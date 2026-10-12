@@ -11,6 +11,7 @@ Cada paso se anota en la bitácora en el momento (deshacer la regresa: `expedien
 en Drive y se agrega a la hoja BITACORA EXPEDIENTES NUCO.
 
 Uso:  inspecciones.py aplicar <plan.json> <foto.json> <foto-doc.json> (--nucos 113[,267,…] | --todos) [--hilos 6]
+      [--raiz 3.-VERIFICACIONES]   (otra carpeta del NUCO con el mismo ejecutor; por omisión 4.-INSPECCIONES)
                              [--continuar <bitácora.jsonl>]
       --todos: cada NUCO del plan con algo que hacer. Los ya hechos se saltan solos (ya no coinciden con la foto).
       --hilos: NUCO en paralelo, cada uno con su conexión a Drive.
@@ -261,6 +262,9 @@ if __name__ == "__main__":
     a = sys.argv[1:]
     if len(a) < 4 or a[0] != "aplicar" or ("--nucos" not in a and "--todos" not in a):
         sys.exit(__doc__)
+    if "--raiz" in a:
+        # El mismo ejecutor para otra carpeta del NUCO (3.-VERIFICACIONES): el plan dice a dónde va cada archivo
+        RAIZ = a[a.index("--raiz") + 1]
     aplicar(a[1], a[2], a[3], ["*"] if "--todos" in a else a[a.index("--nucos") + 1].split(","),
             a[a.index("--continuar") + 1] if "--continuar" in a else None,
             int(a[a.index("--hilos") + 1]) if "--hilos" in a else 1)
