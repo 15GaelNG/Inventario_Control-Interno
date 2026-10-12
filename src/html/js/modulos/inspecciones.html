@@ -503,7 +503,7 @@
     }
 
     // Nucco y Folio ligados (FolioNucco): escribir o elegir cualquiera llena el otro con "auto"
-    // y trae el vehículo. Lo que se guarda y se busca sigue siendo el folio.
+    // y trae el vehículo. Se busca por folio; al guardar va el ID del vehículo.
     const campoNucco = $('#ins-nucco');
     const vehiculoPorClave = {};
     FolioNucco.ligar(campoFolio, campoNucco, {
@@ -1184,6 +1184,8 @@
         });
 
         const res = await callServer('apiRegistrarInspeccion', state.token, {
+          // El vehículo va por su ID; el folio solo se queda para el mensaje
+          ID_VEHICULO: (vehiculoPorClave[campoFolio.value.trim()] || {}).ID || '',
           FOLIO: campoFolio.value.trim(),
           TIPO: campoTipo.value,
           checklist: r.dadas,

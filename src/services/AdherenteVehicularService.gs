@@ -54,7 +54,7 @@ const AdherenteVehicularService = (function () {
   const ESTATUS_VALIDOS = ['ACTIVO', 'BAJA'];
 
   const COLUMNAS_RESUMEN = [
-    ID_COLUMN, 'FECHA', 'FOLIO VEHICULO', 'NUCCO', 'ADHERENTE', 'DEPARTAMENTO', 'ESTATUS',
+    ID_COLUMN, 'FECHA', 'ID VEHICULO', 'FOLIO VEHICULO', 'NUCCO', 'ADHERENTE', 'DEPARTAMENTO', 'ESTATUS',
     'ESTADO FIRMA', 'TOKEN FIRMA', 'TOKEN FIRMA JEFE', 'PDF', 'REGISTRADO POR',
   ];
 
@@ -70,6 +70,7 @@ const AdherenteVehicularService = (function () {
     return {
       ID: datos[ID_COLUMN][i],
       FECHA: HojaServicio.fechaISO(datos['FECHA'][i]),
+      ID_VEHICULO: datos['ID VEHICULO'][i] || '',
       FOLIO_VEHICULO: datos['FOLIO VEHICULO'][i] || '',
       NUCCO: datos['NUCCO'][i] || '',
       ADHERENTE: datos['ADHERENTE'][i] || '',
@@ -91,16 +92,22 @@ const AdherenteVehicularService = (function () {
     return found ? found.data : null;
   }
 
-  /** Adherentes de UN vehículo (para la ficha de Vehículos), más recientes primero. */
+  /** Adherentes de UN vehículo (para la ficha de Vehículos), por su ID, más recientes primero. */
+  function listarPorVehiculo(token, id) {
+    return listarPor_(token, 'ID VEHICULO', id);
+  }
   function listarPorFolio(token, folio) {
+    return listarPor_(token, 'FOLIO VEHICULO', folio);
+  }
+  function listarPor_(token, columna, valor) {
     Permisos.puedeLeer(token, MODULO);
-    if (!folio) return [];
+    if (!valor) return [];
     const sheet = hoja_();
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, COLUMNAS_RESUMEN);
     const resultado = [];
     for (let i = filas - 1; i >= 0; i--) {
       if (!datos[ID_COLUMN][i]) continue;
-      if (String(datos['FOLIO VEHICULO'][i] || '') !== String(folio)) continue;
+      if (String(datos[columna][i] || '') !== String(valor)) continue;
       resultado.push(filaAResumen_(datos, i));
     }
     return resultado;
@@ -281,7 +288,8 @@ const AdherenteVehicularService = (function () {
     const sesion = Permisos.puedeEditar(token, MODULO);
     const remoto = !!(opciones && opciones.remoto);
     const remotoJefe = !!(opciones && opciones.remotoJefe);
-    const folio = String((datos || {})['FOLIO VEHICULO'] || '').trim();
+    // El vehículo es su ID ('ID VEHICULO'); el folio solo llega de una página abierta antes del cambio
+    const folio = String((datos || {})['ID VEHICULO'] || (datos || {})['FOLIO VEHICULO'] || '').trim();
     if (!folio) throw new Error('Selecciona el vehículo (Folio).');
     const adherente = String((datos || {})['ADHERENTE'] || '').trim();
     if (!adherente) throw new Error('Captura el adherente.');
@@ -297,10 +305,10 @@ const AdherenteVehicularService = (function () {
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
-      const vehiculo = VehiculosService.buscarPorFolio(token, folio);
-      if (!vehiculo) throw new Error('No se encontró el vehículo con Folio=' + folio);
+      const vehiculo = VehiculosService.buscar(token, folio);
+      if (!vehiculo) throw new Error('No se encontró el vehículo ' + folio);
       const idVehiculo = vehiculo['ID'];
-      if (!idVehiculo) throw new Error('El vehículo con Folio=' + folio + ' no tiene ID.');
+      if (!idVehiculo) throw new Error('El vehículo ' + folio + ' no tiene ID.');
 
       const ahora = datos['FECHA'] ? new Date(datos['FECHA']) : new Date();
       const id = Ids.nuevo(Entidades.prefijo(SHEET));
@@ -308,7 +316,7 @@ const AdherenteVehicularService = (function () {
       const fila = {
         [ID_COLUMN]: id,
         'FECHA': ahora,
-        'FOLIO VEHICULO': vehiculo['FOLIO'] || folio,
+        'FOLIO VEHICULO': vehiculo['FOLIO'] || '',
         'ID VEHICULO': idVehiculo,
         'NUCCO': vehiculo['NUCCO'] || '',
         'MARCA': vehiculo['MARCA'] || '',
@@ -556,7 +564,7 @@ const AdherenteVehicularService = (function () {
   }
 
   return {
-    listarPorFolio, buscarPorId, crear, cambiarEstatus, eliminar, ligaDeToken,
+    listarPorFolio, listarPorVehiculo, buscarPorId, crear, cambiarEstatus, eliminar, ligaDeToken,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
     PLANTILLA,
   };

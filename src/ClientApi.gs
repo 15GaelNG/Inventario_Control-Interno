@@ -96,19 +96,25 @@ function partesDeFicha_(token, deQue) {
  * permiso sale null y no aparece (lo mismo que deModulo en el cliente); si una que sí puede ver
  * falla por otra cosa, sale vacía y las demás siguen. Texto JSON, por la nota de abajo.
  */
-function apiFichaVehiculo(token, folio) {
-  const parte = partesDeFicha_(token, 'del vehículo ' + folio);
+function apiFichaVehiculo(token, idVehiculo) {
+  // Por el ID del vehículo, nunca por folio (12-oct-2026). Si llega un folio es una página abierta antes del
+  // cambio: se busca el vehículo así una vez y todo lo demás va por su ID.
+  const completo = VehiculosService.buscar(token, idVehiculo);
+  const id = completo ? completo['ID'] : '';
+  const parteDe = partesDeFicha_(token, 'del vehículo ' + idVehiculo);
+  const parte = (modulo, leer) => (id ? parteDe(modulo, leer) : parteDe(modulo, () => []));
   return JSON.stringify({
-    completo: VehiculosService.buscarPorFolio(token, folio),
-    cambios: parte('cambios-vehiculos', () => CambiosVehiculosService.listarPorFolio(token, folio)),
-    reasignaciones: parte('reasignaciones-vehiculares', () => ReasignacionesVehicularesService.listarPorFolio(token, folio)),
-    verificaciones: parte('verificaciones', () => VerificacionesService.listarPorFolio(token, folio)),
-    inspecciones: parte('inspeccion-vehicular', () => InspeccionesService.listarPorFolio(token, folio)),
-    sensores: parte('instalacion-sensores', () => SensoresService.listarPorFolio(token, folio)),
-    hologramas: parte('hologramas', () => HologramasService.listarPorFolio(token, folio)),
-    incidencias: parte('incidencias', () => IncidenciasService.listarPorFolio(token, folio)),
-    responsivas: parte('responsiva-vehicular', () => ResponsivaVehicularService.listarPorFolio(token, folio)),
-    adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorFolio(token, folio)),
+    completo: completo,
+    cambios: parte('cambios-vehiculos', () => CambiosVehiculosService.listarPorVehiculo(token, id)),
+    reasignaciones: parte('reasignaciones-vehiculares', () => ReasignacionesVehicularesService.listarPorVehiculo(token, id)),
+    verificaciones: parte('verificaciones', () => VerificacionesService.listarPorVehiculo(token, id)),
+    inspecciones: parte('inspeccion-vehicular', () => InspeccionesService.listarPorVehiculo(token, id)),
+    sensores: parte('instalacion-sensores', () => SensoresService.listarPorVehiculo(token, id)),
+    // Hologramas queda fuera del cambio (se trata aparte): su FOLIO ya sale del catálogo por la serie
+    hologramas: parte('hologramas', () => HologramasService.listarPorFolio(token, completo['FOLIO'])),
+    incidencias: parte('incidencias', () => IncidenciasService.listarPorVehiculo(token, id)),
+    responsivas: parte('responsiva-vehicular', () => ResponsivaVehicularService.listarPorVehiculo(token, id)),
+    adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorVehiculo(token, id)),
   });
 }
 /**

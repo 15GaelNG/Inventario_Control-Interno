@@ -2360,3 +2360,28 @@ test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.bo
   }
   assert.deepEqual(malos, []);
 });
+
+test('la ficha y las altas de Vehículos ligan por el ID del vehículo, nunca por folio', () => {
+  // 12-oct-2026: "serie o NUCO, jamás folio" (el folio se reasigna; 152 verificaciones quedaron en otro vehículo).
+  const api = read('src/ClientApi.gs');
+  const i = api.indexOf('function apiFichaVehiculo(');
+  const ficha = api.slice(i, api.indexOf('\n}', i));
+  assert.match(ficha, /VehiculosService\.buscar\(token/, 'la ficha busca el vehículo por su ID');
+  const porFolio = ficha.split(/\r?\n/).filter((l) => /listarPorFolio\(/.test(l) && !/HologramasService/.test(l));
+  assert.deepEqual(porFolio, [], 'cada pestaña de la ficha (salvo Hologramas, aparte) se pide con listarPorVehiculo');
+  assert.match(read('src/html/js/app.html'), /callServerListaCacheada\('apiFichaVehiculo', state\.token, vResumen\.ID_VEHICULO/);
+  // Cada alta resuelve el vehículo con lo que manda el formulario: primero su ID
+  [
+    ['src/services/VerificacionesService.gs', /datos\.ID_VEHICULO \|\| datos\.FOLIO/],
+    ['src/services/SensoresService.gs', /datos\.ID_VEHICULO \|\| datos\.FOLIO/],
+    ['src/services/IncidenciasService.gs', /ctx\.datos\.ID_VEHICULO/],
+    ['src/services/InspeccionesService.gs', /p\.ID_VEHICULO/],
+    ['src/services/ReasignacionesVehicularesService.gs', /datos\['ID VEHICULO'\] \|\| datos\['Folio Vehiculo'\]/],
+    ['src/services/ResponsivaVehicularService.gs', /\['ID VEHICULO'\] \|\| \(datos \|\| \{\}\)\['FOLIO VEHICULO'\]/],
+    ['src/services/AdherenteVehicularService.gs', /\['ID VEHICULO'\] \|\| \(datos \|\| \{\}\)\['FOLIO VEHICULO'\]/],
+  ].forEach(([archivo, patron]) => assert.match(read(archivo), patron, archivo + ': el vehículo por su ID'));
+  // Y ninguna busca el vehículo directo por folio para ligar
+  ['ReasignacionesVehicularesService', 'ResponsivaVehicularService', 'AdherenteVehicularService'].forEach((s) => {
+    assert.doesNotMatch(read('src/services/' + s + '.gs'), /VehiculosService\.buscarPorFolio\(/, s);
+  });
+});

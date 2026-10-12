@@ -205,28 +205,50 @@ const VehiculosService = (function () {
   }
 
   /**
-   * Regresa el registro completo de un vehículo (todas sus columnas) por
-   * FOLIO, o null. Optimizado: en vez de leer las 648 filas x 41 columnas
-   * completas (SheetUtils.getAll) solo para buscar una, primero lee nada
-   * más la columna FOLIO para ubicar el renglón, y luego lee solo esa fila.
+   * El registro completo de un vehículo (todas sus columnas) por su ID, o null. Así se pide un vehículo
+   * (12-oct-2026, "serie o NUCO, jamás folio"): el folio se reasigna, el ID no.
    */
+  function buscarPorId(token, id) {
+    return buscarPor_(token, ID_COLUMN, id);
+  }
+
+  /**
+   * Por el ID del vehículo; si lo que llega no tiene forma de ID, por su folio. Lo segundo es solo para
+   * una página abierta antes de que los formularios mandaran el ID: nada nuevo debe llegar por ahí.
+   */
+  function buscar(token, clave) {
+    const limpio = String(clave == null ? '' : clave).trim();
+    return Ids.tieneForma(limpio) ? buscarPorId(token, limpio) : buscarPorFolio(token, limpio);
+  }
+
+  /** Por FOLIO (lo que la gente escribe en un buscador). Para ligar un registro, buscarPorId. */
   function buscarPorFolio(token, folio) {
+    return buscarPor_(token, 'FOLIO', folio);
+  }
+
+  /**
+   * Regresa el registro completo de un vehículo (todas sus columnas) por una
+   * columna (ID o FOLIO), o null. Optimizado: en vez de leer las 648 filas x 41 columnas
+   * completas (SheetUtils.getAll) solo para buscar una, primero lee nada
+   * más esa columna para ubicar el renglón, y luego lee solo esa fila.
+   */
+  function buscarPor_(token, columna, valor) {
     // Referencia: el detalle de una incidencia o una reasignación también necesita el vehículo
     Permisos.puedeLeerFamilia(token, 'vehiculos');
-    if (!folio) return null;
+    if (!valor) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
     const lastRow = sheet.getLastRow();
     if (lastRow < 2) return null;
 
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    const folioCol = headers.indexOf('FOLIO');
-    if (folioCol === -1) return null;
+    const col = headers.indexOf(columna);
+    if (col === -1) return null;
 
-    const folios = sheet.getRange(2, folioCol + 1, lastRow - 1, 1).getValues();
+    const valores = sheet.getRange(2, col + 1, lastRow - 1, 1).getValues();
     let rowIndex = -1;
-    for (let i = 0; i < folios.length; i++) {
-      if (String(folios[i][0]) === String(folio)) {
+    for (let i = 0; i < valores.length; i++) {
+      if (String(valores[i][0]).trim() === String(valor).trim()) {
         rowIndex = i + 2;
         break;
       }
@@ -424,7 +446,7 @@ const VehiculosService = (function () {
     calentar: () => [BASICO, RESUMEN, SEGURO].forEach(HojaServicio.calentar),
     /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(VEHICULOS, token),
-    buscarPorFolio, previsualizarFolio, previsualizarNucco,
+    buscarPorId, buscar, buscarPorFolio, previsualizarFolio, previsualizarNucco,
     crear: (token, datos) => HojaServicio.crear(VEHICULOS, token, datos),
     /**
      * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.

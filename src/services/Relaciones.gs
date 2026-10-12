@@ -163,6 +163,7 @@ const MAPA = {
           // SERIE VEHICULO ya no está aquí: es la llave. Se cambia con cambiarClave(), no
           // propagando. Y FOLIO sí está, porque dejó de ser llave y pasó a ser un atributo
           // más que hay que mantener al día.
+          alNacer: { 'NUCCO': 'NUCCO' },
           columnas: {
             'FOLIO': 'FOLIO',
             'PLACA': 'PLACA',
@@ -191,6 +192,7 @@ const MAPA = {
           // que alguien regenere el esquema (ver docs/ids.md).
           claveOrigen: 'FOLIO',
           clave: 'FOLIO VEHICULO',
+          alNacer: { 'NUCCO': 'NUCCO' },
           columnas: { 'PLACA': 'PLACA' },
         },
         {
@@ -248,6 +250,7 @@ const MAPA = {
           tipo: 'bitacora',
           claveOrigen: 'FOLIO',
           clave: 'FOLIO',
+          alNacer: { 'NUCCO': 'NUCCO' },
           columnas: {
             'DEPARTAMENTO': 'DEPARTAMENTO',
             'MODELO': 'MODELO',
@@ -825,6 +828,13 @@ const MAPA = {
     Object.keys(copia.columnas).forEach((colOrigen) => {
       const valor = encontrado.data[colOrigen];
       datos[copia.columnas[colOrigen]] = valor === undefined || valor === null ? '' : valor;
+    });
+    // alNacer: lo que se copia SOLO al dar de alta y nunca se propaga ni se revisa, porque en el dueño no
+    // cambia (el NUCCO del vehículo). Fuera de propagar() a propósito: un libro sin esa columna (un DEV
+    // viejo) no rompe la copia de lo demás; insert ignora la columna que no existe.
+    Object.keys(copia.alNacer || {}).forEach((colOrigen) => {
+      const valor = encontrado.data[colOrigen];
+      datos[copia.alNacer[colOrigen]] = valor === undefined || valor === null ? '' : valor;
     });
     return { datos: datos, origen: encontrado.data };
   }
