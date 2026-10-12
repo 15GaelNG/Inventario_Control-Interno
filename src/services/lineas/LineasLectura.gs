@@ -35,7 +35,7 @@ const LineasLectura = (function () {
   const PROPIEDAD = 'LINEAS_LECTURA';
   const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v2';
+  const CLAVE_CACHE = 'estructura_virtual_v3'; // v3: TIPO SIM BASICO en vez de LINEA BASICA (12-oct)
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
