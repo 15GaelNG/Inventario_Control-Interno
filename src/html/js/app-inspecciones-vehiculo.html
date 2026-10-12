@@ -1,6 +1,7 @@
 <style>
-  .insp-ficha-anio { margin: 14px 0 6px; font-size: 13px; color: var(--color-text-muted); letter-spacing: .3px; }
-  .insp-ficha-anio:first-of-type { margin-top: 4px; }
+  /* Una sola tabla (columnas alineadas entre años); el año es un renglón separador */
+  .insp-ficha-anio-fila td { background: var(--color-bg); font-weight: 700; font-size: 13px; color: var(--color-text-muted);
+    letter-spacing: .3px; padding-top: 10px; padding-bottom: 6px; }
   .insp-ficha-fuente { font-size: 11px; color: var(--color-text-muted); display: block; }
   .insp-fotos-cabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
   .insp-fotos-cabecera h2 { margin: 0; font-size: 18px; }
@@ -76,8 +77,11 @@
       el.innerHTML = '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' + Iconos.svg('clipboard-list') +
         ' Inspecciones' + boton + '</h3>' +
         (exp === undefined ? '<p class="ln-tenue"><span class="spinner"></span> Buscando las fotos en el expediente del NUCO…</p>' : '') +
-        (filas.length ? anios.map((a) => '<h4 class="insp-ficha-anio">' + escaparHtml(a || 'Sin fecha') + '</h4>' +
-          tablaFicha(columnas, filas.filter((x) => x.anio === a))).join('')
+        (filas.length ? '<div class="ficha-tabla-wrap" data-scroll-x><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
+          '</tr></thead><tbody>' + anios.map((a) => '<tr class="insp-ficha-anio-fila"><td colspan="' + columnas.length + '">' +
+            escaparHtml(a || 'Sin fecha') + '</td></tr>' +
+            filas.filter((x) => x.anio === a).map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('')).join('') +
+          '</tbody></table></div>'
           : '<p class="empty-state">Sin inspecciones para este vehículo.</p>') + '</div>';
       if (o.alPintar) o.alPintar(el);
     }
