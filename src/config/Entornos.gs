@@ -25,8 +25,9 @@ const ENTORNOS = {
     // Módulos que en este proyecto no se enseñan ni se dejan usar (Config.apagado), separados por coma.
     // Help Desk: todavía no sale a producción (7-oct-2026); en los DEV sigue encendido.
     // Vínculos de Líneas (vinculos-lineas): una idea de Emmanuel que se queda así (8-oct-2026); en producción no se
-    // enseña el modo Vínculos de Líneas Telefónicas (lineas.html), en los DEV sí.
-    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas',
+    // enseña el modo Vínculos de Líneas telefónicas (lineas.html), en los DEV sí.
+    // Correcciones de líneas (no está terminado) y Sistemas de Líneas (no tiene enlaces): apagados (12-oct-2026).
+    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas',
 
     // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
     SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
@@ -55,7 +56,6 @@ const ENTORNOS = {
     // Líneas (opcionales: sin esto usan las carpetas de AppSheet que trae el código)
     LINEAS_DRIVE_APPSHEET: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
     LINEAS_DRIVE_NUCOS: '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-',
-    LINEAS_APROBADORES_RESGUARDO: '',   // correos separados por coma
 
     // Geotab (opcional): usuario, base y servidor aquí; GEOTAB_PASSWORD solo en Script Properties
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',
@@ -84,6 +84,9 @@ const ENTORNOS = {
   // ---------------------------------------------------------------- DEV de Emmanuel (rama emmanuel)
   '1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa': {
     ENTORNO: 'DEV',
+
+    // Lo mismo que producción en Líneas (12-oct-2026); Help Desk y Vínculos siguen encendidos aquí
+    MODULOS_APAGADOS: 'correcciones-lineas,sistemas-lineas',
 
     // Copia del libro de producción ("DEV EMMANUEL - Copia de produccion 2026-10-08")
     SS_ID_USUARIOS: '1L177getuQ0RSGXbVsLZEgc9Fn5d2QySDlwjvUuqu_0E',

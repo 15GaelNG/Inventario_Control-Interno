@@ -2940,12 +2940,12 @@
        */
       const ETIQUETA_DOCUMENTO = { inspeccion: 'Inspección', responsiva: 'Responsiva' };
       const ETIQUETA_MIGA = { equipo: 'Equipo', linea: 'Línea', inspeccion: 'Inspección', responsiva: 'Responsiva' };
-      const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas Telefónicas');
+      const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas telefónicas');
       function migas() {
         const anterior = pila.length > 1 ? pila[pila.length - 2] : null;
         return '<nav class="ln-migas" aria-label="Ruta"><button type="button" class="secondary ln-btn-icono" data-ln-volver title="Volver a ' +
           esc(etiquetaMiga(anterior)) + '">' + icono('chevron-left') + ' <span class="ln-migas-volver">Volver a ' + esc(etiquetaMiga(anterior)) + '</span></button>' +
-          '<ol class="ln-migas-ruta"><li><a href="#" class="ln-miga-enlace" data-ln-lista>Líneas Telefónicas</a></li>' +
+          '<ol class="ln-migas-ruta"><li><a href="#" class="ln-miga-enlace" data-ln-lista>Líneas telefónicas</a></li>' +
           pila.map((p, i) => '<li>' + icono('chevron-right', 'ln-icon-sm') +
             (i < pila.length - 1 ? '<button type="button" class="ln-miga-enlace" data-ln-miga="' + i + '">' + esc(etiquetaMiga(p)) + '</button>' :
               '<span class="ln-miga-actual" aria-current="page">' + esc(etiquetaMiga(p)) + '</span>') + '</li>').join('') + '</ol></nav>';
@@ -5155,14 +5155,14 @@
     /** Desde una bitácora: abre el registro en Líneas Telefónicas. */
     function irARegistro(id) {
       memoria.abrirAlEntrar = id;
-      navegarA('lineas-telefonicas', 'Líneas Telefónicas');
+      navegarA('lineas-telefonicas', 'Líneas telefónicas');
     }
 
     /** Desde el Panorama: abre Líneas Telefónicas en Equipos o Líneas, filtrada por un estatus. */
     function irConEstatus(modulo, estatus) {
       memoria.modulo = modulo;
       memoria.filtrarAlEntrar = estatus && estatus !== 'SIN ESTATUS' ? { modulo: modulo, estatus: estatus } : null;
-      navegarA('lineas-telefonicas', 'Líneas Telefónicas');
+      navegarA('lineas-telefonicas', 'Líneas telefónicas');
     }
 
     // ======================================================================

@@ -82,14 +82,20 @@
      iguales, y un navegador viejo que no entiende dvh se queda con vh). */
   #app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
 
-  /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro) */
+  /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro).
+     Recogido ocupa 92px; abierto (al pasar el cursor, initMenuAlPasar en app.html) mide 280px pero
+     el margen negativo le deja ocupar los mismos 92px: se abre POR ENCIMA del contenido, que no se
+     mueve, como el filtro por tipo de Líneas telefónicas. Ancho y margen cambian juntos y con la misma
+     curva, así que el contenido tampoco se mueve durante la animación. Por debajo de los modales (500). */
   #sidebar {
     width: 280px; height: 100vh; height: 100dvh; background: var(--color-sidebar-bg);
     border-right: 1px solid var(--color-sidebar-border);
     padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
-    flex-shrink: 0; overflow-y: auto; overflow-x: hidden; transition: width .28s ease;
+    flex-shrink: 0; overflow-y: auto; overflow-x: hidden;
+    position: relative; z-index: 450; margin-right: -188px; box-shadow: 0 0 40px rgba(0,0,0,.35);
+    transition: width .2s cubic-bezier(.2, 0, 0, 1), margin-right .2s cubic-bezier(.2, 0, 0, 1), box-shadow .2s ease;
   }
-  #sidebar.collapsed { width: 92px; }
+  #sidebar.collapsed { width: 92px; margin-right: 0; box-shadow: none; }
 
   /* Barra de scroll del sidebar (y de sus grupos) — delgada, dorada y sin
      las flechitas feas de la barra por default del navegador/Windows. */
@@ -116,48 +122,34 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
-  /* Ahora vive junto a "Cerrar sesión" (fila completa), no en el encabezado. */
-  .sidebar-collapse-btn {
-    display: flex; align-items: center; gap: 10px; width: 100%;
-    background: transparent; border: none; color: var(--color-sidebar-text);
-    padding: 9px 13px; border-radius: var(--radius); font-size: 13px; font-weight: 500;
-    white-space: nowrap; overflow: hidden; transition: background-color .35s ease;
-  }
-  .sidebar-collapse-btn:hover { background: var(--color-sidebar-hover); }
-  .sidebar-collapse-btn .ico { transition: transform .28s ease; }
   #sidebar.collapsed .sidebar-header { justify-content: center; }
-  #sidebar.collapsed .sidebar-collapse-btn { justify-content: center; }
-  #sidebar.collapsed .sidebar-collapse-btn .ico { transform: rotate(180deg); }
 
   .nav-item {
     display: flex; align-items: center; gap: 10px;
-    padding: 11px 13px; border-radius: var(--radius); cursor: pointer;
+    padding: 8px 10px; border-radius: var(--radius); cursor: pointer;
     color: var(--color-sidebar-text); font-weight: 500; white-space: nowrap; overflow: hidden;
   }
   .nav-item:hover { background: var(--color-sidebar-hover); }
   .nav-item.active { background: var(--color-accent); color: var(--color-primary); }
   .nav-icon { flex-shrink: 0; width: 20px; text-align: center; }
   .nav-label { overflow: hidden; text-overflow: ellipsis; }
+  /* Los módulos sin submódulos (Inicio, Gestión de activos, Encuestas/solicitudes, Help desk) llevan
+     el ícono en la misma placa que los grupos (usuario, 12-oct) */
+  .nav-item .nav-icon {
+    width: 30px; height: 30px; border-radius: 9px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.07); transition: background-color .25s ease, color .25s ease;
+  }
+  .nav-item .nav-icon .ico { width: 15px; height: 15px; }
+  .nav-item:hover .nav-icon {
+    background: rgba(180,161,105,.4); color: var(--color-accent);
+    box-shadow: 0 0 10px rgba(180,161,105,.55);
+  }
+  .nav-item.active .nav-icon { background: var(--color-primary); color: var(--color-accent); box-shadow: none; }
 
   #sidebar.collapsed .sidebar-title,
   #sidebar.collapsed .nav-label { display: none; }
   #sidebar.collapsed .nav-item { justify-content: center; }
-
-  /* Tooltip con el nombre del módulo (sidebar colapsado). Se arma con JS y
-     se cuelga de <body> — NO puede vivir dentro de #sidebar/.nav-groups
-     porque ambos tienen overflow-x:hidden (para quitar la barra de scroll
-     horizontal) y eso recortaría cualquier tooltip que necesite salirse del
-     sidebar; mismo truco que ya usa el popover de filtros de las tablas. */
-  .sidebar-tooltip {
-    position: fixed; transform: translateY(-50%);
-    background: var(--color-primary); color: #fff;
-    padding: 7px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
-    white-space: nowrap; box-shadow: var(--shadow-lg);
-    border: 1px solid rgba(180,161,105,.4);
-    opacity: 0; pointer-events: none; z-index: 9999;
-    transition: opacity .15s ease;
-  }
-  .sidebar-tooltip.show { opacity: 1; }
 
   /* Grupos de navegación (acordeón por área) — con la temática navy+dorado:
      cada grupo trae su ícono en una placa que se enciende en dorado cuando
@@ -167,6 +159,8 @@
      un grupo, el sidebar se expande solo Y ese grupo se abre de una vez
      (ver el click listener en app.html). */
   .nav-groups { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; overflow-y: auto; overflow-x: hidden; }
+  /* Con un grupo abierto el menú no cabe: que se deslice, no que se apachurren los módulos */
+  .nav-groups > * { flex-shrink: 0; }
 
   .nav-group-header {
     display: flex; align-items: center; gap: 10px; cursor: pointer;
@@ -204,11 +198,14 @@
   .nav-group-chevron .ico { width: 15px; height: 15px; }
   .nav-group.expanded .nav-group-chevron { transform: rotate(90deg); color: var(--color-accent); opacity: 1; }
 
+  /* overflow:hidden (para abrir y cerrar con max-height) recortaba el subitem al deslizarse con el
+     mouse (translateX(3px)): perdía la esquina redondeada derecha y el contorno. El relleno de la
+     derecha y de arriba/abajo le da ese lugar (usuario, 12-oct). */
   .nav-group-items {
     max-height: 0; overflow: hidden; opacity: 0; position: relative;
     transition: max-height .3s ease, opacity .25s ease;
     display: flex; flex-direction: column; gap: 1px;
-    padding-left: 16px; margin-left: 24px;
+    padding: 2px 4px 2px 16px; margin-left: 24px;
   }
   .nav-group-items::before {
     content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px;

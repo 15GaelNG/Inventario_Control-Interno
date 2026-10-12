@@ -61,7 +61,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   const inicioLineas = app.indexOf("id: 'lineas'");
   const lineas = app.slice(inicioLineas, app.indexOf('\n    },', inicioLineas));
   // Un solo inventario de accesorios: el de Líneas (el general de jorge se retiró el 1-oct)
-  assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
+  assert.equal((lineas.match(/Inventario de accesorios/g) || []).length, 1);
   assert.doesNotMatch(app, /vista: 'accesorios'/);
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
@@ -80,7 +80,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
   });
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos'[^}]*\}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos'[^}]*\}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos', ocultos)
     .forEach((route) => assert.match(app, new RegExp(`vista: '${route}'[^\\n]*plantilla: 'tpl-`), `falta montar ${route}`));
@@ -1612,10 +1612,8 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   const src = read('src/services/lineas/LineasResguardos.gs');
   const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
   const Notif = { _diaFinPlan: (v) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v || '')); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : ''; } };
-  // leerConfig_ (config/Entornos.gs) da los aprobadores de resguardos
-  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'leerConfig_', 'Utilities',
-    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {},
-    () => 'pau@ciudadmaderas.com, suplente@ciudadmaderas.com', {});
+  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'Utilities',
+    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {}, {});
 
   // Datos de la persona en blanco (eran N/A; usuario, 4-oct); PIN y cuenta solo si tenían algo (NO APLICA se respeta);
   // el patrón se borra
@@ -1648,10 +1646,15 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   assert.equal(R.asesorPara('TELCEL', 'FRACCIONADORA LA ROMITA SA DE CV'), 'WILBERTO');
   assert.equal(R.asesorPara('TELCEL', 'GPH SERVICIOS CONDOMINALES'), 'ALFREDO');
 
-  // Quién aprueba: la Script Property o ADMIN
-  assert.equal(R.puedeAprobar({ correo: 'PAU@ciudadmaderas.com' }), true);
+  // Quién aprueba: quien edita Resguardos y cancelaciones (Pau por correo, y ADMIN); el área de Líneas solo la ve y
+  // manda desde Líneas telefónicas, con el permiso de ese módulo (usuario, 12-oct)
+  assert.equal(R.puedeAprobar({ correo: 'pau@ciudadmaderas.com', puedeAprobar: true }), true);
   assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com' }), false);
-  assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com', esAdmin: true }), true);
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /puedeAprobar: permisos\[MODULO_RESGUARDOS\] === Permisos\.EDICION/);
+  ['formularioResguardo', 'mandarResguardo', 'mandarCancelacion'].forEach((f) =>
+    assert.match(tel, new RegExp('function ' + f + '\\(token[^)]*\\) \\{\\s+const sesion = operar_\\(token\\);'), f + ' pide editar Líneas telefónicas'));
+  assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
   assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO']);
 
   // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
@@ -2314,4 +2317,31 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
   assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
+});
+
+test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {
+  const index = read('src/html/Index.html');
+  const app = read('src/html/js/app.html');
+  const css = read('src/html/styles.html');
+  assert.match(index, /<nav id="sidebar" class="collapsed">/);
+  assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
+  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
+  assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
+  // Abierto mide 280px pero ocupa 92px: queda encima del contenido, por debajo de los modales
+  assert.match(css, /position: relative; z-index: 450; margin-right: -188px;/);
+  assert.match(css, /#sidebar\.collapsed \{ width: 92px; margin-right: 0; box-shadow: none; \}/);
+  // El subitem se desliza sin que su contenedor le corte la esquina; los módulos sueltos llevan la placa del ícono
+  assert.match(css, /padding: 2px 4px 2px 16px; margin-left: 24px;/);
+  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: 9px;/);
+  // Solo la primera letra en mayúscula
+  const etiquetas = [...app.slice(app.indexOf('const NAV_GRUPOS'), app.indexOf('function vistaDe')).matchAll(/etiqueta: '([^']+)'/g)].map((m) => m[1]);
+  assert.ok(etiquetas.includes('Líneas telefónicas') && etiquetas.includes('Gestión de activos') && etiquetas.includes('Help desk'));
+  etiquetas.forEach((e) => assert.doesNotMatch(e.replace(/ - Líneas$/, ''), /\s\p{Lu}/u, e));
+});
+
+test('Correcciones de líneas y Sistemas de Líneas apagados en producción y en el DEV de Emmanuel (12-oct)', () => {
+  const entornos = read('src/config/Entornos.gs');
+  const bloque = (id) => entornos.slice(entornos.indexOf("'" + id + "'"), entornos.indexOf('\n  },', entornos.indexOf("'" + id + "'")));
+  [bloque('1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'), bloque('1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa')]
+    .forEach((b) => ['correcciones-lineas', 'sistemas-lineas'].forEach((v) => assert.match(b, new RegExp("MODULOS_APAGADOS: '[^']*" + v))));
 });
