@@ -10,7 +10,7 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 test('la responsiva se abre en su página desde Documentos, el doble clic y el Historial', () => {
   const lineas = read('src/html/js/lineas.html');
   assert.match(lineas, /inspeccion: pintarInspeccion, responsiva: pintarResponsiva \}\[tipo\]/);
-  assert.match(lineas, /titulo: 'Ver responsiva', visible: \(d\) => d\.documento === 'Responsiva', alHacer: \(d\) => abrir\('responsiva', d\.id\)/);
+  assert.match(lineas, /doc\('eye', 'Ver responsiva', 'ver', true, \(d\) => d\.documento === 'Responsiva', \(d\) => abrir\('responsiva', d\.id\)\)/);
   assert.match(lineas, /abrir\(d\.documento === 'Inspección' \? 'inspeccion' : 'responsiva', d\.id\);/);
   assert.match(lineas, /titulo: 'Ver responsiva', visible: \(m\) => m\.refTipo === 'responsiva' && !!m\.refId/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasResponsiva\(token, id\) \{\s+return TelefoniaService\.responsiva\(token, id\);/);

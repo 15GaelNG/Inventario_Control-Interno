@@ -79,8 +79,9 @@ test('línea sola: Quitar responsable y responsable para USO', () => {
 
 test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por número anterior', () => {
   const html = read('src/html/js/lineas.html');
-  assert.match(html, /texto: 'Editar línea', alHacer: \(\) => abrirEditor\(r\.lineaId, 'LINEA'\)/);
-  assert.match(html, /texto: 'Editar línea', alHacer: \(\) => abrirEditor\(id, 'LINEA'\)/);
+  // En la lista, Editar línea también desde el equipo; en la ficha, solo desde la línea (usuario, 12-oct; pendiente 2.34)
+  assert.match(html, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId,/);
+  assert.match(html, /texto: 'Editar línea', separador: true, alHacer: \(\) => abrirEditor\(id, 'LINEA'\)/);
   assert.match(html, /if \(cond\.cambio\) return/);
   assert.match(html, /valor: \(r\) => \[r\.numero, r\.numerosAnteriores \? 'antes ' \+ r\.numerosAnteriores : ''\]/);
   assert.match(html, /function tarjetaNumeros\(l, cambios\)/);
