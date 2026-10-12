@@ -18,7 +18,7 @@ window.eval(`
   const Iconos = { svg: (n) => '<i data-i="' + n + '"></i>' };
   const formatearFecha = (v) => String(v).slice(0, 10);
   const tablaFicha = (cols, filas) => '<table>' + filas.map((f) => '<tr>' + cols.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('') + '</table>';
-  ` + leer('componentes/galeria.html') + '\n' + leer('app-inspecciones-vehiculo.html') + '\nwindow.Galeria = Galeria; window.InspeccionesFicha = InspeccionesFicha;');
+  ` + leer('componentes/tabla-ficha.html') + '\n' + leer('componentes/galeria.html') + '\n' + leer('app-inspecciones-vehiculo.html') + '\nwindow.Galeria = Galeria; window.InspeccionesFicha = InspeccionesFicha;');
 const { Galeria, InspeccionesFicha } = window;
 const doc = window.document;
 

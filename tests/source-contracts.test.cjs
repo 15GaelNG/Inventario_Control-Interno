@@ -2315,3 +2315,15 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
 });
+
+test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.boton, no hechos a mano', () => {
+  const dir = path.join(__dirname, '..', 'src', 'html', 'js');
+  const malos = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.html') && !/^lineas/.test(n))) {
+    const txt = fs.readFileSync(path.join(dir, f), 'utf8');
+    if (/>Ver<\/a>/.test(txt)) malos.push(f + ': <a …>Ver</a>');
+    if (/class="secondary" data-archivo=/.test(txt)) malos.push(f + ': botón de archivo con class="secondary"');
+    if (/ficha-tabla-wrap/.test(txt)) malos.push(f + ': tabla de ficha hecha a mano (usa TablaFicha.html)');
+  }
+  assert.deepEqual(malos, []);
+});
