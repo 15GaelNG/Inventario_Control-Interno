@@ -515,6 +515,9 @@
      panel ocupa su alto y la tarjeta crece con él; al abrirse se sigue encimando sin mover la lista (min-width: 0) */
   .ln-modulo .filtro-tipo { min-width: 0; }
   .ln-modulo .filtro-tipo-panel { position: relative; }
+  /* Los tipos van en mayúsculas, como la columna Tipo (usuario, 12-oct): más ancho para que quepa EQUIPO + SIM BASICO */
+  .ln-modulo .filtro-tipo:hover .filtro-tipo-panel, .ln-modulo .filtro-tipo:focus-within .filtro-tipo-panel { width: 248px; }
+  .ln-modulo .filtro-tipo-item { min-width: 238px; }
   .ln-cuadro-tipo .ln-regla { font-size: 11px; }
   /* Selección estilo Google Drive (30-sep): tarjeta seleccionada, panel Detalles sin fondo y ⋮ de la ficha */
   #ln-telefonicas button.ln-cuadro.ln-cuadro-sel { background: var(--color-primary-soft); box-shadow: inset 0 0 0 2px var(--color-primary); }
