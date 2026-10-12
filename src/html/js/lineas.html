@@ -2749,8 +2749,6 @@
       const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
       const TIPOS_APPSHEET = ORDEN_TIPOS.filter((t) => t !== 'CAMARA'); // la lista del AppSheet; CAMARA solo si hay
       const PESTANA_TIPO = { 'LINEA': 'lineas', 'SIM BASICO': 'lineas' }; // sin registros: a dónde lleva (el resto, Equipos)
-      const NOMBRE_TIPO = { 'EQUIPO': 'Equipo', 'EQUIPO + SIM': 'Equipo + SIM', 'EQUIPO + SIM BASICO': 'Equipo + SIM básico', 'LINEA': 'Línea',
-        'SIM BASICO': 'SIM básico', 'BANDA ANCHA': 'Banda ancha', 'MODEM': 'Módem', 'CAMARA': 'Cámara' };
       /** { tipo: { total (registros únicos), equipos, lineas } } de todo el inventario. */
       function conteoTipos() {
         const c = {};
@@ -2786,10 +2784,10 @@
             '<span class="filtro-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
             '<span class="filtro-tipo-nombre">' + esc(nombre) + '</span><span class="filtro-tipo-num">' + miles(n) + '</span></button>';
         cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Tipo</div>' +
-          fila('*', 'layers', '', 'Todos', total) +
+          fila('*', 'layers', '', 'TODOS', total) +
           tipos.map((t) => {
             const r = regla(t);
-            return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t ? (NOMBRE_TIPO[t] || t) : 'Sin tipo', conteo[t] ? conteo[t].total : 0);
+            return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t || 'SIN TIPO', conteo[t] ? conteo[t].total : 0);
           }).join('') + '</div>';
         marcarTipos(modulo);
       }

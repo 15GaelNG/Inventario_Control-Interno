@@ -621,6 +621,9 @@
   }
 
   function navegarA(vista, etiqueta) {
+    // En las vistas con `sinAsistente` (Líneas: no tienen ayuda ni recorrido, usuario 12-oct) no sale
+    const asistente = document.getElementById('asistente-flotante');
+    if (asistente) asistente.hidden = !!(vistaDe(vista) || {}).sinAsistente;
     if (vista !== vistaActual) caminarAsistente();
     vistaActual = vista;
     // Rama emmanuel: cada cambio de módulo es un paso de Atrás/Adelante (html/historial-navegador.html)
@@ -675,6 +678,7 @@
    *              Cambios de Monto no son módulos propios, cuelgan de su padre. `libre: true` = no
    *              pide permiso (Sistemas y Encuestas: solo enlaces a sistemas externos). Sin ninguno
    *              de los dos, el item no se pinta.
+   *   sinAsistente  en esa vista no sale el asistente flotante; en un grupo, vale para todos sus items
    * source-contracts revisa que cada plantilla, función y módulo exista.
    */
   const NAV_GRUPOS = [
@@ -696,7 +700,7 @@
     {
       // Módulos de Telefonía de la rama emmanuel (ver html/js/lineas.html). El inventario de accesorios es el de
       // Líneas (accesorios-lineas); el general de jorge ("accesorios") se retiró el 1-oct: quedaba uno solo.
-      id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas',
+      id: 'lineas', icono: 'smartphone', etiqueta: 'Líneas', sinAsistente: true,
       items: [
         // Íconos equivalentes a los del menú del AppSheet (Font Awesome → Lucide)
         { vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas', plantilla: 'tpl-lineas-panorama', init: () => Lineas.initPanorama() },
@@ -729,7 +733,7 @@
       ],
     },
     // Activos por colaborador de todas las áreas (rama emmanuel)
-    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos() },
+    { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos(), sinAsistente: true },
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
     { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
@@ -751,7 +755,7 @@
     // La campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
     { vista: 'notificaciones', etiqueta: 'Notificaciones', icono: 'bell', plantilla: 'tpl-notificaciones', init: () => Notificaciones.initVista(), ayuda: () => AYUDA_NOTIFICACIONES },
     // Control de Cambios de Líneas: salió del menú (30-sep) pero se abre desde el Panorama de Líneas
-    { vista: 'cambios-lineas', etiqueta: 'Control de cambios - Líneas', icono: 'history', requiere: 'cambios-lineas', plantilla: 'tpl-lineas-bitacora', init: () => Lineas.initCambios() },
+    { vista: 'cambios-lineas', etiqueta: 'Control de cambios - Líneas', icono: 'history', requiere: 'cambios-lineas', plantilla: 'tpl-lineas-bitacora', init: () => Lineas.initCambios(), sinAsistente: true },
   ];
 
   /**
@@ -762,7 +766,7 @@
     for (const g of NAV_GRUPOS) {
       if (g.vista === vista) return Object.assign({ iconoArea: g.icono }, g);
       const item = (g.items || []).find((it) => it.vista === vista);
-      if (item) return Object.assign({ iconoArea: g.icono }, item);
+      if (item) return Object.assign({ iconoArea: g.icono, sinAsistente: g.sinAsistente }, item);
     }
     const suelta = VISTAS_FUERA_DEL_MENU.find((v) => v.vista === vista);
     return suelta ? Object.assign({ iconoArea: suelta.icono }, suelta) : null;
