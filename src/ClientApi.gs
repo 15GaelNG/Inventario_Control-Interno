@@ -112,7 +112,7 @@ function apiFichaVehiculo(token, folio) {
   });
 }
 /**
- * Pestaña "Documentos vehicular" de la ficha: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar, solo lectura).
+ * Pestaña "Documentos" de la ficha: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar, solo lectura).
  * Con permiso de Vehículos. Las responsivas y los préstamos solo a quien ve Responsiva vehicular, y los adherentes a
  * quien ve Adherente vehicular (los mismos PDF que sus pestañas). El vehículo es su NUCO, nunca el folio.
  */

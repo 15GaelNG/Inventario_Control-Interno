@@ -267,7 +267,7 @@
         responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
       });
     },
-    // Documentos vehicular: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar), con las fechas de ejemplo
+    // Documentos: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar), con las fechas de ejemplo
     apiDocumentosVehiculo: () => {
       const ar = (nombre, dias, mime) => ({ id: 'f' + nombre.length + dias, nombre, url: 'https:\/\/drive.google.com/file/d/x', mime: mime || 'application/pdf', fecha: hace(dias) });
       const g = (grupo, archivos) => ({ grupo, raiz: grupo.split(' / ')[0], archivos });
