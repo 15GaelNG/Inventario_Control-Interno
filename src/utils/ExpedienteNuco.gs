@@ -164,11 +164,92 @@ const ExpedienteNuco = (function () {
     return { carpetaId: destino.getId(), nombre: nombre };
   }
 
+  const TITULOS = { FACTURA: 'Factura', SEGURO: 'Póliza de seguro', ALTA: 'Alta de placas', TARJETA: 'Tarjeta de circulación',
+    RESPONSIVA: 'Responsiva', TENENCIA: 'Tenencia' };
+
+  /** La carpeta hija que se llama así (tolerando espacios y acentos), o null. Nunca crea. */
+  function buscar_(padre, nombre) {
+    if (!padre) return null;
+    const exacta = padre.getFoldersByName(nombre);
+    if (exacta.hasNext()) return exacta.next();
+    const buscada = clave_(nombre);
+    const todas = padre.getFolders();
+    while (todas.hasNext()) {
+      const c = todas.next();
+      if (clave_(c.getName()) === buscada) return c;
+    }
+    return null;
+  }
+
+  function archivos_(carpetaDrive) {
+    const out = [];
+    const it = carpetaDrive.getFiles();
+    while (it.hasNext()) {
+      const f = it.next();
+      if (f.isTrashed && f.isTrashed()) continue;
+      out.push({ id: f.getId(), nombre: f.getName(), url: f.getUrl(), mime: f.getMimeType(),
+        fecha: (f.getDateCreated ? f.getDateCreated() : f.getLastUpdated()).toISOString() });
+    }
+    return out.sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+  }
+
+  /** Lo que hay en las subcarpetas (anteriores, adherentes, préstamos…), en grupos con su ruta */
+  function grupos_(carpetaDrive, ruta, out, nivel) {
+    const it = carpetaDrive.getFolders();
+    while (it.hasNext()) {
+      const c = it.next();
+      if (c.isTrashed && c.isTrashed()) continue;
+      const r = ruta.concat(c.getName());
+      const archivos = archivos_(c);
+      if (archivos.length) out.push({ grupo: r.join(' / '), raiz: r[0], archivos: archivos });
+      if (nivel < 3) grupos_(c, r, out, nivel + 1);
+    }
+    return out;
+  }
+
+  /**
+   * SOLO LECTURA: el expediente de un NUCO tal como está en Drive (no crea nada). Para la pestaña "Documentos
+   * vehicular" de la ficha. → { existe, url, carpetas: [{nombre, url}], documentos: [{clave, titulo, url, vigentes,
+   * anteriores: [{grupo, raiz, archivos}]}], otros: [{grupo, raiz, archivos}] }. Los archivos van del más nuevo al
+   * más viejo. Quién puede ver qué (responsivas, préstamos, adherentes) lo decide quien llama.
+   */
+  function listar(nucco) {
+    const nucos = raiz_();
+    const hay = nucos.getFoldersByName(nombreNuco_(nucco));
+    if (!hay.hasNext()) return { existe: false, documentos: [], otros: [], carpetas: [] };
+    const nuco = hay.next();
+    const doc = buscar_(nuco, DOCUMENTACION);
+    const carpetas = [DOCUMENTACION].concat(OTRAS).map((n) => buscar_(nuco, n))
+      .filter(Boolean).map((c) => ({ nombre: c.getName(), url: c.getUrl() }));
+    const usadas = {};
+    const documentos = Object.keys(DOCUMENTOS).map((k) => {
+      const c = buscar_(doc, DOCUMENTOS[k].carpeta);
+      if (c) usadas[c.getId()] = true;
+      return { clave: k, titulo: TITULOS[k], url: c ? c.getUrl() : '', vigentes: c ? archivos_(c) : [],
+        anteriores: c ? grupos_(c, [], [], 1) : [] };
+    });
+    // Lo demás de 1.-DOCUMENTACIÓN (ANTERIORES: Oxxo Gas, permisos… y archivos sueltos)
+    const otros = [];
+    if (doc) {
+      const sueltos = archivos_(doc);
+      if (sueltos.length) otros.push({ grupo: '(sueltos en ' + DOCUMENTACION + ')', raiz: '', archivos: sueltos });
+      const it = doc.getFolders();
+      while (it.hasNext()) {
+        const c = it.next();
+        if (usadas[c.getId()] || (c.isTrashed && c.isTrashed())) continue;
+        const archivos = archivos_(c);
+        if (archivos.length) otros.push({ grupo: c.getName(), raiz: c.getName(), archivos: archivos });
+        grupos_(c, [c.getName()], otros, 2);
+      }
+    }
+    return { existe: true, nuco: nombreNuco_(nucco), url: nuco.getUrl(), carpetas, documentos, otros };
+  }
+
   /** El ID de Drive dentro de una liga (".../file/d/<id>/view", "...?id=<id>") o null si no es una liga de Drive */
   function idDeLiga(liga) {
     const m = /\/d\/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})/.exec(String(liga || ''));
     return m ? (m[1] || m[2]) : null;
   }
 
-  return { DOCUMENTOS, PRESTAMOS, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
+  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, listar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
 })();

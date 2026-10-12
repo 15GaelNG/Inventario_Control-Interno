@@ -24,6 +24,10 @@ function driveFalso() {
     x.getFilesByName = (v) => iter(hijos(x).filter((h) => h.tipo !== CARPETA && h.nombre === v));
     x.getFiles = () => iter(hijos(x).filter((h) => h.tipo !== CARPETA));
     x.getFolders = () => iter(hijos(x).filter((h) => h.tipo === CARPETA));
+    x.getUrl = () => 'url:' + x.id;
+    x.getMimeType = () => (x.tipo === 'pdf' ? 'application/pdf' : 'image/' + x.tipo);
+    x.getDateCreated = () => x.fecha;
+    x.isTrashed = () => false;
     x.createFolder = (v) => nodo(v, x, CARPETA);
     porId[x.id] = x;
     return x;
@@ -134,6 +138,29 @@ test('reconoce la carpeta aunque su nombre traiga otro espacio o acento: no crea
   assert.equal(drive.ruta(f), 'NUCOS VEHICULOS/9/1.- DOCUMENTACION/5.- RESPONSIVA /RESPONSIVA-0009.pdf');
   assert.equal(drive.hijos(n9).length, 1);
   assert.equal(drive.hijos(doc).length, 1);
+});
+
+test('listar: por tipo de documento, el vigente y sus anteriores, sin crear nada', () => {
+  const drive = driveFalso();
+  const { E, nucos } = cargar(drive);
+  const viejo = drive.nodo('s1.pdf', null, 'pdf', new Date('2024-03-01T12:00:00Z'));
+  E.archivar(viejo, 88, 'SEGURO');
+  E.archivar(drive.nodo('s2.pdf', null, 'pdf'), 88, 'SEGURO');
+  const n88 = drive.hijos(nucos).find((h) => h.nombre === '88');
+  const doc = drive.hijos(n88).find((h) => h.nombre === '1.-DOCUMENTACIÓN');
+  const oxxo = drive.nodo('ANTERIORES', doc, CARPETA);
+  drive.nodo('ticket.jpg', drive.nodo('OXXO GAS', oxxo, CARPETA), 'jpg');
+  const antes = Object.keys(drive.porId).length;
+  const exp = E.listar('0088');
+  assert.equal(Object.keys(drive.porId).length, antes);             // solo lectura
+  assert.equal(exp.existe, true);
+  const seguro = exp.documentos.find((d) => d.clave === 'SEGURO');
+  assert.deepEqual([...seguro.vigentes.map((a) => a.nombre)], ['SEGURO-0088.pdf']);
+  assert.deepEqual([...seguro.anteriores.map((g) => g.grupo)], ['SEGUROS ANTERIORES']);
+  assert.equal(exp.documentos.length, 6);
+  assert.deepEqual([...exp.otros.map((g) => g.grupo)], ['ANTERIORES / OXXO GAS']);
+  assert.equal(JSON.stringify(E.listar(999)), JSON.stringify({ existe: false, documentos: [], otros: [], carpetas: [] }));
+  assert.equal(drive.hijos(nucos).length, 1);                        // no creó el 999
 });
 
 test('sin NUCCO no adivina', () => {
