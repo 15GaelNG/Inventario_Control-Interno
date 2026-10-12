@@ -1,0 +1,193 @@
+<script>
+  /**
+   * Administración > Capital humano (views/capital-humano.html). Se sube el Excel de CH:
+   *   1. se lee EN EL NAVEGADOR con SheetJS (ExportarExcel.cargarLibreria): las fechas como dd/mm/yyyy, los números tal
+   *      cual, y TELEFONO / NÚMERO DE CUENTA se quitan aquí mismo (nunca viajan);
+   *   2. viaja comprimido (gzip, base64) a CapitalHumano.cargar: primero el ensayo, luego "Aplicar".
+   * El servidor combina por empleo (número + nombre): cada persona conserva su ID PERSONA, nadie se borra.
+   */
+  const CapitalHumanoVista = (function () {
+    // Las mismas que CapitalHumano.SENSIBLES (servidor): aquí se quitan antes de mandar
+    const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'TELEFONO', 'TELÉFONO'];
+    const OBLIGATORIAS = ['No EMPLEADO', 'NOMBRE COMPLETO', 'STATUS', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO'];
+    const limpio = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+    const esSensible = (c) => SENSIBLES.indexOf(limpio(c).toUpperCase()) !== -1;
+    const dos = (n) => ('0' + n).slice(-2);
+
+    /** El valor de una celda de SheetJS como lo muestra la hoja de CH: fecha dd/mm/yyyy; número sin formato; texto limpio */
+    function valorDeCelda(celda, SSF) {
+      if (!celda || celda.v === undefined || celda.v === null) return '';
+      if (celda.t === 'n' && celda.z && SSF && SSF.is_date(celda.z)) {
+        const d = SSF.parse_date_code(celda.v);
+        return d ? dos(d.d) + '/' + dos(d.m) + '/' + d.y : '';
+      }
+      if (celda.t === 'd' && celda.v instanceof Date) {
+        return dos(celda.v.getDate()) + '/' + dos(celda.v.getMonth() + 1) + '/' + celda.v.getFullYear();
+      }
+      return limpio(celda.v);
+    }
+
+    /** La primera hoja del libro (o la que tenga los encabezados de CH) como renglones de texto */
+    function leerLibro(XLSX, wb) {
+      const comoTexto = (ws) => {
+        if (!ws || !ws['!ref']) return [];
+        const rango = XLSX.utils.decode_range(ws['!ref']);
+        const filas = [];
+        for (let r = rango.s.r; r <= rango.e.r; r++) {
+          const fila = [];
+          for (let c = rango.s.c; c <= rango.e.c; c++) fila.push(valorDeCelda(ws[XLSX.utils.encode_cell({ r: r, c: c })], XLSX.SSF));
+          filas.push(fila);
+        }
+        return filas;
+      };
+      const hojas = wb.SheetNames.map((n) => comoTexto(wb.Sheets[n]));
+      return hojas.find((h) => preparar(h).encabezados.length) || hojas[0] || [];
+    }
+
+    /**
+     * Puro: renglones de texto → { encabezados, filas, quitadas, faltan }. El encabezado es el primer renglón (de los 10
+     * primeros) que trae "No EMPLEADO" y "NOMBRE COMPLETO". Sin las columnas sensibles; sin renglones vacíos.
+     */
+    function preparar(renglones) {
+      const i = (renglones || []).slice(0, 10).findIndex((r) => {
+        const enc = r.map(limpio);
+        return enc.indexOf('No EMPLEADO') !== -1 && enc.indexOf('NOMBRE COMPLETO') !== -1;
+      });
+      if (i === -1) return { encabezados: [], filas: [], quitadas: [], faltan: OBLIGATORIAS.slice() };
+      const enc = renglones[i].map(limpio);
+      const quedan = enc.map((c, k) => (c && !esSensible(c) ? k : -1)).filter((k) => k !== -1);
+      return {
+        encabezados: quedan.map((k) => enc[k]),
+        filas: renglones.slice(i + 1).filter((r) => r.some((v) => limpio(v))).map((r) => quedan.map((k) => limpio(r[k]))),
+        quitadas: enc.filter(esSensible),
+        faltan: OBLIGATORIAS.filter((c) => enc.indexOf(c) === -1),
+      };
+    }
+
+    /** JSON → gzip → base64 (así 15 mil renglones viajan en unos cientos de KB) */
+    async function comprimir(objeto) {
+      const flujo = new Blob([JSON.stringify(objeto)]).stream().pipeThrough(new CompressionStream('gzip'));
+      const bytes = new Uint8Array(await new Response(flujo).arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(bin);
+    }
+
+    const num = (n) => Number(n || 0).toLocaleString('es-MX');
+
+    async function pintarResumen() {
+      try {
+        const r = await callServer('apiCapitalHumanoResumen', state.token);
+        document.getElementById('ch-renglones').textContent = num(r.renglones);
+        document.getElementById('ch-activos').textContent = num(r.activos);
+        document.getElementById('ch-sin-id').textContent = r.tieneColumna ? num(r.sinId) : 'sin columna';
+        const s = document.getElementById('ch-sensibles');
+        s.hidden = !r.sensibles.length;
+        s.textContent = r.sensibles.length ? 'La hoja todavía tiene datos sensibles (' + r.sensibles.join(', ') + '): la próxima carga los quita.' : '';
+      } catch (err) {
+        Notificar.error(err.message);
+      }
+    }
+
+    async function pintarHistorial() {
+      const caja = document.getElementById('ch-historial');
+      try {
+        const filas = await callServer('apiCapitalHumanoHistorial', state.token);
+        caja.innerHTML = TablaFicha.html([
+          { t: 'Fecha', r: (x) => escaparHtml(x.FECHA) },
+          { t: 'Quién', r: (x) => escaparHtml(x.QUIEN) },
+          { t: 'Renglones', alinear: 'derecha', num: true, r: (x) => escaparHtml(x.RENGLONES) },
+          { t: 'Nuevos', alinear: 'derecha', num: true, r: (x) => escaparHtml(x.NUEVOS) },
+          { t: 'Cambian', alinear: 'derecha', num: true, r: (x) => escaparHtml(x.CAMBIAN) },
+          { t: 'No vinieron', alinear: 'derecha', num: true, r: (x) => escaparHtml(x.FALTAN) },
+          { t: 'Personas nuevas', alinear: 'derecha', num: true, r: (x) => escaparHtml(x.PERSONAS_NUEVAS) },
+        ], filas || [], { vacio: 'Todavía no se ha subido la lista desde aquí.', minAncho: 620 });
+      } catch (err) {
+        caja.innerHTML = '<p class="error-msg">' + escaparHtml(err.message) + '</p>';
+      }
+    }
+
+    function pintarEnsayo(caja, r, aplicado) {
+      const lista = (titulo, cosas) => (cosas.length ? '<details class="ln-tenue"><summary>' + escaparHtml(titulo) + ' (' + cosas.length + ')</summary><ul>' +
+        cosas.slice(0, 60).map((a) => '<li>' + escaparHtml(a) + '</li>').join('') + '</ul></details>' : '');
+      caja.innerHTML =
+        '<div class="kpi-chips">' +
+          '<span class="chip">' + num(r.renglones) + ' renglones en el archivo</span>' +
+          '<span class="chip">' + num(r.nuevos) + ' nuevos</span>' +
+          '<span class="chip">' + num(r.cambian) + ' cambian</span>' +
+          '<span class="chip">' + num(r.faltan) + ' no vinieron (se quedan)</span>' +
+          '<span class="chip">' + num(r.personasNuevas) + ' personas nuevas</span>' +
+        '</div>' +
+        (r.quitadas.length ? '<p class="ln-tenue">No se suben: ' + escaparHtml(r.quitadas.join(', ')) + '.</p>' : '') +
+        (r.conflictos.length ? '<p class="error-msg">' + r.conflictos.length + ' personas parecen ser una sola pero ya tienen IDs distintos: no se tocan.</p>' : '') +
+        lista('Conflictos', r.conflictos) + lista('Avisos', r.avisos) +
+        (aplicado
+          ? '<p><strong>Listo:</strong> la lista quedó actualizada y cada persona conserva su ID.</p>'
+          : '<button type="button" id="ch-aplicar"><i data-lucide="check" class="ico"></i> Aplicar</button>');
+      caja.hidden = false;
+      if (window.lucide) lucide.createIcons();
+    }
+
+    function init() {
+      const archivo = document.getElementById('ch-archivo');
+      const revisar = document.getElementById('ch-revisar');
+      const caja = document.getElementById('ch-ensayo');
+      let comprimido = null;
+      archivo.addEventListener('change', () => { revisar.disabled = !archivo.files.length; caja.hidden = true; comprimido = null; });
+
+      revisar.addEventListener('click', async () => {
+        const f = archivo.files[0];
+        if (!f) return;
+        revisar.disabled = true;
+        caja.hidden = false;
+        caja.innerHTML = '<p class="ln-tenue"><span class="spinner"></span> Leyendo el archivo…</p>';
+        try {
+          const XLSX = await ExportarExcel.cargarLibreria();
+          const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellNF: true });
+          const datos = preparar(leerLibro(XLSX, wb));
+          if (datos.faltan.length) throw new Error('El archivo no parece la lista de Capital Humano: le falta ' + datos.faltan.join(', ') + '.');
+          caja.innerHTML = '<p class="ln-tenue"><span class="spinner"></span> Revisando ' + num(datos.filas.length) + ' renglones…</p>';
+          comprimido = await comprimir({ encabezados: datos.encabezados, filas: datos.filas });
+          const r = await callServer('apiCapitalHumanoCargar', state.token, comprimido, { escribir: false });
+          r.quitadas = Array.from(new Set(r.quitadas.concat(datos.quitadas)));
+          pintarEnsayo(caja, r, false);
+        } catch (err) {
+          caja.innerHTML = '<p class="error-msg">' + escaparHtml(err.message) + '</p>';
+        } finally {
+          revisar.disabled = !archivo.files.length;
+        }
+      });
+
+      caja.addEventListener('click', async (ev) => {
+        const boton = ev.target.closest('#ch-aplicar');
+        if (!boton || !comprimido) return;
+        const ok = await Confirmar.pedir({
+          titulo: 'Actualizar la lista de Capital Humano',
+          mensaje: 'Se reemplaza COLABORADORES ACTUALIZADO con este archivo. Cada persona conserva su ID y nadie se borra.',
+          textoConfirmar: 'Aplicar',
+        });
+        if (!ok) return;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> Aplicando…';
+        try {
+          const r = await callServer('apiCapitalHumanoCargar', state.token, comprimido, { escribir: true });
+          pintarEnsayo(caja, r, true);
+          Notificar.exito('Lista de Capital Humano actualizada');
+          comprimido = null;
+          invalidarCacheCatalogo('apiListarColaboradores', state.token);
+          pintarResumen();
+          pintarHistorial();
+        } catch (err) {
+          Notificar.error(err.message);
+          boton.disabled = false;
+          boton.textContent = 'Aplicar';
+        }
+      });
+
+      pintarResumen();
+      pintarHistorial();
+    }
+
+    return { init, preparar, valorDeCelda };
+  })();
+</script>

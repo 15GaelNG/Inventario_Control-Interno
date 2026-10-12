@@ -2407,3 +2407,38 @@ test('lo nuevo de Vehículos (inspección, verificación, responsiva de sensor, 
   assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRuta\(ruta, carpetasIds\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
   assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRutaProfunda\(ruta, raizId\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
 });
+
+test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS (docs/personas-unificar.md)', () => {
+  // 12-oct-2026: había cuatro formas de leer personas (CapitalHumano, Líneas con su propia lectura de CH y su respaldo a
+  // COLABORADORES, la revisión de INE). Desde ahora todo pasa por CapitalHumano (activos, idPara, conPersona, filasCH).
+  // Se permiten, hasta retirar COLABORADORES (fase 4): la carga del libro de pruebas de Líneas y su diagnóstico.
+  const PERMITIDOS = ['src/services/CapitalHumano.gs', 'src/services/lineas/LineasReestructura.gs', 'src/services/lineas/LineasRevisionBD.gs'];
+  const malos = [];
+  const recorrer = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return recorrer(p);
+    if (!/\.(gs|html)$/.test(e.name)) return;
+    const rel = path.relative(path.join(__dirname, '..'), p).split(path.sep).join('/');
+    if (PERMITIDOS.includes(rel)) return;
+    const s = fs.readFileSync(p, 'utf8');
+    if (/getSheetByName\(\s*(['"](COLABORADORES ACTUALIZADO|PERSONAS|COLABORADORES)['"]|CapitalHumano\.HOJA_(CH|PERSONAS))/.test(s) ||
+        /leerTabla\(\s*['"]COLABORADORES/.test(s) || /\bTAB\.COLAB\b/.test(s)) malos.push(rel);
+  });
+  recorrer(path.join(__dirname, '..', 'src'));
+  assert.deepEqual(malos, [], 'leen personas por su cuenta (usar CapitalHumano)');
+  // Y cada servicio que captura una persona calcula su ID PERSONA
+  const ch = read('src/services/CapitalHumano.gs');
+  ['VEHICULOS', 'CAJAS CHICAS', 'ASIGNACIONES', 'RESPONSIVA VEHICULAR', 'ADHERENTE VEHICULAR', 'REASIGNACIONES_VEHICULOS',
+    'INSPECCION VEHICULAR', 'UBER', 'ARQUEOS', 'TICKETS'].forEach((h) => assert.match(ch, new RegExp("hoja: '" + h + "'"), 'liga de ' + h));
+  [['VehiculosService.gs', /persona: true/], ['CajasChicasService.gs', /persona: true/], ['UberService.gs', /persona: true/],
+    ['TicketsService.gs', /persona: true/], ['ArqueosService.gs', /persona: true/],
+    ['ResponsivaVehicularService.gs', /CapitalHumano\.conPersona\('RESPONSIVA VEHICULAR'/],
+    ['AdherenteVehicularService.gs', /CapitalHumano\.conPersona\('ADHERENTE VEHICULAR'/],
+    ['ReasignacionesVehicularesService.gs', /CapitalHumano\.conPersona\('REASIGNACIONES_VEHICULOS'/],
+    ['InspeccionesService.gs', /CapitalHumano\.conPersona\('INSPECCION VEHICULAR'/]]
+    .forEach(([f, re]) => assert.match(read('src/services/' + f), re, f));
+  // Ya no hay copias del cálculo
+  ['VehiculosService.gs', 'CajasChicasService.gs'].forEach((f) => assert.doesNotMatch(read('src/services/' + f), /function conPersona_/, f));
+  // El navegador quita lo sensible antes de mandar el Excel
+  assert.match(read('src/html/js/app-capital-humano.html'), /const SENSIBLES = \['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'TELEFONO', 'TELÉFONO'\];/);
+});
