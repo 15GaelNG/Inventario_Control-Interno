@@ -234,6 +234,7 @@ const ResponsivaVehicularService = (function () {
    */
   function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra) {
     const avisos = [];
+    const esPrestamo = String(fila['TIPO RESPONSIVA'] || '').trim().toUpperCase() === TIPO_PRESTAMO;
     let pdf = null;
     try {
       Object.keys(imagenesPdf).forEach((campo) => {
@@ -259,8 +260,9 @@ const ResponsivaVehicularService = (function () {
         plantillaId: PLANTILLA,
         datos: datosPdf,
         imagenes: imagenesPdf,
-        // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA)
-        carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
+        // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA; un préstamo,
+        // en 5.-RESPONSIVA/PRESTAMOS: no es la responsiva del dueño y no la desplaza)
+        carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', esPrestamo ? [ExpedienteNuco.PRESTAMOS] : undefined).getId(),
         nombre: PdfService.nombreArchivo([
           'RESPONSIVA VEHICULAR', fila['RESPONSABLE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
         ]),
@@ -268,7 +270,7 @@ const ResponsivaVehicularService = (function () {
       // Su nombre en el expediente (RESPONSIVA-0088.pdf) y, si es responsiva, la vigente pasa a RESPONSIVAS ANTERIORES.
       // Si esto falla el PDF ya existe y queda ligado: solo se avisa.
       try {
-        ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), fila['NUCCO'], 'RESPONSIVA');
+        ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), fila['NUCCO'], 'RESPONSIVA', { prestamo: esPrestamo });
       } catch (e) {
         avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
       }
