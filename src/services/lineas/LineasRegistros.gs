@@ -262,10 +262,13 @@ const LineasRegistros = (function () {
     const fechas = nuevo || !tieneLinea ? 'SIEMPRE' : 'NUNCA';
     // En el alta no se muestra con SIM BASICO: no tiene adendum y no se le pide (usuario, 8-oct; plan §4.3)
     const conPlan = { campo: 'TIPO DE LINEA', distinto: 'SIM BASICO' };
-    // Al editar también se esconde con SIM BASICO, salvo que ya tenga datos de adendum (no se ocultan ni se borran)
+    // Al editar también se esconde con SIM BASICO, y al cambiarla a SIM BASICO el adendum se borra (usuario, 12-oct;
+    // pendiente 2.33). Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran al editar otra cosa
     const conAdendum = ['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'].some((c) => texto_(v(c)));
+    const yaBasicoConAdendum = conAdendum && texto_(v('TIPO DE LINEA')).toUpperCase() === 'SIM BASICO';
     const soloPlan = nuevo ? { mostrar: conPlan, reset: { cuando: { campo: 'TIPO DE LINEA', igual: 'SIM BASICO' }, valor: '' } }
-      : (conAdendum ? {} : { mostrar: conPlan });
+      : { mostrar: yaBasicoConAdendum ? 'SIEMPRE' : conPlan,
+        reset: { cuando: { y: [{ campo: 'TIPO DE LINEA', igual: 'SIM BASICO' }, { cambio: 'TIPO DE LINEA' }] }, valor: '' } };
     const adendum = [
       titulo('ADENDUM', 'file-text'),
       ed('COSTO PLAN', 'Costo del plan', 'numero', soloPlan),

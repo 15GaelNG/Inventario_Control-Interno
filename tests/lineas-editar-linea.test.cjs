@@ -93,7 +93,31 @@ test('al editar, un SIM BASICO sin datos de adendum no enseña el adendum', () =
   const ctx = Reg._contextoEdicion(basica, null);
   const els = Reg._elementos(basica, {}, usuario, ctx);
   assert.ok(!Reg._cumple(campo(els, 'FIN PLAN').mostrar, basica, ctx));
-  // Con datos de adendum se siguen viendo
+  // Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran al editar otra cosa
   const conFin = Object.assign({}, basica, { 'FIN PLAN': '2027-01-01' });
-  assert.equal(campo(Reg._elementos(conFin, {}, usuario, ctx), 'FIN PLAN').mostrar, 'SIEMPRE');
+  const ctxFin = Object.assign(Reg._contextoEdicion(conFin, null), { nucoRepetido: () => false, telefonoRepetido: () => false });
+  const elsFin = Reg._elementos(conFin, {}, usuario, ctxFin);
+  assert.equal(campo(elsFin, 'FIN PLAN').mostrar, 'SIEMPRE');
+  const r = Reg._resolver(elsFin, conFin, Object.assign({}, conFin, { 'COMPAÑIA': 'TELCEL' }), ctxFin);
+  assert.equal(r.valores['FIN PLAN'], '2027-01-01');
+});
+
+test('al editar, cambiar una línea a SIM BASICO esconde y borra el adendum (usuario, 12-oct; pendiente 2.33)', () => {
+  const Reg = cargar();
+  const plan = { TIPO: 'LINEA', 'NUMERO TELEFONO': '4420000003', 'TIPO DE LINEA': 'PLAN', 'ESTATUS LINEA': 'DISPONIBLE', 'COMPAÑIA': 'TELCEL',
+    'COSTO PLAN': '299', 'INICIO PLAN': '2025-01-01', 'FIN PLAN': '2027-01-01' };
+  const ctx = Object.assign(Reg._contextoEdicion(plan, 'LINEA'), { nucoRepetido: () => false, telefonoRepetido: () => false });
+  const els = Reg._elementos(plan, {}, usuario, ctx);
+  const aBasico = Object.assign({}, plan, { 'TIPO DE LINEA': 'SIM BASICO' });
+  ['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'].forEach((c) => {
+    assert.ok(Reg._cumple(campo(els, c).mostrar, plan, ctx), c + ' se ve con PLAN');
+    assert.ok(!Reg._cumple(campo(els, c).mostrar, aBasico, ctx), c + ' se esconde con SIM BASICO');
+    assert.ok(!Reg._cumple(campo(els, c).requerido, aBasico, ctx), c + ' no se pide');
+  });
+  const r = Reg._resolver(els, plan, aBasico, ctx);
+  assert.deepEqual(r.errores, []);
+  assert.deepEqual(['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'].map((c) => r.valores[c]), ['', '', '']);
+  // Si se queda en PLAN, el adendum no se toca
+  const igual = Reg._resolver(els, plan, Object.assign({}, plan, { 'COMPAÑIA': 'AT&T' }), ctx);
+  assert.equal(igual.valores['COSTO PLAN'], '299');
 });
