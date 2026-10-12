@@ -161,8 +161,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (`usuario.puedeAprobar`, calculado con `Permisos.deCorreo` en `TelefoniaService.usuarioResguardo_`); ADMIN y SUPER también,
   porque editan todo. Con solo LECTURA se ve y no se modifica («Solo puedes consultar Resguardos y cancelaciones, no
   modificarlo.»). «Mandar a resguardo», su formulario y «Mandar a cancelación» piden EDICION de `lineas-telefonicas`, así
-  que el área de Líneas sigue mandando. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) da LECTURA al
-  área LINEAS y EDICION a `paulina.bustamante@ciudadmaderas.com`; en producción manda la hoja PERMISOS (pendiente 8.11).
+  que el área de Líneas sigue mandando. En producción manda la hoja PERMISOS: el área LINEAS está en LECTURA en
+  `resguardos-lineas` (cambio del 12-oct) y no existe una regla personal de Pau; los pasos de la bandeja los hace quien tiene
+  EDICION ahí, que hoy son solo los usuarios con rol ADMIN o SUPER (Pau es SUPER). Es decisión del usuario (12-oct): no hay
+  permisos individuales. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) sí trae LECTURA para el área
+  LINEAS y EDICION para `paulina.bustamante@ciudadmaderas.com`.
   Ya no existe la lista `LINEAS_APROBADORES_RESGUARDO` (12-oct, `585d1c6`).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
