@@ -23,6 +23,7 @@ function driveFalso() {
     x.getFoldersByName = (v) => iter(hijos(x).filter((h) => h.tipo === CARPETA && h.nombre === v));
     x.getFilesByName = (v) => iter(hijos(x).filter((h) => h.tipo !== CARPETA && h.nombre === v));
     x.getFiles = () => iter(hijos(x).filter((h) => h.tipo !== CARPETA));
+    x.getFolders = () => iter(hijos(x).filter((h) => h.tipo === CARPETA));
     x.createFolder = (v) => nodo(v, x, CARPETA);
     porId[x.id] = x;
     return x;
@@ -56,7 +57,7 @@ test('un NUCO nuevo se crea con toda la estructura y el documento llega con su n
   assert.equal(drive.ruta(subido), 'NUCOS VEHICULOS/643/1.-DOCUMENTACIÓN/2.-SEGURO/SEGURO-0643.pdf');
   const n643 = Object.values(drive.porId).find((x) => x.nombre === '643');
   const dentro = drive.hijos(n643).map((h) => h.nombre).sort();
-  assert.deepEqual(dentro, ['1.-DOCUMENTACIÓN', '2.- SERVICIOS', '3.- VERIFICACIONES', '4.- INSPECCIONES']);
+  assert.deepEqual(dentro, ['1.-DOCUMENTACIÓN', '2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES']);
   const doc = drive.hijos(n643).find((h) => h.nombre === '1.-DOCUMENTACIÓN');
   assert.equal(drive.hijos(doc).length, 6);
 });
@@ -109,6 +110,19 @@ test('sin la clave (un DEV) usa la carpeta de pruebas de la raíz, nunca la real
   E.archivar(f, 7, 'TENENCIA');
   assert.match(drive.ruta(f), /^NUCOS VEHICULOS \(DEV\)\/7\/1\.-DOCUMENTACIÓN\/6\.-TENENCIA\/TENENCIA-0007\.pdf$/);
   assert.equal(drive.hijos(nucos).length, 0);
+});
+
+test('reconoce la carpeta aunque su nombre traiga otro espacio o acento: no crea otra al lado', () => {
+  const drive = driveFalso();
+  const { E, nucos } = cargar(drive);
+  const n9 = drive.nodo('9', nucos, CARPETA);
+  const doc = drive.nodo('1.- DOCUMENTACION', n9, CARPETA);        // con espacio y sin acento
+  drive.nodo('5.- RESPONSIVA ', doc, CARPETA);                      // con espacios de más
+  const f = drive.nodo('r.pdf', null, 'pdf');
+  E.archivar(f, 9, 'RESPONSIVA');
+  assert.equal(drive.ruta(f), 'NUCOS VEHICULOS/9/1.- DOCUMENTACION/5.- RESPONSIVA /RESPONSIVA-0009.pdf');
+  assert.equal(drive.hijos(n9).length, 1);
+  assert.equal(drive.hijos(doc).length, 1);
 });
 
 test('sin NUCCO no adivina', () => {

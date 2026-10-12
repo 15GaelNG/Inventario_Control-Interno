@@ -1,4 +1,4 @@
-"""Homologar `3.- VERIFICACIONES` de cada NUCO (docs/nucos-verificaciones.md). SOLO LECTURA: no mueve nada.
+"""Homologar `3.-VERIFICACIONES` de cada NUCO (docs/nucos-verificaciones.md). SOLO LECTURA: no mueve nada.
 
   foto.py <salida> VERIFIC          la foto de la carpeta (carpetas y archivos con md5) → .cache/verificaciones/foto.json
   verificaciones.py ocr             lee cada comprobante con el OCR de Google: una copia como Documento en una carpeta
@@ -23,7 +23,7 @@ CACHE = Path(__file__).resolve().parent / ".cache" / "verificaciones"
 FOTO, OCR, APP, PLAN = CACHE / "foto.json", CACHE / "ocr.json", CACHE / "app.json", CACHE / "plan.json"
 VEHICULOS = CACHE / "vehiculos.json"            # [{nuco, serie, placa, id}] de la hoja VEHICULOS (leer_vehiculos)
 FOTO_DOC = Path(__file__).resolve().parent / ".cache" / "inspecciones" / "foto-doc.json"
-RAIZ = "3.- VERIFICACIONES"
+RAIZ = "3.-VERIFICACIONES"
 POR_REVISAR = "_POR REVISAR"
 SEMESTRE = {1: "1ER SEMESTRE", 2: "2DO SEMESTRE"}
 LEIBLES = re.compile(r"^(image/|application/pdf)")
@@ -358,7 +358,7 @@ def excel(salida, plan, renombrar, sin, foto):
     ws.title = "Resumen"
     cuenta = collections.Counter((p["accion"], p.get("destino_tipo", "")) for p in plan)
     fuentes = collections.Counter(p["fuente"] for p in plan if p.get("destino_tipo") == "PERIODO")
-    filas = [["Archivos en 3.- VERIFICACIONES", len(plan)],
+    filas = [["Archivos en 3.-VERIFICACIONES", len(plan)],
              ["NUCO con carpeta / sin carpeta", "%d / %d" % (len(foto["raices"]), len(sin))],
              ["Carpetas raíz a renombrar a '%s'" % RAIZ, len(renombrar)], ["", ""]]
     filas += [["%s → %s" % (a, t or "-"), n] for (a, t), n in sorted(cuenta.items())]
@@ -380,7 +380,7 @@ def excel(salida, plan, renombrar, sin, foto):
     ws = wb.create_sheet("Renombrar raíz")
     hoja(ws, ["NUCO", "Nombre de antes", "Nombre nuevo"], [[r["nuco"], r["name"], RAIZ] for r in renombrar], [8, 34, 24])
     ws = wb.create_sheet("NUCO sin carpeta")
-    hoja(ws, ["NUCO (no tiene 3.- VERIFICACIONES)"], [[s] for s in sin], [40])
+    hoja(ws, ["NUCO (no tiene 3.-VERIFICACIONES)"], [[s] for s in sin], [40])
     wb.save(salida)
     print("Excel:", salida)
     for (a, t), n in sorted(cuenta.items()):

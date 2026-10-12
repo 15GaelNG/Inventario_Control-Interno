@@ -1,7 +1,7 @@
-"""DRY RUN (sin Drive: trabaja sobre la foto foto.json): homologar <NUCO>/4.- INSPECCIONES.
+"""DRY RUN (sin Drive: trabaja sobre la foto foto.json): homologar <NUCO>/4.-INSPECCIONES.
 
 Reglas (acordadas el 9-oct-2026):
-  4.- INSPECCIONES/
+  4.-INSPECCIONES/
      <año>/
         <N> BIMESTRE/          hasta 2025 (1ER … 6TO)
         <N> TRIMESTRE/         2026 en adelante (1ER … 4TO), por la fecha de lo que contiene
@@ -22,7 +22,7 @@ import reglas
 FOTO, SALIDA = sys.argv[1], sys.argv[2]
 x = json.load(open(FOTO, encoding="utf-8"))
 C, A = x["carpetas"], x["archivos"]
-RAIZ = "4.- INSPECCIONES"
+RAIZ = "4.-INSPECCIONES"
 AJENO = ["@AJENO"]          # marca: se decide al final (documentación o _POR REVISAR)
 SIN_PERIODO = "SIN PERIODO"
 ORD = {1: "1ER", 2: "2DO", 3: "3ER", 4: "4TO", 5: "5TO", 6: "6TO"}
@@ -203,7 +203,7 @@ def periodo_final(anio, p, fecha):
 
 
 # ---------- el plan: a cada carpeta, su ruta nueva (relativa a la raíz) ----------
-destino = {}        # id carpeta → lista de segmentos nuevos (relativa a 4.- INSPECCIONES)
+destino = {}        # id carpeta → lista de segmentos nuevos (relativa a 4.-INSPECCIONES)
 nota = {}           # id carpeta → (clasificación, aviso)
 destino_arch = {}   # id archivo → segmentos nuevos (carpeta) + nombre
 avisos = []
@@ -474,10 +474,10 @@ for p in plan:
                 conc = "ALTA DE PLACAS"
             elif re.search(r"VERIFICAC", texto):
                 conc = None
-                p["aviso"] = "factura de una verificación: le toca a 3.- VERIFICACIONES"
+                p["aviso"] = "factura de una verificación: le toca a 3.-VERIFICACIONES"
     if de_servicio:
         p["accion"] = "REVISAR"
-        p["aviso"] = "es de un servicio (factura/cotización del taller), no del vehículo: le toca a 2.- SERVICIOS"
+        p["aviso"] = "es de un servicio (factura/cotización del taller), no del vehículo: le toca a 2.-SERVICIOS"
         continue
     if not conc:
         p["accion"] = "REVISAR"
@@ -565,7 +565,7 @@ print("a 1.-DOCUMENTACIÓN:", sum(1 for p in plan if p["destino_tipo"] == "DOCUM
 print("papelera por motivo:", collections.Counter(re.sub(r" del NUCO.*", "", p["aviso"]) for p in plan if p["accion"] == "PAPELERA"))
 prof = collections.Counter(len(p["despues"].split("/")) - 3 for p in plan
                            if p["accion"] in ("MOVER", "IGUAL") and p["despues"].split("/")[1] == RAIZ)
-print("niveles de carpeta bajo 4.- INSPECCIONES (archivos por profundidad):", sorted(prof.items()))
+print("niveles de carpeta bajo 4.-INSPECCIONES (archivos por profundidad):", sorted(prof.items()))
 segundo = {p["despues"].split("/")[3] for p in plan if p["accion"] in ("MOVER", "IGUAL") and len(p["despues"].split("/")) > 4
            and es_anio(p["despues"].split("/")[2])}
 print("nombres de nivel 2 después:", sorted({re.sub(r"\d{4}-\d{2}-\d{2}", "<fecha>", re.sub(r"^SIN PERIODO - .*", "SIN PERIODO - <nombre>", k)) for k in segundo}))
