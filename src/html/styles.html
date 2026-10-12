@@ -83,16 +83,18 @@
   #app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
 
   /* Sidebar — fondo navy fijo de marca (no cambia con el tema claro/oscuro).
-     Recogido ocupa 92px; abierto (al pasar el cursor, initMenuAlPasar en app.html) mide 280px pero
+     Recogido ocupa 92px; abierto (al pasar el cursor, initMenuAlPasar en app.html) mide 308px pero
      el margen negativo le deja ocupar los mismos 92px: se abre POR ENCIMA del contenido, que no se
      mueve, como el filtro por tipo de Líneas telefónicas. Ancho y margen cambian juntos y con la misma
-     curva, así que el contenido tampoco se mueve durante la animación. Por debajo de los modales (500). */
+     curva, así que el contenido tampoco se mueve durante la animación. Por debajo de los modales (500).
+     308px (antes 280; usuario, 12-oct): lo que piden «Resguardos y cancelaciones» y «Reasignaciones
+     vehiculares» seleccionados (en negrita) para no cortarse. El margen es siempre 92 menos el ancho. */
   #sidebar {
-    width: 280px; height: 100vh; height: 100dvh; background: var(--color-sidebar-bg);
+    width: 308px; height: 100vh; height: 100dvh; background: var(--color-sidebar-bg);
     border-right: 1px solid var(--color-sidebar-border);
     padding: 18px 14px; display: flex; flex-direction: column; gap: 4px;
     flex-shrink: 0; overflow-y: auto; overflow-x: hidden;
-    position: relative; z-index: 450; margin-right: -188px; box-shadow: 0 0 40px rgba(0,0,0,.35);
+    position: relative; z-index: 450; margin-right: -216px; box-shadow: 0 0 40px rgba(0,0,0,.35);
     transition: width .2s cubic-bezier(.2, 0, 0, 1), margin-right .2s cubic-bezier(.2, 0, 0, 1), box-shadow .2s ease;
   }
   #sidebar.collapsed { width: 92px; margin-right: 0; box-shadow: none; }

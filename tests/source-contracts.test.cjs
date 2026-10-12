@@ -2327,8 +2327,11 @@ test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de
   assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
   assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
   assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
-  // Abierto mide 280px pero ocupa 92px: queda encima del contenido, por debajo de los modales
-  assert.match(css, /position: relative; z-index: 450; margin-right: -188px;/);
+  // Abierto mide 308px (caben «Resguardos y cancelaciones» y «Reasignaciones vehiculares») pero ocupa 92px: queda
+  // encima del contenido, por debajo de los modales. En celular y tableta, el mismo ancho
+  assert.match(css, /#sidebar \{\s*width: 308px;/);
+  assert.match(css, /position: relative; z-index: 450; margin-right: -216px;/);
+  assert.match(read('src/html/shell-movil.html'), /z-index: 900; width: 308px; max-width: 86vw;/);
   assert.match(css, /#sidebar\.collapsed \{ width: 92px; margin-right: 0; box-shadow: none; \}/);
   // El subitem se desliza sin que su contenedor le corte la esquina; los módulos sueltos llevan la placa del ícono
   assert.match(css, /padding: 2px 4px 2px 16px; margin-left: 24px;/);
