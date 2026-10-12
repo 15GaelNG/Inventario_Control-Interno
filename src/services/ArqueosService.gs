@@ -315,6 +315,8 @@ const ArqueosService = (function () {
     nombre: 'el arqueo',
     libro: ssId,
     hoja: NOMBRE_HOJA,
+    // ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.LIGAS)
+    persona: true,
     id: ID_COLUMN,
     // Catálogo ligero para la tabla (12 columnas, no las 79 completas)
     columnas: [

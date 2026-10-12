@@ -125,7 +125,14 @@ const LineasEscritura = (function () {
     return o;
   }
 
+  /** En ASIGNACIONES, el ID PERSONA de quien queda: se calcula de su nombre, número y cuenta (CapitalHumano, 12-oct) */
+  function conPersona_(k, cambios, registro) {
+    if (k === 'ASIGNACIONES' && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('ASIGNACIONES', cambios, registro);
+    return cambios;
+  }
+
   function actualizar_(k, fila, cambios) {
+    conPersona_(k, cambios, Object.assign({}, fila, cambios));
     if (!Object.keys(cambios).length) return;
     LineasDatos.actualizarFila(HOJA[k], fila._fila, cambios);
     Object.assign(fila, comoSeLee_(cambios));
@@ -135,6 +142,7 @@ const LineasEscritura = (function () {
     // Las hojas se leen antes de escribir: si se leyeran después (la primera escritura de un alta), el renglón nuevo
     // ya vendría en la lectura y quedaría dos veces ("El ID … está repetido", prueba del 4-oct)
     const h = hojas();
+    conPersona_(k, objeto, objeto);
     objeto['ID'] = objeto['ID'] || Ids.nuevo(PREFIJO[k]);
     const n = LineasDatos.agregarFilas(HOJA[k], [objeto])[0];
     const fila = Object.assign({ _fila: n }, comoSeLee_(objeto));

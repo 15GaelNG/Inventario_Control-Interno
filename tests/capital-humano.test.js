@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const zlib = require('zlib');
 
 let fallas = 0;
 function ok(condicion, descripcion) {
@@ -22,24 +23,40 @@ function ok(condicion, descripcion) {
 /** Hoja falsa con lo que CapitalHumano usa. */
 function hojaFalsa(enc, filas) {
   const datos = [enc.slice()].concat(filas.map((f) => enc.map((c) => (c in f ? f[c] : ''))));
-  return {
+  let maxCols = Math.max(enc.length, 1);
+  const h = {
     datos,
+    protecciones: [],
     getLastRow: () => datos.length,
-    getLastColumn: () => datos[0].length,
+    getLastColumn: () => Math.max.apply(null, datos.map((r) => r.length).concat([0])),
     getMaxRows: () => Math.max(datos.length, 1000),
     insertRowsAfter: () => {},
     getRange: (f, c, nf, nc) => ({
-      getDisplayValues: () => datos.slice(f - 1, f - 1 + (nf || 1)).map((r) => r.slice(c - 1, c - 1 + (nc || 1)).map(String)),
+      getDisplayValues: () => datos.slice(f - 1, f - 1 + (nf || 1)).map((r) => {
+        const fila = r.slice(c - 1, c - 1 + (nc || 1)).map((x) => (x == null ? '' : String(x)));
+        while (fila.length < (nc || 1)) fila.push('');
+        return fila;
+      }),
       getValues: () => datos.slice(f - 1, f - 1 + (nf || 1)).map((r) => r.slice(c - 1, c - 1 + (nc || 1))),
       // Como en Apps Script, regresa el rango para poder encadenar
-      setValues(v) { v.forEach((r, i) => { datos[f - 1 + i] = (datos[f - 1 + i] || []).slice(); r.forEach((x, j) => { datos[f - 1 + i][c - 1 + j] = x; }); }); return this; },
+      setValues(v) {
+        v.forEach((r, i) => { datos[f - 1 + i] = (datos[f - 1 + i] || []).slice(); r.forEach((x, j) => { datos[f - 1 + i][c - 1 + j] = x; }); });
+        maxCols = Math.max(maxCols, c - 1 + v[0].length);
+        return this;
+      },
       setFontWeight() { return this; },
       setNumberFormat() { return this; },
-      setValue(v) { datos[f - 1] = (datos[f - 1] || []).slice(); datos[f - 1][c - 1] = v; return this; },
+      setValue(v) { datos[f - 1] = (datos[f - 1] || []).slice(); datos[f - 1][c - 1] = v; maxCols = Math.max(maxCols, c); return this; },
     }),
-    getMaxColumns: () => datos[0].length,
-    insertColumnsAfter: () => {},
+    getMaxColumns: () => maxCols,
+    insertColumnsAfter: (despues, n) => { maxCols += n; },
+    deleteColumns: (desde, n) => { maxCols -= n; datos.forEach((r, i) => { datos[i] = r.slice(0, desde - 1).concat(r.slice(desde - 1 + n)); }); },
+    clearContents: () => { datos.length = 0; },
+    appendRow: (r) => { datos.push(r.slice()); },
+    getProtections: () => h.protecciones,
+    protect: () => { const p = { setWarningOnly() { p.aviso = true; return p; }, setDescription() { return p; } }; h.protecciones.push(p); return p; },
   };
+  return h;
 }
 
 const ENC_CH = ['No EMPLEADO', 'NOMBRE COMPLETO', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO', 'STATUS', 'RAZON SOCIAL'];
@@ -49,17 +66,28 @@ function cargar(hojas, anotados) {
     getSheetByName: (n) => hojas[n] || null,
     insertSheet: (n) => { hojas[n] = hojaFalsa([], []); hojas[n].datos.length = 0; return hojas[n]; },
   };
+  // ProtectionType, para proteger la pestaña al cargar
+  ss.ProtectionType = { SHEET: 'SHEET' };
   const ctx = vm.createContext({
+    Buffer,
     // Caché del servidor (src/utils/CacheHojas.gs): aquí no guarda nada
     CacheHojas: { tocar() {}, tocarHoja() {}, recordar: (clave, hojas, armar) => armar() },
     console,
     Logger: { log: () => {} },
-    SpreadsheetApp: { openById: () => ss },
+    SpreadsheetApp: { openById: () => ss, ProtectionType: { SHEET: 'SHEET' } },
     LockService: { getScriptLock: () => ({ waitLock: () => true, releaseLock: () => {} }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_LAB', TELEFONIA: () => 'SS_LAB' } },
     // Solo lo que CapitalHumano usa de Relaciones: anotar en el log
     Relaciones: { anotar: (ss, entradas, quien) => { (anotados || []).push({ entradas: entradas, quien: quien }); } },
+    Auth: { validarSesion: () => ({ correo: 'admin@cm.mx' }) },
+    Permisos: { puedeEditar: () => ({ correo: 'admin@cm.mx' }), puedeLeer: () => ({ correo: 'admin@cm.mx' }) },
+    // Lo que cargar() usa para recibir el archivo comprimido
+    Utilities: {
+      base64Decode: (t) => Buffer.from(t, 'base64'),
+      newBlob: (bytes) => ({ bytes }),
+      ungzip: (blob) => ({ getDataAsString: () => zlib.gunzipSync(blob.bytes).toString('utf8') }),
+    },
   });
   const lee = (...p) => fs.readFileSync(path.join(__dirname, '..', 'src', ...p), 'utf8');
   vm.runInContext(lee('config', 'Entidades.gs'), ctx);
@@ -70,13 +98,21 @@ function cargar(hojas, anotados) {
   return ctx.CH;
 }
 
-/** Las filas escritas en PERSONAS como objetos, por número + nombre. */
+/**
+ * El ID PERSONA de cada empleo, leído de COLABORADORES ACTUALIZADO (desde el 12-oct-2026 vive ahí, en su columna).
+ * { 'NUMERO|NOMBRE': { id, ids: [los de cada renglón de ese empleo] } }
+ */
 function personas(hojas) {
-  const h = hojas['PERSONAS'];
-  if (!h) return {};
+  const h = hojas['COLABORADORES ACTUALIZADO'];
   const [enc, ...filas] = h.datos;
+  const iId = enc.indexOf('ID PERSONA');
   const out = {};
-  filas.forEach((r) => { out[r[enc.indexOf('No EMPLEADO')] + '|' + r[enc.indexOf('NOMBRE COMPLETO')]] = { id: r[enc.indexOf('ID PERSONA')], motivo: r[enc.indexOf('MOTIVO')] }; });
+  if (iId === -1) return out;
+  filas.forEach((r) => {
+    const k = r[enc.indexOf('No EMPLEADO')] + '|' + r[enc.indexOf('NOMBRE COMPLETO')];
+    out[k] = out[k] || { id: r[iId] || '', ids: [] };
+    out[k].ids.push(r[iId] || '');
+  });
   return out;
 }
 
@@ -110,32 +146,32 @@ console.log('1. El ensayo cuenta y no escribe');
 {
   const hojas = escenario();
   const r = cargar(hojas).identificar();
-  ok(!hojas['PERSONAS'], 'no crea PERSONAS');
+  ok(!hojas['PERSONAS'] && hojas['COLABORADORES ACTUALIZADO'].datos[0].indexOf('ID PERSONA') === -1, 'no escribe nada');
   // CIB00223(1) + Francisco(1) + Vanessa(1) + Juan(1) + 2 José + Ana(1) + Luis(1) + 2 María = 10
   ok(/ 10 personas \(10 nuevas\)/.test(r), 'salen 10 personas de 12 renglones: ' + (r.match(/\d+ personas .*/) || [''])[0]);
   ok(/ 1 números usados por más de una persona \(ambiguos\) — HA00059/.test(r), 'HA00059 queda marcado como ambiguo');
-  ok(/IPQ00309 \(LUIS SOTO\) dice que su número anterior es AC00001, pero en la hoja AC00001 es de JOSE LOPEZ/.test(r),
+  ok(/IPQ00309 \(LUIS SOTO\) dice que su número anterior es AC00001, pero en la lista AC00001 es de JOSE LOPEZ/.test(r),
     'avisa del número anterior que ya es de otra persona');
 }
 
-console.log('\n2. Escribiendo: quién quedó con quién');
+console.log('\n2. Escribiendo: quién quedó con quién (en la columna ID PERSONA de la misma lista)');
 {
   const hojas = escenario();
-  cargar(hojas).identificar({ escribir: true });
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
   const p = personas(hojas);
-  ok(p['CIB00223|PERLA CRUZ'] && Object.keys(p).filter((k) => k.indexOf('CIB00223') === 0).length === 1,
-    'la recontratación es un solo empleo');
+  ok(hojas['COLABORADORES ACTUALIZADO'].datos[0].indexOf('ID PERSONA') !== -1 && !hojas['PERSONAS'],
+    'crea la columna ID PERSONA en la lista de CH (no otra pestaña)');
+  ok(p['CIB00223|PERLA CRUZ'].ids.length === 2 && p['CIB00223|PERLA CRUZ'].ids[0] === p['CIB00223|PERLA CRUZ'].ids[1],
+    'la recontratación: sus dos renglones con el mismo ID');
   ok(p['HA00059|FRANCISCO RAMIREZ'].id !== p['HA00059|VANESSA LLERA'].id, 'el número reutilizado son DOS personas');
   ok(p['HA00241|JUAN FULGENCIO'].id === p['VALLE02922|JUAN FULGENCIO'].id, 'Juan con dos números es UNA persona');
-  ok(/fecha de nacimiento/.test(p['HA00241|JUAN FULGENCIO'].motivo + p['VALLE02922|JUAN FULGENCIO'].motivo),
-    'y el motivo lo dice');
   ok(p['AC00001|JOSE LOPEZ'].id !== p['AC00002|JOSE LOPEZ'].id, 'los homónimos son dos personas');
-  ok(p['AC00255|ANA PEREZ'] && p['AC00255|ANA PEREZ'].id === p['FRO01353|ANA PEREZ'].id,
-    'el número anterior que no está en la hoja queda ligado a su persona');
-  ok(/número anterior de FRO01353/.test(p['AC00255|ANA PEREZ'].motivo), 'con su motivo');
+  ok(CH.idPara('VEHICULOS', { 'NO EMPLEADO': 'AC00255' }) === p['FRO01353|ANA PEREZ'].id,
+    'el número anterior que no está en la lista sigue encontrando a su persona (por N. EMPLEADO ANTERIOR)');
   ok(p['IPQ00309|LUIS SOTO'].id !== p['AC00001|JOSE LOPEZ'].id, 'Luis no se fundió con José por el número anterior');
   ok(p['PTE00001|MARIA GOMEZ'].id !== p['PTE00002|MARIA GOMEZ'].id, 'sin fecha de nacimiento, el nombre solo no junta');
-  ok(hojas['PERSONAS'].datos[0].indexOf('FECHA DE NACIMIENTO') === -1, 'la fecha de nacimiento no se copia a PERSONAS');
+  ok(Object.keys(p).every((k) => /^PER-/.test(p[k].id)), 'todos con su ID PER-');
 }
 
 console.log('\n3. Un ID dado nunca cambia; correr otra vez no agrega nada');
@@ -145,7 +181,7 @@ console.log('\n3. Un ID dado nunca cambia; correr otra vez no agrega nada');
   CH.identificar({ escribir: true });
   const antes = JSON.stringify(personas(hojas));
   const r = CH.identificar({ escribir: true });
-  ok(JSON.stringify(personas(hojas)) === antes, 'PERSONAS quedó igual');
+  ok(JSON.stringify(personas(hojas)) === antes, 'ningún ID cambió');
   ok(/ 0 empleos por identificar/.test(r), 'y el reporte dice que no hay nada por identificar');
 }
 
@@ -191,7 +227,7 @@ console.log('\n5b. Un renglón nuevo que liga a dos personas con ID distinto: co
   const r = CH.identificar({ escribir: true });
   const p = personas(hojas);
   ok(/ 1 conflictos/.test(r) && /ya tienen IDs distintos/.test(r), 'lo reporta como conflicto');
-  ok(!p['AC00005|JOSE LOPEZ'], 'el renglón que los ligaría no se escribe');
+  ok(p['AC00005|JOSE LOPEZ'].id === '', 'el renglón que los ligaría se queda sin ID');
   ok(p['AC00001|JOSE LOPEZ'].id === p0['AC00001|JOSE LOPEZ'].id && p['AC00002|JOSE LOPEZ'].id === p0['AC00002|JOSE LOPEZ'].id,
     'y nadie cambió de ID');
 }
@@ -205,7 +241,7 @@ console.log('\n6. Columnas sensibles en la hoja pegada');
   ok(/datos sensibles que no deben estar en el libro: NÚMERO DE CUENTA, TELEFONO/.test(r), 'avisa que hay que borrarlas');
 }
 
-console.log('\n7. El catálogo: la hoja de CH es externa y PERSONAS es del sistema nuevo');
+console.log('\n7. El catálogo: la hoja de CH es externa y PERSONAS es el catálogo de IDs (PER-)');
 {
   const ctx = vm.createContext({});
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'config', 'Entidades.gs'), 'utf8') + ';this.E=Entidades', ctx);
@@ -259,7 +295,7 @@ console.log('\n8. La cascada: nombre primero, el número solo desempata');
   ok(r['CAJAS CHICAS (persona)'].entradas[0].quedo.indexOf('VANESSA LLERA') === 0, 'Caja Chica: por correo, aunque el nombre venga abreviado');
   ok(r['LINEAS TELEFONICAS (persona)'].entradas[0].tipo === 'SIN_DUENO_ESPERADO', 'Líneas: un código de desarrollo no es una persona');
   ok(v.diferencias === 4 && !hojas['VEHICULOS'].datos[0].includes('ID PERSONA'), 'el ensayo cuenta 4 por ligar y no crea la columna');
-  ok(p['HA00241|JUAN FULGENCIO'] !== undefined, '(PERSONAS existe)');
+  ok(p['HA00241|JUAN FULGENCIO'].id !== '', '(la lista ya tiene sus IDs)');
 }
 
 console.log('\n9. Escribiendo: crea la columna, liga, y nunca borra un ID con vacío');
@@ -302,8 +338,101 @@ console.log('\n11. idPara: lo que usan Vehículos y Caja Chica al guardar');
   ok(CH.idPara('HOLOGRAMAS', {}) === null, 'null para una hoja que no se liga');
   ok(CH.columnasDePersona('CAJAS CHICAS').join() === 'RESPONSABLE DE CAJA CHICA,CORREO ELECTRONICO DE RESPONSABLE',
     'las columnas que cambian a la persona de una caja');
-  delete hojas['PERSONAS'];
-  ok(CH.idPara('VEHICULOS', { 'RESPONSABLE VEHICULO': 'PERLA CRUZ' }) === null, 'null si todavía no hay PERSONAS: no se toca nada');
+  ok(cargar(escenario()).idPara('VEHICULOS', { 'RESPONSABLE VEHICULO': 'PERLA CRUZ' }) === null,
+    'null si la lista todavía no tiene IDs: no se toca nada');
+  ok(CH.columnaPara('INSPECCION VEHICULAR') === 'ID PERSONA CONDUCTOR' && CH.columnaPara('UBER') === 'ID PERSONA',
+    'cada hoja con su columna (la inspección guarda la del conductor)');
+}
+
+console.log('\n12. conPersona: el ID se calcula al guardar, nunca lo manda el cliente');
+{
+  const hojas = escenarioLigas();
+  const CH = cargar(hojas);
+  const p = personas(hojas);
+  const nueva = CH.conPersona('ASIGNACIONES', { RESPONSABLE: 'Vanessa Llera', 'NO EMPLEADO': 'HA00059', 'ID PERSONA': 'PER-TRAMPA' });
+  ok(nueva['ID PERSONA'] === p['HA00059|VANESSA LLERA'].id, 'una asignación de Líneas con su persona (el ID que mandó el cliente se ignora)');
+  const sinCambio = CH.conPersona('VEHICULOS', { PLACA: 'ABC123', 'ID PERSONA': 'PER-TRAMPA' }, { 'RESPONSABLE VEHICULO': 'PERLA CRUZ' });
+  ok(!('ID PERSONA' in sinCambio), 'si no cambia la persona, no se toca su ID');
+  const insp = CH.conPersona('INSPECCION VEHICULAR', { CONDUCTOR: 'JUAN FULGENCIO' });
+  ok(insp['ID PERSONA CONDUCTOR'] === p['HA00241|JUAN FULGENCIO'].id, 'la inspección: el ID del conductor en su columna');
+}
+
+// ================================================ cargar la lista desde Administración > Capital humano
+
+/** Lo que manda el navegador: { encabezados, filas } en JSON, comprimido y en base64 */
+const archivo = (encabezados, filas) => zlib.gzipSync(Buffer.from(JSON.stringify({ encabezados, filas }), 'utf8')).toString('base64');
+const ENC_ARCHIVO = ['No EMPLEADO', 'NOMBRE COMPLETO', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO', 'STATUS', 'RAZON SOCIAL', 'FECHA DE INGRESO',
+  'TELEFONO', 'NÚMERO DE CUENTA'];
+/** La lista del escenario como la mandaría CH, más renglones nuevos, en OTRO orden (al revés) */
+function archivoDelEscenario(hojas, extra) {
+  const [enc, ...filas] = hojas['COLABORADORES ACTUALIZADO'].datos;
+  const de = (r, c) => (enc.indexOf(c) === -1 ? '' : r[enc.indexOf(c)]);
+  const rs = filas.map((r) => ENC_ARCHIVO.map((c) => (c === 'TELEFONO' ? '5512345678' : c === 'NÚMERO DE CUENTA' ? '0123456789' : de(r, c))));
+  return rs.reverse().concat(extra || []);
+}
+
+console.log('\n13. cargar: el ensayo cuenta y no escribe');
+{
+  const hojas = escenario();
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  const antes = JSON.stringify(hojas['COLABORADORES ACTUALIZADO'].datos);
+  const r = CH.cargar('tok', archivo(ENC_ARCHIVO, archivoDelEscenario(hojas,
+    [['CIB05000', 'NUEVA PERSONA', '', '09/09/2000', 'Activo', 'CENTRO', '', '5500000000', '999']])));
+  ok(r.ensayo && r.nuevos === 1 && r.empleosNuevos === 1 && r.personasNuevas === 1 && r.faltan === 0,
+    'un renglón nuevo, una persona nueva, nadie falta: ' + JSON.stringify([r.nuevos, r.empleosNuevos, r.personasNuevas, r.faltan]));
+  ok(JSON.stringify(hojas['COLABORADORES ACTUALIZADO'].datos) === antes, 'no tocó la hoja');
+  ok(r.quitadas.indexOf('TELEFONO') !== -1 && r.quitadas.indexOf('NÚMERO DE CUENTA') !== -1, 'avisa qué columnas sensibles no entran');
+}
+
+console.log('\n14. cargar: cada ID se queda con su empleo aunque el archivo venga en otro orden');
+{
+  const hojas = escenario();
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  const p0 = personas(hojas);
+  CH.cargar('tok', archivo(ENC_ARCHIVO, archivoDelEscenario(hojas,
+    [['CIB09999', 'JUAN FULGENCIO', 'VALLE02922', '04/04/1985', 'Activo', 'CENTRO', '', '', '']])), { escribir: true });
+  const p = personas(hojas);
+  ok(Object.keys(p0).every((k) => p[k] && p[k].id === p0[k].id), 'ningún ID cambió (el archivo venía al revés)');
+  ok(p['CIB09999|JUAN FULGENCIO'].id === p0['HA00241|JUAN FULGENCIO'].id, 'el número nuevo de Juan es la misma persona');
+  const enc = hojas['COLABORADORES ACTUALIZADO'].datos[0];
+  ok(enc.indexOf('TELEFONO') === -1 && enc.indexOf('NÚMERO DE CUENTA') === -1, 'lo sensible no entró a la hoja');
+  ok(!JSON.stringify(hojas['COLABORADORES ACTUALIZADO'].datos).includes('5512345678'), 'ni sus valores');
+  ok(enc[enc.length - 1] === 'ID PERSONA', 'el ID va al final');
+  ok(hojas['COLABORADORES ACTUALIZADO'].protecciones.length === 1 && hojas['COLABORADORES ACTUALIZADO'].protecciones[0].aviso,
+    'la pestaña queda protegida (aviso: no se pega a mano)');
+  ok(hojas['CAPITAL HUMANO HISTORIAL'] && hojas['CAPITAL HUMANO HISTORIAL'].datos.length === 2, 'y la carga queda en el historial');
+}
+
+console.log('\n15. cargar: nunca borra a nadie; rechaza lo que no es la lista completa');
+{
+  const hojas = escenario();
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  const p0 = personas(hojas);
+  const filas = archivoDelEscenario(hojas).filter((r) => !(r[0] === 'PTE00002' && r[1] === 'MARIA GOMEZ'));
+  const r = CH.cargar('tok', archivo(ENC_ARCHIVO, filas), { escribir: true });
+  ok(r.faltan === 1 && personas(hojas)['PTE00002|MARIA GOMEZ'].id === p0['PTE00002|MARIA GOMEZ'].id,
+    'quien no viene en el archivo se queda, con su ID');
+  ok(r.avisos.some((a) => /PTE00002/.test(a)), 'y se avisa');
+  let error = '';
+  try { CH.cargar('tok', archivo(ENC_ARCHIVO, filas.slice(0, 3)), { escribir: true }); } catch (e) { error = e.message; }
+  ok(/trae 3 renglones/.test(error), 'un archivo con muchos menos renglones se rechaza: ' + error);
+  error = '';
+  try { CH.cargar('tok', archivo(['No EMPLEADO', 'NOMBRE'], [['X', 'Y']]), { escribir: true }); } catch (e) { error = e.message; }
+  ok(/no parece la lista de Capital Humano/.test(error), 'uno sin las columnas de CH, también');
+}
+
+console.log('\n16. La lista para elegir a una persona: solo activos, con su ID');
+{
+  const hojas = escenario();
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  const lista = CH.activos();
+  ok(lista.every((x) => x.ESTATUS === 'ACTIVO') && !lista.some((x) => x.NOMBRE === 'FRANCISCO RAMIREZ'), 'quien solo está de baja no sale');
+  ok(lista.some((x) => x.NOMBRE === 'PERLA CRUZ'), 'quien tiene un empleo activo sí');
+  ok(lista.every((x) => /^PER-/.test(x.ID_PERSONA)), 'cada uno con su ID PERSONA');
 }
 
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');

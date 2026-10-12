@@ -20,7 +20,7 @@ const LINEAS_DRIVE_NUCOS_ID = '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-';
 function pestanasLineas_() {
   const T = LineasRepo.TAB;
   // Sin HISTORIAL_REASIGNACIONES, BITACORA DE DESECHO, REACTIVACION y SOLICITUD: módulos retirados el 30-sep
-  return [T.LINEAS, T.CAMBIOS, T.INSP, T.RESP, T.COLAB, T.LISTAS, 'ACCESORIOS CELULARES', 'MOVIMIENTOS_ACCESORIOS'];
+  return [T.LINEAS, T.CAMBIOS, T.INSP, T.RESP, T.LISTAS, 'ACCESORIOS CELULARES', 'MOVIMIENTOS_ACCESORIOS'];
 }
 
 /** Pestañas que le faltan a la hoja. No escribe nada. */

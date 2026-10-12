@@ -123,10 +123,11 @@ const Entidades = (function () {
     // borraría. Cada renglón es un EMPLEO, no una persona: el mismo número se repite al
     // recontratar, CH reutiliza números de gente dada de baja, y una persona puede tener dos
     // números a la vez (otra razón social, un ascenso). Reemplaza a COLABORADORES, que era
-    // una foto vieja (3,627, todos ACTIVO); esa se queda mientras Líneas la lea.
+    // una foto vieja (3,627, todos ACTIVO) y ya no lee nadie (se retira). Desde el 12-oct-2026 trae la
+    // columna ID PERSONA y la sube la app (Administración > Capital humano), no se pega.
     'COLABORADORES ACTUALIZADO': { prefijo: 'EMP', llaveAnterior: 'No EMPLEADO', llaveEsDato: true, externa: true, familia: 'capitalhumano' },
-    // Quién es quién: un renglón por empleo (número + nombre) con su ID PERSONA. La mantiene
-    // la app (CapitalHumano.identificar), nunca se pega; por eso aquí sí viven los IDs.
+    // El catálogo de IDs de persona (PER-). Hasta el 12-oct-2026 era una pestaña aparte; ahora el ID vive en
+    // COLABORADORES ACTUALIZADO y esta pestaña se retira (docs/personas-unificar.md). El prefijo se queda.
     'PERSONAS': { prefijo: 'PER', llaveAnterior: 'No EMPLEADO', delSistemaNuevo: true, familia: 'capitalhumano' },
 
     // --- Pestañas del sistema nuevo: NO vienen de AppSheet, las crea el módulo de Líneas ---
@@ -192,11 +193,18 @@ const Entidades = (function () {
     { hoja: 'MOVIMIENTOS_ACCESORIOS', columna: 'ID ACCESORIO', padre: 'ACCESORIOS CELULARES', llave: { columna: 'ID_Accesorio', enPadre: 'ID ANTERIOR' } },
     { hoja: 'ARQUEOS', columna: 'ID CAJA CHICA', padre: 'CAJAS CHICAS', llave: { columna: 'ID CCH', enPadre: 'ID CCH' } },
     { hoja: 'INCREMENTOS', columna: 'ID CAJA CHICA', padre: 'CAJAS CHICAS', llave: { columna: 'ID CCH', enPadre: 'ID CCH' } },
-    // Las ligas de Capital Humano (CapitalHumano.LIGAS). PERSONAS no se borra desde la app,
-    // pero si algún día se hace, aquí ya está quién depende de ella.
+    // Las ligas de Capital Humano (CapitalHumano.LIGAS). El ID PERSONA (PER-) vive desde el 12-oct-2026 como columna de
+    // COLABORADORES ACTUALIZADO; 'PERSONAS' sigue siendo su catálogo de IDs. Nadie se borra de la lista de CH.
     { hoja: 'VEHICULOS', columna: 'ID PERSONA', padre: 'PERSONAS' },
     { hoja: 'CAJAS CHICAS', columna: 'ID PERSONA', padre: 'PERSONAS' },
-    { hoja: 'LINEAS TELEFONICAS', columna: 'ID PERSONA', padre: 'PERSONAS', libro: 'TELEFONIA' },
+    { hoja: 'ASIGNACIONES', columna: 'ID PERSONA', padre: 'PERSONAS', libro: 'TELEFONIA' },
+    { hoja: 'RESPONSIVA VEHICULAR', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'ADHERENTE VEHICULAR', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'REASIGNACIONES_VEHICULOS', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'INSPECCION VEHICULAR', columna: 'ID PERSONA CONDUCTOR', padre: 'PERSONAS' },
+    { hoja: 'UBER', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'ARQUEOS', columna: 'ID PERSONA', padre: 'PERSONAS' },
+    { hoja: 'TICKETS', columna: 'ID PERSONA', padre: 'PERSONAS' },
   ];
 
   /** Las hojas que apuntan a `padre`, en el orden del catálogo. */

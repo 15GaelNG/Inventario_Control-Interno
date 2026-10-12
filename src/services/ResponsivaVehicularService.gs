@@ -446,6 +446,8 @@ const ResponsivaVehicularService = (function () {
         fila['DEPARTAMENTO ANTERIOR'] = vehiculo['DEPARTAMENTO'] || '';
       }
 
+      // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
+      if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('RESPONSIVA VEHICULAR', fila, fila);
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
       // Enganche con reasignación: si el responsable que firma es distinto al actual del
