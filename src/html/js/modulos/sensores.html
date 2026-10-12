@@ -441,6 +441,7 @@
           })),
           cargar: (folio) => callServer('apiDatosVehiculoParaSensor', state.token, folio),
           nucco: { vehiculos: () => callServerCacheado('apiListarVehiculosBasico', state.token) },
+          llave: { campo: 'ID_VEHICULO', de: (d) => d.ID_VEHICULO },
           ficha: (d) => {
             const c = d.copiados;
             const avisos = [];

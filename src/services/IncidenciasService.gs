@@ -19,6 +19,8 @@ const IncidenciasService = (function () {
     const trabajoHecho = !!(row['DESCRIPCION TRABAJO REALIZADO'] || row['INSPECCION SALIDA']);
     return {
       ID: row['ID'],
+      ID_VEHICULO: row['ID VEHICULO'] || '',
+      NUCCO: row['NUCCO'] || '',
       FOLIO: row['FOLIO'] || '',
       DEPARTAMENTO: row['DEPARTAMENTO'] || '',
       MODELO: row['MODELO'] || '',
@@ -64,10 +66,11 @@ const IncidenciasService = (function () {
      * con 'ID VEHICULO' vacío. Un vínculo que falta se repara después; una incidencia que no se
      * pudo capturar, no.
      */
-    alCrear: (fila) => {
+    alCrear: (fila, ctx) => {
       let delVehiculo = null;
       try {
-        delVehiculo = Relaciones.datosParaNuevo('INCIDENCIAS', fila['FOLIO']);
+        // Por el ID del vehículo; lo escrito en el folio solo si el formulario no lo resolvió
+        delVehiculo = Relaciones.datosParaNuevo('INCIDENCIAS', (ctx && ctx.datos && ctx.datos.ID_VEHICULO) || fila['FOLIO']);
       } catch (err) {
         console.error('Incidencia sin vínculo al catálogo: ' + err.message);
       }
@@ -128,6 +131,7 @@ const IncidenciasService = (function () {
     calentar: () => HojaServicio.calentar(INCIDENCIAS),
     /** Incidencias de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(INCIDENCIAS, token, 'FOLIO', folio),
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(INCIDENCIAS, token, id),
     /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(INCIDENCIAS, token, id),
     /** Todas las columnas de TODAS las incidencias (para exportar completo) */

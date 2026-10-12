@@ -40,20 +40,22 @@ const NotificacionesService = (function () {
 
   /**
    * Mismo criterio que alertaVerificaciones_ de DashboardService: solo la
-   * verificación más reciente de cada folio cuenta, y 30 días antes de
+   * verificación más reciente de cada vehículo (su ID) cuenta, y 30 días antes de
    * FECHA_PROXIMA ya es "por vencer".
    */
-  function itemsVerificaciones_(token, vehiculosPorFolio) {
+  function itemsVerificaciones_(token, vehiculosPorId) {
     const filas = VerificacionesService.listar(token);
-    const ultimaPorFolio = {};
+    const ultimaPorVehiculo = {};
     filas.forEach((v) => {
-      const actual = ultimaPorFolio[v.FOLIO];
-      if (!actual || (v.FECHA_VERIFICACION || '') > (actual.FECHA_VERIFICACION || '')) ultimaPorFolio[v.FOLIO] = v;
+      const clave = v.ID_VEHICULO || 'folio:' + v.FOLIO;   // sin ID (no debería haber): no se pierde
+      const actual = ultimaPorVehiculo[clave];
+      if (!actual || (v.FECHA_VERIFICACION || '') > (actual.FECHA_VERIFICACION || '')) ultimaPorVehiculo[clave] = v;
     });
     const items = [];
-    Object.keys(ultimaPorFolio).forEach((folio) => {
-      const v = ultimaPorFolio[folio];
-      const veh = vehiculosPorFolio[folio];
+    Object.keys(ultimaPorVehiculo).forEach((clave) => {
+      const v = ultimaPorVehiculo[clave];
+      const veh = vehiculosPorId[v.ID_VEHICULO];
+      const folio = veh ? veh.FOLIO : v.FOLIO;
       if (veh && !noEsBaja_(veh.ESTATUS)) return;
       if (!v.FECHA_PROXIMA) return;
       const dias = diasHasta_(v.FECHA_PROXIMA);
@@ -74,21 +76,21 @@ const NotificacionesService = (function () {
    * sin ninguna inspección registrada, o cuya inspección más reciente tiene más
    * de UMBRAL_DIAS_INSPECCION días.
    */
-  function itemsInspecciones_(token, vehiculosPorFolio) {
-    const activos = Object.keys(vehiculosPorFolio)
-      .map((f) => vehiculosPorFolio[f])
+  function itemsInspecciones_(token, vehiculosPorId) {
+    const activos = Object.keys(vehiculosPorId)
+      .map((id) => vehiculosPorId[id])
       .filter((v) => noEsBaja_(v.ESTATUS));
 
-    const ultimaPorFolio = {};
+    const ultimaPorVehiculo = {};
     InspeccionesService.listar(token).forEach((i) => {
-      const actual = ultimaPorFolio[i.FOLIO];
-      if (!actual || (i.FECHA || '') > actual) ultimaPorFolio[i.FOLIO] = i.FECHA || '';
+      const actual = ultimaPorVehiculo[i.ID_VEHICULO];
+      if (!actual || (i.FECHA || '') > actual) ultimaPorVehiculo[i.ID_VEHICULO] = i.FECHA || '';
     });
 
     const limite = new Date(Date.now() - UMBRAL_DIAS_INSPECCION * DIA_MS);
     const items = [];
     activos.forEach((v) => {
-      const ultima = ultimaPorFolio[v.FOLIO];
+      const ultima = ultimaPorVehiculo[v.ID_VEHICULO];
       const f = ultima ? new Date(ultima) : null;
       const atrasada = !ultima || isNaN(f.getTime()) || f < limite;
       if (!atrasada) return;
@@ -139,12 +141,12 @@ const NotificacionesService = (function () {
 
   function armar_(token) {
     fallos_ = [];
-    const vehiculosPorFolio = {};
-    seccion_(() => VehiculosService.listarResumen(token)).forEach((v) => { vehiculosPorFolio[v.FOLIO] = v; });
+    const vehiculosPorId = {};
+    seccion_(() => VehiculosService.listarResumen(token)).forEach((v) => { if (v.ID_VEHICULO) vehiculosPorId[v.ID_VEHICULO] = v; });
 
     const items = [].concat(
-      seccion_(() => itemsVerificaciones_(token, vehiculosPorFolio)),
-      seccion_(() => itemsInspecciones_(token, vehiculosPorFolio)),
+      seccion_(() => itemsVerificaciones_(token, vehiculosPorId)),
+      seccion_(() => itemsInspecciones_(token, vehiculosPorId)),
       seccion_(() => itemsSeguro_(token))
     );
     items.sort((a, b) => a.dias - b.dias);

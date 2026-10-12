@@ -31,7 +31,7 @@ e.cargar('src/utils/CacheHojas.gs', {
     };
     var HojaServicio = { fechaISO: (v) => v };
     var VehiculosService = {
-      listarResumen: () => lista_('vehiculos', 'VEHICULOS', () => [{ FOLIO: 'A1', NUCCO: '0001', ESTATUS: 'ACTIVO' }, { FOLIO: 'A2', ESTATUS: 'BAJA VEHICULAR' }]),
+      listarResumen: () => lista_('vehiculos', 'VEHICULOS', () => [{ ID_VEHICULO: 'VEH-1', FOLIO: 'A1', NUCCO: '0001', ESTATUS: 'ACTIVO' }, { ID_VEHICULO: 'VEH-2', FOLIO: 'A2', ESTATUS: 'BAJA VEHICULAR' }]),
       vencimientosSeguro: () => lista_('vehiculos', 'VEHICULOS', () => [{ FOLIO: 'A1', NUCCO: '0001', ESTATUS: 'ACTIVO', 'FECHA VENCIMIENTO SEGURO': hoy }], 'SEGURO'),
     };
     var TicketsService = { listarResumen: () => lista_('tickets', 'TICKETS', () => [{ 'FECHA DE REGISTRO': hoy, SOLICITANTE: 'Ana' }]) };

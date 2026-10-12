@@ -24,6 +24,18 @@
     const ORD = ['', '1ER', '2DO', '3ER', '4TO', '5TO', '6TO'];
     const opcionesDe = {};      // NUCO → opciones de la ficha abierta
     const expediente = {};      // NUCO → inspecciones del expediente (mientras la página siga abierta)
+    const pidiendo = {};        // NUCO → promesa en camino (precargar)
+
+    /** Pedir las del expediente ya (al abrir la ficha, en segundo plano) */
+    function precargar(nucco) {
+      const n = String(nucco || '');
+      if (!n || expediente[n] !== undefined || pidiendo[n]) return pidiendo[n];
+      pidiendo[n] = callServer('apiInspeccionesExpediente', state.token, n)
+        .then((t) => { expediente[n] = JSON.parse(t); })
+        .catch((err) => { expediente[n] = []; Notificar.error('No se pudieron leer las fotos del expediente: ' + err.message); })
+        .then(() => { delete pidiendo[n]; });
+      return pidiendo[n];
+    }
 
     /** El nombre de la carpeta del periodo de una fecha "aaaa-mm-dd…" (2026+: trimestre; antes: bimestre) */
     function periodo(fecha) {
@@ -88,6 +100,11 @@
       const n = el.dataset.inspFicha;
       if (!el.dataset.ligado) {
         el.dataset.ligado = '1';
+        // Pasar el mouse (o el dedo) por "Fotos" ya las pide: al dar clic normalmente ya llegaron
+        el.addEventListener('pointerover', (ev) => {
+          const b = ev.target.closest('[data-insp-fotos]');
+          if (b) pedirFotos(n, b.dataset.inspFotos);
+        });
         el.addEventListener('click', (ev) => {
           const b = ev.target.closest('[data-insp-fotos]');
           if (!b) return;
@@ -97,38 +114,49 @@
         });
       }
       tabla(el);
-      if (expediente[n] !== undefined || el.dataset.pidiendo) return;
-      el.dataset.pidiendo = '1';
-      try {
-        expediente[n] = JSON.parse(await callServer('apiInspeccionesExpediente', state.token, n));
-      } catch (err) {
-        expediente[n] = [];
-        Notificar.error('No se pudieron leer las fotos del expediente: ' + err.message);
-      }
-      delete el.dataset.pidiendo;
+      if (expediente[n] !== undefined) return;
+      await precargar(n);
       if (document.body.contains(el)) tabla(el);
     }
 
-    /** La vista de fotos de una inspección (cualquiera: de la app o solo del expediente) */
-    function pintarFotos(contenedor, d, app) {
+    const fotosDe = {};         // carpeta de la inspección → promesa de sus fotos
+    function pedirFotos(nucco, id) {
+      if (!fotosDe[id]) {
+        fotosDe[id] = callServer('apiFotosInspeccion', state.token, String(nucco), id).then((t) => JSON.parse(t));
+        fotosDe[id].catch(() => { delete fotosDe[id]; });
+      }
+      return fotosDe[id];
+    }
+
+    /** La vista de fotos de una inspección (cualquiera: de la app o solo del expediente). Las fotos se piden aquí. */
+    async function pintarFotos(contenedor, d, app, nucco) {
       const datos = [
         d.fecha ? formatearFecha(d.fecha + 'T12:00:00') : '', d.nombre + ' ' + d.anio,
         app && app.TIPO, app && app.INSPECTOR ? 'Inspector: ' + app.INSPECTOR : '',
         app && app.PUNTAJE !== '' && app.PUNTAJE != null ? 'Puntaje: ' + app.PUNTAJE + '%' : '',
         d.fotos + (d.fotos === 1 ? ' foto' : ' fotos'),
       ].filter(Boolean);
-      const grupos = d.secciones.map((s) => ({ titulo: s.nombre, fotos: s.fotos }));
+
       contenedor.innerHTML = '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Inspección ' + escaparHtml(d.nombre + ' ' + d.anio) + '</h2>' +
         '<div class="insp-fotos-botones">' +
         d.pdfs.map((p) => TablaFicha.boton({ texto: p.nombre, icono: 'file-text', href: p.url })).join('') +
         TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</div>' +
         '<div class="insp-fotos-datos">' + datos.map((x) => '<span>' + escaparHtml(x) + '</span>').join('') + '</div></div></div>' +
-        '<div class="card ln-card" data-insp-galeria>' + (grupos.length ? Galeria.html(grupos) : '<p class="empty-state">Sin fotos.</p>') + '</div>';
-      Galeria.ligar(contenedor.querySelector('[data-insp-galeria]'), grupos, { titulo: 'Inspección ' + d.nombre + ' ' + d.anio });
+        '<div class="card ln-card" data-insp-galeria><p class="ln-tenue"><span class="spinner"></span> Cargando ' + d.fotos + ' fotos…</p></div>';
+      const caja = contenedor.querySelector('[data-insp-galeria]');
+      try {
+        const r = await pedirFotos(nucco, d.id);
+        const grupos = r.secciones.map((s) => ({ titulo: s.nombre, fotos: s.fotos }));
+        if (!document.body.contains(caja)) return;
+        caja.innerHTML = grupos.length ? Galeria.html(grupos) : '<p class="empty-state">Sin fotos.</p>';
+        Galeria.ligar(caja, grupos, { titulo: 'Inspección ' + d.nombre + ' ' + d.anio });
+      } catch (err) {
+        caja.innerHTML = '<p class="empty-state">No se pudieron leer las fotos: ' + escaparHtml(err.message) + '</p>';
+      }
     }
 
     function olvidar(nucco) { delete expediente[String(nucco || '')]; }
 
-    return { preparar, cargar, pintarFotos, olvidar, periodo, juntar };
+    return { preparar, cargar, precargar, pintarFotos, olvidar, periodo, juntar };
   })();
 </script>
