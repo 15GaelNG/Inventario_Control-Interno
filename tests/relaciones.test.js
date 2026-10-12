@@ -83,7 +83,7 @@ function hoja(nombre, encabezados, filasObj) {
 // tiene ID que dar, y truena a propósito.
 const COL_VEH = ['ID', 'FOLIO', 'SERIE VEHICULO', 'PLACA', 'MARCA', 'CLASE', 'LINEA VEHICULO',
   'MODELO', 'COLOR', 'CAPACIDAD COMBUSTIBLE (LTS)', 'RAZON SOCIAL', 'DEPARTAMENTO',
-  'SEDE', 'OFICINA / DESARROLLO', 'RESPONSABLE VEHICULO', 'SENSOR', 'SERIE SENSOR'];
+  'SEDE', 'OFICINA / DESARROLLO', 'RESPONSABLE VEHICULO', 'SENSOR', 'SERIE SENSOR', 'NUCCO'];
 
 // CTA0001 vive y es de CONSTRUCCION. CTA0002 está dado de baja: su DEPARTAMENTO ya no
 // dice un área, dice un estatus — y las copias sí guardan el área buena (POST VENTA).
@@ -95,7 +95,7 @@ const base = {
 // CTA0003 es uno de los 116 vehículos de baja a los que les toca quedar con el
 // DEPARTAMENTO vacío (la baja ya consta en ESTATUS), pero sus copias sí conservan el área.
 const vehiculos = [
-  Object.assign({ ID: 'VEH-00000000AAAAAA', FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', 'SERIE SENSOR': 'S1', DEPARTAMENTO: 'CONSTRUCCION' }, base),
+  Object.assign({ ID: 'VEH-00000000AAAAAA', FOLIO: 'CTA0001', 'SERIE VEHICULO': 'SER1', 'SERIE SENSOR': 'S1', DEPARTAMENTO: 'CONSTRUCCION', NUCCO: '00001' }, base),
   // CTA0002 está de baja, y quien la dio de baja escribió la palabra en TRES columnas:
   // DEPARTAMENTO, PLACA y RESPONSABLE. Así está en producción, medido el 30/09/2026.
   Object.assign({}, base, {
@@ -427,6 +427,18 @@ console.log('\n7c. Da lo mismo si le dan el ID del dueño o su llave de negocio'
     'una copia que se propaga por serie también acepta el FOLIO, que es lo que manda la app');
   ok(porFolioEnSerie.datos['ID VEHICULO'] === 'VEH-00000000AAAAAA',
     'y llega al mismo dueño, con la misma llave foránea');
+}
+
+console.log('\n7c2. Y nace con el NUCCO del vehículo (alNacer: se copia al crear, nunca se propaga)');
+{
+  // 12-oct-2026: todo lo de un vehículo se guarda por su NUCO. El NUCCO no cambia en el dueño, así que no va en
+  // columnas (propagar); las hojas de prueba no tienen esa columna y propagar sigue sin tronar.
+  const hs = armar();
+  const R = cargar(hs);
+  ['VERIFICACIONES', 'INSTALACION DE SENSORES', 'INCIDENCIAS'].forEach((hoja) => {
+    const r = R.datosParaNuevo(hoja, 'VEH-00000000AAAAAA');
+    ok(r.datos['NUCCO'] === '00001', hoja + ' nace con el NUCCO del vehículo');
+  });
 }
 
 console.log('\n7d. Si el dueño no existe, o no tiene ID, truena antes de escribir nada');

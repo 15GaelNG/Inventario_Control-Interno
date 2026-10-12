@@ -31,7 +31,7 @@ const InspeccionesService = (function () {
 
   /** Columnas que necesita la tabla. Leer las 195 serían ~57,000 celdas por consulta. */
   const COLUMNAS_LISTA = [
-    COL_ID, 'FOLIO', 'TIPO', 'FECHA', 'RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE',
+    COL_ID, 'ID VEHICULO', 'NUCO', 'FOLIO', 'TIPO', 'FECHA', 'RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE',
     'OFICINA / DESARROLLO', 'CONDUCTOR', 'JEFE DIRECTO', 'VEHICULO', 'NO SERIE',
     'MODELO / AÑO', 'PLACAS', 'FECHA ULTIMO SERVICIO', 'HOLOGRAMA', 'TIPO COMBUSTIBLE',
     'VOLTAJE', 'OBSERVACIONES', 'NOMBRE INSPECTOR', 'PUNTAJE FINAL INSPECCION', COL_PDF,
@@ -124,6 +124,8 @@ const InspeccionesService = (function () {
   function desdeOriginal_(row) {
     return {
       ID: row[COL_ID],
+      ID_VEHICULO: row['ID VEHICULO'] || '',
+      NUCCO: row['NUCO'] || '',
       FOLIO: row['FOLIO'] || '',
       TIPO: row['TIPO'] || '',
       FECHA: fechaISO_(row['FECHA']),
@@ -302,7 +304,7 @@ const InspeccionesService = (function () {
    * Guarda una inspección: escribe la fila, sube las imágenes y genera el PDF del formato.
    *
    * @param {Object} p
-   * @param {string} p.FOLIO       vehículo (de ahí se copian sus datos)
+   * @param {string} p.ID_VEHICULO vehículo (de ahí se copian sus datos); p.FOLIO solo de una página vieja
    * @param {string} p.TIPO        tipo de unidad: decide checklist, plantilla y carpeta
    * @param {Object} p.checklist   { 'PIEZA': 'BUENO' }
    * @param {Object} p.llantas     { 'LLANTA DD': 7 }
@@ -311,11 +313,12 @@ const InspeccionesService = (function () {
    */
   function registrar(token, p, imagenes) {
     const sesion = Permisos.puedeEditar(token, MODULO);
-    const folio = limpiar_(p && p.FOLIO);
-    if (!folio) throw new Error('El folio del vehículo es obligatorio');
+    const porId = limpiar_(p && p.ID_VEHICULO);
+    const folio = porId || limpiar_(p && p.FOLIO);
+    if (!folio) throw new Error('Elige el vehículo');
 
-    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
-    if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
+    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, porId ? 'ID' : 'FOLIO');
+    if (!vehiculo) throw new Error('No existe el vehículo ' + folio);
 
     const estructura = estructuraDeTipo(token, p.TIPO);
     const checklist = p.checklist || {};
@@ -973,6 +976,7 @@ const InspeccionesService = (function () {
     calentar: () => HojaServicio.calentar(INSPECCIONES),
     /** Inspecciones de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(INSPECCIONES, token, 'FOLIO', folio),
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(INSPECCIONES, token, id),
     /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(INSPECCIONES, token, id),

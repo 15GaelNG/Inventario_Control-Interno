@@ -31,12 +31,13 @@ const ReasignacionesVehicularesService = (function () {
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     hoja: 'REASIGNACIONES_VEHICULOS',
     columnas: [
-      'ID', 'Folio Vehiculo', 'Fecha de Reasignacion', 'VIN', 'NUCO',
+      'ID', 'ID VEHICULO', 'Folio Vehiculo', 'Fecha de Reasignacion', 'VIN', 'NUCO',
       'No Empleado Saliente', 'Responsable Saliente', 'Departamento Saliente',
       'No Empleado Entrante', 'Responsable Entrante', 'Departamento Entrante', 'QUIEN REGISTRO',
     ],
     fila: (r) => ({
       ID: r['ID'],
+      ID_VEHICULO: r['ID VEHICULO'] || '',
       FOLIO_VEHICULO: r['Folio Vehiculo'] || '',
       FECHA: HojaServicio.fechaISO(r['Fecha de Reasignacion']),
       VIN: r['VIN'] || '',
@@ -59,16 +60,17 @@ const ReasignacionesVehicularesService = (function () {
    */
   function crear(token, datos) {
     const sesion = Permisos.puedeEditar(token, 'reasignaciones-vehiculares');
-    const folio = datos['Folio Vehiculo'];
-    if (!folio) throw new Error('Selecciona el vehículo (Folio).');
+    // El vehículo es su ID ('ID VEHICULO'); el folio solo llega de una página abierta antes del cambio
+    const folio = datos['ID VEHICULO'] || datos['Folio Vehiculo'];
+    if (!folio) throw new Error('Selecciona el vehículo (Nucco o Folio).');
     const responsableEntrante = String(datos['Responsable Entrante'] || '').trim();
     if (!responsableEntrante) throw new Error('Captura el responsable entrante.');
 
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
     try {
-      const vehiculo = VehiculosService.buscarPorFolio(token, folio);
-      if (!vehiculo) throw new Error('No se encontró el vehículo con Folio=' + folio);
+      const vehiculo = VehiculosService.buscar(token, folio);
+      if (!vehiculo) throw new Error('No se encontró el vehículo ' + folio);
 
       // Se valida antes de escribir nada: si el vehículo no tuviera ID, el update de abajo
       // tronaría DESPUÉS de insertar esta fila (reasignación escrita, vehículo sin actualizar).
@@ -83,7 +85,7 @@ const ReasignacionesVehicularesService = (function () {
         // La llave foránea de verdad. El folio se guarda también, para que la hoja se lea,
         // pero sale del vehículo encontrado y no de lo que mandó el navegador.
         'ID VEHICULO': idVehiculo,
-        'Folio Vehiculo': vehiculo['FOLIO'] || folio,
+        'Folio Vehiculo': vehiculo['FOLIO'] || '',
         'Fecha de Reasignacion': HojaServicio.fechaDeEntrada(datos['Fecha de Reasignacion']) || new Date(),
         'VIN': vehiculo['SERIE VEHICULO'] || '',
         'NUCO': vehiculo['NUCCO'] || '',
@@ -122,5 +124,6 @@ const ReasignacionesVehicularesService = (function () {
     eliminar: (token, id) => HojaServicio.eliminar(REASIGNACIONES, token, id),
     /** Historial de reasignaciones de UN vehículo (para enlazarlo desde el detalle de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(REASIGNACIONES, token, 'FOLIO_VEHICULO', folio),
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(REASIGNACIONES, token, id),
   };
 })();

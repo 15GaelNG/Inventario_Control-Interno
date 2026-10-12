@@ -2039,7 +2039,9 @@
       btn.innerHTML = '<span class="spinner"></span> Registrando…';
       toastCargando('Registrando…');
       try {
-        await callServer('apiCrearIncidencia', state.token, CamposHoja.recolectar(CAMPOS_INCIDENCIA, 'inc'));
+        const nueva = CamposHoja.recolectar(CAMPOS_INCIDENCIA, 'inc');
+        nueva.ID_VEHICULO = (buscarVehiculoInc_(String(nueva.FOLIO || '').trim()) || {}).ID || '';
+        await callServer('apiCrearIncidencia', state.token, nueva);
         ev.target.reset();
         fijarFechaRegistroHoy();
         document.getElementById('inc-fecha-inspeccion').value = hoyISO();
@@ -2566,7 +2568,7 @@
           ? { FECHA_PROXIMA: 'Debe ser posterior a la fecha de verificación' } : null),
         textoGuardar: 'Registrar verificación', iconoGuardar: 'save',
         alGuardar: async (valores, archivos) => {
-          await callServer('apiRegistrarVerificacion', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores), {
+          await callServer('apiRegistrarVerificacion', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, FOLIO: vResumen.FOLIO }, valores), {
             base64: await leerArchivoBase64(archivos.COMPROBANTE), mimeType: archivos.COMPROBANTE.type,
           });
         },
@@ -2592,7 +2594,7 @@
         ],
         textoGuardar: 'Registrar incidencia', iconoGuardar: 'save',
         alGuardar: async (valores) => {
-          await callServer('apiCrearIncidencia', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores));
+          await callServer('apiCrearIncidencia', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, FOLIO: vResumen.FOLIO }, valores));
         },
         textoExito: () => 'Incidencia registrada',
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'incidencias'); },
@@ -2604,7 +2606,7 @@
       cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
       let datos;
       try {
-        datos = await callServer('apiDatosVehiculoParaSensor', state.token, vResumen.FOLIO);
+        datos = await callServer('apiDatosVehiculoParaSensor', state.token, vResumen.ID_VEHICULO || vResumen.FOLIO);
       } catch (err) {
         cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
         return;
@@ -2627,7 +2629,7 @@
         ],
         textoGuardar: 'Registrar instalación', iconoGuardar: 'save',
         alGuardar: async (valores, archivos) => {
-          await callServer('apiRegistrarSensor', state.token, Object.assign({ FOLIO: vResumen.FOLIO }, valores), {
+          await callServer('apiRegistrarSensor', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, FOLIO: vResumen.FOLIO }, valores), {
             base64: await leerArchivoBase64(archivos.RESPONSIVA), mimeType: archivos.RESPONSIVA.type,
           });
         },
@@ -2984,7 +2986,7 @@
             const firma = firmas[campo].exportar();
             if (firma) imagenes[campo] = firma;
           });
-          const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
+          const datos = Object.assign({ 'ID VEHICULO': vResumen.ID_VEHICULO, 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_RESPONSIVA_VEHICULAR, 'resv'));
           // Si el responsable tampoco firmó, se difiere junto con el jefe (dos ligas de un
           // jalón) -- nadie tiene que estar presente para pedir la del jefe.
           const opciones = modo === 'remotoJefe'
@@ -3179,7 +3181,7 @@
             const firma = firmas[campo].exportar();
             if (firma) imagenes[campo] = firma;
           });
-          const datos = Object.assign({ 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_ADHERENTE_VEHICULAR, 'adh'));
+          const datos = Object.assign({ 'ID VEHICULO': vResumen.ID_VEHICULO, 'FOLIO VEHICULO': vResumen.FOLIO }, CamposHoja.recolectar(CAMPOS_ADHERENTE_VEHICULAR, 'adh'));
           const opciones = modo === 'remotoJefe'
             ? (firmas['FIRMA ADHERENTE'].vacia() ? { remoto: true, remotoJefe: true } : { remotoJefe: true })
             : undefined;
@@ -3369,7 +3371,7 @@
       cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
       let datos;
       try {
-        datos = await callServer('apiDatosVehiculoParaSensor', state.token, s.FOLIO || vResumen.FOLIO);
+        datos = await callServer('apiDatosVehiculoParaSensor', state.token, s.ID_VEHICULO || vResumen.ID_VEHICULO || s.FOLIO || vResumen.FOLIO);
       } catch (err) {
         cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
         return;
@@ -3519,7 +3521,8 @@
         // no aparece, igual que en el menú); si una que sí puede ver falla, sale vacía. Una ficha
         // ya vista sale al instante de su copia guardada y se repinta sola si llegó algo distinto;
         // cualquier guardado borra las copias (ESCRIBE en api.html).
-        const ficha = JSON.parse((await callServerListaCacheada('apiFichaVehiculo', state.token, vResumen.FOLIO)) || '{}');
+        // Por el ID del vehículo (el folio se reasigna; el ID no)
+        const ficha = JSON.parse((await callServerListaCacheada('apiFichaVehiculo', state.token, vResumen.ID_VEHICULO || vResumen.FOLIO)) || '{}');
         const { completo, cambios, reasignaciones, verificaciones, inspecciones, sensores, hologramas, incidencias, responsivas, adherentes } = ficha;
         // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
         if (detalle.hidden || !document.body.contains(detalle) || fichaVehiculoAbierta !== vResumen) return;

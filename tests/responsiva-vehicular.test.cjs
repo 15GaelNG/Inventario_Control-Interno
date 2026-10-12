@@ -88,7 +88,7 @@ function crearContexto() {
       leerColumnasDeHoja: () => ({ filas: 0, datos: {} }),
     },
     VehiculosService: {
-      buscarPorFolio: () => Object.assign({}, VEHICULO_BASE),
+      buscar: () => Object.assign({}, VEHICULO_BASE),
       actualizar: (token, id, cambios) => { llamadas.actualizarVehiculo.push({ id, cambios }); },
     },
     ExpedienteNuco: {

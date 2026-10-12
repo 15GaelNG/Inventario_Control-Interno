@@ -76,26 +76,27 @@ const DashboardService = (function () {
 
   /**
    * Mismo criterio que el módulo de Verificaciones (app-verificaciones.html):
-   * solo la verificación más reciente de cada folio cuenta, y son 30 días
+   * solo la verificación más reciente de cada vehículo (su ID) cuenta, y son 30 días
    * antes de FECHA_PROXIMA para "por vencer".
    */
   function alertaVerificaciones_(token) {
     const filas = VerificacionesService.listar(token);
-    const ultimaPorFolio = {};
+    const ultimaPorVehiculo = {};
     filas.forEach((v) => {
-      const actual = ultimaPorFolio[v.FOLIO];
-      if (!actual || (v.FECHA_VERIFICACION || '') > (actual.FECHA_VERIFICACION || '')) ultimaPorFolio[v.FOLIO] = v;
+      const clave = v.ID_VEHICULO || 'folio:' + v.FOLIO;
+      const actual = ultimaPorVehiculo[clave];
+      if (!actual || (v.FECHA_VERIFICACION || '') > (actual.FECHA_VERIFICACION || '')) ultimaPorVehiculo[clave] = v;
     });
     let vencidas = 0;
     let porVencer = 0;
-    Object.keys(ultimaPorFolio).forEach((folio) => {
-      const v = ultimaPorFolio[folio];
+    Object.keys(ultimaPorVehiculo).forEach((clave) => {
+      const v = ultimaPorVehiculo[clave];
       if (!v.FECHA_PROXIMA) return;
       const dias = Math.floor((new Date(v.FECHA_PROXIMA) - new Date()) / DIA_MS);
       if (dias < 0) vencidas++;
       else if (dias <= 30) porVencer++;
     });
-    return { vencidas: vencidas, porVencer: porVencer, total: Object.keys(ultimaPorFolio).length };
+    return { vencidas: vencidas, porVencer: porVencer, total: Object.keys(ultimaPorVehiculo).length };
   }
 
   /**
@@ -109,15 +110,15 @@ const DashboardService = (function () {
     const activos = lista_('vehiculos', () => VehiculosService.listarResumen(token))
       .filter((v) => String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR');
 
-    const ultimaPorFolio = {};
+    const ultimaPorVehiculo = {};
     lista_('inspecciones', () => InspeccionesService.listar(token)).forEach((i) => {
-      const actual = ultimaPorFolio[i.FOLIO];
-      if (!actual || (i.FECHA || '') > actual) ultimaPorFolio[i.FOLIO] = i.FECHA || '';
+      const actual = ultimaPorVehiculo[i.ID_VEHICULO];
+      if (!actual || (i.FECHA || '') > actual) ultimaPorVehiculo[i.ID_VEHICULO] = i.FECHA || '';
     });
 
     const limite = new Date(Date.now() - UMBRAL_DIAS * DIA_MS);
     const atrasados = activos.filter((v) => {
-      const ultima = ultimaPorFolio[v.FOLIO];
+      const ultima = ultimaPorVehiculo[v.ID_VEHICULO];
       if (!ultima) return true;
       const f = new Date(ultima);
       return isNaN(f.getTime()) || f < limite;
