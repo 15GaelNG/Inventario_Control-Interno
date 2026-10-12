@@ -186,7 +186,9 @@ la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** copias «(SISTEMA)» de
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
 originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias se hicieron una vez, el 6-oct);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
-AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
+AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`): la hoja 2 empieza en «SANCIONES POR MAL MANEJO»
+con un salto de página cuyo párrafo mide 1 pt; con varios responsables (« / » en RESPONSABLE) el nombre bajo la firma va en
+8 pt (`NOMBRES_BAJO_FIRMA`), y si el PDF sale con más de 2 hojas se quita el salto y se exporta de nuevo. El patrón se puede dibujar en el servidor
 (`LineasPatronPng.gs`). Si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (alguien lo quitó
 a mano en Drive), se usa el PDF que sí está en esa carpeta (el del mismo nombre o el más reciente «INSP…» / «RESP…») y
 se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisarPdfsLigados` con
