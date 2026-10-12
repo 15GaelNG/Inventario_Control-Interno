@@ -489,6 +489,9 @@
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     min-height: 36px; padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; white-space: nowrap;
   }
+  /* Recargar datos junto a Agregar equipo y Agregar línea: con el borde gris claro se veía más chico aunque mide lo
+     mismo (usuario, 12-oct); el contorno de marca lo iguala */
+  .ln-modulo .page-header-actions button.secondary { border-color: var(--color-primary); }
   a.ln-boton { text-decoration: none; box-sizing: border-box; cursor: pointer; }
   a.ln-boton:hover { text-decoration: none; }
   a.ln-boton .ln-icon, .ln-detalle-botones > button .ln-icon { width: 15px; height: 15px; }
