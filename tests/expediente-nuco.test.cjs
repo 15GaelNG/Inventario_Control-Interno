@@ -193,6 +193,23 @@ test('inspecciones: cada carpeta año/periodo es una inspección, con sus seccio
   assert.equal(JSON.stringify(E.inspecciones(999)), '[]');
 });
 
+test('listar: la imagen de relleno (NO APLICA / SIN INFORMACIÓN) no cuenta como documento; la sección lo dice', () => {
+  const drive = driveFalso();
+  const { E, nucos } = cargar(drive);
+  E.archivar(drive.nodo('f.pdf', null, 'pdf'), 5, 'FACTURA');
+  const doc = drive.hijos(drive.hijos(nucos).find((h) => h.nombre === '5')).find((h) => h.nombre === '1.-DOCUMENTACIÓN');
+  const sub = (n) => drive.hijos(doc).find((h) => h.nombre === n);
+  drive.nodo('SEGURO-0005 NO APLICA.jpg', sub('2.-SEGURO'), 'jpg');
+  drive.nodo('CARPETA SIN INFORMACIÓN.jpg', sub('6.-TENENCIA'), 'jpg');
+  const exp = JSON.parse(JSON.stringify(E.listar(5)));
+  const de = (k) => exp.documentos.find((d) => d.clave === k);
+  assert.equal(de('SEGURO').vigentes.length, 0);
+  assert.equal(de('SEGURO').relleno, 'NO APLICA');
+  assert.equal(de('TENENCIA').relleno, 'SIN INFORMACIÓN');
+  assert.equal(de('FACTURA').vigentes.length, 1);
+  assert.equal(de('FACTURA').relleno, null);
+});
+
 test('sin NUCCO no adivina', () => {
   const drive = driveFalso();
   const { E } = cargar(drive);
