@@ -280,7 +280,6 @@
           doc('SEGURO', 'Póliza de seguro', [ar('SEGURO-0100.pdf', 20)], [g('SEGUROS ANTERIORES', [ar('SEGURO-0100 2025-03-01.pdf', 385), ar('SEGURO-0100 2024-03-01.pdf', 750)])]),
           doc('ALTA', 'Alta de placas', [ar('ALTA DE PLACAS-0100.pdf', 880)]),
           doc('TARJETA', 'Tarjeta de circulación', [ar('TARJETA DE CIRCULACION-0100.jpg', 870, 'image/jpeg')]),
-          doc('RESPONSIVA', 'Responsiva', [ar('RESPONSIVA-0100.pdf', 4)], [g('RESPONSIVAS ANTERIORES', [ar('RESPONSIVA-0100 2025-11-02.pdf', 340)]), g('PRESTAMOS', [ar('PRESTAMO-0100.pdf', 30)])]),
           doc('TENENCIA', 'Tenencia', [], [g('TENENCIAS ANTERIORES', [ar('TENENCIA-0100 2025.pdf', 280), ar('TENENCIA-0100 2024.pdf', 640)])]),
         ],
         otros: [g('ANTERIORES / OXXO GAS', [ar('TARJETA OXXO GAS.jpg', 700, 'image/jpeg')])],
