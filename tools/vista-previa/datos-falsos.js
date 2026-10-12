@@ -551,11 +551,10 @@
     modulos.forEach((m) => { delete state.permisos[m]; });
   }
 
-  /** Día de Muertos (html/temporada.html) encendido, visto por un ADMIN (sale el botón de la flor) */
-  function temporada() {
-    document.body.dataset.temporada = 'muertos';
-    state.sesion.rol = 'ADMIN';
-    Temporada.aplicar();
+  /** Día de Muertos (html/temporada.html) abierto, visto por un ADMIN (o por cualquiera: rol) */
+  function temporada(rol) {
+    state.sesion.rol = rol || 'ADMIN';
+    Temporada.aplicar('muertos');
   }
 
   const ESCENAS = {
@@ -584,6 +583,9 @@
       if (opcion) opcion.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       await esperar(500);
     },
+    // El panel de la flor: lo de cada quien (sin la parte de administración) y el del ADMIN
+    'muertos-panel': async () => { temporada('USUARIO'); await abrir('dashboard'); (await hasta('.dm-interruptor')).click(); await hasta('#dm-panel:not([hidden])'); await esperar(300); },
+    'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.dm-interruptor')).click(); await hasta('[data-dm-global]'); await esperar(300); },
     'muertos-vacio': async () => {
       temporada(); await abrir('vehiculos');
       const buscar = await hasta('.dt-buscar'); buscar.value = 'nada-que-coincida'; evento(buscar, 'input');
