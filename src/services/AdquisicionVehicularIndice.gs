@@ -3,16 +3,20 @@
  * Llena ADQUISICION_VEHICULAR_INDICE (la consulta AdquisicionVehicularService.buscar, que usa el
  * botón "Buscar expediente de adquisición" de la ficha de Vehículos) en dos pasadas:
  *
- * A. EXCEL (rápida, sin OCR): lee REGISTRO VEHICULAR 2024 e HISTORICO DE ADQUISICIÓN VEHICULAR
- *    2025 completos (AdquisicionVehicularService.leerFuente_) -- esos dos ya traen la serie en
- *    una columna. Resuelve la carpeta de 2024 por nombre contra lo que de verdad existe en
- *    Drive (2025 ya trae su liga directo en el Excel).
- * B. OCR (lenta, solo lo que A no cubrió -- hoy básicamente 2026, que no tiene Excel maestro):
- *    recorre las carpetas reales de Adquisición Vehicular, parte el folio y el área del nombre
- *    de cada solicitud ("30371-CONSTRUCCIÓN"), copia su factura como Documento con OCR, saca la
- *    serie con una expresión regular y tira la copia. Mismo patrón que la lectura de INE de
- *    Líneas (LineasIneLectura.gs): tandas de 4.5 min que se reprograman solas con un trigger,
- *    progreso en Script Properties para no perder nada si se corta a la mitad.
+ * A. EXCEL (rápida, sin OCR): lee los tres archivos maestros completos (REGISTRO VEHICULAR 2024,
+ *    HISTORICO DE ADQUISICIÓN VEHICULAR 2025 y 2026 -- AdquisicionVehicularService.leerFuente_)
+ *    -- los tres ya traen la serie en una columna, capturada a mano por quien da de alta la
+ *    compra. Para cada fila busca PRIMERO la carpeta real en Drive por folio ("30371-
+ *    CONSTRUCCIÓN"); si no la encuentra así, por el nombre que trae el Excel (2024); y solo si
+ *    Drive de verdad no la tiene usa el link del Excel como último recurso (en 2025/2026 puede
+ *    venir a Dropbox, no a Drive).
+ * B. OCR (lenta, solo lo que A no cubrió -- una compra tan reciente que nadie la capturó
+ *    todavía en ningún Excel): recorre TODAS las carpetas reales de Adquisición Vehicular (el
+ *    universo completo, no una muestra), parte el folio y el área del nombre de cada solicitud,
+ *    copia su factura como Documento con OCR, saca la serie con una expresión regular y tira la
+ *    copia. Mismo patrón que la lectura de INE de Líneas (LineasIneLectura.gs): tandas de 4.5
+ *    min que se reprograman solas con un trigger, progreso en Script Properties para no perder
+ *    nada si se corta a la mitad.
  *
  * Solo lee Adquisición Vehicular (de otra cuenta); nunca escribe ahí -- la copia con OCR se
  * guarda y se tira dentro de la raíz de ESTA app (DriveUtils.carpetaEnRaiz).

@@ -4,10 +4,10 @@
  * (carpetas de Drive + Excel, dueño gestor.vehicular@ciudadmaderas.com). buscar(), lo que usa el
  * botón "Buscar expediente de adquisición" de la ficha, YA NO lee esos archivos externos en
  * vivo (se rompió dos veces por el formato de archivos que no controlamos: una columna con otro
- * nombre, un encabezado que no era la primera fila -- 12-oct-2026) ni depende de que exista un
- * Excel por año (2026 no tiene ninguno). En vez de eso consulta la hoja propia
- * ADQUISICION_VEHICULAR_INDICE, que llena AdquisicionVehicularIndice.gs (Excel 2024/2025 +
- * OCR de facturas para lo que esos Excel no cubren) con una corrida manual desde el editor.
+ * nombre, un encabezado que no era la primera fila -- 12-oct-2026). En vez de eso consulta la
+ * hoja propia ADQUISICION_VEHICULAR_INDICE, que llena AdquisicionVehicularIndice.gs (Excel
+ * 2024/2025/2026 + OCR de facturas para lo que esos tres Excel no cubren) con una corrida manual
+ * desde el editor.
  *
  * Lo que queda aquí (FUENTES, leerFuente_, listarCarpetasAdquisicion_, indiceHoja_…) es lo que
  * usa ese constructor del índice -- el botón de la ficha solo llama buscar().
@@ -27,7 +27,10 @@ const AdquisicionVehicularService = (function () {
 
   // El nombre de las columnas de folio/serie/carpeta cambia de año a año (confirmado a mano,
   // descomprimiendo los .xlsx reales, 12-oct-2026) -- un registro por año en vez de asumir que
-  // comparten esquema. 2026 no tiene archivo maestro: lo cubre el OCR (AdquisicionVehicularIndice.gs).
+  // comparten esquema. 2026 SÍ tiene archivo maestro (estaba en la raíz de la carpeta "2026" de
+  // Drive, no en ningún mes -- se encontró tarde, 12-oct-2026, mismo formato que el de 2025): el
+  // OCR de AdquisicionVehicularIndice.gs queda como respaldo solo para lo que ni este Excel
+  // tenga capturado todavía (una compra tan reciente que nadie la registró aquí).
   const FUENTES = [
     {
       año: '2024', fileId: '1dduU0ItSqOi7T3qoY_m1h_RW0sY7LxsS',
@@ -35,6 +38,10 @@ const AdquisicionVehicularService = (function () {
     },
     {
       año: '2025', fileId: '13KU1abKg1MzSRzH8vAFoS0MwnqFWjyLj',
+      colSerie: '# DE SERIE', colFolio: 'TICKET HELP', colArea: 'ÁREA SOLICITANTE', colCarpeta: null, colLiga: 'LIGA DE LA CARPETA',
+    },
+    {
+      año: '2026', fileId: '1lKg7bcODcAiFcqkJK9I0ShEL5wxWL1x7',
       colSerie: '# DE SERIE', colFolio: 'TICKET HELP', colArea: 'ÁREA SOLICITANTE', colCarpeta: null, colLiga: 'LIGA DE LA CARPETA',
     },
   ];

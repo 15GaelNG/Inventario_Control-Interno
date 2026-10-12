@@ -71,7 +71,7 @@ function libroMock() {
   return { getSheetByName: (nombre) => hojas[nombre] || null, insertSheet(nombre) { hojas[nombre] = hojaMock([]); return hojas[nombre]; } };
 }
 
-function crearContexto({ fuentes2024 = [], fuentes2025 = [], drive = {}, libro } = {}) {
+function crearContexto({ fuentes2024 = [], fuentes2025 = [], fuentes2026 = [], drive = {}, libro } = {}) {
   const libroVehiculos = libro || libroMock();
   const contexto = vm.createContext({
     Permisos: { puedeLeer: () => {}, puedeEditar: () => {} },
@@ -82,6 +82,7 @@ function crearContexto({ fuentes2024 = [], fuentes2025 = [], drive = {}, libro }
         if (id === 'SS_VEH') return libroVehiculos;
         if (id === '1dduU0ItSqOi7T3qoY_m1h_RW0sY7LxsS') return hojaExcelFalsa(fuentes2024);
         if (id === '13KU1abKg1MzSRzH8vAFoS0MwnqFWjyLj') return hojaExcelFalsa(fuentes2025);
+        if (id === '1lKg7bcODcAiFcqkJK9I0ShEL5wxWL1x7') return hojaExcelFalsa(fuentes2026);
         throw new Error('spreadsheet no esperado: ' + id);
       },
     },
@@ -135,6 +136,18 @@ test('leerFuente_ encuentra el encabezado aunque no sea el primer renglón (el a
   const filas = contexto.Servicio.leerFuente_(contexto.Servicio.FUENTES[1]);
   assert.equal(filas.length, 1);
   assert.equal(filas[0].folio, '30371');
+});
+
+test('FUENTES incluye 2026 (el HISTORICO maestro estaba en la raíz de la carpeta Drive del año, no se vio a la primera -- 12-oct-2026) con el mismo formato que 2025', () => {
+  const { contexto } = crearContexto({
+    fuentes2026: [ENCABEZADO_2025, ['MMBM7U5G7TH018473', '60134', 'CONSTRUCCION', '']],
+  });
+  assert.equal(contexto.Servicio.FUENTES.length, 3);
+  const fuente2026 = contexto.Servicio.FUENTES.find((f) => f.año === '2026');
+  assert.ok(fuente2026, 'debe existir una fuente para 2026');
+  const filas = contexto.Servicio.leerFuente_(fuente2026);
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].folio, '60134');
 });
 
 // ---------------------------------------------------------------------------------- carpetas de Drive
