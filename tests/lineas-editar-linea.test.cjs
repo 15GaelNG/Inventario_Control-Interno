@@ -83,7 +83,11 @@ test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por n�
   assert.match(html, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId,/);
   assert.match(html, /texto: 'Editar línea', separador: true, alHacer: \(\) => abrirEditor\(id, 'LINEA'\)/);
   assert.match(html, /if \(cond\.cambio\) return/);
-  assert.match(html, /valor: \(r\) => \[r\.numero, r\.numerosAnteriores \? 'antes ' \+ r\.numerosAnteriores : ''\]/);
+  // La búsqueda encuentra la línea por un número anterior, pero en la celda solo va el actual; los anteriores, en la ficha
+  // abajo del número (usuario, 12-oct)
+  assert.match(html, /valor: \(r\) => \[r\.numero, r\.numerosAnteriores\]\.filter\(Boolean\)\.join\(' '\),/);
+  assert.doesNotMatch(html, />antes ' \+ esc\(r\.numerosAnteriores\)/);
+  assert.match(html, /anteriores \? 'Antes <span class="ln-mono">' \+ esc\(anteriores\) \+ '<\/span>' : ''\)/);
   assert.match(html, /function tarjetaNumeros\(l, cambios\)/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores'\];/);
 });

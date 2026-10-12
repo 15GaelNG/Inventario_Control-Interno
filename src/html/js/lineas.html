@@ -2203,11 +2203,11 @@
         detalle: 'linea', textoVacio: 'Sin líneas',
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
-          // Con los números que tuvo por un cambio de número (8-oct): la búsqueda encuentra la línea por uno anterior
+          // La búsqueda encuentra la línea por un número que tuvo (8-oct); en la celda solo se ve el actual y los anteriores
+          // van en la ficha, abajo del número (usuario, 12-oct)
           { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,
-            valor: (r) => [r.numero, r.numerosAnteriores ? 'antes ' + r.numerosAnteriores : ''].filter(Boolean).join(' · '),
-            render: (v, r) => '<span class="ln-mono ln-fuerte">' + guion(r && r.numero) + '</span>' +
-              (r && r.numerosAnteriores ? ' <span class="ln-tenue ln-mono">antes ' + esc(r.numerosAnteriores) + '</span>' : '') },
+            valor: (r) => [r.numero, r.numerosAnteriores].filter(Boolean).join(' '),
+            render: (v, r) => '<span class="ln-mono ln-fuerte">' + guion(r && r.numero) + '</span>' },
           { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
           { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
@@ -2591,13 +2591,6 @@
           alAbrirFila: (r) => abrir(cfg.detalle, r.id),
           alTocarFila: (r) => vistaRapida(cfg.detalle, r),
           alCambiarSeleccion: (filas) => alCambiarSeleccion(modulo, filas),
-          ayuda: 'Como en Google Drive: un clic selecciona la fila y arriba aparecen sus acciones; ⋮ (o el clic derecho) trae las demás. ' +
-            'Doble clic abre la ficha. Ctrl+clic agrega o quita filas y Shift+clic marca un rango; para marcar varias arrastrando, empieza ' +
-            'fuera de las filas (en el espacio de abajo). "Detalles" abre el panel de la derecha, que sigue a la fila que selecciones. ' +
-            'Esc quita la selección. En celular: tocar abre la vista rápida y mantener presionado selecciona. ' +
-            'La flecha de cada columna filtra, ordena, fija u oculta; ' +
-            '"Vista" agrega las demás columnas del AppSheet (compañía, sede, comentarios, PIN…). "Última responsiva" y "Última inspección" ' +
-            'abren la más reciente de la carpeta del NUCO en NUCOS. Los indicadores de arriba filtran con un clic.',
           alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); marcarTipos(modulo); },
         });
         // La tabla se repinta con cada filtro, búsqueda, orden o KPI: las tarjetas la siguen
@@ -3009,11 +3002,12 @@
        * Encabezado de la ficha: qué es, su estado, las acciones y un resumen rápido con lo que más se
        * consulta (para revisar un equipo o línea sin bajar por la página).
        */
-      function encabezado(ico, titulo, chips, botones, resumen) {
+      function encabezado(ico, titulo, chips, botones, resumen, subtitulo) {
         const datos = (resumen || []).filter(Boolean);
         return '<div class="ln-detalle-header card">' +
           '<div class="ln-detalle-icono">' + icono(ico) + '</div>' +
-          '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2><div class="ln-chips">' + chips + '</div></div>' +
+          '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2>' + (subtitulo ? '<div class="ln-tenue ln-detalle-sub">' + subtitulo + '</div>' : '') +
+          '<div class="ln-chips">' + chips + '</div></div>' +
           '<div class="ln-detalle-botones">' + (botones || '') + '</div>' +
           (datos.length ? '<dl class="ln-resumen-rapido">' + datos.map((d) => '<div><dt>' + esc(d[0]) + '</dt><dd>' + (d[2] ? (d[1] || vacio) : guion(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
           '</div>';
@@ -3116,13 +3110,16 @@
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
           fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '' };
+          // Los números que tuvo por un cambio de número, abajo del actual (usuario, 12-oct; antes iban en la tabla)
+          const anteriores = (((memoria.indice || {}).lineas || []).filter((x) => x.id === id)[0] || {}).numerosAnteriores;
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
               // Con equipo, las capturas son del equipo: a la vista "Ver equipo"; suelta: sus capturas. El resto en ⋮
               botonesFicha('data-linea-id', id, 'linea', puedeOperarLinea && !e,
                 e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '', puedeOperarLinea),
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
-                ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]]) +
+                ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]],
+              anteriores ? 'Antes <span class="ln-mono">' + esc(anteriores) + '</span>' : '') +
             fichaEnPestanas(
             '<div class="ln-grid-2">' +
               tarjeta(icono('card-sim') + ' Línea', campos([
@@ -3405,8 +3402,6 @@
         cont.innerHTML = '<div class="stat-row ln-docs-kpis"></div>' +
           '<div class="card ln-card ln-historial">' +
           '<div class="ln-historial-cabecera"><h3>' + icono('folder-check') + ' Inspecciones y responsivas (' + miles(filas.length) + ')</h3></div>' +
-          '<p class="ln-tenue ln-docs-ayuda">Las registradas en AppSheet o en el sistema nuevo y las guardadas en la carpeta NUCOS de Drive. ' +
-          'Selecciona una fila: en la barra (o con clic derecho) ves la inspección, abres el PDF o la carpeta.</p>' +
           (filas.length ? '<div class="ln-docs-tabla"></div>' : '<p class="empty-state">Este registro no tiene inspecciones ni responsivas.</p>') + '</div>';
         const conFecha = (d) => (d ? fecha(d.fecha) || 'Sin fecha' : 'Ninguna');
         const marcar = tilesKpi($('.ln-docs-kpis', cont), [
@@ -3453,9 +3448,6 @@
             doc('folder-open', 'Ver carpeta en Drive', 'drive', false, (d) => !!d.carpetaId,
               (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener')),
           ],
-          ayuda: 'Inspecciones y responsivas del registro. Doble clic en una fila abre la inspección o la responsiva. ' +
-            'Los indicadores de arriba filtran por tipo; la flecha de cada columna filtra u ordena. ' +
-            'Origen: AppSheet y Sistema nuevo son registros de la hoja; Carpeta NUCOS son los que solo están en Drive.',
           columnas: [
             { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 130, render: (v) => esc(fecha(v) || 'Sin fecha') },
             { campo: 'documento', titulo: 'Documento', tipo: 'lista', ancho: 150,
@@ -3634,7 +3626,6 @@
           });
         }
         const htmlIndividual = !esReasignar ? '' : '<div class="ln-masiva-individual" hidden>' +
-          '<p class="ln-tenue ln-masiva-ayuda">Cada equipo trae su responsable actual: cambia solo los que necesites. Los que dejes igual no se tocan.</p>' +
           filas.map((r) => '<section class="ln-af-seccion ln-masiva-fila" data-masiva-fila="' + esc(r.id) + '"><h4 class="ln-af-titulo">' + icono(esLinea ? 'card-sim' : 'smartphone') + ' ' +
             esc(nombreDe(r)) + ' · ' + esc(esLinea ? (r.compania || 'Sin compañía') : (r.modelo || 'Sin modelo')) + '</h4><div class="ln-af-grid">' + elementosFila[r.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
           '</div>';
@@ -4950,7 +4941,6 @@
             { icono: 'signature', titulo: 'Ver responsiva', visible: (m) => m.refTipo === 'responsiva' && !!m.refId, alHacer: (m) => abrir('responsiva', m.refId) },
             { icono: 'file-text', titulo: 'Ver PDF', visible: (m) => !!m.pdfId, alHacer: (m) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(m.pdfId) + '/view', '_blank', 'noopener') },
           ],
-          ayuda: 'Un renglón por acción, del AppSheet y del sistema nuevo. Responsable y estatus: los de ese momento.',
           alCambiarFiltros: (f) => {
             if (select.value === MOV_ASIGNACIONES) return;
             const valores = f && f.movimiento && f.movimiento.valores;
@@ -5010,8 +5000,6 @@
             { icono: porNuco ? 'card-sim' : 'smartphone', titulo: porNuco ? 'Ir al número' : 'Ir al NUCO', visible: (p) => !!p.irId,
               alHacer: (p) => abrir(porNuco ? 'linea' : 'equipo', p.irId) },
           ],
-          ayuda: 'Un periodo por fila: desde cuándo y hasta cuándo estuvo ' + (porNuco ? 'cada número en este NUCO' : 'este número en cada NUCO') +
-            '. "Actual" es lo que tiene hoy. ' + (porNuco ? '"Ir al número"' : '"Ir al NUCO"') + ' abre su ficha si sigue en el inventario.',
           columnas: [
             principal,
             porNuco ? columnaNuco : columnaNumero,
@@ -5143,9 +5131,7 @@
             tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
               (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
-                htmlSubirFotos('insp-fotos', deDrive
-                  ? 'Se guardan en Drive, en la carpeta de la app (la de NUCOS es de solo consulta), y se ven aquí con las demás.'
-                  : 'Se guardan en la carpeta FOTOS de esta inspección en Drive.') + '</div>' : ''));
+                htmlSubirFotos('insp-fotos') + '</div>' : ''));
           activarBotonesDocumento(detalle, 'INSPECCION', i, r);
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
@@ -6223,8 +6209,6 @@
           exportar: exportarBase('ACCESORIOS', 'Inventario de accesorios'),
           etiquetaFila: (a) => a.nombre,
           detalle: { titulo: (a) => a.nombre, contenidoExtra: movimientosEnPanel },
-          ayuda: 'Selecciona un artículo: en la barra (o con clic derecho) "Ver detalle" muestra el artículo y sus movimientos, y ' +
-            '"Registrar entrada" / "Registrar salida" sus movimientos.',
           alCambiarFiltros: (f) => { filtrosAcc = f || {}; if (marcarKpi) marcarKpi(filtrosAcc); },
           // Solo con EDICION en el inventario (en AppSheet, la tabla la editaba una lista de correos)
           accionesFila: puedeEditarModulo('accesorios-lineas') ? [
@@ -6557,8 +6541,6 @@
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
           accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
           accionesSeleccion: puede ? ACCIONES[vista] : [],
-          ayuda: puede ? 'Selecciona uno o varios renglones para confirmar el paso (recibir, entregar, carta firmada o enviada, cancelada). La flecha abre el equipo.'
-            : 'Aquí ves el avance de lo que se mandó a resguardo y a cancelación. La flecha abre el equipo.',
           alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
         });
         tabla.setDatos(filasVista());
@@ -6656,7 +6638,6 @@
           etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
           detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
           accionesFila: hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
-          ayuda: 'Bitácora de solo lectura. El ojo abre todos los campos del registro y el celular abre la ficha del activo.',
           alCambiarFiltros: (f) => { filtrosBit = f || {}; if (marcarKpi) marcarKpi(filtrosBit); },
         });
         tabla.hFecha = hFecha;
