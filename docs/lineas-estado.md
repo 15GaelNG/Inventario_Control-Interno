@@ -170,8 +170,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Menú de Líneas** (12-oct, `585d1c6`): Panorama, Líneas telefónicas, Resguardos y cancelaciones e Inventario de
   accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
   `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción). El menú lateral
-  sale recogido (92 px) y se abre a 280 px al pasar el cursor, encima del contenido, sin botón de colapsar (en celular y
-  tableta, hasta 1024 px, sigue el cajón de `shell-movil.html`); las etiquetas llevan solo la primera mayúscula.
+  sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
+  «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
+  el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
 - **Sin asistente flotante** (12-oct, `7163c54`): el botón del asistente de la esquina inferior derecha se esconde en
   las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
   (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
