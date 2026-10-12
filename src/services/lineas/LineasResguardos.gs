@@ -21,8 +21,8 @@
  *   elegir cualquiera de ellos en Editar abre este formulario, y la edición directa no los acepta. Si el equipo ya
  *   estaba guardado (p. ej. RESGUARDO → PARA VENTA) no se pide otra recepción: se actualiza su renglón abierto o, si
  *   no tiene y su línea va a cancelación, se crea ya EN RESGUARDO.
- * - Quién aprueba (Pau y su suplente) se configura en la Script Property LINEAS_APROBADORES_RESGUARDO (correos
- *   separados por coma); ADMIN también puede. Cualquiera del módulo ve la bandeja (el avance).
+ * - Aprueba quien EDITA Resguardos y cancelaciones (Pau por correo, y ADMIN): lo calcula TelefoniaService
+ *   (usuario.puedeAprobar). El área de Líneas la ve (el avance) y manda desde Líneas telefónicas (usuario, 12-oct).
  */
 const LineasResguardos = (function () {
   const TAB = 'APP_RESGUARDOS';
@@ -58,7 +58,6 @@ const LineasResguardos = (function () {
   ];
 
   const MAXIMO = 150;
-  const PROP_APROBADORES = 'LINEAS_APROBADORES_RESGUARDO';
 
   const txt = (v) => (v === null || v === undefined ? '' : String(v).trim());
   const may = (v) => txt(v).toUpperCase();
@@ -66,18 +65,13 @@ const LineasResguardos = (function () {
 
   // ---------------- Permisos ----------------
 
-  function aprobadores_() {
-    return String(leerConfig_(PROP_APROBADORES) || '')
-      .split(',').map((c) => c.trim().toLowerCase()).filter(Boolean);
-  }
-
-  /** Pau y su suplente (Script Property) o ADMIN. */
+  /** Quien edita Resguardos y cancelaciones (ver el encabezado). */
   function puedeAprobar(usuario) {
-    return !!usuario && (usuario.esAdmin || aprobadores_().indexOf(String(usuario.correo || '').toLowerCase()) >= 0);
+    return !!(usuario && usuario.puedeAprobar);
   }
 
   function exigirAprobador_(usuario) {
-    if (!puedeAprobar(usuario)) throw new Error('Solo quien recibe los resguardos (y ADMIN) puede hacer este paso.');
+    if (!puedeAprobar(usuario)) throw new Error('Solo puedes consultar Resguardos y cancelaciones, no modificarlo.');
   }
 
   // ---------------- Apoyos ----------------
@@ -535,7 +529,7 @@ const LineasResguardos = (function () {
 
   return {
     formulario, mandar, mandarCancelacion, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion, puedeAprobar, asesorPara,
-    TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, PROP_APROBADORES, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
+    TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_,
   };
 })();

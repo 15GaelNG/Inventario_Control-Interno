@@ -17,8 +17,9 @@
     .shell-menu-btn .ico { width: 20px; height: 20px; }
 
     #sidebar, #sidebar.collapsed {
-      position: fixed; top: 0; left: 0; bottom: 0; z-index: 900; width: 280px; max-width: 86vw;
+      position: fixed; top: 0; left: 0; bottom: 0; z-index: 900; width: 308px; max-width: 86vw;
       transform: translateX(-100%); transition: transform .25s ease;
+      margin-right: 0; box-shadow: none;   /* en escritorio se abre encima del contenido (styles.html) */
     }
     body.shell-menu-abierto #sidebar { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .35); }
     /* En el panel siempre se ven los nombres, aunque en escritorio el menú esté colapsado */
@@ -27,7 +28,6 @@
     #sidebar.collapsed .nav-group-chevron { display: inline-flex; }
     #sidebar.collapsed .nav-item, #sidebar.collapsed .nav-group-header { justify-content: flex-start; }
     #sidebar.collapsed .nav-group-items { display: flex !important; }
-    .sidebar-collapse-btn { display: none; }
 
     .shell-fondo { position: fixed; inset: 0; z-index: 890; background: rgba(6, 20, 30, .45); }
     body.shell-menu-abierto .shell-fondo { display: block; }
@@ -97,7 +97,7 @@
       temaPanel.className = 'shell-tema-panel';
       temaPanel.innerHTML = '<span>Tema</span>';
       temaPanel.appendChild(temaBarra.cloneNode(true));
-      sidebar.insertBefore(temaPanel, document.getElementById('sidebar-collapse-btn'));
+      sidebar.appendChild(temaPanel);
       if (typeof marcarTemaActual === 'function') marcarTemaActual();
     }
 

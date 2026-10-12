@@ -1,0 +1,1307 @@
+<style>
+  /* ============ Temporada: Día de Muertos ============
+     Decoración que un ADMIN prende o apaga para todos (botón de la flor en la barra de arriba;
+     TemporadaService.gs la guarda y Router.gs la pone en <body data-temporada="muertos">).
+     Todo vive bajo body[data-temporada="muertos"]: apagada, nada de esto aplica.
+     Dónde se ve:
+       login     cielo de noche (estrellas, luna), papel picado que se mece con el mouse, calavera,
+                 velas, pétalos cayendo, mariposas monarca, título con letra de temporada
+       carga     papel picado y velas
+       barra     papel picado que se mece con el mouse, corona de cempasúchil en el avatar
+       menú      tira de papel picado y una flor en lo activo
+       Inicio    franja de noche con estrellas, una mariposa que cruza y la ofrenda colectiva
+       tablas    calaverita cuando están vacías
+       guardar   un puñado de pétalos sale del aviso de "guardado"
+     Las tablas, formularios y colores de estado (error, éxito) no se tocan.
+     Los dibujos se arman en el script de abajo (SVG), sin imágenes externas. */
+  :root {
+    --dm-rosa: #E2457B;
+    --dm-cempa: #F29A2E;
+    --dm-morado: #8257A8;
+    --dm-turquesa: #2A9D8F;
+    --dm-oro: #CDB46A;
+    --dm-noche: #2a1745;
+    --dm-letra: 'Fraunces', Georgia, 'Times New Roman', serif;
+    /* El script lo lee para saber si la persona pidió "reducir movimiento" (sin matchMedia) */
+    --dm-movimiento: 1;
+  }
+
+  /* ---------- Papel picado (piezas sueltas que se mecen con el mouse) ---------- */
+  .dm-guirnalda { overflow: hidden; pointer-events: none; }
+  .dm-guirnalda svg { display: block; }
+  .dm-hilo { stroke: rgba(6, 38, 58, .35); }
+  :root[data-theme="dark"] .dm-hilo, .dm-guirnalda-clara .dm-hilo { stroke: rgba(255, 255, 255, .45); }
+
+  /* Bajo la barra de arriba, flotando ENCIMA del contenido: lo que se desliza pasa por detrás de
+     las banderitas (si colgara en el hueco entre la barra y el contenido, el contenido se cortaría
+     en una franja lisa). La barra pierde su margen y el contenido lo gana como relleno, así que
+     todo queda donde estaba, 6 px más abajo. Sin clics: lo de abajo se sigue usando. */
+  body[data-temporada="muertos"] .topbar { position: relative; margin-bottom: 0; }
+  body[data-temporada="muertos"] #view-container { padding-top: 24px; }
+  .dm-barra-picado { position: absolute; left: 0; right: 0; top: 100%; height: 22px; z-index: 5; }
+
+  /* ---------- Menú: "el camino es el menú" ----------
+     Un anochecer de fondo y un camino de pétalos de cempasúchil que SIGUE LA ESTRUCTURA del menú:
+     une la columna de íconos de los módulos (en los huecos entre placas) y, en un grupo abierto,
+     baja por su línea de submódulos con una ramita hacia cada uno. Se ilumina el tramo desde
+     arriba hasta donde estás (o hasta la opción bajo el mouse); lo demás queda tenue. Donde estás
+     lleva una vela encendida. Las medidas del menú no cambian (prender o apagar la temporada no
+     mueve nada de lugar). El camino va detrás de las opciones (z-index -1 dentro del menú, que ya
+     es su propio contexto): nunca tapa un clic. */
+  /* Anochecer en todo el alto: noche profunda arriba → índigo → morado → la última luz cálida en
+     el horizonte (abajo). Las estrellas (--dm-cielo-menu, SVG armado en el script) son una capa
+     más del fondo: miden siempre 308 px de ancho (el menú abierto), así que no se estiran mientras
+     el menú se abre, y como son fondo no se deslizan con las opciones. */
+  body[data-temporada="muertos"] #sidebar {
+    background:
+      var(--dm-cielo-menu) left top / 308px auto repeat-y,
+      radial-gradient(130% 22% at 50% 100%, rgba(242, 140, 40, .16), rgba(226, 69, 123, .07) 45%, transparent 75%),
+      radial-gradient(90% 35% at 75% 0%, rgba(130, 87, 168, .32), transparent 70%),
+      linear-gradient(180deg, #150e2b 0%, #1f1742 22%, #261b4d 44%, #22204c 64%, #1d2448 82%, #2a2140 100%);
+  }
+  /* Dos capas: una en el menú (de Inicio al primer módulo) y otra dentro de la lista de grupos,
+     que puede deslizarse por su cuenta: así cada pétalo se mueve con sus opciones */
+  body[data-temporada="muertos"] .nav-groups { position: relative; }
+  .dm-camino { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: -1; pointer-events: none; }
+  .dm-camino-petalo {
+    position: absolute; left: var(--x); top: var(--y); width: 9px; height: 12px; margin: -6px 0 0 -4.5px;
+    background: var(--dm-petalo-0) center / contain no-repeat; transform: rotate(var(--giro));
+    /* Apagado: claro y tenue, como pétalo a la luz de la luna (el naranja bajo opacidad se veía café) */
+    opacity: .34; filter: saturate(.45) brightness(1.7);
+    transition: opacity .3s ease, transform .3s ease, filter .3s ease;
+  }
+  .dm-camino-petalo.dm-rama { width: 7px; height: 9px; margin: -4.5px 0 0 -3.5px; }
+  .dm-camino-petalo.dm-brilla {
+    opacity: 1; transform: rotate(var(--giro)) scale(1.15); transition-delay: var(--retraso, 0ms);
+    filter: saturate(1.25) drop-shadow(0 0 4px rgba(255, 170, 60, .9));
+  }
+  /* La línea dorada de los submódulos queda como el hilo de la guirnalda, más tenue */
+  body[data-temporada="muertos"] .nav-group-items::before { opacity: .3; }
+  /* La vela encendida en lo activo: el cuerpo (::before) y la llama (::after), a la derecha */
+  body[data-temporada="muertos"] .nav-item.active,
+  body[data-temporada="muertos"] .nav-subitem.active { position: relative; padding-right: 38px; }
+  body[data-temporada="muertos"] .nav-item.active::before,
+  body[data-temporada="muertos"] .nav-subitem.active::before {
+    content: ''; position: absolute; right: 21px; bottom: calc(50% - 8px); width: 6px; height: 11px; border-radius: 1.5px 1.5px 1px 1px;
+    background: linear-gradient(90deg, #e8d9b4, #fff8e6 45%, #d9c69d); box-shadow: 0 1px 2px rgba(6, 38, 58, .35);
+  }
+  body[data-temporada="muertos"] .nav-item.active::after,
+  body[data-temporada="muertos"] .nav-subitem.active::after {
+    content: ''; position: absolute; right: 20px; bottom: calc(50% + 4px); width: 8px; height: 13px;
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%; transform-origin: 50% 90%;
+    background: radial-gradient(ellipse at 50% 78%, #fff 0 16%, #ffe08a 34%, #f7a234 60%, rgba(226, 97, 11, 0) 76%);
+    filter: drop-shadow(0 0 4px rgba(255, 150, 40, .95));
+    animation: dmParpadeo 2.4s ease-in-out infinite;
+  }
+  body[data-temporada="muertos"] .nav-item.active .nav-icon { filter: drop-shadow(0 0 5px rgba(255, 196, 120, .9)); }
+  body[data-temporada="muertos"] #sidebar.collapsed .nav-item.active { padding-right: 10px; }
+  body[data-temporada="muertos"] #sidebar.collapsed .nav-item.active::before,
+  body[data-temporada="muertos"] #sidebar.collapsed .nav-item.active::after { display: none; }
+  /* El pétalo que baja por el camino al abrirse el menú (lo mueve el script) */
+  .dm-petalo-menu {
+    position: absolute; width: 11px; height: 15px; z-index: 2; pointer-events: none;
+    background: var(--dm-petalo-0) center / contain no-repeat;
+  }
+
+  /* ---------- Corona de cempasúchil sobre el avatar de la barra ---------- */
+  /* El avatar trae margin-right: 8px (styles.html): se pasa al contenedor para que la corona se
+     centre sobre la foto y no sobre la foto más el margen */
+  body[data-temporada="muertos"] #user-avatar { position: relative; display: inline-flex; margin-right: 8px; }
+  body[data-temporada="muertos"] #user-avatar > .avatar { margin-right: 0; }
+  body[data-temporada="muertos"] #user-avatar::after {
+    content: ''; position: absolute; left: 50%; top: -8px; width: 46px; height: 17px; transform: translateX(-50%);
+    background: var(--dm-corona) center / contain no-repeat; pointer-events: none;
+    filter: drop-shadow(0 1px 1px rgba(6, 38, 58, .25));
+  }
+
+  /* ---------- Botón de la flor (solo ADMIN): prende / apaga la decoración para todos ---------- */
+  .dm-interruptor {
+    background: transparent; border: 1px solid var(--color-border); border-radius: 999px;
+    width: 34px; height: 34px; padding: 0; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .dm-interruptor:hover { background: var(--color-bg); }
+  .dm-interruptor-flor {
+    width: 20px; height: 20px; background: var(--dm-flor) center / contain no-repeat;
+    filter: grayscale(1); opacity: .5; transition: filter .25s ease, opacity .25s ease, transform .4s ease;
+  }
+  .dm-interruptor:hover .dm-interruptor-flor { opacity: .8; transform: rotate(30deg); }
+  .dm-interruptor[aria-pressed="true"] .dm-interruptor-flor { filter: none; opacity: 1; }
+
+  /* ---------- Cielo de noche: estrellas que titilan y luna ---------- */
+  .dm-estrellas { position: absolute; inset: 0; pointer-events: none; }
+  .dm-estrella {
+    position: absolute; width: var(--tam); height: var(--tam); border-radius: 50%; background: #fff8e6;
+    box-shadow: 0 0 6px 1px rgba(255, 244, 214, .7); opacity: .35;
+    animation: dmTitilar var(--dur) ease-in-out var(--retraso) infinite alternate;
+  }
+  @keyframes dmTitilar { from { opacity: .15; transform: scale(.7); } to { opacity: .95; transform: scale(1); } }
+  .dm-luna {
+    position: absolute; width: 46px; height: 46px; border-radius: 50%;
+    box-shadow: 13px 9px 0 0 #f3e7c4; filter: drop-shadow(0 0 16px rgba(243, 231, 196, .55));
+  }
+
+  /* ---------- Mariposas monarca ---------- */
+  .dm-mariposa { position: absolute; left: 0; top: 0; width: 36px; height: 31px; pointer-events: none; will-change: transform; }
+  .dm-mariposa-cuerpo { position: relative; width: 100%; height: 100%; perspective: 90px; }
+  .dm-mariposa-cuerpo::after {   /* el cuerpo */
+    content: ''; position: absolute; left: 50%; top: 18%; width: 3px; height: 66%; margin-left: -1.5px;
+    border-radius: 2px; background: #1c1208;
+  }
+  .dm-ala {
+    position: absolute; top: 0; width: 50%; height: 100%; background: center / contain no-repeat;
+    animation: dmAleteo .32s ease-in-out infinite alternate;
+  }
+  .dm-ala-izq { left: 0; background-image: var(--dm-ala-izq); transform-origin: 100% 50%; }
+  .dm-ala-der { right: 0; background-image: var(--dm-ala-der); transform-origin: 0 50%; animation-name: dmAleteoDer; }
+  @keyframes dmAleteo { from { transform: rotateY(8deg); } to { transform: rotateY(68deg); } }
+  @keyframes dmAleteoDer { from { transform: rotateY(-8deg); } to { transform: rotateY(-68deg); } }
+  /* La que cruza la franja del Inicio de vez en cuando (sola, con CSS) */
+  .dm-mariposa-cruza { width: 24px; height: 21px; animation: dmCruzar 28s linear 3s infinite; opacity: 0; }
+  @keyframes dmCruzar {
+    0%   { transform: translate(-40px, 34px) rotate(80deg); opacity: 1; }
+    8%   { transform: translate(18vw, 6px) rotate(100deg); }
+    16%  { transform: translate(36vw, 30px) rotate(78deg); }
+    24%  { transform: translate(56vw, 8px) rotate(102deg); }
+    32%  { transform: translate(78vw, 26px) rotate(84deg); opacity: 1; }
+    33%, 100% { transform: translate(100vw, 20px) rotate(90deg); opacity: 0; }
+  }
+
+  /* ---------- Login ---------- */
+  .dm-login { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  /* Tinte de noche (morado arriba) y la luz cálida de las velas abajo a la derecha */
+  .dm-login-noche {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 88% 88%, rgba(242, 140, 40, .30), transparent 42%),
+      linear-gradient(180deg, rgba(42, 23, 69, .66) 0%, rgba(42, 23, 69, .2) 45%, rgba(6, 38, 58, 0) 72%);
+  }
+  .dm-login .dm-estrellas { bottom: 48%; }
+  .dm-login .dm-luna { right: 13%; top: 96px; }
+  .dm-login-picado { position: absolute; left: 0; right: 0; top: 0; height: 46px; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .25)); }
+  /* La segunda fila, más chica y atrás */
+  .dm-login-picado-atras {
+    position: absolute; left: 0; right: 0; top: 22px; height: 32px; opacity: .8;
+    background: var(--dm-picado-claro) 72px 0 / auto 32px repeat-x;
+  }
+  .dm-login-calavera {
+    position: absolute; right: 5%; top: 50%; width: min(32%, 290px); transform: translateY(-50%);
+    color: var(--dm-oro); opacity: .24; filter: drop-shadow(0 0 12px rgba(205, 180, 106, .35));
+  }
+  .dm-login-calavera svg { display: block; width: 100%; height: auto; }
+  .dm-login .dm-velas { position: absolute; right: 56px; bottom: 150px; }
+  body[data-temporada="muertos"] .login-hero-content { padding-top: 80px; }
+  body[data-temporada="muertos"] .login-hero-title {
+    font-family: var(--dm-letra); font-weight: 600; font-size: 38px; line-height: 1.15; letter-spacing: -.4px;
+    font-variation-settings: 'opsz' 96, 'SOFT' 50;
+  }
+
+  .dm-login-pill {
+    display: inline-flex; align-items: center; gap: 8px; margin-bottom: 16px;
+    padding: 6px 14px 6px 8px; border-radius: 999px;
+    background: rgba(42, 23, 69, .45); backdrop-filter: blur(6px);
+    border: 1px solid rgba(205, 180, 106, .45);
+    color: #f3e6bf; font-size: 12px; font-weight: 600; letter-spacing: .4px;
+  }
+  .dm-flor-mini { width: 20px; height: 20px; flex-shrink: 0; background: var(--dm-flor) center / contain no-repeat; }
+
+  /* La rayita bajo "Iniciar sesión": los cinco colores del papel picado */
+  body[data-temporada="muertos"] .login-divider {
+    width: 70px;
+    background: linear-gradient(90deg,
+      var(--dm-rosa) 0 20%, var(--dm-cempa) 20% 40%, var(--dm-morado) 40% 60%,
+      var(--dm-turquesa) 60% 80%, var(--dm-oro) 80% 100%);
+  }
+
+  /* Pétalos de cempasúchil cayendo despacio */
+  .dm-petalos { position: absolute; inset: 0; overflow: hidden; }
+  .dm-petalo {
+    position: absolute; top: -24px; width: var(--tam); height: calc(var(--tam) * 1.33);
+    background: var(--dm-petalo) center / contain no-repeat; opacity: 0;
+    animation: dmCaer var(--dur) linear var(--retraso) infinite;
+  }
+  @keyframes dmCaer {
+    0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
+    10%  { opacity: .9; }
+    50%  { transform: translate3d(var(--vaiven), 55vh, 0) rotate(190deg); }
+    88%  { opacity: .8; }
+    100% { transform: translate3d(0, 108vh, 0) rotate(380deg); opacity: 0; }
+  }
+
+  /* Pétalos que salen del aviso de "guardado" (los mueve el script) */
+  .dm-rafaga { position: fixed; inset: 0; pointer-events: none; z-index: 10000; overflow: hidden; }
+  .dm-rafaga span { position: absolute; width: 12px; height: 16px; background: var(--dm-petalo) center / contain no-repeat; }
+
+  /* ---------- Velas ---------- */
+  .dm-velas { display: flex; align-items: flex-end; gap: 12px; }
+  .dm-vela {
+    position: relative; width: 15px; height: var(--alto); border-radius: 4px 4px 3px 3px;
+    background: linear-gradient(90deg, #d9c69d 0%, #fff6e0 42%, #f1e3c2 60%, #c9b385 100%);
+    box-shadow: inset 0 -8px 10px rgba(80, 50, 20, .18), 0 6px 14px rgba(0, 0, 0, .25);
+  }
+  .dm-vela::before {   /* pabilo */
+    content: ''; position: absolute; left: 50%; top: -6px; width: 1.5px; height: 7px; margin-left: -.75px;
+    background: #3b2a1a; border-radius: 1px;
+  }
+  .dm-vela::after {    /* escurrido de cera */
+    content: ''; position: absolute; left: 3px; top: 0; width: 4px; height: 9px; border-radius: 0 0 3px 3px;
+    background: #fff6e0; opacity: .9;
+  }
+  .dm-llama {
+    position: absolute; left: 50%; bottom: calc(100% + 4px); width: 10px; height: 20px; margin-left: -5px;
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+    background: radial-gradient(ellipse at 50% 78%, #fff 0 16%, #ffe8a3 32%, #f7b23b 58%, rgba(242, 120, 30, 0) 74%);
+    transform-origin: 50% 90%;
+    filter: drop-shadow(0 0 6px rgba(255, 170, 60, .9));
+    animation: dmParpadeo 2.6s ease-in-out infinite;
+  }
+  .dm-vela:nth-child(3n+2) .dm-llama { animation-duration: 2.1s; animation-delay: -.7s; }
+  .dm-vela:nth-child(3n) .dm-llama { animation-duration: 3s; animation-delay: -1.3s; }
+  .dm-llama::after {   /* el resplandor alrededor */
+    content: ''; position: absolute; left: 50%; top: 50%; width: 96px; height: 96px; transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255, 176, 72, .32), rgba(255, 176, 72, 0) 65%);
+  }
+  @keyframes dmParpadeo {
+    0%, 100% { transform: scale(1, 1) rotate(-1deg); }
+    22% { transform: scale(.94, 1.07) rotate(1.6deg); }
+    48% { transform: scale(1.04, .94) rotate(-.6deg); }
+    71% { transform: scale(.97, 1.05) rotate(1deg); }
+  }
+
+  /* ---------- Pantalla de carga ---------- */
+  body[data-temporada="muertos"] #loading-screen {
+    background:
+      radial-gradient(circle at 50% 62%, rgba(242, 140, 40, .17), transparent 38%),
+      radial-gradient(circle at 30% 20%, #2a1745 0%, #06263A 58%, #041722 100%);
+  }
+  .dm-carga-picado {
+    position: absolute; left: 0; right: 0; top: 0; height: 44px; pointer-events: none;
+    background: var(--dm-picado-claro) 0 0 / auto 44px repeat-x;
+  }
+  body[data-temporada="muertos"] .loading-badge {
+    box-shadow: 0 0 0 1px rgba(255, 190, 90, .25), 0 0 64px rgba(242, 140, 40, .38), var(--shadow-lg);
+  }
+  .dm-velas-carga { margin-top: 38px; }
+  body[data-temporada="muertos"] .loading-bar-fill { background: linear-gradient(90deg, var(--dm-cempa), var(--dm-rosa)); }
+
+  /* ---------- Inicio: una franja delgada de noche ---------- */
+  .dm-banner {
+    position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px;
+    margin: 0 0 18px; padding: 12px 14px 12px 16px; border-radius: var(--radius);
+    background: linear-gradient(105deg, var(--dm-noche) 0%, #1b2148 38%, #06263A 78%);
+    border: 1px solid rgba(205, 180, 106, .35); box-shadow: var(--shadow); color: #fff;
+  }
+  .dm-banner .dm-estrellas { z-index: 0; }
+  .dm-banner-flor {
+    position: relative; z-index: 1; flex-shrink: 0; width: 38px; height: 38px; background: var(--dm-flor) center / contain no-repeat;
+    filter: drop-shadow(0 0 10px rgba(242, 140, 40, .55));
+  }
+  .dm-banner-texto { position: relative; z-index: 1; min-width: 0; margin-right: auto; }
+  .dm-banner-texto strong {
+    display: block; color: #ecd9a2; font-family: var(--dm-letra); font-size: 17px; font-weight: 600; letter-spacing: .1px;
+    font-variation-settings: 'opsz' 48, 'SOFT' 50;
+  }
+  .dm-banner-texto span { display: block; color: rgba(255, 255, 255, .78); font-size: 12.5px; margin-top: 2px; }
+  .dm-banner-picado {
+    position: absolute; right: 40px; top: 0; width: 42%; height: 26px; pointer-events: none;
+    background: var(--dm-picado-claro) 0 0 / auto 26px repeat-x;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 40%);
+    mask-image: linear-gradient(90deg, transparent, #000 40%);
+  }
+  .dm-banner-ofrenda {
+    position: relative; z-index: 1; flex-shrink: 0; display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 14px 7px 10px; border-radius: 999px; cursor: pointer;
+    background: linear-gradient(180deg, #3b2442, #281a3c); border: 1px solid rgba(242, 154, 46, .6); color: #ffe2b0;
+    box-shadow: 0 0 0 4px rgba(27, 22, 56, .85), 0 4px 14px rgba(0, 0, 0, .3);
+    font-size: 12.5px; font-weight: 600; white-space: nowrap;
+    transition: background .2s ease, transform .2s ease;
+  }
+  .dm-banner-ofrenda:hover { background: linear-gradient(180deg, #4a2b48, #33203f); transform: translateY(-1px); }
+  .dm-banner-ofrenda b { color: #fff; font-weight: 700; }
+  .dm-mini-vela { position: relative; width: 6px; height: 12px; margin: 6px 2px 0; border-radius: 1.5px; background: #fff3d6; }
+  .dm-mini-vela::before {
+    content: ''; position: absolute; left: 50%; bottom: calc(100% + 1px); width: 6px; height: 9px; margin-left: -3px;
+    border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+    background: radial-gradient(ellipse at 50% 75%, #fff 0 18%, #ffd36b 40%, #f29a2e 70%, transparent 74%);
+    animation: dmParpadeo 2.2s ease-in-out infinite;
+  }
+  .dm-banner-cerrar {
+    position: relative; z-index: 1; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border-radius: 999px;
+    background: transparent; border: 0; color: rgba(255, 255, 255, .6); font-size: 18px; line-height: 1; cursor: pointer;
+  }
+  .dm-banner-cerrar:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+  .dm-banner .dm-mariposa-cruza { top: 0; left: 0; z-index: 1; }
+
+  /* ---------- Nuestra ofrenda (ventana) ---------- */
+  .dm-ofrenda.modal-card {
+    position: relative; overflow: hidden; max-width: 540px; padding: 52px 26px 22px; color: #f4ecd8;
+    background:
+      radial-gradient(ellipse at 50% 58%, rgba(242, 140, 40, .22), transparent 55%),
+      linear-gradient(180deg, var(--dm-noche) 0%, #121a3a 48%, #06263A 100%);
+    border: 1px solid rgba(205, 180, 106, .35);
+  }
+  .dm-ofrenda .dm-estrellas { bottom: 55%; }
+  .dm-ofrenda-picado { position: absolute; left: 0; right: 0; top: 0; height: 34px; background: var(--dm-picado-claro) 0 0 / auto 34px repeat-x; }
+  .dm-ofrenda-cerrar {
+    position: absolute; right: 10px; top: 38px; z-index: 2; width: 30px; height: 30px; padding: 0; border-radius: 999px;
+    border: 0; background: transparent; color: rgba(255, 255, 255, .7); font-size: 20px; line-height: 1; cursor: pointer;
+  }
+  .dm-ofrenda-cerrar:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+  .dm-ofrenda h3 {
+    position: relative; margin: 0; text-align: center; color: #ecd9a2;
+    font-family: var(--dm-letra); font-size: 28px; font-weight: 600; font-variation-settings: 'opsz' 96, 'SOFT' 50;
+  }
+  .dm-ofrenda-sub { position: relative; margin: 6px auto 0; max-width: 400px; text-align: center; font-size: 12.5px; line-height: 1.5; color: rgba(244, 236, 216, .75); }
+  /* El altar: tres escalones con su orilla de cempasúchil y las velas encima */
+  .dm-altar { position: relative; margin: 18px auto 0; max-width: 420px; }
+  .dm-escalon {
+    position: relative; display: flex; justify-content: center; align-items: flex-end; flex-wrap: wrap; gap: 6px 9px;
+    min-height: 40px; margin: 0 auto; padding: 18px 10px 6px;
+    border-bottom: 9px solid #6b3a1f; border-radius: 2px;
+    background: linear-gradient(180deg, transparent 0 55%, rgba(107, 58, 31, .35));
+  }
+  .dm-escalon::after {   /* la orilla de flores */
+    content: ''; position: absolute; left: -2px; right: -2px; bottom: -12px; height: 9px;
+    background: radial-gradient(circle at 5px 5px, #f29a2e 3.4px, #d9660b 4.4px, transparent 4.8px) 0 0 / 10px 9px repeat-x;
+  }
+  .dm-escalon:nth-child(1) { width: 56%; }
+  .dm-escalon:nth-child(2) { width: 78%; }
+  .dm-escalon:nth-child(3) { width: 100%; }
+  .dm-escalon .dm-vela { width: 9px; }
+  .dm-escalon .dm-vela::after { display: none; }
+  .dm-escalon .dm-llama { width: 7px; height: 13px; margin-left: -3.5px; }
+  .dm-escalon .dm-llama::after { width: 46px; height: 46px; }
+  .dm-escalon .dm-vela.dm-nueva { animation: dmAparecer .6s cubic-bezier(.3, 1.6, .5, 1); }
+  @keyframes dmAparecer { from { transform: scale(.2) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .dm-altar-vacio { padding: 20px 0 8px; text-align: center; font-size: 12.5px; font-style: italic; color: rgba(244, 236, 216, .6); }
+  .dm-ofrenda-total { position: relative; margin: 22px 0 14px; text-align: center; font-size: 13px; color: rgba(244, 236, 216, .8); }
+  .dm-ofrenda-total b { font-family: var(--dm-letra); font-size: 22px; color: #ffd38a; margin-right: 4px; }
+  .dm-ofrenda-form { position: relative; display: flex; gap: 8px; }
+  .dm-ofrenda-form input {
+    flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; font-size: 13.5px;
+    background: rgba(255, 255, 255, .08); border: 1px solid rgba(205, 180, 106, .4); color: #fff;
+  }
+  .dm-ofrenda-form input::placeholder { color: rgba(244, 236, 216, .5); }
+  .dm-ofrenda-form input:focus { outline: none; border-color: var(--dm-cempa); box-shadow: 0 0 0 3px rgba(242, 154, 46, .25); }
+  .dm-ofrenda-encender {
+    flex-shrink: 0; padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; font-size: 13px;
+    background: linear-gradient(135deg, #f7b23b, #e2610b); color: #2a1406; box-shadow: 0 6px 18px rgba(226, 97, 11, .35);
+  }
+  .dm-ofrenda-encender:disabled { opacity: .6; cursor: default; }
+  .dm-ofrenda-nota { position: relative; margin: 8px 0 0; font-size: 11.5px; color: rgba(244, 236, 216, .55); text-align: center; }
+  .dm-ofrenda-quitar { background: none; border: 0; padding: 0; color: #ffd38a; font-size: 11.5px; text-decoration: underline; cursor: pointer; }
+  .dm-ofrenda-lista {
+    position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 16px;
+    max-height: 150px; overflow-y: auto; padding: 2px;
+  }
+  .dm-memoria {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px; font-size: 12px;
+    background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); color: #f4ecd8;
+  }
+  .dm-memoria.dm-mia { border-color: rgba(242, 154, 46, .6); background: rgba(242, 154, 46, .12); }
+  .dm-memoria .dm-mini-vela { margin: 4px 1px 0; transform: scale(.8); }
+  .dm-memoria button { background: none; border: 0; padding: 0 0 0 2px; color: rgba(255, 255, 255, .5); cursor: pointer; font-size: 14px; line-height: 1; }
+  .dm-memoria button:hover { color: #fff; }
+
+  /* ---------- Tablas vacías ---------- */
+  body[data-temporada="muertos"] .dt-vacio:not(.dt-error)::before {
+    content: ''; display: block; width: 34px; height: 34px; margin: 0 auto 8px;
+    background-color: var(--color-accent);
+    -webkit-mask: var(--dm-calavera) center / contain no-repeat;
+    mask: var(--dm-calavera) center / contain no-repeat;
+  }
+  body[data-temporada="muertos"] .dt-vacio:not(.dt-error)::after {
+    content: 'Por aquí no asoman ni las ánimas'; display: block; margin-top: 4px;
+    font-size: 12px; font-style: italic; opacity: .75;
+  }
+
+  /* ---------- Tableta y celular ---------- */
+  @media (max-width: 1024px) {
+    .dm-login-calavera { display: none; }
+    .dm-banner-picado { width: 30%; }
+    body[data-temporada="muertos"] .login-hero-title { font-size: 32px; }
+  }
+  @media (max-width: 640px) {
+    body[data-temporada="muertos"] #view-container { padding-top: 18px; }
+    .dm-barra-picado { height: 16px; }
+    .dm-login .dm-velas, .dm-login .dm-luna { display: none; }
+    .dm-login-picado { height: 34px; }
+    .dm-login-picado-atras { top: 16px; height: 24px; background-size: auto 24px; background-position: 54px 0; }
+    body[data-temporada="muertos"] .login-hero-content { padding-top: 58px; }
+    body[data-temporada="muertos"] .login-hero-title { font-size: 28px; }
+    .dm-banner-picado { display: none; }
+    .dm-banner { flex-wrap: wrap; gap: 10px; padding: 10px 10px 12px 12px; }
+    .dm-banner-flor { width: 30px; height: 30px; }
+    .dm-banner-texto { flex: 1 1 calc(100% - 100px); }   /* flor + texto + cerrar en un renglón; el botón abajo */
+    .dm-banner-ofrenda { order: 3; margin: 0 0 0 40px; }
+    .dm-ofrenda.modal-card { padding: 46px 16px 18px; }
+    .dm-ofrenda h3 { font-size: 24px; }
+    .dm-ofrenda-form { flex-direction: column; }
+  }
+
+  /* "Reducir movimiento": nada se mueve; pétalos, mariposas y ráfagas no se pintan y las
+     velas y estrellas quedan quietas. El papel picado deja de mecerse (lo revisa el script). */
+  @media (prefers-reduced-motion: reduce) {
+    :root { --dm-movimiento: 0; }
+    .dm-petalos, .dm-mariposa, .dm-rafaga { display: none; }
+    .dm-llama, .dm-mini-vela::before, .dm-estrella { animation: none; }
+    .dm-estrella { opacity: .6; }
+    .dm-interruptor-flor, .dm-banner-ofrenda { transition: none; }
+    .dm-camino-petalo, .dm-camino-petalo.dm-brilla { transition: opacity .3s ease; transition-delay: 0ms; transform: rotate(var(--giro)); }
+    body[data-temporada="muertos"] .nav-item.active::after,
+    body[data-temporada="muertos"] .nav-subitem.active::after { animation: none; }
+    .dm-escalon .dm-vela.dm-nueva { animation: none; }
+  }
+</style>
+
+<script>
+  /**
+   * Temporada — decoración de Día de Muertos (ver el bloque de estilos de arriba).
+   *
+   * Se decora sola: observa la página y, si body[data-temporada="muertos"], agrega lo suyo
+   * cuando aparece el login, la pantalla de carga, la barra, el menú o el Inicio. Todo lo que
+   * agrega lleva la clase dm-deco y se quita igual de solo al apagarla.
+   *
+   *   Temporada.aplicar()             → vuelve a revisar la página (p. ej. tras cambiar el atributo)
+   *   Temporada.mensajesCarga(pasos)  → cambia los mensajes de la pantalla de carga (app.html)
+   *   Temporada.abrirOfrenda()        → abre "Nuestra ofrenda" (el botón de la franja del Inicio)
+   *
+   * Los dibujos son SVG armados aquí. Ojo con la regla del repo: nada de diagonales dobles ni
+   * diagonal-asterisco en un string; por eso las direcciones van con la diagonal escapada.
+   */
+  const Temporada = (function () {
+    const XMLNS = 'http:\/\/www.w3.org/2000/svg';
+    const LETRA = 'https:\/\/fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT@9..144,500..700,50&display=swap';
+    const COLORES = ['#E2457B', '#F29A2E', '#8257A8', '#2A9D8F', '#CDB46A'];
+    const MOTIVOS = ['calavera', 'flor', 'rombo', 'sol', 'flor'];
+    const BANDERA = 'M0 0H24V18L22 21 20 18 18 21 16 18 14 21 12 18 10 21 8 18 6 21 4 18 2 21 0 18Z';
+    let fondosListos = false;
+    let pendiente = false;
+
+    function activa() { return !!document.body && document.body.dataset.temporada === 'muertos'; }
+    function url(svg) { return 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")'; }
+    /** ¿La persona pidió "reducir movimiento"? (lo decide el CSS: --dm-movimiento) */
+    function quieto() { return getComputedStyle(document.documentElement).getPropertyValue('--dm-movimiento').trim() === '0'; }
+    const azar = (min, max) => min + Math.random() * (max - min);
+    function esc(v) {
+      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    // ---------- Dibujos ----------
+
+    /** Lo que se recorta de cada banderita (negro = hueco), en una caja de 24×22 */
+    function motivo(tipo) {
+      const N = 'fill="#000"', B = 'fill="#fff"';
+      let m = [4, 8, 12, 16, 20].map((x) => `<circle cx="${x}" cy="3" r=".75" ${N}/>`).join('');
+      if (tipo === 'flor') {
+        for (let i = 0; i < 8; i++) m += `<ellipse cx="12" cy="7.6" rx="1.5" ry="2.6" ${N} transform="rotate(${i * 45} 12 11)"/>`;
+        m += `<circle cx="12" cy="11" r="1.4" ${B}/>`;
+      } else if (tipo === 'calavera') {
+        m += `<ellipse cx="12" cy="10" rx="4.6" ry="4.2" ${N}/><rect x="9.4" y="12" width="5.2" height="3.8" rx="1.2" ${N}/>` +
+          `<circle cx="10.2" cy="10.1" r="1.25" ${B}/><circle cx="13.8" cy="10.1" r="1.25" ${B}/>` +
+          `<path d="M12 11.9l.7 1.2h-1.4z" ${B}/><rect x="10.9" y="14.2" width=".45" height="1.6" ${B}/>` +
+          `<rect x="12.65" y="14.2" width=".45" height="1.6" ${B}/>`;
+      } else if (tipo === 'rombo') {
+        m += `<path d="M12 5.5L17.5 11 12 16.5 6.5 11Z" ${N}/><path d="M12 8L15 11 12 14 9 11Z" ${B}/>` +
+          `<path d="M12 10L13 11 12 12 11 11Z" ${N}/><path d="M3.5 11L4.5 10 5.5 11 4.5 12Z" ${N}/>` +
+          `<path d="M18.5 11L19.5 10 20.5 11 19.5 12Z" ${N}/>`;
+      } else if (tipo === 'sol') {
+        m += `<circle cx="12" cy="11" r="2.6" ${N}/>`;
+        for (let i = 0; i < 8; i++) m += `<rect x="11.4" y="5" width="1.2" height="2.6" rx=".6" ${N} transform="rotate(${i * 45} 12 11)"/>`;
+      }
+      return m;
+    }
+
+    /**
+     * Las banderitas de `tramos` tramos de papel picado (5 por tramo, a `paso` una de otra,
+     * colgando de un hilo con su comba). Regresa el SVG por dentro y dónde quedó cada una.
+     */
+    function banderas(prefijo, paso, tramos) {
+      const W = paso * 5;
+      let defs = '', hilos = '', cuerpo = '';
+      const lugares = [];
+      for (let i = 0; i < 5; i++) defs += `<mask id="${prefijo}m${i}"><rect width="24" height="22" fill="#fff"/>${motivo(MOTIVOS[i])}</mask>`;
+      for (let k = 0; k < tramos; k++) {
+        const x0 = k * W;
+        hilos += `<path d="M${x0} 1.5Q${x0 + W / 2} 8.5 ${x0 + W} 1.5"/>`;
+        for (let i = 0; i < 5; i++) {
+          const t = (i * paso + paso / 2) / W;
+          const lugar = { x: x0 + W * t - 12, y: 1.5 + 14 * t * (1 - t), ang: Math.atan(14 * (1 - 2 * t) / W) * 180 / Math.PI };
+          lugares.push(lugar);
+          cuerpo += `<g data-b="${lugares.length - 1}" transform="${transformar(lugar, 0)}">` +
+            `<path d="${BANDERA}" fill="${COLORES[i]}" fill-opacity=".93" mask="url(#${prefijo}m${i})"/>` +
+            '<rect width="24" height="1.3" fill="#000" opacity=".14"/></g>';
+        }
+      }
+      return { defs, hilos, cuerpo, lugares, ancho: W * tramos };
+    }
+    const transformar = (l, extra) => `translate(${l.x.toFixed(2)} ${l.y.toFixed(2)}) rotate(${(l.ang + extra).toFixed(2)} 12 0)`;
+
+    /** Un tramo como imagen de fondo (para las tiras que no se mueven) */
+    function picado(hilo, paso) {
+      const b = banderas('m', paso || 30, 1);
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 ${b.ancho} 30" width="${b.ancho}" height="30"><defs>${b.defs}</defs>` +
+        `<g fill="none" stroke="${hilo}" stroke-width=".6">${b.hilos}</g>${b.cuerpo}</svg>`;
+    }
+
+    /** Flor de cempasúchil: cuatro anillos de pétalos, de afuera (naranja) hacia adentro (amarillo) */
+    function flor() {
+      const anillos = [[16, 12, 4.2, 7.5, '#D9660B'], [13, 8, 3.8, 6, '#F08A1C'], [11, 4.6, 3.2, 4.6, '#F7A934'], [8, 1.8, 2.4, 3.4, '#FBC54D']];
+      let s = '';
+      anillos.forEach(([n, d, rx, ry, c], k) => {
+        for (let i = 0; i < n; i++) {
+          s += `<ellipse cy="${-d}" rx="${rx}" ry="${ry}" fill="${c}" stroke="#B5530A" stroke-opacity=".35" stroke-width=".5" transform="rotate(${(i * 360 / n + k * 11).toFixed(1)})"/>`;
+        }
+      });
+      return `<svg xmlns="${XMLNS}" viewBox="-20 -20 40 40">${s}<circle r="2.2" fill="#9A4A0B"/></svg>`;
+    }
+
+    /** Corona: cinco flores chicas en arco, con hojas entre ellas (va sobre el avatar) */
+    function corona() {
+      let hojas = '', flores = '';
+      const y = (x) => 11 - 6 * Math.sin(Math.PI * x / 44);
+      [9, 16, 28, 35].forEach((x) => {
+        hojas += `<ellipse cx="${x}" cy="${y(x).toFixed(1)}" rx="3.4" ry="1.5" fill="#3F7D3A" transform="rotate(${x < 22 ? -35 : 35} ${x} ${y(x).toFixed(1)})"/>`;
+      });
+      [[5, 3.3], [13, 3.8], [22, 4.5], [31, 3.8], [39, 3.3]].forEach(([x, r]) => { flores += florChica(x, Number(y(x).toFixed(2)), r); });
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 44 16">${hojas}${flores}</svg>`;
+    }
+
+    /** Una flor chica de cempasúchil (dos anillos de pétalos y el centro), para la corona del avatar */
+    function florChica(x, y, r) {
+      let p = '';
+      for (let i = 0; i < 10; i++) p += `<circle cx="${(x + r * .62 * Math.cos(i * Math.PI / 5)).toFixed(2)}" cy="${(y + r * .62 * Math.sin(i * Math.PI / 5)).toFixed(2)}" r="${(r * .42).toFixed(2)}" fill="#F08A1C"/>`;
+      for (let i = 0; i < 7; i++) p += `<circle cx="${(x + r * .28 * Math.cos(i * Math.PI * 2 / 7)).toFixed(2)}" cy="${(y + r * .28 * Math.sin(i * Math.PI * 2 / 7)).toFixed(2)}" r="${(r * .3).toFixed(2)}" fill="#FBC54D"/>`;
+      return p + `<circle cx="${x}" cy="${y}" r="${(r * .18).toFixed(2)}" fill="#9A4A0B"/>`;
+    }
+
+    /**
+     * El cielo del menú: estrellas fijas, más y más brillantes arriba, cada vez menos y más tenues
+     * hacia abajo (anochecer). Unas pocas titilan (animación dentro del propio SVG). Se arma una vez.
+     */
+    function cieloMenu() {
+      const W = 308, H = 1100;
+      let s = '';
+      for (let i = 0; i < 110; i++) {
+        const y = H * Math.pow(Math.random(), 1.7);         // se juntan arriba
+        const cae = 1 - y / H;
+        const op = (.1 + .42 * Math.pow(cae, 1.4)) * azar(.6, 1);
+        const r = azar(.45, .95) + (Math.random() < .08 ? .45 : 0);
+        const titila = Math.random() < .22;
+        s += `<circle cx="${azar(4, W - 4).toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(2)}" fill="#fff6e0" fill-opacity="${op.toFixed(2)}"` +
+          (titila ? ` class="t" style="animation-duration:${azar(3, 7).toFixed(1)}s;animation-delay:-${azar(0, 7).toFixed(1)}s"` : '') + '/>';
+      }
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><style>` +
+        '.t{animation:t 5s ease-in-out infinite alternate}@keyframes t{from{opacity:.25}to{opacity:1}}' +
+        '@media (prefers-reduced-motion:reduce){.t{animation:none}}</style>' + s + '</svg>';
+    }
+
+    /** Ala de monarca (la derecha; la izquierda es la misma al espejo). Cuerpo en x = 0 */
+    function ala(espejo) {
+      const borde = '#1c1208';
+      const g = espejo ? ' transform="translate(30 0) scale(-1 1)"' : '';
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 30 40"><defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="1">` +
+        '<stop offset="0" stop-color="#FFB13B"/><stop offset="1" stop-color="#E2610B"/></linearGradient></defs>' +
+        `<g${g} stroke="${borde}" stroke-linejoin="round">` +
+        '<path d="M1 18C3 8 12 1 26 2 30 4 29 11 24 16 18 20 8 20 1 19Z" fill="url(#a)" stroke-width="1.9"/>' +
+        '<path d="M1 20C8 21 17 24 19 31 19 37 12 40 7 37 3 33 1 27 1 21Z" fill="url(#a)" stroke-width="1.9"/>' +
+        '<path d="M1 19L22 5M1 19L26 11M1 19L18 17M1 21L13 35M1 21L17 28M1 21L8 37" fill="none" stroke-width=".7"/>' +
+        '<g fill="#fff" stroke="none"><circle cx="24.5" cy="3" r=".75"/><circle cx="27.6" cy="6.4" r=".7"/><circle cx="26.6" cy="10.6" r=".7"/>' +
+        '<circle cx="17.8" cy="33.6" r=".7"/><circle cx="14.6" cy="37" r=".7"/><circle cx="10" cy="38" r=".65"/></g></g></svg>';
+    }
+
+    function petalo(c1, c2) {
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 12 16"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">` +
+        `<stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>` +
+        `<path d="M6 .5C10.5 4 11 10 6 15.5 1 10 1.5 4 6 .5Z" fill="url(#g)"/>` +
+        `<path d="M6 2.5V13" stroke="${c2}" stroke-width=".5" opacity=".5"/></svg>`;
+    }
+
+    /** Calaverita de líneas (como los íconos del sistema), para las tablas vacías */
+    function calaveraIcono() {
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">` +
+        '<path d="M12 2.5c-4.8 0-8 3.4-8 7.8 0 2.6 1.2 4.4 2.8 5.5v2.7c0 1.2.9 2 2 2h6.4c1.1 0 2-.8 2-2v-2.7c1.6-1.1 2.8-2.9 2.8-5.5 0-4.4-3.2-7.8-8-7.8Z"/>' +
+        '<circle cx="8.9" cy="11" r="2"/><circle cx="15.1" cy="11" r="2"/><path d="M12 13.6l-.9 1.6h1.8Z"/>' +
+        '<path d="M10.3 17.6v2.6M13.7 17.6v2.6"/><circle cx="12" cy="6.2" r=".9"/>' +
+        '<path d="M10.4 6.2h-.8M14.4 6.2h-.8M12 4.6v-.6"/></svg>';
+    }
+
+    /** Calavera de azúcar en líneas doradas, grande y tenue, para el fondo del login */
+    function calaveraLogin() {
+      let petalos = '';
+      [68, 132].forEach((cx) => {
+        for (let i = 0; i < 10; i++) {
+          const a = i * Math.PI / 5;
+          petalos += `<circle cx="${(cx + 29 * Math.cos(a)).toFixed(1)}" cy="${(108 + 29 * Math.sin(a)).toFixed(1)}" r="3.2"/>`;
+        }
+      });
+      let frente = '';
+      for (let i = 0; i < 8; i++) frente += `<ellipse cx="100" cy="39" rx="5" ry="10" transform="rotate(${i * 45} 100 52)"/>`;
+      const dientes = [76, 88, 100, 112, 124].map((x) => `<path d="M${x} 179v15"/>`).join('');
+      return '<svg viewBox="0 0 200 230" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M100 12C152 12 184 48 184 98c0 34-15 55-32 66v26c0 15-10 24-25 24H73c-15 0-25-9-25-24v-26C31 153 16 132 16 98 16 48 48 12 100 12Z"/>' +
+        '<circle cx="68" cy="108" r="22"/><circle cx="132" cy="108" r="22"/><circle cx="68" cy="108" r="8"/><circle cx="132" cy="108" r="8"/>' +
+        petalos + frente + '<circle cx="100" cy="52" r="5"/>' +
+        '<path d="M100 160c-9-7-12-14-7-18 3-2 6-1 7 2 1-3 4-4 7-2 5 4 2 11-7 18Z"/>' +
+        '<path d="M66 186h68"/>' + dientes +
+        '<path d="M52 66c-10-4-12-16-2-18 7-1 9 7 3 9"/><path d="M148 66c10-4 12-16 2-18-7-1-9 7-3 9"/>' +
+        '<path d="M86 76c4 4 9 5 14 5s10-1 14-5"/>' +
+        '<circle cx="40" cy="140" r="2"/><circle cx="48" cy="151" r="2"/><circle cx="160" cy="140" r="2"/><circle cx="152" cy="151" r="2"/>' +
+        '</svg>';
+    }
+
+    /** Pone los dibujos en variables CSS y pide la letra de temporada (una vez) */
+    function prepararFondos() {
+      if (fondosListos) return;
+      fondosListos = true;
+      const raiz = document.documentElement.style;
+      raiz.setProperty('--dm-picado-claro', url(picado('rgba(255,255,255,.45)')));
+      raiz.setProperty('--dm-flor', url(flor()));
+      raiz.setProperty('--dm-corona', url(corona()));
+      raiz.setProperty('--dm-cielo-menu', url(cieloMenu()));
+      raiz.setProperty('--dm-calavera', url(calaveraIcono()));
+      raiz.setProperty('--dm-ala-der', url(ala(false)));
+      raiz.setProperty('--dm-ala-izq', url(ala(true)));
+      raiz.setProperty('--dm-petalo-0', url(petalo('#FBBF3A', '#E8780F')));
+      raiz.setProperty('--dm-petalo-1', url(petalo('#F59E0B', '#C2570C')));
+      raiz.setProperty('--dm-petalo-2', url(petalo('#F7A934', '#D9660B')));
+      const letra = document.createElement('link');
+      letra.rel = 'stylesheet';
+      letra.href = LETRA;
+      document.head.appendChild(letra);
+    }
+
+    // ---------- Papel picado que se mece con el mouse ----------
+
+    let nGuirnaldas = 0;
+    /**
+     * Llena `el` (con su alto ya puesto por CSS) de papel picado de piezas sueltas. Cada
+     * banderita es un resorte: el mouse que pasa cerca la empuja y regresa sola a su lugar.
+     * Se rehace si cambia el tamaño y deja de escuchar cuando `el` sale de la página.
+     */
+    function guirnalda(el, paso) {
+      const prefijo = 'dmg' + (++nGuirnaldas);
+      let grupos = [], lugares = [], centros = [], ang = [], vel = [], hecho = '', animando = false, xAnterior = null, escala = 1;
+
+      function armar() {
+        const ancho = el.clientWidth, alto = el.clientHeight;
+        if (!ancho || !alto || hecho === ancho + 'x' + alto) return;
+        hecho = ancho + 'x' + alto;
+        escala = alto / 30;
+        const b = banderas(prefijo, paso, Math.ceil(ancho / (paso * 5 * escala)));
+        el.innerHTML = `<svg width="${(b.ancho * escala).toFixed(1)}" height="${alto}" viewBox="0 0 ${b.ancho} 30" aria-hidden="true">` +
+          `<defs>${b.defs}</defs><g class="dm-hilo" fill="none" stroke-width=".6">${b.hilos}</g>${b.cuerpo}</svg>`;
+        grupos = [...el.querySelectorAll('g[data-b]')];
+        lugares = b.lugares;
+        centros = lugares.map((l) => (l.x + 12) * escala);
+        ang = lugares.map(() => 0);
+        vel = lugares.map(() => 0);
+      }
+
+      function cuadro() {
+        let energia = 0;
+        for (let i = 0; i < grupos.length; i++) {
+          if (!ang[i] && !vel[i]) continue;
+          vel[i] = vel[i] * .9 - ang[i] * .07;
+          ang[i] = Math.max(-30, Math.min(30, ang[i] + vel[i]));
+          if (Math.abs(ang[i]) < .05 && Math.abs(vel[i]) < .05) { ang[i] = 0; vel[i] = 0; }
+          energia += Math.abs(ang[i]) + Math.abs(vel[i]);
+          grupos[i].setAttribute('transform', transformar(lugares[i], ang[i]));
+        }
+        if (energia > 0 && el.isConnected) requestAnimationFrame(cuadro);
+        else animando = false;
+      }
+
+      function alMover(ev) {
+        if (!el.isConnected) { window.removeEventListener('pointermove', alMover); vigia.disconnect(); return; }
+        const dx = xAnterior === null ? 0 : ev.clientX - xAnterior;
+        xAnterior = ev.clientX;
+        if (!dx || quieto()) return;
+        const r = el.getBoundingClientRect();
+        if (ev.clientY < r.top - 12 || ev.clientY > r.bottom + 36) return;
+        const x = ev.clientX - r.left;
+        let toco = false;
+        for (let i = 0; i < centros.length; i++) {
+          const d = Math.abs(centros[i] - x);
+          if (d < 70) { vel[i] -= Math.max(-4, Math.min(4, dx * .12)) * (1 - d / 70); toco = true; }
+        }
+        if (toco && !animando) { animando = true; requestAnimationFrame(cuadro); }
+      }
+
+      const vigia = new ResizeObserver(armar);
+      vigia.observe(el);
+      window.addEventListener('pointermove', alMover, { passive: true });
+      armar();
+    }
+
+    // ---------- Mariposas que vuelan libres (login) ----------
+
+    function htmlMariposa(clase) {
+      return `<div class="dm-mariposa ${clase || ''}" aria-hidden="true"><div class="dm-mariposa-cuerpo">` +
+        '<span class="dm-ala dm-ala-izq"></span><span class="dm-ala dm-ala-der"></span></div></div>';
+    }
+
+    /**
+     * n mariposas que vagan dentro de `caja`: cambian de rumbo poco a poco (suma de senos) y, si
+     * se alejan de su zona, giran de regreso. Se detiene sola cuando `caja` sale de la página.
+     */
+    function volar(caja, n) {
+      const mariposas = [];
+      for (let i = 0; i < n; i++) {
+        caja.insertAdjacentHTML('beforeend', htmlMariposa());
+        const el = caja.lastElementChild;
+        el.querySelectorAll('.dm-ala').forEach((a) => { a.style.animationDelay = (-Math.random()).toFixed(2) + 's'; });
+        mariposas.push({
+          el, x: caja.clientWidth * azar(.2, .8), y: caja.clientHeight * azar(.15, .55), rumbo: azar(0, Math.PI * 2),
+          t: azar(0, 100), f1: azar(.5, .9), f2: azar(1.1, 1.7), vel: azar(40, 62), esc: azar(.75, 1.1),
+          zona: { cx: azar(.4, .7), cy: azar(.25, .45) },
+        });
+      }
+      let antes = performance.now();
+      function cuadro(ahora) {
+        if (!caja.isConnected) return;
+        const dt = Math.min(.05, (ahora - antes) / 1000);
+        antes = ahora;
+        const W = caja.clientWidth, H = caja.clientHeight;
+        mariposas.forEach((m) => {
+          m.t += dt;
+          m.rumbo += (Math.sin(m.t * m.f1) * 1.5 + Math.sin(m.t * m.f2 + 2) * .9) * dt;
+          const cx = W * m.zona.cx, cy = H * m.zona.cy;
+          const lejos = Math.hypot(cx - m.x, cy - m.y) / (Math.min(W, H) * .42);
+          if (lejos > 1) {
+            const hacia = Math.atan2(cy - m.y, cx - m.x);
+            m.rumbo += Math.atan2(Math.sin(hacia - m.rumbo), Math.cos(hacia - m.rumbo)) * Math.min(1, lejos - 1) * 2.5 * dt;
+          }
+          const v = m.vel * (.75 + .25 * Math.sin(m.t * 3));
+          m.x += Math.cos(m.rumbo) * v * dt;
+          m.y += Math.sin(m.rumbo) * v * dt + Math.sin(m.t * 7) * 10 * dt;
+          m.el.style.transform = `translate(${m.x.toFixed(1)}px, ${m.y.toFixed(1)}px) rotate(${(m.rumbo * 180 / Math.PI + 90).toFixed(1)}deg) scale(${m.esc.toFixed(2)})`;
+        });
+        requestAnimationFrame(cuadro);
+      }
+      requestAnimationFrame(cuadro);
+    }
+
+    // ---------- Piezas ----------
+
+    function velas(clase, alturas) {
+      return `<div class="dm-velas ${clase || ''}" aria-hidden="true">` +
+        (alturas || [46, 64, 38]).map((alto) => `<div class="dm-vela" style="--alto:${alto}px"><span class="dm-llama"></span></div>`).join('') +
+        '</div>';
+    }
+
+    function petalos(n) {
+      let h = '';
+      for (let i = 0; i < n; i++) {
+        const dur = azar(10, 18);
+        h += `<span class="dm-petalo" style="left:${azar(4, 96).toFixed(1)}%;--dur:${dur.toFixed(1)}s;--retraso:-${azar(0, dur).toFixed(1)}s;` +
+          `--tam:${azar(12, 19).toFixed(1)}px;--vaiven:${((Math.random() < .5 ? -1 : 1) * azar(20, 70)).toFixed(0)}px;--dm-petalo:var(--dm-petalo-${i % 3})"></span>`;
+      }
+      return `<div class="dm-petalos">${h}</div>`;
+    }
+
+    function estrellas(n) {
+      let h = '';
+      for (let i = 0; i < n; i++) {
+        h += `<span class="dm-estrella" style="left:${azar(2, 98).toFixed(1)}%;top:${azar(4, 96).toFixed(1)}%;` +
+          `--tam:${azar(1.2, 2.6).toFixed(1)}px;--dur:${azar(2.5, 6).toFixed(1)}s;--retraso:-${azar(0, 6).toFixed(1)}s"></span>`;
+      }
+      return `<div class="dm-estrellas" aria-hidden="true">${h}</div>`;
+    }
+
+    /** Un puñado de pétalos que sale de `origen` (el aviso de "guardado", un botón) */
+    function rafaga(origen) {
+      if (quieto() || !origen.isConnected) return;
+      const r = origen.getBoundingClientRect();
+      if (!r.width) return;
+      const capa = document.createElement('div');
+      capa.className = 'dm-rafaga dm-deco';
+      document.body.appendChild(capa);
+      for (let i = 0; i < 16; i++) {
+        const p = document.createElement('span');
+        p.style.setProperty('--dm-petalo', `var(--dm-petalo-${i % 3})`);
+        p.style.left = (r.left + r.width * azar(.15, .85)) + 'px';
+        p.style.top = (r.top + r.height * .3) + 'px';
+        capa.appendChild(p);
+        const a = azar(-160, -20) * Math.PI / 180;
+        const v = azar(110, 240);
+        const dx = Math.cos(a) * v, dy = Math.sin(a) * v, giro = azar(-420, 420);
+        p.animate([
+          { transform: 'translate(0, 0) rotate(0deg) scale(.6)', opacity: 1 },
+          { transform: `translate(${dx * .6}px, ${dy * .6}px) rotate(${giro / 2}deg) scale(1)`, opacity: 1, offset: .4 },
+          { transform: `translate(${dx}px, ${dy + 170}px) rotate(${giro}deg) scale(.9)`, opacity: 0 },
+        ], { duration: azar(1100, 1600), easing: 'cubic-bezier(.2, .6, .4, 1)', fill: 'forwards' });
+      }
+      setTimeout(() => capa.remove(), 1900);
+    }
+
+    /** Los avisos de éxito (los dos sistemas: Notificar y el toast de app.html) sueltan pétalos */
+    function revisarExitos(registros) {
+      if (!activa()) return;
+      registros.forEach((r) => {
+        const candidatos = [r.target, ...r.addedNodes];
+        candidatos.forEach((n) => {
+          if (n.nodeType !== 1 || !n.matches('.toast-exito, .notif-toast-exito') || n.dataset.dmRafaga) return;
+          n.dataset.dmRafaga = '1';
+          requestAnimationFrame(() => rafaga(n));
+        });
+      });
+    }
+
+    // ---------- Login y carga ----------
+
+    function decorarLogin(hero) {
+      const fondos = hero.querySelectorAll('.login-hero-bg');
+      const ultimo = fondos[fondos.length - 1];
+      const capa = '<div class="dm-login dm-deco" aria-hidden="true"><div class="dm-login-noche"></div>' +
+        `${estrellas(38)}<span class="dm-luna"></span>` +
+        `<div class="dm-login-calavera">${calaveraLogin()}</div>${petalos(10)}${velas()}` +
+        '<div class="dm-login-picado-atras"></div><div class="dm-login-picado dm-guirnalda dm-guirnalda-clara"></div></div>';
+      if (ultimo) ultimo.insertAdjacentHTML('afterend', capa);
+      else hero.insertAdjacentHTML('afterbegin', capa);
+      const login = hero.querySelector('.dm-login');
+      guirnalda(login.querySelector('.dm-login-picado'), 30);
+      volar(login, 3);
+      const cuerpo = hero.querySelector('.login-hero-body');
+      if (cuerpo) {
+        cuerpo.insertAdjacentHTML('afterbegin',
+          '<div class="dm-login-pill dm-deco"><span class="dm-flor-mini"></span>Día de Muertos · 1 y 2 de noviembre</div>');
+      }
+    }
+
+    function decorarCarga(pantalla) {
+      pantalla.insertAdjacentHTML('afterbegin', '<div class="dm-carga-picado dm-deco" aria-hidden="true"></div>');
+      const barra = pantalla.querySelector('.loading-bar');
+      if (barra) barra.insertAdjacentHTML('beforebegin', velas('dm-velas-carga dm-deco'));
+    }
+
+    // ---------- Menú: el camino ----------
+
+    /**
+     * El camino de pétalos que sigue la estructura del menú (ver el CSS de "el camino es el menú"):
+     *   · tronco: por la columna de íconos, en el hueco entre una placa y la siguiente; en un grupo
+     *     abierto baja por su línea de submódulos hasta el siguiente módulo
+     *   · ramas: un pétalo chico hacia cada submódulo de un grupo abierto
+     *   · se ilumina el tronco desde arriba hasta la opción bajo el mouse (o, sin mouse, hasta donde
+     *     estás) y la rama de esa opción; se enciende de arriba hacia abajo, en cascada
+     * Todo se mide de la página (getBoundingClientRect), así que sigue al menú aunque se abra, se
+     * recoja, se deslice o se vuelva a pintar (renderNavGrupos rehace la lista al llegar los permisos).
+     */
+    function decorarMenu(menu) {
+      menu.insertAdjacentHTML('afterbegin', '<div class="dm-camino dm-camino-arriba dm-deco" aria-hidden="true"></div>');
+      const arriba = menu.querySelector('.dm-camino-arriba');
+      let grupos = null, abajo = null, objetivo = null, pendienteTrazo = false;
+
+      const centro = (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, arriba: r.top, abajo: r.bottom, alto: r.height }; };
+      const visible = (el) => !!el && el.getBoundingClientRect().height > 0;
+
+      /** Pétalos del tronco entre y1 y y2 (de la página) en la columna x, uno cada ~12 px */
+      function tramo(lista, x, y1, y2) {
+        const largo = y2 - y1;
+        if (largo < 8) return;
+        const n = Math.max(1, Math.round(largo / 12));
+        for (let k = 0; k < n; k++) lista.push({ x, y: y1 + largo * (k + .5) / n, giro: (lista.length % 2 ? 24 : -24) + 180 });
+      }
+
+      function trazar() {
+        pendienteTrazo = false;
+        if (!arriba.isConnected) { vigia.disconnect(); cambios.disconnect(); return; }
+        grupos = menu.querySelector('.nav-groups');
+        if (grupos && !grupos.querySelector(':scope > .dm-camino-grupos')) {
+          grupos.insertAdjacentHTML('afterbegin', '<div class="dm-camino dm-camino-grupos dm-deco" aria-hidden="true"></div>');
+          vigia.observe(grupos);
+          grupos.querySelectorAll('.nav-group-items').forEach((l) => vigia.observe(l));
+        }
+        abajo = grupos && grupos.querySelector(':scope > .dm-camino-grupos');
+
+        // Los módulos de arriba a abajo: Inicio (fuera de la lista) y cada fila de la lista
+        const inicio = menu.querySelector(':scope > .nav-item');
+        const filas = grupos ? [...grupos.children].filter((el) => el.matches('.nav-item, .nav-group') && visible(el)) : [];
+        const placa = (fila) => fila.querySelector('.nav-icon');
+        const enArriba = [], enGrupos = [];
+
+        if (inicio && filas.length && visible(placa(inicio))) {
+          const a = centro(placa(inicio)), b = centro(placa(filas[0]));
+          // Si la lista está deslizada, el primer módulo puede quedar arriba de ella: el tramo llega a su orilla
+          const tope = grupos.getBoundingClientRect().top;
+          tramo(enArriba, a.x, a.abajo + 3, Math.max(Math.min(b.arriba - 3, tope + 10), a.abajo + 3));
+        }
+        filas.forEach((fila, i) => {
+          const p = placa(fila);
+          if (!p) return;
+          const c = centro(p);
+          const siguiente = filas[i + 1] && placa(filas[i + 1]);
+          const lista = fila.matches('.nav-group.expanded') ? fila.querySelector('.nav-group-items') : null;
+          const fin = siguiente ? centro(siguiente).arriba - 3 : (lista && visible(lista) ? lista.getBoundingClientRect().bottom - 6 : null);
+          if (fin !== null) tramo(enGrupos, c.x, c.abajo + 3, fin);
+          if (lista && visible(lista)) {
+            lista.querySelectorAll('.nav-subitem').forEach((sub) => {
+              const s = centro(sub);
+              if (s.alto) enGrupos.push({ x: c.x + 8, y: s.y, giro: -90, rama: sub });
+            });
+          }
+        });
+
+        // Al volver a dibujar (deslizar, abrir el menú) lo encendido nace encendido, sin cascada:
+        // la cascada es solo para cuando cambia hasta dónde se ilumina (iluminar)
+        const meta = alcance();
+        pintar(arriba, menu, enArriba, meta);
+        if (abajo) pintar(abajo, grupos, enGrupos, meta);
+      }
+
+      /** Pone los pétalos (con coordenadas de la página) en la capa, medidos desde su contenedor */
+      function pintar(capa, contenedor, lista, meta) {
+        const r = contenedor.getBoundingClientRect();
+        const dx = -r.left - contenedor.clientLeft, dy = -r.top - contenedor.clientTop + contenedor.scrollTop;
+        capa.innerHTML = lista.map((p) => {
+          const vista = p.rama ? p.rama.dataset.view || '' : '';
+          const encendido = p.rama ? !!meta.vista && vista === meta.vista : p.y <= meta.tope;
+          return `<span class="dm-camino-petalo${p.rama ? ' dm-rama' : ''}${encendido ? ' dm-brilla' : ''}"` +
+            `${p.rama ? ` data-vista="${esc(vista)}"` : ''} style="--x:${(p.x + dx).toFixed(1)}px;` +
+            `--y:${(p.y + dy).toFixed(1)}px;--giro:${p.giro}deg"></span>`;
+        }).join('');
+      }
+
+      /** Hasta qué altura (de la página) se ilumina el tronco y qué rama */
+      function alcance() {
+        const meta = destino();
+        return {
+          tope: meta ? centro(meta).y + 2 : -Infinity,
+          vista: meta && meta.matches('.nav-subitem') ? meta.dataset.view : null,
+        };
+      }
+
+      /** Hasta dónde se ilumina: la opción bajo el mouse o, si no hay, donde estás */
+      function destino() {
+        if (objetivo && objetivo.isConnected && visible(objetivo)) return objetivo;
+        const sub = menu.querySelector('.nav-subitem.active');
+        if (sub && visible(sub)) return sub;
+        if (sub) { const g = sub.closest('.nav-group'); if (g && visible(g)) return g.querySelector('.nav-group-header'); }
+        return menu.querySelector('.nav-item.active');
+      }
+
+      function iluminar() {
+        const { tope, vista } = alcance();
+        let orden = 0;
+        menu.querySelectorAll('.dm-camino-petalo').forEach((p) => {
+          const r = p.getBoundingClientRect();
+          const enciende = p.classList.contains('dm-rama') ? p.dataset.vista === vista && !!vista : r.top + r.height / 2 <= tope;
+          if (enciende && !p.classList.contains('dm-brilla')) p.style.setProperty('--retraso', Math.min(orden++ * 14, 280) + 'ms');
+          else if (enciende) orden++;
+          p.classList.toggle('dm-brilla', enciende);
+        });
+      }
+
+      function programarTrazo() {
+        if (pendienteTrazo) return;
+        pendienteTrazo = true;
+        requestAnimationFrame(trazar);
+      }
+
+      // Cambia el camino lo que cambia el tamaño o el lugar de las opciones: el menú que se abre y
+      // se recoge, un grupo que se despliega, la lista que se vuelve a pintar o que se desliza
+      const vigia = new ResizeObserver(programarTrazo);
+      vigia.observe(menu);
+      // Lo que pasa dentro del propio camino (pétalos que se encienden, la capa que se vuelve a
+      // llenar) no cuenta: si contara, el camino se volvería a dibujar sin fin
+      const delCamino = (n) => n.nodeType === 1 && !!n.closest('.dm-camino, .dm-petalo-menu');
+      const cuenta = (r) => !delCamino(r.target) &&
+        (r.type === 'attributes' || ![...r.addedNodes, ...r.removedNodes].every(delCamino));
+      const cambios = new MutationObserver((registros) => { if (registros.some(cuenta)) programarTrazo(); });
+      cambios.observe(menu, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+      menu.addEventListener('scroll', programarTrazo, { capture: true, passive: true });
+      // Al terminar de abrir o cerrar un grupo (max-height) o el menú (width) se vuelve a medir
+      menu.addEventListener('transitionend', (ev) => {
+        if (ev.propertyName === 'max-height' || (ev.target === menu && ev.propertyName === 'width')) programarTrazo();
+      });
+      programarTrazo();
+
+      menu.addEventListener('mouseover', (ev) => {
+        const opcion = ev.target.closest('.nav-item, .nav-subitem, .nav-group-header');
+        if (opcion && opcion !== objetivo) { objetivo = opcion; iluminar(); }
+      });
+      menu.addEventListener('mouseleave', () => { objetivo = null; iluminar(); });
+
+      // Al abrirse (pierde .collapsed), un pétalo baja por el camino
+      let cerrado = menu.classList.contains('collapsed');
+      new MutationObserver(() => {
+        const ahora = menu.classList.contains('collapsed');
+        if (cerrado && !ahora && arriba.isConnected && activa()) petaloAlAbrir(menu);
+        cerrado = ahora;
+      }).observe(menu, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    function petaloAlAbrir(menu) {
+      if (quieto()) return;
+      const p = document.createElement('span');
+      p.className = 'dm-petalo-menu dm-deco';
+      // Baja por la columna de íconos (donde va el camino)
+      const icono = menu.querySelector('.nav-icon');
+      const m = menu.getBoundingClientRect();
+      p.style.left = (icono ? icono.getBoundingClientRect().left - m.left + 10 : 30) + 'px';
+      p.style.top = (menu.scrollTop + 40) + 'px';
+      menu.appendChild(p);
+      const baja = Math.min(menu.clientHeight - 90, 420);
+      p.animate([
+        { transform: 'translate(0, 0) rotate(0deg)', opacity: 0 },
+        { transform: `translate(-6px, ${baja * .3}px) rotate(140deg)`, opacity: 1, offset: .25 },
+        { transform: `translate(5px, ${baja * .65}px) rotate(260deg)`, opacity: 1, offset: .65 },
+        { transform: `translate(-3px, ${baja}px) rotate(380deg)`, opacity: 0 },
+      ], { duration: 2600, easing: 'ease-in-out', fill: 'forwards' }).onfinish = () => p.remove();
+    }
+
+    // ---------- Franja del Inicio ----------
+
+    const LLAVE_OCULTO = 'dm-banner-oculto-' + new Date().getFullYear();
+    function bannerOculto() {
+      try { return localStorage.getItem(LLAVE_OCULTO) === '1'; } catch (e) { return false; }
+    }
+
+    function textoBanner() {
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      const dia1 = new Date(hoy.getFullYear(), 10, 1);
+      const faltan = Math.round((dia1 - hoy) / 86400000);
+      if (faltan > 1) return `Faltan ${faltan} días para el 1 de noviembre · Recordamos con cariño a quienes ya no están.`;
+      if (faltan === 1) return 'Mañana empieza el Día de Muertos · Que el cempasúchil les marque el camino.';
+      if (faltan >= -1) return 'Hoy honramos a quienes ya no están · Que el cempasúchil les marque el camino.';
+      return 'Gracias por recordar con nosotros a quienes ya no están.';
+    }
+
+    function decorarInicio(kpis) {
+      const seccion = kpis.closest('.dash-section') || kpis;
+      seccion.insertAdjacentHTML('beforebegin',
+        `<div class="dm-banner dm-deco" role="note">${estrellas(16)}${htmlMariposa('dm-mariposa-cruza')}` +
+        '<span class="dm-banner-flor" aria-hidden="true"></span>' +
+        `<div class="dm-banner-texto"><strong>Temporada de Día de Muertos</strong><span>${textoBanner()}</span></div>` +
+        '<div class="dm-banner-picado" aria-hidden="true"></div>' +
+        '<button type="button" class="dm-banner-ofrenda" title="Nuestra ofrenda: enciende una vela por quien recuerdas">' +
+        '<span class="dm-mini-vela" aria-hidden="true"></span><span>Encender una vela</span><b class="dm-banner-total"></b></button>' +
+        '<button type="button" class="dm-banner-cerrar" title="Ocultar esta franja" aria-label="Ocultar esta franja">×</button></div>');
+      const banner = seccion.previousElementSibling;
+      banner.querySelector('.dm-banner-ofrenda').addEventListener('click', abrirOfrenda);
+      banner.querySelector('.dm-banner-cerrar').addEventListener('click', () => {
+        try { localStorage.setItem(LLAVE_OCULTO, '1'); } catch (e) { /* sin almacenamiento: solo se quita esta vez */ }
+        banner.remove();
+      });
+      pedirOfrenda().then(pintarTotal).catch(() => { /* sin el número la franja sirve igual */ });
+    }
+
+    // ---------- Nuestra ofrenda ----------
+
+    let ofrenda = null;          // lo último que contestó el servidor
+    let ofrendaPedida = null;    // { promesa, ts }
+
+    function pedirOfrenda(fresca) {
+      if (!fresca && ofrendaPedida && Date.now() - ofrendaPedida.ts < 60000) return ofrendaPedida.promesa;
+      const promesa = callServer('apiOfrenda', state.token).then((o) => { ofrenda = o; return o; });
+      ofrendaPedida = { promesa, ts: Date.now() };
+      promesa.catch(() => { ofrendaPedida = null; });
+      return promesa;
+    }
+
+    function pintarTotal() {
+      const total = ofrenda ? ofrenda.total : 0;
+      document.querySelectorAll('.dm-banner-total').forEach((b) => { b.textContent = total ? '· ' + total : ''; });
+    }
+
+    function abrirOfrenda() {
+      let fondo = document.getElementById('dm-ofrenda');
+      if (!fondo) {
+        document.body.insertAdjacentHTML('beforeend',
+          '<div class="modal-backdrop dm-deco" id="dm-ofrenda">' +
+          '<div class="modal-card dm-ofrenda" role="dialog" aria-modal="true" aria-labelledby="dm-ofrenda-titulo">' +
+          `<div class="dm-ofrenda-picado" aria-hidden="true"></div>${estrellas(22)}` +
+          '<button type="button" class="dm-ofrenda-cerrar" aria-label="Cerrar">×</button>' +
+          '<h3 id="dm-ofrenda-titulo">Nuestra ofrenda</h3>' +
+          '<p class="dm-ofrenda-sub">Enciende una vela por quien recuerdas. Aquí solo se ve el nombre que escribas, nunca quién encendió la vela.</p>' +
+          '<div class="dm-altar" aria-hidden="true"></div>' +
+          '<div class="dm-ofrenda-total" aria-live="polite"></div>' +
+          '<form class="dm-ofrenda-form"><input type="text" maxlength="80" autocomplete="off" placeholder="¿A quién recuerdas? (opcional)" aria-label="A quién recuerdas">' +
+          '<button type="submit" class="dm-ofrenda-encender">Encender mi vela</button></form>' +
+          '<p class="dm-ofrenda-nota"></p>' +
+          '<div class="dm-ofrenda-lista"></div></div></div>');
+        fondo = document.getElementById('dm-ofrenda');
+        fondo.addEventListener('click', (ev) => {
+          if (ev.target === fondo || ev.target.closest('.dm-ofrenda-cerrar')) cerrarOfrenda();
+          const quitar = ev.target.closest('[data-dm-quitar]');
+          if (quitar) apagarVela(quitar.dataset.dmQuitar);
+        });
+        fondo.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarOfrenda(); });
+        fondo.querySelector('form').addEventListener('submit', (ev) => { ev.preventDefault(); encenderVela(); });
+      }
+      fondo.hidden = false;
+      pintarOfrenda();
+      pedirOfrenda(true).then(() => pintarOfrenda()).catch((err) => {
+        fondo.querySelector('.dm-ofrenda-total').textContent = 'No se pudo cargar la ofrenda: ' + ((err && err.message) || err);
+      });
+      setTimeout(() => fondo.querySelector('input').focus(), 50);
+    }
+
+    function cerrarOfrenda() {
+      const fondo = document.getElementById('dm-ofrenda');
+      if (fondo) fondo.hidden = true;
+    }
+
+    /** Las velas del altar: hasta 36, repartidas en tres escalones (menos arriba) */
+    function pintarAltar(altar, total, nueva) {
+      const n = Math.min(total, 36);
+      if (!n) { altar.innerHTML = '<div class="dm-altar-vacio">Aún no hay velas. Enciende la primera.</div>'; return; }
+      const arriba = Math.round(n * .2), medio = Math.round(n * .33), abajo = n - arriba - medio;
+      let k = 0;
+      const escalon = (cuantas) => '<div class="dm-escalon">' + Array.from({ length: cuantas }, () => {
+        k++;
+        const alto = 16 + ((k * 37) % 13);
+        return `<div class="dm-vela${nueva && k === n ? ' dm-nueva' : ''}" style="--alto:${alto}px"><span class="dm-llama"></span></div>`;
+      }).join('') + '</div>';
+      altar.innerHTML = escalon(arriba) + escalon(medio) + escalon(abajo);
+    }
+
+    function pintarOfrenda(nueva) {
+      const fondo = document.getElementById('dm-ofrenda');
+      if (!fondo || fondo.hidden) return;
+      const o = ofrenda;
+      const total = fondo.querySelector('.dm-ofrenda-total');
+      const nota = fondo.querySelector('.dm-ofrenda-nota');
+      const boton = fondo.querySelector('.dm-ofrenda-encender');
+      const input = fondo.querySelector('input');
+      pintarAltar(fondo.querySelector('.dm-altar'), o ? o.total : 0, nueva);
+      if (!o) { total.textContent = 'Encendiendo el altar…'; return; }
+      total.innerHTML = `<b>${o.total}</b>${o.total === 1 ? 'vela encendida' : 'velas encendidas'}`;
+      boton.disabled = !o.encendida;
+      boton.textContent = o.mia ? 'Cambiar el nombre' : 'Encender mi vela';
+      if (o.mia && document.activeElement !== input && !input.value) input.value = o.mia.memoria;
+      nota.innerHTML = !o.encendida ? 'La ofrenda está cerrada.'
+        : o.mia ? 'Tu vela ya está encendida. <button type="button" class="dm-ofrenda-quitar" data-dm-quitar="' + esc(o.mia.id) + '">Quitar mi vela</button>'
+        : 'Una vela por persona; el nombre se puede cambiar después.';
+      fondo.querySelector('.dm-ofrenda-lista').innerHTML = o.memorias.map((m) =>
+        `<span class="dm-memoria${m.mia ? ' dm-mia' : ''}"><span class="dm-mini-vela" aria-hidden="true"></span>${esc(m.memoria)}` +
+        (m.mia || o.moderar ? `<button type="button" data-dm-quitar="${esc(m.id)}" title="${m.mia ? 'Quitar mi vela' : 'Quitar (moderación)'}" aria-label="Quitar">×</button>` : '') +
+        '</span>').join('');
+      pintarTotal();
+    }
+
+    async function encenderVela() {
+      const fondo = document.getElementById('dm-ofrenda');
+      const boton = fondo.querySelector('.dm-ofrenda-encender');
+      const eraNueva = !(ofrenda && ofrenda.mia);
+      boton.disabled = true;
+      try {
+        ofrenda = await callServer('apiOfrendaEncender', state.token, fondo.querySelector('input').value);
+        ofrendaPedida = { promesa: Promise.resolve(ofrenda), ts: Date.now() };
+        pintarOfrenda(eraNueva);
+        rafaga(boton);
+      } catch (err) {
+        Notificar.error('No se pudo encender la vela: ' + ((err && err.message) || err));
+      } finally {
+        boton.disabled = !(ofrenda && ofrenda.encendida);
+      }
+    }
+
+    async function apagarVela(id) {
+      const propia = ofrenda && ofrenda.mia && ofrenda.mia.id === id;
+      const ok = await Confirmar.pedir({
+        titulo: propia ? '¿Quitar tu vela?' : '¿Quitar esta vela de la ofrenda?',
+        mensaje: propia ? 'Puedes volver a encenderla cuando quieras.' : 'Se quita para todos. Quien la encendió puede volver a encenderla.',
+        textoConfirmar: 'Quitar',
+      });
+      if (!ok) return;
+      try {
+        ofrenda = await callServer('apiOfrendaApagar', state.token, id);
+        ofrendaPedida = { promesa: Promise.resolve(ofrenda), ts: Date.now() };
+        const input = document.querySelector('#dm-ofrenda input');
+        if (propia && input) input.value = '';
+        pintarOfrenda();
+      } catch (err) {
+        Notificar.error('No se pudo quitar la vela: ' + ((err && err.message) || err));
+      }
+    }
+
+    // ---------- Botón de la flor (ADMIN) ----------
+
+    function esAdmin() {
+      return typeof state !== 'undefined' && !!state && !!state.sesion && state.sesion.rol === 'ADMIN';
+    }
+
+    function interruptor() {
+      const derecha = document.querySelector('.topbar-right');
+      let boton = document.querySelector('.dm-interruptor');
+      if (!derecha || !esAdmin()) { if (boton) boton.remove(); return; }
+      if (!boton) {
+        prepararFondos();
+        derecha.insertAdjacentHTML('afterbegin', '<button type="button" class="dm-interruptor"><span class="dm-interruptor-flor"></span></button>');
+        boton = derecha.querySelector('.dm-interruptor');
+        boton.addEventListener('click', alternar);
+      }
+      const prendida = activa();
+      if (boton.getAttribute('aria-pressed') !== String(prendida)) {
+        boton.setAttribute('aria-pressed', String(prendida));
+        boton.title = prendida
+          ? 'Decoración de Día de Muertos: encendida para todos. Clic para apagarla.'
+          : 'Decoración de Día de Muertos: apagada. Clic para encenderla para todos.';
+      }
+    }
+
+    async function alternar() {
+      const encender = !activa();
+      const ok = await Confirmar.pedir({
+        titulo: encender ? '¿Encender la decoración de Día de Muertos?' : '¿Apagar la decoración de Día de Muertos?',
+        mensaje: (encender ? 'La verán todas las personas del sistema' : 'Se quita para todas las personas') +
+          '; quien ya esté dentro, la próxima vez que recargue.',
+        textoConfirmar: encender ? 'Encender' : 'Apagar',
+      });
+      if (!ok) return;
+      try {
+        const quedo = await callServer('apiTemporadaGuardar', state.token, encender ? 'muertos' : '');
+        document.body.dataset.temporada = quedo || '';
+        decorar();
+        Notificar.exito(quedo ? 'Decoración de Día de Muertos encendida' : 'Decoración de Día de Muertos apagada');
+      } catch (err) {
+        Notificar.error('No se pudo cambiar la decoración: ' + ((err && err.message) || err));
+      }
+    }
+
+    // ---------- Lo que corre ----------
+
+    function decorar() {
+      interruptor();
+      if (!activa()) {
+        document.querySelectorAll('.dm-deco').forEach((el) => el.remove());
+        return;
+      }
+      prepararFondos();
+      const topbar = document.querySelector('.topbar');
+      if (topbar && !topbar.querySelector('.dm-barra-picado')) {
+        topbar.insertAdjacentHTML('beforeend', '<div class="dm-barra-picado dm-guirnalda dm-deco" aria-hidden="true"></div>');
+        guirnalda(topbar.querySelector('.dm-barra-picado'), 40);
+      }
+      const menu = document.getElementById('sidebar');
+      if (menu && !menu.querySelector('.dm-camino-arriba')) decorarMenu(menu);
+      const hero = document.querySelector('.login-hero');
+      if (hero && !hero.querySelector('.dm-login')) decorarLogin(hero);
+      const carga = document.getElementById('loading-screen');
+      if (carga && !carga.querySelector('.dm-carga-picado')) decorarCarga(carga);
+      const kpis = document.getElementById('dash-kpis');
+      if (kpis && !document.querySelector('.dm-banner') && !bannerOculto()) decorarInicio(kpis);
+    }
+
+    /** Muchas vistas se montan seguido: se revisa una vez por cuadro, no por cada cambio */
+    function programar() {
+      if (pendiente) return;
+      pendiente = true;
+      requestAnimationFrame(() => { pendiente = false; decorar(); });
+    }
+
+    function mensajesCarga(pasos) {
+      if (!activa()) return;
+      const MENSAJES = ['Encendiendo las velas…', 'Poniendo el cempasúchil…', 'Picando el papel…', 'Sirviendo el pan de muerto…'];
+      pasos.forEach((paso, i) => { if (MENSAJES[i]) paso.mensaje = MENSAJES[i]; });
+    }
+
+    new MutationObserver((registros) => { revisarExitos(registros); programar(); })
+      .observe(document.body, { childList: true, subtree: true });
+    programar();
+
+    return { aplicar: decorar, mensajesCarga, abrirOfrenda };
+  })();
+</script>

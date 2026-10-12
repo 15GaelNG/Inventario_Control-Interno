@@ -22,6 +22,8 @@ const VerificacionesService = (function () {
   function desdeOriginal_(row) {
     return {
       ID: row['ID'],
+      ID_VEHICULO: row['ID VEHICULO'] || '',
+      NUCCO: row['NUCCO'] || '',
       FOLIO: row['FOLIO VEHICULO'] || '',
       PLACA: row['PLACA'] || '',
       FECHA_REGISTRO: HojaServicio.fechaISO(row['FECHA REGISTRO']),
@@ -51,12 +53,12 @@ const VerificacionesService = (function () {
   function registrar(token, datos, archivo) {
     const sesion = Permisos.puedeEditar(token, 'verificaciones');
 
-    // Trae el ID del vehículo o su folio, según qué tan migrado esté el formulario.
-    const folio = String(datos.FOLIO || '').trim();
-    if (!folio) throw new Error('Selecciona el vehículo');
-    // Resuelve al vehículo y devuelve ya puestas 'ID VEHICULO', 'FOLIO VEHICULO' y 'PLACA'.
+    // El vehículo es su ID (ID_VEHICULO); el folio solo llega de una página abierta antes del cambio.
+    const vehiculo = String(datos.ID_VEHICULO || datos.FOLIO || '').trim();
+    if (!vehiculo) throw new Error('Selecciona el vehículo');
+    // Resuelve al vehículo y devuelve ya puestas 'ID VEHICULO', 'FOLIO VEHICULO', 'PLACA' y 'NUCCO'.
     // Truena si no existe, igual que antes.
-    const delVehiculo = Relaciones.datosParaNuevo('VERIFICACIONES', folio);
+    const delVehiculo = Relaciones.datosParaNuevo('VERIFICACIONES', vehiculo);
 
     const fechaVerificacion = HojaServicio.fechaObligatoria(datos.FECHA_VERIFICACION, 'fecha de verificación');
     const fechaProxima = HojaServicio.fechaObligatoria(datos.FECHA_PROXIMA, 'fecha de próxima verificación');
@@ -66,15 +68,28 @@ const VerificacionesService = (function () {
     if (!archivo || !archivo.base64) throw new Error('Adjunta el comprobante de verificación');
 
     const id = Ids.nuevo(Entidades.prefijo('VERIFICACIONES'));
-    const imagen = DriveUtils.guardarImagenAppSheet({
-      carpetaId: Config.DRIVE_FOLDERS.VERIFICACIONES(),
-      tabla: TABLA,
-      idFila: id,
-      columna: COL_COMPROBANTE,
-      archivo: archivo,
-    });
-    // "<ID>_VERIFICACION_<fecha>.ext": urlComprobante() busca el archivo por ese nombre exacto
-    const rutaComprobante = HojaServicio.renombrarRuta(imagen.fileId, id, 'VERIFICACION', imagen.ruta);
+    const nucco = delVehiculo.datos['NUCCO'];
+    let imagen;
+    let rutaComprobante;
+    if (ExpedienteNuco.tieneNuco(nucco)) {
+      // En el expediente del NUCO (12-oct-2026): 3.-VERIFICACIONES/<año>/<1ER|2DO> SEMESTRE/VERIFICACION-0088 <fecha>.png,
+      // y la hoja guarda su liga
+      const revisado = DriveUtils.blobRevisado(archivo, ['image/png', 'image/jpeg'], 'el comprobante');
+      const guardado = ExpedienteNuco.guardar(revisado.blob, ExpedienteNuco.carpetaVerificacion(nucco, fechaVerificacion),
+        'VERIFICACION', nucco, fechaVerificacion, revisado.extension);
+      imagen = { fileId: guardado.getId() };
+      rutaComprobante = guardado.getUrl();
+    } else {
+      imagen = DriveUtils.guardarImagenAppSheet({
+        carpetaId: Config.DRIVE_FOLDERS.VERIFICACIONES(),
+        tabla: TABLA,
+        idFila: id,
+        columna: COL_COMPROBANTE,
+        archivo: archivo,
+      });
+      // "<ID>_VERIFICACION_<fecha>.ext": urlComprobante() busca el archivo por ese nombre exacto
+      rutaComprobante = HojaServicio.renombrarRuta(imagen.fileId, id, 'VERIFICACION', imagen.ruta);
+    }
 
     try {
       SheetUtils.insert(HojaServicio.libro(VERIFICACIONES), HojaServicio.nombreHoja(VERIFICACIONES), Object.assign({}, delVehiculo.datos, {
@@ -154,6 +169,8 @@ const VerificacionesService = (function () {
     calentar: () => HojaServicio.calentar(VERIFICACIONES),
     /** Verificaciones de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(VERIFICACIONES, token, 'FOLIO', folio),
+    /** Las de UN vehículo, por su ID (la ficha) */
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(VERIFICACIONES, token, id),
     /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(VERIFICACIONES, token, id),
     /** Todas las columnas de TODAS las verificaciones (para exportar completo) */

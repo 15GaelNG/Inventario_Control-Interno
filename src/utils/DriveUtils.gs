@@ -31,22 +31,31 @@ const DriveUtils = (function () {
    * @param {string} [p.etiqueta]       cómo llamarlo en los mensajes de error ('la imagen', 'el PDF'…)
    * @return {{ruta: string, fileId: string}}
    */
-  function guardarArchivoAppSheet(p) {
-    const permitidos = p.permitidos || IMAGENES;
-    const etiqueta = p.etiqueta || 'el archivo';
-    const mimeType = p.archivo && p.archivo.mimeType;
-    if (permitidos.indexOf(mimeType) === -1) {
-      throw new Error('Solo se aceptan archivos ' + permitidos.map((m) => EXTENSIONES[m] || m).join(' o ').toUpperCase());
+  /**
+   * Lo que mandó el navegador ({base64, mimeType}) como blob, revisado: tipo permitido y máximo 10 MB.
+   * @return {{blob: Blob, extension: string}}  extension con punto ('.png')
+   */
+  function blobRevisado(archivo, permitidos, etiqueta, nombre) {
+    const tipos = permitidos || IMAGENES;
+    const que = etiqueta || 'el archivo';
+    const mimeType = archivo && archivo.mimeType;
+    if (tipos.indexOf(mimeType) === -1) {
+      throw new Error('Solo se aceptan archivos ' + tipos.map((m) => EXTENSIONES[m] || m).join(' o ').toUpperCase());
     }
+    const bytes = Utilities.base64Decode(archivo.base64);
+    if (bytes.length > MAX_BYTES) throw new Error(que.charAt(0).toUpperCase() + que.slice(1) + ' pesa más de 10 MB');
+    return { blob: Utilities.newBlob(bytes, mimeType, nombre || 'archivo'), extension: '.' + EXTENSIONES[mimeType] };
+  }
 
-    const bytes = Utilities.base64Decode(p.archivo.base64);
-    if (bytes.length > MAX_BYTES) throw new Error(etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1) + ' pesa más de 10 MB');
+  function guardarArchivoAppSheet(p) {
+    const etiqueta = p.etiqueta || 'el archivo';
+    const revisado = blobRevisado(p.archivo, p.permitidos, etiqueta);
 
     const hora = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss');
-    const nombre = p.idFila + '.' + p.columna + '.' + hora + '.' + EXTENSIONES[mimeType];
+    const nombre = p.idFila + '.' + p.columna + '.' + hora + revisado.extension;
     let archivo;
     try {
-      archivo = marcarAutor(DriveApp.getFolderById(p.carpetaId).createFile(Utilities.newBlob(bytes, mimeType, nombre)));
+      archivo = marcarAutor(DriveApp.getFolderById(p.carpetaId).createFile(revisado.blob.setName(nombre)));
     } catch (err) {
       // "Acceso denegado: DriveApp" casi siempre = la cuenta puede VER la carpeta pero no EDITARLA
       throw new Error(
@@ -72,8 +81,28 @@ const DriveUtils = (function () {
     });
   }
 
-  /** Archivo de Drive a partir de su ruta AppSheet, buscando en orden en las carpetas dadas (o null). */
+  /** El ID de Drive dentro de una liga (".../file/d/<id>/view", "...?id=<id>") o null si no es una liga de Drive */
+  function idDeLiga(liga) {
+    const m = /\/d\/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})/.exec(String(liga || ''));
+    return m ? (m[1] || m[2]) : null;
+  }
+
+  /**
+   * Lo nuevo de la familia Vehículos se guarda en el expediente del NUCO y la hoja guarda su LIGA (12-oct-2026); lo
+   * viejo, una ruta de AppSheet. Los lectores (archivoDeRuta / archivoDeRutaProfunda y los que se apoyan en ellos)
+   * aceptan las dos: una liga se abre por su ID. → File, null (liga a un archivo que ya no se puede abrir) o
+   * undefined (no es liga: que siga buscando por la ruta).
+   */
+  function archivoDeLiga_(valor) {
+    const id = /^https?:/i.test(String(valor || '').trim()) ? idDeLiga(valor) : null;
+    if (!id) return undefined;
+    try { return DriveApp.getFileById(id); } catch (e) { return null; }
+  }
+
+  /** Archivo de Drive a partir de su ruta AppSheet, buscando en orden en las carpetas dadas (o null). Acepta una liga. */
   function archivoDeRuta(ruta, carpetasIds) {
+    const porLiga = archivoDeLiga_(ruta);
+    if (porLiga !== undefined) return porLiga;
     const nombre = String(ruta || '').split('/').pop();
     if (!nombre) return null;
 
@@ -124,6 +153,8 @@ const DriveUtils = (function () {
    * @return {File|null}
    */
   function archivoDeRutaProfunda(ruta, raizId) {
+    const porLiga = archivoDeLiga_(ruta);
+    if (porLiga !== undefined) return porLiga;
     const partes = String(ruta || '').split('/').map((p) => p.trim()).filter(Boolean);
     if (partes.length < 2 || !raizId) return null;
 
@@ -282,7 +313,7 @@ const DriveUtils = (function () {
   }
 
   return {
-    guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
+    blobRevisado, idDeLiga, guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
     marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio,
   };

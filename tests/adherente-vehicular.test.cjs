@@ -81,11 +81,18 @@ function crearContexto() {
       leerColumnasDeHoja: () => ({ filas: 0, datos: {} }),
     },
     VehiculosService: {
-      buscarPorFolio: () => Object.assign({}, VEHICULO_BASE),
+      buscar: () => Object.assign({}, VEHICULO_BASE),
       actualizar: (token, id, cambios) => { llamadas.actualizarVehiculo.push({ id, cambios }); },
     },
     ExpedienteNuco: {
       carpeta: (nucco, doc, sub) => ({ getId: () => 'NUCO/' + [nucco, doc].concat(sub || []).join('/') }),
+      FIRMAS: 'FIRMAS',
+      tieneNuco: (n) => /^[0-9]+$/.test(String(n == null ? '' : n).trim()),
+      // El respaldo final de cada firma: al expediente del NUCO (5.-RESPONSIVA/FIRMAS)
+      guardar: (blob, carpeta, prefijo) => {
+        llamadas.imagenesSubidas.push({ carpeta: carpeta.getId(), nombre: prefijo });
+        return { getId: () => 'firma-' + llamadas.imagenesSubidas.length };
+      },
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
     },
     PdfService: {
@@ -161,7 +168,7 @@ test('presencial: cada firma se respalda en la MISMA carpeta que usa Responsiva,
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
     { 'FIRMA ADHERENTE': FIRMA_ADHERENTE, 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI });
   assert.equal(llamadas.imagenesSubidas.length, 3);
-  assert.ok(llamadas.imagenesSubidas.every((img) => img.carpeta === 'RESPONSIVAS VEHICULARES_Images'));
+  assert.ok(llamadas.imagenesSubidas.every((img) => img.carpeta === 'NUCO/00001/RESPONSIVA/FIRMAS'), 'el respaldo de cada firma va al expediente del NUCO');
   const otrasColumnas = Object.keys(llamadas.insert[0]).filter((k) => METADATO.indexOf(k) === -1);
   assert.ok(!otrasColumnas.some((k) => k.toUpperCase().indexOf('FIRMA') !== -1));
   assert.equal(llamadas.insert[0]['FIRMA JEFE TEMP'], '');

@@ -15,7 +15,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 
 ## 1. Qué hace
 
-- **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
+- **Líneas telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
   EQUIPO + SIM BASICO, LINEA, SIM BASICO, BANDA ANCHA, MODEM, CAMARA). La línea sola básica se llamaba LINEA BASICA
   hasta el 12-oct (`e26b863`, `d59d7d1`): el TIPO no se guarda en el libro, se calcula (`tipoViejo_`),
@@ -65,7 +65,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
 - **Vínculos** (8-oct; `lineas-vinculos.html`): **una idea del usuario que se queda así**, apagada en producción como Help
   Desk (`vinculos-lineas` en `MODULOS_APAGADOS` del bloque de producción de `Entornos.gs`: sin botón ni espacio); en
-  los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas Telefónicas junto a
+  los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas telefónicas junto a
   Tabla y Tarjetas, con el cajón a la izquierda y dos vistas. **Grafo**: todo lo que cabe en la pantalla flotando como
   red (personas con sus equipos y líneas como íconos y sus vínculos; se prenden Personas y Sueltos), búsqueda (persona, NUCO, número también anterior, IMEI o estatus; varias con
   coma; con búsqueda salen las bajas), departamento y compañía; la rueda acerca, el fondo se arrastra y se aleja solo
@@ -156,10 +156,30 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
   (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
-- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
+- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta). Los pasos
+  de la bandeja y sus notificaciones (campana) los hace quien tiene EDICION en `resguardos-lineas`
+  (`usuario.puedeAprobar`, calculado con `Permisos.deCorreo` en `TelefoniaService.usuarioResguardo_`); ADMIN y SUPER también,
+  porque editan todo. Con solo LECTURA se ve y no se modifica («Solo puedes consultar Resguardos y cancelaciones, no
+  modificarlo.»). «Mandar a resguardo», su formulario y «Mandar a cancelación» piden EDICION de `lineas-telefonicas`, así
+  que el área de Líneas sigue mandando. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) da LECTURA al
+  área LINEAS y EDICION a `paulina.bustamante@ciudadmaderas.com`; en producción manda la hoja PERMISOS (pendiente 8.11).
+  Ya no existe la lista `LINEAS_APROBADORES_RESGUARDO` (12-oct, `585d1c6`).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
-- **Accesorios** de celular, **Gestión de Activos** (por persona) y **Correcciones de Líneas** (módulo temporal).
+- **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
+- **Menú de Líneas** (12-oct, `585d1c6`): Panorama, Líneas telefónicas, Resguardos y cancelaciones e Inventario de
+  accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
+  `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción). El menú lateral
+  sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
+  «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
+  el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
+- **Sin asistente flotante** (12-oct, `7163c54`): el botón del asistente de la esquina inferior derecha se esconde en
+  las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
+  (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
+  `#asistente-flotante`). En los demás módulos sigue igual.
+- **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
+  y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
+  `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
 
 ## 2. Datos (libro de producción `17YrtuMY…`)
 
@@ -186,7 +206,9 @@ la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** copias «(SISTEMA)» de
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
 originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias se hicieron una vez, el 6-oct);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
-AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
+AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`): la hoja 2 empieza en «SANCIONES POR MAL MANEJO»
+con un salto de página cuyo párrafo mide 1 pt; con varios responsables (« / » en RESPONSABLE) el nombre bajo la firma va en
+8 pt (`NOMBRES_BAJO_FIRMA`), y si el PDF sale con más de 2 hojas se quita el salto y se exporta de nuevo. El patrón se puede dibujar en el servidor
 (`LineasPatronPng.gs`). Si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (alguien lo quitó
 a mano en Drive), se usa el PDF que sí está en esa carpeta (el del mismo nombre o el más reciente «INSP…» / «RESP…») y
 se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisarPdfsLigados` con

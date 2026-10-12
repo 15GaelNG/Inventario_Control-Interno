@@ -9,15 +9,17 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <?!= include('html/styles'); ?>
 </head>
-<!-- data-apagados: lo que este proyecto tiene apagado (Config.apagados); el menú no lo pinta -->
-<body data-apagados="<?= apagados ?>">
+<!-- data-apagados: lo que este proyecto tiene apagado (Config.apagados); el menú no lo pinta.
+     data-temporada: la decoración de temporada encendida (TemporadaService; html/temporada.html) -->
+<body data-apagados="<?= apagados ?>" data-temporada="<?= temporada ?>">
 
   <div id="login-screen-container"></div>
   <div id="loading-screen-container"></div>
 
   <div id="app-shell" hidden>
     <div id="app">
-      <nav id="sidebar">
+      <!-- Recogido: se abre al pasar el cursor (initMenuAlPasar en app.html) -->
+      <nav id="sidebar" class="collapsed">
         <div class="sidebar-header">
           <div class="sidebar-brand">
             <img class="sidebar-brand-icon" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png" alt="Control Interno" />
@@ -26,17 +28,13 @@
         </div>
 
 
-        <div class="nav-item" data-view="dashboard" data-tooltip="Inicio">
+        <div class="nav-item" data-view="dashboard">
           <span class="nav-icon"><i data-lucide="home" class="ico"></i></span><span class="nav-label">Inicio</span>
         </div>
 
         <div class="nav-groups" id="nav-groups"></div>
 
         <div style="flex:1"></div>
-
-        <button type="button" class="sidebar-collapse-btn" id="sidebar-collapse-btn" title="Colapsar menú">
-          <i data-lucide="chevron-left" class="ico"></i><span class="nav-label">Colapsar menú</span>
-        </button>
       </nav>
       <main id="main">
         <div class="topbar">
@@ -123,6 +121,9 @@
        lo que si necesita de app.html (callServer, state, escaparHtml...) lo usa
        adentro de funciones que no se llaman hasta más tarde, vía iniciar(). -->
   <?!= include('html/notificaciones'); ?>
+  <!-- Temporada (Día de Muertos): se decora sola al aparecer el login, la carga, la barra y el
+       Inicio. Antes de app.html: el render() de arranque ya sale decorado. -->
+  <?!= include('html/temporada'); ?>
   <!-- CamposHoja: el motor de los formularios declarados por columnas (Vehículos, Caja Chica,
        Arqueos). Antes de app.html porque slugCampo, que usan todos los módulos, vive ahí. -->
   <?!= include('html/js/componentes/campos-hoja'); ?>

@@ -670,24 +670,32 @@ const TelefoniaService = (function () {
 
   // ---- Resguardo y bandeja de Pau (reunión con Líneas, 30-sep) ----
 
+  /**
+   * Los pasos de la bandeja (recibir, entregar, vendido, cartas, confirmar la cancelación) los hace quien EDITA
+   * Resguardos y cancelaciones: Pau, por correo, y ADMIN; el área de Líneas solo la ve (usuario, 12-oct).
+   */
   function usuarioResguardo_(sesion) {
-    return Object.assign(usuarioOperacion_(sesion), { esAdmin: sesion.rol === Config.ROLES.ADMIN });
+    const permisos = sesion.permisos || Permisos.deCorreo(sesion.correo);
+    return Object.assign(usuarioOperacion_(sesion), { puedeAprobar: permisos[MODULO_RESGUARDOS] === Permisos.EDICION });
   }
+
+  // Mandar a resguardo o a cancelación se hace desde Líneas telefónicas: pide su edición, no la de la bandeja (con
+  // solo lectura en la bandeja, el área de Líneas sigue mandando; usuario, 12-oct)
 
   /** Formulario de "Mandar a resguardo": datos de cada equipo y la propuesta de su línea. */
   function formularioResguardo(token, ids) {
-    const sesion = Permisos.puedeEditar(token, MODULO_RESGUARDOS);
+    const sesion = operar_(token);
     return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
   }
 
   function mandarResguardo(token, ids, datos) {
-    const sesion = Permisos.puedeEditar(token, MODULO_RESGUARDOS);
+    const sesion = operar_(token);
     return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
   }
 
   /** "Mandar a cancelación": una o varias líneas a la bandeja de cancelaciones sin mandar el equipo a resguardo. */
   function mandarCancelacion(token, ids, datos) {
-    const sesion = Permisos.puedeEditar(token, MODULO_RESGUARDOS);
+    const sesion = operar_(token);
     return LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion)));
   }
 

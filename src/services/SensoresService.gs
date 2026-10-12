@@ -64,6 +64,8 @@ const SensoresService = (function () {
   function desdeOriginal_(row) {
     return {
       ID: row['ID'],
+      ID_VEHICULO: row['ID VEHICULO'] || '',
+      NUCCO: row['NUCCO'] || '',
       FOLIO: row['FOLIO'] || '',
       SERIE_SENSOR: row['SERIE SENSOR'] || '',
       SERIE_VEHICULO: row['SERIE VEHICULO'] || '',
@@ -136,11 +138,13 @@ const SensoresService = (function () {
     if (!limpio) return null;
     const { columnas, vehiculo } = datosDeVehiculo_(limpio);
 
+    // Por el ID del vehículo, no por lo que se escribió (puede ser el ID o, de una página vieja, el folio)
     const yaInstalado = SheetUtils.getAll(ssId(), nombreHoja_())
-      .filter((r) => enMayusculas_(r['FOLIO']) === enMayusculas_(limpio) && enMayusculas_(r['ESTATUS SENSOR']) === 'ACTIVO')
+      .filter((r) => limpiar_(r['ID VEHICULO']) === limpiar_(vehiculo['ID']) && enMayusculas_(r['ESTATUS SENSOR']) === 'ACTIVO')
       .map((r) => r['SERIE SENSOR']);
 
     return {
+      ID_VEHICULO: vehiculo['ID'] || '',
       copiados: columnas,
       combustibles: combustiblesDe_(vehiculo['TIPO DE COMBUSTIBLE']),
       tipoCombustibleVehiculo: vehiculo['TIPO DE COMBUSTIBLE'] || '',
@@ -179,8 +183,8 @@ const SensoresService = (function () {
   function registrar(token, datos, archivo) {
     Permisos.puedeEditar(token, 'instalacion-sensores');
 
-    // Trae el ID del vehículo o su folio, según qué tan migrado esté el formulario.
-    const folio = limpiar_(datos.FOLIO);
+    // El vehículo es su ID (ID_VEHICULO); el folio solo llega de una página abierta antes del cambio.
+    const folio = limpiar_(datos.ID_VEHICULO || datos.FOLIO);
     if (!folio) throw new Error('Selecciona el vehículo');
     const serieSensor = enMayusculas_(datos.SERIE_SENSOR);
     if (!serieSensor) throw new Error('La serie del sensor es obligatoria');
@@ -205,17 +209,30 @@ const SensoresService = (function () {
     }
 
     const id = Ids.nuevo(Entidades.prefijo('INSTALACION DE SENSORES'));
-    const guardado = DriveUtils.guardarArchivoAppSheet({
-      carpetaId: Config.DRIVE_FOLDERS.SENSORES(),
-      carpetaRelativa: CARPETA_RELATIVA,
-      idFila: id,
-      columna: COL_RESPONSIVA,
-      archivo: archivo,
-      permitidos: ['application/pdf'],
-      etiqueta: 'la responsiva',
-    });
-    // "<ID>_RESPONSIVA_SENSOR_<fecha>.ext": urlResponsiva() busca el archivo por ese nombre exacto
-    const rutaResponsiva = HojaServicio.renombrarRuta(guardado.fileId, id, 'RESPONSIVA_SENSOR', guardado.ruta);
+    const nucco = columnas['NUCCO'];
+    let guardado;
+    let rutaResponsiva;
+    if (ExpedienteNuco.tieneNuco(nucco)) {
+      // En el expediente del NUCO (12-oct-2026): 1.-DOCUMENTACIÓN/5.-RESPONSIVA/SENSORES/RESPONSIVA SENSOR-0088 <fecha>.pdf,
+      // y la hoja guarda su liga
+      const revisado = DriveUtils.blobRevisado(archivo, ['application/pdf'], 'la responsiva');
+      const archivoNuco = ExpedienteNuco.guardar(revisado.blob,
+        ExpedienteNuco.carpeta(nucco, 'RESPONSIVA', [ExpedienteNuco.SENSORES]), 'RESPONSIVA SENSOR', nucco, fechaInstalacion, '.pdf');
+      guardado = { fileId: archivoNuco.getId() };
+      rutaResponsiva = archivoNuco.getUrl();
+    } else {
+      guardado = DriveUtils.guardarArchivoAppSheet({
+        carpetaId: Config.DRIVE_FOLDERS.SENSORES(),
+        carpetaRelativa: CARPETA_RELATIVA,
+        idFila: id,
+        columna: COL_RESPONSIVA,
+        archivo: archivo,
+        permitidos: ['application/pdf'],
+        etiqueta: 'la responsiva',
+      });
+      // "<ID>_RESPONSIVA_SENSOR_<fecha>.ext": urlResponsiva() busca el archivo por ese nombre exacto
+      rutaResponsiva = HojaServicio.renombrarRuta(guardado.fileId, id, 'RESPONSIVA_SENSOR', guardado.ruta);
+    }
 
     let nueva;
     try {
@@ -348,6 +365,7 @@ const SensoresService = (function () {
     calentar: () => HojaServicio.calentar(SENSORES),
     /** Sensores de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(SENSORES, token, 'FOLIO', folio),
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(SENSORES, token, id),
     /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Vehículos */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(SENSORES, token, id),
     /** Todas las columnas de TODOS los sensores (para exportar completo) */

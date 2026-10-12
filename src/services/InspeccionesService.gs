@@ -31,7 +31,7 @@ const InspeccionesService = (function () {
 
   /** Columnas que necesita la tabla. Leer las 195 serían ~57,000 celdas por consulta. */
   const COLUMNAS_LISTA = [
-    COL_ID, 'FOLIO', 'TIPO', 'FECHA', 'RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE',
+    COL_ID, 'ID VEHICULO', 'NUCO', 'FOLIO', 'TIPO', 'FECHA', 'RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE',
     'OFICINA / DESARROLLO', 'CONDUCTOR', 'JEFE DIRECTO', 'VEHICULO', 'NO SERIE',
     'MODELO / AÑO', 'PLACAS', 'FECHA ULTIMO SERVICIO', 'HOLOGRAMA', 'TIPO COMBUSTIBLE',
     'VOLTAJE', 'OBSERVACIONES', 'NOMBRE INSPECTOR', 'PUNTAJE FINAL INSPECCION', COL_PDF,
@@ -124,6 +124,8 @@ const InspeccionesService = (function () {
   function desdeOriginal_(row) {
     return {
       ID: row[COL_ID],
+      ID_VEHICULO: row['ID VEHICULO'] || '',
+      NUCCO: row['NUCO'] || '',
       FOLIO: row['FOLIO'] || '',
       TIPO: row['TIPO'] || '',
       FECHA: fechaISO_(row['FECHA']),
@@ -302,7 +304,7 @@ const InspeccionesService = (function () {
    * Guarda una inspección: escribe la fila, sube las imágenes y genera el PDF del formato.
    *
    * @param {Object} p
-   * @param {string} p.FOLIO       vehículo (de ahí se copian sus datos)
+   * @param {string} p.ID_VEHICULO vehículo (de ahí se copian sus datos); p.FOLIO solo de una página vieja
    * @param {string} p.TIPO        tipo de unidad: decide checklist, plantilla y carpeta
    * @param {Object} p.checklist   { 'PIEZA': 'BUENO' }
    * @param {Object} p.llantas     { 'LLANTA DD': 7 }
@@ -311,11 +313,12 @@ const InspeccionesService = (function () {
    */
   function registrar(token, p, imagenes) {
     const sesion = Permisos.puedeEditar(token, MODULO);
-    const folio = limpiar_(p && p.FOLIO);
-    if (!folio) throw new Error('El folio del vehículo es obligatorio');
+    const porId = limpiar_(p && p.ID_VEHICULO);
+    const folio = porId || limpiar_(p && p.FOLIO);
+    if (!folio) throw new Error('Elige el vehículo');
 
-    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, 'FOLIO');
-    if (!vehiculo) throw new Error('No existe un vehículo con folio ' + folio);
+    const vehiculo = SheetUtils.findById(ssId(), 'VEHICULOS', folio, porId ? 'ID' : 'FOLIO');
+    if (!vehiculo) throw new Error('No existe el vehículo ' + folio);
 
     const estructura = estructuraDeTipo(token, p.TIPO);
     const checklist = p.checklist || {};
@@ -387,6 +390,17 @@ const InspeccionesService = (function () {
     });
     fila['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
 
+    // ---- dónde: el expediente del NUCO (12-oct-2026) ----
+    // 4.-INSPECCIONES/<año>/<N> TRIMESTRE con su PDF (INSPECCION-0088 2026-10-12.pdf) y, en FIRMAS Y DIAGRAMAS, lo
+    // que se dibujó o firmó; la hoja guarda las ligas. Un vehículo sin NUCCO usa las carpetas de antes (rutas).
+    const nucco = vehiculo.data['NUCCO'];
+    const enNuco = ExpedienteNuco.tieneNuco(nucco);
+    let carpetaInsp = null;
+    let carpetaFirmas = null;
+    const carpetaInspeccion_ = () => (carpetaInsp = carpetaInsp || ExpedienteNuco.carpetaInspeccion(nucco, ahora));
+    const carpetaFirmas_ = () => (carpetaFirmas = carpetaFirmas ||
+      ExpedienteNuco.subcarpeta(carpetaInspeccion_(), ExpedienteNuco.FIRMAS_Y_DIAGRAMAS));
+
     // ---- imágenes (diagramas y firmas) ----
     const subidas = [];
     const paraPdf = {};
@@ -394,6 +408,14 @@ const InspeccionesService = (function () {
     try {
       COLUMNAS_IMAGEN.forEach(([columna]) => {
         const imagen = (imagenes || {})[columna];
+        if (imagen && imagen.base64 && enNuco) {
+          const revisado = DriveUtils.blobRevisado(imagen, ['image/png', 'image/jpeg'], 'la imagen de ' + columna);
+          const archivo = ExpedienteNuco.guardar(revisado.blob, carpetaFirmas_(), columna, nucco, ahora, revisado.extension);
+          subidas.push(archivo.getId());
+          fila[columna] = archivo.getUrl();
+          paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({}, imagen, FIRMA_PDF) : imagen;
+          return;
+        }
         if (imagen && imagen.base64) {
           const guardada = DriveUtils.guardarArchivoAppSheet({
             carpetaId: Config.DRIVE_FOLDERS.INSPECCIONES_IMAGENES(),
@@ -438,14 +460,16 @@ const InspeccionesService = (function () {
         }, {})),
         imagenes: paraPdf,
         formato: FORMATO_PDF,
-        carpetaId: Config.DRIVE_FOLDERS.REPORTES(),
-        subcarpeta: estructura.carpeta,
-        nombre: PdfService.nombreArchivo([
-          'INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(ahora),
-        ]),
+        carpetaId: enNuco ? carpetaInspeccion_().getId() : Config.DRIVE_FOLDERS.REPORTES(),
+        subcarpeta: enNuco ? undefined : estructura.carpeta,
+        nombre: enNuco
+          ? ExpedienteNuco.nombreConFecha(carpetaInspeccion_(), 'INSPECCION', nucco, '.pdf', ahora).replace(/\.pdf$/, '')
+          : PdfService.nombreArchivo(['INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(ahora)]),
       });
+      if (enNuco) ExpedienteNuco.olvidar(nucco);
       SheetUtils.update(ssId(), hoja_().getName(), id,
-        { [COL_PDF]: estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
+        { [COL_PDF]: enNuco ? pdf.url
+          : estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
         COL_ID);
     } catch (err) {
       // La inspección ya quedó guardada: el PDF se puede volver a generar, así que no se
@@ -973,6 +997,7 @@ const InspeccionesService = (function () {
     calentar: () => HojaServicio.calentar(INSPECCIONES),
     /** Inspecciones de un solo vehículo (ficha de Vehículos) */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(INSPECCIONES, token, 'FOLIO', folio),
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(INSPECCIONES, token, id),
     /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(INSPECCIONES, token, id),

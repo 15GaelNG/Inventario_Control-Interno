@@ -21,11 +21,12 @@ const CambiosVehiculosService = (function () {
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     // Por nombre y no por columnas: una copia con las mismas 8 columnas podía quedar cacheada 6 h
     hoja: 'CAMBIOS VEHICULOS',
-    columnas: ['ID', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'],
+    columnas: ['ID', 'ID VEHICULO', 'FOLIO', 'TABLA', 'CAMPO', 'ANTES', 'DESPUES', 'ACTUALIZADO POR', 'FECHA ACTUALIZACION'],
     // Los renglones de antes de este módulo no tienen ID; FOLIO es el que dice que el renglón es real
     incluir: (r) => !!r['FOLIO'],
     fila: (r) => ({
       ID: r['ID'] || '',
+      ID_VEHICULO: r['ID VEHICULO'] || '',
       FOLIO: r['FOLIO'] || '',
       CAMPO: r['CAMPO'] || '',
       ANTES: r['ANTES'] || '',
@@ -72,6 +73,7 @@ const CambiosVehiculosService = (function () {
           // datosAntes ES el renglón completo del vehículo, así que ya trae su ID. Si no lo
           // tuviera se guarda vacío a propósito: una bitácora nunca debe tumbar el guardado.
           'ID VEHICULO': (datosAntes && datosAntes['ID']) || '',
+          NUCCO: (datosAntes && datosAntes['NUCCO']) || '',
           FOLIO: folio || '',
           TABLA: 'VEHICULOS',
           CAMPO: campo,
@@ -99,5 +101,6 @@ const CambiosVehiculosService = (function () {
     completo: (token) => HojaServicio.completo(CAMBIOS, token),
     /** Historial de UN vehículo (detalle de Vehículos): en toda la hoja, no solo en los 500 */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(CAMBIOS, token, 'FOLIO', folio, { maximo: MAXIMO_POR_VEHICULO }),
+    listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(CAMBIOS, token, id, { maximo: MAXIMO_POR_VEHICULO }),
   };
 })();

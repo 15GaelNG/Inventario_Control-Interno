@@ -221,10 +221,14 @@
    *       }),
    *       alCargar: (datos, form) => form.setOpciones('COMBUSTIBLE', datos.combustibles),
    *       nucco: { vehiculos: async () => [{ FOLIO, NUCO, PLACA, MARCA }] },   // vehículos: ver abajo
+   *       llave: { campo: 'ID_VEHICULO', de: (datos) => datos.ID },   // opcional: ver abajo
    *     },
+   *   buscar.llave: lo que se escribe es para la gente (el folio), pero el registro se liga por su ID: el
+   *   ID del registro que encontró cargar() va en los valores como llave.campo ('' si no se encontró o
+   *   si lo escrito cambió después).
    *   buscar.nucco (todo formulario que busca un vehículo): pone el campo Nucco ANTES del
    *   folio, con su lista, ligados con FolioNucco: escribir cualquiera llena el otro con
-   *   "auto" y la búsqueda corre igual (lo que se guarda y se busca sigue siendo el folio).
+   *   "auto" y la búsqueda corre igual (se busca por folio; con buscar.llave se liga por el ID).
    *   El Nucco no va en los valores ni en el resumen; se oculta junto con el folio (visibleSi).
    *     campos: [
    *       { id: 'SERIE', etiqueta: 'Serie del sensor', requerido: true, ayuda: '…', mayusculas: true,
@@ -496,9 +500,15 @@
         return el ? el.value : '';
       }
 
+      let encontradoBuscar = null;   // { valor, llave }: lo último que encontró buscar.cargar
+
       function getValores() {
         const valores = {};
         if (buscar) valores[buscar.campo] = visible(buscar) ? elemento(buscar.campo).value.trim() : '';
+        if (buscar && buscar.llave) {
+          valores[buscar.llave.campo] = encontradoBuscar && valores[buscar.campo] && encontradoBuscar.valor === valores[buscar.campo]
+            ? encontradoBuscar.llave : '';
+        }
         campos.forEach((c) => {
           if (c.tipo === 'archivo') return;
           // Lo oculto no se envía: si la respuesta cambió, esos datos ya no aplican
@@ -747,10 +757,12 @@
         const consultar = async () => {
           const valor = campoBuscar.value.trim();
           pedido = valor;
+          encontradoBuscar = null;
           if (!valor) { pintarFicha(null); setError(buscar.campo, null); actualizarPanel(); return; }
           try {
             const datos = await buscar.cargar(valor);
             if (pedido !== valor) return;          // el usuario siguió escribiendo
+            if (datos && buscar.llave) encontradoBuscar = { valor: valor, llave: String(buscar.llave.de(datos) || '') };
             if (!datos) {
               pintarFicha(null);
               // Si la búsqueda es opcional, no encontrar NO es un error: se captura a mano

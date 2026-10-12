@@ -23,7 +23,15 @@
    *   al mostrarla: DocumentosVehiculo.cargar(elementoDeLaPestaña)
    */
   const DocumentosVehiculo = (function () {
-    const yaLeidos = {};          // NUCO → respuesta (mientras la página siga abierta)
+    const yaLeidos = {};          // NUCO → promesa de la respuesta (mientras la página siga abierta)
+
+    /** Pedirla ya (al abrir la ficha, en segundo plano): cuando se abra la pestaña normalmente ya llegó */
+    function precargar(nucco) {
+      const n = String(nucco || '');
+      if (!n || yaLeidos[n]) return;
+      yaLeidos[n] = callServer('apiDocumentosVehiculo', state.token, n).then((t) => JSON.parse(t));
+      yaLeidos[n].catch(() => { delete yaLeidos[n]; });
+    }
     const ICONO = { FACTURA: 'receipt', SEGURO: 'shield-check', ALTA: 'badge-check', TARJETA: 'id-card',
       RESPONSIVA: 'file-signature', TENENCIA: 'landmark' };
 
@@ -94,8 +102,8 @@
       el.dataset.cargado = '1';
       const nucco = el.dataset.docsVehiculo;
       try {
-        const exp = yaLeidos[nucco] || JSON.parse(await callServer('apiDocumentosVehiculo', state.token, nucco));
-        yaLeidos[nucco] = exp;
+        precargar(nucco);
+        const exp = await yaLeidos[nucco];
         if (document.body.contains(el)) pintar(el, exp);
       } catch (err) {
         delete el.dataset.cargado;
@@ -106,6 +114,6 @@
     /** Después de subir un documento desde la ficha: la próxima vez se vuelve a leer Drive */
     function olvidar(nucco) { delete yaLeidos[String(nucco || '')]; }
 
-    return { contenedor, cargar, olvidar };
+    return { contenedor, cargar, precargar, olvidar };
   })();
 </script>

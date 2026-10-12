@@ -326,6 +326,7 @@
           })),
           cargar: (folio) => callServer('apiBuscarVehiculoPorFolio', state.token, folio),
           nucco: { vehiculos: () => callServerCacheado('apiListarVehiculosBasico', state.token) },
+          llave: { campo: 'ID_VEHICULO', de: (v) => v['ID'] },
           ficha: (v) => ({
             titulo: v['PLACA'] || 'Sin placa',
             subtitulo: [v['MARCA'], v['LINEA VEHICULO'], v['MODELO']].filter(Boolean).join(' · '),

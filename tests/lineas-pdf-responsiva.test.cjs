@@ -16,9 +16,11 @@ function parrafo(valor, interlineado, letra) {
     getNumChildren: () => p.hijos.length, getChild: (i) => p.hijos[i], getParent: () => p.padre,
     getPreviousSibling: () => { const i = p.padre.hijos.indexOf(p); return i > 0 ? p.padre.hijos[i - 1] : null; },
     getLineSpacing: () => p.interlineado, setLineSpacing(v) { p.interlineado = v; return p; },
+    setSpacingBefore(v) { p.antes = v; return p; }, setSpacingAfter(v) { p.despues = v; return p; },
     getAttributes: () => ({ FONT_SIZE: p.letra || null }),
+    setAttributes(a) { if ('FONT_SIZE' in a) p.letra = a.FONT_SIZE; return p; },
     removeFromParent() { p.padre.hijos.splice(p.padre.hijos.indexOf(p), 1); p.padre = null; },
-    appendPageBreak() { p.hijos.push({ getType: () => 'PAGE_BREAK' }); },
+    appendPageBreak() { const s = { getType: () => 'PAGE_BREAK' }; p.hijos.push(s); return s; },
   };
   if (valor) p.hijos.push(Object.assign(texto(valor, Array(valor.length).fill({})), { getParent: () => p }));
   return p;
@@ -52,7 +54,8 @@ function texto(valor, formatos) {
   };
 }
 
-function generar(plantillaId, elemento, cuerpoArmado) {
+/** `hojas`: las que trae cada PDF exportado (la primera exportación, la segunda…). */
+function generar(plantillaId, elemento, cuerpoArmado, registro, hojas) {
   const pagina = {};
   const cuerpo = Object.assign(cuerpoArmado || {
     getType: () => 'CONTAINER', getNumChildren: () => 1, getChild: () => elemento, findText: () => null,
@@ -61,7 +64,15 @@ function generar(plantillaId, elemento, cuerpoArmado) {
     setMarginTop(v) { pagina.arriba = v; return this; }, setMarginBottom(v) { pagina.abajo = v; return this; },
     setMarginLeft(v) { pagina.izq = v; return this; }, setMarginRight(v) { pagina.der = v; return this; },
   });
-  const copia = { getId: () => 'tmp', getAs: () => ({ setName: () => ({}) }), setTrashed: () => {} };
+  const exportados = [];
+  const copia = {
+    getId: () => 'tmp', setTrashed: () => {},
+    getAs: () => {
+      const n = (hojas || [2])[Math.min(exportados.length, (hojas || [2]).length - 1)];
+      exportados.push(n);
+      return { setName: () => ({}), getDataAsString: () => '<</Type /Pages /Count ' + n + '>>' + '<</Type /Page>>'.repeat(n) };
+    },
+  };
   const contexto = vm.createContext({
     DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
     DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
@@ -69,13 +80,14 @@ function generar(plantillaId, elemento, cuerpoArmado) {
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8') + '\nthis.pdf = LineasPdf;', contexto);
   const carpeta = { createFile: () => ({ getId: () => 'pdf', getName: () => 'r.pdf', getUrl: () => 'url', setSharing: () => {} }) };
-  contexto.pdf.generarPdfDesdePlantilla(plantillaId(contexto.pdf.PLANTILLAS), { 'No TELEFONO': '4421234567' }, {}, carpeta, 'r.pdf');
+  contexto.pdf.generarPdfDesdePlantilla(plantillaId(contexto.pdf.PLANTILLAS), registro || { 'No TELEFONO': '4421234567' }, {}, carpeta, 'r.pdf');
+  pagina.exportados = exportados;
   return pagina;
 }
 
 test('la responsiva y la inspección conservan la página y los márgenes de su plantilla', () => {
-  assert.deepEqual(generar((p) => p.RESPONSIVA_CELULAR, texto('x', [{}])), {});
-  assert.deepEqual(generar((p) => p.INSPECCION_CELULAR, texto('x', [{}])), {});
+  assert.deepEqual(generar((p) => p.RESPONSIVA_CELULAR, texto('x', [{}])), { exportados: [2] });
+  assert.deepEqual(generar((p) => p.INSPECCION_CELULAR, texto('x', [{}])), { exportados: [2] });
 });
 
 function cuerpoResponsiva() {
@@ -101,8 +113,47 @@ test('responsiva: la hoja 2 empieza en las sanciones (salto de página en lugar 
   generar((p) => p.RESPONSIVA_CELULAR, null, d.cuerpo);
   assert.deepEqual(d.cuerpo.hijos, [d.tabla, d.vacios[0], d.titulo]);
   assert.deepEqual(d.vacios[0].hijos.map((h) => h.getType()), ['PAGE_BREAK']);
-  // Vacío: 11 pt, como en el HTML del AppSheet
-  assert.ok(Math.abs(17 * d.vacios[0].interlineado * 1.211 - 11) < 1e-9);
+});
+
+test('responsiva: el renglón del salto casi no mide, para que quepa en la hoja 1 aunque venga llena (NUCO 1137)', () => {
+  const d = cuerpoResponsiva();
+  const pagina = generar((p) => p.RESPONSIVA_CELULAR, null, d.cuerpo);
+  assert.equal(d.vacios[0].letra, 1);
+  assert.equal(d.vacios[0].interlineado, 1);
+  assert.equal(d.vacios[0].antes, 0);
+  assert.equal(d.vacios[0].despues, 0);
+  assert.deepEqual(pagina.exportados, [2], 'con 2 hojas se exporta una sola vez');
+});
+
+function cuerpoConTabla() {
+  // Lo que deja ajustarComoAppSheet_ y vuelve a abrir quitarSalto_
+  const d = cuerpoResponsiva();
+  d.cuerpo.getChildIndex = (h) => d.cuerpo.hijos.indexOf(h);
+  return d;
+}
+
+test('responsiva: si la hoja 1 no alcanzó (3 hojas), se quita el salto y se exporta de nuevo', () => {
+  const d = cuerpoConTabla();
+  const pagina = generar((p) => p.RESPONSIVA_CELULAR, null, d.cuerpo, null, [3, 2]);
+  assert.deepEqual(pagina.exportados, [3, 2]);
+  assert.deepEqual(d.cuerpo.hijos, [d.tabla, d.titulo], 'sin el párrafo del salto: el título sigue a la tabla');
+});
+
+test('responsiva: con varios responsables, el nombre bajo la firma va en 8 pt; el párrafo «Yo, …» no cambia', () => {
+  const yo = parrafo('Yo, <<RESPONSABLE>> identificándome', 1.5, 9);
+  const bajoFirma = parrafo('<<RESPONSABLE>>', 1.15, 11);
+  const d = cuerpoResponsiva();
+  d.tabla.hijos.push(yo, bajoFirma);
+  yo.padre = d.tabla; bajoFirma.padre = d.tabla;
+  generar((p) => p.RESPONSIVA_CELULAR, null, d.cuerpo, { RESPONSABLE: 'ANA PEREZ / LUIS GOMEZ' });
+  assert.equal(bajoFirma.letra, 8);
+  assert.equal(yo.letra, 9);
+
+  const uno = cuerpoResponsiva();
+  const soloUno = parrafo('<<RESPONSABLE>>', 1.15, 11);
+  uno.tabla.hijos.push(soloUno); soloUno.padre = uno.tabla;
+  generar((p) => p.RESPONSIVA_CELULAR, null, uno.cuerpo, { RESPONSABLE: 'ANA PEREZ' });
+  assert.equal(soloUno.letra, 11, 'con un solo responsable, como el AppSheet');
 });
 
 test('la inspección no cambia su interlineado', () => {

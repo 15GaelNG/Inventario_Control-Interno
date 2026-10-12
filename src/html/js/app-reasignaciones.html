@@ -200,7 +200,10 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Registrando…');
       try {
-        await callServer('apiCrearReasignacionVehicular', state.token, CamposHoja.recolectar(CAMPOS_REASIGNACION, 'rv'));
+        const nueva = CamposHoja.recolectar(CAMPOS_REASIGNACION, 'rv');
+        // El vehículo va por su ID (el folio escrito solo sirve para encontrarlo)
+        nueva['ID VEHICULO'] = (vehiculosPorFolio[String(nueva['Folio Vehiculo'] || '').trim()] || {}).ID || '';
+        await callServer('apiCrearReasignacionVehicular', state.token, nueva);
         ev.target.reset();   // también vacía VIN y los datos del saliente
         document.getElementById('rv-fecha-de-reasignacion').value = hoyISO();
         // El vehículo reasignado ya trae otro responsable — refresca el

@@ -31,9 +31,15 @@ const LineasPdf = (function () {
   // interlineado (1.0 / 1.15 / 1.5) se aplica sobre el tamaño de la letra; Google Docs lo aplica sobre la altura
   // natural de la fuente (Century Gothic: 1.211 veces la letra) y la responsiva salía en 3 hojas (5-oct). Un párrafo
   // vacío en ese HTML mide 11 pt. Sin interlineado propio, el párrafo toma el del estilo Normal (responsiva: 1.0). La
-  // hoja 2 empieza en las sanciones: en el AppSheet el título cae ahí por espacio.
+  // hoja 2 empieza en las sanciones: en el AppSheet el título cae ahí por espacio. `hojas`: si el PDF sale con más, la
+  // hoja 1 no alcanzó y el salto se quita (ver generarPdfDesdePlantilla).
   const COMO_APPSHEET = {
-    [PLANTILLAS.RESPONSIVA_CELULAR]: { altoFuente: 1.211, altoVacio: 11, interlineadoNormal: 1, saltoAntesDe: 'SANCIONES POR MAL MANEJO' },
+    [PLANTILLAS.RESPONSIVA_CELULAR]: { altoFuente: 1.211, altoVacio: 11, interlineadoNormal: 1, saltoAntesDe: 'SANCIONES POR MAL MANEJO', hojas: 2 },
+  };
+  // Con varios responsables, sus nombres bajo la firma van en letra más chica: en 11 pt, dos nombres ocupaban tres
+  // renglones y la hoja 1 no alcanzaba (NUCO 1137, 12-oct). La etiqueta es la del párrafo que solo tiene el nombre.
+  const NOMBRES_BAJO_FIRMA = {
+    [PLANTILLAS.RESPONSIVA_CELULAR]: { etiqueta: '<<RESPONSABLE>>', columna: 'RESPONSABLE', letra: 8 },
   };
 
   // ---------------- Evaluador de expresiones AppSheet (subconjunto) ----------------
@@ -216,13 +222,19 @@ const LineasPdf = (function () {
     try {
       const doc = DocumentApp.openById(copia.getId());
       const secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean);
+      if (NOMBRES_BAJO_FIRMA[plantillaId]) achicarNombresBajoFirma_(doc.getBody(), NOMBRES_BAJO_FIRMA[plantillaId], registro);
       secciones.forEach((seccion) => {
         procesarBloquesIf_(seccion, registro, avisos);
         reemplazarEtiquetas_(seccion, registro, imagenes || {}, avisos);
       });
-      if (COMO_APPSHEET[plantillaId]) ajustarComoAppSheet_(doc.getBody(), COMO_APPSHEET[plantillaId], avisos);
+      const ajuste = COMO_APPSHEET[plantillaId];
+      if (ajuste) ajustarComoAppSheet_(doc.getBody(), ajuste, avisos);
       doc.saveAndClose();
-      const pdf = DriveUtils.marcarAutor(carpeta.createFile(copia.getAs('application/pdf').setName(nombrePdf)));
+      let blob = copia.getAs('application/pdf');
+      // La hoja 1 no alcanzó (p. ej. muchos responsables): sin el salto, las sanciones siguen donde termina y no queda
+      // una hoja en blanco
+      if (ajuste && ajuste.hojas && paginas_(blob) > ajuste.hojas && quitarSalto_(copia.getId())) blob = copia.getAs('application/pdf');
+      const pdf = DriveUtils.marcarAutor(carpeta.createFile(blob.setName(nombrePdf)));
       // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
       // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
       if (!sinCompartir) pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
@@ -245,6 +257,7 @@ const LineasPdf = (function () {
   /** La copia rellena queda con las alturas de la impresión del AppSheet (ver COMO_APPSHEET). */
   function ajustarComoAppSheet_(body, ajuste, avisos) {
     const T = DocumentApp.ElementType;
+    let conSalto = null;
     // Salto de página antes del título de la hoja 2; los renglones vacíos que lo separaban de la hoja 1 se quitan
     if (ajuste.saltoAntesDe) {
       let titulo = null;
@@ -257,7 +270,7 @@ const LineasPdf = (function () {
         const vacios = [];
         for (let p = titulo.getPreviousSibling(); p && p.getType() === T.PARAGRAPH && vacio_(p); p = p.getPreviousSibling()) vacios.unshift(p);
         // Después de una tabla Docs exige un párrafo: el primero se queda y lleva el salto
-        const conSalto = vacios.length ? vacios.shift() : body.insertParagraph(body.getChildIndex(titulo), '');
+        conSalto = vacios.length ? vacios.shift() : body.insertParagraph(body.getChildIndex(titulo), '');
         vacios.forEach((p) => p.removeFromParent());
         conSalto.appendPageBreak();
       }
@@ -272,6 +285,49 @@ const LineasPdf = (function () {
         el.setLineSpacing(ajuste.altoVacio / (letra * ajuste.altoFuente));
       } else {
         el.setLineSpacing((Number(el.getLineSpacing()) || ajuste.interlineadoNormal) / ajuste.altoFuente);
+      }
+    };
+    recorrer(body);
+    // El renglón del salto queda en la hoja 1 y casi no mide: con 11 pt no cabía cuando la hoja 1 venía llena y él solo
+    // hacía una hoja en blanco (NUCO 1137, 12-oct). La hoja 2 empieza igual en el título.
+    if (conSalto) {
+      conSalto.setAttributes({ [DocumentApp.Attribute.FONT_SIZE]: 1 });
+      conSalto.setLineSpacing(1).setSpacingBefore(0).setSpacingAfter(0);
+    }
+  }
+
+  /** Hojas del PDF (Docs las escribe sin comprimir: «/Type /Page» por hoja). */
+  function paginas_(blob) {
+    return (blob.getDataAsString('ISO-8859-1').match(/\/Type\s*\/Page(?![a-z])/g) || []).length;
+  }
+
+  /** Quita de la copia el párrafo con el salto de página (ver ajustarComoAppSheet_). Devuelve si lo encontró. */
+  function quitarSalto_(docId) {
+    const doc = DocumentApp.openById(docId);
+    const body = doc.getBody();
+    const T = DocumentApp.ElementType;
+    let quitado = false;
+    for (let i = body.getNumChildren() - 1; i >= 0 && !quitado; i--) {
+      const el = body.getChild(i);
+      if (el.getType() !== T.PARAGRAPH) continue;
+      for (let j = 0; j < el.getNumChildren(); j++) {
+        if (el.getChild(j).getType() === T.PAGE_BREAK) { el.removeFromParent(); quitado = true; break; }
+      }
+    }
+    doc.saveAndClose();
+    return quitado;
+  }
+
+  /** Con varios nombres (« / »), el párrafo que solo lleva la etiqueta del nombre va en letra más chica. */
+  function achicarNombresBajoFirma_(body, cfg, registro) {
+    if (aTexto_(valorColumna_(registro, cfg.columna)).indexOf(' / ') < 0) return;
+    const T = DocumentApp.ElementType;
+    const recorrer = (el) => {
+      const t = el.getType();
+      if (t === T.PARAGRAPH || t === T.LIST_ITEM) {
+        if (el.getText().trim() === cfg.etiqueta) el.setAttributes({ [DocumentApp.Attribute.FONT_SIZE]: cfg.letra });
+      } else if (el.getNumChildren) {
+        for (let i = 0; i < el.getNumChildren(); i++) recorrer(el.getChild(i));
       }
     };
     recorrer(body);

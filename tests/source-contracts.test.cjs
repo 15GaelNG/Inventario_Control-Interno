@@ -61,7 +61,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   const inicioLineas = app.indexOf("id: 'lineas'");
   const lineas = app.slice(inicioLineas, app.indexOf('\n    },', inicioLineas));
   // Un solo inventario de accesorios: el de Líneas (el general de jorge se retiró el 1-oct)
-  assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
+  assert.equal((lineas.match(/Inventario de accesorios/g) || []).length, 1);
   assert.doesNotMatch(app, /vista: 'accesorios'/);
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
@@ -80,7 +80,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
   });
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos'[^}]*\}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos'[^}]*\}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos', ocultos)
     .forEach((route) => assert.match(app, new RegExp(`vista: '${route}'[^\\n]*plantilla: 'tpl-`), `falta montar ${route}`));
@@ -387,8 +387,9 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso);
   // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración);
   // AdquisicionVehicularService, el índice propio de Adquisición Vehicular (AdquisicionVehicularIndice.gs lo
-  // llena) -- no es la lista de un módulo, es una búsqueda por serie
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'AdquisicionVehicularService.gs'];
+  // llena) -- no es la lista de un módulo, es una búsqueda por serie; y TemporadaService la ofrenda de Día
+  // de Muertos (no es un módulo: cualquiera con sesión enciende su vela)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'AdquisicionVehicularService.gs', 'TemporadaService.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
@@ -1614,10 +1615,8 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   const src = read('src/services/lineas/LineasResguardos.gs');
   const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
   const Notif = { _diaFinPlan: (v) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v || '')); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : ''; } };
-  // leerConfig_ (config/Entornos.gs) da los aprobadores de resguardos
-  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'leerConfig_', 'Utilities',
-    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {},
-    () => 'pau@ciudadmaderas.com, suplente@ciudadmaderas.com', {});
+  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'Utilities',
+    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {}, {});
 
   // Datos de la persona en blanco (eran N/A; usuario, 4-oct); PIN y cuenta solo si tenían algo (NO APLICA se respeta);
   // el patrón se borra
@@ -1650,10 +1649,15 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   assert.equal(R.asesorPara('TELCEL', 'FRACCIONADORA LA ROMITA SA DE CV'), 'WILBERTO');
   assert.equal(R.asesorPara('TELCEL', 'GPH SERVICIOS CONDOMINALES'), 'ALFREDO');
 
-  // Quién aprueba: la Script Property o ADMIN
-  assert.equal(R.puedeAprobar({ correo: 'PAU@ciudadmaderas.com' }), true);
+  // Quién aprueba: quien edita Resguardos y cancelaciones (Pau por correo, y ADMIN); el área de Líneas solo la ve y
+  // manda desde Líneas telefónicas, con el permiso de ese módulo (usuario, 12-oct)
+  assert.equal(R.puedeAprobar({ correo: 'pau@ciudadmaderas.com', puedeAprobar: true }), true);
   assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com' }), false);
-  assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com', esAdmin: true }), true);
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /puedeAprobar: permisos\[MODULO_RESGUARDOS\] === Permisos\.EDICION/);
+  ['formularioResguardo', 'mandarResguardo', 'mandarCancelacion'].forEach((f) =>
+    assert.match(tel, new RegExp('function ' + f + '\\(token[^)]*\\) \\{\\s+const sesion = operar_\\(token\\);'), f + ' pide editar Líneas telefónicas'));
+  assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
   assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO']);
 
   // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
@@ -2281,7 +2285,7 @@ test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga tam
   const sinRevisar = llamadas
     .filter((m) => !m[2].includes("Config.exigirEncendido('helpdesk')")).map((m) => m[1]);
   assert.deepEqual(sinRevisar, [], 'llamadas de Help Desk sin Config.exigirEncendido');
-  assert.ok(read('src/html/Index.html').includes('<body data-apagados="<?= apagados ?>">'), 'Index.html pasa la lista al menú');
+  assert.match(read('src/html/Index.html'), /<body data-apagados="<\?= apagados \?>"[ >]/, 'Index.html pasa la lista al menú');
   assert.ok(read('src/Router.gs').includes('template.apagados = JSON.stringify(Config.apagados())'), 'Router llena la lista');
 });
 
@@ -2318,6 +2322,36 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
 });
 
+test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {
+  const index = read('src/html/Index.html');
+  const app = read('src/html/js/app.html');
+  const css = read('src/html/styles.html');
+  assert.match(index, /<nav id="sidebar" class="collapsed">/);
+  assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
+  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
+  assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
+  // Abierto mide 308px (caben «Resguardos y cancelaciones» y «Reasignaciones vehiculares») pero ocupa 92px: queda
+  // encima del contenido, por debajo de los modales. En celular y tableta, el mismo ancho
+  assert.match(css, /#sidebar \{\s*width: 308px;/);
+  assert.match(css, /position: relative; z-index: 450; margin-right: -216px;/);
+  assert.match(read('src/html/shell-movil.html'), /z-index: 900; width: 308px; max-width: 86vw;/);
+  assert.match(css, /#sidebar\.collapsed \{ width: 92px; margin-right: 0; box-shadow: none; \}/);
+  // El subitem se desliza sin que su contenedor le corte la esquina; los módulos sueltos llevan la placa del ícono
+  assert.match(css, /padding: 2px 4px 2px 16px; margin-left: 24px;/);
+  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: 9px;/);
+  // Solo la primera letra en mayúscula
+  const etiquetas = [...app.slice(app.indexOf('const NAV_GRUPOS'), app.indexOf('function vistaDe')).matchAll(/etiqueta: '([^']+)'/g)].map((m) => m[1]);
+  assert.ok(etiquetas.includes('Líneas telefónicas') && etiquetas.includes('Gestión de activos') && etiquetas.includes('Help desk'));
+  etiquetas.forEach((e) => assert.doesNotMatch(e.replace(/ - Líneas$/, ''), /\s\p{Lu}/u, e));
+});
+
+test('Correcciones de líneas y Sistemas de Líneas apagados en producción y en el DEV de Emmanuel (12-oct)', () => {
+  const entornos = read('src/config/Entornos.gs');
+  const bloque = (id) => entornos.slice(entornos.indexOf("'" + id + "'"), entornos.indexOf('\n  },', entornos.indexOf("'" + id + "'")));
+  [bloque('1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'), bloque('1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa')]
+    .forEach((b) => ['correcciones-lineas', 'sistemas-lineas'].forEach((v) => assert.match(b, new RegExp("MODULOS_APAGADOS: '[^']*" + v))));
+});
+
 test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.boton, no hechos a mano', () => {
   const dir = path.join(__dirname, '..', 'src', 'html', 'js');
   const malos = [];
@@ -2328,4 +2362,50 @@ test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.bo
     if (/ficha-tabla-wrap/.test(txt)) malos.push(f + ': tabla de ficha hecha a mano (usa TablaFicha.html)');
   }
   assert.deepEqual(malos, []);
+});
+
+test('la ficha y las altas de Vehículos ligan por el ID del vehículo, nunca por folio', () => {
+  // 12-oct-2026: "serie o NUCO, jamás folio" (el folio se reasigna; 152 verificaciones quedaron en otro vehículo).
+  const api = read('src/ClientApi.gs');
+  const i = api.indexOf('function apiFichaVehiculo(');
+  const ficha = api.slice(i, api.indexOf('\n}', i));
+  assert.match(ficha, /VehiculosService\.buscar\(token/, 'la ficha busca el vehículo por su ID');
+  const porFolio = ficha.split(/\r?\n/).filter((l) => /listarPorFolio\(/.test(l) && !/HologramasService/.test(l));
+  assert.deepEqual(porFolio, [], 'cada pestaña de la ficha (salvo Hologramas, aparte) se pide con listarPorVehiculo');
+  assert.match(read('src/html/js/app.html'), /callServerListaCacheada\('apiFichaVehiculo', state\.token, vResumen\.ID_VEHICULO/);
+  // Cada alta resuelve el vehículo con lo que manda el formulario: primero su ID
+  [
+    ['src/services/VerificacionesService.gs', /datos\.ID_VEHICULO \|\| datos\.FOLIO/],
+    ['src/services/SensoresService.gs', /datos\.ID_VEHICULO \|\| datos\.FOLIO/],
+    ['src/services/IncidenciasService.gs', /ctx\.datos\.ID_VEHICULO/],
+    ['src/services/InspeccionesService.gs', /p\.ID_VEHICULO/],
+    ['src/services/ReasignacionesVehicularesService.gs', /datos\['ID VEHICULO'\] \|\| datos\['Folio Vehiculo'\]/],
+    ['src/services/ResponsivaVehicularService.gs', /\['ID VEHICULO'\] \|\| \(datos \|\| \{\}\)\['FOLIO VEHICULO'\]/],
+    ['src/services/AdherenteVehicularService.gs', /\['ID VEHICULO'\] \|\| \(datos \|\| \{\}\)\['FOLIO VEHICULO'\]/],
+  ].forEach(([archivo, patron]) => assert.match(read(archivo), patron, archivo + ': el vehículo por su ID'));
+  // Y ninguna busca el vehículo directo por folio para ligar
+  ['ReasignacionesVehicularesService', 'ResponsivaVehicularService', 'AdherenteVehicularService'].forEach((s) => {
+    assert.doesNotMatch(read('src/services/' + s + '.gs'), /VehiculosService\.buscarPorFolio\(/, s);
+  });
+});
+
+test('lo nuevo de Vehículos (inspección, verificación, responsiva de sensor, firmas) se guarda en el expediente del NUCO', () => {
+  // 12-oct-2026, plan "Vehículos: todo por NUCO", fase 2: la hoja guarda la liga; las carpetas sueltas solo para un vehículo sin NUCCO
+  const casos = [
+    ['InspeccionesService.gs', /ExpedienteNuco\.carpetaInspeccion\(/],
+    ['InspeccionesService.gs', /ExpedienteNuco\.FIRMAS_Y_DIAGRAMAS/],
+    ['VerificacionesService.gs', /ExpedienteNuco\.carpetaVerificacion\(/],
+    ['SensoresService.gs', /ExpedienteNuco\.SENSORES/],
+    ['ResponsivaVehicularService.gs', /ExpedienteNuco\.FIRMAS\]/],
+    ['AdherenteVehicularService.gs', /ExpedienteNuco\.FIRMAS\]/],
+  ];
+  casos.forEach(([f, re]) => assert.match(read('src/services/' + f), re, f));
+  ['InspeccionesService.gs', 'VerificacionesService.gs', 'SensoresService.gs'].forEach((f) => {
+    const s = read('src/services/' + f);
+    assert.match(s, /ExpedienteNuco\.tieneNuco\(/, f + ': la carpeta de antes, solo sin NUCCO');
+    assert.match(s, /ExpedienteNuco\.guardar\(/, f + ': guarda con ExpedienteNuco.guardar (nombre, autor, copia)');
+  });
+  // Los lectores aceptan la liga (lo nuevo) y la ruta (lo viejo)
+  assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRuta\(ruta, carpetasIds\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
+  assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRutaProfunda\(ruta, raizId\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
 });

@@ -257,6 +257,14 @@ const HojaServicio = (function () {
     return tope ? lista.slice(0, tope) : lista;
   }
 
+  /**
+   * Los renglones de UN vehículo, por su ID (la ficha de Vehículos). Convención de la familia: la fila() de cada
+   * servicio expone el ID del vehículo como ID_VEHICULO (leído de la columna 'ID VEHICULO'). Nunca por folio.
+   */
+  function listarPorVehiculo(def, token, idVehiculo, opciones) {
+    return listarPor(def, token, 'ID_VEHICULO', idVehiculo, opciones);
+  }
+
   /** Todas las columnas de todos los renglones (exportar / "Vista"), sin caché */
   function completo(def, token) {
     Permisos.puedeLeer(token, def.modulo);
@@ -475,7 +483,7 @@ const HojaServicio = (function () {
 
   return {
     // leer y escribir
-    listar, listarPor, completo, buscarPorId, crear, actualizar, eliminar, calentar,
+    listar, listarPor, listarPorVehiculo, completo, buscarPorId, crear, actualizar, eliminar, calentar,
     // la hoja, para lo propio de cada servicio
     hoja, libro, nombreHoja,
     // valores
