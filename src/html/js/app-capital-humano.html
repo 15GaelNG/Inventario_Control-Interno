@@ -2,13 +2,13 @@
   /**
    * Administración > Capital humano (views/capital-humano.html). Se sube el Excel de CH:
    *   1. se lee EN EL NAVEGADOR con SheetJS (ExportarExcel.cargarLibreria): las fechas como dd/mm/yyyy, los números tal
-   *      cual, y TELEFONO / NÚMERO DE CUENTA se quitan aquí mismo (nunca viajan);
+   *      cual, y el NÚMERO DE CUENTA se quita aquí mismo (nunca viaja; el teléfono sí se sube);
    *   2. viaja comprimido (gzip, base64) a CapitalHumano.cargar: primero el ensayo, luego "Aplicar".
    * El servidor combina por empleo (número + nombre): cada persona conserva su ID PERSONA, nadie se borra.
    */
   const CapitalHumanoVista = (function () {
     // Las mismas que CapitalHumano.SENSIBLES (servidor): aquí se quitan antes de mandar
-    const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'TELEFONO', 'TELÉFONO'];
+    const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA'];
     const OBLIGATORIAS = ['No EMPLEADO', 'NOMBRE COMPLETO', 'STATUS', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO'];
     const limpio = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
     const esSensible = (c) => SENSIBLES.indexOf(limpio(c).toUpperCase()) !== -1;

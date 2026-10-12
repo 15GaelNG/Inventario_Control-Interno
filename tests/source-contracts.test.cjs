@@ -2440,5 +2440,8 @@ test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS 
   // Ya no hay copias del cálculo
   ['VehiculosService.gs', 'CajasChicasService.gs'].forEach((f) => assert.doesNotMatch(read('src/services/' + f), /function conPersona_/, f));
   // El navegador quita lo sensible antes de mandar el Excel
-  assert.match(read('src/html/js/app-capital-humano.html'), /const SENSIBLES = \['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'TELEFONO', 'TELÉFONO'\];/);
+  // (la cuenta, sí; el teléfono se queda: usuario, 12-oct-2026). Las dos listas, la del navegador y la del servidor, iguales
+  const sensibles = (s) => /const SENSIBLES = (\[[^\]]*\]);/.exec(s)[1];
+  assert.equal(sensibles(read('src/html/js/app-capital-humano.html')), "['NÚMERO DE CUENTA', 'NUMERO DE CUENTA']");
+  assert.equal(sensibles(read('src/services/CapitalHumano.gs')), "['NÚMERO DE CUENTA', 'NUMERO DE CUENTA']");
 });

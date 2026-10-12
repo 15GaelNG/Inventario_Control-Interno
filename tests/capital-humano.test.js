@@ -237,8 +237,9 @@ console.log('\n6. Columnas sensibles en la hoja pegada');
   const hojas = escenario();
   const h = hojas['COLABORADORES ACTUALIZADO'];
   h.datos[0] = h.datos[0].concat(['NÚMERO DE CUENTA', 'TELEFONO']);
+  // (el TELEFONO sí se queda desde el 12-oct-2026: solo la cuenta es sensible)
   const r = cargar(hojas).identificar();
-  ok(/datos sensibles que no deben estar en el libro: NÚMERO DE CUENTA, TELEFONO/.test(r), 'avisa que hay que borrarlas');
+  ok(/datos sensibles que no deben estar en el libro: NÚMERO DE CUENTA\./.test(r), 'avisa que hay que quitar la cuenta (el teléfono no)');
 }
 
 console.log('\n7. El catálogo: la hoja de CH es externa y PERSONAS es el catálogo de IDs (PER-)');
@@ -382,7 +383,7 @@ console.log('\n13. cargar: el ensayo cuenta y no escribe');
   ok(r.ensayo && r.nuevos === 1 && r.empleosNuevos === 1 && r.personasNuevas === 1 && r.faltan === 0,
     'un renglón nuevo, una persona nueva, nadie falta: ' + JSON.stringify([r.nuevos, r.empleosNuevos, r.personasNuevas, r.faltan]));
   ok(JSON.stringify(hojas['COLABORADORES ACTUALIZADO'].datos) === antes, 'no tocó la hoja');
-  ok(r.quitadas.indexOf('TELEFONO') !== -1 && r.quitadas.indexOf('NÚMERO DE CUENTA') !== -1, 'avisa qué columnas sensibles no entran');
+  ok(r.quitadas.join() === 'NÚMERO DE CUENTA', 'avisa que la cuenta no entra (el teléfono sí)');
 }
 
 console.log('\n14. cargar: cada ID se queda con su empleo aunque el archivo venga en otro orden');
@@ -397,8 +398,8 @@ console.log('\n14. cargar: cada ID se queda con su empleo aunque el archivo veng
   ok(Object.keys(p0).every((k) => p[k] && p[k].id === p0[k].id), 'ningún ID cambió (el archivo venía al revés)');
   ok(p['CIB09999|JUAN FULGENCIO'].id === p0['HA00241|JUAN FULGENCIO'].id, 'el número nuevo de Juan es la misma persona');
   const enc = hojas['COLABORADORES ACTUALIZADO'].datos[0];
-  ok(enc.indexOf('TELEFONO') === -1 && enc.indexOf('NÚMERO DE CUENTA') === -1, 'lo sensible no entró a la hoja');
-  ok(!JSON.stringify(hojas['COLABORADORES ACTUALIZADO'].datos).includes('5512345678'), 'ni sus valores');
+  ok(enc.indexOf('NÚMERO DE CUENTA') === -1 && enc.indexOf('TELEFONO') !== -1, 'la cuenta no entró a la hoja; el teléfono sí');
+  ok(!JSON.stringify(hojas['COLABORADORES ACTUALIZADO'].datos).includes('0123456789'), 'ni el valor de la cuenta');
   ok(enc[enc.length - 1] === 'ID PERSONA', 'el ID va al final');
   ok(hojas['COLABORADORES ACTUALIZADO'].protecciones.length === 1 && hojas['COLABORADORES ACTUALIZADO'].protecciones[0].aviso,
     'la pestaña queda protegida (aviso: no se pega a mano)');

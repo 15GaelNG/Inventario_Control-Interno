@@ -10,7 +10,7 @@ ACTUALIZADO y la lista se **sube desde Administración > Capital humano** (solo 
   HojaServicio; ID PERSONA en Vehículos, Caja Chica, ASIGNACIONES (Líneas), Responsiva, Adherente, Reasignaciones,
   Inspección (`ID PERSONA CONDUCTOR`), Uber, Arqueos y Tickets; listas solo de activos.
 - Fase 2 (código) ✅ en `ayrton` — el módulo de carga.
-- Pendiente: master + despliegue; **la primera carga en prod quita TELEFONO y NÚMERO DE CUENTA de la hoja**; Fase 4
+- Pendiente: master + despliegue; **la primera carga en prod quita NÚMERO DE CUENTA de la hoja** (el TELEFONO se queda, usuario 12-oct); Fase 4
   (llenar el ID PERSONA de lo existente con Salud > "Actualizar", y ocultar PERSONAS y COLABORADORES dos semanas).
 - **Mientras tanto no pegar la lista a mano** en COLABORADORES ACTUALIZADO (desalinea la columna AA).
 
