@@ -2351,3 +2351,24 @@ test('la ficha y las altas de Vehículos ligan por el ID del vehículo, nunca po
     assert.doesNotMatch(read('src/services/' + s + '.gs'), /VehiculosService\.buscarPorFolio\(/, s);
   });
 });
+
+test('lo nuevo de Vehículos (inspección, verificación, responsiva de sensor, firmas) se guarda en el expediente del NUCO', () => {
+  // 12-oct-2026, plan "Vehículos: todo por NUCO", fase 2: la hoja guarda la liga; las carpetas sueltas solo para un vehículo sin NUCCO
+  const casos = [
+    ['InspeccionesService.gs', /ExpedienteNuco\.carpetaInspeccion\(/],
+    ['InspeccionesService.gs', /ExpedienteNuco\.FIRMAS_Y_DIAGRAMAS/],
+    ['VerificacionesService.gs', /ExpedienteNuco\.carpetaVerificacion\(/],
+    ['SensoresService.gs', /ExpedienteNuco\.SENSORES/],
+    ['ResponsivaVehicularService.gs', /ExpedienteNuco\.FIRMAS\]/],
+    ['AdherenteVehicularService.gs', /ExpedienteNuco\.FIRMAS\]/],
+  ];
+  casos.forEach(([f, re]) => assert.match(read('src/services/' + f), re, f));
+  ['InspeccionesService.gs', 'VerificacionesService.gs', 'SensoresService.gs'].forEach((f) => {
+    const s = read('src/services/' + f);
+    assert.match(s, /ExpedienteNuco\.tieneNuco\(/, f + ': la carpeta de antes, solo sin NUCCO');
+    assert.match(s, /ExpedienteNuco\.guardar\(/, f + ': guarda con ExpedienteNuco.guardar (nombre, autor, copia)');
+  });
+  // Los lectores aceptan la liga (lo nuevo) y la ruta (lo viejo)
+  assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRuta\(ruta, carpetasIds\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
+  assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRutaProfunda\(ruta, raizId\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
+});

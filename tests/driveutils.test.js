@@ -77,5 +77,17 @@ ok(buscar('MODELOS INSPECCION/PIPA/DERECHA.png', modelosReal) === null, 'un arch
 ok(buscar('MODELOS INSPECCION/NP300/FRONTAL.png', raizProd) === null, 'una carpeta que no está da null');
 ok(buscar('FRONTAL.png', modelosReal) === null, 'una ruta sin carpeta no se resuelve (no es ruta de AppSheet)');
 
+console.log('5. Lo nuevo guarda la LIGA de Drive (expediente del NUCO, 12-oct-2026): los lectores la abren por su ID');
+const enNuco = archivo('VERIFICACION-0024 2026-10-12.png');
+delete porId[enNuco.id];
+enNuco.id = '1AbCdEfGhIjKlMnOpQrStUvWx';
+porId[enNuco.id] = enNuco;
+const liga = 'https:' + '/' + '/drive.google.com/file/d/' + enNuco.id + '/view?usp=drivesdk';
+ok(buscar(liga, raizProd) === enNuco, 'archivoDeRutaProfunda abre la liga');
+ok(contexto.DriveUtils.archivoDeRuta(liga, [raizProd.id]) === enNuco, 'archivoDeRuta también');
+ok(buscar('https:' + '/' + '/drive.google.com/file/d/1NoExisteNoExisteNoExiste/view', raizProd) === null,
+  'una liga a un archivo que ya no se puede abrir da null (no busca por la ruta)');
+ok(buscar('MODELOS INSPECCION/PIPA/FRONTAL.png', raizProd) === frontalPipa, 'y las rutas de antes siguen igual');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

@@ -225,7 +225,11 @@ const AdherenteVehicularService = (function () {
             campo, fila['ADHERENTE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
           ]) + '.png';
           const blob = Utilities.newBlob(Utilities.base64Decode(img.base64), img.mimeType || 'image/png', nombreImagen);
-          const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+          // En el expediente del NUCO (12-oct-2026): 5.-RESPONSIVA/FIRMAS/ADHERENTE FIRMA …-0088 <fecha>.png; sin NUCCO, donde siempre
+          const archivo = ExpedienteNuco.tieneNuco(fila['NUCCO'])
+            ? ExpedienteNuco.guardar(blob, ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', [ExpedienteNuco.FIRMAS]),
+              'ADHERENTE ' + campo, fila['NUCCO'], ahora, img.mimeType === 'image/jpeg' ? '.jpg' : '.png')
+            : DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
           DriveUtils.compartirLoMasAmplioPosible(archivo);
         } catch (e) {
           avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);

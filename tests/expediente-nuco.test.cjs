@@ -29,6 +29,7 @@ function driveFalso() {
     x.getDateCreated = () => x.fecha;
     x.isTrashed = () => false;
     x.createFolder = (v) => nodo(v, x, CARPETA);
+    x.createFile = (blob) => nodo(blob.getName(), x, /\.pdf$/.test(blob.getName()) ? 'pdf' : 'jpg');
     porId[x.id] = x;
     return x;
   }
@@ -42,7 +43,11 @@ function cargar(drive, opciones) {
   const pruebas = drive.nodo('NUCOS VEHICULOS (DEV)', null, CARPETA);
   const ctx = vm.createContext({
     Config: { DRIVE_FOLDERS: { NUCOS_VEHICULOS: () => (op.sinClave ? '' : nucos.id) } },
-    DriveUtils: { carpetaEnRaiz: () => pruebas },
+    DriveUtils: {
+      carpetaEnRaiz: () => pruebas,
+      marcarAutor: (a) => a,
+      idDeLiga: (l) => { const m = /\/d\/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})/.exec(String(l || '')); return m ? (m[1] || m[2]) : null; },
+    },
     DriveApp: { getFolderById: (id) => drive.porId[id] },
     // La API de Drive (avanzada): solo lo que usa inspecciones() — "'a' in parents or 'b' in parents"
     Drive: { Files: { list: (p) => {
@@ -51,7 +56,8 @@ function cargar(drive, opciones) {
         id: x.id, name: x.nombre, parents: [x.padre], mimeType: x.tipo === CARPETA ? 'application/vnd.google-apps.folder' : (x.tipo === 'pdf' ? 'application/pdf' : 'image/jpeg'),
         thumbnailLink: x.tipo === 'jpg' ? 'mini:' + x.id : undefined, webViewLink: 'url:' + x.id, createdTime: '2026-07-10T00:00:00Z' })) };
     } } },
-    Utilities: { formatDate: (d) => d.toISOString().slice(0, 10) },
+    Utilities: { formatDate: (d, zona, f) => (f === 'yyyy' ? String(d.getUTCFullYear()) : f === 'M' ? String(d.getUTCMonth() + 1)
+      : d.toISOString().slice(0, 10)) },
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     CacheService: { getScriptCache: () => {
       const m = op.cache || (op.cache = {});
@@ -241,4 +247,71 @@ test('idDeLiga saca el ID de las ligas de Drive', () => {
   assert.equal(E.idDeLiga('https://drive.google.com/file/d/1VMUB2RJbQ9McGc25m1ROHCYx1p0vCh8k/view?usp=drive'), '1VMUB2RJbQ9McGc25m1ROHCYx1p0vCh8k');
   assert.equal(E.idDeLiga('https://drive.google.com/open?id=1VMUB2RJbQ9McGc25m1ROHCYx1p0vCh8k'), '1VMUB2RJbQ9McGc25m1ROHCYx1p0vCh8k');
   assert.equal(E.idDeLiga('VEHICULOS_Files_/AUT0017.DOCUMENTO BAJA.pdf'), null);
+});
+
+// ---- Lo que llega de los módulos (12-oct-2026, "Vehículos: todo por NUCO") ----
+const blob = (nombre) => { const b = { nombre }; b.getName = () => b.nombre; b.setName = (v) => { b.nombre = v; return b; }; return b; };
+
+test('periodos: inspección por trimestre desde 2026 y por bimestre antes; verificación por semestre', () => {
+  const { E } = cargar(driveFalso());
+  assert.equal(E.periodoInspeccion(new Date('2026-10-12T12:00:00Z')), '4TO TRIMESTRE');
+  assert.equal(E.periodoInspeccion(new Date('2026-03-31T12:00:00Z')), '1ER TRIMESTRE');
+  assert.equal(E.periodoInspeccion(new Date('2025-05-20T12:00:00Z')), '3ER BIMESTRE');
+  assert.equal(E.periodoInspeccion(new Date('2025-12-01T12:00:00Z')), '6TO BIMESTRE');
+  assert.equal(E.semestreVerificacion(new Date('2026-06-30T12:00:00Z')), '1ER SEMESTRE');
+  assert.equal(E.semestreVerificacion(new Date('2026-07-01T12:00:00Z')), '2DO SEMESTRE');
+});
+
+test('guardar: la inspección y la verificación van a su año y periodo, con nombre por fecha y sin pisar otra', () => {
+  const drive = driveFalso();
+  const { E } = cargar(drive);
+  const f = new Date('2026-10-12T12:00:00Z');
+  const pdf = E.guardar(blob('x.pdf'), E.carpetaInspeccion('0024', f), 'INSPECCION', '0024', f, '.pdf');
+  assert.equal(drive.ruta(pdf), 'NUCOS VEHICULOS/24/4.-INSPECCIONES/2026/4TO TRIMESTRE/INSPECCION-0024 2026-10-12.pdf');
+  const otro = E.guardar(blob('y.pdf'), E.carpetaInspeccion(24, f), 'INSPECCION', 24, f, '.pdf');
+  assert.equal(otro.getName(), 'INSPECCION-0024 2026-10-12 (2).pdf', 'la misma fecha no pisa la anterior');
+  const firma = E.guardar(blob('f.png'), E.subcarpeta(E.carpetaInspeccion(24, f), E.FIRMAS_Y_DIAGRAMAS), 'FIRMA INSPECTOR', 24, f, '.png');
+  assert.equal(drive.ruta(firma), 'NUCOS VEHICULOS/24/4.-INSPECCIONES/2026/4TO TRIMESTRE/FIRMAS Y DIAGRAMAS/FIRMA INSPECTOR-0024 2026-10-12.png');
+  const ver = E.guardar(blob('c.jpg'), E.carpetaVerificacion(88, new Date('2026-04-27T12:00:00Z')), 'VERIFICACION', 88, new Date('2026-04-27T12:00:00Z'), '.jpg');
+  assert.equal(drive.ruta(ver), 'NUCOS VEHICULOS/88/3.-VERIFICACIONES/2026/1ER SEMESTRE/VERIFICACION-0088 2026-04-27.jpg');
+});
+
+test('guardar usa la carpeta de periodo que ya existe aunque varíe el espacio, y la responsiva del sensor va a 5.-RESPONSIVA/SENSORES', () => {
+  const drive = driveFalso();
+  const { E, nucos } = cargar(drive);
+  const n = drive.nodo('7', nucos, CARPETA);
+  const anio = drive.nodo('2026', drive.nodo('4.- INSPECCIONES', n, CARPETA), CARPETA);
+  const tri = drive.nodo('4TO  TRIMESTRE', anio, CARPETA);
+  const f = new Date('2026-11-02T12:00:00Z');
+  const pdf = E.guardar(blob('x.pdf'), E.carpetaInspeccion(7, f), 'INSPECCION', 7, f, '.pdf');
+  assert.equal(drive.porId[pdf.padre], tri, 'no se crea otra carpeta al lado');
+  const sen = E.guardar(blob('r.pdf'), E.carpeta(7, 'RESPONSIVA', [E.SENSORES]), 'RESPONSIVA SENSOR', 7, f, '.pdf');
+  assert.equal(drive.ruta(sen), 'NUCOS VEHICULOS/7/1.-DOCUMENTACIÓN/5.-RESPONSIVA/SENSORES/RESPONSIVA SENSOR-0007 2026-11-02.pdf');
+});
+
+test('guardar borra la copia de la lectura del NUCO', () => {
+  const op = { cache: {} };
+  const drive = driveFalso();
+  const { E } = cargar(drive, op);
+  op.cache['exp_insp_v1_24'] = '[]';
+  E.guardar(blob('x.pdf'), E.carpetaInspeccion(24, new Date('2026-10-12T12:00:00Z')), 'INSPECCION', 24, new Date('2026-10-12T12:00:00Z'), '.pdf');
+  assert.equal(op.cache['exp_insp_v1_24'], undefined);
+});
+
+test('el documento de baja va a 3.-ALTA DE PLACAS/BAJAS y no toca el alta vigente', () => {
+  const drive = driveFalso();
+  const { E } = cargar(drive);
+  const alta = drive.nodo('a.pdf', null, 'pdf');
+  E.archivar(alta, 5, 'ALTA');
+  const baja = drive.nodo('VEH-1.DOCUMENTO BAJA.pdf', null, 'pdf');
+  E.archivar(baja, 5, 'ALTA', { subcarpeta: 'BAJAS', prefijo: 'BAJA' });
+  assert.equal(drive.ruta(alta), 'NUCOS VEHICULOS/5/1.-DOCUMENTACIÓN/3.-ALTA DE PLACAS/ALTA DE PLACAS-0005.pdf');
+  assert.equal(drive.ruta(baja), 'NUCOS VEHICULOS/5/1.-DOCUMENTACIÓN/3.-ALTA DE PLACAS/BAJAS/BAJA-0005.pdf');
+});
+
+test('tieneNuco: sin número no hay expediente (quien guarda usa su carpeta de antes)', () => {
+  const { E } = cargar(driveFalso());
+  assert.equal(E.tieneNuco('0024'), true);
+  assert.equal(E.tieneNuco(''), false);
+  assert.equal(E.tieneNuco('S/N'), false);
 });

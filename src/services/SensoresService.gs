@@ -209,17 +209,30 @@ const SensoresService = (function () {
     }
 
     const id = Ids.nuevo(Entidades.prefijo('INSTALACION DE SENSORES'));
-    const guardado = DriveUtils.guardarArchivoAppSheet({
-      carpetaId: Config.DRIVE_FOLDERS.SENSORES(),
-      carpetaRelativa: CARPETA_RELATIVA,
-      idFila: id,
-      columna: COL_RESPONSIVA,
-      archivo: archivo,
-      permitidos: ['application/pdf'],
-      etiqueta: 'la responsiva',
-    });
-    // "<ID>_RESPONSIVA_SENSOR_<fecha>.ext": urlResponsiva() busca el archivo por ese nombre exacto
-    const rutaResponsiva = HojaServicio.renombrarRuta(guardado.fileId, id, 'RESPONSIVA_SENSOR', guardado.ruta);
+    const nucco = columnas['NUCCO'];
+    let guardado;
+    let rutaResponsiva;
+    if (ExpedienteNuco.tieneNuco(nucco)) {
+      // En el expediente del NUCO (12-oct-2026): 1.-DOCUMENTACIÓN/5.-RESPONSIVA/SENSORES/RESPONSIVA SENSOR-0088 <fecha>.pdf,
+      // y la hoja guarda su liga
+      const revisado = DriveUtils.blobRevisado(archivo, ['application/pdf'], 'la responsiva');
+      const archivoNuco = ExpedienteNuco.guardar(revisado.blob,
+        ExpedienteNuco.carpeta(nucco, 'RESPONSIVA', [ExpedienteNuco.SENSORES]), 'RESPONSIVA SENSOR', nucco, fechaInstalacion, '.pdf');
+      guardado = { fileId: archivoNuco.getId() };
+      rutaResponsiva = archivoNuco.getUrl();
+    } else {
+      guardado = DriveUtils.guardarArchivoAppSheet({
+        carpetaId: Config.DRIVE_FOLDERS.SENSORES(),
+        carpetaRelativa: CARPETA_RELATIVA,
+        idFila: id,
+        columna: COL_RESPONSIVA,
+        archivo: archivo,
+        permitidos: ['application/pdf'],
+        etiqueta: 'la responsiva',
+      });
+      // "<ID>_RESPONSIVA_SENSOR_<fecha>.ext": urlResponsiva() busca el archivo por ese nombre exacto
+      rutaResponsiva = HojaServicio.renombrarRuta(guardado.fileId, id, 'RESPONSIVA_SENSOR', guardado.ruta);
+    }
 
     let nueva;
     try {

@@ -19,6 +19,15 @@
  *   ExpedienteNuco.archivar(archivo, nucco, 'RESPONSIVA', { prestamo: true })    → 5.-RESPONSIVA/PRESTAMOS/PRESTAMO-0088 <fecha>.pdf
  *                                                                  (un préstamo NO desplaza a la responsiva vigente)
  *   ExpedienteNuco.carpeta(nucco, 'RESPONSIVA')                  → la carpeta (para generar un PDF directo ahí)
+ *   ExpedienteNuco.archivar(archivo, nucco, 'ALTA', { subcarpeta: 'BAJAS', prefijo: 'BAJA' })
+ *                                                                → 3.-ALTA DE PLACAS/BAJAS/BAJA-0088.pdf (no toca la vigente)
+ *
+ * Lo que llega de los módulos (12-oct-2026, plan "Vehículos: todo por NUCO"): la hoja guarda la LIGA del archivo.
+ *   ExpedienteNuco.carpetaInspeccion(nucco, fecha)    → 4.-INSPECCIONES/<año>/<N> TRIMESTRE (antes de 2026, BIMESTRE)
+ *   ExpedienteNuco.carpetaVerificacion(nucco, fecha)  → 3.-VERIFICACIONES/<año>/<1ER|2DO> SEMESTRE
+ *   ExpedienteNuco.carpeta(nucco, 'RESPONSIVA', ['SENSORES'])  (o ['FIRMAS']) → 5.-RESPONSIVA/SENSORES
+ *   ExpedienteNuco.guardar(blob, carpeta, 'VERIFICACION', nucco, fecha) → VERIFICACION-0088 2026-06-11.png
+ *   Los periodos son las reglas de la homologación (tools/nucos/homologar_insp.py y verificaciones.py).
  *
  * De dónde sale NUCOS VEHICULOS: DRIVE_FOLDER_ID_NUCOS_VEHICULOS en Entornos.gs (producción: la real). Sin eso
  * (un DEV), una carpeta "NUCOS VEHICULOS" de pruebas en la raíz de ESE proyecto: un DEV nunca escribe en la real.
@@ -41,6 +50,10 @@ const ExpedienteNuco = (function () {
   };
   const ADHERENTES = 'ADHERENTES';
   const PRESTAMOS = 'PRESTAMOS';
+  const SENSORES = 'SENSORES';
+  const FIRMAS = 'FIRMAS';
+  const FIRMAS_Y_DIAGRAMAS = 'FIRMAS Y DIAGRAMAS';
+  const ORDINAL = ['', '1ER', '2DO', '3ER', '4TO', '5TO', '6TO'];
 
   function raiz_() {
     const id = Config.DRIVE_FOLDERS.NUCOS_VEHICULOS();
@@ -106,6 +119,57 @@ const ExpedienteNuco = (function () {
     return carpetaDrive.getFilesByName(nombre).hasNext();
   }
 
+  /** ¿Tiene NUCCO (número)? Sin él no hay expediente: quien guarda usa su carpeta de antes */
+  function tieneNuco(nucco) {
+    return /^\d+$/.test(String(nucco == null ? '' : nucco).trim());
+  }
+
+  const fecha_ = (f, formato) => Utilities.formatDate(f || new Date(), Session.getScriptTimeZone(), formato);
+
+  /** Periodo de una inspección: desde 2026 trimestre, antes bimestre ("4TO TRIMESTRE", "3ER BIMESTRE") */
+  function periodoInspeccion(fecha) {
+    const anio = Number(fecha_(fecha, 'yyyy'));
+    const mes = Number(fecha_(fecha, 'M'));
+    return anio >= 2026 ? ORDINAL[Math.floor((mes - 1) / 3) + 1] + ' TRIMESTRE' : ORDINAL[Math.floor((mes - 1) / 2) + 1] + ' BIMESTRE';
+  }
+
+  /** Semestre de una verificación ("1ER SEMESTRE" enero-junio, "2DO SEMESTRE" julio-diciembre) */
+  function semestreVerificacion(fecha) {
+    return (Number(fecha_(fecha, 'M')) <= 6 ? ORDINAL[1] : ORDINAL[2]) + ' SEMESTRE';
+  }
+
+  /** <NUCO>/<2.-, 3.- o 4.-…>/<año>/<periodo> (las crea si faltan; reconoce las que ya están aunque varíen espacios) */
+  function carpetaDePeriodo_(nucco, otra, fecha, periodo) {
+    return subcarpeta_(subcarpeta_(subcarpeta_(carpetaNuco(nucco), otra), fecha_(fecha, 'yyyy')), periodo);
+  }
+  function carpetaInspeccion(nucco, fecha) {
+    return carpetaDePeriodo_(nucco, OTRAS[2], fecha, periodoInspeccion(fecha));
+  }
+  function carpetaVerificacion(nucco, fecha) {
+    return carpetaDePeriodo_(nucco, OTRAS[1], fecha, semestreVerificacion(fecha));
+  }
+
+  /** PREFIJO-0088 2026-06-11.ext; si ya existe, (2), (3)… Para lo que se acumula por fecha (inspecciones, verificaciones) */
+  function nombreConFecha(carpetaDrive, prefijo, nucco, ext, fecha) {
+    const base = prefijo + '-' + ('0000' + nombreNuco_(nucco)).slice(-4) + ' ' + fecha_(fecha, 'yyyy-MM-dd');
+    if (!existe_(carpetaDrive, base + ext)) return base + ext;
+    let n = 2;
+    while (existe_(carpetaDrive, base + ' (' + n + ')' + ext)) n++;
+    return base + ' (' + n + ')' + ext;
+  }
+
+  /**
+   * Crea un archivo en una carpeta del expediente con su nombre (nombreConFecha), anota quién lo subió y borra la copia
+   * de la lectura del NUCO. El blob ya viene revisado (DriveUtils.blobRevisado). → File (getUrl() es lo que guarda la hoja)
+   */
+  function guardar(blob, carpetaDrive, prefijo, nucco, fecha, ext) {
+    const extension = ext || extension_(blob.getName()) || '';
+    const nombre = nombreConFecha(carpetaDrive, prefijo, nucco, extension, fecha);
+    const archivo = DriveUtils.marcarAutor(carpetaDrive.createFile(blob.setName(nombre)));
+    olvidar(nucco);
+    return archivo;
+  }
+
   /** SEGURO-0088.pdf; si ya hay uno, con la fecha; si también, (2), (3)… (como tools/nucos/reglas.nombre_final) */
   function nombreLibre(carpetaDrive, prefijo, nucco, ext, fecha) {
     const base = prefijo + '-' + ('0000' + nombreNuco_(nucco)).slice(-4);
@@ -149,10 +213,12 @@ const ExpedienteNuco = (function () {
     const op = opciones || {};
     const def = definicion_(documento);
     const ext = extension_(archivo.getName());
-    if (op.adherente || op.prestamo) {
-      // Un adherente o un préstamo no es la responsiva del dueño: va a su subcarpeta y no toca la vigente
-      const destino = carpeta(nucco, 'RESPONSIVA', [op.adherente ? ADHERENTES : PRESTAMOS]);
-      const nombre = nombreLibre(destino, op.adherente ? 'ADHERENTE' : 'PRESTAMO', nucco, ext, new Date());
+    const aparte = op.adherente ? { sub: ADHERENTES, prefijo: 'ADHERENTE' } : op.prestamo ? { sub: PRESTAMOS, prefijo: 'PRESTAMO' }
+      : op.subcarpeta ? { sub: op.subcarpeta, prefijo: op.prefijo || def.prefijo } : null;
+    if (aparte) {
+      // Un adherente, un préstamo o una baja no es el documento vigente: va a su subcarpeta y no lo toca
+      const destino = carpeta(nucco, documento, [aparte.sub]);
+      const nombre = nombreLibre(destino, aparte.prefijo, nucco, ext, new Date());
       archivo.moveTo(destino);
       archivo.setName(nombre);
       return { carpetaId: destino.getId(), nombre: nombre };
@@ -398,11 +464,10 @@ const ExpedienteNuco = (function () {
     return r;
   }
 
-  /** El ID de Drive dentro de una liga (".../file/d/<id>/view", "...?id=<id>") o null si no es una liga de Drive */
-  function idDeLiga(liga) {
-    const m = /\/d\/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})/.exec(String(liga || ''));
-    return m ? (m[1] || m[2]) : null;
-  }
+  /** El ID de Drive dentro de una liga (o null): el mismo de DriveUtils */
+  const idDeLiga = (liga) => DriveUtils.idDeLiga(liga);
 
-  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, listar, inspecciones, fotosInspeccion, olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
+  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, SENSORES, FIRMAS, FIRMAS_Y_DIAGRAMAS, listar, inspecciones, fotosInspeccion,
+    olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga, tieneNuco, periodoInspeccion, semestreVerificacion,
+    carpetaInspeccion, carpetaVerificacion, nombreConFecha, guardar, subcarpeta: subcarpeta_ };
 })();

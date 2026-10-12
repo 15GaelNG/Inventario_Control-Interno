@@ -93,6 +93,13 @@ function crearContexto() {
     },
     ExpedienteNuco: {
       carpeta: (nucco, doc, sub) => ({ getId: () => 'NUCO/' + [nucco, doc].concat(sub || []).join('/') }),
+      FIRMAS: 'FIRMAS',
+      tieneNuco: (n) => /^[0-9]+$/.test(String(n == null ? '' : n).trim()),
+      // El respaldo final de cada firma: al expediente del NUCO (5.-RESPONSIVA/FIRMAS)
+      guardar: (blob, carpeta, prefijo) => {
+        llamadas.imagenesSubidas.push({ carpeta: carpeta.getId(), nombre: prefijo });
+        return { getId: () => 'firma-' + llamadas.imagenesSubidas.length };
+      },
       PRESTAMOS: 'PRESTAMOS',
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push(Object.assign({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }, op && op.prestamo ? { prestamo: true } : {})); },
     },
@@ -171,7 +178,7 @@ test('presencial: cada firma se respalda como imagen en Drive, sin ligarla en la
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
     { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI });
   assert.equal(llamadas.imagenesSubidas.length, 3);
-  assert.ok(llamadas.imagenesSubidas.every((img) => img.carpeta === 'RESPONSIVAS VEHICULARES_Images'));
+  assert.ok(llamadas.imagenesSubidas.every((img) => img.carpeta === 'NUCO/00001/RESPONSIVA/FIRMAS'), 'el respaldo de cada firma va al expediente del NUCO');
   const otrasColumnas = Object.keys(llamadas.insert[0]).filter((k) => METADATO.indexOf(k) === -1);
   assert.ok(!otrasColumnas.some((k) => k.toUpperCase().indexOf('FIRMA') !== -1));
   assert.equal(llamadas.insert[0]['FIRMA JEFE TEMP'], '');
