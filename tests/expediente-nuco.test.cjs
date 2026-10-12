@@ -89,6 +89,17 @@ test('un adherente va a ADHERENTES y no mueve la responsiva vigente', () => {
   assert.equal(drive.ruta(adh), 'NUCOS VEHICULOS/24/1.-DOCUMENTACIÓN/5.-RESPONSIVA/ADHERENTES/ADHERENTE-0024.pdf');
 });
 
+test('un préstamo va a PRESTAMOS y no mueve la responsiva vigente', () => {
+  const drive = driveFalso();
+  const { E } = cargar(drive);
+  const resp = drive.nodo('r.pdf', null, 'pdf');
+  E.archivar(resp, 308, 'RESPONSIVA');
+  const pres = drive.nodo('RESPONSIVA VEHICULAR ANA 2026-10-12.pdf', null, 'pdf');
+  E.archivar(pres, 308, 'RESPONSIVA', { prestamo: true });
+  assert.equal(drive.ruta(resp), 'NUCOS VEHICULOS/308/1.-DOCUMENTACIÓN/5.-RESPONSIVA/RESPONSIVA-0308.pdf');
+  assert.equal(drive.ruta(pres), 'NUCOS VEHICULOS/308/1.-DOCUMENTACIÓN/5.-RESPONSIVA/PRESTAMOS/PRESTAMO-0308.pdf');
+});
+
 test('la factura y el alta no tienen "anteriores": la segunda se queda junto, con fecha', () => {
   const drive = driveFalso();
   const { E } = cargar(drive);

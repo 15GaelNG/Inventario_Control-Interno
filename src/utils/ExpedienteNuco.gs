@@ -16,6 +16,8 @@
  *   ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')            → 2.-SEGURO/SEGURO-0088.pdf; la póliza que estaba
  *                                                                  ahí pasa a SEGUROS ANTERIORES con su fecha
  *   ExpedienteNuco.archivar(archivo, nucco, 'RESPONSIVA', { adherente: true })   → 5.-RESPONSIVA/ADHERENTES/ADHERENTE-0088.pdf
+ *   ExpedienteNuco.archivar(archivo, nucco, 'RESPONSIVA', { prestamo: true })    → 5.-RESPONSIVA/PRESTAMOS/PRESTAMO-0088 <fecha>.pdf
+ *                                                                  (un préstamo NO desplaza a la responsiva vigente)
  *   ExpedienteNuco.carpeta(nucco, 'RESPONSIVA')                  → la carpeta (para generar un PDF directo ahí)
  *
  * De dónde sale NUCOS VEHICULOS: DRIVE_FOLDER_ID_NUCOS_VEHICULOS en Entornos.gs (producción: la real). Sin eso
@@ -38,6 +40,7 @@ const ExpedienteNuco = (function () {
     TENENCIA: { carpeta: '6.-TENENCIA', prefijo: 'TENENCIA', anteriores: 'TENENCIAS ANTERIORES' },
   };
   const ADHERENTES = 'ADHERENTES';
+  const PRESTAMOS = 'PRESTAMOS';
 
   function raiz_() {
     const id = Config.DRIVE_FOLDERS.NUCOS_VEHICULOS();
@@ -145,9 +148,10 @@ const ExpedienteNuco = (function () {
     const op = opciones || {};
     const def = definicion_(documento);
     const ext = extension_(archivo.getName());
-    if (op.adherente) {
-      const destino = carpeta(nucco, 'RESPONSIVA', [ADHERENTES]);
-      const nombre = nombreLibre(destino, 'ADHERENTE', nucco, ext, new Date());
+    if (op.adherente || op.prestamo) {
+      // Un adherente o un préstamo no es la responsiva del dueño: va a su subcarpeta y no toca la vigente
+      const destino = carpeta(nucco, 'RESPONSIVA', [op.adherente ? ADHERENTES : PRESTAMOS]);
+      const nombre = nombreLibre(destino, op.adherente ? 'ADHERENTE' : 'PRESTAMO', nucco, ext, new Date());
       archivo.moveTo(destino);
       archivo.setName(nombre);
       return { carpetaId: destino.getId(), nombre: nombre };
@@ -166,5 +170,5 @@ const ExpedienteNuco = (function () {
     return m ? (m[1] || m[2]) : null;
   }
 
-  return { DOCUMENTOS, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
+  return { DOCUMENTOS, PRESTAMOS, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
 })();
