@@ -2348,3 +2348,15 @@ test('Correcciones de líneas y Sistemas de Líneas apagados en producción y en
   [bloque('1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'), bloque('1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa')]
     .forEach((b) => ['correcciones-lineas', 'sistemas-lineas'].forEach((v) => assert.match(b, new RegExp("MODULOS_APAGADOS: '[^']*" + v))));
 });
+
+test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.boton, no hechos a mano', () => {
+  const dir = path.join(__dirname, '..', 'src', 'html', 'js');
+  const malos = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.html') && !/^lineas/.test(n))) {
+    const txt = fs.readFileSync(path.join(dir, f), 'utf8');
+    if (/>Ver<\/a>/.test(txt)) malos.push(f + ': <a …>Ver</a>');
+    if (/class="secondary" data-archivo=/.test(txt)) malos.push(f + ': botón de archivo con class="secondary"');
+    if (/ficha-tabla-wrap/.test(txt)) malos.push(f + ': tabla de ficha hecha a mano (usa TablaFicha.html)');
+  }
+  assert.deepEqual(malos, []);
+});

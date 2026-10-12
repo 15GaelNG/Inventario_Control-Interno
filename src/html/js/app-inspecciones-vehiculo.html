@@ -1,13 +1,8 @@
 <style>
-  /* Una sola tabla (columnas alineadas entre años); el año es un renglón separador */
-  .insp-ficha-anio-fila td { background: var(--color-bg); font-weight: 700; font-size: 13px; color: var(--color-text-muted);
-    letter-spacing: .3px; padding-top: 10px; padding-bottom: 6px; }
-  .insp-ficha-fuente { font-size: 11px; color: var(--color-text-muted); display: block; }
   .insp-fotos-cabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
   .insp-fotos-cabecera h2 { margin: 0; font-size: 18px; }
   .insp-fotos-datos { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--color-text-muted); width: 100%; }
   .insp-fotos-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
-  .insp-fotos-botones a { text-decoration: none; }
 </style>
 
 <script>
@@ -57,16 +52,15 @@
       const exp = expediente[el.dataset.inspFicha];
       const filas = juntar(o.app || [], exp || []);
       const columnas = [
-        { t: 'Fecha', r: (x) => (x.fecha ? formatearFecha(x.fecha + 'T12:00:00') : '—') +
-          '<span class="insp-ficha-fuente">' + (x.app ? 'App' : 'Expediente') + '</span>' },
+        { t: 'Fecha', r: (x) => TablaFicha.conSub(x.fecha ? formatearFecha(x.fecha + 'T12:00:00') : '—', x.app ? 'App' : 'Expediente') },
         { t: 'Periodo', r: (x) => escaparHtml(x.exp ? x.exp.nombre : periodo(x.fecha) || '—') },
         { t: 'Tipo', r: (x) => escaparHtml((x.app && x.app.TIPO) || '—') },
         { t: 'Inspector', r: (x) => escaparHtml((x.app && x.app.INSPECTOR) || '—') },
-        { t: 'Puntaje', r: (x) => (x.app && x.app.PUNTAJE !== '' && x.app.PUNTAJE != null ? x.app.PUNTAJE + '%' : '—') },
+        { t: 'Puntaje', alinear: 'derecha', num: true, r: (x) => (x.app && x.app.PUNTAJE !== '' && x.app.PUNTAJE != null ? x.app.PUNTAJE + '%' : '—') },
         { t: 'Formato', r: (x) => (x.app && x.app.PDF ? o.botonPdf(x.app.PDF)
-          : x.exp && x.exp.pdfs.length ? '<a href="' + escaparHtml(x.exp.pdfs[0].url) + '" target="_blank" rel="noopener" class="secondary" style="text-decoration:none">Ver</a>' : '—') },
+          : x.exp && x.exp.pdfs.length ? TablaFicha.boton({ href: x.exp.pdfs[0].url }) : '—') },
         { t: 'Fotos', r: (x) => (exp === undefined ? '<span class="spinner"></span>'
-          : x.exp && x.exp.fotos ? '<button type="button" class="secondary" data-insp-fotos="' + escaparHtml(x.exp.id) + '">' + Iconos.svg('image') + ' ' + x.exp.fotos + '</button>'
+          : x.exp && x.exp.fotos ? TablaFicha.boton({ texto: String(x.exp.fotos), icono: 'image', clase: 'tf-btn-num', datos: { inspFotos: x.exp.id }, titulo: 'Ver las fotos' })
           : '<span class="ln-tenue">Sin fotos</span>') },
         { t: '', r: (x) => (x.app ? o.acciones(x.app.ID) : '') },
       ];
@@ -77,12 +71,8 @@
       el.innerHTML = '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' + Iconos.svg('clipboard-list') +
         ' Inspecciones' + boton + '</h3>' +
         (exp === undefined ? '<p class="ln-tenue"><span class="spinner"></span> Buscando las fotos en el expediente del NUCO…</p>' : '') +
-        (filas.length ? '<div class="ficha-tabla-wrap" data-scroll-x><table><thead><tr>' + columnas.map((c) => '<th>' + c.t + '</th>').join('') +
-          '</tr></thead><tbody>' + anios.map((a) => '<tr class="insp-ficha-anio-fila"><td colspan="' + columnas.length + '">' +
-            escaparHtml(a || 'Sin fecha') + '</td></tr>' +
-            filas.filter((x) => x.anio === a).map((f) => '<tr>' + columnas.map((c) => '<td>' + c.r(f) + '</td>').join('') + '</tr>').join('')).join('') +
-          '</tbody></table></div>'
-          : '<p class="empty-state">Sin inspecciones para este vehículo.</p>') + '</div>';
+        TablaFicha.html(columnas, anios.reduce((todas, a) => todas.concat(filas.filter((x) => x.anio === a)), []),
+          { grupo: (x) => x.anio || 'Sin fecha', vacio: 'Sin inspecciones para este vehículo.', minAncho: 680 }) + '</div>';
       if (o.alPintar) o.alPintar(el);
     }
 
@@ -130,8 +120,8 @@
       const grupos = d.secciones.map((s) => ({ titulo: s.nombre, fotos: s.fotos }));
       contenedor.innerHTML = '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Inspección ' + escaparHtml(d.nombre + ' ' + d.anio) + '</h2>' +
         '<div class="insp-fotos-botones">' +
-        d.pdfs.map((p) => '<a href="' + escaparHtml(p.url) + '" target="_blank" rel="noopener" class="secondary">' + Iconos.svg('file-text') + ' ' + escaparHtml(p.nombre) + '</a>').join('') +
-        '<a href="' + escaparHtml(d.url) + '" target="_blank" rel="noopener" class="secondary">' + Iconos.svg('folder-open') + ' Carpeta</a></div>' +
+        d.pdfs.map((p) => TablaFicha.boton({ texto: p.nombre, icono: 'file-text', href: p.url })).join('') +
+        TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</div>' +
         '<div class="insp-fotos-datos">' + datos.map((x) => '<span>' + escaparHtml(x) + '</span>').join('') + '</div></div></div>' +
         '<div class="card ln-card" data-insp-galeria>' + (grupos.length ? Galeria.html(grupos) : '<p class="empty-state">Sin fotos.</p>') + '</div>';
       Galeria.ligar(contenedor.querySelector('[data-insp-galeria]'), grupos, { titulo: 'Inspección ' + d.nombre + ' ' + d.anio });
