@@ -1,11 +1,27 @@
 # Expediente por NUCO: `3.- VERIFICACIONES`
 
 Tercera parte del expediente por NUCO (después de [documentación](nucos-expediente.md) e
-[inspecciones](nucos-inspecciones.md)). **Estado al 11-oct-2026: análisis hecho, nada aplicado.** Todo lo de aquí se
+[inspecciones](nucos-inspecciones.md)). **Estado al 12-oct-2026: carpetas homologadas** (ver abajo, "Corrida del 12-oct"); la hoja de la app sin corregir todavía. Todo lo de aquí se
 sacó en solo lectura; el OCR usa copias temporales en una carpeta propia, fuera de NUCOS, que se borran al terminar.
 
 Herramienta: `tools/nucos/verificaciones.py` (`ocr`, `dry-run`). Datos en `tools/nucos/.cache/verificaciones/`
 (fuera de git): `foto.json`, `ocr.json`, `app.json`, `ocr-app.json`, `religar.json`, `cobertura.json`.
+
+## Corrida del 12-oct-2026
+
+Solo se acomodaron los **certificados con fecha leída** (OCR, nombre o carpeta del área): **196 archivos en 114 NUCO** a
+`3.-VERIFICACIONES/<año>/<1ER|2DO> SEMESTRE/VERIFICACION-<NUCO> <fecha>[ DOBLE CERO][ RECHAZO].ext`. Lo demás (112:
+sin fecha, tenencias/responsiva, el expediente viejo del 118 y los siniestros del 294) **se quedó donde estaba**; la app
+lo muestra como otros archivos y lo resuelve la pasada de `_POR REVISAR` con el área. Nada salió de la carpeta.
+
+- Mismo ejecutor que inspecciones: `inspecciones.py aplicar .cache/verificaciones/plan.json .cache/verificaciones/foto.json
+  .cache/ligas/foto-doc.json (--nucos … | --todos) --raiz 3.-VERIFICACIONES`. 150 carpetas viejas que quedaron vacías
+  (`PROGRAMA 2025/…`) a `_PAPELERA`.
+- Piloto 28, 109, 113, 95 (bitácora `20261012-114141-inspecciones.jsonl`); **rollback probado en el 109** (archivos y
+  carpetas de vuelta, nada de más) y vuelto a aplicar en la corrida grande (`20261012-114302-inspecciones.jsonl`, 658
+  renglones en la hoja BITACORA EXPEDIENTES NUCO).
+- Verificación en vivo: **308 de 308** archivos donde dice el plan (196 movidos + 112 que se quedan).
+- Deshacer: `expediente.py deshacer .cache/bitacoras/<bitácora> [--nucos N]`, la más nueva primero.
 
 ## Hay dos lugares que no se hablan
 

@@ -13,7 +13,7 @@ El periodo sale de, en este orden: la fecha de expedición del certificado (OCR)
 semestres, lo dicen los certificados). Nunca la fecha de subida ni la hoja de la app (sus registros apuntan por folio y
 152 están ligados a otro vehículo). Lo que no se puede fechar va a `_POR REVISAR`.
 """
-import sys, json, re, collections, datetime, threading
+import sys, json, re, collections, datetime, threading, unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -227,6 +227,8 @@ def dry_run(salida):
 
     plan = []
     for a in foto["archivos"]:
+        if a["nuco"].startswith("_"):                   # _PAPELERA no es un NUCO
+            continue
         nuco = nuco_num(a["nuco"])
         ruta = a["ruta"][1:-1]                          # entre la raíz y el archivo
         texto_ruta = N(" / ".join(ruta))
@@ -243,23 +245,19 @@ def dry_run(salida):
             plan.append(dict(base, accion="REVISAR", aviso="acceso directo"))
             continue
         # Lo que no es una verificación
+        # Lo que no es una verificación (expediente viejo, siniestros…) se aparta tal cual, con su estructura, dentro de
+        # _POR REVISAR: la corrida no saca nada de 3.-VERIFICACIONES (acordado el 11-oct)
         if AJENO.search(texto_ruta):
-            plan.append(dict(base, accion="REVISAR", aviso="no es verificación (expediente viejo, siniestro, taller…)"))
+            plan.append(dict(base, accion="MOVER", destino_tipo="POR REVISAR", aviso="no es verificación: se aparta con su carpeta",
+                             despues="/".join([a["nuco"], RAIZ, POR_REVISAR] + [x.strip() for x in ruta] + [a["name"]])))
             continue
         conc = reglas.concepto_archivo(a["name"]) or next(
             (reglas.concepto(s) for s in reversed(ruta) if reglas.concepto(s)), None)
         if conc and not re.search(r"VERIFIC", N(a["name"])):
-            if a.get("md5") and a["md5"] in md5_doc[nuco]:
-                plan.append(dict(base, accion="PAPELERA", aviso="ya está igual (mismo md5) en 1.-DOCUMENTACIÓN"))
-                continue
-            carpeta = reglas.CARPETA_DE[conc]
-            rel = "/".join([carpeta] + ([VERSION_ANTERIOR[conc]] if conc in VERSION_ANTERIOR else []))
-            m = re.search(r"(?<!\d)(20[0-2]\d)(?!\d)", a["name"] + " " + " ".join(ruta))
-            fecha = (m.group(1) if m else "")
-            plan.append(dict(base, accion="MOVER", destino_tipo="DOCUMENTACION", fuente="nombre",
-                             despues="%s/%s/%s/@%s|%s|%s" % (a["nuco"], reglas.DOCUMENTACION, rel, reglas.PREFIJO_DE[conc], fecha,
-                                                            reglas.extension(a["name"], a["mime"])),
-                             aviso="documento %s guardado en verificaciones" % conc))
+            # Un documento del vehículo no cruza a 1.-DOCUMENTACIÓN en esta corrida: queda en _POR REVISAR para la pasada
+            # con el área
+            plan.append(dict(base, accion="REVISAR", aviso="documento %s: va a 1.-DOCUMENTACIÓN en la pasada de _POR REVISAR%s"
+                             % (conc, " (ya hay uno igual ahí)" if a.get("md5") and a["md5"] in md5_doc[nuco] else "")))
             continue
 
         # El periodo
@@ -285,13 +283,13 @@ def dry_run(salida):
                          despues="%s/%s/%s/%s/@VERIFICACION|%s|%s|%s" % (a["nuco"], RAIZ, anio, SEMESTRE[sem], fecha, sufijo,
                                                                          reglas.extension(a["name"], a["mime"]))))
 
-    # _POR REVISAR: plano, el nombre lleva de dónde venía
+    # Lo que no se pudo ubicar (sin fecha, documentos del vehículo, lo ajeno) SE QUEDA DONDE ESTÁ (12-oct-2026): solo se
+    # acomodan los certificados con fecha. La app lo muestra como "otros archivos de la carpeta"; la pasada de
+    # _POR REVISAR con el área lo resuelve después.
     for p in plan:
-        if p["accion"] == "REVISAR":
-            a = next(x for x in foto["archivos"] if x["id"] == p["id"])
-            origen = next((s.strip() for s in reversed(a["ruta"][1:-1])), "")
-            p.update(accion="MOVER", destino_tipo="POR REVISAR",
-                     despues="/".join([a["nuco"], RAIZ, POR_REVISAR, (origen + " - " if origen else "") + a["name"]]))
+        if p["accion"] == "REVISAR" or p.get("destino_tipo") == "POR REVISAR":
+            p.update(accion="IGUAL", destino_tipo="SE QUEDA", despues=p["nuco"] + "/" + p["antes"],
+                     aviso="se queda donde está: " + (p["aviso"] or ""))
 
     # Nombres finales: VERIFICACION-0088 2026-06-11 RECHAZO.pdf; idéntico (mismo md5) en el mismo destino → papelera
     usados = collections.defaultdict(set)
@@ -322,9 +320,11 @@ def dry_run(salida):
                 n += 1
         usados[carpeta].add(nombre)
         p["despues"] = carpeta + "/" + nombre
+        if unicodedata.normalize("NFC", p["despues"]) == unicodedata.normalize("NFC", p["nuco"] + "/" + p["antes"]):
+            p["accion"] = "IGUAL"                       # ya está donde debe (corrida repetida o lo ya homologado)
 
     # Las raíces con otro nombre y los NUCO sin carpeta
-    renombrar = [r for r in foto["raices"] if r["name"] != RAIZ]
+    renombrar = [r for r in foto["raices"] if r["name"] != RAIZ and not r["nuco"].startswith("_")]
     con = {r["nuco"] for r in foto["raices"]}
     sin = sorted((n["name"] for n in foto["nucos"] if n["name"] not in con), key=lambda s: int(nuco_num(s)) if nuco_num(s).isdigit() else 9999)
     json.dump(dict(plan=plan, renombrar=renombrar, sin_carpeta=sin), open(PLAN, "w", encoding="utf-8"), ensure_ascii=False)
