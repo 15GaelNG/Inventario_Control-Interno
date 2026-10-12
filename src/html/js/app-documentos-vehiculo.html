@@ -7,6 +7,15 @@
     padding: 5px 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); }
   .docs-veh-carpetas a:hover { border-color: var(--color-primary); color: var(--color-primary); }
   .badge-estado.docs-veh-anterior { background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  /* Las tablas de todas las secciones con los mismos anchos: las columnas quedan alineadas de una tarjeta a otra */
+  .docs-veh-seccion table { table-layout: fixed; width: 100%; }
+  .docs-veh-seccion th:nth-child(1), .docs-veh-seccion td:nth-child(1) { width: 46%; }
+  .docs-veh-seccion th:nth-child(2), .docs-veh-seccion td:nth-child(2) { width: 26%; }
+  .docs-veh-seccion th:nth-child(3), .docs-veh-seccion td:nth-child(3) { width: 16%; }
+  .docs-veh-seccion th:nth-child(4), .docs-veh-seccion td:nth-child(4) { width: 12%; text-align: right; }
+  .docs-veh-seccion td { overflow-wrap: anywhere; }
+  /* En celular cada tabla conserva su ancho y se desliza de lado (como la de Inspecciones) */
+  @media (max-width: 640px) { .docs-veh-seccion table { min-width: 520px; } }
   .docs-veh-relleno { margin: 4px 0 0; font-size: 13px; color: var(--color-text-muted); display: flex; align-items: center; gap: 8px; }
   .docs-veh-archivo { display: inline-flex; align-items: center; gap: 6px; word-break: break-word; }
 </style>
@@ -64,7 +73,7 @@
       return '<div class="card ln-card docs-veh-seccion">' +
         '<h3>' + Iconos.svg(ICONO[d.clave] || 'file') + ' ' + escaparHtml(d.titulo) +
         ' <span class="ln-tab-num">' + total + '</span>' + abrir + '</h3>' +
-        (filas.length ? tablaFicha(COLUMNAS, filas)
+        (filas.length ? tablaFicha(COLUMNAS, filas).replace('<div class="ficha-tabla-wrap">', '<div class="ficha-tabla-wrap" data-scroll-x>')
           : d.relleno ? '<p class="docs-veh-relleno">' + chip(d.relleno === 'NO APLICA' ? 'No aplica' : 'Sin información', 'docs-veh-anterior') +
             ' El área marcó la carpeta así: no hay documento.</p>'
           : '<p class="empty-state">No hay ' + escaparHtml(d.titulo.toLowerCase()) + ' en la carpeta del NUCO.</p>') +
