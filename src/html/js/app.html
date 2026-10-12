@@ -1473,6 +1473,12 @@
       grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text',
       soloLectura: true, placeholder: 'Se genera solo (consecutivo)',
     },
+    // La llena guardarExpedienteAdquisicion (botón "Buscar expediente de adquisición" en la
+    // ficha, ver abrirFichaVehiculo) -- nunca se escribe a mano aquí.
+    {
+      grupo: 'Identificación', clave: 'FOLIO ADQUISICION', etiqueta: 'Folio de adquisición', tipo: 'text',
+      soloLectura: true, placeholder: 'Se llena al buscar el expediente',
+    },
 
     { grupo: 'Documentación y seguro', clave: 'ADJUNTAR FACTURA', etiqueta: 'Factura', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'TARJETA CIRCULACION', etiqueta: 'Tarjeta de circulación', tipo: 'file' },
@@ -3266,6 +3272,32 @@
       }
     }
 
+    /** Busca, por SERIE VEHICULO, el folio y la carpeta de la compra en Adquisición Vehicular
+     *  (proceso externo -- ver AdquisicionVehicularService.gs) y, si la persona confirma, lo
+     *  guarda en la ficha. Nunca escribe nada afuera, solo lee. */
+    async function buscarExpedienteAdquisicionFicha(vResumen, completo) {
+      const serie = completo['SERIE VEHICULO'];
+      if (!serie) { toastError('Este vehículo no tiene número de serie registrado.'); return; }
+      try {
+        const encontrado = await callServer('apiBuscarExpedienteAdquisicion', state.token, serie);
+        if (!encontrado) { toastError('No se encontró un expediente de adquisición con esa serie.'); return; }
+        const ok = await Confirmar.pedir({
+          titulo: 'Expediente encontrado',
+          mensaje: 'Folio ' + encontrado.folio + ' · ' + (encontrado.area || 'sin área') + ' (' + encontrado.año + ')' +
+            (encontrado.liga ? '' : ' — no se encontró la carpeta en Drive, solo se guardará el folio.'),
+          textoConfirmar: 'Guardar en la ficha',
+        });
+        if (!ok) return;
+        await callServer('apiGuardarExpedienteAdquisicion', state.token, vResumen.ID, {
+          'FOLIO ADQUISICION': encontrado.folio, 'LIGA EXPEDIENTE ADQUISICION': encontrado.liga || '',
+        });
+        toastExito('Expediente guardado');
+        abrirFichaVehiculo(vResumen, 'general');
+      } catch (err) {
+        toastError('No se pudo buscar el expediente: ' + err.message);
+      }
+    }
+
     /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
      *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
      *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
@@ -3493,6 +3525,9 @@
           '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + chipAdherentes + '</div></div>' +
           '<div class="ln-detalle-botones">' +
           (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
+          (puedeEditar ? (completo['LIGA EXPEDIENTE ADQUISICION']
+            ? '<button type="button" id="veh-btn-expediente-adquisicion" data-liga="' + escaparHtml(completo['LIGA EXPEDIENTE ADQUISICION']) + '">' + Iconos.svg('externo') + ' Ver expediente de adquisición</button>'
+            : '<button type="button" id="veh-btn-expediente-adquisicion">' + Iconos.svg('ver') + ' Buscar expediente de adquisición</button>') : '') +
           '</div>' +
           (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
             '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
@@ -3644,6 +3679,12 @@
         if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
         const btnEditar = document.getElementById('veh-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
+        const btnExpediente = document.getElementById('veh-btn-expediente-adquisicion');
+        if (btnExpediente) {
+          btnExpediente.addEventListener('click', () => btnExpediente.dataset.liga
+            ? window.open(btnExpediente.dataset.liga, '_blank')
+            : buscarExpedienteAdquisicionFicha(vResumen, completo));
+        }
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;

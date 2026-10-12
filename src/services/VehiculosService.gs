@@ -74,7 +74,9 @@ const VehiculosService = (function () {
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
       fila['FECHA REGISTRO SISTEMA CI'] = new Date();
     },
-    noEditables: ['FOLIO', 'NUCCO', 'FECHA REGISTRO SISTEMA CI'],
+    // FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICION: las llena guardarExpedienteAdquisicion_
+    // (abajo), nunca la edición normal de la ficha -- ver AdquisicionVehicularService.gs.
+    noEditables: ['FOLIO', 'NUCCO', 'FECHA REGISTRO SISTEMA CI', 'FOLIO ADQUISICION', 'LIGA EXPEDIENTE ADQUISICION'],
     // La sección "Accesorios y sensor" de la ficha: solo la edita quien tiene EDICION en
     // Instalación de Sensores (en la pantalla: DE_SENSORES en CAMPOS_VEHICULO, app.html)
     deOtroModulo: { 'instalacion-sensores': ['ACCESORIOS', 'ADITAMENTOS', 'ACTIVADOR', '$ Costo del Sensor', 'LLAVE DUPLICADA'] },
@@ -414,6 +416,18 @@ const VehiculosService = (function () {
   }
   const CARPETA_ADJUNTOS_IMAGENES = 'VEHICULOS_Images';
 
+  /**
+   * Guarda el folio y la liga que encontró AdquisicionVehicularService.buscar() -- el único
+   * camino para escribir estas dos columnas (noEditables las bloquea en actualizar() normal).
+   */
+  function guardarExpedienteAdquisicion(token, id, datos) {
+    Permisos.puedeEditar(token, 'vehiculos');
+    return SheetUtils.update(ssId(), SHEET_VEHICULOS, id, {
+      'FOLIO ADQUISICION': datos['FOLIO ADQUISICION'] || '',
+      'LIGA EXPEDIENTE ADQUISICION': datos['LIGA EXPEDIENTE ADQUISICION'] || '',
+    }, ID_COLUMN);
+  }
+
   return {
     /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
      * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
@@ -446,5 +460,6 @@ const VehiculosService = (function () {
       return HojaServicio.subirArchivo(carpeta, 'de adjuntos de Vehículos', nombreArchivo, mimeType, base64Data);
     },
     diagnosticoIds, vencimientosSeguro,
+    guardarExpedienteAdquisicion,
   };
 })();

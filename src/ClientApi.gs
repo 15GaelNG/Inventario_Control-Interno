@@ -380,6 +380,14 @@ function apiDevolverPrestamoVehicular(token, id) {
   return ResponsivaVehicularService.devolverPrestamo(token, id);
 }
 
+// --- Adquisición Vehicular (expediente externo, solo lectura) ---
+function apiBuscarExpedienteAdquisicion(token, serie) {
+  return AdquisicionVehicularService.buscar(token, serie);
+}
+function apiGuardarExpedienteAdquisicion(token, id, datos) {
+  return VehiculosService.guardarExpedienteAdquisicion(token, id, datos);
+}
+
 // --- Adherente Vehicular ---
 function apiListarAdherentesVehicularesPorFolio(token, folio) {
   return JSON.stringify(AdherenteVehicularService.listarPorFolio(token, folio));
