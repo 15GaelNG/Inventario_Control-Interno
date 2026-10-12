@@ -2489,7 +2489,7 @@
     /** Igual que renderCamposVehiculo pero para MOSTRAR (no capturar): mismos grupos y
      *  etiquetas legibles que Registrar/Editar, en vez del volcado plano de antes. Lo que
      *  no está en CAMPOS_VEHICULO (columnas legadas del AppSheet) cae en "Otros datos".
-     *  soloGrupos filtra a solo esos grupos (para repartir "General" vs "Detalles"). */
+     *  soloGrupos filtra a solo esos grupos (null: todos, más "Otros datos"). */
     function seccionesFichaVehiculo(completo, soloGrupos) {
       const porGrupo = {};
       const grupos = [];
@@ -2497,6 +2497,8 @@
       CAMPOS_VEHICULO.forEach((campo) => {
         usadas.add(campo.clave);
         if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
+        // Los archivos (factura, póliza, responsiva…) se ven en las pestañas Documentos y Responsiva, no aquí
+        if (campo.tipo === 'file') return;
         const valor = completo[campo.clave];
         if (valor === '' || valor === null || valor === undefined) return;
         if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
@@ -2509,11 +2511,16 @@
         if (otros.length) { porGrupo['Otros datos'] = otros; grupos.push('Otros datos'); }
       }
 
-      return grupos.map((g) => '<div class="card ln-card"><h3><i data-lucide="' + (ICONO_GRUPO_VEHICULO[g] || 'info') +
-        '" class="ico ln-icon"></i> ' + g + '</h3><div class="info-grid">' + porGrupo[g].join('') + '</div></div>').join('');
+      // Pestaña Datos: las secciones del formulario de Editar, en su orden. Plegables; en celular solo las dos primeras
+      // abiertas para que no sea un scroll eterno. "Documentación y seguro" aquí solo trae los estados.
+      const abiertas = Pantalla.esCelular() ? 2 : grupos.length;
+      return grupos.map((g, i) => '<details class="card ln-card ficha-seccion"' + (i < abiertas ? ' open' : '') + '><summary><h3>' +
+        '<i data-lucide="' + (ICONO_GRUPO_VEHICULO[g] || 'info') + '" class="ico ln-icon"></i> ' + (TITULO_SECCION_FICHA[g] || g) +
+        (g === 'Documentación y seguro' ? ' <a href="#" class="ln-enlace ficha-ver-documentos" data-ir-pestana="documentos">Ver documentos</a>' : '') +
+        '</h3></summary><div class="info-grid">' + porGrupo[g].join('') + '</div></details>').join('');
     }
 
-    const GRUPOS_FICHA_GENERAL = ['Vehículo', 'Identificación'];
+    const TITULO_SECCION_FICHA = { 'Documentación y seguro': 'Seguro, tenencia y verificación' };
 
     function botonArchivoFicha(tipo, ruta) {
       return ruta ? '<button type="button" class="secondary" data-archivo="' + tipo + '" data-ruta="' + escaparHtml(ruta) + '">Ver</button>' : '—';
@@ -3549,9 +3556,8 @@
             '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
           '</div>';
 
-        const general = seccionesFichaVehiculo(completo, GRUPOS_FICHA_GENERAL);
-        const detalles = seccionesFichaVehiculo(completo, CAMPOS_VEHICULO.map((c) => c.grupo)
-          .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL.indexOf(g) === -1).concat('Otros datos'));
+        // Una sola pestaña Datos (12-oct-2026; antes General + Detalles): todo el vehículo, por secciones
+        const datos = seccionesFichaVehiculo(completo, null);
 
         // Cada parte del historial es de su módulo (Cambios / Reasignaciones): sin permiso, no sale
         const historial = (cambios === null ? '' : '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
@@ -3592,8 +3598,7 @@
             `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>');
 
         html += fichaEnPestanas([
-          { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
-          { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
           { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
@@ -3930,6 +3935,8 @@
     document.getElementById('veh-detalle').addEventListener('click', (ev) => {
       const pestana = ev.target.closest('[data-ficha-tab]');
       if (pestana) { mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab); return; }
+      const ir = ev.target.closest('[data-ir-pestana]');
+      if (ir) { ev.preventDefault(); mostrarPestanaFichaVehiculo(ir.dataset.irPestana); return; }
       const archivo = ev.target.closest('[data-archivo]');
       if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
