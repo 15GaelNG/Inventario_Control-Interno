@@ -14,6 +14,8 @@ Reglas (11/12-oct-2026). El vehículo es el renglón (su NUCCO), nunca el folio:
     Si no hay copia idéntica, no se toca.
   - Celda vacía: si la carpeta del documento (p. ej. 2.-SEGURO) tiene un solo archivo vigente (directo en ella, no en
     ANTERIORES), o un solo PDF entre varios, se llena con su liga. Si hay dos o más candidatos, no se adivina.
+  - Nunca con una imagen de relleno ("NO APLICA", "SIN INFORMACIÓN"): el 12-oct se llenaron 309 pólizas con
+    "SEGURO-…NO APLICA.jpg" y se regresaron a vacías (bitácora …-ligas-doc.NO-APLICA.jsonl).
   - DOCUMENTO BAJA vacío no se llena (su carpeta, ALTA DE PLACAS, es de otro documento).
 """
 import sys, json, re, time, collections
@@ -31,6 +33,7 @@ COLS = {"ADJUNTAR FACTURA": "1.-FACTURA", "POLIZA SEGURO": "2.-SEGURO", "ALTA PL
 NO_LLENAR = {"DOCUMENTO BAJA"}
 liga = lambda i: "https://drive.google.com/file/d/%s/view?usp=drivesdk" % i
 num = lambda s: str(int(re.match(r"\s*(\d+)", s).group(1))) if re.match(r"\s*(\d+)", s or "") else ""
+RELLENO = re.compile(r"NO APLICA|SIN INFORMACI|NO TIENE|PENDIENTE")
 clave = lambda s: re.sub(r"\s+", "", reglas.normal(s or ""))
 
 
@@ -118,7 +121,8 @@ def plan(foto_doc):
             else:
                 if col in NO_LLENAR:
                     continue
-                vs = vigentes.get((n, clave(sub)), [])
+                # Las imágenes de relleno del área ("SEGURO-0001 NO APLICA.jpg", "SIN INFORMACIÓN") no son el documento
+                vs = [v_ for v_ in vigentes.get((n, clave(sub)), []) if not RELLENO.search(reglas.normal(v_["name"]))]
                 pdfs = [a for a in vs if a["mime"] == "application/pdf" or a["name"].lower().endswith(".pdf")]
                 if len(vs) == 1:
                     a = vs[0]
