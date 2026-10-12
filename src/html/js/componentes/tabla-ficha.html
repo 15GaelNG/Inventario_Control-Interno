@@ -1,0 +1,103 @@
+<style>
+  /* TablaFicha: tablas cortas dentro de una ficha (no son DataTable: sin filtros, orden ni paginación) */
+  .tf-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
+  .tf-wrap table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  .tf-wrap.tf-fija table { table-layout: fixed; }
+  .tf-wrap th {
+    background: var(--color-bg); color: var(--color-text-muted); font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; text-align: left;
+    padding: 10px 14px; border-bottom: 1px solid var(--color-border);
+  }
+  .tf-wrap td { padding: 11px 14px; border-bottom: 1px solid var(--color-border); vertical-align: middle; color: var(--color-text); }
+  .tf-wrap tbody tr:last-child td { border-bottom: none; }
+  .tf-wrap tbody tr:not(.tf-grupo):hover td { background: var(--color-primary-soft); }
+  .tf-wrap th:first-child, .tf-wrap td:first-child { padding-left: 16px; }
+  .tf-wrap th:last-child, .tf-wrap td:last-child { padding-right: 16px; }
+  .tf-wrap .tf-derecha { text-align: right; }
+  .tf-wrap .tf-centro { text-align: center; }
+  .tf-wrap .tf-num { font-variant-numeric: tabular-nums; }
+  .tf-wrap .tf-parte { overflow-wrap: anywhere; }
+  .tf-sub { display: block; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+  .tf-wrap tr.tf-grupo td {
+    background: var(--color-bg); color: var(--color-text-muted); font-weight: 700; font-size: 12px; letter-spacing: .3px;
+    padding-top: 8px; padding-bottom: 8px;
+  }
+  .tf-vacio { margin: 0; padding: 18px; text-align: center; color: var(--color-text-muted); font-size: 13px;
+    border: 1px dashed var(--color-border); border-radius: 12px; }
+  /* El botón de acción de una celda (Ver, PDF, Fotos, Carpeta): uno solo para toda la app */
+  .tf-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px;
+    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+    font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; cursor: pointer; line-height: 1;
+  }
+  .tf-btn:hover, .tf-btn:focus-visible { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
+  .tf-btn .ico, .tf-btn svg { width: 14px; height: 14px; }
+  .tf-btn.tf-btn-num { font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) {
+    .tf-wrap td { padding: 10px 12px; }
+  }
+</style>
+
+<script>
+  /**
+   * TablaFicha — tablas cortas dentro de una ficha (las pestañas de Vehículos, Caja Chica, Permisos…): pocas filas, sin
+   * filtros ni paginación (para listas grandes está DataTable). Un mismo look en toda la app y un solo botón de acción.
+   *
+   *   contenedor.innerHTML = TablaFicha.html([
+   *     { t: 'Archivo', r: (f) => f.nombre, ancho: '46%', parte: true },     // parte: los textos largos se parten
+   *     { t: 'Monto', r: (f) => formatearMoneda(f.monto), alinear: 'derecha', num: true },
+   *     { t: '', r: (f) => TablaFicha.boton({ href: f.url }) },
+   *   ], filas, {
+   *     grupo: (f) => f.anio,          // opcional: un renglón separador cada vez que cambia (las filas ya ordenadas)
+   *     vacio: 'Sin registros.',       // opcional: lo que sale sin filas
+   *     minAncho: 560,                 // opcional: en celular conserva ese ancho y se desliza de lado
+   *   });
+   *
+   *   TablaFicha.boton({ texto: 'Ver', icono: 'eye', href })                       // abre en otra pestaña
+   *   TablaFicha.boton({ texto: 'Ver', icono: 'file-text', datos: { archivo: 'verificacion', ruta } })  // <button data-…>
+   *
+   * Si alguna columna trae `ancho`, la tabla usa anchos fijos: varias tablas con los mismos anchos quedan alineadas
+   * entre sí (Documentos: una por tipo de documento). Las celdas (r) devuelven HTML: escápalo tú.
+   */
+  const TablaFicha = (function () {
+    const atrib = (k) => 'data-' + String(k).replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+
+    function html(columnas, filas, opciones) {
+      const o = opciones || {};
+      if (!filas || !filas.length) return '<p class="tf-vacio">' + (o.vacio || 'Sin registros.') + '</p>';
+      const fija = columnas.some((c) => c.ancho);
+      const clase = (c) => [c.alinear === 'derecha' ? 'tf-derecha' : c.alinear === 'centro' ? 'tf-centro' : '',
+        c.num ? 'tf-num' : '', c.parte ? 'tf-parte' : ''].filter(Boolean).join(' ');
+      const td = (c, f) => '<td' + (clase(c) ? ' class="' + clase(c) + '"' : '') + '>' + c.r(f) + '</td>';
+      let previo = {};
+      const cuerpo = filas.map((f) => {
+        let sep = '';
+        if (o.grupo) {
+          const g = o.grupo(f);
+          if (g !== previo) { sep = '<tr class="tf-grupo"><td colspan="' + columnas.length + '">' + escaparHtml(g == null || g === '' ? '—' : g) + '</td></tr>'; previo = g; }
+        }
+        return sep + '<tr>' + columnas.map((c) => td(c, f)).join('') + '</tr>';
+      }).join('');
+      return '<div class="tf-wrap' + (fija ? ' tf-fija' : '') + '" data-scroll-x>' +
+        '<table' + (o.minAncho ? ' style="min-width:' + Number(o.minAncho) + 'px"' : '') + '>' +
+        (fija ? '<colgroup>' + columnas.map((c) => '<col' + (c.ancho ? ' style="width:' + escaparHtml(c.ancho) + '"' : '') + '>').join('') + '</colgroup>' : '') +
+        '<thead><tr>' + columnas.map((c) => '<th' + (clase(c) ? ' class="' + clase(c) + '"' : '') + '>' + c.t + '</th>').join('') + '</tr></thead>' +
+        '<tbody>' + cuerpo + '</tbody></table></div>';
+    }
+
+    function boton(op) {
+      const o = op || {};
+      const contenido = (o.icono === null ? '' : Iconos.svg(o.icono || 'eye')) + '<span>' + escaparHtml(o.texto == null ? 'Ver' : o.texto) + '</span>';
+      const titulo = o.titulo ? ' title="' + escaparHtml(o.titulo) + '"' : '';
+      const clase = 'tf-btn' + (o.clase ? ' ' + o.clase : '');
+      if (o.href) return '<a class="' + clase + '" href="' + escaparHtml(o.href) + '" target="_blank" rel="noopener"' + titulo + '>' + contenido + '</a>';
+      const datos = Object.keys(o.datos || {}).map((k) => ' ' + atrib(k) + '="' + escaparHtml(o.datos[k]) + '"').join('');
+      return '<button type="button" class="' + clase + '"' + datos + titulo + '>' + contenido + '</button>';
+    }
+
+    /** Un texto con una línea chica abajo (p. ej. la fecha y "App" / "Expediente") */
+    const conSub = (texto, sub) => texto + (sub ? '<span class="tf-sub">' + sub + '</span>' : '');
+
+    return { html, boton, conSub };
+  })();
+</script>

@@ -1,21 +1,11 @@
 <style>
   .docs-veh-seccion h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .docs-veh-carpeta { margin-left: auto; text-decoration: none; font-size: 12px; padding: 4px 10px; }
+  .docs-veh-carpeta { margin-left: auto; }
   .docs-veh-carpetas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .docs-veh-ver { text-decoration: none; }
   .docs-veh-carpetas a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 12px;
     padding: 5px 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); }
   .docs-veh-carpetas a:hover { border-color: var(--color-primary); color: var(--color-primary); }
   .badge-estado.docs-veh-anterior { background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-border); }
-  /* Las tablas de todas las secciones con los mismos anchos: las columnas quedan alineadas de una tarjeta a otra */
-  .docs-veh-seccion table { table-layout: fixed; width: 100%; }
-  .docs-veh-seccion th:nth-child(1), .docs-veh-seccion td:nth-child(1) { width: 46%; }
-  .docs-veh-seccion th:nth-child(2), .docs-veh-seccion td:nth-child(2) { width: 26%; }
-  .docs-veh-seccion th:nth-child(3), .docs-veh-seccion td:nth-child(3) { width: 16%; }
-  .docs-veh-seccion th:nth-child(4), .docs-veh-seccion td:nth-child(4) { width: 12%; text-align: right; }
-  .docs-veh-seccion td { overflow-wrap: anywhere; }
-  /* En celular cada tabla conserva su ancho y se desliza de lado (como la de Inspecciones) */
-  @media (max-width: 640px) { .docs-veh-seccion table { min-width: 520px; } }
   .docs-veh-relleno { margin: 4px 0 0; font-size: 13px; color: var(--color-text-muted); display: flex; align-items: center; gap: 8px; }
   .docs-veh-archivo { display: inline-flex; align-items: center; gap: 6px; word-break: break-word; }
 </style>
@@ -50,15 +40,16 @@
         nombre: '<span class="docs-veh-archivo">' + Iconos.svg(iconoArchivo(a)) + ' ' + escaparHtml(a.nombre) + '</span>',
         estado: estado,
         fecha: formatearFecha(a.fecha),
-        ver: '<a href="' + escaparHtml(a.url) + '" target="_blank" rel="noopener" class="secondary docs-veh-ver">Ver</a>',
+        ver: TablaFicha.boton({ href: a.url }),
       };
     }
 
+    // Los mismos anchos en todas las secciones: las columnas quedan alineadas de una tarjeta a otra
     const COLUMNAS = [
-      { t: 'Archivo', r: (f) => f.nombre },
-      { t: 'Estado', r: (f) => f.estado },
-      { t: 'Subido', r: (f) => f.fecha },
-      { t: '', r: (f) => f.ver },
+      { t: 'Archivo', r: (f) => f.nombre, ancho: '46%', parte: true },
+      { t: 'Estado', r: (f) => f.estado, ancho: '26%' },
+      { t: 'Subido', r: (f) => f.fecha, ancho: '16%', num: true },
+      { t: '', r: (f) => f.ver, ancho: '12%', alinear: 'derecha' },
     ];
     const chip = (texto, clase) => '<span class="badge-estado ' + clase + '">' + escaparHtml(texto) + '</span>';
 
@@ -67,13 +58,11 @@
       const total = d.vigentes.length + anteriores;
       const filas = d.vigentes.map((a) => fila(a, chip(d.vigentes.length > 1 ? 'En la carpeta' : 'Vigente', 'activo')))
         .concat(...d.anteriores.map((g) => g.archivos.map((a) => fila(a, chip(g.grupo, 'docs-veh-anterior')))));
-      const abrir = d.url
-        ? '<a href="' + escaparHtml(d.url) + '" target="_blank" rel="noopener" class="secondary docs-veh-carpeta">' + Iconos.svg('folder-open') + ' Carpeta</a>'
-        : '';
+      const abrir = d.url ? '<span class="docs-veh-carpeta">' + TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</span>' : '';
       return '<div class="card ln-card docs-veh-seccion">' +
         '<h3>' + Iconos.svg(ICONO[d.clave] || 'file') + ' ' + escaparHtml(d.titulo) +
         ' <span class="ln-tab-num">' + total + '</span>' + abrir + '</h3>' +
-        (filas.length ? tablaFicha(COLUMNAS, filas).replace('<div class="ficha-tabla-wrap">', '<div class="ficha-tabla-wrap" data-scroll-x>')
+        (filas.length ? TablaFicha.html(COLUMNAS, filas, { minAncho: 520 })
           : d.relleno ? '<p class="docs-veh-relleno">' + chip(d.relleno === 'NO APLICA' ? 'No aplica' : 'Sin información', 'docs-veh-anterior') +
             ' El área marcó la carpeta así: no hay documento.</p>'
           : '<p class="empty-state">No hay ' + escaparHtml(d.titulo.toLowerCase()) + ' en la carpeta del NUCO.</p>') +
