@@ -90,7 +90,7 @@ test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por n�
 
 test('al editar, un SIM BASICO sin datos de adendum no enseña el adendum', () => {
   const Reg = cargar();
-  const basica = { TIPO: 'LINEA BASICA', 'NUMERO TELEFONO': '4420000002', 'TIPO DE LINEA': 'SIM BASICO', 'ESTATUS LINEA': 'DISPONIBLE' };
+  const basica = { TIPO: 'SIM BASICO', 'NUMERO TELEFONO': '4420000002', 'TIPO DE LINEA': 'SIM BASICO', 'ESTATUS LINEA': 'DISPONIBLE' };
   const ctx = Reg._contextoEdicion(basica, null);
   const els = Reg._elementos(basica, {}, usuario, ctx);
   assert.ok(!Reg._cumple(campo(els, 'FIN PLAN').mostrar, basica, ctx));
@@ -121,4 +121,14 @@ test('al editar, cambiar una línea a SIM BASICO esconde y borra el adendum (usu
   // Si se queda en PLAN, el adendum no se toca
   const igual = Reg._resolver(els, plan, Object.assign({}, plan, { 'COMPAÑIA': 'AT&T' }), ctx);
   assert.equal(igual.valores['COSTO PLAN'], '299');
+});
+
+test('LINEA BASICA ahora se llama SIM BASICO (usuario, 12-oct; pendiente 2.35)', () => {
+  const Reg = cargar();
+  const vieja = { TIPO: 'LINEA BASICA', 'NUMERO TELEFONO': '4420000004', 'TIPO DE LINEA': 'SIM BASICO', 'ESTATUS LINEA': 'DISPONIBLE', 'COMPAÑIA': 'TELCEL' };
+  const ctx = Object.assign(Reg._contextoEdicion(vieja, 'LINEA'), { nucoRepetido: () => false, telefonoRepetido: () => false });
+  const r = Reg._resolver(Reg._elementos(vieja, {}, usuario, ctx), vieja, vieja, ctx);
+  assert.equal(r.valores.TIPO, 'SIM BASICO');
+  assert.equal(Reg._tipoAutomatico('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'SIM BASICO');
+  assert.doesNotMatch(read('src/html/js/lineas.html'), /'Línea básica'/);
 });

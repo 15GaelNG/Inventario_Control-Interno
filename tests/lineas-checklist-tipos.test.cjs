@@ -1,4 +1,4 @@
-// Los tipos básicos (EQUIPO + SIM BASICO, LINEA BASICA; 4-oct) no existían en el AppSheet: la inspección del NUCO 0726
+// Los tipos básicos (EQUIPO + SIM BASICO y SIM BASICO, antes LINEA BASICA; 4-oct) no existían en el AppSheet: la inspección del NUCO 0726
 // solo mostraba unos cuantos puntos porque las reglas preguntaban por "EQUIPO + SIM" y "LINEA" exactos.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -18,11 +18,13 @@ test('EQUIPO + SIM BASICO muestra los mismos puntos que EQUIPO + SIM', () => {
   assert.ok(cumple('EQUIPOS', 'equipo + sim basico'));
 });
 
-test('LINEA BASICA muestra los mismos puntos que LINEA', () => {
+test('SIM BASICO (antes LINEA BASICA, 12-oct) muestra los mismos puntos que LINEA', () => {
+  assert.equal(visibles('SIM BASICO'), visibles('LINEA'));
+  assert.ok(!cumple('NO_LINEA', 'SIM BASICO'));
+  // Lo guardado con el nombre de antes sigue valiendo
   assert.equal(visibles('LINEA BASICA'), visibles('LINEA'));
-  assert.ok(!cumple('NO_LINEA', 'LINEA BASICA'));
 });
 
 test('el formulario en el navegador usa la misma equivalencia', () => {
-  assert.match(read('src/html/js/lineas.html'), /CONDICIONES_APPSHEET\[cond\]\(t\.replace\(\/ BASIC\[OA\]\$\/, ''\)\)/);
+  assert.match(read('src/html/js/lineas.html'), /CONDICIONES_APPSHEET\[cond\]\(t === 'SIM BASICO' \|\| t === 'LINEA BASICA' \? 'LINEA' : t\.replace\(\/ BASIC\[OA\]\$\/, ''\)\)/);
 });

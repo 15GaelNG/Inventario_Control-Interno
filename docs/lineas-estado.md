@@ -17,7 +17,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 
 - **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
-  EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
+  EQUIPO + SIM BASICO, LINEA, SIM BASICO, BANDA ANCHA, MODEM, CAMARA; la línea sola básica se llamaba LINEA BASICA hasta
+  el 12-oct).
 - **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
   modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,

@@ -55,7 +55,7 @@ const LineasEscritura = (function () {
   // Los "no aplica" se guardan en blanco, como en la migración (LineasEstructura)
   const NO_APLICA = ['', 'N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'];
   // Tipos viejos que llevan línea sí o sí (MODEM, BANDA ANCHA y CAMARA la llevan solo si tienen número)
-  const TIPOS_CON_LINEA_FIJA = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA'];
+  const TIPOS_CON_LINEA_FIJA = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO'];
 
   let hojas_ = null; // las 4 hojas, una lectura por ejecución; se actualizan en memoria al escribir
   let tocados_ = []; // registros que aparecen por un cambio (la línea que se separa de su equipo)
@@ -419,7 +419,7 @@ const LineasEscritura = (function () {
     const numero = v('NUMERO TELEFONO');
     const sim = v('NUMERO SIM');
     const conEquipo = tipo in ESTRUCTURA_TIPO_EQUIPO;
-    const conLinea = tipo in ESTRUCTURA_TIPO_LINEA && (!!(numero || sim) || tipo === 'LINEA' || tipo === 'LINEA BASICA');
+    const conLinea = tipo in ESTRUCTURA_TIPO_LINEA && (!!(numero || sim) || tipo === 'LINEA' || tipo === 'SIM BASICO');
     if (!conEquipo && !conLinea) throw new Error('Elige el TIPO del registro.');
     const refs = [];
     const e = conEquipo ? agregar_('EQUIPOS', {

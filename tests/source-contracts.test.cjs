@@ -259,7 +259,7 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'EQUIPO + SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001', 'ESTATUS LINEA': 'CANCELADA' }, ''), 'EQUIPO');
   assert.equal(T('LINEA', { 'NUMERO TELEFONO': '4420000001' }, ''), 'LINEA');
-  assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'LINEA BASICA');
+  assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001' }, 'MODEM'), 'MODEM'); // histórico: se queda
   assert.match(reg, /const valores = homologarNuco_\(aHoja_\(elementos, r\.valores\)\);/);
   // La bitácora no registra "5 → 0005" como un cambio (solo se escribe homologado)

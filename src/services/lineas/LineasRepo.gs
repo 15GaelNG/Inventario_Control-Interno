@@ -44,13 +44,13 @@ const LineasRepo = (function () {
     'BANDA ANCHA': 'BANDA_ANCHA',
     'CAMARA': 'CAMARA',
   };
-  const TIPOS_CON_LINEA = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'MODEM', 'BANDA ANCHA', 'CAMARA'];
+  const TIPOS_CON_LINEA = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'MODEM', 'BANDA ANCHA', 'CAMARA'];
   /** Tipos cuyo nombre no cambia al quitar/poner la línea: tienen línea solo si hay número o SIM. */
   const TIPOS_LINEA_OPCIONAL = ['MODEM', 'BANDA ANCHA', 'CAMARA'];
 
   /** Catálogos del AppSheet (enums de LINEAS TELEFONICAS). */
   const CATALOGO = {
-    tipos: ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'],
+    tipos: ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'BANDA ANCHA', 'MODEM', 'CAMARA'],
     // Estatus acordados con Líneas el 30-sep (ya no son los del AppSheet). Los equipos no se cancelan: solo las líneas.
     // Sin acentos, como pide el AppSheet ("MAYÚSCULAS Y SIN ACENTOS"). Los valores viejos que sigan en la hoja se
     // muestran "(no está en la lista)" y Líneas los corrige; la conversión propuesta está en

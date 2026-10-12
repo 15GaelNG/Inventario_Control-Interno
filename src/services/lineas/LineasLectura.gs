@@ -101,7 +101,7 @@ const LineasLectura = (function () {
       return tl === 'SIM BASICO' ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM';
     }
     if (e) return te === 'MODEM' ? 'MODEM' : (te === 'CAMARA' ? 'CAMARA' : 'EQUIPO');
-    return tl === 'SIM BASICO' ? 'LINEA BASICA' : 'LINEA';
+    return tl === 'SIM BASICO' ? 'SIM BASICO' : 'LINEA';
   }
 
   /**

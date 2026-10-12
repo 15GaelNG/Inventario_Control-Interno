@@ -96,12 +96,12 @@ const ESTRUCTURA_NOMBRE_NUEVO = {
   linea: { 'RESGUARDO': 'DISPONIBLE' },
 };
 // TIPO viejo (mezcla de línea y equipo) → tipo de equipo y tipo de línea (plan §5.6, D5.6). '' = el TIPO viejo no
-// alcanza para saberlo: lo confirma la factura (cuenta de SIM básicos o de planes). LINEA BASICA sí se sabe: se
+// alcanza para saberlo: lo confirma la factura (cuenta de SIM básicos o de planes). SIM BASICO sí se sabe: se
 // factura en la cuenta de SIM básicos (plan §5.6.1).
 const ESTRUCTURA_TIPO_EQUIPO = { 'EQUIPO': 'CELULAR', 'EQUIPO + SIM': 'CELULAR', 'EQUIPO + SIM BASICO': 'CELULAR',
   'MODEM': 'MODEM', 'BANDA ANCHA': 'MODEM', 'CAMARA': 'CAMARA' };
 const ESTRUCTURA_TIPO_LINEA = { 'EQUIPO + SIM': 'PLAN', 'LINEA': '', 'EQUIPO + SIM BASICO': 'SIM BASICO',
-  'LINEA BASICA': 'SIM BASICO', 'BANDA ANCHA': 'BANDA ANCHA', 'MODEM': '', 'CAMARA': '' };
+  'SIM BASICO': 'SIM BASICO', 'BANDA ANCHA': 'BANDA ANCHA', 'MODEM': '', 'CAMARA': '' };
 
 const ESTRUCTURA_FUENTE_INVENTARIO = 'INVENTARIO (SIN CONFIRMAR)';
 // Código de resguardo escrito en RESPONSABLE (decisión del usuario: no se pasa). Dos formas: la vieja (P0132, R1-0006,
@@ -223,8 +223,8 @@ function reestructuraArmarEstructura() {
     // ¿Tiene equipo? Los tipos con equipo (como hoy en LineasRepo); una línea suelta no lleva aparato (D4.2)
     const tieneEquipo = tipo in ESTRUCTURA_TIPO_EQUIPO;
     // ¿Tiene línea? Solo si hay número o SIM (un MODEM o un EQUIPO sin número es solo el aparato). Una fila de solo
-    // línea (LINEA, LINEA BASICA) se copia aunque no tenga ni número ni SIM, para no perder el registro (NUCO 1217).
-    const soloLinea = tipo === 'LINEA' || tipo === 'LINEA BASICA';
+    // línea (LINEA, SIM BASICO) se copia aunque no tenga ni número ni SIM, para no perder el registro (NUCO 1217).
+    const soloLinea = tipo === 'LINEA' || tipo === 'SIM BASICO';
     const tieneLinea = tipo in ESTRUCTURA_TIPO_LINEA && (!!(numero || sim) || soloLinea);
     if (tipo in ESTRUCTURA_TIPO_LINEA && !numero && !sim) {
       anotar(soloLinea ? 'Línea sin número ni SIM (se copia para no perder el registro)' : 'TIPO con línea pero sin número ni SIM (queda solo el equipo)', ref + ' · ' + tipo);

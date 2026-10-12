@@ -327,7 +327,7 @@ const LineasRegistros = (function () {
 
   /**
    * TIPO asignado solo (usuario, 4-oct): un equipo sin línea es EQUIPO; con línea, EQUIPO + SIM, o EQUIPO + SIM BASICO si
-   * la línea es básica; una línea sola, LINEA o LINEA BASICA. Una línea CANCELADA ya no cuenta. MODEM, BANDA ANCHA y
+   * la línea es básica; una línea sola, LINEA o SIM BASICO. Una línea CANCELADA ya no cuenta. MODEM, BANDA ANCHA y
    * CAMARA se quedan (histórico). La pantalla hace la misma cuenta (tipoAutomatico) para mostrarlo en vivo.
    */
   function tipoAutomatico_(parte, valores, tipoActual) {
@@ -337,7 +337,7 @@ const LineasRegistros = (function () {
       texto_(valores['ESTATUS LINEA']).toUpperCase() !== 'CANCELADA';
     const basica = texto_(valores['TIPO DE LINEA']).toUpperCase() === 'SIM BASICO';
     if (parte === 'EQUIPO') return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
-    return basica ? 'LINEA BASICA' : 'LINEA';
+    return basica ? 'SIM BASICO' : 'LINEA';
   }
 
   /** Valores de la fila como texto/fecha ISO local para el formulario. */
@@ -426,6 +426,8 @@ const LineasRegistros = (function () {
     };
     const campoTipo = orden.filter((e) => e.columna === 'TIPO')[0];
     if (campoTipo) tomar(campoTipo); // las acciones masivas no traen TIPO
+    // Una pestaña abierta antes del 12-oct todavía manda LINEA BASICA: ahora se llama SIM BASICO (pendiente 2.35)
+    if (texto_(valores['TIPO']).toUpperCase() === 'LINEA BASICA') valores['TIPO'] = 'SIM BASICO';
     const tipo = texto_(valores['TIPO']).toUpperCase();
     orden.forEach((e) => { if (e.columna !== 'TIPO') tomar(e); });
     // 2) Reset_If

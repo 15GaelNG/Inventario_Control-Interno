@@ -285,7 +285,7 @@
           'EQUIPO': { color: 'minorText', icono: 'smartphone', bold: true, italic: true, fondo: true },
           'EQUIPO + SIM BASICO': { color: '#54AE98', icono: 'card-sim', bold: true, italic: true, fondo: true },
           'CAMARA': { color: '#004734', icono: 'camera', bold: true, italic: true, fondo: true },
-          'LINEA BASICA': { color: '#B3A184', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'SIM BASICO': { color: '#B3A184', icono: 'card-sim', bold: true, italic: true, fondo: true },
         },
       },
       // Bitácora: ANTES con flecha hacia abajo y DESPUES hacia arriba (fa-caret-circle-down / up)
@@ -717,7 +717,7 @@
       if (cond === 'NUNCA') return false;
       const t = String((valores && valores.TIPO !== undefined ? valores.TIPO : tipo) || '').trim().toUpperCase();
       // Los tipos básicos no existían en el AppSheet: para sus reglas valen como EQUIPO + SIM y LINEA (LineasChecklist.tipoBase)
-      if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t.replace(/ BASIC[OA]$/, ''));
+      if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t === 'SIM BASICO' || t === 'LINEA BASICA' ? 'LINEA' : t.replace(/ BASIC[OA]$/, ''));
       if (cond.y) return cond.y.every((c) => cumpleCondicion(c, tipo, valores, ctx));
       if (cond.tipoLleno) return !!t;
       if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
@@ -1426,7 +1426,7 @@
     /** FOLIO y ESTATUS GENERAL (AppFormula de LINEAS TELEFONICAS) para mostrarlos en vivo. */
     /**
      * TIPO asignado solo (usuario, 4-oct; la misma cuenta que LineasRegistros.tipoAutomatico_): equipo sin línea → EQUIPO;
-     * con línea → EQUIPO + SIM, o EQUIPO + SIM BASICO si es básica; línea sola → LINEA o LINEA BASICA. Una línea
+     * con línea → EQUIPO + SIM, o EQUIPO + SIM BASICO si es básica; línea sola → LINEA o SIM BASICO. Una línea
      * CANCELADA ya no cuenta. MODEM, BANDA ANCHA y CAMARA (histórico) se quedan como están.
      */
     function tipoAutomatico(v, ctx) {
@@ -1435,7 +1435,7 @@
       const vacio = (x) => !x || ['N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'].indexOf(x) >= 0;
       const conLinea = (!vacio(txt('NUMERO TELEFONO')) || !vacio(txt('NUMERO SIM'))) && txt('ESTATUS LINEA') !== 'CANCELADA';
       const basica = txt('TIPO DE LINEA') === 'SIM BASICO';
-      if (ctx && ctx.parte === 'LINEA' && txt('_VINCULAR') !== 'TRUE') return basica ? 'LINEA BASICA' : 'LINEA';
+      if (ctx && ctx.parte === 'LINEA' && txt('_VINCULAR') !== 'TRUE') return basica ? 'SIM BASICO' : 'LINEA';
       if (ctx && ctx.parte === 'LINEA') return basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM';
       return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
     }
@@ -2753,11 +2753,11 @@
       // línea). Clic = solo ese tipo; si en esta pestaña no hay de ese tipo (una LINEA suelta en Equipos), lleva a la
       // otra pestaña con el filtro. Otra vez (o Todos) = todos. Es una franja de íconos que se despliega con el mouse
       // (o el teclado) por encima de la tabla, como el menú lateral de Gmail: sin botón y sin mover la tabla (solo CSS).
-      const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
+      const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
       const TIPOS_APPSHEET = ORDEN_TIPOS.filter((t) => t !== 'CAMARA'); // la lista del AppSheet; CAMARA solo si hay
-      const PESTANA_TIPO = { 'LINEA': 'lineas', 'LINEA BASICA': 'lineas' }; // sin registros: a dónde lleva (el resto, Equipos)
+      const PESTANA_TIPO = { 'LINEA': 'lineas', 'SIM BASICO': 'lineas' }; // sin registros: a dónde lleva (el resto, Equipos)
       const NOMBRE_TIPO = { 'EQUIPO': 'Equipo', 'EQUIPO + SIM': 'Equipo + SIM', 'EQUIPO + SIM BASICO': 'Equipo + SIM básico', 'LINEA': 'Línea',
-        'LINEA BASICA': 'Línea básica', 'BANDA ANCHA': 'Banda ancha', 'MODEM': 'Módem', 'CAMARA': 'Cámara' };
+        'SIM BASICO': 'SIM básico', 'BANDA ANCHA': 'Banda ancha', 'MODEM': 'Módem', 'CAMARA': 'Cámara' };
       /** { tipo: { total (registros únicos), equipos, lineas } } de todo el inventario. */
       function conteoTipos() {
         const c = {};
