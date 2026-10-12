@@ -283,13 +283,13 @@ def dry_run(salida):
                          despues="%s/%s/%s/%s/@VERIFICACION|%s|%s|%s" % (a["nuco"], RAIZ, anio, SEMESTRE[sem], fecha, sufijo,
                                                                          reglas.extension(a["name"], a["mime"]))))
 
-    # _POR REVISAR: plano, el nombre lleva de dónde venía
+    # Lo que no se pudo ubicar (sin fecha, documentos del vehículo, lo ajeno) SE QUEDA DONDE ESTÁ (12-oct-2026): solo se
+    # acomodan los certificados con fecha. La app lo muestra como "otros archivos de la carpeta"; la pasada de
+    # _POR REVISAR con el área lo resuelve después.
     for p in plan:
-        if p["accion"] == "REVISAR":
-            a = next(x for x in foto["archivos"] if x["id"] == p["id"])
-            origen = next((s.strip() for s in reversed(a["ruta"][1:-1])), "")
-            p.update(accion="MOVER", destino_tipo="POR REVISAR",
-                     despues="/".join([a["nuco"], RAIZ, POR_REVISAR, (origen + " - " if origen else "") + a["name"]]))
+        if p["accion"] == "REVISAR" or p.get("destino_tipo") == "POR REVISAR":
+            p.update(accion="IGUAL", destino_tipo="SE QUEDA", despues=p["nuco"] + "/" + p["antes"],
+                     aviso="se queda donde está: " + (p["aviso"] or ""))
 
     # Nombres finales: VERIFICACION-0088 2026-06-11 RECHAZO.pdf; idéntico (mismo md5) en el mismo destino → papelera
     usados = collections.defaultdict(set)
