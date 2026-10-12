@@ -10,7 +10,7 @@ const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 test('la responsiva se abre en su página desde Documentos, el doble clic y el Historial', () => {
   const lineas = read('src/html/js/lineas.html');
   assert.match(lineas, /inspeccion: pintarInspeccion, responsiva: pintarResponsiva \}\[tipo\]/);
-  assert.match(lineas, /titulo: 'Ver responsiva', visible: \(d\) => d\.documento === 'Responsiva', alHacer: \(d\) => abrir\('responsiva', d\.id\)/);
+  assert.match(lineas, /doc\('eye', 'Ver responsiva', 'ver', true, \(d\) => d\.documento === 'Responsiva', \(d\) => abrir\('responsiva', d\.id\)\)/);
   assert.match(lineas, /abrir\(d\.documento === 'Inspección' \? 'inspeccion' : 'responsiva', d\.id\);/);
   assert.match(lineas, /titulo: 'Ver responsiva', visible: \(m\) => m\.refTipo === 'responsiva' && !!m\.refId/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasResponsiva\(token, id\) \{\s+return TelefoniaService\.responsiva\(token, id\);/);
@@ -19,7 +19,13 @@ test('la responsiva se abre en su página desde Documentos, el doble clic y el H
 test('la página de la responsiva muestra lo de ese día: responsable con director, equipo y línea, accesorios y comentario', () => {
   const lineas = read('src/html/js/lineas.html');
   const pagina = lineas.slice(lineas.indexOf('function pintarResponsiva('), lineas.indexOf('// ---- Inspección ----'));
-  assert.match(pagina, /llamar\('apiLineasResponsiva', id\)/);
+  assert.match(pagina, /pedirDocumento\('responsiva', id\)/);
+  // Usuario, 9-oct: la página sale al instante con lo que trajo la ficha y se precarga al seleccionar la fila
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /const API_DOCUMENTO = \{ inspeccion: 'apiLineasInspeccion', responsiva: 'apiLineasResponsiva' \};/);
+  assert.match(cliente, /if \(tipo === 'inspeccion' \|\| tipo === 'responsiva'\) pintarDocumentoPrevio\(detalle, tipo, id\);/);
+  assert.match(cliente, /alCambiarSeleccion: \(sel\) => \{ if \(sel\.length === 1\) precargarDocumento\(/);
+  assert.match(cliente, /return pedirDocumento\('inspeccion', id\)\.then/);
   assert.match(pagina, /\['Director', s\.director\]/);
   assert.match(pagina, /' Equipo y línea'/);
   assert.match(pagina, /' Accesorios entregados'/);

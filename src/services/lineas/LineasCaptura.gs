@@ -476,6 +476,7 @@ const LineasCaptura = (function () {
       const valores = r.valores;
       // PATRON: puntos trazados en el sistema ("1-2-3") o el valor que ya tenía la línea
       if (datos.patron !== undefined && datos.patron !== null) valores['PATRON'] = String(datos.patron);
+      if (LineasUtil.bloqueoSinPatron(datos)) valores['PATRON'] = '';
       limpiarAdicionales_(valores);
       const fechaRegistro = valores['FECHA DE REGISTRO'] ? new Date(valores['FECHA DE REGISTRO']) : ahora;
       const calificacion = LineasChecklist.calificacion(valores);
@@ -574,6 +575,7 @@ const LineasCaptura = (function () {
       if (r.errores.length) throw new Error(r.errores.join(' · '));
       const valores = r.valores;
       if (datos.patron !== undefined && datos.patron !== null) valores['CONTRASEÑA'] = String(datos.patron);
+      if (LineasUtil.bloqueoSinPatron(datos)) valores['CONTRASEÑA'] = '';
       // Una sola fecha (como la inspección); el PDF sigue usando DIA, MES y AÑO
       const fechaDoc = valores['FECHA RESPONSIVA'] ? new Date(valores['FECHA RESPONSIVA']) : ahora;
       const fechaResp = isNaN(fechaDoc) ? ahora : fechaDoc;
@@ -604,6 +606,8 @@ const LineasCaptura = (function () {
         copia['PATRON'] = String(datos.patron);
         if (String(valores['PIN EQUIPO'] || '').trim().toUpperCase() === 'PATRON') copia['PIN EQUIPO'] = 'PATRON';
       }
+      // Con PIN, contraseña o sin bloqueo, el patrón del equipo se borra y su PIN EQUIPO queda el de la responsiva
+      if (LineasUtil.bloqueoSinPatron(datos)) { copia['PATRON'] = ''; copia['PIN EQUIPO'] = valores['PIN EQUIPO'] || ''; }
       const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;
 
       // Con identificación, la carpeta de la responsiva ya existe (la suya): su PDF se guarda ahí (destinoPdf_)
@@ -761,8 +765,10 @@ const LineasCaptura = (function () {
     const archivo = (c) => LineasArchivos.blob(col(c));
     const imagen = (clave, c, nombre) => (firmas && firmas[clave] ? blobBase64_(firmas[clave], nombre) : archivo(c));
     const colPatron = esInspeccion ? 'PATRON' : 'CONTRASEÑA';
+    // Con un PIN o una contraseña en PIN EQUIPO, el patrón que quedó de antes no va en el PDF (usuario, 9-oct)
+    const rutaPatron = LineasUtil.patronVigente(col('PIN EQUIPO'), col(colPatron));
     const patron = firmas && firmas.patron ? blobBase64_(firmas.patron, 'patron.png')
-      : LineasPatronPng.blob(col(colPatron), esInspeccion ? '#ddebf7' : '#ffffff') || archivo(colPatron);
+      : (rutaPatron ? LineasPatronPng.blob(rutaPatron, esInspeccion ? '#ddebf7' : '#ffffff') || LineasArchivos.blob(rutaPatron) : null);
     // Con responsables adicionales, la firma del principal va más chica: los demás firman el PDF impreso en la misma línea
     const nombreFirmaResponsable = ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firma-principal.png' : 'firma-responsable.png';
     const destino = PDF[tipo];

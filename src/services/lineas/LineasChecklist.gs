@@ -32,10 +32,14 @@ const LineasChecklist = (function () {
   };
 
   /**
-   * Los tipos básicos (EQUIPO + SIM BASICO, LINEA BASICA; 4-oct) no existían en el AppSheet: para sus reglas valen
+   * Los tipos básicos (EQUIPO + SIM BASICO y SIM BASICO, la línea sola; 4-oct) no existían en el AppSheet: para sus reglas valen
    * como EQUIPO + SIM y LINEA. Sin esto la inspección del NUCO 0726 solo mostraba unos cuantos puntos.
    */
-  const tipoBase = (tipo) => String(tipo || '').trim().toUpperCase().replace(/ BASIC[OA]$/, '');
+  // SIM BASICO es la línea sola básica (antes del 12-oct, LINEA BASICA; pendiente 2.35)
+  const tipoBase = (tipo) => {
+    const t = String(tipo || '').trim().toUpperCase();
+    return t === 'SIM BASICO' || t === 'LINEA BASICA' ? 'LINEA' : t.replace(/ BASIC[OA]$/, '');
+  };
 
   function cumple(codigo, tipo) {
     const f = CONDICIONES[codigo];

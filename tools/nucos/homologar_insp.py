@@ -1,7 +1,7 @@
-"""DRY RUN (sin Drive: trabaja sobre la foto foto.json): homologar <NUCO>/4.- INSPECCIONES.
+"""DRY RUN (sin Drive: trabaja sobre la foto foto.json): homologar <NUCO>/4.-INSPECCIONES.
 
 Reglas (acordadas el 9-oct-2026):
-  4.- INSPECCIONES/
+  4.-INSPECCIONES/
      <año>/
         <N> BIMESTRE/          hasta 2025 (1ER … 6TO)
         <N> TRIMESTRE/         2026 en adelante (1ER … 4TO), por la fecha de lo que contiene
@@ -15,14 +15,14 @@ Reglas (acordadas el 9-oct-2026):
 
 Uso: homologar_insp.py foto.json salida   →  salida.xlsx, salida.json, salida-arboles.txt
 """
-import sys, json, re, collections, statistics
+import sys, datetime, json, re, collections, statistics
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parent))
 import reglas
 
 FOTO, SALIDA = sys.argv[1], sys.argv[2]
 x = json.load(open(FOTO, encoding="utf-8"))
 C, A = x["carpetas"], x["archivos"]
-RAIZ = "4.- INSPECCIONES"
+RAIZ = "4.-INSPECCIONES"
 AJENO = ["@AJENO"]          # marca: se decide al final (documentación o _POR REVISAR)
 SIN_PERIODO = "SIN PERIODO"
 ORD = {1: "1ER", 2: "2DO", 3: "3ER", 4: "4TO", 5: "5TO", 6: "6TO"}
@@ -45,10 +45,48 @@ raiz_de = {r["id"]: r for r in x["raices"]}
 def fecha_nombre(nombre):
     """'22122025-U46BLX.PDF' → (2025, 12, 22); solo si es una fecha válida ddmmaaaa al inicio."""
     m = re.match(r"\s*(\d{2})(\d{2})(\d{4})(?!\d)", nombre)
-    if not m:
+    h = re.match(r"\s*INSPECCION-\d{4} (\d{4})-(\d{2})-(\d{2})(?!\d)", nombre)   # el nombre ya homologado
+    if h:
+        a, mes, d = int(h.group(1)), int(h.group(2)), int(h.group(3))
+    elif not m:
         return None
-    d, mes, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
+    else:
+        d, mes, a = int(m.group(1)), int(m.group(2)), int(m.group(3))
     return (a, mes, d) if 1 <= d <= 31 and 1 <= mes <= 12 and 2010 <= a <= 2030 else None
+
+
+def _valida(a, mes, d):
+    try:
+        datetime.date(a, mes, d)
+    except ValueError:
+        return None
+    return (a, mes, d) if 2015 <= a <= 2026 else None
+
+
+def fecha_flexible(nombre):
+    """Las otras formas en que el área escribe la fecha del PDF, solo las que no se prestan a dos lecturas
+    (11-oct-2026; 348 PDF se quedaban sin renombrar):
+      '8072025-LA73647.PDF'   d/mm/aaaa de 7 dígitos, si solo una lectura es fecha ('1072025' es 1/07 o 10/7: no)
+      '181224-SV5769C.pdf', 'SV5769C-181224.pdf'   ddmmaa al inicio o al final
+      '20231026113318911.pdf'   el sello del escáner (aaaammdd + hora)"""
+    n = nombre.strip()
+    m = re.match(r"(20\d\d)(\d\d)(\d\d)\d{6,}(?!\d)", n)
+    if m:
+        return _valida(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    m = re.match(r"(\d)(\d)(\d)(\d{4})(?!\d)", n)
+    if m:
+        a = int(m.group(4))
+        lecturas = {f for f in (_valida(a, int(m.group(2) + m.group(3)), int(m.group(1))),
+                                _valida(a, int(m.group(3)), int(m.group(1) + m.group(2)))) if f}
+        return lecturas.pop() if len(lecturas) == 1 else None
+    m = re.match(r"(\d\d)(\d\d)(\d\d)(?=[-_ ])", n) or re.search(r"[-_ ](\d\d)(\d\d)(\d\d)(?=\.[A-Za-z0-9]{2,4}$|$)", n)
+    if m:
+        return _valida(2000 + int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    return None
+
+
+def fecha_pdf(nombre):
+    return fecha_nombre(nombre) or fecha_flexible(nombre)
 
 
 def todos_los_archivos(cid, prof=3):
@@ -62,7 +100,7 @@ def todos_los_archivos(cid, prof=3):
 def fecha_carpeta(cid):
     """La fecha de una inspección: la de su PDF (ddmmaaaa); si hay varios, la más repetida. Si no hay, la mediana de
     cuándo se subieron sus archivos. → ((año, mes, día), 'pdf' | 'archivos') o (None, None)"""
-    pdfs = [fecha_nombre(a["name"]) for a in arch_de[cid] if a["mime"].endswith("pdf")]
+    pdfs = [fecha_pdf(a["name"]) for a in arch_de[cid] if a["mime"].endswith("pdf")]
     pdfs = [f for f in pdfs if f]
     if pdfs:
         return collections.Counter(pdfs).most_common(1)[0][0], "pdf"
@@ -165,7 +203,7 @@ def periodo_final(anio, p, fecha):
 
 
 # ---------- el plan: a cada carpeta, su ruta nueva (relativa a la raíz) ----------
-destino = {}        # id carpeta → lista de segmentos nuevos (relativa a 4.- INSPECCIONES)
+destino = {}        # id carpeta → lista de segmentos nuevos (relativa a 4.-INSPECCIONES)
 nota = {}           # id carpeta → (clasificación, aviso)
 destino_arch = {}   # id archivo → segmentos nuevos (carpeta) + nombre
 avisos = []
@@ -256,6 +294,12 @@ def colocar(c, anio, ctx):
     # no es confiable (se suben semanas después, o se copian de otra carpeta). Para el año de algo suelto sí sirve.
     if fuente != "pdf":
         fecha = None
+    # Ya homologada (una corrida anterior, el piloto): se queda como está. Sin esto el plan no es idempotente:
+    # "SIN PERIODO - X" se volvía "SIN PERIODO - SIN PERIODO - X" y "POR BAJA 2026-05-13" perdía su fecha
+    if c["name"].strip() == SIN_PERIODO or c["name"].startswith(SIN_PERIODO + " - "):
+        nota[c["id"]] = ("PERIODO", "ya homologada")
+        inspeccion(c["id"], anio, c["name"].strip(), ctx)
+        return
     if t[0] == "AJENO":
         nota[c["id"]] = ("AJENO", "")
         ajeno(c["id"], anio, AJENO + [str(anio), c["name"].strip()])
@@ -263,6 +307,9 @@ def colocar(c, anio, ctx):
     if t[0] == "MOTIVO":
         f = fecha if fecha and fecha[0] == anio else None
         nombre = t[1] + (" %04d-%02d-%02d" % f if f else "")
+        ya = re.fullmatch(re.escape(t[1]) + r" (\d{4})-\d{2}-\d{2}", c["name"].strip())
+        if not f and ya and int(ya.group(1)) == anio:
+            nombre = c["name"].strip()
         nota[c["id"]] = ("MOTIVO", "" if f else "sin fecha: va sin fecha")
         if f and fuente == "archivos":
             nota[c["id"]] = ("MOTIVO", "fecha tomada de cuándo se subieron los archivos (no hay PDF con fecha)")
@@ -325,6 +372,12 @@ def archivo_suelto(a, anio):
 
 for r in x["raices"]:
     for c in hijas[r["id"]]:
+        if c["name"].strip() == "_POR REVISAR":
+            # Ya apartado por una corrida anterior: se queda (plano) como está
+            destino[c["id"]] = ["_POR REVISAR"]
+            nota[c["id"]] = ("POR REVISAR", "ya homologada")
+            bajo_igual(c["id"], destino[c["id"]])
+            continue
         if es_anio(c["name"]):
             anio = int(c["name"].strip())
             destino[c["id"]] = [str(anio)]
@@ -387,6 +440,9 @@ for a in A:
     # El PDF de la inspección (directo en el periodo o motivo) con fecha → INSPECCION-0267 2025-12-22.pdf
     if es_anio(segs[0] if segs else "") and len(segs) == 2 and a["mime"].endswith("pdf"):
         f = fecha_nombre(a["name"])
+        if not f:
+            f = fecha_flexible(a["name"])
+            f = f if f and f[0] == int(segs[0]) else None    # la forma dudosa solo si cuadra con su año
         if f:
             nombre = "INSPECCION-%04d %04d-%02d-%02d.pdf" % (int(a["nuco"]), *f)
     plan.append(dict(base, accion="MOVER", despues="/".join([a["nuco"], RAIZ] + segs + [nombre])))
@@ -418,10 +474,10 @@ for p in plan:
                 conc = "ALTA DE PLACAS"
             elif re.search(r"VERIFICAC", texto):
                 conc = None
-                p["aviso"] = "factura de una verificación: le toca a 3.- VERIFICACIONES"
+                p["aviso"] = "factura de una verificación: le toca a 3.-VERIFICACIONES"
     if de_servicio:
         p["accion"] = "REVISAR"
-        p["aviso"] = "es de un servicio (factura/cotización del taller), no del vehículo: le toca a 2.- SERVICIOS"
+        p["aviso"] = "es de un servicio (factura/cotización del taller), no del vehículo: le toca a 2.-SERVICIOS"
         continue
     if not conc:
         p["accion"] = "REVISAR"
@@ -509,7 +565,7 @@ print("a 1.-DOCUMENTACIÓN:", sum(1 for p in plan if p["destino_tipo"] == "DOCUM
 print("papelera por motivo:", collections.Counter(re.sub(r" del NUCO.*", "", p["aviso"]) for p in plan if p["accion"] == "PAPELERA"))
 prof = collections.Counter(len(p["despues"].split("/")) - 3 for p in plan
                            if p["accion"] in ("MOVER", "IGUAL") and p["despues"].split("/")[1] == RAIZ)
-print("niveles de carpeta bajo 4.- INSPECCIONES (archivos por profundidad):", sorted(prof.items()))
+print("niveles de carpeta bajo 4.-INSPECCIONES (archivos por profundidad):", sorted(prof.items()))
 segundo = {p["despues"].split("/")[3] for p in plan if p["accion"] in ("MOVER", "IGUAL") and len(p["despues"].split("/")) > 4
            and es_anio(p["despues"].split("/")[2])}
 print("nombres de nivel 2 después:", sorted({re.sub(r"\d{4}-\d{2}-\d{2}", "<fecha>", re.sub(r"^SIN PERIODO - .*", "SIN PERIODO - <nombre>", k)) for k in segundo}))

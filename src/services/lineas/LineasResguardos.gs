@@ -494,7 +494,7 @@ const LineasResguardos = (function () {
     espejar_(r.hechos, (f, sol) => {
       if (LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO')) !== LineasUtil.digitos(sol['NUMERO'])) return null; // ya tiene otra línea
       const tipo = may(LineasUtil.col(f, 'TIPO'));
-      // Registro de solo línea (TIPO LINEA / LINEA BASICA): el número es el registro; solo queda CANCELADA
+      // Registro de solo línea (TIPO LINEA / SIM BASICO): el número es el registro; solo queda CANCELADA
       if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) return { 'ESTATUS LINEA': 'CANCELADA' };
       const cambios = Object.assign({}, LineasRepo.VALORES_SIN_LINEA, { 'ESTATUS LINEA': 'CANCELADA' });
       cambios['TIPO'] = LineasRepo.tipoSinLinea(tipo);

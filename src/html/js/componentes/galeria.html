@@ -1,0 +1,117 @@
+<style>
+  /* Rejilla de miniaturas (en la página) y visor a pantalla completa (encima de todo) */
+  .galeria-seccion { margin-bottom: 18px; }
+  .galeria-seccion h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .4px; text-transform: uppercase; color: var(--color-text-muted); }
+  .galeria-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .galeria-mini {
+    position: relative; aspect-ratio: 1 / 1; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;
+    background: var(--color-bg); padding: 0; cursor: zoom-in; display: flex; align-items: center; justify-content: center;
+    color: var(--color-text-muted);
+  }
+  .galeria-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .galeria-mini:hover { border-color: var(--color-primary); }
+  .galeria-mini .galeria-video { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff; border-radius: 6px; padding: 2px 6px; font-size: 11px; }
+  .galeria-visor { position: fixed; inset: 0; z-index: 3000; background: rgba(10,16,20,.97); display: flex; flex-direction: column; color: #fff; }
+  .galeria-visor-barra { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; }
+  .galeria-visor-barra .galeria-titulo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .galeria-visor button, .galeria-visor a { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; text-decoration: none; cursor: pointer; }
+  .galeria-visor-cuerpo { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; padding: 0 56px 16px; }
+  .galeria-visor-cuerpo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .galeria-visor-cuerpo .galeria-prev, .galeria-visor-cuerpo .galeria-sig { position: absolute; top: 50%; transform: translateY(-50%); font-size: 22px; padding: 10px 14px; }
+  .galeria-visor-cuerpo .galeria-prev { left: 8px; }
+  .galeria-visor-cuerpo .galeria-sig { right: 8px; }
+  @media (max-width: 640px) {
+    .galeria-rejilla { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .galeria-visor-cuerpo { padding: 0 8px 12px; }
+    .galeria-visor-cuerpo .galeria-prev, .galeria-visor-cuerpo .galeria-sig { top: auto; bottom: 16px; transform: none; }
+  }
+</style>
+
+<script>
+  /**
+   * Galeria — fotos en miniatura agrupadas por sección y un visor a pantalla completa para verlas grandes y pasar de
+   * una a otra (flechas, teclado, Esc). Las fotos son archivos de Drive: { id, nombre, mime, miniatura, enlace }
+   * (miniatura = thumbnailLink de la API de Drive; sin ella sale el ícono). Un video no se reproduce aquí: se abre en
+   * Drive.
+   *
+   *   contenedor.innerHTML = Galeria.html([{ titulo: 'NEUMATICOS', fotos: [...] }, …]);
+   *   Galeria.ligar(contenedor, grupos, { titulo: 'Inspección 2026-07-09' });   // el clic en una miniatura abre el visor
+   *   Galeria.abrir(fotos, 3, { titulo });                                      // o abrirlo directo
+   */
+  const Galeria = (function () {
+    const esVideo = (f) => String(f.mime || '').indexOf('video') === 0;
+    /** El thumbnailLink de Drive termina en "=s220": se pide más grande cambiando ese número */
+    const grande = (url) => (/=s\d+(-c)?$/.test(String(url || '')) ? String(url).replace(/=s\d+(-c)?$/, '=s1600') : (url || ''));
+
+    function html(grupos) {
+      let n = 0;
+      return grupos.filter((g) => g.fotos && g.fotos.length).map((g) =>
+        '<div class="galeria-seccion"><h4>' + escaparHtml(g.titulo) + ' (' + g.fotos.length + ')</h4><div class="galeria-rejilla">' +
+        g.fotos.map((f) => '<button type="button" class="galeria-mini" data-galeria="' + (n++) + '" title="' + escaparHtml(f.nombre || '') + '">' +
+          (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + escaparHtml(f.miniatura) + '" alt="' + escaparHtml(f.nombre || '') + '">'
+            : Iconos.svg(esVideo(f) ? 'video' : 'image')) +
+          (esVideo(f) ? '<span class="galeria-video">video</span>' : '') + '</button>').join('') +
+        '</div></div>').join('');
+    }
+
+    function ligar(contenedor, grupos, opciones) {
+      const todas = [].concat(...grupos.filter((g) => g.fotos && g.fotos.length).map((g) =>
+        g.fotos.map((f) => Object.assign({ seccion: g.titulo }, f))));
+      contenedor.addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-galeria]');
+        if (b) abrir(todas, Number(b.dataset.galeria), opciones);
+      });
+    }
+
+    let visor = null;
+    function cerrar() {
+      if (!visor) return;
+      document.removeEventListener('keydown', visor.teclas);
+      visor.el.remove();
+      visor = null;
+    }
+
+    function abrir(fotos, inicio, opciones) {
+      cerrar();
+      const op = opciones || {};
+      const el = document.createElement('div');
+      el.className = 'galeria-visor';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-modal', 'true');
+      document.body.appendChild(el);
+      let i = Math.max(0, Math.min(inicio || 0, fotos.length - 1));
+      function pintar() {
+        const f = fotos[i];
+        const titulo = [op.titulo, f.seccion, f.nombre].filter(Boolean).join(' · ');
+        const cuerpo = esVideo(f) || !f.miniatura
+          ? '<a href="' + escaparHtml(f.enlace || '#') + '" target="_blank" rel="noopener">' + Iconos.svg(esVideo(f) ? 'video' : 'image') + ' Abrir en Drive</a>'
+          : '<img referrerpolicy="no-referrer" src="' + escaparHtml(grande(f.miniatura)) + '" alt="' + escaparHtml(f.nombre || '') + '">';
+        el.innerHTML = '<div class="galeria-visor-barra"><span class="galeria-titulo">' + escaparHtml(titulo) + '</span>' +
+          '<span>' + (i + 1) + ' / ' + fotos.length + '</span>' +
+          (f.enlace ? '<a href="' + escaparHtml(f.enlace) + '" target="_blank" rel="noopener">Drive</a>' : '') +
+          '<button type="button" data-galeria-cerrar aria-label="Cerrar">' + Iconos.svg('x') + '</button></div>' +
+          '<div class="galeria-visor-cuerpo">' + cuerpo +
+          (fotos.length > 1 ? '<button type="button" class="galeria-prev" data-galeria-mover="-1" aria-label="Anterior">‹</button>' +
+            '<button type="button" class="galeria-sig" data-galeria-mover="1" aria-label="Siguiente">›</button>' : '') + '</div>';
+      }
+      const mover = (d) => { i = (i + d + fotos.length) % fotos.length; pintar(); };
+      el.addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-galeria-cerrar]')) return cerrar();
+        const m = ev.target.closest('[data-galeria-mover]');
+        if (m) return mover(Number(m.dataset.galeriaMover));
+        if (ev.target === el || ev.target.classList.contains('galeria-visor-cuerpo')) cerrar();
+      });
+      const teclas = (ev) => {
+        if (ev.key === 'Escape') cerrar();
+        else if (ev.key === 'ArrowRight') mover(1);
+        else if (ev.key === 'ArrowLeft') mover(-1);
+      };
+      document.addEventListener('keydown', teclas);
+      visor = { el, teclas };
+      pintar();
+      return { mover, cerrar, actual: () => i };
+    }
+
+    return { html, ligar, abrir, cerrar, grande };
+  })();
+</script>

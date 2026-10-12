@@ -262,10 +262,13 @@ const LineasRegistros = (function () {
     const fechas = nuevo || !tieneLinea ? 'SIEMPRE' : 'NUNCA';
     // En el alta no se muestra con SIM BASICO: no tiene adendum y no se le pide (usuario, 8-oct; plan §4.3)
     const conPlan = { campo: 'TIPO DE LINEA', distinto: 'SIM BASICO' };
-    // Al editar también se esconde con SIM BASICO, salvo que ya tenga datos de adendum (no se ocultan ni se borran)
+    // Al editar también se esconde con SIM BASICO, y al cambiarla a SIM BASICO el adendum se borra (usuario, 12-oct;
+    // pendiente 2.33). Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran al editar otra cosa
     const conAdendum = ['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'].some((c) => texto_(v(c)));
+    const yaBasicoConAdendum = conAdendum && texto_(v('TIPO DE LINEA')).toUpperCase() === 'SIM BASICO';
     const soloPlan = nuevo ? { mostrar: conPlan, reset: { cuando: { campo: 'TIPO DE LINEA', igual: 'SIM BASICO' }, valor: '' } }
-      : (conAdendum ? {} : { mostrar: conPlan });
+      : { mostrar: yaBasicoConAdendum ? 'SIEMPRE' : conPlan,
+        reset: { cuando: { y: [{ campo: 'TIPO DE LINEA', igual: 'SIM BASICO' }, { cambio: 'TIPO DE LINEA' }] }, valor: '' } };
     const adendum = [
       titulo('ADENDUM', 'file-text'),
       ed('COSTO PLAN', 'Costo del plan', 'numero', soloPlan),
@@ -324,7 +327,7 @@ const LineasRegistros = (function () {
 
   /**
    * TIPO asignado solo (usuario, 4-oct): un equipo sin línea es EQUIPO; con línea, EQUIPO + SIM, o EQUIPO + SIM BASICO si
-   * la línea es básica; una línea sola, LINEA o LINEA BASICA. Una línea CANCELADA ya no cuenta. MODEM, BANDA ANCHA y
+   * la línea es básica; una línea sola, LINEA o SIM BASICO. Una línea CANCELADA ya no cuenta. MODEM, BANDA ANCHA y
    * CAMARA se quedan (histórico). La pantalla hace la misma cuenta (tipoAutomatico) para mostrarlo en vivo.
    */
   function tipoAutomatico_(parte, valores, tipoActual) {
@@ -334,7 +337,7 @@ const LineasRegistros = (function () {
       texto_(valores['ESTATUS LINEA']).toUpperCase() !== 'CANCELADA';
     const basica = texto_(valores['TIPO DE LINEA']).toUpperCase() === 'SIM BASICO';
     if (parte === 'EQUIPO') return !conLinea ? 'EQUIPO' : (basica ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM');
-    return basica ? 'LINEA BASICA' : 'LINEA';
+    return basica ? 'SIM BASICO' : 'LINEA';
   }
 
   /** Valores de la fila como texto/fecha ISO local para el formulario. */
@@ -423,6 +426,8 @@ const LineasRegistros = (function () {
     };
     const campoTipo = orden.filter((e) => e.columna === 'TIPO')[0];
     if (campoTipo) tomar(campoTipo); // las acciones masivas no traen TIPO
+    // Una pestaña abierta antes del 12-oct todavía manda LINEA BASICA: ahora se llama SIM BASICO (pendiente 2.35)
+    if (texto_(valores['TIPO']).toUpperCase() === 'LINEA BASICA') valores['TIPO'] = 'SIM BASICO';
     const tipo = texto_(valores['TIPO']).toUpperCase();
     orden.forEach((e) => { if (e.columna !== 'TIPO') tomar(e); });
     // 2) Reset_If
@@ -603,6 +608,7 @@ const LineasRegistros = (function () {
       const r = resolver_(elementos, base, enviados, ctx);
       if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
       const valores = homologarNuco_(aHoja_(elementos, r.valores));
+      if (LineasUtil.bloqueoSinPatron(datos) && 'PATRON' in valores) valores['PATRON'] = '';
       // Solo lo que cambió (las fechas sin cambio se comparan por texto para no reescribirlas)
       const cambios = {};
       Object.keys(valores).forEach((c) => {

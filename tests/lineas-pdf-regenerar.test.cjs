@@ -91,7 +91,8 @@ function captura(fila, opciones) {
       buscarFilasPorId: () => [2], leerFilas: () => [[fila]], idsDeFila: () => [fila.ID], existeTabla: () => true,
       buscarFilasVarios: () => [7], conCandado: (f) => f(), actualizarFila: (...a) => hechos.ligados.push(a),
     },
-    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nuco4: (n) => String(n).padStart(4, '0') },
+    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nuco4: (n) => String(n).padStart(4, '0'),
+      patronVigente: (pin, p) => (!pin || /^PATR[OÓ]N$/i.test(pin) ? (p || '') : '') },
     LineasArchivos: {
       blob: () => null, enNucos: () => true, olvidarNuco: () => {},
       reemplazarPdf: (id, bytes) => { hechos.reemplazos.push([id, bytes.length]); return { id, name: 'RESP 0012 05 10.pdf' }; },
@@ -155,7 +156,8 @@ test('las firmas de la captura (caché) bastan para regenerar sin pedirlas', () 
 
 test('la pantalla: «Regenerar PDF» solo en responsivas del sistema con PDF y con permiso de operar; pide solo las firmas', () => {
   const cliente = read('src/html/js/lineas.html');
-  assert.match(cliente, /\{ icono: 'refresh-ccw', titulo: 'Regenerar PDF', visible: \(d\) => operar && d\.tipoPdf === 'RESPONSIVA' && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+alHacer: \(d\) => regenerarPdf\(d\) \}/);
+  // Fuera de la barra: en el ⋮ y el clic derecho (usuario, 12-oct; pendiente 2.34)
+  assert.match(cliente, /doc\('refresh-ccw', 'Regenerar PDF', 'pdf', false, \(d\) => operar && d\.tipoPdf === 'RESPONSIVA' && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+\(d\) => regenerarPdf\(d\)\)/);
   assert.match(cliente, /refrescarDespuesDeCaptura\(registroId \|\| pila\[pila\.length - 1\]\.id, d\.tipoPdf, d\.id, true\);/);
   assert.match(cliente, /llamar\('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura\.pdfFirmas \|\| null\)/);
   assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar\); return; \}/);

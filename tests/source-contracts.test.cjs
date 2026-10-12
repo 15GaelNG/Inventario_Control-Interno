@@ -259,7 +259,7 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'EQUIPO + SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001', 'ESTATUS LINEA': 'CANCELADA' }, ''), 'EQUIPO');
   assert.equal(T('LINEA', { 'NUMERO TELEFONO': '4420000001' }, ''), 'LINEA');
-  assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'LINEA BASICA');
+  assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001' }, 'MODEM'), 'MODEM'); // histórico: se queda
   assert.match(reg, /const valores = homologarNuco_\(aHoja_\(elementos, r\.valores\)\);/);
   // La bitácora no registra "5 → 0005" como un cambio (solo se escribe homologado)
@@ -831,7 +831,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
   assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',\s+filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
-  assert.match(lineas, /\{ icono: 'file-plus', titulo: 'Generar PDF', visible: \(d\) => !!d\.pdfPendiente,/);
+  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => !!d\.pdfPendiente,/);
   // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
   assert.match(lineas, /idTabla: 'lineas-documentos-v1',\s+exportar: false,/);
   assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
@@ -944,7 +944,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v6';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v7';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1728,7 +1728,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
   assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', puedeOperar, '', true\)/);
   assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
-  assert.match(lineas, /\.concat\(drive, documentos, \[/);
+  assert.match(lineas, /\.concat\(documentos, drive, operar \? editar\.concat\(vinculo\) : \[\], historial\)/);
   assert.doesNotMatch(lineas, /Abrir carpeta/);
   assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e,/);
   assert.match(lineas, /function abrirMenuFicha\(boton\)/);
@@ -1755,8 +1755,10 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.match(dt, /class="dt-menu-titulo">\$\{esc\(a\.tituloGrupo\)\}/);
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
-  assert.match(lineas, /texto: 'Ver última inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección'/);
-  assert.match(lineas, /texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'responsiva', tituloGrupo: 'Responsiva'/);
+  // Nueva inspección y Nueva responsiva juntas; Ver la última, solo en la ficha (usuario, 12-oct; pendiente 2.34)
+  assert.match(lineas, /texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.match(lineas, /texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);
   assert.match(lineas, /conservarSeleccion: \(el\) => !!el\.closest\('#ln-listado \.ln-cuadro, #ln-modal-captura, \.ln-menu-flotante'\)/);
   // Documentos, historial, bandeja…: sin columna de Acciones; sus botones van a la barra y al clic derecho
   assert.match(dt, /const hayAccionesFila = accionesFila\.length > 0 && !\(cfg\.seleccionDrive && cfg\.seleccionable\);/);
@@ -2314,4 +2316,16 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
   assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
+});
+
+test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.boton, no hechos a mano', () => {
+  const dir = path.join(__dirname, '..', 'src', 'html', 'js');
+  const malos = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.html') && !/^lineas/.test(n))) {
+    const txt = fs.readFileSync(path.join(dir, f), 'utf8');
+    if (/>Ver<\/a>/.test(txt)) malos.push(f + ': <a …>Ver</a>');
+    if (/class="secondary" data-archivo=/.test(txt)) malos.push(f + ': botón de archivo con class="secondary"');
+    if (/ficha-tabla-wrap/.test(txt)) malos.push(f + ': tabla de ficha hecha a mano (usa TablaFicha.html)');
+  }
+  assert.deepEqual(malos, []);
 });

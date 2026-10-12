@@ -127,6 +127,8 @@
        Arqueos). Antes de app.html porque slugCampo, que usan todos los módulos, vive ahí. -->
   <?!= include('html/js/componentes/campos-hoja'); ?>
   <?!= include('html/js/app'); ?>
+  <?!= include('html/js/app-documentos-vehiculo'); ?>
+  <?!= include('html/js/app-inspecciones-vehiculo'); ?>
   <?!= include('html/js/app-arqueos'); ?>
   <?!= include('html/js/app-cajachica'); ?>
   <?!= include('html/js/app-reasignaciones'); ?>
@@ -150,6 +152,8 @@
   <?!= include('html/js/datos-firmas-automaticas'); ?>
   <?!= include('html/js/componentes/lienzo'); ?>
   <?!= include('html/js/componentes/exportar-excel'); ?>
+  <?!= include('html/js/componentes/galeria'); ?>
+  <?!= include('html/js/componentes/tabla-ficha'); ?>
 
   <?!= include('html/js/app-verificaciones'); ?>
   <?!= include('html/js/app-relaciones-sencilla'); ?>
@@ -168,6 +172,8 @@
   <?!= include('html/js/lineas'); ?>
   <!-- Módulo temporal de correcciones (se quita cuando Líneas termine) -->
   <?!= include('html/js/lineas-correcciones'); ?>
+  <!-- Medidor de tiempos de Líneas: apagado salvo con ?medir=1 en la dirección -->
+  <?!= include('html/js/lineas-medidor'); ?>
 
   <!-- Atrás / Adelante del navegador y gesto de dos dedos del touchpad (rama emmanuel) -->
   <?!= include('html/historial-navegador'); ?>

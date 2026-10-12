@@ -1,0 +1,111 @@
+<style>
+  .docs-veh-seccion h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .docs-veh-carpeta { margin-left: auto; }
+  .docs-veh-carpetas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .docs-veh-carpetas a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 12px;
+    padding: 5px 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); }
+  .docs-veh-carpetas a:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .badge-estado.docs-veh-anterior { background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .docs-veh-relleno { margin: 4px 0 0; font-size: 13px; color: var(--color-text-muted); display: flex; align-items: center; gap: 8px; }
+  .docs-veh-archivo { display: inline-flex; align-items: center; gap: 6px; word-break: break-word; }
+</style>
+<script>
+  /**
+   * app-documentos-vehiculo.html — pestaña "Documentos" de la ficha de un vehículo.
+   *
+   * Enseña lo que hay en la carpeta de su NUCO (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN): por cada tipo de documento
+   * (factura, póliza, alta de placas, tarjeta, tenencia) el vigente y su historial. La responsiva no: tiene su pestaña. No guarda nada: lee
+   * Drive (apiDocumentosVehiculo → ExpedienteNuco.listar), así que también sale lo que el área subió a mano. Se pide
+   * solo al abrir la pestaña (leer Drive tarda ~1–3 s) y se recuerda mientras la ficha siga abierta.
+   *
+   * Uso (abrirFichaVehiculo en app.html):
+   *   pestaña { id: 'documentos', contenido: DocumentosVehiculo.contenedor(nucco) }
+   *   al mostrarla: DocumentosVehiculo.cargar(elementoDeLaPestaña)
+   */
+  const DocumentosVehiculo = (function () {
+    const yaLeidos = {};          // NUCO → respuesta (mientras la página siga abierta)
+    const ICONO = { FACTURA: 'receipt', SEGURO: 'shield-check', ALTA: 'badge-check', TARJETA: 'id-card',
+      RESPONSIVA: 'file-signature', TENENCIA: 'landmark' };
+
+    function contenedor(nucco) {
+      return '<div data-docs-vehiculo="' + escaparHtml(String(nucco || '')) + '">' +
+        '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Leyendo la carpeta del NUCO…</p></div></div>';
+    }
+
+    const esImagen = (a) => String(a.mime || '').indexOf('image') === 0;
+    const iconoArchivo = (a) => (esImagen(a) ? 'image' : /pdf/.test(a.mime || '') ? 'file-text' : 'file');
+
+    function fila(a, estado) {
+      return {
+        nombre: '<span class="docs-veh-archivo">' + Iconos.svg(iconoArchivo(a)) + ' ' + escaparHtml(a.nombre) + '</span>',
+        estado: estado,
+        fecha: formatearFecha(a.fecha),
+        ver: TablaFicha.boton({ href: a.url }),
+      };
+    }
+
+    // Los mismos anchos en todas las secciones: las columnas quedan alineadas de una tarjeta a otra
+    const COLUMNAS = [
+      { t: 'Archivo', r: (f) => f.nombre, ancho: '46%', parte: true },
+      { t: 'Estado', r: (f) => f.estado, ancho: '26%' },
+      { t: 'Subido', r: (f) => f.fecha, ancho: '16%', num: true },
+      { t: '', r: (f) => f.ver, ancho: '12%', alinear: 'derecha' },
+    ];
+    const chip = (texto, clase) => '<span class="badge-estado ' + clase + '">' + escaparHtml(texto) + '</span>';
+
+    function seccion(d) {
+      const anteriores = d.anteriores.reduce((n, g) => n + g.archivos.length, 0);
+      const total = d.vigentes.length + anteriores;
+      const filas = d.vigentes.map((a) => fila(a, chip(d.vigentes.length > 1 ? 'En la carpeta' : 'Vigente', 'activo')))
+        .concat(...d.anteriores.map((g) => g.archivos.map((a) => fila(a, chip(g.grupo, 'docs-veh-anterior')))));
+      const abrir = d.url ? '<span class="docs-veh-carpeta">' + TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</span>' : '';
+      return '<div class="card ln-card docs-veh-seccion">' +
+        '<h3>' + Iconos.svg(ICONO[d.clave] || 'file') + ' ' + escaparHtml(d.titulo) +
+        ' <span class="ln-tab-num">' + total + '</span>' + abrir + '</h3>' +
+        (filas.length ? TablaFicha.html(COLUMNAS, filas, { minAncho: 520 })
+          : d.relleno ? '<p class="docs-veh-relleno">' + chip(d.relleno === 'NO APLICA' ? 'No aplica' : 'Sin información', 'docs-veh-anterior') +
+            ' El área marcó la carpeta así: no hay documento.</p>'
+          : '<p class="empty-state">No hay ' + escaparHtml(d.titulo.toLowerCase()) + ' en la carpeta del NUCO.</p>') +
+        '</div>';
+    }
+
+    function pintar(el, exp) {
+      if (!exp.existe) {
+        el.innerHTML = '<div class="card ln-card"><p class="empty-state">Este vehículo todavía no tiene carpeta en NUCOS VEHICULOS. Se crea sola al subir su primer documento.</p></div>';
+        return;
+      }
+      const otros = exp.otros.reduce((n, g) => n + g.archivos.length, 0);
+      let html = '<div class="card ln-card docs-veh-cabecera">' +
+        '<p class="ln-tenue">Lo que hay en la carpeta del NUCO ' + escaparHtml(exp.nuco) + ', del más nuevo al más viejo. ' +
+        'Para agregar un documento: <b>Editar</b> → Documentación y seguro.</p>' +
+        '<div class="docs-veh-carpetas"><a href="' + escaparHtml(exp.url) + '" target="_blank" rel="noopener" class="secondary">' +
+        '' + Iconos.svg('folder-open') + ' NUCO ' + escaparHtml(exp.nuco) + '</a>' +
+        exp.carpetas.map((c) => '<a href="' + escaparHtml(c.url) + '" target="_blank" rel="noopener" class="secondary">' +
+          Iconos.svg('folder') + ' ' + escaparHtml(c.nombre) + '</a>').join('') + '</div></div>';
+      html += exp.documentos.map(seccion).join('');
+      if (otros) {
+        html += seccion({ clave: 'OTROS', titulo: 'Otros documentos', url: '', vigentes: [], anteriores: exp.otros });
+      }
+      el.innerHTML = html;
+    }
+
+    async function cargar(el) {
+      if (!el || el.dataset.cargado) return;
+      el.dataset.cargado = '1';
+      const nucco = el.dataset.docsVehiculo;
+      try {
+        const exp = yaLeidos[nucco] || JSON.parse(await callServer('apiDocumentosVehiculo', state.token, nucco));
+        yaLeidos[nucco] = exp;
+        if (document.body.contains(el)) pintar(el, exp);
+      } catch (err) {
+        delete el.dataset.cargado;
+        el.innerHTML = '<div class="card ln-card"><p class="empty-state">No se pudo leer la carpeta del NUCO: ' + escaparHtml(err.message) + '</p></div>';
+      }
+    }
+
+    /** Después de subir un documento desde la ficha: la próxima vez se vuelve a leer Drive */
+    function olvidar(nucco) { delete yaLeidos[String(nucco || '')]; }
+
+    return { contenedor, cargar, olvidar };
+  })();
+</script>

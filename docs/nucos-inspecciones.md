@@ -4,8 +4,53 @@ Segunda parte de [nucos-expediente.md](nucos-expediente.md), que dejó `1.-DOCUM
 Aquí se documenta lo de `4.- INSPECCIONES` del 9-oct-2026: el inventario, las reglas, la herramienta, el piloto de 6
 NUCO y lo que falta para los demás.
 
-> **Estado al 9-oct-2026:** piloto aplicado y verificado en 6 NUCO (113, 267, 482, 111, 260, 140) y rollback probado
-> en el 482. Faltan los ~570 restantes: **[Para retomar](#para-retomar-dónde-se-quedó-el-9-oct-2026)** tiene los pasos.
+> **Estado al 11-oct-2026: HOMOLOGADO.** Corrida grande aplicada y verificada en todos los NUCO
+> ([Corrida grande](#corrida-grande-11-oct-2026)). Lo que sigue está en [Después de la corrida grande](#después-de-la-corrida-grande).
+
+## Corrida grande (11-oct-2026)
+
+Domingo, sin movimiento en Drive. Foto nueva (`.cache/inspecciones/20261011b/`), dry run y 5 NUCO de prueba con hilos
+(67, 74, 485, 176, 181: bitácora `20261011-093034-inspecciones.jsonl`), luego `--todos --hilos 6` (~3 h).
+
+**Antes de correr se corrigió el plan:**
+- No era idempotente: en los 6 del piloto proponía `SIN PERIODO - SIN PERIODO - …`, quitarle la fecha a `POR BAJA
+  2026-05-13` y volver a mover `_POR REVISAR`. Ahora lo ya homologado sale IGUAL (se puede repetir la corrida).
+- Lee también la fecha del PDF en `ddmmaa` (al inicio o al final), `d/mm/aaaa` de 7 dígitos (solo si hay una lectura:
+  `1072025` no) y el sello del escáner (`20231026113318911`). 348 PDF se quedaban sin renombrar y sus motivos sin fecha.
+  La forma dudosa solo renombra si cuadra con el año de su carpeta.
+
+**Resultado** (bitácora `20261011-101603-inspecciones.jsonl`, 44,190 renglones en la hoja):
+
+| | |
+|---|---|
+| NUCO tocados | 412 de 412, ninguno saltado ni fallado |
+| Archivos movidos | 37,727 (1,793 PDF renombrados a `INSPECCION-<NUCO> <fecha>.pdf`, 676 a `1.-DOCUMENTACIÓN`, 469 a `_POR REVISAR`) |
+| A `_PAPELERA` | 150 archivos (relleno y copias idénticas) y 3,464 carpetas que quedaron vacías |
+
+**Verificación** (dos, independientes):
+1. Contra el plan (`verificar_inspecciones.py --todos`): 157,183 en su lugar + 150 en la papelera = los 157,333 de la foto.
+2. Foto de después (`.cache/inspecciones/20261011-despues/`) contra la de antes, archivo por archivo (inspecciones y
+   documentación, 166,695): **0 perdidos, 0 con otro contenido (md5), 0 cambiaron de NUCO, 0 fuera de donde dice el
+   plan**, 0 archivos nuevos durante la corrida. Estructura: todo bajo año / periodo o motivo / sección; las únicas
+   subcarpetas fuera de las 8 secciones son 119 archivos de evidencias con nombre propio dentro de una inspección (regla
+   EXTRA: `EVIDENCIAS DE CAMINO`, `INSPECCION JORGE AVECILLA`).
+
+Quedaban de antes, sin archivos (la corrida no las toca): 11 raíces vacías `4.-INSPECCIONES` (422–438, 496) y la carpeta
+vacía `236/4.- INSPECCIONES/2022`. Se renombraron / apartaron a `_PAPELERA` con su bitácora
+(`20261011-130936-inspecciones-limpieza.jsonl`). 23 NUCO tienen `4.- INSPECCIONES` vacía: solo traía documentos, que se
+fueron a `1.-DOCUMENTACIÓN`; la raíz se queda para que todos tengan la misma estructura.
+
+**Correcciones del 12-oct-2026** (`tools/nucos/corregir_fechas_insp.py`, bitácora `20261012-095804-fechas-insp.jsonl`,
+18 renglones en la hoja): 21 PDF tenían en el nombre un año distinto al de su carpeta. Era del área: en enero tecleaban
+el año anterior (`16012024-SU2825C.pdf` en `2025/1ER BIMESTRE`, subido en enero de 2025) y la homologación toma la fecha
+del nombre. Se corrigió el año a 17 (16 de enero de 2025 y el 101, cuyo mes cuadra con su carpeta de 2024) y la carpeta
+del 399 pasó de `2024/1ER BIMESTRE` a `2025/2DO BIMESTRE` (PDF y fotos de marzo de 2025). Para el área: el 42 (su lugar,
+`2025/2DO BIMESTRE`, ya tiene otra inspección), el 176 (sin forma de saberlo) y el 371 (julio en `2DO TRIMESTRE`).
+Además se rellenaron 116 puntajes vacíos de la hoja INSPECCION VEHICULAR con el de su PDF (`tools/nucos/puntajes_insp.py`,
+bitácora `20261012-095336-puntajes.jsonl`; validado 39 de 40 contra los que sí lo tenían).
+
+**Para deshacer** un NUCO: `expediente.py deshacer .cache/bitacoras/<bitácora>.jsonl --nucos N` (la más nueva primero:
+limpieza → 101603 → 093034 → las del piloto).
 
 ## Lo que había
 
@@ -258,7 +303,9 @@ De la bitácora más nueva a la más vieja. Lo deshecho queda en `<bitácora>.de
    la bitácora guarda el valor anterior). En la app: `InspeccionesService.registrar` genera el PDF en
    `<NUCO>/4.- INSPECCIONES/<año>/<N> TRIMESTRE/INSPECCION-<NUCO> <fecha>.pdf` (por `ExpedienteNuco`), guarda la liga y
    `urlFormato` acepta ligas además de rutas. Decisiones ya tomadas: trimestre por fecha; los originales de `REPORTES` de
-   las 202 copiadas se quedan donde están.
+   las 202 copiadas se quedan donde están. **El cambio de la app espera (9-oct-2026, decisión de Ayrton):** no se toca
+   mientras la homologación esté a medias ni mientras se estén moviendo archivos; se hace cuando ninguna corrida esté en
+   curso. Mientras tanto la app sigue guardando en `REPORTES` e `INSPECCIONES_Images`.
 2. **`_POR REVISAR`**: que el área diga qué es (pestaña "Por revisar" del Excel).
 3. **Vaciar `_PAPELERA`** con las cuentas dueñas.
 4. Seguir con **`2.- SERVICIOS`** (inventario y propuesta abajo) y **`3.- VERIFICACIONES`**.

@@ -859,7 +859,7 @@ def respaldar(carpeta, hilos=6):
     print("\nRespaldo: https://drive.google.com/drive/folders/%s" % raiz)
 
 
-OTRAS_CARPETAS = ["2.- SERVICIOS", "3.- VERIFICACIONES", "4.- INSPECCIONES"]   # los nombres que más se usan en NUCOS
+OTRAS_CARPETAS = ["2.-SERVICIOS", "3.-VERIFICACIONES", "4.-INSPECCIONES"]   # los nombres que más se usan en NUCOS
 
 
 def crear_nucos(pedidos):

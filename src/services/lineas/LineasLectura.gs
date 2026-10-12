@@ -35,7 +35,7 @@ const LineasLectura = (function () {
   const PROPIEDAD = 'LINEAS_LECTURA';
   const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v2';
+  const CLAVE_CACHE = 'estructura_virtual_v3'; // v3: TIPO SIM BASICO en vez de LINEA BASICA (12-oct)
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
@@ -101,7 +101,7 @@ const LineasLectura = (function () {
       return tl === 'SIM BASICO' ? 'EQUIPO + SIM BASICO' : 'EQUIPO + SIM';
     }
     if (e) return te === 'MODEM' ? 'MODEM' : (te === 'CAMARA' ? 'CAMARA' : 'EQUIPO');
-    return tl === 'SIM BASICO' ? 'LINEA BASICA' : 'LINEA';
+    return tl === 'SIM BASICO' ? 'SIM BASICO' : 'LINEA';
   }
 
   /**

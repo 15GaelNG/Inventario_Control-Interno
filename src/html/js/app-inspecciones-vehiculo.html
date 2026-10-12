@@ -1,0 +1,134 @@
+<style>
+  .insp-fotos-cabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .insp-fotos-cabecera h2 { margin: 0; font-size: 18px; }
+  .insp-fotos-datos { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--color-text-muted); width: 100%; }
+  .insp-fotos-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+</style>
+
+<script>
+  /**
+   * app-inspecciones-vehiculo.html — pestaña Inspecciones de la ficha de un vehículo y su vista de fotos.
+   *
+   * Junta dos fuentes en UNA tabla por año: las inspecciones capturadas en la app (hoja INSPECCION VEHICULAR: fecha,
+   * tipo, inspector, puntaje, su PDF) y las del expediente del NUCO en Drive (4.-INSPECCIONES/<año>/<periodo o
+   * motivo>/<sección>/fotos, apiInspeccionesExpediente). Una de la app se empata con la del expediente por la fecha de
+   * su PDF o por su periodo (2026 en adelante trimestre, antes bimestre: las reglas de la homologación). Cualquier
+   * inspección con fotos, venga de donde venga, se ve igual: "Fotos" abre su vista con las secciones (Galeria).
+   *
+   * Uso (abrirFichaVehiculo en app.html):
+   *   contenido: InspeccionesFicha.preparar(nucco, { app, botonPdf, acciones, agregar, alPintar, alFotos })
+   *   al mostrar la pestaña: InspeccionesFicha.cargar(elementoDeLaPestaña)
+   *   la vista de fotos: InspeccionesFicha.pintarFotos(contenedor, inspeccion)
+   */
+  const InspeccionesFicha = (function () {
+    const ORD = ['', '1ER', '2DO', '3ER', '4TO', '5TO', '6TO'];
+    const opcionesDe = {};      // NUCO → opciones de la ficha abierta
+    const expediente = {};      // NUCO → inspecciones del expediente (mientras la página siga abierta)
+
+    /** El nombre de la carpeta del periodo de una fecha "aaaa-mm-dd…" (2026+: trimestre; antes: bimestre) */
+    function periodo(fecha) {
+      const a = Number(String(fecha).slice(0, 4));
+      const m = Number(String(fecha).slice(5, 7));
+      if (!a || !m) return '';
+      return a >= 2026 ? ORD[Math.ceil(m / 3)] + ' TRIMESTRE' : ORD[Math.ceil(m / 2)] + ' BIMESTRE';
+    }
+
+    /** Las de la app con su carpeta del expediente (si la hay) y las que solo están en el expediente */
+    function juntar(app, exp) {
+      const libres = exp.slice();
+      const tomar = (cond) => { const i = libres.findIndex(cond); return i === -1 ? null : libres.splice(i, 1)[0]; };
+      const filas = app.map((r) => {
+        const f = String(r.FECHA || '').slice(0, 10);
+        const anio = f.slice(0, 4);
+        const d = f && (tomar((x) => x.fecha === f) || tomar((x) => x.anio === anio && x.nombre === periodo(f)));
+        return { app: r, exp: d || null, fecha: f, anio: anio || (d && d.anio) || '' };
+      });
+      libres.forEach((d) => filas.push({ app: null, exp: d, fecha: d.fecha, anio: d.anio }));
+      return filas.sort((a, b) => ((b.fecha || b.anio) > (a.fecha || a.anio) ? 1 : -1));
+    }
+
+    function tabla(el) {
+      const o = opcionesDe[el.dataset.inspFicha];
+      const exp = expediente[el.dataset.inspFicha];
+      const filas = juntar(o.app || [], exp || []);
+      const columnas = [
+        { t: 'Fecha', r: (x) => TablaFicha.conSub(x.fecha ? formatearFecha(x.fecha + 'T12:00:00') : '—', x.app ? 'App' : 'Expediente') },
+        { t: 'Periodo', r: (x) => escaparHtml(x.exp ? x.exp.nombre : periodo(x.fecha) || '—') },
+        { t: 'Tipo', r: (x) => escaparHtml((x.app && x.app.TIPO) || '—') },
+        { t: 'Inspector', r: (x) => escaparHtml((x.app && x.app.INSPECTOR) || '—') },
+        { t: 'Puntaje', alinear: 'derecha', num: true, r: (x) => (x.app && x.app.PUNTAJE !== '' && x.app.PUNTAJE != null ? x.app.PUNTAJE + '%' : '—') },
+        { t: 'Formato', r: (x) => (x.app && x.app.PDF ? o.botonPdf(x.app.PDF)
+          : x.exp && x.exp.pdfs.length ? TablaFicha.boton({ href: x.exp.pdfs[0].url }) : '—') },
+        { t: 'Fotos', r: (x) => (exp === undefined ? '<span class="spinner"></span>'
+          : x.exp && x.exp.fotos ? TablaFicha.boton({ texto: String(x.exp.fotos), icono: 'image', clase: 'tf-btn-num', datos: { inspFotos: x.exp.id }, titulo: 'Ver las fotos' })
+          : '<span class="ln-tenue">Sin fotos</span>') },
+        { t: '', r: (x) => (x.app ? o.acciones(x.app.ID) : '') },
+      ];
+      const anios = [];
+      filas.forEach((x) => { if (anios.indexOf(x.anio) === -1) anios.push(x.anio); });
+      const boton = o.agregar ? '<button type="button" class="secondary" data-agregar="' + o.agregar.tipo + '" style="margin-left:auto">' +
+        Iconos.svg('plus') + ' ' + o.agregar.texto + '</button>' : '';
+      el.innerHTML = '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' + Iconos.svg('clipboard-list') +
+        ' Inspecciones' + boton + '</h3>' +
+        (exp === undefined ? '<p class="ln-tenue"><span class="spinner"></span> Buscando las fotos en el expediente del NUCO…</p>' : '') +
+        TablaFicha.html(columnas, anios.reduce((todas, a) => todas.concat(filas.filter((x) => x.anio === a)), []),
+          { grupo: (x) => x.anio || 'Sin fecha', vacio: 'Sin inspecciones para este vehículo.', minAncho: 680 }) + '</div>';
+      if (o.alPintar) o.alPintar(el);
+    }
+
+    function preparar(nucco, opciones) {
+      const n = String(nucco || '');
+      opcionesDe[n] = opciones;
+      return '<div data-insp-ficha="' + escaparHtml(n) + '"></div>';
+    }
+
+    /** Pinta lo de la app al momento y completa con el expediente (Drive) cuando llega */
+    async function cargar(el) {
+      if (!el) return;
+      const n = el.dataset.inspFicha;
+      if (!el.dataset.ligado) {
+        el.dataset.ligado = '1';
+        el.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-insp-fotos]');
+          if (!b) return;
+          const d = (expediente[n] || []).find((x) => x.id === b.dataset.inspFotos);
+          const fila = juntar(opcionesDe[n].app || [], expediente[n] || []).find((x) => x.exp === d);
+          if (d && opcionesDe[n].alFotos) opcionesDe[n].alFotos(d, fila && fila.app);
+        });
+      }
+      tabla(el);
+      if (expediente[n] !== undefined || el.dataset.pidiendo) return;
+      el.dataset.pidiendo = '1';
+      try {
+        expediente[n] = JSON.parse(await callServer('apiInspeccionesExpediente', state.token, n));
+      } catch (err) {
+        expediente[n] = [];
+        Notificar.error('No se pudieron leer las fotos del expediente: ' + err.message);
+      }
+      delete el.dataset.pidiendo;
+      if (document.body.contains(el)) tabla(el);
+    }
+
+    /** La vista de fotos de una inspección (cualquiera: de la app o solo del expediente) */
+    function pintarFotos(contenedor, d, app) {
+      const datos = [
+        d.fecha ? formatearFecha(d.fecha + 'T12:00:00') : '', d.nombre + ' ' + d.anio,
+        app && app.TIPO, app && app.INSPECTOR ? 'Inspector: ' + app.INSPECTOR : '',
+        app && app.PUNTAJE !== '' && app.PUNTAJE != null ? 'Puntaje: ' + app.PUNTAJE + '%' : '',
+        d.fotos + (d.fotos === 1 ? ' foto' : ' fotos'),
+      ].filter(Boolean);
+      const grupos = d.secciones.map((s) => ({ titulo: s.nombre, fotos: s.fotos }));
+      contenedor.innerHTML = '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Inspección ' + escaparHtml(d.nombre + ' ' + d.anio) + '</h2>' +
+        '<div class="insp-fotos-botones">' +
+        d.pdfs.map((p) => TablaFicha.boton({ texto: p.nombre, icono: 'file-text', href: p.url })).join('') +
+        TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</div>' +
+        '<div class="insp-fotos-datos">' + datos.map((x) => '<span>' + escaparHtml(x) + '</span>').join('') + '</div></div></div>' +
+        '<div class="card ln-card" data-insp-galeria>' + (grupos.length ? Galeria.html(grupos) : '<p class="empty-state">Sin fotos.</p>') + '</div>';
+      Galeria.ligar(contenedor.querySelector('[data-insp-galeria]'), grupos, { titulo: 'Inspección ' + d.nombre + ' ' + d.anio });
+    }
+
+    function olvidar(nucco) { delete expediente[String(nucco || '')]; }
+
+    return { preparar, cargar, pintarFotos, olvidar, periodo, juntar };
+  })();
+</script>

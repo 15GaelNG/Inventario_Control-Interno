@@ -111,6 +111,27 @@ function apiFichaVehiculo(token, folio) {
     adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorFolio(token, folio)),
   });
 }
+/**
+ * Pestaña "Documentos" de la ficha: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar, solo lectura), con
+ * permiso de Vehículos. Sin la responsiva (12-oct-2026): tiene su propia pestaña (Responsiva, con sus permisos), y
+ * los préstamos y adherentes viven dentro de su carpeta. El vehículo es su NUCO, nunca el folio.
+ */
+/**
+ * Pestaña Inspecciones de la ficha: las inspecciones del expediente del NUCO (4.-INSPECCIONES en Drive), con sus fotos
+ * por sección. Con permiso de Inspección vehicular (el mismo de la pestaña). Texto JSON.
+ */
+function apiInspeccionesExpediente(token, nucco) {
+  Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  return JSON.stringify(ExpedienteNuco.inspecciones(nucco));
+}
+const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
+function apiDocumentosVehiculo(token, nucco) {
+  Permisos.puedeLeer(token, 'vehiculos');
+  const exp = ExpedienteNuco.listar(nucco);
+  exp.documentos = exp.documentos.filter((d) => DOCUMENTOS_FICHA.indexOf(d.clave) !== -1);
+  return JSON.stringify(exp);
+}
+
 // JSON.stringify (no el arreglo directo): con FECHA_REGISTRO (Date) en cada fila,
 // google.script.run pierde la respuesta de forma intermitente (confirmado con
 // pruebas — regresa null aunque el servidor sí arma las filas). Como texto viaja
@@ -587,6 +608,12 @@ function apiLineasGuardarResponsiva(token, datos) {
 }
 function apiLineasIdentificacionesRegistradas(token, personas) {
   return TelefoniaService.identificacionesRegistradas(token, personas);
+}
+function apiLineasMediciones(token, filas) {
+  return TelefoniaService.registrarMediciones(token, filas);
+}
+function apiLineasMedirServidor(token, que, id) {
+  return TelefoniaService.medirServidor(token, que, id);
 }
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);

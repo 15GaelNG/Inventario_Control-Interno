@@ -1,9 +1,9 @@
-"""Aplica en la carpeta REAL el plan de homologar 4.- INSPECCIONES (docs/nucos-expediente.md).
+"""Aplica en la carpeta REAL el plan de homologar 4.-INSPECCIONES (docs/nucos-expediente.md).
 
 El plan sale del dry run (homologar_insp.py → homolog-insp.json, con la foto foto.json). Por cada NUCO:
   1. Revisa que Drive siga como en la foto: cada archivo del plan, en su carpeta y con su nombre. Si algo cambió, ese
      NUCO no se toca (se avisa).
-  2. Renombra la raíz a «4.- INSPECCIONES» si hace falta y crea las carpetas que faltan.
+  2. Renombra la raíz a «4.-INSPECCIONES» si hace falta y crea las carpetas que faltan.
   3. Mueve y renombra cada archivo (mover conserva su ID: las ligas siguen sirviendo). Le deja en appProperties de
      dónde venía (padre y nombre), que viaja con él aunque alguien lo mueva después.
   4. Manda a la papelera lo que el plan dice (relleno, idénticos), y las carpetas viejas que quedaron vacías.
@@ -11,6 +11,7 @@ Cada paso se anota en la bitácora en el momento (deshacer la regresa: `expedien
 en Drive y se agrega a la hoja BITACORA EXPEDIENTES NUCO.
 
 Uso:  inspecciones.py aplicar <plan.json> <foto.json> <foto-doc.json> (--nucos 113[,267,…] | --todos) [--hilos 6]
+      [--raiz 3.-VERIFICACIONES]   (otra carpeta del NUCO con el mismo ejecutor; por omisión 4.-INSPECCIONES)
                              [--continuar <bitácora.jsonl>]
       --todos: cada NUCO del plan con algo que hacer. Los ya hechos se saltan solos (ya no coinciden con la foto).
       --hilos: NUCO en paralelo, cada uno con su conexión a Drive.
@@ -26,7 +27,7 @@ from pathlib import Path
 import expediente as e
 import reglas
 
-RAIZ = "4.- INSPECCIONES"
+RAIZ = "4.-INSPECCIONES"
 DOCUMENTACION = "1.-DOCUMENTACIÓN"
 HOJA_BITACORA = "BITACORA EXPEDIENTES NUCO"
 PAPELERA = "_PAPELERA"
@@ -175,7 +176,7 @@ def aplicar(plan_json, foto_json, foto_doc_json, nucos, continuar=None, hilos=1)
         hijos_cache = {}
 
         def carpeta(segs):
-            """La carpeta bajo el NUCO (segs[0] es 4.- INSPECCIONES o 1.-DOCUMENTACIÓN); crea la que falte."""
+            """La carpeta bajo el NUCO (segs[0] es 4.-INSPECCIONES o 1.-DOCUMENTACIÓN); crea la que falte."""
             actual = base[segs[0]]
             for s_ in segs[1:]:
                 if actual not in hijos_cache:
@@ -261,6 +262,9 @@ if __name__ == "__main__":
     a = sys.argv[1:]
     if len(a) < 4 or a[0] != "aplicar" or ("--nucos" not in a and "--todos" not in a):
         sys.exit(__doc__)
+    if "--raiz" in a:
+        # El mismo ejecutor para otra carpeta del NUCO (3.-VERIFICACIONES): el plan dice a dónde va cada archivo
+        RAIZ = a[a.index("--raiz") + 1]
     aplicar(a[1], a[2], a[3], ["*"] if "--todos" in a else a[a.index("--nucos") + 1].split(","),
             a[a.index("--continuar") + 1] if "--continuar" in a else None,
             int(a[a.index("--hilos") + 1]) if "--hilos" in a else 1)
