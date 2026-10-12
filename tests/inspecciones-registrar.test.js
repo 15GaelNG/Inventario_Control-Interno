@@ -9,8 +9,12 @@ const vm = require('vm');
 
 let fila = null;           // lo que se escribió en la hoja
 let paraPdf = null;        // lo que recibió PdfService.generar
-const subidas = [];        // lo que se guardó en Drive
+const subidas = [];        // lo que se guardó en Drive por la ruta de antes (vehículo sin NUCCO)
+const guardados = [];      // lo que se guardó en el expediente del NUCO
 const buscadas = [];       // en qué carpeta raíz se buscó cada dibujo en blanco
+let actualizado = null;    // lo que se escribió después (la liga del PDF)
+let nuccoVehiculo = '25';
+const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
 
 const ESTRUCTURA = {
   tipo: 'HONDA 150XR', plantillaId: 'doc', carpeta: 'INSPECCIONES HONDA 150XR',
@@ -37,11 +41,24 @@ const contexto = vm.createContext({
     leerColumnas: () => ({ filas: 0, datos: { 'ID INSPECCION': [] } }),
     // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
     // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).
-    findById: () => ({ data: { ID: 'VEH-00000000AAAAAA', FOLIO: 'AUT0025', NUCCO: '25', 'RESPONSABLE VEHICULO': 'JORGE AVECILLA', PLACA: 'GGR658F' } }),
+    findById: () => ({ data: { ID: 'VEH-00000000AAAAAA', FOLIO: 'AUT0025', NUCCO: nuccoVehiculo, 'RESPONSABLE VEHICULO': 'JORGE AVECILLA', PLACA: 'GGR658F' } }),
     insert: (id, hoja, datos) => { fila = datos; },
-    update: () => {},
+    update: (libro, hoja, id, cambios) => { actualizado = cambios; },
+  },
+  ExpedienteNuco: {
+    FIRMAS_Y_DIAGRAMAS: 'FIRMAS Y DIAGRAMAS',
+    tieneNuco: (n) => /^[0-9]+$/.test(String(n == null ? '' : n).trim()),
+    carpetaInspeccion: () => carpetaFalsa('25/4.-INSPECCIONES/2026/4TO TRIMESTRE'),
+    subcarpeta: (c, nombre) => carpetaFalsa(c.ruta + '/' + nombre),
+    nombreConFecha: (c, prefijo, n, ext) => prefijo + '-0025 2026-10-12' + ext,
+    guardar: (blob, c, prefijo, n, f, ext) => {
+      guardados.push({ ruta: c.ruta, prefijo, ext });
+      return { getId: () => 'g' + guardados.length, getUrl: () => 'https:' + '/' + '/drive.google.com/file/d/G' + guardados.length + '/view' };
+    },
+    olvidar: () => {},
   },
   DriveUtils: {
+    blobRevisado: (archivo) => ({ blob: { archivo }, extension: '.png' }),
     guardarArchivoAppSheet: (p) => {
       subidas.push(p);
       return { ruta: p.carpetaRelativa + '/' + p.idFila + '.' + p.columna + '.120000.png', fileId: 'f' + subidas.length };
@@ -82,8 +99,8 @@ ok(fila['ID VEHICULO'] === 'VEH-00000000AAAAAA',
 ok(fila['FOLIO'] === 'AUT0025', 'y el folio también, para que la hoja se lea');
 
 console.log('\n1. Diagramas');
-ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRONTAL']),
-  'el diagrama marcado se sube con la ruta de AppSheet: ' + fila['INS FRONTAL']);
+ok(/^https:.*drive\.google\.com\/file\/d\//.test(fila['INS FRONTAL']),
+  'el diagrama marcado se guarda en el expediente del NUCO y la hoja guarda su liga: ' + fila['INS FRONTAL']);
 ok(fila['INS TRASERA'] === ESTRUCTURA.diagramas[1].ruta && paraPdf.imagenes['INS TRASERA'].blob === 'blob-trasera',
   'el que no se marcó guarda la ruta del dibujo en blanco y el PDF lleva ese dibujo');
 ok(fila['INS IZQUIERDA'] === ESTRUCTURA.diagramas[2].ruta, 'si el dibujo en blanco no está en Drive, la fila igual guarda su ruta (como AppSheet)');
@@ -94,14 +111,15 @@ ok(/Izquierda/.test(resultado.advertencia) && !/Trasera/.test(resultado.adverten
 
 console.log('1b. Los dibujos en blanco se LEEN de producción; todo lo demás, de pruebas');
 ok(buscadas.length === 2 && buscadas.every((r) => r === 'raiz-prod'), 'los dibujos en blanco se buscan en la raíz de MODELOS (prod)');
-ok(subidas.every((p) => p.carpetaId === 'imagenes'), 'lo que se escribe va a la carpeta de pruebas');
+ok(subidas.length === 0 && guardados.length === 2 && guardados.every((g) => g.ruta === '25/4.-INSPECCIONES/2026/4TO TRIMESTRE/FIRMAS Y DIAGRAMAS'),
+  'lo dibujado y firmado va a FIRMAS Y DIAGRAMAS de su trimestre, en el NUCO (nada a la carpeta suelta)');
 const vista = (ruta) => contexto.InspeccionesService.previsualizarImagen('token', ruta).raiz;
 ok(vista('MODELOS INSPECCION/PIPA/IZQUIERDA.png') === 'raiz-prod', 'la vista previa de un dibujo en blanco sale de prod');
 ok(vista('INSPECCION VEHICULAR_Images/2026_25_291.FIRMA INSPECTOR.120000.png') === 'raiz-pruebas',
   'la de una firma o un diagrama marcado sale de pruebas');
 
 console.log('2. Firmas');
-ok(subidas.some((s) => s.columna === 'FIRMA INSPECTOR'), 'la firma del inspector se guarda en Drive');
+ok(guardados.some((g) => g.prefijo === 'FIRMA INSPECTOR'), 'la firma del inspector se guarda en Drive');
 ok(paraPdf.imagenes['FIRMA INSPECTOR'].ancho === 150 && paraPdf.imagenes['FIRMA INSPECTOR'].alto === 60,
   'en el PDF va en una caja de 150 × 60 pt, como en los formatos de AppSheet');
 ok(!paraPdf.imagenes['INS FRONTAL'].alto, 'los diagramas no se encogen a esa caja');
@@ -115,6 +133,23 @@ ok(esFecha(servicio) && servicio.getFullYear() === 2026 && servicio.getMonth() =
 ok(fila['NOMBRE INSPECTOR'] === 'INSPECTOR PRUEBA', 'el inspector es quien tiene la sesión');
 ok(fila['PLACAS'] === 'GGR658F' && fila['RESPONSABLE'] === 'JORGE AVECILLA', 'los datos del vehículo vienen del catálogo');
 ok(resultado.puntaje === 100 && resultado.pdf === 'https://pdf', 'regresa el puntaje y la liga del PDF');
+
+console.log('4. El PDF va al expediente del NUCO');
+ok(paraPdf.carpetaId === 'id:25/4.-INSPECCIONES/2026/4TO TRIMESTRE' && !paraPdf.subcarpeta,
+  'se genera en 4.-INSPECCIONES/<año>/<trimestre> del NUCO, no en REPORTES');
+ok(paraPdf.nombre === 'INSPECCION-0025 2026-10-12', 'con el nombre de la homologación: INSPECCION-<NUCO> <fecha>');
+ok(actualizado && actualizado['FORMATO INSPECCION VEHICULAR'] === 'https://pdf', 'y la hoja guarda la liga del PDF');
+
+console.log('5. Un vehículo sin NUCCO usa las carpetas de antes (rutas)');
+nuccoVehiculo = '';
+guardados.length = 0;
+contexto.InspeccionesService.registrar('token', {
+  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
+}, { 'INS FRONTAL': { base64: 'TRAZO', mimeType: 'image/png' } });
+ok(guardados.length === 0 && subidas.length === 1 && subidas[0].carpetaId === 'imagenes', 'la imagen va a la carpeta de antes');
+ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRONTAL']), 'con la ruta de AppSheet');
+ok(paraPdf.carpetaId === 'formatos' && paraPdf.subcarpeta === ESTRUCTURA.carpeta, 'y el PDF a REPORTES, como antes');
+ok(actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/' + ESTRUCTURA.carpeta + '/INSPECCION.pdf', 'con su ruta');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

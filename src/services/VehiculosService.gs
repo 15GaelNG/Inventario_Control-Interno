@@ -399,6 +399,8 @@ const VehiculosService = (function () {
     'RESPONSIVA': 'RESPONSIVA', 'DOCUMENTO BAJA': 'ALTA', 'POLIZA SEGURO': 'SEGURO', 'ARCHIVO TENENCIA': 'TENENCIA',
     'ADJUNTAR FACTURA': 'FACTURA', 'TARJETA CIRCULACION': 'TARJETA', 'ALTA PLACAS': 'ALTA',
   };
+  // El documento de baja va con las placas, pero en su subcarpeta y con su nombre (BAJA-0088.pdf): no es el alta vigente
+  const APARTE_DE = { 'DOCUMENTO BAJA': { subcarpeta: 'BAJAS', prefijo: 'BAJA' } };
 
   /**
    * SheetUtils escribe solo en las columnas que la hoja ya tiene: sin esto, la liga de la tarjeta o del alta se perdía
@@ -428,7 +430,7 @@ const VehiculosService = (function () {
       const id = ExpedienteNuco.idDeLiga((cambios || {})[columna]);
       if (!id) return;
       try {
-        ExpedienteNuco.archivar(DriveApp.getFileById(id), registro.NUCCO, DOCUMENTO_DE[columna]);
+        ExpedienteNuco.archivar(DriveApp.getFileById(id), registro.NUCCO, DOCUMENTO_DE[columna], APARTE_DE[columna]);
       } catch (err) {
         console.error('No se pudo guardar ' + columna + ' en el expediente del NUCO ' + registro.NUCCO + ': ' + err.message);
       }

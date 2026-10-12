@@ -390,6 +390,17 @@ const InspeccionesService = (function () {
     });
     fila['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
 
+    // ---- dónde: el expediente del NUCO (12-oct-2026) ----
+    // 4.-INSPECCIONES/<año>/<N> TRIMESTRE con su PDF (INSPECCION-0088 2026-10-12.pdf) y, en FIRMAS Y DIAGRAMAS, lo
+    // que se dibujó o firmó; la hoja guarda las ligas. Un vehículo sin NUCCO usa las carpetas de antes (rutas).
+    const nucco = vehiculo.data['NUCCO'];
+    const enNuco = ExpedienteNuco.tieneNuco(nucco);
+    let carpetaInsp = null;
+    let carpetaFirmas = null;
+    const carpetaInspeccion_ = () => (carpetaInsp = carpetaInsp || ExpedienteNuco.carpetaInspeccion(nucco, ahora));
+    const carpetaFirmas_ = () => (carpetaFirmas = carpetaFirmas ||
+      ExpedienteNuco.subcarpeta(carpetaInspeccion_(), ExpedienteNuco.FIRMAS_Y_DIAGRAMAS));
+
     // ---- imágenes (diagramas y firmas) ----
     const subidas = [];
     const paraPdf = {};
@@ -397,6 +408,14 @@ const InspeccionesService = (function () {
     try {
       COLUMNAS_IMAGEN.forEach(([columna]) => {
         const imagen = (imagenes || {})[columna];
+        if (imagen && imagen.base64 && enNuco) {
+          const revisado = DriveUtils.blobRevisado(imagen, ['image/png', 'image/jpeg'], 'la imagen de ' + columna);
+          const archivo = ExpedienteNuco.guardar(revisado.blob, carpetaFirmas_(), columna, nucco, ahora, revisado.extension);
+          subidas.push(archivo.getId());
+          fila[columna] = archivo.getUrl();
+          paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({}, imagen, FIRMA_PDF) : imagen;
+          return;
+        }
         if (imagen && imagen.base64) {
           const guardada = DriveUtils.guardarArchivoAppSheet({
             carpetaId: Config.DRIVE_FOLDERS.INSPECCIONES_IMAGENES(),
@@ -441,14 +460,16 @@ const InspeccionesService = (function () {
         }, {})),
         imagenes: paraPdf,
         formato: FORMATO_PDF,
-        carpetaId: Config.DRIVE_FOLDERS.REPORTES(),
-        subcarpeta: estructura.carpeta,
-        nombre: PdfService.nombreArchivo([
-          'INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(ahora),
-        ]),
+        carpetaId: enNuco ? carpetaInspeccion_().getId() : Config.DRIVE_FOLDERS.REPORTES(),
+        subcarpeta: enNuco ? undefined : estructura.carpeta,
+        nombre: enNuco
+          ? ExpedienteNuco.nombreConFecha(carpetaInspeccion_(), 'INSPECCION', nucco, '.pdf', ahora).replace(/\.pdf$/, '')
+          : PdfService.nombreArchivo(['INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(ahora)]),
       });
+      if (enNuco) ExpedienteNuco.olvidar(nucco);
       SheetUtils.update(ssId(), hoja_().getName(), id,
-        { [COL_PDF]: estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
+        { [COL_PDF]: enNuco ? pdf.url
+          : estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
         COL_ID);
     } catch (err) {
       // La inspección ya quedó guardada: el PDF se puede volver a generar, así que no se

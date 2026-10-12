@@ -68,15 +68,28 @@ const VerificacionesService = (function () {
     if (!archivo || !archivo.base64) throw new Error('Adjunta el comprobante de verificación');
 
     const id = Ids.nuevo(Entidades.prefijo('VERIFICACIONES'));
-    const imagen = DriveUtils.guardarImagenAppSheet({
-      carpetaId: Config.DRIVE_FOLDERS.VERIFICACIONES(),
-      tabla: TABLA,
-      idFila: id,
-      columna: COL_COMPROBANTE,
-      archivo: archivo,
-    });
-    // "<ID>_VERIFICACION_<fecha>.ext": urlComprobante() busca el archivo por ese nombre exacto
-    const rutaComprobante = HojaServicio.renombrarRuta(imagen.fileId, id, 'VERIFICACION', imagen.ruta);
+    const nucco = delVehiculo.datos['NUCCO'];
+    let imagen;
+    let rutaComprobante;
+    if (ExpedienteNuco.tieneNuco(nucco)) {
+      // En el expediente del NUCO (12-oct-2026): 3.-VERIFICACIONES/<año>/<1ER|2DO> SEMESTRE/VERIFICACION-0088 <fecha>.png,
+      // y la hoja guarda su liga
+      const revisado = DriveUtils.blobRevisado(archivo, ['image/png', 'image/jpeg'], 'el comprobante');
+      const guardado = ExpedienteNuco.guardar(revisado.blob, ExpedienteNuco.carpetaVerificacion(nucco, fechaVerificacion),
+        'VERIFICACION', nucco, fechaVerificacion, revisado.extension);
+      imagen = { fileId: guardado.getId() };
+      rutaComprobante = guardado.getUrl();
+    } else {
+      imagen = DriveUtils.guardarImagenAppSheet({
+        carpetaId: Config.DRIVE_FOLDERS.VERIFICACIONES(),
+        tabla: TABLA,
+        idFila: id,
+        columna: COL_COMPROBANTE,
+        archivo: archivo,
+      });
+      // "<ID>_VERIFICACION_<fecha>.ext": urlComprobante() busca el archivo por ese nombre exacto
+      rutaComprobante = HojaServicio.renombrarRuta(imagen.fileId, id, 'VERIFICACION', imagen.ruta);
+    }
 
     try {
       SheetUtils.insert(HojaServicio.libro(VERIFICACIONES), HojaServicio.nombreHoja(VERIFICACIONES), Object.assign({}, delVehiculo.datos, {

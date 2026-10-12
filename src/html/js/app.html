@@ -2472,7 +2472,10 @@
     const TITULO_SECCION_FICHA = { 'Documentación y seguro': 'Seguro, tenencia y verificación' };
 
     function botonArchivoFicha(tipo, ruta) {
-      return ruta ? TablaFicha.boton({ datos: { archivo: tipo, ruta: ruta } }) : '—';
+      if (!ruta) return '—';
+      // Lo nuevo guarda la liga de Drive (expediente del NUCO): se abre directo; lo viejo es una ruta que resuelve el servidor
+      if (/^https?:/i.test(String(ruta))) return TablaFicha.boton({ href: ruta });
+      return TablaFicha.boton({ datos: { archivo: tipo, ruta: ruta } });
     }
 
     // ---------- Captura de verificación/sensor/holograma/incidencia/inspección desde la
