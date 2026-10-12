@@ -1,0 +1,39 @@
+<!--
+  Administración > Capital humano: aquí se sube la lista de Capital Humano (el Excel que manda CH). La app la combina
+  con COLABORADORES ACTUALIZADO por empleo (número + nombre), así cada persona conserva su ID PERSONA. Ya no se pega a
+  mano en la hoja. Lógica: js/app-capital-humano.html; servidor: services/CapitalHumano.gs (cargar).
+-->
+<template id="tpl-capital-humano">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="users" class="ico"></i> Capital humano</h2>
+      <p class="page-subtitle">La lista de Capital Humano de la que salen las personas de todos los módulos. Sube aquí el Excel nuevo: cada persona conserva su ID.</p>
+    </div>
+  </div>
+
+  <div class="stat-row" id="ch-resumen">
+    <div class="stat-card"><div class="stat-icon"><i data-lucide="list" class="ico"></i></div>
+      <div><div class="stat-value" id="ch-renglones">—</div><div class="stat-label">Renglones (activos y bajas)</div></div></div>
+    <div class="stat-card"><div class="stat-icon"><i data-lucide="user-check" class="ico"></i></div>
+      <div><div class="stat-value" id="ch-activos">—</div><div class="stat-label">Activos</div></div></div>
+    <div class="stat-card"><div class="stat-icon"><i data-lucide="fingerprint" class="ico"></i></div>
+      <div><div class="stat-value" id="ch-sin-id">—</div><div class="stat-label">Sin ID PERSONA</div></div></div>
+  </div>
+  <p class="error-msg" id="ch-sensibles" hidden></p>
+
+  <div class="card ln-card">
+    <h3 style="display:flex; align-items:center; gap:8px"><i data-lucide="file-up" class="ico"></i> Subir la lista nueva</h3>
+    <p class="ln-tenue">El Excel completo que manda Capital Humano (activos y bajas). Primero se revisa sin cambiar nada; después lo aplicas.
+      Teléfono y número de cuenta no se suben: se quitan en tu navegador.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center">
+      <input type="file" id="ch-archivo" accept=".xlsx,.xls,.csv" />
+      <button type="button" id="ch-revisar" disabled><i data-lucide="search-check" class="ico"></i> Revisar</button>
+    </div>
+    <div id="ch-ensayo" hidden style="margin-top:14px"></div>
+  </div>
+
+  <div class="card ln-card">
+    <h3 style="display:flex; align-items:center; gap:8px"><i data-lucide="history" class="ico"></i> Cargas anteriores</h3>
+    <div id="ch-historial"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>
+  </div>
+</template>

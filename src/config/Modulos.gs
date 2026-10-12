@@ -85,6 +85,8 @@ const Modulos = (function () {
         { id: 'usuarios', etiqueta: 'Usuarios y permisos', listo: true },
         { id: 'relaciones', etiqueta: 'Datos conectados', listo: true },
         { id: 'salud', etiqueta: 'Salud', listo: true },
+        // La lista de Capital Humano (COLABORADORES ACTUALIZADO): se sube aquí, no se pega (12-oct-2026)
+        { id: 'capital-humano', etiqueta: 'Capital humano', listo: true },
       ],
     },
   ];

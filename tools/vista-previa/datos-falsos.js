@@ -14,7 +14,7 @@
       ['inspeccion-vehicular', 'Inspección Vehicular'], ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
     ['arqueos', 'Arqueos', 'wallet', [['arqueos', 'Arqueos'], ['caja-chica', 'Caja Chica']]],
     ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
-    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
+    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud'], ['capital-humano', 'Capital humano']]],
   ];
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
   const conEscenas = MODULOS.map((g) => g[0]);
@@ -245,6 +245,9 @@
       { dueno: 'FOLIO', copia: 'FOLIO', encontradas: 198, deCopia: 212, conValor: 205, duplicadasEnDueno: 0 },
     ], datos: [['PLACA', 'PLACA'], ['COLOR', 'COLOR']] }),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
+    apiCapitalHumanoResumen: { renglones: 15254, activos: 3233, sinId: 0, tieneColumna: true, sensibles: ['TELEFONO', 'NÚMERO DE CUENTA'] },
+    apiCapitalHumanoHistorial: [{ FECHA: '12/10/2026 15:10', QUIEN: 'prueba@ciudadmaderas.com', RENGLONES: '15254', NUEVOS: '28', CAMBIAN: '311',
+      FALTAN: '0', EMPLEOS_NUEVOS: '28', PERSONAS_NUEVAS: '26', AVISOS: '' }],
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
@@ -550,6 +553,7 @@
       const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
+    'capital-humano': async () => { await abrir('capital-humano'); await hasta('#ch-historial table'); await esperar(300); },
     'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
     'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },
