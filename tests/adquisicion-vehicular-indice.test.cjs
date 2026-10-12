@@ -58,7 +58,7 @@ function scriptAppMock() {
 const ENCABEZADOS_INDICE = ['SERIE', 'FOLIO', 'AREA', 'AÑO', 'LIGA_CARPETA', 'FUENTE', 'ACTUALIZADO'];
 
 function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () => [], fuentes = [{ año: '2024' }, { año: '2025' }],
-  buscarEnListaCarpetas = () => '', archivosPorCarpeta = {}, drivePropsStore } = {}) {
+  buscarEnListaCarpetas = () => '', buscarCarpetaPorFolio = () => '', archivosPorCarpeta = {}, drivePropsStore } = {}) {
   const hoja = hojaIndice || hojaMock([ENCABEZADOS_INDICE]);
   const propiedades = drivePropsStore || propertiesServiceMock();
   const scriptApp = scriptAppMock();
@@ -69,6 +69,7 @@ function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () 
       listarCarpetasAdquisicion_: listarCarpetas,
       leerFuente_: leerFuente,
       buscarEnListaCarpetas_: buscarEnListaCarpetas,
+      buscarCarpetaPorFolio_: buscarCarpetaPorFolio,
       FUENTES: fuentes,
       ENCABEZADOS_INDICE,
     },
@@ -148,7 +149,7 @@ test('indiceAdqFactura_ prefiere el PDF de factura sobre el XML del CFDI, y null
 
 // ---------------------------------------------------------------------------------------- pasada A (Excel)
 
-test('indiceAdqPasadaExcel_ reemplaza solo las filas de cada FUENTE, resolviendo la liga de 2024 por nombre de carpeta', () => {
+test('indiceAdqPasadaExcel_ reemplaza solo las filas de cada FUENTE, prefiriendo SIEMPRE la carpeta real de Drive sobre lo que traiga el Excel', () => {
   const hojaIndice = hojaMock([ENCABEZADOS_INDICE,
     ['VIEJA', '9', 'X', '2024', '', 'EXCEL-2024', 'ayer'],       // de una corrida anterior: debe desaparecer
     ['OTRA-FUENTE', '1', 'Y', '2026', '', 'OCR-2026', 'ayer']]); // de otra FUENTE: no se toca
@@ -158,14 +159,16 @@ test('indiceAdqPasadaExcel_ reemplaza solo las filas de cada FUENTE, resolviendo
       { año: '2024', colCarpeta: true },
       { año: '2025' },
     ],
-    leerFuente_undefined: true,
   });
   // leerFuente_ regresa una fila por fuente, usando fuente.año para distinguir cuál es cuál
   contexto.AdquisicionVehicularService.leerFuente_ = (fuente) => (fuente.año === '2024'
     ? [{ serie: '3C7WRAKT9RG165067', año: '2024', folio: '3', area: 'CONSTRUCCIÓN', liga: '', nombreCarpeta: '00 - NOVIEMBRE 23 - RAM4000 CMP' }]
     : [{ serie: 'JN1BE6DS1R9105926', año: '2025', folio: '30371', area: 'CONSTRUCCIÓN', liga: 'https://dropbox/x', nombreCarpeta: '' }]);
-  contexto.AdquisicionVehicularService.buscarEnListaCarpetas_ = (lista, año, nombre) => (nombre === '00 - NOVIEMBRE 23 - RAM4000 CMP' ? 'https://drive/real' : '');
-  contexto.AdquisicionVehicularService.listarCarpetasAdquisicion_ = () => [{ año: '2024', nombre: '00 - NOVIEMBRE 23 - RAM4000 CMP' }];
+  // 2024: el folio ("3") no aparece como prefijo del nombre real -- falla la búsqueda por folio, cae al nombre
+  // 2025: "30371-CONSTRUCCIÓN" SÍ existe en Drive -- gana sobre el link de Dropbox que trae el Excel
+  contexto.AdquisicionVehicularService.buscarCarpetaPorFolio_ = (lista, año, folio) => (año === '2025' && folio === '30371' ? 'https://drive/real-2025' : '');
+  contexto.AdquisicionVehicularService.buscarEnListaCarpetas_ = (lista, año, nombre) => (nombre === '00 - NOVIEMBRE 23 - RAM4000 CMP' ? 'https://drive/real-2024' : '');
+  contexto.AdquisicionVehicularService.listarCarpetasAdquisicion_ = () => [{ año: '2024', nombre: '00 - NOVIEMBRE 23 - RAM4000 CMP' }, { año: '2025', nombre: '30371-CONSTRUCCIÓN' }];
 
   contexto.indiceAdqPasadaExcel_();
 
@@ -173,11 +176,24 @@ test('indiceAdqPasadaExcel_ reemplaza solo las filas de cada FUENTE, resolviendo
   const porFuente = (f) => filas.filter((r) => r[5] === f);
   assert.equal(porFuente('EXCEL-2024').length, 1);
   assert.equal(porFuente('EXCEL-2024')[0][0], '3C7WRAKT9RG165067');
-  assert.equal(porFuente('EXCEL-2024')[0][4], 'https://drive/real', 'liga de 2024 resuelta por nombre de carpeta');
+  assert.equal(porFuente('EXCEL-2024')[0][4], 'https://drive/real-2024', 'liga de 2024 resuelta por nombre de carpeta (no hay match por folio)');
   assert.equal(porFuente('EXCEL-2025').length, 1);
-  assert.equal(porFuente('EXCEL-2025')[0][4], 'https://dropbox/x', 'liga de 2025 viene directo del Excel');
+  assert.equal(porFuente('EXCEL-2025')[0][4], 'https://drive/real-2025', 'liga de 2025 prefiere Drive sobre el Dropbox del Excel');
   assert.equal(porFuente('OCR-2026').length, 1, 'una FUENTE distinta no se toca');
   assert.equal(filas.some((r) => r[0] === 'VIEJA'), false, 'la fila vieja de EXCEL-2024 se reemplazó');
+});
+
+test('indiceAdqPasadaExcel_ usa el link del Excel como último recurso si Drive de verdad no tiene la carpeta', () => {
+  const hojaIndice = hojaMock([ENCABEZADOS_INDICE]);
+  const { contexto } = crearContexto({ hojaIndice, fuentes: [{ año: '2025' }] });
+  contexto.AdquisicionVehicularService.leerFuente_ = () =>
+    [{ serie: 'JN1BE6DS1R9105926', año: '2025', folio: '30371', area: 'CONSTRUCCIÓN', liga: 'https://dropbox/x', nombreCarpeta: '' }];
+  contexto.AdquisicionVehicularService.buscarCarpetaPorFolio_ = () => '';
+  contexto.AdquisicionVehicularService.buscarEnListaCarpetas_ = () => '';
+  contexto.AdquisicionVehicularService.listarCarpetasAdquisicion_ = () => [];
+
+  contexto.indiceAdqPasadaExcel_();
+  assert.equal(hojaIndice._filas[1][4], 'https://dropbox/x');
 });
 
 // ---------------------------------------------------------------------------------------- estado / informe

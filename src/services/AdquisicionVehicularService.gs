@@ -125,6 +125,20 @@ const AdquisicionVehicularService = (function () {
     return match ? match.url : '';
   }
 
+  /** Busca en una lista YA recorrida una carpeta del año dado cuyo nombre empiece con
+   *  "<folio>-" (la convención real de 2025/2026, confirmada navegando Drive: "30371-
+   *  CONSTRUCCIÓN") -- a diferencia de buscarEnListaCarpetas_, no necesita el texto de
+   *  "NOMBRE DE LA CARPETA" del Excel, que para 2025 ni siquiera existe (ahí la liga viene de
+   *  otra columna, a veces a Dropbox; esto permite preferir la carpeta real de Drive cuando sí
+   *  está, en vez de usar siempre ese link). */
+  function buscarCarpetaPorFolio_(lista, año, folio) {
+    const folioBuscado = String(folio || '').trim();
+    if (!folioBuscado) return '';
+    const prefijo = new RegExp('^' + folioBuscado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*-');
+    const match = lista.find((c) => c.año === año && prefijo.test(c.nombre));
+    return match ? match.url : '';
+  }
+
   /** La hoja del índice (o null si no existe y no se pide crearla) -- mismo patrón que
    *  HelpdeskService.hoja_: se crea sola la primera vez que hace falta. */
   function indiceHoja_(crear) {
@@ -165,7 +179,7 @@ const AdquisicionVehicularService = (function () {
     buscar,
     // Lo de abajo lo usa AdquisicionVehicularIndice.gs para construir el índice; el botón de la
     // ficha solo llama buscar().
-    FUENTES, leerFuente_, listarCarpetasAdquisicion_, buscarEnListaCarpetas_,
+    FUENTES, leerFuente_, listarCarpetasAdquisicion_, buscarEnListaCarpetas_, buscarCarpetaPorFolio_,
     indiceHoja_, HOJA_INDICE, ENCABEZADOS_INDICE,
   };
 })();

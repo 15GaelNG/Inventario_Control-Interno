@@ -149,6 +149,14 @@ test('listarCarpetasAdquisicion_ ignora carpetas de año con otro nombre (REPORT
   assert.equal(carpetas[0].nombre, '00 - NOVIEMBRE 23 - RAM4000 CMP');
 });
 
+test('buscarCarpetaPorFolio_ encuentra por "<folio>-" al inicio del nombre (la convención real de 2025/2026)', () => {
+  const { contexto } = crearContexto();
+  const lista = [{ año: '2025', nombre: '30371-CONSTRUCCIÓN', url: 'https://drive/30371' }, { año: '2025', nombre: '30888-DIRECCIÓN GENERAL', url: 'https://drive/30888' }];
+  assert.equal(contexto.Servicio.buscarCarpetaPorFolio_(lista, '2025', '30371'), 'https://drive/30371');
+  assert.equal(contexto.Servicio.buscarCarpetaPorFolio_(lista, '2025', '303'), '', 'no matchea un folio que solo es prefijo de otro folio');
+  assert.equal(contexto.Servicio.buscarCarpetaPorFolio_(lista, '2024', '30371'), '', 'año distinto no matchea');
+});
+
 test('buscarEnListaCarpetas_ encuentra por nombre dentro del año dado, sin volver a tocar Drive', () => {
   const { contexto } = crearContexto();
   const lista = [{ año: '2024', nombre: '00 - NOVIEMBRE 23 - RAM4000 CMP', url: 'https://drive/x' }];

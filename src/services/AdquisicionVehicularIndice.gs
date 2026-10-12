@@ -102,8 +102,12 @@ const indiceAdqEsCuota_ = (e) => /quota|rate ?limit|limit exceeded|too many|dema
 // ---------------------------------------------------------------------------------------------- pasada A (Excel)
 
 /** Lee los dos Excel completos y reemplaza, en el índice, lo que haya de cada FUENTE -- así una
- *  re-corrida no deja filas viejas si algo se quitó del Excel. Resuelve la carpeta de 2024 por
- *  nombre (listarCarpetasAdquisicion_ ya recorrido una vez, no por cada fila). */
+ *  re-corrida no deja filas viejas si algo se quitó del Excel. La liga de cada fila prefiere SIEMPRE
+ *  la carpeta real de Drive (por folio, "30371-CONSTRUCCIÓN" -- la convención real de 2025/2026; si
+ *  no aparece así, por el texto de NOMBRE DE LA CARPETA, la de 2024) y solo si Drive de verdad no
+ *  tiene esa carpeta usa lo que traiga el Excel (en 2025 puede ser un link a Dropbox, no a Drive --
+ *  el usuario prefirió Drive cuando esté disponible, 12-oct-2026). listarCarpetasAdquisicion_ se
+ *  recorre una sola vez para toda la pasada, no por cada fila. */
 function indiceAdqPasadaExcel_() {
   const hoja = AdquisicionVehicularService.indiceHoja_(true);
   const carpetas = AdquisicionVehicularService.listarCarpetasAdquisicion_();
@@ -111,7 +115,9 @@ function indiceAdqPasadaExcel_() {
   AdquisicionVehicularService.FUENTES.forEach((fuente) => {
     const fuenteNombre = 'EXCEL-' + fuente.año;
     const filas = AdquisicionVehicularService.leerFuente_(fuente).map((f) => {
-      const liga = f.liga || AdquisicionVehicularService.buscarEnListaCarpetas_(carpetas, f.año, f.nombreCarpeta);
+      let liga = AdquisicionVehicularService.buscarCarpetaPorFolio_(carpetas, f.año, f.folio);
+      if (!liga && f.nombreCarpeta) liga = AdquisicionVehicularService.buscarEnListaCarpetas_(carpetas, f.año, f.nombreCarpeta);
+      if (!liga) liga = f.liga;   // último recurso: lo que traiga el Excel (puede ser Dropbox)
       return [f.serie, f.folio, f.area, f.año, liga, fuenteNombre, ahora];
     });
     indiceAdqReemplazarFuente_(hoja, fuenteNombre, filas);
