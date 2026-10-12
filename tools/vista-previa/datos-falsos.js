@@ -297,7 +297,7 @@
           doc('FACTURA', 'Factura', [ar('FACTURA-0100.pdf', 900), ar('FACTURA-0100.xml', 900, 'text/xml')]),
           doc('SEGURO', 'Póliza de seguro', [ar('SEGURO-0100.pdf', 20)], [g('SEGUROS ANTERIORES', [ar('SEGURO-0100 2025-03-01.pdf', 385), ar('SEGURO-0100 2024-03-01.pdf', 750)])]),
           doc('ALTA', 'Alta de placas', [ar('ALTA DE PLACAS-0100.pdf', 880)]),
-          doc('TARJETA', 'Tarjeta de circulación', [ar('TARJETA DE CIRCULACION-0100.jpg', 870, 'image/jpeg')]),
+          Object.assign(doc('TARJETA', 'Tarjeta de circulación', []), { relleno: 'NO APLICA' }),
           doc('TENENCIA', 'Tenencia', [], [g('TENENCIAS ANTERIORES', [ar('TENENCIA-0100 2025.pdf', 280), ar('TENENCIA-0100 2024.pdf', 640)])]),
         ],
         otros: [g('ANTERIORES / OXXO GAS', [ar('TARJETA OXXO GAS.jpg', 700, 'image/jpeg')])],
@@ -536,6 +536,11 @@
       (await hasta('[data-insp-fotos]')).click();
       (await hasta('.galeria-mini')).click();
       await hasta('.galeria-visor'); await esperar(300);
+    },
+    'vehiculos-documentos-relleno': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="documentos"]')).click();
+      (await hasta('.docs-veh-relleno')).scrollIntoView({ block: 'center' }); await esperar(300);
     },
     'vehiculos-documentos': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();

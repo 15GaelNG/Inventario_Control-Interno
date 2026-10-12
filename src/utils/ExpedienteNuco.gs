@@ -181,6 +181,17 @@ const ExpedienteNuco = (function () {
     return null;
   }
 
+  /**
+   * La imagen de relleno que el área pone cuando no hay documento ("SEGURO-0001 NO APLICA.jpg", "CARPETA SIN
+   * INFORMACIÓN.jpg"): no es un documento. → 'NO APLICA' | 'SIN INFORMACIÓN' | null (como tools/nucos/reglas.RELLENO)
+   */
+  function relleno_(nombre) {
+    const n = clave_(nombre);
+    if (/NOAPLICA/.test(n)) return 'NO APLICA';
+    if (/SININFORMACI|NOTIENE/.test(n)) return 'SIN INFORMACIÓN';
+    return null;
+  }
+
   function archivos_(carpetaDrive) {
     const out = [];
     const it = carpetaDrive.getFiles();
@@ -225,19 +236,25 @@ const ExpedienteNuco = (function () {
     const documentos = Object.keys(DOCUMENTOS).map((k) => {
       const c = buscar_(doc, DOCUMENTOS[k].carpeta);
       if (c) usadas[c.getId()] = true;
-      return { clave: k, titulo: TITULOS[k], url: c ? c.getUrl() : '', vigentes: c ? archivos_(c) : [],
-        anteriores: c ? grupos_(c, [], [], 1) : [] };
+      const todos = c ? archivos_(c) : [];
+      const vigentes = todos.filter((a) => !relleno_(a.nombre));
+      // Sin documento, pero con la imagen de relleno: la sección dice "No aplica" / "Sin información" en vez de
+      // contarla como documento
+      const relleno = !vigentes.length && todos.length ? relleno_(todos[0].nombre) : null;
+      return { clave: k, titulo: TITULOS[k], url: c ? c.getUrl() : '', vigentes: vigentes, relleno: relleno,
+        anteriores: c ? grupos_(c, [], [], 1).map((g) => Object.assign(g, { archivos: g.archivos.filter((a) => !relleno_(a.nombre)) }))
+          .filter((g) => g.archivos.length) : [] };
     });
     // Lo demás de 1.-DOCUMENTACIÓN (ANTERIORES: Oxxo Gas, permisos… y archivos sueltos)
     const otros = [];
     if (doc) {
-      const sueltos = archivos_(doc);
+      const sueltos = archivos_(doc).filter((a) => !relleno_(a.nombre));
       if (sueltos.length) otros.push({ grupo: '(sueltos en ' + DOCUMENTACION + ')', raiz: '', archivos: sueltos });
       const it = doc.getFolders();
       while (it.hasNext()) {
         const c = it.next();
         if (usadas[c.getId()] || (c.isTrashed && c.isTrashed())) continue;
-        const archivos = archivos_(c);
+        const archivos = archivos_(c).filter((a) => !relleno_(a.nombre));
         if (archivos.length) otros.push({ grupo: c.getName(), raiz: c.getName(), archivos: archivos });
         grupos_(c, [c.getName()], otros, 2);
       }
