@@ -172,6 +172,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción). El menú lateral
   sale recogido (92 px) y se abre a 280 px al pasar el cursor, encima del contenido, sin botón de colapsar (en celular y
   tableta, hasta 1024 px, sigue el cajón de `shell-movil.html`); las etiquetas llevan solo la primera mayúscula.
+- **Sin asistente flotante** (12-oct, `7163c54`): el botón del asistente de la esquina inferior derecha se esconde en
+  las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
+  (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
+  `#asistente-flotante`). En los demás módulos sigue igual.
+- **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
+  y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
+  `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
 
 ## 2. Datos (libro de producción `17YrtuMY…`)
 
