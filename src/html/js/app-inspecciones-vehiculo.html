@@ -24,6 +24,18 @@
     const ORD = ['', '1ER', '2DO', '3ER', '4TO', '5TO', '6TO'];
     const opcionesDe = {};      // NUCO → opciones de la ficha abierta
     const expediente = {};      // NUCO → inspecciones del expediente (mientras la página siga abierta)
+    const pidiendo = {};        // NUCO → promesa en camino (precargar)
+
+    /** Pedir las del expediente ya (al abrir la ficha, en segundo plano) */
+    function precargar(nucco) {
+      const n = String(nucco || '');
+      if (!n || expediente[n] !== undefined || pidiendo[n]) return pidiendo[n];
+      pidiendo[n] = callServer('apiInspeccionesExpediente', state.token, n)
+        .then((t) => { expediente[n] = JSON.parse(t); })
+        .catch((err) => { expediente[n] = []; Notificar.error('No se pudieron leer las fotos del expediente: ' + err.message); })
+        .then(() => { delete pidiendo[n]; });
+      return pidiendo[n];
+    }
 
     /** El nombre de la carpeta del periodo de una fecha "aaaa-mm-dd…" (2026+: trimestre; antes: bimestre) */
     function periodo(fecha) {
@@ -97,15 +109,8 @@
         });
       }
       tabla(el);
-      if (expediente[n] !== undefined || el.dataset.pidiendo) return;
-      el.dataset.pidiendo = '1';
-      try {
-        expediente[n] = JSON.parse(await callServer('apiInspeccionesExpediente', state.token, n));
-      } catch (err) {
-        expediente[n] = [];
-        Notificar.error('No se pudieron leer las fotos del expediente: ' + err.message);
-      }
-      delete el.dataset.pidiendo;
+      if (expediente[n] !== undefined) return;
+      await precargar(n);
       if (document.body.contains(el)) tabla(el);
     }
 
@@ -129,6 +134,6 @@
 
     function olvidar(nucco) { delete expediente[String(nucco || '')]; }
 
-    return { preparar, cargar, pintarFotos, olvidar, periodo, juntar };
+    return { preparar, cargar, precargar, pintarFotos, olvidar, periodo, juntar };
   })();
 </script>

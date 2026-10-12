@@ -3650,6 +3650,11 @@
 
         detalle.innerHTML = html;
         wireMigasVehiculo();
+        // Lo que se lee de Drive (Documentos, fotos de Inspecciones) se pide ya, en segundo plano: al abrir su pestaña
+        // normalmente ya llegó
+        const nuccoFicha = vResumen.NUCCO || completo['NUCCO'];
+        DocumentosVehiculo.precargar(nuccoFicha);
+        if (inspecciones) InspeccionesFicha.precargar(nuccoFicha);
         if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
         const btnEditar = document.getElementById('veh-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
