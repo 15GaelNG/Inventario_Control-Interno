@@ -1,7 +1,20 @@
 # Personas: unificar PERSONAS y COLABORADORES ACTUALIZADO (pendiente, en el radar)
 
-Estado: **en espera** (12-oct-2026). Se retoma después de la Fase 3 de "Vehículos: todo por NUCO".
-Auditoría hecha el 12-oct-2026 sobre el libro productivo (`17YrtuMY…`), solo lectura.
+Estado (12-oct-2026, tarde): **en curso**. Decisión del usuario: una sola hoja — el ID PERSONA vive en COLABORADORES
+ACTUALIZADO y la lista se **sube desde Administración > Capital humano** (solo admins), ya no se pega.
+
+- Fase 0 (datos, prod) ✅ — columna AA "ID PERSONA" en COLABORADORES ACTUALIZADO (15,254 renglones, verificados contra
+  PERSONAS) y 28 empleos nuevos identificados. `tools/capital_humano/mudar_id_persona.py` (plan/aplicar/verificar/deshacer),
+  bitácora `20261012-142529-id-persona.jsonl`. Una unión a mano: MAGNO ANTONIO CRISTOBAL JACINTO (CH lo renumeró).
+- Fase 1 (código) ✅ en `ayrton` — `CapitalHumano.gs` es el único que lee personas (contrato); `persona: true` en
+  HojaServicio; ID PERSONA en Vehículos, Caja Chica, ASIGNACIONES (Líneas), Responsiva, Adherente, Reasignaciones,
+  Inspección (`ID PERSONA CONDUCTOR`), Uber, Arqueos y Tickets; listas solo de activos.
+- Fase 2 (código) ✅ en `ayrton` — el módulo de carga.
+- Pendiente: master + despliegue; **la primera carga en prod quita TELEFONO y NÚMERO DE CUENTA de la hoja**; Fase 4
+  (llenar el ID PERSONA de lo existente con Salud > "Actualizar", y ocultar PERSONAS y COLABORADORES dos semanas).
+- **Mientras tanto no pegar la lista a mano** en COLABORADORES ACTUALIZADO (desalinea la columna AA).
+
+Auditoría hecha el 12-oct-2026 sobre el libro productivo (`17YrtuMY…`), solo lectura. Lo de abajo es el estado de antes.
 
 ## Cómo está hoy
 
