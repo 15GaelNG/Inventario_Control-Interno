@@ -3579,7 +3579,7 @@
           { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
-          { id: 'documentos', titulo: 'Documentos vehicular', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+          { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
           verificaciones && {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
             contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
@@ -4108,7 +4108,7 @@
         const archivos = await subirArchivosVehiculo('editar-vehiculo');
         const datos = Object.assign(recolectarDatosVehiculo('editar-vehiculo'), archivos);
         await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, datos);
-        // Un documento subido cambia la carpeta del NUCO: la pestaña Documentos vehicular se vuelve a leer
+        // Un documento subido cambia la carpeta del NUCO: la pestaña Documentos se vuelve a leer
         if (Object.keys(archivos).length && fichaVehiculoAbierta) DocumentosVehiculo.olvidar(fichaVehiculoAbierta.NUCCO);
         cerrarEditarVehiculo();
         invalidarCacheLista('apiListarVehiculosResumen', state.token);
