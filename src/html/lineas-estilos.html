@@ -489,6 +489,9 @@
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     min-height: 36px; padding: 8px 12px; font-size: 13px; font-weight: 600; line-height: 1.2; border-radius: 8px; white-space: nowrap;
   }
+  /* Recargar datos junto a Agregar equipo y Agregar línea: mide lo mismo, pero con el borde gris claro se veía más chico
+     (usuario, 12-oct: opción B, borde gris más oscuro; en modo oscuro se queda el borde del tema) */
+  :root:not([data-theme="dark"]) .ln-modulo .page-header-actions button.secondary { border-color: #b9c1c6; }
   a.ln-boton { text-decoration: none; box-sizing: border-box; cursor: pointer; }
   a.ln-boton:hover { text-decoration: none; }
   a.ln-boton .ln-icon, .ln-detalle-botones > button .ln-icon { width: 15px; height: 15px; }
