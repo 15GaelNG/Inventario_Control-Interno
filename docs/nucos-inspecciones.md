@@ -40,6 +40,15 @@ vacía `236/4.- INSPECCIONES/2022`. Se renombraron / apartaron a `_PAPELERA` con
 (`20261011-130936-inspecciones-limpieza.jsonl`). 23 NUCO tienen `4.- INSPECCIONES` vacía: solo traía documentos, que se
 fueron a `1.-DOCUMENTACIÓN`; la raíz se queda para que todos tengan la misma estructura.
 
+**Correcciones del 12-oct-2026** (`tools/nucos/corregir_fechas_insp.py`, bitácora `20261012-095804-fechas-insp.jsonl`,
+18 renglones en la hoja): 21 PDF tenían en el nombre un año distinto al de su carpeta. Era del área: en enero tecleaban
+el año anterior (`16012024-SU2825C.pdf` en `2025/1ER BIMESTRE`, subido en enero de 2025) y la homologación toma la fecha
+del nombre. Se corrigió el año a 17 (16 de enero de 2025 y el 101, cuyo mes cuadra con su carpeta de 2024) y la carpeta
+del 399 pasó de `2024/1ER BIMESTRE` a `2025/2DO BIMESTRE` (PDF y fotos de marzo de 2025). Para el área: el 42 (su lugar,
+`2025/2DO BIMESTRE`, ya tiene otra inspección), el 176 (sin forma de saberlo) y el 371 (julio en `2DO TRIMESTRE`).
+Además se rellenaron 116 puntajes vacíos de la hoja INSPECCION VEHICULAR con el de su PDF (`tools/nucos/puntajes_insp.py`,
+bitácora `20261012-095336-puntajes.jsonl`; validado 39 de 40 contra los que sí lo tenían).
+
 **Para deshacer** un NUCO: `expediente.py deshacer .cache/bitacoras/<bitácora>.jsonl --nucos N` (la más nueva primero:
 limpieza → 101603 → 093034 → las del piloto).
 
