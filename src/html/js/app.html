@@ -3288,7 +3288,7 @@
           textoConfirmar: 'Guardar en la ficha',
         });
         if (!ok) return;
-        await callServer('apiGuardarExpedienteAdquisicion', state.token, vResumen.ID, {
+        await callServer('apiGuardarExpedienteAdquisicion', state.token, vResumen.ID_VEHICULO, {
           'FOLIO ADQUISICION': encontrado.folio, 'LIGA EXPEDIENTE ADQUISICION': encontrado.liga || '',
         });
         toastExito('Expediente guardado');
