@@ -1,4 +1,4 @@
-"""SOLO LECTURA: ¿cada archivo del plan está hoy en Drive donde el plan dice? (homologar 4.- INSPECCIONES)
+"""SOLO LECTURA: ¿cada archivo del plan está hoy en Drive donde el plan dice? (homologar 4.-INSPECCIONES)
 
 Uso: verificar_inspecciones.py <plan.json> <foto.json> (--nucos 113[,…] | --todos) [--arbol]
      verificar_inspecciones.py x x --contra-foto <foto.json> --nucos 482   (después de deshacer)
@@ -21,7 +21,7 @@ def verificar(plan_json, foto_json, nucos, arbol=False):
     total = collections.Counter()
     for nuco in nucos:
         nuco_id = raiz_de[nuco]["nuco_id"]
-        vivo = arbol_vivo(d, nuco_id)              # todo el NUCO: 4.- INSPECCIONES y 1.-DOCUMENTACIÓN
+        vivo = arbol_vivo(d, nuco_id)              # todo el NUCO: 4.-INSPECCIONES y 1.-DOCUMENTACIÓN
 
         def ruta(i):
             partes = []
@@ -48,14 +48,14 @@ def verificar(plan_json, foto_json, nucos, arbol=False):
                 total["en otro lugar"] += 1
             else:
                 total["en su lugar"] += 1
-        # Carpetas que quedaron vacías dentro de 4.- INSPECCIONES
+        # Carpetas que quedaron vacías dentro de 4.-INSPECCIONES
         con_hijos = {v[0] for v in vivo.values()}
         vacias = [ruta(i) for i, v in vivo.items() if v[2] and i not in con_hijos and ruta(i).split("/")[1] == RAIZ]
         nombres_n2 = sorted({ruta(i).split("/")[3] for i, v in vivo.items() if v[2] and len(ruta(i).split("/")) == 4
                              and ruta(i).split("/")[1] == RAIZ})
         profundidad = max((len(ruta(i).split("/")) - 2 for i, v in vivo.items() if not v[2] and ruta(i).split("/")[1] == RAIZ),
                           default=0)
-        print("NUCO %s: %s | carpetas vacías: %d | profundidad máx. (carpetas) bajo 4.- INSPECCIONES: %d"
+        print("NUCO %s: %s | carpetas vacías: %d | profundidad máx. (carpetas) bajo 4.-INSPECCIONES: %d"
               % (nuco, dict(total), len(vacias), profundidad - 1))
         print("  nivel 2:", nombres_n2)
         for m in mal[:20]:

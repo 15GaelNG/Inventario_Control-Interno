@@ -82,23 +82,23 @@ cambia = [p for p in P if p["antes"] != p["despues"]]
 clas = collections.Counter(v[0] for v in nota.values())
 acc = collections.Counter(p["accion"] for p in P)
 prof = collections.Counter(len(p["despues"].split("/")) - 3 for p in P
-                           if p["accion"] != "PAPELERA" and p["despues"].split("/")[1] == "4.- INSPECCIONES")
+                           if p["accion"] != "PAPELERA" and p["despues"].split("/")[1] == "4.-INSPECCIONES")
 filas = [
-    ("Dry run: homologar 4.- INSPECCIONES (solo lectura, nada se movió)", ""),
+    ("Dry run: homologar 4.-INSPECCIONES (solo lectura, nada se movió)", ""),
     ("", ""),
     ("NUCO con carpeta de inspecciones", len(x["raices"])),
-    ("Carpeta raíz que se renombra a «4.- INSPECCIONES»", sum(1 for z in x["raices"] if z["name"] != "4.- INSPECCIONES")),
+    ("Carpeta raíz que se renombra a «4.-INSPECCIONES»", sum(1 for z in x["raices"] if z["name"] != "4.-INSPECCIONES")),
     ("Archivos", len(P)),
     ("  se quedan igual", acc["IGUAL"]),
     ("  se mueven o renombran", acc["MOVER"]),
     ("  van a la papelera (recuperables 30 días, en bitácora)", acc["PAPELERA"]),
     ("PDF de inspección que pasan a INSPECCION-<NUCO> <fecha>.pdf", sum(1 for p in P if "/INSPECCION-" in p["despues"])),
     ("Documentos del vehículo que pasan a 1.-DOCUMENTACIÓN", sum(1 for p in P if p["destino_tipo"] == "DOCUMENTACION")),
-    ("Archivos a 4.- INSPECCIONES/_POR REVISAR (plano)", sum(1 for p in P if p["destino_tipo"] == "POR REVISAR")),
+    ("Archivos a 4.-INSPECCIONES/_POR REVISAR (plano)", sum(1 for p in P if p["destino_tipo"] == "POR REVISAR")),
     ("Archivos en <año>/SIN PERIODO…", sum(1 for p in P if "/SIN PERIODO" in p["despues"])),
     ("Nombre repetido en el destino (va con (2))", sum(1 for p in P if "mismo nombre" in p["aviso"])),
     ("", ""),
-    ("Profundidad bajo 4.- INSPECCIONES (archivos)", ""),
+    ("Profundidad bajo 4.-INSPECCIONES (archivos)", ""),
 ] + [("  %d nivel(es) de carpeta" % k, n) for k, n in sorted(prof.items())] + [
     ("", ""),
     ("Carpetas por clasificación", ""),
@@ -131,9 +131,9 @@ for cid, (k, aviso) in nota.items():
         continue
     despues = h["destino"].get(cid)
     filas_c.append([c["nuco"], k, "/".join([c["nuco"]] + c["ruta"]),
-                    "(se quita este nivel)" if despues is None else "/".join([c["nuco"], "4.- INSPECCIONES"] + despues),
+                    "(se quita este nivel)" if despues is None else "/".join([c["nuco"], "4.-INSPECCIONES"] + despues),
                     cuenta[(c["nuco"], "/".join(c["ruta"]))], aviso])
-orden = ["SIN CLASIFICAR", "AJENO", "EXTRA", "SECCION SUELTA", "ENVOLTORIO", "MOTIVO", "PERIODO", "AÑO"]
+orden = ["SIN CLASIFICAR", "AJENO", "EXTRA", "SECCION SUELTA", "ENVOLTORIO", "MOTIVO", "PERIODO", "AÑO", "POR REVISAR"]
 for f in sorted(filas_c, key=lambda f: (orden.index(f[1]), int(f[0]) if f[0].isdigit() else 0, f[2])):
     s.append(f)
     for c in s[s.max_row]:

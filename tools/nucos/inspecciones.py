@@ -1,9 +1,9 @@
-"""Aplica en la carpeta REAL el plan de homologar 4.- INSPECCIONES (docs/nucos-expediente.md).
+"""Aplica en la carpeta REAL el plan de homologar 4.-INSPECCIONES (docs/nucos-expediente.md).
 
 El plan sale del dry run (homologar_insp.py → homolog-insp.json, con la foto foto.json). Por cada NUCO:
   1. Revisa que Drive siga como en la foto: cada archivo del plan, en su carpeta y con su nombre. Si algo cambió, ese
      NUCO no se toca (se avisa).
-  2. Renombra la raíz a «4.- INSPECCIONES» si hace falta y crea las carpetas que faltan.
+  2. Renombra la raíz a «4.-INSPECCIONES» si hace falta y crea las carpetas que faltan.
   3. Mueve y renombra cada archivo (mover conserva su ID: las ligas siguen sirviendo). Le deja en appProperties de
      dónde venía (padre y nombre), que viaja con él aunque alguien lo mueva después.
   4. Manda a la papelera lo que el plan dice (relleno, idénticos), y las carpetas viejas que quedaron vacías.
@@ -26,7 +26,7 @@ from pathlib import Path
 import expediente as e
 import reglas
 
-RAIZ = "4.- INSPECCIONES"
+RAIZ = "4.-INSPECCIONES"
 DOCUMENTACION = "1.-DOCUMENTACIÓN"
 HOJA_BITACORA = "BITACORA EXPEDIENTES NUCO"
 PAPELERA = "_PAPELERA"
@@ -175,7 +175,7 @@ def aplicar(plan_json, foto_json, foto_doc_json, nucos, continuar=None, hilos=1)
         hijos_cache = {}
 
         def carpeta(segs):
-            """La carpeta bajo el NUCO (segs[0] es 4.- INSPECCIONES o 1.-DOCUMENTACIÓN); crea la que falte."""
+            """La carpeta bajo el NUCO (segs[0] es 4.-INSPECCIONES o 1.-DOCUMENTACIÓN); crea la que falte."""
             actual = base[segs[0]]
             for s_ in segs[1:]:
                 if actual not in hijos_cache:
