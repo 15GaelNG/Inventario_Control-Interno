@@ -33,6 +33,8 @@ const UberService = (function () {
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     // Ojo: no confundir con la pestaña "UBER JUANITO", que es otra cosa con otras columnas
     hoja: 'UBER',
+    // ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.LIGAS)
+    persona: true,
     columnas: COLUMNAS_LISTA,
     fila: (r) => {
       const fila = { NOMBRE_COMPLETO: r['NOMBRE COMPLETO'] || '', RAZON_SOCIAL: r['RAZON SOCIAL'] || '', ESTATUS: r['ESTAUS USUARIO'] || '' };

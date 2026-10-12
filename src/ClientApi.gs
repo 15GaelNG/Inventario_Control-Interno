@@ -906,8 +906,8 @@ function apiRelacionesMapa(token) {
 function mapaCompleto_() {
   const mapa = Relaciones.describir();
   mapa.duenos.push({
-    hoja: CapitalHumano.HOJA_PERSONAS,
-    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_PERSONAS),
+    hoja: CapitalHumano.HOJA_CH,
+    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_CH),
     llaveDeNegocio: 'NOMBRE COMPLETO',
     copias: CapitalHumano.describirLigas().map((l) => ({
       nombre: l.nombre,

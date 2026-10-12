@@ -61,6 +61,8 @@ const VehiculosService = (function () {
     incluir: () => true,
     archivos: ETIQUETA_ARCHIVO,
     candadoAlCrear: true,
+    // ID PERSONA del responsable: se calcula de su nombre al crear y al cambiarlo (CapitalHumano, 01/10/2026)
+    persona: true,
     alCrear: (fila, ctx) => {
       asegurarColumnasDocumento_(fila);
       // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
@@ -68,7 +70,6 @@ const VehiculosService = (function () {
       const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
       ajenas.columnas.forEach((c) => { delete fila[c]; });
       Object.assign(fila, ajenas.sinDueno);
-      conPersona_(fila, fila);
       fila.FOLIO = generarFolio_(ctx.datos.CLASE);
       fila.NUCCO = generarNucco_();
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
@@ -83,7 +84,6 @@ const VehiculosService = (function () {
       // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
       // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
       Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete cambios[c]; });
-      conPersona_(cambios, Object.assign({}, ctx.actual, cambios));
     },
     despues: (registro, ctx) => {
       archivarEnExpediente_(registro, ctx.accion === 'actualizar' ? ctx.cambios : registro);
@@ -372,24 +372,6 @@ const VehiculosService = (function () {
     return String(maximo + 1).padStart(5, '0');
   }
 
-  /**
-   * ID PERSONA no se captura: se calcula del responsable (CapitalHumano, decisión del
-   * 01/10/2026). Si cambió el responsable (o su número), se recalcula y va en el mismo
-   * renglón. Si todavía no hay PERSONAS, no se toca; Salud lo pone al día después.
-   *
-   * @param {Object} datos     lo que se va a escribir (aquí se agrega ID PERSONA)
-   * @param {Object} registro  el registro completo como va a quedar
-   */
-  function conPersona_(datos, registro) {
-    delete datos[CapitalHumano.COLUMNA];
-    if (!CapitalHumano.columnasDePersona(SHEET_VEHICULOS).some((c) => datos[c] !== undefined)) return;
-    try {
-      const id = CapitalHumano.idPara(SHEET_VEHICULOS, registro);
-      if (id !== null) datos[CapitalHumano.COLUMNA] = id;
-    } catch (err) {
-      console.error('CapitalHumano: no se pudo calcular la persona del vehículo: ' + err.message);
-    }
-  }
 
   // Carpetas de Drive de los adjuntos (responsiva, documento de baja, póliza, tenencia): PDF a
   // "VEHICULOS_Files_", imagen (foto del documento) a "VEHICULOS_Images", las dos en la raíz de
