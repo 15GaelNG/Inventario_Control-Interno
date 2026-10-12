@@ -228,6 +228,16 @@
     100% { transform: translate3d(0, 108vh, 0) rotate(380deg); opacity: 0; }
   }
 
+  /* Lluvia ligera de pétalos sobre el contenido (fuera del menú), de vez en cuando: la capa cubre
+     #main (que ya es relative), por debajo del papel picado de la barra (5) y de las ventanas (500);
+     sin clics. Los mueve el script. */
+  .dm-lluvia { position: absolute; inset: 0; z-index: 4; overflow: hidden; pointer-events: none; }
+  .dm-lluvia span {
+    position: absolute; top: -24px; width: var(--tam); height: calc(var(--tam) * 1.33);
+    background: var(--dm-petalo) center / contain no-repeat; opacity: 0;
+    filter: drop-shadow(0 2px 2px rgba(6, 38, 58, .12));
+  }
+
   /* Pétalos que salen del aviso de "guardado" (los mueve el script) */
   .dm-rafaga { position: fixed; inset: 0; pointer-events: none; z-index: 10000; overflow: hidden; }
   .dm-rafaga span { position: absolute; width: 12px; height: 16px; background: var(--dm-petalo) center / contain no-repeat; }
@@ -443,7 +453,7 @@
      velas y estrellas quedan quietas. El papel picado deja de mecerse (lo revisa el script). */
   @media (prefers-reduced-motion: reduce) {
     :root { --dm-movimiento: 0; }
-    .dm-petalos, .dm-mariposa, .dm-rafaga { display: none; }
+    .dm-petalos, .dm-mariposa, .dm-rafaga, .dm-lluvia { display: none; }
     .dm-llama, .dm-mini-vela::before, .dm-estrella { animation: none; }
     .dm-estrella { opacity: .6; }
     .dm-interruptor-flor, .dm-banner-ofrenda { transition: none; }
@@ -610,11 +620,14 @@
         '<circle cx="17.8" cy="33.6" r=".7"/><circle cx="14.6" cy="37" r=".7"/><circle cx="10" cy="38" r=".65"/></g></g></svg>';
     }
 
-    function petalo(c1, c2) {
+    /** Pétalo de cempasúchil (alargado, en punta) o, con redondo, de terciopelo / flor de nube */
+    function petalo(c1, c2, redondo) {
+      const forma = redondo ? 'M6 1.5C10.5 1.5 11.5 7 9.8 11.5 8.6 14.6 3.4 14.6 2.2 11.5.5 7 1.5 1.5 6 1.5Z'
+        : 'M6 .5C10.5 4 11 10 6 15.5 1 10 1.5 4 6 .5Z';
       return `<svg xmlns="${XMLNS}" viewBox="0 0 12 16"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">` +
         `<stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>` +
-        `<path d="M6 .5C10.5 4 11 10 6 15.5 1 10 1.5 4 6 .5Z" fill="url(#g)"/>` +
-        `<path d="M6 2.5V13" stroke="${c2}" stroke-width=".5" opacity=".5"/></svg>`;
+        `<path d="${forma}" fill="url(#g)"/>` +
+        `<path d="M6 ${redondo ? 4 : 2.5}V${redondo ? 12 : 13}" stroke="${c2}" stroke-width=".5" opacity=".5"/></svg>`;
     }
 
     /** Calaverita de líneas (como los íconos del sistema), para las tablas vacías */
@@ -665,6 +678,10 @@
       raiz.setProperty('--dm-petalo-0', url(petalo('#FBBF3A', '#E8780F')));
       raiz.setProperty('--dm-petalo-1', url(petalo('#F59E0B', '#C2570C')));
       raiz.setProperty('--dm-petalo-2', url(petalo('#F7A934', '#D9660B')));
+      // Para la lluvia del contenido: terciopelo magenta, terciopelo granate y flor de nube
+      raiz.setProperty('--dm-petalo-3', url(petalo('#F06B9A', '#B8285E', true)));
+      raiz.setProperty('--dm-petalo-4', url(petalo('#D9483B', '#8E1F2A', true)));
+      raiz.setProperty('--dm-petalo-5', url(petalo('#FFF3D6', '#D2B06E', true)));
       const letra = document.createElement('link');
       letra.rel = 'stylesheet';
       letra.href = LETRA;
@@ -873,6 +890,49 @@
       pantalla.insertAdjacentHTML('afterbegin', '<div class="dm-carga-picado dm-deco" aria-hidden="true"></div>');
       const barra = pantalla.querySelector('.loading-bar');
       if (barra) barra.insertAdjacentHTML('beforebegin', velas('dm-velas-carga dm-deco'));
+    }
+
+    // ---------- Lluvia de pétalos sobre el contenido ----------
+
+    let lluviaEnMarcha = false;
+    const MAX_LLUVIA = 3;
+    // Más cempasúchil (0–2) que terciopelo (3, 4) y nube (5)
+    const VARIEDAD = [0, 0, 1, 1, 2, 2, 3, 3, 4, 5];
+
+    /**
+     * Cada 5–9 s deja caer UN pétalo en el área del contenido (nunca más de 3 a la vez). Baja
+     * despacio, meciéndose de lado y girando sobre sí mismo (se angosta y se ensancha, como una
+     * hoja que voltea). No cae con la pestaña oculta, sin sesión (login) ni con la temporada apagada.
+     */
+    function llover() {
+      if (!activa()) { lluviaEnMarcha = false; return; }
+      setTimeout(llover, azar(5000, 9000));
+      const capa = document.querySelector('#main > .dm-lluvia');
+      const shell = document.getElementById('app-shell');
+      if (!capa || document.hidden || quieto() || (shell && shell.hidden) || capa.children.length >= MAX_LLUVIA) return;
+      const alto = capa.clientHeight, ancho = capa.clientWidth;
+      if (!alto || !ancho) return;
+      const p = document.createElement('span');
+      const tam = azar(10, 15);
+      p.style.setProperty('--tam', tam.toFixed(1) + 'px');
+      p.style.setProperty('--dm-petalo', `var(--dm-petalo-${VARIEDAD[Math.floor(Math.random() * VARIEDAD.length)]})`);
+      p.style.left = azar(4, 92).toFixed(1) + '%';
+      capa.appendChild(p);
+      const vaiven = azar(30, 80) * (Math.random() < .5 ? -1 : 1);
+      const giro = azar(200, 480) * (Math.random() < .5 ? -1 : 1);
+      const baja = alto + 50;
+      const pasos = 6;
+      const cuadros = [];
+      for (let k = 0; k <= pasos; k++) {
+        const t = k / pasos;
+        cuadros.push({
+          offset: t,
+          opacity: t === 0 ? 0 : t > .9 ? 0 : .85,
+          transform: `translate(${(Math.sin(t * Math.PI * 2.2) * vaiven).toFixed(1)}px, ${(baja * t).toFixed(1)}px) ` +
+            `rotate(${(giro * t).toFixed(0)}deg) scaleX(${(.35 + .65 * Math.abs(Math.cos(t * Math.PI * 3))).toFixed(2)})`,
+        });
+      }
+      p.animate(cuadros, { duration: azar(10000, 15000), easing: 'linear', fill: 'forwards' }).onfinish = () => p.remove();
     }
 
     // ---------- Menú: el camino ----------
@@ -1281,6 +1341,11 @@
       if (hero && !hero.querySelector('.dm-login')) decorarLogin(hero);
       const carga = document.getElementById('loading-screen');
       if (carga && !carga.querySelector('.dm-carga-picado')) decorarCarga(carga);
+      const principal = document.getElementById('main');
+      if (principal && !principal.querySelector(':scope > .dm-lluvia')) {
+        principal.insertAdjacentHTML('beforeend', '<div class="dm-lluvia dm-deco" aria-hidden="true"></div>');
+        if (!lluviaEnMarcha) { lluviaEnMarcha = true; setTimeout(llover, azar(2000, 4000)); }
+      }
       const kpis = document.getElementById('dash-kpis');
       if (kpis && !document.querySelector('.dm-banner') && !bannerOculto()) decorarInicio(kpis);
     }
