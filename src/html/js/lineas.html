@@ -5357,7 +5357,7 @@
             grupos.map((g) => '<button type="button" class="lnp-leyenda-item"' + (g.estatus && esHoy() ? ' data-lnp-ir="lineas" data-estatus="' + esc(g.estatus) + '" title="Ver en Líneas Telefónicas"' : ' disabled') + '>' +
               '<span class="lnp-leyenda-marca" style="background:' + g.color + '"></span><span class="lnp-leyenda-nombre">' + esc(g.nombre) + '</span>' +
               '<strong>' + miles(r.grupos[g.clave]) + '</strong><span class="lnp-leyenda-pct">' + pct(r.grupos[g.clave], r.activas) + '</span></button>').join('') +
-          '</div>' + (r.grupos.revisar ? '<p class="lnp-nota">"Por revisar": estatus que ya no existen (por ejemplo SUSPENDIDA). Líneas los corrige en Correcciones de Líneas.</p>' : '');
+          '</div>' + (r.grupos.revisar ? '<p class="lnp-nota">"Por revisar": estatus que ya no existen (por ejemplo SUSPENDIDA). Líneas los corrige en Correcciones de líneas.</p>' : '');
 
         // Dinero por cuenta: lo que más pregunta dirección. Los SIM básicos van aparte, solo con su número.
         $('#lnp-renta', raiz).textContent = dinero(r.renta);
@@ -5404,7 +5404,7 @@
           tile('circle-check', e.uso, 'En uso · ' + pct(e.uso, e.total), 'stat-tile-ok'),
           tile('archive', e.guardado, 'Guardados', '', 'Resguardo, para venta, posible venta-daño o para desecho'),
           tile('package-x', e.baja, 'Ya no están', '', 'Vendidos, donados, extraviados o robados y desechados'),
-          tile('circle-help', e.revisar, 'Por revisar', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de Líneas'),
+          tile('circle-help', e.revisar, 'Por revisar', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de líneas'),
         ], () => null);
       }
 
@@ -5509,7 +5509,7 @@
         const clic = esHoy();
         $('#lnp-total-' + conjunto, raiz).textContent = miles(total) + ' en total';
         $('#lnp-barras-' + conjunto, raiz).innerHTML = filas.length ? filas.map(([s, v]) =>
-          '<button type="button" class="lnp-barra"' + (clic ? ' data-lnp-ir="' + conjunto + '" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas Telefónicas"' : ' disabled') + '>' +
+          '<button type="button" class="lnp-barra"' + (clic ? ' data-lnp-ir="' + conjunto + '" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas telefónicas"' : ' disabled') + '>' +
             '<span class="lnp-barra-nombre">' + esc(s) + '</span>' +
             '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%"></span></span>' +
             '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, total) + '</span></button>').join('')
