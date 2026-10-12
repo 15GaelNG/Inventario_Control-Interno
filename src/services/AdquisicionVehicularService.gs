@@ -23,8 +23,13 @@ const AdquisicionVehicularService = (function () {
 
   const FUENTES = [
     {
+      // colFolio confirmado leyendo el .xlsx real (descomprimido), no el resumen "en lenguaje
+      // natural" de la herramienta de lectura de Drive -- esa herramienta había pegado el
+      // título de la hoja ("REGISTRO 2024") al encabezado real ("FOLIO "), y el nombre de
+      // columna equivocado hacía que el folio saliera vacío aunque área/año sí coincidieran
+      // (12-oct-2026, reportado por el usuario).
       año: '2024', fileId: '1dduU0ItSqOi7T3qoY_m1h_RW0sY7LxsS',
-      colSerie: 'NO. SERIE', colFolio: 'REGISTRO 2024 FOLIO', colArea: 'ÁREA SOLICITANTE',
+      colSerie: 'NO. SERIE', colFolio: 'FOLIO', colArea: 'ÁREA SOLICITANTE',
       colCarpeta: 'NOMBRE DE LA CARPETA', colLiga: null,
     },
     {
@@ -79,16 +84,28 @@ const AdquisicionVehicularService = (function () {
     }
   }
 
+  /** El encabezado real NO siempre es el primer renglón: el archivo de 2025 trae un bloque de
+   *  título/resumen arriba (5 renglones, confirmado descomprimiendo el .xlsx) antes de la fila
+   *  con "TICKET HELP", "# DE SERIE", etc. Por eso se busca la fila que de verdad trae
+   *  colSerie como encabezado, en vez de asumir que es la primera. */
+  function encontrarEncabezado_(valores, colSerie) {
+    for (let i = 0; i < valores.length; i++) {
+      const indices = indiceEncabezados_(valores[i]);
+      if (indices[colSerie] !== undefined) return { indices, fila: i };
+    }
+    return null;
+  }
+
   function buscarEnFuente_(fuente, serieBuscada) {
     const hoja = SpreadsheetApp.openById(fuente.fileId).getSheets()[0];
     const valores = hoja.getDataRange().getValues();
     if (!valores.length) return null;
-    const indices = indiceEncabezados_(valores[0]);
-    const colSerie = indices[fuente.colSerie];
-    if (colSerie === undefined) return null;
+    const encabezado = encontrarEncabezado_(valores, fuente.colSerie);
+    if (!encabezado) return null;
+    const indices = encabezado.indices;
 
-    for (let i = 1; i < valores.length; i++) {
-      const celdaSerie = valores[i][colSerie];
+    for (let i = encabezado.fila + 1; i < valores.length; i++) {
+      const celdaSerie = valores[i][indices[fuente.colSerie]];
       if (!celdaSerie) continue;
       const series = String(celdaSerie).split(/\s+/).map(normalizarSerie_).filter(Boolean);
       if (series.indexOf(serieBuscada) === -1) continue;

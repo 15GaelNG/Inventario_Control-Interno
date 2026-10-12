@@ -60,29 +60,49 @@ function crearContexto({ fuentes2024 = [], fuentes2025 = [], drive = {} } = {}) 
   return contexto;
 }
 
-const ENCABEZADO_2024 = ['NO. SERIE', 'REGISTRO 2024 FOLIO', 'ÁREA SOLICITANTE', 'NOMBRE DE LA CARPETA'];
+// Encabezados reales (confirmados leyendo el .xlsx descomprimido, no el resumen de Drive --
+// ver el comentario en AdquisicionVehicularService.gs sobre el bug del 12-oct-2026).
+const ENCABEZADO_2024 = ['NO. SERIE', 'FOLIO', 'ÁREA SOLICITANTE', 'NOMBRE DE LA CARPETA'];
 const ENCABEZADO_2025 = ['# DE SERIE', 'TICKET HELP', 'ÁREA SOLICITANTE', 'LIGA DE LA CARPETA'];
 
 test('encuentra por serie en la fuente 2024 (una sola serie en la fila)', () => {
   const contexto = crearContexto({
-    fuentes2024: [ENCABEZADO_2024, ['3C7WRAKT9RG165067', '3.00', 'CONSTRUCCIÓN', '03- MARZO -RAM 4000- GTO']],
-    drive: { '2024': { '03. MARZO': { '03- MARZO -RAM 4000- GTO': null } } },
+    fuentes2024: [ENCABEZADO_2024, ['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '00 - NOVIEMBRE 23 - RAM4000 CMP']],
+    drive: { '2024': { '11. NOVIEMBRE': { '00 - NOVIEMBRE 23 - RAM4000 CMP': null } } },
   });
   const resultado = contexto.Servicio.buscar('tok', '3C7WRAKT9RG165067');
   assert.equal(resultado.año, '2024');
-  assert.equal(resultado.folio, '3.00');
+  assert.equal(resultado.folio, '3');
   assert.equal(resultado.area, 'CONSTRUCCIÓN');
-  assert.match(resultado.liga, /03- MARZO -RAM 4000- GTO/);
+  assert.match(resultado.liga, /00 - NOVIEMBRE 23 - RAM4000 CMP/);
 });
 
 test('encuentra por serie en la fuente 2025, usando LIGA DE LA CARPETA directo (sin buscar en Drive)', () => {
   const contexto = crearContexto({
-    fuentes2025: [ENCABEZADO_2025, ['JN1BE6DS1R9105926', '27697', 'CONSTRUCCIÓN', 'https://www.dropbox.com/scl/fo/x']],
+    fuentes2025: [ENCABEZADO_2025, ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', 'https://www.dropbox.com/scl/fo/x']],
   });
   const resultado = contexto.Servicio.buscar('tok', 'JN1BE6DS1R9105926');
   assert.equal(resultado.año, '2025');
-  assert.equal(resultado.folio, '27697');
+  assert.equal(resultado.folio, '30371');
   assert.equal(resultado.liga, 'https://www.dropbox.com/scl/fo/x');
+});
+
+test('el encabezado no siempre es el primer renglón (el archivo real de 2025 trae 5 filas de título/resumen encima)', () => {
+  const filaVacia = [];
+  const contexto = crearContexto({
+    fuentes2025: [
+      ['SEGUIMIENTO A TICKETS|HELPDESK', '', '', 'AHORROS'],
+      filaVacia,
+      ['', '', '', '', '', '', '', '', '', '3'],
+      filaVacia,
+      ['', '', '46034'],
+      ENCABEZADO_2025,
+      ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', 'https://www.dropbox.com/scl/fo/x'],
+    ],
+  });
+  const resultado = contexto.Servicio.buscar('tok', 'JN1BE6DS1R9105926');
+  assert.ok(resultado, 'debe saltarse las filas de título y encontrar el encabezado real más abajo');
+  assert.equal(resultado.folio, '30371');
 });
 
 test('separa varias series en una sola celda (compra de lote) y encuentra la que corresponde', () => {
@@ -97,7 +117,7 @@ test('separa varias series en una sola celda (compra de lote) y encuentra la que
 
 test('normaliza mayúsculas/espacios al comparar la serie buscada', () => {
   const contexto = crearContexto({
-    fuentes2025: [ENCABEZADO_2025, ['JN1BE6DS1R9105926', '27697', 'CONSTRUCCIÓN', 'https://dropbox.example/x']],
+    fuentes2025: [ENCABEZADO_2025, ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', 'https://dropbox.example/x']],
   });
   const resultado = contexto.Servicio.buscar('tok', '  jn1be6ds1r9105926 ');
   assert.ok(resultado);
@@ -113,11 +133,11 @@ test('regresa null si la serie no aparece en ninguna fuente', () => {
 
 test('si la carpeta no existe en Drive, regresa folio/área sin liga (no truena)', () => {
   const contexto = crearContexto({
-    fuentes2024: [ENCABEZADO_2024, ['3C7WRAKT9RG165067', '3.00', 'CONSTRUCCIÓN', '03- MARZO -RAM 4000- GTO']],
+    fuentes2024: [ENCABEZADO_2024, ['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '00 - NOVIEMBRE 23 - RAM4000 CMP']],
     drive: {}, // el año 2024 no existe en Drive -- igual que enero-mayo/noviembre de 2024 en la vida real
   });
   const resultado = contexto.Servicio.buscar('tok', '3C7WRAKT9RG165067');
-  assert.equal(resultado.folio, '3.00');
+  assert.equal(resultado.folio, '3');
   assert.equal(resultado.liga, '');
 });
 
