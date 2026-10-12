@@ -288,7 +288,9 @@ const ExpedienteNuco = (function () {
   const CARPETA_MIME = 'application/vnd.google-apps.folder';
 
   /** Hijos de varias carpetas a la vez (Drive API, una consulta por cada 40 padres), con miniatura */
-  function hijosDrive_(padres) {
+  const CAMPOS_COMPLETOS = 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,createdTime)';
+  const CAMPOS_CONTAR = 'nextPageToken,files(id,mimeType,parents)';
+  function hijosDrive_(padres, campos) {
     const out = [];
     for (let i = 0; i < padres.length; i += 40) {
       const grupo = padres.slice(i, i + 40);
@@ -297,7 +299,7 @@ const ExpedienteNuco = (function () {
         const r = Drive.Files.list({
           q: '(' + grupo.map((p) => "'" + p + "' in parents").join(' or ') + ') and trashed = false',
           pageSize: 1000, orderBy: 'name', supportsAllDrives: true, includeItemsFromAllDrives: true,
-          fields: 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,createdTime)',
+          fields: campos || CAMPOS_COMPLETOS,
           pageToken: pagina || undefined,
         });
         (r.files || []).forEach((f) => out.push(f));
@@ -312,9 +314,10 @@ const ExpedienteNuco = (function () {
 
   /**
    * SOLO LECTURA: las inspecciones del expediente del NUCO (4.-INSPECCIONES, ya homologada: <año>/<periodo o motivo>/
-   * <sección>/foto). → [{ id, anio, nombre, fecha, url, pdfs: [{id, nombre, url}], secciones: [{nombre, fotos: [{id,
-   * nombre, mime, miniatura, enlace}]}], fotos }], de la más nueva a la más vieja. Sin _POR REVISAR. Para la pestaña
-   * Inspecciones de la ficha: junto con las de la app, y la vista de fotos de cada una.
+   * <sección>/foto), SIN las fotos: solo cuántas hay (la tabla de la pestaña no necesita más y así la respuesta es chica,
+   * cabe en la copia de 10 min y se precarga). Las fotos de una inspección: fotosInspeccion(nucco, id).
+   * → [{ id, anio, nombre, fecha, url, pdfs: [{id, nombre, url}], secciones: [{nombre, fotos: número}], fotos }],
+   * de la más nueva a la más vieja. Sin _POR REVISAR.
    */
   function inspecciones(nucco) {
     const n = nombreNuco_(nucco);
@@ -324,8 +327,6 @@ const ExpedienteNuco = (function () {
     if (!id) return [];
     const raiz = hijosDrive_([id]).find((f) => f.mimeType === CARPETA_MIME && clave_(f.name) === clave_(OTRAS[2]));
     if (!raiz) return [];
-    const archivo = (f) => ({ id: f.id, nombre: f.name, mime: f.mimeType, enlace: f.webViewLink,
-      miniatura: f.thumbnailLink || null, fecha: f.createdTime || '' });
     const anios = hijosDrive_([raiz.id]).filter((f) => f.mimeType === CARPETA_MIME && /^\s*20\d\d\s*$/.test(f.name));
     const insp = hijosDrive_(anios.map((a) => a.id)).filter((f) => f.mimeType === CARPETA_MIME);
     const anioDe = {};
@@ -333,40 +334,68 @@ const ExpedienteNuco = (function () {
     const porId = {};
     const lista = insp.map((c) => {
       const x = { id: c.id, anio: anioDe[c.parents[0]], nombre: c.name.trim(), fecha: fechaEnNombre_(c.name), url: c.webViewLink,
-        pdfs: [], sueltos: [], secciones: [], fotos: 0 };
+        pdfs: [], sueltos: 0, secciones: [], fotos: 0 };
       porId[c.id] = x;
       return x;
     });
-    const nivel3 = hijosDrive_(insp.map((c) => c.id));
     const seccionDe = {};
-    nivel3.forEach((f) => {
+    hijosDrive_(insp.map((c) => c.id)).forEach((f) => {
       const x = porId[f.parents[0]];
       if (!x) return;
       if (f.mimeType === CARPETA_MIME) {
-        const s = { nombre: f.name.trim(), fotos: [] };
-        x.secciones.push(s);
-        seccionDe[f.id] = { x: x, s: s };
+        const s_ = { nombre: f.name.trim(), fotos: 0 };
+        x.secciones.push(s_);
+        seccionDe[f.id] = s_;
       } else if (/pdf/.test(f.mimeType)) {
         x.pdfs.push({ id: f.id, nombre: f.name, url: f.webViewLink });
         if (!x.fecha) x.fecha = fechaEnNombre_(f.name);
       } else {
-        x.sueltos.push(archivo(f));
+        x.sueltos++;
       }
     });
-    hijosDrive_(Object.keys(seccionDe)).forEach((f) => {
-      const d = seccionDe[f.parents[0]];
-      if (!d || f.mimeType === CARPETA_MIME) return;
-      d.s.fotos.push(archivo(f));
+    // Las fotos de las secciones solo se CUENTAN (id, padre y tipo: lo mínimo que manda Drive)
+    hijosDrive_(Object.keys(seccionDe), CAMPOS_CONTAR).forEach((f) => {
+      const s_ = seccionDe[f.parents[0]];
+      if (s_ && f.mimeType !== CARPETA_MIME) s_.fotos++;
     });
     lista.forEach((x) => {
-      if (x.sueltos.length) x.secciones.unshift({ nombre: 'SIN SECCIÓN', fotos: x.sueltos });
+      if (x.sueltos) x.secciones.unshift({ nombre: 'SIN SECCIÓN', fotos: x.sueltos });
       delete x.sueltos;
-      x.secciones = x.secciones.filter((s) => s.fotos.length);
-      x.fotos = x.secciones.reduce((n, s) => n + s.fotos.length, 0);
+      x.secciones = x.secciones.filter((s_) => s_.fotos);
+      x.fotos = x.secciones.reduce((k, s_) => k + s_.fotos, 0);
     });
     const ordenada = lista.sort((a, b) => ((b.fecha || b.anio + '-00') > (a.fecha || a.anio + '-00') ? 1 : -1));
-    guardar_(claveInsp_(n), ordenada, CACHE_MIN);   // las miniaturas de Drive duran horas: 10 min es seguro
+    guardar_(claveInsp_(n), ordenada, CACHE_MIN);
     return ordenada;
+  }
+
+  /**
+   * SOLO LECTURA: las fotos de UNA inspección del expediente, por sección, con su miniatura de Drive. Solo de una
+   * inspección de ese NUCO (la carpeta tiene que estar en inspecciones(nucco)). Copia de 10 min (las miniaturas duran horas).
+   * → { secciones: [{ nombre, fotos: [{ id, nombre, mime, miniatura, enlace, fecha }] }] }
+   */
+  function fotosInspeccion(nucco, carpetaId) {
+    const clave = 'exp_fotos_v1_' + carpetaId;
+    const guardado = enCache_(clave);
+    if (guardado) return guardado;
+    if (!inspecciones(nucco).some((x) => x.id === carpetaId)) throw new Error('Esa inspección no es de este vehículo.');
+    const archivo = (f) => ({ id: f.id, nombre: f.name, mime: f.mimeType, enlace: f.webViewLink,
+      miniatura: f.thumbnailLink || null, fecha: f.createdTime || '' });
+    const secciones = [];
+    const sueltos = [];
+    const seccionDe = {};
+    hijosDrive_([carpetaId]).forEach((f) => {
+      if (f.mimeType === CARPETA_MIME) { seccionDe[f.id] = { nombre: f.name.trim(), fotos: [] }; secciones.push(seccionDe[f.id]); }
+      else if (!/pdf/.test(f.mimeType)) sueltos.push(archivo(f));
+    });
+    hijosDrive_(Object.keys(seccionDe)).forEach((f) => {
+      const s_ = seccionDe[f.parents[0]];
+      if (s_ && f.mimeType !== CARPETA_MIME) s_.fotos.push(archivo(f));
+    });
+    if (sueltos.length) secciones.unshift({ nombre: 'SIN SECCIÓN', fotos: sueltos });
+    const r = { secciones: secciones.filter((s_) => s_.fotos.length) };
+    guardar_(clave, r, CACHE_MIN);
+    return r;
   }
 
   /** El ID de Drive dentro de una liga (".../file/d/<id>/view", "...?id=<id>") o null si no es una liga de Drive */
@@ -375,5 +404,5 @@ const ExpedienteNuco = (function () {
     return m ? (m[1] || m[2]) : null;
   }
 
-  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, listar, inspecciones, olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
+  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, listar, inspecciones, fotosInspeccion, olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
 })();

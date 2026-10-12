@@ -2416,7 +2416,7 @@
       document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
       document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
       document.getElementById('veh-enlace-lista').addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
-      InspeccionesFicha.pintarFotos(document.getElementById('veh-insp-fotos'), d, app);
+      InspeccionesFicha.pintarFotos(document.getElementById('veh-insp-fotos'), d, app, vResumen.NUCCO);
       document.getElementById('view-container').scrollTop = 0;
       window.scrollTo(0, 0);
     }
