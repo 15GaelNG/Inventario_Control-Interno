@@ -323,7 +323,8 @@
       clearTimeout(espera);
       espera = setTimeout(() => sidebar.classList.toggle('collapsed', !abrir), ms);
     };
-    sidebar.addEventListener('mouseenter', () => cambiar(true, 120));
+    // 400 ms al entrar: que no se abra solo por cruzarlo con el cursor (usuario, 12-oct)
+    sidebar.addEventListener('mouseenter', () => cambiar(true, 400));
     sidebar.addEventListener('mouseleave', () => cambiar(false, 300));
   })();
 

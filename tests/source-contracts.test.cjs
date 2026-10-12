@@ -2325,8 +2325,10 @@ test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de
   const css = read('src/html/styles.html');
   assert.match(index, /<nav id="sidebar" class="collapsed">/);
   assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
-  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
+  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 400\)\);/);
   assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
+  // El panel de tipos de las tablas de Líneas también tarda 400 ms en abrirse con el cursor
+  assert.match(read('src/html/lineas-estilos.html'), /\.ln-modulo \.filtro-tipo:hover \.filtro-tipo-panel \{ transition-delay: \.4s; \}/);
   // Abierto mide 308px (caben «Resguardos y cancelaciones» y «Reasignaciones vehiculares») pero ocupa 92px: queda
   // encima del contenido, por debajo de los modales. En celular y tableta, el mismo ancho
   assert.match(css, /#sidebar \{\s*width: 308px;/);
