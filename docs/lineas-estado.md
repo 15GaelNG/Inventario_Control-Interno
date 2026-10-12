@@ -35,7 +35,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
   o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
-  Un SIM BASICO sin datos de adendum no enseña el adendum (ni al agregar ni al editar).
+  Un SIM BASICO no enseña el adendum al agregar. Al editar, cambiar el Tipo de línea a SIM BASICO esconde el adendum y
+  al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, pendiente 2.33,
+  `soloPlan` en `LineasRegistros.gs`). Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran
+  al editar otra cosa.
 - **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
   equipo, Vincular línea (sin línea) o Cambiar línea y Desvincular línea; en la línea, Vincular a equipo (suelta y
   DISPONIBLE) o Cambiar de equipo y Desvincular del equipo. Solo líneas sueltas DISPONIBLE y equipos en USO o RESGUARDO
