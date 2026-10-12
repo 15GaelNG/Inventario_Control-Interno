@@ -2458,6 +2458,22 @@
       if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
     }
 
+    /** Las fotos de una inspección (de la app o solo del expediente): Vehículos › NUCO › Inspección */
+    function abrirFotosInspeccionVehiculo(vResumen, d, app) {
+      const detalle = document.getElementById('veh-detalle');
+      detalle.innerHTML = '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver-ficha">' +
+        Iconos.svg('chevron-left') + ' Volver</button><span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a> › ' +
+        '<a href="#" class="ln-enlace" id="veh-enlace-ficha">Nucco ' + escaparHtml(vResumen.NUCCO || '') + '</a> › Inspección ' +
+        escaparHtml(d.nombre + ' ' + d.anio) + '</span></div><div id="veh-insp-fotos"></div>';
+      const aLaFicha = (ev) => { if (ev) ev.preventDefault(); abrirFichaVehiculo(vResumen, 'inspecciones'); };
+      document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
+      document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
+      document.getElementById('veh-enlace-lista').addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
+      InspeccionesFicha.pintarFotos(document.getElementById('veh-insp-fotos'), d, app);
+      document.getElementById('view-container').scrollTop = 0;
+      window.scrollTo(0, 0);
+    }
+
     function cerrarFichaVehiculo() {
       fichaVehiculoAbierta = null;
       document.getElementById('veh-detalle').hidden = true;
@@ -3193,6 +3209,7 @@
       const detalle = document.getElementById('veh-detalle');
       mostrarPestanaFicha(detalle, nombre);
       if (nombre === 'documentos') DocumentosVehiculo.cargar(detalle.querySelector('[data-docs-vehiculo]'));
+      if (nombre === 'inspecciones') InspeccionesFicha.cargar(detalle.querySelector('[data-insp-ficha]'));
     }
 
     // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
@@ -3590,17 +3607,21 @@
             ], verificaciones, 'Sin verificaciones registradas para este vehículo.',
             puedeEditarModulo('verificaciones') ? { tipo: 'verificacion', texto: 'Agregar' } : null),
           },
+          // Las de la app y las del expediente del NUCO (Drive) en una tabla por año, cada una con sus fotos
+          // (app-inspecciones-vehiculo.html): el expediente se lee al abrir la pestaña
           inspecciones && {
             id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
-            contenido: pestanaFicha('clipboard-list', 'Inspecciones', [
-              { t: 'Fecha', r: (i) => formatearFecha(i.FECHA) },
-              { t: 'Tipo', r: (i) => escaparHtml(i.TIPO || '—') },
-              { t: 'Inspector', r: (i) => escaparHtml(i.INSPECTOR || '—') },
-              { t: 'Puntaje', r: (i) => (i.PUNTAJE === '' || i.PUNTAJE === null || i.PUNTAJE === undefined) ? '—' : i.PUNTAJE + '%' },
-              { t: 'Formato', r: (i) => botonArchivoFicha('inspeccion', i.PDF) },
-              { t: '', r: (i) => accionesFichaRegistro('inspeccion', i.ID, {}) },
-            ], inspecciones, 'Sin inspecciones registradas para este vehículo.',
-            puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null),
+            contenido: InspeccionesFicha.preparar(vResumen.NUCCO || completo['NUCCO'], {
+              app: inspecciones,
+              botonPdf: (ruta) => botonArchivoFicha('inspeccion', ruta),
+              acciones: (id) => accionesFichaRegistro('inspeccion', id, {}),
+              agregar: puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null,
+              alPintar: (el) => {
+                el.querySelectorAll('[data-ficha-ver]').forEach((btn) => btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id)));
+                el.querySelectorAll('[data-agregar]').forEach((btn) => btn.addEventListener('click', () => abrirAgregarInspeccion(vResumen, completo, hologramas || [])));
+              },
+              alFotos: (d, app) => abrirFotosInspeccionVehiculo(vResumen, d, app),
+            }),
           },
           sensores && {
             id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,

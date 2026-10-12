@@ -44,6 +44,13 @@ function cargar(drive, opciones) {
     Config: { DRIVE_FOLDERS: { NUCOS_VEHICULOS: () => (op.sinClave ? '' : nucos.id) } },
     DriveUtils: { carpetaEnRaiz: () => pruebas },
     DriveApp: { getFolderById: (id) => drive.porId[id] },
+    // La API de Drive (avanzada): solo lo que usa inspecciones() — "'a' in parents or 'b' in parents"
+    Drive: { Files: { list: (p) => {
+      const padres = [...p.q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
+      return { files: Object.values(drive.porId).filter((x) => padres.indexOf(x.padre) !== -1).map((x) => ({
+        id: x.id, name: x.nombre, parents: [x.padre], mimeType: x.tipo === CARPETA ? 'application/vnd.google-apps.folder' : (x.tipo === 'pdf' ? 'application/pdf' : 'image/jpeg'),
+        thumbnailLink: x.tipo === 'jpg' ? 'mini:' + x.id : undefined, webViewLink: 'url:' + x.id, createdTime: '2026-07-10T00:00:00Z' })) };
+    } } },
     Utilities: { formatDate: (d) => d.toISOString().slice(0, 10) },
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     console,
@@ -161,6 +168,29 @@ test('listar: por tipo de documento, el vigente y sus anteriores, sin crear nada
   assert.deepEqual([...exp.otros.map((g) => g.grupo)], ['ANTERIORES / OXXO GAS']);
   assert.equal(JSON.stringify(E.listar(999)), JSON.stringify({ existe: false, documentos: [], otros: [], carpetas: [] }));
   assert.equal(drive.hijos(nucos).length, 1);                        // no creó el 999
+});
+
+test('inspecciones: cada carpeta año/periodo es una inspección, con sus secciones, fotos y PDF (sin _POR REVISAR)', () => {
+  const drive = driveFalso();
+  const { E, nucos } = cargar(drive);
+  const n24 = drive.nodo('24', nucos, CARPETA);
+  const raiz = drive.nodo('4.-INSPECCIONES', n24, CARPETA);
+  const t3 = drive.nodo('3ER TRIMESTRE', drive.nodo('2026', raiz, CARPETA), CARPETA);
+  drive.nodo('INSPECCION-0024 2026-07-09.pdf', t3, 'pdf');
+  const neu = drive.nodo('NEUMATICOS', t3, CARPETA);
+  drive.nodo('a.jpg', neu, 'jpg'); drive.nodo('b.jpg', neu, 'jpg');
+  drive.nodo('c.jpg', drive.nodo('CRISTALERIA', t3, CARPETA), 'jpg');
+  const baja = drive.nodo('POR BAJA 2025-06-23', drive.nodo('2025', raiz, CARPETA), CARPETA);
+  drive.nodo('d.jpg', drive.nodo('INTERIORES', baja, CARPETA), 'jpg');
+  drive.nodo('x.jpg', drive.nodo('_POR REVISAR', raiz, CARPETA), 'jpg');
+  drive.nodo('vacia', drive.nodo('4TO BIMESTRE', drive.nodo('2024', raiz, CARPETA), CARPETA), CARPETA);
+  const lista = JSON.parse(JSON.stringify(E.inspecciones('0024')));
+  assert.deepEqual(lista.map((x) => [x.anio, x.nombre, x.fecha, x.fotos]),
+    [['2026', '3ER TRIMESTRE', '2026-07-09', 3], ['2025', 'POR BAJA 2025-06-23', '2025-06-23', 1], ['2024', '4TO BIMESTRE', '', 0]]);
+  assert.deepEqual(lista[0].secciones.map((s) => s.nombre + ':' + s.fotos.length).sort(), ['CRISTALERIA:1', 'NEUMATICOS:2']);
+  assert.equal(lista[0].pdfs[0].nombre, 'INSPECCION-0024 2026-07-09.pdf');
+  assert.equal(lista[0].secciones[0].fotos[0].miniatura.slice(0, 5), 'mini:');
+  assert.equal(JSON.stringify(E.inspecciones(999)), '[]');
 });
 
 test('sin NUCCO no adivina', () => {

@@ -245,11 +245,90 @@ const ExpedienteNuco = (function () {
     return { existe: true, nuco: nombreNuco_(nucco), url: nuco.getUrl(), carpetas, documentos, otros };
   }
 
+  const CARPETA_MIME = 'application/vnd.google-apps.folder';
+
+  /** Hijos de varias carpetas a la vez (Drive API, una consulta por cada 40 padres), con miniatura */
+  function hijosDrive_(padres) {
+    const out = [];
+    for (let i = 0; i < padres.length; i += 40) {
+      const grupo = padres.slice(i, i + 40);
+      let pagina = null;
+      do {
+        const r = Drive.Files.list({
+          q: '(' + grupo.map((p) => "'" + p + "' in parents").join(' or ') + ') and trashed = false',
+          pageSize: 1000, orderBy: 'name', supportsAllDrives: true, includeItemsFromAllDrives: true,
+          fields: 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,createdTime)',
+          pageToken: pagina || undefined,
+        });
+        (r.files || []).forEach((f) => out.push(f));
+        pagina = r.nextPageToken;
+      } while (pagina);
+    }
+    return out;
+  }
+
+  /** "INSPECCION-0024 2026-07-09.pdf" o "POR BAJA 2025-06-23" → "2026-07-09" */
+  const fechaEnNombre_ = (n) => ((/(20\d\d-\d\d-\d\d)/.exec(n || '') || [])[1] || '');
+
+  /**
+   * SOLO LECTURA: las inspecciones del expediente del NUCO (4.-INSPECCIONES, ya homologada: <año>/<periodo o motivo>/
+   * <sección>/foto). → [{ id, anio, nombre, fecha, url, pdfs: [{id, nombre, url}], secciones: [{nombre, fotos: [{id,
+   * nombre, mime, miniatura, enlace}]}], fotos }], de la más nueva a la más vieja. Sin _POR REVISAR. Para la pestaña
+   * Inspecciones de la ficha: junto con las de la app, y la vista de fotos de cada una.
+   */
+  function inspecciones(nucco) {
+    const hay = raiz_().getFoldersByName(nombreNuco_(nucco));
+    if (!hay.hasNext()) return [];
+    const raiz = buscar_(hay.next(), OTRAS[2]);
+    if (!raiz) return [];
+    const archivo = (f) => ({ id: f.id, nombre: f.name, mime: f.mimeType, enlace: f.webViewLink,
+      miniatura: f.thumbnailLink || null, fecha: f.createdTime || '' });
+    const anios = hijosDrive_([raiz.getId()]).filter((f) => f.mimeType === CARPETA_MIME && /^\s*20\d\d\s*$/.test(f.name));
+    const insp = hijosDrive_(anios.map((a) => a.id)).filter((f) => f.mimeType === CARPETA_MIME);
+    const anioDe = {};
+    anios.forEach((a) => { anioDe[a.id] = a.name.trim(); });
+    const porId = {};
+    const lista = insp.map((c) => {
+      const x = { id: c.id, anio: anioDe[c.parents[0]], nombre: c.name.trim(), fecha: fechaEnNombre_(c.name), url: c.webViewLink,
+        pdfs: [], sueltos: [], secciones: [], fotos: 0 };
+      porId[c.id] = x;
+      return x;
+    });
+    const nivel3 = hijosDrive_(insp.map((c) => c.id));
+    const seccionDe = {};
+    nivel3.forEach((f) => {
+      const x = porId[f.parents[0]];
+      if (!x) return;
+      if (f.mimeType === CARPETA_MIME) {
+        const s = { nombre: f.name.trim(), fotos: [] };
+        x.secciones.push(s);
+        seccionDe[f.id] = { x: x, s: s };
+      } else if (/pdf/.test(f.mimeType)) {
+        x.pdfs.push({ id: f.id, nombre: f.name, url: f.webViewLink });
+        if (!x.fecha) x.fecha = fechaEnNombre_(f.name);
+      } else {
+        x.sueltos.push(archivo(f));
+      }
+    });
+    hijosDrive_(Object.keys(seccionDe)).forEach((f) => {
+      const d = seccionDe[f.parents[0]];
+      if (!d || f.mimeType === CARPETA_MIME) return;
+      d.s.fotos.push(archivo(f));
+    });
+    lista.forEach((x) => {
+      if (x.sueltos.length) x.secciones.unshift({ nombre: 'SIN SECCIÓN', fotos: x.sueltos });
+      delete x.sueltos;
+      x.secciones = x.secciones.filter((s) => s.fotos.length);
+      x.fotos = x.secciones.reduce((n, s) => n + s.fotos.length, 0);
+    });
+    return lista.sort((a, b) => ((b.fecha || b.anio + '-00') > (a.fecha || a.anio + '-00') ? 1 : -1));
+  }
+
   /** El ID de Drive dentro de una liga (".../file/d/<id>/view", "...?id=<id>") o null si no es una liga de Drive */
   function idDeLiga(liga) {
     const m = /\/d\/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})/.exec(String(liga || ''));
     return m ? (m[1] || m[2]) : null;
   }
 
-  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, listar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
+  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, listar, inspecciones, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga };
 })();
