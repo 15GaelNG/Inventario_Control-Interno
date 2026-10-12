@@ -53,6 +53,10 @@ function cargar(drive, opciones) {
     } } },
     Utilities: { formatDate: (d) => d.toISOString().slice(0, 10) },
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
+    CacheService: { getScriptCache: () => {
+      const m = op.cache || (op.cache = {});
+      return { get: (k) => m[k] || null, put: (k, v) => { m[k] = v; }, removeAll: (ks) => ks.forEach((k) => delete m[k]) };
+    } },
     console,
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'ExpedienteNuco.gs'), 'utf8') +
@@ -208,6 +212,18 @@ test('listar: la imagen de relleno (NO APLICA / SIN INFORMACIÓN) no cuenta como
   assert.equal(de('TENENCIA').relleno, 'SIN INFORMACIÓN');
   assert.equal(de('FACTURA').vigentes.length, 1);
   assert.equal(de('FACTURA').relleno, null);
+});
+
+test('listar guarda su copia y archivar la borra (la siguiente lectura va a Drive)', () => {
+  const drive = driveFalso();
+  const op = {};
+  const { E } = cargar(drive, op);
+  E.archivar(drive.nodo('a.pdf', null, 'pdf'), 7, 'SEGURO');
+  assert.equal(JSON.parse(JSON.stringify(E.listar(7))).documentos.find((d) => d.clave === 'SEGURO').vigentes.length, 1);
+  assert.ok(op.cache['exp_docs_v1_7'], 'quedó la copia');
+  E.archivar(drive.nodo('b.pdf', null, 'pdf'), 7, 'TENENCIA');
+  assert.equal(op.cache['exp_docs_v1_7'], undefined, 'archivar la borró');
+  assert.equal(JSON.parse(JSON.stringify(E.listar(7))).documentos.find((d) => d.clave === 'TENENCIA').vigentes.length, 1);
 });
 
 test('sin NUCCO no adivina', () => {
