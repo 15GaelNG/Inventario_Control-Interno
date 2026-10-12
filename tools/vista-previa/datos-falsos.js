@@ -261,11 +261,29 @@
         completo: VEHICULO,
         cambios: parte('cambios-vehiculos', FICHAS.apiListarCambiosVehiculosPorFolio),
         reasignaciones: parte('reasignaciones-vehiculares', FICHAS.apiListarReasignacionesVehicularesPorFolio),
-        verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', '[]'),
+        verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', [{ ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PUNTAJE: 96.3, INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' }]),
         sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
         incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
         responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
       });
+    },
+    // Inspecciones del expediente del NUCO (ExpedienteNuco.inspecciones): carpetas con sus secciones y fotos
+    apiInspeccionesExpediente: () => {
+      const colores = ['#9bb7c4', '#c9b48f', '#8fa88f', '#b49bb7', '#c4a29b', '#9ba4c4'];
+      const mini = (n) => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http:' + '//www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="' + colores[n % colores.length] + '"/><text x="110" y="120" font-size="28" text-anchor="middle" fill="#fff">' + n + '</text></svg>');
+      let k = 0;
+      const sec = (nombre, n) => ({ nombre, fotos: Array.from({ length: n }, () => ({ id: 'ph' + (++k), nombre: 'IMG_' + (1000 + k) + '.jpg', mime: 'image/jpeg', miniatura: mini(k), enlace: 'https:\/\/drive.google.com/file/d/x' })) });
+      const insp = (id, anio, nombre, fecha, secciones) => ({ id, anio, nombre, fecha, url: 'https:\/\/drive.google.com/drive/folders/x',
+        pdfs: fecha ? [{ id: 'p' + id, nombre: 'INSPECCION-0024 ' + fecha + '.pdf', url: 'https:\/\/drive.google.com/file/d/x' }] : [],
+        secciones, fotos: secciones.reduce((n, x) => n + x.fotos.length, 0) });
+      const ocho = () => [sec('CRISTALERIA', 4), sec('DOCUMENTACION', 2), sec('INTERIORES', 5), sec('LATONERIA Y PINTURA', 6), sec('NEUMATICOS', 4), sec('OTROS ELEMENTOS', 1), sec('SISTEMA ELECTRICO', 2), sec('SISTEMA MECANICO', 3)];
+      const d1 = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      return JSON.stringify([
+        insp('i1', d1.slice(0, 4), '4TO TRIMESTRE', d1, ocho()),
+        insp('i2', '2025', 'POR BAJA 2025-06-23', '2025-06-23', [sec('LATONERIA Y PINTURA', 5), sec('NEUMATICOS', 2)]),
+        insp('i3', '2025', '3ER BIMESTRE', '2025-05-20', ocho()),
+        insp('i4', '2023', 'SIN PERIODO - 1ER INSPECCION 2023', '', [sec('SIN SECCIÓN', 7)]),
+      ]);
     },
     // Documentos: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar), con las fechas de ejemplo
     apiDocumentosVehiculo: () => {
@@ -501,6 +519,24 @@
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    'vehiculos-inspecciones': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      await hasta('[data-insp-fotos]'); await esperar(300);
+    },
+    'vehiculos-inspeccion-fotos': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('[data-insp-fotos]')).click();
+      await hasta('.galeria-mini'); await esperar(400);
+    },
+    'vehiculos-inspeccion-visor': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('[data-insp-fotos]')).click();
+      (await hasta('.galeria-mini')).click();
+      await hasta('.galeria-visor'); await esperar(300);
+    },
     'vehiculos-documentos': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
       (await hasta('[data-ficha-tab="documentos"]')).click();

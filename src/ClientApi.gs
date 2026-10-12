@@ -116,6 +116,14 @@ function apiFichaVehiculo(token, folio) {
  * permiso de Vehículos. Sin la responsiva (12-oct-2026): tiene su propia pestaña (Responsiva, con sus permisos), y
  * los préstamos y adherentes viven dentro de su carpeta. El vehículo es su NUCO, nunca el folio.
  */
+/**
+ * Pestaña Inspecciones de la ficha: las inspecciones del expediente del NUCO (4.-INSPECCIONES en Drive), con sus fotos
+ * por sección. Con permiso de Inspección vehicular (el mismo de la pestaña). Texto JSON.
+ */
+function apiInspeccionesExpediente(token, nucco) {
+  Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  return JSON.stringify(ExpedienteNuco.inspecciones(nucco));
+}
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
 function apiDocumentosVehiculo(token, nucco) {
   Permisos.puedeLeer(token, 'vehiculos');
