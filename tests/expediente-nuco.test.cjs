@@ -191,10 +191,14 @@ test('inspecciones: cada carpeta año/periodo es una inspección, con sus seccio
   const lista = JSON.parse(JSON.stringify(E.inspecciones('0024')));
   assert.deepEqual(lista.map((x) => [x.anio, x.nombre, x.fecha, x.fotos]),
     [['2026', '3ER TRIMESTRE', '2026-07-09', 3], ['2025', 'POR BAJA 2025-06-23', '2025-06-23', 1], ['2024', '4TO BIMESTRE', '', 0]]);
-  assert.deepEqual(lista[0].secciones.map((s) => s.nombre + ':' + s.fotos.length).sort(), ['CRISTALERIA:1', 'NEUMATICOS:2']);
+  assert.deepEqual(lista[0].secciones.map((s) => s.nombre + ':' + s.fotos).sort(), ['CRISTALERIA:1', 'NEUMATICOS:2']);   // solo cuántas
   assert.equal(lista[0].pdfs[0].nombre, 'INSPECCION-0024 2026-07-09.pdf');
-  assert.equal(lista[0].secciones[0].fotos[0].miniatura.slice(0, 5), 'mini:');
   assert.equal(JSON.stringify(E.inspecciones(999)), '[]');
+  // Las fotos, con su miniatura, solo al pedir UNA inspección, y solo si es de ese NUCO
+  const fotos = JSON.parse(JSON.stringify(E.fotosInspeccion('0024', t3.id)));
+  assert.deepEqual(fotos.secciones.map((s) => s.nombre + ':' + s.fotos.length).sort(), ['CRISTALERIA:1', 'NEUMATICOS:2']);
+  assert.equal(fotos.secciones[0].fotos[0].miniatura.slice(0, 5), 'mini:');
+  assert.throws(() => E.fotosInspeccion('0024', raiz.id), /no es de este vehículo/);
 });
 
 test('listar: la imagen de relleno (NO APLICA / SIN INFORMACIÓN) no cuenta como documento; la sección lo dice', () => {

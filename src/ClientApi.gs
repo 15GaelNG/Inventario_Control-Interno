@@ -128,6 +128,11 @@ function apiInspeccionesExpediente(token, nucco) {
   Permisos.puedeLeer(token, 'inspeccion-vehicular');
   return JSON.stringify(ExpedienteNuco.inspecciones(nucco));
 }
+/** Las fotos de UNA inspección del expediente (solo al abrirla), por sección y con miniatura. Texto JSON. */
+function apiFotosInspeccion(token, nucco, carpetaId) {
+  Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  return JSON.stringify(ExpedienteNuco.fotosInspeccion(nucco, carpetaId));
+}
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
 function apiDocumentosVehiculo(token, nucco) {
   Permisos.puedeLeer(token, 'vehiculos');

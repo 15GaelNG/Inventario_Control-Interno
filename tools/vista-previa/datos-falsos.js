@@ -268,6 +268,7 @@
       });
     },
     // Inspecciones del expediente del NUCO (ExpedienteNuco.inspecciones): carpetas con sus secciones y fotos
+    apiFotosInspeccion: (token, nucco, id) => JSON.stringify({ secciones: (JSON.parse(respuestas.apiInspeccionesExpediente()).find((x) => x.id === id) || { secciones: [] }).secciones }),
     apiInspeccionesExpediente: () => {
       const colores = ['#9bb7c4', '#c9b48f', '#8fa88f', '#b49bb7', '#c4a29b', '#9ba4c4'];
       const mini = (n) => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http:' + '//www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="' + colores[n % colores.length] + '"/><text x="110" y="120" font-size="28" text-anchor="middle" fill="#fff">' + n + '</text></svg>');
