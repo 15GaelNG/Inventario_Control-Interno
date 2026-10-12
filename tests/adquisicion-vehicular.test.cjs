@@ -1,27 +1,26 @@
 // Adquisición Vehicular (proceso externo, fuera de esta app): AdquisicionVehicularService.buscar
-// cruza por SERIE VEHICULO contra las hojas externas conocidas (una por año, cada una con sus
-// propios nombres de columna -- verificado a mano en Drive, 12-oct-2026) y nunca escribe nada
-// ahí. guardarExpedienteAdquisicion (VehiculosService) es el único camino para guardar lo
-// encontrado en la ficha -- noEditables bloquea la edición normal.
+// YA NO lee los Excel externos en vivo (se rompió dos veces por su formato -- ver
+// AdquisicionVehicularIndice.gs) -- consulta la hoja propia ADQUISICION_VEHICULAR_INDICE.
+// leerFuente_/listarCarpetasAdquisicion_/buscarEnListaCarpetas_ son lo que usa el constructor de
+// ese índice, no el botón de la ficha. guardarExpedienteAdquisicion (VehiculosService) sigue
+// siendo el único camino para escribir FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICION.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-function hojaFalsa(filas) {
-  return {
-    getSheets: () => [{ getDataRange: () => ({ getValues: () => filas }) }],
-  };
+function hojaExcelFalsa(filas) {
+  return { getSheets: () => [{ getDataRange: () => ({ getValues: () => filas }) }] };
 }
 
 function carpetaFalsa(estructura) {
   // estructura: objetos anidados por nombre de carpeta; una hoja (sin más hijos) es `null`.
-  // Ej.: { '2024': { '03. MARZO': { '03- MARZO -RAM 4000- GTO': null } } }
   function folderDe(nombre, hijos) {
     return {
       getName: () => nombre,
       getUrl: () => 'https://drive.google.com/drive/folders/' + nombre,
+      getId: () => nombre,
       getFoldersByName: (n) => {
         const lista = (hijos && hijos[n] !== undefined) ? [folderDe(n, hijos[n])] : [];
         let i = 0;
@@ -39,13 +38,50 @@ function carpetaFalsa(estructura) {
   return { getFolderById: () => raiz };
 }
 
-function crearContexto({ fuentes2024 = [], fuentes2025 = [], drive = {} } = {}) {
+/** Hoja de cálculo en memoria: suficiente de getRange/getValues/setValues/deleteRow para
+ *  indiceHoja_, mapaIndice_ y el constructor del índice. */
+function hojaMock(filasIniciales) {
+  const filas = (filasIniciales || []).map((f) => f.slice());
+  return {
+    getLastRow: () => filas.length,
+    getRange(row, col, numRows, numCols) {
+      return {
+        setValues(valores) {
+          valores.forEach((fila, i) => { filas[row - 1 + i] = fila.slice(); });
+          return this;
+        },
+        getValues() {
+          const out = [];
+          for (let r = 0; r < numRows; r++) {
+            const fila = filas[row - 1 + r] || [];
+            out.push(Array.from({ length: numCols }, (_, c) => (fila[col - 1 + c] !== undefined ? fila[col - 1 + c] : '')));
+          }
+          return out;
+        },
+        setFontWeight() { return this; },
+      };
+    },
+    deleteRow(row) { filas.splice(row - 1, 1); },
+    setFrozenRows() { return this; },
+  };
+}
+
+function libroMock() {
+  const hojas = {};
+  return { getSheetByName: (nombre) => hojas[nombre] || null, insertSheet(nombre) { hojas[nombre] = hojaMock([]); return hojas[nombre]; } };
+}
+
+function crearContexto({ fuentes2024 = [], fuentes2025 = [], drive = {}, libro } = {}) {
+  const libroVehiculos = libro || libroMock();
   const contexto = vm.createContext({
     Permisos: { puedeLeer: () => {}, puedeEditar: () => {} },
+    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_VEH' } },
+    CacheHojas: { recordar: (clave, hojas2, armar) => armar() },   // sin caché: cada llamada relee la hoja
     SpreadsheetApp: {
       openById: (id) => {
-        if (id === '1dduU0ItSqOi7T3qoY_m1h_RW0sY7LxsS') return hojaFalsa(fuentes2024);
-        if (id === '13KU1abKg1MzSRzH8vAFoS0MwnqFWjyLj') return hojaFalsa(fuentes2025);
+        if (id === 'SS_VEH') return libroVehiculos;
+        if (id === '1dduU0ItSqOi7T3qoY_m1h_RW0sY7LxsS') return hojaExcelFalsa(fuentes2024);
+        if (id === '13KU1abKg1MzSRzH8vAFoS0MwnqFWjyLj') return hojaExcelFalsa(fuentes2025);
         throw new Error('spreadsheet no esperado: ' + id);
       },
     },
@@ -57,91 +93,97 @@ function crearContexto({ fuentes2024 = [], fuentes2025 = [], drive = {} } = {}) 
     '\nthis.Servicio = AdquisicionVehicularService;',
     contexto
   );
-  return contexto;
+  return { contexto, libroVehiculos };
 }
 
-// Encabezados reales (confirmados leyendo el .xlsx descomprimido, no el resumen de Drive --
-// ver el comentario en AdquisicionVehicularService.gs sobre el bug del 12-oct-2026).
+// Encabezados reales (confirmados leyendo el .xlsx descomprimido, no el resumen de Drive -- ver
+// el comentario en AdquisicionVehicularService.gs sobre el bug del 12-oct-2026).
 const ENCABEZADO_2024 = ['NO. SERIE', 'FOLIO', 'ÁREA SOLICITANTE', 'NOMBRE DE LA CARPETA'];
 const ENCABEZADO_2025 = ['# DE SERIE', 'TICKET HELP', 'ÁREA SOLICITANTE', 'LIGA DE LA CARPETA'];
 
-test('encuentra por serie en la fuente 2024 (una sola serie en la fila)', () => {
-  const contexto = crearContexto({
-    fuentes2024: [ENCABEZADO_2024, ['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '00 - NOVIEMBRE 23 - RAM4000 CMP']],
-    drive: { '2024': { '11. NOVIEMBRE': { '00 - NOVIEMBRE 23 - RAM4000 CMP': null } } },
+// ---------------------------------------------------------------------------------------- leerFuente_
+
+test('leerFuente_ regresa TODAS las filas de la fuente, no solo la primera', () => {
+  const { contexto } = crearContexto({
+    fuentes2024: [ENCABEZADO_2024,
+      ['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '00 - NOVIEMBRE 23 - RAM4000 CMP'],
+      ['3N1CN8AE4RL847016', '1', 'CAPITAL HUMANO', '00- SEPTIEMBRE 2023 - XOCHITL']],
   });
-  const resultado = contexto.Servicio.buscar('tok', '3C7WRAKT9RG165067');
-  assert.equal(resultado.año, '2024');
-  assert.equal(resultado.folio, '3');
-  assert.equal(resultado.area, 'CONSTRUCCIÓN');
-  assert.match(resultado.liga, /00 - NOVIEMBRE 23 - RAM4000 CMP/);
+  const filas = contexto.Servicio.leerFuente_(contexto.Servicio.FUENTES[0]);
+  assert.equal(filas.length, 2);
+  assert.equal(filas[0].serie, '3C7WRAKT9RG165067');
+  assert.equal(filas[1].folio, '1');
 });
 
-test('encuentra por serie en la fuente 2025, usando LIGA DE LA CARPETA directo (sin buscar en Drive)', () => {
-  const contexto = crearContexto({
-    fuentes2025: [ENCABEZADO_2025, ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', 'https://www.dropbox.com/scl/fo/x']],
+test('leerFuente_ separa varias series en una sola celda (compra de lote)', () => {
+  const { contexto } = crearContexto({
+    fuentes2025: [ENCABEZADO_2025, ['ABC111 DEF222 GHI333', '30', 'COMERCIALIZACIÓN', 'https://dropbox.example/lote']],
   });
-  const resultado = contexto.Servicio.buscar('tok', 'JN1BE6DS1R9105926');
-  assert.equal(resultado.año, '2025');
-  assert.equal(resultado.folio, '30371');
-  assert.equal(resultado.liga, 'https://www.dropbox.com/scl/fo/x');
+  const filas = contexto.Servicio.leerFuente_(contexto.Servicio.FUENTES[1]);
+  assert.deepEqual(Array.from(filas.map((f) => f.serie)), ['ABC111', 'DEF222', 'GHI333']);
+  assert.ok(filas.every((f) => f.folio === '30'));
 });
 
-test('el encabezado no siempre es el primer renglón (el archivo real de 2025 trae 5 filas de título/resumen encima)', () => {
-  const filaVacia = [];
-  const contexto = crearContexto({
+test('leerFuente_ encuentra el encabezado aunque no sea el primer renglón (el archivo real de 2025 trae 5 filas de título encima)', () => {
+  const { contexto } = crearContexto({
     fuentes2025: [
-      ['SEGUIMIENTO A TICKETS|HELPDESK', '', '', 'AHORROS'],
-      filaVacia,
-      ['', '', '', '', '', '', '', '', '', '3'],
-      filaVacia,
-      ['', '', '46034'],
+      ['SEGUIMIENTO A TICKETS|HELPDESK', '', '', 'AHORROS'], [], ['', '', '', '', '', '', '', '', '', '3'], [], ['', '', '46034'],
       ENCABEZADO_2025,
       ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', 'https://www.dropbox.com/scl/fo/x'],
     ],
   });
-  const resultado = contexto.Servicio.buscar('tok', 'JN1BE6DS1R9105926');
-  assert.ok(resultado, 'debe saltarse las filas de título y encontrar el encabezado real más abajo');
-  assert.equal(resultado.folio, '30371');
+  const filas = contexto.Servicio.leerFuente_(contexto.Servicio.FUENTES[1]);
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].folio, '30371');
 });
 
-test('separa varias series en una sola celda (compra de lote) y encuentra la que corresponde', () => {
-  const contexto = crearContexto({
-    fuentes2025: [ENCABEZADO_2025,
-      ['ABC111 DEF222 GHI333', '30', 'COMERCIALIZACIÓN', 'https://dropbox.example/lote']],
+// ---------------------------------------------------------------------------------- carpetas de Drive
+
+test('listarCarpetasAdquisicion_ ignora carpetas de año con otro nombre (REPORTE ANUAL PROVEEDORES) y recorre años/meses/solicitudes', () => {
+  const { contexto } = crearContexto({
+    drive: { '2024': { '11. NOVIEMBRE': { '00 - NOVIEMBRE 23 - RAM4000 CMP': null } }, 'REPORTE ANUAL PROVEEDORES': {} },
   });
-  const resultado = contexto.Servicio.buscar('tok', 'def222');
-  assert.ok(resultado, 'debe encontrar la serie DEF222 dentro de la celda con varias');
-  assert.equal(resultado.folio, '30');
+  const carpetas = contexto.Servicio.listarCarpetasAdquisicion_();
+  assert.equal(carpetas.length, 1);
+  assert.equal(carpetas[0].año, '2024');
+  assert.equal(carpetas[0].nombre, '00 - NOVIEMBRE 23 - RAM4000 CMP');
 });
 
-test('normaliza mayúsculas/espacios al comparar la serie buscada', () => {
-  const contexto = crearContexto({
-    fuentes2025: [ENCABEZADO_2025, ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', 'https://dropbox.example/x']],
-  });
+test('buscarEnListaCarpetas_ encuentra por nombre dentro del año dado, sin volver a tocar Drive', () => {
+  const { contexto } = crearContexto();
+  const lista = [{ año: '2024', nombre: '00 - NOVIEMBRE 23 - RAM4000 CMP', url: 'https://drive/x' }];
+  assert.equal(contexto.Servicio.buscarEnListaCarpetas_(lista, '2024', '00 - NOVIEMBRE 23 - RAM4000 CMP'), 'https://drive/x');
+  assert.equal(contexto.Servicio.buscarEnListaCarpetas_(lista, '2025', '00 - NOVIEMBRE 23 - RAM4000 CMP'), '', 'año distinto no matchea');
+  assert.equal(contexto.Servicio.buscarEnListaCarpetas_(lista, '2024', 'NO EXISTE'), '');
+});
+
+// ---------------------------------------------------------------------------------------------- buscar
+
+test('buscar lee del índice propio (ADQUISICION_VEHICULAR_INDICE), no abre ningún Excel externo', () => {
+  const libro = libroMock();
+  const hoja = libro.insertSheet('ADQUISICION_VEHICULAR_INDICE');
+  hoja.getRange(1, 1, 1, 7).setValues([['SERIE', 'FOLIO', 'AREA', 'AÑO', 'LIGA_CARPETA', 'FUENTE', 'ACTUALIZADO']]);
+  hoja.getRange(2, 1, 1, 7).setValues([['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', '2025', 'https://drive/x', 'EXCEL-2025', '2026-10-12']]);
+  const { contexto } = crearContexto({ libro });
   const resultado = contexto.Servicio.buscar('tok', '  jn1be6ds1r9105926 ');
-  assert.ok(resultado);
+  assert.deepEqual(Object.assign({}, resultado), { año: '2025', folio: '30371', area: 'CONSTRUCCIÓN', liga: 'https://drive/x' });
 });
 
-test('regresa null si la serie no aparece en ninguna fuente', () => {
-  const contexto = crearContexto({
-    fuentes2024: [ENCABEZADO_2024, ['AAA', '1', 'X', 'carpeta']],
-    fuentes2025: [ENCABEZADO_2025, ['BBB', '2', 'Y', 'https://dropbox.example/y']],
-  });
-  assert.equal(contexto.Servicio.buscar('tok', 'CCCCCC'), null);
+test('buscar regresa null si la serie no está en el índice', () => {
+  const libro = libroMock();
+  const hoja = libro.insertSheet('ADQUISICION_VEHICULAR_INDICE');
+  hoja.getRange(1, 1, 1, 7).setValues([['SERIE', 'FOLIO', 'AREA', 'AÑO', 'LIGA_CARPETA', 'FUENTE', 'ACTUALIZADO']]);
+  hoja.getRange(2, 1, 1, 7).setValues([['AAA', '1', 'X', '2024', '', 'EXCEL-2024', '2026-10-12']]);
+  const { contexto } = crearContexto({ libro });
+  assert.equal(contexto.Servicio.buscar('tok', 'BBBBBB'), null);
 });
 
-test('si la carpeta no existe en Drive, regresa folio/área sin liga (no truena)', () => {
-  const contexto = crearContexto({
-    fuentes2024: [ENCABEZADO_2024, ['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '00 - NOVIEMBRE 23 - RAM4000 CMP']],
-    drive: {}, // el año 2024 no existe en Drive -- igual que enero-mayo/noviembre de 2024 en la vida real
-  });
-  const resultado = contexto.Servicio.buscar('tok', '3C7WRAKT9RG165067');
-  assert.equal(resultado.folio, '3');
-  assert.equal(resultado.liga, '');
+test('buscar regresa null sin tronar si el índice todavía no existe (nadie lo ha corrido)', () => {
+  const { contexto } = crearContexto({ libro: libroMock() });
+  assert.equal(contexto.Servicio.buscar('tok', 'CUALQUIERA'), null);
 });
 
-// --- VehiculosService.guardarExpedienteAdquisicion: único camino para escribir las dos columnas ---
+// ---------------------------------------------------------------------------- VehiculosService.guardarExpedienteAdquisicion
 
 function crearContextoVehiculos() {
   const llamadas = { update: [] };
@@ -149,8 +191,6 @@ function crearContextoVehiculos() {
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
     Permisos: { puedeEditar: (token, modulo) => { llamadas.permisoPedido = modulo; } },
     SheetUtils: {
-      // Object.assign crea el objeto en el realm de este archivo (no el de vm): deepEqual, más
-      // abajo, compara por prototipo además de por valor y cruzar vm/host realms lo rompe.
       update: (ssId, hoja, id, cambios) => { llamadas.update.push({ ssId, hoja, id, cambios: Object.assign({}, cambios) }); return cambios; },
     },
     console,

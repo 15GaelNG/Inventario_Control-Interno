@@ -1,41 +1,41 @@
 /**
  * AdquisicionVehicularService.gs
  * "ADQUISICIÓN VEHICULAR" es un proceso de compra de vehículos que vive FUERA de esta app
- * (carpetas de Drive + Excel, dueño gestor.vehicular@ciudadmaderas.com) — no es una hoja ni una
- * carpeta propia de Control Interno. Este servicio solo LEE esos archivos externos para
- * encontrar, por número de serie, el folio y la carpeta de una compra ya hecha; nunca escribe
- * ahí. Lo usa un botón manual en la ficha del vehículo ("Buscar expediente de adquisición"),
- * no un sincronizador automático — ver VehiculosService.guardarExpedienteAdquisicion, que es
- * quien de verdad guarda lo que aquí se encuentra.
+ * (carpetas de Drive + Excel, dueño gestor.vehicular@ciudadmaderas.com). buscar(), lo que usa el
+ * botón "Buscar expediente de adquisición" de la ficha, YA NO lee esos archivos externos en
+ * vivo (se rompió dos veces por el formato de archivos que no controlamos: una columna con otro
+ * nombre, un encabezado que no era la primera fila -- 12-oct-2026) ni depende de que exista un
+ * Excel por año (2026 no tiene ninguno). En vez de eso consulta la hoja propia
+ * ADQUISICION_VEHICULAR_INDICE, que llena AdquisicionVehicularIndice.gs (Excel 2024/2025 +
+ * OCR de facturas para lo que esos Excel no cubren) con una corrida manual desde el editor.
  *
- * El nombre de las columnas de folio/serie/carpeta cambia de año a año (confirmado a mano,
- * navegando Drive, 12-oct-2026) — por eso FUENTES es una lista con un registro por año en vez
- * de asumir que todas comparten esquema. 2026 no tiene archivo maestro conocido todavía.
+ * Lo que queda aquí (FUENTES, leerFuente_, listarCarpetasAdquisicion_, indiceHoja_…) es lo que
+ * usa ese constructor del índice -- el botón de la ficha solo llama buscar().
  *
  * IDs fijos a propósito (no por Config.SPREADSHEET_IDS/DRIVE_FOLDERS: esos son para recursos
- * PROPIOS de la app, por ambiente). Esta carpeta/archivos son de otra cuenta, de solo lectura
- * — mismo caso que PLANTILLA_ARQUEO_DOC_ID (ArqueosService.gs) o CARPETA_RESPONSIVAS_HEREDADAS
- * (MigracionResponsivasHeredadas.gs): CLAUDE.md permite ID fijo cuando solo se lee/copia.
+ * PROPIOS de la app, por ambiente). La carpeta/archivos de Adquisición Vehicular son de otra
+ * cuenta, de solo lectura — mismo caso que PLANTILLA_ARQUEO_DOC_ID (ArqueosService.gs) o
+ * CARPETA_RESPONSIVAS_HEREDADAS (MigracionResponsivasHeredadas.gs): CLAUDE.md permite ID fijo
+ * cuando solo se lee/copia.
  */
 
 const AdquisicionVehicularService = (function () {
   const RAIZ_ADQUISICION_VEHICULAR = '13c8hkl5lUn_46CydAvKy-aUOl5Bzgneo';
+  const HOJA_INDICE = 'ADQUISICION_VEHICULAR_INDICE';
+  const ENCABEZADOS_INDICE = ['SERIE', 'FOLIO', 'AREA', 'AÑO', 'LIGA_CARPETA', 'FUENTE', 'ACTUALIZADO'];
+  const TTL_INDICE_SEGUNDOS = 1800;
 
+  // El nombre de las columnas de folio/serie/carpeta cambia de año a año (confirmado a mano,
+  // descomprimiendo los .xlsx reales, 12-oct-2026) -- un registro por año en vez de asumir que
+  // comparten esquema. 2026 no tiene archivo maestro: lo cubre el OCR (AdquisicionVehicularIndice.gs).
   const FUENTES = [
     {
-      // colFolio confirmado leyendo el .xlsx real (descomprimido), no el resumen "en lenguaje
-      // natural" de la herramienta de lectura de Drive -- esa herramienta había pegado el
-      // título de la hoja ("REGISTRO 2024") al encabezado real ("FOLIO "), y el nombre de
-      // columna equivocado hacía que el folio saliera vacío aunque área/año sí coincidieran
-      // (12-oct-2026, reportado por el usuario).
       año: '2024', fileId: '1dduU0ItSqOi7T3qoY_m1h_RW0sY7LxsS',
-      colSerie: 'NO. SERIE', colFolio: 'FOLIO', colArea: 'ÁREA SOLICITANTE',
-      colCarpeta: 'NOMBRE DE LA CARPETA', colLiga: null,
+      colSerie: 'NO. SERIE', colFolio: 'FOLIO', colArea: 'ÁREA SOLICITANTE', colCarpeta: 'NOMBRE DE LA CARPETA', colLiga: null,
     },
     {
       año: '2025', fileId: '13KU1abKg1MzSRzH8vAFoS0MwnqFWjyLj',
-      colSerie: '# DE SERIE', colFolio: 'TICKET HELP', colArea: 'ÁREA SOLICITANTE',
-      colCarpeta: null, colLiga: 'LIGA DE LA CARPETA',
+      colSerie: '# DE SERIE', colFolio: 'TICKET HELP', colArea: 'ÁREA SOLICITANTE', colCarpeta: null, colLiga: 'LIGA DE LA CARPETA',
     },
   ];
 
@@ -50,44 +50,9 @@ const AdquisicionVehicularService = (function () {
     return indices;
   }
 
-  /** Busca, bajo la raíz, una subcarpeta del año y luego, dentro de ella, una cuyo nombre
-   *  coincida (exacto o como substring en cualquier sentido, para tolerar espacios/acentos de
-   *  más) con "nombreEsperado" -- el valor de la columna colCarpeta de esa fuente (es el único
-   *  dato que tenemos del nombre real de la carpeta; el folio por sí solo no siempre aparece
-   *  en el nombre, se vio navegando Drive a mano). Si algo no existe (carpeta del año, del
-   *  mes, o de la solicitud), regresa '' sin tronar: no todos los registros tienen carpeta
-   *  viva hoy. */
-  function buscarCarpeta_(año, nombreEsperado) {
-    const nombreBuscado = String(nombreEsperado || '').trim();
-    if (!nombreBuscado) return '';
-    try {
-      const raiz = DriveApp.getFolderById(RAIZ_ADQUISICION_VEHICULAR);
-      const carpetasAño = raiz.getFoldersByName(año);
-      if (!carpetasAño.hasNext()) return '';
-      const carpetaAño = carpetasAño.next();
-      const meses = carpetaAño.getFolders();
-      while (meses.hasNext()) {
-        const mes = meses.next();
-        const solicitudes = mes.getFolders();
-        while (solicitudes.hasNext()) {
-          const solicitud = solicitudes.next();
-          const nombre = solicitud.getName();
-          if (nombre === nombreBuscado || nombre.indexOf(nombreBuscado) !== -1 || nombreBuscado.indexOf(nombre) !== -1) {
-            return solicitud.getUrl();
-          }
-        }
-      }
-      return '';
-    } catch (err) {
-      console.error('AdquisicionVehicularService.buscarCarpeta_ falló para "' + nombreBuscado + '": ' + err.message);
-      return '';
-    }
-  }
-
-  /** El encabezado real NO siempre es el primer renglón: el archivo de 2025 trae un bloque de
-   *  título/resumen arriba (5 renglones, confirmado descomprimiendo el .xlsx) antes de la fila
-   *  con "TICKET HELP", "# DE SERIE", etc. Por eso se busca la fila que de verdad trae
-   *  colSerie como encabezado, en vez de asumir que es la primera. */
+  /** El encabezado real no siempre es el primer renglón (el archivo de 2025 trae un bloque de
+   *  título/resumen arriba, confirmado descomprimiendo el .xlsx) -- se busca la fila que de
+   *  verdad trae colSerie como encabezado, en vez de asumir que es la primera. */
   function encontrarEncabezado_(valores, colSerie) {
     for (let i = 0; i < valores.length; i++) {
       const indices = indiceEncabezados_(valores[i]);
@@ -96,48 +61,111 @@ const AdquisicionVehicularService = (function () {
     return null;
   }
 
-  function buscarEnFuente_(fuente, serieBuscada) {
+  /** TODAS las filas de una fuente (no se detiene en la primera que haga match), una por cada
+   *  serie -- una celda con varias (compra de lote) se separa. `nombreCarpeta` es el valor crudo
+   *  de colCarpeta, si la fuente lo tiene: resolverlo a una liga real es trabajo del índice
+   *  (listarCarpetasAdquisicion_ + buscarEnListaCarpetas_), no de esta función. */
+  function leerFuente_(fuente) {
     const hoja = SpreadsheetApp.openById(fuente.fileId).getSheets()[0];
     const valores = hoja.getDataRange().getValues();
-    if (!valores.length) return null;
+    if (!valores.length) return [];
     const encabezado = encontrarEncabezado_(valores, fuente.colSerie);
-    if (!encabezado) return null;
+    if (!encabezado) return [];
     const indices = encabezado.indices;
-
+    const filas = [];
     for (let i = encabezado.fila + 1; i < valores.length; i++) {
       const celdaSerie = valores[i][indices[fuente.colSerie]];
       if (!celdaSerie) continue;
       const series = String(celdaSerie).split(/\s+/).map(normalizarSerie_).filter(Boolean);
-      if (series.indexOf(serieBuscada) === -1) continue;
-
+      if (!series.length) continue;
       const folio = fuente.colFolio && indices[fuente.colFolio] !== undefined
         ? String(valores[i][indices[fuente.colFolio]] || '').trim() : '';
       const area = fuente.colArea && indices[fuente.colArea] !== undefined
         ? String(valores[i][indices[fuente.colArea]] || '').trim() : '';
-      let liga = fuente.colLiga && indices[fuente.colLiga] !== undefined
+      const liga = fuente.colLiga && indices[fuente.colLiga] !== undefined
         ? String(valores[i][indices[fuente.colLiga]] || '').trim() : '';
-      if (!liga && fuente.colCarpeta && indices[fuente.colCarpeta] !== undefined) {
-        liga = buscarCarpeta_(fuente.año, valores[i][indices[fuente.colCarpeta]]);
-      }
-
-      return { año: fuente.año, folio, area, liga };
+      const nombreCarpeta = fuente.colCarpeta && indices[fuente.colCarpeta] !== undefined
+        ? String(valores[i][indices[fuente.colCarpeta]] || '').trim() : '';
+      series.forEach((serie) => filas.push({ serie, año: fuente.año, folio, area, liga, nombreCarpeta }));
     }
-    return null;
+    return filas;
   }
 
-  /** Busca el expediente de adquisición de un vehículo por su número de serie, en las fuentes
-   *  externas conocidas (una por año). Regresa { año, folio, area, liga } o null si no se
-   *  encontró en ninguna -- "no encontrado" no es un error. */
+  /** Recorre de verdad Drive, UNA vez por corrida (raíz -> carpeta de cada año -> de cada mes ->
+   *  de cada solicitud) -- la usan las dos pasadas del índice: la A para resolver la carpeta de
+   *  2024 (por nombre) y la B para encontrar lo que 2026 no tiene en ningún Excel. */
+  function listarCarpetasAdquisicion_() {
+    const salida = [];
+    const raiz = DriveApp.getFolderById(RAIZ_ADQUISICION_VEHICULAR);
+    const años = raiz.getFolders();
+    while (años.hasNext()) {
+      const carpetaAño = años.next();
+      const año = carpetaAño.getName().trim();
+      if (!/^\d{4}$/.test(año)) continue;   // ignora "REPORTE ANUAL PROVEEDORES" y similares
+      const meses = carpetaAño.getFolders();
+      while (meses.hasNext()) {
+        const mes = meses.next();
+        const solicitudes = mes.getFolders();
+        while (solicitudes.hasNext()) {
+          const solicitud = solicitudes.next();
+          salida.push({ año, mes: mes.getName(), nombre: solicitud.getName(), id: solicitud.getId(), url: solicitud.getUrl() });
+        }
+      }
+    }
+    return salida;
+  }
+
+  /** Busca en una lista YA recorrida (listarCarpetasAdquisicion_) una carpeta del año dado cuyo
+   *  nombre coincida con nombreEsperado -- sin volver a tocar Drive. */
+  function buscarEnListaCarpetas_(lista, año, nombreEsperado) {
+    const nombreBuscado = String(nombreEsperado || '').trim();
+    if (!nombreBuscado) return '';
+    const match = lista.find((c) => c.año === año &&
+      (c.nombre === nombreBuscado || c.nombre.indexOf(nombreBuscado) !== -1 || nombreBuscado.indexOf(c.nombre) !== -1));
+    return match ? match.url : '';
+  }
+
+  /** La hoja del índice (o null si no existe y no se pide crearla) -- mismo patrón que
+   *  HelpdeskService.hoja_: se crea sola la primera vez que hace falta. */
+  function indiceHoja_(crear) {
+    const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS());
+    let hoja = ss.getSheetByName(HOJA_INDICE);
+    if (!hoja) {
+      if (!crear) return null;
+      hoja = ss.insertSheet(HOJA_INDICE);
+      hoja.getRange(1, 1, 1, ENCABEZADOS_INDICE.length).setValues([ENCABEZADOS_INDICE]).setFontWeight('bold');
+      hoja.setFrozenRows(1);
+    }
+    return hoja;
+  }
+
+  function mapaIndice_() {
+    return CacheHojas.recordar('adquisicion_vehicular_indice', [[Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_INDICE]], () => {
+      const hoja = indiceHoja_(false);
+      const mapa = {};
+      if (!hoja || hoja.getLastRow() < 2) return mapa;
+      hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS_INDICE.length).getValues().forEach((f) => {
+        const serie = String(f[0]).trim();
+        if (serie) mapa[serie] = { año: String(f[3]), folio: String(f[1]), area: String(f[2]), liga: String(f[4]) };
+      });
+      return mapa;
+    }, TTL_INDICE_SEGUNDOS);
+  }
+
+  /** Busca el expediente de un vehículo por su serie, en el índice propio -- no abre ningún
+   *  archivo externo. Regresa { año, folio, area, liga } o null si no se encontró. */
   function buscar(token, serie) {
     Permisos.puedeLeer(token, 'vehiculos');
     const serieBuscada = normalizarSerie_(serie);
     if (!serieBuscada) return null;
-    for (let i = 0; i < FUENTES.length; i++) {
-      const encontrado = buscarEnFuente_(FUENTES[i], serieBuscada);
-      if (encontrado) return encontrado;
-    }
-    return null;
+    return mapaIndice_()[serieBuscada] || null;
   }
 
-  return { buscar };
+  return {
+    buscar,
+    // Lo de abajo lo usa AdquisicionVehicularIndice.gs para construir el índice; el botón de la
+    // ficha solo llama buscar().
+    FUENTES, leerFuente_, listarCarpetasAdquisicion_, buscarEnListaCarpetas_,
+    indiceHoja_, HOJA_INDICE, ENCABEZADOS_INDICE,
+  };
 })();
