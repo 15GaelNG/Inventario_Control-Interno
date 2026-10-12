@@ -6,7 +6,7 @@ adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpet
 `UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
 inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
 correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después
-(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-09
+(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-12
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -17,8 +17,23 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 
 - **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
-  EQUIPO + SIM BASICO, LINEA, SIM BASICO, BANDA ANCHA, MODEM, CAMARA; la línea sola básica se llamaba LINEA BASICA hasta
-  el 12-oct).
+  EQUIPO + SIM BASICO, LINEA, SIM BASICO, BANDA ANCHA, MODEM, CAMARA). La línea sola básica se llamaba LINEA BASICA
+  hasta el 12-oct (`e26b863`, `d59d7d1`): el TIPO no se guarda en el libro, se calcula (`tipoViejo_`),
+  así que solo cambió el código; `tipoBase` (`LineasChecklist.gs`, `lineas.html`) trata SIM BASICO y LINEA BASICA como
+  LINEA y `resolver_` convierte LINEA BASICA en SIM BASICO (pestañas guardadas de antes). Los scripts del reporte
+  (`conciliacion.py`, `conversion_estatus.py`) aceptan los dos nombres.
+- **Opciones de cada pantalla** (12-oct, `516a07c`; se separan con rayas las que van juntas). Clic derecho
+  del equipo: Detalles | Reasignar, Mandar a resguardo | Nueva inspección, Nueva responsiva | Editar información, Editar
+  línea | Vincular, Cambiar o Desvincular línea | Ir a la línea, Historial. Clic derecho de la línea: Detalles | Mandar a
+  cancelación | Editar línea | Vincular a equipo, Cambiar de equipo o Desvincular del equipo | Ir al equipo, Historial. ⋮ de
+  la ficha del equipo: Reasignar, Mandar a resguardo | Documentos (Ver última inspección, Ver última responsiva) | Ver
+  carpeta en Drive | Editar información | Vincular… | Historial. ⋮ de la ficha de la línea: Mandar a cancelación | Editar
+  línea | Vincular… | Historial (el botón «Ver equipo» de la cabecera sigue). En Documentos la barra al seleccionar trae
+  Ver inspección o Ver responsiva, Ver PDF, Generar PDF y Subir PDF firmado; Regenerar PDF y Ver carpeta en Drive solo
+  en el ⋮ y el clic derecho (son `accionesSeleccion` de la tabla, no `accionesFila`).
+- **Sin textos de ayuda** (12-oct, `4d07afa`): ni el párrafo de Documentos, ni el de Reasignar varios, ni
+  las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
+  Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
 - **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
   modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
@@ -37,7 +52,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
   Un SIM BASICO no enseña el adendum al agregar. Al editar, cambiar el Tipo de línea a SIM BASICO esconde el adendum y
-  al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, pendiente 2.33,
+  al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, `a23f9ec`,
   `soloPlan` en `LineasRegistros.gs`). Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran
   al editar otra cosa.
 - **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
@@ -68,8 +83,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
   ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
   La ficha de la línea tiene «Números de esta línea» (el actual y los anteriores con fecha y comentario,
-  `LineasRepo.numerosDeLinea`) y la tabla de líneas enseña «antes …» junto al número: la búsqueda la encuentra por uno
-  anterior (índice `numerosAnteriores`, caché `indice_telefonia_v6`). Lo de antes del 8-oct sigue solo en la bitácora
+  `LineasRepo.numerosDeLinea`). Los anteriores van en la ficha de la línea, abajo del número y arriba de los chips
+  («Antes 9990000001», gris y chico; parámetro `subtitulo` de `encabezado`, 12-oct, `4d07afa`); la columna Número de
+  la tabla ya no los enseña, pero la búsqueda sigue encontrando la línea por uno anterior (índice `numerosAnteriores`,
+  caché `indice_telefonia_v7`). Lo de antes del 8-oct sigue solo en la bitácora
   del AppSheet («Números que ha tenido» del equipo; pendiente 4.1).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
