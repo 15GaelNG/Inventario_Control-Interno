@@ -111,6 +111,25 @@ function apiFichaVehiculo(token, folio) {
     adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorFolio(token, folio)),
   });
 }
+/**
+ * Pestaña "Documentos vehicular" de la ficha: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar, solo lectura).
+ * Con permiso de Vehículos. Las responsivas y los préstamos solo a quien ve Responsiva vehicular, y los adherentes a
+ * quien ve Adherente vehicular (los mismos PDF que sus pestañas). El vehículo es su NUCO, nunca el folio.
+ */
+function apiDocumentosVehiculo(token, nucco) {
+  const sesion = Auth.validarSesion(token);
+  Permisos.puedeLeer(token, 'vehiculos');
+  const permisos = Permisos.deCorreo(sesion.correo);
+  const exp = ExpedienteNuco.listar(nucco);
+  exp.documentos.forEach((d) => {
+    if (d.clave !== 'RESPONSIVA') return;
+    if (!permisos['responsiva-vehicular']) { d.vigentes = []; d.oculto = true; }
+    d.anteriores = d.anteriores.filter((g) => (g.raiz === ExpedienteNuco.ADHERENTES
+      ? !!permisos['adherente-vehicular'] : !!permisos['responsiva-vehicular']));
+  });
+  return JSON.stringify(exp);
+}
+
 // JSON.stringify (no el arreglo directo): con FECHA_REGISTRO (Date) en cada fila,
 // google.script.run pierde la respuesta de forma intermitente (confirmado con
 // pruebas — regresa null aunque el servidor sí arma las filas). Como texto viaja

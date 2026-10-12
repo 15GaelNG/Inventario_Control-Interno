@@ -267,6 +267,25 @@
         responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
       });
     },
+    // Documentos vehicular: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar), con las fechas de ejemplo
+    apiDocumentosVehiculo: () => {
+      const ar = (nombre, dias, mime) => ({ id: 'f' + nombre.length + dias, nombre, url: 'https:\/\/drive.google.com/file/d/x', mime: mime || 'application/pdf', fecha: hace(dias) });
+      const g = (grupo, archivos) => ({ grupo, raiz: grupo.split(' / ')[0], archivos });
+      const doc = (clave, titulo, vigentes, anteriores) => ({ clave, titulo, url: 'https:\/\/drive.google.com/drive/folders/x', vigentes, anteriores: anteriores || [] });
+      return JSON.stringify({
+        existe: true, nuco: '100', url: 'https:\/\/drive.google.com/drive/folders/x',
+        carpetas: ['1.-DOCUMENTACIÓN', '2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES'].map((nombre) => ({ nombre, url: 'https:\/\/drive.google.com/drive/folders/x' })),
+        documentos: [
+          doc('FACTURA', 'Factura', [ar('FACTURA-0100.pdf', 900), ar('FACTURA-0100.xml', 900, 'text/xml')]),
+          doc('SEGURO', 'Póliza de seguro', [ar('SEGURO-0100.pdf', 20)], [g('SEGUROS ANTERIORES', [ar('SEGURO-0100 2025-03-01.pdf', 385), ar('SEGURO-0100 2024-03-01.pdf', 750)])]),
+          doc('ALTA', 'Alta de placas', [ar('ALTA DE PLACAS-0100.pdf', 880)]),
+          doc('TARJETA', 'Tarjeta de circulación', [ar('TARJETA DE CIRCULACION-0100.jpg', 870, 'image/jpeg')]),
+          doc('RESPONSIVA', 'Responsiva', [ar('RESPONSIVA-0100.pdf', 4)], [g('RESPONSIVAS ANTERIORES', [ar('RESPONSIVA-0100 2025-11-02.pdf', 340)]), g('PRESTAMOS', [ar('PRESTAMO-0100.pdf', 30)])]),
+          doc('TENENCIA', 'Tenencia', [], [g('TENENCIAS ANTERIORES', [ar('TENENCIA-0100 2025.pdf', 280), ar('TENENCIA-0100 2024.pdf', 640)])]),
+        ],
+        otros: [g('ANTERIORES / OXXO GAS', [ar('TARJETA OXXO GAS.jpg', 700, 'image/jpeg')])],
+      });
+    },
     apiListarInspecciones: [
       { ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PLACAS: 'GGY886F', PUNTAJE: 96.3, RESPONSABLE: 'JUAN MANUEL FULGENCIO', INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' },
       { ID: '2026_25_291', FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', FECHA: hace(3), PLACAS: 'GGR658F', PUNTAJE: 84.5, RESPONSABLE: 'JORGE LUIS AVECILLA', INSPECTOR: 'AYRTON SEPULVEDA', PDF: '' },
@@ -375,7 +394,15 @@
         if (nombre === 'withFailureHandler') return (f) => { falla = f; return api; };
         return (...args) => {
           // Una respuesta puede ser una función: la arma con los argumentos y los permisos de la escena
-          const r = typeof respuestas[nombre] === 'function' ? respuestas[nombre](...args) : respuestas[nombre];
+          const responder = (n, a) => (typeof respuestas[n] === 'function' ? respuestas[n](...a) : respuestas[n]);
+          // Las listas llegan envueltas con su huella (apiListaConHuella en ClientApi.gs; el vigía de api.html)
+          if (nombre === 'apiListaConHuella') {
+            const v = responder(args[1], [args[0]].concat(args[2] || []));
+            setTimeout(() => exito({ v: v === undefined ? (/^apiListar/.test(args[1]) ? [] : null) : JSON.parse(JSON.stringify(v)), huella: {} }), 120);
+            return;
+          }
+          if (nombre === 'apiHuellasVigentes') { setTimeout(() => exito({}), 120); return; }
+          const r = responder(nombre, args);
           setTimeout(() => (r === undefined ? exito(/^apiListar/.test(nombre) ? [] : null) : exito(JSON.parse(JSON.stringify(r)))), 120);
         };
       },
@@ -475,6 +502,11 @@
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    'vehiculos-documentos': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="documentos"]')).click();
+      await hasta('.docs-veh-seccion'); await esperar(300);
+    },
     // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas
     // pestañas no aparecen y la sección de sensor del formulario sale bloqueada
     'vehiculos-ficha-sin-sensores': async () => {
