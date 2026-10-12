@@ -3,9 +3,10 @@
 Rama `master` = producción (la versión vigente está en el INDICE; lo último de Líneas ahí es la parte 6 con COMENTARIO,
 plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el PDF, Reasignar corregido, responsables
 adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive sin
-`UrlFetchApp`); además, Exportar a Excel del inventario como lo muestra el panel (9-oct). Rama `emmanuel`: además, el PIN del equipo solo con números y sin la compatibilidad con OBSERVACIONES.
-Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y
-queda para después (`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-09
+`UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
+inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
+correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después
+(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-12
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -14,9 +15,25 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 
 ## 1. Qué hace
 
-- **Líneas Telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
+- **Líneas telefónicas:** tabla de equipos y líneas (selección estilo Google Drive), ficha con General, Documentos e
   Historial; Editar en pestañas con Agregar equipo / Agregar línea; TIPO se calcula solo (EQUIPO, EQUIPO + SIM,
-  EQUIPO + SIM BASICO, LINEA, LINEA BASICA, BANDA ANCHA, MODEM, CAMARA).
+  EQUIPO + SIM BASICO, LINEA, SIM BASICO, BANDA ANCHA, MODEM, CAMARA). La línea sola básica se llamaba LINEA BASICA
+  hasta el 12-oct (`e26b863`, `d59d7d1`): el TIPO no se guarda en el libro, se calcula (`tipoViejo_`),
+  así que solo cambió el código; `tipoBase` (`LineasChecklist.gs`, `lineas.html`) trata SIM BASICO y LINEA BASICA como
+  LINEA y `resolver_` convierte LINEA BASICA en SIM BASICO (pestañas guardadas de antes). Los scripts del reporte
+  (`conciliacion.py`, `conversion_estatus.py`) aceptan los dos nombres.
+- **Opciones de cada pantalla** (12-oct, `516a07c`; se separan con rayas las que van juntas). Clic derecho
+  del equipo: Detalles | Reasignar, Mandar a resguardo | Nueva inspección, Nueva responsiva | Editar información, Editar
+  línea | Vincular, Cambiar o Desvincular línea | Ir a la línea, Historial. Clic derecho de la línea: Detalles | Mandar a
+  cancelación | Editar línea | Vincular a equipo, Cambiar de equipo o Desvincular del equipo | Ir al equipo, Historial. ⋮ de
+  la ficha del equipo: Reasignar, Mandar a resguardo | Documentos (Ver última inspección, Ver última responsiva) | Ver
+  carpeta en Drive | Editar información | Vincular… | Historial. ⋮ de la ficha de la línea: Mandar a cancelación | Editar
+  línea | Vincular… | Historial (el botón «Ver equipo» de la cabecera sigue). En Documentos la barra al seleccionar trae
+  Ver inspección o Ver responsiva, Ver PDF, Generar PDF y Subir PDF firmado; Regenerar PDF y Ver carpeta en Drive solo
+  en el ⋮ y el clic derecho (son `accionesSeleccion` de la tabla, no `accionesFila`).
+- **Sin textos de ayuda** (12-oct, `4d07afa`): ni el párrafo de Documentos, ni el de Reasignar varios, ni
+  las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
+  Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
 - **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
   modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
@@ -34,7 +51,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
   o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
-  Un SIM BASICO sin datos de adendum no enseña el adendum (ni al agregar ni al editar).
+  Un SIM BASICO no enseña el adendum al agregar. Al editar, cambiar el Tipo de línea a SIM BASICO esconde el adendum y
+  al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, `a23f9ec`,
+  `soloPlan` en `LineasRegistros.gs`). Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran
+  al editar otra cosa.
 - **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
   equipo, Vincular línea (sin línea) o Cambiar línea y Desvincular línea; en la línea, Vincular a equipo (suelta y
   DISPONIBLE) o Cambiar de equipo y Desvincular del equipo. Solo líneas sueltas DISPONIBLE y equipos en USO o RESGUARDO
@@ -43,11 +63,30 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   fija (ref.lineaNueva) y su comentario; si no, el comentario va en otra ventana. Movimientos ASIGNAR_LINEA («Vincular
   línea»), CAMBIO_LINEA, CAMBIO_EQUIPO y RETIRAR_LINEA («Desvincular línea»). La línea se separa con
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
+- **Vínculos** (8-oct; `lineas-vinculos.html`): **una idea del usuario que se queda así**, apagada en producción como Help
+  Desk (`vinculos-lineas` en `MODULOS_APAGADOS` del bloque de producción de `Entornos.gs`: sin botón ni espacio); en
+  los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas telefónicas junto a
+  Tabla y Tarjetas, con el cajón a la izquierda y dos vistas. **Grafo**: todo lo que cabe en la pantalla flotando como
+  red (personas con sus equipos y líneas como íconos y sus vínculos; se prenden Personas y Sueltos), búsqueda (persona, NUCO, número también anterior, IMEI o estatus; varias con
+  coma; con búsqueda salen las bajas), departamento y compañía; la rueda acerca, el fondo se arrastra y se aleja solo
+  para que quepa. Lo que interesa se mete al cajón: clic en la relación y «Al cajón», arrastrarla al cajón o «Todo al
+  cajón» (hasta 60). **Lienzo**: en blanco; se saca del cajón arrastrando la ficha, cada nodo se queda donde se suelta y
+  se regresa al cajón arrastrándolo ahí. **Módulos** (en las dos vistas): Resguardo, Venta y desecho y Cancelación son
+  cajas que se ponen a un lado de la red, se mueven del encabezado, se estiran de la esquina (caben más) y se quitan, con
+  lo de su estatus flotando adentro, su buscador y su cuenta («12 de 300»); en el lienzo también vive en su caja lo
+  suelto con ese estatus, y lo que se saca de un módulo se queda en el lienzo. Soltar abre la
+  acción de siempre con lo soltado ya elegido (`LineasVinculos.alSoltar`): línea sobre un equipo → Vincular o Cambiar
+  línea o Cambiar de equipo; tijeras del vínculo → Desvincular; línea a Cancelación → Mandar a cancelación; equipo a
+  Resguardo o a Venta y desecho → Mandar a resguardo (con PARA VENTA); equipo sobre una persona (también uno sacado del
+  módulo de Resguardo) → Reasignar. El cajón, el lienzo y los módulos se guardan en el navegador (`localStorage` `lineas.vinculos.v1`: claves y posiciones). Sin permiso de operar
+  solo se ve y se arma. Clic = vista rápida (en el grafo, elige la relación); doble clic = ficha.
 - **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
   ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
   La ficha de la línea tiene «Números de esta línea» (el actual y los anteriores con fecha y comentario,
-  `LineasRepo.numerosDeLinea`) y la tabla de líneas enseña «antes …» junto al número: la búsqueda la encuentra por uno
-  anterior (índice `numerosAnteriores`, caché `indice_telefonia_v6`). Lo de antes del 8-oct sigue solo en la bitácora
+  `LineasRepo.numerosDeLinea`). Los anteriores van en la ficha de la línea, abajo del número y arriba de los chips
+  («Antes 9990000001», gris y chico; parámetro `subtitulo` de `encabezado`, 12-oct, `4d07afa`); la columna Número de
+  la tabla ya no los enseña, pero la búsqueda sigue encontrando la línea por uno anterior (índice `numerosAnteriores`,
+  caché `indice_telefonia_v7`). Lo de antes del 8-oct sigue solo en la bitácora
   del AppSheet («Números que ha tenido» del equipo; pendiente 4.1).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
@@ -60,9 +99,33 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   al escribirlo (Mandar a resguardo, antes de pedir las inspecciones; inspección y responsiva) y en el servidor.
 - **Páginas de la inspección y de la responsiva** (Documentos, doble clic o Historial): lo que dice el documento de ese
   día; a la vista Ver PDF y Subir PDF firmado, y en ⋮ Ver equipo, Ver carpeta en Drive y Generar o Regenerar PDF
-  (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`).
+  (`botonesDocumento` en lineas.html; `apiLineasInspeccion` / `apiLineasResponsiva`). Se ve al instante con lo que ya
+  trajo Documentos (fecha, responsable, inspector, calificación, Ver PDF) y se completa al llegar lo demás; al
+  seleccionar su fila se pide antes (`precargarDocumento`). Lo que pide la ficha queda 2 min en la página: «Volver» no
+  lo pide otra vez; cualquier otra llamada al servidor (guardar, PDF, formularios) lo borra (`llamar`, 9-oct).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
+- **Identificación en la responsiva** (9-oct, opcional): por cada responsable (el principal, cuyo tipo es
+  IDENTIFICACION, y del segundo al quinto, con su propio tipo) se eligen fotos (hasta 4: una, o frente y vuelta) o un
+  PDF, que se ven antes de guardar (clic en la foto = en grande). Las fotos se juntan en el navegador en un PDF carta,
+  dos por hoja, JPEG calidad .92 y hasta 2400 px por lado (`pdfDeFotos` en lineas.html); el servidor solo recibe PDF de
+  hasta 15 MB (`datos.identificaciones`). Se guarda antes que la responsiva, en una carpeta nueva de la responsiva en
+  NUCOS (`RESP DD MM`, donde después va su PDF), como «INE - NOMBRE - ID PERSONA.pdf» (`CapitalHumano.idPara`; sin
+  ID PERSONA, solo el nombre), y un renglón por archivo en APP_IDENTIFICACIONES; si la responsiva no se guarda, la
+  carpeta va a la papelera (`LineasIdentificaciones.gs`). Sin NUCO va a la carpeta de la app (`Files`). La página de la
+  responsiva ofrece «Ver INE» (o «Ver …» con el nombre, si son varias).
+  **Reutilizarla** (9-oct, en producción desde la v88): al llenar o cambiar el nombre o el número de un responsable, la
+  pantalla busca su identificación más reciente en APP_IDENTIFICACIONES por su nombre (sin acentos; si el nombre es de
+  dos personas, con su número; `apiLineasIdentificacionesRegistradas`, permiso de operar Líneas; la de un archivo en la
+  papelera no cuenta) y, si tiene, muestra «INE registrada · NUCO ·
+  fecha · Ver · ¿Es correcta? Sí / No». Sí: no se sube nada; al guardar se copia a la carpeta de la responsiva nueva con
+  su nombre de siempre y queda un renglón con ORIGEN REUTILIZADA (el servidor revisa que el registro sea de esa misma
+  persona). No: se suben fotos o PDF como siempre. Sin contestar, Guardar no deja pasar y lleva a la pregunta. Sirve en la
+  responsiva sola, Reasignar y Vincular.
+- **Fotos de la inspección** (9-oct): se ven en miniatura desde que se eligen, con la espera encima mientras suben;
+  clic = en grande (`verFotoEnGrande`), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
+  dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura
+  se recorría y dejaba un cuadro blanco.
 - **Responsables adicionales:** en Editar, la responsiva y la inspección, hasta cuatro más (segundo a quinto: número de
   empleado y nombre de Capital Humano), cada uno en su bloque con «Quitar» y «Agregar responsable» debajo
   (`LineasRegistros.camposAdicionales`, condición `{ cuantos }`). Columnas `NO EMPLEADO / NOMBRE SEGUNDO… QUINTO
@@ -82,17 +145,41 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
   con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Editar, al
   trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
-  Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón». El PDF lo dibuja igual que la
+  Con PIN EQUIPO = PATRON y patrón guardado, General muestra solo la fila «Patrón». Un solo bloqueo (usuario, 9-oct):
+  el patrón vale si PIN EQUIPO dice PATRON o está vacío (`LineasUtil.patronVigente`); con un PIN o una contraseña,
+  General y el PDF no lo enseñan, y guardar con «PIN», «CONTRASEÑA» o «SIN BLOQUEO» lo borra (Editar, inspección y
+  responsiva, que también deja su PIN en el equipo; `LineasUtil.bloqueoSinPatron`). El PDF lo dibuja igual que la
   pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
 - **Tipo de bloqueo del equipo** (PIN, PATRÓN, CONTRASEÑA o SIN BLOQUEO): una lista en Editar, la inspección y la
   responsiva (`conSelectorBloqueo` / `activarBloqueo`, lineas.html) que no se guarda: PIN y contraseña van en PIN
   EQUIPO; patrón, «PATRON»; sin bloqueo, «N/A». Con «PIN» solo números (no deja escribir letras); la contraseña acepta
-  todo. La lista viaja como `datos.bloqueo` y el servidor lo revisa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
+  todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
+  (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Editar, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
-- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta).
+- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta). Los pasos
+  de la bandeja y sus notificaciones (campana) los hace quien tiene EDICION en `resguardos-lineas`
+  (`usuario.puedeAprobar`, calculado con `Permisos.deCorreo` en `TelefoniaService.usuarioResguardo_`); ADMIN y SUPER también,
+  porque editan todo. Con solo LECTURA se ve y no se modifica («Solo puedes consultar Resguardos y cancelaciones, no
+  modificarlo.»). «Mandar a resguardo», su formulario y «Mandar a cancelación» piden EDICION de `lineas-telefonicas`, así
+  que el área de Líneas sigue mandando. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) da LECTURA al
+  área LINEAS y EDICION a `paulina.bustamante@ciudadmaderas.com`; en producción manda la hoja PERMISOS (pendiente 8.11).
+  Ya no existe la lista `LINEAS_APROBADORES_RESGUARDO` (12-oct, `585d1c6`).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
-- **Accesorios** de celular, **Gestión de Activos** (por persona) y **Correcciones de Líneas** (módulo temporal).
+- **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
+- **Menú de Líneas** (12-oct, `585d1c6`): Panorama, Líneas telefónicas, Resguardos y cancelaciones e Inventario de
+  accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
+  `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción). El menú lateral
+  sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
+  «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
+  el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
+- **Sin asistente flotante** (12-oct, `7163c54`): el botón del asistente de la esquina inferior derecha se esconde en
+  las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
+  (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
+  `#asistente-flotante`). En los demás módulos sigue igual.
+- **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
+  y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
+  `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
 
 ## 2. Datos (libro de producción `17YrtuMY…`)
 
@@ -107,6 +194,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau, avisos, fotos y correcciones |
+| APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
 
@@ -118,7 +206,9 @@ la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** copias «(SISTEMA)» de
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
 originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias se hicieron una vez, el 6-oct);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
-AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`). El patrón se puede dibujar en el servidor
+AppSheet (HTML con Chromium), en 2 hojas (`LineasPdf.COMO_APPSHEET`): la hoja 2 empieza en «SANCIONES POR MAL MANEJO»
+con un salto de página cuyo párrafo mide 1 pt; con varios responsables (« / » en RESPONSABLE) el nombre bajo la firma va en
+8 pt (`NOMBRES_BAJO_FIRMA`), y si el PDF sale con más de 2 hojas se quita el salto y se exporta de nuevo. El patrón se puede dibujar en el servidor
 (`LineasPatronPng.gs`). Si el PDF ligado a una captura del sistema ya no está en su carpeta de NUCOS (alguien lo quitó
 a mano en Drive), se usa el PDF que sí está en esa carpeta (el del mismo nombre o el más reciente «INSP…» / «RESP…») y
 se vuelve a ligar en APP_EVIDENCIAS y en la columna del PDF (`LineasRepo.revisarPdfsLigados` con
@@ -146,12 +236,15 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasRepo.gs`, `LineasDatos.gs`, `LineasUtil.gs` | Acceso a datos, IDs, normalización (NUCO a 4 dígitos) |
 | `lineas/LineasRegistros.gs` | Formulario de alta y edición (reglas del AppSheet) |
 | `lineas/LineasCaptura.gs`, `LineasChecklist.gs`, `LineasPdf.gs`, `LineasPatronPng.gs`, `LineasEvidencias.gs`, `LineasArchivos.gs` | Inspección y responsiva: checklist, firmas, fotos, PDF (y la imagen del patrón) y Drive |
+| `lineas/LineasIdentificaciones.gs` | Identificación de cada responsable en la responsiva (Drive y APP_IDENTIFICACIONES) |
+| `lineas/LineasIneNucos.gs` | INE que ya estaban en NUCOS (9-oct): inventario de solo lectura de NUCOS de producción en la pestaña «INE NUCOS» del libro del DEV (`lineasIneNucos_inventario`, desde el editor de un DEV) |
 | `lineas/LineasAcciones.gs`, `LineasResguardos.gs` | Reasignar, Mandar a resguardo y bandeja de Pau |
 | `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel (el inventario: una hoja LINEAS TELEFONICAS como el panel, con ID del AppSheet y las columnas de la vista del AppSheet, `LineasRepo.vistaCompleta`; Cambios y Accesorios, sus pestañas tal cual) |
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
 | `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
-| `html/js/lineas.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas |
+| `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
+| `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
 
 ## 4. Cómo se trabaja

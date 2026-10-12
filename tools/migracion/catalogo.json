@@ -384,6 +384,19 @@
       "migrable": false
     },
     {
+      "hoja": "APP_IDENTIFICACIONES",
+      "prefijo": "IDN",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "modulo": "",
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
       "hoja": "LINEAS",
       "prefijo": "LIN",
       "llaveAnterior": "ID",

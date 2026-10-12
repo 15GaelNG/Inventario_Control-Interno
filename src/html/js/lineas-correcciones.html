@@ -159,10 +159,6 @@
           detalle: { titulo: (f) => (f.NUCO ? 'NUCO ' + f.NUCO : 'Número ' + f.NUMERO) + ' · ' + (f.CATEGORIA || f.CAMPO) },
           accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Abrir el NUCO para corregirlo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => Lineas.irARegistro(f.REGISTRO_ID) }],
           accionesSeleccion: puede ? ACCIONES : [],
-          ayuda: vista === 'CORREGIR'
-            ? (puede ? 'La flecha abre el NUCO para corregirlo. Después selecciona uno o varios casos y márcalos como corregidos o "no aplica".'
-              : 'Aquí ves el avance de las correcciones. La flecha abre el NUCO.')
-            : 'Cambios que se aplican solos al migrar (proveedor, documento de venta o regla acordada). Solo consulta.',
           alCambiarFiltros: (f) => { filtros = f || {}; marcas.forEach((m) => m(filtros)); },
         });
         tabla.setDatos(filasVista());

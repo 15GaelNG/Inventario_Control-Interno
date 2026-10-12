@@ -117,25 +117,41 @@ function reestructuraLeerHojaCH_(ss) {
   const faltan = REESTRUCTURA_DE_CH.filter((p) => enc.indexOf(p[0]) < 0).map((p) => p[0]);
   if (faltan.length) throw new Error('Faltan columnas en ' + REESTRUCTURA_HOJA_CH + ': ' + faltan.join(', '));
   const texto = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  // La zona del libro una sola vez (usuario, 9-oct: pedirla por cada fecha, ~30 mil veces, eran ~20 s de la primera
+  // carga de un formulario sin caché)
+  const zona = ss.getSpreadsheetTimeZone();
+  // Con la misma zona en el script, la fecha se arma en JavaScript: Utilities.formatDate por cada una (~30 mil) eran
+  // otros ~18 s
+  const mismaZona = typeof Session !== 'undefined' && Session.getScriptTimeZone() === zona;
+  const dos = (x) => (x < 10 ? '0' : '') + x;
   const fecha = (v) => {
-    if (v instanceof Date && !isNaN(v.getTime())) return Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return mismaZona ? v.getFullYear() + '-' + dos(v.getMonth() + 1) + '-' + dos(v.getDate()) : Utilities.formatDate(v, zona, 'yyyy-MM-dd');
+    }
     const t = texto(v);
     let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
     if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
     m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
     return m ? m[0] : '';
   };
-  const columnas = REESTRUCTURA_DE_CH.map((p) => hoja.getRange(2, enc.indexOf(p[0]) + 1, n, 1).getValues());
+  // Un solo bloque de la primera a la última columna acordada (antes, 14 lecturas de una columna: ~22 s)
+  const t0 = Date.now();
+  const posiciones = REESTRUCTURA_DE_CH.map((p) => enc.indexOf(p[0]));
+  const desde = Math.min.apply(null, posiciones);
+  const bloque = hoja.getRange(2, desde + 1, n, Math.max.apply(null, posiciones) - desde + 1).getValues();
+  if (typeof LineasDatos !== 'undefined') LineasDatos.tiempo('leer CH ' + bloque[0].length + ' columnas × ' + n + ' filas', t0);
   const salida = [];
   for (let i = 0; i < n; i++) {
-    if (columnas.every((c) => texto(c[i][0]) === '')) continue;
+    const fila = bloque[i];
+    if (posiciones.every((c) => texto(fila[c - desde]) === '')) continue;
     const o = {};
     REESTRUCTURA_DE_CH.forEach((p, k) => {
-      const v = columnas[k][i][0];
+      const v = fila[posiciones[k] - desde];
       o[p[1]] = p[1].indexOf('FECHA') === 0 ? fecha(v) : (p[1] === 'CORREO EMPRESARIAL' ? texto(v).toLowerCase() : texto(v).toUpperCase());
     });
     salida.push(o);
   }
+  if (typeof LineasDatos !== 'undefined') LineasDatos.tiempo('CH preparada (' + salida.length + ')', t0);
   return salida;
 }
 

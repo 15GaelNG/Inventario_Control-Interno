@@ -34,7 +34,7 @@ const LineasNotificaciones = (function () {
    * Tipos sin adendum: EQUIPO no tiene línea; los SIM básicos (cuenta AT&T 643495915) se ponen en equipos con el
    * adendum ya vencido y no tienen fin de plazo, aunque la fila conserve la fecha del plan anterior.
    */
-  const TIPOS_SIN_ADENDUM = ['EQUIPO', 'EQUIPO + SIM BASICO', 'LINEA BASICA'];
+  const TIPOS_SIN_ADENDUM = ['EQUIPO', 'EQUIPO + SIM BASICO', 'SIM BASICO'];
 
   /**
    * Avisos de seguimiento (30-sep-2026; propuesta del sistema: los días y a quién se ajustan con la respuesta de Líneas,

@@ -61,7 +61,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   const inicioLineas = app.indexOf("id: 'lineas'");
   const lineas = app.slice(inicioLineas, app.indexOf('\n    },', inicioLineas));
   // Un solo inventario de accesorios: el de Líneas (el general de jorge se retiró el 1-oct)
-  assert.equal((lineas.match(/Inventario de Accesorios/g) || []).length, 1);
+  assert.equal((lineas.match(/Inventario de accesorios/g) || []).length, 1);
   assert.doesNotMatch(app, /vista: 'accesorios'/);
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
@@ -81,7 +81,7 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
     assert.doesNotMatch(read('src/config/Modulos.gs'), new RegExp(`id: '${v}'`), v);
   });
   // Acceso directo debajo del desplegable de Líneas
-  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de Activos', requiere: 'gestion-activos'[^}]*\}/);
+  assert.match(app, /\{ id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos'[^}]*\}/);
   assert.match(app, /grupo\.vista \? `/);
   orden.concat('gestion-activos', ocultos)
     .forEach((route) => assert.match(app, new RegExp(`vista: '${route}'[^\\n]*plantilla: 'tpl-`), `falta montar ${route}`));
@@ -260,7 +260,7 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'EQUIPO + SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001', 'ESTATUS LINEA': 'CANCELADA' }, ''), 'EQUIPO');
   assert.equal(T('LINEA', { 'NUMERO TELEFONO': '4420000001' }, ''), 'LINEA');
-  assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'LINEA BASICA');
+  assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001' }, 'MODEM'), 'MODEM'); // histórico: se queda
   assert.match(reg, /const valores = homologarNuco_\(aHoja_\(elementos, r\.valores\)\);/);
   // La bitácora no registra "5 → 0005" como un cambio (solo se escribe homologado)
@@ -830,7 +830,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
   assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',\s+filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
-  assert.match(lineas, /\{ icono: 'file-plus', titulo: 'Generar PDF', visible: \(d\) => !!d\.pdfPendiente,/);
+  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => !!d\.pdfPendiente,/);
   // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
   assert.match(lineas, /idTabla: 'lineas-documentos-v1',\s+exportar: false,/);
   assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
@@ -943,7 +943,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v6';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v7';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1613,10 +1613,8 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   const src = read('src/services/lineas/LineasResguardos.gs');
   const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
   const Notif = { _diaFinPlan: (v) => { const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(v || '')); return m ? m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2) : ''; } };
-  // leerConfig_ (config/Entornos.gs) da los aprobadores de resguardos
-  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'leerConfig_', 'Utilities',
-    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {},
-    () => 'pau@ciudadmaderas.com, suplente@ciudadmaderas.com', {});
+  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'Utilities',
+    src + '\nreturn LineasResguardos;')(Util, Notif, { ZONA_APP: 'America/Mexico_City' }, {}, {}, {});
 
   // Datos de la persona en blanco (eran N/A; usuario, 4-oct); PIN y cuenta solo si tenían algo (NO APLICA se respeta);
   // el patrón se borra
@@ -1649,10 +1647,15 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   assert.equal(R.asesorPara('TELCEL', 'FRACCIONADORA LA ROMITA SA DE CV'), 'WILBERTO');
   assert.equal(R.asesorPara('TELCEL', 'GPH SERVICIOS CONDOMINALES'), 'ALFREDO');
 
-  // Quién aprueba: la Script Property o ADMIN
-  assert.equal(R.puedeAprobar({ correo: 'PAU@ciudadmaderas.com' }), true);
+  // Quién aprueba: quien edita Resguardos y cancelaciones (Pau por correo, y ADMIN); el área de Líneas solo la ve y
+  // manda desde Líneas telefónicas, con el permiso de ese módulo (usuario, 12-oct)
+  assert.equal(R.puedeAprobar({ correo: 'pau@ciudadmaderas.com', puedeAprobar: true }), true);
   assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com' }), false);
-  assert.equal(R.puedeAprobar({ correo: 'otro@ciudadmaderas.com', esAdmin: true }), true);
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /puedeAprobar: permisos\[MODULO_RESGUARDOS\] === Permisos\.EDICION/);
+  ['formularioResguardo', 'mandarResguardo', 'mandarCancelacion'].forEach((f) =>
+    assert.match(tel, new RegExp('function ' + f + '\\(token[^)]*\\) \\{\\s+const sesion = operar_\\(token\\);'), f + ' pide editar Líneas telefónicas'));
+  assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
   assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO']);
 
   // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
@@ -1727,7 +1730,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
   assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', puedeOperar, '', true\)/);
   assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
-  assert.match(lineas, /\.concat\(drive, documentos, \[/);
+  assert.match(lineas, /\.concat\(documentos, drive, operar \? editar\.concat\(vinculo\) : \[\], historial\)/);
   assert.doesNotMatch(lineas, /Abrir carpeta/);
   assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e,/);
   assert.match(lineas, /function abrirMenuFicha\(boton\)/);
@@ -1754,8 +1757,10 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.match(dt, /class="dt-menu-titulo">\$\{esc\(a\.tituloGrupo\)\}/);
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
-  assert.match(lineas, /texto: 'Ver última inspección', maximo: 1, enBarra: false, grupo: 'inspeccion', tituloGrupo: 'Inspección'/);
-  assert.match(lineas, /texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'responsiva', tituloGrupo: 'Responsiva'/);
+  // Nueva inspección y Nueva responsiva juntas; Ver la última, solo en la ficha (usuario, 12-oct; pendiente 2.34)
+  assert.match(lineas, /texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.match(lineas, /texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);
   assert.match(lineas, /conservarSeleccion: \(el\) => !!el\.closest\('#ln-listado \.ln-cuadro, #ln-modal-captura, \.ln-menu-flotante'\)/);
   // Documentos, historial, bandeja…: sin columna de Acciones; sus botones van a la barra y al clic derecho
   assert.match(dt, /const hayAccionesFila = accionesFila\.length > 0 && !\(cfg\.seleccionDrive && cfg\.seleccionable\);/);
@@ -2313,6 +2318,36 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
   assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
+});
+
+test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {
+  const index = read('src/html/Index.html');
+  const app = read('src/html/js/app.html');
+  const css = read('src/html/styles.html');
+  assert.match(index, /<nav id="sidebar" class="collapsed">/);
+  assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
+  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
+  assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
+  // Abierto mide 308px (caben «Resguardos y cancelaciones» y «Reasignaciones vehiculares») pero ocupa 92px: queda
+  // encima del contenido, por debajo de los modales. En celular y tableta, el mismo ancho
+  assert.match(css, /#sidebar \{\s*width: 308px;/);
+  assert.match(css, /position: relative; z-index: 450; margin-right: -216px;/);
+  assert.match(read('src/html/shell-movil.html'), /z-index: 900; width: 308px; max-width: 86vw;/);
+  assert.match(css, /#sidebar\.collapsed \{ width: 92px; margin-right: 0; box-shadow: none; \}/);
+  // El subitem se desliza sin que su contenedor le corte la esquina; los módulos sueltos llevan la placa del ícono
+  assert.match(css, /padding: 2px 4px 2px 16px; margin-left: 24px;/);
+  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: 9px;/);
+  // Solo la primera letra en mayúscula
+  const etiquetas = [...app.slice(app.indexOf('const NAV_GRUPOS'), app.indexOf('function vistaDe')).matchAll(/etiqueta: '([^']+)'/g)].map((m) => m[1]);
+  assert.ok(etiquetas.includes('Líneas telefónicas') && etiquetas.includes('Gestión de activos') && etiquetas.includes('Help desk'));
+  etiquetas.forEach((e) => assert.doesNotMatch(e.replace(/ - Líneas$/, ''), /\s\p{Lu}/u, e));
+});
+
+test('Correcciones de líneas y Sistemas de Líneas apagados en producción y en el DEV de Emmanuel (12-oct)', () => {
+  const entornos = read('src/config/Entornos.gs');
+  const bloque = (id) => entornos.slice(entornos.indexOf("'" + id + "'"), entornos.indexOf('\n  },', entornos.indexOf("'" + id + "'")));
+  [bloque('1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'), bloque('1rpvvay1hBTFfm5paVyvy6-Thmx-CQ6uUWVef20Jr8VmHQxkCWZ7UmeOa')]
+    .forEach((b) => ['correcciones-lineas', 'sistemas-lineas'].forEach((v) => assert.match(b, new RegExp("MODULOS_APAGADOS: '[^']*" + v))));
 });
 
 test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.boton, no hechos a mano', () => {

@@ -72,7 +72,7 @@ test('un renglón por equipo y uno por línea sin equipo, con las columnas de la
   assert.strictEqual(r1['COMENTARIOS'], 'nota vieja'); // de la hoja vieja hasta la migración
   assert.strictEqual(r1['JEFE DIRECTO'], ''); // decisión: el jefe solo va en la inspección
   const r3 = f.find((x) => x['ID'] === 'LIN-B');
-  assert.strictEqual(r3['TIPO'], 'LINEA BASICA');
+  assert.strictEqual(r3['TIPO'], 'SIM BASICO');
   assert.strictEqual(r3['NUCO'], '1500'); // la línea sin equipo conserva su NUCO viejo para sus documentos
 });
 
@@ -106,5 +106,5 @@ test('TIPO de la hoja vieja a partir de los tipos nuevos', () => {
   assert.strictEqual(L.tipoViejo_(e('MODEM'), null), 'MODEM');
   assert.strictEqual(L.tipoViejo_(e('CELULAR'), null), 'EQUIPO');
   assert.strictEqual(L.tipoViejo_(null, l('PLAN')), 'LINEA');
-  assert.strictEqual(L.tipoViejo_(null, l('SIM BASICO')), 'LINEA BASICA');
+  assert.strictEqual(L.tipoViejo_(null, l('SIM BASICO')), 'SIM BASICO');
 });

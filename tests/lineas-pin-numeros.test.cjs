@@ -65,7 +65,20 @@ test('pantalla: el error sale solo con «PIN» y letras', () => {
   assert.equal(errorPinBloqueo(cuerpoFalso('PIN', '12a4')), 'SOLO NUMEROS');
   assert.equal(errorPinBloqueo(cuerpoFalso('PIN', '1234')), '');
   assert.equal(errorPinBloqueo(cuerpoFalso('CONTRASEÑA', 'abC1')), '');
-  assert.equal(bloqueoElegido({ querySelector: () => null }), '', 'formulario sin la lista');
+  assert.equal(bloqueoElegido({ querySelector: () => null }), null, 'formulario sin la lista: no se manda');
+  assert.equal(bloqueoElegido(cuerpoFalso('', '')), '', 'con la lista y sin elegir: vacío (el servidor lo rechaza)');
+});
+
+test('tipo de bloqueo obligatorio siempre que se ve (usuario, 9-oct): la lista ya trae SIN BLOQUEO', () => {
+  assert.throws(() => LineasUtil.exigirPinEquipo({ bloqueo: '', valores: {} }), /TIPO DE BLOQUEO DEL EQUIPO es obligatorio/);
+  assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: null, valores: {} }), 'sin la lista (o oculta) no llega');
+  assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: 'SIN BLOQUEO', valores: { 'PIN EQUIPO': 'N/A' } }));
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin\.mostrar, requerido: pin\.mostrar, virtual: true/);
+  assert.match(cliente, /const v = \(e\.columna === '_BLOQUEO' \? bloqueoElegido\(cuerpo\) : valores\[e\.columna\]\) \|\| '';/, 'Editar y Agregar');
+  assert.match(cliente, /if \(e\.columna === '_BLOQUEO' && bloqueoElegido\(cuerpo\) === null\) return;/,
+    'Editar: si la lista no está a la vista no se pide (usuario, 9-oct: salió «obligatorio» al editar una línea)');
+  assert.match(cliente, /if \(bloqueoElegido\(\$\('#ln-captura-cuerpo', raiz\)\) === ''\) errores\.push\(\{ columna: '_BLOQUEO'/, 'inspección y responsiva');
 });
 
 test('pantalla: con «PIN» las letras no se escriben; con contraseña sí', () => {
@@ -100,4 +113,39 @@ test('pantalla: Editar tiene la lista de bloqueo y los tres formularios mandan e
   assert.equal((cliente.match(/valores: valores, patron: patron, bloqueo: bloqueo,/g) || []).length, 2, 'inspección y responsiva');
   assert.match(tramo('    function erroresFormularioEn(', '    /** FOLIO y ESTATUS GENERAL'), /errorPinBloqueo\(cuerpo\)/);
   assert.match(tramo('      function erroresCaptura(', '      function patronParaGuardar('), /errorPinBloqueo\(/);
+});
+
+// Usuario, 9-oct: el NUCO 0896 mostraba su PIN y, a la vez, la imagen de un patrón que dejó una inspección del AppSheet
+// (la inspección del 7-oct eligió «PIN» y el patrón viejo se quedó). Un solo bloqueo.
+test('un solo bloqueo: con PIN, contraseña o sin bloqueo el patrón se borra al guardar y no se muestra', () => {
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'PIN' }), true);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'CONTRASEÑA' }), true);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'SIN BLOQUEO' }), true);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: 'PATRÓN' }), false);
+  assert.equal(LineasUtil.bloqueoSinPatron({ bloqueo: null }), false, 'sin la lista no se toca');
+  const img = 'INSPECCIONES LINEAS_Images/cbbef8da.PATRON.175320.png';
+  assert.equal(LineasUtil.patronVigente('123456', img), '', 'NUCO 0896');
+  assert.equal(LineasUtil.patronVigente('Clave1', img), '');
+  assert.equal(LineasUtil.patronVigente('PATRON', img), img);
+  assert.equal(LineasUtil.patronVigente('PATRÓN', '1-5-9'), '1-5-9');
+  assert.equal(LineasUtil.patronVigente('', img), img, 'sin PIN: el del AppSheet se sigue viendo');
+  assert.equal(LineasUtil.patronVigente('N/A', img), img, 'N/A del AppSheet: como estaba');
+
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /valores\['PATRON'\] = String\(datos\.patron\);\s*if \(LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['PATRON'\] = '';/, 'inspección');
+  assert.match(captura, /valores\['CONTRASEÑA'\] = String\(datos\.patron\);\s*if \(LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['CONTRASEÑA'\] = '';/, 'responsiva');
+  assert.match(captura, /if \(LineasUtil\.bloqueoSinPatron\(datos\)\) \{ copia\['PATRON'\] = ''; copia\['PIN EQUIPO'\] = valores\['PIN EQUIPO'\] \|\| ''; \}/, 'responsiva → equipo');
+  assert.match(captura, /const rutaPatron = LineasUtil\.patronVigente\(col\('PIN EQUIPO'\), col\(colPatron\)\);/, 'PDF');
+  assert.match(read('src/services/lineas/LineasRegistros.gs'), /if \(LineasUtil\.bloqueoSinPatron\(datos\) && 'PATRON' in valores\) valores\['PATRON'\] = '';/, 'Editar');
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.equal((repo.match(/patronRuta: LineasUtil\.patronVigente\(col\(f, 'PIN EQUIPO'\), col\(f, 'PATRON'\)\) \|\| null/g) || []).length, 2, 'ficha e inspección');
+});
+
+// Usuario, 9-oct: vista de tarjetas con la sede junto al departamento, y el filtro de tipo dentro de la tarjeta
+test('tarjetas del inventario: «DEPARTAMENTO · SEDE» y el filtro de tipo no se sale', () => {
+  assert.match(cliente, /const depto = guion\(\[r\.departamento, r\['SEDE'\] \|\| r\.sede\]\.filter\(Boolean\)\.join\(' · '\)\);/);
+  assert.equal((cliente.match(/'<div class="ln-cuadro-depto">' \+ depto \+ '<\/div>'/g) || []).length, 2, 'equipos y líneas');
+  const estilos = read('src/html/lineas-estilos.html');
+  assert.match(estilos, /\.ln-modulo \.filtro-tipo \{ min-width: 0; \}/);
+  assert.match(estilos, /\.ln-modulo \.filtro-tipo-panel \{ position: relative; \}/);
 });

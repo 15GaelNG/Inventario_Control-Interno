@@ -352,8 +352,10 @@ const TelefoniaService = (function () {
   function documento_(token, id, tipo) {
     const sesion = leer_(token);
     const esInspeccion = tipo === 'INSPECCION';
+    const t0 = Date.now();
     const doc = (esInspeccion ? LineasRepo.leerInspeccion(id) : LineasRepo.leerResponsiva(id)) ||
       (/^drive_/.test(id) ? documentoNucos_(id.slice(6), tipo) : null);
+    LineasDatos.tiempo('documento: leído', t0);
     if (!doc) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
     if (esInspeccion && !puedeVerSecretos_(sesion)) {
@@ -367,6 +369,7 @@ const TelefoniaService = (function () {
       const r = f ? LineasRepo.convertirRegistro(f) : null;
       if (r && r.equipo) eq = { _id: r.id, nuco: r.equipo.nuco, modelo: r.equipo.modelo, imei: r.equipo.imei, tipo: r.equipo.tipo };
     }
+    LineasDatos.tiempo('documento: su equipo', t0);
 
     if (!doc.drive && doc.registroId && doc.fecha) {
       try {
@@ -377,6 +380,7 @@ const TelefoniaService = (function () {
       }
     }
 
+    LineasDatos.tiempo('documento: carpeta en NUCOS', t0);
     const fotos = [];
     const pdfs = doc.drive && doc.drive.pdfs ? doc.drive.pdfs.slice() : [];
     // Fotos agregadas en el sistema a una inspección de NUCOS: viven en una carpeta de la app (APP_EVIDENCIAS)
@@ -393,7 +397,10 @@ const TelefoniaService = (function () {
         });
       });
     }
+    LineasDatos.tiempo('documento: fotos', t0);
     const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
+    // Identificación de cada responsable, subida con la responsiva (usuario, 9-oct; pendiente 2.27)
+    if (!esInspeccion) salida.identificaciones = LineasIdentificaciones.deResponsiva([id]);
     salida[esInspeccion ? 'inspeccion' : 'responsiva'] = doc;
     return LineasUtil.paraCliente(salida);
   }
@@ -554,6 +561,66 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
+  /** Paso 3 de la identificación (pendiente 2.29): la registrada de cada responsable de la responsiva que se captura. */
+  /**
+   * Medidor de tiempos (html/js/lineas-medidor.html, con ?medir=1; usuario, 9-oct): una fila por acción en la hoja
+   * MEDICIONES LINEAS del libro de Líneas. Solo en un DEV: en producción no escribe.
+   */
+  const HOJA_MEDICIONES = 'MEDICIONES LINEAS';
+  const COLS_MEDICIONES = ['FECHA', 'SESION', 'USUARIO', 'N', 'VISTA', 'VISTA FINAL', 'ACCION', 'TOTAL MS', 'LLAMADAS', 'SERVIDOR MS', 'DETALLE', 'NOTA'];
+  function registrarMediciones(token, filas) {
+    const sesion = leer_(token);
+    if (String(Config.ENTORNO || '').toUpperCase() === 'PROD') throw new Error('El medidor solo escribe en un DEV.');
+    if (!LineasDatos.existeTabla(HOJA_MEDICIONES)) LineasDatos.asegurarPestana(HOJA_MEDICIONES, COLS_MEDICIONES);
+    const ahora = new Date();
+    const t = (v) => String(v === null || v === undefined ? '' : v).slice(0, 2000);
+    LineasDatos.agregarFilas(HOJA_MEDICIONES, (filas || []).slice(0, 50).map((f) => ({
+      'FECHA': ahora, 'SESION': t(f.sesion), 'USUARIO': t(sesion && (sesion.correo || sesion.email)), 'N': Number(f.n) || '',
+      'VISTA': t(f.vista), 'VISTA FINAL': t(f.vistaFinal), 'ACCION': t(f.accion), 'TOTAL MS': Number(f.total_ms) || 0,
+      'LLAMADAS': Number(f.llamadas) || 0, 'SERVIDOR MS': Number(f.servidor_ms) || 0, 'DETALLE': t(f.detalle), 'NOTA': t(f.nota),
+    })));
+    return true;
+  }
+
+  /**
+   * Lo mismo que una llamada de la pantalla, pero con sus pasos medidos (abrir el libro, cada búsqueda, cada lectura y
+   * caché: LineasDatos.tiempo), para saber qué parte tarda. Solo en un DEV; lo pide el medidor con ?medir=1&diag=…
+   * Deja una fila «SERVIDOR …» en MEDICIONES LINEAS y la regresa.
+   */
+  function medirServidor(token, que, id) {
+    leer_(token);
+    if (String(Config.ENTORNO || '').toUpperCase() === 'PROD') throw new Error('El medidor solo corre en un DEV.');
+    const llamadas = {
+      equipo: () => equipo(token, id), linea: () => linea(token, id), evidencias: () => evidencias(token, id),
+      historial: () => historial(token, id), asignaciones: () => asignaciones(token, id, 'equipo'),
+      asignacionesLinea: () => asignaciones(token, id, 'linea'), ultimaInspeccion: () => ultimoDocumentoNuco(token, id, 'INSPECCION'),
+      indice: () => LineasRepo.indice(true),
+      catalogos: () => catalogos(token), colaboradores: () => colaboradores(token),
+      inspeccion: () => inspeccion(token, id), responsiva: () => responsiva(token, id),
+      contextoInspeccion: () => contextoInspeccion(token, { equipoId: id }), contextoResponsiva: () => contextoResponsiva(token, { equipoId: id }),
+      // Sin caché, como la primera vez (usuario, 9-oct): índices, catálogos, colaboradores, IDs y la estructura de LINEAS
+      frio: () => { LineasRepo.borrarCaches(); LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']); },
+    };
+    if (!llamadas[que]) throw new Error('No se mide «' + que + '».');
+    LineasDatos.medirPasos(true);
+    const inicio = Date.now();
+    let error = '';
+    try { llamadas[que](); } catch (e) { error = e.message; }
+    const total = Date.now() - inicio;
+    const pasos = LineasDatos.pasos();
+    LineasDatos.medirPasos(false);
+    const fila = { sesion: 'SERVIDOR', vista: 'servidor', vistaFinal: '', accion: 'SERVIDOR ' + que + ' ' + id, total_ms: total,
+      llamadas: pasos.length, servidor_ms: pasos.reduce((s, p) => s + (Number(String(p).split(' ').pop()) || 0), 0),
+      detalle: pasos.join(' | '), nota: error };
+    registrarMediciones(token, [fila]);
+    return fila;
+  }
+
+  function identificacionesRegistradas(token, personas) {
+    operar_(token);
+    return LineasUtil.paraCliente(LineasIdentificaciones.registradas(personas));
+  }
+
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
   function generarPdf(token, tipo, id, forzar, firmas) {
     const sesion = operar_(token);
@@ -603,24 +670,32 @@ const TelefoniaService = (function () {
 
   // ---- Resguardo y bandeja de Pau (reunión con Líneas, 30-sep) ----
 
+  /**
+   * Los pasos de la bandeja (recibir, entregar, vendido, cartas, confirmar la cancelación) los hace quien EDITA
+   * Resguardos y cancelaciones: Pau, por correo, y ADMIN; el área de Líneas solo la ve (usuario, 12-oct).
+   */
   function usuarioResguardo_(sesion) {
-    return Object.assign(usuarioOperacion_(sesion), { esAdmin: sesion.rol === Config.ROLES.ADMIN });
+    const permisos = sesion.permisos || Permisos.deCorreo(sesion.correo);
+    return Object.assign(usuarioOperacion_(sesion), { puedeAprobar: permisos[MODULO_RESGUARDOS] === Permisos.EDICION });
   }
+
+  // Mandar a resguardo o a cancelación se hace desde Líneas telefónicas: pide su edición, no la de la bandeja (con
+  // solo lectura en la bandeja, el área de Líneas sigue mandando; usuario, 12-oct)
 
   /** Formulario de "Mandar a resguardo": datos de cada equipo y la propuesta de su línea. */
   function formularioResguardo(token, ids) {
-    const sesion = Permisos.puedeEditar(token, MODULO_RESGUARDOS);
+    const sesion = operar_(token);
     return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
   }
 
   function mandarResguardo(token, ids, datos) {
-    const sesion = Permisos.puedeEditar(token, MODULO_RESGUARDOS);
+    const sesion = operar_(token);
     return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
   }
 
   /** "Mandar a cancelación": una o varias líneas a la bandeja de cancelaciones sin mandar el equipo a resguardo. */
   function mandarCancelacion(token, ids, datos) {
-    const sesion = Permisos.puedeEditar(token, MODULO_RESGUARDOS);
+    const sesion = operar_(token);
     return LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion)));
   }
 
@@ -656,7 +731,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,

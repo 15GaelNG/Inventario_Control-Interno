@@ -246,6 +246,23 @@ const LineasCaptura = (function () {
    * Lleva al DIRECTOR de la persona, como el AppSheet; el jefe directo va en la inspección (usuario, 6-oct: del 4 al
    * 6-oct la responsiva guardó al jefe en DIRECTOR).
    */
+  /**
+   * Identificación de cada responsable (usuario, 9-oct; pendiente 2.27): fotos o PDF que se revisan antes de subir. No
+   * es columna de RESPONSIVAS LINEAS: la pantalla la manda aparte (datos.identificaciones) y se guarda en la carpeta de
+   * la responsiva y en APP_IDENTIFICACIONES (LineasIdentificaciones). Opcional. orden 0 = el principal, cuyo tipo es
+   * IDENTIFICACION; los demás eligen el suyo en el mismo apartado.
+   */
+  const archivoIdentificacion_ = (orden, mostrar) => campo_('_IDENTIFICACION_' + orden, 'Identificación', 'identificacion',
+    { valor: '', orden: orden, conTipo: orden > 0, opciones: orden > 0 ? IDENTIFICACIONES : undefined, mostrar: mostrar || 'SIEMPRE', virtual: true });
+  function conIdentificacionAdicional_(elementos) {
+    return elementos.reduce((a, e) => {
+      a.push(e);
+      const m = e.tipo === 'campo' && String(e.columna).match(/^NOMBRE (SEGUNDO|TERCER|CUARTO|QUINTO) RESPONSABLE$/);
+      if (m) a.push(archivoIdentificacion_(ORDEN_ADICIONALES.indexOf(m[1]) + 1, e.mostrar));
+      return a;
+    }, []);
+  }
+
   /** Columnas de la línea en la responsiva: con Vincular / Cambiar línea salen de la línea que se pone. */
   const COLUMNAS_DE_LINEA = ['NUMERO TELEFONO', 'NUMERO SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'PIN WHATSAPP'];
 
@@ -289,6 +306,7 @@ const LineasCaptura = (function () {
       ed('No EMPLEADO', 'No. de empleado', 'listaAbierta', persona('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH), llenarVacios: true }),
       ed('RESPONSABLE', 'Nombre', 'listaAbierta', persona('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true }),
       campo_('IDENTIFICACION', 'Identificación', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES }),
+      archivoIdentificacion_(0),
       // Listas abiertas: un valor viejo fuera de la lista no debe impedir firmar la responsiva
       ed('PUESTO', 'Puesto', 'listaAbierta', persona('PUESTO'), { opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }),
       ed('DEPARTAMENTO', 'Departamento', 'listaAbierta', persona('DEPARTAMENTO'), { opciones: catalogos.departamentos || [] }),
@@ -298,8 +316,9 @@ const LineasCaptura = (function () {
       ed('DIRECTOR', 'Director', 'listaAbierta', persona('DIRECTOR'), { opciones: catalogos.directores || [] }),
       ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
     ].concat(
-      // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; al reasignar empiezan vacíos
-      LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), persona), [
+      // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; al reasignar empiezan vacíos. Cada uno con su
+      // identificación debajo de su nombre (usuario, 9-oct)
+      conIdentificacionAdicional_(LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), persona)), [
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
       ed('ACCESORIOS', 'Accesorios entregados', 'multi', accesorios.join(' , '), {
         opciones: LineasRepo.CATALOGO.accesorios.concat(accesorios.filter((x) => LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
@@ -393,7 +412,8 @@ const LineasCaptura = (function () {
    * Los secretos que no se mostraron (sin permiso) conservan el valor de la línea.
    */
   function validarFormulario_(elementos, enviados, valoresOcultos) {
-    const campos = elementos.filter((e) => e.tipo === 'campo');
+    // La identificación (archivo) no es un valor del formulario: llega aparte (datos.identificaciones)
+    const campos = elementos.filter((e) => e.tipo === 'campo' && e.control !== 'identificacion');
     const valores = {};
     campos.forEach((e) => { valores[e.columna] = e.valor === undefined || e.valor === null ? '' : String(e.valor); });
     campos.forEach((e) => {
@@ -456,6 +476,7 @@ const LineasCaptura = (function () {
       const valores = r.valores;
       // PATRON: puntos trazados en el sistema ("1-2-3") o el valor que ya tenía la línea
       if (datos.patron !== undefined && datos.patron !== null) valores['PATRON'] = String(datos.patron);
+      if (LineasUtil.bloqueoSinPatron(datos)) valores['PATRON'] = '';
       limpiarAdicionales_(valores);
       const fechaRegistro = valores['FECHA DE REGISTRO'] ? new Date(valores['FECHA DE REGISTRO']) : ahora;
       const calificacion = LineasChecklist.calificacion(valores);
@@ -521,8 +542,29 @@ const LineasCaptura = (function () {
     if (datos.usarFirmaGuardada) datos.firmaCiBase64 = firmaPropia_(usuario);
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
+    // Identificación de cada responsable (usuario, 9-oct): se escribe antes, en la carpeta de la responsiva; si la
+    // responsiva no se guarda, se manda a la papelera
+    const enviados = datos.valores || {};
+    const identificaciones = LineasIdentificaciones.revisar(datos.identificaciones, enviados);
+    const escritos = identificaciones.length ? LineasIdentificaciones.escribir(identificaciones, LineasUtil.col(objetivoCaptura_(ref).fila, 'NUCO'),
+      LineasIdentificaciones.fechaDe(enviados['FECHA RESPONSIVA']), PDF.RESPONSIVA.carpeta) : null;
 
-    const res = LineasDatos.conCandado(() => {
+    let res;
+    try {
+      res = guardarResponsivaEnCandado_(datos, usuario, puedeVerSecretos, accion, ref, id, escritos);
+    } catch (e) {
+      LineasIdentificaciones.descartar(escritos);
+      throw e;
+    }
+
+    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null });
+    const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
+    return { id: id, pdfPendiente: true, filas: filas, hecho: res.hecho, registroId: res.obj.reg.id,
+      identificaciones: escritos ? escritos.archivos.length : 0 };
+  }
+
+  function guardarResponsivaEnCandado_(datos, usuario, puedeVerSecretos, accion, ref, id, escritos) {
+    return LineasDatos.conCandado(() => {
       const ahora = new Date();
       let obj = objetivoCaptura_(ref);
       const elementos = formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, accion ? accion.modo : '', accion ? accion.lineaFila || null : null)
@@ -533,6 +575,7 @@ const LineasCaptura = (function () {
       if (r.errores.length) throw new Error(r.errores.join(' · '));
       const valores = r.valores;
       if (datos.patron !== undefined && datos.patron !== null) valores['CONTRASEÑA'] = String(datos.patron);
+      if (LineasUtil.bloqueoSinPatron(datos)) valores['CONTRASEÑA'] = '';
       // Una sola fecha (como la inspección); el PDF sigue usando DIA, MES y AÑO
       const fechaDoc = valores['FECHA RESPONSIVA'] ? new Date(valores['FECHA RESPONSIVA']) : ahora;
       const fechaResp = isNaN(fechaDoc) ? ahora : fechaDoc;
@@ -563,14 +606,18 @@ const LineasCaptura = (function () {
         copia['PATRON'] = String(datos.patron);
         if (String(valores['PIN EQUIPO'] || '').trim().toUpperCase() === 'PATRON') copia['PIN EQUIPO'] = 'PATRON';
       }
+      // Con PIN, contraseña o sin bloqueo, el patrón del equipo se borra y su PIN EQUIPO queda el de la responsiva
+      if (LineasUtil.bloqueoSinPatron(datos)) { copia['PATRON'] = ''; copia['PIN EQUIPO'] = valores['PIN EQUIPO'] || ''; }
       const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;
 
+      // Con identificación, la carpeta de la responsiva ya existe (la suya): su PDF se guarda ahí (destinoPdf_)
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
       LineasDatos.agregarFilas(LineasRepo.TAB.APP_EVID, [{
         'TIPO': 'RESPONSIVA', 'ORIGEN': 'SISTEMA', 'ID_REGISTRO': id, 'ID_LINEA': obj.reg.id, 'NUCO': obj.reg.nuco || '',
-        'FECHA': ahora, 'CARPETA_ID': '', 'RUTA': '', 'FOTOS': '0',
+        'FECHA': ahora, 'CARPETA_ID': escritos ? escritos.carpetaId : '', 'RUTA': escritos ? escritos.ruta : '', 'FOTOS': '0',
         'PDFS_JSON': '[]', 'COINCIDENCIA_EXACTA': 'TRUE', 'ACTUALIZADO_EN': ahora,
       }]);
+      LineasIdentificaciones.registrar(escritos, id, obj.reg, usuario, ahora);
       LineasRepo.registrarMovimiento('RESPONSIVA', { motivo: valores['COMENTARIO'] || '', ticket: valores['TICKET'] || '' }, usuario, ahora, {
         refs: [obj.reg.id].concat(g ? g.refs || [] : []), nuco: obj.reg.nuco, numero: valores['No TELEFONO'] || null,
         antes: {}, despues: { responsable: { nombre: valores['RESPONSABLE'] || null } },
@@ -578,10 +625,6 @@ const LineasCaptura = (function () {
       });
       return { obj: obj, hecho: hecho };
     });
-
-    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null });
-    const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
-    return { id: id, pdfPendiente: true, filas: filas, hecho: res.hecho, registroId: res.obj.reg.id };
   }
 
   /**
@@ -722,8 +765,10 @@ const LineasCaptura = (function () {
     const archivo = (c) => LineasArchivos.blob(col(c));
     const imagen = (clave, c, nombre) => (firmas && firmas[clave] ? blobBase64_(firmas[clave], nombre) : archivo(c));
     const colPatron = esInspeccion ? 'PATRON' : 'CONTRASEÑA';
+    // Con un PIN o una contraseña en PIN EQUIPO, el patrón que quedó de antes no va en el PDF (usuario, 9-oct)
+    const rutaPatron = LineasUtil.patronVigente(col('PIN EQUIPO'), col(colPatron));
     const patron = firmas && firmas.patron ? blobBase64_(firmas.patron, 'patron.png')
-      : LineasPatronPng.blob(col(colPatron), esInspeccion ? '#ddebf7' : '#ffffff') || archivo(colPatron);
+      : (rutaPatron ? LineasPatronPng.blob(rutaPatron, esInspeccion ? '#ddebf7' : '#ffffff') || LineasArchivos.blob(rutaPatron) : null);
     // Con responsables adicionales, la firma del principal va más chica: los demás firman el PDF impreso en la misma línea
     const nombreFirmaResponsable = ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firma-principal.png' : 'firma-responsable.png';
     const destino = PDF[tipo];

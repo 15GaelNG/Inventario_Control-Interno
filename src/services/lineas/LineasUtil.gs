@@ -150,9 +150,25 @@ const LineasUtil = (function () {
    * inspección y la responsiva; la pantalla hace lo mismo (errorPinBloqueo en lineas.html).
    */
   function exigirPinEquipo(datos) {
+    // Obligatorio cuando el formulario tiene la lista y se ve (usuario, 9-oct); sin ella no llega (null)
+    if (datos && datos.bloqueo === '') throw new Error('TIPO DE BLOQUEO DEL EQUIPO es obligatorio');
     const pin = String(((datos && datos.valores) || {})['PIN EQUIPO'] || '').trim();
     if (String((datos && datos.bloqueo) || '').trim().toUpperCase() === 'PIN' && pin && !/^\d+$/.test(pin)) throw new Error('PIN DEL EQUIPO: SOLO NUMEROS');
   }
 
-  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo };
+  /**
+   * El equipo tiene un solo bloqueo (usuario, 9-oct: el NUCO 0896 mostraba su PIN y el patrón que dejó una inspección del
+   * AppSheet). Al guardar con «PIN», «CONTRASEÑA» o «SIN BLOQUEO» el patrón se borra (Editar, la inspección y la responsiva).
+   */
+  function bloqueoSinPatron(datos) {
+    return /^(PIN|CONTRASEÑA|SIN BLOQUEO)$/.test(String((datos && datos.bloqueo) || '').trim().toUpperCase());
+  }
+
+  /** El patrón solo vale si PIN EQUIPO dice PATRON o está vacío; con un PIN o una contraseña es uno viejo y no se muestra. */
+  function patronVigente(pinEquipo, patron) {
+    const pin = txt(pinEquipo);
+    return !pin || /^PATR[OÓ]N$/i.test(String(pin)) ? (txt(patron) || '') : '';
+  }
+
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo, bloqueoSinPatron, patronVigente };
 })();

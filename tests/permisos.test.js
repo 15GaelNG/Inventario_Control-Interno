@@ -145,6 +145,13 @@ const EDITA = {   // si no está aquí, la tabla la editaba todo el que la veía
   'gestion-activos': () => false,   // solo se ve: lo que se edita ahí lo decide lineas-telefonicas
 };
 ['panorama-lineas', 'resguardos-lineas', 'correcciones-lineas'].forEach((m) => { EDITA[m] = EDITA['lineas-telefonicas']; });
+// Se aparta del AppSheet (usuario, 12-oct): Resguardos y cancelaciones solo lo edita Pau; el área de Líneas lo ve y
+// manda a resguardo o a cancelación con el permiso de Líneas telefónicas
+EDITA['resguardos-lineas'] = (u) => u.CORREO === CM('paulina.bustamante');
+ok(semilla(usuario({ CORREO: CM('paulina.bustamante'), AREA: 'LINEAS' }))['resguardos-lineas'] === 'EDICION' &&
+  semilla(usuario({ CORREO: CM('ejecutivotelefonia.ci'), AREA: 'LINEAS' }))['resguardos-lineas'] === 'LECTURA' &&
+  semilla(usuario({ CORREO: CM('ejecutivotelefonia.ci'), AREA: 'LINEAS' }))['lineas-telefonicas'] === 'EDICION',
+  'Resguardos y cancelaciones: Pau lo edita; el área de Líneas lo ve y sigue editando Líneas telefónicas');
 
 function appsheet(u) {
   const mapa = {};

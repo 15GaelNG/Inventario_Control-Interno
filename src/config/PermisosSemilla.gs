@@ -60,7 +60,10 @@ const PERMISOS_SEMILLA = (function () {
   // Líneas: la tabla LINEAS TELEFONICAS solo la editaba una lista, que del área LINEAS incluye a los 3
   const MODULOS_LINEAS = ['lineas-telefonicas', 'panorama-lineas', 'resguardos-lineas', 'correcciones-lineas'];
   dar(MODULOS_LINEAS, [ANALISIS, COORD_AUDITORIA], 'LECTURA', 'AppSheet: LINEAS TELEFONICAS (ver)');
-  dar(MODULOS_LINEAS, [LINEAS], 'EDICION', 'AppSheet: tabla LINEAS TELEFONICAS (editar)');
+  dar(MODULOS_LINEAS.filter((m) => m !== 'resguardos-lineas'), [LINEAS], 'EDICION', 'AppSheet: tabla LINEAS TELEFONICAS (editar)');
+  // Resguardos y cancelaciones (usuario, 12-oct): el área de Líneas la ve y manda desde Líneas telefónicas; la atiende Pau
+  dar(['resguardos-lineas'], [LINEAS], 'LECTURA', 'Ve la bandeja de resguardos y cancelaciones');
+  dar(['resguardos-lineas'], ['paulina.bustamante@ciudadmaderas.com'], 'EDICION', 'Recibe resguardos y confirma cancelaciones');
   dar(['accesorios-lineas'], [ANALISIS], 'LECTURA', 'AppSheet: INVENTARIO DE ACCESORIOS (ver)');
   dar(['accesorios-lineas'], [LINEAS], 'EDICION', 'AppSheet: tabla ACCESORIOS CELULARES (editar)');
   dar(['cambios-lineas'], [ANALISIS, LINEAS], 'EDICION', 'AppSheet: CONTROL DE CAMBIOS - LINEAS');

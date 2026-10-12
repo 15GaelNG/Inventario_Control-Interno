@@ -172,14 +172,37 @@ test('opciones separadas: el equipo no trae lo de la línea (usuario, 4-oct)', (
   const barra = cliente.slice(cliente.indexOf('function accionesSeleccionDe'), cliente.indexOf('let detallesAbiertos'));
   const equipo = barra.slice(barra.indexOf("if (modulo === 'equipos')"), barra.indexOf('historial];') + 11);
   assert.doesNotMatch(equipo, /abrirCancelacion|Mandar línea a cancelación/);
-  assert.match(equipo, /texto: 'Ir a la línea', maximo: 1, grupo: 'mover', visible: \(f\) => !!f\[0\]\.lineaId, alHacer: \(f\) => abrir\('linea', f\[0\]\.lineaId\)/);
+  assert.match(equipo, /texto: 'Ir a la línea', maximo: 1, grupo: 'ir', visible: \(f\) => !!f\[0\]\.lineaId, alHacer: \(f\) => abrir\('linea', f\[0\]\.lineaId\)/);
   const linea = barra.slice(barra.indexOf('historial];') + 11);
   ["texto: 'Mandar a cancelación'", "texto: 'Ir al equipo'"].forEach((t) => assert.ok(linea.includes(t), t));
   assert.doesNotMatch(linea, /abrirResguardo|abrirReasignar|abrirCaptura/);
   const ficha = cliente.slice(cliente.indexOf('function abrirMenuFicha'), cliente.indexOf('menuFlotante(boton, items.filter(Boolean));'));
   assert.doesNotMatch(ficha, /Mandar línea a cancelación/);
-  assert.match(ficha, /texto: 'Ir a la línea'/);
-  assert.match(ficha, /texto: 'Ir al equipo'/);
+  // En la ficha ya no van Ir a la línea ni Ir al equipo: están en su información (usuario, 12-oct; pendiente 2.34)
+  assert.doesNotMatch(ficha, /texto: 'Ir a la línea'|texto: 'Ir al equipo'/);
+});
+
+test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y ⋮ de la ficha', () => {
+  const cliente = read('src/html/js/lineas.html');
+  const barra = cliente.slice(cliente.indexOf('function accionesSeleccionDe'), cliente.indexOf('let detallesAbiertos'));
+  const equipo = barra.slice(barra.indexOf("if (modulo === 'equipos')"), barra.indexOf('historial];') + 11);
+  const linea = barra.slice(barra.indexOf('historial];') + 11);
+  const enOrden = (txt, lista) => {
+    const pos = lista.map((t) => txt.indexOf(t));
+    pos.forEach((p, i) => assert.ok(p >= 0, lista[i]));
+    assert.deepEqual(pos.slice().sort((a, b) => a - b), pos, lista.join(' · '));
+  };
+  enOrden(equipo, ['[detalles,', "'Reasignar'", "'Mandar a resguardo'", "'Nueva inspección'", "'Nueva responsiva'", '    editar,',
+    "'Editar línea'", "'Vincular línea'", "'Cambiar línea'", "'Desvincular línea'", "'Ir a la línea'", 'historial];']);
+  // Ver la última inspección o responsiva ya no va en el clic derecho del equipo
+  assert.doesNotMatch(equipo, /Ver última/);
+  enOrden(linea, ['[detalles,', "'Mandar a cancelación'", '  editar,', "'Vincular a equipo'", "'Cambiar de equipo'",
+    "'Desvincular del equipo'", "'Ir al equipo'", 'historial];']);
+  const ficha = cliente.slice(cliente.indexOf('function abrirMenuFicha'), cliente.indexOf('menuFlotante(boton, items.filter(Boolean));'));
+  enOrden(ficha, ["texto: 'Reasignar'", "texto: 'Mandar a resguardo'", '.concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)']);
+  assert.match(ficha, /\.concat\(editar, vinculo, historial\);/);
+  // En el ⋮ del equipo ya no está Editar línea
+  assert.doesNotMatch(ficha, /abrirEditor\(r\.lineaId, 'LINEA'\)/);
 });
 
 test('POSIBLE VENTA-DAÑO ya no existe: 8 estatus de equipo y los que lo tenían regresan a POSIBLE VENTA (usuario, 4-oct)', () => {
@@ -234,7 +257,7 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   assert.equal(escritos.find((a) => a[1] && a[1]['ESTATUS EQUIPO'] === 'USO')[1]['JEFE DIRECTO'], 'JEFA DE LA INSPECCION');
 
   const cliente = read('src/html/js/lineas.html');
-  const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  const fn = cliente.slice(cliente.indexOf('async function abrirReasignar(fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   // Orden (usuario, 5-oct): responsiva (se revisa, no se guarda) → inspección (se guarda) → reasignar con las dos
   const iResp = fn.indexOf("capturarEnFlujo('RESPONSIVA'");
   const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");

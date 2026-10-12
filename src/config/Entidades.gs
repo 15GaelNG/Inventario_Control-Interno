@@ -140,6 +140,8 @@ const Entidades = (function () {
     'APP_RESGUARDOS': { prefijo: 'RSG', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // Módulo TEMPORAL "Correcciones de Líneas" (30-sep): se borra cuando Líneas termine (ver LineasCorrecciones.gs)
     'APP_CORRECCIONES': { prefijo: 'COR', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Identificación de cada responsable en la responsiva (Líneas, 9-oct): la crea LineasIdentificaciones al guardar la primera
+    'APP_IDENTIFICACIONES': { prefijo: 'IDN', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // Reestructura de Líneas (plan de la reestructura, partes 4 y 5): cada hoja guarda una sola cosa
     'LINEAS': { prefijo: 'LIN', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     'EQUIPOS': { prefijo: 'EQU', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },

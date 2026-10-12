@@ -132,7 +132,7 @@ test('servidor: el archivo del AppSheet se busca en la carpeta de la app, en la 
 
 test('servidor: la responsiva pasa al equipo el patrón trazado', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs').replace(/\r/g, '');
-  const resp = captura.slice(captura.indexOf('  function guardarResponsiva('), captura.indexOf('    firmasCache_(\'RESPONSIVA\''));
+  const resp = captura.slice(captura.indexOf('  function guardarResponsiva('), captura.indexOf('  function exigirInspeccion('));
   assert.match(resp, /if \(datos\.patron !== undefined && datos\.patron !== null\) \{\n\s+copia\['PATRON'\] = String\(datos\.patron\);/);
   assert.match(resp, /LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia, usuario, ahora, \{ tolerante: true \}\)/);
   assert.match(read('src/config/Entornos.gs'), /LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn'/);

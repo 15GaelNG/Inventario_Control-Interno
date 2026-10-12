@@ -44,13 +44,13 @@ const LineasRepo = (function () {
     'BANDA ANCHA': 'BANDA_ANCHA',
     'CAMARA': 'CAMARA',
   };
-  const TIPOS_CON_LINEA = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'MODEM', 'BANDA ANCHA', 'CAMARA'];
+  const TIPOS_CON_LINEA = ['EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'MODEM', 'BANDA ANCHA', 'CAMARA'];
   /** Tipos cuyo nombre no cambia al quitar/poner la línea: tienen línea solo si hay número o SIM. */
   const TIPOS_LINEA_OPCIONAL = ['MODEM', 'BANDA ANCHA', 'CAMARA'];
 
   /** Catálogos del AppSheet (enums de LINEAS TELEFONICAS). */
   const CATALOGO = {
-    tipos: ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'LINEA BASICA', 'BANDA ANCHA', 'MODEM', 'CAMARA'],
+    tipos: ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'BANDA ANCHA', 'MODEM', 'CAMARA'],
     // Estatus acordados con Líneas el 30-sep (ya no son los del AppSheet). Los equipos no se cancelan: solo las líneas.
     // Sin acentos, como pide el AppSheet ("MAYÚSCULAS Y SIN ACENTOS"). Los valores viejos que sigan en la hoja se
     // muestran "(no está en la lista)" y Líneas los corrige; la conversión propuesta está en
@@ -93,7 +93,7 @@ const LineasRepo = (function () {
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v6'; // v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v7'; // v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -170,7 +170,9 @@ const LineasRepo = (function () {
       _id: id, nuco: nuco, tipo: TIPOS_CON_EQUIPO[tipo], modelo: txt(col(f, 'EQUIPO')), imei: digitos(col(f, 'IMEI')),
       simResidual: tipo === 'EQUIPO' ? sim : null,
       accesorios: (txt(col(f, 'ACCESORIOS')) || '').split(',').map((s) => s.trim()).filter(Boolean),
-      pinEquipo: texto('PIN EQUIPO'), patronRuta: texto('PATRON'), cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
+      // Con un PIN o una contraseña, el patrón que quedó de antes no se muestra (usuario, 9-oct)
+      pinEquipo: texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
+      cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
       color: texto('COLOR'),
       estatus: txt(col(f, 'ESTATUS EQUIPO')), lineaId: tieneLinea ? id : null, responsable: datosResponsable,
       carpetaDriveId: nuco && carpetas ? (carpetas[nuco] || null) : null, legado: legado,
@@ -419,9 +421,12 @@ const LineasRepo = (function () {
    * 29-sep, desde la corrida del 30-sep). Las pestañas que citan al registro (inspecciones, responsivas, bitácoras,
    * APP_*) pueden seguir con cualquiera de ellos hasta que se reescriban.
    */
+  // Una vez por ejecución (usuario, 9-oct: Asignaciones la pedía por cada renglón y cada vez leía y desarmaba la caché)
+  let equivalencias_ = null;
   function equivalenciasIds_() {
+    if (equivalencias_) return equivalencias_;
     const enCache = LineasDatos.cacheLeer(CLAVE_IDS);
-    if (enCache && enCache.viejo) return enCache;
+    if (enCache && enCache.viejo) return (equivalencias_ = enCache);
     const m = { viejo: {}, nuevo: {} };
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const ids = LineasDatos.idsDeFila(f);
@@ -430,7 +435,7 @@ const LineasRepo = (function () {
       m.nuevo[ids[0].toLowerCase()] = ids.slice(1);
     });
     LineasDatos.cacheGuardar(CLAVE_IDS, m, 6 * 3600); // los registros nuevos no traen ID viejo: no hay que invalidarla
-    return m;
+    return (equivalencias_ = m);
   }
 
   /** ID vigente de un registro citado con su ID actual o con uno anterior. */
@@ -743,7 +748,7 @@ const LineasRepo = (function () {
       },
       checklist: checklist, otraApp: txt(col(f, 'OTRA')), calificacion: LineasUtil.numero(col(f, 'CALIFICACION')),
       tipoContrasena: txt(col(f, 'PIN EQUIPO')) === 'PATRON' ? 'PATRON' : (txt(col(f, 'PIN EQUIPO')) ? 'PIN' : null),
-      pinEquipo: txt(col(f, 'PIN EQUIPO')), patronRuta: txt(col(f, 'PATRON')),
+      pinEquipo: txt(col(f, 'PIN EQUIPO')), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
       observaciones: txt(col(f, 'COMENTARIO')), ticket: ticket === null ? null : String(ticket), inspector: txt(col(f, 'NOMBRE INSPECTOR')),
       firmas: { responsableRuta: txt(col(f, 'FIRMA RESPONSABLE')), inspectorRuta: txt(col(f, 'FIRMA INSPECTOR')) },
       pdfRuta: txt(col(f, 'FORMATO INSPECCIONES LINEAS')),
@@ -947,7 +952,9 @@ const LineasRepo = (function () {
    * acción: no se copian (§5.5).
    */
   function historialDeRegistro(id, puedeVerSecretos) {
+    const t0 = Date.now();
     const ids = idsDeRegistro(id);
+    LineasDatos.tiempo('historial: ids (' + ids.length + ')', t0);
     id = ids[0] || id;
     const hayMov = LineasDatos.existeTabla(TAB.APP_MOV);
     const hayNuevo = LineasDatos.existeTabla(TAB.MOV);
@@ -968,6 +975,7 @@ const LineasRepo = (function () {
     // Una fila está oculta si el sistema nuevo la registró con cualquiera de sus IDs (el de hoy o el de antes)
     const oculta = (mapa, f, ...columnas) => columnas.concat(['ID'], LineasDatos.COLS_ID_ANTERIOR).some((c) => mapa[txt(f[c])]);
     const leidas = peticiones.length ? LineasDatos.leerFilas(peticiones) : [];
+    LineasDatos.tiempo('historial: lecturas', t0);
     const r = {};
     peticiones.forEach((p, i) => { r[p.tabla] = leidas[i]; });
     // Renglones migrados de las pestañas retiradas: se leen como si vinieran de su pestaña (sin repetir)
@@ -1154,6 +1162,7 @@ const LineasRepo = (function () {
     });
 
     // 7) Responsable y estatus de ese momento: los de hoy, deshaciendo los cambios de cada acción de la más nueva a la más vieja
+    LineasDatos.tiempo('historial: eventos', t0);
     eventos.sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
     let registro = null;
     try { registro = leerRegistroPorId(id); } catch (e) { registro = null; }
@@ -1191,8 +1200,10 @@ const LineasRepo = (function () {
    * vista 'equipo' → números que ha tenido el NUCO del registro; 'linea' → NUCOs en los que ha estado su número.
    */
   function asignacionesDeRegistro(id, vista) {
+    const t0 = Date.now();
     const porNuco = vista !== 'linea';
     const actual = leerRegistroObligatorio(id, 'el registro');
+    LineasDatos.tiempo('asignaciones: registro', t0);
     const clave = porNuco ? nucoDe_(col(actual, 'NUCO')) : digitos(col(actual, 'NUMERO TELEFONO'));
     const salida = { vista: porNuco ? 'equipo' : 'linea', clave: clave, periodos: [], incompleto: false };
     if (!clave || !/\d/.test(clave)) return salida; // un NUCO sin número ("N/A"…) no identifica a un equipo
@@ -1201,13 +1212,13 @@ const LineasRepo = (function () {
     const variantes = porNuco && /^\d+$/.test(clave) ? [clave, String(Number(clave))].filter((v, i, a) => a.indexOf(v) === i) : [clave];
     const filasLineas = {};
     const filasCambios = {};
-    variantes.forEach((v) => {
-      LineasDatos.buscarFilas(TAB.LINEAS, porNuco ? 'NUCO' : 'NUMERO TELEFONO', v).forEach((n) => { filasLineas[n] = true; });
-      (porNuco ? ['NUCO', 'ANTES', 'DESPUES'] : ['ANTES', 'DESPUES'])
-        .forEach((c) => LineasDatos.buscarFilas(TAB.CAMBIOS, c, v).forEach((n) => { filasCambios[n] = true; }));
-    });
+    // Las variantes de una columna, en una sola búsqueda (buscarFilasVarios; usuario, 9-oct: rapidez)
+    LineasDatos.buscarFilasVarios(TAB.LINEAS, porNuco ? 'NUCO' : 'NUMERO TELEFONO', variantes).forEach((n) => { filasLineas[n] = true; });
+    (porNuco ? ['NUCO', 'ANTES', 'DESPUES'] : ['ANTES', 'DESPUES'])
+      .forEach((c) => LineasDatos.buscarFilasVarios(TAB.CAMBIOS, c, variantes).forEach((n) => { filasCambios[n] = true; }));
     const numeros = (o) => Object.keys(o).map(Number);
     const primera = LineasDatos.leerFilas([{ tabla: TAB.LINEAS, filas: numeros(filasLineas) }, { tabla: TAB.CAMBIOS, filas: numeros(filasCambios) }]);
+    LineasDatos.tiempo('asignaciones: primera lectura', t0);
     const campoAsignacion = (f) => {
       const c = sinAcentos_(col(f, 'CAMPO'));
       return c === 'NUMERO TELEFONO' ? 'numero' : (c === 'NUCO' ? 'nuco' : null);
@@ -1233,6 +1244,7 @@ const LineasRepo = (function () {
     const hayReact = LineasDatos.existeTabla(TAB.REACTIVACION); // retirada el 30-sep: sus renglones están en APP_MOVIMIENTOS
     const faltantes = listaIds.filter((k) => !filaActual[k]);
     const todosLosIds = [].concat.apply([], listaIds.map(idsDeRegistro));
+    LineasDatos.tiempo('asignaciones: ids (' + listaIds.length + ' → ' + todosLosIds.length + ')', t0);
     const segunda = LineasDatos.leerFilas([
       { tabla: TAB.CAMBIOS, filas: LineasDatos.buscarFilasVarios(TAB.CAMBIOS, 'ID_LINEA', todosLosIds) },
       { tabla: TAB.LINEAS, filas: [].concat.apply([], faltantes.map((k) => LineasDatos.buscarFilasPorId(TAB.LINEAS, k))) },
@@ -1268,6 +1280,7 @@ const LineasRepo = (function () {
       });
     });
 
+    LineasDatos.tiempo('asignaciones: segunda lectura', t0);
     // 3) Línea de tiempo de cada fila, del estado actual hacia atrás
     const periodos = [];
     listaIds.forEach((k) => {
@@ -1426,7 +1439,15 @@ const LineasRepo = (function () {
     const juntar = function () {
       return Array.prototype.concat.apply([], arguments).filter((v, i, a) => a.indexOf(v) === i).sort();
     };
-    const ch = colaboradoresActivos_();
+    // Lo de Capital Humano sale del índice de colaboradores (caché 6 h), no de leer otra vez la base (usuario, 9-oct: la
+    // inspección pedía catálogos y colaboradores y las dos leían las 15 mil filas de CH sin caché)
+    const ix = indiceColaboradores();
+    const ch = ix.filas.map((f) => {
+      const o = {};
+      [['puesto', 'PUESTO'], ['departamento', 'DEPARTAMENTO'], ['area', 'AREA'], ['sede', 'SEDE'], ['oficina', 'OFICINA/DESARROLLO'],
+        ['director', 'DIRECTOR'], ['jefe', 'JEFE DIRECTO']].forEach(([k, c]) => { o[c] = f[ix.columnas.indexOf(k)]; });
+      return o;
+    });
     // Listas de LISTAS TELEFONOS con que el AppSheet valida (Valid_If = IN(..., SORT(SELECT(LISTAS TELEFONOS[...]))))
     const c = Object.assign({}, CATALOGO, {
       sedes: unicos(ch, 'SEDE'),
@@ -1487,6 +1508,7 @@ const LineasRepo = (function () {
     ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4',
       'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
+    equivalencias_ = null;
   }
 
   return {
