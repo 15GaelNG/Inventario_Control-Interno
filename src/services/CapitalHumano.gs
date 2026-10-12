@@ -24,7 +24,8 @@
  * Reglas que no se rompen:
  *   - Un ID dado nunca cambia. Si una carga nueva hace parecer que dos personas con ID son una, se avisa y no se toca.
  *   - Nunca se borra a nadie: quien no venga en el archivo se queda (sigue citado en documentos) y se avisa.
- *   - Lo sensible (TELEFONO, NÚMERO DE CUENTA) no entra a la hoja. La fecha de nacimiento solo sirve para la regla 2.
+ *   - Lo sensible (NÚMERO DE CUENTA) no entra a la hoja. TELEFONO sí (usuario, 12-oct-2026). La fecha de nacimiento
+ *     solo sirve para la regla 2.
  */
 const CapitalHumano = (function () {
   const HOJA_CH = 'COLABORADORES ACTUALIZADO';
@@ -33,8 +34,9 @@ const CapitalHumano = (function () {
   const HOJA_PERSONAS = 'PERSONAS';
   const COLUMNA = 'ID PERSONA';
   const HISTORIAL = 'CAPITAL HUMANO HISTORIAL';
-  // Columnas que la lista de CH trae y que no deben vivir en el libro de la app (decisión de Ayrton, 01/10/2026)
-  const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'TELEFONO', 'TELÉFONO'];
+  // Columnas que la lista de CH trae y que no deben vivir en el libro de la app (decisión de Ayrton, 01/10/2026; el
+  // 12-oct-2026 decidió que el TELEFONO sí se queda)
+  const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA'];
   /** Sin estas, un archivo no es la lista de CH: se rechaza antes de tocar nada */
   const OBLIGATORIAS = ['No EMPLEADO', 'NOMBRE COMPLETO', 'STATUS', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO'];
   /** Un archivo con menos de esta parte de los renglones que ya hay se rechaza (¿se exportó solo una hoja, un filtro?) */

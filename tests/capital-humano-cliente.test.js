@@ -1,6 +1,6 @@
 /**
  * Administración > Capital humano (src/html/js/app-capital-humano.html), la parte del navegador: el Excel de CH se lee
- * aquí y lo sensible (TELEFONO, NÚMERO DE CUENTA) se quita ANTES de mandarlo. Las fechas van como dd/mm/yyyy, igual que
+ * aquí y lo sensible (NÚMERO DE CUENTA; el teléfono sí se sube) se quita ANTES de mandarlo. Las fechas van como dd/mm/yyyy, igual que
  * se ven en la hoja.
  *
  * Correr: node tests/capital-humano-cliente.test.js
@@ -27,10 +27,10 @@ console.log('1. preparar: encabezados, sin lo sensible');
     ['', '', '', '', '', '', '', ''],
     ['CIB00002', 'LUIS SOTO', 'AC00001', '03/04/1985', 'Baja', '', '', 'VENTAS'],
   ]);
-  ok(r.encabezados.join('|') === 'No EMPLEADO|NOMBRE COMPLETO|N. EMPLEADO ANTERIOR|FECHA DE NACIMIENTO|STATUS|DEPARTAMENTO',
+  ok(r.encabezados.join('|') === 'No EMPLEADO|NOMBRE COMPLETO|N. EMPLEADO ANTERIOR|FECHA DE NACIMIENTO|STATUS|TELEFONO|DEPARTAMENTO',
     'encuentra el renglón de encabezados aunque haya un título arriba: ' + r.encabezados.join('|'));
-  ok(r.quitadas.join() === 'TELEFONO,NÚMERO DE CUENTA', 'teléfono y cuenta se quitan');
-  ok(!JSON.stringify(r.filas).includes('5512345678') && !JSON.stringify(r.filas).includes('0123456789'), 'y sus valores no viajan');
+  ok(r.quitadas.join() === 'NÚMERO DE CUENTA', 'la cuenta se quita; el teléfono se queda (usuario, 12-oct)');
+  ok(!JSON.stringify(r.filas).includes('0123456789') && JSON.stringify(r.filas).includes('5512345678'), 'el valor de la cuenta no viaja; el del teléfono sí');
   ok(r.filas.length === 2 && r.filas[0][1] === 'ANA PEREZ', 'sin renglones vacíos y con el texto limpio');
   ok(r.faltan.length === 0, 'trae todas las columnas que pide el servidor');
 }
