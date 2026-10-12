@@ -203,6 +203,14 @@
   };
 
   const respuestas = {
+    // La ofrenda de Día de Muertos (TemporadaService): 23 velas, una propia
+    apiOfrenda: () => ({
+      total: 23, encendida: true, moderar: true, mia: { id: 'v1', memoria: 'Mi abuela Carmen' },
+      memorias: ['Mi abuela Carmen', 'Don Ramiro, mi papá', 'Tía Lupe', 'Rocío M.', 'El Güero de Obra', 'Abuelito Chema', 'Mi hermano Luis', 'Doña Toña']
+        .map((m, i) => ({ id: 'v' + (i + 1), memoria: m, mia: i === 0 })),
+    }),
+    apiOfrendaEncender: () => respuestas.apiOfrenda(),
+    apiOfrendaApagar: () => respuestas.apiOfrenda(),
     ...LISTAS,
     ...FICHAS,
     apiPermisosPanel: PERMISOS_PANEL,
@@ -543,7 +551,44 @@
     modulos.forEach((m) => { delete state.permisos[m]; });
   }
 
+  /** Día de Muertos (html/temporada.html) encendido, visto por un ADMIN (sale el botón de la flor) */
+  function temporada() {
+    document.body.dataset.temporada = 'muertos';
+    state.sesion.rol = 'ADMIN';
+    Temporada.aplicar();
+  }
+
   const ESCENAS = {
+    'muertos-inicio': async () => { temporada(); await abrir('dashboard'); await hasta('.dm-banner'); await esperar(400); },
+    'muertos-login': async () => { temporada(); state.token = null; render(); await hasta('.dm-login'); await esperar(900); },
+    'muertos-carga': async () => {
+      temporada();
+      montarVista('tpl-loading', null, document.getElementById('loading-screen-container'));
+      await hasta('.dm-velas-carga');
+      document.querySelectorAll('.loading-icon').forEach((el, i) => { if (i < 2) el.classList.add('active'); });
+      document.getElementById('loading-bar-fill').style.width = '55%';
+      document.getElementById('loading-message').textContent = 'Poniendo el cempasúchil…';
+      await esperar(700);
+    },
+    'muertos-ofrenda': async () => { temporada(); await abrir('dashboard'); (await hasta('.dm-banner-ofrenda')).click(); await hasta('.dm-memoria'); await esperar(900); },
+    // El menú abierto (en escritorio se abre al pasar el cursor; en celular, con el botón: capturar con --ancho=390)
+    'muertos-menu': async () => {
+      temporada(); await abrir('vehiculos');
+      const menu = document.getElementById('sidebar');
+      const grupo = document.querySelector('.nav-subitem.active');
+      if (grupo) grupo.closest('.nav-group').classList.add('expanded');
+      if (Pantalla.esAngosta()) (await hasta('.shell-menu-btn')).click();
+      else menu.classList.remove('collapsed');
+      await esperar(500);
+      const opcion = menu.querySelector('.nav-subitem.active') || menu.querySelector('.nav-item.active');
+      if (opcion) opcion.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await esperar(500);
+    },
+    'muertos-vacio': async () => {
+      temporada(); await abrir('vehiculos');
+      const buscar = await hasta('.dt-buscar'); buscar.value = 'nada-que-coincida'; evento(buscar, 'input');
+      await hasta('.dt-vacio'); await esperar(500);
+    },
     'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.dc-tarjeta'); await esperar(300); },
     'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await hasta('.rel-s-tabla'); await esperar(300); },
     'relaciones-revisar': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-tarjeta [data-dc-accion="revisar"]')).click(); (await hasta('.dc-vista')).scrollIntoView({ block: 'center' }); await esperar(300); },

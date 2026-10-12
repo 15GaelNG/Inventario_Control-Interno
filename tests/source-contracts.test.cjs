@@ -387,7 +387,8 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
   // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso);
   // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs'];
+  // y TemporadaService la ofrenda de Día de Muertos (no es un módulo: cualquiera con sesión enciende su vela)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'TemporadaService.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
@@ -2283,7 +2284,7 @@ test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga tam
   const sinRevisar = llamadas
     .filter((m) => !m[2].includes("Config.exigirEncendido('helpdesk')")).map((m) => m[1]);
   assert.deepEqual(sinRevisar, [], 'llamadas de Help Desk sin Config.exigirEncendido');
-  assert.ok(read('src/html/Index.html').includes('<body data-apagados="<?= apagados ?>">'), 'Index.html pasa la lista al menú');
+  assert.match(read('src/html/Index.html'), /<body data-apagados="<\?= apagados \?>"[ >]/, 'Index.html pasa la lista al menú');
   assert.ok(read('src/Router.gs').includes('template.apagados = JSON.stringify(Config.apagados())'), 'Router llena la lista');
 });
 
