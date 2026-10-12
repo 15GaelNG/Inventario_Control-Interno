@@ -1,6 +1,6 @@
 """DRY RUN (solo lectura) de las inspecciones de la APP (hoja INSPECCION VEHICULAR, PDF en REPORTES): cada inspección de la hoja → qué se haría para que su PDF quede en el expediente de su NUCO.
 
-  - Si el área ya copió ese PDF (mismo md5) a 4.- INSPECCIONES de su NUCO: solo se cambiaría la liga de la hoja.
+  - Si el área ya copió ese PDF (mismo md5) a 4.-INSPECCIONES de su NUCO: solo se cambiaría la liga de la hoja.
   - Si solo está en REPORTES: se movería a <NUCO>/<carpeta de inspecciones>/<año>/<N> TRIMESTRE/ddmmaaaa-<VEHICULO> <PLACA>.pdf
     y la hoja guardaría su liga (mover conserva el ID).
 No escribe nada en Drive ni en la hoja. Sale un Excel para revisar y un JSON con el plan.
@@ -137,7 +137,7 @@ for f in filas:
         ruta.append(ci[0]["name"])
         aa = anios.get(ci[0]["id"], [])
     else:
-        ruta.append("4.- INSPECCIONES"); crear.append("4.- INSPECCIONES"); aa = []
+        ruta.append("4.-INSPECCIONES"); crear.append("4.-INSPECCIONES"); aa = []
     if str(anio) != "2026":
         x["accion"] = "REVISAR"; x["aviso"] = "año %d (solo se miró 2026)" % anio; continue
     if len(aa) > 1:

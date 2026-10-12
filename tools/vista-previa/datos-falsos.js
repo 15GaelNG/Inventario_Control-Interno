@@ -261,10 +261,46 @@
         completo: VEHICULO,
         cambios: parte('cambios-vehiculos', FICHAS.apiListarCambiosVehiculosPorFolio),
         reasignaciones: parte('reasignaciones-vehiculares', FICHAS.apiListarReasignacionesVehicularesPorFolio),
-        verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', '[]'),
+        verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', [{ ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PUNTAJE: 96.3, INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' }]),
         sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
         incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
         responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
+      });
+    },
+    // Inspecciones del expediente del NUCO (ExpedienteNuco.inspecciones): carpetas con sus secciones y fotos
+    apiInspeccionesExpediente: () => {
+      const colores = ['#9bb7c4', '#c9b48f', '#8fa88f', '#b49bb7', '#c4a29b', '#9ba4c4'];
+      const mini = (n) => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http:' + '//www.w3.org/2000/svg" width="220" height="220"><rect width="220" height="220" fill="' + colores[n % colores.length] + '"/><text x="110" y="120" font-size="28" text-anchor="middle" fill="#fff">' + n + '</text></svg>');
+      let k = 0;
+      const sec = (nombre, n) => ({ nombre, fotos: Array.from({ length: n }, () => ({ id: 'ph' + (++k), nombre: 'IMG_' + (1000 + k) + '.jpg', mime: 'image/jpeg', miniatura: mini(k), enlace: 'https:\/\/drive.google.com/file/d/x' })) });
+      const insp = (id, anio, nombre, fecha, secciones) => ({ id, anio, nombre, fecha, url: 'https:\/\/drive.google.com/drive/folders/x',
+        pdfs: fecha ? [{ id: 'p' + id, nombre: 'INSPECCION-0024 ' + fecha + '.pdf', url: 'https:\/\/drive.google.com/file/d/x' }] : [],
+        secciones, fotos: secciones.reduce((n, x) => n + x.fotos.length, 0) });
+      const ocho = () => [sec('CRISTALERIA', 4), sec('DOCUMENTACION', 2), sec('INTERIORES', 5), sec('LATONERIA Y PINTURA', 6), sec('NEUMATICOS', 4), sec('OTROS ELEMENTOS', 1), sec('SISTEMA ELECTRICO', 2), sec('SISTEMA MECANICO', 3)];
+      const d1 = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+      return JSON.stringify([
+        insp('i1', d1.slice(0, 4), '4TO TRIMESTRE', d1, ocho()),
+        insp('i2', '2025', 'POR BAJA 2025-06-23', '2025-06-23', [sec('LATONERIA Y PINTURA', 5), sec('NEUMATICOS', 2)]),
+        insp('i3', '2025', '3ER BIMESTRE', '2025-05-20', ocho()),
+        insp('i4', '2023', 'SIN PERIODO - 1ER INSPECCION 2023', '', [sec('SIN SECCIÓN', 7)]),
+      ]);
+    },
+    // Documentos: lo que hay en la carpeta del NUCO (ExpedienteNuco.listar), con las fechas de ejemplo
+    apiDocumentosVehiculo: () => {
+      const ar = (nombre, dias, mime) => ({ id: 'f' + nombre.length + dias, nombre, url: 'https:\/\/drive.google.com/file/d/x', mime: mime || 'application/pdf', fecha: hace(dias) });
+      const g = (grupo, archivos) => ({ grupo, raiz: grupo.split(' / ')[0], archivos });
+      const doc = (clave, titulo, vigentes, anteriores) => ({ clave, titulo, url: 'https:\/\/drive.google.com/drive/folders/x', vigentes, anteriores: anteriores || [] });
+      return JSON.stringify({
+        existe: true, nuco: '100', url: 'https:\/\/drive.google.com/drive/folders/x',
+        carpetas: ['1.-DOCUMENTACIÓN', '2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES'].map((nombre) => ({ nombre, url: 'https:\/\/drive.google.com/drive/folders/x' })),
+        documentos: [
+          doc('FACTURA', 'Factura', [ar('FACTURA-0100.pdf', 900), ar('FACTURA-0100.xml', 900, 'text/xml')]),
+          doc('SEGURO', 'Póliza de seguro', [ar('SEGURO-0100.pdf', 20)], [g('SEGUROS ANTERIORES', [ar('SEGURO-0100 2025-03-01.pdf', 385), ar('SEGURO-0100 2024-03-01.pdf', 750)])]),
+          doc('ALTA', 'Alta de placas', [ar('ALTA DE PLACAS-0100.pdf', 880)]),
+          doc('TARJETA', 'Tarjeta de circulación', [ar('TARJETA DE CIRCULACION-0100.jpg', 870, 'image/jpeg')]),
+          doc('TENENCIA', 'Tenencia', [], [g('TENENCIAS ANTERIORES', [ar('TENENCIA-0100 2025.pdf', 280), ar('TENENCIA-0100 2024.pdf', 640)])]),
+        ],
+        otros: [g('ANTERIORES / OXXO GAS', [ar('TARJETA OXXO GAS.jpg', 700, 'image/jpeg')])],
       });
     },
     apiListarInspecciones: [
@@ -375,7 +411,15 @@
         if (nombre === 'withFailureHandler') return (f) => { falla = f; return api; };
         return (...args) => {
           // Una respuesta puede ser una función: la arma con los argumentos y los permisos de la escena
-          const r = typeof respuestas[nombre] === 'function' ? respuestas[nombre](...args) : respuestas[nombre];
+          const responder = (n, a) => (typeof respuestas[n] === 'function' ? respuestas[n](...a) : respuestas[n]);
+          // Las listas llegan envueltas con su huella (apiListaConHuella en ClientApi.gs; el vigía de api.html)
+          if (nombre === 'apiListaConHuella') {
+            const v = responder(args[1], [args[0]].concat(args[2] || []));
+            setTimeout(() => exito({ v: v === undefined ? (/^apiListar/.test(args[1]) ? [] : null) : JSON.parse(JSON.stringify(v)), huella: {} }), 120);
+            return;
+          }
+          if (nombre === 'apiHuellasVigentes') { setTimeout(() => exito({}), 120); return; }
+          const r = responder(nombre, args);
           setTimeout(() => (r === undefined ? exito(/^apiListar/.test(nombre) ? [] : null) : exito(JSON.parse(JSON.stringify(r)))), 120);
         };
       },
@@ -475,6 +519,29 @@
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    'vehiculos-inspecciones': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      await hasta('[data-insp-fotos]'); await esperar(300);
+    },
+    'vehiculos-inspeccion-fotos': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('[data-insp-fotos]')).click();
+      await hasta('.galeria-mini'); await esperar(400);
+    },
+    'vehiculos-inspeccion-visor': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('[data-insp-fotos]')).click();
+      (await hasta('.galeria-mini')).click();
+      await hasta('.galeria-visor'); await esperar(300);
+    },
+    'vehiculos-documentos': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="documentos"]')).click();
+      await hasta('.docs-veh-seccion'); await esperar(300);
+    },
     // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas
     // pestañas no aparecen y la sección de sensor del formulario sale bloqueada
     'vehiculos-ficha-sin-sensores': async () => {

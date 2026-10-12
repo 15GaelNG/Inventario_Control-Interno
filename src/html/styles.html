@@ -863,6 +863,14 @@
     padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
   }
   .info-section-title:first-child { margin-top: 0; }
+  /* Secciones plegables de la ficha (pestaña Datos de Vehículos): <details class="card ln-card ficha-seccion"> */
+  .ficha-seccion > summary { list-style: none; cursor: pointer; }
+  .ficha-seccion > summary::-webkit-details-marker { display: none; }
+  .ficha-seccion > summary h3 { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .ficha-seccion > summary h3::after { content: '›'; margin-left: 8px; color: var(--color-text-muted); transform: rotate(90deg); transition: transform .15s; }
+  .ficha-seccion:not([open]) > summary h3::after { transform: none; }
+  .ficha-seccion[open] > summary { margin-bottom: 12px; }
+  .ficha-ver-documentos { margin-left: auto; font-size: 12px; font-weight: 500; }
   /* En un formulario la línea del título no se pega a las etiquetas del primer renglón (el -2px es para la ficha) */
   .info-section-title:has(+ .field) { margin-bottom: 10px; }
   /* Ficha de datos (dos columnas) en celular: una, para que los valores largos no se corten */

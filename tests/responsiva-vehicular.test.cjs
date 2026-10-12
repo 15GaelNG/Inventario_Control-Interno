@@ -93,7 +93,8 @@ function crearContexto() {
     },
     ExpedienteNuco: {
       carpeta: (nucco, doc, sub) => ({ getId: () => 'NUCO/' + [nucco, doc].concat(sub || []).join('/') }),
-      archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
+      PRESTAMOS: 'PRESTAMOS',
+      archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push(Object.assign({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }, op && op.prestamo ? { prestamo: true } : {})); },
     },
     PdfService: {
       generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
@@ -445,6 +446,13 @@ test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí
 });
 
 // ---------- Préstamo Vehicular (TIPO RESPONSIVA / devolverPrestamo) ----------
+
+test('préstamo: su PDF va a 5.-RESPONSIVA/PRESTAMOS y no desplaza a la responsiva vigente del dueño', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' }, FIRMA_OK);
+  assert.equal(llamadas.pdfEn, 'NUCO/00001/RESPONSIVA/PRESTAMOS');
+  assert.deepEqual(llamadas.expediente, [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: false, prestamo: true }]);
+});
 
 test('préstamo: reasigna el vehículo a quien lo recibe y respalda a quién lo tenía antes', () => {
   const { contexto, llamadas } = crearContexto();
