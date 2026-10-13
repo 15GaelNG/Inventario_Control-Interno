@@ -5445,12 +5445,13 @@
           // foto sin vista previa se abre en Drive como antes
           const enVisor = (f) => !!f.miniatura && !f.video;
           const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f, n) =>
-            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '"' + (enVisor(f) ? ' data-foto="' + n + '"' : '') + '>' +
+            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '" title="' + esc(f.nombre || '') + '"' + (enVisor(f) ? ' data-foto="' + n + '"' : '') + '>' +
             '<span class="ln-foto">' +
             (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
-            // Solo el nombre (usuario, 13-oct: sin la lupa con «Ampliar»); lo que va a Drive lo sigue diciendo
-            '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') +
-            (enVisor(f) ? '' : '<small>' + icono('external-link') + ' Abrir en Drive</small>') + '</span></a>').join('') + '</div>';
+            // Solo la foto, sin el nombre (usuario, 13-oct: como antes; el nombre queda al pasar el cursor y en el visor). Lo
+            // que va a Drive (video o sin vista previa) sí lo dice
+            '</span>' + (enVisor(f) ? '' : '<span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') +
+            '<small>' + icono('external-link') + ' Abrir en Drive</small></span>') + '</a>').join('') + '</div>';
           const deDrive = i.origen === 'DRIVE';
           pila[pila.length - 1].etiqueta = 'Inspección' + (fecha(i.fecha) ? ' ' + fecha(i.fecha) : '');
           detalle.innerHTML = migas() +
