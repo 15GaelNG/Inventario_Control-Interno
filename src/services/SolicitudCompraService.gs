@@ -5,12 +5,16 @@
  * casi el final de la compra, así que aquí se lleva el expediente de la compra DESDE el folio
  * del ticket, antes de que el vehículo nazca.
  *
- * Al crear una solicitud, esta app crea sola una carpeta de Drive (dentro de su propia raíz,
- * nunca en la cuenta de Gestión Vehicular) nombrada "<FOLIO>-<NOMBRE>": repositorio de solo ver
- * y subir documentos (nada de seguimiento de los 15 pasos del proceso, por ahora). El botón "Ya
- * crear vehículo" (app.html) manda el folio y la liga de esa carpeta al alta de Vehículos
- * (VehiculosService.gs, VEHICULOS.alCrear) y, si sale bien, marcarConvertida deja esta
- * solicitud como ABIERTA -> CONVERTIDA con el Nucco resultante.
+ * Al crear una solicitud, esta app crea sola una carpeta de Drive nombrada "<FOLIO>-<NOMBRE>"
+ * dentro de la raíz REAL de Adquisición Vehicular (RAIZ_ADQUISICION_VEHICULAR, la misma carpeta
+ * de la cuenta de Gestión Vehicular que AdquisicionVehicularService.gs solo lee -- decisión del
+ * usuario, 13-oct-2026: que las solicitudes nuevas ya nazcan en la carpeta real, no en una aparte
+ * de esta app). Para que esto funcione, la cuenta que corre la app necesita permiso de EDITOR en
+ * esa carpeta (antes solo hacía falta lectura); si no lo tiene, crear() truena con un mensaje que
+ * lo explica. Repositorio de solo ver y subir documentos (nada de seguimiento de los 15 pasos del
+ * proceso, por ahora). El botón "Ya crear vehículo" (app.html) manda el folio y la liga de esa
+ * carpeta al alta de Vehículos (VehiculosService.gs, VEHICULOS.alCrear) y, si sale bien,
+ * marcarConvertida deja esta solicitud como ABIERTA -> CONVERTIDA con el Nucco resultante.
  *
  * Solo ADMIN/SUPER por ahora (sin fila en PERMISOS_SEMILLA -- entran por código, nadie más ve
  * ni lee este módulo).
@@ -23,7 +27,6 @@
 
 const SolicitudCompraService = (function () {
   const HOJA = 'SOLICITUD COMPRA';
-  const CARPETA_RAIZ = 'SOLICITUDES_COMPRA';
   const ENCABEZADOS = ['ID', 'FOLIO', 'AREA', 'NOMBRE', 'FECHA', 'ESTATUS', 'LIGA_CARPETA', 'CARPETA_ID', 'NUCCO_RESULTANTE'];
 
   function ssId() {
@@ -43,12 +46,25 @@ const SolicitudCompraService = (function () {
     return hoja;
   }
 
-  /** La subcarpeta "<folio>-<nombre>" dentro de la raíz de solicitudes de compra (la crea si no existe). */
+  /** La subcarpeta "<folio>-<nombre>" dentro de la raíz REAL de Adquisición Vehicular (la crea
+   *  si no existe) -- necesita permiso de EDITOR ahí, no solo lectura. */
   function carpetaDeSolicitud_(folio, nombre) {
-    const raiz = DriveUtils.carpetaEnRaiz(CARPETA_RAIZ);
+    let raiz;
+    try {
+      raiz = DriveApp.getFolderById(AdquisicionVehicularService.RAIZ_ADQUISICION_VEHICULAR);
+    } catch (e) {
+      throw new Error('No se pudo abrir la carpeta de Adquisición Vehicular (' + e.message + ').');
+    }
     const nombreCarpeta = String(folio).trim() + '-' + String(nombre).trim();
     const existentes = raiz.getFoldersByName(nombreCarpeta);
-    return existentes.hasNext() ? existentes.next() : raiz.createFolder(nombreCarpeta);
+    if (existentes.hasNext()) return existentes.next();
+    try {
+      return raiz.createFolder(nombreCarpeta);
+    } catch (e) {
+      // "Acceso denegado" casi siempre = la cuenta puede VER la carpeta pero no EDITARLA
+      throw new Error('No se pudo crear la carpeta en Adquisición Vehicular (' + e.message + '). ' +
+        'Verifica que la cuenta que corre la app tenga permiso de EDITOR en esa carpeta de Drive (no solo lectura).');
+    }
   }
 
   function filaAObjeto_(valores) {

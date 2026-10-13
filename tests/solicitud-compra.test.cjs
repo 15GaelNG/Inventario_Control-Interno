@@ -75,7 +75,7 @@ function carpetaRaizMock(subcarpetasIniciales) {
 }
 
 function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasIniciales = {} } = {}) {
-  const llamadas = { carpetaEnRaiz: null, subirArchivo: [], permisoLeer: [], permisoEditar: [], tocarHoja: 0 };
+  const llamadas = { getFolderById: null, subirArchivo: [], permisoLeer: [], permisoEditar: [], tocarHoja: 0 };
   const libroVehiculos = libro || libroMock();
   const raiz = carpetaRaizMock(subcarpetasIniciales);
   const contexto = vm.createContext({
@@ -85,8 +85,9 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasIniciales = 
       puedeEditar: (token, modulo) => { llamadas.permisoEditar.push(modulo); },
     },
     SpreadsheetApp: { openById: (id) => libroVehiculos },
+    DriveApp: { getFolderById: (id) => { llamadas.getFolderById = id; return raiz; } },
+    AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
     DriveUtils: {
-      carpetaEnRaiz: (nombre) => { llamadas.carpetaEnRaiz = nombre; return raiz; },
       archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [],
     },
     Ids: { nuevo: (prefijo) => prefijo + '-TEST-1' },
@@ -116,7 +117,7 @@ test('crear hace la hoja SOLICITUD COMPRA la primera vez, la subcarpeta "<FOLIO>
   const creada = contexto.Servicio.crear('tok', { FOLIO: '30371', AREA: 'CONSTRUCCIÓN', NOMBRE: 'Camioneta para Construcción' });
 
   assert.equal(llamadas.permisoEditar[0], 'solicitud-compra');
-  assert.equal(llamadas.carpetaEnRaiz, 'SOLICITUDES_COMPRA');
+  assert.equal(llamadas.getFolderById, 'RAIZ-ADQ-TEST', 'crea dentro de la raíz REAL de Adquisición Vehicular, no en una propia');
   assert.equal(creada.ESTATUS, 'ABIERTA');
   assert.equal(creada.FOLIO, '30371');
   assert.equal(creada.CARPETA_ID, 'id-30371-Camioneta para Construcción');
@@ -130,7 +131,7 @@ test('crear truena sin folio o sin nombre, sin tocar Drive', () => {
   const { contexto, llamadas } = crearContexto();
   assert.throws(() => contexto.Servicio.crear('tok', { NOMBRE: 'Algo' }), /folio/i);
   assert.throws(() => contexto.Servicio.crear('tok', { FOLIO: '1' }), /nombre/i);
-  assert.equal(llamadas.carpetaEnRaiz, null, 'nunca llegó a pedir la carpeta');
+  assert.equal(llamadas.getFolderById, null, 'nunca llegó a pedir la carpeta');
 });
 
 test('crear reusa la subcarpeta si ya existe una con ese mismo nombre (no crea una segunda)', () => {
@@ -139,6 +140,32 @@ test('crear reusa la subcarpeta si ya existe una con ese mismo nombre (no crea u
   const creada = contexto.Servicio.crear('tok', { FOLIO: '100', NOMBRE: 'Prueba' });
   assert.equal(creada.CARPETA_ID, 'YA-EXISTE');
   assert.equal(Object.keys(raiz._subcarpetas).length, 1, 'sigue habiendo una sola carpeta con ese nombre');
+});
+
+test('crear da un mensaje claro si la cuenta no tiene permiso de EDITOR en la carpeta real', () => {
+  const raizSinPermiso = {
+    getFoldersByName: () => ({ hasNext: () => false }),
+    createFolder: () => { throw new Error('You do not have permission to access the requested resource.'); },
+  };
+  const contexto = vm.createContext({
+    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
+    Permisos: { puedeEditar: () => {} },
+    SpreadsheetApp: { openById: () => libroMock() },
+    DriveApp: { getFolderById: () => raizSinPermiso },
+    AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
+    DriveUtils: { archivosDeCarpeta: () => [] },
+    Ids: { nuevo: () => 'SOC-TEST' },
+    Entidades: { prefijo: () => 'SOC' },
+    CacheHojas: { tocarHoja: () => {} },
+    HojaServicio: { fechaISO: () => '' },
+    console,
+  });
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, '../src/services/SolicitudCompraService.gs'), 'utf8') +
+    '\nthis.Servicio = SolicitudCompraService;',
+    contexto
+  );
+  assert.throws(() => contexto.Servicio.crear('tok', { FOLIO: '1', NOMBRE: 'X' }), /permiso de EDITOR/);
 });
 
 // ---------------------------------------------------------------------------------------- listar / eliminar

@@ -224,5 +224,8 @@ const AdquisicionVehicularService = (function () {
     // ficha solo llama buscar().
     FUENTES, leerFuente_, listarCarpetasAdquisicion_, buscarEnListaCarpetas_, buscarCarpetaPorFolio_,
     indiceHoja_, HOJA_INDICE, ENCABEZADOS_INDICE, normalizarSerie_,
+    // La raíz real de Adquisición Vehicular (de otra cuenta) -- SolicitudCompraService.gs
+    // también crea ahí (con permiso de EDITOR, a diferencia de este servicio que solo lee).
+    RAIZ_ADQUISICION_VEHICULAR,
   };
 })();
