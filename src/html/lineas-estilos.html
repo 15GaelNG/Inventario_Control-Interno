@@ -324,7 +324,9 @@
   .ln-editor-grid .field[hidden] { display: none; }
   .ln-seguridad-editor { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
   .ln-seguridad-editor[hidden] { display: none; }
-  .ln-error-fijo { position: sticky; bottom: 62px; z-index: 6; margin: 14px 0; box-shadow: var(--shadow-lg); }
+  /* El error del pie va en su lugar, arriba de los botones. Flotaba (sticky) sin fondo y se pintaba encima del campo que
+     quedaba atrás, el Comentario de Mandar a resguardo (pendiente 2.39, 13-oct); cada campo ya marca su error */
+  .ln-error-fijo { margin: 14px 0; }
   .ln-otra-app { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--color-border); }
   .ln-patron { position: relative; width: 300px; height: 300px; max-width: 100%; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; }
   .ln-patron svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }

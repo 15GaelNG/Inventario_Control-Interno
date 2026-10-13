@@ -282,3 +282,11 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   assert.match(fn, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id, false, pdfInspeccion/);
   assert.match(cliente, /const pdf = sesion\.flujo\.sinPdf \? null : llamar\('apiLineasGenerarPdf'/);
 });
+
+// Pendiente 2.39 (13-oct): el error del pie de las capturas flotaba sin fondo y se pintaba encima del Comentario de
+// Mandar a resguardo. Va en su lugar, arriba de los botones
+test('el error del pie de las capturas no flota encima de los campos', () => {
+  const estilos = read('src/html/lineas-estilos.html');
+  const regla = (estilos.match(/\.ln-error-fijo \{[^}]*\}/) || [''])[0];
+  assert.equal(regla, '.ln-error-fijo { margin: 14px 0; }');
+});
