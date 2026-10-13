@@ -1,0 +1,21 @@
+<!--
+  Nuestra ofrenda (altar de Día de Muertos): mismo contenido que antes vivía en la ventana
+  modal de Temporada.abrirOfrenda() (src/html/temporada.html), ahora como su propia vista de
+  módulo -- Temporada.initOfrenda() la llena al montarse. Solo existe en el menú durante la
+  temporada (Router.gs apaga la vista 'ofrenda' el resto del año).
+-->
+<template id="tpl-ofrenda">
+  <div class="dm-ofrenda modal-card" style="margin: 0 auto;">
+    <div class="dm-ofrenda-picado" aria-hidden="true"></div>
+    <h3>Nuestra ofrenda</h3>
+    <p class="dm-ofrenda-sub">Enciende una vela por quien recuerdas. Aquí solo se ve el nombre que escribas, nunca quién encendió la vela.</p>
+    <div class="dm-altar" aria-hidden="true"></div>
+    <div class="dm-ofrenda-total" aria-live="polite"></div>
+    <form class="dm-ofrenda-form">
+      <input type="text" maxlength="80" autocomplete="off" placeholder="¿A quién recuerdas? (opcional)" aria-label="A quién recuerdas">
+      <button type="submit" class="dm-ofrenda-encender">Encender mi vela</button>
+    </form>
+    <p class="dm-ofrenda-nota"></p>
+    <div class="dm-ofrenda-lista"></div>
+  </div>
+</template>

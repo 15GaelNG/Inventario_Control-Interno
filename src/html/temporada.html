@@ -1139,7 +1139,7 @@
         '<span class="dm-mini-vela" aria-hidden="true"></span><span>Encender una vela</span><b class="dm-banner-total"></b></button>' +
         '<button type="button" class="dm-banner-cerrar" title="Ocultar esta franja" aria-label="Ocultar esta franja">×</button></div>');
       const banner = seccion.previousElementSibling;
-      banner.querySelector('.dm-banner-ofrenda').addEventListener('click', abrirOfrenda);
+      banner.querySelector('.dm-banner-ofrenda').addEventListener('click', () => navegarA('ofrenda', 'Nuestra ofrenda'));
       banner.querySelector('.dm-banner-cerrar').addEventListener('click', () => {
         try { localStorage.setItem(LLAVE_OCULTO, '1'); } catch (e) { /* sin almacenamiento: solo se quita esta vez */ }
         banner.remove();
@@ -1148,9 +1148,12 @@
     }
 
     // ---------- Nuestra ofrenda ----------
+    // Vista de módulo (tpl-ofrenda, app.html NAV_GRUPOS), no ventana: el contenido vive en la
+    // plantilla (misma fachada que antes, .dm-ofrenda.modal-card); initOfrenda() solo la llena.
 
     let ofrenda = null;          // lo último que contestó el servidor
     let ofrendaPedida = null;    // { promesa, ts }
+    let raizOfrenda = null;      // el .dm-ofrenda de la vista montada ahora, o null si no está
 
     function pedirOfrenda(fresca) {
       if (!fresca && ofrendaPedida && Date.now() - ofrendaPedida.ts < 60000) return ofrendaPedida.promesa;
@@ -1165,42 +1168,21 @@
       document.querySelectorAll('.dm-banner-total').forEach((b) => { b.textContent = total ? '· ' + total : ''; });
     }
 
-    function abrirOfrenda() {
-      let fondo = document.getElementById('dm-ofrenda');
-      if (!fondo) {
-        document.body.insertAdjacentHTML('beforeend',
-          '<div class="modal-backdrop dm-deco" id="dm-ofrenda">' +
-          '<div class="modal-card dm-ofrenda" role="dialog" aria-modal="true" aria-labelledby="dm-ofrenda-titulo">' +
-          `<div class="dm-ofrenda-picado" aria-hidden="true"></div>${estrellas(22)}` +
-          '<button type="button" class="dm-ofrenda-cerrar" aria-label="Cerrar">×</button>' +
-          '<h3 id="dm-ofrenda-titulo">Nuestra ofrenda</h3>' +
-          '<p class="dm-ofrenda-sub">Enciende una vela por quien recuerdas. Aquí solo se ve el nombre que escribas, nunca quién encendió la vela.</p>' +
-          '<div class="dm-altar" aria-hidden="true"></div>' +
-          '<div class="dm-ofrenda-total" aria-live="polite"></div>' +
-          '<form class="dm-ofrenda-form"><input type="text" maxlength="80" autocomplete="off" placeholder="¿A quién recuerdas? (opcional)" aria-label="A quién recuerdas">' +
-          '<button type="submit" class="dm-ofrenda-encender">Encender mi vela</button></form>' +
-          '<p class="dm-ofrenda-nota"></p>' +
-          '<div class="dm-ofrenda-lista"></div></div></div>');
-        fondo = document.getElementById('dm-ofrenda');
-        fondo.addEventListener('click', (ev) => {
-          if (ev.target === fondo || ev.target.closest('.dm-ofrenda-cerrar')) cerrarOfrenda();
-          const quitar = ev.target.closest('[data-dm-quitar]');
-          if (quitar) apagarVela(quitar.dataset.dmQuitar);
-        });
-        fondo.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') cerrarOfrenda(); });
-        fondo.querySelector('form').addEventListener('submit', (ev) => { ev.preventDefault(); encenderVela(); });
-      }
-      fondo.hidden = false;
+    /** init de la vista (montarVista la llama al clonar tpl-ofrenda en #view-container) */
+    function initOfrenda() {
+      const raiz = document.querySelector('#view-container .dm-ofrenda');
+      if (!raiz) return;
+      raizOfrenda = raiz;
+      raiz.insertAdjacentHTML('afterbegin', estrellas(22));
+      raiz.addEventListener('click', (ev) => {
+        const quitar = ev.target.closest('[data-dm-quitar]');
+        if (quitar) apagarVela(quitar.dataset.dmQuitar);
+      });
+      raiz.querySelector('form').addEventListener('submit', (ev) => { ev.preventDefault(); encenderVela(); });
       pintarOfrenda();
       pedirOfrenda(true).then(() => pintarOfrenda()).catch((err) => {
-        fondo.querySelector('.dm-ofrenda-total').textContent = 'No se pudo cargar la ofrenda: ' + ((err && err.message) || err);
+        if (raizOfrenda === raiz) raiz.querySelector('.dm-ofrenda-total').textContent = 'No se pudo cargar la ofrenda: ' + ((err && err.message) || err);
       });
-      setTimeout(() => fondo.querySelector('input').focus(), 50);
-    }
-
-    function cerrarOfrenda() {
-      const fondo = document.getElementById('dm-ofrenda');
-      if (fondo) fondo.hidden = true;
     }
 
     /** Las velas del altar: hasta 36, repartidas en tres escalones (menos arriba) */
@@ -1218,8 +1200,8 @@
     }
 
     function pintarOfrenda(nueva) {
-      const fondo = document.getElementById('dm-ofrenda');
-      if (!fondo || fondo.hidden) return;
+      const fondo = raizOfrenda;
+      if (!fondo || !fondo.isConnected) return;
       const o = ofrenda;
       const total = fondo.querySelector('.dm-ofrenda-total');
       const nota = fondo.querySelector('.dm-ofrenda-nota');
@@ -1242,7 +1224,7 @@
     }
 
     async function encenderVela() {
-      const fondo = document.getElementById('dm-ofrenda');
+      const fondo = raizOfrenda;
       const boton = fondo.querySelector('.dm-ofrenda-encender');
       const eraNueva = !(ofrenda && ofrenda.mia);
       boton.disabled = true;
@@ -1269,7 +1251,7 @@
       try {
         ofrenda = await callServer('apiOfrendaApagar', state.token, id);
         ofrendaPedida = { promesa: Promise.resolve(ofrenda), ts: Date.now() };
-        const input = document.querySelector('#dm-ofrenda input');
+        const input = raizOfrenda && raizOfrenda.querySelector('input');
         if (propia && input) input.value = '';
         pintarOfrenda();
       } catch (err) {
@@ -1367,6 +1349,6 @@
       .observe(document.body, { childList: true, subtree: true });
     programar();
 
-    return { aplicar: decorar, mensajesCarga, abrirOfrenda };
+    return { aplicar: decorar, mensajesCarga, initOfrenda };
   })();
 </script>
