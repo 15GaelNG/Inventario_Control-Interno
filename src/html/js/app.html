@@ -3178,6 +3178,7 @@
       mostrarPestanaFicha(detalle, nombre);
       if (nombre === 'documentos') DocumentosVehiculo.cargar(detalle.querySelector('[data-docs-vehiculo]'));
       if (nombre === 'inspecciones') InspeccionesFicha.cargar(detalle.querySelector('[data-insp-ficha]'));
+      if (nombre === 'adquisicion') cargarArchivosAdquisicionFichaTab(detalle.querySelector('[data-adq-ficha-archivos]'));
     }
 
     // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
@@ -3311,38 +3312,50 @@
       }
     }
 
-    /** Archivos de la carpeta de Adquisición Vehicular ya ligada a este vehículo -- mismo
-     *  apiAdquisicionVehicularArchivos y mismo formato de Galeria que el apartado "Adquisición
-     *  vehicular". Página aparte dentro de la ficha (migas + Volver), igual que las fotos de una
-     *  inspección (abrirFotosInspeccionVehiculo). */
-    async function abrirArchivosAdquisicionFicha(vResumen, liga) {
-      const detalle = document.getElementById('veh-detalle');
-      detalle.innerHTML = '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver-ficha">' +
-        Iconos.svg('chevron-left') + ' Volver</button><span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a> › ' +
-        '<a href="#" class="ln-enlace" id="veh-enlace-ficha">Nucco ' + escaparHtml(vResumen.NUCCO || '') + '</a> › Archivos de adquisición</span></div>' +
-        '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Archivos de adquisición</h2>' +
-        '<div class="insp-fotos-botones">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</div></div></div>' +
-        '<div class="card ln-card" data-adq-archivos><p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>';
-      const aLaFicha = (ev) => { if (ev) ev.preventDefault(); abrirFichaVehiculo(vResumen, 'general'); };
-      document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
-      document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
-      document.getElementById('veh-enlace-lista').addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
-      const caja = detalle.querySelector('[data-adq-archivos]');
+    /** Contenido de la pestaña "Adquisición" de la ficha: folio y carpeta ya ligados (si los
+     *  hay), o el botón para buscarlos (buscarExpedienteAdquisicionFicha, vía el dispatcher
+     *  genérico data-agregar) si todavía no se ha ligado ninguno. Visible a cualquiera que vea
+     *  la ficha -- el folio ya se ve igual en la pestaña Datos; solo "Buscar" necesita edición. */
+    function contenidoAdquisicionFicha(completo, puedeEditar) {
+      const folio = completo['FOLIO ADQUISICION'];
+      const liga = completo['LIGA EXPEDIENTE ADQUISICION'];
+      const boton = puedeEditar
+        ? '<button type="button" class="secondary" data-agregar="adquisicion" style="margin-left:auto">' +
+          Iconos.svg('ver') + (folio ? ' Buscar de nuevo' : ' Buscar expediente') + '</button>' : '';
+      if (!folio) {
+        return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+          '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' + boton + '</h3>' +
+          '<p class="empty-state">Todavía no se ha ligado el expediente de compra de este vehículo.</p></div>';
+      }
+      return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+        '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' +
+        (liga ? '<span style="margin-left:auto">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</span>' : boton) + '</h3>' +
+        '<dl class="ln-resumen-rapido"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
+        (liga ? '<div data-adq-ficha-archivos data-liga="' + escaparHtml(liga) + '" style="margin-top:12px">' +
+          '<p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>'
+          : '<p class="empty-state" style="margin-top:12px">No se encontró la carpeta en Drive.</p>') +
+        '</div>';
+    }
+
+    /** Los archivos de la carpeta (Galeria), pedidos solo al abrir la pestaña -- mismo
+     *  apiAdquisicionVehicularArchivos que usa el apartado "Adquisición". */
+    async function cargarArchivosAdquisicionFichaTab(contenedor) {
+      if (!contenedor || contenedor.dataset.cargado) return;
+      contenedor.dataset.cargado = '1';
       try {
-        const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, liga));
-        if (!document.body.contains(caja)) return;
+        const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, contenedor.dataset.liga));
+        if (!document.body.contains(contenedor)) return;
         if (!r.soportado) {
-          caja.innerHTML = '<p class="empty-state">Esta carpeta no es de Drive (por ejemplo, Dropbox) — no se pueden listar sus archivos aquí. Usa "Abrir carpeta" arriba.</p>';
+          contenedor.innerHTML = '<p class="empty-state">Esta carpeta no es de Drive (por ejemplo, Dropbox) — no se pueden listar sus archivos aquí. Usa "Abrir carpeta" arriba.</p>';
           return;
         }
-        if (!r.archivos.length) { caja.innerHTML = '<p class="empty-state">La carpeta no tiene archivos todavía.</p>'; return; }
+        if (!r.archivos.length) { contenedor.innerHTML = '<p class="empty-state">La carpeta no tiene archivos todavía.</p>'; return; }
         const grupos = [{ titulo: 'Archivos', fotos: r.archivos }];
-        caja.innerHTML = Galeria.html(grupos);
-        Galeria.ligar(caja, grupos, { titulo: 'Archivos de adquisición · Nucco ' + (vResumen.NUCCO || '') });
+        contenedor.innerHTML = Galeria.html(grupos);
+        Galeria.ligar(contenedor, grupos, { titulo: 'Adquisición' });
       } catch (err) {
-        caja.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
+        contenedor.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
       }
-      document.getElementById('view-container').scrollTop = 0;
     }
 
     /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
@@ -3573,10 +3586,6 @@
           '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + chipAdherentes + '</div></div>' +
           '<div class="ln-detalle-botones">' +
           (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
-          (puedeEditar ? (completo['LIGA EXPEDIENTE ADQUISICION']
-            ? '<button type="button" id="veh-btn-expediente-adquisicion" data-liga="' + escaparHtml(completo['LIGA EXPEDIENTE ADQUISICION']) + '">' + Iconos.svg('externo') + ' Ver expediente de adquisición</button>' +
-              '<button type="button" id="veh-btn-archivos-adquisicion" data-liga="' + escaparHtml(completo['LIGA EXPEDIENTE ADQUISICION']) + '">' + Iconos.svg('folder-open') + ' Ver archivos</button>'
-            : '<button type="button" id="veh-btn-expediente-adquisicion">' + Iconos.svg('ver') + ' Buscar expediente de adquisición</button>') : '') +
           '</div>' +
           (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
             '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
@@ -3628,6 +3637,9 @@
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
           { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+          // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
+          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab)
+          { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
           verificaciones && {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
             contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
@@ -3737,14 +3749,6 @@
         if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
         const btnEditar = document.getElementById('veh-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
-        const btnExpediente = document.getElementById('veh-btn-expediente-adquisicion');
-        if (btnExpediente) {
-          btnExpediente.addEventListener('click', () => btnExpediente.dataset.liga
-            ? window.open(btnExpediente.dataset.liga, '_blank')
-            : buscarExpedienteAdquisicionFicha(vResumen, completo));
-        }
-        const btnArchivosAdq = document.getElementById('veh-btn-archivos-adquisicion');
-        if (btnArchivosAdq) btnArchivosAdq.addEventListener('click', () => abrirArchivosAdquisicionFicha(vResumen, btnArchivosAdq.dataset.liga));
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;
@@ -3755,6 +3759,7 @@
             else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas || []);
             else if (tipo === 'responsiva') abrirAgregarResponsivaVehicular(vResumen, completo);
             else if (tipo === 'adherente') abrirAgregarAdherenteVehicular(vResumen, completo);
+            else if (tipo === 'adquisicion') buscarExpedienteAdquisicionFicha(vResumen, completo);
           });
         });
         // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar) ya
