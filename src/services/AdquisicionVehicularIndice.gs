@@ -26,7 +26,7 @@
  *   adquisicionVehicularIndice_continuar()  blanco del trigger -- sigue la pasada B donde quedó
  *   adquisicionVehicularIndice_estado()     progreso, de solo lectura
  *   adquisicionVehicularIndice_detener()    para y borra el trigger
- *   adquisicionVehicularIndice_importarListaFinal_()  carga, UNA vez, el trabajo manual de
+ *   adquisicionVehicularIndice_importarListaFinal()  carga, UNA vez, el trabajo manual de
  *     AdquisicionVehicularListaFinalSemilla.gs (FUENTE="MANUAL") -- ligas que ni A ni B pueden
  *     encontrar solas (hipervínculos ocultos de Excel viejo, carpetas de Dropbox)
  */
@@ -86,7 +86,7 @@ function adquisicionVehicularIndice_detener() {
  *  (FUENTE="MANUAL") -- no necesita que A o B hayan corrido antes, ni corre nada de Drive/OCR.
  *  Reemplaza solo las filas que ya tenían FUENTE="MANUAL" (indiceAdqReemplazarFuente_): se puede
  *  volver a correr sin duplicar si se actualiza la semilla. */
-function adquisicionVehicularIndice_importarListaFinal_() {
+function adquisicionVehicularIndice_importarListaFinal() {
   soloEditor_();
   const hoja = AdquisicionVehicularService.indiceHoja_(true);
   const ahora = new Date().toISOString();

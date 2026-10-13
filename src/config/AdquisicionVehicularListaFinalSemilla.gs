@@ -8,7 +8,7 @@
  * "Numeros_de_serie_facturas - con lista final.xlsx" (hoja "Lista final"), 13-oct-2026.
  *
  * Cada fila: [SERIE, FOLIO, AREA, AÑO, LIGA_CARPETA]. Se carga UNA vez con
- * adquisicionVehicularIndice_importarListaFinal_() (AdquisicionVehicularIndice.gs), con
+ * adquisicionVehicularIndice_importarListaFinal() (AdquisicionVehicularIndice.gs), con
  * FUENTE="MANUAL" -- ese import es idempotente (se puede volver a correr sin duplicar), pero
  * si despues se corre adquisicionVehicularIndice_todo(), puede volver a agregar estas mismas
  * series bajo EXCEL-2024/2025/2026 u OCR-2024/2025/2026 (el constructor no sabe que ya estan aqui): se verian dos veces en

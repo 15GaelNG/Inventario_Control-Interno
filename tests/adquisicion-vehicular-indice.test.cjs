@@ -200,7 +200,7 @@ test('indiceAdqPasadaExcel_ usa el link del Excel como último recurso si Drive 
 
 // ---------------------------------------------------------------------------------------- importar lista final (manual)
 
-test('adquisicionVehicularIndice_importarListaFinal_ carga la semilla con FUENTE=MANUAL', () => {
+test('adquisicionVehicularIndice_importarListaFinal carga la semilla con FUENTE=MANUAL', () => {
   const hojaIndice = hojaMock([ENCABEZADOS_INDICE, ['VIEJA', '9', 'X', '2024', '', 'EXCEL-2024', 'ayer']]);
   const { contexto } = crearContexto({
     hojaIndice,
@@ -210,7 +210,7 @@ test('adquisicionVehicularIndice_importarListaFinal_ carga la semilla con FUENTE
     ],
   });
 
-  const informe = contexto.adquisicionVehicularIndice_importarListaFinal_();
+  const informe = contexto.adquisicionVehicularIndice_importarListaFinal();
 
   assert.equal(informe, 'Cargadas 2 series con FUENTE=MANUAL.');
   const filas = hojaIndice._filas.slice(1);
@@ -221,15 +221,15 @@ test('adquisicionVehicularIndice_importarListaFinal_ carga la semilla con FUENTE
   assert.equal(manual.find((r) => r[0] === '9BD281HJ5SYG30459')[4], 'https://www.dropbox.com/scl/fo/xyz', 'también carga ligas de Dropbox');
 });
 
-test('adquisicionVehicularIndice_importarListaFinal_ es idempotente: correrla dos veces no duplica', () => {
+test('adquisicionVehicularIndice_importarListaFinal es idempotente: correrla dos veces no duplica', () => {
   const hojaIndice = hojaMock([ENCABEZADOS_INDICE]);
   const { contexto } = crearContexto({
     hojaIndice,
     listaFinal: [['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '2024', 'https://drive.google.com/drive/folders/abc']],
   });
 
-  contexto.adquisicionVehicularIndice_importarListaFinal_();
-  contexto.adquisicionVehicularIndice_importarListaFinal_();
+  contexto.adquisicionVehicularIndice_importarListaFinal();
+  contexto.adquisicionVehicularIndice_importarListaFinal();
 
   const manual = hojaIndice._filas.slice(1).filter((r) => r[5] === 'MANUAL');
   assert.equal(manual.length, 1, 'la segunda corrida reemplaza, no agrega');
