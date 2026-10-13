@@ -155,7 +155,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     Ampliar, Abrir en Drive y, separado y con permiso de operar, Quitar foto; en la foto dentro del visor, Abrir en Drive y
     Quitar foto (esta si la llamada pasa `alQuitar`). `menuFlotante(ancla, items, punto)` acepta un punto y entonces va donde
     está el cursor, con z-index 900 (por encima del visor). Escape cierra primero el menú y luego el visor.
-  - **En la página de la inspección** (`pintarInspeccion`) cada foto dice «Ampliar» y abre el visor con todas las fotos
+  - **En la página de la inspección** (`pintarInspeccion`) cada foto lleva solo su nombre (sin «Ampliar» desde el 13-oct, usuario) y abre el visor con todas las fotos
     del documento; un video o una foto sin vista previa dice «Abrir en Drive» y se abre allá (Ctrl o clic medio también).
     `pedirDatos` acepta `opciones.encima` (z-index 800, por arriba del visor, que es 700).
   - **Quitar foto:** solo con el permiso de operar Líneas (EDICION de lineas-telefonicas). Ventana «¿Quitar foto?» con
