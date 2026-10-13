@@ -2440,9 +2440,19 @@ test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS 
     .forEach(([f, re]) => assert.match(read('src/services/' + f), re, f));
   // Ya no hay copias del cálculo
   ['VehiculosService.gs', 'CajasChicasService.gs'].forEach((f) => assert.doesNotMatch(read('src/services/' + f), /function conPersona_/, f));
-  // El navegador quita lo sensible antes de mandar el Excel
-  // (la cuenta, sí; el teléfono se queda: usuario, 12-oct-2026). Las dos listas, la del navegador y la del servidor, iguales
-  const sensibles = (s) => /const SENSIBLES = (\[[^\]]*\]);/.exec(s)[1];
-  assert.equal(sensibles(read('src/html/js/app-capital-humano.html')), "['NÚMERO DE CUENTA', 'NUMERO DE CUENTA']");
-  assert.equal(sensibles(read('src/services/CapitalHumano.gs')), "['NÚMERO DE CUENTA', 'NUMERO DE CUENTA']");
+  // Del Excel de CH solo entran las columnas PERMITIDAS (lista de permitidas, no de prohibidas: el 12-oct el Excel trajo
+  // CLABE, CURP, domicilio… y la cuenta con otro nombre). La del navegador y la del servidor, iguales; y nunca la cuenta,
+  // la CLABE, el CURP ni el RFC (el teléfono sí: usuario, 12-oct-2026)
+  const permitidas = (s) => {
+    const m = /const PERMITIDAS = (\[[^\]]*\]);/.exec(s);
+    assert.ok(m, 'falta const PERMITIDAS');
+    return JSON.parse(m[1].replace(/'/g, '"'));
+  };
+  const enNavegador = permitidas(read('src/html/js/app-capital-humano.html'));
+  assert.deepEqual(enNavegador, permitidas(read('src/services/CapitalHumano.gs')), 'PERMITIDAS: navegador y servidor distintos');
+  ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'CLABE', 'BANCO', 'CURP', 'RFC', 'IMSS', 'INE', 'CALLE/NUMERO']
+    .forEach((c) => assert.ok(enNavegador.indexOf(c) === -1, c + ' no debe entrar al libro'));
+  assert.ok(enNavegador.indexOf('TELEFONO') !== -1, 'el teléfono sí entra (usuario, 12-oct-2026)');
+  assert.doesNotMatch(read('src/services/CapitalHumano.gs') + read('src/html/js/app-capital-humano.html'), /const SENSIBLES\b/,
+    'la lista de prohibidas ya no existe: es de permitidas');
 });

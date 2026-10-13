@@ -24,8 +24,8 @@
  * Reglas que no se rompen:
  *   - Un ID dado nunca cambia. Si una carga nueva hace parecer que dos personas con ID son una, se avisa y no se toca.
  *   - Nunca se borra a nadie: quien no venga en el archivo se queda (sigue citado en documentos) y se avisa.
- *   - Lo sensible (NÚMERO DE CUENTA) no entra a la hoja. TELEFONO sí (usuario, 12-oct-2026). La fecha de nacimiento
- *     solo sirve para la regla 2.
+ *   - Solo entran las columnas de PERMITIDAS (sin NÚMERO DE CUENTA, CURP, RFC, CLABE, domicilio…). TELEFONO sí
+ *     (usuario, 12-oct-2026). La fecha de nacimiento solo sirve para la regla 2.
  */
 const CapitalHumano = (function () {
   const HOJA_CH = 'COLABORADORES ACTUALIZADO';
@@ -34,9 +34,15 @@ const CapitalHumano = (function () {
   const HOJA_PERSONAS = 'PERSONAS';
   const COLUMNA = 'ID PERSONA';
   const HISTORIAL = 'CAPITAL HUMANO HISTORIAL';
-  // Columnas que la lista de CH trae y que no deben vivir en el libro de la app (decisión de Ayrton, 01/10/2026; el
-  // 12-oct-2026 decidió que el TELEFONO sí se queda)
-  const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA'];
+  // Las ÚNICAS columnas de la lista de CH que viven en el libro de la app (más ID PERSONA): las que ya tenía la hoja de
+  // producción, sin NÚMERO DE CUENTA (Ayrton, 01/10/2026; TELEFONO sí, 12-oct-2026). Es lista de permitidas, no de
+  // prohibidas: el Excel de CH trae ~60 columnas (CURP, RFC, IMSS, domicilio, CLABE, banco, beneficiarios, INE…) y
+  // con nombres que cambian (la cuenta llegó como CLABE el 12-oct); lo que no esté aquí no entra. Una columna nueva
+  // que la app necesite se agrega aquí y en app-capital-humano.html (contrato).
+  const PERMITIDAS = ['No EMPLEADO', 'No INGRESOS', 'OFICINA/DESARROLLO', 'SEDE', 'APELLIDO PATERNO', 'APELLIDO MATERNO',
+    'NOMBRES', 'NOMBRE COMPLETO', 'ANTIGUEDAD', 'N. EMPLEADO ANTERIOR', 'STATUS', 'FECHA DE INGRESO', 'FECHA DE NACIMIENTO',
+    'CORREO EMPRESARIAL', 'TELEFONO', 'DEPARTAMENTO', 'AREA', 'PUESTO', 'TIPO PUESTO', 'DIRECTOR', 'JEFE DIRECTO',
+    'RAZON SOCIAL', 'TIPO CONTRATO', 'FECHA DE BAJA', 'MOTIVO DE BAJA'];
   /** Sin estas, un archivo no es la lista de CH: se rechaza antes de tocar nada */
   const OBLIGATORIAS = ['No EMPLEADO', 'NOMBRE COMPLETO', 'STATUS', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO'];
   /** Un archivo con menos de esta parte de los renglones que ya hay se rechaza (¿se exportó solo una hoja, un filtro?) */
@@ -44,7 +50,9 @@ const CapitalHumano = (function () {
 
   const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase();
   const claveEmpleo = (numero, nombre) => norm(numero) + '|' + norm(nombre);
-  const esSensible = (c) => SENSIBLES.indexOf(norm(c)) !== -1;
+  const PERMITIDAS_N = PERMITIDAS.map((c) => String(c).replace(/\s+/g, ' ').trim().toUpperCase());
+  /** Una columna que no debe estar en el libro: todo lo que no sea permitida ni la del ID */
+  const esSensible = (c) => !!String(c == null ? '' : c).trim() && norm(c) !== COLUMNA && PERMITIDAS_N.indexOf(norm(c)) === -1;
   const esActivo = (f) => /^ACTIV/.test(norm(f['STATUS']));
 
   function libro_() {
@@ -341,7 +349,7 @@ const CapitalHumano = (function () {
       hoja.getRange(1, 1, total, encabezados.length).setNumberFormat('@');
       hoja.getRange(1, 1, 1, encabezados.length).setValues([encabezados]).setFontWeight('bold');
       if (filas.length) hoja.getRange(2, 1, filas.length, encabezados.length).setValues(filas);
-      // Las columnas sensibles que tuviera la hoja quedan vacías al final: se quitan
+      // Las columnas no permitidas que tuviera la hoja quedan vacías al final: se quitan
       if (hoja.getMaxColumns() > encabezados.length) hoja.deleteColumns(encabezados.length + 1, hoja.getMaxColumns() - encabezados.length);
       proteger_(hoja);
       CacheHojas.tocarHoja(hoja);
@@ -709,7 +717,7 @@ const CapitalHumano = (function () {
   return {
     identificar, cargar, historial, resumen, revisarLigas, idPara, conPersona, columnasDePersona, columnaPara, describirLigas,
     personaDe, nombreComparable, listarColaboradores, activos, calentarColaboradores: () => colaboradores_(true), filasCH,
-    idsPorEmpleo, HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA, SENSIBLES, OBLIGATORIAS,
+    idsPorEmpleo, HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA, PERMITIDAS, OBLIGATORIAS,
   };
 })();
 
