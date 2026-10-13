@@ -6,7 +6,7 @@ adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpet
 `UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
 inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
 correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después
-(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-12
+(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-13
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -23,11 +23,12 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   LINEA y `resolver_` convierte LINEA BASICA en SIM BASICO (pestañas guardadas de antes). Los scripts del reporte
   (`conciliacion.py`, `conversion_estatus.py`) aceptan los dos nombres.
 - **Opciones de cada pantalla** (12-oct, `516a07c`; se separan con rayas las que van juntas). Clic derecho
-  del equipo: Detalles | Reasignar, Mandar a resguardo | Nueva inspección, Nueva responsiva | Editar información, Editar
-  línea | Vincular, Cambiar o Desvincular línea | Ir a la línea, Historial. Clic derecho de la línea: Detalles | Mandar a
+  del equipo: Detalles | Reasignar, Mandar a resguardo | Nueva inspección, Nueva responsiva | Editar equipo |
+  Vincular, Cambiar o Desvincular línea | Ir a la línea, Historial («Editar equipo» se llamaba «Editar información»
+  y traía «Editar línea» al lado hasta el 13-oct; la línea sigue con «Editar línea», `aff5615`). Clic derecho de la línea: Detalles | Mandar a
   cancelación | Editar línea | Vincular a equipo, Cambiar de equipo o Desvincular del equipo | Ir al equipo, Historial. ⋮ de
   la ficha del equipo: Reasignar, Mandar a resguardo | Documentos (Ver última inspección, Ver última responsiva) | Ver
-  carpeta en Drive | Editar información | Vincular… | Historial. ⋮ de la ficha de la línea: Mandar a cancelación | Editar
+  carpeta en Drive | Editar equipo | Vincular… | Historial. ⋮ de la ficha de la línea: Mandar a cancelación | Editar
   línea | Vincular… | Historial (el botón «Ver equipo» de la cabecera sigue). En Documentos la barra al seleccionar trae
   Ver inspección o Ver responsiva, Ver PDF, Generar PDF y Subir PDF firmado; Regenerar PDF y Ver carpeta en Drive solo
   en el ⋮ y el clic derecho (son `accionesSeleccion` de la tabla, no `accionesFila`).
@@ -39,17 +40,21 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
   DISPONIBLE sin él. La cancelación no se elige al agregar. Con SIM BASICO no se pide ni se guarda adendum
   (`LineasRegistros.crearLineaEnEquipo_`, `estatusAltaLinea_`).
-- **Estatus en Editar información** (8-oct): directo. RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE
+- **Estatus en Editar equipo** (8-oct; «Editar información» hasta el 13-oct): directo. RESGUARDO, PARA VENTA, PARA VENTA
+  CON DETALLE (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO del equipo, y EN PROCESO DE
   CANCELACION y CANCELADA de la línea, con un aviso «no se agregará en el panel de Resguardos y cancelaciones, pero se
   quedará en el historial» (Confirmar o Cancelar; el servidor los acepta solo con `datos.sinPanel`). El equipo que pasa
-  a uno de esos estatus deja DISPONIBLE su línea en uso (el aviso lo dice). Al panel de Pau se llega con «Mandar a
-  resguardo» y «Mandar a cancelación».
+  a uno de esos estatus deja DISPONIBLE su línea en uso (el aviso lo dice). Al revés (13-oct, `aff5615`): el equipo que
+  pasa a USO con su línea DISPONIBLE (o RESGUARDO, el valor viejo) en el mismo registro la lleva a USO; antes la línea se
+  quedaba en la asignación de resguardo y se separaba del equipo (`LineasRegistros.editar`; `LineasEscritura.guardar`
+  hace lo que dicen los estatus). Al panel de Pau se llega con «Mandar a resguardo» y «Mandar a cancelación».
 - **PIN de WhatsApp** (8-oct): en la ficha va en la información del equipo (General → Equipo, y Equipo en la ficha de
   la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni lo pide (pendiente 2.25).
-- **Editar línea y Editar información** (8-oct): la línea se edita aparte (⋮ de la línea, ⋮ del equipo con línea y la
-  tabla de líneas; `apiLineasFormularioRegistro(id, 'LINEA')`, `LineasRegistros.contextoEdicion_`). Una línea de un NUCO
+- **Editar línea y Editar equipo** (8-oct; «Editar información» hasta el 13-oct): la línea se edita aparte (⋮ de la línea
+  y la tabla de líneas; el equipo no la trae desde el 12-oct; `apiLineasFormularioRegistro(id, 'LINEA')`,
+  `LineasRegistros.contextoEdicion_`). Una línea de un NUCO
   trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
-  o CANCELADA. Editar información de un equipo con línea ya no trae la línea ni el adendum. La línea sola con
+  o CANCELADA. Editar equipo, con línea, ya no trae la línea ni el adendum. La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige.
   Un SIM BASICO no enseña el adendum al agregar. Al editar, cambiar el Tipo de línea a SIM BASICO esconde el adendum y
   al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, `a23f9ec`,
@@ -167,6 +172,28 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   permisos individuales. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) sí trae LECTURA para el área
   LINEAS y EDICION para `paulina.bustamante@ciudadmaderas.com`.
   Ya no existe la lista `LINEAS_APROBADORES_RESGUARDO` (12-oct, `585d1c6`).
+- **Mandar a resguardo y Mandar a cancelación** (13-oct, `aff5615`; `LineasResguardos.gs`, `abrirResguardo` y
+  `abrirCancelacion` en `lineas.html`):
+  - **Ubicación:** el formulario llena solo, aunque se puede cambiar, DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA
+    (`UBICACION_RESGUARDO`, valor de `camposUbicacion_`), sin importar la sede ni la oficina que traiga el equipo.
+  - **Estatus:** `ESTATUS_EQUIPO_RESGUARDO` = RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE (estatus nuevo; ámbar, «Tiene
+    un detalle; se ofrece en venta», `GRUPO_EQUIPO` del Panorama y `VENTA` de Vínculos) y PARA DESECHO.
+  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): el formulario no
+    ofrece su estatus actual (`formulario` regresa por equipo `enBandeja` y `opcionesEstatus`), y `mandar` rechaza el
+    mismo estatus («NUCO X: ya está en Resguardos y cancelaciones como RESGUARDO; elige otro estatus.»). Con otro
+    estatus se actualiza su renglón; no se pide otra recepción.
+  - **Equipo sin renglón abierto** (viene de una persona, viene guardado del AppSheet o Pau ya lo entregó a Líneas): crea un
+    renglón PENDIENTE DE RECEPCION, que Pau recibe; las respuestas traen `porRecibir` (antes `yaGuardado`: uno ya guardado no
+    entraba a la bandeja o entraba como EN RESGUARDO con «Ya estaba en resguardo»). Líneas decide cuáles de los equipos
+    RESGUARDO del AppSheet manda al panel de Pau.
+  - **Motivo de la cancelación:** Mandar a cancelación pide «Motivo» con la lista `MOTIVOS_CANCELACION` (LINEA VENCIDA o
+    CANCELACION ANTICIPADA), obligatorio y sin nada elegido (`pedirDatos`, opción `elegir`: «Selecciona…»), además del
+    comentario obligatorio y el ticket opcional; el servidor exige `datos.motivoCancelacion`. Se guarda en la columna
+    MOTIVO_CANCELACION de APP_RESGUARDOS (`asegurarBandeja_` la agrega a la hoja que ya existe), se ve en la columna
+    «Motivo» de la pestaña Cancelaciones y queda en el historial como cambio «MOTIVO DE CANCELACION». Donde no se elige
+    (Mandar a resguardo de un equipo con línea que va a cancelación; Desvincular o Cambiar línea con «MANDAR A
+    CANCELACIÓN», `LineasAcciones.vincular` con `{ motivoDelAdendum: true }`) sale del adendum
+    (`motivoCancelacionDe_`): vencido → LINEA VENCIDA; vigente → CANCELACION ANTICIPADA; sin fecha o SIM BASICO, en blanco.
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
 - **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
@@ -196,7 +223,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
-| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau, avisos, fotos y correcciones |
+| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones, desde el 13-oct), avisos, fotos y correcciones |
 | APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
