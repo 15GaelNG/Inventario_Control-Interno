@@ -41,11 +41,15 @@
       const archivos = Array.from((input && input.files) || []);
       if (!archivos.length) return;
       const btn = contenedor.querySelector('[data-soc-subir]');
+      const textoOriginal = btn.innerHTML;
       btn.disabled = true;
+      input.disabled = true;
+      toastCargando(archivos.length === 1 ? 'Subiendo archivo…' : 'Subiendo archivos…');
       try {
-        for (const archivo of archivos) {
-          const base64 = await leerArchivoBase64(archivo);
-          await callServer('apiSolicitudCompraSubirArchivo', state.token, fila.ID, archivo.name, archivo.type, base64);
+        for (let i = 0; i < archivos.length; i++) {
+          btn.innerHTML = '<span class="spinner"></span> Subiendo' + (archivos.length > 1 ? ' ' + (i + 1) + ' de ' + archivos.length : '') + '…';
+          const base64 = await leerArchivoBase64(archivos[i]);
+          await callServer('apiSolicitudCompraSubirArchivo', state.token, fila.ID, archivos[i].name, archivos[i].type, base64);
         }
         input.value = '';
         await recargar();
@@ -54,6 +58,8 @@
         toastError('No se pudo subir: ' + err.message);
       } finally {
         btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+        input.disabled = false;
       }
     });
   }
@@ -132,6 +138,11 @@
       ev.preventDefault();
       const errorBox = document.getElementById('soc-nueva-error');
       errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Creando…';
+      toastCargando('Creando solicitud…');
       try {
         await callServer('apiCrearSolicitudCompra', state.token, {
           FOLIO: document.getElementById('soc-folio').value.trim(),
@@ -144,6 +155,9 @@
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
       }
     });
   }
