@@ -4,8 +4,8 @@
      Tableta y celular (≤1024px, ver componentes/pantalla.html): el menú lateral deja de ocupar ancho y se
      abre como panel con el botón de menú de la barra superior, con un fondo oscuro detrás; se cierra al
      elegir un módulo, tocar fuera o con Esc. Celular (≤640px): la barra superior deja solo menú, logo,
-     campana y salir; el cambio de tema pasa al panel. */
-  .shell-menu-btn, .shell-fondo, .shell-tema-panel { display: none; }
+     campana y engrane de Apariencia (el usuario y salir están al pie del panel). */
+  .shell-menu-btn, .shell-fondo { display: none; }
 
   @media (max-width: 1024px) {
     .shell-menu-btn {
@@ -26,7 +26,9 @@
     #sidebar.collapsed .sidebar-title, #sidebar.collapsed .nav-label,
     #sidebar.collapsed .nav-group-header .nav-label { display: inline; }
     #sidebar.collapsed .nav-group-chevron { display: inline-flex; }
+    #sidebar.collapsed .sidebar-usuario-texto, #sidebar.collapsed .sidebar-logout { display: flex; }
     #sidebar.collapsed .nav-item, #sidebar.collapsed .nav-group-header { justify-content: flex-start; }
+    #sidebar.collapsed .sidebar-usuario-tarjeta { padding: 6px 8px; }
     #sidebar.collapsed .nav-group-items { display: flex !important; }
 
     .shell-fondo { position: fixed; inset: 0; z-index: 890; background: rgba(6, 20, 30, .45); }
@@ -45,22 +47,11 @@
   @media (max-width: 640px) {
     .topbar { padding: 8px 12px; }
     .topbar-right { gap: 8px; }
-    .topbar-theme-toggle, .topbar-user { display: none; }
-    .topbar-user-menu { padding-left: 8px; }
     .topbar-cm-logo { height: 26px; }
     /* Sin relleno abajo: lo que se pega abajo con sticky (los botones de un formulario) queda al
        ras de la pantalla; el espacio final lo da el último bloque de la vista */
     #view-container { padding: 0 12px; }
     #view-container > :last-child { margin-bottom: 20px; }
-
-    /* Cambio de tema dentro del panel, al pie (en la barra ya no cabe) */
-    .shell-tema-panel {
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      padding: 10px 13px; margin-top: 8px; border-top: 1px solid var(--color-sidebar-border);
-      color: var(--color-sidebar-text); font-size: 13px; font-weight: 500;
-    }
-    .shell-tema-panel .topbar-theme-toggle { display: flex; background: rgba(255, 255, 255, .08); border-color: var(--color-sidebar-border); }
-    .shell-tema-panel .theme-btn { color: var(--color-sidebar-text); }
 
     .page-header h2 { font-size: 19px; }
     .page-subtitle { font-size: 12px; }
@@ -70,7 +61,7 @@
 </style>
 
 <script>
-  /** Botón de menú, fondo y tema del panel lateral en pantallas angostas (ver estilos arriba y Pantalla). */
+  /** Botón de menú y fondo del panel lateral en pantallas angostas (ver estilos arriba y Pantalla). */
   (function () {
     const sidebar = document.getElementById('sidebar');
     const barra = document.querySelector('.topbar-left');
@@ -88,18 +79,6 @@
     const fondo = document.createElement('div');
     fondo.className = 'shell-fondo';
     document.body.appendChild(fondo);
-
-    // Tema en el panel: una copia de los botones de la barra. Funcionan solos porque app.html los
-    // atiende por clase (.theme-btn + data-tema) con delegación, y marcarTemaActual marca todos.
-    const temaBarra = document.querySelector('.topbar .topbar-theme-toggle');
-    if (temaBarra) {
-      const temaPanel = document.createElement('div');
-      temaPanel.className = 'shell-tema-panel';
-      temaPanel.innerHTML = '<span>Tema</span>';
-      temaPanel.appendChild(temaBarra.cloneNode(true));
-      sidebar.appendChild(temaPanel);
-      if (typeof marcarTemaActual === 'function') marcarTemaActual();
-    }
 
     const abierto = () => document.body.classList.contains('shell-menu-abierto');
     /** Con el panel cerrado y fuera de la pantalla, su contenido no debe recibir el foco del teclado. */

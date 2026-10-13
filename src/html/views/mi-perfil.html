@@ -1,0 +1,89 @@
+<style>
+  /* ============ Mi perfil (el usuario al pie del menú; js/app-perfil.html) ============
+     Izquierda: quién es (foto, nombre, puesto, área, sus datos de Capital Humano y de la cuenta).
+     Derecha: sus módulos con el nivel de permiso. En tableta y celular, una sobre otra. */
+  .perfil-rejilla { display: grid; grid-template-columns: minmax(300px, 380px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .perfil-tarjeta { position: relative; overflow: hidden; text-align: center; padding-top: 28px; }
+  /* El brillo detrás de la foto */
+  .perfil-tarjeta::before {
+    content: ''; position: absolute; left: 50%; top: -120px; width: 320px; height: 240px; transform: translateX(-50%);
+    background: radial-gradient(closest-side, var(--color-accent-soft), transparent); opacity: .9; pointer-events: none;
+  }
+  .perfil-foto { position: relative; display: inline-block; padding: 5px; border-radius: 50%; background: var(--color-surface); box-shadow: 0 0 0 2px var(--color-accent); }
+  .perfil-foto::after {   /* en línea */
+    content: ''; position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--color-success); border: 3px solid var(--color-surface);
+  }
+  .perfil-nombre { position: relative; margin: 14px 0 2px; font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: .01em; }
+  .perfil-puesto { position: relative; margin: 0; color: var(--color-text-muted); font-size: 12px; text-transform: uppercase; }
+  .perfil-insignia {
+    position: relative; display: inline-block; margin-top: 10px; padding: 3px 12px; border-radius: 999px;
+    background: var(--color-primary); color: #fff; font-size: 11.5px; font-weight: 700; letter-spacing: .03em;
+  }
+  .perfil-datos { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--color-border); text-align: left; }
+  .perfil-datos li { display: flex; align-items: center; gap: 12px; padding: 7px 0; }
+  .perfil-datos-ico {
+    flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text-muted);
+  }
+  .perfil-datos-ico .ico { width: 15px; height: 15px; }
+  .perfil-datos small { display: block; color: var(--color-text-muted); font-size: 11.5px; }
+  .perfil-datos b { display: block; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  .perfil-cuenta {
+    margin-top: 14px; padding: 14px; border: 1px solid var(--color-border); border-radius: 10px;
+    background: var(--color-bg); text-align: left;
+  }
+  .perfil-cuenta-titulo { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; font-weight: 700; }
+  .perfil-cuenta dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; margin: 0; }
+  .perfil-cuenta dt { color: var(--color-text-muted); font-size: 11.5px; }
+  .perfil-cuenta dd { margin: 2px 0 0; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+  .perfil-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; text-align: left; }
+  .perfil-chip {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid var(--perfil-chip, var(--color-primary)); background: var(--color-surface);
+  }
+  .perfil-chip .ico { color: var(--perfil-chip, var(--color-primary)); width: 18px; height: 18px; flex: none; }
+  .perfil-chip small { display: block; color: var(--color-text-muted); font-size: 11.5px; }
+  .perfil-chip b { display: block; color: var(--perfil-chip, var(--color-primary)); font-size: 13px; }
+  .perfil-nota { margin: 6px 0 0; color: var(--color-text-muted); font-size: 12px; text-align: left; }
+  .perfil-apariencia { margin-top: 14px; width: 100%; }
+
+  .perfil-modulos-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .perfil-modulos-cabeza h3 { margin: 0; font-size: 17px; }
+  .perfil-modulos-cabeza p { margin: 2px 0 0; color: var(--color-text-muted); font-size: 12.5px; }
+  .perfil-grupo { padding: 14px 0; border-top: 1px solid var(--color-border); }
+  .perfil-grupo:first-of-type { border-top: none; }
+  .perfil-grupo h4 { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13.5px; }
+  .perfil-grupo-ico {
+    width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center;
+    background: var(--color-primary-soft); color: var(--color-primary);
+  }
+  .perfil-grupo-ico .ico { width: 15px; height: 15px; }
+  .perfil-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  .perfil-modulo {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px;
+    border: 1px solid var(--color-border); border-radius: 10px; font-size: 13px;
+  }
+  .perfil-nivel { flex: none; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
+  .perfil-nivel-EDICION { background: var(--color-primary-soft); color: var(--color-primary); }
+  :root[data-theme="dark"] .perfil-nivel-EDICION { color: var(--color-text); }
+  .perfil-nivel-LECTURA { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .perfil-vacio { padding: 40px 12px; text-align: center; color: var(--color-text-muted); }
+  .perfil-vacio .ico { width: 36px; height: 36px; margin-bottom: 8px; color: var(--color-primary); }
+  .perfil-cargando { color: var(--color-text-muted); }
+
+  @media (max-width: 1024px) {
+    .perfil-rejilla { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .perfil-modulos { grid-template-columns: minmax(0, 1fr); }
+  }
+</style>
+
+<template id="tpl-mi-perfil">
+  <h2>Mi perfil</h2>
+  <div class="perfil-rejilla">
+    <section class="card perfil-tarjeta" id="perfil-tarjeta"></section>
+    <section class="card" id="perfil-modulos"></section>
+  </div>
+</template>

@@ -1,0 +1,78 @@
+<script>
+  /**
+   * Avatar — la foto de perfil de Google de una persona (la del directorio del dominio,
+   * FotosDirectorio.gs) o, si no tiene, sus iniciales. Un solo lugar para pintar "quién".
+   *
+   *   Avatar.html(correo, nombre, { tam: 32, clase: '', foto: '' })
+   *       → HTML para innerHTML. Sin foto todavía, salen las iniciales; la foto se pone encima
+   *         cuando llega. `tam` en px (0 = llena su contenedor); `foto` para una URL que ya se
+   *         tiene (la pantalla de entrada, antes de haber sesión).
+   *   Avatar.cargar(pedir)
+   *       → pide las fotos UNA vez (pedir() regresa una promesa de { correo: url }; la app usa
+   *         callServerCacheado('apiFotosPerfil', token)). Al llegar, los avatares ya pintados
+   *         cambian sus iniciales por la foto solos.
+   *   Avatar.completar(raiz)  → pone la foto a los avatares de `raiz` que no la tengan.
+   *   Avatar.iniciales(texto) → "Ana López" → "AL"; "ana.lopez@…" → "AL".
+   *
+   * Si una foto no carga (la quitaron, sin red), se quita y quedan las iniciales.
+   * Va antes de app.html en Index.html: render() lo usa en la primera pasada.
+   */
+  const Avatar = (function () {
+    let fotos = null;
+    let pidiendo = null;
+
+    const norm = (c) => String(c || '').trim().toLowerCase();
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    // Solo fotos de Google (el directorio solo da esas): nada de otra cosa en un src. Sin "//"
+    // seguidas en la expresión (ver el bug de Apps Script en CLAUDE.md): de ahí el [/]
+    const fotoValida = (u) => /^https:[/][/][a-z0-9.-]+\.googleusercontent\.com[/]/i.test(String(u || ''));
+
+    function iniciales(texto) {
+      const t = String(texto || '').split('@')[0];
+      const partes = t.split(/[\s._-]+/).filter(Boolean);
+      return (partes.slice(0, 2).map((p) => p[0].toUpperCase()).join('')) || '?';
+    }
+
+    const urlDe = (correo) => (fotos && fotos[norm(correo)]) || '';
+    const img = (url) => '<img class="avatar-foto" src="' + esc(url) + '" alt="" referrerpolicy="no-referrer" loading="lazy">';
+
+    function html(correo, nombre, op) {
+      const o = op || {};
+      const tam = o.tam === 0 ? 0 : Number(o.tam) || 32;
+      const url = fotoValida(o.foto) ? o.foto : urlDe(correo);
+      const medida = tam ? ' style="width:' + tam + 'px;height:' + tam + 'px;font-size:' + Math.max(10, Math.round(tam * 0.4)) + 'px"' : '';
+      return '<span class="avatar' + (tam ? '' : ' avatar-llenar') + (o.clase ? ' ' + esc(o.clase) : '') + '" data-avatar-correo="' + esc(norm(correo)) + '"' +
+        medida + ' title="' + esc(nombre || correo || '') + '" aria-hidden="true">' +
+        '<span class="avatar-iniciales">' + esc(iniciales(nombre || correo)) + '</span>' + (url ? img(url) : '') + '</span>';
+    }
+
+    function completar(raiz) {
+      if (!fotos) return;
+      (raiz || document).querySelectorAll('[data-avatar-correo]').forEach((el) => {
+        if (el.querySelector('.avatar-foto')) return;
+        const url = urlDe(el.getAttribute('data-avatar-correo'));
+        if (url) el.insertAdjacentHTML('beforeend', img(url));
+      });
+    }
+
+    function cargar(pedir) {
+      if (!pidiendo) {
+        pidiendo = Promise.resolve().then(pedir).then((mapa) => {
+          fotos = {};
+          Object.keys(mapa || {}).forEach((c) => { if (fotoValida(mapa[c])) fotos[norm(c)] = mapa[c]; });
+          completar(document);
+          return fotos;
+        }).catch(() => { pidiendo = null; return {}; });   // sin fotos: iniciales; la próxima vez se reintenta
+      }
+      return pidiendo;
+    }
+
+    // Una foto que no carga se quita: quedan las iniciales de abajo
+    document.addEventListener('error', (ev) => {
+      const el = ev.target;
+      if (el && el.classList && el.classList.contains('avatar-foto')) el.remove();
+    }, true);
+
+    return { html, cargar, completar, iniciales, urlDe };
+  })();
+</script>

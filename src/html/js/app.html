@@ -140,30 +140,21 @@
     toastTimeoutId = setTimeout(() => { if (toastActual) toastActual.classList.remove('show'); }, 4500);
   }
 
-  // Tema (claro/oscuro) — se aplica antes de montar cualquier vista para evitar parpadeo.
-  // Los botones de tema viven en dos lugares (login y sidebar del app-shell), así que
-  // se identifican por clase (.theme-btn + data-tema), no por id, y se manejan con
-  // delegación de eventos para que funcionen sin importar cuándo se monten.
-  (function initTema() {
-    try {
-      const guardado = localStorage.getItem('tema');
-      if (guardado === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-    } catch (e) { /* localStorage puede fallar en vista previa/incógnito, se ignora */ }
-  })();
-
+  // Tema (claro/oscuro/auto): lo guarda y lo aplica Apariencia (componentes/apariencia.html, el
+  // engrane de la barra), antes de montar cualquier vista para evitar parpadeo. En el login quedan
+  // los botones sol/luna (.theme-btn + data-tema), atendidos con delegación de eventos.
   function aplicarTema(tema) {
-    if (tema === 'dark') {
-      document.documentElement.setAttribute('data-theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-    }
-    try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
+    Apariencia.cambiar({ modo: tema });
+    marcarTemaActual();
+  }
+  // Cambió lo que se ve (un botón, el engrane o el modo Auto al cambiar el del sistema)
+  document.addEventListener('tema-cambiado', () => {
     marcarTemaActual();
     // Si el slideshow del fondo del login está activo, refresca las
     // imágenes ya pintadas a la variante del tema nuevo — si no, se
     // quedarían con la del tema anterior hasta el siguiente cambio de slide.
     if (typeof actualizarHeroLoginTema === 'function') actualizarHeroLoginTema();
-  }
+  });
 
   /**
    * Marca el botón del tema actual (rama emmanuel). Antes solo se marcaba al mostrar el login: si se entraba con la
@@ -457,7 +448,11 @@
       initLogin();
       return;
     }
-    document.getElementById('user-name').textContent = state.sesion.nombre + ' · ' + state.sesion.rol;
+    // El usuario al pie del menú: nombre y, debajo, su puesto de Capital Humano (de Mi perfil; mientras, rol y área)
+    document.getElementById('user-name').textContent = state.sesion.nombre;
+    document.getElementById('user-avatar').innerHTML = Avatar.html(state.sesion.correo, state.sesion.nombre, { tam: 34 });
+    pintarUsuarioMenu(null);
+    pedirMiPerfil().then(pintarUsuarioMenu).catch(() => { /* se queda con el rol y el área */ });
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
     // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
@@ -758,6 +753,8 @@
     { vista: 'dashboard', etiqueta: 'Inicio', icono: 'home', plantilla: 'tpl-dashboard', init: () => initDashboard(), ayuda: () => AYUDA_DASHBOARD },
     // La campana de la barra superior → "Ver todas" (html/notificaciones.html, rama emmanuel)
     { vista: 'notificaciones', etiqueta: 'Notificaciones', icono: 'bell', plantilla: 'tpl-notificaciones', init: () => Notificaciones.initVista(), ayuda: () => AYUDA_NOTIFICACIONES },
+    // El usuario al pie del menú lateral (js/app-perfil.html)
+    { vista: 'mi-perfil', etiqueta: 'Mi perfil', icono: 'user-round', plantilla: 'tpl-mi-perfil', init: () => initMiPerfil() },
     // Control de Cambios de Líneas: salió del menú (30-sep) pero se abre desde el Panorama de Líneas
     { vista: 'cambios-lineas', etiqueta: 'Control de cambios - Líneas', icono: 'history', requiere: 'cambios-lineas', plantilla: 'tpl-lineas-bitacora', init: () => Lineas.initCambios(), sinAsistente: true },
   ];
@@ -839,7 +836,7 @@
     const login = document.getElementById('login-screen-container');
     montarVista('tpl-login', null, login);
 
-    aplicarTema(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+    marcarTemaActual();
     initLoginHeroSlideshow();
 
     const inputPassword = document.getElementById('login-password');

@@ -1,9 +1,9 @@
 <style>
   /* ============ Temporada: Día de Muertos ============
      Un ADMIN abre o cierra la temporada para todos (TemporadaService.gs la guarda y Router.gs la
-     pone en <body data-temporada="muertos">). Mientras está abierta, cada quien tiene la flor en la
-     barra de arriba para apagarla en su pantalla y elegir cuántos pétalos caen, qué tan rápido, si
-     salen mariposas… (se guarda en su navegador). Todo vive bajo body[data-temporada="muertos"]:
+     pone en <body data-temporada="muertos">). Mientras está abierta, cada quien tiene una sección en
+     el panel de Apariencia (el engrane de la barra) para apagarla en su pantalla y elegir cuántos
+     pétalos caen, qué tan rápido, si salen mariposas… (se guarda en su navegador). Todo vive bajo body[data-temporada="muertos"]:
      apagada (para todos o para esa persona), nada de esto aplica.
      Dónde se ve:
        login     cielo de noche (estrellas, luna), papel picado que se mece con el mouse, calavera,
@@ -106,48 +106,26 @@
     background: var(--dm-petalo-0) center / contain no-repeat;
   }
 
-  /* ---------- Corona de cempasúchil sobre el avatar de la barra ---------- */
-  /* El avatar trae margin-right: 8px (styles.html): se pasa al contenedor para que la corona se
-     centre sobre la foto y no sobre la foto más el margen */
-  body[data-temporada="muertos"] #user-avatar { position: relative; display: inline-flex; margin-right: 8px; }
-  body[data-temporada="muertos"] #user-avatar > .avatar { margin-right: 0; }
+  /* ---------- Corona de cempasúchil sobre el avatar (al pie del menú lateral) ---------- */
+  body[data-temporada="muertos"] #user-avatar { position: relative; display: inline-flex; }
   body[data-temporada="muertos"] #user-avatar::after {
     content: ''; position: absolute; left: 50%; top: -8px; width: 46px; height: 17px; transform: translateX(-50%);
     background: var(--dm-corona) center / contain no-repeat; pointer-events: none;
     filter: drop-shadow(0 1px 1px rgba(6, 38, 58, .25));
   }
 
-  /* ---------- Botón de la flor: lo ve todo el mundo mientras la temporada está abierta y abre
-     el panel de cada quien (verla o no, cuántos pétalos, qué tan rápido). El ADMIN, además,
-     la abre o la cierra para todos desde el mismo panel. ---------- */
-  .dm-interruptor {
-    background: transparent; border: 1px solid var(--color-border); border-radius: 999px;
-    width: 34px; height: 34px; padding: 0; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center; cursor: pointer;
-  }
-  .dm-interruptor:hover { background: var(--color-bg); }
-  .dm-interruptor-flor {
-    width: 20px; height: 20px; background: var(--dm-flor) center / contain no-repeat;
-    filter: grayscale(1); opacity: .5; transition: filter .25s ease, opacity .25s ease, transform .4s ease;
-  }
-  .dm-interruptor:hover .dm-interruptor-flor { opacity: .8; transform: rotate(30deg); }
-  .dm-interruptor[aria-pressed="true"] .dm-interruptor-flor { filter: none; opacity: 1; }
-  .dm-interruptor[aria-expanded="true"] { background: var(--color-bg); }
-
-  .dm-panel {
-    position: fixed; top: 60px; right: 12px; z-index: 950; width: 300px; max-width: calc(100vw - 32px);
-    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
-    box-shadow: 0 12px 32px rgba(6, 20, 30, .18); padding: 14px 16px 12px; color: var(--color-text); font-size: 13px;
-  }
-  .dm-panel[hidden] { display: none; }
-  .dm-panel-titulo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+  /* ---------- Sus opciones, dentro del panel de Apariencia (el engrane de la barra,
+     componentes/apariencia.html): las ve todo el mundo mientras la temporada está abierta (verla o
+     no, cuántos pétalos, qué tan rápido). El ADMIN, además, la abre o la cierra para todos. ---------- */
+  .dm-panel { font-size: 13px; }
+  .dm-panel-titulo { display: flex; align-items: center; gap: 8px; }
   .dm-panel-fila {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; cursor: pointer;
   }
   .dm-panel-rango { display: block; padding: 7px 0; }
   .dm-panel-rango > span { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
   .dm-panel-rango b { font-weight: 600; color: var(--color-text-muted); }
-  .dm-panel input[type="range"] { width: 100%; margin: 0; }
+  .dm-panel input[type="range"] { width: 100%; margin: 0; padding: 0; border: none; background: transparent; }
   .dm-panel input { accent-color: var(--dm-cempa); }
   .dm-panel input[type="checkbox"] { width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
   .dm-panel-opciones { border-top: 1px solid var(--color-border); margin-top: 4px; padding-top: 4px; }
@@ -498,7 +476,7 @@
     .dm-petalos, .dm-mariposa, .dm-rafaga, .dm-lluvia { display: none; }
     .dm-llama, .dm-mini-vela::before, .dm-estrella { animation: none; }
     .dm-estrella { opacity: .6; }
-    .dm-interruptor-flor, .dm-banner-ofrenda { transition: none; }
+    .dm-banner-ofrenda { transition: none; }
     .dm-camino-petalo, .dm-camino-petalo.dm-brilla { transition: opacity .3s ease; transition-delay: 0ms; transform: rotate(var(--giro)); }
     body[data-temporada="muertos"] .nav-item.active::after,
     body[data-temporada="muertos"] .nav-subitem.active::after { animation: none; }
@@ -517,7 +495,8 @@
    *   Temporada.aplicar([valor])      → vuelve a revisar la página; con valor, la temporada que dice el servidor
    *
    * Lo de cada quien (si la ve, cuántos pétalos, la velocidad, mariposas, pétalos al guardar) se
-   * guarda en su navegador (localStorage 'dm-preferencias') y se elige en el panel de la flor.
+   * guarda en su navegador (localStorage 'dm-preferencias') y se elige en el panel de Apariencia.
+   *   Temporada.opciones(cont)        → pinta esas opciones en cont (lo llama Apariencia); dice si pintó algo
    *   Temporada.mensajesCarga(pasos)  → cambia los mensajes de la pantalla de carga (app.html)
    *   Temporada.abrirOfrenda()        → abre "Nuestra ofrenda" (el botón de la franja del Inicio)
    *
@@ -1394,94 +1373,47 @@
       }
     }
 
-    // ---------- Botón de la flor y su panel ----------
+    // ---------- Sus opciones, en el panel de Apariencia (el engrane de la barra) ----------
 
     function esAdmin() {
       return typeof state !== 'undefined' && !!state && !!state.sesion && state.sesion.rol === 'ADMIN';
     }
     const abierta = () => delServidor === 'muertos';
+    let contenedorOpciones = null;
 
     /**
-     * La flor sale a todos mientras la temporada está abierta (y al ADMIN siempre, para abrirla).
-     * Gris: la persona la apagó en su pantalla; a color: la está viendo.
+     * Pinta "Día de Muertos" en cont (la sección de componentes/apariencia.html). Sale a todos
+     * mientras la temporada está abierta (y al ADMIN siempre, para abrirla). Devuelve si pintó algo.
      */
-    function interruptor() {
-      const derecha = document.querySelector('.topbar-right');
-      let boton = document.querySelector('.dm-interruptor');
-      if (!derecha || !(abierta() || esAdmin())) {
-        if (boton) boton.remove();
-        cerrarPanel();
-        return;
-      }
-      if (!boton) {
-        prepararFondos();
-        derecha.insertAdjacentHTML('afterbegin',
-          '<button type="button" class="dm-interruptor" aria-haspopup="dialog" aria-expanded="false"><span class="dm-interruptor-flor"></span></button>');
-        boton = derecha.querySelector('.dm-interruptor');
-        boton.addEventListener('click', (ev) => { ev.stopPropagation(); alternarPanel(); });
-      }
-      const prendida = activa();
-      if (boton.getAttribute('aria-pressed') !== String(prendida)) {
-        boton.setAttribute('aria-pressed', String(prendida));
-        boton.title = !abierta() ? 'Día de Muertos: cerrado para todos'
-          : prendida ? 'Día de Muertos: tus opciones' : 'Día de Muertos: lo apagaste en tu pantalla';
-      }
-    }
-
-    function panel() { return document.getElementById('dm-panel'); }
-
-    function alternarPanel() {
-      const p = panel();
-      if (p && !p.hidden) cerrarPanel();
-      else abrirPanel();
-    }
-
-    function abrirPanel() {
-      let p = panel();
-      if (!p) {
-        document.body.insertAdjacentHTML('beforeend', '<div class="dm-panel" id="dm-panel" role="dialog" aria-label="Día de Muertos" hidden></div>');
-        p = panel();
-        p.addEventListener('click', (ev) => ev.stopPropagation());
-        p.addEventListener('input', (ev) => {
+    function opciones(cont) {
+      if (cont && cont !== contenedorOpciones) {
+        contenedorOpciones = cont;
+        cont.addEventListener('input', (ev) => {
           const el = ev.target.closest('[data-pref]');
           if (!el) return;
           const clave = el.dataset.pref;
           cambiarPref({ [clave]: el.type === 'checkbox' ? el.checked : Number(el.value) });
-          actualizarPanel();   // en su lugar: volver a pintar soltaría el rango a medio arrastre
+          actualizarOpciones();   // en su lugar: volver a pintar soltaría el rango a medio arrastre
         });
-        p.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { cerrarPanel(); const b = document.querySelector('.dm-interruptor'); if (b) b.focus(); } });
-        document.addEventListener('click', () => cerrarPanel());
+        cont.addEventListener('click', (ev) => {
+          if (ev.target.closest('[data-dm-restablecer]')) { cambiarPref(PREF_BASE); actualizarOpciones(); }
+          else if (ev.target.closest('[data-dm-global]')) alternar();
+        });
       }
-      p.hidden = false;
-      pintarPanel();
-      // Debajo de la flor, alineado a su orilla derecha (sin salirse de la pantalla)
-      const boton = document.querySelector('.dm-interruptor');
-      if (boton) {
-        boton.setAttribute('aria-expanded', 'true');
-        const r = boton.getBoundingClientRect();
-        p.style.top = (r.bottom + 8) + 'px';
-        // Alineado a la flor, pero sin pasarse de la orilla izquierda (16 px) en pantallas angostas
-        const ancho = p.offsetWidth;
-        p.style.right = Math.max(16, Math.min(window.innerWidth - r.right, window.innerWidth - 16 - ancho)) + 'px';
-      }
+      return pintarOpciones();
     }
 
-    function cerrarPanel() {
-      const p = panel();
-      if (p) p.hidden = true;
-      const boton = document.querySelector('.dm-interruptor');
-      if (boton) boton.setAttribute('aria-expanded', 'false');
-    }
-
-    function pintarPanel() {
-      const p = panel();
-      if (!p || p.hidden) return;
+    function pintarOpciones() {
+      const p = contenedorOpciones;
+      if (!p) return false;
+      if (!(abierta() || esAdmin())) { p.innerHTML = ''; return false; }
+      prepararFondos();
       const casilla = (clave, texto) =>
         `<label class="dm-panel-fila"><span>${texto}</span><input type="checkbox" data-pref="${clave}"${pref[clave] ? ' checked' : ''}></label>`;
       const rango = (clave, texto, lista) =>
         `<label class="dm-panel-rango"><span>${texto} <b>${lista[pref[clave]] ? lista[pref[clave]].nombre : ''}</b></span>` +
         `<input type="range" min="0" max="${lista.length - 1}" step="1" value="${pref[clave]}" data-pref="${clave}" aria-label="${texto}"></label>`;
-      let h = '<div class="dm-panel-titulo"><span class="dm-flor-mini"></span>Día de Muertos</div>';
+      let h = '<h3 class="ap-subtitulo dm-panel-titulo"><span class="dm-flor-mini"></span>Día de Muertos</h3><div class="dm-panel">';
       if (abierta()) {
         h += casilla('mostrar', 'Ver la decoración') +
           `<div class="dm-panel-opciones" aria-disabled="${!pref.mostrar}">` +
@@ -1499,16 +1431,13 @@
         h += '<div class="dm-panel-admin"><p>Administración: ' + (abierta() ? 'abierta para todos.' : 'cerrada para todos.') + '</p>' +
           `<button type="button" class="${abierta() ? 'secondary' : ''}" data-dm-global>${abierta() ? 'Cerrar la temporada para todos' : 'Abrir la temporada para todos'}</button></div>`;
       }
-      p.innerHTML = h;
-      const restablecer = p.querySelector('[data-dm-restablecer]');
-      if (restablecer) restablecer.addEventListener('click', () => { cambiarPref(PREF_BASE); actualizarPanel(); });
-      const global = p.querySelector('[data-dm-global]');
-      if (global) global.addEventListener('click', () => { cerrarPanel(); alternar(); });
+      p.innerHTML = h + '</div>';
+      return true;
     }
 
-    /** Pone los controles y sus etiquetas como está pref, sin rehacer el panel */
-    function actualizarPanel() {
-      const p = panel();
+    /** Pone los controles y sus etiquetas como está pref, sin rehacer la sección */
+    function actualizarOpciones() {
+      const p = contenedorOpciones;
       if (!p) return;
       const listas = { cantidad: CANTIDADES, velocidad: VELOCIDADES };
       p.querySelectorAll('[data-pref]').forEach((el) => {
@@ -1542,6 +1471,7 @@
         if (delServidor && !pref.mostrar) cambiarPref({ mostrar: true });
         else aplicarPref();
         decorar();
+        pintarOpciones();
         Notificar.exito(quedo ? 'Decoración de Día de Muertos encendida' : 'Decoración de Día de Muertos apagada');
       } catch (err) {
         Notificar.error('No se pudo cambiar la decoración: ' + ((err && err.message) || err));
@@ -1551,7 +1481,6 @@
     // ---------- Lo que corre ----------
 
     function decorar() {
-      interruptor();
       if (!activa()) {
         document.querySelectorAll('.dm-deco').forEach((el) => el.remove());
         return;
@@ -1600,6 +1529,6 @@
       decorar();
     }
 
-    return { aplicar, mensajesCarga, abrirOfrenda };
+    return { aplicar, mensajesCarga, abrirOfrenda, opciones };
   })();
 </script>
