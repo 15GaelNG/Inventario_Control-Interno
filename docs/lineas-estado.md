@@ -213,7 +213,27 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     estorbarle. Para que sea rápido: una asignación sin persona deja el ID PERSONA en blanco sin consultar Capital Humano
     (`LineasEscritura.conPersona_`), el resguardo reutiliza las 4 hojas que leyó la inspección en la misma ejecución, y
     `LineasNotificaciones.crear` y `LineasResguardos.asegurarBandeja_` revisan sus columnas una vez cada 6 h (cachés
-    `ln_notif_esquema_v1` y `ln_resguardos_esquema_v1`). Tiempos, en `migracion/TIEMPOS_LINEAS.md` (cambio 4).
+    `ln_notif_esquema_v1` y `ln_resguardos_esquema_v2`). Tiempos, en `migracion/TIEMPOS_LINEAS.md` (cambio 4).
+- **La bandeja de Pau: espera en cada paso, espejo del inventario y accesorios** (13-oct, `93e77a8`; `LineasResguardos.gs` y
+  `initResguardos` en `lineas.html`):
+  - **Espera:** Recibir, Entregar a Líneas, Vendido, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
+    `pedirDatos` con `{ detalle, peligro, espera, alConfirmar }`: la ventana lista lo que se toca (`detalle`, clase
+    `confirmar-detalle`), y al aceptar se queda con la pantalla de espera («Recibiendo N equipo(s)», «Entregando…»,
+    «Marcando… como vendidos», «Guardando N carta(s)…», «Cancelando N línea(s)») hasta que contesta el servidor; un error se
+    ve en la misma ventana con «Volver». Recibir sigue pidiendo confirmación (pendiente 3.1). La pantalla de espera
+    (`.ln-espera`) y el estado de las miniaturas (`.ln-miniatura-estado`) toman las esquinas de su ventana
+    (`border-radius: inherit`, `7a66cc6`): antes salían cuadradas encima de las ventanas redondeadas.
+  - **Espejo del inventario** (usuario, 13-oct; `bandeja` con `espejo_` y `abierto_`): un renglón abierto (PENDIENTE DE
+    RECEPCION, EN RESGUARDO o con su cancelación en curso) muestra al leer lo de hoy del registro: NUCO, TIPO, MODELO, IMEI y
+    ACCESORIOS y, si el renglón no va a cancelación o el registro sigue con el mismo número, NUMERO (solo sin cancelación),
+    COMPANIA, RAZON_SOCIAL y FIN_PLAN. Una cancelación es de su número: si el equipo ya tiene otra línea, el renglón conserva
+    lo de la línea que se cancela. La hoja sigue guardando lo de cuando se mandó. No siguen al inventario los datos que se
+    llenan al mandar: estatus del equipo y de la línea, departamento, sede, oficina y comentario (mandar otra vez un equipo
+    abierto con otro estatus sí actualiza estatus, departamento, sede y oficina; el comentario no se actualiza, usuario,
+    13-oct). Lo cerrado (entregado, vendido, cancelado) se queda como quedó.
+  - **Accesorios:** columna ACCESORIOS al final de APP_RESGUARDOS (`asegurarBandeja_` la agrega a la hoja que ya existe;
+    caché `ln_resguardos_esquema_v2`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
+    mandar a cancelación; la pestaña Resguardos tiene la columna «Accesorios» después de IMEI.
 - **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
   sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
   escribe como en Capital Humano (`guardarCH`: QUERETARO → QRO). Cachés `indice_colaboradores_v6` y `catalogos_telefonia_v8`.
@@ -246,7 +266,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
-| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones, desde el 13-oct), avisos, fotos y correcciones |
+| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario), avisos, fotos y correcciones |
 | APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
