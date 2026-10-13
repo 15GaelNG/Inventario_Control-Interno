@@ -194,6 +194,21 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     (Mandar a resguardo de un equipo con línea que va a cancelación; Desvincular o Cambiar línea con «MANDAR A
     CANCELACIÓN», `LineasAcciones.vincular` con `{ motivoDelAdendum: true }`) sale del adendum
     (`motivoCancelacionDe_`): vencido → LINEA VENCIDA; vigente → CANCELACION ANTICIPADA; sin fecha o SIM BASICO, en blanco.
+    Así se queda, sin lista en esas dos (usuario, 13-oct).
+  - **Cómo corre Mandar a resguardo con inspección** (13-oct, `4e8ccd6`; `abrirResguardo` en `lineas.html`, igual desde el
+    clic derecho que desde el ⋮ de la ficha): la ventana sigue con la pantalla de espera («Mandando N a resguardo»)
+    después de «Guardar inspección y terminar», hasta que el servidor contesta; si falla, dice «No se mandó a
+    resguardo» y que las inspecciones quedaron guardadas. La última inspección viaja con el resguardo en **una sola
+    llamada** (`inspeccionesEnFlujo(equipos, para, ultima)`; `TelefoniaService.mandarResguardo` con `datos.inspeccion`
+    llama a `LineasCaptura.guardarInspeccion(…, { sinIndice: true })` y luego a `LineasResguardos.mandar`; regresa la
+    inspección con `resguardo` o, si el resguardo falló, con `error`). El PDF de la inspección se pide después, sin
+    estorbarle. Para que sea rápido: una asignación sin persona deja el ID PERSONA en blanco sin consultar Capital Humano
+    (`LineasEscritura.conPersona_`), el resguardo reutiliza las 4 hojas que leyó la inspección en la misma ejecución, y
+    `LineasNotificaciones.crear` y `LineasResguardos.asegurarBandeja_` revisan sus columnas una vez cada 6 h (cachés
+    `ln_notif_esquema_v1` y `ln_resguardos_esquema_v1`). Tiempos, en `migracion/TIEMPOS_LINEAS.md` (cambio 4).
+- **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
+  sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
+  escribe como en Capital Humano (`guardarCH`: QUERETARO → QRO). Cachés `indice_colaboradores_v6` y `catalogos_telefonia_v8`.
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
 - **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
@@ -274,7 +289,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
 | `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
-| `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
+| `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Desde el 13-oct, en un DEV, guardar una inspección, generar un PDF, Mandar a resguardo y Mandar a cancelación anotan sus pasos dentro del servidor (`TelefoniaService.conPasosEnDev_`, con `LineasDatos.tiempo` «@a los ms») y el medidor los pide con `apiLineasPasosServidor` y los escribe como «SERVIDOR …»; en producción no hacen nada. Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
 
 ## 4. Cómo se trabaja
