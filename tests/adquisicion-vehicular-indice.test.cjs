@@ -73,6 +73,7 @@ function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () 
       buscarCarpetaPorFolio_: buscarCarpetaPorFolio,
       FUENTES: fuentes,
       ENCABEZADOS_INDICE,
+      normalizarSerie_: (s) => String(s || '').toUpperCase().replace(/\s+/g, ''),
     },
     DriveApp: {
       getFolderById: (id) => ({
@@ -196,6 +197,27 @@ test('indiceAdqPasadaExcel_ usa el link del Excel como último recurso si Drive 
 
   contexto.indiceAdqPasadaExcel_();
   assert.equal(hojaIndice._filas[1][4], 'https://dropbox/x');
+});
+
+test('indiceAdqPasadaExcel_ no reinserta una serie que ya está cargada con FUENTE=MANUAL', () => {
+  const hojaIndice = hojaMock([ENCABEZADOS_INDICE,
+    ['JN1BE6DS1R9105926', '30371', 'CONSTRUCCIÓN', '2025', 'https://drive/manual', 'MANUAL', 'ayer']]);
+  const { contexto } = crearContexto({ hojaIndice, fuentes: [{ año: '2025' }] });
+  // El Excel vivo SÍ trae esta serie (y otra más, nueva) -- la de MANUAL se tiene que saltar, la otra no
+  contexto.AdquisicionVehicularService.leerFuente_ = () => [
+    { serie: 'JN1BE6DS1R9105926', año: '2025', folio: '30371', area: 'CONSTRUCCIÓN', liga: '', nombreCarpeta: '' },
+    { serie: 'OTRASERIE2025XXXX', año: '2025', folio: '99999', area: 'TI', liga: 'https://drive/otra', nombreCarpeta: '' },
+  ];
+  contexto.AdquisicionVehicularService.buscarCarpetaPorFolio_ = () => '';
+  contexto.AdquisicionVehicularService.buscarEnListaCarpetas_ = () => '';
+  contexto.AdquisicionVehicularService.listarCarpetasAdquisicion_ = () => [];
+
+  contexto.indiceAdqPasadaExcel_();
+
+  const filas = hojaIndice._filas.slice(1);
+  assert.equal(filas.filter((r) => r[0] === 'JN1BE6DS1R9105926').length, 1, 'no se duplica la serie ya en MANUAL');
+  assert.equal(filas.find((r) => r[0] === 'JN1BE6DS1R9105926')[5], 'MANUAL', 'la fila que queda sigue siendo la MANUAL');
+  assert.equal(filas.some((r) => r[0] === 'OTRASERIE2025XXXX' && r[5] === 'EXCEL-2025'), true, 'una serie nueva sí se agrega normal');
 });
 
 // ---------------------------------------------------------------------------------------- importar lista final (manual)

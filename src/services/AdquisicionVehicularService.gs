@@ -230,6 +230,6 @@ const AdquisicionVehicularService = (function () {
     // Lo de abajo lo usa AdquisicionVehicularIndice.gs para construir el índice; el botón de la
     // ficha solo llama buscar().
     FUENTES, leerFuente_, listarCarpetasAdquisicion_, buscarEnListaCarpetas_, buscarCarpetaPorFolio_,
-    indiceHoja_, HOJA_INDICE, ENCABEZADOS_INDICE,
+    indiceHoja_, HOJA_INDICE, ENCABEZADOS_INDICE, normalizarSerie_,
   };
 })();

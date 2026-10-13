@@ -9,11 +9,10 @@
  *
  * Cada fila: [SERIE, FOLIO, AREA, AÑO, LIGA_CARPETA]. Se carga UNA vez con
  * adquisicionVehicularIndice_importarListaFinal() (AdquisicionVehicularIndice.gs), con
- * FUENTE="MANUAL" -- ese import es idempotente (se puede volver a correr sin duplicar), pero
- * si despues se corre adquisicionVehicularIndice_todo(), puede volver a agregar estas mismas
- * series bajo EXCEL-2024/2025/2026 u OCR-2024/2025/2026 (el constructor no sabe que ya estan aqui): se verian dos veces en
- * el apartado "Adquisicion". Si eso pasa, hay que agregar una limpieza por serie antes de volver
- * a correr el automatico.
+ * FUENTE="MANUAL" -- ese import es idempotente (se puede volver a correr sin duplicar). Una
+ * corrida despues de adquisicionVehicularIndice_todo() (compras nuevas) no reinserta estas
+ * series: indiceAdqPasadaExcel_ se salta, en la pasada A, cualquier serie que ya tenga
+ * FUENTE="MANUAL" (indiceAdqSeriesDeFuente_).
  */
 const ADQUISICION_VEHICULAR_LISTA_FINAL_ = [
   ["3N1CN8AE4RL847016", "1", "CAPITAL HUMANO", "2024", "https://drive.google.com/drive/folders/1WgORLYWI9YxgE4pbYX3sScEpyIGqUlpo?usp=drive_link"],

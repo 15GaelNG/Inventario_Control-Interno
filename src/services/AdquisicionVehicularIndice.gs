@@ -127,21 +127,44 @@ const indiceAdqEsCuota_ = (e) => /quota|rate ?limit|limit exceeded|too many|dema
  *  no aparece así, por el texto de NOMBRE DE LA CARPETA, la de 2024) y solo si Drive de verdad no
  *  tiene esa carpeta usa lo que traiga el Excel (en 2025 puede ser un link a Dropbox, no a Drive --
  *  el usuario prefirió Drive cuando esté disponible, 12-oct-2026). listarCarpetasAdquisicion_ se
- *  recorre una sola vez para toda la pasada, no por cada fila. */
+ *  recorre una sola vez para toda la pasada, no por cada fila.
+ *
+ *  Nunca pisa una serie que ya está cargada con FUENTE="MANUAL"
+ *  (adquisicionVehicularIndice_importarListaFinal, 13-oct-2026): esas ligas se investigaron a
+ *  mano (hipervínculos ocultos del Excel viejo, carpetas de Dropbox) y son mejores que lo que
+ *  esta pasada puede encontrar sola -- sin este filtro, una corrida después de importar la lista
+ *  final volvería a agregar esas mismas series bajo EXCEL-*, duplicadas en "Adquisición". */
 function indiceAdqPasadaExcel_() {
   const hoja = AdquisicionVehicularService.indiceHoja_(true);
   const carpetas = AdquisicionVehicularService.listarCarpetasAdquisicion_();
+  const seriesManual = indiceAdqSeriesDeFuente_(hoja, 'MANUAL');
   const ahora = new Date().toISOString();
   AdquisicionVehicularService.FUENTES.forEach((fuente) => {
     const fuenteNombre = 'EXCEL-' + fuente.año;
-    const filas = AdquisicionVehicularService.leerFuente_(fuente).map((f) => {
-      let liga = AdquisicionVehicularService.buscarCarpetaPorFolio_(carpetas, f.año, f.folio);
-      if (!liga && f.nombreCarpeta) liga = AdquisicionVehicularService.buscarEnListaCarpetas_(carpetas, f.año, f.nombreCarpeta);
-      if (!liga) liga = f.liga;   // último recurso: lo que traiga el Excel (puede ser Dropbox)
-      return [f.serie, f.folio, f.area, f.año, liga, fuenteNombre, ahora];
-    });
+    const filas = AdquisicionVehicularService.leerFuente_(fuente)
+      .filter((f) => !seriesManual.has(f.serie))
+      .map((f) => {
+        let liga = AdquisicionVehicularService.buscarCarpetaPorFolio_(carpetas, f.año, f.folio);
+        if (!liga && f.nombreCarpeta) liga = AdquisicionVehicularService.buscarEnListaCarpetas_(carpetas, f.año, f.nombreCarpeta);
+        if (!liga) liga = f.liga;   // último recurso: lo que traiga el Excel (puede ser Dropbox)
+        return [f.serie, f.folio, f.area, f.año, liga, fuenteNombre, ahora];
+      });
     indiceAdqReemplazarFuente_(hoja, fuenteNombre, filas);
   });
+}
+
+/** Las series (ya normalizadas) que el índice ya tiene bajo una FUENTE dada -- para que otra
+ *  pasada no las vuelva a insertar. */
+function indiceAdqSeriesDeFuente_(hoja, fuenteNombre) {
+  const series = new Set();
+  if (hoja.getLastRow() > 1) {
+    const colSerie = AdquisicionVehicularService.ENCABEZADOS_INDICE.indexOf('SERIE');
+    const colFuente = AdquisicionVehicularService.ENCABEZADOS_INDICE.indexOf('FUENTE');
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, AdquisicionVehicularService.ENCABEZADOS_INDICE.length).getValues().forEach((f) => {
+      if (f[colFuente] === fuenteNombre && f[colSerie]) series.add(AdquisicionVehicularService.normalizarSerie_(f[colSerie]));
+    });
+  }
+  return series;
 }
 
 /** Quita del índice los renglones de esa FUENTE y escribe los nuevos en su lugar. */
