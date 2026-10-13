@@ -29,6 +29,9 @@
  *   adquisicionVehicularIndice_importarListaFinal()  carga, UNA vez, el trabajo manual de
  *     AdquisicionVehicularListaFinalSemilla.gs (FUENTE="MANUAL") -- ligas que ni A ni B pueden
  *     encontrar solas (hipervínculos ocultos de Excel viejo, carpetas de Dropbox)
+ *   adquisicionVehicularIndice_autoLlenarVehiculos()  propaga el índice a la ficha de cada
+ *     vehículo (FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICION), sin tener que abrirlas una por
+ *     una -- correr después de cualquiera de las de arriba
  */
 const INDICE_ADQ_PROP = 'ADQUISICION_VEHICULAR_INDICE_ESTADO';
 const INDICE_ADQ_CONTINUAR = 'adquisicionVehicularIndice_continuar';
@@ -93,6 +96,28 @@ function adquisicionVehicularIndice_importarListaFinal() {
   const filas = ADQUISICION_VEHICULAR_LISTA_FINAL_.map((f) => f.concat(['MANUAL', ahora]));
   indiceAdqReemplazarFuente_(hoja, 'MANUAL', filas);
   return 'Cargadas ' + filas.length + ' series con FUENTE=MANUAL.';
+}
+
+/** Llena FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICION en todos los vehículos cuya serie ya
+ *  esté en el índice -- lo mismo que el botón "Buscar expediente" de la ficha, de un jalón, para
+ *  no tener que abrirlas una por una (VehiculosService.autoLlenarAdquisicion). Nunca pisa un
+ *  vehículo que ya tenía algo capturado. Corre después de _todo() o _importarListaFinal(), con
+ *  lo que haya en el índice en ese momento -- no construye nada, solo lo propaga a Vehículos. */
+function adquisicionVehicularIndice_autoLlenarVehiculos() {
+  soloEditor_();
+  const hoja = AdquisicionVehicularService.indiceHoja_(false);
+  const mapa = {};
+  if (hoja && hoja.getLastRow() > 1) {
+    const colSerie = AdquisicionVehicularService.ENCABEZADOS_INDICE.indexOf('SERIE');
+    const colFolio = AdquisicionVehicularService.ENCABEZADOS_INDICE.indexOf('FOLIO');
+    const colLiga = AdquisicionVehicularService.ENCABEZADOS_INDICE.indexOf('LIGA_CARPETA');
+    hoja.getRange(2, 1, hoja.getLastRow() - 1, AdquisicionVehicularService.ENCABEZADOS_INDICE.length).getValues().forEach((f) => {
+      const serie = AdquisicionVehicularService.normalizarSerie_(f[colSerie]);
+      if (serie) mapa[serie] = { folio: String(f[colFolio] || '').trim(), liga: String(f[colLiga] || '').trim() };
+    });
+  }
+  const llenados = VehiculosService.autoLlenarAdquisicion(mapa);
+  return 'Se llenaron ' + llenados + ' vehículos con su folio/carpeta de adquisición.';
 }
 
 // ---------------------------------------------------------------------------------------------- estado

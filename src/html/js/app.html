@@ -2244,6 +2244,11 @@
     let todosLosVehiculos = [];
     /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
     let fichaVehiculoAbierta = null;
+    /** Series (normalizadas) con expediente de Adquisición Vehicular ya encontrado en el índice
+     *  (apiAdquisicionVehicularLista) -- para la columna "Adquisición" del catálogo, se llena en
+     *  cargar(). No es lo mismo que FOLIO ADQUISICION en la ficha (eso solo queda cuando alguien
+     *  le dio clic a "Buscar expediente" en ESE vehículo); esto refleja el índice completo. */
+    let adquisicionEncontrada = new Set();
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true, 2);
@@ -3924,6 +3929,16 @@
         // normalizando "_"->" " contra el encabezado real de la hoja ("SERIE VEHICULO") -- con
         // otra clave no la reconoce como la misma y agrega una segunda columna duplicada.
         { campo: 'SERIE_VEHICULO', titulo: 'Serie Vehículo', tipo: 'texto', enDetalle: false },
+        {
+          // Computada (apiAdquisicionVehicularLista, cargar()): si el índice de Adquisición
+          // Vehicular ya tiene carpeta para esta serie -- no depende de que alguien le haya
+          // dado clic a "Buscar expediente" en la ficha de ESTE vehículo (ver adquisicionEncontrada).
+          campo: 'ADQUISICION', titulo: 'Adquisición', tipo: 'lista', enDetalle: false,
+          valor: (v) => (adquisicionEncontrada.has(serieNormalizada(v.SERIE_VEHICULO)) ? 'Encontrada' : ''),
+          render: (val) => (val
+            ? '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Encontrada</span>'
+            : '<span style="color:var(--color-text-muted)">—</span>'),
+        },
         // 'texto' (no 'lista'): ESTATUS trae varias razones de baja distintas
         // ("BAJA VEHICULAR", etc.) — contiene/no contiene "BAJA" cubre todas
         // sin tener que enumerarlas, igual que hacía el filtro de KPI de antes.
@@ -4118,8 +4133,14 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        const texto = await callServerListaCacheada('apiListarVehiculosResumen', state.token);
+        const [texto, textoAdq] = await Promise.all([
+          callServerListaCacheada('apiListarVehiculosResumen', state.token),
+          callServerCacheado('apiAdquisicionVehicularLista', state.token).catch(() => '[]'),
+        ]);
         todosLosVehiculos = texto ? JSON.parse(texto) : [];
+        adquisicionEncontrada = new Set(
+          (JSON.parse(textoAdq || '[]') || []).filter((f) => f.liga).map((f) => serieNormalizada(f.serie))
+        );
       } catch (err) {
         tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
         return;

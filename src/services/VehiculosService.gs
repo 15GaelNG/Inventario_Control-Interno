@@ -452,6 +452,48 @@ const VehiculosService = (function () {
     }, ID_COLUMN);
   }
 
+  /**
+   * Lo mismo que guardarExpedienteAdquisicion, pero para TODOS los vehículos de un jalón --
+   * así no hay que abrir cada ficha y darle clic a "Buscar expediente". Solo se corre desde el
+   * editor (adquisicionVehicularIndice_autoLlenarVehiculos, AdquisicionVehicularIndice.gs);
+   * `mapaSerieAFolioLiga` es { SERIE_NORMALIZADA: { folio, liga } }, ya armado por quien llama.
+   *
+   * Nunca pisa un vehículo que ya tenía algo en FOLIO ADQUISICION (ni a mano, ni de una corrida
+   * anterior de esto) -- y solo toca esas dos columnas, nunca el resto de la fila: una sola
+   * lectura y una sola escritura POR COLUMNA (no SheetUtils.update por vehículo, son cientos y
+   * cada uno relee la hoja completa para encontrar su fila).
+   */
+  function autoLlenarAdquisicion(mapaSerieAFolioLiga) {
+    soloEditor_();
+    const hoja = SpreadsheetApp.openById(ssId()).getSheetByName(SHEET_VEHICULOS);
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const colSerie = encabezados.indexOf('SERIE VEHICULO') + 1;
+    const colFolio = encabezados.indexOf('FOLIO ADQUISICION') + 1;
+    const colLiga = encabezados.indexOf('LIGA EXPEDIENTE ADQUISICION') + 1;
+    if (!colSerie || !colFolio || !colLiga) throw new Error('VEHICULOS no tiene las columnas SERIE VEHICULO/FOLIO ADQUISICION/LIGA EXPEDIENTE ADQUISICION.');
+    const nFilas = hoja.getLastRow() - 1;
+    if (nFilas <= 0) return 0;
+    const series = hoja.getRange(2, colSerie, nFilas, 1).getValues();
+    const folios = hoja.getRange(2, colFolio, nFilas, 1).getValues();
+    const ligas = hoja.getRange(2, colLiga, nFilas, 1).getValues();
+    let llenados = 0;
+    for (let i = 0; i < nFilas; i++) {
+      if (folios[i][0]) continue;
+      const serie = String(series[i][0] || '').toUpperCase().replace(/\s+/g, '');
+      const encontrado = serie && mapaSerieAFolioLiga[serie];
+      if (!encontrado) continue;
+      folios[i][0] = encontrado.folio;
+      ligas[i][0] = encontrado.liga;
+      llenados++;
+    }
+    if (llenados) {
+      hoja.getRange(2, colFolio, nFilas, 1).setValues(folios);
+      hoja.getRange(2, colLiga, nFilas, 1).setValues(ligas);
+      CacheHojas.tocar(ssId(), SHEET_VEHICULOS);
+    }
+    return llenados;
+  }
+
   return {
     /** Catálogo completo, todas las columnas. Pesado (648 filas x 41 columnas) —
      * usar listarResumen() para listas/tarjetas y buscarPorFolio() para detalle. */
@@ -484,6 +526,6 @@ const VehiculosService = (function () {
       return HojaServicio.subirArchivo(carpeta, 'de adjuntos de Vehículos', nombreArchivo, mimeType, base64Data);
     },
     diagnosticoIds, vencimientosSeguro,
-    guardarExpedienteAdquisicion,
+    guardarExpedienteAdquisicion, autoLlenarAdquisicion,
   };
 })();

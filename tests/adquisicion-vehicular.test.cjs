@@ -206,14 +206,46 @@ test('buscar regresa null sin tronar si el índice todavía no existe (nadie lo 
 
 // ---------------------------------------------------------------------------- VehiculosService.guardarExpedienteAdquisicion
 
-function crearContextoVehiculos() {
-  const llamadas = { update: [] };
+/** Hoja en memoria con encabezados reales (fila 1) -- suficiente para autoLlenarAdquisicion
+ *  (getLastColumn/getLastRow/getRange por columna). */
+function hojaVehMock(encabezados, filasDatos) {
+  const filas = [encabezados.slice()].concat(filasDatos.map((f) => f.slice()));
+  return {
+    getLastColumn: () => encabezados.length,
+    getLastRow: () => filas.length,
+    getRange(row, col, numRows, numCols) {
+      return {
+        getValues() {
+          const out = [];
+          for (let r = 0; r < (numRows || 1); r++) {
+            const fila = filas[row - 1 + r] || [];
+            out.push(Array.from({ length: numCols || 1 }, (_, c) => (fila[col - 1 + c] !== undefined ? fila[col - 1 + c] : '')));
+          }
+          return out;
+        },
+        setValues(valores) {
+          valores.forEach((fila, r) => {
+            fila.forEach((v, c) => { filas[row - 1 + r][col - 1 + c] = v; });
+          });
+          return this;
+        },
+      };
+    },
+    _filas: filas,
+  };
+}
+
+function crearContextoVehiculos({ hoja } = {}) {
+  const llamadas = { update: [], tocar: [] };
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
     Permisos: { puedeEditar: (token, modulo) => { llamadas.permisoPedido = modulo; } },
     SheetUtils: {
       update: (ssId, hoja, id, cambios) => { llamadas.update.push({ ssId, hoja, id, cambios: Object.assign({}, cambios) }); return cambios; },
     },
+    soloEditor_: () => {},
+    SpreadsheetApp: { openById: (id) => ({ getSheetByName: () => hoja }) },
+    CacheHojas: { tocar: (ssId, hojaNombre) => llamadas.tocar.push({ ssId, hojaNombre }) },
     console,
   });
   vm.runInContext(
@@ -241,4 +273,36 @@ test('noEditables sigue bloqueando FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICI
   const codigo = fs.readFileSync(path.join(__dirname, '../src/services/VehiculosService.gs'), 'utf8');
   assert.match(codigo, /noEditables:\s*\[[^\]]*'FOLIO ADQUISICION'[^\]]*\]/);
   assert.match(codigo, /noEditables:\s*\[[^\]]*'LIGA EXPEDIENTE ADQUISICION'[^\]]*\]/);
+});
+
+// ---------------------------------------------------------------------------- VehiculosService.autoLlenarAdquisicion
+
+const ENCABEZADOS_VEH = ['ID', 'SERIE VEHICULO', 'FOLIO ADQUISICION', 'LIGA EXPEDIENTE ADQUISICION'];
+
+test('autoLlenarAdquisicion llena solo los vehículos sin folio cuya serie está en el mapa', () => {
+  const hoja = hojaVehMock(ENCABEZADOS_VEH, [
+    ['V1', 'jn1be6ds1r9105926', '', ''],              // sin folio, serie en el mapa (minúsculas/espacio de más) -> se llena
+    ['V2', 'MMBM7U5G6SH031049', 'YA-TENIA', 'https://drive/viejo'],   // ya tenía algo -> no se toca
+    ['V3', 'NOESTAENELINDICE1', '', ''],               // serie no está en el mapa -> se queda vacío
+  ]);
+  const { contexto, llamadas } = crearContextoVehiculos({ hoja });
+  const mapa = {
+    'JN1BE6DS1R9105926': { folio: '30371', liga: 'https://drive/30371' },
+    'MMBM7U5G6SH031049': { folio: '27697', liga: 'https://drive/27697' },
+  };
+
+  const llenados = contexto.Servicio.autoLlenarAdquisicion(mapa);
+
+  assert.equal(llenados, 1);
+  assert.deepEqual(hoja._filas[1], ['V1', 'jn1be6ds1r9105926', '30371', 'https://drive/30371']);
+  assert.deepEqual(hoja._filas[2], ['V2', 'MMBM7U5G6SH031049', 'YA-TENIA', 'https://drive/viejo'], 'no se pisa lo ya capturado');
+  assert.deepEqual(hoja._filas[3], ['V3', 'NOESTAENELINDICE1', '', '']);
+  assert.equal(llamadas.tocar.length, 1, 'avisa a CacheHojas cuando sí cambió algo');
+});
+
+test('autoLlenarAdquisicion no toca CacheHojas si no llenó nada', () => {
+  const hoja = hojaVehMock(ENCABEZADOS_VEH, [['V1', 'NOESTAENELINDICE', '', '']]);
+  const { contexto, llamadas } = crearContextoVehiculos({ hoja });
+  assert.equal(contexto.Servicio.autoLlenarAdquisicion({}), 0);
+  assert.equal(llamadas.tocar.length, 0);
 });
