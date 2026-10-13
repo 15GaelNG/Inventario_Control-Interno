@@ -617,7 +617,7 @@ console.log('\nrevisar() empareja igual que propagar(): por la FK primero');
   const enc = hs['INSTALACION DE SENSORES'].enc.concat(['ID VEHICULO']);
   const fila = (extra) => Object.assign({ ID_SENSOR: 'SEN-X', 'SERIE SENSOR': 'SX' }, comoSensores(vehiculos[0], 'POST VENTA'), extra);
   hs['INSTALACION DE SENSORES'] = hoja('INSTALACION DE SENSORES', enc, [
-    // FK de CTA0001 pero la serie de CTA0003: manda la FK
+    // FK de CTA0001 pero la serie de CTA0003: no se adivina cuál está mal (13-oct; antes mandaba la FK)
     fila({ 'ID VEHICULO': vehiculos[0].ID, 'SERIE VEHICULO': 'SER3', SEDE: 'VIEJA' }),
     // FK puesta y serie vacía: el caso CON0618
     fila({ 'ID VEHICULO': vehiculos[0].ID, 'SERIE VEHICULO': '', SEDE: 'VIEJA' }),
@@ -625,14 +625,32 @@ console.log('\nrevisar() empareja igual que propagar(): por la FK primero');
     fila({ 'ID VEHICULO': 'VEH-00000000ZZZZZZ', 'SERIE VEHICULO': 'SER1', SEDE: 'VIEJA' }),
   ]);
   const R = cargar(hs);
-  const r = R.revisar({ corregir: true, hojas: ['INSTALACION DE SENSORES'] });
+  const r = R.revisar({ corregir: true, detalle: true, hojas: ['INSTALACION DE SENSORES'] });
   const s = hs['INSTALACION DE SENSORES'];
   const col = (n) => s.enc.indexOf(n);
-  ok(s.datos[0][col('DEPARTAMENTO')] === 'CONSTRUCCION', 'FK y serie en desacuerdo: recibe los datos del dueño de la FK');
+  ok(s.datos[0][col('SEDE')] === 'VIEJA', 'FK y serie en desacuerdo: no se toca (no se adivina cuál está mal)');
+  const choque = r['INSTALACION DE SENSORES'].entradas.filter((e) => e.fila === 2)[0];
+  ok(choque && choque.tipo === 'CLAVE_DUPLICADA_EN_ORIGEN' && /SER1.*aquí dice SER3/.test(choque.motivo),
+    'y va a mano, diciendo qué dice cada uno: ' + (choque && choque.motivo));
   ok(s.datos[1][col('SEDE')] === 'QRO', 'serie vacía con FK: se empareja y se corrige');
   ok(s.datos[2][col('SEDE')] === 'VIEJA', 'FK rota: no se corrige con el dueño de la serie');
-  ok(r['INSTALACION DE SENSORES'].huerfanos === 1 && r['INSTALACION DE SENSORES'].emparejadasPorId === 2,
-    'el resumen dice 2 por ID y 1 huérfana');
+  ok(r['INSTALACION DE SENSORES'].huerfanos === 1 && r['INSTALACION DE SENSORES'].emparejadasPorId === 1 &&
+    r['INSTALACION DE SENSORES'].clavesDuplicadasOmitidas === 1, 'el resumen dice 1 por ID, 1 en desacuerdo y 1 huérfana');
+}
+
+console.log('\nNunca por folio: VERIFICACIONES e INCIDENCIAS sin ID VEHICULO van a mano (13-oct)');
+{
+  const hs = armar();
+  const R = cargar(hs);
+  // La verificación de armar() no trae ID VEHICULO, solo el folio de CTA0001
+  const r = R.revisar({ corregir: true, detalle: true, hojas: ['VERIFICACIONES'] });
+  const v = r['VERIFICACIONES'];
+  ok(v.emparejadasPorClave === 0 && v.huerfanos === 1, 'no se empareja por FOLIO VEHICULO: ' + JSON.stringify([v.emparejadasPorClave, v.huerfanos]));
+  ok(v.entradas.some((e) => e.tipo === 'HUERFANO' && /por FOLIO VEHICULO no se liga/.test(e.motivo || '')), 'y dice por qué');
+  ok(hs['VERIFICACIONES'].valor('VER-1', 'ID_VERIFICACION', 'PLACA') === 'AAA111', 'ni se le copia nada');
+  const p = R.alGuardar('VEHICULOS', Object.assign({}, vehiculos[0], { PLACA: 'NUEVA1' }), { PLACA: 'NUEVA1' });
+  ok(!p.VERIFICACIONES && hs['VERIFICACIONES'].valor('VER-1', 'ID_VERIFICACION', 'PLACA') === 'AAA111',
+    'al guardar el vehículo tampoco se propaga por folio');
   ok(!r['HOLOGRAMAS'], 'con hojas: [...] solo revisa esas');
 }
 
