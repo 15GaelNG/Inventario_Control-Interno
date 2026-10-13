@@ -67,6 +67,17 @@
     document.getElementById('modal-nueva-solicitud-compra').hidden = true;
   }
 
+  /** Atajo para subir/ver archivos sin tener que abrir el detalle de la fila (el "ojito") --
+   *  misma pintarArchivosSolicitudCompra de arriba, nomás que en una ventana aparte. */
+  function abrirModalArchivosSolicitudCompra(fila) {
+    document.getElementById('soc-archivos-titulo').textContent = fila.FOLIO + ' — ' + fila.NOMBRE;
+    document.getElementById('modal-archivos-solicitud-compra').hidden = false;
+    pintarArchivosSolicitudCompra(fila, document.getElementById('soc-archivos-cuerpo'));
+  }
+  function cerrarModalArchivosSolicitudCompra() {
+    document.getElementById('modal-archivos-solicitud-compra').hidden = true;
+  }
+
   async function initSolicitudCompra() {
     async function recargarLista() {
       tabla.setCargando(true);
@@ -100,6 +111,7 @@
         },
       ],
       accionesFila: [
+        { icono: 'upload', titulo: 'Subir archivos', alHacer: (f) => abrirModalArchivosSolicitudCompra(f) },
         { icono: 'external-link', titulo: 'Abrir carpeta', alHacer: (f) => window.open(f.LIGA_CARPETA, '_blank'), visible: (f) => !!f.LIGA_CARPETA },
         { icono: 'car', titulo: 'Ya crear vehículo', visible: (f) => f.ESTATUS === 'ABIERTA', alHacer: (f) => crearVehiculoDesdeSolicitudCompra(f) },
       ],
@@ -113,6 +125,9 @@
 
     document.getElementById('soc-btn-nueva').addEventListener('click', abrirModalNuevaSolicitudCompra);
     document.getElementById('btn-cerrar-nueva-solicitud-compra').addEventListener('click', cerrarModalNuevaSolicitudCompra);
+    const modalArchivos = document.getElementById('modal-archivos-solicitud-compra');
+    document.getElementById('btn-cerrar-archivos-solicitud-compra').addEventListener('click', cerrarModalArchivosSolicitudCompra);
+    modalArchivos.addEventListener('click', (ev) => { if (ev.target === modalArchivos) cerrarModalArchivosSolicitudCompra(); });
     document.getElementById('form-nueva-solicitud-compra').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const errorBox = document.getElementById('soc-nueva-error');
