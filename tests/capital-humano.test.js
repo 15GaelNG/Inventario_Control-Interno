@@ -321,6 +321,31 @@ console.log('\n9. Escribiendo: crea la columna, liga, y nunca borra un ID con va
   ok(r2['VEHICULOS (persona)'].entradas.some((e) => e.dueno === 'AUT0001' && e.tipo === 'HUERFANO'), 'y se avisa para corregir a mano');
 }
 
+console.log('\n9b. Bitácora vs caché: en una bitácora solo se llena el ID que falta; el que ya está, se queda (13-oct)');
+{
+  const hojas = escenarioLigas();
+  const p = personas(hojas);
+  const otro = p['AC00001|JOSE LOPEZ'].id;
+  hojas['TICKETS'] = hojaFalsa(['ID', 'TICKET', 'SOLICITANTE', 'ID PERSONA'], [
+    { TICKET: 'T-1', SOLICITANTE: 'PERLA CRUZ', 'ID PERSONA': '' },        // vacío: se llena
+    { TICKET: 'T-2', SOLICITANTE: 'PERLA CRUZ', 'ID PERSONA': otro },      // el del día dice otra persona: se queda
+  ]);
+  // VEHICULOS es caché: un ID que ya no es el de su responsable SÍ se corrige
+  const veh = hojas['VEHICULOS'];
+  veh.datos[0].push('ID PERSONA');
+  veh.datos.forEach((r, i) => { if (i) r.push(i === 1 ? otro : ''); });
+  const CH = cargar(hojas);
+  const ensayo = CH.revisarLigas({ detalle: true });
+  const t = ensayo['TICKETS (solicitante)'];
+  ok(t.diferencias === 1 && t.diferenciasHistoricas === 1, 'TICKETS: 1 por llenar y 1 histórico: ' + JSON.stringify([t.diferencias, t.diferenciasHistoricas]));
+  ok(t.entradas.some((e) => e.tipo === 'DIFERENCIA_HISTORICA' && e.dueno === 'T-2'), 'el histórico sale como «Todo bien», no como «Actualizar»');
+  CH.revisarLigas({ escribir: true });
+  const ids = colDe(hojas['TICKETS'], 'ID PERSONA');
+  ok(ids[0] === p['CIB00223|PERLA CRUZ'].id, 'el vacío se llenó con su persona');
+  ok(ids[1] === otro, 'el que ya estaba no se tocó (es quien pidió ese día)');
+  ok(colDe(veh, 'ID PERSONA')[0] === p['HA00241|JUAN FULGENCIO'].id, 'en VEHICULOS (caché) el ID viejo sí se corrigió a su responsable de hoy');
+}
+
 console.log('\n10. Actualizar solo los seleccionados');
 {
   const hojas = escenarioLigas();
