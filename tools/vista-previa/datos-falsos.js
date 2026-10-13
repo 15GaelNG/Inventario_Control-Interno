@@ -253,7 +253,7 @@
       { dueno: 'FOLIO', copia: 'FOLIO', encontradas: 198, deCopia: 212, conValor: 205, duplicadasEnDueno: 0 },
     ], datos: [['PLACA', 'PLACA'], ['COLOR', 'COLOR']] }),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
-    apiCapitalHumanoResumen: { renglones: 15254, activos: 3233, sinId: 0, tieneColumna: true, sensibles: ['TELEFONO', 'NÚMERO DE CUENTA'] },
+    apiCapitalHumanoResumen: { renglones: 15254, activos: 3233, sinId: 0, tieneColumna: true, sensibles: ['NÚMERO DE CUENTA'] },
     apiCapitalHumanoHistorial: [{ FECHA: '12/10/2026 15:10', QUIEN: 'prueba@ciudadmaderas.com', RENGLONES: '15254', NUEVOS: '28', CAMBIAN: '311',
       FALTAN: '0', EMPLEOS_NUEVOS: '28', PERSONAS_NUEVAS: '26', AVISOS: '' }],
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
@@ -552,6 +552,14 @@
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'capital-humano': async () => { await abrir('capital-humano'); await hasta('#ch-historial table'); await esperar(300); },
+    // El ensayo de una carga (como en la captura del usuario del 12-oct): las cifras, los avisos y Aplicar
+    'capital-humano-ensayo': async () => {
+      await abrir('capital-humano'); await hasta('#ch-historial table');
+      const nombre = document.getElementById('ch-archivo-nombre'); nombre.textContent = 'BASE RELOJ CHECADOR ABRIL 2026.xlsx'; nombre.classList.remove('vacio');
+      CapitalHumanoVista.pintarEnsayo(document.getElementById('ch-ensayo'), { renglones: 15254, nuevos: 30, cambian: 15224, faltan: 5, personasNuevas: 26,
+        quitadas: ['NÚMERO DE CUENTA'], conflictos: [], avisos: ['No vino en el archivo: CIB00001 ANA PEREZ (se queda)', 'No vino en el archivo: CIB00002 LUIS SOTO (se queda)'] }, false);
+      await esperar(300);
+    },
     'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
     'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },
