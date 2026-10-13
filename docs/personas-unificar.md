@@ -10,6 +10,11 @@ ACTUALIZADO y la lista se **sube desde Administración > Capital humano** (solo 
   HojaServicio; ID PERSONA en Vehículos, Caja Chica, ASIGNACIONES (Líneas), Responsiva, Adherente, Reasignaciones,
   Inspección (`ID PERSONA CONDUCTOR`), Uber, Arqueos y Tickets; listas solo de activos.
 - Fase 2 (código) ✅ en `ayrton` — el módulo de carga.
+- Prueba en el DEV (12-oct, noche) ✅ — 15,254 renglones del Excel, 30 nuevos, 5 que no vinieron se quedaron, todos con
+  ID. Hallazgo: el Excel de CH trae **59 columnas** (CURP, RFC, IMSS, domicilio, CLABE, banco, beneficiarios, INE…) y la
+  cuenta llegó como CLABE, así que el filtro por nombre no la quitó. Desde `9de510f` la carga usa **lista de permitidas**
+  (`PERMITIDAS`: las 25 de la hoja de prod sin NÚMERO DE CUENTA, más ID PERSONA), en el navegador y en el servidor; la
+  siguiente carga en el DEV limpia esas columnas.
 - Pendiente: master + despliegue; **la primera carga en prod quita NÚMERO DE CUENTA de la hoja** (el TELEFONO se queda, usuario 12-oct); Fase 4
   (llenar el ID PERSONA de lo existente con Salud > "Actualizar", y ocultar PERSONAS y COLABORADORES dos semanas).
 - **Mientras tanto no pegar la lista a mano** en COLABORADORES ACTUALIZADO (desalinea la columna AA).
