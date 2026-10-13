@@ -215,14 +215,7 @@ const AdquisicionVehicularService = (function () {
     Permisos.puedeLeer(token, 'vehiculos');
     const carpetaId = idCarpetaDrive_(liga);
     if (!carpetaId) return { soportado: false };
-    const r = Drive.Files.list({
-      q: "'" + carpetaId + "' in parents and trashed = false", pageSize: 200, orderBy: 'name',
-      fields: 'files(id,name,mimeType,thumbnailLink,webViewLink)', supportsAllDrives: true, includeItemsFromAllDrives: true,
-    });
-    return {
-      soportado: true,
-      archivos: (r.files || []).map((f) => ({ id: f.id, nombre: f.name, mime: f.mimeType, miniatura: f.thumbnailLink || '', enlace: f.webViewLink || '' })),
-    };
+    return { soportado: true, archivos: DriveUtils.archivosDeCarpeta(carpetaId) };
   }
 
   return {

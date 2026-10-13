@@ -71,12 +71,13 @@ function libroMock() {
   return { getSheetByName: (nombre) => hojas[nombre] || null, insertSheet(nombre) { hojas[nombre] = hojaMock([]); return hojas[nombre]; } };
 }
 
-function crearContexto({ fuentes2024 = [], fuentes2025 = [], fuentes2026 = [], drive = {}, libro } = {}) {
+function crearContexto({ fuentes2024 = [], fuentes2025 = [], fuentes2026 = [], drive = {}, libro, archivosPorCarpeta = {} } = {}) {
   const libroVehiculos = libro || libroMock();
   const contexto = vm.createContext({
     Permisos: { puedeLeer: () => {}, puedeEditar: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_VEH' } },
     CacheHojas: { recordar: (clave, hojas2, armar) => armar() },   // sin caché: cada llamada relee la hoja
+    DriveUtils: { archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [] },
     SpreadsheetApp: {
       openById: (id) => {
         if (id === 'SS_VEH') return libroVehiculos;
@@ -204,6 +205,25 @@ test('buscar regresa null sin tronar si el índice todavía no existe (nadie lo 
   assert.equal(contexto.Servicio.buscar('tok', 'CUALQUIERA'), null);
 });
 
+// ---------------------------------------------------------------------------------- archivos
+
+test('archivos delega en DriveUtils.archivosDeCarpeta con el ID sacado de la liga de Drive', () => {
+  const { contexto } = crearContexto({
+    archivosPorCarpeta: { ABC123: [{ id: 'f1', nombre: 'factura.pdf', mime: 'application/pdf', miniatura: '', enlace: 'https://drive/f1' }] },
+  });
+  const r = contexto.Servicio.archivos('tok', 'https://drive.google.com/drive/folders/ABC123?usp=drive_link');
+  assert.equal(r.soportado, true);
+  assert.equal(r.archivos.length, 1);
+  assert.equal(r.archivos[0].nombre, 'factura.pdf');
+});
+
+test('archivos regresa soportado:false si la liga no es de Drive (Dropbox)', () => {
+  const { contexto } = crearContexto();
+  const r = contexto.Servicio.archivos('tok', 'https://www.dropbox.com/scl/fo/x');
+  assert.equal(r.soportado, false);
+  assert.equal(r.archivos, undefined);
+});
+
 // ---------------------------------------------------------------------------- VehiculosService.guardarExpedienteAdquisicion
 
 /** Hoja en memoria con encabezados reales (fila 1) -- suficiente para autoLlenarAdquisicion
@@ -273,6 +293,12 @@ test('noEditables sigue bloqueando FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICI
   const codigo = fs.readFileSync(path.join(__dirname, '../src/services/VehiculosService.gs'), 'utf8');
   assert.match(codigo, /noEditables:\s*\[[^\]]*'FOLIO ADQUISICION'[^\]]*\]/);
   assert.match(codigo, /noEditables:\s*\[[^\]]*'LIGA EXPEDIENTE ADQUISICION'[^\]]*\]/);
+});
+
+test('VEHICULOS.alCrear sí copia FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICION cuando el puente de Solicitud de compra los manda (noEditables solo bloquea actualizar, nunca crear)', () => {
+  const codigo = fs.readFileSync(path.join(__dirname, '../src/services/VehiculosService.gs'), 'utf8');
+  assert.match(codigo, /ctx\.datos\['FOLIO ADQUISICION'\]\)\s*fila\['FOLIO ADQUISICION'\]\s*=\s*ctx\.datos\['FOLIO ADQUISICION'\]/);
+  assert.match(codigo, /ctx\.datos\['LIGA EXPEDIENTE ADQUISICION'\]\)\s*fila\['LIGA EXPEDIENTE ADQUISICION'\]\s*=\s*ctx\.datos\['LIGA EXPEDIENTE ADQUISICION'\]/);
 });
 
 // ---------------------------------------------------------------------------- VehiculosService.autoLlenarAdquisicion

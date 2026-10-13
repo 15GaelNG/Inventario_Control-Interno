@@ -153,6 +153,9 @@ const Entidades = (function () {
     // Copia de los tickets del helpdesk de TI que se han visto desde la app (05/10/2026): la
     // crea y la mantiene HelpdeskService; un renglón por ticket del helpdesk
     'APP_HELPDESK': { prefijo: 'HDK', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'otros', modulo: 'helpdesk' },
+    // Puente hacia Adquisición Vehicular (13-oct-2026): el expediente de una compra, desde el
+    // ticket, antes de que exista el vehículo -- la crea SolicitudCompraService.
+    'SOLICITUD COMPRA': { prefijo: 'SOC', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'vehiculos', modulo: 'solicitud-compra' },
   };
 
   /**

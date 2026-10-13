@@ -37,6 +37,10 @@ const Modulos = (function () {
         { id: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular' },
         { id: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', listo: true, editaEn: [{ modulo: 'vehiculos', que: 'la sección «Accesorios y sensor» de la ficha' }] },
         { id: 'hologramas', etiqueta: 'Hologramas', listo: true },
+        // Puente hacia Adquisición Vehicular (13-oct-2026): el expediente de una compra desde
+        // el ticket, antes de que exista el vehículo -- solo ADMIN/SUPER por ahora (sin fila en
+        // PERMISOS_SEMILLA, ver PermisosService.gs).
+        { id: 'solicitud-compra', etiqueta: 'Solicitud de compra', listo: true },
       ],
     },
     {

@@ -486,6 +486,19 @@
       "modulo": "helpdesk",
       "pisaLlaveAnterior": true,
       "migrable": false
+    },
+    {
+      "hoja": "SOLICITUD COMPRA",
+      "prefijo": "SOC",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "modulo": "solicitud-compra",
+      "pisaLlaveAnterior": true,
+      "migrable": false
     }
   ],
   "familias": [

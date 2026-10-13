@@ -1,0 +1,135 @@
+<script>
+  /**
+   * solicitud-compra.js — Puente hacia Adquisición Vehicular: repositorio de documentos de una
+   * compra desde el folio del ticket, antes de que exista el vehículo (SolicitudCompraService.gs).
+   * Solo ADMIN/SUPER por ahora. "Ya crear vehículo" abre el alta de Vehículos ya con el folio y
+   * la carpeta puestos (crearVehiculoDesdeSolicitudCompra, app.html).
+   */
+
+  function badgeEstatusSolicitudCompra(estatus) {
+    const convertida = estatus === 'CONVERTIDA';
+    return '<span class="badge-estado ' + (convertida ? 'activo' : 'pendiente') + '">' +
+      Iconos.svg(convertida ? 'circle-check' : 'clock') + ' ' + escaparHtml(estatus || '') + '</span>';
+  }
+
+  /** Panel de detalle: archivos de la carpeta (Galeria) + subir nuevos. */
+  async function pintarArchivosSolicitudCompra(fila, contenedor) {
+    contenedor.innerHTML =
+      '<div class="dt-campo-titulo" style="margin-bottom:8px">Archivos</div>' +
+      '<div data-soc-galeria><span class="dt-skel" style="height:90px; width:100%; border-radius:8px"></span></div>' +
+      '<div style="margin-top:12px; display:flex; gap:8px; align-items:center">' +
+      '<input type="file" multiple id="soc-input-archivo-' + fila.ID + '">' +
+      '<button type="button" class="secondary" data-soc-subir>' + Iconos.svg('upload') + ' Subir</button></div>';
+
+    async function recargar() {
+      const caja = contenedor.querySelector('[data-soc-galeria]');
+      try {
+        const archivos = JSON.parse(await callServer('apiSolicitudCompraArchivos', state.token, fila.ID));
+        if (!archivos.length) { caja.innerHTML = '<p class="empty-state">Todavía no hay archivos.</p>'; return; }
+        const grupos = [{ titulo: 'Archivos', fotos: archivos }];
+        caja.innerHTML = Galeria.html(grupos);
+        Galeria.ligar(caja, grupos, { titulo: fila.FOLIO + ' — ' + fila.NOMBRE });
+      } catch (err) {
+        caja.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
+      }
+    }
+    await recargar();
+    if (!document.body.contains(contenedor)) return;
+
+    contenedor.querySelector('[data-soc-subir]').addEventListener('click', async () => {
+      const input = contenedor.querySelector('#soc-input-archivo-' + fila.ID);
+      const archivos = Array.from((input && input.files) || []);
+      if (!archivos.length) return;
+      const btn = contenedor.querySelector('[data-soc-subir]');
+      btn.disabled = true;
+      try {
+        for (const archivo of archivos) {
+          const base64 = await leerArchivoBase64(archivo);
+          await callServer('apiSolicitudCompraSubirArchivo', state.token, fila.ID, archivo.name, archivo.type, base64);
+        }
+        input.value = '';
+        await recargar();
+        toastExito(archivos.length === 1 ? 'Archivo subido' : 'Archivos subidos');
+      } catch (err) {
+        toastError('No se pudo subir: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  }
+
+  function abrirModalNuevaSolicitudCompra() {
+    document.getElementById('form-nueva-solicitud-compra').reset();
+    document.getElementById('soc-nueva-error').hidden = true;
+    document.getElementById('modal-nueva-solicitud-compra').hidden = false;
+  }
+  function cerrarModalNuevaSolicitudCompra() {
+    document.getElementById('modal-nueva-solicitud-compra').hidden = true;
+  }
+
+  async function initSolicitudCompra() {
+    async function recargarLista() {
+      tabla.setCargando(true);
+      try {
+        tabla.setDatos(JSON.parse(await callServer('apiListarSolicitudesCompra', state.token)));
+      } catch (err) {
+        tabla.setError('No se pudo cargar: ' + err.message);
+      }
+    }
+
+    const tabla = DataTable.crear(document.getElementById('soc-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'solicitud-compra',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay solicitudes de compra.',
+      ayuda: 'El expediente de una compra desde el folio del ticket, antes de que exista el vehículo. "Ya crear vehículo" da de alta el vehículo con el folio y la carpeta ya puestos.',
+      etiquetaFila: (f) => f.FOLIO + ' — ' + f.NOMBRE,
+      detalle: {
+        titulo: (f) => f.FOLIO + ' — ' + f.NOMBRE,
+        contenidoExtra: (f, el) => pintarArchivosSolicitudCompra(f, el),
+      },
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'NOMBRE', titulo: 'Nombre', tipo: 'texto' },
+        { campo: 'AREA', titulo: 'Área', tipo: 'lista' },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusSolicitudCompra(v) },
+        {
+          campo: 'NUCCO_RESULTANTE', titulo: 'Vehículo', filtrable: false, ordenable: false,
+          render: (v) => (v ? escaparHtml(v) : '<span style="color:var(--color-text-muted)">—</span>'),
+        },
+      ],
+      accionesFila: [
+        { icono: 'external-link', titulo: 'Abrir carpeta', alHacer: (f) => window.open(f.LIGA_CARPETA, '_blank'), visible: (f) => !!f.LIGA_CARPETA },
+        { icono: 'car', titulo: 'Ya crear vehículo', visible: (f) => f.ESTATUS === 'ABIERTA', alHacer: (f) => crearVehiculoDesdeSolicitudCompra(f) },
+      ],
+      seleccionable: true,
+      alEliminar: async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarSolicitudCompra', state.token, f.ID)));
+      },
+    });
+
+    await recargarLista();
+
+    document.getElementById('soc-btn-nueva').addEventListener('click', abrirModalNuevaSolicitudCompra);
+    document.getElementById('btn-cerrar-nueva-solicitud-compra').addEventListener('click', cerrarModalNuevaSolicitudCompra);
+    document.getElementById('form-nueva-solicitud-compra').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('soc-nueva-error');
+      errorBox.hidden = true;
+      try {
+        await callServer('apiCrearSolicitudCompra', state.token, {
+          FOLIO: document.getElementById('soc-folio').value.trim(),
+          AREA: document.getElementById('soc-area').value.trim(),
+          NOMBRE: document.getElementById('soc-nombre').value.trim(),
+        });
+        cerrarModalNuevaSolicitudCompra();
+        await recargarLista();
+        toastExito('Solicitud creada');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      }
+    });
+  }
+</script>

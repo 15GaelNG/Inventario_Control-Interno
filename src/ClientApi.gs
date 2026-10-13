@@ -426,6 +426,26 @@ function apiAdquisicionVehicularArchivos(token, liga) {
   return JSON.stringify(AdquisicionVehicularService.archivos(token, liga));
 }
 
+// --- Solicitud de compra (puente hacia Adquisición Vehicular, antes de que exista el vehículo) ---
+function apiListarSolicitudesCompra(token) {
+  return JSON.stringify(SolicitudCompraService.listar(token));
+}
+function apiCrearSolicitudCompra(token, datos) {
+  return SolicitudCompraService.crear(token, datos);
+}
+function apiEliminarSolicitudCompra(token, id) {
+  return SolicitudCompraService.eliminar(token, id);
+}
+function apiSolicitudCompraArchivos(token, id) {
+  return JSON.stringify(SolicitudCompraService.archivos(token, id));
+}
+function apiSolicitudCompraSubirArchivo(token, id, nombreArchivo, mimeType, base64Data) {
+  return SolicitudCompraService.subirArchivo(token, id, nombreArchivo, mimeType, base64Data);
+}
+function apiSolicitudCompraMarcarConvertida(token, id, nucco) {
+  return SolicitudCompraService.marcarConvertida(token, id, nucco);
+}
+
 // --- Adherente Vehicular ---
 function apiListarAdherentesVehicularesPorFolio(token, folio) {
   return JSON.stringify(AdherenteVehicularService.listarPorFolio(token, folio));

@@ -1,0 +1,36 @@
+<template id="tpl-solicitud-compra">
+  <div class="page-header-compacto">
+    <div>
+      <h2><i data-lucide="file-plus-2" class="ico"></i> Solicitud de compra</h2>
+      <p class="page-subtitle">El expediente de una compra desde el folio del ticket, antes de que exista el vehículo</p>
+    </div>
+    <button type="button" class="secondary" id="soc-btn-nueva"><i data-lucide="plus" class="ico"></i> Nueva solicitud</button>
+  </div>
+
+  <div class="card card-compacta">
+    <div id="soc-tabla"></div>
+  </div>
+
+  <!-- Modal: nueva solicitud -->
+  <div class="modal-backdrop" id="modal-nueva-solicitud-compra" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div><h3 style="margin:0">Nueva solicitud de compra</h3></div>
+        <button type="button" class="modal-close" id="btn-cerrar-nueva-solicitud-compra"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-nueva-solicitud-compra">
+        <div class="form-rejilla" data-columnas="1">
+          <div class="field"><label>Folio (del ticket)</label><input type="text" id="soc-folio" required /></div>
+          <div class="field"><label>Área</label><input type="text" id="soc-area" /></div>
+          <div class="field">
+            <label>Nombre</label>
+            <input type="text" id="soc-nombre" required placeholder="Ej. Camioneta para Construcción" />
+            <p class="page-subtitle" style="margin:4px 0 0">Así se va a llamar la carpeta en Drive (junto con el folio).</p>
+          </div>
+        </div>
+        <div class="error-msg" id="soc-nueva-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Crear</button>
+      </form>
+    </div>
+  </div>
+</template>

@@ -607,6 +607,15 @@
     navegarA('caja-chica', 'Caja chica');
   }
 
+  // Mismo mecanismo, para "Ya crear vehículo" (modulos/solicitud-compra.html): abre Vehículos en
+  // la pestaña Registrar con el folio/carpeta de la solicitud ya puestos.
+  let solicitudCompraPendienteVehiculo = null;
+  function crearVehiculoDesdeSolicitudCompra(solicitud) {
+    if (!solicitud) return;
+    solicitudCompraPendienteVehiculo = solicitud;
+    navegarA('vehiculos', 'Vehículos');
+  }
+
   // Qué vista está montada ahora mismo -- lo usa el asistente flotante (más abajo) para saber
   // si esta pantalla tiene un tour (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`). Se guarda
   // aquí, no se adivina del menú (⟵ llega igual por el historial o un enlace entre módulos).
@@ -691,6 +700,7 @@
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
         { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
         { vista: 'adquisicion-vehicular', etiqueta: 'Adquisición', icono: 'folder-open', requiere: 'vehiculos', plantilla: 'tpl-adquisicion-vehicular', init: () => initAdquisicionVehicular(), ayuda: () => AYUDA_ADQUISICION_VEHICULAR },
+        { vista: 'solicitud-compra', etiqueta: 'Solicitud de compra', icono: 'file-plus-2', requiere: 'solicitud-compra', plantilla: 'tpl-solicitud-compra', init: () => initSolicitudCompra() },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos(), ayuda: () => AYUDA_CAMBIOS_VEHICULOS },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares(), ayuda: () => AYUDA_REASIGNACIONES },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones(), ayuda: () => AYUDA_VERIFICACIONES },
@@ -4230,7 +4240,22 @@
       try {
         const archivos = await subirArchivosVehiculo('veh');
         const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
-        await callServer('apiCrearVehiculo', state.token, datos);
+        // "FOLIO ADQUISICION" es soloLectura -- CamposHoja.recolectar no lo manda; viene de la
+        // solicitud de compra pendiente, no de lo que se ve en el formulario.
+        const pendienteSolicitud = solicitudCompraPendienteVehiculo;
+        if (pendienteSolicitud) {
+          datos['FOLIO ADQUISICION'] = pendienteSolicitud.FOLIO;
+          datos['LIGA EXPEDIENTE ADQUISICION'] = pendienteSolicitud.LIGA_CARPETA;
+        }
+        const creado = await callServer('apiCrearVehiculo', state.token, datos);
+        if (pendienteSolicitud) {
+          solicitudCompraPendienteVehiculo = null;
+          try {
+            await callServer('apiSolicitudCompraMarcarConvertida', state.token, pendienteSolicitud.ID, creado.NUCCO);
+          } catch (err) {
+            console.error('El vehículo se creó, pero no se pudo marcar la solicitud de compra como convertida:', err);
+          }
+        }
         ev.target.reset();
         pasosAltaVeh.ir(0);
         document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
@@ -4269,6 +4294,17 @@
       const v = todosLosVehiculos.find((x) => x.FOLIO === folio);
       if (v) abrirFichaVehiculo(v);
       else toastError('No se encontró el vehículo con folio ' + folio);
+    }
+
+    // Se llegó aquí desde "Ya crear vehículo" (modulos/solicitud-compra.html,
+    // crearVehiculoDesdeSolicitudCompra): abre la pestaña Registrar con el folio de
+    // adquisición ya puesto (soloLectura en CAMPOS_VEHICULO). Se queda en
+    // solicitudCompraPendienteVehiculo (no se limpia aquí) para que el submit más abajo
+    // mande también la liga y, si sale bien, marque la solicitud como convertida.
+    if (solicitudCompraPendienteVehiculo && puedeEditar) {
+      const btnRegistrar = document.querySelector('#veh-tabs [data-tab="registrar"]');
+      if (btnRegistrar) btnRegistrar.click();
+      poblarFormularioVehiculo('veh', { 'FOLIO ADQUISICION': solicitudCompraPendienteVehiculo.FOLIO });
     }
   }
 

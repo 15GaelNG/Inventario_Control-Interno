@@ -73,9 +73,16 @@ const VehiculosService = (function () {
       fila.NUCCO = generarNucco_();
       fila[ID_COLUMN] = Ids.nuevo(Entidades.prefijo(SHEET_VEHICULOS));
       fila['FECHA REGISTRO SISTEMA CI'] = new Date();
+      // El puente desde "Ya crear vehículo" (SolicitudCompraService.gs) manda estas dos ya
+      // resueltas -- noEditables solo bloquea actualizar(), no crear(), así nace el vehículo ya
+      // ligado a su expediente sin pasar por "Buscar expediente" (eso sigue siendo para los
+      // vehículos de antes de Solicitud de compra).
+      if (ctx.datos['FOLIO ADQUISICION']) fila['FOLIO ADQUISICION'] = ctx.datos['FOLIO ADQUISICION'];
+      if (ctx.datos['LIGA EXPEDIENTE ADQUISICION']) fila['LIGA EXPEDIENTE ADQUISICION'] = ctx.datos['LIGA EXPEDIENTE ADQUISICION'];
     },
     // FOLIO ADQUISICION / LIGA EXPEDIENTE ADQUISICION: las llena guardarExpedienteAdquisicion_
-    // (abajo), nunca la edición normal de la ficha -- ver AdquisicionVehicularService.gs.
+    // (abajo) o alCrear de arriba, nunca la edición normal de la ficha -- ver
+    // AdquisicionVehicularService.gs / SolicitudCompraService.gs.
     noEditables: ['FOLIO', 'NUCCO', 'FECHA REGISTRO SISTEMA CI', 'FOLIO ADQUISICION', 'LIGA EXPEDIENTE ADQUISICION'],
     // La sección "Accesorios y sensor" de la ficha: solo la edita quien tiene EDICION en
     // Instalación de Sensores (en la pantalla: DE_SENSORES en CAMPOS_VEHICULO, app.html)
