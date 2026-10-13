@@ -80,10 +80,13 @@
         const r = await callServer('apiCapitalHumanoResumen', state.token);
         document.getElementById('ch-renglones').textContent = num(r.renglones);
         document.getElementById('ch-activos').textContent = num(r.activos);
-        document.getElementById('ch-sin-id').textContent = r.tieneColumna ? num(r.sinId) : 'sin columna';
+        document.getElementById('ch-sin-id').textContent = r.tieneColumna ? num(r.sinId) : 'Sin columna';
+        document.getElementById('ch-tile-sin-id').classList.toggle('stat-tile-warn', !r.tieneColumna || Number(r.sinId) > 0);
         const s = document.getElementById('ch-sensibles');
         s.hidden = !r.sensibles.length;
-        s.textContent = r.sensibles.length ? 'La hoja todavía tiene datos sensibles (' + r.sensibles.join(', ') + '): la próxima carga los quita.' : '';
+        s.innerHTML = r.sensibles.length ? '<i data-lucide="shield-alert" class="ico"></i><span>La hoja todavía tiene datos sensibles (' +
+          escaparHtml(r.sensibles.join(', ')) + '): la próxima carga los quita.</span>' : '';
+        if (window.lucide) lucide.createIcons();
       } catch (err) {
         Notificar.error(err.message);
       }
@@ -108,22 +111,27 @@
     }
 
     function pintarEnsayo(caja, r, aplicado) {
-      const lista = (titulo, cosas) => (cosas.length ? '<details class="ln-tenue"><summary>' + escaparHtml(titulo) + ' (' + cosas.length + ')</summary><ul>' +
+      const lista = (titulo, cosas) => (cosas.length ? '<details><summary>' + escaparHtml(titulo) + ' (' + cosas.length + ')</summary><ul>' +
         cosas.slice(0, 60).map((a) => '<li>' + escaparHtml(a) + '</li>').join('') + '</ul></details>' : '');
+      const ficha = (valor, etiqueta, sub, clase) => '<div class="kpi-chip' + (clase ? ' ' + clase : '') + '">' +
+        '<span class="kpi-chip-label">' + etiqueta + '</span><span class="kpi-chip-value">' + num(valor) + '</span>' +
+        (sub ? '<span class="kpi-chip-sub">' + sub + '</span>' : '') + '</div>';
       caja.innerHTML =
         '<div class="kpi-chips">' +
-          '<span class="chip">' + num(r.renglones) + ' renglones en el archivo</span>' +
-          '<span class="chip">' + num(r.nuevos) + ' nuevos</span>' +
-          '<span class="chip">' + num(r.cambian) + ' cambian</span>' +
-          '<span class="chip">' + num(r.faltan) + ' no vinieron (se quedan)</span>' +
-          '<span class="chip">' + num(r.personasNuevas) + ' personas nuevas</span>' +
+          ficha(r.renglones, 'En el archivo', 'renglones') +
+          ficha(r.nuevos, 'Nuevos', 'empleos que se agregan') +
+          ficha(r.cambian, 'Se actualizan', 'conservan su ID') +
+          ficha(r.faltan, 'No vinieron', 'se quedan en la hoja', r.faltan ? 'kpi-warn' : '') +
+          ficha(r.personasNuevas, 'Personas nuevas', 'con ID nuevo') +
         '</div>' +
-        (r.quitadas.length ? '<p class="ln-tenue">No se suben: ' + escaparHtml(r.quitadas.join(', ')) + '.</p>' : '') +
         (r.conflictos.length ? '<p class="error-msg">' + r.conflictos.length + ' personas parecen ser una sola pero ya tienen IDs distintos: no se tocan.</p>' : '') +
         lista('Conflictos', r.conflictos) + lista('Avisos', r.avisos) +
-        (aplicado
-          ? '<p><strong>Listo:</strong> la lista quedó actualizada y cada persona conserva su ID.</p>'
-          : '<button type="button" id="ch-aplicar"><i data-lucide="check" class="ico"></i> Aplicar</button>');
+        '<div class="ch-ensayo-pie">' +
+          '<p class="ch-tenue">' + (r.quitadas.length ? 'No se suben: ' + escaparHtml(r.quitadas.join(', ')) + '.' : '') + '</p>' +
+          (aplicado
+            ? '<p class="ch-listo"><i data-lucide="circle-check" class="ico"></i> Listo: la lista quedó actualizada y cada persona conserva su ID.</p>'
+            : '<button type="button" id="ch-aplicar"><i data-lucide="check" class="ico"></i> Aplicar</button>') +
+        '</div>';
       caja.hidden = false;
       if (window.lucide) lucide.createIcons();
     }
@@ -133,20 +141,28 @@
       const revisar = document.getElementById('ch-revisar');
       const caja = document.getElementById('ch-ensayo');
       let comprimido = null;
-      archivo.addEventListener('change', () => { revisar.disabled = !archivo.files.length; caja.hidden = true; comprimido = null; });
+      const nombre = document.getElementById('ch-archivo-nombre');
+      archivo.addEventListener('change', () => {
+        const f = archivo.files[0];
+        nombre.textContent = f ? f.name : 'Elige el Excel de Capital Humano (.xlsx)';
+        nombre.classList.toggle('vacio', !f);
+        revisar.disabled = !f;
+        caja.hidden = true;
+        comprimido = null;
+      });
 
       revisar.addEventListener('click', async () => {
         const f = archivo.files[0];
         if (!f) return;
         revisar.disabled = true;
         caja.hidden = false;
-        caja.innerHTML = '<p class="ln-tenue"><span class="spinner"></span> Leyendo el archivo…</p>';
+        caja.innerHTML = '<p class="ch-tenue"><span class="spinner"></span> Leyendo el archivo…</p>';
         try {
           const XLSX = await ExportarExcel.cargarLibreria();
           const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellNF: true });
           const datos = preparar(leerLibro(XLSX, wb));
           if (datos.faltan.length) throw new Error('El archivo no parece la lista de Capital Humano: le falta ' + datos.faltan.join(', ') + '.');
-          caja.innerHTML = '<p class="ln-tenue"><span class="spinner"></span> Revisando ' + num(datos.filas.length) + ' renglones…</p>';
+          caja.innerHTML = '<p class="ch-tenue"><span class="spinner"></span> Revisando ' + num(datos.filas.length) + ' renglones…</p>';
           comprimido = await comprimir({ encabezados: datos.encabezados, filas: datos.filas });
           const r = await callServer('apiCapitalHumanoCargar', state.token, comprimido, { escribir: false });
           r.quitadas = Array.from(new Set(r.quitadas.concat(datos.quitadas)));
@@ -188,6 +204,7 @@
       pintarHistorial();
     }
 
-    return { init, preparar, valorDeCelda };
+    // pintarEnsayo: para la vista previa (tools/vista-previa), que no lee un Excel de verdad
+    return { init, preparar, valorDeCelda, pintarEnsayo };
   })();
 </script>
