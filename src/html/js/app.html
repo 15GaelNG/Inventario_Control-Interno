@@ -3407,6 +3407,7 @@
         textoConfirmar: 'Generar nueva liga',
       });
       if (!ok) return;
+      toastCargando('Generando liga…');
       try {
         mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, tipo, id, quien));
         toastExito('Liga generada');
