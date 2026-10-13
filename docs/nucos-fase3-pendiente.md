@@ -61,7 +61,17 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
   En la hoja quedan 307 de 309 PDF con liga (2 inspecciones sin PDF) y solo 4 celdas con ruta vieja, a propósito: 3
   imágenes del NUCO 231 que no existen en Drive y la firma `data:,` del 471. Los originales de REPORTES de las
   inspecciones que el área ya había copiado se quedaron donde estaban.
-- Siguen: corrida 2 (verificaciones), 3 (responsivas de sensores) y 4 (firmas de Responsiva y Adherente).
+- **Corrida 2, verificaciones (13-oct):** `verificaciones_app.py` (plan propio; aplicar/verificar/deshacer de
+  `inspecciones_app.py`). Solo se lleva al NUCO lo que el CERTIFICADO confirma: la serie (NIV) leída con OCR es la del
+  vehículo de ese NUCO, y la fecha del certificado es la capturada (o no se lee). Si el área ya tiene un comprobante de
+  ese día, se compara el FOLIO del certificado: mismo folio → la celda apunta al del área (sin duplicar); otro folio →
+  quedan los dos; sin folio legible → Revisar. Piloto 27, 48, 53, 79, 282 (`20261013-173134`, el 27 deshecho y vuelto a
+  aplicar en `20261013-173210`); resto `20261013-173629-verif-app.jsonl`: 98 movidos, 150 celdas, 154 carpetas, 0
+  pendientes. En total 155 registros quedaron con liga (100 movidos, 55 al archivo del área). **257 no se tocaron**
+  (pestaña Revisar de `.cache/verificaciones/20261013/plan-app.xlsx`): ~126 sin serie legible, ~84 cuya serie es de OTRO
+  vehículo (los mal ligados desde AppSheet), ~40 con otra fecha en el certificado, 5 sin folio para comparar y casos
+  sueltos. Para el área.
+- Siguen: corrida 3 (responsivas de sensores) y 4 (firmas de Responsiva y Adherente).
 
 ## También en el radar (no se hacen sin preguntar)
 

@@ -33,6 +33,8 @@ from googleapiclient.discovery import build
 CARP = reglas.CARPETA
 HOJA = "INSPECCION VEHICULAR"
 COL_ID = "ID INSPECCION"
+COL_NUCO = "NUCO"                 # verificaciones_app.py usa estas mismas funciones con su hoja (HOJA, COL_ID, COL_NUCO, ETIQUETA)
+ETIQUETA = "insp-app"
 COL_PDF = "FORMATO INSPECCION VEHICULAR"
 COLS_IMG = ["INS FRONTAL", "INS TRASERA", "INS IZQUIERDA", "INS DERECHA", "FIRMA RESPONSABLE", "FIRMA INSPECTOR"]
 REPORTES = "1EYmA9RNLiPcY4vzZ07j2CC_0CBnutwkp"           # DRIVE_FOLDER_ID_REPORTES (prod): "INSPECCIONES VEHICULARES"
@@ -430,7 +432,7 @@ def aplicar(plan_json, nucos=None):
     if not ops:
         raise SystemExit("Nada que hacer para esos NUCO")
     crear = {c["clave"]: c for c in p["crear"]}
-    bit = e.Bitacora(e.CACHE / "bitacoras" / (time.strftime("%Y%m%d-%H%M%S") + "-insp-app.jsonl"))
+    bit = e.Bitacora(e.CACHE / "bitacoras" / (time.strftime("%Y%m%d-%H%M%S") + "-" + ETIQUETA + ".jsonl"))
     bit.anotar(accion="inicio", plan=str(plan_json), nucos=sorted({o["nuco"] for o in ops}, key=int))
     resumen = collections.Counter()
     creadas = {}                                  # "nueva:k" → id real
@@ -473,7 +475,7 @@ def aplicar(plan_json, nucos=None):
             if not fila:
                 saltar("el ID INSPECCION ya no está (o está repetido) en la hoja"); continue
             n, r = fila
-            if (r[H.index("NUCO")].strip().lstrip("0")) != nuco:
+            if (r[H.index(COL_NUCO)].strip().lstrip("0")) != nuco:
                 saltar("el renglón ya no es de ese NUCO"); continue
             if r[H.index(o["columna"])].strip() != o["valor_antes"]:
                 saltar("la celda cambió desde el plan"); continue
