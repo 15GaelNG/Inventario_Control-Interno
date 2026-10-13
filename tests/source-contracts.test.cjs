@@ -602,9 +602,29 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.match(movil, /@media \(max-width: 1024px\)/);
   assert.match(movil, /Pantalla\.alCambiar\(/);
   assert.match(movil, /shell-menu-abierto/);
-  // Panel cerrado = fuera del foco del teclado; el tema baja al panel en celular
+  // Panel cerrado = fuera del foco del teclado
   assert.match(movil, /sidebar\.inert = Pantalla\.esAngosta\(\) && !abierto\(\)/);
-  assert.match(movil, /className = 'shell-tema-panel'/);
+  // Tema, color, letra y la temporada: un solo engrane en la barra (componentes/apariencia.html),
+  // también en celular; ya no hay sol/luna en la barra ni la flor de la temporada
+  assert.match(index, /class="ap-boton"/);
+  assert.ok(index.indexOf("include('html/js/componentes/pantalla')") < index.indexOf("include('html/js/componentes/apariencia')"), 'Apariencia va después de Pantalla');
+  assert.ok(index.indexOf("include('html/js/componentes/apariencia')") < index.indexOf("include('html/js/app')"), 'Apariencia va antes de app');
+  assert.doesNotMatch(index, /topbar-theme-toggle/);
+  assert.doesNotMatch(movil, /shell-tema-panel/);
+  assert.doesNotMatch(read('src/html/temporada.html'), /dm-interruptor/);
+  assert.match(read('src/html/temporada.html'), /return \{ aplicar, mensajesCarga, abrirOfrenda, opciones \};/);
+  // El usuario y salir, al pie del menú lateral (13-oct): lleva a Mi perfil; ya no en la barra de arriba
+  const pie = index.slice(index.indexOf('<nav id="sidebar"'), index.indexOf('</nav>'));
+  assert.match(pie, /class="nav-item sidebar-usuario-tarjeta" data-view="mi-perfil"/);
+  assert.match(pie, /id="user-avatar"/);
+  assert.match(pie, /id="btn-logout"/);
+  assert.doesNotMatch(index, /topbar-user-menu/);
+  assert.ok(index.indexOf("include('html/js/app-perfil')") < index.indexOf("include('html/js/app')"), 'app-perfil antes de app: render() pinta el puesto');
+  // Mi perfil es de quien entró: nunca regresa SALT ni PASSWORD_HASH, y no se adivina entre homónimos
+  const usuarios = read('src/services/UsuariosService.gs');
+  const perfil = usuarios.slice(usuarios.indexOf('function miPerfil('), usuarios.indexOf('return { listar'));
+  assert.doesNotMatch(perfil, /SALT|PASSWORD_HASH|\.\.\.usuario/);
+  assert.match(perfil, /porNombre\.length === 1 \? porNombre\[0\] : null/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);

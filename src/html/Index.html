@@ -35,6 +35,18 @@
         <div class="nav-groups" id="nav-groups"></div>
 
         <div style="flex:1"></div>
+
+        <!-- Quién entró: recogido, solo la foto; abierto, nombre, puesto y salir. Lleva a Mi perfil
+             (nav-item con data-view: navegarA lo marca como lo demás del menú) -->
+        <div class="sidebar-usuario">
+          <div class="nav-item sidebar-usuario-tarjeta" data-view="mi-perfil" role="button" tabindex="0" title="Mi perfil">
+            <span id="user-avatar"></span>
+            <span class="nav-label sidebar-usuario-texto"><b id="user-name"></b><small id="user-puesto"></small></span>
+          </div>
+          <button type="button" id="btn-logout" class="sidebar-logout" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <i data-lucide="log-out" class="ico"></i>
+          </button>
+        </div>
       </nav>
       <main id="main">
         <div class="topbar">
@@ -43,18 +55,11 @@
             <img class="topbar-cm-logo cm-logo-dark" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/CMTC-Dark.png" alt="Ciudad Maderas" />
           </div>
           <div class="topbar-right">
-            <div class="topbar-theme-toggle">
-              <button type="button" class="theme-btn" data-tema="light" title="Modo claro"><i data-lucide="sun" class="ico"></i></button>
-              <button type="button" class="theme-btn" data-tema="dark" title="Modo oscuro"><i data-lucide="moon" class="ico"></i></button>
-            </div>
             <div class="topbar-date" id="topbar-date"></div>
-            <!-- Aquí se inserta sola la campana de Notificaciones (html/notificaciones.html) -->
-            <div class="topbar-user-menu">
-              <div class="topbar-user" id="user-name"></div>
-              <button type="button" id="btn-logout" class="topbar-logout-btn" title="Cerrar sesión">
-                <i data-lucide="log-out" class="ico"></i>
-              </button>
-            </div>
+            <!-- Aquí se inserta sola la campana de Notificaciones (html/notificaciones.html), antes del engrane.
+                 El usuario y salir viven al pie del menú lateral (.sidebar-usuario) -->
+            <!-- Apariencia: modo, color, ancho, letra y la temporada (html/js/componentes/apariencia.html) -->
+            <button type="button" class="ap-boton" title="Apariencia" aria-label="Apariencia" aria-haspopup="dialog" aria-expanded="false" aria-controls="ap-panel"><i data-lucide="settings" class="ico"></i></button>
           </div>
         </div>
         <div id="view-container"></div>
@@ -96,6 +101,7 @@
   <?!= include('html/views/salud'); ?>
   <?!= include('html/views/capital-humano'); ?>
   <?!= include('html/views/usuarios'); ?>
+  <?!= include('html/views/mi-perfil'); ?>
   <?!= include('html/views/sistemas'); ?>
   <?!= include('html/views/helpdesk'); ?>
 
@@ -112,6 +118,9 @@
   <!-- Pantalla: los cortes celular / tableta / táctil del sistema. Antes que todo lo que pregunta
        "¿es celular?" (notificaciones, app, shell-movil, Líneas). -->
   <?!= include('html/js/componentes/pantalla'); ?>
+  <!-- Apariencia: el engrane de la barra. Después de Pantalla (el modo Auto) y antes de todo lo que
+       se pinta: pone el tema, el color y la letra guardados antes del primer render(). -->
+  <?!= include('html/js/componentes/apariencia'); ?>
   <!-- Notificaciones: UNA campana para todo el sistema, por módulo (Líneas y Vehículos). Se inserta sola en
        .topbar-right, antes del usuario. Antes de app.html a propósito: su render() llama Notificaciones.iniciar()
        en la misma pasada síncrona del render() de arranque (línea final del
@@ -128,6 +137,11 @@
   <!-- CamposHoja: el motor de los formularios declarados por columnas (Vehículos, Caja Chica,
        Arqueos). Antes de app.html porque slugCampo, que usan todos los módulos, vive ahí. -->
   <?!= include('html/js/componentes/campos-hoja'); ?>
+  <!-- Avatar: iniciales (sin las fotos del directorio en esta versión). Antes de app.html: su render()
+       pinta el avatar del menú en la primera pasada. -->
+  <?!= include('html/js/componentes/avatar'); ?>
+  <!-- Mi perfil: antes de app.html, porque su render() pinta el puesto del usuario del menú en la primera pasada -->
+  <?!= include('html/js/app-perfil'); ?>
   <?!= include('html/js/app'); ?>
   <?!= include('html/js/app-documentos-vehiculo'); ?>
   <?!= include('html/js/app-inspecciones-vehiculo'); ?>

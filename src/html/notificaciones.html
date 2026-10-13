@@ -458,8 +458,8 @@
           '<div class="ntf-panel-lista"></div>' +
           '<div class="ntf-panel-pie"><button type="button" class="ntf-enlace" data-ntf-ver-todas>Ver todas</button></div>' +
         '</div>';
-      // Donde estaba la campanita de jorge: antes del usuario (o al principio si no hay)
-      barra.insertBefore(caja, barra.querySelector(':scope > .topbar-user-menu') || barra.firstChild);
+      // Antes del engrane de Apariencia (al final si no está)
+      barra.insertBefore(caja, barra.querySelector(':scope > .ap-boton'));
       boton = caja.querySelector('.ntf-campana');
       contador = caja.querySelector('.ntf-contador');
       panel = caja.querySelector('.ntf-panel');
