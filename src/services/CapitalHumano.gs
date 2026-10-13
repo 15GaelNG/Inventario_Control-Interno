@@ -49,7 +49,9 @@ const CapitalHumano = (function () {
   const MINIMO_RENGLONES = 0.9;
 
   const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase();
-  const claveEmpleo = (numero, nombre) => norm(numero) + '|' + norm(nombre);
+  /** El número de empleado comparable: sin ceros a la izquierda (CH lo mandó como 09099 y la hoja lo tenía como 9099, 13-oct) */
+  const numEmpleo = (v) => norm(v).replace(/^0+(?=\d)/, '');
+  const claveEmpleo = (numero, nombre) => numEmpleo(numero) + '|' + norm(nombre);
   const PERMITIDAS_N = PERMITIDAS.map((c) => String(c).replace(/\s+/g, ' ').trim().toUpperCase());
   /** Una columna que no debe estar en el libro: todo lo que no sea permitida ni la del ID */
   const esSensible = (c) => !!String(c == null ? '' : c).trim() && norm(c) !== COLUMNA && PERMITIDAS_N.indexOf(norm(c)) === -1;
@@ -120,7 +122,7 @@ const CapitalHumano = (function () {
     };
     const nodo = (numero, nombre) => {
       const k = claveEmpleo(numero, nombre);
-      if (!datos[k]) datos[k] = { numero: norm(numero), nombre: norm(nombre) };
+      if (!datos[k]) datos[k] = { numero: numEmpleo(numero), nombre: norm(nombre) };
       raiz(k);
       return k;
     };
@@ -128,7 +130,7 @@ const CapitalHumano = (function () {
     const nombresPorNumero = {};
     const renglones = {};    // empleos que sí son renglón de la lista
     filas.forEach((f) => {
-      const numero = norm(f['No EMPLEADO']);
+      const numero = numEmpleo(f['No EMPLEADO']);
       if (!numero || !norm(f['NOMBRE COMPLETO'])) return;
       renglones[nodo(numero, f['NOMBRE COMPLETO'])] = true;
       (nombresPorNumero[numero] = nombresPorNumero[numero] || {})[norm(f['NOMBRE COMPLETO'])] = true;
@@ -150,9 +152,9 @@ const CapitalHumano = (function () {
     // Regla 3: número anterior
     const avisos = [];
     filas.forEach((f) => {
-      const numero = norm(f['No EMPLEADO']);
+      const numero = numEmpleo(f['No EMPLEADO']);
       const nombre = norm(f['NOMBRE COMPLETO']);
-      const anterior = norm(f['N. EMPLEADO ANTERIOR']);
+      const anterior = numEmpleo(f['N. EMPLEADO ANTERIOR']);
       if (!numero || !nombre || !anterior || anterior === numero) return;
       const otros = nombresPorNumero[anterior];
       if (otros && !otros[nombre]) {
@@ -482,14 +484,14 @@ const CapitalHumano = (function () {
     const ix = { porNombre: {}, porNumero: {}, porCorreo: {}, etiqueta: {} };
     const visto = (numero, nombre, id) => {
       agregar(ix.porNombre, nombreComparable(nombre), id);
-      agregar(ix.porNumero, norm(numero), id);
+      agregar(ix.porNumero, numEmpleo(numero), id);
       if (!ix.etiqueta[id]) ix.etiqueta[id] = norm(nombre) + ' · ' + norm(numero);
     };
     ch.filas.forEach((f) => {
       const id = existentes[claveEmpleo(f['No EMPLEADO'], f['NOMBRE COMPLETO'])];
       if (!id) return;
       visto(f['No EMPLEADO'], f['NOMBRE COMPLETO'], id);
-      if (norm(f['N. EMPLEADO ANTERIOR'])) agregar(ix.porNumero, norm(f['N. EMPLEADO ANTERIOR']), id);
+      if (numEmpleo(f['N. EMPLEADO ANTERIOR'])) agregar(ix.porNumero, numEmpleo(f['N. EMPLEADO ANTERIOR']), id);
       const correo = String(f['CORREO EMPRESARIAL'] || '').trim().toLowerCase();
       if (correo.indexOf('@') > 0) agregar(ix.porCorreo, correo, id);
     });
@@ -513,7 +515,7 @@ const CapitalHumano = (function () {
    */
   function personaDe(ix, numero, nombre, correo) {
     const nom = norm(nombre);
-    const num = norm(numero);
+    const num = numEmpleo(numero);
     const cor = String(correo || '').trim().toLowerCase();
     if (!nom && !num && !cor) return { id: '', tipo: 'VACIO' };
     const comparable = nombreComparable(nom);
