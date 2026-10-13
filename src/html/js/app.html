@@ -690,6 +690,7 @@
         { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
         { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
+        { vista: 'adquisicion-vehicular', etiqueta: 'Adquisición', icono: 'folder-open', requiere: 'vehiculos', plantilla: 'tpl-adquisicion-vehicular', init: () => initAdquisicionVehicular(), ayuda: () => AYUDA_ADQUISICION_VEHICULAR },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos(), ayuda: () => AYUDA_CAMBIOS_VEHICULOS },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares(), ayuda: () => AYUDA_REASIGNACIONES },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones(), ayuda: () => AYUDA_VERIFICACIONES },
@@ -3310,6 +3311,40 @@
       }
     }
 
+    /** Archivos de la carpeta de Adquisición Vehicular ya ligada a este vehículo -- mismo
+     *  apiAdquisicionVehicularArchivos y mismo formato de Galeria que el apartado "Adquisición
+     *  vehicular". Página aparte dentro de la ficha (migas + Volver), igual que las fotos de una
+     *  inspección (abrirFotosInspeccionVehiculo). */
+    async function abrirArchivosAdquisicionFicha(vResumen, liga) {
+      const detalle = document.getElementById('veh-detalle');
+      detalle.innerHTML = '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver-ficha">' +
+        Iconos.svg('chevron-left') + ' Volver</button><span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a> › ' +
+        '<a href="#" class="ln-enlace" id="veh-enlace-ficha">Nucco ' + escaparHtml(vResumen.NUCCO || '') + '</a> › Archivos de adquisición</span></div>' +
+        '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Archivos de adquisición</h2>' +
+        '<div class="insp-fotos-botones">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</div></div></div>' +
+        '<div class="card ln-card" data-adq-archivos><p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>';
+      const aLaFicha = (ev) => { if (ev) ev.preventDefault(); abrirFichaVehiculo(vResumen, 'general'); };
+      document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
+      document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
+      document.getElementById('veh-enlace-lista').addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
+      const caja = detalle.querySelector('[data-adq-archivos]');
+      try {
+        const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, liga));
+        if (!document.body.contains(caja)) return;
+        if (!r.soportado) {
+          caja.innerHTML = '<p class="empty-state">Esta carpeta no es de Drive (por ejemplo, Dropbox) — no se pueden listar sus archivos aquí. Usa "Abrir carpeta" arriba.</p>';
+          return;
+        }
+        if (!r.archivos.length) { caja.innerHTML = '<p class="empty-state">La carpeta no tiene archivos todavía.</p>'; return; }
+        const grupos = [{ titulo: 'Archivos', fotos: r.archivos }];
+        caja.innerHTML = Galeria.html(grupos);
+        Galeria.ligar(caja, grupos, { titulo: 'Archivos de adquisición · Nucco ' + (vResumen.NUCCO || '') });
+      } catch (err) {
+        caja.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
+      }
+      document.getElementById('view-container').scrollTop = 0;
+    }
+
     /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
      *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
      *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
@@ -3539,7 +3574,8 @@
           '<div class="ln-detalle-botones">' +
           (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
           (puedeEditar ? (completo['LIGA EXPEDIENTE ADQUISICION']
-            ? '<button type="button" id="veh-btn-expediente-adquisicion" data-liga="' + escaparHtml(completo['LIGA EXPEDIENTE ADQUISICION']) + '">' + Iconos.svg('externo') + ' Ver expediente de adquisición</button>'
+            ? '<button type="button" id="veh-btn-expediente-adquisicion" data-liga="' + escaparHtml(completo['LIGA EXPEDIENTE ADQUISICION']) + '">' + Iconos.svg('externo') + ' Ver expediente de adquisición</button>' +
+              '<button type="button" id="veh-btn-archivos-adquisicion" data-liga="' + escaparHtml(completo['LIGA EXPEDIENTE ADQUISICION']) + '">' + Iconos.svg('folder-open') + ' Ver archivos</button>'
             : '<button type="button" id="veh-btn-expediente-adquisicion">' + Iconos.svg('ver') + ' Buscar expediente de adquisición</button>') : '') +
           '</div>' +
           (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
@@ -3707,6 +3743,8 @@
             ? window.open(btnExpediente.dataset.liga, '_blank')
             : buscarExpedienteAdquisicionFicha(vResumen, completo));
         }
+        const btnArchivosAdq = document.getElementById('veh-btn-archivos-adquisicion');
+        if (btnArchivosAdq) btnArchivosAdq.addEventListener('click', () => abrirArchivosAdquisicionFicha(vResumen, btnArchivosAdq.dataset.liga));
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;

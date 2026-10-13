@@ -1,0 +1,81 @@
+<script>
+  /**
+   * adquisicion-vehicular.js — Apartado de solo lectura sobre el índice de
+   * AdquisicionVehicularService.gs (hoja ADQUISICION_VEHICULAR_INDICE, llenada aparte desde el
+   * editor por AdquisicionVehicularIndice.gs). No edita nada: solo lista los expedientes
+   * encontrados y, por fila, permite ver los archivos de su carpeta (si es de Drive) o abrirla
+   * tal cual (si es de Dropbox u otro servicio -- ahí no se pueden listar archivos).
+   */
+
+  /** El panel de detalle de una fila: archivos de su carpeta (Galeria), o un aviso si la liga no
+   *  es de Drive. Mismo patrón de spinner → relleno que pintarGaleriaInspeccion
+   *  (app-inspecciones-vehiculo.html). */
+  async function cargarArchivosAdquisicion(fila, contenedor) {
+    if (!fila.liga) {
+      contenedor.innerHTML = '<p class="empty-state">Este expediente todavía no tiene carpeta ligada.</p>';
+      return;
+    }
+    contenedor.innerHTML = '<span class="dt-skel" style="height:90px; width:100%; border-radius:8px"></span>';
+    try {
+      const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, fila.liga));
+      if (!r.soportado) {
+        contenedor.innerHTML = '<p class="empty-state">Esta carpeta no es de Drive (por ejemplo, Dropbox) — ' +
+          'no se pueden listar sus archivos aquí. Usa "Abrir carpeta" para verla directamente.</p>';
+        return;
+      }
+      if (!r.archivos.length) {
+        contenedor.innerHTML = '<p class="empty-state">La carpeta no tiene archivos todavía.</p>';
+        return;
+      }
+      const grupos = [{ titulo: 'Archivos', fotos: r.archivos }];
+      contenedor.innerHTML = Galeria.html(grupos);
+      Galeria.ligar(contenedor, grupos, { titulo: 'Serie ' + fila.serie });
+    } catch (err) {
+      contenedor.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
+    }
+  }
+
+  const AYUDA_ADQUISICION_VEHICULAR = [
+    { pregunta: '¿De dónde sale esta lista?', respuesta: 'Del índice que arma Adquisición Vehicular (Excel de compras + OCR de facturas) para cada número de serie -- se corre aparte desde el editor, no desde aquí.' },
+    { pregunta: '¿Por qué un expediente no tiene carpeta?', respuesta: 'Puede que la compra se haya capturado pero la carpeta todavía no se encontró en Drive ni venía ligada en el Excel. El botón "Abrir carpeta" no aparece si no hay liga.' },
+    { pregunta: '¿Por qué no veo los archivos de un expediente?', respuesta: 'Si la carpeta es de Dropbox (no de Drive), aquí no se puede listar su contenido -- usa "Abrir carpeta" para verla directamente en una pestaña nueva.' },
+  ];
+
+  async function initAdquisicionVehicular() {
+    const contenedor = document.getElementById('adq-tabla');
+    const tabla = DataTable.crear(contenedor, {
+      idCampo: 'serie',
+      idTabla: 'adquisicion-vehicular',
+      ordenInicial: { campo: 'año', dir: 'desc' },
+      textoVacio: 'Todavía no hay expedientes en el índice.',
+      ayuda: 'Un expediente por número de serie, con su folio, área, año y la carpeta donde quedó la factura.',
+      exportar: { nombreArchivo: 'Adquisicion vehicular' },
+      etiquetaFila: (f) => f.serie,
+      detalle: {
+        titulo: (f) => 'Serie ' + f.serie,
+        contenidoExtra: (f, el) => cargarArchivosAdquisicion(f, el),
+      },
+      columnas: [
+        { campo: 'serie', titulo: 'Serie', tipo: 'texto', fijada: true },
+        { campo: 'folio', titulo: 'Folio', tipo: 'texto' },
+        { campo: 'area', titulo: 'Área', tipo: 'lista' },
+        { campo: 'año', titulo: 'Año', tipo: 'lista' },
+        { campo: 'fuente', titulo: 'Fuente', tipo: 'lista' },
+        {
+          campo: 'liga', titulo: 'Carpeta', filtrable: false, ordenable: false,
+          render: (v) => (v ? Iconos.svg('folder-open') + ' Con carpeta' : '<span style="color:var(--color-text-muted)">Sin carpeta</span>'),
+        },
+      ],
+      accionesFila: [
+        { icono: 'external-link', titulo: 'Abrir carpeta', alHacer: (f) => window.open(f.liga, '_blank'), visible: (f) => !!f.liga },
+      ],
+    });
+
+    tabla.setCargando(true);
+    try {
+      tabla.setDatos(JSON.parse(await callServer('apiAdquisicionVehicularLista', state.token)));
+    } catch (err) {
+      tabla.setError('No se pudo cargar el índice de Adquisición Vehicular: ' + err.message);
+    }
+  }
+</script>

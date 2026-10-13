@@ -419,6 +419,12 @@ function apiBuscarExpedienteAdquisicion(token, serie) {
 function apiGuardarExpedienteAdquisicion(token, id, datos) {
   return VehiculosService.guardarExpedienteAdquisicion(token, id, datos);
 }
+function apiAdquisicionVehicularLista(token) {
+  return JSON.stringify(AdquisicionVehicularService.listar(token));
+}
+function apiAdquisicionVehicularArchivos(token, liga) {
+  return JSON.stringify(AdquisicionVehicularService.archivos(token, liga));
+}
 
 // --- Adherente Vehicular ---
 function apiListarAdherentesVehicularesPorFolio(token, folio) {

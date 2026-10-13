@@ -182,8 +182,51 @@ const AdquisicionVehicularService = (function () {
     return mapaIndice_()[serieBuscada] || null;
   }
 
+  /** TODOS los expedientes del índice (no por serie) -- para el apartado "Adquisición vehicular".
+   *  Solo las filas con serie (las de OCR sin serie encontrada son ruido de auditoría interna,
+   *  no expedientes para mostrar). Mismo permiso y misma caché que buscar()/mapaIndice_(). */
+  function listar(token) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    return CacheHojas.recordar('adquisicion_vehicular_lista', [[Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_INDICE]], () => {
+      const hoja = indiceHoja_(false);
+      if (!hoja || hoja.getLastRow() < 2) return [];
+      return hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS_INDICE.length).getValues()
+        .filter((f) => String(f[0]).trim())
+        .map((f) => ({
+          serie: String(f[0]).trim(), folio: String(f[1]).trim(), area: String(f[2]).trim(),
+          año: String(f[3]).trim(), liga: String(f[4]).trim(), fuente: String(f[5]).trim(), actualizado: String(f[6]).trim(),
+        }));
+    }, TTL_INDICE_SEGUNDOS);
+  }
+
+  /** El id de carpeta de Drive de una liga ("https://drive.google.com/drive/folders/<id>" o
+   *  "...?id=<id>"), o '' si la liga no es de Drive (p. ej. Dropbox) -- esas solo se abren tal cual. */
+  function idCarpetaDrive_(liga) {
+    const texto = String(liga || '');
+    if (!/drive\.google\.com/.test(texto)) return '';
+    const m = texto.match(/\/folders\/([a-zA-Z0-9_-]+)/) || texto.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : '';
+  }
+
+  /** Archivos de la carpeta de Drive de un expediente (nombre, miniatura, liga -- mismo formato
+   *  que ya espera el componente Galeria). { soportado: false } si la liga no es de Drive: ahí
+   *  solo se puede abrir la carpeta tal cual, no listar su contenido. */
+  function archivos(token, liga) {
+    Permisos.puedeLeer(token, 'vehiculos');
+    const carpetaId = idCarpetaDrive_(liga);
+    if (!carpetaId) return { soportado: false };
+    const r = Drive.Files.list({
+      q: "'" + carpetaId + "' in parents and trashed = false", pageSize: 200, orderBy: 'name',
+      fields: 'files(id,name,mimeType,thumbnailLink,webViewLink)', supportsAllDrives: true, includeItemsFromAllDrives: true,
+    });
+    return {
+      soportado: true,
+      archivos: (r.files || []).map((f) => ({ id: f.id, nombre: f.name, mime: f.mimeType, miniatura: f.thumbnailLink || '', enlace: f.webViewLink || '' })),
+    };
+  }
+
   return {
-    buscar,
+    buscar, listar, archivos,
     // Lo de abajo lo usa AdquisicionVehicularIndice.gs para construir el índice; el botón de la
     // ficha solo llama buscar().
     FUENTES, leerFuente_, listarCarpetasAdquisicion_, buscarEnListaCarpetas_, buscarCarpetaPorFolio_,
