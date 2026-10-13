@@ -36,7 +36,7 @@ test('servidor: Editar, Agregar, la inspección y la responsiva lo revisan antes
   assert.match(registros, /function crear\(datos, usuario\) \{[\s\S]{0,200}LineasUtil\.exigirPinEquipo\(datos\);/);
   assert.match(registros, /function editar\(id, datos, usuario, puedeVerSecretos\) \{\s*asegurarEsquema_\(\);\s*LineasUtil\.exigirPinEquipo\(datos\);/);
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  assert.match(captura, /function guardarInspeccion\(datos, usuario, puedeVerSecretos\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
+  assert.match(captura, /function guardarInspeccion\(datos, usuario, puedeVerSecretos, opciones\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
   assert.match(captura, /function guardarResponsiva\(datos, usuario, puedeVerSecretos, accion\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
 });
 

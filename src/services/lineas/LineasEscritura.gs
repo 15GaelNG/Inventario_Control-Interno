@@ -127,7 +127,19 @@ const LineasEscritura = (function () {
 
   /** En ASIGNACIONES, el ID PERSONA de quien queda: se calcula de su nombre, número y cuenta (CapitalHumano, 12-oct) */
   function conPersona_(k, cambios, registro) {
-    if (k === 'ASIGNACIONES' && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('ASIGNACIONES', cambios, registro);
+    if (k !== 'ASIGNACIONES' || typeof CapitalHumano === 'undefined') return cambios;
+    // Sin persona (una asignación de resguardo, o se quitó al responsable) el ID PERSONA queda en blanco, sin buscarla:
+    // CapitalHumano arma su índice leyendo toda la base de CH (~6.8 s en Mandar a resguardo, 13-oct) para contestar lo
+    // mismo. Con persona se busca como siempre
+    const columnas = CapitalHumano.columnasDePersona('ASIGNACIONES');
+    const tocaPersona = columnas.some((c) => cambios[c] !== undefined);
+    // Sin cambio de persona (p. ej. solo la FECHA FIN), lo mismo que hace CapitalHumano.conPersona: el ID no se manda
+    if (!tocaPersona) { delete cambios['ID PERSONA']; return cambios; }
+    if (columnas.every((c) => limpio_(registro[c]) === '')) {
+      cambios['ID PERSONA'] = '';
+      return cambios;
+    }
+    CapitalHumano.conPersona('ASIGNACIONES', cambios, registro);
     return cambios;
   }
 

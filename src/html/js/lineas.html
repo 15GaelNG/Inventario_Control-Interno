@@ -3554,23 +3554,28 @@
        * Pide en orden la inspección de cada equipo que todavía no la tiene. Regresa { idRegistro: idInspeccion } o null
        * si se cerró alguna sin guardar (la acción no sigue).
        */
-      async function inspeccionesEnFlujo(equipos, para) {
+      async function inspeccionesEnFlujo(equipos, para, ultima) {
         const ids = {};
+        let deLaUltima = null;
         for (let i = 0; i < equipos.length; i++) {
           const q = equipos[i];
           const hecha = inspeccionHecha(q.id);
           if (hecha) { ids[q.id] = hecha; continue; }
+          // ultima = { espera, guardar(datos, idsDeLasAnteriores) }: la última se guarda con la acción (Mandar a
+          // resguardo, 13-oct) y lo que contesta (con el id de la inspección) regresa en ultima
+          const conLaAccion = !!ultima && i === equipos.length - 1;
           // enAccion = dentro de Mandar a resguardo: el comentario ya lo pidió la acción y el responsable es quien recibe
           // (las personas de procesos, usuario 4-oct)
-          const r = await capturarEnFlujo('INSPECCION', { equipoId: q.id, enAccion: true }, {
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: q.id, enAccion: true }, Object.assign({
             aviso: 'Inspección · NUCO ' + (q.nuco || '—') + (equipos.length > 1 ? ' · ' + (i + 1) + ' de ' + equipos.length : ''),
             boton: i + 1 < equipos.length ? 'Guardar inspección y seguir' : 'Guardar inspección y terminar',
-          });
+          }, conLaAccion ? { espera: ultima.espera, guardar: (datos) => ultima.guardar(datos, Object.assign({}, ids)) } : {}));
           if (!r) return null;
           inspeccionesDelDia[q.id] = { id: r.id, dia: hoyLocal() };
           ids[q.id] = r.id;
+          if (conLaAccion) deLaUltima = r;
         }
-        return ids;
+        return { ids: ids, ultima: deLaUltima };
       }
 
       /**
@@ -3869,22 +3874,57 @@
           // del usuario, 3-oct): una por cada equipo que viene de una persona. Si se cierra una sin guardar, no se manda
           // ninguno; las que ya se guardaron no se vuelven a pedir hoy
           const deUnaPersona = equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
+          const textoEspera = estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
+          const enviar = (extra) => llamar('apiLineasMandarResguardo', equipos.map((q) => q.id),
+            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo }, extra));
+          // La espera también después de la inspección (usuario, 13-oct): antes solo salía un aviso en la esquina y no se
+          // sabía si se estaba mandando. Igual que Reasignar: la ventana vuelve con la pantalla de espera
+          const ventanaEspera = () => {
+            const v = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '' };
+            mostrarModalCaptura();
+            $('#ln-captura-icono', raiz).innerHTML = icono('archive');
+            $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
+            $('#ln-captura-titulo', raiz).textContent = accionTexto;
+            $('#ln-captura-subtitulo', raiz).textContent = equipos.length === 1
+              ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ') : miles(equipos.length) + ' equipos';
+            $('#ln-captura-cuerpo', raiz).innerHTML = '';
+            $('#ln-modal-captura', raiz).setAttribute('aria-busy', 'true');
+            $('#ln-modal-captura', raiz).querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+            mostrarEspera(textoEspera);
+            return v;
+          };
+          const errorEnVentana = (v, mensaje) => {
+            if (captura !== v) return;
+            v.guardando = false;
+            $('#ln-modal-captura', raiz).removeAttribute('aria-busy');
+            $('#ln-modal-captura', raiz).querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+            mostrarEspera('No se mandó a resguardo', { tono: 'error', icono: 'triangle-alert', texto: 'Las inspecciones quedaron guardadas: vuelve a mandarlo y no se piden otra vez.',
+              detalle: mensaje, acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          };
+          let r = null; // lo que contestó el resguardo
+          let espera = sesion; // la ventana que muestra la espera hasta que el servidor contesta
           let inspecciones = {};
-          let enModal = true;
           if (deUnaPersona.length) {
             cerrarCaptura(true);
-            enModal = false;
-            inspecciones = await inspeccionesEnFlujo(deUnaPersona, 'al mandarlo a resguardo');
-            if (!inspecciones) {
+            // La última inspección se guarda con el resguardo, en la misma llamada (rapidez, 13-oct; su PDF se pide al
+            // terminar: TelefoniaService.mandarResguardo). Mientras, la ventana de la inspección dice «Mandando…»
+            const hechas = await inspeccionesEnFlujo(deUnaPersona, 'al mandarlo a resguardo', {
+              espera: textoEspera, guardar: (datos, previas) => enviar({ inspecciones: previas, inspeccion: datos }),
+            });
+            if (!hechas) {
               aviso(icono('triangle-alert', 'ln-alerta') + ' Sin mandar a resguardo · falta la inspección', 8000);
               return;
             }
-            aviso((estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial) + '…', 6000);
-          } else estadoGuardado(estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial);
+            inspecciones = hechas.ids;
+            if (hechas.ultima && hechas.ultima.error) { errorEnVentana(ventanaEspera(), esc(hechas.ultima.error)); return; }
+            if (hechas.ultima) { r = hechas.ultima.resguardo; espera = null; } // ya se mandó: la ventana de la inspección se cerró
+            else espera = ventanaEspera(); // la del día ya estaba: solo falta mandarlo
+          } else estadoGuardado(textoEspera);
+          const enModal = espera === sesion;
           try {
-            const r = await llamar('apiLineasMandarResguardo', equipos.map((q) => q.id), { comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo, inspecciones: inspecciones });
+            if (!r) r = await enviar({ inspecciones: inspecciones });
             await aplicarCambiosIndice(r.indice);
-            if (enModal && captura === sesion) cerrarCaptura(true);
+            if (captura === espera) cerrarCaptura(true);
             if (tablas.equipos) tablas.equipos.limpiarSeleccion();
             if (vigente()) { pintarIndicadores(); pintarListado(); }
             const omitidos = r.omitidos || [];
@@ -3897,7 +3937,11 @@
             const actual = pila[pila.length - 1];
             if (actual && equipos.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
           } catch (e) {
-            if (!enModal) { aviso(icono('triangle-alert', 'ln-alerta') + ' No se mandó a resguardo: ' + mensajeError(e) + ' Las inspecciones quedaron guardadas: vuelve a mandarlo y no se piden otra vez.', 15000); return; }
+            if (!enModal) {
+              if (espera) errorEnVentana(espera, mensajeError(e));
+              else aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+              return;
+            }
             errorAlGuardar(e);
           }
         });
@@ -4640,7 +4684,7 @@
         const valores = leerFormularioAppSheet();
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
-        estadoGuardado(sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF');
+        estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF'));
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
         Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };

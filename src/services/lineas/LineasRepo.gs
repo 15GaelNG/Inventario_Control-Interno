@@ -1423,7 +1423,7 @@ const LineasRepo = (function () {
    * "Agregar 'x'" se queda en su registro y no entra a estas listas.
    */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v7');
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v8'); // v8: sedes con QUERETARO en vez de QRO (13-oct)
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -1467,32 +1467,36 @@ const LineasRepo = (function () {
       otrasApps: unicos(inspecciones, 'OTRA'),
       identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v7', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v8', c, 21600);
     return c;
   }
 
   /** Personas activas de CH para elegir al responsable: al elegir una se llenan sus datos (autollenar). */
   function indiceColaboradores() {
-    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v5');
+    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v6');
     if (enCache) return enCache;
     // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (CapitalHumano.activos, 12-oct-2026).
     // Líneas los guarda en mayúsculas y el correo en minúsculas, como siempre.
     const may = (v) => { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase(); return t || null; };
+    // Sede, área y oficina como las muestra el sistema («QRO» → «QUERETARO»; LineasUtil.mostrarCH). Al leer la base de CH
+    // con leerTabla ya salían así; con CapitalHumano.activos (12-oct) la lista de Sede ofrecía QRO (usuario, 13-oct). Al
+    // guardar se escribe como en CH (guardarCH)
+    const comoSeMuestra = (c, v) => { const t = may(v); return t && LineasUtil.mostrarCH(c, t); };
     const filas = CapitalHumano.activos().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
-      may(p.AREA), may(p.SEDE), may(p.OFICINA), 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
+      comoSeMuestra('AREA', p.AREA), comoSeMuestra('SEDE', p.SEDE), comoSeMuestra('OFICINA/DESARROLLO', p.OFICINA), 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
       String(p.CORREO || '').trim().toLowerCase() || null]).filter((c) => c[1]);
     const ix = LineasUtil.paraCliente({
       columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo'],
       filas: filas, generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_colaboradores_v5', ix, 21600);
+    LineasDatos.cacheGuardar('indice_colaboradores_v6', ix, 21600);
     return ix;
   }
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5',
-      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7',
+    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6',
+      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
     equivalencias_ = null;
   }

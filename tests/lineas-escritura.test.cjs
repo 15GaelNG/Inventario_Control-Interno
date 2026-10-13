@@ -341,3 +341,26 @@ test('paso 4: con LINEAS TELEFONICAS retirada no se lee; rutas y NUCO de la lín
   assert.strictEqual(t.registro('LIN-C')['COMENTARIOS'], ''); // el comentario viejo vive en MOVIMIENTOS
   assert.ok(t.lecturas.indexOf('LINEAS TELEFONICAS') < 0, 'no se leyó la hoja vieja');
 });
+
+test('rapidez (13-oct): una asignación sin persona deja el ID PERSONA en blanco sin buscar en Capital Humano', () => {
+  let buscadas = 0;
+  globalThis.CapitalHumano = {
+    columnasDePersona: () => ['RESPONSABLE', 'NO EMPLEADO', 'CUENTA GOOGLE'],
+    conPersona: (hoja, cambios) => { buscadas++; cambios['ID PERSONA'] = 'PER-NUEVA'; return cambios; },
+  };
+  try {
+    const t = cargar(BASE);
+    // Mandar a resguardo: se cierra la de la persona y se abre la de resguardo, sin nadie
+    t.guardar('EQU-1', { 'ESTATUS EQUIPO': 'RESGUARDO', 'ESTATUS LINEA': 'DISPONIBLE', 'RESPONSABLE': '', 'NO EMPLEADO': '', 'PUESTO': '' });
+    const guardada = t.vigentes().find((a) => a['ID EQUIPO'] === 'EQU-1');
+    assert.strictEqual(guardada['TIPO'], 'RESGUARDO');
+    assert.strictEqual(guardada['ID PERSONA'], '');
+    assert.strictEqual(buscadas, 0, 'no se buscó a nadie');
+    // Con persona se busca como siempre
+    t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'ESTATUS LINEA': 'USO', 'RESPONSABLE': 'ANA' });
+    assert.strictEqual(t.vigentes().find((a) => a['ID EQUIPO'] === 'EQU-2')['ID PERSONA'], 'PER-NUEVA');
+    assert.ok(buscadas >= 1);
+  } finally {
+    delete globalThis.CapitalHumano;
+  }
+});

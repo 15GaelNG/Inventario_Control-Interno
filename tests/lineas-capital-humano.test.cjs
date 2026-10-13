@@ -13,7 +13,15 @@ test('Capital Humano en Líneas: la lista de personas sale de CapitalHumano.acti
   const ix = repo.slice(repo.indexOf('function indiceColaboradores()'), repo.indexOf('/** Vacía las cachés del módulo'));
   assert.match(ix, /CapitalHumano\.activos\(\)\.map\(/);
   assert.match(ix, /'ACTIVO'/);
-  assert.match(ix, /indice_colaboradores_v5/);
+  assert.match(ix, /indice_colaboradores_v6/);
+  // Sede, área y oficina como las muestra el sistema: QRO → QUERETARO (usuario, 13-oct)
+  assert.match(ix, /comoSeMuestra\('AREA', p\.AREA\), comoSeMuestra\('SEDE', p\.SEDE\), comoSeMuestra\('OFICINA\/DESARROLLO', p\.OFICINA\)/);
+  assert.match(ix, /const comoSeMuestra = \(c, v\) => \{ const t = may\(v\); return t && LineasUtil\.mostrarCH\(c, t\); \};/);
+  const Util = new Function('LineasDatos', 'LineasArchivos', fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasUtil.gs'), 'utf8') +
+    '\nreturn LineasUtil;')({ normCol: (c) => String(c).toUpperCase().trim() }, {});
+  assert.equal(Util.mostrarCH('SEDE', 'QRO'), 'QUERETARO');
+  assert.equal(Util.mostrarCH('OFICINA/DESARROLLO', 'CARRANZA SLP'), 'CARRANZA SAN LUIS POTOSI');
+  assert.equal(Util.guardarCH('SEDE', 'QUERETARO'), 'QRO', 'en la hoja se guarda como en CH');
   assert.doesNotMatch(repo, /colaboradoresActivos_|TAB\.COLAB|COLAB: 'COLABORADORES'/, 'sin la lectura vieja');
 });
 
@@ -28,7 +36,10 @@ test('Capital Humano en Líneas: nadie en Líneas lee la pestaña de CH directo'
 
 test('Capital Humano en Líneas: una asignación con persona calcula su ID PERSONA al guardarse', () => {
   const esc = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasEscritura.gs'), 'utf8');
-  assert.match(esc, /if \(k === 'ASIGNACIONES' && typeof CapitalHumano !== 'undefined'\) CapitalHumano\.conPersona\('ASIGNACIONES', cambios, registro\);/);
+  assert.match(esc, /if \(k !== 'ASIGNACIONES' \|\| typeof CapitalHumano === 'undefined'\) return cambios;/);
+  assert.match(esc, /CapitalHumano\.conPersona\('ASIGNACIONES', cambios, registro\);/);
+  // Sin persona no se busca (rapidez, 13-oct; lineas-escritura lo prueba)
+  assert.match(esc, /if \(columnas\.every\(\(c\) => limpio_\(registro\[c\]\) === ''\)\) \{\s+cambios\['ID PERSONA'\] = '';/);
   assert.match(esc, /function actualizar_\(k, fila, cambios\) \{\s*conPersona_\(k, cambios, Object\.assign\(\{\}, fila, cambios\)\);/);
   assert.match(esc, /const h = hojas\(\);\s*conPersona_\(k, objeto, objeto\);/);
 });

@@ -72,6 +72,8 @@ const LineasResguardos = (function () {
   const MAXIMO = 150;
 
   const txt = (v) => (v === null || v === undefined ? '' : String(v).trim());
+  /** Marca de tiempo del medidor del DEV (TelefoniaService.conPasosEnDev_); afuera no hace nada. */
+  const marca_ = (que, desde) => { if (typeof LineasDatos.tiempo === 'function') LineasDatos.tiempo(que, desde); };
   const may = (v) => txt(v).toUpperCase();
   const dia = (d) => Utilities.formatDate(d, LineasDatos.ZONA_APP, 'yyyy-MM-dd');
 
@@ -123,8 +125,12 @@ const LineasResguardos = (function () {
 
   /** La bandeja con todas sus columnas (MOTIVO_CANCELACION llegó el 13-oct a una hoja que ya existía). */
   function asegurarBandeja_() {
-    if (!LineasDatos.existeTabla(TAB)) LineasDatos.asegurarPestana(TAB, ENCABEZADOS);
-    else if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, ['MOTIVO_CANCELACION']);
+    if (!LineasDatos.existeTabla(TAB)) { LineasDatos.asegurarPestana(TAB, ENCABEZADOS); return; }
+    // La columna se revisa una vez cada 6 h, no en cada guardado (rapidez, 13-oct)
+    const cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null;
+    if (cache && cache.get('ln_resguardos_esquema_v1') === '1') return;
+    if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, ['MOTIVO_CANCELACION']);
+    if (cache) cache.put('ln_resguardos_esquema_v1', '1', 21600);
   }
 
   /** Renglón abierto de la bandeja (PENDIENTE DE RECEPCION o EN RESGUARDO) por ID de registro. */
@@ -235,7 +241,9 @@ const LineasResguardos = (function () {
     if (motivo.length <= 3) throw new Error('Escribe el comentario del resguardo (queda en el historial de cada equipo).');
     const ticket = txt(d.ticket);
     const porEquipo = d.porEquipo || {};
+    const t0 = Date.now();
     const campos = camposUbicacion_(usuario);
+    marca_('mandar · campos de ubicación', t0);
 
     // Validación completa antes de escribir nada
     const errores = [];
@@ -272,11 +280,13 @@ const LineasResguardos = (function () {
         throw new Error('NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '') + ': ya está en Resguardos y cancelaciones como ' + actual + '; elige otro estatus.');
       });
       // Antes de escribir: la inspección de cada equipo que viene de una persona
+      const t1 = Date.now();
       lista.forEach((id) => {
         const f = porId[id];
         if (!f || may(LineasUtil.col(f, 'ESTATUS EQUIPO')) !== 'USO') return;
         LineasCaptura.exigirInspeccion((d.inspecciones || {})[id], LineasDatos.idsDeFila(f), 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || ''));
       });
+      marca_('mandar · revisar inspecciones', t1);
       lista.forEach((id) => {
         const f = porId[id];
         const nuco = f ? LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '' : '';
@@ -295,12 +305,16 @@ const LineasResguardos = (function () {
           !enCancelacion_(cancelando, f, LineasUtil.col(f, 'NUMERO TELEFONO'));
         const motivoCancelacion = cancela ? motivoCancelacionDe_(f) : '';
         const ahora = new Date();
+        const t2 = Date.now();
         const guardado = LineasRepo.guardarCambiosRegistro(f, cambiosResguardo_(f, pedido, tieneLinea), usuario, ahora);
+        marca_('mandar · guardar el registro', t2);
+        const t3 = Date.now();
         LineasRepo.registrarMovimiento('RESGUARDO', { motivo: pedido.COMENTARIO || motivo, ticket: ticket }, usuario, ahora, {
           refs: [id].concat(guardado.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'),
           antes: antes, despues: { estatus: pedido['ESTATUS EQUIPO'], estatusLinea: tieneLinea ? pedido['ESTATUS LINEA'] : '' },
           detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos.concat(cambioMotivo_(motivoCancelacion)) },
         });
+        marca_('mandar · movimiento', t3);
         const compania = txt(LineasUtil.col(f, 'COMPAÑIA'));
         const razon = txt(LineasUtil.col(f, 'RAZON SOCIAL'));
         // Ya en la bandeja (p. ej. RESGUARDO → PARA VENTA): el teléfono ya está con quien recibe
@@ -332,7 +346,10 @@ const LineasResguardos = (function () {
       });
       LineasDatos.agregarFilas(TAB, nuevos);
     });
+    const t4 = Date.now();
     const indice = hechos.length ? LineasRepo.refrescarIndice(hechos.map((h) => h.id)) : null; // solo los tocados
+    marca_('mandar · refrescar el índice', t4);
+    const t5 = Date.now();
     const porRecibir = hechos.filter((h) => h.porRecibir);
     const conCancelacion = hechos.filter((h) => h.cancelacion);
     if (porRecibir.length) {
@@ -344,6 +361,7 @@ const LineasResguardos = (function () {
         usuario.nombre + ' mandó a cancelación la línea de ' + conCancelacion.length + ' equipo(s) que ya estaban en resguardo: NUCO ' +
         conCancelacion.slice(0, 10).map((h) => h.nuco).join(', ') + '.');
     }
+    marca_('mandar · aviso en la campana', t5);
     return { hechos: hechos, omitidos: omitidos, indice: indice };
   }
 

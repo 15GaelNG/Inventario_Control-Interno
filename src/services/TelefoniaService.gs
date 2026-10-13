@@ -552,7 +552,8 @@ const TelefoniaService = (function () {
   /** Guarda una inspección nueva (checklist, snapshot y bitácora). El PDF se pide aparte. */
   function guardarInspeccion(token, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+    return conPasosEnDev_('apiLineasGuardarInspeccion', () =>
+      LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion))));
   }
 
   /** Guarda una responsiva nueva. El PDF se pide aparte. */
@@ -567,6 +568,33 @@ const TelefoniaService = (function () {
    * MEDICIONES LINEAS del libro de Líneas. Solo en un DEV: en producción no escribe.
    */
   const HOJA_MEDICIONES = 'MEDICIONES LINEAS';
+
+  /**
+   * Pasos de lo que guarda (usuario, 13-oct: Mandar a resguardo tardaba ~38 s después de la inspección). Solo en un DEV:
+   * la llamada anota sus pasos (LineasDatos.tiempo: candado, lecturas, cachés, escrituras) y los deja 10 min en la caché;
+   * el medidor (?medir=1) los pide al terminar con apiLineasPasosServidor y los escribe en MEDICIONES LINEAS. En
+   * producción no hace nada.
+   */
+  const esDev_ = () => String(Config.ENTORNO || '').toUpperCase() !== 'PROD';
+  function conPasosEnDev_(nombre, fn) {
+    if (!esDev_()) return fn();
+    LineasDatos.medirPasos(true);
+    const inicio = Date.now();
+    try {
+      return fn();
+    } finally {
+      try {
+        CacheService.getScriptCache().put('lineas_pasos_' + nombre, JSON.stringify({ total_ms: Date.now() - inicio, pasos: LineasDatos.pasos().slice(-150) }), 600);
+      } catch (e) { console.warn('conPasosEnDev_: ' + e.message); }
+      LineasDatos.medirPasos(false);
+    }
+  }
+  function pasosServidor(token, nombre) {
+    leer_(token);
+    if (!esDev_()) throw new Error('El medidor solo corre en un DEV.');
+    const v = CacheService.getScriptCache().get('lineas_pasos_' + String(nombre || ''));
+    return v ? JSON.parse(v) : null;
+  }
   const COLS_MEDICIONES = ['FECHA', 'SESION', 'USUARIO', 'N', 'VISTA', 'VISTA FINAL', 'ACCION', 'TOTAL MS', 'LLAMADAS', 'SERVIDOR MS', 'DETALLE', 'NOTA'];
   function registrarMediciones(token, filas) {
     const sesion = leer_(token);
@@ -624,7 +652,8 @@ const TelefoniaService = (function () {
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
   function generarPdf(token, tipo, id, forzar, firmas) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
+    return conPasosEnDev_('apiLineasGenerarPdf', () =>
+      LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null)));
   }
 
   /**
@@ -688,15 +717,36 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
   }
 
+  /**
+   * datos.inspeccion (usuario, 13-oct: Mandar a resguardo tardaba ~31 s después de la inspección): la última inspección
+   * llega con el resguardo y se guardan en la misma llamada (un viaje al servidor y un índice menos; su PDF se pide
+   * después, sin estorbarle al resguardo). Regresa la inspección ({ id, … }) con `resguardo` o, si la inspección se guardó
+   * pero el resguardo no, con `error` (la pantalla avisa que la inspección sí quedó).
+   */
   function mandarResguardo(token, ids, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
+    return conPasosEnDev_('apiLineasMandarResguardo', () => {
+      const d = Object.assign({}, datos || {});
+      const usuario = usuarioResguardo_(sesion);
+      if (!d.inspeccion) return LineasUtil.paraCliente(LineasResguardos.mandar(ids, d, usuario));
+      const inspeccion = LineasCaptura.guardarInspeccion(d.inspeccion, usuarioOperacion_(sesion), puedeVerSecretos_(sesion), { sinIndice: true });
+      d.inspecciones = Object.assign({}, d.inspecciones);
+      d.inspecciones[String(d.inspeccion.equipoId || '')] = inspeccion.id;
+      delete d.inspeccion;
+      // Las 4 hojas que leyó la inspección (ya con lo que escribió) sirven para el resguardo: entre los dos candados pasan
+      // ~0.2 s y el equipo está en la ventana de quien lo manda. Volver a leerlas costaba ~6 s (13-oct)
+      try {
+        return LineasUtil.paraCliente(Object.assign({}, inspeccion, { resguardo: LineasResguardos.mandar(ids, d, usuario) }));
+      } catch (e) {
+        return LineasUtil.paraCliente(Object.assign({}, inspeccion, { error: e.message }));
+      }
+    });
   }
 
   /** "Mandar a cancelación": una o varias líneas a la bandeja de cancelaciones sin mandar el equipo a resguardo. */
   function mandarCancelacion(token, ids, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion)));
+    return conPasosEnDev_('apiLineasMandarCancelacion', () => LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion))));
   }
 
   /** Bandeja de resguardos y cancelaciones: la ve todo el módulo; los pasos solo quien aprueba. */
@@ -731,7 +781,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,

@@ -628,6 +628,9 @@ function apiLineasMediciones(token, filas) {
 function apiLineasMedirServidor(token, que, id) {
   return TelefoniaService.medirServidor(token, que, id);
 }
+function apiLineasPasosServidor(token, nombre) {
+  return TelefoniaService.pasosServidor(token, nombre);
+}
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }

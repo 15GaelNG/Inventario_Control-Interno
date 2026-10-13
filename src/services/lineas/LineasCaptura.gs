@@ -29,6 +29,8 @@
 const LineasCaptura = (function () {
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ZONA = 'America/Mexico_City';
+  /** Marca de tiempo del medidor del DEV (TelefoniaService.conPasosEnDev_); afuera no hace nada. */
+  const marca_ = (que, desde) => { if (typeof LineasDatos.tiempo === 'function') LineasDatos.tiempo(que, desde); };
 
   // Rutas del AppSheet para los PDF (acciones GUARDAR de sus bots)
   const PDF = {
@@ -455,7 +457,8 @@ const LineasCaptura = (function () {
   /** Lo que no es de la persona: en Reasignar es lo único que la inspección pasa al inventario. */
   const ACCESOS_INSPECCION = ['PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'];
 
-  function guardarInspeccion(datos, usuario, puedeVerSecretos) {
+  /** opciones.sinIndice: quien llama refresca el índice después (Mandar a resguardo con la inspección, 13-oct). */
+  function guardarInspeccion(datos, usuario, puedeVerSecretos, opciones) {
     LineasUtil.exigirPinEquipo(datos);
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaInspectorBase64 = firmaPropia_(usuario);
@@ -466,9 +469,11 @@ const LineasCaptura = (function () {
 
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
+      const t0 = Date.now();
       const obj = objetivoCaptura_(ref);
       const elementos = formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!datos.enAccion, datos.reasignar ? datos.desdeResponsiva : null)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
+      marca_('inspección · registro y formulario', t0);
       const ocultos = {};
       elementos.forEach((e) => { if (e.secreto) ocultos[e.columna] = e.valor; });
       const r = validarFormulario_(elementos, datos.valores || {}, ocultos);
@@ -503,7 +508,9 @@ const LineasCaptura = (function () {
       // El color es del aparato (EQUIPOS): la inspección lo actualiza si trae uno (decisión del usuario, 3-oct)
       if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
       // tolerante: lo que no tiene dónde guardarse en las hojas nuevas (p. ej. la persona de un equipo guardado) se ignora
+      const t1 = Date.now();
       const g = LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true });
+      marca_('inspección · guardar el registro', t1);
 
       // 3) Evidencia del sistema nuevo (carpeta y fotos) y movimiento.
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);
@@ -523,7 +530,9 @@ const LineasCaptura = (function () {
     });
 
     firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null, patron: datos.patronBase64 || null });
-    const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
+    const t2 = Date.now();
+    const filas = opciones && opciones.sinIndice ? null : LineasRepo.refrescarIndice([res.obj.reg.id]);
+    marca_('inspección · refrescar el índice', t2);
     return { id: id, calificacion: res.calificacion, pdfPendiente: true, filas: filas };
   }
 
@@ -781,9 +790,11 @@ const LineasCaptura = (function () {
         'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron };
     const anterior = forzar ? pdfVigente_(ev) : null;
     try {
+      const tp = Date.now();
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos);
+      marca_('pdf · copiar la plantilla y convertir', tp);
       if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
       if (anterior) {
         const nuevo = DriveApp.getFileById(pdf.id);

@@ -69,7 +69,11 @@ test('Mandar a resguardo: la inspección se captura dentro de la acción (usuari
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /function capturarEnFlujo\(tipo, ref, opciones\)/);
   assert.match(cliente, /if \(borrador && borrador\.flujo && !borrador\.guardada\) borrador\.flujo\.resolver\(null\);/);
-  assert.match(cliente, /inspecciones = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo'\);/);
+  // La última inspección se guarda con el resguardo, en la misma llamada (rapidez, 13-oct)
+  assert.match(cliente, /const hechas = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo', \{\s+espera: textoEspera, guardar: \(datos, previas\) => enviar\(\{ inspecciones: previas, inspeccion: datos \}\),/);
+  assert.match(cliente, /conLaAccion \? \{ espera: ultima\.espera, guardar: \(datos\) => ultima\.guardar\(datos, Object\.assign\(\{\}, ids\)\) \} : \{\}/);
+  assert.match(read('src/services/TelefoniaService.gs'), /LineasCaptura\.guardarInspeccion\(d\.inspeccion, usuarioOperacion_\(sesion\), puedeVerSecretos_\(sesion\), \{ sinIndice: true \}\);/);
+  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /LineasEscritura\.olvidar/); // el resguardo usa las hojas que leyó la inspección
   assert.match(read('src/services/lineas/LineasResguardos.gs'), /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\]/);
   // La responsiva se revisa antes de hacer la acción (Reasignar), con el mismo candado
   const captura = read('src/services/lineas/LineasCaptura.gs');
@@ -112,7 +116,7 @@ test('patrón con orden y dirección, y pantalla de espera al guardar (usuario, 
   assert.match(pantalla, /ln-patron-flecha/);
   assert.match(pantalla, /fillText\(String\(i \+ 1\)/); // el PDF lleva el número de cada punto
   assert.match(pantalla, /function mostrarEspera\(titulo, o\)/);
-  assert.match(pantalla, /estadoGuardado\(sesion\.flujo \? 'Guardando la inspección' : 'Generando tu PDF'\)/);
+  assert.match(pantalla, /estadoGuardado\(sesion\.flujo && sesion\.flujo\.espera \? sesion\.flujo\.espera : \(sesion\.flujo \? 'Guardando la inspección' : 'Generando tu PDF'\)\)/);
   assert.doesNotMatch(pantalla, /Firmas cargadas|Del registro: no se cambian aquí|Captura el color y confirma/);
   assert.match(read('src/html/views/lineas/lineas-telefonicas.html'), /id="ln-captura-espera"/);
 });
