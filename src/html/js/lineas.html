@@ -1739,6 +1739,17 @@
 
     /** La miniatura de Drive (thumbnailLink, «…=s220») en otro tamaño. */
     const miniaturaDe = (url, lado) => String(url || '').replace(/=s\d+(-[a-z0-9-]+)?$/i, '') + '=s' + lado;
+    /** La foto grande del visor (la de Drive a 2400 px), pedida antes para que abra nítida. */
+    const fotoGrande = (f) => f.grande || (f.miniatura ? miniaturaDe(f.miniatura, 2400) : '');
+    const fotosPedidas = {};
+    function pedirFotoGrande(f) {
+      const url = fotoGrande(f);
+      if (!url || fotosPedidas[url]) return;
+      const pre = new Image();
+      pre.referrerPolicy = 'no-referrer';
+      pre.src = url;
+      fotosPedidas[url] = pre;
+    }
 
     /**
      * Visor de fotos (usuario, 13-oct: «que se amplíe para verlo más cerca», en vez de mandar a Drive). fotos: [{ grande,
@@ -1781,14 +1792,19 @@
         const f = lista[i];
         acercar(false);
         // Primero la miniatura que ya se ve; luego la grande
-        const grande = f.grande || (f.miniatura ? miniaturaDe(f.miniatura, 2400) : '');
-        img.src = f.miniatura || grande;
+        const grande = fotoGrande(f);
+        const pedida = fotosPedidas[grande];
+        // Ya llegó (se pidió al pasar el cursor o al ver la de al lado): directo la grande
+        img.src = pedida && pedida.complete && pedida.naturalWidth ? grande : (f.miniatura || grande);
         if (grande && grande !== img.src) {
           const pre = new Image();
           pre.referrerPolicy = 'no-referrer';
           pre.onload = () => { if (lista[i] === f) img.src = grande; };
           pre.src = grande;
+          fotosPedidas[grande] = pre;
         }
+        // La anterior y la siguiente, para que las flechas también abran nítidas
+        if (lista.length > 1) { pedirFotoGrande(lista[(i + 1) % lista.length]); pedirFotoGrande(lista[(i - 1 + lista.length) % lista.length]); }
         capa.querySelector('[data-nombre]').textContent = f.nombre || '';
         capa.querySelector('[data-cuenta]').textContent = lista.length > 1 ? (i + 1) + ' de ' + lista.length : '';
         const drive = capa.querySelector('[data-drive]');
@@ -5313,6 +5329,7 @@
           const ampliar = (f) => verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
           detalle.querySelectorAll('[data-foto]').forEach((a) => {
             const f = fotos[Number(a.dataset.foto)];
+            a.addEventListener('mouseenter', () => pedirFotoGrande(f), { once: true });
             a.addEventListener('click', (ev) => {
               if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
               ev.preventDefault();
