@@ -97,6 +97,8 @@ const ReasignacionesVehicularesService = (function () {
         'Departamento Entrante': datos['Departamento Entrante'] || '',
         'QUIEN REGISTRO': sesion.nombre,
       };
+      // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
+      if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('REASIGNACIONES_VEHICULOS', fila, fila);
       SheetUtils.insert(HojaServicio.libro(REASIGNACIONES), REASIGNACIONES.hoja, fila);
 
       // candadoTomado: este hilo ya tiene el candado del script (arriba), y waitLock no es

@@ -57,21 +57,6 @@ const CajasChicasService = (function () {
     return String(maximo + 1);
   }
 
-  /**
-   * ID PERSONA no se captura: se calcula del responsable y su correo (CapitalHumano,
-   * decisión del 01/10/2026). Si cambiaron, se recalcula y va en el mismo renglón; si
-   * todavía no hay PERSONAS, no se toca y Salud lo pone al día después.
-   */
-  function conPersona_(datos, registro) {
-    delete datos[CapitalHumano.COLUMNA];
-    if (!CapitalHumano.columnasDePersona('CAJAS CHICAS').some((c) => datos[c] !== undefined)) return;
-    try {
-      const id = CapitalHumano.idPara('CAJAS CHICAS', registro);
-      if (id !== null) datos[CapitalHumano.COLUMNA] = id;
-    } catch (err) {
-      console.error('CapitalHumano: no se pudo calcular la persona de la caja: ' + err.message);
-    }
-  }
 
   /** La hoja, para HojaServicio */
   const CAJAS_CHICAS = {
@@ -106,9 +91,9 @@ const CajasChicasService = (function () {
     alCrear: (fila, ctx) => {
       fila[ID_COLUMN] = generarIdCch_(ctx.hoja);
       fila['ESTATUS'] = 'VIGENTE';
-      conPersona_(fila, fila);
     },
-    alActualizar: (cambios, ctx) => conPersona_(cambios, Object.assign({}, ctx.actual, cambios)),
+    // ID PERSONA del responsable (y su correo): se calcula al crear y al cambiarlo (CapitalHumano, 01/10/2026)
+    persona: true,
   };
 
   return {

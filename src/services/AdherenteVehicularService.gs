@@ -427,6 +427,8 @@ const AdherenteVehicularService = (function () {
         }
       }
 
+      // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
+      if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('ADHERENTE VEHICULAR', fila, fila);
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
       if (remoto || remotoJefe) {

@@ -4,7 +4,7 @@
   sessionStorage.setItem('token', 'vista-previa');
   sessionStorage.setItem('sesion', JSON.stringify({ token: 'vista-previa', nombre: 'AYRTON SEPULVEDA CHOWEL', correo: 'prueba@ciudadmaderas.com' }));
   const tema = /tema=oscuro/.test(location.hash) ? 'dark' : 'light';
-  try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
+  try { localStorage.setItem('apariencia', JSON.stringify({ modo: tema })); } catch (e) { /* no-op */ }
 
   // Los mismos grupos que src/config/Modulos.gs (sin Líneas: sus escenas llegan con la Fase 4 del plan responsivo)
   const MODULOS = [
@@ -14,7 +14,7 @@
       ['inspeccion-vehicular', 'Inspección Vehicular'], ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
     ['arqueos', 'Arqueos', 'wallet', [['arqueos', 'Arqueos'], ['caja-chica', 'Caja Chica']]],
     ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
-    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
+    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud'], ['capital-humano', 'Capital humano']]],
   ];
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
   const conEscenas = MODULOS.map((g) => g[0]);
@@ -253,7 +253,17 @@
       { dueno: 'FOLIO', copia: 'FOLIO', encontradas: 198, deCopia: 212, conValor: 205, duplicadasEnDueno: 0 },
     ], datos: [['PLACA', 'PLACA'], ['COLOR', 'COLOR']] }),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
+    apiCapitalHumanoResumen: { renglones: 15254, activos: 3233, sinId: 0, tieneColumna: true, sensibles: ['NÚMERO DE CUENTA'] },
+    apiCapitalHumanoHistorial: [{ FECHA: '12/10/2026 15:10', QUIEN: 'prueba@ciudadmaderas.com', RENGLONES: '15254', NUEVOS: '28', CAMBIAN: '311',
+      FALTAN: '0', EMPLEOS_NUEVOS: '28', PERSONAS_NUEVAS: '26', AVISOS: '' }],
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
+    apiMiPerfil: {
+      correo: 'prueba@ciudadmaderas.com', nombre: 'AYRTON SEPULVEDA CHOWEL', rol: 'ADMIN', area: 'CONTROL INTERNO', activo: true,
+      ch: { idPersona: 'P-00412', noEmpleado: 'CIB02110', puesto: 'ESPECIALISTA DE ANALISIS DE DATOS', departamento: 'CONTROL INTERNO',
+        area: 'CONTROL INTERNO', sede: 'MÉRIDA', oficina: 'CORPORATIVO', jefeDirecto: 'GABRIELA CHAVEZ RIVERA' },
+      grupos: grupos.map((g) => ({ etiqueta: g.etiqueta, icono: g.icono,
+        modulos: g.modulos.map((m, i) => ({ id: m.id, etiqueta: m.etiqueta, nivel: i % 3 === 2 ? 'LECTURA' : 'EDICION' })) })),
+    },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
     apiBuscarVehiculoPorFolio: VEHICULO,
@@ -499,11 +509,10 @@
     modulos.forEach((m) => { delete state.permisos[m]; });
   }
 
-  /** Día de Muertos (html/temporada.html) encendido, visto por un ADMIN (sale el botón de la flor) */
-  function temporada() {
-    document.body.dataset.temporada = 'muertos';
-    state.sesion.rol = 'ADMIN';
-    Temporada.aplicar();
+  /** Día de Muertos (html/temporada.html) abierto, visto por un ADMIN (o por cualquiera: rol) */
+  function temporada(rol) {
+    state.sesion.rol = rol || 'ADMIN';
+    Temporada.aplicar('muertos');
   }
 
   const ESCENAS = {
@@ -532,6 +541,20 @@
       if (opcion) opcion.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       await esperar(500);
     },
+    // El engrane (componentes/apariencia.html) con la sección de la temporada: lo de cada quien
+    // (sin la parte de administración) y el del ADMIN
+    'muertos-panel': async () => { temporada('USUARIO'); await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('#ap-temporada:not([hidden]) .dm-panel-opciones'); await esperar(400); },
+    'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('[data-dm-global]'); await esperar(400); },
+    // Mi perfil (el usuario al pie del menú) y el menú abierto con el usuario abajo
+    'mi-perfil': async () => { Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo'); await esperar(400); },
+    'menu-usuario': async () => {
+      Temporada.aplicar(''); await abrir('dashboard');
+      if (Pantalla.esAngosta()) (await hasta('.shell-menu-btn')).click();
+      else document.getElementById('sidebar').classList.remove('collapsed');
+      await esperar(500);
+    },
+    // El engrane sin temporada: modo, color, ancho y letra
+    'apariencia': async () => { Temporada.aplicar(''); state.sesion.rol = 'USUARIO'; await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('#ap-panel.ap-visible'); await esperar(400); },
     'muertos-vacio': async () => {
       temporada(); await abrir('vehiculos');
       const buscar = await hasta('.dt-buscar'); buscar.value = 'nada-que-coincida'; evento(buscar, 'input');
@@ -546,6 +569,15 @@
       const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
+    'capital-humano': async () => { await abrir('capital-humano'); await hasta('#ch-historial table'); await esperar(300); },
+    // El ensayo de una carga (como en la captura del usuario del 12-oct): las cifras, los avisos y Aplicar
+    'capital-humano-ensayo': async () => {
+      await abrir('capital-humano'); await hasta('#ch-historial table');
+      const nombre = document.getElementById('ch-archivo-nombre'); nombre.textContent = 'BASE RELOJ CHECADOR ABRIL 2026.xlsx'; nombre.classList.remove('vacio');
+      CapitalHumanoVista.pintarEnsayo(document.getElementById('ch-ensayo'), { renglones: 15254, nuevos: 30, cambian: 15224, faltan: 5, personasNuevas: 26,
+        quitadas: ['NÚMERO DE CUENTA'], conflictos: [], avisos: ['No vino en el archivo: CIB00001 ANA PEREZ (se queda)', 'No vino en el archivo: CIB00002 LUIS SOTO (se queda)'] }, false);
+      await esperar(300);
+    },
     'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
     'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },

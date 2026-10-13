@@ -196,7 +196,7 @@
     const COLOR_ESTATUS = {
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'DISPONIBLE': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
-      'PARA VENTA': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      'PARA VENTA': 'ambar', 'PARA VENTA CON DETALLE': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
       // Bandeja de resguardos y cancelaciones
       'PENDIENTE DE RECEPCION': 'ambar', 'EN RESGUARDO': 'azul', 'ENTREGADO A LINEAS': 'verde',
       'POR FIRMAR': 'ambar', 'CARTA FIRMADA': 'ambar', 'CARTA ENVIADA': 'azul',
@@ -208,7 +208,7 @@
     /** Qué significa cada estatus (reunión 30-sep); se ve al pasar el ratón (usuario, 4-oct). */
     const SIGNIFICADO_ESTATUS = {
       'USO': 'En operación, con una persona', 'RESGUARDO': 'Guardado en almacén; puede volver a usarse',
-      'PARA VENTA': 'Buen estado; se ofrece en venta',
+      'PARA VENTA': 'Buen estado; se ofrece en venta', 'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta',
       'PARA DESECHO': 'Apartado para desecharse', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
       'DESECHADO': 'Ya se desechó', 'EXTRAVIO-ROBO': 'Extraviado o robado',
       'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Pasa a la bandeja de cancelaciones; se pide al proveedor',
@@ -401,8 +401,14 @@
     }
 
     /** Menú flotante con el mismo aspecto que el ⋮ de las tablas. items = [{ icono, texto, alHacer, separador, peligro }] */
-    function menuFlotante(ancla, items) {
-      document.querySelectorAll('.ln-menu-flotante').forEach((m) => m.remove());
+    /** Cierra los menús de opciones abiertos (con sus escuchas). */
+    function cerrarMenusFlotantes() {
+      document.querySelectorAll('.ln-menu-flotante').forEach((m) => (m._cerrar ? m._cerrar() : m.remove()));
+    }
+
+    /** Menú de opciones junto a `ancla`; con `punto` ({ x, y }, clic derecho), donde está el cursor y por encima del visor. */
+    function menuFlotante(ancla, items, punto) {
+      cerrarMenusFlotantes();
       if (!items.length) return;
       const menu = document.createElement('div');
       menu.className = 'dt-popover dt-menu ln-menu-flotante';
@@ -413,14 +419,21 @@
       document.body.appendChild(menu);
       pintarIconos(menu);
       const r = ancla.getBoundingClientRect();
-      menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
-      menu.style.top = (r.bottom + menu.offsetHeight + 8 > window.innerHeight ? Math.max(8, r.top - menu.offsetHeight - 6) : r.bottom + 6) + 'px';
+      if (punto) {
+        menu.style.zIndex = '900';
+        menu.style.left = Math.max(8, Math.min(punto.x, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = Math.max(8, Math.min(punto.y, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+      } else {
+        menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = (r.bottom + menu.offsetHeight + 8 > window.innerHeight ? Math.max(8, r.top - menu.offsetHeight - 6) : r.bottom + 6) + 'px';
+      }
       const cerrar = () => {
         menu.remove();
         document.removeEventListener('mousedown', fuera, true);
         document.removeEventListener('keydown', tecla, true);
       };
-      const fuera = (ev) => { if (!menu.contains(ev.target) && !ancla.contains(ev.target)) cerrar(); };
+      const fuera = (ev) => { if (!menu.contains(ev.target) && (punto || !ancla.contains(ev.target))) cerrar(); };
+      menu._cerrar = cerrar;
       const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
       document.addEventListener('mousedown', fuera, true);
       document.addEventListener('keydown', tecla, true);
@@ -719,6 +732,7 @@
       // Los tipos básicos no existían en el AppSheet: para sus reglas valen como EQUIPO + SIM y LINEA (LineasChecklist.tipoBase)
       if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t === 'SIM BASICO' || t === 'LINEA BASICA' ? 'LINEA' : t.replace(/ BASIC[OA]$/, ''));
       if (cond.y) return cond.y.every((c) => cumpleCondicion(c, tipo, valores, ctx));
+      if (cond.o) return cond.o.some((c) => cumpleCondicion(c, tipo, valores, ctx));
       if (cond.tipoLleno) return !!t;
       if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
       if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
@@ -1604,8 +1618,8 @@
         const lista = caja.querySelector('.ln-ine-lista');
         pintarRegistrada(caja);
         lista.innerHTML = s.pdf
-          ? '<span class="ln-foto-chip">' + icono('file-text', 'ln-icon-sm') + '<a class="ln-foto-nombre" href="' + esc(s.pdf.url) + '" target="_blank" rel="noopener">' + esc(s.pdf.archivo.name) + '</a>' +
-            '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>'
+          // El PDF como las fotos, con su carátula (usuario, 13-oct)
+          ? htmlMiniaturaPdf(s.pdf.url, s.pdf.archivo.name, s.pdf.caratula, '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button>')
           : s.fotos.map((f, i) => '<span class="ln-miniatura"><img src="' + esc(f.url) + '" alt="' + esc(f.archivo.name) + '" data-ver-foto />' +
             '<button type="button" data-ine-quitar="' + i + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>').join('');
         pintarIconos(lista);
@@ -1671,7 +1685,9 @@
         if (archivos.some((a) => a.size > INE_MAX_MB * 1024 * 1024)) return error('El archivo supera ' + INE_MAX_MB + ' MB.');
         if (pdfs.length) {
           vaciar(caja);
-          caja._ine.pdf = { archivo: pdfs[0], url: URL.createObjectURL(pdfs[0]) };
+          const pdf = { archivo: pdfs[0], url: URL.createObjectURL(pdfs[0]), caratula: null };
+          caja._ine.pdf = pdf;
+          caratulaPdf(pdfs[0]).then((c) => { if (caja._ine.pdf === pdf) { pdf.caratula = c; pintar(caja); } }).catch(() => { /* sin carátula: el ícono */ });
         } else {
           if (caja._ine.pdf) vaciar(caja);
           if (caja._ine.fotos.length + fotos.length > INE_MAX_FOTOS) return error('Son hasta ' + INE_MAX_FOTOS + ' fotos.');
@@ -1725,13 +1741,280 @@
       });
     }
 
-    /** La foto en grande (identificación e inspección), para revisarla antes de guardar. Se cierra con un clic. */
+    /** La foto en grande (identificación e inspección), para revisarla antes de guardar. */
     function verFotoEnGrande(url) {
+      verFotos([{ grande: url }], 0);
+    }
+
+    // ---- Arrastrar y soltar archivos y carátula de los PDF (usuario, 13-oct; pendiente 2.42) ----
+    // Soltar archivos sobre un botón de subir (.ln-upload) o un campo de archivo (.ln-af-archivo) es como elegirlos: se
+    // ponen en su input y se avisa con 'change', así cada pantalla los maneja como siempre. Fuera de esos lugares, dentro
+    // de Líneas, soltar un archivo no hace nada (el navegador no lo abre encima de la app).
+    const ZONAS_SOLTAR = '.ln-upload, .ln-af-archivo';
+    const conArchivos = (ev) => !!(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).indexOf('Files') >= 0);
+    const inputDeZona = (zona) => zona.querySelector('input[type="file"]:not([capture]):not([disabled])');
+    /** ¿El archivo entra en el accept del input? («image/*», «application/pdf», «.pdf»; sin accept, todo). */
+    function aceptaArchivo(input, archivo) {
+      const reglas = String(input.accept || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+      if (!reglas.length) return true;
+      const tipo = String(archivo.type || '').toLowerCase();
+      const nombre = String(archivo.name || '').toLowerCase();
+      return reglas.some((r) => (r.charAt(0) === '.' ? nombre.slice(-r.length) === r
+        : r.slice(-1) === '*' ? tipo.indexOf(r.slice(0, -1)) === 0 : tipo === r)); // «image/» + comodín
+    }
+    let zonaEncima = null;
+    const marcarZona = (zona) => {
+      if (zonaEncima === zona) return;
+      if (zonaEncima) zonaEncima.classList.remove('ln-soltar');
+      zonaEncima = zona;
+      if (zona) zona.classList.add('ln-soltar');
+    };
+    // Mientras se arrastran archivos sobre Líneas, todos los lugares para soltar se marcan («Suelta aquí», usuario 13-oct);
+    // se quita solo si deja de llegar dragover (salió de la ventana o se soltó)
+    let finArrastre = null;
+    const arrastrando = (si) => {
+      clearTimeout(finArrastre);
+      document.documentElement.classList.toggle('ln-arrastrando', si);
+      if (si) finArrastre = setTimeout(() => { arrastrando(false); marcarZona(null); }, 250);
+    };
+    document.addEventListener('dragover', (ev) => {
+      if (!conArchivos(ev) || !ev.target.closest || !ev.target.closest('.ln-modulo')) return;
+      ev.preventDefault();
+      arrastrando(true);
+      const zona = ev.target.closest(ZONAS_SOLTAR);
+      const input = zona && inputDeZona(zona);
+      ev.dataTransfer.dropEffect = input ? 'copy' : 'none';
+      marcarZona(input ? zona : null);
+    });
+    document.addEventListener('dragleave', (ev) => { if (zonaEncima && !zonaEncima.contains(ev.relatedTarget)) marcarZona(null); });
+    document.addEventListener('drop', (ev) => {
+      if (!conArchivos(ev) || !ev.target.closest || !ev.target.closest('.ln-modulo')) return;
+      ev.preventDefault();
+      marcarZona(null);
+      arrastrando(false);
+      const zona = ev.target.closest(ZONAS_SOLTAR);
+      const input = zona && inputDeZona(zona);
+      if (!input) return;
+      const archivos = Array.from(ev.dataTransfer.files || []);
+      const sirven = archivos.filter((a) => aceptaArchivo(input, a)).slice(0, input.multiple ? archivos.length : 1);
+      if (!sirven.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ese tipo de archivo no se puede subir aquí.', 6000); return; }
+      const dt = new DataTransfer();
+      sirven.forEach((a) => dt.items.add(a));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // Carátula (primera hoja) de un PDF, como imagen, con pdf.js; se carga la primera vez que hace falta
+    const URL_PDFJS = 'https:\/\/cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+    let cargandoPdfJs = null;
+    function cargarPdfJs() {
+      if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+      if (!cargandoPdfJs) {
+        cargandoPdfJs = new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = URL_PDFJS + 'pdf.min.js';
+          script.onload = () => {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL_PDFJS + 'pdf.worker.min.js';
+            resolve(window.pdfjsLib);
+          };
+          script.onerror = () => { cargandoPdfJs = null; reject(new Error('No se pudo cargar el lector de PDF.')); };
+          document.head.appendChild(script);
+        });
+      }
+      return cargandoPdfJs;
+    }
+    /** archivo (File o Blob de un PDF) → promesa con la carátula en data URL (JPEG de `ancho` px). */
+    function caratulaPdf(archivo, ancho) {
+      return Promise.all([cargarPdfJs(), archivo.arrayBuffer()])
+        .then(([pdfjs, datos]) => pdfjs.getDocument({ data: datos }).promise)
+        .then((pdf) => pdf.getPage(1))
+        .then((pagina) => {
+          const vista = pagina.getViewport({ scale: (ancho || 360) / pagina.getViewport({ scale: 1 }).width });
+          const lienzo = document.createElement('canvas');
+          lienzo.width = Math.round(vista.width);
+          lienzo.height = Math.round(vista.height);
+          const ctx = lienzo.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+          return pagina.render({ canvasContext: ctx, viewport: vista }).promise.then(() => lienzo.toDataURL('image/jpeg', 0.85));
+        });
+    }
+    const esPdf = (archivo) => archivo.type === 'application/pdf' || /\.pdf$/i.test(archivo.name || '');
+    /**
+     * Miniatura de un PDF elegido: su carátula (al llegar; mientras, el ícono) con la etiqueta PDF; clic = el PDF en otra
+     * pestaña. `quitar`: el HTML del botón para quitarlo.
+     */
+    function htmlMiniaturaPdf(url, nombre, caratula, quitar) {
+      return '<span class="ln-miniatura ln-miniatura-pdf"><a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(nombre) + '">' +
+        (caratula ? '<img src="' + esc(caratula) + '" alt="' + esc(nombre) + '" />' : icono('file-text')) + '</a>' +
+        '<span class="ln-miniatura-etiqueta">PDF</span>' + (quitar || '') + '</span>';
+    }
+
+    // Campo de archivo (Editar): lo elegido o soltado se ve en miniatura, la foto o la carátula del PDF, con X para quitarlo
+    document.addEventListener('change', (ev) => {
+      const input = ev.target.closest && ev.target.closest('.ln-af-archivo input[type="file"][data-archivo]');
+      if (!input) return;
+      const caja = input.closest('.ln-af-archivo');
+      const anterior = caja.querySelector('.ln-af-vista');
+      if (anterior) { if (anterior._url) URL.revokeObjectURL(anterior._url); anterior.remove(); }
+      const archivo = input.files && input.files[0];
+      if (!archivo) return;
+      const vista = document.createElement('div');
+      vista.className = 'ln-af-vista';
+      vista._url = URL.createObjectURL(archivo);
+      const quitar = '<button type="button" data-af-quitar aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button>';
+      const pintar = (caratula) => {
+        vista.innerHTML = esPdf(archivo) ? htmlMiniaturaPdf(vista._url, archivo.name, caratula, quitar)
+          : '<span class="ln-miniatura"><img src="' + esc(vista._url) + '" alt="' + esc(archivo.name) + '" data-ver-foto />' + quitar + '</span>';
+        pintarIconos(vista);
+      };
+      pintar(null);
+      caja.appendChild(vista);
+      if (esPdf(archivo)) caratulaPdf(archivo).then((c) => { if (vista.isConnected) pintar(c); }).catch(() => { /* sin carátula: el ícono */ });
+    });
+    document.addEventListener('click', (ev) => {
+      const b = ev.target.closest && ev.target.closest('[data-af-quitar]');
+      if (!b) return;
+      const caja = b.closest('.ln-af-archivo');
+      const input = caja && caja.querySelector('input[type="file"][data-archivo]');
+      if (input) { input.value = ''; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+
+    /** La miniatura de Drive (thumbnailLink, «…=s220») en otro tamaño. */
+    const miniaturaDe = (url, lado) => String(url || '').replace(/=s\d+(-[a-z0-9-]+)?$/i, '') + '=s' + lado;
+    /** La foto grande del visor (la de Drive a 2400 px), pedida antes para que abra nítida. */
+    const fotoGrande = (f) => f.grande || (f.miniatura ? miniaturaDe(f.miniatura, 2400) : '');
+    const fotosPedidas = {};
+    function pedirFotoGrande(f) {
+      const url = fotoGrande(f);
+      if (!url || fotosPedidas[url]) return;
+      const pre = new Image();
+      pre.referrerPolicy = 'no-referrer';
+      pre.src = url;
+      fotosPedidas[url] = pre;
+    }
+
+    /**
+     * Visor de fotos (usuario, 13-oct: «que se amplíe para verlo más cerca», en vez de mandar a Drive). fotos: [{ grande,
+     * miniatura, nombre, enlace, id }]; se pasa con las flechas (teclado o botones), clic en la foto la acerca y la sigue
+     * el cursor, Escape o la X cierran. o.alQuitar(foto) (promesa): botón «Quitar foto»; si se quita, sale de la lista.
+     */
+    function verFotos(fotos, inicio, opciones) {
+      const o = opciones || {};
+      const lista = fotos.slice();
+      let i = Math.max(0, Math.min(inicio || 0, lista.length - 1));
       const capa = document.createElement('div');
-      capa.className = 'ln-ine-visor';
-      capa.innerHTML = '<img src="' + esc(url) + '" alt="" />';
-      capa.addEventListener('click', () => capa.remove());
+      capa.className = 'ln-visor';
+      capa.setAttribute('role', 'dialog');
+      capa.setAttribute('aria-modal', 'true');
+      capa.innerHTML = '<div class="ln-visor-barra"><span class="ln-visor-nombre" data-nombre></span><span class="ln-visor-cuenta" data-cuenta></span>' +
+        '<span class="ln-visor-botones">' +
+        '<a class="ln-visor-boton" data-drive target="_blank" rel="noopener" title="Abrir en Drive">' + ico('external-link') + '<span>Abrir en Drive</span></a>' +
+        (o.alQuitar ? '<button type="button" class="ln-visor-boton ln-visor-quitar" data-quitar title="Quitar foto">' + ico('trash-2') + '<span>Quitar foto</span></button>' : '') +
+        '<button type="button" class="ln-visor-boton" data-cerrar title="Cerrar" aria-label="Cerrar">' + ico('x') + '</button></span></div>' +
+        '<div class="ln-visor-escena" data-escena><img alt="" data-img /></div>' +
+        '<button type="button" class="ln-visor-flecha ln-visor-anterior" data-paso="-1" aria-label="Anterior">' + ico('chevron-left') + '</button>' +
+        '<button type="button" class="ln-visor-flecha ln-visor-siguiente" data-paso="1" aria-label="Siguiente">' + ico('chevron-right') + '</button>';
+      const img = capa.querySelector('[data-img]');
+      const escena = capa.querySelector('[data-escena]');
+      const cerrar = () => { capa.remove(); document.removeEventListener('keydown', tecla, true); };
+      const acercar = (si, ev) => {
+        escena.classList.toggle('ln-visor-cerca', si);
+        if (si && ev) seguir(ev);
+        else img.style.transformOrigin = '';
+      };
+      const seguir = (ev) => {
+        const r = img.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        const x = Math.max(0, Math.min(100, (ev.clientX - r.left) / r.width * 100));
+        const y = Math.max(0, Math.min(100, (ev.clientY - r.top) / r.height * 100));
+        img.style.transformOrigin = x + '% ' + y + '%';
+      };
+      const mostrar = () => {
+        if (!lista.length) { cerrar(); return; }
+        const f = lista[i];
+        acercar(false);
+        // Primero la miniatura que ya se ve; luego la grande
+        const grande = fotoGrande(f);
+        const pedida = fotosPedidas[grande];
+        // Ya llegó (se pidió al pasar el cursor o al ver la de al lado): directo la grande
+        img.src = pedida && pedida.complete && pedida.naturalWidth ? grande : (f.miniatura || grande);
+        if (grande && grande !== img.src) {
+          const pre = new Image();
+          pre.referrerPolicy = 'no-referrer';
+          pre.onload = () => { if (lista[i] === f) img.src = grande; };
+          pre.src = grande;
+          fotosPedidas[grande] = pre;
+        }
+        // La anterior y la siguiente, para que las flechas también abran nítidas
+        if (lista.length > 1) { pedirFotoGrande(lista[(i + 1) % lista.length]); pedirFotoGrande(lista[(i - 1 + lista.length) % lista.length]); }
+        capa.querySelector('[data-nombre]').textContent = f.nombre || '';
+        capa.querySelector('[data-cuenta]').textContent = lista.length > 1 ? (i + 1) + ' de ' + lista.length : '';
+        const drive = capa.querySelector('[data-drive]');
+        drive.hidden = !f.enlace;
+        if (f.enlace) drive.href = f.enlace;
+        capa.querySelectorAll('[data-paso]').forEach((b) => { b.hidden = lista.length < 2; });
+      };
+      const pasar = (n) => { if (lista.length > 1) { i = (i + n + lista.length) % lista.length; mostrar(); } };
+      const quitar = () => {
+        const f = lista[i];
+        o.alQuitar(f).then((hecho) => {
+          if (!hecho || !document.body.contains(capa)) return;
+          lista.splice(lista.indexOf(f), 1);
+          i = Math.min(i, lista.length - 1);
+          mostrar();
+        });
+      };
+      const tecla = (ev) => {
+        // Una ventana o un menú abiertos encima (Quitar foto, clic derecho) tienen sus teclas; la captura de abajo no
+        if (document.querySelector('.ln-menu-flotante')) return;
+        if (Array.from(document.querySelectorAll('.modal-backdrop')).some((m) => capa.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+        if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); }
+        else if (ev.key === 'ArrowLeft') pasar(-1);
+        else if (ev.key === 'ArrowRight') pasar(1);
+      };
+      img.referrerPolicy = 'no-referrer';
+      // La foto ocupa toda la escena (object-fit: contain): lo que se ve de ella es este rectángulo; alrededor es fondo
+      const sobreFoto = (ev) => {
+        const r = img.getBoundingClientRect();
+        const nw = img.naturalWidth;
+        const nh = img.naturalHeight;
+        if (!nw || !nh || !r.width || !r.height) return true;
+        const k = Math.min(r.width / nw, r.height / nh);
+        const ancho = nw * k;
+        const alto = nh * k;
+        const x = ev.clientX - r.left - (r.width - ancho) / 2;
+        const y = ev.clientY - r.top - (r.height - alto) / 2;
+        return x >= 0 && y >= 0 && x <= ancho && y <= alto;
+      };
+      // Clic fuera de la foto cierra (usuario, 13-oct: antes acercaba aunque fuera en lo oscuro); acercada, cualquier clic aleja
+      img.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const cerca = escena.classList.contains('ln-visor-cerca');
+        if (!cerca && !sobreFoto(ev)) { cerrar(); return; }
+        acercar(!cerca, ev);
+      });
+      img.addEventListener('mousemove', (ev) => {
+        const cerca = escena.classList.contains('ln-visor-cerca');
+        if (cerca) seguir(ev);
+        img.style.cursor = cerca ? 'zoom-out' : (sobreFoto(ev) ? 'zoom-in' : 'default');
+      });
+      img.addEventListener('error', () => {
+        const f = lista[i];
+        if (f && f.miniatura && img.src !== f.miniatura) img.src = f.miniatura;
+      });
+      capa.addEventListener('click', (ev) => {
+        const paso = ev.target.closest('[data-paso]');
+        if (paso) { pasar(Number(paso.dataset.paso)); return; }
+        if (ev.target.closest('[data-quitar]')) { quitar(); return; }
+        if (ev.target.closest('[data-cerrar]') || ev.target === escena || ev.target === capa) cerrar();
+      });
+      document.addEventListener('keydown', tecla, true);
+      // El menú del clic derecho de la galería no se queda encima del visor (usuario, 13-oct); el visor no tiene el suyo
+      cerrarMenusFlotantes();
       document.body.appendChild(capa);
+      pintarIconos(capa);
+      mostrar();
     }
 
     /**
@@ -2244,7 +2527,9 @@
       let ocultarSinAsignar = false; // oculta los periodos "Sin línea" / "Sin equipo" (suelen ser transiciones)
       let fichaActual = null; // la ficha abierta (su carpeta de Drive, para el ⋮)
       // Estatus del equipo que van por el formulario de resguardo (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO)
-      const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO'];
+      const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'];
+      // Por qué se cancela la línea (LineasResguardos.MOTIVOS_CANCELACION; usuario, 13-oct)
+      const MOTIVOS_CANCELACION = ['LINEA VENCIDA', 'CANCELACION ANTICIPADA'];
       // Los de la línea que en Editar llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
       const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       let marcarKpi = null;
@@ -2505,7 +2790,7 @@
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
-        const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar información', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
+        const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar equipo', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
           alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
@@ -2525,9 +2810,8 @@
               alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
             { icono: 'signature', texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
               alHacer: (f) => abrirCaptura('RESPONSIVA', { equipoId: f[0].id }) },
+            // En el equipo solo Editar equipo: la línea se edita desde la línea (usuario, 13-oct)
             editar,
-            { icono: 'card-sim', texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: (f) => operar() && !!f[0].lineaId,
-              alHacer: (f) => abrirEditor(f[0].lineaId, 'LINEA') },
             vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
             vinculo('arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA', (r) => !!r.lineaId),
             vinculo('unlink', 'Desvincular línea', 'DESVINCULAR', (r) => !!r.lineaId),
@@ -3168,10 +3452,10 @@
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
         const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
-        // Editar línea y Editar información (del equipo) por separado (usuario, 8-oct). En el equipo ya no van Editar línea
-        // ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
+        // Editar línea y Editar equipo por separado (usuario, 8-oct; «Editar información» hasta el 13-oct). En el equipo ya no
+        // van Editar línea ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
         const editar = [tipo === 'equipo'
-          ? { icono: 'pencil', texto: 'Editar información', separador: true, alHacer: () => abrirEditor(id) }
+          ? { icono: 'pencil', texto: 'Editar equipo', separador: true, alHacer: () => abrirEditor(id) }
           : { icono: 'pencil', texto: 'Editar línea', separador: true, alHacer: () => abrirEditor(id, 'LINEA') }];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
         const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
@@ -3553,23 +3837,28 @@
        * Pide en orden la inspección de cada equipo que todavía no la tiene. Regresa { idRegistro: idInspeccion } o null
        * si se cerró alguna sin guardar (la acción no sigue).
        */
-      async function inspeccionesEnFlujo(equipos, para) {
+      async function inspeccionesEnFlujo(equipos, para, ultima) {
         const ids = {};
+        let deLaUltima = null;
         for (let i = 0; i < equipos.length; i++) {
           const q = equipos[i];
           const hecha = inspeccionHecha(q.id);
           if (hecha) { ids[q.id] = hecha; continue; }
+          // ultima = { espera, guardar(datos, idsDeLasAnteriores) }: la última se guarda con la acción (Mandar a
+          // resguardo, 13-oct) y lo que contesta (con el id de la inspección) regresa en ultima
+          const conLaAccion = !!ultima && i === equipos.length - 1;
           // enAccion = dentro de Mandar a resguardo: el comentario ya lo pidió la acción y el responsable es quien recibe
           // (las personas de procesos, usuario 4-oct)
-          const r = await capturarEnFlujo('INSPECCION', { equipoId: q.id, enAccion: true }, {
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: q.id, enAccion: true }, Object.assign({
             aviso: 'Inspección · NUCO ' + (q.nuco || '—') + (equipos.length > 1 ? ' · ' + (i + 1) + ' de ' + equipos.length : ''),
             boton: i + 1 < equipos.length ? 'Guardar inspección y seguir' : 'Guardar inspección y terminar',
-          });
+          }, conLaAccion ? { espera: ultima.espera, guardar: (datos) => ultima.guardar(datos, Object.assign({}, ids)) } : {}));
           if (!r) return null;
           inspeccionesDelDia[q.id] = { id: r.id, dia: hoyLocal() };
           ids[q.id] = r.id;
+          if (conLaAccion) deLaUltima = r;
         }
-        return ids;
+        return { ids: ids, ultima: deLaUltima };
       }
 
       /**
@@ -3801,14 +4090,19 @@
         const elementosFila = {}; // lo que se captura de cada equipo (con prefijo FILA|<id>| para que sea único)
         const vistaFila = {}; // lo que se dibuja: lo informativo y lo que se captura
         equipos.forEach((q) => {
-          const actual = { DEPARTAMENTO: 'DISPONIBLE', SEDE: q.sede, 'OFICINA / DESARROLLO': q.oficina };
+          // La ubicación sale siempre DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA, sin importar dónde estaba, y se puede
+          // cambiar (usuario, 13-oct; el valor lo pone el servidor: LineasResguardos.UBICACION_RESGUARDO)
           const els = ubicacion.map((c) => {
             const b = base(c);
-            return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, actual[c]) ? actual[c] || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
+            const valor = b && b.valor;
+            return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, valor) ? valor || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
           });
           // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación, sin
-          // elegir; vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo)
-          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: form.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
+          // elegir; vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo).
+          // Ya en la bandeja de Pau, sin el estatus que tiene: solo se cambia a otro (usuario, 13-oct)
+          const posibles = q.opcionesEstatus || form.estatusEquipo;
+          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles,
+            valor: posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : '', requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
           if (q.tieneLinea) {
             const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
             estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea] : form.estatusLinea,
@@ -3863,35 +4157,74 @@
           // del usuario, 3-oct): una por cada equipo que viene de una persona. Si se cierra una sin guardar, no se manda
           // ninguno; las que ya se guardaron no se vuelven a pedir hoy
           const deUnaPersona = equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
+          const textoEspera = estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
+          const enviar = (extra) => llamar('apiLineasMandarResguardo', equipos.map((q) => q.id),
+            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo }, extra));
+          // La espera también después de la inspección (usuario, 13-oct): antes solo salía un aviso en la esquina y no se
+          // sabía si se estaba mandando. Igual que Reasignar: la ventana vuelve con la pantalla de espera
+          const ventanaEspera = () => {
+            const v = captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '' };
+            mostrarModalCaptura();
+            $('#ln-captura-icono', raiz).innerHTML = icono('archive');
+            $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
+            $('#ln-captura-titulo', raiz).textContent = accionTexto;
+            $('#ln-captura-subtitulo', raiz).textContent = equipos.length === 1
+              ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ') : miles(equipos.length) + ' equipos';
+            $('#ln-captura-cuerpo', raiz).innerHTML = '';
+            $('#ln-modal-captura', raiz).setAttribute('aria-busy', 'true');
+            $('#ln-modal-captura', raiz).querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+            mostrarEspera(textoEspera);
+            return v;
+          };
+          const errorEnVentana = (v, mensaje) => {
+            if (captura !== v) return;
+            v.guardando = false;
+            $('#ln-modal-captura', raiz).removeAttribute('aria-busy');
+            $('#ln-modal-captura', raiz).querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+            mostrarEspera('No se mandó a resguardo', { tono: 'error', icono: 'triangle-alert', texto: 'Las inspecciones quedaron guardadas: vuelve a mandarlo y no se piden otra vez.',
+              detalle: mensaje, acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          };
+          let r = null; // lo que contestó el resguardo
+          let espera = sesion; // la ventana que muestra la espera hasta que el servidor contesta
           let inspecciones = {};
-          let enModal = true;
           if (deUnaPersona.length) {
             cerrarCaptura(true);
-            enModal = false;
-            inspecciones = await inspeccionesEnFlujo(deUnaPersona, 'al mandarlo a resguardo');
-            if (!inspecciones) {
+            // La última inspección se guarda con el resguardo, en la misma llamada (rapidez, 13-oct; su PDF se pide al
+            // terminar: TelefoniaService.mandarResguardo). Mientras, la ventana de la inspección dice «Mandando…»
+            const hechas = await inspeccionesEnFlujo(deUnaPersona, 'al mandarlo a resguardo', {
+              espera: textoEspera, guardar: (datos, previas) => enviar({ inspecciones: previas, inspeccion: datos }),
+            });
+            if (!hechas) {
               aviso(icono('triangle-alert', 'ln-alerta') + ' Sin mandar a resguardo · falta la inspección', 8000);
               return;
             }
-            aviso((estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial) + '…', 6000);
-          } else estadoGuardado(estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial);
+            inspecciones = hechas.ids;
+            if (hechas.ultima && hechas.ultima.error) { errorEnVentana(ventanaEspera(), esc(hechas.ultima.error)); return; }
+            if (hechas.ultima) { r = hechas.ultima.resguardo; espera = null; } // ya se mandó: la ventana de la inspección se cerró
+            else espera = ventanaEspera(); // la del día ya estaba: solo falta mandarlo
+          } else estadoGuardado(textoEspera);
+          const enModal = espera === sesion;
           try {
-            const r = await llamar('apiLineasMandarResguardo', equipos.map((q) => q.id), { comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo, inspecciones: inspecciones });
+            if (!r) r = await enviar({ inspecciones: inspecciones });
             await aplicarCambiosIndice(r.indice);
-            if (enModal && captura === sesion) cerrarCaptura(true);
+            if (captura === espera) cerrarCaptura(true);
             if (tablas.equipos) tablas.equipos.limpiarSeleccion();
             if (vigente()) { pintarIndicadores(); pintarListado(); }
             const omitidos = r.omitidos || [];
-            const porRecibir = r.hechos.filter((h) => !h.yaGuardado).length;
+            const porRecibir = r.hechos.filter((h) => h.porRecibir).length;
             aviso(icono('circle-check') + ' ' + miles(r.hechos.length) + ' equipo(s) actualizados' + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio' : '') +
-              (porRecibir ? '. ' + miles(porRecibir) + ' por recibir en Resguardos y cancelaciones.' : '. Ya estaban en resguardo: no se pide otra recepción.'), 8000);
+              (porRecibir ? '. ' + miles(porRecibir) + ' por recibir en Resguardos y cancelaciones.' : '. Ya estaban en Resguardos y cancelaciones: se actualizó su renglón.'), 8000);
             if (omitidos.length) {
               aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => 'NUCO ' + (o.nuco || o.id) + ' (' + o.motivo + ')').join(' · '), 12000);
             }
             const actual = pila[pila.length - 1];
             if (actual && equipos.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
           } catch (e) {
-            if (!enModal) { aviso(icono('triangle-alert', 'ln-alerta') + ' No se mandó a resguardo: ' + mensajeError(e) + ' Las inspecciones quedaron guardadas: vuelve a mandarlo y no se piden otra vez.', 15000); return; }
+            if (!enModal) {
+              if (espera) errorEnVentana(espera, mensajeError(e));
+              else aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+              return;
+            }
             errorAlGuardar(e);
           }
         });
@@ -3995,6 +4328,7 @@
       /**
        * "Mandar a cancelación" (30-sep): una o varias líneas pasan a la pestaña Cancelaciones de la bandeja (carta
        * firmada → enviada → cancelada), sin mandar el equipo a resguardo. La línea queda EN PROCESO DE CANCELACION.
+       * Con su motivo (usuario, 13-oct): LINEA VENCIDA o CANCELACION ANTICIPADA, obligatorio, además del comentario.
        */
       async function abrirCancelacion(filas) {
         const permisos = await cargarPermisos().catch(() => null);
@@ -4006,10 +4340,12 @@
         const subtitulo = (conNumero.length > 1 ? miles(conNumero.length) + ' líneas · ' : '') + lista;
         try {
           const r = await pedirDatos('Mandar a cancelación', subtitulo,
-            [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+            [{ clave: 'motivo', etiqueta: 'Motivo', requerido: true, opciones: MOTIVOS_CANCELACION, elegir: true },
+              { clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
             'Mandar a cancelación', {
               espera: 'Mandando a cancelación',
-              alConfirmar: (datos) => llamar('apiLineasMandarCancelacion', conNumero.map((x) => x.id), { comentario: datos.comentario, ticket: datos.ticket }),
+              alConfirmar: (datos) => llamar('apiLineasMandarCancelacion', conNumero.map((x) => x.id),
+                { motivoCancelacion: datos.motivo, comentario: datos.comentario, ticket: datos.ticket }),
             });
           if (!r) return;
           await aplicarCambiosIndice(r.indice);
@@ -4027,7 +4363,7 @@
 
       // ---- Alta y edición directa del inventario ----
       /**
-       * Editar información y Agregar equipo / Agregar línea (usuario, 4-oct): todo lo guardado en pestañas (equipo,
+       * Editar equipo y Agregar equipo / Agregar línea (usuario, 4-oct): todo lo guardado en pestañas (equipo,
        * responsable, línea, adendum, accesorios y accesos); FOLIO, NUCO y TIPO fijos y el TIPO se asigna solo. Los estatus
        * se cambian aquí: RESGUARDO, PARA VENTA y PARA DESECHO abren Mandar a resguardo y EN PROCESO DE CANCELACION, Mandar
        * a cancelación (al guardar). `parte` (alta): EQUIPO o LINEA.
@@ -4037,7 +4373,7 @@
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : (parte === 'LINEA' ? 'card-sim' : 'smartphone'));
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = id ? (parte === 'LINEA' ? 'Editar línea' : 'Editar información') : agregar;
+        $('#ln-captura-titulo', raiz).textContent = id ? (parte === 'LINEA' ? 'Editar línea' : 'Editar equipo') : agregar;
         $('#ln-captura-subtitulo', raiz).textContent = '';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesionEditor = captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
@@ -4107,7 +4443,7 @@
             const avisos = [];
             if (cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO)) avisos.push('Equipo: ' + (inicial['ESTATUS EQUIPO'] || '—') + ' → ' + valores['ESTATUS EQUIPO']);
             if (cambiaA('ESTATUS LINEA', ESTATUS_LINEA_PANEL)) avisos.push('Línea: ' + (inicial['ESTATUS LINEA'] || '—') + ' → ' + valores['ESTATUS LINEA']);
-            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar). Editar información
+            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar). Editar equipo
             // del equipo ya no trae la línea: su estatus llega en form.estatusLinea
             else if (avisos.length && (inicial['ESTATUS LINEA'] || form.estatusLinea) === 'USO' && (valores['ESTATUS LINEA'] || 'USO') === 'USO') avisos.push('Línea: USO → DISPONIBLE');
             if (patron) {
@@ -4631,7 +4967,7 @@
         const valores = leerFormularioAppSheet();
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
-        estadoGuardado(sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF');
+        estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF'));
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
         Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
@@ -5105,11 +5441,17 @@
           const s = i.snapshot || {};
           const fotos = r.fotos || [];
           const firmas = r.firmas || [];
-          const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f) =>
-            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '">' +
+          // Clic = el visor (ampliar, pasar entre fotos y quitar la enviada por error, usuario 13-oct); un video o una
+          // foto sin vista previa se abre en Drive como antes
+          const enVisor = (f) => !!f.miniatura && !f.video;
+          const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f, n) =>
+            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '" title="' + esc(f.nombre || '') + '"' + (enVisor(f) ? ' data-foto="' + n + '"' : '') + '>' +
             '<span class="ln-foto">' +
             (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
-            '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
+            // Solo la foto, sin el nombre (usuario, 13-oct: como antes; el nombre queda al pasar el cursor y en el visor). Lo
+            // que va a Drive (video o sin vista previa) sí lo dice
+            '</span>' + (enVisor(f) ? '' : '<span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') +
+            '<small>' + icono('external-link') + ' Abrir en Drive</small></span>') + '</a>').join('') + '</div>';
           const deDrive = i.origen === 'DRIVE';
           pila[pila.length - 1].etiqueta = 'Inspección' + (fecha(i.fecha) ? ' ' + fecha(i.fecha) : '');
           detalle.innerHTML = migas() +
@@ -5131,6 +5473,37 @@
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos') + '</div>' : ''));
           activarBotonesDocumento(detalle, 'INSPECCION', i, r);
+          const enGaleria = fotos.filter(enVisor);
+          // Quitar una foto: a la papelera de Drive y al historial, sin comentario ni detalle (usuario, 13-oct); la página se
+          // vuelve a pintar
+          const alQuitar = (f) => pedirDatos('¿Quitar foto?', '', [], 'Quitar foto', {
+              peligro: true, encima: true, espera: 'Quitando la foto',
+              alConfirmar: () => llamar('apiLineasQuitarFotoInspeccion', id, f.id, ''),
+            }).then((res) => {
+              if (!res) return false;
+              aviso(icono('circle-check') + ' Foto quitada: ' + esc(res.nombre) + (res.quedo === 'PAPELERA' ? ' (en la papelera de Drive)' : ' (en FOTOS QUITADAS)') + '.', 6000);
+              if (vigente() && pila.length && pila[pila.length - 1].id === id) abrir('inspeccion', id, true);
+              return true;
+            });
+          const ampliar = (f) => verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
+          detalle.querySelectorAll('[data-foto]').forEach((a) => {
+            const f = fotos[Number(a.dataset.foto)];
+            a.addEventListener('mouseenter', () => pedirFotoGrande(f), { once: true });
+            a.addEventListener('click', (ev) => {
+              if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
+              ev.preventDefault();
+              ampliar(f);
+            });
+            // Clic derecho: Ampliar, Abrir en Drive y Quitar foto (usuario, 13-oct)
+            a.addEventListener('contextmenu', (ev) => {
+              ev.preventDefault();
+              menuFlotante(a, [
+                { icono: 'zoom-in', texto: 'Ampliar', alHacer: () => ampliar(f) },
+                { icono: 'external-link', texto: 'Abrir en Drive', alHacer: () => window.open(f.enlace, '_blank', 'noopener') },
+                r.puedeOperar ? { icono: 'trash-2', texto: 'Quitar foto', peligro: true, separador: true, alHacer: () => alQuitar(f) } : null,
+              ].filter(Boolean), { x: ev.clientX, y: ev.clientY });
+            });
+          });
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
             // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)
@@ -5199,7 +5572,7 @@
     ];
     const GRUPO_EQUIPO = {
       'USO': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
-      'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado',
+      'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'PARA VENTA CON DETALLE': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado',
       'PARA DESECHO': 'guardado', 'DESECHO': 'guardado',
       'VENDIDO': 'baja', 'DONADO': 'baja', 'DESECHADO': 'baja', 'EXTRAVIO-ROBO': 'baja', 'EXTRAVIADO': 'baja', 'ROBADO': 'baja', 'ROBO': 'baja',
     }; // el resto (FUERA DE INVENTARIO, CANCELADO, N/A…) = 'revisar'
@@ -6335,21 +6708,29 @@
      * opciones }]. Regresa una promesa con { clave: valor } o null si se cancela.
      * opciones.alConfirmar(valores) (promesa): la ventana se queda con la pantalla de espera (opciones.espera) desde el
      * clic hasta que termina; si falla, muestra el error y "Volver" regresa a lo capturado. Regresa lo que regrese.
+     * opciones.detalle: lista de lo que se va a tocar (como Confirmar); opciones.peligro: botón rojo. Sin campos sirve
+     * de confirmación con espera (pasos de la bandeja de Pau, 13-oct). opciones.encima: por arriba del visor de fotos.
      */
     function pedirDatos(titulo, mensaje, campos, textoConfirmar, opciones) {
       const o = opciones || {};
+      const detalle = o.detalle || [];
       return new Promise((resolve) => {
         const fondo = document.createElement('div');
         fondo.className = 'modal-backdrop';
+        if (o.encima) fondo.style.zIndex = '800';
         fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px;position:relative">' +
           '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' +
           '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
+          (detalle.length ? '<ul class="confirmar-detalle">' + detalle.slice(0, 50).map((d) => '<li>' + esc(d) + '</li>').join('') +
+            (detalle.length > 50 ? '<li><em>…y ' + miles(detalle.length - 50) + ' más</em></li>' : '') + '</ul>' : '') +
           campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
-            (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + c.opciones.map((o) => '<option' + (o === c.valor ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>'
+            // elegir: la lista empieza sin nada elegido («Selecciona…»), como las de los formularios
+            (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + (c.elegir ? '<option value="">Selecciona…</option>' : '') +
+              c.opciones.map((o) => '<option' + (o === c.valor ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>'
               : c.area ? '<textarea id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" rows="4">' + esc(c.valor || '') + '</textarea>'
               : '<input type="text" id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" value="' + esc(c.valor || '') + '" autocomplete="off" data-respetar-texto />') + '</div>').join('') +
           '<div class="error-msg" data-error hidden></div>' +
-          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button"' + (o.peligro ? ' class="danger"' : '') + ' data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
           '<div class="ln-espera" data-espera hidden></div></div>';
         document.body.appendChild(fondo);
         const espera = fondo.querySelector('[data-espera]');
@@ -6407,6 +6788,8 @@
           { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'MODELO', titulo: 'Modelo', tipo: 'texto' },
           { campo: 'IMEI', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          // Lo que se mandó con el equipo (usuario, 13-oct); mientras sigue abierto, lo de hoy del inventario
+          { campo: 'ACCESORIOS', titulo: 'Accesorios', tipo: 'texto', render: (v) => guion(String(v || '').split(',').map((x) => x.trim()).filter(Boolean).join(', ')) },
           { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
@@ -6427,6 +6810,8 @@
           { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
           { campo: 'CANCELACION', titulo: 'Cancelación', tipo: 'lista', render: (v) => chip(v) },
+          // LINEA VENCIDA o CANCELACION ANTICIPADA (usuario, 13-oct)
+          { campo: 'MOTIVO_CANCELACION', titulo: 'Motivo', tipo: 'lista' },
           { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista' },
           { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
@@ -6442,60 +6827,54 @@
         ],
       };
 
-      /** Paso de la bandeja: pide lo necesario, confirma y llama al servidor. */
+      /**
+       * Paso de la bandeja: pide lo necesario (o solo confirma) y llama al servidor. La ventana se queda con la pantalla
+       * de espera desde el clic hasta que contesta, y un error se ve ahí mismo (usuario, 13-oct: antes no se sabía si
+       * estaba en proceso hasta el aviso del final).
+       */
       async function paso(accion, filas, opciones) {
         const o = opciones || {};
-        let extra = {};
-        if (o.campos) {
-          extra = await pedirDatos(o.titulo, o.mensaje, o.campos, o.boton);
-          if (!extra) return;
-        } else {
-          const ok = await Confirmar.pedir({
-            titulo: o.titulo, mensaje: o.mensaje, textoConfirmar: o.boton, peligro: !!o.peligro,
-            detalle: filas.slice(0, 20).map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || '')),
-          });
-          if (!ok) return;
-        }
-        try {
-          const r = await llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra);
-          const omitidos = r.omitidos || [];
-          const avisos = (r.hechos || []).filter((h) => h.aviso);
-          aviso(icono('circle-check') + ' ' + o.hecho + ': ' + miles((r.hechos || []).length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
-            omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
-          avisos.forEach((h) => aviso(icono('triangle-alert', 'ln-alerta') + ' NUCO ' + h.nuco + ': ' + h.aviso, 10000));
-          if (tabla) tabla.limpiarSeleccion();
-          if (o.inventario) memoria.cargadoEn = 0; // el inventario cambió: que Líneas Telefónicas lo vuelva a pedir
-          cargar();
-        } catch (e) {
-          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
-        }
+        const detalle = filas.map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || f.CANCELACION || ''));
+        const r = await pedirDatos(o.titulo, o.mensaje, o.campos || [], o.boton, {
+          detalle: detalle, peligro: !!o.peligro, espera: o.espera || (o.hecho + '…'),
+          alConfirmar: (extra) => llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra),
+        });
+        if (!r) return;
+        const omitidos = r.omitidos || [];
+        const avisos = (r.hechos || []).filter((h) => h.aviso);
+        aviso(icono('circle-check') + ' ' + o.hecho + ': ' + miles((r.hechos || []).length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
+          omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
+        avisos.forEach((h) => aviso(icono('triangle-alert', 'ln-alerta') + ' NUCO ' + h.nuco + ': ' + h.aviso, 10000));
+        if (tabla) tabla.limpiarSeleccion();
+        if (o.inventario) memoria.cargadoEn = 0; // el inventario cambió: que Líneas Telefónicas lo vuelva a pedir
+        cargar();
       }
 
       const ACCIONES = {
         RESGUARDOS: [
           { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1,
             alHacer: (filas) => paso('RECIBIR', filas, { titulo: '¿Confirmas que recibiste ' + miles(filas.length) + ' equipo(s)?',
-              mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos' }) },
+              mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos', espera: 'Recibiendo ' + miles(filas.length) + ' equipo(s)' }) },
           { icono: 'hand-helping', texto: 'Entregar a Líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1,
             alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a Líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
               campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
-              boton: 'Entregar', hecho: 'Entregados' }) },
+              boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
           { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1,
             alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
-              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true }) },
+              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
         ],
         CANCELACIONES: [
           { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1,
             alHacer: (filas) => paso('CARTA_FIRMADA', filas, { titulo: 'Carta firmada', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA FIRMADA.',
               campos: [{ clave: 'asesor', etiqueta: 'Asesor', valor: filas[0].ASESOR || '', opciones: ['KARLA', 'WILBERTO', 'ALFREDO'].indexOf(filas[0].ASESOR) >= 0 || !filas[0].ASESOR ? ['KARLA', 'WILBERTO', 'ALFREDO'] : null }],
-              boton: 'Guardar', hecho: 'Cartas firmadas' }) },
+              boton: 'Guardar', hecho: 'Cartas firmadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) firmada(s)' }) },
           { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1,
             alHacer: (filas) => paso('CARTA_ENVIADA', filas, { titulo: 'Carta enviada al proveedor', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA ENVIADA.',
-              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas' }) },
+              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) enviada(s)' }) },
           { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true,
             alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
               mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
-              peligro: true, hecho: 'Canceladas', inventario: true }) },
+              peligro: true, hecho: 'Canceladas', inventario: true, espera: 'Cancelando ' + miles(filas.length) + ' línea(s)' }) },
         ],
       };
 

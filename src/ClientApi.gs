@@ -43,6 +43,10 @@ function apiResumenInicio(token) {
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
 }
+// Mi perfil (el usuario al pie del menú): lo de quien entró
+function apiMiPerfil(token) {
+  return UsuariosService.miPerfil(token);
+}
 function apiIdentidadGoogle() {
   return Auth.identidadGoogle();
 }
@@ -540,6 +544,16 @@ function apiListarDepartamentos(token) {
 function apiListarColaboradores(token) {
   return CapitalHumano.listarColaboradores(token);
 }
+// Administración > Capital humano (solo admins): subir la lista de CH. El archivo viaja comprimido (gzip, base64).
+function apiCapitalHumanoResumen(token) {
+  return CapitalHumano.resumen(token);
+}
+function apiCapitalHumanoHistorial(token) {
+  return CapitalHumano.historial(token);
+}
+function apiCapitalHumanoCargar(token, comprimido, opciones) {
+  return CapitalHumano.cargar(token, comprimido, opciones);
+}
 function apiListarSolicitantesTickets(token) {
   return TicketsService.listarSolicitantes(token);
 }
@@ -658,6 +672,9 @@ function apiLineasMediciones(token, filas) {
 function apiLineasMedirServidor(token, que, id) {
   return TelefoniaService.medirServidor(token, que, id);
 }
+function apiLineasPasosServidor(token, nombre) {
+  return TelefoniaService.pasosServidor(token, nombre);
+}
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
@@ -681,6 +698,9 @@ function apiLineasVincular(token, datos) {
 }
 function apiLineasFotosInspeccion(token, id, accion) {
   return TelefoniaService.fotosInspeccion(token, id, accion);
+}
+function apiLineasQuitarFotoInspeccion(token, id, archivoId, comentario) {
+  return TelefoniaService.quitarFotoInspeccion(token, id, archivoId, comentario);
 }
 function apiLineasAccesoriosIndice(token) {
   return LineasAccesorios.indice(token);
@@ -941,8 +961,8 @@ function apiRelacionesMapa(token) {
 function mapaCompleto_() {
   const mapa = Relaciones.describir();
   mapa.duenos.push({
-    hoja: CapitalHumano.HOJA_PERSONAS,
-    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_PERSONAS),
+    hoja: CapitalHumano.HOJA_CH,
+    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_CH),
     llaveDeNegocio: 'NOMBRE COMPLETO',
     copias: CapitalHumano.describirLigas().map((l) => ({
       nombre: l.nombre,
@@ -955,6 +975,7 @@ function mapaCompleto_() {
       columnas: [{ origen: l.columna, destino: l.columna, calculada: true }],
       // Con qué se reconoce el renglón en la pantalla: el folio del vehículo, el número de caja…
       llaveRegistro: l.etiqueta,
+      rol: l.rol,
       sinDueno: null,
       notaColumnas: null,
       huerfanaEsperada: 'un responsable que no es persona (BAJA VEHICULAR, DONACIÓN, un código de desarrollo…)',

@@ -316,19 +316,15 @@ function ineLecInterpretar_(texto, vocabulario) {
  * PERSONAS. La fecha solo se usa para ligar, como en CapitalHumano.gs.
  */
 function ineLecCH_() {
-  const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS());
-  const leer = (nombre) => {
-    const h = ss.getSheetByName(nombre);
-    if (!h || h.getLastRow() < 2) return [];
-    const v = h.getRange(1, 1, h.getLastRow(), h.getLastColumn()).getDisplayValues();
-    const enc = v[0].map((x) => String(x).trim());
-    return v.slice(1).map((r) => { const o = {}; enc.forEach((k, i) => { o[k] = r[i]; }); return o; });
-  };
+  // La lista de CH y el ID PERSONA de cada empleo, de CapitalHumano (el único que lee personas, 12-oct-2026)
+  const filas = CapitalHumano.filasCH();
+  const porEmpleo = CapitalHumano.idsPorEmpleo();
   const ids = {};
-  leer(CapitalHumano.HOJA_PERSONAS).forEach((f) => {
-    if (f['ID PERSONA']) ids[ineLecNorm_(f['No EMPLEADO']).trim() + '|' + ineLecPalabras_(f['NOMBRE COMPLETO']).join(' ')] = f['ID PERSONA'];
+  filas.forEach((f) => {
+    const id = porEmpleo[CapitalHumano.claveEmpleo(f['No EMPLEADO'], f['NOMBRE COMPLETO'])];
+    if (id) ids[ineLecNorm_(f['No EMPLEADO']).trim() + '|' + ineLecPalabras_(f['NOMBRE COMPLETO']).join(' ')] = id;
   });
-  return ineLecPersonas_(leer(CapitalHumano.HOJA_CH), ids);
+  return ineLecPersonas_(filas, ids);
 }
 
 /** Puro: renglones de CH + {número|nombre → ID PERSONA} → personas. */
@@ -658,12 +654,8 @@ function lineasIneRevision() {
   if (!hojaEnsayo || hojaEnsayo.getLastRow() < 2) throw new Error('Falta el ensayo: corre lineasIneEnsayo() primero.');
   const ensayo = hojaEnsayo.getRange(2, 1, hojaEnsayo.getLastRow() - 1, INE_ENSAYO_ENCABEZADOS.length).getDisplayValues();
   // Activos de Capital Humano, por número
-  const ch = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS()).getSheetByName(CapitalHumano.HOJA_CH);
-  const v = ch.getRange(1, 1, ch.getLastRow(), ch.getLastColumn()).getDisplayValues();
-  const iNum = v[0].indexOf('No EMPLEADO');
-  const iSt = v[0].indexOf('STATUS');
   const activos = {};
-  v.slice(1).forEach((r) => { if (/ACTIV/i.test(r[iSt])) activos[ineLecNorm_(r[iNum]).trim()] = true; });
+  CapitalHumano.filasCH().forEach((f) => { if (/ACTIV/i.test(f['STATUS'])) activos[ineLecNorm_(f['No EMPLEADO']).trim()] = true; });
   const lista = ineLecParaRevisar_(ensayo, (numeros) => String(numeros || '').split(', ').some((n) => activos[n]));
 
   // Lo que ya se haya contestado se conserva (por los IDS de los archivos)

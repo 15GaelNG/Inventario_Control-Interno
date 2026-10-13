@@ -541,11 +541,11 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   // Responsiva: una sola fecha como la inspección (usuario, 4-oct); DIA, MES y AÑO ya no se capturan
   assert.equal(control(resp, 'FECHA RESPONSIVA'), 'fechaHora', 'responsiva FECHA RESPONSIVA');
   ['DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(resp, c), undefined, 'responsiva sin ' + c));
-  assert.match(repo, /catalogos_telefonia_v7/);
+  assert.match(repo, /catalogos_telefonia_v8/);
   // Reestructura (§3): los datos del responsable salen solo de Capital Humano (personas activas)
   ['sedes', 'areas', 'oficinas', 'puestos', 'jefes', 'directores'].forEach((k) => assert.match(repo, new RegExp(k + ": unicos\\(ch, '")));
-  assert.match(repo, /function colaboradoresActivos_\(\)/);
-  assert.match(repo, /indice_colaboradores_v4/);
+  assert.match(repo, /CapitalHumano\.activos\(\)/);
+  assert.match(repo, /indice_colaboradores_v6/);
   ['DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
   // "Agregar 'x'": lo tecleado sin elegirlo no se guarda, y solo en los datos del responsable
   const cbx = read('src/html/js/componentes/combobox.html');
@@ -604,9 +604,29 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.match(movil, /@media \(max-width: 1024px\)/);
   assert.match(movil, /Pantalla\.alCambiar\(/);
   assert.match(movil, /shell-menu-abierto/);
-  // Panel cerrado = fuera del foco del teclado; el tema baja al panel en celular
+  // Panel cerrado = fuera del foco del teclado
   assert.match(movil, /sidebar\.inert = Pantalla\.esAngosta\(\) && !abierto\(\)/);
-  assert.match(movil, /className = 'shell-tema-panel'/);
+  // Tema, color, letra y la temporada: un solo engrane en la barra (componentes/apariencia.html),
+  // también en celular; ya no hay sol/luna en la barra ni la flor de la temporada
+  assert.match(index, /class="ap-boton"/);
+  assert.ok(index.indexOf("include('html/js/componentes/pantalla')") < index.indexOf("include('html/js/componentes/apariencia')"), 'Apariencia va después de Pantalla');
+  assert.ok(index.indexOf("include('html/js/componentes/apariencia')") < index.indexOf("include('html/js/app')"), 'Apariencia va antes de app');
+  assert.doesNotMatch(index, /topbar-theme-toggle/);
+  assert.doesNotMatch(movil, /shell-tema-panel/);
+  assert.doesNotMatch(read('src/html/temporada.html'), /dm-interruptor/);
+  assert.match(read('src/html/temporada.html'), /return \{ aplicar, mensajesCarga, abrirOfrenda, opciones \};/);
+  // El usuario y salir, al pie del menú lateral (13-oct): lleva a Mi perfil; ya no en la barra de arriba
+  const pie = index.slice(index.indexOf('<nav id="sidebar"'), index.indexOf('</nav>'));
+  assert.match(pie, /class="nav-item sidebar-usuario-tarjeta" data-view="mi-perfil"/);
+  assert.match(pie, /id="user-avatar"/);
+  assert.match(pie, /id="btn-logout"/);
+  assert.doesNotMatch(index, /topbar-user-menu/);
+  assert.ok(index.indexOf("include('html/js/app-perfil')") < index.indexOf("include('html/js/app')"), 'app-perfil antes de app: render() pinta el puesto');
+  // Mi perfil es de quien entró: nunca regresa SALT ni PASSWORD_HASH, y no se adivina entre homónimos
+  const usuarios = read('src/services/UsuariosService.gs');
+  const perfil = usuarios.slice(usuarios.indexOf('function miPerfil('), usuarios.indexOf('return { listar'));
+  assert.doesNotMatch(perfil, /SALT|PASSWORD_HASH|\.\.\.usuario/);
+  assert.match(perfil, /porNombre\.length === 1 \? porNombre\[0\] : null/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
@@ -923,7 +943,7 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
   // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
-  assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
+  assert.ok(servicio.includes("const esFotoDeInspeccion_ = (nombre, mime) => /^(image|video)\\//.test(mime) && !/^(FIRMA|PATRON)/i.test(nombre);"), 'las firmas y el patrón no son fotos de la inspección');
   assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
   // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
   assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
@@ -1521,7 +1541,8 @@ test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctr
 test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores viejos y departamento DISPONIBLE', () => {
   const repoSrc = read('src/services/lineas/LineasRepo.gs');
   // Listas acordadas con Líneas (sin acentos, como el AppSheet)
-  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\]/);
+  // PARA VENTA CON DETALLE, de resguardo (usuario, 13-oct)
+  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\]/);
   assert.match(repoSrc, /estatusLinea: \['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'\]/);
   // Quitar la línea deja ESTATUS LINEA en blanco (antes "SIN LINEA")
   assert.match(repoSrc, /'FIN PLAN': '', 'ESTATUS LINEA': '', 'FECHA CAMBIO TEMPORAL'/);
@@ -1658,7 +1679,7 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   ['formularioResguardo', 'mandarResguardo', 'mandarCancelacion'].forEach((f) =>
     assert.match(tel, new RegExp('function ' + f + '\\(token[^)]*\\) \\{\\s+const sesion = operar_\\(token\\);'), f + ' pide editar Líneas telefónicas'));
   assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
-  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO']);
+  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
 
   // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
   assert.match(src, /Object\.assign\(\{\}, LineasRepo\.VALORES_SIN_LINEA, \{ 'ESTATUS LINEA': 'CANCELADA' \}\)/);
@@ -1670,9 +1691,9 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   // Cliente: Mandar a resguardo desde 1, con su propio formulario; vista de la bandeja
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /async function abrirResguardo\(filas, opciones\)/);
-  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\), \{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo, inspecciones: inspecciones \}\)/);
+  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\),\s+Object\.assign\(\{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo \}, extra\)\)/);
   // La inspección de cada equipo que viene de una persona, dentro de la acción (pendiente 2.6; usuario, 3-oct)
-  assert.match(cliente, /inspecciones = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo'\);/);
+  assert.match(cliente, /const hechas = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo', \{/);
   assert.match(src, /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\], LineasDatos\.idsDeFila\(f\),/);
   assert.match(cliente, /function initResguardos\(\)/);
   assert.match(read('src/html/js/app.html'), /vista: 'resguardos-lineas'[^\n]*plantilla: 'tpl-lineas-resguardos', init: \(\) => Lineas\.initResguardos\(\)/);
@@ -1691,13 +1712,14 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
   // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
   assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
-  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa
-  assert.match(cliente, /'Estatus del equipo', 'escala', \{ opciones: form\.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS \}/);
+  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa, menos el que ya tiene si ya está en la
+  // bandeja (usuario, 13-oct; lo prueba lineas-resguardo-cancelacion)
+  assert.match(cliente, /const posibles = q\.opcionesEstatus \|\| form\.estatusEquipo;/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);
-  // Si ya estaba guardado no se pide otra recepción: se actualiza el renglón abierto de la bandeja
-  assert.match(resg, /const yaGuardado = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0;/);
+  // Si ya tiene su renglón abierto no se pide otra recepción: se actualiza; sin renglón abierto, Pau lo recibe
+  assert.match(resg, /const abierto = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0 \? abiertoDe_\(abiertos, f\) : null;/);
   assert.match(resg, /LineasDatos\.actualizarFila\(TAB, abierto\._fila,/);
-  assert.match(resg, /'ESTADO': yaGuardado \? ESTADO\.RESGUARDO : ESTADO\.PENDIENTE/);
+  assert.match(resg, /'ESTADO': ESTADO\.PENDIENTE, 'RECIBIO': '',/);
 });
 
 test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep)', () => {
@@ -1741,7 +1763,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /vista === 'RESGUARDOS' \? todas\.filter\(\(f\) => f\.ESTADO\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasMandarCancelacion\(token, ids, datos\)/);
   const resg = read('src/services/lineas/LineasResguardos.gs');
-  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario\)/);
+  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario, opciones\)/);
   assert.match(resg, /'SOLICITO_CORREO': usuario\.correo, 'SOLICITO_NOMBRE': usuario\.nombre, 'ESTADO': '',/);
   // Con cualquiera de los IDs del registro: la bandeja guarda el que tenía al mandarlo (reestructura, etapa 3)
   assert.match(resg, /if \(enCancelacion_\(cancelando, f, numero\)\)/);
@@ -2328,8 +2350,10 @@ test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de
   const css = read('src/html/styles.html');
   assert.match(index, /<nav id="sidebar" class="collapsed">/);
   assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
-  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
+  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 400\)\);/);
   assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
+  // El panel de tipos de las tablas de Líneas también tarda 400 ms en abrirse con el cursor
+  assert.match(read('src/html/lineas-estilos.html'), /\.ln-modulo \.filtro-tipo:hover \.filtro-tipo-panel \{ transition-delay: \.4s; \}/);
   // Abierto mide 308px (caben «Resguardos y cancelaciones» y «Reasignaciones vehiculares») pero ocupa 92px: queda
   // encima del contenido, por debajo de los modales. En celular y tableta, el mismo ancho
   assert.match(css, /#sidebar \{\s*width: 308px;/);
@@ -2408,4 +2432,63 @@ test('lo nuevo de Vehículos (inspección, verificación, responsiva de sensor, 
   // Los lectores aceptan la liga (lo nuevo) y la ruta (lo viejo)
   assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRuta\(ruta, carpetasIds\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
   assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRutaProfunda\(ruta, raizId\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
+});
+
+test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS (docs/personas-unificar.md)', () => {
+  // 12-oct-2026: había cuatro formas de leer personas (CapitalHumano, Líneas con su propia lectura de CH y su respaldo a
+  // COLABORADORES, la revisión de INE). Desde ahora todo pasa por CapitalHumano (activos, idPara, conPersona, filasCH).
+  // Se permiten, hasta retirar COLABORADORES (fase 4): la carga del libro de pruebas de Líneas y su diagnóstico.
+  const PERMITIDOS = ['src/services/CapitalHumano.gs', 'src/services/lineas/LineasReestructura.gs', 'src/services/lineas/LineasRevisionBD.gs'];
+  const malos = [];
+  const recorrer = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return recorrer(p);
+    if (!/\.(gs|html)$/.test(e.name)) return;
+    const rel = path.relative(path.join(__dirname, '..'), p).split(path.sep).join('/');
+    if (PERMITIDOS.includes(rel)) return;
+    const s = fs.readFileSync(p, 'utf8');
+    if (/getSheetByName\(\s*(['"](COLABORADORES ACTUALIZADO|PERSONAS|COLABORADORES)['"]|CapitalHumano\.HOJA_(CH|PERSONAS))/.test(s) ||
+        /leerTabla\(\s*['"]COLABORADORES/.test(s) || /\bTAB\.COLAB\b/.test(s)) malos.push(rel);
+  });
+  recorrer(path.join(__dirname, '..', 'src'));
+  assert.deepEqual(malos, [], 'leen personas por su cuenta (usar CapitalHumano)');
+  // Y cada servicio que captura una persona calcula su ID PERSONA
+  const ch = read('src/services/CapitalHumano.gs');
+  ['VEHICULOS', 'CAJAS CHICAS', 'ASIGNACIONES', 'RESPONSIVA VEHICULAR', 'ADHERENTE VEHICULAR', 'REASIGNACIONES_VEHICULOS',
+    'INSPECCION VEHICULAR', 'UBER', 'ARQUEOS', 'TICKETS'].forEach((h) => assert.match(ch, new RegExp("hoja: '" + h + "'"), 'liga de ' + h));
+  [['VehiculosService.gs', /persona: true/], ['CajasChicasService.gs', /persona: true/], ['UberService.gs', /persona: true/],
+    ['TicketsService.gs', /persona: true/], ['ArqueosService.gs', /persona: true/],
+    ['ResponsivaVehicularService.gs', /CapitalHumano\.conPersona\('RESPONSIVA VEHICULAR'/],
+    ['AdherenteVehicularService.gs', /CapitalHumano\.conPersona\('ADHERENTE VEHICULAR'/],
+    ['ReasignacionesVehicularesService.gs', /CapitalHumano\.conPersona\('REASIGNACIONES_VEHICULOS'/],
+    ['InspeccionesService.gs', /CapitalHumano\.conPersona\('INSPECCION VEHICULAR'/]]
+    .forEach(([f, re]) => assert.match(read('src/services/' + f), re, f));
+  // Ya no hay copias del cálculo
+  ['VehiculosService.gs', 'CajasChicasService.gs'].forEach((f) => assert.doesNotMatch(read('src/services/' + f), /function conPersona_/, f));
+  // Del Excel de CH solo entran las columnas PERMITIDAS (lista de permitidas, no de prohibidas: el 12-oct el Excel trajo
+  // CLABE, CURP, domicilio… y la cuenta con otro nombre). La del navegador y la del servidor, iguales; y nunca la cuenta,
+  // la CLABE, el CURP ni el RFC (el teléfono sí: usuario, 12-oct-2026)
+  const permitidas = (s) => {
+    const m = /const PERMITIDAS = (\[[^\]]*\]);/.exec(s);
+    assert.ok(m, 'falta const PERMITIDAS');
+    return JSON.parse(m[1].replace(/'/g, '"'));
+  };
+  const enNavegador = permitidas(read('src/html/js/app-capital-humano.html'));
+  assert.deepEqual(enNavegador, permitidas(read('src/services/CapitalHumano.gs')), 'PERMITIDAS: navegador y servidor distintos');
+  ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'CLABE', 'BANCO', 'CURP', 'RFC', 'IMSS', 'INE', 'CALLE/NUMERO']
+    .forEach((c) => assert.ok(enNavegador.indexOf(c) === -1, c + ' no debe entrar al libro'));
+  assert.ok(enNavegador.indexOf('TELEFONO') !== -1, 'el teléfono sí entra (usuario, 12-oct-2026)');
+  assert.doesNotMatch(read('src/services/CapitalHumano.gs') + read('src/html/js/app-capital-humano.html'), /const SENSIBLES\b/,
+    'la lista de prohibidas ya no existe: es de permitidas');
+});
+
+test('lo que un módulo le pide a ExportarExcel existe (prod: «ExportarExcel.cargarLibreria is not a function», 13-oct)', () => {
+  const comp = read('src/html/js/componentes/exportar-excel.html');
+  const exporta = /return \{([^}]*)\};\s*\}\)\(\);/.exec(comp)[1].split(',').map((s) => s.trim());
+  const usados = new Set();
+  filesBelow(path.join(root, 'src')).filter((f) => /\.html$/.test(f)).forEach((f) => {
+    for (const m of fs.readFileSync(f, 'utf8').matchAll(/ExportarExcel\.(\w+)/g)) usados.add(m[1]);
+  });
+  const faltan = [...usados].filter((u) => exporta.indexOf(u) === -1);
+  assert.deepEqual(faltan, [], 'ExportarExcel no exporta: ' + faltan.join(', '));
 });

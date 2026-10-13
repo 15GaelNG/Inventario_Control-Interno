@@ -66,6 +66,8 @@
  *   archivos     { COLUMNA: 'ETIQUETA' }: el cliente manda '<COLUMNA>_FILE_ID' del archivo que
  *                ya subió, y aquí se renombra a "<id>_<ETIQUETA>_<fecha>.ext" al guardar
  *   candadoAlCrear  crear bajo el candado del script (consecutivos calculados aquí)
+ *   persona: true   la hoja guarda a una persona (CapitalHumano.LIGAS): al crear y al cambiar su nombre/número/correo se
+ *                   calcula su ID PERSONA (de COLABORADORES ACTUALIZADO). El cliente nunca lo manda.
  *   alCrear(fila, ctx) / alActualizar(cambios, ctx)
  *                lo propio del módulo: regresan columnas a poner encima (o cambian el objeto).
  *                ctx = { token, sesion, hoja, datos, id, actual, opciones }
@@ -340,6 +342,8 @@ const HojaServicio = (function () {
     try {
       ctx.hoja = hoja(def);
       aplicar_(def.alCrear, fila, ctx);
+      // persona: true — el ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.conPersona)
+      if (def.persona && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona(ctx.hoja.getName(), fila, fila);
       // El id lo pone SheetUtils.insert con el formato del sistema si el gancho no lo puso
       SheetUtils.insert(libro(def), ctx.hoja.getName(), fila);
     } finally {
@@ -362,7 +366,7 @@ const HojaServicio = (function () {
     // El renglón de antes solo se lee si un gancho lo usa: SheetUtils.update ya lo busca y
     // truena si no existe, y cada búsqueda es leer la hoja entera
     let actual = null;
-    if (def.alActualizar || def.despues) {
+    if (def.alActualizar || def.despues || def.persona) {
       const encontrado = SheetUtils.findById(libro(def), nombreReal, id, columnaId(def));
       if (!encontrado) throw new Error('No se encontró ' + nombre(def) + ' con ' + columnaId(def) + '=' + id);
       actual = encontrado.data;
@@ -372,6 +376,7 @@ const HojaServicio = (function () {
       opciones: opciones || {}, accion: 'actualizar',
     };
     aplicar_(def.alActualizar, datos, ctx);
+    if (def.persona && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona(nombreReal, datos, Object.assign({}, actual, datos));
 
     const registro = SheetUtils.update(libro(def), nombreReal, id, datos, columnaId(def));
     renombrarArchivos_(def, archivos, id);

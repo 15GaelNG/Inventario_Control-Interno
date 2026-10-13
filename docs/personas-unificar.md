@@ -1,7 +1,25 @@
 # Personas: unificar PERSONAS y COLABORADORES ACTUALIZADO (pendiente, en el radar)
 
-Estado: **en espera** (12-oct-2026). Se retoma después de la Fase 3 de "Vehículos: todo por NUCO".
-Auditoría hecha el 12-oct-2026 sobre el libro productivo (`17YrtuMY…`), solo lectura.
+Estado (12-oct-2026, tarde): **en curso**. Decisión del usuario: una sola hoja — el ID PERSONA vive en COLABORADORES
+ACTUALIZADO y la lista se **sube desde Administración > Capital humano** (solo admins), ya no se pega.
+
+- Fase 0 (datos, prod) ✅ — columna AA "ID PERSONA" en COLABORADORES ACTUALIZADO (15,254 renglones, verificados contra
+  PERSONAS) y 28 empleos nuevos identificados. `tools/capital_humano/mudar_id_persona.py` (plan/aplicar/verificar/deshacer),
+  bitácora `20261012-142529-id-persona.jsonl`. Una unión a mano: MAGNO ANTONIO CRISTOBAL JACINTO (CH lo renumeró).
+- Fase 1 (código) ✅ en `ayrton` — `CapitalHumano.gs` es el único que lee personas (contrato); `persona: true` en
+  HojaServicio; ID PERSONA en Vehículos, Caja Chica, ASIGNACIONES (Líneas), Responsiva, Adherente, Reasignaciones,
+  Inspección (`ID PERSONA CONDUCTOR`), Uber, Arqueos y Tickets; listas solo de activos.
+- Fase 2 (código) ✅ en `ayrton` — el módulo de carga.
+- Prueba en el DEV (12-oct, noche) ✅ — 15,254 renglones del Excel, 30 nuevos, 5 que no vinieron se quedaron, todos con
+  ID. Hallazgo: el Excel de CH trae **59 columnas** (CURP, RFC, IMSS, domicilio, CLABE, banco, beneficiarios, INE…) y la
+  cuenta llegó como CLABE, así que el filtro por nombre no la quitó. Desde `9de510f` la carga usa **lista de permitidas**
+  (`PERMITIDAS`: las 25 de la hoja de prod sin NÚMERO DE CUENTA, más ID PERSONA), en el navegador y en el servidor; la
+  siguiente carga en el DEV limpia esas columnas.
+- Pendiente: master + despliegue; **la primera carga en prod quita NÚMERO DE CUENTA de la hoja** (el TELEFONO se queda, usuario 12-oct); Fase 4
+  (llenar el ID PERSONA de lo existente con Salud > "Actualizar", y ocultar PERSONAS y COLABORADORES dos semanas).
+- **Mientras tanto no pegar la lista a mano** en COLABORADORES ACTUALIZADO (desalinea la columna AA).
+
+Auditoría hecha el 12-oct-2026 sobre el libro productivo (`17YrtuMY…`), solo lectura. Lo de abajo es el estado de antes.
 
 ## Cómo está hoy
 

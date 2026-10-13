@@ -114,7 +114,8 @@ const LineasDatos = (function () {
   function medirPasos(activo) { pasos_ = activo ? [] : null; }
   function pasos() { return pasos_ || []; }
   function tiempo(que, desde) {
-    if (pasos_) pasos_.push(que + ' ' + (Date.now() - desde));
+    // «@a los ms · qué · cuánto»: el último número sigue siendo lo que tardó (medirServidor lo suma)
+    if (pasos_) pasos_.push('@' + (Date.now() - INICIO_) + ' ' + que + ' ' + (Date.now() - desde));
     if (midiendo_ === null) {
       try { midiendo_ = PropertiesService.getScriptProperties().getProperty('LINEAS_MEDIR') === '1'; } catch (e) { midiendo_ = false; }
     }

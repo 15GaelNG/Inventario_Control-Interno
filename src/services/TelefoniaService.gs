@@ -381,28 +381,85 @@ const TelefoniaService = (function () {
     }
 
     LineasDatos.tiempo('documento: carpeta en NUCOS', t0);
-    const fotos = [];
     const pdfs = doc.drive && doc.drive.pdfs ? doc.drive.pdfs.slice() : [];
-    // Fotos agregadas en el sistema a una inspección de NUCOS: viven en una carpeta de la app (APP_EVIDENCIAS)
-    const carpetaExtra = esInspeccion && /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
-    if (esInspeccion && (doc.drive || carpetaExtra)) {
-      const vistos = {};
-      [doc.drive && doc.drive.fotosCarpetaId, doc.drive && doc.drive.carpetaId, carpetaExtra].filter(Boolean).forEach((c) => {
-        archivosCarpeta_(c, 200).forEach((f) => {
-          if (vistos[f.id]) return;
-          vistos[f.id] = true;
-          if (!/^(image|video)\//.test(f.mimeType)) return;
-          if (/^(FIRMA|PATRON)/i.test(f.name)) return; // las firmas y el patrón solo van en el PDF
-          fotos.push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) });
-        });
-      });
-    }
+    const fotos = esInspeccion ? fotosDe_(carpetasFotos_(doc, id)) : [];
     LineasDatos.tiempo('documento: fotos', t0);
     const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
     // Identificación de cada responsable, subida con la responsiva (usuario, 9-oct; pendiente 2.27)
     if (!esInspeccion) salida.identificaciones = LineasIdentificaciones.deResponsiva([id]);
     salida[esInspeccion ? 'inspeccion' : 'responsiva'] = doc;
     return LineasUtil.paraCliente(salida);
+  }
+
+  /**
+   * Carpetas donde viven las fotos de una inspección: la de sus fotos, la suya y, si es de NUCOS, la que el sistema le
+   * agregó (APP_EVIDENCIAS). `doc` ya trae su carpeta de NUCOS si la tiene (documento_ o inspeccionConCarpetas_).
+   */
+  function carpetasFotos_(doc, id) {
+    const carpetaExtra = /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
+    return [doc.drive && doc.drive.fotosCarpetaId, doc.drive && doc.drive.carpetaId, carpetaExtra].filter(Boolean)
+      .filter((x, i, a) => a.indexOf(x) === i);
+  }
+
+  /** Lo que se ve como foto de la inspección: imágenes y videos, sin las firmas ni el patrón (solo van en el PDF). */
+  const esFotoDeInspeccion_ = (nombre, mime) => /^(image|video)\//.test(mime) && !/^(FIRMA|PATRON)/i.test(nombre);
+
+  function fotosDe_(carpetas) {
+    const fotos = [];
+    const vistos = {};
+    carpetas.forEach((c) => {
+      archivosCarpeta_(c, 200).forEach((f) => {
+        if (vistos[f.id]) return;
+        vistos[f.id] = true;
+        if (!esFotoDeInspeccion_(f.name, f.mimeType)) return;
+        fotos.push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) });
+      });
+    });
+    return fotos;
+  }
+
+  /**
+   * Quitar una foto de una inspección guardada (usuario, 13-oct: «se pueda eliminar también alguna imagen que hayan
+   * enviado por error»). Solo una foto de las carpetas de esa inspección; va a la papelera de Drive (se recupera de ahí
+   * 30 días) y queda en el historial del registro (sin comentario obligatorio: usuario, 13-oct). Si la cuenta de la app no puede mandarla a la
+   * papelera (el archivo es de otra cuenta), se saca de la carpeta a «FOTOS QUITADAS», junto a ella, y ya no se ve.
+   */
+  function quitarFotoInspeccion(token, id, archivoId, comentario) {
+    const sesion = operar_(token);
+    const motivo = String(comentario || '').trim();
+    const doc = LineasRepo.leerInspeccion(id) || (/^drive_/.test(String(id)) ? documentoNucos_(String(id).slice(6), 'INSPECCION') : null);
+    if (!doc) throw new Error('No existe la inspección ' + id);
+    if (!doc.drive && doc.registroId && doc.fecha) {
+      const n = evidenciasNucos_(doc.registroId, sesion).filter((x) => x.tipo === 'INSPECCION' && dia_(x.doc.fecha) === dia_(doc.fecha))[0];
+      if (n) doc.drive = n.doc.drive;
+    }
+    const carpetas = carpetasFotos_(doc, id);
+    let archivo = null;
+    try { archivo = DriveApp.getFileById(String(archivoId || '')); } catch (e) { archivo = null; }
+    if (!archivo) throw new Error('La foto ya no existe en Drive.');
+    let carpeta = null;
+    for (const padres = archivo.getParents(); padres.hasNext();) {
+      const c = padres.next();
+      if (carpetas.indexOf(c.getId()) >= 0) { carpeta = c; break; }
+    }
+    if (!carpeta || !esFotoDeInspeccion_(archivo.getName(), archivo.getMimeType())) throw new Error('La foto no es de esta inspección.');
+    const nombre = archivo.getName();
+    let quedo = 'PAPELERA';
+    try {
+      archivo.setTrashed(true);
+    } catch (e) {
+      const destino = carpeta.getFoldersByName('FOTOS QUITADAS');
+      archivo.moveTo(destino.hasNext() ? destino.next() : carpeta.createFolder('FOTOS QUITADAS'));
+      quedo = 'FOTOS QUITADAS';
+    }
+    if (doc.nuco) LineasArchivos.olvidarNuco(doc.nuco);
+    // El recuento de APP_EVIDENCIAS (si la inspección tiene su renglón)
+    try { LineasCaptura.fotosInspeccion(id, 'actualizar', sesion.correo, /^drive_/.test(String(id)) ? doc : null); } catch (e) { console.warn('quitarFotoInspeccion, recuento: ' + e.message); }
+    LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('FOTO_QUITADA', { motivo: motivo }, usuarioOperacion_(sesion), new Date(), {
+      refs: [doc.registroId], nuco: doc.nuco,
+      detalle: { inspeccionId: id, cambios: [{ campo: 'FOTO', antes: nombre, despues: '' }] },
+    }));
+    return { quitada: archivo.getId(), nombre: nombre, quedo: quedo };
   }
 
   /**
@@ -552,7 +609,8 @@ const TelefoniaService = (function () {
   /** Guarda una inspección nueva (checklist, snapshot y bitácora). El PDF se pide aparte. */
   function guardarInspeccion(token, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+    return conPasosEnDev_('apiLineasGuardarInspeccion', () =>
+      LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion))));
   }
 
   /** Guarda una responsiva nueva. El PDF se pide aparte. */
@@ -567,6 +625,33 @@ const TelefoniaService = (function () {
    * MEDICIONES LINEAS del libro de Líneas. Solo en un DEV: en producción no escribe.
    */
   const HOJA_MEDICIONES = 'MEDICIONES LINEAS';
+
+  /**
+   * Pasos de lo que guarda (usuario, 13-oct: Mandar a resguardo tardaba ~38 s después de la inspección). Solo en un DEV:
+   * la llamada anota sus pasos (LineasDatos.tiempo: candado, lecturas, cachés, escrituras) y los deja 10 min en la caché;
+   * el medidor (?medir=1) los pide al terminar con apiLineasPasosServidor y los escribe en MEDICIONES LINEAS. En
+   * producción no hace nada.
+   */
+  const esDev_ = () => String(Config.ENTORNO || '').toUpperCase() !== 'PROD';
+  function conPasosEnDev_(nombre, fn) {
+    if (!esDev_()) return fn();
+    LineasDatos.medirPasos(true);
+    const inicio = Date.now();
+    try {
+      return fn();
+    } finally {
+      try {
+        CacheService.getScriptCache().put('lineas_pasos_' + nombre, JSON.stringify({ total_ms: Date.now() - inicio, pasos: LineasDatos.pasos().slice(-150) }), 600);
+      } catch (e) { console.warn('conPasosEnDev_: ' + e.message); }
+      LineasDatos.medirPasos(false);
+    }
+  }
+  function pasosServidor(token, nombre) {
+    leer_(token);
+    if (!esDev_()) throw new Error('El medidor solo corre en un DEV.');
+    const v = CacheService.getScriptCache().get('lineas_pasos_' + String(nombre || ''));
+    return v ? JSON.parse(v) : null;
+  }
   const COLS_MEDICIONES = ['FECHA', 'SESION', 'USUARIO', 'N', 'VISTA', 'VISTA FINAL', 'ACCION', 'TOTAL MS', 'LLAMADAS', 'SERVIDOR MS', 'DETALLE', 'NOTA'];
   function registrarMediciones(token, filas) {
     const sesion = leer_(token);
@@ -624,7 +709,8 @@ const TelefoniaService = (function () {
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
   function generarPdf(token, tipo, id, forzar, firmas) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null));
+    return conPasosEnDev_('apiLineasGenerarPdf', () =>
+      LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null)));
   }
 
   /**
@@ -688,15 +774,36 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
   }
 
+  /**
+   * datos.inspeccion (usuario, 13-oct: Mandar a resguardo tardaba ~31 s después de la inspección): la última inspección
+   * llega con el resguardo y se guardan en la misma llamada (un viaje al servidor y un índice menos; su PDF se pide
+   * después, sin estorbarle al resguardo). Regresa la inspección ({ id, … }) con `resguardo` o, si la inspección se guardó
+   * pero el resguardo no, con `error` (la pantalla avisa que la inspección sí quedó).
+   */
   function mandarResguardo(token, ids, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.mandar(ids, datos || {}, usuarioResguardo_(sesion)));
+    return conPasosEnDev_('apiLineasMandarResguardo', () => {
+      const d = Object.assign({}, datos || {});
+      const usuario = usuarioResguardo_(sesion);
+      if (!d.inspeccion) return LineasUtil.paraCliente(LineasResguardos.mandar(ids, d, usuario));
+      const inspeccion = LineasCaptura.guardarInspeccion(d.inspeccion, usuarioOperacion_(sesion), puedeVerSecretos_(sesion), { sinIndice: true });
+      d.inspecciones = Object.assign({}, d.inspecciones);
+      d.inspecciones[String(d.inspeccion.equipoId || '')] = inspeccion.id;
+      delete d.inspeccion;
+      // Las 4 hojas que leyó la inspección (ya con lo que escribió) sirven para el resguardo: entre los dos candados pasan
+      // ~0.2 s y el equipo está en la ventana de quien lo manda. Volver a leerlas costaba ~6 s (13-oct)
+      try {
+        return LineasUtil.paraCliente(Object.assign({}, inspeccion, { resguardo: LineasResguardos.mandar(ids, d, usuario) }));
+      } catch (e) {
+        return LineasUtil.paraCliente(Object.assign({}, inspeccion, { error: e.message }));
+      }
+    });
   }
 
   /** "Mandar a cancelación": una o varias líneas a la bandeja de cancelaciones sin mandar el equipo a resguardo. */
   function mandarCancelacion(token, ids, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion)));
+    return conPasosEnDev_('apiLineasMandarCancelacion', () => LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion))));
   }
 
   /** Bandeja de resguardos y cancelaciones: la ve todo el módulo; los pasos solo quien aprueba. */
@@ -731,7 +838,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,

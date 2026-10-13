@@ -303,6 +303,23 @@
   .ln-upload b, .ln-upload small { display: block; }
   .ln-upload small { margin-top: 3px; color: var(--color-text-muted); font-size: 11.5px; }
   .ln-upload input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  /* Arrastrar y soltar (pendiente 2.42): con archivos encima de Líneas, cada lugar para soltar se marca y dice «Suelta
+     aquí»; el que está bajo el cursor, más fuerte (usuario, 13-oct: «una transición de arrastra aquí») */
+  .ln-af-archivo { position: relative; }
+  .ln-upload, .ln-af-archivo { transition: transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease; }
+  .ln-upload::after, .ln-af-archivo::after {
+    content: 'Suelta aquí'; position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+    border-radius: inherit; background: color-mix(in srgb, var(--color-accent-soft) 88%, transparent); color: var(--color-primary);
+    font-weight: 700; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .18s ease;
+  }
+  .ln-arrastrando .ln-upload:has(input[type="file"]:not([capture]):not([disabled])),
+  .ln-arrastrando .ln-af-archivo:has(input[type="file"]:not([disabled])) {
+    border: 1.5px dashed var(--color-primary); border-radius: 13px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+  .ln-arrastrando .ln-upload:has(input[type="file"]:not([capture]):not([disabled]))::after,
+  .ln-arrastrando .ln-af-archivo:has(input[type="file"]:not([disabled]))::after { opacity: .75; }
+  .ln-upload.ln-soltar, .ln-af-archivo.ln-soltar { transform: scale(1.02); border-style: solid; box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 20%, transparent); }
+  .ln-upload.ln-soltar::after, .ln-af-archivo.ln-soltar::after { opacity: 1; background: var(--color-accent-soft); }
   .ln-checklist-seccion { margin-bottom: 16px; }
   .ln-checklist-punto { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border); }
   .ln-checklist-punto:last-child { border-bottom: none; }
@@ -324,7 +341,9 @@
   .ln-editor-grid .field[hidden] { display: none; }
   .ln-seguridad-editor { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-border); }
   .ln-seguridad-editor[hidden] { display: none; }
-  .ln-error-fijo { position: sticky; bottom: 62px; z-index: 6; margin: 14px 0; box-shadow: var(--shadow-lg); }
+  /* El error del pie va en su lugar, arriba de los botones. Flotaba (sticky) sin fondo y se pintaba encima del campo que
+     quedaba atrás, el Comentario de Mandar a resguardo (pendiente 2.39, 13-oct); cada campo ya marca su error */
+  .ln-error-fijo { margin: 14px 0; }
   .ln-otra-app { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--color-border); }
   .ln-patron { position: relative; width: 300px; height: 300px; max-width: 100%; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); place-items: center; }
   .ln-patron svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -518,6 +537,11 @@
   /* Los tipos van en mayúsculas, como la columna Tipo (usuario, 12-oct): más ancho para que quepa EQUIPO + SIM BASICO */
   .ln-modulo .filtro-tipo:hover .filtro-tipo-panel, .ln-modulo .filtro-tipo:focus-within .filtro-tipo-panel { width: 248px; }
   .ln-modulo .filtro-tipo-item { min-width: 238px; }
+  /* Con el cursor se abre a los 400 ms, no a los 120 de la regla común: que no se abra solo por cruzarlo (usuario, 12-oct).
+     Con el teclado sigue igual. Los textos aparecen cuando ya se está abriendo */
+  .ln-modulo .filtro-tipo:hover .filtro-tipo-panel { transition-delay: .4s; }
+  .ln-modulo .filtro-tipo:hover .filtro-tipo-titulo, .ln-modulo .filtro-tipo:hover .filtro-tipo-nombre,
+  .ln-modulo .filtro-tipo:hover .filtro-tipo-num { transition-delay: .48s; }
   .ln-cuadro-tipo .ln-regla { font-size: 11px; }
   /* Selección estilo Google Drive (30-sep): tarjeta seleccionada, panel Detalles sin fondo y ⋮ de la ficha */
   #ln-telefonicas button.ln-cuadro.ln-cuadro-sel { background: var(--color-primary-soft); box-shadow: inset 0 0 0 2px var(--color-primary); }
@@ -721,12 +745,43 @@
   /* Miniatura de una foto elegida (identificación e inspección): clic = en grande */
   .ln-miniatura { position: relative; width: 168px; aspect-ratio: 3 / 2; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-bg); }
   .ln-miniatura img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
-  .ln-miniatura-estado { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255,255,255,.72); color: var(--color-text); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+  .ln-miniatura-estado { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255,255,255,.72); color: var(--color-text); font-size: 12px; text-align: center; overflow-wrap: anywhere; border-radius: inherit; }
+  /* Un PDF elegido se ve como las fotos, con su carátula (pendiente 2.42) */
+  .ln-miniatura-pdf { aspect-ratio: 3 / 4; width: 120px; background: #fff; }
+  .ln-miniatura-pdf > a { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--color-text-muted); }
+  .ln-miniatura-pdf > a img { object-fit: cover; object-position: top; cursor: pointer; }
+  .ln-miniatura-pdf > a > .ln-icon { width: 34px; height: 34px; }
+  .ln-miniatura-etiqueta { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 5px; background: var(--color-primary); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .3px; pointer-events: none; }
+  .ln-af-vista { margin-top: 2px; }
   .ln-miniatura-error .ln-miniatura-estado { background: rgba(243,236,214,.94); color: var(--ln-rojo-tx); }
   .ln-miniatura button { position: absolute; top: 4px; right: 4px; display: inline-flex; padding: 3px; border: none; border-radius: 50%; background: var(--color-surface); color: var(--color-text); cursor: pointer; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.2)); }
   .ln-foto-chip a.ln-foto-nombre { color: inherit; }
-  .ln-ine-visor { position: fixed; inset: 0; z-index: 700; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.82); cursor: zoom-out; }
-  .ln-ine-visor img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  /* Visor de fotos (verFotos, 13-oct): barra arriba, la foto al centro (clic = de cerca, sigue al cursor) y flechas */
+  .ln-visor { position: fixed; inset: 0; z-index: 700; display: flex; flex-direction: column; background: rgba(0,0,0,.88); color: #fff; }
+  .ln-visor-barra { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(0,0,0,.4); font-size: 13px; }
+  .ln-visor-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .ln-visor-cuenta { color: rgba(255,255,255,.7); white-space: nowrap; }
+  .ln-visor-botones { margin-left: auto; display: inline-flex; gap: 6px; }
+  .ln-visor-boton { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.25); border-radius: 8px;
+    background: rgba(255,255,255,.08); color: #fff; font-size: 13px; text-decoration: none; cursor: pointer; }
+  .ln-visor-boton:hover { background: rgba(255,255,255,.18); }
+  .ln-visor-boton[hidden] { display: none; }
+  .ln-visor-quitar:hover { background: var(--color-danger); border-color: var(--color-danger); }
+  .ln-visor-escena { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px 64px; overflow: hidden; cursor: zoom-out; }
+  /* La foto llena el espacio desde que abre: la miniatura se ve del tamaño final y luego llega la grande (13-oct) */
+  .ln-visor-escena img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; transition: transform .15s ease; }
+  .ln-visor-cerca img { transform: scale(2.5); cursor: zoom-out; }
+  .ln-visor-flecha { position: absolute; top: 50%; transform: translateY(-50%); display: inline-flex; padding: 10px; border: none; border-radius: 50%;
+    background: rgba(255,255,255,.14); color: #fff; cursor: pointer; }
+  .ln-visor-flecha:hover { background: rgba(255,255,255,.28); }
+  .ln-visor-flecha[hidden] { display: none; }
+  .ln-visor-anterior { left: 12px; }
+  .ln-visor-siguiente { right: 12px; }
+  @media (max-width: 640px) {
+    .ln-visor-boton span { display: none; }
+    .ln-visor-escena { padding: 8px; }
+    .ln-visor-flecha { top: auto; bottom: 16px; transform: none; }
+  }
   .ln-fotos-despues { margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--color-border); }
   .ln-fotos-despues h4 { display: flex; align-items: center; gap: 7px; }
   .ln-estatus-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
@@ -1004,10 +1059,15 @@
   .ln-patron-vista text { fill: #fff; font: bold 17px Arial, sans-serif; text-anchor: middle; dominant-baseline: middle; }
   .ln-captura-modal { position: relative; }
   .ln-espera { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none; }
+    gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none;
+    border-radius: inherit; }
   .ln-espera[hidden] { display: none; }
   /* Regenerar, Generar PDF pendiente y Subir PDF firmado abren la ventana sin cuerpo: la espera necesita su alto */
   .ln-captura-modal:has(> .ln-espera:not([hidden])) { min-height: 340px; }
+  /* Las ventanas chicas (pedirDatos: Quitar foto, pasos de la bandeja) también: si no, la espera sale aplastada (13-oct) */
+  .modal-card:not(.ln-captura-modal):has(> .ln-espera:not([hidden])) { min-height: 280px; }
+  /* …y sin transparencia: en una ventana chica el título y los botones quedaban detrás del círculo (13-oct) */
+  .modal-card:not(.ln-captura-modal) > .ln-espera { background: var(--color-surface); backdrop-filter: none; }
   .ln-espera-circulo { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     background: var(--color-accent-soft); margin-bottom: 10px; }
   .ln-espera-circulo .ln-spinner { width: 34px; height: 34px; border-width: 3px; }

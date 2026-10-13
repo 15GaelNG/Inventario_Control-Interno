@@ -173,9 +173,9 @@
             const sinLigar = g.entradas.filter((x) => vacio(x.tenia)).length;
             return {
               titulo: sinLigar === g.entradas.length
-                ? cuantos(c, k) + verbo(k, ' todavía no tiene', ' todavía no tienen') + ' ligada su persona'
-                : cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' su persona por ligar o por actualizar',
-              ejemplo: 'Por ejemplo ' + quien + ': su responsable es ' + e.quedo + ' en ' + d.nombre +
+                ? cuantos(c, k) + verbo(k, ' todavía no tiene', ' todavía no tienen') + ' el ID de su ' + (g.c.rol || 'persona')
+                : cuantos(c, k) + verbo(k, ' tiene', ' tienen') + ' el ID de su ' + (g.c.rol || 'persona') + ' por guardar o por actualizar',
+              ejemplo: 'Por ejemplo ' + quien + ': su ' + (g.c.rol || 'persona') + ' es ' + e.quedo + ' en ' + d.nombre +
                 (vacio(e.tenia) ? ', pero esa liga aún no está guardada.' : ', pero tenía ligada a ' + e.tenia + '.'),
               explicacion: 'Ya se encontró a cada persona en ' + d.nombre + ' por su nombre o su correo. «Actualizar» guarda esa ' +
                 'liga en la columna ' + dato(e.columna) + ' (la crea si no existe). El nombre que está escrito no se toca.',

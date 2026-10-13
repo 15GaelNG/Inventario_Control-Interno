@@ -91,6 +91,18 @@
         .apiLineasMediciones(state.token, filas);
     }
 
+    // Lo que guarda anota sus pasos en el servidor (TelefoniaService.conPasosEnDev_, solo DEV; usuario, 13-oct): al
+    // terminar se piden y van como otra fila («SERVIDOR …»), con «@a los ms» de cada paso dentro de esa ejecución
+    const CON_PASOS = ['apiLineasGuardarInspeccion', 'apiLineasGenerarPdf', 'apiLineasMandarResguardo', 'apiLineasMandarCancelacion'];
+    function pedirPasos(fn) {
+      if (typeof state === 'undefined' || !state.token) return;
+      google.script.run.withSuccessHandler((r) => {
+        if (!r) return;
+        anotar({ vista: vista(), vistaFinal: vista(), accion: 'SERVIDOR ' + fn, total_ms: r.total_ms, llamadas: (r.pasos || []).length,
+          servidor_ms: r.total_ms, detalle: (r.pasos || []).join(' | '), nota: 'pasos dentro del servidor' });
+      }).withFailureHandler((e) => console.warn('[MEDIR] pasos ' + fn, e)).apiLineasPasosServidor(state.token, fn);
+    }
+
     async function medirPiso_() {
       const ms = [];
       for (let i = 0; i < 3; i++) {
@@ -120,6 +132,7 @@
         };
         const p = original.apply(this, arguments);
         p.then(fin, fin);
+        if (CON_PASOS.indexOf(fn) >= 0) p.then(() => pedirPasos(fn), () => pedirPasos(fn));
         return p;
       };
       document.addEventListener('click', empezar, true);

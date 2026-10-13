@@ -183,6 +183,16 @@ test('de resguardo a uso con su persona (reasignar): abre la asignación con per
   assert.strictEqual(nueva['DEPARTAMENTO'], ''); // DISPONIBLE es de lo guardado
 });
 
+test('de resguardo a uso sin cambiar la línea: la línea DISPONIBLE se queda guardada y se separa (por eso Editar la pasa a USO)', () => {
+  // Error que encontró el usuario el 13-oct: en Editar, RESGUARDO → USO desvinculaba la línea. Escritura hace lo que le
+  // dicen los estatus; LineasRegistros.editar manda la línea a USO junto con el equipo (lineas-acciones lo revisa)
+  const t = cargar(BASE);
+  t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'RESPONSABLE': 'ANA' });
+  const delEquipo = t.vigentes().find((a) => a['ID EQUIPO'] === 'EQU-2');
+  assert.strictEqual(delEquipo['ID LINEA'], '');
+  assert.ok(t.tocados().indexOf('LIN-B') >= 0, 'la línea pasa a verse aparte');
+});
+
 test('lo que no tiene dónde guardarse avisa; la inspección (tolerante) lo ignora', () => {
   const t = cargar(BASE);
   assert.throws(() => t.guardar('EQU-3', { 'RESPONSABLE': 'PEDRO' }), /no tiene asignación vigente/);
@@ -330,4 +340,27 @@ test('paso 4: con LINEAS TELEFONICAS retirada no se lee; rutas y NUCO de la lín
   assert.strictEqual(t.registro('LIN-C')['RESPONSIVA'], 'R_Files_/vieja.pdf');
   assert.strictEqual(t.registro('LIN-C')['COMENTARIOS'], ''); // el comentario viejo vive en MOVIMIENTOS
   assert.ok(t.lecturas.indexOf('LINEAS TELEFONICAS') < 0, 'no se leyó la hoja vieja');
+});
+
+test('rapidez (13-oct): una asignación sin persona deja el ID PERSONA en blanco sin buscar en Capital Humano', () => {
+  let buscadas = 0;
+  globalThis.CapitalHumano = {
+    columnasDePersona: () => ['RESPONSABLE', 'NO EMPLEADO', 'CUENTA GOOGLE'],
+    conPersona: (hoja, cambios) => { buscadas++; cambios['ID PERSONA'] = 'PER-NUEVA'; return cambios; },
+  };
+  try {
+    const t = cargar(BASE);
+    // Mandar a resguardo: se cierra la de la persona y se abre la de resguardo, sin nadie
+    t.guardar('EQU-1', { 'ESTATUS EQUIPO': 'RESGUARDO', 'ESTATUS LINEA': 'DISPONIBLE', 'RESPONSABLE': '', 'NO EMPLEADO': '', 'PUESTO': '' });
+    const guardada = t.vigentes().find((a) => a['ID EQUIPO'] === 'EQU-1');
+    assert.strictEqual(guardada['TIPO'], 'RESGUARDO');
+    assert.strictEqual(guardada['ID PERSONA'], '');
+    assert.strictEqual(buscadas, 0, 'no se buscó a nadie');
+    // Con persona se busca como siempre
+    t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'ESTATUS LINEA': 'USO', 'RESPONSABLE': 'ANA' });
+    assert.strictEqual(t.vigentes().find((a) => a['ID EQUIPO'] === 'EQU-2')['ID PERSONA'], 'PER-NUEVA');
+    assert.ok(buscadas >= 1);
+  } finally {
+    delete globalThis.CapitalHumano;
+  }
 });

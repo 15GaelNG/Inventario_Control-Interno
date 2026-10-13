@@ -9,7 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /return \{ reasignar, vincular, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
+  assert.match(acciones, /return \{ reasignar, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_ \};/);
   // Reasignar: el director sale de la responsiva y el jefe directo de la inspección (si es de la misma persona) o de
   // Capital Humano (usuario, 6-oct)
   assert.match(acciones, /cambios\['JEFE DIRECTO'\] = deInspeccion \|\| datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
@@ -39,6 +39,9 @@ test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel d
   assert.match(reg, /ESTATUS_LINEA_PANEL\.indexOf\(estatusLinea\) >= 0/);
   // El equipo que se guarda deja DISPONIBLE su línea en uso
   assert.match(reg, /if \(sinPanel && aGuardado && !\('ESTATUS LINEA' in cambios\) && texto_\(base\['ESTATUS LINEA'\]\)\.toUpperCase\(\) === 'USO'\)/);
+  // Y al revés (usuario, 13-oct): el equipo guardado que pasa a USO se lleva su línea DISPONIBLE (antes se desvinculaba)
+  assert.match(reg, /const aUso = 'ESTATUS EQUIPO' in cambios && estatusEquipo === 'USO';/);
+  assert.match(reg, /if \(aUso && lineaConEquipo && !\('ESTATUS LINEA' in cambios\) && \['DISPONIBLE', 'RESGUARDO'\]\.indexOf\(texto_\(base\['ESTATUS LINEA'\]\)\.toUpperCase\(\)\) >= 0\) \{\s+cambios\['ESTATUS LINEA'\] = 'USO';/);
   assert.match(reg, /guardarCambiosRegistro\(fila, cambios, usuario, new Date\(\), \{ corregir: true \}\)/);
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /abrirCambioEstatus|fichaDeFila|texto: 'Cambiar estatus'/);
@@ -66,7 +69,11 @@ test('Mandar a resguardo: la inspección se captura dentro de la acción (usuari
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /function capturarEnFlujo\(tipo, ref, opciones\)/);
   assert.match(cliente, /if \(borrador && borrador\.flujo && !borrador\.guardada\) borrador\.flujo\.resolver\(null\);/);
-  assert.match(cliente, /inspecciones = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo'\);/);
+  // La última inspección se guarda con el resguardo, en la misma llamada (rapidez, 13-oct)
+  assert.match(cliente, /const hechas = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo', \{\s+espera: textoEspera, guardar: \(datos, previas\) => enviar\(\{ inspecciones: previas, inspeccion: datos \}\),/);
+  assert.match(cliente, /conLaAccion \? \{ espera: ultima\.espera, guardar: \(datos\) => ultima\.guardar\(datos, Object\.assign\(\{\}, ids\)\) \} : \{\}/);
+  assert.match(read('src/services/TelefoniaService.gs'), /LineasCaptura\.guardarInspeccion\(d\.inspeccion, usuarioOperacion_\(sesion\), puedeVerSecretos_\(sesion\), \{ sinIndice: true \}\);/);
+  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /LineasEscritura\.olvidar/); // el resguardo usa las hojas que leyó la inspección
   assert.match(read('src/services/lineas/LineasResguardos.gs'), /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\]/);
   // La responsiva se revisa antes de hacer la acción (Reasignar), con el mismo candado
   const captura = read('src/services/lineas/LineasCaptura.gs');
@@ -109,7 +116,7 @@ test('patrón con orden y dirección, y pantalla de espera al guardar (usuario, 
   assert.match(pantalla, /ln-patron-flecha/);
   assert.match(pantalla, /fillText\(String\(i \+ 1\)/); // el PDF lleva el número de cada punto
   assert.match(pantalla, /function mostrarEspera\(titulo, o\)/);
-  assert.match(pantalla, /estadoGuardado\(sesion\.flujo \? 'Guardando la inspección' : 'Generando tu PDF'\)/);
+  assert.match(pantalla, /estadoGuardado\(sesion\.flujo && sesion\.flujo\.espera \? sesion\.flujo\.espera : \(sesion\.flujo \? 'Guardando la inspección' : 'Generando tu PDF'\)\)/);
   assert.doesNotMatch(pantalla, /Firmas cargadas|Del registro: no se cambian aquí|Captura el color y confirma/);
   assert.match(read('src/html/views/lineas/lineas-telefonicas.html'), /id="ln-captura-espera"/);
 });
@@ -193,7 +200,11 @@ test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y �
     assert.deepEqual(pos.slice().sort((a, b) => a - b), pos, lista.join(' · '));
   };
   enOrden(equipo, ['[detalles,', "'Reasignar'", "'Mandar a resguardo'", "'Nueva inspección'", "'Nueva responsiva'", '    editar,',
-    "'Editar línea'", "'Vincular línea'", "'Cambiar línea'", "'Desvincular línea'", "'Ir a la línea'", 'historial];']);
+    "'Vincular línea'", "'Cambiar línea'", "'Desvincular línea'", "'Ir a la línea'", 'historial];']);
+  // En el clic derecho del equipo solo Editar equipo: la línea se edita desde la línea (usuario, 13-oct)
+  assert.doesNotMatch(equipo, /'Editar línea'/);
+  assert.match(barra, /texto: tipo === 'linea' \? 'Editar línea' : 'Editar equipo'/);
+  assert.doesNotMatch(cliente, /'Editar información'/);
   // Ver la última inspección o responsiva ya no va en el clic derecho del equipo
   assert.doesNotMatch(equipo, /Ver última/);
   enOrden(linea, ['[detalles,', "'Mandar a cancelación'", '  editar,', "'Vincular a equipo'", "'Cambiar de equipo'",
@@ -205,10 +216,10 @@ test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y �
   assert.doesNotMatch(ficha, /abrirEditor\(r\.lineaId, 'LINEA'\)/);
 });
 
-test('POSIBLE VENTA-DAÑO ya no existe: 8 estatus de equipo y los que lo tenían regresan a POSIBLE VENTA (usuario, 4-oct)', () => {
+test('POSIBLE VENTA-DAÑO ya no existe y PARA VENTA CON DETALLE sí: 9 estatus de equipo (usuario, 4-oct y 13-oct)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
-  assert.match(repo, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\],/);
-  assert.match(read('src/services/lineas/LineasResguardos.gs'), /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'PARA DESECHO'\];/);
+  assert.match(repo, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\],/);
+  assert.match(read('src/services/lineas/LineasResguardos.gs'), /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'\];/);
   const estructura = read('src/services/lineas/LineasEstructura.gs');
   assert.doesNotMatch(estructura, /'POSIBLE VENTA': 'POSIBLE VENTA-DAÑO'|'POSIBLE VENTA-DAÑO'/);
   assert.match(estructura, /'POSIBLE VENTA': 'RESGUARDO'/); // sigue guardado mientras Líneas lo corrige
@@ -270,4 +281,12 @@ test('Reasignar: la inspección es obligatoria (usuario, 5-oct): de ese equipo y
   assert.match(fn, /let inspeccionId = inspeccionHecha\(fila\.id\);/);
   assert.match(fn, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id, false, pdfInspeccion/);
   assert.match(cliente, /const pdf = sesion\.flujo\.sinPdf \? null : llamar\('apiLineasGenerarPdf'/);
+});
+
+// Pendiente 2.39 (13-oct): el error del pie de las capturas flotaba sin fondo y se pintaba encima del Comentario de
+// Mandar a resguardo. Va en su lugar, arriba de los botones
+test('el error del pie de las capturas no flota encima de los campos', () => {
+  const estilos = read('src/html/lineas-estilos.html');
+  const regla = (estilos.match(/\.ln-error-fijo \{[^}]*\}/) || [''])[0];
+  assert.equal(regla, '.ln-error-fijo { margin: 14px 0; }');
 });

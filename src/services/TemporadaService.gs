@@ -1,8 +1,9 @@
 /**
  * TemporadaService.gs
- * Decoración de temporada (hoy solo Día de Muertos). La prende y la apaga un ADMIN desde el
- * botón de la flor en la barra de arriba; vale para todos y se guarda en la propiedad del
- * proyecto TEMPORADA. Router.gs la pone en <body data-temporada="…"> al servir la página, así
+ * Decoración de temporada (hoy solo Día de Muertos). La abre y la cierra un ADMIN desde el
+ * panel de la flor en la barra de arriba; vale para todos y se guarda en la propiedad del
+ * proyecto TEMPORADA. Abierta, cada quien la puede apagar en su pantalla y elegir pétalos,
+ * velocidad, etc. (eso vive en su navegador, no aquí). Router.gs la pone en <body data-temporada="…"> al servir la página, así
  * que el login ya sale decorado sin otra llamada. Lo que se ve está en src/html/temporada.html.
  *
  * La ofrenda colectiva (Inicio → "Nuestra ofrenda"): cada persona enciende UNA vela por año,

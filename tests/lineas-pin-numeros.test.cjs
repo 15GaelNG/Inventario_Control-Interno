@@ -36,7 +36,7 @@ test('servidor: Editar, Agregar, la inspección y la responsiva lo revisan antes
   assert.match(registros, /function crear\(datos, usuario\) \{[\s\S]{0,200}LineasUtil\.exigirPinEquipo\(datos\);/);
   assert.match(registros, /function editar\(id, datos, usuario, puedeVerSecretos\) \{\s*asegurarEsquema_\(\);\s*LineasUtil\.exigirPinEquipo\(datos\);/);
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  assert.match(captura, /function guardarInspeccion\(datos, usuario, puedeVerSecretos\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
+  assert.match(captura, /function guardarInspeccion\(datos, usuario, puedeVerSecretos, opciones\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
   assert.match(captura, /function guardarResponsiva\(datos, usuario, puedeVerSecretos, accion\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
 });
 
@@ -148,4 +148,16 @@ test('tarjetas del inventario: «DEPARTAMENTO · SEDE» y el filtro de tipo no s
   const estilos = read('src/html/lineas-estilos.html');
   assert.match(estilos, /\.ln-modulo \.filtro-tipo \{ min-width: 0; \}/);
   assert.match(estilos, /\.ln-modulo \.filtro-tipo-panel \{ position: relative; \}/);
+});
+
+// Usuario, 13-oct: el NUCO 1712 se vinculó con su responsiva y el PIN de WhatsApp se quedó el de antes (lo corrigieron
+// con Editar). El de la responsiva pasa a la línea, como el de la inspección; sin línea no hay a dónde
+test('la responsiva pasa a la línea el PIN de WhatsApp', () => {
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  const resp = captura.slice(captura.indexOf('  function guardarResponsivaEnCandado_('), captura.indexOf('  function exigirInspeccion('));
+  assert.match(resp, /if \(obj\.linea && 'PIN WHATSAPP' in valores\) copia\['PIN WHATSAPP'\] = valores\['PIN WHATSAPP'\];\s*const g = Object\.keys\(copia\)\.length \? LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia/);
+  // Después de la acción (Vincular, Cambiar línea, Reasignar): obj es el registro como quedó, con la línea que se puso
+  assert.ok(resp.indexOf("if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });") < resp.indexOf("copia['PIN WHATSAPP']"));
+  // PIN WHATSAPP va a la hoja LINEAS
+  assert.match(read('src/services/lineas/LineasEscritura.gs'), /'PIN WHATSAPP': 'PIN WHATSAPP', 'ESTATUS LINEA': 'ESTATUS LINEA'/);
 });

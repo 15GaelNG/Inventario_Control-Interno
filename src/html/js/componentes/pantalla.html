@@ -30,6 +30,10 @@
    *                           el teléfono, achicar la ventana). Devuelve la función para dejar
    *                           de escuchar.
    *   Pantalla.CONSULTAS      las consultas tal cual, por si un caso raro necesita la suya
+   *
+   * Y el tema del sistema operativo (para el modo "Auto" de Apariencia), aparte de los cuatro:
+   *   Pantalla.prefiereOscuro()       la computadora o el teléfono están en modo oscuro
+   *   Pantalla.alCambiarEsquema(fn)   llama fn(prefiereOscuro()) cuando la persona lo cambia
    */
   const Pantalla = (function () {
     const CONSULTAS = Object.freeze({
@@ -66,6 +70,23 @@
       return () => quitar.forEach((f) => f());
     }
 
-    return { esCelular, esTableta, esAngosta, esTactil, estado, alCambiar, CONSULTAS };
+    // Fuera de CONSULTAS a propósito: no es un tamaño, y alCambiar no debe avisar por él
+    const ESQUEMA = '(prefers-color-scheme: dark)';
+    let esquema;
+    function listaEsquema() {
+      if (esquema === undefined) esquema = typeof window.matchMedia === 'function' ? window.matchMedia(ESQUEMA) : null;
+      return esquema;
+    }
+    const prefiereOscuro = () => { const c = listaEsquema(); return !!(c && c.matches); };
+    function alCambiarEsquema(fn) {
+      const c = listaEsquema();
+      if (!c) return () => {};
+      const avisar = () => fn(prefiereOscuro());
+      if (c.addEventListener) { c.addEventListener('change', avisar); return () => c.removeEventListener('change', avisar); }
+      c.addListener(avisar);
+      return () => c.removeListener(avisar);
+    }
+
+    return { esCelular, esTableta, esAngosta, esTactil, estado, alCambiar, prefiereOscuro, alCambiarEsquema, CONSULTAS };
   })();
 </script>
