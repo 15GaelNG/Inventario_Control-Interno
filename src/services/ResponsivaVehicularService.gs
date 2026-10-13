@@ -69,7 +69,7 @@ const ResponsivaVehicularService = (function () {
 
   const COLUMNAS_RESUMEN = [
     ID_COLUMN, 'FECHA', 'ID VEHICULO', 'FOLIO VEHICULO', 'NUCCO', 'RESPONSABLE', 'DEPARTAMENTO', 'ESTADO FIRMA',
-    'TOKEN FIRMA', 'TOKEN FIRMA JEFE', 'PDF', 'REGISTRADO POR',
+    'TOKEN FIRMA', 'TOKEN FIRMA JEFE', 'FIRMADO POR', 'FIRMADO POR JEFE', 'PDF', 'REGISTRADO POR',
     'TIPO RESPONSIVA', 'FECHA FIN PRESTAMO', 'ESTATUS PRESTAMO', 'RESPONSABLE ANTERIOR',
   ];
 
@@ -100,6 +100,10 @@ const ResponsivaVehicularService = (function () {
       ESTADO_FIRMA: datos['ESTADO FIRMA'][i] || 'FIRMADO',
       TOKEN_FIRMA: datos['TOKEN FIRMA'][i] || '',
       TOKEN_FIRMA_JEFE: datos['TOKEN FIRMA JEFE'][i] || '',
+      // Esa parte ya firmó a distancia -- aunque la otra siga pendiente y el token ya esté
+      // vacío. Lo usa "Generar nueva liga" para saber si hay algo de esa parte que regenerar.
+      FIRMADO_POR: datos['FIRMADO POR'][i] || '',
+      FIRMADO_POR_JEFE: datos['FIRMADO POR JEFE'][i] || '',
       PDF: datos['PDF'][i] || '',
       REGISTRADO_POR: datos['REGISTRADO POR'][i] || '',
       // En blanco (renglones de antes de Préstamo Vehicular) = responsiva definitiva de siempre.
@@ -160,21 +164,36 @@ const ResponsivaVehicularService = (function () {
   }
 
   /** "Generar nueva liga" (botón manual, ficha de Vehículos): token nuevo para una liga
-   *  PENDIENTE que venció (o se perdió) -- sin crear otro registro. El link viejo deja de
-   *  servir solo: buscarPorToken_ ya no lo encuentra en ninguna fila en cuanto se sobrescribe. */
+   *  PENDIENTE que venció, se perdió, o YA SE USÓ PERO FIRMARON MAL y la otra parte todavía no
+   *  completa (el documento sigue sin cerrarse) -- sin crear otro registro. El link viejo deja
+   *  de servir solo: buscarPorToken_ ya no lo encuentra en ninguna fila en cuanto se sobrescribe.
+   *  Si esa parte ya había firmado, se borra su firma anterior (Drive incluido, igual que al
+   *  eliminar el registro) para que no se use por accidente si la otra parte completa antes de
+   *  que ésta vuelva a firmar. */
   function regenerarLiga(token, id, quien) {
     Permisos.puedeEditar(token, MODULO);
     const encontrado = SheetUtils.findById(ssId(), SHEET, id, ID_COLUMN);
     if (!encontrado) throw new Error('No se encontró el registro.');
-    if (String(encontrado.data['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+    const fila = encontrado.data;
+    if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
       throw new Error('Esta firma ya se completó; no se puede generar una liga nueva.');
     }
     const columnaToken = quien === 'jefe' ? 'TOKEN FIRMA JEFE' : 'TOKEN FIRMA';
     const columnaExpira = quien === 'jefe' ? 'TOKEN FIRMA JEFE EXPIRA' : 'TOKEN FIRMA EXPIRA';
+    const columnaTemp = quien === 'jefe' ? 'FIRMA JEFE TEMP' : 'FIRMA RESPONSABLE TEMP';
+    const columnaFirmadoPor = quien === 'jefe' ? 'FIRMADO POR JEFE' : 'FIRMADO POR';
+    // Si esta parte nunca tuvo liga (ni pendiente ni ya usada) es que firmó presencial al crear
+    // el registro -- no hay nada que regenerar, y borrar su TEMP tiraría una firma de verdad.
+    if (!fila[columnaToken] && !fila[columnaFirmadoPor]) {
+      throw new Error('Esta parte firmó presencial, no a distancia; no hay liga que regenerar.');
+    }
+    borrarFirmaTempSiHay_(fila[columnaTemp]);
     const tokenNuevo = Utilities.getUuid();
     const cambios = {};
     cambios[columnaToken] = tokenNuevo;
     cambios[columnaExpira] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
+    cambios[columnaTemp] = '';
+    cambios[columnaFirmadoPor] = '';
     SheetUtils.update(ssId(), SHEET, id, cambios, ID_COLUMN);
     return construirLiga_(tokenNuevo, quien);
   }

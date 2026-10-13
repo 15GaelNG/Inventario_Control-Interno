@@ -112,7 +112,7 @@ function crearContexto() {
     '\nthis.Servicio = AdherenteVehicularService;',
     contexto
   );
-  return { contexto, llamadas };
+  return { contexto, llamadas, archivosDrive };
 }
 
 const FIRMA_ADHERENTE = { base64: 'abc', mimeType: 'image/png' };
@@ -353,6 +353,35 @@ test('regenerarLiga: revisa permiso de edición antes de tocar nada', () => {
   contexto.Permisos.puedeEditar = (token, modulo) => { pedido = modulo; return { nombre: 'TESTER', correo: 't@x.com' }; };
   contexto.Servicio.regenerarLiga('tok', id, 'principal');
   assert.equal(pedido, 'adherente-vehicular');
+});
+
+test('regenerarLiga: si esa parte ya firmó MAL y la otra sigue pendiente, se puede regenerar -- descarta la firma anterior', () => {
+  const { contexto, llamadas, archivosDrive } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  const tokenAdherente = llamadas.insert[0]['TOKEN FIRMA'];
+  contexto.Servicio.completarFirma(tokenAdherente, { base64: 'firmo-mal', mimeType: 'image/png' });
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE', 'el jefe todavía no firma -- el documento sigue abierto');
+  assert.ok(llamadas.insert[0]['FIRMA ADHERENTE TEMP'], 'la firma mala quedó guardada');
+  const archivoFirmaMala = JSON.parse(llamadas.insert[0]['FIRMA ADHERENTE TEMP']).archivoId;
+
+  contexto.Servicio.regenerarLiga('tok', id, 'principal');
+
+  assert.ok(llamadas.insert[0]['TOKEN FIRMA'], 'token nuevo generado');
+  assert.equal(llamadas.insert[0]['FIRMA ADHERENTE TEMP'], '', 'la firma mala se descarta');
+  assert.equal(llamadas.insert[0]['FIRMADO POR'], '', 'ya no hay quién la firmó -- hay que volver a firmar');
+  assert.equal(archivosDrive[archivoFirmaMala].trashed, true, 'el archivo de Drive de la firma mala también se tira');
+});
+
+test('regenerarLiga: truena si esa parte firmó presencial (nunca tuvo liga) -- no hay nada que regenerar', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE');
+  assert.throws(() => contexto.Servicio.regenerarLiga('tok', id, 'jefe'), /firmó presencial/);
+  assert.ok(llamadas.insert[0]['FIRMA JEFE TEMP'], 'su firma presencial sigue intacta -- no se tocó');
 });
 
 // ---------- Firma a distancia: liga del JEFE (opciones.remotoJefe) ----------

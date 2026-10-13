@@ -3401,7 +3401,9 @@
     async function regenerarLigaFicha_(tipo, quien, id, vResumen) {
       const ok = await Confirmar.pedir({
         titulo: 'Generar nueva liga',
-        mensaje: 'La liga anterior deja de funcionar en cuanto generes la nueva. ¿Continuar?',
+        mensaje: 'La liga anterior deja de funcionar en cuanto generes la nueva -- y si esa parte ' +
+          'ya había firmado (por ejemplo, si firmó mal), esa firma se descarta: va a tener que volver ' +
+          'a firmar con la liga nueva. ¿Continuar?',
         textoConfirmar: 'Generar nueva liga',
       });
       if (!ok) return;
@@ -3758,8 +3760,8 @@
                 eliminar: puedeEditarModulo('responsiva-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
-                regenerarLiga: puedeEditarModulo('responsiva-vehicular') && !!r.TOKEN_FIRMA,
-                regenerarLigaJefe: puedeEditarModulo('responsiva-vehicular') && !!r.TOKEN_FIRMA_JEFE,
+                regenerarLiga: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
                 devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
               }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
@@ -3780,8 +3782,8 @@
                 eliminar: puedeEditarModulo('adherente-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
-                regenerarLiga: puedeEditarModulo('adherente-vehicular') && !!r.TOKEN_FIRMA,
-                regenerarLigaJefe: puedeEditarModulo('adherente-vehicular') && !!r.TOKEN_FIRMA_JEFE,
+                regenerarLiga: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
               }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
             puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
