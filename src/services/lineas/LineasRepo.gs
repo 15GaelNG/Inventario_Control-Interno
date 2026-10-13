@@ -895,6 +895,8 @@ const LineasRepo = (function () {
     COMENTARIO_ANTERIOR: 'Comentario anterior',
     // PDF de la inspección o la responsiva, ya firmado o vuelto a hacer con la plantilla (5-oct)
     PDF_FIRMADO: 'PDF firmado', PDF_REGENERADO: 'PDF regenerado',
+    // Una foto de la inspección enviada por error, a la papelera de Drive (13-oct)
+    FOTO_QUITADA: 'Foto quitada',
   };
   const sinAcentos_ = (v) => String(v === null || v === undefined ? '' : v).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   function movimientoDeCampo(campo) {

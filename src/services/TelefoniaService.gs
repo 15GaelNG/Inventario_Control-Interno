@@ -381,28 +381,86 @@ const TelefoniaService = (function () {
     }
 
     LineasDatos.tiempo('documento: carpeta en NUCOS', t0);
-    const fotos = [];
     const pdfs = doc.drive && doc.drive.pdfs ? doc.drive.pdfs.slice() : [];
-    // Fotos agregadas en el sistema a una inspección de NUCOS: viven en una carpeta de la app (APP_EVIDENCIAS)
-    const carpetaExtra = esInspeccion && /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
-    if (esInspeccion && (doc.drive || carpetaExtra)) {
-      const vistos = {};
-      [doc.drive && doc.drive.fotosCarpetaId, doc.drive && doc.drive.carpetaId, carpetaExtra].filter(Boolean).forEach((c) => {
-        archivosCarpeta_(c, 200).forEach((f) => {
-          if (vistos[f.id]) return;
-          vistos[f.id] = true;
-          if (!/^(image|video)\//.test(f.mimeType)) return;
-          if (/^(FIRMA|PATRON)/i.test(f.name)) return; // las firmas y el patrón solo van en el PDF
-          fotos.push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) });
-        });
-      });
-    }
+    const fotos = esInspeccion ? fotosDe_(carpetasFotos_(doc, id)) : [];
     LineasDatos.tiempo('documento: fotos', t0);
     const salida = { equipo: eq, fotos: fotos, pdfs: pdfs, puedeOperar: puedeOperar_(sesion) };
     // Identificación de cada responsable, subida con la responsiva (usuario, 9-oct; pendiente 2.27)
     if (!esInspeccion) salida.identificaciones = LineasIdentificaciones.deResponsiva([id]);
     salida[esInspeccion ? 'inspeccion' : 'responsiva'] = doc;
     return LineasUtil.paraCliente(salida);
+  }
+
+  /**
+   * Carpetas donde viven las fotos de una inspección: la de sus fotos, la suya y, si es de NUCOS, la que el sistema le
+   * agregó (APP_EVIDENCIAS). `doc` ya trae su carpeta de NUCOS si la tiene (documento_ o inspeccionConCarpetas_).
+   */
+  function carpetasFotos_(doc, id) {
+    const carpetaExtra = /^drive_/.test(String(id)) ? carpetaFotosExtra_(id) : null;
+    return [doc.drive && doc.drive.fotosCarpetaId, doc.drive && doc.drive.carpetaId, carpetaExtra].filter(Boolean)
+      .filter((x, i, a) => a.indexOf(x) === i);
+  }
+
+  /** Lo que se ve como foto de la inspección: imágenes y videos, sin las firmas ni el patrón (solo van en el PDF). */
+  const esFotoDeInspeccion_ = (nombre, mime) => /^(image|video)\//.test(mime) && !/^(FIRMA|PATRON)/i.test(nombre);
+
+  function fotosDe_(carpetas) {
+    const fotos = [];
+    const vistos = {};
+    carpetas.forEach((c) => {
+      archivosCarpeta_(c, 200).forEach((f) => {
+        if (vistos[f.id]) return;
+        vistos[f.id] = true;
+        if (!esFotoDeInspeccion_(f.name, f.mimeType)) return;
+        fotos.push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, enlace: f.webViewLink, video: /^video\//.test(f.mimeType) });
+      });
+    });
+    return fotos;
+  }
+
+  /**
+   * Quitar una foto de una inspección guardada (usuario, 13-oct: «se pueda eliminar también alguna imagen que hayan
+   * enviado por error»). Solo una foto de las carpetas de esa inspección; va a la papelera de Drive (se recupera de ahí
+   * 30 días) y queda en el historial del registro con su comentario. Si la cuenta de la app no puede mandarla a la
+   * papelera (el archivo es de otra cuenta), se saca de la carpeta a «FOTOS QUITADAS», junto a ella, y ya no se ve.
+   */
+  function quitarFotoInspeccion(token, id, archivoId, comentario) {
+    const sesion = operar_(token);
+    const motivo = String(comentario || '').trim();
+    if (motivo.length <= 3) throw new Error('Escribe por qué se quita la foto (queda en el historial).');
+    const doc = LineasRepo.leerInspeccion(id) || (/^drive_/.test(String(id)) ? documentoNucos_(String(id).slice(6), 'INSPECCION') : null);
+    if (!doc) throw new Error('No existe la inspección ' + id);
+    if (!doc.drive && doc.registroId && doc.fecha) {
+      const n = evidenciasNucos_(doc.registroId, sesion).filter((x) => x.tipo === 'INSPECCION' && dia_(x.doc.fecha) === dia_(doc.fecha))[0];
+      if (n) doc.drive = n.doc.drive;
+    }
+    const carpetas = carpetasFotos_(doc, id);
+    let archivo = null;
+    try { archivo = DriveApp.getFileById(String(archivoId || '')); } catch (e) { archivo = null; }
+    if (!archivo) throw new Error('La foto ya no existe en Drive.');
+    let carpeta = null;
+    for (const padres = archivo.getParents(); padres.hasNext();) {
+      const c = padres.next();
+      if (carpetas.indexOf(c.getId()) >= 0) { carpeta = c; break; }
+    }
+    if (!carpeta || !esFotoDeInspeccion_(archivo.getName(), archivo.getMimeType())) throw new Error('La foto no es de esta inspección.');
+    const nombre = archivo.getName();
+    let quedo = 'PAPELERA';
+    try {
+      archivo.setTrashed(true);
+    } catch (e) {
+      const destino = carpeta.getFoldersByName('FOTOS QUITADAS');
+      archivo.moveTo(destino.hasNext() ? destino.next() : carpeta.createFolder('FOTOS QUITADAS'));
+      quedo = 'FOTOS QUITADAS';
+    }
+    if (doc.nuco) LineasArchivos.olvidarNuco(doc.nuco);
+    // El recuento de APP_EVIDENCIAS (si la inspección tiene su renglón)
+    try { LineasCaptura.fotosInspeccion(id, 'actualizar', sesion.correo, /^drive_/.test(String(id)) ? doc : null); } catch (e) { console.warn('quitarFotoInspeccion, recuento: ' + e.message); }
+    LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('FOTO_QUITADA', { motivo: motivo }, usuarioOperacion_(sesion), new Date(), {
+      refs: [doc.registroId], nuco: doc.nuco,
+      detalle: { inspeccionId: id, cambios: [{ campo: 'FOTO', antes: nombre, despues: '' }] },
+    }));
+    return { quitada: archivo.getId(), nombre: nombre, quedo: quedo };
   }
 
   /**
@@ -781,7 +839,7 @@ const TelefoniaService = (function () {
 
   return {
     permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,

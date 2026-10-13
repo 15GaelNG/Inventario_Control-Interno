@@ -655,6 +655,9 @@ function apiLineasVincular(token, datos) {
 function apiLineasFotosInspeccion(token, id, accion) {
   return TelefoniaService.fotosInspeccion(token, id, accion);
 }
+function apiLineasQuitarFotoInspeccion(token, id, archivoId, comentario) {
+  return TelefoniaService.quitarFotoInspeccion(token, id, archivoId, comentario);
+}
 function apiLineasAccesoriosIndice(token) {
   return LineasAccesorios.indice(token);
 }

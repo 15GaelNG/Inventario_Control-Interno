@@ -1725,13 +1725,104 @@
       });
     }
 
-    /** La foto en grande (identificación e inspección), para revisarla antes de guardar. Se cierra con un clic. */
+    /** La foto en grande (identificación e inspección), para revisarla antes de guardar. */
     function verFotoEnGrande(url) {
+      verFotos([{ grande: url }], 0);
+    }
+
+    /** La miniatura de Drive (thumbnailLink, «…=s220») en otro tamaño. */
+    const miniaturaDe = (url, lado) => String(url || '').replace(/=s\d+(-[a-z0-9-]+)?$/i, '') + '=s' + lado;
+
+    /**
+     * Visor de fotos (usuario, 13-oct: «que se amplíe para verlo más cerca», en vez de mandar a Drive). fotos: [{ grande,
+     * miniatura, nombre, enlace, id }]; se pasa con las flechas (teclado o botones), clic en la foto la acerca y la sigue
+     * el cursor, Escape o la X cierran. o.alQuitar(foto) (promesa): botón «Quitar foto»; si se quita, sale de la lista.
+     */
+    function verFotos(fotos, inicio, opciones) {
+      const o = opciones || {};
+      const lista = fotos.slice();
+      let i = Math.max(0, Math.min(inicio || 0, lista.length - 1));
       const capa = document.createElement('div');
-      capa.className = 'ln-ine-visor';
-      capa.innerHTML = '<img src="' + esc(url) + '" alt="" />';
-      capa.addEventListener('click', () => capa.remove());
+      capa.className = 'ln-visor';
+      capa.setAttribute('role', 'dialog');
+      capa.setAttribute('aria-modal', 'true');
+      capa.innerHTML = '<div class="ln-visor-barra"><span class="ln-visor-nombre" data-nombre></span><span class="ln-visor-cuenta" data-cuenta></span>' +
+        '<span class="ln-visor-botones">' +
+        '<a class="ln-visor-boton" data-drive target="_blank" rel="noopener" title="Abrir en Drive">' + ico('external-link') + '<span>Abrir en Drive</span></a>' +
+        (o.alQuitar ? '<button type="button" class="ln-visor-boton ln-visor-quitar" data-quitar title="Quitar foto">' + ico('trash-2') + '<span>Quitar foto</span></button>' : '') +
+        '<button type="button" class="ln-visor-boton" data-cerrar title="Cerrar" aria-label="Cerrar">' + ico('x') + '</button></span></div>' +
+        '<div class="ln-visor-escena" data-escena><img alt="" data-img /></div>' +
+        '<button type="button" class="ln-visor-flecha ln-visor-anterior" data-paso="-1" aria-label="Anterior">' + ico('chevron-left') + '</button>' +
+        '<button type="button" class="ln-visor-flecha ln-visor-siguiente" data-paso="1" aria-label="Siguiente">' + ico('chevron-right') + '</button>';
+      const img = capa.querySelector('[data-img]');
+      const escena = capa.querySelector('[data-escena]');
+      const cerrar = () => { capa.remove(); document.removeEventListener('keydown', tecla, true); };
+      const acercar = (si, ev) => {
+        escena.classList.toggle('ln-visor-cerca', si);
+        if (si && ev) seguir(ev);
+        else img.style.transformOrigin = '';
+      };
+      const seguir = (ev) => {
+        const r = img.getBoundingClientRect();
+        if (!r.width || !r.height) return;
+        const x = Math.max(0, Math.min(100, (ev.clientX - r.left) / r.width * 100));
+        const y = Math.max(0, Math.min(100, (ev.clientY - r.top) / r.height * 100));
+        img.style.transformOrigin = x + '% ' + y + '%';
+      };
+      const mostrar = () => {
+        if (!lista.length) { cerrar(); return; }
+        const f = lista[i];
+        acercar(false);
+        // Primero la miniatura que ya se ve; luego la grande
+        const grande = f.grande || (f.miniatura ? miniaturaDe(f.miniatura, 2400) : '');
+        img.src = f.miniatura || grande;
+        if (grande && grande !== img.src) {
+          const pre = new Image();
+          pre.referrerPolicy = 'no-referrer';
+          pre.onload = () => { if (lista[i] === f) img.src = grande; };
+          pre.src = grande;
+        }
+        capa.querySelector('[data-nombre]').textContent = f.nombre || '';
+        capa.querySelector('[data-cuenta]').textContent = lista.length > 1 ? (i + 1) + ' de ' + lista.length : '';
+        const drive = capa.querySelector('[data-drive]');
+        drive.hidden = !f.enlace;
+        if (f.enlace) drive.href = f.enlace;
+        capa.querySelectorAll('[data-paso]').forEach((b) => { b.hidden = lista.length < 2; });
+      };
+      const pasar = (n) => { if (lista.length > 1) { i = (i + n + lista.length) % lista.length; mostrar(); } };
+      const quitar = () => {
+        const f = lista[i];
+        o.alQuitar(f).then((hecho) => {
+          if (!hecho || !document.body.contains(capa)) return;
+          lista.splice(lista.indexOf(f), 1);
+          i = Math.min(i, lista.length - 1);
+          mostrar();
+        });
+      };
+      const tecla = (ev) => {
+        // Una ventana abierta encima (Quitar foto) tiene sus teclas; la captura de abajo no
+        if (Array.from(document.querySelectorAll('.modal-backdrop')).some((m) => capa.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+        if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); }
+        else if (ev.key === 'ArrowLeft') pasar(-1);
+        else if (ev.key === 'ArrowRight') pasar(1);
+      };
+      img.referrerPolicy = 'no-referrer';
+      img.addEventListener('click', (ev) => { ev.stopPropagation(); acercar(!escena.classList.contains('ln-visor-cerca'), ev); });
+      img.addEventListener('mousemove', (ev) => { if (escena.classList.contains('ln-visor-cerca')) seguir(ev); });
+      img.addEventListener('error', () => {
+        const f = lista[i];
+        if (f && f.miniatura && img.src !== f.miniatura) img.src = f.miniatura;
+      });
+      capa.addEventListener('click', (ev) => {
+        const paso = ev.target.closest('[data-paso]');
+        if (paso) { pasar(Number(paso.dataset.paso)); return; }
+        if (ev.target.closest('[data-quitar]')) { quitar(); return; }
+        if (ev.target.closest('[data-cerrar]') || ev.target === escena || ev.target === capa) cerrar();
+      });
+      document.addEventListener('keydown', tecla, true);
       document.body.appendChild(capa);
+      pintarIconos(capa);
+      mostrar();
     }
 
     /**
@@ -5158,11 +5249,15 @@
           const s = i.snapshot || {};
           const fotos = r.fotos || [];
           const firmas = r.firmas || [];
-          const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f) =>
-            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '">' +
+          // Clic = el visor (ampliar, pasar entre fotos y quitar la enviada por error, usuario 13-oct); un video o una
+          // foto sin vista previa se abre en Drive como antes
+          const enVisor = (f) => !!f.miniatura && !f.video;
+          const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f, n) =>
+            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '"' + (enVisor(f) ? ' data-foto="' + n + '"' : '') + '>' +
             '<span class="ln-foto">' +
             (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
-            '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') + '<small>' + icono('external-link') + ' Abrir en Drive</small></span></a>').join('') + '</div>';
+            '</span><span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') + '<small>' +
+            (enVisor(f) ? icono('zoom-in') + ' Ampliar' : icono('external-link') + ' Abrir en Drive') + '</small></span></a>').join('') + '</div>';
           const deDrive = i.origen === 'DRIVE';
           pila[pila.length - 1].etiqueta = 'Inspección' + (fecha(i.fecha) ? ' ' + fecha(i.fecha) : '');
           detalle.innerHTML = migas() +
@@ -5184,6 +5279,24 @@
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos') + '</div>' : ''));
           activarBotonesDocumento(detalle, 'INSPECCION', i, r);
+          const enGaleria = fotos.filter(enVisor);
+          // Quitar una foto: a la papelera de Drive, con comentario (queda en el historial); la página se vuelve a pintar
+          const alQuitar = (f) => pedirDatos('Quitar foto', f.nombre,
+            [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, minimo: 4, area: true }], 'Quitar foto', {
+              peligro: true, encima: true, espera: 'Quitando la foto',
+              alConfirmar: (v) => llamar('apiLineasQuitarFotoInspeccion', id, f.id, v.comentario),
+            }).then((res) => {
+              if (!res) return false;
+              aviso(icono('circle-check') + ' Foto quitada: ' + esc(res.nombre) + (res.quedo === 'PAPELERA' ? ' (en la papelera de Drive)' : ' (en FOTOS QUITADAS)') + '.', 6000);
+              if (vigente() && pila.length && pila[pila.length - 1].id === id) abrir('inspeccion', id, true);
+              return true;
+            });
+          detalle.querySelectorAll('[data-foto]').forEach((a) => a.addEventListener('click', (ev) => {
+            if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
+            ev.preventDefault();
+            const f = fotos[Number(a.dataset.foto)];
+            verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
+          }));
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
             // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)
@@ -6389,7 +6502,7 @@
      * opciones.alConfirmar(valores) (promesa): la ventana se queda con la pantalla de espera (opciones.espera) desde el
      * clic hasta que termina; si falla, muestra el error y "Volver" regresa a lo capturado. Regresa lo que regrese.
      * opciones.detalle: lista de lo que se va a tocar (como Confirmar); opciones.peligro: botón rojo. Sin campos sirve
-     * de confirmación con espera (pasos de la bandeja de Pau, 13-oct).
+     * de confirmación con espera (pasos de la bandeja de Pau, 13-oct). opciones.encima: por arriba del visor de fotos.
      */
     function pedirDatos(titulo, mensaje, campos, textoConfirmar, opciones) {
       const o = opciones || {};
@@ -6397,6 +6510,7 @@
       return new Promise((resolve) => {
         const fondo = document.createElement('div');
         fondo.className = 'modal-backdrop';
+        if (o.encima) fondo.style.zIndex = '800';
         fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px;position:relative">' +
           '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' +
           '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +

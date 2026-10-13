@@ -921,7 +921,7 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
   // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
-  assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
+  assert.ok(servicio.includes("const esFotoDeInspeccion_ = (nombre, mime) => /^(image|video)\\//.test(mime) && !/^(FIRMA|PATRON)/i.test(nombre);"), 'las firmas y el patrón no son fotos de la inspección');
   assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
   // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
   assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
