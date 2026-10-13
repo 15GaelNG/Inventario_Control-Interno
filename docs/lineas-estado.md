@@ -140,7 +140,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
   dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura
   se recorría y dejaba un cuadro blanco.
-- **Arrastrar y soltar archivos y carátula de los PDF** (13-oct, `5595604` y `3da7620`, pendiente 2.42; bloque del mismo nombre
+- **Arrastrar y soltar archivos y carátula de los PDF** (13-oct, `5595604` y `3da7620`; bloque del mismo nombre
   en `lineas.html`, `tests/lineas-soltar-pdf.test.cjs`):
   - **Soltar** archivos sobre un botón de subir (`.ln-upload`: fotos de la inspección, «Agregar fotos» de una inspección
     guardada, identificación de la responsiva) o un campo de archivo (`.ln-af-archivo`, Editar) es como elegirlos: van al
@@ -152,7 +152,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     soltar se marca con borde y «Suelta aquí» (clase `ln-arrastrando` en `<html>`; se quita sola 250 ms después del último
     `dragover`); el que está bajo el cursor se agranda un poco, dice «Suelta aquí» completo y lleva la clase `ln-soltar`.
   - **Carátula del PDF:** `caratulaPdf(archivo)` dibuja la primera hoja con pdf.js 3.11.174 de cdnjs (`cargarPdfJs`: se
-    carga la primera vez que hace falta, con su worker `pdf.worker.min.js`) y `htmlMiniaturaPdf` la muestra como las fotos,
+    carga la primera vez que hace falta, con su worker) y `htmlMiniaturaPdf` la muestra como las fotos,
     con la etiqueta «PDF»; clic = el PDF en otra pestaña. Aplica a la identificación de la responsiva (antes salía un renglón
     con el nombre del PDF) y a los campos de archivo de Editar, que ahora también muestran en miniatura lo elegido (foto o
     carátula) con X para quitarlo (`.ln-af-vista`). Si pdf.js no carga, sale el ícono de documento.
