@@ -303,6 +303,9 @@
   .ln-upload b, .ln-upload small { display: block; }
   .ln-upload small { margin-top: 3px; color: var(--color-text-muted); font-size: 11.5px; }
   .ln-upload input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  /* Arrastrar y soltar (pendiente 2.42): el lugar donde se va a soltar se marca */
+  .ln-upload.ln-soltar, .ln-af-archivo.ln-soltar { border-color: var(--color-primary); border-style: solid; background: var(--color-accent-soft); }
+  .ln-af-archivo.ln-soltar { outline: 2px dashed var(--color-primary); outline-offset: 4px; border-radius: 8px; }
   .ln-checklist-seccion { margin-bottom: 16px; }
   .ln-checklist-punto { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border); }
   .ln-checklist-punto:last-child { border-bottom: none; }
@@ -729,6 +732,13 @@
   .ln-miniatura { position: relative; width: 168px; aspect-ratio: 3 / 2; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-bg); }
   .ln-miniatura img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
   .ln-miniatura-estado { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255,255,255,.72); color: var(--color-text); font-size: 12px; text-align: center; overflow-wrap: anywhere; border-radius: inherit; }
+  /* Un PDF elegido se ve como las fotos, con su carátula (pendiente 2.42) */
+  .ln-miniatura-pdf { aspect-ratio: 3 / 4; width: 120px; background: #fff; }
+  .ln-miniatura-pdf > a { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--color-text-muted); }
+  .ln-miniatura-pdf > a img { object-fit: cover; object-position: top; cursor: pointer; }
+  .ln-miniatura-pdf > a > .ln-icon { width: 34px; height: 34px; }
+  .ln-miniatura-etiqueta { position: absolute; left: 6px; bottom: 6px; padding: 1px 6px; border-radius: 5px; background: var(--color-primary); color: #fff; font-size: 10.5px; font-weight: 700; letter-spacing: .3px; pointer-events: none; }
+  .ln-af-vista { margin-top: 2px; }
   .ln-miniatura-error .ln-miniatura-estado { background: rgba(243,236,214,.94); color: var(--ln-rojo-tx); }
   .ln-miniatura button { position: absolute; top: 4px; right: 4px; display: inline-flex; padding: 3px; border: none; border-radius: 50%; background: var(--color-surface); color: var(--color-text); cursor: pointer; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.2)); }
   .ln-foto-chip a.ln-foto-nombre { color: inherit; }

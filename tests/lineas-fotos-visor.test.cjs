@@ -56,13 +56,14 @@ test('el servidor solo quita una foto de esa inspección, con permiso de operar,
   assert.match(servicio, /const fotos = esInspeccion \? fotosDe_\(carpetasFotos_\(doc, id\)\) : \[\];/);
 });
 
-test('clic derecho en la galería y en el visor da las opciones; la foto abre del tamaño final (usuario, 13-oct)', () => {
+test('clic derecho solo en la galería, y su menú no se queda encima del visor; la foto abre del tamaño final (usuario, 13-oct)', () => {
   const pintar = cuerpo(lineas, 'function pintarInspeccion(detalle, id)', '    /** Desde una bitácora');
   assert.ok(pintar.includes("a.addEventListener('contextmenu'"), 'galería');
   for (const t of ["texto: 'Ampliar'", "texto: 'Abrir en Drive'", "texto: 'Quitar foto', peligro: true"]) assert.ok(pintar.includes(t), t);
   const visor = cuerpo(lineas, 'function verFotos(fotos, inicio, opciones)', '    /**\n     * Lo que va al servidor');
-  assert.ok(visor.includes("img.addEventListener('contextmenu'"), 'visor');
-  assert.ok(visor.includes("menuFlotante(img, items, { x: ev.clientX, y: ev.clientY });"));
+  assert.ok(!visor.includes("addEventListener('contextmenu'"), 'el visor no tiene clic derecho propio');
+  assert.ok(visor.includes('cerrarMenusFlotantes();'), 'al abrir el visor se cierra el menú de la galería');
+  assert.ok(lineas.includes("const fuera = (ev) => { if (!menu.contains(ev.target) && (punto || !ancla.contains(ev.target))) cerrar(); };"));
   assert.ok(visor.includes("if (document.querySelector('.ln-menu-flotante')) return;"), 'Escape cierra primero el menú');
   assert.ok(lineas.includes("function menuFlotante(ancla, items, punto) {"));
   assert.ok(lineas.includes("menu.style.zIndex = '900';"), 'el menú por encima del visor');

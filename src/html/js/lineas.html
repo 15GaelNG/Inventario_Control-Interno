@@ -401,9 +401,14 @@
     }
 
     /** Menú flotante con el mismo aspecto que el ⋮ de las tablas. items = [{ icono, texto, alHacer, separador, peligro }] */
+    /** Cierra los menús de opciones abiertos (con sus escuchas). */
+    function cerrarMenusFlotantes() {
+      document.querySelectorAll('.ln-menu-flotante').forEach((m) => (m._cerrar ? m._cerrar() : m.remove()));
+    }
+
     /** Menú de opciones junto a `ancla`; con `punto` ({ x, y }, clic derecho), donde está el cursor y por encima del visor. */
     function menuFlotante(ancla, items, punto) {
-      document.querySelectorAll('.ln-menu-flotante').forEach((m) => m.remove());
+      cerrarMenusFlotantes();
       if (!items.length) return;
       const menu = document.createElement('div');
       menu.className = 'dt-popover dt-menu ln-menu-flotante';
@@ -427,7 +432,8 @@
         document.removeEventListener('mousedown', fuera, true);
         document.removeEventListener('keydown', tecla, true);
       };
-      const fuera = (ev) => { if (!menu.contains(ev.target) && !ancla.contains(ev.target)) cerrar(); };
+      const fuera = (ev) => { if (!menu.contains(ev.target) && (punto || !ancla.contains(ev.target))) cerrar(); };
+      menu._cerrar = cerrar;
       const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
       document.addEventListener('mousedown', fuera, true);
       document.addEventListener('keydown', tecla, true);
@@ -1611,8 +1617,8 @@
         const lista = caja.querySelector('.ln-ine-lista');
         pintarRegistrada(caja);
         lista.innerHTML = s.pdf
-          ? '<span class="ln-foto-chip">' + icono('file-text', 'ln-icon-sm') + '<a class="ln-foto-nombre" href="' + esc(s.pdf.url) + '" target="_blank" rel="noopener">' + esc(s.pdf.archivo.name) + '</a>' +
-            '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>'
+          // El PDF como las fotos, con su carátula (usuario, 13-oct)
+          ? htmlMiniaturaPdf(s.pdf.url, s.pdf.archivo.name, s.pdf.caratula, '<button type="button" data-ine-quitar="pdf" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button>')
           : s.fotos.map((f, i) => '<span class="ln-miniatura"><img src="' + esc(f.url) + '" alt="' + esc(f.archivo.name) + '" data-ver-foto />' +
             '<button type="button" data-ine-quitar="' + i + '" aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button></span>').join('');
         pintarIconos(lista);
@@ -1678,7 +1684,9 @@
         if (archivos.some((a) => a.size > INE_MAX_MB * 1024 * 1024)) return error('El archivo supera ' + INE_MAX_MB + ' MB.');
         if (pdfs.length) {
           vaciar(caja);
-          caja._ine.pdf = { archivo: pdfs[0], url: URL.createObjectURL(pdfs[0]) };
+          const pdf = { archivo: pdfs[0], url: URL.createObjectURL(pdfs[0]), caratula: null };
+          caja._ine.pdf = pdf;
+          caratulaPdf(pdfs[0]).then((c) => { if (caja._ine.pdf === pdf) { pdf.caratula = c; pintar(caja); } }).catch(() => { /* sin carátula: el ícono */ });
         } else {
           if (caja._ine.pdf) vaciar(caja);
           if (caja._ine.fotos.length + fotos.length > INE_MAX_FOTOS) return error('Son hasta ' + INE_MAX_FOTOS + ' fotos.');
@@ -1736,6 +1744,130 @@
     function verFotoEnGrande(url) {
       verFotos([{ grande: url }], 0);
     }
+
+    // ---- Arrastrar y soltar archivos y carátula de los PDF (usuario, 13-oct; pendiente 2.42) ----
+    // Soltar archivos sobre un botón de subir (.ln-upload) o un campo de archivo (.ln-af-archivo) es como elegirlos: se
+    // ponen en su input y se avisa con 'change', así cada pantalla los maneja como siempre. Fuera de esos lugares, dentro
+    // de Líneas, soltar un archivo no hace nada (el navegador no lo abre encima de la app).
+    const ZONAS_SOLTAR = '.ln-upload, .ln-af-archivo';
+    const conArchivos = (ev) => !!(ev.dataTransfer && Array.from(ev.dataTransfer.types || []).indexOf('Files') >= 0);
+    const inputDeZona = (zona) => zona.querySelector('input[type="file"]:not([capture]):not([disabled])');
+    /** ¿El archivo entra en el accept del input? («image/*», «application/pdf», «.pdf»; sin accept, todo). */
+    function aceptaArchivo(input, archivo) {
+      const reglas = String(input.accept || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+      if (!reglas.length) return true;
+      const tipo = String(archivo.type || '').toLowerCase();
+      const nombre = String(archivo.name || '').toLowerCase();
+      return reglas.some((r) => (r.charAt(0) === '.' ? nombre.slice(-r.length) === r
+        : r.slice(-1) === '*' ? tipo.indexOf(r.slice(0, -1)) === 0 : tipo === r)); // «image/» + comodín
+    }
+    let zonaEncima = null;
+    const marcarZona = (zona) => {
+      if (zonaEncima === zona) return;
+      if (zonaEncima) zonaEncima.classList.remove('ln-soltar');
+      zonaEncima = zona;
+      if (zona) zona.classList.add('ln-soltar');
+    };
+    document.addEventListener('dragover', (ev) => {
+      if (!conArchivos(ev) || !ev.target.closest || !ev.target.closest('.ln-modulo')) return;
+      ev.preventDefault();
+      const zona = ev.target.closest(ZONAS_SOLTAR);
+      const input = zona && inputDeZona(zona);
+      ev.dataTransfer.dropEffect = input ? 'copy' : 'none';
+      marcarZona(input ? zona : null);
+    });
+    document.addEventListener('dragleave', (ev) => { if (zonaEncima && !zonaEncima.contains(ev.relatedTarget)) marcarZona(null); });
+    document.addEventListener('drop', (ev) => {
+      if (!conArchivos(ev) || !ev.target.closest || !ev.target.closest('.ln-modulo')) return;
+      ev.preventDefault();
+      marcarZona(null);
+      const zona = ev.target.closest(ZONAS_SOLTAR);
+      const input = zona && inputDeZona(zona);
+      if (!input) return;
+      const archivos = Array.from(ev.dataTransfer.files || []);
+      const sirven = archivos.filter((a) => aceptaArchivo(input, a)).slice(0, input.multiple ? archivos.length : 1);
+      if (!sirven.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ese tipo de archivo no se puede subir aquí.', 6000); return; }
+      const dt = new DataTransfer();
+      sirven.forEach((a) => dt.items.add(a));
+      input.files = dt.files;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // Carátula (primera hoja) de un PDF, como imagen, con pdf.js; se carga la primera vez que hace falta
+    const URL_PDFJS = 'https:\/\/cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+    let cargandoPdfJs = null;
+    function cargarPdfJs() {
+      if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+      if (!cargandoPdfJs) {
+        cargandoPdfJs = new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = URL_PDFJS + 'pdf.min.js';
+          script.onload = () => {
+            window.pdfjsLib.GlobalWorkerOptions.workerSrc = URL_PDFJS + 'pdf.worker.min.js';
+            resolve(window.pdfjsLib);
+          };
+          script.onerror = () => { cargandoPdfJs = null; reject(new Error('No se pudo cargar el lector de PDF.')); };
+          document.head.appendChild(script);
+        });
+      }
+      return cargandoPdfJs;
+    }
+    /** archivo (File o Blob de un PDF) → promesa con la carátula en data URL (JPEG de `ancho` px). */
+    function caratulaPdf(archivo, ancho) {
+      return Promise.all([cargarPdfJs(), archivo.arrayBuffer()])
+        .then(([pdfjs, datos]) => pdfjs.getDocument({ data: datos }).promise)
+        .then((pdf) => pdf.getPage(1))
+        .then((pagina) => {
+          const vista = pagina.getViewport({ scale: (ancho || 360) / pagina.getViewport({ scale: 1 }).width });
+          const lienzo = document.createElement('canvas');
+          lienzo.width = Math.round(vista.width);
+          lienzo.height = Math.round(vista.height);
+          const ctx = lienzo.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+          return pagina.render({ canvasContext: ctx, viewport: vista }).promise.then(() => lienzo.toDataURL('image/jpeg', 0.85));
+        });
+    }
+    const esPdf = (archivo) => archivo.type === 'application/pdf' || /\.pdf$/i.test(archivo.name || '');
+    /**
+     * Miniatura de un PDF elegido: su carátula (al llegar; mientras, el ícono) con la etiqueta PDF; clic = el PDF en otra
+     * pestaña. `quitar`: el HTML del botón para quitarlo.
+     */
+    function htmlMiniaturaPdf(url, nombre, caratula, quitar) {
+      return '<span class="ln-miniatura ln-miniatura-pdf"><a href="' + esc(url) + '" target="_blank" rel="noopener" title="' + esc(nombre) + '">' +
+        (caratula ? '<img src="' + esc(caratula) + '" alt="' + esc(nombre) + '" />' : icono('file-text')) + '</a>' +
+        '<span class="ln-miniatura-etiqueta">PDF</span>' + (quitar || '') + '</span>';
+    }
+
+    // Campo de archivo (Editar): lo elegido o soltado se ve en miniatura, la foto o la carátula del PDF, con X para quitarlo
+    document.addEventListener('change', (ev) => {
+      const input = ev.target.closest && ev.target.closest('.ln-af-archivo input[type="file"][data-archivo]');
+      if (!input) return;
+      const caja = input.closest('.ln-af-archivo');
+      const anterior = caja.querySelector('.ln-af-vista');
+      if (anterior) { if (anterior._url) URL.revokeObjectURL(anterior._url); anterior.remove(); }
+      const archivo = input.files && input.files[0];
+      if (!archivo) return;
+      const vista = document.createElement('div');
+      vista.className = 'ln-af-vista';
+      vista._url = URL.createObjectURL(archivo);
+      const quitar = '<button type="button" data-af-quitar aria-label="Quitar">' + icono('x', 'ln-icon-sm') + '</button>';
+      const pintar = (caratula) => {
+        vista.innerHTML = esPdf(archivo) ? htmlMiniaturaPdf(vista._url, archivo.name, caratula, quitar)
+          : '<span class="ln-miniatura"><img src="' + esc(vista._url) + '" alt="' + esc(archivo.name) + '" data-ver-foto />' + quitar + '</span>';
+        pintarIconos(vista);
+      };
+      pintar(null);
+      caja.appendChild(vista);
+      if (esPdf(archivo)) caratulaPdf(archivo).then((c) => { if (vista.isConnected) pintar(c); }).catch(() => { /* sin carátula: el ícono */ });
+    });
+    document.addEventListener('click', (ev) => {
+      const b = ev.target.closest && ev.target.closest('[data-af-quitar]');
+      if (!b) return;
+      const caja = b.closest('.ln-af-archivo');
+      const input = caja && caja.querySelector('input[type="file"][data-archivo]');
+      if (input) { input.value = ''; input.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
 
     /** La miniatura de Drive (thumbnailLink, «…=s220») en otro tamaño. */
     const miniaturaDe = (url, lado) => String(url || '').replace(/=s\d+(-[a-z0-9-]+)?$/i, '') + '=s' + lado;
@@ -1833,17 +1965,6 @@
       img.referrerPolicy = 'no-referrer';
       img.addEventListener('click', (ev) => { ev.stopPropagation(); acercar(!escena.classList.contains('ln-visor-cerca'), ev); });
       img.addEventListener('mousemove', (ev) => { if (escena.classList.contains('ln-visor-cerca')) seguir(ev); });
-      // Clic derecho: las opciones de la foto (usuario, 13-oct)
-      img.addEventListener('contextmenu', (ev) => {
-        const f = lista[i];
-        const items = [
-          f.enlace ? { icono: 'external-link', texto: 'Abrir en Drive', alHacer: () => window.open(f.enlace, '_blank', 'noopener') } : null,
-          o.alQuitar ? { icono: 'trash-2', texto: 'Quitar foto', peligro: true, separador: true, alHacer: quitar } : null,
-        ].filter(Boolean);
-        if (!items.length) return;
-        ev.preventDefault();
-        menuFlotante(img, items, { x: ev.clientX, y: ev.clientY });
-      });
       img.addEventListener('error', () => {
         const f = lista[i];
         if (f && f.miniatura && img.src !== f.miniatura) img.src = f.miniatura;
@@ -1855,6 +1976,8 @@
         if (ev.target.closest('[data-cerrar]') || ev.target === escena || ev.target === capa) cerrar();
       });
       document.addEventListener('keydown', tecla, true);
+      // El menú del clic derecho de la galería no se queda encima del visor (usuario, 13-oct); el visor no tiene el suyo
+      cerrarMenusFlotantes();
       document.body.appendChild(capa);
       pintarIconos(capa);
       mostrar();
