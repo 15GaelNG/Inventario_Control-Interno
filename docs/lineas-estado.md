@@ -139,7 +139,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
   dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura
   se recorría y dejaba un cuadro blanco.
-- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`; pendiente 2.41 cerrado):
+- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`):
   - **Visor** (`verFotos(fotos, inicio, opciones)` en `lineas.html`, clase `.ln-visor` en `lineas-estilos.html`; reemplaza
     a `.ln-ine-visor`): pantalla completa oscura con el nombre, «N de M», «Abrir en Drive», «Quitar foto» (solo si la
     llamada pasa `alQuitar`) y X; flechas a los lados y teclas ← → (dan la vuelta), Escape cierra; un clic en la foto la
