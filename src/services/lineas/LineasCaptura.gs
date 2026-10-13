@@ -234,8 +234,9 @@ const LineasCaptura = (function () {
    * RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet).
    * Mejora (pedido del área, 29-sep): los datos del responsable y del equipo vienen de la línea, como en el AppSheet,
    * pero se pueden corregir antes de firmar, igual que en la inspección (listas y autollenado del colaborador). Lo
-   * corregido queda en la responsiva y su PDF; LINEAS TELEFONICAS no cambia (la responsiva no tiene el bot de la
-   * inspección). Solo ID, ID LINEA, NUCO, FECHA RESPONSIVA y NOMBRE CI siguen fijos.
+   * corregido queda en la responsiva y su PDF; al inventario (la responsiva no tiene el bot de la inspección) solo pasan
+   * el color, el bloqueo del equipo y el PIN de WhatsApp (guardarResponsivaEnCandado_). Solo ID, ID LINEA, NUCO, FECHA
+   * RESPONSIVA y NOMBRE CI siguen fijos.
    */
   /** Sugerencias de identificación en la responsiva (usuario, 4-oct: la lista traía números y textos sin sentido; se puede escribir otra). */
   const IDENTIFICACIONES = ['INE', 'LICENCIA DE CONDUCIR'];
@@ -617,6 +618,9 @@ const LineasCaptura = (function () {
       }
       // Con PIN, contraseña o sin bloqueo, el patrón del equipo se borra y su PIN EQUIPO queda el de la responsiva
       if (LineasUtil.bloqueoSinPatron(datos)) { copia['PATRON'] = ''; copia['PIN EQUIPO'] = valores['PIN EQUIPO'] || ''; }
+      // El PIN de WhatsApp es de la línea: el de la responsiva pasa a ella, como el de la inspección (usuario, 13-oct: el
+      // NUCO 1712 se vinculó con su responsiva el 12-oct y el PIN se quedó el de antes hasta corregirlo con Editar)
+      if (obj.linea && 'PIN WHATSAPP' in valores) copia['PIN WHATSAPP'] = valores['PIN WHATSAPP'];
       const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;
 
       // Con identificación, la carpeta de la responsiva ya existe (la suya): su PDF se guarda ahí (destinoPdf_)
