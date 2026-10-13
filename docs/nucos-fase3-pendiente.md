@@ -37,6 +37,26 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
 4. **Respaldos de firmas de Responsiva y Adherente** (`RESPONSIVAS VEHICULARES_Images/`, no ligados en la hoja) →
    `5.-RESPONSIVA/FIRMAS/`. Las firmas TEMP de la firma a distancia se quedan (se borran solas al generar el PDF).
 
+## Avance del 13-oct-2026 (corrida 1: inspecciones de la app)
+
+- Fase 2 confirmada en prod: la inspección del 12-oct del NUCO 649 cayó en `649/4.-INSPECCIONES/2026/4TO TRIMESTRE`.
+- `inspecciones_app.py` (plan / aplicar / verificar / deshacer): mismas reglas que la app (periodo por fecha,
+  `INSPECCION-0088 aaaa-mm-dd.pdf`, firmas y diagramas en `FIRMAS Y DIAGRAMAS` junto a su PDF, `(2)` si el nombre existe).
+  Cada celda se busca por ID INSPECCION y debe seguir igual que en el plan; lo que cambió se salta. Nunca adivina: si la
+  copia del área dice otra fecha u otro periodo, va a Revisar.
+- Piloto aplicado y verificado en 10 NUCO: 22, 25, 60, 205, 258 (bitácora `20261013-141816` y, el 258,
+  `20261013-142100` tras probar el deshacer) y 72, 111, 201, 232, 339 (`20261013-142706`).
+- **Fechas de la homologación del 11-oct.** Tomó la fecha del nombre que el área le puso al PDF y a veces estaba mal.
+  `fechas_insp.py` leyó la fecha impresa de los 1,794 PDF (texto o OCR de Google): 934 coinciden, 27 en mes, 747 sin
+  fecha legible (casi todo escaneos con la fecha a mano), 86 distintas. Corregidas con `corregir_fecha_insp.py` (solo
+  renombra; la carpeta entera si es POR <MOTIVO> <fecha> o el periodo de una sola inspección): 5 confirmadas por la app
+  (217, 462, 301, 196, 320; bitácora `20261013-143529-fecha-insp`) y 21 "seguras" leídas del texto del PDF, 1 a 3 días,
+  mismo periodo (`20261013-145504-fecha-insp`).
+- **Decisión del usuario (13-oct):** las 60 restantes (OCR o una fecha dudosa) se quedan con el nombre del archivo: en
+  15 revisadas a mano, el nombre siempre era el bueno. Regla: **una fecha leída con OCR o de un campo dudoso nunca
+  corrige al nombre del archivo**.
+- Falta: foto nueva, plan, revisión y aplicar el resto.
+
 ## También en el radar (no se hacen sin preguntar)
 
 - Verificaciones: 106 archivos que no son verificación; certificados rescatables (NUCO 196, 267, 252); probables
