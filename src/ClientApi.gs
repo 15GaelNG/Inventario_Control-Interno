@@ -925,6 +925,7 @@ function mapaCompleto_() {
       columnas: [{ origen: l.columna, destino: l.columna, calculada: true }],
       // Con qué se reconoce el renglón en la pantalla: el folio del vehículo, el número de caja…
       llaveRegistro: l.etiqueta,
+      rol: l.rol,
       sinDueno: null,
       notaColumnas: null,
       huerfanaEsperada: 'un responsable que no es persona (BAJA VEHICULAR, DONACIÓN, un código de desarrollo…)',
