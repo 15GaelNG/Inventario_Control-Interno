@@ -2108,7 +2108,8 @@
    *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
-    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null, devolverPrestamo: false }, opciones);
+    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null,
+      regenerarLiga: false, regenerarLigaJefe: false, devolverPrestamo: false }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
@@ -2131,6 +2132,15 @@
     }
     if (o.copiarLigaJefe) {
       html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLigaJefe) + '" title="Copiar liga del jefe directo">' + Iconos.svg('copiar') + '</button>';
+    }
+    // regenerarLiga/regenerarLigaJefe: booleano (no el token) -- misma condición que
+    // copiarLiga/copiarLigaJefe (sigue PENDIENTE). Botón manual: la persona decide cuándo pedir
+    // una liga nueva (la de antes venció o se perdió), no un trigger automático.
+    if (o.regenerarLiga) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-regenerar-liga="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Generar una liga nueva del responsable/adherente (la anterior deja de servir)">' + Iconos.svg('refresh-ccw') + '</button>';
+    }
+    if (o.regenerarLigaJefe) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-regenerar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Generar una liga nueva del jefe directo (la anterior deja de servir)">' + Iconos.svg('refresh-ccw') + '</button>';
     }
     // devolverPrestamo: Préstamo Vehicular en curso -- un clic regresa el vehículo a quien lo
     // tenía antes, sin pedir firma ni generar PDF (ver devolverPrestamoFicha).
@@ -3384,6 +3394,26 @@
       }
     }
 
+    /** "Generar nueva liga" (botón manual): la anterior queda muerta en cuanto se genera la
+     *  nueva (apiFirmaRemotaRegenerarLiga sobrescribe el token/la fecha de expira del mismo
+     *  registro) -- se pide confirmar antes porque no hay vuelta atrás, y se repinta la pestaña
+     *  después (el token cambió, aunque no se vea distinto en pantalla). */
+    async function regenerarLigaFicha_(tipo, quien, id, vResumen) {
+      const ok = await Confirmar.pedir({
+        titulo: 'Generar nueva liga',
+        mensaje: 'La liga anterior deja de funcionar en cuanto generes la nueva. ¿Continuar?',
+        textoConfirmar: 'Generar nueva liga',
+      });
+      if (!ok) return;
+      try {
+        mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, tipo, id, quien));
+        toastExito('Liga generada');
+        abrirFichaVehiculo(vResumen, tipo === 'responsiva' ? 'responsiva' : 'adherente', true);
+      } catch (err) {
+        toastError('No se pudo generar la liga: ' + err.message);
+      }
+    }
+
     /** Editar verificación: 3 campos, actualiza campo por campo (mismo que su
      *  módulo -- guardarCambiosCampoPorCampo + apiActualizarCampoVerificacion). */
     function abrirEditarVerificacionFicha(v, vResumen) {
@@ -3728,6 +3758,8 @@
                 eliminar: puedeEditarModulo('responsiva-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                regenerarLiga: puedeEditarModulo('responsiva-vehicular') && !!r.TOKEN_FIRMA,
+                regenerarLigaJefe: puedeEditarModulo('responsiva-vehicular') && !!r.TOKEN_FIRMA_JEFE,
                 devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
               }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
@@ -3748,6 +3780,8 @@
                 eliminar: puedeEditarModulo('adherente-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                regenerarLiga: puedeEditarModulo('adherente-vehicular') && !!r.TOKEN_FIRMA,
+                regenerarLigaJefe: puedeEditarModulo('adherente-vehicular') && !!r.TOKEN_FIRMA_JEFE,
               }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
             puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
@@ -3812,6 +3846,12 @@
         });
         detalle.querySelectorAll('[data-ficha-copiar-liga-jefe]').forEach((btn) => {
           btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLigaJefe, 'jefe', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-regenerar-liga]').forEach((btn) => {
+          btn.addEventListener('click', () => regenerarLigaFicha_(btn.dataset.fichaRegenerarLiga, 'principal', btn.dataset.id, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-regenerar-liga-jefe]').forEach((btn) => {
+          btn.addEventListener('click', () => regenerarLigaFicha_(btn.dataset.fichaRegenerarLigaJefe, 'jefe', btn.dataset.id, vResumen));
         });
         detalle.querySelectorAll('[data-ficha-devolver-prestamo]').forEach((btn) => {
           btn.addEventListener('click', () => devolverPrestamoFicha(btn.dataset.id, vResumen));

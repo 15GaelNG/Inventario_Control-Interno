@@ -376,6 +376,72 @@ test('la liga usa el despliegue público si está configurado (Config.urlFirmaPu
   assert.ok(res.liga.startsWith('https://script.google.com/macros/s/PUBLICO/exec'));
 });
 
+// ---------------------------------------------------------------------------- regenerarLiga ("Generar nueva liga")
+
+test('regenerarLiga: token distinto al anterior, expira +5 días, y la liga coincide con ligaDeToken del token nuevo', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  const tokenViejo = llamadas.insert[0]['TOKEN FIRMA'];
+
+  const ahora = Date.now();
+  const liga = contexto.Servicio.regenerarLiga('tok', id, 'principal');
+
+  const tokenNuevo = llamadas.insert[0]['TOKEN FIRMA'];
+  assert.notEqual(tokenNuevo, tokenViejo);
+  assert.equal(liga, contexto.Servicio.ligaDeToken('tok', tokenNuevo, 'principal'));
+  const expira = new Date(llamadas.insert[0]['TOKEN FIRMA EXPIRA']).getTime();
+  assert.ok(expira > ahora + 4 * 24 * 60 * 60 * 1000 && expira <= ahora + 5 * 24 * 60 * 60 * 1000 + 1000);
+});
+
+test('regenerarLiga: el token viejo deja de servir en cuanto se genera el nuevo', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+  const tokenViejo = llamadas.insert[0]['TOKEN FIRMA'];
+
+  contexto.Servicio.regenerarLiga('tok', id, 'principal');
+
+  assert.equal(contexto.Servicio.obtenerPendientePorToken(tokenViejo).vigente, false);
+});
+
+test('regenerarLiga: también funciona del lado del jefe, sin tocar el token del responsable', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  const tokenResponsable = llamadas.insert[0]['TOKEN FIRMA'];
+
+  contexto.Servicio.regenerarLiga('tok', id, 'jefe');
+
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA'], tokenResponsable, 'no toca el token del responsable');
+  assert.ok(contexto.Servicio.obtenerPendientePorToken(tokenResponsable).vigente, 'el del responsable sigue sirviendo');
+});
+
+test('regenerarLiga: truena si la firma ya se completó (ESTADO FIRMA ya no PENDIENTE)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA JEFE': FIRMA_JEFE, 'FIRMA CI': FIRMA_CI });
+  const id = llamadas.insert[0].ID;
+  assert.throws(() => contexto.Servicio.regenerarLiga('tok', id, 'principal'), /ya se completó/);
+});
+
+test('regenerarLiga: truena si el registro no existe', () => {
+  const { contexto } = crearContexto();
+  assert.throws(() => contexto.Servicio.regenerarLiga('tok', 'NO-EXISTE', 'principal'), /No se encontró/);
+});
+
+test('regenerarLiga: revisa permiso de edición antes de tocar nada', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+  let pedido = null;
+  contexto.Permisos.puedeEditar = (token, modulo) => { pedido = modulo; return { nombre: 'TESTER', correo: 't@x.com' }; };
+  contexto.Servicio.regenerarLiga('tok', id, 'principal');
+  assert.equal(pedido, 'responsiva-vehicular');
+});
+
 test('obtenerPendienteJefePorToken: igual de estricto que el del responsable (no existe / ya firmado / vencido)', () => {
   const { contexto, llamadas } = crearContexto();
   assert.equal(contexto.Servicio.obtenerPendienteJefePorToken('no-existe').vigente, false);

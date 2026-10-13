@@ -159,6 +159,26 @@ const ResponsivaVehicularService = (function () {
     return construirLiga_(tokenFirma, quien);
   }
 
+  /** "Generar nueva liga" (botón manual, ficha de Vehículos): token nuevo para una liga
+   *  PENDIENTE que venció (o se perdió) -- sin crear otro registro. El link viejo deja de
+   *  servir solo: buscarPorToken_ ya no lo encuentra en ninguna fila en cuanto se sobrescribe. */
+  function regenerarLiga(token, id, quien) {
+    Permisos.puedeEditar(token, MODULO);
+    const encontrado = SheetUtils.findById(ssId(), SHEET, id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    if (String(encontrado.data['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+      throw new Error('Esta firma ya se completó; no se puede generar una liga nueva.');
+    }
+    const columnaToken = quien === 'jefe' ? 'TOKEN FIRMA JEFE' : 'TOKEN FIRMA';
+    const columnaExpira = quien === 'jefe' ? 'TOKEN FIRMA JEFE EXPIRA' : 'TOKEN FIRMA EXPIRA';
+    const tokenNuevo = Utilities.getUuid();
+    const cambios = {};
+    cambios[columnaToken] = tokenNuevo;
+    cambios[columnaExpira] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
+    SheetUtils.update(ssId(), SHEET, id, cambios, ID_COLUMN);
+    return construirLiga_(tokenNuevo, quien);
+  }
+
   /** El renglón completo (todas sus columnas) por el token vigente de la columna dada;
    *  null si no hay match. */
   function buscarPorToken_(tokenFirma, columna) {
@@ -666,7 +686,7 @@ const ResponsivaVehicularService = (function () {
   }
 
   return {
-    listarPorFolio, listarPorVehiculo, buscarPorId, crear, eliminar, ligaDeToken,
+    listarPorFolio, listarPorVehiculo, buscarPorId, crear, eliminar, ligaDeToken, regenerarLiga,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
     devolverPrestamo,
     PLANTILLA,

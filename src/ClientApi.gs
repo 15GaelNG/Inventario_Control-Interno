@@ -487,6 +487,12 @@ function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
   const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
   return servicio.ligaDeToken(token, tokenFirma, quien);
 }
+// "Generar nueva liga" (botón manual en la ficha, ESTADO FIRMA sigue PENDIENTE pero la liga
+// anterior venció o se perdió): token nuevo sobre el MISMO registro, sin crear otro.
+function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return servicio.regenerarLiga(token, id, quien);
+}
 
 // --- Arqueos ---
 function apiListarAuditItems(token) {
