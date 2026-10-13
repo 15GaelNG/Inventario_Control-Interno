@@ -192,6 +192,8 @@ const MAPA = {
           // que alguien regenere el esquema (ver docs/ids.md).
           claveOrigen: 'FOLIO',
           clave: 'FOLIO VEHICULO',
+          // Nunca por folio (usuario: «serie o NUCO, jamás el folio»; 13-oct: Salud no adivina): sin ID VEHICULO, a mano
+          soloPorId: true,
           alNacer: { 'NUCCO': 'NUCCO' },
           columnas: { 'PLACA': 'PLACA' },
         },
@@ -250,6 +252,7 @@ const MAPA = {
           tipo: 'bitacora',
           claveOrigen: 'FOLIO',
           clave: 'FOLIO',
+          soloPorId: true,   // nunca por folio, igual que VERIFICACIONES
           alNacer: { 'NUCCO': 'NUCCO' },
           columnas: {
             'DEPARTAMENTO': 'DEPARTAMENTO',
@@ -702,7 +705,8 @@ const MAPA = {
               if (idNorm && fk === idNorm) { filas.push(i + 2); porFk++; }
               return;   // tiene FK y no es de este dueño: su llave de negocio no manda
             }
-            if (claveNorm && normalizar_(fila[0]) === claveNorm) { filas.push(i + 2); porClave++; }
+            // soloPorId (VERIFICACIONES, INCIDENCIAS): su llave es el folio, y por folio nunca se empareja
+            if (!copia.soloPorId && claveNorm && normalizar_(fila[0]) === claveNorm) { filas.push(i + 2); porClave++; }
           });
           if (!filas.length) return;
 
@@ -1000,6 +1004,16 @@ const MAPA = {
           if (fk) {
             if (duplicados[campoDueno][fk]) return duplicada(copia.llaveForanea);
             filaOrigen = indice[campoDueno][fk] || null;
+            // Nunca adivina (13-oct): si el ID dice un registro y la llave (la serie, el NUCO) dice otro, no se decide
+            // cuál está mal. El folio no cuenta: no es llave (soloPorId).
+            const claveDelDueno = filaOrigen ? normalizar_(filaOrigen[copia.claveOrigen]) : '';
+            if (filaOrigen && !copia.soloPorId && claveValor && claveDelDueno && claveValor !== claveDelDueno) {
+              duplicadosOmitidos++;
+              anotar(Object.assign({ tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', columna: copia.clave, tenia: claveValor, quedo: claveDelDueno,
+                motivo: 'su ' + copia.llaveForanea + ' es de ' + (limpiar_(filaOrigen[origenDef.llaveDeNegocio]) || fk) + ', cuyo ' +
+                  copia.claveOrigen + ' es ' + claveDelDueno + ', pero aquí dice ' + claveValor + '; corrige el que esté mal' }, base));
+              return;
+            }
             if (filaOrigen) porFk++;
             else if (copia.sinDueno) {
               // Un dueño capturado por AppSheet no trae el vínculo: se busca por la llave de
@@ -1010,7 +1024,7 @@ const MAPA = {
               if (f === 'DUPLICADA') return duplicada(copia.clave);
               if (f) { filaOrigen = f; porClave++; }
             }
-          } else {
+          } else if (!copia.soloPorId) {
             const f = porLaClave(false);
             if (f === 'DUPLICADA') return duplicada(copia.clave);
             if (f) { filaOrigen = f; porClave++; }
@@ -1034,7 +1048,10 @@ const MAPA = {
             huerfanos++;
             anotar(Object.assign(fk
               ? { tipo: 'HUERFANO', columna: copia.llaveForanea, tenia: fk, quedo: '' }
-              : { tipo: 'HUERFANO', columna: copia.clave, tenia: '', quedo: '' }, base));
+              : copia.soloPorId
+                ? { tipo: 'HUERFANO', columna: copia.llaveForanea, tenia: claveValor, quedo: '',
+                  motivo: 'no tiene ' + copia.llaveForanea + ' y por ' + copia.clave + ' no se liga (nunca por folio); captura su ' + copia.llaveForanea }
+                : { tipo: 'HUERFANO', columna: copia.clave, tenia: '', quedo: '' }, base));
             return;
           }
           // Con qué nombre la gente reconoce al dueño (el folio), aunque se haya emparejado por ID
