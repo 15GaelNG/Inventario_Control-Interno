@@ -49,7 +49,9 @@ const CapitalHumano = (function () {
   const MINIMO_RENGLONES = 0.9;
 
   const norm = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase();
-  const claveEmpleo = (numero, nombre) => norm(numero) + '|' + norm(nombre);
+  /** El número de empleado comparable: sin ceros a la izquierda (CH lo mandó como 09099 y la hoja lo tenía como 9099, 13-oct) */
+  const numEmpleo = (v) => norm(v).replace(/^0+(?=\d)/, '');
+  const claveEmpleo = (numero, nombre) => numEmpleo(numero) + '|' + norm(nombre);
   const PERMITIDAS_N = PERMITIDAS.map((c) => String(c).replace(/\s+/g, ' ').trim().toUpperCase());
   /** Una columna que no debe estar en el libro: todo lo que no sea permitida ni la del ID */
   const esSensible = (c) => !!String(c == null ? '' : c).trim() && norm(c) !== COLUMNA && PERMITIDAS_N.indexOf(norm(c)) === -1;
@@ -120,7 +122,7 @@ const CapitalHumano = (function () {
     };
     const nodo = (numero, nombre) => {
       const k = claveEmpleo(numero, nombre);
-      if (!datos[k]) datos[k] = { numero: norm(numero), nombre: norm(nombre) };
+      if (!datos[k]) datos[k] = { numero: numEmpleo(numero), nombre: norm(nombre) };
       raiz(k);
       return k;
     };
@@ -128,7 +130,7 @@ const CapitalHumano = (function () {
     const nombresPorNumero = {};
     const renglones = {};    // empleos que sí son renglón de la lista
     filas.forEach((f) => {
-      const numero = norm(f['No EMPLEADO']);
+      const numero = numEmpleo(f['No EMPLEADO']);
       if (!numero || !norm(f['NOMBRE COMPLETO'])) return;
       renglones[nodo(numero, f['NOMBRE COMPLETO'])] = true;
       (nombresPorNumero[numero] = nombresPorNumero[numero] || {})[norm(f['NOMBRE COMPLETO'])] = true;
@@ -150,9 +152,9 @@ const CapitalHumano = (function () {
     // Regla 3: número anterior
     const avisos = [];
     filas.forEach((f) => {
-      const numero = norm(f['No EMPLEADO']);
+      const numero = numEmpleo(f['No EMPLEADO']);
       const nombre = norm(f['NOMBRE COMPLETO']);
-      const anterior = norm(f['N. EMPLEADO ANTERIOR']);
+      const anterior = numEmpleo(f['N. EMPLEADO ANTERIOR']);
       if (!numero || !nombre || !anterior || anterior === numero) return;
       const otros = nombresPorNumero[anterior];
       if (otros && !otros[nombre]) {
@@ -424,6 +426,13 @@ const CapitalHumano = (function () {
    * Cada hoja que guarda a una persona: de qué columnas sale, en qué columna va su ID y con qué se reconoce el renglón.
    * `persona: true` en una definición de HojaServicio usa la liga de su hoja. opcional: si la pestaña no existe en el
    * libro (LINEAS TELEFONICAS solo vive en el libro de pruebas de Líneas) no es error.
+   *
+   * bitacora: el registro es de un día (quién firmó, quién manejaba, quién pidió): Salud solo llena el ID que falta y
+   * nunca cambia uno que ya está (13-oct). Sin bitacora (VEHICULOS, CAJAS CHICAS) es el responsable de HOY: si cambia, su
+   * ID se actualiza. Al guardar desde la app (conPersona) las dos recalculan el ID si cambia el nombre.
+   *
+   * Una hoja puede tener varias ligas, cada una con su columna (13-oct): la primera es la principal (idPara, columnaPara,
+   * columnasDePersona); conPersona las calcula todas.
    */
   const VEH = () => Config.SPREADSHEET_IDS.VEHICULOS();
   const TEL = () => Config.SPREADSHEET_IDS.TELEFONIA();
@@ -433,21 +442,30 @@ const CapitalHumano = (function () {
       columnaCorreo: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'ID CCH' },
     // Líneas: la persona vive en ASIGNACIONES desde la reestructura (LINEAS TELEFONICAS ya no existe en producción)
     { nombre: 'ASIGNACIONES (persona)', hoja: 'ASIGNACIONES', libro: TEL, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO',
-      columnaCorreo: 'CUENTA GOOGLE', etiqueta: 'ID' },
+      columnaCorreo: 'CUENTA GOOGLE', etiqueta: 'ID', bitacora: true },
     { nombre: 'LINEAS TELEFONICAS (persona)', hoja: 'LINEAS TELEFONICAS', libro: TEL, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO',
       columnaCorreo: 'EMAIL USUARIO', etiqueta: 'NUCO', opcional: true },
-    { nombre: 'RESPONSIVA VEHICULAR (persona)', hoja: 'RESPONSIVA VEHICULAR', libro: VEH, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID' },
-    { nombre: 'ADHERENTE VEHICULAR (persona)', hoja: 'ADHERENTE VEHICULAR', libro: VEH, columnaNombre: 'ADHERENTE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID' },
+    { nombre: 'RESPONSIVA VEHICULAR (persona)', hoja: 'RESPONSIVA VEHICULAR', libro: VEH, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID', bitacora: true },
+    { nombre: 'ADHERENTE VEHICULAR (persona)', hoja: 'ADHERENTE VEHICULAR', libro: VEH, columnaNombre: 'ADHERENTE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID', bitacora: true },
     { nombre: 'REASIGNACIONES (persona entrante)', hoja: 'REASIGNACIONES_VEHICULOS', libro: VEH, columnaNombre: 'Responsable Entrante',
-      columnaNumero: 'No Empleado Entrante', etiqueta: 'ID' },
+      columnaNumero: 'No Empleado Entrante', etiqueta: 'ID', bitacora: true },
+    // Quien entregó el vehículo: la otra mitad de la reasignación
+    { nombre: 'REASIGNACIONES (persona saliente)', hoja: 'REASIGNACIONES_VEHICULOS', libro: VEH, columnaNombre: 'Responsable Saliente',
+      columnaNumero: 'No Empleado Saliente', etiqueta: 'ID', columna: 'ID PERSONA SALIENTE', bitacora: true },
     { nombre: 'INSPECCION VEHICULAR (conductor)', hoja: 'INSPECCION VEHICULAR', libro: VEH, columnaNombre: 'CONDUCTOR', etiqueta: 'ID INSPECCION',
-      columna: 'ID PERSONA CONDUCTOR' },
-    { nombre: 'UBER (persona)', hoja: 'UBER', libro: VEH, columnaNombre: 'NOMBRE COMPLETO', columnaCorreo: 'CORREO ELECTRONICO', etiqueta: 'ID' },
-    { nombre: 'ARQUEOS (responsable)', hoja: 'ARQUEOS', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID ARQUEO' },
-    { nombre: 'TICKETS (solicitante)', hoja: 'TICKETS', libro: VEH, columnaNombre: 'SOLICITANTE', etiqueta: 'TICKET' },
+      columna: 'ID PERSONA CONDUCTOR', bitacora: true },
+    // El responsable del vehículo ese día (no siempre es quien maneja)
+    { nombre: 'INSPECCION VEHICULAR (responsable)', hoja: 'INSPECCION VEHICULAR', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID INSPECCION',
+      columna: 'ID PERSONA RESPONSABLE', bitacora: true },
+    { nombre: 'UBER (persona)', hoja: 'UBER', libro: VEH, columnaNombre: 'NOMBRE COMPLETO', columnaCorreo: 'CORREO ELECTRONICO', etiqueta: 'ID', bitacora: true },
+    { nombre: 'ARQUEOS (responsable)', hoja: 'ARQUEOS', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID ARQUEO', bitacora: true },
+    { nombre: 'TICKETS (solicitante)', hoja: 'TICKETS', libro: VEH, columnaNombre: 'SOLICITANTE', etiqueta: 'TICKET', bitacora: true },
   ];
   const columnaDe_ = (l) => l.columna || COLUMNA;
-  const ligaDe_ = (hoja) => LIGAS.filter((x) => x.hoja === hoja)[0] || null;
+  const ligasDe_ = (hoja) => LIGAS.filter((x) => x.hoja === hoja);
+  const ligaDe_ = (hoja) => ligasDe_(hoja)[0] || null;
+  /** Las columnas de un registro de donde sale la persona de una liga */
+  const columnasDeLiga_ = (l) => [l.columnaNombre, l.columnaNumero, l.columnaCorreo].filter(Boolean);
 
   /**
    * Lo que se escribe donde iría una persona y NO es una persona: es normal, no un error.
@@ -482,14 +500,14 @@ const CapitalHumano = (function () {
     const ix = { porNombre: {}, porNumero: {}, porCorreo: {}, etiqueta: {} };
     const visto = (numero, nombre, id) => {
       agregar(ix.porNombre, nombreComparable(nombre), id);
-      agregar(ix.porNumero, norm(numero), id);
+      agregar(ix.porNumero, numEmpleo(numero), id);
       if (!ix.etiqueta[id]) ix.etiqueta[id] = norm(nombre) + ' · ' + norm(numero);
     };
     ch.filas.forEach((f) => {
       const id = existentes[claveEmpleo(f['No EMPLEADO'], f['NOMBRE COMPLETO'])];
       if (!id) return;
       visto(f['No EMPLEADO'], f['NOMBRE COMPLETO'], id);
-      if (norm(f['N. EMPLEADO ANTERIOR'])) agregar(ix.porNumero, norm(f['N. EMPLEADO ANTERIOR']), id);
+      if (numEmpleo(f['N. EMPLEADO ANTERIOR'])) agregar(ix.porNumero, numEmpleo(f['N. EMPLEADO ANTERIOR']), id);
       const correo = String(f['CORREO EMPRESARIAL'] || '').trim().toLowerCase();
       if (correo.indexOf('@') > 0) agregar(ix.porCorreo, correo, id);
     });
@@ -510,10 +528,15 @@ const CapitalHumano = (function () {
   /**
    * La persona de un responsable: { id, como } si se encontró; si no, { id: '', tipo, motivo } con el tipo que Salud
    * entiende (normal, a mano, homónimos).
+   *
+   * Nunca adivina (usuario, 13-oct): MANDA EL NOMBRE. El correo y el número solo desempatan a dos personas que se llaman
+   * igual. Si el nombre es de una persona y el correo de otra (los correos de puesto: asistente.ci@, especialista.admon…@
+   * pasan de una persona a otra), o el nombre no está en CH pero el correo sí, no se decide: va a mano, diciendo de quién
+   * es cada uno. (Un número de OTRA persona sí se ignora: en VEHICULOS el número quedó viejo al reasignar, 01-oct.)
    */
   function personaDe(ix, numero, nombre, correo) {
     const nom = norm(nombre);
-    const num = norm(numero);
+    const num = numEmpleo(numero);
     const cor = String(correo || '').trim().toLowerCase();
     if (!nom && !num && !cor) return { id: '', tipo: 'VACIO' };
     const comparable = nombreComparable(nom);
@@ -522,15 +545,29 @@ const CapitalHumano = (function () {
     }
     if (/\//.test(nom)) return { id: '', tipo: 'HUERFANO', motivo: 'trae varias personas en la misma celda' };
     const llaves = (m, k) => Object.keys(m[k] || {});
+    const quien = (id) => ix.etiqueta[id] || id;
     const porCorreo = cor ? llaves(ix.porCorreo, cor) : [];
-    if (porCorreo.length === 1) return { id: porCorreo[0], como: 'correo' };
+    const deCorreo = porCorreo.length === 1 ? porCorreo[0] : '';
     const porNombre = comparable ? llaves(ix.porNombre, comparable) : [];
-    if (porNombre.length === 1) return { id: porNombre[0], como: 'nombre' };
+    if (porNombre.length === 1) {
+      if (deCorreo && deCorreo !== porNombre[0]) {
+        return { id: '', tipo: 'CLAVE_DUPLICADA_EN_ORIGEN',
+          motivo: 'el nombre es de ' + quien(porNombre[0]) + ' y el correo ' + cor + ' es de ' + quien(deCorreo) + '; corrige el que esté mal' };
+      }
+      return { id: porNombre[0], como: deCorreo ? 'nombre y correo' : 'nombre' };
+    }
     if (porNombre.length > 1) {
+      if (deCorreo && porNombre.indexOf(deCorreo) !== -1) return { id: deCorreo, como: 'nombre + correo' };
       const desempata = llaves(ix.porNumero, num).filter((i) => porNombre.indexOf(i) !== -1);
       if (desempata.length === 1) return { id: desempata[0], como: 'nombre + número' };
-      return { id: '', tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', motivo: 'hay ' + porNombre.length + ' personas con ese nombre y el número no desempata' };
+      return { id: '', tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', motivo: 'hay ' + porNombre.length + ' personas con ese nombre y ni el número ni el correo desempatan' };
     }
+    // El nombre no está en CH
+    if (nom && deCorreo) {
+      return { id: '', tipo: 'HUERFANO', motivo: '«' + nombre + '» no está en la lista de Capital Humano y el correo ' + cor +
+        ' es de ' + quien(deCorreo) + '; si es esa persona, corrige el nombre' };
+    }
+    if (!nom && deCorreo) return { id: deCorreo, como: 'correo' };
     if (!nom && num) {
       const porNumero = llaves(ix.porNumero, num);
       if (porNumero.length === 1) return { id: porNumero[0], como: 'número' };
@@ -541,7 +578,8 @@ const CapitalHumano = (function () {
   /**
    * Revisa (y con escribir, pone al día) la columna ID PERSONA de las hojas ligadas.
    * Regresa lo mismo que Relaciones.revisar por hoja, para que Salud lo pinte igual:
-   *   DIFERENCIA            le falta su ID PERSONA o ya no es el de su responsable → «Actualizar»
+   *   DIFERENCIA            le falta su ID PERSONA o (en una caché) ya no es el de su responsable → «Actualizar»
+   *   DIFERENCIA_HISTORICA  una bitácora con otro ID del que saldría hoy: el del día se queda → normal
    *   HUERFANO / CLAVE_…     su responsable no se puede ligar → a mano
    *   SIN_DUENO_ESPERADO     dice algo que no es una persona (BAJA VEHICULAR) → normal
    * Nunca escribe un ID vacío encima de uno que había.
@@ -587,6 +625,12 @@ const CapitalHumano = (function () {
         if (p.id) {
           if (p.como === 'correo' || p.como === 'nombre') r.emparejadasPorClave++; else r.emparejadasPorId++;
           if (tenia === p.id) { nuevos.push([p.id]); return; }
+          if (l.bitacora && tenia) {
+            r.diferenciasHistoricas++;
+            entradas.push(Object.assign({ tipo: 'DIFERENCIA_HISTORICA', tenia: ix.etiqueta[tenia] || tenia, quedo: ix.etiqueta[p.id] || p.id }, base));
+            nuevos.push([f[columna]]);
+            return;
+          }
           r.diferencias++;
           entradas.push(Object.assign({ tipo: 'DIFERENCIA', tenia: tenia ? (ix.etiqueta[tenia] || tenia) : '', quedo: ix.etiqueta[p.id] || p.id }, base));
           nuevos.push([cfg.escribir && (!soloFilas || soloFilas.indexOf(fila) !== -1) ? p.id : (f[columna] || '')]);
@@ -619,7 +663,10 @@ const CapitalHumano = (function () {
    * hay IDs (y entonces no se toca nada).
    */
   function idPara(hoja, registro) {
-    const l = ligaDe_(hoja);
+    return idDeLiga_(ligaDe_(hoja), registro);
+  }
+
+  function idDeLiga_(l, registro) {
     if (!l) return null;
     let ix;
     try { ix = indiceGuardado_(); } catch (e) { return null; }
@@ -631,7 +678,7 @@ const CapitalHumano = (function () {
   /** Las columnas que, si cambian, cambian a la persona de un registro de `hoja`. */
   function columnasDePersona(hoja) {
     const l = ligaDe_(hoja);
-    return l ? [l.columnaNombre, l.columnaNumero, l.columnaCorreo].filter(Boolean) : [];
+    return l ? columnasDeLiga_(l) : [];
   }
 
   /** La columna donde va el ID de la persona en `hoja` ('ID PERSONA', o la suya: INSPECCION → ID PERSONA CONDUCTOR) */
@@ -646,22 +693,26 @@ const CapitalHumano = (function () {
    * lo pone al día Salud después. Lo usan HojaServicio (`persona: true`) y los servicios escritos a mano.
    */
   function conPersona(hoja, datos, registro) {
-    const columna = columnaPara(hoja);
-    delete datos[columna];
-    if (!columnasDePersona(hoja).some((c) => datos[c] !== undefined)) return datos;
-    try {
-      const id = idPara(hoja, registro || datos);
-      if (id !== null) datos[columna] = id;
-    } catch (err) {
-      console.error('CapitalHumano: no se pudo calcular la persona de ' + hoja + ': ' + err.message);
-    }
+    // Cada liga de la hoja por su lado (Inspección: conductor y responsable; Reasignaciones: entrante y saliente)
+    ligasDe_(hoja).forEach((l) => {
+      const columna = columnaDe_(l);
+      delete datos[columna];
+      if (!columnasDeLiga_(l).some((c) => datos[c] !== undefined)) return;
+      try {
+        const id = idDeLiga_(l, registro || datos);
+        if (id !== null) datos[columna] = id;
+      } catch (err) {
+        console.error('CapitalHumano: no se pudo calcular la persona de ' + l.nombre + ': ' + err.message);
+      }
+    });
     return datos;
   }
 
   /** Para Datos conectados y Salud: las ligas como si fueran copias del MAPA. */
   function describirLigas() {
+    // rol: lo de entre paréntesis del nombre (conductor, persona saliente…), para que Salud diga de quién es cada tarjeta
     return LIGAS.filter((l) => !l.opcional).map((l) => ({ nombre: l.nombre, hoja: l.hoja, columna: columnaDe_(l), etiqueta: l.etiqueta,
-      desde: [l.columnaCorreo, l.columnaNombre, l.columnaNumero].filter(Boolean) }));
+      rol: (/\(([^)]+)\)/.exec(l.nombre) || [])[1] || 'persona', desde: [l.columnaCorreo, l.columnaNombre, l.columnaNumero].filter(Boolean) }));
   }
 
   // ======================================================================

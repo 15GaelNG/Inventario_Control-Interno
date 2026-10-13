@@ -656,8 +656,18 @@
       "padre": "PERSONAS"
     },
     {
+      "hoja": "REASIGNACIONES_VEHICULOS",
+      "columna": "ID PERSONA SALIENTE",
+      "padre": "PERSONAS"
+    },
+    {
       "hoja": "INSPECCION VEHICULAR",
       "columna": "ID PERSONA CONDUCTOR",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "INSPECCION VEHICULAR",
+      "columna": "ID PERSONA RESPONSABLE",
       "padre": "PERSONAS"
     },
     {

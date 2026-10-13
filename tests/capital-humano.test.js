@@ -294,7 +294,10 @@ console.log('\n8. La cascada: nombre primero, el número solo desempata');
   ok(por('AUT0006').tipo === 'HUERFANO' && /varias personas/.test(por('AUT0006').motivo), 'dos personas en la celda: a mano');
   ok(por('AUT0007').quedo.indexOf('ANA PEREZ') === 0, 'sin título ni acento: Ana');
   ok(por('AUT0008').tipo === 'HUERFANO' && /no está en la lista/.test(por('AUT0008').motivo), 'quien no está en CH: a mano');
-  ok(r['CAJAS CHICAS (persona)'].entradas[0].quedo.indexOf('VANESSA LLERA') === 0, 'Caja Chica: por correo, aunque el nombre venga abreviado');
+  // Nunca adivina (13-oct): «V. LLERA» no está en CH; el correo es de Vanessa, pero eso lo decide una persona
+  const vll = r['CAJAS CHICAS (persona)'].entradas[0];
+  ok(vll.tipo === 'HUERFANO' && /correo vanessa@cm\.mx es de VANESSA LLERA/.test(vll.motivo),
+    'Caja Chica: el nombre no está en CH y el correo sí: a mano, diciendo de quién es el correo — ' + vll.motivo);
   ok(r['LINEAS TELEFONICAS (persona)'].entradas[0].tipo === 'SIN_DUENO_ESPERADO', 'Líneas: un código de desarrollo no es una persona');
   ok(v.diferencias === 4 && !hojas['VEHICULOS'].datos[0].includes('ID PERSONA'), 'el ensayo cuenta 4 por ligar y no crea la columna');
   ok(p['HA00241|JUAN FULGENCIO'].id !== '', '(la lista ya tiene sus IDs)');
@@ -312,13 +315,88 @@ console.log('\n9. Escribiendo: crea la columna, liga, y nunca borra un ID con va
   ok(veh.datos[0].indexOf('ID PERSONA') !== -1, 'creó la columna ID PERSONA');
   ok(ids[0] === p['HA00241|JUAN FULGENCIO'].id && ids[2] === p['AC00002|JOSE LOPEZ'].id, 'escribió los IDs de su persona');
   ok(ids[3] === '' && ids[4] === '' && ids[7] === '', 'los que no se ligan quedan vacíos');
-  // 2, no 3: Líneas solo traía un código de desarrollo, que es normal; no había nada que escribir
-  ok(anotados.length === 2 && anotados.every((a) => a.quien === 'AYRTON'), 'cada hoja que cambió anotó en el log quién lo hizo');
+  // Solo VEHICULOS: Líneas traía un código de desarrollo (normal) y la caja de «V. LLERA» va a mano (13-oct)
+  ok(anotados.length === 1 && anotados.every((a) => a.quien === 'AYRTON'), 'cada hoja que cambió anotó en el log quién lo hizo');
   // Ahora el responsable de AUT0001 cambia a alguien que no está en CH: su ID anterior NO se borra
   veh.datos[1][veh.datos[0].indexOf('RESPONSABLE VEHICULO')] = 'NADIE CONOCIDO';
   const r2 = CH.revisarLigas({ escribir: true, detalle: true });
   ok(colDe(veh, 'ID PERSONA')[0] === p['HA00241|JUAN FULGENCIO'].id, 'un responsable que ya no se liga no borra el ID que había');
   ok(r2['VEHICULOS (persona)'].entradas.some((e) => e.dueno === 'AUT0001' && e.tipo === 'HUERFANO'), 'y se avisa para corregir a mano');
+}
+
+console.log('\n8b. Nunca adivina: nombre de una persona y correo de otra → a mano (prod 13-oct, caja 201)');
+{
+  const hojas = escenarioLigas();
+  const p = personas(hojas);
+  const CH = cargar(hojas);
+  hojas['CAJAS CHICAS'] = hojaFalsa(['ID', 'ID CCH', 'RESPONSABLE DE CAJA CHICA', 'CORREO ELECTRONICO DE RESPONSABLE', 'ID PERSONA'], [
+    { 'ID CCH': '201', 'RESPONSABLE DE CAJA CHICA': 'PERLA CRUZ', 'CORREO ELECTRONICO DE RESPONSABLE': 'vanessa@cm.mx', 'ID PERSONA': 'PER-VIEJO' },
+    { 'ID CCH': '202', 'RESPONSABLE DE CAJA CHICA': 'VANESSA LLERA', 'CORREO ELECTRONICO DE RESPONSABLE': 'VANESSA@cm.mx' },
+    { 'ID CCH': '203', 'RESPONSABLE DE CAJA CHICA': 'JOSE LOPEZ', 'CORREO ELECTRONICO DE RESPONSABLE': 'nadie@cm.mx' },
+  ]);
+  const r = CH.revisarLigas({ detalle: true })['CAJAS CHICAS (persona)'];
+  const de = (caja) => r.entradas.filter((e) => e.dueno === caja)[0];
+  ok(de('201').tipo === 'CLAVE_DUPLICADA_EN_ORIGEN' && /el nombre es de PERLA CRUZ.*el correo vanessa@cm\.mx es de VANESSA LLERA/.test(de('201').motivo),
+    'nombre de Perla y correo de Vanessa: a mano, con los dos nombres — ' + de('201').motivo);
+  ok(de('202').tipo === 'DIFERENCIA' && de('202').quedo.indexOf('VANESSA LLERA') === 0, 'nombre y correo de la misma persona: se liga');
+  ok(de('203').tipo === 'CLAVE_DUPLICADA_EN_ORIGEN', 'homónimos con un correo que no es de ninguno: no se adivina');
+  CH.revisarLigas({ escribir: true });
+  ok(colDe(hojas['CAJAS CHICAS'], 'ID PERSONA')[0] === 'PER-VIEJO', 'y el ID que tenía la 201 no se cambió ni se borró');
+  ok(colDe(hojas['CAJAS CHICAS'], 'ID PERSONA')[1] === p['HA00059|VANESSA LLERA'].id, 'la 202 sí quedó ligada');
+}
+
+console.log('\n9b. Bitácora vs caché: en una bitácora solo se llena el ID que falta; el que ya está, se queda (13-oct)');
+{
+  const hojas = escenarioLigas();
+  const p = personas(hojas);
+  const otro = p['AC00001|JOSE LOPEZ'].id;
+  hojas['TICKETS'] = hojaFalsa(['ID', 'TICKET', 'SOLICITANTE', 'ID PERSONA'], [
+    { TICKET: 'T-1', SOLICITANTE: 'PERLA CRUZ', 'ID PERSONA': '' },        // vacío: se llena
+    { TICKET: 'T-2', SOLICITANTE: 'PERLA CRUZ', 'ID PERSONA': otro },      // el del día dice otra persona: se queda
+  ]);
+  // VEHICULOS es caché: un ID que ya no es el de su responsable SÍ se corrige
+  const veh = hojas['VEHICULOS'];
+  veh.datos[0].push('ID PERSONA');
+  veh.datos.forEach((r, i) => { if (i) r.push(i === 1 ? otro : ''); });
+  const CH = cargar(hojas);
+  const ensayo = CH.revisarLigas({ detalle: true });
+  const t = ensayo['TICKETS (solicitante)'];
+  ok(t.diferencias === 1 && t.diferenciasHistoricas === 1, 'TICKETS: 1 por llenar y 1 histórico: ' + JSON.stringify([t.diferencias, t.diferenciasHistoricas]));
+  ok(t.entradas.some((e) => e.tipo === 'DIFERENCIA_HISTORICA' && e.dueno === 'T-2'), 'el histórico sale como «Todo bien», no como «Actualizar»');
+  CH.revisarLigas({ escribir: true });
+  const ids = colDe(hojas['TICKETS'], 'ID PERSONA');
+  ok(ids[0] === p['CIB00223|PERLA CRUZ'].id, 'el vacío se llenó con su persona');
+  ok(ids[1] === otro, 'el que ya estaba no se tocó (es quien pidió ese día)');
+  ok(colDe(veh, 'ID PERSONA')[0] === p['HA00241|JUAN FULGENCIO'].id, 'en VEHICULOS (caché) el ID viejo sí se corrigió a su responsable de hoy');
+}
+
+console.log('\n9c. Dos personas en una hoja: cada una en su columna (13-oct: Reasignaciones e Inspección)');
+{
+  const hojas = escenarioLigas();
+  const p = personas(hojas);
+  const CH = cargar(hojas);
+  // Al guardar: las dos se calculan; los IDs que mande el cliente se ignoran
+  const reas = CH.conPersona('REASIGNACIONES_VEHICULOS', { 'Responsable Entrante': 'PERLA CRUZ', 'Responsable Saliente': 'JUAN FULGENCIO',
+    'No Empleado Saliente': 'HA00241', 'ID PERSONA SALIENTE': 'PER-TRAMPA' });
+  ok(reas['ID PERSONA'] === p['CIB00223|PERLA CRUZ'].id && reas['ID PERSONA SALIENTE'] === p['HA00241|JUAN FULGENCIO'].id,
+    'reasignación: el entrante en ID PERSONA y el saliente en ID PERSONA SALIENTE');
+  const insp = CH.conPersona('INSPECCION VEHICULAR', { CONDUCTOR: 'PERLA CRUZ', RESPONSABLE: 'JUAN FULGENCIO' });
+  ok(insp['ID PERSONA CONDUCTOR'] === p['CIB00223|PERLA CRUZ'].id && insp['ID PERSONA RESPONSABLE'] === p['HA00241|JUAN FULGENCIO'].id,
+    'inspección: el conductor y el responsable, cada uno en su columna');
+  const solo = CH.conPersona('INSPECCION VEHICULAR', { CONDUCTOR: 'PERLA CRUZ' }, { CONDUCTOR: 'PERLA CRUZ', RESPONSABLE: 'JUAN FULGENCIO' });
+  ok(!('ID PERSONA RESPONSABLE' in solo) && solo['ID PERSONA CONDUCTOR'], 'si solo cambia el conductor, el ID del responsable no se toca');
+  ok(CH.columnaPara('INSPECCION VEHICULAR') === 'ID PERSONA CONDUCTOR', 'la liga principal sigue siendo la misma (columnaPara)');
+  // Salud: cada liga es su propia tarjeta y escribe su propia columna
+  hojas['REASIGNACIONES_VEHICULOS'] = hojaFalsa(['ID', 'Responsable Entrante', 'No Empleado Entrante', 'Responsable Saliente', 'No Empleado Saliente'], [
+    { ID: 'RVE-1', 'Responsable Entrante': 'PERLA CRUZ', 'Responsable Saliente': 'JUAN FULGENCIO' },
+  ]);
+  const r = CH.revisarLigas({ detalle: true });
+  ok(r['REASIGNACIONES (persona entrante)'].diferencias === 1 && r['REASIGNACIONES (persona saliente)'].diferencias === 1,
+    'Salud ve dos tarjetas en Reasignaciones (entrante y saliente)');
+  CH.revisarLigas({ escribir: true, hojas: ['REASIGNACIONES (persona saliente)'] });
+  const h = hojas['REASIGNACIONES_VEHICULOS'];
+  ok(colDe(h, 'ID PERSONA SALIENTE')[0] === p['HA00241|JUAN FULGENCIO'].id && h.datos[0].indexOf('ID PERSONA') === -1,
+    'actualizar la del saliente crea y llena solo ID PERSONA SALIENTE');
 }
 
 console.log('\n10. Actualizar solo los seleccionados');
@@ -424,6 +502,26 @@ console.log('\n14b. cargar: solo entran las columnas permitidas (el Excel de CH 
   ok(enc.indexOf('TELEFONO') !== -1 && enc.indexOf('RAZON SOCIAL') !== -1, 'lo permitido sí (teléfono, razón social)');
   ok(!/012345678901234567|CURP-NUEVO|CURP-VIEJO|CALLE 1/.test(JSON.stringify(h.datos)), 'ni sus valores, tampoco los que ya estaban en la hoja');
   ok(['CLABE', 'BANCO', 'CURP', 'CALLE/NUMERO', 'NÚMERO DE CUENTA'].every((c) => r.quitadas.indexOf(c) !== -1), 'y lo dice: ' + r.quitadas.join(', '));
+}
+
+console.log('\n14c. cargar: el número con ceros a la izquierda es el mismo empleo (prod 13-oct: 9099 en la hoja, 09099 en el Excel)');
+{
+  const hojas = escenario();
+  hojas['COLABORADORES ACTUALIZADO'].datos.push(['9099', 'HECTOR ANGUIANO', '', '17/11/2002', 'Baja', 'GPH']);
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  const id = personas(hojas)['9099|HECTOR ANGUIANO'].id;
+  const filas = archivoDelEscenario(hojas).map((r) => (r[0] === '9099' ? ['09099'].concat(r.slice(1)) : r));
+  const r = CH.cargar('tok', archivo(ENC_ARCHIVO, filas), { escribir: true });
+  ok(r.nuevos === 0 && r.empleosNuevos === 0 && r.faltan === 0, 'ni empleo nuevo ni "no vino": ' + JSON.stringify([r.nuevos, r.empleosNuevos, r.faltan]));
+  const p = personas(hojas);
+  ok(p['09099|HECTOR ANGUIANO'] && p['09099|HECTOR ANGUIANO'].id === id && !p['9099|HECTOR ANGUIANO'],
+    'queda un solo renglón, como lo trae el Excel, con el mismo ID');
+  ok(CH.idPara('VEHICULOS', { 'RESPONSABLE VEHICULO': 'HECTOR ANGUIANO', 'NO EMPLEADO': '9099' }) === id, 'y se encuentra por 9099');
+  // Lo que ya quedó repetido en prod (9099 y 09099, mismo ID): la siguiente carga deja uno
+  hojas['COLABORADORES ACTUALIZADO'].datos.push(hojas['COLABORADORES ACTUALIZADO'].datos.find((x) => x[0] === '09099').map((v, i) => (i ? v : '9099')));
+  CH.cargar('tok', archivo(ENC_ARCHIVO, filas), { escribir: true });
+  ok(hojas['COLABORADORES ACTUALIZADO'].datos.filter((x) => /HECTOR/.test(x[1])).length === 1, 'el repetido de antes se va');
 }
 
 console.log('\n15. cargar: nunca borra a nadie; rechaza lo que no es la lista completa');
