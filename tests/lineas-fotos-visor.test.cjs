@@ -5,7 +5,7 @@ const path = require('path');
 
 // Fotos de la inspección (usuario, 13-oct; pendiente 2.41): clic = visor en la misma pantalla (ampliar, pasar entre
 // fotos, acercar) en vez de Drive, y quitar una foto enviada por error (a la papelera, con comentario en el historial).
-const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
+const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/\r/g, '');
 const lineas = read('src/html/js/lineas.html');
 const servicio = read('src/services/TelefoniaService.gs');
 const cuerpo = (texto, inicio, fin) => texto.slice(texto.indexOf(inicio), texto.indexOf(fin, texto.indexOf(inicio)));
