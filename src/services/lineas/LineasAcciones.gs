@@ -191,5 +191,6 @@ const LineasAcciones = (function () {
     return { tocados: tocados, anteriorACancelar: anteriorACancelar };
   }
 
-  return { reasignar, vincular, PERSONA_DE_RESPONSIVA, datoDeCH_ };
+  // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado
+  return { reasignar, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_ };
 })();

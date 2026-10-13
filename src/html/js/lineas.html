@@ -732,6 +732,7 @@
       // Los tipos básicos no existían en el AppSheet: para sus reglas valen como EQUIPO + SIM y LINEA (LineasChecklist.tipoBase)
       if (typeof cond === 'string') return !!CONDICIONES_APPSHEET[cond] && CONDICIONES_APPSHEET[cond](t === 'SIM BASICO' || t === 'LINEA BASICA' ? 'LINEA' : t.replace(/ BASIC[OA]$/, ''));
       if (cond.y) return cond.y.every((c) => cumpleCondicion(c, tipo, valores, ctx));
+      if (cond.o) return cond.o.some((c) => cumpleCondicion(c, tipo, valores, ctx));
       if (cond.tipoLleno) return !!t;
       if (cond.tipoEn) return cond.tipoEn.indexOf(t) >= 0;
       if (cond.tipoNoEn) return cond.tipoNoEn.indexOf(t) < 0;
