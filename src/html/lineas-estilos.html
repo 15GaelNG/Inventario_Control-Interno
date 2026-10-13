@@ -744,7 +744,8 @@
   .ln-visor-boton[hidden] { display: none; }
   .ln-visor-quitar:hover { background: var(--color-danger); border-color: var(--color-danger); }
   .ln-visor-escena { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px 64px; overflow: hidden; cursor: zoom-out; }
-  .ln-visor-escena img { max-width: 100%; max-height: 100%; object-fit: contain; cursor: zoom-in; transition: transform .15s ease; }
+  /* La foto llena el espacio desde que abre: la miniatura se ve del tamaño final y luego llega la grande (13-oct) */
+  .ln-visor-escena img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; transition: transform .15s ease; }
   .ln-visor-cerca img { transform: scale(2.5); cursor: zoom-out; }
   .ln-visor-flecha { position: absolute; top: 50%; transform: translateY(-50%); display: inline-flex; padding: 10px; border: none; border-radius: 50%;
     background: rgba(255,255,255,.14); color: #fff; cursor: pointer; }

@@ -401,7 +401,8 @@
     }
 
     /** Menú flotante con el mismo aspecto que el ⋮ de las tablas. items = [{ icono, texto, alHacer, separador, peligro }] */
-    function menuFlotante(ancla, items) {
+    /** Menú de opciones junto a `ancla`; con `punto` ({ x, y }, clic derecho), donde está el cursor y por encima del visor. */
+    function menuFlotante(ancla, items, punto) {
       document.querySelectorAll('.ln-menu-flotante').forEach((m) => m.remove());
       if (!items.length) return;
       const menu = document.createElement('div');
@@ -413,8 +414,14 @@
       document.body.appendChild(menu);
       pintarIconos(menu);
       const r = ancla.getBoundingClientRect();
-      menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
-      menu.style.top = (r.bottom + menu.offsetHeight + 8 > window.innerHeight ? Math.max(8, r.top - menu.offsetHeight - 6) : r.bottom + 6) + 'px';
+      if (punto) {
+        menu.style.zIndex = '900';
+        menu.style.left = Math.max(8, Math.min(punto.x, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = Math.max(8, Math.min(punto.y, window.innerHeight - menu.offsetHeight - 8)) + 'px';
+      } else {
+        menu.style.left = Math.max(8, Math.min(r.right - menu.offsetWidth, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = (r.bottom + menu.offsetHeight + 8 > window.innerHeight ? Math.max(8, r.top - menu.offsetHeight - 6) : r.bottom + 6) + 'px';
+      }
       const cerrar = () => {
         menu.remove();
         document.removeEventListener('mousedown', fuera, true);
@@ -1800,7 +1807,8 @@
         });
       };
       const tecla = (ev) => {
-        // Una ventana abierta encima (Quitar foto) tiene sus teclas; la captura de abajo no
+        // Una ventana o un menú abiertos encima (Quitar foto, clic derecho) tienen sus teclas; la captura de abajo no
+        if (document.querySelector('.ln-menu-flotante')) return;
         if (Array.from(document.querySelectorAll('.modal-backdrop')).some((m) => capa.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
         if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); }
         else if (ev.key === 'ArrowLeft') pasar(-1);
@@ -1809,6 +1817,17 @@
       img.referrerPolicy = 'no-referrer';
       img.addEventListener('click', (ev) => { ev.stopPropagation(); acercar(!escena.classList.contains('ln-visor-cerca'), ev); });
       img.addEventListener('mousemove', (ev) => { if (escena.classList.contains('ln-visor-cerca')) seguir(ev); });
+      // Clic derecho: las opciones de la foto (usuario, 13-oct)
+      img.addEventListener('contextmenu', (ev) => {
+        const f = lista[i];
+        const items = [
+          f.enlace ? { icono: 'external-link', texto: 'Abrir en Drive', alHacer: () => window.open(f.enlace, '_blank', 'noopener') } : null,
+          o.alQuitar ? { icono: 'trash-2', texto: 'Quitar foto', peligro: true, separador: true, alHacer: quitar } : null,
+        ].filter(Boolean);
+        if (!items.length) return;
+        ev.preventDefault();
+        menuFlotante(img, items, { x: ev.clientX, y: ev.clientY });
+      });
       img.addEventListener('error', () => {
         const f = lista[i];
         if (f && f.miniatura && img.src !== f.miniatura) img.src = f.miniatura;
@@ -5291,12 +5310,24 @@
               if (vigente() && pila.length && pila[pila.length - 1].id === id) abrir('inspeccion', id, true);
               return true;
             });
-          detalle.querySelectorAll('[data-foto]').forEach((a) => a.addEventListener('click', (ev) => {
-            if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
-            ev.preventDefault();
+          const ampliar = (f) => verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
+          detalle.querySelectorAll('[data-foto]').forEach((a) => {
             const f = fotos[Number(a.dataset.foto)];
-            verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
-          }));
+            a.addEventListener('click', (ev) => {
+              if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
+              ev.preventDefault();
+              ampliar(f);
+            });
+            // Clic derecho: Ampliar, Abrir en Drive y Quitar foto (usuario, 13-oct)
+            a.addEventListener('contextmenu', (ev) => {
+              ev.preventDefault();
+              menuFlotante(a, [
+                { icono: 'zoom-in', texto: 'Ampliar', alHacer: () => ampliar(f) },
+                { icono: 'external-link', texto: 'Abrir en Drive', alHacer: () => window.open(f.enlace, '_blank', 'noopener') },
+                r.puedeOperar ? { icono: 'trash-2', texto: 'Quitar foto', peligro: true, separador: true, alHacer: () => alQuitar(f) } : null,
+              ].filter(Boolean), { x: ev.clientX, y: ev.clientY });
+            });
+          });
           if (r.puedeOperar) {
             // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
             // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)
