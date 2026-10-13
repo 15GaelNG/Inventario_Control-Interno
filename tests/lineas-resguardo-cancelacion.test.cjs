@@ -123,7 +123,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   t2.R.mandarCancelacion(['LIN-1'], { comentario: 'se cambió de línea' }, usuario, { motivoDelAdendum: true });
   assert.equal(t2.tablas.APP_RESGUARDOS[1].MOTIVO_CANCELACION, 'CANCELACION ANTICIPADA');
   // La hoja que ya existía recibe la columna nueva
-  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION']]);
+  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario, \{ motivoDelAdendum: true \}\);/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
   const cliente = read('src/html/js/lineas.html');
@@ -142,4 +142,56 @@ test('PARA VENTA CON DETALLE vive en resguardo y se ve como los otros de venta',
   assert.match(cliente, /'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta'/);
   assert.match(cliente, /'PARA VENTA CON DETALLE': 'guardado'/);
   assert.match(read('src/html/js/lineas-vinculos.html'), /const VENTA = \['PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'POSIBLE VENTA', 'VENTA'\];/);
+});
+
+// El panel de Pau espeja el inventario mientras el renglón sigue abierto (usuario, 13-oct; plan §5.5)
+test('la bandeja muestra lo de hoy del inventario en lo abierto y deja como quedó lo cerrado', () => {
+  const inv = [
+    equipo('EQU-1', '0012', 'RESGUARDO', { 'EQUIPO': 'MOTO G', 'IMEI': '111', 'ACCESORIOS': 'CAJA, CABLE', 'TIPO': 'EQUIPO + SIM',
+      'NUMERO TELEFONO': '4420000001', 'COMPAÑIA': 'TELCEL', 'RAZON SOCIAL': 'FRO', 'FIN PLAN': '01/12/2026' }),
+    equipo('EQU-2', '0013', 'VENDIDO', { 'EQUIPO': 'IPHONE', 'IMEI': '222' }),
+    equipo('EQU-3', '0014', 'USO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4420000009', 'COMPAÑIA': 'ATT' }),
+  ];
+  const bandeja = [
+    { ID: 'R1', REGISTRO_ID: 'EQU-1', NUCO: '0012', MODELO: 'MOTO', IMEI: '000', NUMERO: '4420000001', COMPANIA: 'ATT', ESTADO: 'EN RESGUARDO',
+      SEDE: 'QUERETARO', ESTATUS_EQUIPO: 'RESGUARDO', COMENTARIO: 'PRIMERO' },
+    { ID: 'R2', REGISTRO_ID: 'EQU-2', NUCO: '0013', MODELO: 'VIEJO', IMEI: '999', ESTADO: 'VENDIDO' },
+    // Cancelación en curso de un número que el equipo ya no tiene: la línea se queda como se mandó
+    { ID: 'R3', REGISTRO_ID: 'EQU-3', NUCO: '0014', NUMERO: '4420000005', COMPANIA: 'TELCEL', ESTADO: '', CANCELACION: 'POR FIRMAR' },
+  ];
+  const t = cargar(inv, bandeja);
+  inv[0]['SEDE'] = 'MERIDA'; // editado en el inventario: la sede es del trámite, no se espeja
+  const filas = t.R.bandeja({ puedeAprobar: true }).filas;
+  const r = (id) => filas.filter((f) => f.ID === id)[0];
+  assert.equal(r('R1').MODELO, 'MOTO G');
+  assert.equal(r('R1').IMEI, '111');
+  assert.equal(r('R1').ACCESORIOS, 'CAJA, CABLE');
+  assert.equal(r('R1').COMPANIA, 'TELCEL');
+  assert.equal(r('R1').RAZON_SOCIAL, 'FRO');
+  assert.equal(r('R1').FIN_PLAN, '01/12/2026');
+  assert.equal(r('R1').SEDE, 'QUERETARO');
+  assert.equal(r('R1').ESTATUS_EQUIPO, 'RESGUARDO');
+  assert.equal(r('R1').COMENTARIO, 'PRIMERO');
+  assert.equal(r('R2').MODELO, 'VIEJO', 'lo vendido se queda como quedó');
+  assert.equal(r('R3').NUMERO, '4420000005');
+  assert.equal(r('R3').COMPANIA, 'TELCEL');
+  assert.equal(r('R3').NUCO, '0014');
+});
+
+test('al mandar a resguardo se guardan los accesorios del equipo en la bandeja', () => {
+  const t = cargar([equipo('EQU-1', '0012', 'USO', { 'ACCESORIOS': 'CAJA, FUNDA' })], []);
+  t.R.mandar(['EQU-1'], { comentario: 'SE GUARDA', porEquipo: { 'EQU-1': pedido('RESGUARDO') }, inspecciones: { 'EQU-1': 'INS-1' } }, usuario);
+  assert.equal(t.tablas.APP_RESGUARDOS[0].ACCESORIOS, 'CAJA, FUNDA');
+  assert.ok(t.escritas.columnas.some((c) => c.indexOf('ACCESORIOS') > 0), 'la columna se agrega a la hoja que ya existe');
+});
+
+test('cada paso de la bandeja espera en su ventana hasta que contesta el servidor', () => {
+  const html = read('src/html/js/lineas.html');
+  const paso = html.slice(html.indexOf('async function paso(accion, filas, opciones)'), html.indexOf('const ACCIONES = {'));
+  assert.match(paso, /pedirDatos\(o\.titulo, o\.mensaje, o\.campos \|\| \[\], o\.boton, \{/);
+  assert.match(paso, /alConfirmar: \(extra\) => llamar\('apiLineasAccionBandejaResguardo'/);
+  assert.doesNotMatch(paso, /Confirmar\.pedir/);
+  const acciones = html.slice(html.indexOf('const ACCIONES = {'), html.indexOf('function filasVista()'));
+  assert.equal((acciones.match(/espera: '/g) || []).length, 6, 'las seis acciones dicen qué están haciendo');
+  assert.match(html, /\{ campo: 'ACCESORIOS', titulo: 'Accesorios'/);
 });

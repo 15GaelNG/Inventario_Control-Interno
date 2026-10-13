@@ -29,6 +29,10 @@
  *   AppSheet, o Pau ya lo entregó a Líneas) entra a la bandeja por recibir: Líneas decide cuáles manda. Cada línea que va
  *   a cancelación lleva su motivo (MOTIVO_CANCELACION): LINEA VENCIDA o CANCELACION ANTICIPADA; en «Mandar a
  *   cancelación» se elige y aquí sale del adendum (vencido o no).
+ * - Usuario, 13-oct: la bandeja espeja el inventario (plan §5.5) mientras su renglón sigue abierto: modelo, IMEI, tipo,
+ *   accesorios, número, compañía, razón social y fin del adendum salen del registro de hoy (`espejo_`, al leer; la hoja
+ *   guarda lo de cuando se mandó). Lo que se llena al mandar (estatus, departamento, sede, oficina, comentario) es del
+ *   trámite y no sigue al inventario. Lo cerrado (entregado, vendido, cancelado) se queda como quedó.
  */
 const LineasResguardos = (function () {
   const TAB = 'APP_RESGUARDOS';
@@ -36,7 +40,7 @@ const LineasResguardos = (function () {
     'ESTATUS_EQUIPO', 'ESTATUS_LINEA', 'DEPARTAMENTO', 'SEDE', 'OFICINA', 'COMENTARIO', 'MOTIVO', 'SOLICITO_CORREO', 'SOLICITO_NOMBRE',
     'ESTADO', 'RECIBIDO_EN', 'RECIBIO', 'ENTREGADO_EN', 'ENTREGADO_A', 'ENTREGA_ASUNTO',
     'CANCELACION', 'ASESOR', 'CARTA_FIRMADA_EN', 'CARTA_ENVIADA_EN', 'CANCELACION_ASUNTO', 'CANCELADA_EN', 'CANCELO', 'ACTUALIZADO_EN',
-    'MOTIVO_CANCELACION'];
+    'MOTIVO_CANCELACION', 'ACCESORIOS'];
 
   const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO' };
   const FASE = { POR_FIRMAR: 'POR FIRMAR', FIRMADA: 'CARTA FIRMADA', ENVIADA: 'CARTA ENVIADA', CANCELADA: 'CANCELADA' };
@@ -128,9 +132,9 @@ const LineasResguardos = (function () {
     if (!LineasDatos.existeTabla(TAB)) { LineasDatos.asegurarPestana(TAB, ENCABEZADOS); return; }
     // La columna se revisa una vez cada 6 h, no en cada guardado (rapidez, 13-oct)
     const cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null;
-    if (cache && cache.get('ln_resguardos_esquema_v1') === '1') return;
-    if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, ['MOTIVO_CANCELACION']);
-    if (cache) cache.put('ln_resguardos_esquema_v1', '1', 21600);
+    if (cache && cache.get('ln_resguardos_esquema_v2') === '1') return;
+    if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, ['MOTIVO_CANCELACION', 'ACCESORIOS']);
+    if (cache) cache.put('ln_resguardos_esquema_v2', '1', 21600);
   }
 
   /** Renglón abierto de la bandeja (PENDIENTE DE RECEPCION o EN RESGUARDO) por ID de registro. */
@@ -325,6 +329,7 @@ const LineasResguardos = (function () {
           LineasDatos.actualizarFila(TAB, abierto._fila, Object.assign({
             'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': tieneLinea ? pedido['ESTATUS LINEA'] : '',
             'DEPARTAMENTO': pedido.DEPARTAMENTO, 'SEDE': pedido.SEDE, 'OFICINA': pedido['OFICINA / DESARROLLO'], 'ACTUALIZADO_EN': ahora,
+            'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
           }, nuevaCancelacion ? { 'CANCELACION': FASE.POR_FIRMAR, 'ASESOR': asesorPara(compania, razon), 'MOTIVO_CANCELACION': motivoCancelacion } : {}));
           hechos.push({ id: id, nuco: nuco, cancelacion: nuevaCancelacion, porRecibir: false });
           return;
@@ -334,7 +339,7 @@ const LineasResguardos = (function () {
         nuevos.push({
           'FECHA': ahora, 'REGISTRO_ID': txt(f['ID']), 'NUCO': nuco, 'NUMERO': tieneLinea ? txt(LineasUtil.col(f, 'NUMERO TELEFONO')) : '',
           'TIPO': tipo, 'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'COMPANIA': compania,
-          'RAZON_SOCIAL': razon, 'FIN_PLAN': vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin,
+          'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')), 'RAZON_SOCIAL': razon, 'FIN_PLAN': vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin,
           'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': tieneLinea ? pedido['ESTATUS LINEA'] : '',
           'DEPARTAMENTO': pedido.DEPARTAMENTO, 'SEDE': pedido.SEDE, 'OFICINA': pedido['OFICINA / DESARROLLO'],
           'COMENTARIO': pedido.COMENTARIO, 'MOTIVO': motivo, 'SOLICITO_CORREO': usuario.correo, 'SOLICITO_NOMBRE': usuario.nombre,
@@ -432,6 +437,7 @@ const LineasResguardos = (function () {
         nuevos.push({
           'FECHA': ahora, 'REGISTRO_ID': txt(f['ID']), 'NUCO': nuco, 'NUMERO': numero, 'TIPO': may(LineasUtil.col(f, 'TIPO')),
           'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'COMPANIA': compania, 'RAZON_SOCIAL': razon,
+          'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
           'FIN_PLAN': vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin, 'ESTATUS_EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')),
           'ESTATUS_LINEA': LINEA_CANCELACION, 'DEPARTAMENTO': txt(LineasUtil.col(f, 'DEPARTAMENTO')), 'SEDE': txt(LineasUtil.col(f, 'SEDE')),
           'OFICINA': txt(LineasUtil.col(f, 'OFICINA / DESARROLLO')), 'COMENTARIO': '', 'MOTIVO': motivo,
@@ -468,9 +474,43 @@ const LineasResguardos = (function () {
     return o;
   }
 
+  /** ¿El renglón sigue abierto? Por recibir o en resguardo, o con su cancelación en curso. */
+  const abierto_ = (r) => [ESTADO.PENDIENTE, ESTADO.RESGUARDO].indexOf(r['ESTADO']) >= 0 ||
+    (!!r['CANCELACION'] && r['CANCELACION'] !== FASE.CANCELADA);
+
+  /**
+   * El renglón abierto con lo de hoy del inventario (ver el encabezado). El equipo (modelo, IMEI, tipo, accesorios)
+   * siempre; la línea (número, compañía, razón social, fin del adendum) si el renglón no va a cancelación o si el
+   * registro sigue con el mismo número: una cancelación es de ese número, aunque el equipo ya tenga otra línea.
+   */
+  function espejo_(r, f, hoy) {
+    if (!f || !abierto_(r)) return r;
+    const tipo = may(LineasUtil.col(f, 'TIPO'));
+    const numero = txt(LineasUtil.col(f, 'NUMERO TELEFONO'));
+    const tieneLinea = !!numero && !/^EQUIPO$/.test(tipo);
+    const o = Object.assign({}, r, {
+      'NUCO': LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || r['NUCO'], 'TIPO': tipo || r['TIPO'],
+      'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
+    });
+    const mismaLinea = LineasUtil.digitos(numero) === LineasUtil.digitos(r['NUMERO']);
+    if (r['CANCELACION'] && !mismaLinea) return o;
+    if (!r['CANCELACION']) o['NUMERO'] = tieneLinea ? numero : '';
+    if (tieneLinea) {
+      o['COMPANIA'] = txt(LineasUtil.col(f, 'COMPAÑIA'));
+      o['RAZON_SOCIAL'] = txt(LineasUtil.col(f, 'RAZON SOCIAL'));
+      o['FIN_PLAN'] = vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin;
+    }
+    return o;
+  }
+
   /** Todos los renglones de la bandeja, del más reciente al más antiguo, y si la persona puede aprobar. */
   function bandeja(usuario) {
-    const filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
+    let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
+    if (filas.some(abierto_)) {
+      const porId = filasPorId_();
+      const hoy = dia(new Date());
+      filas = filas.map((r) => espejo_(r, porId[r['REGISTRO_ID']], hoy));
+    }
     filas.sort((a, b) => (b.FECHA instanceof Date ? b.FECHA.getTime() : 0) - (a.FECHA instanceof Date ? a.FECHA.getTime() : 0));
     return { puedeAprobar: puedeAprobar(usuario), filas: filas, estados: ESTADO, fases: FASE };
   }
@@ -600,6 +640,6 @@ const LineasResguardos = (function () {
     formulario, mandar, mandarCancelacion, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
-    _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_,
+    _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_,
   };
 })();

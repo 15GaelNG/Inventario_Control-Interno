@@ -6388,15 +6388,20 @@
      * opciones }]. Regresa una promesa con { clave: valor } o null si se cancela.
      * opciones.alConfirmar(valores) (promesa): la ventana se queda con la pantalla de espera (opciones.espera) desde el
      * clic hasta que termina; si falla, muestra el error y "Volver" regresa a lo capturado. Regresa lo que regrese.
+     * opciones.detalle: lista de lo que se va a tocar (como Confirmar); opciones.peligro: botón rojo. Sin campos sirve
+     * de confirmación con espera (pasos de la bandeja de Pau, 13-oct).
      */
     function pedirDatos(titulo, mensaje, campos, textoConfirmar, opciones) {
       const o = opciones || {};
+      const detalle = o.detalle || [];
       return new Promise((resolve) => {
         const fondo = document.createElement('div');
         fondo.className = 'modal-backdrop';
         fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px;position:relative">' +
           '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' +
           '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
+          (detalle.length ? '<ul class="confirmar-detalle">' + detalle.slice(0, 50).map((d) => '<li>' + esc(d) + '</li>').join('') +
+            (detalle.length > 50 ? '<li><em>…y ' + miles(detalle.length - 50) + ' más</em></li>' : '') + '</ul>' : '') +
           campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
             // elegir: la lista empieza sin nada elegido («Selecciona…»), como las de los formularios
             (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + (c.elegir ? '<option value="">Selecciona…</option>' : '') +
@@ -6404,7 +6409,7 @@
               : c.area ? '<textarea id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" rows="4">' + esc(c.valor || '') + '</textarea>'
               : '<input type="text" id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" value="' + esc(c.valor || '') + '" autocomplete="off" data-respetar-texto />') + '</div>').join('') +
           '<div class="error-msg" data-error hidden></div>' +
-          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button" data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button"' + (o.peligro ? ' class="danger"' : '') + ' data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
           '<div class="ln-espera" data-espera hidden></div></div>';
         document.body.appendChild(fondo);
         const espera = fondo.querySelector('[data-espera]');
@@ -6462,6 +6467,8 @@
           { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'MODELO', titulo: 'Modelo', tipo: 'texto' },
           { campo: 'IMEI', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          // Lo que se mandó con el equipo (usuario, 13-oct); mientras sigue abierto, lo de hoy del inventario
+          { campo: 'ACCESORIOS', titulo: 'Accesorios', tipo: 'texto', render: (v) => guion(String(v || '').split(',').map((x) => x.trim()).filter(Boolean).join(', ')) },
           { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
@@ -6499,60 +6506,54 @@
         ],
       };
 
-      /** Paso de la bandeja: pide lo necesario, confirma y llama al servidor. */
+      /**
+       * Paso de la bandeja: pide lo necesario (o solo confirma) y llama al servidor. La ventana se queda con la pantalla
+       * de espera desde el clic hasta que contesta, y un error se ve ahí mismo (usuario, 13-oct: antes no se sabía si
+       * estaba en proceso hasta el aviso del final).
+       */
       async function paso(accion, filas, opciones) {
         const o = opciones || {};
-        let extra = {};
-        if (o.campos) {
-          extra = await pedirDatos(o.titulo, o.mensaje, o.campos, o.boton);
-          if (!extra) return;
-        } else {
-          const ok = await Confirmar.pedir({
-            titulo: o.titulo, mensaje: o.mensaje, textoConfirmar: o.boton, peligro: !!o.peligro,
-            detalle: filas.slice(0, 20).map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || '')),
-          });
-          if (!ok) return;
-        }
-        try {
-          const r = await llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra);
-          const omitidos = r.omitidos || [];
-          const avisos = (r.hechos || []).filter((h) => h.aviso);
-          aviso(icono('circle-check') + ' ' + o.hecho + ': ' + miles((r.hechos || []).length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
-            omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
-          avisos.forEach((h) => aviso(icono('triangle-alert', 'ln-alerta') + ' NUCO ' + h.nuco + ': ' + h.aviso, 10000));
-          if (tabla) tabla.limpiarSeleccion();
-          if (o.inventario) memoria.cargadoEn = 0; // el inventario cambió: que Líneas Telefónicas lo vuelva a pedir
-          cargar();
-        } catch (e) {
-          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
-        }
+        const detalle = filas.map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || f.CANCELACION || ''));
+        const r = await pedirDatos(o.titulo, o.mensaje, o.campos || [], o.boton, {
+          detalle: detalle, peligro: !!o.peligro, espera: o.espera || (o.hecho + '…'),
+          alConfirmar: (extra) => llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra),
+        });
+        if (!r) return;
+        const omitidos = r.omitidos || [];
+        const avisos = (r.hechos || []).filter((h) => h.aviso);
+        aviso(icono('circle-check') + ' ' + o.hecho + ': ' + miles((r.hechos || []).length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
+          omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
+        avisos.forEach((h) => aviso(icono('triangle-alert', 'ln-alerta') + ' NUCO ' + h.nuco + ': ' + h.aviso, 10000));
+        if (tabla) tabla.limpiarSeleccion();
+        if (o.inventario) memoria.cargadoEn = 0; // el inventario cambió: que Líneas Telefónicas lo vuelva a pedir
+        cargar();
       }
 
       const ACCIONES = {
         RESGUARDOS: [
           { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1,
             alHacer: (filas) => paso('RECIBIR', filas, { titulo: '¿Confirmas que recibiste ' + miles(filas.length) + ' equipo(s)?',
-              mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos' }) },
+              mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos', espera: 'Recibiendo ' + miles(filas.length) + ' equipo(s)' }) },
           { icono: 'hand-helping', texto: 'Entregar a Líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1,
             alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a Líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
               campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
-              boton: 'Entregar', hecho: 'Entregados' }) },
+              boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
           { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1,
             alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
-              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true }) },
+              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
         ],
         CANCELACIONES: [
           { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1,
             alHacer: (filas) => paso('CARTA_FIRMADA', filas, { titulo: 'Carta firmada', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA FIRMADA.',
               campos: [{ clave: 'asesor', etiqueta: 'Asesor', valor: filas[0].ASESOR || '', opciones: ['KARLA', 'WILBERTO', 'ALFREDO'].indexOf(filas[0].ASESOR) >= 0 || !filas[0].ASESOR ? ['KARLA', 'WILBERTO', 'ALFREDO'] : null }],
-              boton: 'Guardar', hecho: 'Cartas firmadas' }) },
+              boton: 'Guardar', hecho: 'Cartas firmadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) firmada(s)' }) },
           { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1,
             alHacer: (filas) => paso('CARTA_ENVIADA', filas, { titulo: 'Carta enviada al proveedor', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA ENVIADA.',
-              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas' }) },
+              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) enviada(s)' }) },
           { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true,
             alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
               mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
-              peligro: true, hecho: 'Canceladas', inventario: true }) },
+              peligro: true, hecho: 'Canceladas', inventario: true, espera: 'Cancelando ' + miles(filas.length) + ' línea(s)' }) },
         ],
       };
 
