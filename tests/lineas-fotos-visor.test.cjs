@@ -17,7 +17,9 @@ test('la galería de la inspección abre el visor; un video o una foto sin vista
   assert.match(pintar, /verFotos\(enGaleria, enGaleria\.indexOf\(f\), r\.puedeOperar \? \{ alQuitar: alQuitar \} : \{\}\)/);
   assert.match(pintar, /if \(ev\.ctrlKey \|\| ev\.metaKey \|\| ev\.shiftKey \|\| ev\.button === 1\) return;/);
   // Quitar: sin comentario (usuario, 13-oct), ventana por encima del visor, con espera
-  assert.match(pintar, /pedirDatos\('¿Quitar esta foto\?', f\.nombre, \[\], 'Quitar foto', \{/);
+  assert.match(pintar, /pedirDatos\('¿Quitar foto\?', '', \[\], 'Quitar foto', \{/);
+  // La espera de una ventana chica no sale aplastada
+  assert.match(read('src/html/lineas-estilos.html'), /\.modal-card:not\(\.ln-captura-modal\):has\(> \.ln-espera:not\(\[hidden\]\)\) \{ min-height: 280px; \}/);
   assert.match(pintar, /llamar\('apiLineasQuitarFotoInspeccion', id, f\.id, ''\)/);
   assert.match(pintar, /peligro: true, encima: true, espera: 'Quitando la foto'/);
 });

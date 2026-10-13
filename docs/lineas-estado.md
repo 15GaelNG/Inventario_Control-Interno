@@ -139,7 +139,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
   dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura
   se recorría y dejaba un cuadro blanco.
-- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`; pendiente 2.41 cerrado):
+- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`; pendiente 2.41 cerrado):
   - **Visor** (`verFotos(fotos, inicio, opciones)` en `lineas.html`, clase `.ln-visor` en `lineas-estilos.html`; reemplaza
     a `.ln-ine-visor`): pantalla completa oscura con el nombre, «N de M», «Abrir en Drive», «Quitar foto» (solo si la
     llamada pasa `alQuitar`) y X; flechas a los lados y teclas ← → (dan la vuelta), Escape cierra; un clic en la foto la
@@ -150,7 +150,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     del documento; un video o una foto sin vista previa dice «Abrir en Drive» y se abre allá (Ctrl o clic medio también).
     `pedirDatos` acepta `opciones.encima` (z-index 800, por arriba del visor, que es 700).
   - **Quitar foto:** solo con el permiso de operar Líneas (EDICION de lineas-telefonicas). Ventana «¿Quitar foto?» con
-    Cancelar y «Quitar foto» (botón de peligro) y la espera «Quitando la foto»; sin comentario (usuario, 13-oct).
+    Cancelar y «Quitar foto» (botón de peligro) y la espera «Quitando la foto»; sin comentario (usuario, 13-oct). La espera
+    de las ventanas chicas de `pedirDatos` (también las de la bandeja de Pau) tiene un alto mínimo de 280 px para no
+    salir aplastada (`6eec499`).
     `TelefoniaService.quitarFotoInspeccion(token, id, archivoId, comentario)` (`apiLineasQuitarFotoInspeccion`): lee la
     inspección (o la de NUCOS `drive_…`, con la carpeta de NUCOS del mismo día), acepta solo una foto de las carpetas de
     esa inspección (`carpetasFotos_`: la de fotos, la de la inspección y la extra de APP_EVIDENCIAS) que sea foto

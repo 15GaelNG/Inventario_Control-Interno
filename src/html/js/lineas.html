@@ -5280,8 +5280,9 @@
                 htmlSubirFotos('insp-fotos') + '</div>' : ''));
           activarBotonesDocumento(detalle, 'INSPECCION', i, r);
           const enGaleria = fotos.filter(enVisor);
-          // Quitar una foto: a la papelera de Drive y al historial, sin comentario (usuario, 13-oct); la página se vuelve a pintar
-          const alQuitar = (f) => pedirDatos('¿Quitar esta foto?', f.nombre, [], 'Quitar foto', {
+          // Quitar una foto: a la papelera de Drive y al historial, sin comentario ni detalle (usuario, 13-oct); la página se
+          // vuelve a pintar
+          const alQuitar = (f) => pedirDatos('¿Quitar foto?', '', [], 'Quitar foto', {
               peligro: true, encima: true, espera: 'Quitando la foto',
               alConfirmar: () => llamar('apiLineasQuitarFotoInspeccion', id, f.id, ''),
             }).then((res) => {
