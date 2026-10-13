@@ -426,6 +426,26 @@ console.log('\n14b. cargar: solo entran las columnas permitidas (el Excel de CH 
   ok(['CLABE', 'BANCO', 'CURP', 'CALLE/NUMERO', 'NÚMERO DE CUENTA'].every((c) => r.quitadas.indexOf(c) !== -1), 'y lo dice: ' + r.quitadas.join(', '));
 }
 
+console.log('\n14c. cargar: el número con ceros a la izquierda es el mismo empleo (prod 13-oct: 9099 en la hoja, 09099 en el Excel)');
+{
+  const hojas = escenario();
+  hojas['COLABORADORES ACTUALIZADO'].datos.push(['9099', 'HECTOR ANGUIANO', '', '17/11/2002', 'Baja', 'GPH']);
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  const id = personas(hojas)['9099|HECTOR ANGUIANO'].id;
+  const filas = archivoDelEscenario(hojas).map((r) => (r[0] === '9099' ? ['09099'].concat(r.slice(1)) : r));
+  const r = CH.cargar('tok', archivo(ENC_ARCHIVO, filas), { escribir: true });
+  ok(r.nuevos === 0 && r.empleosNuevos === 0 && r.faltan === 0, 'ni empleo nuevo ni "no vino": ' + JSON.stringify([r.nuevos, r.empleosNuevos, r.faltan]));
+  const p = personas(hojas);
+  ok(p['09099|HECTOR ANGUIANO'] && p['09099|HECTOR ANGUIANO'].id === id && !p['9099|HECTOR ANGUIANO'],
+    'queda un solo renglón, como lo trae el Excel, con el mismo ID');
+  ok(CH.idPara('VEHICULOS', { 'RESPONSABLE VEHICULO': 'HECTOR ANGUIANO', 'NO EMPLEADO': '9099' }) === id, 'y se encuentra por 9099');
+  // Lo que ya quedó repetido en prod (9099 y 09099, mismo ID): la siguiente carga deja uno
+  hojas['COLABORADORES ACTUALIZADO'].datos.push(hojas['COLABORADORES ACTUALIZADO'].datos.find((x) => x[0] === '09099').map((v, i) => (i ? v : '9099')));
+  CH.cargar('tok', archivo(ENC_ARCHIVO, filas), { escribir: true });
+  ok(hojas['COLABORADORES ACTUALIZADO'].datos.filter((x) => /HECTOR/.test(x[1])).length === 1, 'el repetido de antes se va');
+}
+
 console.log('\n15. cargar: nunca borra a nadie; rechaza lo que no es la lista completa');
 {
   const hojas = escenario();
