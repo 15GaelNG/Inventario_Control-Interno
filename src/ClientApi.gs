@@ -47,6 +47,10 @@ function apiLogin(correo, password) {
 function apiFotosPerfil(token) {
   return FotosDirectorio.todas(token);
 }
+// Mi perfil (el usuario al pie del menú): lo de quien entró
+function apiMiPerfil(token) {
+  return UsuariosService.miPerfil(token);
+}
 function apiIdentidadGoogle() {
   return Auth.identidadGoogle();
 }

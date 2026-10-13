@@ -68,7 +68,7 @@ plantilla, la función y el módulo existan.
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
 escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
 validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
-`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja` y `Avatar`. Cada
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar` y `Apariencia`. Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
 - **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
@@ -95,6 +95,9 @@ uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
   marques "auto" un campo que se bloquea por otra razón (permisos, lo que se
   eligió, guardando).
 - **Elegir un vehículo por Folio o Nucco → `FolioNucco.ligar`.**
+- **Cómo se ve el sistema (modo claro/oscuro/auto, color, ancho, letra) → `Apariencia`**, el engrane de la
+  barra (`componentes/apariencia.html`). Una opción de la temporada u otra preferencia de la persona va como
+  sección de ese panel (como `Temporada.opciones(cont)`), no como otro botón en la barra.
 - `tests/source-contracts.test.cjs` falla si alguien vuelve a escribir la
   etiqueta "auto" a mano o hace otra copia del par Folio/Nucco.
 - Un componente nuevo se incluye en `src/html/Index.html` antes de los módulos y

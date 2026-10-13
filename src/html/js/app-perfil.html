@@ -1,0 +1,100 @@
+<script>
+  /**
+   * Mi perfil — VISTAS_FUERA_DEL_MENU 'mi-perfil' (plantilla en views/mi-perfil.html). Se llega con
+   * el usuario al pie del menú lateral (.sidebar-usuario en Index.html).
+   *
+   * Sale al instante con lo de la sesión y se completa con apiMiPerfil (UsuariosService.miPerfil):
+   * su renglón de Capital Humano, su cuenta y sus módulos. Va por callServerCacheado: desde la
+   * segunda visita sale con la copia guardada y se refresca por detrás. render() lo pide también
+   * para poner el puesto bajo el nombre del menú.
+   */
+  const NIVELES_PERFIL = { EDICION: 'Edición', LECTURA: 'Lectura' };
+
+  function pedirMiPerfil() {
+    return callServerCacheado('apiMiPerfil', state.token);
+  }
+
+  /** El puesto bajo el nombre, al pie del menú (sin perfil todavía: rol y área de la sesión) */
+  function pintarUsuarioMenu(perfil) {
+    const puesto = document.getElementById('user-puesto');
+    if (!puesto || !state.sesion) return;
+    const ch = perfil && perfil.ch;
+    puesto.textContent = (ch && ch.puesto) || [state.sesion.rol, state.sesion.departamento].filter(Boolean).join(' · ');
+  }
+
+  function initMiPerfil() {
+    pintarPerfil(null);
+    pedirMiPerfil()
+      .then((perfil) => { pintarPerfil(perfil); pintarUsuarioMenu(perfil); })
+      .catch((err) => {
+        const cont = document.getElementById('perfil-modulos');
+        if (cont) cont.innerHTML = '<div class="perfil-vacio"><i data-lucide="circle-alert" class="ico"></i><p>No se pudo cargar tu perfil: ' +
+          escaparHtml((err && err.message) || String(err)) + '</p></div>';
+        refreshIcons();
+      });
+  }
+
+  /** Pinta las dos tarjetas; perfil null = lo que ya se sabe por la sesión, mientras llega */
+  function pintarPerfil(perfil) {
+    const tarjeta = document.getElementById('perfil-tarjeta');
+    const modulos = document.getElementById('perfil-modulos');
+    if (!tarjeta || !modulos || !state.sesion) return;
+    const s = state.sesion;
+    const p = perfil || {};
+    const ch = p.ch || {};
+    const esc = escaparHtml;
+    const cargando = !perfil;
+    const area = ch.area || ch.departamento || p.area || s.departamento || '';
+    const dato = (icono, etiqueta, valor) => valor
+      ? `<li><span class="perfil-datos-ico"><i data-lucide="${icono}" class="ico"></i></span><span><small>${etiqueta}</small><b>${esc(valor)}</b></span></li>`
+      : '';
+    const totalModulos = (p.grupos || []).reduce((n, g) => n + g.modulos.length, 0);
+
+    tarjeta.innerHTML =
+      `<div class="perfil-foto">${Avatar.html(s.correo, s.nombre, { tam: 96 })}</div>` +
+      `<h3 class="perfil-nombre">${esc(s.nombre)}</h3>` +
+      `<p class="perfil-puesto">${esc(ch.puesto || (cargando ? '' : 'Sin puesto en Capital Humano'))}</p>` +
+      (area ? `<span class="perfil-insignia">${esc(area)}</span>` : '') +
+      '<ul class="perfil-datos">' +
+        dato('mail', 'Correo electrónico', s.correo) +
+        dato('briefcase', 'Puesto', ch.puesto) +
+        dato('building-2', 'Área / departamento', [ch.area, ch.departamento].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' · ')) +
+        dato('map-pin', 'Sede / oficina', [ch.sede, ch.oficina].filter(Boolean).join(' · ')) +
+        dato('user-round', 'Jefe directo', ch.jefeDirecto) +
+      '</ul>' +
+      (!cargando && !p.ch ? '<p class="perfil-nota">No encontramos tu correo en la lista de Capital Humano.</p>' : '') +
+      '<div class="perfil-cuenta"><p class="perfil-cuenta-titulo"><i data-lucide="id-card" class="ico"></i>Información de cuenta</p><dl>' +
+        `<div><dt>Rol</dt><dd>${esc(p.rol || s.rol || '—')}</dd></div>` +
+        `<div><dt>No. de empleado</dt><dd>${esc(ch.noEmpleado || '—')}</dd></div>` +
+        `<div><dt>Área de permisos</dt><dd>${esc(p.area || s.departamento || '—')}</dd></div>` +
+        `<div><dt>ID persona</dt><dd>${esc(ch.idPersona || '—')}</dd></div>` +
+      '</dl></div>' +
+      '<div class="perfil-chips">' +
+        `<div class="perfil-chip" style="--perfil-chip:var(--color-success)"><i data-lucide="shield-check" class="ico"></i><div><small>Cuenta</small><b>${cargando ? '…' : (p.activo ? 'Activa' : 'Inactiva')}</b></div></div>` +
+        `<div class="perfil-chip"><i data-lucide="layout-grid" class="ico"></i><div><small>Módulos</small><b>${cargando ? '…' : totalModulos}</b></div></div>` +
+      '</div>' +
+      '<button type="button" class="secondary perfil-apariencia" data-perfil-apariencia><i data-lucide="settings" class="ico"></i>Apariencia</button>';
+    tarjeta.querySelector('[data-perfil-apariencia]').addEventListener('click', () => Apariencia.abrir());
+
+    let h = '<div class="perfil-modulos-cabeza"><div><h3>Mis módulos</h3><p>Lo que puedes ver y editar en el sistema.</p></div></div>';
+    if (cargando) h += '<p class="perfil-cargando">Cargando…</p>';
+    else if (!totalModulos) {
+      h += '<div class="perfil-vacio"><i data-lucide="lock" class="ico"></i><p>Todavía no tienes módulos. Pídeselos a quien administra los permisos.</p></div>';
+    } else {
+      p.grupos.forEach((g) => {
+        h += `<div class="perfil-grupo"><h4><span class="perfil-grupo-ico"><i data-lucide="${esc(g.icono || 'folder')}" class="ico"></i></span>${esc(g.etiqueta)}</h4><div class="perfil-modulos">` +
+          g.modulos.map((m) => `<div class="perfil-modulo"><span>${esc(m.etiqueta)}</span>` +
+            `<span class="perfil-nivel perfil-nivel-${esc(m.nivel)}">${esc(NIVELES_PERFIL[m.nivel] || m.nivel)}</span></div>`).join('') +
+          '</div></div>';
+      });
+    }
+    modulos.innerHTML = h;
+    refreshIcons();
+  }
+
+  // El usuario del menú es un nav-item (navegarA lo atiende con el clic); con el teclado, Enter o espacio
+  document.addEventListener('keydown', (ev) => {
+    const tarjeta = ev.target.closest && ev.target.closest('.sidebar-usuario-tarjeta');
+    if (tarjeta && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); tarjeta.click(); }
+  });
+</script>

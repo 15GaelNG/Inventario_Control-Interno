@@ -63,7 +63,8 @@
     margin: 0; padding: 0; height: 100%;
     background: var(--color-bg);
     color: var(--color-text);
-    font-family: 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
+    /* --letra: la que eligió la persona en Apariencia (componentes/apariencia.html) */
+    font-family: var(--letra, 'Poppins'), 'Poppins', 'Segoe UI', system-ui, -apple-system, sans-serif;
     font-size: 14px;
     /* Que el celular no agrande el texto por su cuenta al girarlo */
     -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
@@ -265,31 +266,31 @@
   .topbar-date {
     font-size: 12.5px; font-weight: 500; color: var(--color-text-muted);
   }
-  .topbar-theme-toggle {
-    display: flex; gap: 6px; background: var(--color-bg); border: 1px solid var(--color-border);
-    border-radius: 999px; padding: 4px;
-  }
-  .topbar-theme-toggle .theme-btn {
-    background: transparent; border: none; color: var(--color-text-muted);
-    width: 30px; height: 30px; border-radius: 999px; padding: 0; font-size: 14px;
-  }
-  .topbar-theme-toggle .theme-btn.active { background: var(--color-primary); color: #fff; }
 
-  /* Usuario + cerrar sesión — antes vivían al fondo del sidebar, ahora aquí. */
-  .topbar-user-menu {
-    display: flex; align-items: center; gap: 10px;
-    padding-left: 14px; border-left: 1px solid var(--color-border);
+  /* Usuario + cerrar sesión, al pie del menú lateral (usuario, 13-oct; antes en la barra de arriba).
+     Recogido: solo la foto, centrada como los íconos; abierto: nombre, puesto y salir. Lleva a Mi perfil. */
+  .sidebar-usuario {
+    display: flex; align-items: center; gap: 6px; margin-top: 8px; padding-top: 10px;
+    border-top: 1px solid var(--color-sidebar-border);
   }
-  .topbar-user {
-    font-size: 12.5px; font-weight: 600; color: var(--color-text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 170px;
+  .sidebar-usuario-tarjeta { flex: 1; min-width: 0; padding: 6px 8px; }
+  .sidebar-usuario-tarjeta .avatar { box-shadow: 0 0 0 2px rgba(180,161,105,.55); }
+  .sidebar-usuario-texto { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+  .sidebar-usuario-texto b {
+    font-size: 12px; font-weight: 600; color: var(--color-sidebar-text-strong);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .topbar-logout-btn {
-    background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
-    width: 34px; height: 34px; border-radius: 999px; padding: 0; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
+  .sidebar-usuario-texto small {
+    font-size: 10.5px; color: var(--color-sidebar-text); text-transform: uppercase; letter-spacing: .02em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .topbar-logout-btn:hover { background: var(--color-danger); color: #fff; border-color: transparent; }
+  .sidebar-logout {
+    background: transparent; border: 1px solid var(--color-sidebar-border); color: var(--color-sidebar-text);
+    width: 32px; height: 32px; border-radius: 999px; padding: 0; flex-shrink: 0;
+  }
+  .sidebar-logout:hover { background: var(--color-danger); color: #fff; border-color: transparent; }
+  #sidebar.collapsed .sidebar-logout { display: none; }
+  #sidebar.collapsed .sidebar-usuario-tarjeta { justify-content: center; padding: 6px 0; }
 
   .card {
     background: var(--color-surface); border: 1px solid var(--color-border);
@@ -1158,7 +1159,6 @@
   }
   .avatar.avatar-llenar { width: 100%; height: 100%; }
   .avatar-foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .topbar-user-menu .avatar { margin-right: 8px; }
   .google-account-avatar {
     width: 34px; height: 34px; border-radius: 50%; background: var(--color-primary);
     color: #fff; display: flex; align-items: center; justify-content: center;

@@ -4,7 +4,7 @@
   sessionStorage.setItem('token', 'vista-previa');
   sessionStorage.setItem('sesion', JSON.stringify({ token: 'vista-previa', nombre: 'AYRTON SEPULVEDA CHOWEL', correo: 'prueba@ciudadmaderas.com' }));
   const tema = /tema=oscuro/.test(location.hash) ? 'dark' : 'light';
-  try { localStorage.setItem('tema', tema); } catch (e) { /* no-op */ }
+  try { localStorage.setItem('apariencia', JSON.stringify({ modo: tema })); } catch (e) { /* no-op */ }
 
   // Los mismos grupos que src/config/Modulos.gs (sin Líneas: sus escenas llegan con la Fase 4 del plan responsivo)
   const MODULOS = [
@@ -257,6 +257,13 @@
     apiCapitalHumanoHistorial: [{ FECHA: '12/10/2026 15:10', QUIEN: 'prueba@ciudadmaderas.com', RENGLONES: '15254', NUEVOS: '28', CAMBIAN: '311',
       FALTAN: '0', EMPLEOS_NUEVOS: '28', PERSONAS_NUEVAS: '26', AVISOS: '' }],
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
+    apiMiPerfil: {
+      correo: 'prueba@ciudadmaderas.com', nombre: 'AYRTON SEPULVEDA CHOWEL', rol: 'ADMIN', area: 'CONTROL INTERNO', activo: true,
+      ch: { idPersona: 'P-00412', noEmpleado: 'CIB02110', puesto: 'ESPECIALISTA DE ANALISIS DE DATOS', departamento: 'CONTROL INTERNO',
+        area: 'CONTROL INTERNO', sede: 'MÉRIDA', oficina: 'CORPORATIVO', jefeDirecto: 'GABRIELA CHAVEZ RIVERA' },
+      grupos: grupos.map((g) => ({ etiqueta: g.etiqueta, icono: g.icono,
+        modulos: g.modulos.map((m, i) => ({ id: m.id, etiqueta: m.etiqueta, nivel: i % 3 === 2 ? 'LECTURA' : 'EDICION' })) })),
+    },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
     apiBuscarVehiculoPorFolio: VEHICULO,
@@ -583,9 +590,20 @@
       if (opcion) opcion.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
       await esperar(500);
     },
-    // El panel de la flor: lo de cada quien (sin la parte de administración) y el del ADMIN
-    'muertos-panel': async () => { temporada('USUARIO'); await abrir('dashboard'); (await hasta('.dm-interruptor')).click(); await hasta('#dm-panel:not([hidden])'); await esperar(300); },
-    'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.dm-interruptor')).click(); await hasta('[data-dm-global]'); await esperar(300); },
+    // El engrane (componentes/apariencia.html) con la sección de la temporada: lo de cada quien
+    // (sin la parte de administración) y el del ADMIN
+    'muertos-panel': async () => { temporada('USUARIO'); await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('#ap-temporada:not([hidden]) .dm-panel-opciones'); await esperar(400); },
+    'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('[data-dm-global]'); await esperar(400); },
+    // Mi perfil (el usuario al pie del menú) y el menú abierto con el usuario abajo
+    'mi-perfil': async () => { Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo'); await esperar(400); },
+    'menu-usuario': async () => {
+      Temporada.aplicar(''); await abrir('dashboard');
+      if (Pantalla.esAngosta()) (await hasta('.shell-menu-btn')).click();
+      else document.getElementById('sidebar').classList.remove('collapsed');
+      await esperar(500);
+    },
+    // El engrane sin temporada: modo, color, ancho y letra
+    'apariencia': async () => { Temporada.aplicar(''); state.sesion.rol = 'USUARIO'; await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('#ap-panel.ap-visible'); await esperar(400); },
     'muertos-vacio': async () => {
       temporada(); await abrir('vehiculos');
       const buscar = await hasta('.dt-buscar'); buscar.value = 'nada-que-coincida'; evento(buscar, 'input');
