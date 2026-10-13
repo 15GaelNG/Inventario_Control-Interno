@@ -139,20 +139,30 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
   dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura
   se recorría y dejaba un cuadro blanco.
-- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`):
+- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`, `841f37b`, `7de277f`, `ec1e813`):
   - **Visor** (`verFotos(fotos, inicio, opciones)` en `lineas.html`, clase `.ln-visor` en `lineas-estilos.html`; reemplaza
     a `.ln-ine-visor`): pantalla completa oscura con el nombre, «N de M», «Abrir en Drive», «Quitar foto» (solo si la
     llamada pasa `alQuitar`) y X; flechas a los lados y teclas ← → (dan la vuelta), Escape cierra; un clic en la foto la
     acerca 2.5 veces siguiendo el cursor y otro la aleja. Pinta primero la miniatura y luego la grande de Drive
     (`miniaturaDe(url, 2400)`). Lo usan la página de la inspección y las miniaturas de la captura (inspección e
     identificación, por `verFotoEnGrande`).
+  - **Foto a tamaño completo y pedida antes** (`7de277f`, `ec1e813`): la foto del visor llena el espacio desde que abre
+    (`.ln-visor-escena img` con `width` y `height` al 100 % y `object-fit: contain`); antes se veía chica y luego se
+    agrandaba (usuario, 13-oct). La grande de Drive se pide antes (`pedirFotoGrande`, `fotoGrande`, `fotosPedidas`): al pasar
+    el cursor sobre una foto de la galería y, al mostrar una, la anterior y la siguiente; si ya llegó, el visor abre
+    directo con ella, nítida.
+  - **Clic derecho** (`7de277f`, usuario, 13-oct): en una foto de la galería de la inspección, menú en el cursor con
+    Ampliar, Abrir en Drive y, separado y con permiso de operar, Quitar foto; en la foto dentro del visor, Abrir en Drive y
+    Quitar foto (esta si la llamada pasa `alQuitar`). `menuFlotante(ancla, items, punto)` acepta un punto y entonces va donde
+    está el cursor, con z-index 900 (por encima del visor). Escape cierra primero el menú y luego el visor.
   - **En la página de la inspección** (`pintarInspeccion`) cada foto dice «Ampliar» y abre el visor con todas las fotos
     del documento; un video o una foto sin vista previa dice «Abrir en Drive» y se abre allá (Ctrl o clic medio también).
     `pedirDatos` acepta `opciones.encima` (z-index 800, por arriba del visor, que es 700).
   - **Quitar foto:** solo con el permiso de operar Líneas (EDICION de lineas-telefonicas). Ventana «¿Quitar foto?» con
     Cancelar y «Quitar foto» (botón de peligro) y la espera «Quitando la foto»; sin comentario (usuario, 13-oct). La espera
     de las ventanas chicas de `pedirDatos` (también las de la bandeja de Pau) tiene un alto mínimo de 280 px para no
-    salir aplastada (`6eec499`).
+    salir aplastada (`6eec499`) y es opaca (`.modal-card:not(.ln-captura-modal) > .ln-espera`, `841f37b`): con la
+    transparencia se leían detrás el título y los botones. Las ventanas grandes (captura) siguen con la espera al 94 %.
     `TelefoniaService.quitarFotoInspeccion(token, id, archivoId, comentario)` (`apiLineasQuitarFotoInspeccion`): lee la
     inspección (o la de NUCOS `drive_…`, con la carpeta de NUCOS del mismo día), acepta solo una foto de las carpetas de
     esa inspección (`carpetasFotos_`: la de fotos, la de la inspección y la extra de APP_EVIDENCIAS) que sea foto
