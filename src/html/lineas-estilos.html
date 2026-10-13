@@ -728,7 +728,7 @@
   /* Miniatura de una foto elegida (identificación e inspección): clic = en grande */
   .ln-miniatura { position: relative; width: 168px; aspect-ratio: 3 / 2; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; background: var(--color-bg); }
   .ln-miniatura img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
-  .ln-miniatura-estado { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255,255,255,.72); color: var(--color-text); font-size: 12px; text-align: center; overflow-wrap: anywhere; }
+  .ln-miniatura-estado { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px; background: rgba(255,255,255,.72); color: var(--color-text); font-size: 12px; text-align: center; overflow-wrap: anywhere; border-radius: inherit; }
   .ln-miniatura-error .ln-miniatura-estado { background: rgba(243,236,214,.94); color: var(--ln-rojo-tx); }
   .ln-miniatura button { position: absolute; top: 4px; right: 4px; display: inline-flex; padding: 3px; border: none; border-radius: 50%; background: var(--color-surface); color: var(--color-text); cursor: pointer; box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,.2)); }
   .ln-foto-chip a.ln-foto-nombre { color: inherit; }
@@ -1011,7 +1011,8 @@
   .ln-patron-vista text { fill: #fff; font: bold 17px Arial, sans-serif; text-anchor: middle; dominant-baseline: middle; }
   .ln-captura-modal { position: relative; }
   .ln-espera { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none; }
+    gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none;
+    border-radius: inherit; }
   .ln-espera[hidden] { display: none; }
   /* Regenerar, Generar PDF pendiente y Subir PDF firmado abren la ventana sin cuerpo: la espera necesita su alto */
   .ln-captura-modal:has(> .ln-espera:not([hidden])) { min-height: 340px; }
