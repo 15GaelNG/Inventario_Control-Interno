@@ -20,6 +20,7 @@ test('la galería de la inspección abre el visor; un video o una foto sin vista
   assert.match(pintar, /pedirDatos\('¿Quitar foto\?', '', \[\], 'Quitar foto', \{/);
   // La espera de una ventana chica no sale aplastada
   assert.match(read('src/html/lineas-estilos.html'), /\.modal-card:not\(\.ln-captura-modal\):has\(> \.ln-espera:not\(\[hidden\]\)\) \{ min-height: 280px; \}/);
+  assert.ok(read('src/html/lineas-estilos.html').includes('.modal-card:not(.ln-captura-modal) > .ln-espera { background: var(--color-surface); backdrop-filter: none; }'), 'la espera de una ventana chica tapa lo de atrás');
   assert.match(pintar, /llamar\('apiLineasQuitarFotoInspeccion', id, f\.id, ''\)/);
   assert.match(pintar, /peligro: true, encima: true, espera: 'Quitando la foto'/);
 });

@@ -1041,6 +1041,8 @@
   .ln-captura-modal:has(> .ln-espera:not([hidden])) { min-height: 340px; }
   /* Las ventanas chicas (pedirDatos: Quitar foto, pasos de la bandeja) también: si no, la espera sale aplastada (13-oct) */
   .modal-card:not(.ln-captura-modal):has(> .ln-espera:not([hidden])) { min-height: 280px; }
+  /* …y sin transparencia: en una ventana chica el título y los botones quedaban detrás del círculo (13-oct) */
+  .modal-card:not(.ln-captura-modal) > .ln-espera { background: var(--color-surface); backdrop-filter: none; }
   .ln-espera-circulo { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     background: var(--color-accent-soft); margin-bottom: 10px; }
   .ln-espera-circulo .ln-spinner { width: 34px; height: 34px; border-width: 3px; }
