@@ -120,7 +120,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   inspección, responsiva, Editar, Mandar a resguardo y otras.
 - **Identificación en la responsiva** (9-oct, opcional): por cada responsable (el principal, cuyo tipo es
   IDENTIFICACION, y del segundo al quinto, con su propio tipo) se eligen fotos (hasta 4: una, o frente y vuelta) o un
-  PDF, que se ven antes de guardar (clic en la foto = en grande). Las fotos se juntan en el navegador en un PDF carta,
+  PDF, que se ven antes de guardar (clic en la foto = en grande; el PDF se ve con su carátula, ver «Arrastrar y soltar archivos y
+  carátula de los PDF»). Las fotos se juntan en el navegador en un PDF carta,
   dos por hoja, JPEG calidad .92 y hasta 2400 px por lado (`pdfDeFotos` en lineas.html); el servidor solo recibe PDF de
   hasta 15 MB (`datos.identificaciones`). Se guarda antes que la responsiva, en una carpeta nueva de la responsiva en
   NUCOS (`RESP DD MM`, donde después va su PDF), como «INE - NOMBRE - ID PERSONA.pdf» (`CapitalHumano.idPara`; sin
@@ -139,11 +140,29 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
   dentro de su botón (`.ln-upload` con `position: relative`): fuera de él, al regresar de elegir, la ventana de captura
   se recorría y dejaba un cuadro blanco.
-- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`, `841f37b`, `7de277f`, `ec1e813`):
+- **Arrastrar y soltar archivos y carátula de los PDF** (13-oct, `5595604` y `3da7620`, pendiente 2.42; bloque del mismo nombre
+  en `lineas.html`, `tests/lineas-soltar-pdf.test.cjs`):
+  - **Soltar** archivos sobre un botón de subir (`.ln-upload`: fotos de la inspección, «Agregar fotos» de una inspección
+    guardada, identificación de la responsiva) o un campo de archivo (`.ln-af-archivo`, Editar) es como elegirlos: van al
+    input de esa zona (no al de la cámara, `[capture]`), filtrados por su `accept` (`aceptaArchivo`), uno solo si el input no
+    es múltiple, y se dispara `change`, así cada pantalla los maneja como siempre. Un tipo que el input no acepta da el
+    aviso «Ese tipo de archivo no se puede subir aquí.». Dentro de Líneas (`.ln-modulo`), soltar un archivo fuera de esos
+    lugares no lo abre encima de la app.
+  - **«Suelta aquí»** (`3da7620`, usuario, 13-oct): mientras se arrastran archivos sobre Líneas, cada lugar donde se pueden
+    soltar se marca con borde y «Suelta aquí» (clase `ln-arrastrando` en `<html>`; se quita sola 250 ms después del último
+    `dragover`); el que está bajo el cursor se agranda un poco, dice «Suelta aquí» completo y lleva la clase `ln-soltar`.
+  - **Carátula del PDF:** `caratulaPdf(archivo)` dibuja la primera hoja con pdf.js 3.11.174 de cdnjs (`cargarPdfJs`: se
+    carga la primera vez que hace falta, con su worker `pdf.worker.min.js`) y `htmlMiniaturaPdf` la muestra como las fotos,
+    con la etiqueta «PDF»; clic = el PDF en otra pestaña. Aplica a la identificación de la responsiva (antes salía un renglón
+    con el nombre del PDF) y a los campos de archivo de Editar, que ahora también muestran en miniatura lo elegido (foto o
+    carátula) con X para quitarlo (`.ln-af-vista`). Si pdf.js no carga, sale el ícono de documento.
+- **Visor de fotos y «Quitar foto»** (13-oct, `5b2299f`, `566709c`, `c8b3973`, `6eec499`, `841f37b`, `7de277f`, `ec1e813`, `5595604`, `3da7620`):
   - **Visor** (`verFotos(fotos, inicio, opciones)` en `lineas.html`, clase `.ln-visor` en `lineas-estilos.html`; reemplaza
     a `.ln-ine-visor`): pantalla completa oscura con el nombre, «N de M», «Abrir en Drive», «Quitar foto» (solo si la
     llamada pasa `alQuitar`) y X; flechas a los lados y teclas ← → (dan la vuelta), Escape cierra; un clic en la foto la
-    acerca 2.5 veces siguiendo el cursor y otro la aleja. Pinta primero la miniatura y luego la grande de Drive
+    acerca 2.5 veces siguiendo el cursor y otro la aleja; un clic fuera de la foto, en lo oscuro alrededor, cierra el visor
+    (`3da7620`, usuario, 13-oct; `sobreFoto` calcula el rectángulo visible de la foto con `object-fit: contain`), y acercada,
+    cualquier clic aleja. El cursor es lupa sobre la foto y normal fuera. Pinta primero la miniatura y luego la grande de Drive
     (`miniaturaDe(url, 2400)`). Lo usan la página de la inspección y las miniaturas de la captura (inspección e
     identificación, por `verFotoEnGrande`).
   - **Foto a tamaño completo y pedida antes** (`7de277f`, `ec1e813`): la foto del visor llena el espacio desde que abre
@@ -151,10 +170,12 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     agrandaba (usuario, 13-oct). La grande de Drive se pide antes (`pedirFotoGrande`, `fotoGrande`, `fotosPedidas`): al pasar
     el cursor sobre una foto de la galería y, al mostrar una, la anterior y la siguiente; si ya llegó, el visor abre
     directo con ella, nítida.
-  - **Clic derecho** (`7de277f`, usuario, 13-oct): en una foto de la galería de la inspección, menú en el cursor con
-    Ampliar, Abrir en Drive y, separado y con permiso de operar, Quitar foto; en la foto dentro del visor, Abrir en Drive y
-    Quitar foto (esta si la llamada pasa `alQuitar`). `menuFlotante(ancla, items, punto)` acepta un punto y entonces va donde
-    está el cursor, con z-index 900 (por encima del visor). Escape cierra primero el menú y luego el visor.
+  - **Clic derecho** (`7de277f`, usuario, 13-oct; ajustado en `5595604`): solo en la galería de la inspección: en una foto,
+    menú en el cursor con Ampliar, Abrir en Drive y, separado y con permiso de operar, Quitar foto. El visor ya no tiene clic
+    derecho propio (el menú se quedaba encima de la foto al abrirla): al abrirse cierra el menú de la galería
+    (`cerrarMenusFlotantes`; `menuFlotante` guarda `menu._cerrar` para quitar también sus escuchas) y, con un menú de clic
+    derecho abierto, cualquier clic fuera de él lo cierra, también sobre la foto que lo abrió. `menuFlotante(ancla, items,
+    punto)` acepta un punto y entonces va donde está el cursor, con z-index 900. Escape cierra primero el menú y luego el visor.
   - **En la página de la inspección** (`pintarInspeccion`) cada foto lleva solo su nombre (sin «Ampliar» desde el 13-oct, usuario) y abre el visor con todas las fotos
     del documento; un video o una foto sin vista previa dice «Abrir en Drive» y se abre allá (Ctrl o clic medio también).
     `pedirDatos` acepta `opciones.encima` (z-index 800, por arriba del visor, que es 700).
