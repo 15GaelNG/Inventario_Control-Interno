@@ -426,6 +426,10 @@ const CapitalHumano = (function () {
    * Cada hoja que guarda a una persona: de qué columnas sale, en qué columna va su ID y con qué se reconoce el renglón.
    * `persona: true` en una definición de HojaServicio usa la liga de su hoja. opcional: si la pestaña no existe en el
    * libro (LINEAS TELEFONICAS solo vive en el libro de pruebas de Líneas) no es error.
+   *
+   * bitacora: el registro es de un día (quién firmó, quién manejaba, quién pidió): Salud solo llena el ID que falta y
+   * nunca cambia uno que ya está (13-oct). Sin bitacora (VEHICULOS, CAJAS CHICAS) es el responsable de HOY: si cambia, su
+   * ID se actualiza. Al guardar desde la app (conPersona) las dos recalculan el ID si cambia el nombre.
    */
   const VEH = () => Config.SPREADSHEET_IDS.VEHICULOS();
   const TEL = () => Config.SPREADSHEET_IDS.TELEFONIA();
@@ -435,18 +439,18 @@ const CapitalHumano = (function () {
       columnaCorreo: 'CORREO ELECTRONICO DE RESPONSABLE', etiqueta: 'ID CCH' },
     // Líneas: la persona vive en ASIGNACIONES desde la reestructura (LINEAS TELEFONICAS ya no existe en producción)
     { nombre: 'ASIGNACIONES (persona)', hoja: 'ASIGNACIONES', libro: TEL, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO',
-      columnaCorreo: 'CUENTA GOOGLE', etiqueta: 'ID' },
+      columnaCorreo: 'CUENTA GOOGLE', etiqueta: 'ID', bitacora: true },
     { nombre: 'LINEAS TELEFONICAS (persona)', hoja: 'LINEAS TELEFONICAS', libro: TEL, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO',
       columnaCorreo: 'EMAIL USUARIO', etiqueta: 'NUCO', opcional: true },
-    { nombre: 'RESPONSIVA VEHICULAR (persona)', hoja: 'RESPONSIVA VEHICULAR', libro: VEH, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID' },
-    { nombre: 'ADHERENTE VEHICULAR (persona)', hoja: 'ADHERENTE VEHICULAR', libro: VEH, columnaNombre: 'ADHERENTE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID' },
+    { nombre: 'RESPONSIVA VEHICULAR (persona)', hoja: 'RESPONSIVA VEHICULAR', libro: VEH, columnaNombre: 'RESPONSABLE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID', bitacora: true },
+    { nombre: 'ADHERENTE VEHICULAR (persona)', hoja: 'ADHERENTE VEHICULAR', libro: VEH, columnaNombre: 'ADHERENTE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID', bitacora: true },
     { nombre: 'REASIGNACIONES (persona entrante)', hoja: 'REASIGNACIONES_VEHICULOS', libro: VEH, columnaNombre: 'Responsable Entrante',
-      columnaNumero: 'No Empleado Entrante', etiqueta: 'ID' },
+      columnaNumero: 'No Empleado Entrante', etiqueta: 'ID', bitacora: true },
     { nombre: 'INSPECCION VEHICULAR (conductor)', hoja: 'INSPECCION VEHICULAR', libro: VEH, columnaNombre: 'CONDUCTOR', etiqueta: 'ID INSPECCION',
-      columna: 'ID PERSONA CONDUCTOR' },
-    { nombre: 'UBER (persona)', hoja: 'UBER', libro: VEH, columnaNombre: 'NOMBRE COMPLETO', columnaCorreo: 'CORREO ELECTRONICO', etiqueta: 'ID' },
-    { nombre: 'ARQUEOS (responsable)', hoja: 'ARQUEOS', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID ARQUEO' },
-    { nombre: 'TICKETS (solicitante)', hoja: 'TICKETS', libro: VEH, columnaNombre: 'SOLICITANTE', etiqueta: 'TICKET' },
+      columna: 'ID PERSONA CONDUCTOR', bitacora: true },
+    { nombre: 'UBER (persona)', hoja: 'UBER', libro: VEH, columnaNombre: 'NOMBRE COMPLETO', columnaCorreo: 'CORREO ELECTRONICO', etiqueta: 'ID', bitacora: true },
+    { nombre: 'ARQUEOS (responsable)', hoja: 'ARQUEOS', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID ARQUEO', bitacora: true },
+    { nombre: 'TICKETS (solicitante)', hoja: 'TICKETS', libro: VEH, columnaNombre: 'SOLICITANTE', etiqueta: 'TICKET', bitacora: true },
   ];
   const columnaDe_ = (l) => l.columna || COLUMNA;
   const ligaDe_ = (hoja) => LIGAS.filter((x) => x.hoja === hoja)[0] || null;
@@ -543,7 +547,8 @@ const CapitalHumano = (function () {
   /**
    * Revisa (y con escribir, pone al día) la columna ID PERSONA de las hojas ligadas.
    * Regresa lo mismo que Relaciones.revisar por hoja, para que Salud lo pinte igual:
-   *   DIFERENCIA            le falta su ID PERSONA o ya no es el de su responsable → «Actualizar»
+   *   DIFERENCIA            le falta su ID PERSONA o (en una caché) ya no es el de su responsable → «Actualizar»
+   *   DIFERENCIA_HISTORICA  una bitácora con otro ID del que saldría hoy: el del día se queda → normal
    *   HUERFANO / CLAVE_…     su responsable no se puede ligar → a mano
    *   SIN_DUENO_ESPERADO     dice algo que no es una persona (BAJA VEHICULAR) → normal
    * Nunca escribe un ID vacío encima de uno que había.
@@ -589,6 +594,12 @@ const CapitalHumano = (function () {
         if (p.id) {
           if (p.como === 'correo' || p.como === 'nombre') r.emparejadasPorClave++; else r.emparejadasPorId++;
           if (tenia === p.id) { nuevos.push([p.id]); return; }
+          if (l.bitacora && tenia) {
+            r.diferenciasHistoricas++;
+            entradas.push(Object.assign({ tipo: 'DIFERENCIA_HISTORICA', tenia: ix.etiqueta[tenia] || tenia, quedo: ix.etiqueta[p.id] || p.id }, base));
+            nuevos.push([f[columna]]);
+            return;
+          }
           r.diferencias++;
           entradas.push(Object.assign({ tipo: 'DIFERENCIA', tenia: tenia ? (ix.etiqueta[tenia] || tenia) : '', quedo: ix.etiqueta[p.id] || p.id }, base));
           nuevos.push([cfg.escribir && (!soloFilas || soloFilas.indexOf(fila) !== -1) ? p.id : (f[columna] || '')]);
