@@ -40,6 +40,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
   DISPONIBLE sin él. La cancelación no se elige al agregar. Con SIM BASICO no se pide ni se guarda adendum
   (`LineasRegistros.crearLineaEnEquipo_`, `estatusAltaLinea_`).
+- **Agregar equipo con una línea que ya existe** (13-oct): la sección LÍNEA empieza con «¿Se vincula una línea?» (empieza en
+  No). Sí → «Línea», lista solo con las líneas sueltas DISPONIBLES (sin equipo, con número; con compañía y tipo;
+  `lineasSueltas_`), y se esconden Número, SIM, Tipo de línea, Compañía, Razón social, Estatus de la línea y el ADENDUM, que
+  trae la línea. No → como siempre (número nuevo opcional). El PIN de WhatsApp aparece con un número escrito o con la línea
+  vinculada. Al guardar, antes de escribir se revisa que la línea siga suelta y DISPONIBLE y que el equipo quede en USO o
+  RESGUARDO (si no, error sin escribir nada); el equipo se da de alta sin línea y, en el mismo candado, se vincula con la
+  escritura y el movimiento de «Vincular línea» (`LineasAcciones.aplicarVinculo`, ASIGNAR_LINEA), con el comentario del alta.
+  La línea sigue al equipo (USO si está en uso, DISPONIBLE si está guardado). En el historial quedan «Alta de registro» y
+  «Vincular línea»; no genera responsiva.
 - **Estatus en Editar equipo** (8-oct; «Editar información» hasta el 13-oct): directo. RESGUARDO, PARA VENTA, PARA VENTA
   CON DETALLE (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO del equipo, y EN PROCESO DE
   CANCELACION y CANCELADA de la línea, con un aviso «no se agregará en el panel de Resguardos y cancelaciones, pero se
