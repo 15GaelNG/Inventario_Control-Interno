@@ -528,6 +528,11 @@ const CapitalHumano = (function () {
   /**
    * La persona de un responsable: { id, como } si se encontró; si no, { id: '', tipo, motivo } con el tipo que Salud
    * entiende (normal, a mano, homónimos).
+   *
+   * Nunca adivina (usuario, 13-oct): MANDA EL NOMBRE. El correo y el número solo desempatan a dos personas que se llaman
+   * igual. Si el nombre es de una persona y el correo de otra (los correos de puesto: asistente.ci@, especialista.admon…@
+   * pasan de una persona a otra), o el nombre no está en CH pero el correo sí, no se decide: va a mano, diciendo de quién
+   * es cada uno. (Un número de OTRA persona sí se ignora: en VEHICULOS el número quedó viejo al reasignar, 01-oct.)
    */
   function personaDe(ix, numero, nombre, correo) {
     const nom = norm(nombre);
@@ -540,15 +545,29 @@ const CapitalHumano = (function () {
     }
     if (/\//.test(nom)) return { id: '', tipo: 'HUERFANO', motivo: 'trae varias personas en la misma celda' };
     const llaves = (m, k) => Object.keys(m[k] || {});
+    const quien = (id) => ix.etiqueta[id] || id;
     const porCorreo = cor ? llaves(ix.porCorreo, cor) : [];
-    if (porCorreo.length === 1) return { id: porCorreo[0], como: 'correo' };
+    const deCorreo = porCorreo.length === 1 ? porCorreo[0] : '';
     const porNombre = comparable ? llaves(ix.porNombre, comparable) : [];
-    if (porNombre.length === 1) return { id: porNombre[0], como: 'nombre' };
+    if (porNombre.length === 1) {
+      if (deCorreo && deCorreo !== porNombre[0]) {
+        return { id: '', tipo: 'CLAVE_DUPLICADA_EN_ORIGEN',
+          motivo: 'el nombre es de ' + quien(porNombre[0]) + ' y el correo ' + cor + ' es de ' + quien(deCorreo) + '; corrige el que esté mal' };
+      }
+      return { id: porNombre[0], como: deCorreo ? 'nombre y correo' : 'nombre' };
+    }
     if (porNombre.length > 1) {
+      if (deCorreo && porNombre.indexOf(deCorreo) !== -1) return { id: deCorreo, como: 'nombre + correo' };
       const desempata = llaves(ix.porNumero, num).filter((i) => porNombre.indexOf(i) !== -1);
       if (desempata.length === 1) return { id: desempata[0], como: 'nombre + número' };
-      return { id: '', tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', motivo: 'hay ' + porNombre.length + ' personas con ese nombre y el número no desempata' };
+      return { id: '', tipo: 'CLAVE_DUPLICADA_EN_ORIGEN', motivo: 'hay ' + porNombre.length + ' personas con ese nombre y ni el número ni el correo desempatan' };
     }
+    // El nombre no está en CH
+    if (nom && deCorreo) {
+      return { id: '', tipo: 'HUERFANO', motivo: '«' + nombre + '» no está en la lista de Capital Humano y el correo ' + cor +
+        ' es de ' + quien(deCorreo) + '; si es esa persona, corrige el nombre' };
+    }
+    if (!nom && deCorreo) return { id: deCorreo, como: 'correo' };
     if (!nom && num) {
       const porNumero = llaves(ix.porNumero, num);
       if (porNumero.length === 1) return { id: porNumero[0], como: 'número' };

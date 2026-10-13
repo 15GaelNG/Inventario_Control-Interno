@@ -294,7 +294,10 @@ console.log('\n8. La cascada: nombre primero, el número solo desempata');
   ok(por('AUT0006').tipo === 'HUERFANO' && /varias personas/.test(por('AUT0006').motivo), 'dos personas en la celda: a mano');
   ok(por('AUT0007').quedo.indexOf('ANA PEREZ') === 0, 'sin título ni acento: Ana');
   ok(por('AUT0008').tipo === 'HUERFANO' && /no está en la lista/.test(por('AUT0008').motivo), 'quien no está en CH: a mano');
-  ok(r['CAJAS CHICAS (persona)'].entradas[0].quedo.indexOf('VANESSA LLERA') === 0, 'Caja Chica: por correo, aunque el nombre venga abreviado');
+  // Nunca adivina (13-oct): «V. LLERA» no está en CH; el correo es de Vanessa, pero eso lo decide una persona
+  const vll = r['CAJAS CHICAS (persona)'].entradas[0];
+  ok(vll.tipo === 'HUERFANO' && /correo vanessa@cm\.mx es de VANESSA LLERA/.test(vll.motivo),
+    'Caja Chica: el nombre no está en CH y el correo sí: a mano, diciendo de quién es el correo — ' + vll.motivo);
   ok(r['LINEAS TELEFONICAS (persona)'].entradas[0].tipo === 'SIN_DUENO_ESPERADO', 'Líneas: un código de desarrollo no es una persona');
   ok(v.diferencias === 4 && !hojas['VEHICULOS'].datos[0].includes('ID PERSONA'), 'el ensayo cuenta 4 por ligar y no crea la columna');
   ok(p['HA00241|JUAN FULGENCIO'].id !== '', '(la lista ya tiene sus IDs)');
@@ -312,13 +315,34 @@ console.log('\n9. Escribiendo: crea la columna, liga, y nunca borra un ID con va
   ok(veh.datos[0].indexOf('ID PERSONA') !== -1, 'creó la columna ID PERSONA');
   ok(ids[0] === p['HA00241|JUAN FULGENCIO'].id && ids[2] === p['AC00002|JOSE LOPEZ'].id, 'escribió los IDs de su persona');
   ok(ids[3] === '' && ids[4] === '' && ids[7] === '', 'los que no se ligan quedan vacíos');
-  // 2, no 3: Líneas solo traía un código de desarrollo, que es normal; no había nada que escribir
-  ok(anotados.length === 2 && anotados.every((a) => a.quien === 'AYRTON'), 'cada hoja que cambió anotó en el log quién lo hizo');
+  // Solo VEHICULOS: Líneas traía un código de desarrollo (normal) y la caja de «V. LLERA» va a mano (13-oct)
+  ok(anotados.length === 1 && anotados.every((a) => a.quien === 'AYRTON'), 'cada hoja que cambió anotó en el log quién lo hizo');
   // Ahora el responsable de AUT0001 cambia a alguien que no está en CH: su ID anterior NO se borra
   veh.datos[1][veh.datos[0].indexOf('RESPONSABLE VEHICULO')] = 'NADIE CONOCIDO';
   const r2 = CH.revisarLigas({ escribir: true, detalle: true });
   ok(colDe(veh, 'ID PERSONA')[0] === p['HA00241|JUAN FULGENCIO'].id, 'un responsable que ya no se liga no borra el ID que había');
   ok(r2['VEHICULOS (persona)'].entradas.some((e) => e.dueno === 'AUT0001' && e.tipo === 'HUERFANO'), 'y se avisa para corregir a mano');
+}
+
+console.log('\n8b. Nunca adivina: nombre de una persona y correo de otra → a mano (prod 13-oct, caja 201)');
+{
+  const hojas = escenarioLigas();
+  const p = personas(hojas);
+  const CH = cargar(hojas);
+  hojas['CAJAS CHICAS'] = hojaFalsa(['ID', 'ID CCH', 'RESPONSABLE DE CAJA CHICA', 'CORREO ELECTRONICO DE RESPONSABLE', 'ID PERSONA'], [
+    { 'ID CCH': '201', 'RESPONSABLE DE CAJA CHICA': 'PERLA CRUZ', 'CORREO ELECTRONICO DE RESPONSABLE': 'vanessa@cm.mx', 'ID PERSONA': 'PER-VIEJO' },
+    { 'ID CCH': '202', 'RESPONSABLE DE CAJA CHICA': 'VANESSA LLERA', 'CORREO ELECTRONICO DE RESPONSABLE': 'VANESSA@cm.mx' },
+    { 'ID CCH': '203', 'RESPONSABLE DE CAJA CHICA': 'JOSE LOPEZ', 'CORREO ELECTRONICO DE RESPONSABLE': 'nadie@cm.mx' },
+  ]);
+  const r = CH.revisarLigas({ detalle: true })['CAJAS CHICAS (persona)'];
+  const de = (caja) => r.entradas.filter((e) => e.dueno === caja)[0];
+  ok(de('201').tipo === 'CLAVE_DUPLICADA_EN_ORIGEN' && /el nombre es de PERLA CRUZ.*el correo vanessa@cm\.mx es de VANESSA LLERA/.test(de('201').motivo),
+    'nombre de Perla y correo de Vanessa: a mano, con los dos nombres — ' + de('201').motivo);
+  ok(de('202').tipo === 'DIFERENCIA' && de('202').quedo.indexOf('VANESSA LLERA') === 0, 'nombre y correo de la misma persona: se liga');
+  ok(de('203').tipo === 'CLAVE_DUPLICADA_EN_ORIGEN', 'homónimos con un correo que no es de ninguno: no se adivina');
+  CH.revisarLigas({ escribir: true });
+  ok(colDe(hojas['CAJAS CHICAS'], 'ID PERSONA')[0] === 'PER-VIEJO', 'y el ID que tenía la 201 no se cambió ni se borró');
+  ok(colDe(hojas['CAJAS CHICAS'], 'ID PERSONA')[1] === p['HA00059|VANESSA LLERA'].id, 'la 202 sí quedó ligada');
 }
 
 console.log('\n9b. Bitácora vs caché: en una bitácora solo se llena el ID que falta; el que ya está, se queda (13-oct)');
