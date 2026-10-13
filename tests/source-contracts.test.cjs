@@ -2459,3 +2459,14 @@ test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS 
   assert.doesNotMatch(read('src/services/CapitalHumano.gs') + read('src/html/js/app-capital-humano.html'), /const SENSIBLES\b/,
     'la lista de prohibidas ya no existe: es de permitidas');
 });
+
+test('lo que un módulo le pide a ExportarExcel existe (prod: «ExportarExcel.cargarLibreria is not a function», 13-oct)', () => {
+  const comp = read('src/html/js/componentes/exportar-excel.html');
+  const exporta = /return \{([^}]*)\};\s*\}\)\(\);/.exec(comp)[1].split(',').map((s) => s.trim());
+  const usados = new Set();
+  filesBelow(path.join(root, 'src')).filter((f) => /\.html$/.test(f)).forEach((f) => {
+    for (const m of fs.readFileSync(f, 'utf8').matchAll(/ExportarExcel\.(\w+)/g)) usados.add(m[1]);
+  });
+  const faltan = [...usados].filter((u) => exporta.indexOf(u) === -1);
+  assert.deepEqual(faltan, [], 'ExportarExcel no exporta: ' + faltan.join(', '));
+});
