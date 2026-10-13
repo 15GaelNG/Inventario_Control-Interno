@@ -59,10 +59,16 @@ La regla importa en las siguientes.
 | TICKETS | 2,140 | sin columna |
 | RESPONSIVA / ADHERENTE | 2 / 5 | sin columna |
 
-## Pendiente: dos personas en una hoja (por decidir)
+## Dos personas en una hoja
 
-Hoy el código asume una persona por hoja (`ligaDe_`, `conPersona`, `columnaPara`). Propuesta: varias ligas por hoja,
-cada una con su columna, solo cuando la segunda persona **participó en el evento**:
+Una hoja puede tener varias ligas, cada una con su columna y su tarjeta en Salud («… el ID de su conductor», «… de su
+persona saliente»). `conPersona` las calcula todas al guardar; `idPara` / `columnaPara` siguen siendo de la principal.
+
+**Hecho (13-oct, el usuario eligió estas dos):** REASIGNACIONES → `ID PERSONA SALIENTE`; INSPECCION VEHICULAR →
+`ID PERSONA RESPONSABLE`. Las dos son bitácora. **No se hicieron** (se pueden agregar después igual): RESPONSIVA →
+`ID PERSONA ANTERIOR`, CAJAS CHICAS → `ID PERSONA CAPTURISTA`.
+
+La propuesta original, solo cuando la segunda persona **participó en el evento**:
 
 | Hoja | Segunda persona | Columna nueva | Tipo |
 |---|---|---|---|
