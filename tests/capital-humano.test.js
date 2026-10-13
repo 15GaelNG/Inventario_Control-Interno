@@ -236,10 +236,11 @@ console.log('\n6. Columnas sensibles en la hoja pegada');
 {
   const hojas = escenario();
   const h = hojas['COLABORADORES ACTUALIZADO'];
-  h.datos[0] = h.datos[0].concat(['NÚMERO DE CUENTA', 'TELEFONO']);
-  // (el TELEFONO sí se queda desde el 12-oct-2026: solo la cuenta es sensible)
+  h.datos[0] = h.datos[0].concat(['NÚMERO DE CUENTA', 'TELEFONO', 'CLABE', 'CURP']);
+  // Solo entran las PERMITIDAS: el TELEFONO sí (12-oct-2026); la cuenta, la CLABE y el CURP no
   const r = cargar(hojas).identificar();
-  ok(/datos sensibles que no deben estar en el libro: NÚMERO DE CUENTA\./.test(r), 'avisa que hay que quitar la cuenta (el teléfono no)');
+  ok(/datos sensibles que no deben estar en el libro: NÚMERO DE CUENTA, CLABE, CURP\./.test(r),
+    'avisa que hay que quitar la cuenta, la CLABE y el CURP (el teléfono no)');
 }
 
 console.log('\n7. El catálogo: la hoja de CH es externa y PERSONAS es el catálogo de IDs (PER-)');
@@ -404,6 +405,25 @@ console.log('\n14. cargar: cada ID se queda con su empleo aunque el archivo veng
   ok(hojas['COLABORADORES ACTUALIZADO'].protecciones.length === 1 && hojas['COLABORADORES ACTUALIZADO'].protecciones[0].aviso,
     'la pestaña queda protegida (aviso: no se pega a mano)');
   ok(hojas['CAPITAL HUMANO HISTORIAL'] && hojas['CAPITAL HUMANO HISTORIAL'].datos.length === 2, 'y la carga queda en el historial');
+}
+
+console.log('\n14b. cargar: solo entran las columnas permitidas (el Excel de CH trae CURP, CLABE, banco… — 12-oct)');
+{
+  const hojas = escenario();
+  const CH = cargar(hojas);
+  CH.identificar({ escribir: true });
+  // Como quedó el DEV el 12-oct: la hoja ya traía columnas de más (una carga anterior al cambio)
+  const h = hojas['COLABORADORES ACTUALIZADO'];
+  h.datos.forEach((r, i) => r.push(i ? 'CURP-VIEJO' : 'CURP'));
+  const ENC = ENC_ARCHIVO.concat(['CLABE', 'BANCO', 'CURP', 'CALLE/NUMERO']);
+  const filas = archivoDelEscenario(hojas).map((r) => r.concat(['012345678901234567', 'BANCO X', 'CURP-NUEVO', 'CALLE 1']));
+  const r = CH.cargar('tok', archivo(ENC, filas), { escribir: true });
+  const enc = h.datos[0];
+  ok(['CLABE', 'BANCO', 'CURP', 'CALLE/NUMERO', 'NÚMERO DE CUENTA'].every((c) => enc.indexOf(c) === -1),
+    'ni la CLABE, ni el banco, ni el CURP, ni el domicilio entran: ' + enc.join('|'));
+  ok(enc.indexOf('TELEFONO') !== -1 && enc.indexOf('RAZON SOCIAL') !== -1, 'lo permitido sí (teléfono, razón social)');
+  ok(!/012345678901234567|CURP-NUEVO|CURP-VIEJO|CALLE 1/.test(JSON.stringify(h.datos)), 'ni sus valores, tampoco los que ya estaban en la hoja');
+  ok(['CLABE', 'BANCO', 'CURP', 'CALLE/NUMERO', 'NÚMERO DE CUENTA'].every((c) => r.quitadas.indexOf(c) !== -1), 'y lo dice: ' + r.quitadas.join(', '));
 }
 
 console.log('\n15. cargar: nunca borra a nadie; rechaza lo que no es la lista completa');

@@ -2,16 +2,21 @@
   /**
    * Administración > Capital humano (views/capital-humano.html). Se sube el Excel de CH:
    *   1. se lee EN EL NAVEGADOR con SheetJS (ExportarExcel.cargarLibreria): las fechas como dd/mm/yyyy, los números tal
-   *      cual, y el NÚMERO DE CUENTA se quita aquí mismo (nunca viaja; el teléfono sí se sube);
+   *      cual, y solo viajan las columnas PERMITIDAS (sin cuenta, CLABE, CURP, domicilio…; el teléfono sí se sube);
    *   2. viaja comprimido (gzip, base64) a CapitalHumano.cargar: primero el ensayo, luego "Aplicar".
    * El servidor combina por empleo (número + nombre): cada persona conserva su ID PERSONA, nadie se borra.
    */
   const CapitalHumanoVista = (function () {
-    // Las mismas que CapitalHumano.SENSIBLES (servidor): aquí se quitan antes de mandar
-    const SENSIBLES = ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA'];
+    // Las mismas que CapitalHumano.PERMITIDAS (servidor; contrato): solo estas columnas salen del navegador. Lo demás
+    // del Excel de CH (cuenta, CLABE, CURP, RFC, domicilio, beneficiarios…) se queda aquí
+    const PERMITIDAS = ['No EMPLEADO', 'No INGRESOS', 'OFICINA/DESARROLLO', 'SEDE', 'APELLIDO PATERNO', 'APELLIDO MATERNO',
+      'NOMBRES', 'NOMBRE COMPLETO', 'ANTIGUEDAD', 'N. EMPLEADO ANTERIOR', 'STATUS', 'FECHA DE INGRESO', 'FECHA DE NACIMIENTO',
+      'CORREO EMPRESARIAL', 'TELEFONO', 'DEPARTAMENTO', 'AREA', 'PUESTO', 'TIPO PUESTO', 'DIRECTOR', 'JEFE DIRECTO',
+      'RAZON SOCIAL', 'TIPO CONTRATO', 'FECHA DE BAJA', 'MOTIVO DE BAJA'];
     const OBLIGATORIAS = ['No EMPLEADO', 'NOMBRE COMPLETO', 'STATUS', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO'];
     const limpio = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
-    const esSensible = (c) => SENSIBLES.indexOf(limpio(c).toUpperCase()) !== -1;
+    const PERMITIDAS_N = PERMITIDAS.map((c) => limpio(c).toUpperCase());
+    const esSensible = (c) => !!limpio(c) && PERMITIDAS_N.indexOf(limpio(c).toUpperCase()) === -1;
     const dos = (n) => ('0' + n).slice(-2);
 
     /** El valor de una celda de SheetJS como lo muestra la hoja de CH: fecha dd/mm/yyyy; número sin formato; texto limpio */
@@ -84,8 +89,9 @@
         document.getElementById('ch-tile-sin-id').classList.toggle('stat-tile-warn', !r.tieneColumna || Number(r.sinId) > 0);
         const s = document.getElementById('ch-sensibles');
         s.hidden = !r.sensibles.length;
-        s.innerHTML = r.sensibles.length ? '<i data-lucide="shield-alert" class="ico"></i><span>La hoja todavía tiene datos sensibles (' +
-          escaparHtml(r.sensibles.join(', ')) + '): la próxima carga los quita.</span>' : '';
+        s.innerHTML = r.sensibles.length ? '<i data-lucide="shield-alert" class="ico"></i><span>La hoja todavía tiene ' +
+          r.sensibles.length + (r.sensibles.length === 1 ? ' columna' : ' columnas') + ' que no deben estar en el libro (' +
+          escaparHtml(r.sensibles.join(', ')) + '): la próxima carga las quita.</span>' : '';
         if (window.lucide) lucide.createIcons();
       } catch (err) {
         Notificar.error(err.message);
@@ -125,9 +131,10 @@
           ficha(r.personasNuevas, 'Personas nuevas', 'con ID nuevo') +
         '</div>' +
         (r.conflictos.length ? '<p class="error-msg">' + r.conflictos.length + ' personas parecen ser una sola pero ya tienen IDs distintos: no se tocan.</p>' : '') +
-        lista('Conflictos', r.conflictos) + lista('Avisos', r.avisos) +
+        lista('Conflictos', r.conflictos) + lista('Avisos', r.avisos) + lista('Columnas que no se suben', r.quitadas) +
         '<div class="ch-ensayo-pie">' +
-          '<p class="ch-tenue">' + (r.quitadas.length ? 'No se suben: ' + escaparHtml(r.quitadas.join(', ')) + '.' : '') + '</p>' +
+          '<p class="ch-tenue">' + (r.quitadas.length ? 'No se suben ' + r.quitadas.length + (r.quitadas.length === 1 ? ' columna' : ' columnas') +
+            ' que la app no usa (cuenta, CURP, domicilio…).' : '') + '</p>' +
           (aplicado
             ? '<p class="ch-listo"><i data-lucide="circle-check" class="ico"></i> Listo: la lista quedó actualizada y cada persona conserva su ID.</p>'
             : '<button type="button" id="ch-aplicar"><i data-lucide="check" class="ico"></i> Aplicar</button>') +

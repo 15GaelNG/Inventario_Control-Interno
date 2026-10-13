@@ -35,6 +35,17 @@ console.log('1. preparar: encabezados, sin lo sensible');
   ok(r.faltan.length === 0, 'trae todas las columnas que pide el servidor');
 }
 
+console.log('\n1b. preparar: solo las columnas permitidas (el Excel de CH del 12-oct traía CLABE, CURP, domicilio…)');
+{
+  const r = V.preparar([
+    ['No EMPLEADO', 'NOMBRE COMPLETO', 'N. EMPLEADO ANTERIOR', 'FECHA DE NACIMIENTO', 'STATUS', 'CURP', 'CLABE', 'BANCO', 'CALLE/NUMERO', 'PUESTO'],
+    ['CIB00001', 'ANA PEREZ', '', '01/02/1990', 'Activo', 'PEAA900201MDFRRN01', '012345678901234567', 'BANCO X', 'CALLE 1', 'AUXILIAR'],
+  ]);
+  ok(r.encabezados.join('|') === 'No EMPLEADO|NOMBRE COMPLETO|N. EMPLEADO ANTERIOR|FECHA DE NACIMIENTO|STATUS|PUESTO', 'solo lo permitido: ' + r.encabezados.join('|'));
+  ok(r.quitadas.join() === 'CURP,CLABE,BANCO,CALLE/NUMERO', 'lo demás se queda en el navegador: ' + r.quitadas.join());
+  ok(!/PEAA900201|012345678901234567|BANCO X|CALLE 1/.test(JSON.stringify(r.filas)), 'y sus valores no viajan');
+}
+
 console.log('\n2. preparar: lo que no es la lista de CH');
 {
   const r = V.preparar([['FOLIO', 'PLACA'], ['AUT0001', 'ABC123']]);
