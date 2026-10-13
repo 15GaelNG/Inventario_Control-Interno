@@ -19,9 +19,6 @@ const Router = (function () {
     const template = HtmlService.createTemplateFromFile('html/Index');
     template.apagados = JSON.stringify(Config.apagados());
     template.temporada = TemporadaService.actual();
-    // "Nuestra ofrenda" (altar de Día de Muertos) solo existe en el menú durante la temporada;
-    // se apaga igual que un módulo apagado por ambiente, sin lógica nueva en el cliente.
-    if (template.temporada !== 'muertos') template.apagados = JSON.stringify(Config.apagados().concat('ofrenda'));
     return template
       .evaluate()
       .setTitle('Control Interno — Ciudad Maderas')

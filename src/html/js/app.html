@@ -741,10 +741,6 @@
     { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
     // Los tickets del helpdesk de TI (05/10/2026): todos lo ven; cada quien, lo que su cuenta ve allá
     { id: 'helpdesk', vista: 'helpdesk', icono: 'headset', etiqueta: 'Help desk', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk(), ayuda: () => AYUDA_HELPDESK },
-    // La ofrenda colectiva de Día de Muertos (altar con velas): cualquiera con sesión, sin
-    // entrada en Modulos.gs -- solo existe en el menú durante la temporada (Router.gs apaga
-    // 'ofrenda' el resto del año, igual que un módulo apagado por ambiente).
-    { id: 'ofrenda', vista: 'ofrenda', icono: 'flame', etiqueta: 'Nuestra ofrenda', libre: true, plantilla: 'tpl-ofrenda', init: () => Temporada.initOfrenda() },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
