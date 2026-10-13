@@ -68,4 +68,7 @@ test('clic derecho solo en la galería, y su menú no se queda encima del visor;
   assert.ok(lineas.includes("function menuFlotante(ancla, items, punto) {"));
   assert.ok(lineas.includes("menu.style.zIndex = '900';"), 'el menú por encima del visor');
   assert.ok(read('src/html/lineas-estilos.html').includes('.ln-visor-escena img { width: 100%; height: 100%; object-fit: contain;'));
+  // Clic fuera de la foto (lo oscuro alrededor) cierra; sobre ella acerca (usuario, 13-oct)
+  assert.ok(visor.includes("if (!cerca && !sobreFoto(ev)) { cerrar(); return; }"));
+  assert.ok(visor.includes("img.style.cursor = cerca ? 'zoom-out' : (sobreFoto(ev) ? 'zoom-in' : 'default');"));
 });

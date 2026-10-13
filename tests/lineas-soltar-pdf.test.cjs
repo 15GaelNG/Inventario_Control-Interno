@@ -31,6 +31,11 @@ test('soltar: solo en los botones de subir y los campos de archivo de Líneas, p
   assert.ok(bloque.includes("input.dispatchEvent(new Event('change', { bubbles: true }));"));
   assert.ok(!/'\/\*'/.test(bloque), 'nada de «/*» en un string de un .html (Apps Script lo borra)');
   assert.match(css, /\.ln-upload\.ln-soltar, \.ln-af-archivo\.ln-soltar \{/);
+  // «Suelta aquí» en todos los lugares mientras se arrastra, y se quita solo al dejar de llegar dragover
+  assert.ok(bloque.includes("document.documentElement.classList.toggle('ln-arrastrando', si);"));
+  assert.ok(bloque.includes('finArrastre = setTimeout(() => { arrastrando(false); marcarZona(null); }, 250);'));
+  assert.ok(css.includes("content: 'Suelta aquí';"));
+  assert.ok(css.includes('.ln-arrastrando .ln-upload:has(input[type="file"]:not([capture]):not([disabled]))'));
 });
 
 test('carátula del PDF con pdf.js (se carga la primera vez) en la identificación y en los campos de archivo', () => {

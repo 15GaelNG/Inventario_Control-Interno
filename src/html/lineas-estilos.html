@@ -303,9 +303,23 @@
   .ln-upload b, .ln-upload small { display: block; }
   .ln-upload small { margin-top: 3px; color: var(--color-text-muted); font-size: 11.5px; }
   .ln-upload input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-  /* Arrastrar y soltar (pendiente 2.42): el lugar donde se va a soltar se marca */
-  .ln-upload.ln-soltar, .ln-af-archivo.ln-soltar { border-color: var(--color-primary); border-style: solid; background: var(--color-accent-soft); }
-  .ln-af-archivo.ln-soltar { outline: 2px dashed var(--color-primary); outline-offset: 4px; border-radius: 8px; }
+  /* Arrastrar y soltar (pendiente 2.42): con archivos encima de Líneas, cada lugar para soltar se marca y dice «Suelta
+     aquí»; el que está bajo el cursor, más fuerte (usuario, 13-oct: «una transición de arrastra aquí») */
+  .ln-af-archivo { position: relative; }
+  .ln-upload, .ln-af-archivo { transition: transform .18s ease, background-color .18s ease, border-color .18s ease, box-shadow .18s ease; }
+  .ln-upload::after, .ln-af-archivo::after {
+    content: 'Suelta aquí'; position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center;
+    border-radius: inherit; background: color-mix(in srgb, var(--color-accent-soft) 88%, transparent); color: var(--color-primary);
+    font-weight: 700; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .18s ease;
+  }
+  .ln-arrastrando .ln-upload:has(input[type="file"]:not([capture]):not([disabled])),
+  .ln-arrastrando .ln-af-archivo:has(input[type="file"]:not([disabled])) {
+    border: 1.5px dashed var(--color-primary); border-radius: 13px; box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 12%, transparent);
+  }
+  .ln-arrastrando .ln-upload:has(input[type="file"]:not([capture]):not([disabled]))::after,
+  .ln-arrastrando .ln-af-archivo:has(input[type="file"]:not([disabled]))::after { opacity: .75; }
+  .ln-upload.ln-soltar, .ln-af-archivo.ln-soltar { transform: scale(1.02); border-style: solid; box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-primary) 20%, transparent); }
+  .ln-upload.ln-soltar::after, .ln-af-archivo.ln-soltar::after { opacity: 1; background: var(--color-accent-soft); }
   .ln-checklist-seccion { margin-bottom: 16px; }
   .ln-checklist-punto { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--color-border); }
   .ln-checklist-punto:last-child { border-bottom: none; }

@@ -1768,9 +1768,18 @@
       zonaEncima = zona;
       if (zona) zona.classList.add('ln-soltar');
     };
+    // Mientras se arrastran archivos sobre Líneas, todos los lugares para soltar se marcan («Suelta aquí», usuario 13-oct);
+    // se quita solo si deja de llegar dragover (salió de la ventana o se soltó)
+    let finArrastre = null;
+    const arrastrando = (si) => {
+      clearTimeout(finArrastre);
+      document.documentElement.classList.toggle('ln-arrastrando', si);
+      if (si) finArrastre = setTimeout(() => { arrastrando(false); marcarZona(null); }, 250);
+    };
     document.addEventListener('dragover', (ev) => {
       if (!conArchivos(ev) || !ev.target.closest || !ev.target.closest('.ln-modulo')) return;
       ev.preventDefault();
+      arrastrando(true);
       const zona = ev.target.closest(ZONAS_SOLTAR);
       const input = zona && inputDeZona(zona);
       ev.dataTransfer.dropEffect = input ? 'copy' : 'none';
@@ -1781,6 +1790,7 @@
       if (!conArchivos(ev) || !ev.target.closest || !ev.target.closest('.ln-modulo')) return;
       ev.preventDefault();
       marcarZona(null);
+      arrastrando(false);
       const zona = ev.target.closest(ZONAS_SOLTAR);
       const input = zona && inputDeZona(zona);
       if (!input) return;
@@ -1963,8 +1973,31 @@
         else if (ev.key === 'ArrowRight') pasar(1);
       };
       img.referrerPolicy = 'no-referrer';
-      img.addEventListener('click', (ev) => { ev.stopPropagation(); acercar(!escena.classList.contains('ln-visor-cerca'), ev); });
-      img.addEventListener('mousemove', (ev) => { if (escena.classList.contains('ln-visor-cerca')) seguir(ev); });
+      // La foto ocupa toda la escena (object-fit: contain): lo que se ve de ella es este rectángulo; alrededor es fondo
+      const sobreFoto = (ev) => {
+        const r = img.getBoundingClientRect();
+        const nw = img.naturalWidth;
+        const nh = img.naturalHeight;
+        if (!nw || !nh || !r.width || !r.height) return true;
+        const k = Math.min(r.width / nw, r.height / nh);
+        const ancho = nw * k;
+        const alto = nh * k;
+        const x = ev.clientX - r.left - (r.width - ancho) / 2;
+        const y = ev.clientY - r.top - (r.height - alto) / 2;
+        return x >= 0 && y >= 0 && x <= ancho && y <= alto;
+      };
+      // Clic fuera de la foto cierra (usuario, 13-oct: antes acercaba aunque fuera en lo oscuro); acercada, cualquier clic aleja
+      img.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const cerca = escena.classList.contains('ln-visor-cerca');
+        if (!cerca && !sobreFoto(ev)) { cerrar(); return; }
+        acercar(!cerca, ev);
+      });
+      img.addEventListener('mousemove', (ev) => {
+        const cerca = escena.classList.contains('ln-visor-cerca');
+        if (cerca) seguir(ev);
+        img.style.cursor = cerca ? 'zoom-out' : (sobreFoto(ev) ? 'zoom-in' : 'default');
+      });
       img.addEventListener('error', () => {
         const f = lista[i];
         if (f && f.miniatura && img.src !== f.miniatura) img.src = f.miniatura;
