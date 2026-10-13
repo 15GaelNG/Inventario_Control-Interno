@@ -16,10 +16,10 @@ test('la galería de la inspección abre el visor; un video o una foto sin vista
   assert.match(pintar, /' data-foto="' \+ n \+ '"'/);
   assert.match(pintar, /verFotos\(enGaleria, enGaleria\.indexOf\(f\), r\.puedeOperar \? \{ alQuitar: alQuitar \} : \{\}\)/);
   assert.match(pintar, /if \(ev\.ctrlKey \|\| ev\.metaKey \|\| ev\.shiftKey \|\| ev\.button === 1\) return;/);
-  // Quitar: comentario obligatorio, ventana por encima del visor, con espera
-  assert.match(pintar, /llamar\('apiLineasQuitarFotoInspeccion', id, f\.id, v\.comentario\)/);
+  // Quitar: sin comentario (usuario, 13-oct), ventana por encima del visor, con espera
+  assert.match(pintar, /pedirDatos\('¿Quitar esta foto\?', f\.nombre, \[\], 'Quitar foto', \{/);
+  assert.match(pintar, /llamar\('apiLineasQuitarFotoInspeccion', id, f\.id, ''\)/);
   assert.match(pintar, /peligro: true, encima: true, espera: 'Quitando la foto'/);
-  assert.match(pintar, /minimo: 4, area: true/);
 });
 
 test('el visor: flechas, Escape, acercar con clic y la foto grande de Drive; la captura también lo usa', () => {
@@ -36,11 +36,11 @@ test('el visor: flechas, Escape, acercar con clic y la foto grande de Drive; la 
   assert.doesNotMatch(css, /ln-ine-visor/);
 });
 
-test('el servidor solo quita una foto de esa inspección, con permiso de operar y comentario, y lo anota', () => {
+test('el servidor solo quita una foto de esa inspección, con permiso de operar, y lo anota', () => {
   assert.match(read('src/ClientApi.gs'), /function apiLineasQuitarFotoInspeccion\(token, id, archivoId, comentario\) \{\s+return TelefoniaService\.quitarFotoInspeccion\(token, id, archivoId, comentario\);/);
   const quitar = cuerpo(servicio, 'function quitarFotoInspeccion(token, id, archivoId, comentario)', '  /**\n   * Abre un archivo');
   assert.match(quitar, /const sesion = operar_\(token\);/);
-  assert.match(quitar, /if \(motivo\.length <= 3\) throw new Error/);
+  assert.doesNotMatch(quitar, /motivo\.length/, 'el comentario no es obligatorio');
   assert.match(quitar, /const carpetas = carpetasFotos_\(doc, id\);/);
   assert.match(quitar, /carpetas\.indexOf\(c\.getId\(\)\) >= 0/);
   assert.match(quitar, /if \(!carpeta \|\| !esFotoDeInspeccion_\(archivo\.getName\(\), archivo\.getMimeType\(\)\)\) throw new Error\('La foto no es de esta inspección\.'\);/);

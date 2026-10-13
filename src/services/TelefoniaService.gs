@@ -421,13 +421,12 @@ const TelefoniaService = (function () {
   /**
    * Quitar una foto de una inspección guardada (usuario, 13-oct: «se pueda eliminar también alguna imagen que hayan
    * enviado por error»). Solo una foto de las carpetas de esa inspección; va a la papelera de Drive (se recupera de ahí
-   * 30 días) y queda en el historial del registro con su comentario. Si la cuenta de la app no puede mandarla a la
+   * 30 días) y queda en el historial del registro (sin comentario obligatorio: usuario, 13-oct). Si la cuenta de la app no puede mandarla a la
    * papelera (el archivo es de otra cuenta), se saca de la carpeta a «FOTOS QUITADAS», junto a ella, y ya no se ve.
    */
   function quitarFotoInspeccion(token, id, archivoId, comentario) {
     const sesion = operar_(token);
     const motivo = String(comentario || '').trim();
-    if (motivo.length <= 3) throw new Error('Escribe por qué se quita la foto (queda en el historial).');
     const doc = LineasRepo.leerInspeccion(id) || (/^drive_/.test(String(id)) ? documentoNucos_(String(id).slice(6), 'INSPECCION') : null);
     if (!doc) throw new Error('No existe la inspección ' + id);
     if (!doc.drive && doc.registroId && doc.fecha) {
