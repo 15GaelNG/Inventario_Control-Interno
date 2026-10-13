@@ -509,6 +509,8 @@
       { icono: 'loading-icon-2', mensaje: 'Revisando accesorios…' },
       { icono: 'loading-icon-3', mensaje: 'Cerrando caja chica del día…' },
     ];
+    // En temporada (Día de Muertos) los mensajes cambian; los íconos son los mismos
+    Temporada.mensajesCarga(pasos);
     // Era 1.9 s de espera fija antes de pedir nada; ahora es más corta y los datos ya vienen en camino
     const duracionTotal = 1000;
     const porPaso = duracionTotal / pasos.length;
@@ -746,6 +748,7 @@
         { vista: 'usuarios', etiqueta: 'Usuarios y permisos', icono: 'shield-check', requiere: 'usuarios', plantilla: 'tpl-usuarios', init: () => initPermisosAdmin(), ayuda: () => AYUDA_USUARIOS },
         { vista: 'relaciones', etiqueta: 'Datos conectados', icono: 'git-compare-arrows', requiere: 'relaciones', plantilla: 'tpl-relaciones', init: () => initRelaciones(), ayuda: () => AYUDA_RELACIONES },
         { vista: 'salud', etiqueta: 'Salud', icono: 'heart-pulse', requiere: 'salud', plantilla: 'tpl-salud', init: () => initSalud(), ayuda: () => AYUDA_SALUD },
+        { vista: 'capital-humano', etiqueta: 'Capital humano', icono: 'users', requiere: 'capital-humano', plantilla: 'tpl-capital-humano', init: () => CapitalHumanoVista.init() },
       ],
     },
   ];

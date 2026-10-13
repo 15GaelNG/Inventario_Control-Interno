@@ -500,6 +500,16 @@ function apiListarDepartamentos(token) {
 function apiListarColaboradores(token) {
   return CapitalHumano.listarColaboradores(token);
 }
+// Administración > Capital humano (solo admins): subir la lista de CH. El archivo viaja comprimido (gzip, base64).
+function apiCapitalHumanoResumen(token) {
+  return CapitalHumano.resumen(token);
+}
+function apiCapitalHumanoHistorial(token) {
+  return CapitalHumano.historial(token);
+}
+function apiCapitalHumanoCargar(token, comprimido, opciones) {
+  return CapitalHumano.cargar(token, comprimido, opciones);
+}
 function apiListarSolicitantesTickets(token) {
   return TicketsService.listarSolicitantes(token);
 }
@@ -811,6 +821,21 @@ function apiPermisosGuardar(token, cambios) {
   return Permisos.guardar(token, cambios);
 }
 
+// Decoración de temporada (Día de Muertos): solo ADMIN
+function apiTemporadaGuardar(token, valor) {
+  return TemporadaService.guardar(token, valor);
+}
+// La ofrenda colectiva del Inicio: cualquiera con sesión; quitar, la propia o ADMIN
+function apiOfrenda(token) {
+  return TemporadaService.ofrenda(token);
+}
+function apiOfrendaEncender(token, memoria) {
+  return TemporadaService.encender(token, memoria);
+}
+function apiOfrendaApagar(token, id) {
+  return TemporadaService.apagar(token, id);
+}
+
 // --- Inspección vehicular (rama `ayrton`) ---
 function apiListarInspecciones(token) {
   return InspeccionesService.listar(token);
@@ -886,8 +911,8 @@ function apiRelacionesMapa(token) {
 function mapaCompleto_() {
   const mapa = Relaciones.describir();
   mapa.duenos.push({
-    hoja: CapitalHumano.HOJA_PERSONAS,
-    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_PERSONAS),
+    hoja: CapitalHumano.HOJA_CH,
+    etiqueta: Relaciones.etiqueta(CapitalHumano.HOJA_CH),
     llaveDeNegocio: 'NOMBRE COMPLETO',
     copias: CapitalHumano.describirLigas().map((l) => ({
       nombre: l.nombre,

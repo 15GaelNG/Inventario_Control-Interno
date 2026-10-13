@@ -386,7 +386,8 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
   // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso);
   // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs'];
+  // y TemporadaService la ofrenda de Día de Muertos (no es un módulo: cualquiera con sesión enciende su vela)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'TemporadaService.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
@@ -541,8 +542,8 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   assert.match(repo, /catalogos_telefonia_v7/);
   // Reestructura (§3): los datos del responsable salen solo de Capital Humano (personas activas)
   ['sedes', 'areas', 'oficinas', 'puestos', 'jefes', 'directores'].forEach((k) => assert.match(repo, new RegExp(k + ": unicos\\(ch, '")));
-  assert.match(repo, /function colaboradoresActivos_\(\)/);
-  assert.match(repo, /indice_colaboradores_v4/);
+  assert.match(repo, /CapitalHumano\.activos\(\)/);
+  assert.match(repo, /indice_colaboradores_v5/);
   ['DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
   // "Agregar 'x'": lo tecleado sin elegirlo no se guarda, y solo en los datos del responsable
   const cbx = read('src/html/js/componentes/combobox.html');
@@ -2282,7 +2283,7 @@ test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga tam
   const sinRevisar = llamadas
     .filter((m) => !m[2].includes("Config.exigirEncendido('helpdesk')")).map((m) => m[1]);
   assert.deepEqual(sinRevisar, [], 'llamadas de Help Desk sin Config.exigirEncendido');
-  assert.ok(read('src/html/Index.html').includes('<body data-apagados="<?= apagados ?>">'), 'Index.html pasa la lista al menú');
+  assert.match(read('src/html/Index.html'), /<body data-apagados="<\?= apagados \?>"[ >]/, 'Index.html pasa la lista al menú');
   assert.ok(read('src/Router.gs').includes('template.apagados = JSON.stringify(Config.apagados())'), 'Router llena la lista');
 });
 
@@ -2407,4 +2408,52 @@ test('lo nuevo de Vehículos (inspección, verificación, responsiva de sensor, 
   // Los lectores aceptan la liga (lo nuevo) y la ruta (lo viejo)
   assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRuta\(ruta, carpetasIds\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
   assert.match(read('src/utils/DriveUtils.gs'), /function archivoDeRutaProfunda\(ruta, raizId\) \{\s*const porLiga = archivoDeLiga_\(ruta\);/);
+});
+
+test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS (docs/personas-unificar.md)', () => {
+  // 12-oct-2026: había cuatro formas de leer personas (CapitalHumano, Líneas con su propia lectura de CH y su respaldo a
+  // COLABORADORES, la revisión de INE). Desde ahora todo pasa por CapitalHumano (activos, idPara, conPersona, filasCH).
+  // Se permiten, hasta retirar COLABORADORES (fase 4): la carga del libro de pruebas de Líneas y su diagnóstico.
+  const PERMITIDOS = ['src/services/CapitalHumano.gs', 'src/services/lineas/LineasReestructura.gs', 'src/services/lineas/LineasRevisionBD.gs'];
+  const malos = [];
+  const recorrer = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return recorrer(p);
+    if (!/\.(gs|html)$/.test(e.name)) return;
+    const rel = path.relative(path.join(__dirname, '..'), p).split(path.sep).join('/');
+    if (PERMITIDOS.includes(rel)) return;
+    const s = fs.readFileSync(p, 'utf8');
+    if (/getSheetByName\(\s*(['"](COLABORADORES ACTUALIZADO|PERSONAS|COLABORADORES)['"]|CapitalHumano\.HOJA_(CH|PERSONAS))/.test(s) ||
+        /leerTabla\(\s*['"]COLABORADORES/.test(s) || /\bTAB\.COLAB\b/.test(s)) malos.push(rel);
+  });
+  recorrer(path.join(__dirname, '..', 'src'));
+  assert.deepEqual(malos, [], 'leen personas por su cuenta (usar CapitalHumano)');
+  // Y cada servicio que captura una persona calcula su ID PERSONA
+  const ch = read('src/services/CapitalHumano.gs');
+  ['VEHICULOS', 'CAJAS CHICAS', 'ASIGNACIONES', 'RESPONSIVA VEHICULAR', 'ADHERENTE VEHICULAR', 'REASIGNACIONES_VEHICULOS',
+    'INSPECCION VEHICULAR', 'UBER', 'ARQUEOS', 'TICKETS'].forEach((h) => assert.match(ch, new RegExp("hoja: '" + h + "'"), 'liga de ' + h));
+  [['VehiculosService.gs', /persona: true/], ['CajasChicasService.gs', /persona: true/], ['UberService.gs', /persona: true/],
+    ['TicketsService.gs', /persona: true/], ['ArqueosService.gs', /persona: true/],
+    ['ResponsivaVehicularService.gs', /CapitalHumano\.conPersona\('RESPONSIVA VEHICULAR'/],
+    ['AdherenteVehicularService.gs', /CapitalHumano\.conPersona\('ADHERENTE VEHICULAR'/],
+    ['ReasignacionesVehicularesService.gs', /CapitalHumano\.conPersona\('REASIGNACIONES_VEHICULOS'/],
+    ['InspeccionesService.gs', /CapitalHumano\.conPersona\('INSPECCION VEHICULAR'/]]
+    .forEach(([f, re]) => assert.match(read('src/services/' + f), re, f));
+  // Ya no hay copias del cálculo
+  ['VehiculosService.gs', 'CajasChicasService.gs'].forEach((f) => assert.doesNotMatch(read('src/services/' + f), /function conPersona_/, f));
+  // Del Excel de CH solo entran las columnas PERMITIDAS (lista de permitidas, no de prohibidas: el 12-oct el Excel trajo
+  // CLABE, CURP, domicilio… y la cuenta con otro nombre). La del navegador y la del servidor, iguales; y nunca la cuenta,
+  // la CLABE, el CURP ni el RFC (el teléfono sí: usuario, 12-oct-2026)
+  const permitidas = (s) => {
+    const m = /const PERMITIDAS = (\[[^\]]*\]);/.exec(s);
+    assert.ok(m, 'falta const PERMITIDAS');
+    return JSON.parse(m[1].replace(/'/g, '"'));
+  };
+  const enNavegador = permitidas(read('src/html/js/app-capital-humano.html'));
+  assert.deepEqual(enNavegador, permitidas(read('src/services/CapitalHumano.gs')), 'PERMITIDAS: navegador y servidor distintos');
+  ['NÚMERO DE CUENTA', 'NUMERO DE CUENTA', 'CLABE', 'BANCO', 'CURP', 'RFC', 'IMSS', 'INE', 'CALLE/NUMERO']
+    .forEach((c) => assert.ok(enNavegador.indexOf(c) === -1, c + ' no debe entrar al libro'));
+  assert.ok(enNavegador.indexOf('TELEFONO') !== -1, 'el teléfono sí entra (usuario, 12-oct-2026)');
+  assert.doesNotMatch(read('src/services/CapitalHumano.gs') + read('src/html/js/app-capital-humano.html'), /const SENSIBLES\b/,
+    'la lista de prohibidas ya no existe: es de permitidas');
 });

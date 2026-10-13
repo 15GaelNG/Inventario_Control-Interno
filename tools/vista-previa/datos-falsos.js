@@ -14,7 +14,7 @@
       ['inspeccion-vehicular', 'Inspección Vehicular'], ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
     ['arqueos', 'Arqueos', 'wallet', [['arqueos', 'Arqueos'], ['caja-chica', 'Caja Chica']]],
     ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
-    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud']]],
+    ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud'], ['capital-humano', 'Capital humano']]],
   ];
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
   const conEscenas = MODULOS.map((g) => g[0]);
@@ -203,6 +203,14 @@
   };
 
   const respuestas = {
+    // La ofrenda de Día de Muertos (TemporadaService): 23 velas, una propia
+    apiOfrenda: () => ({
+      total: 23, encendida: true, moderar: true, mia: { id: 'v1', memoria: 'Mi abuela Carmen' },
+      memorias: ['Mi abuela Carmen', 'Don Ramiro, mi papá', 'Tía Lupe', 'Rocío M.', 'El Güero de Obra', 'Abuelito Chema', 'Mi hermano Luis', 'Doña Toña']
+        .map((m, i) => ({ id: 'v' + (i + 1), memoria: m, mia: i === 0 })),
+    }),
+    apiOfrendaEncender: () => respuestas.apiOfrenda(),
+    apiOfrendaApagar: () => respuestas.apiOfrenda(),
     ...LISTAS,
     ...FICHAS,
     apiPermisosPanel: PERMISOS_PANEL,
@@ -245,6 +253,9 @@
       { dueno: 'FOLIO', copia: 'FOLIO', encontradas: 198, deCopia: 212, conValor: 205, duplicadasEnDueno: 0 },
     ], datos: [['PLACA', 'PLACA'], ['COLOR', 'COLOR']] }),
     apiSaludRevisar: JSON.stringify({ mapa: REL_MAPA, reporte: REL_REVISION }),
+    apiCapitalHumanoResumen: { renglones: 15254, activos: 3233, sinId: 0, tieneColumna: true, sensibles: ['NÚMERO DE CUENTA'] },
+    apiCapitalHumanoHistorial: [{ FECHA: '12/10/2026 15:10', QUIEN: 'prueba@ciudadmaderas.com', RENGLONES: '15254', NUEVOS: '28', CAMBIAN: '311',
+      FALTAN: '0', EMPLEOS_NUEVOS: '28', PERSONAS_NUEVAS: '26', AVISOS: '' }],
     apiMisPermisos: { correo: 'prueba@ciudadmaderas.com', permisos, grupos },
     apiListarVehiculosBasico: [{ FOLIO: 'AUT0024', NUCO: '24', PLACA: 'GGY886F', MARCA: 'CHEVROLET', LINEA_VEHICULO: 'BEAT' },
       { FOLIO: 'AUT0100', NUCO: '100', PLACA: 'ABC123A', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200' }],
@@ -491,7 +502,46 @@
     modulos.forEach((m) => { delete state.permisos[m]; });
   }
 
+  /** Día de Muertos (html/temporada.html) abierto, visto por un ADMIN (o por cualquiera: rol) */
+  function temporada(rol) {
+    state.sesion.rol = rol || 'ADMIN';
+    Temporada.aplicar('muertos');
+  }
+
   const ESCENAS = {
+    'muertos-inicio': async () => { temporada(); await abrir('dashboard'); await hasta('.dm-banner'); await esperar(400); },
+    'muertos-login': async () => { temporada(); state.token = null; render(); await hasta('.dm-login'); await esperar(900); },
+    'muertos-carga': async () => {
+      temporada();
+      montarVista('tpl-loading', null, document.getElementById('loading-screen-container'));
+      await hasta('.dm-velas-carga');
+      document.querySelectorAll('.loading-icon').forEach((el, i) => { if (i < 2) el.classList.add('active'); });
+      document.getElementById('loading-bar-fill').style.width = '55%';
+      document.getElementById('loading-message').textContent = 'Poniendo el cempasúchil…';
+      await esperar(700);
+    },
+    'muertos-ofrenda': async () => { temporada(); await abrir('dashboard'); (await hasta('.dm-banner-ofrenda')).click(); await hasta('.dm-memoria'); await esperar(900); },
+    // El menú abierto (en escritorio se abre al pasar el cursor; en celular, con el botón: capturar con --ancho=390)
+    'muertos-menu': async () => {
+      temporada(); await abrir('vehiculos');
+      const menu = document.getElementById('sidebar');
+      const grupo = document.querySelector('.nav-subitem.active');
+      if (grupo) grupo.closest('.nav-group').classList.add('expanded');
+      if (Pantalla.esAngosta()) (await hasta('.shell-menu-btn')).click();
+      else menu.classList.remove('collapsed');
+      await esperar(500);
+      const opcion = menu.querySelector('.nav-subitem.active') || menu.querySelector('.nav-item.active');
+      if (opcion) opcion.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      await esperar(500);
+    },
+    // El panel de la flor: lo de cada quien (sin la parte de administración) y el del ADMIN
+    'muertos-panel': async () => { temporada('USUARIO'); await abrir('dashboard'); (await hasta('.dm-interruptor')).click(); await hasta('#dm-panel:not([hidden])'); await esperar(300); },
+    'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.dm-interruptor')).click(); await hasta('[data-dm-global]'); await esperar(300); },
+    'muertos-vacio': async () => {
+      temporada(); await abrir('vehiculos');
+      const buscar = await hasta('.dt-buscar'); buscar.value = 'nada-que-coincida'; evento(buscar, 'input');
+      await hasta('.dt-vacio'); await esperar(500);
+    },
     'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.dc-tarjeta'); await esperar(300); },
     'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await hasta('.rel-s-tabla'); await esperar(300); },
     'relaciones-revisar': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.dc-tarjeta [data-dc-accion="revisar"]')).click(); (await hasta('.dc-vista')).scrollIntoView({ block: 'center' }); await esperar(300); },
@@ -501,6 +551,15 @@
       const sel = (n) => document.querySelector('[data-dc-nueva="' + n + '"]'); sel('dueno').value = 'VEHICULOS'; sel('copia').value = 'HOLOGRAMAS';
       document.querySelector('[data-dc-accion="sugerir"]').click(); await hasta('.dc-elegir'); await esperar(300); },
     'relaciones-lineas': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
+    'capital-humano': async () => { await abrir('capital-humano'); await hasta('#ch-historial table'); await esperar(300); },
+    // El ensayo de una carga (como en la captura del usuario del 12-oct): las cifras, los avisos y Aplicar
+    'capital-humano-ensayo': async () => {
+      await abrir('capital-humano'); await hasta('#ch-historial table');
+      const nombre = document.getElementById('ch-archivo-nombre'); nombre.textContent = 'BASE RELOJ CHECADOR ABRIL 2026.xlsx'; nombre.classList.remove('vacio');
+      CapitalHumanoVista.pintarEnsayo(document.getElementById('ch-ensayo'), { renglones: 15254, nuevos: 30, cambian: 15224, faltan: 5, personasNuevas: 26,
+        quitadas: ['NÚMERO DE CUENTA'], conflictos: [], avisos: ['No vino en el archivo: CIB00001 ANA PEREZ (se queda)', 'No vino en el archivo: CIB00002 LUIS SOTO (se queda)'] }, false);
+      await esperar(300);
+    },
     'salud': async () => { await abrir('salud'); await vistaSalud(false); await hasta('.rel-s-pend'); await esperar(300); },
     'salud-lineas': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('#salud-tabs .tab-btn[data-tab="familia-1"]')).click(); await esperar(400); },
     'salud-detalle-seleccion': async () => { await abrir('salud'); await vistaSalud(false); (await hasta('[data-s-ver]')).click(); await esperar(700); const cajas = document.querySelectorAll('#salud-tabla tbody input[type="checkbox"]'); if (cajas[0]) cajas[0].click(); await esperar(400); },

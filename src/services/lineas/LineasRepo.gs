@@ -18,7 +18,6 @@ const LineasRepo = (function () {
     DESECHO: 'BITACORA DE DESECHO',
     INSP: 'INSPECCIONES LINEAS',
     RESP: 'RESPONSIVAS LINEAS',
-    COLAB: 'COLABORADORES',
     LISTAS: 'LISTAS TELEFONOS',
     REACTIVACION: 'REACTIVACION DE LINEAS',
     SOLICITUD: 'SOLICITUD DE LINEAS',
@@ -1472,40 +1471,27 @@ const LineasRepo = (function () {
     return c;
   }
 
-  /**
-   * Las personas ACTIVAS de la base de Capital Humano. La base guarda también las bajas, para el histórico, pero las
-   * listas de los formularios solo ofrecen a quien está activo.
-   *
-   * Producción (usuario, 4-oct): la base es la pestaña COLABORADORES ACTUALIZADO, la que pega Ayrton y usan sus
-   * módulos. Líneas solo la lee, con las columnas acordadas (reestructuraLeerHojaCH_), y no toca ni esa ni
-   * COLABORADORES. Sin esa pestaña (la base de pruebas), sigue leyendo COLABORADORES.
-   */
-  function colaboradoresActivos_() {
-    const ch = typeof reestructuraLeerHojaCH_ === 'function' ? reestructuraLeerHojaCH_(LineasDatos.libro()) : null;
-    return (ch || LineasDatos.leerTabla(TAB.COLAB)).filter((f) => String(col(f, 'ESTATUS COLABORADOR') || '').trim().toUpperCase() === 'ACTIVO');
-  }
-
   /** Personas activas de CH para elegir al responsable: al elegir una se llenan sus datos (autollenar). */
   function indiceColaboradores() {
-    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v4');
+    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v5');
     if (enCache) return enCache;
-    const filas = colaboradoresActivos_().map((f) => {
-      const n = txt(col(f, 'No EMPLEADO'));
-      return [n === null ? null : String(n), txt(col(f, 'NOMBRE COMPLETO')), txt(col(f, 'PUESTO')), txt(col(f, 'DEPARTAMENTO')),
-        txt(col(f, 'AREA')), txt(col(f, 'SEDE')), txt(col(f, 'OFICINA/DESARROLLO')), txt(col(f, 'ESTATUS COLABORADOR')),
-        txt(col(f, 'DIRECTOR')), txt(col(f, 'JEFE DIRECTO')), txt(col(f, 'CORREO EMPRESARIAL'))];
-    }).filter((c) => c[1]);
+    // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (CapitalHumano.activos, 12-oct-2026).
+    // Líneas los guarda en mayúsculas y el correo en minúsculas, como siempre.
+    const may = (v) => { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase(); return t || null; };
+    const filas = CapitalHumano.activos().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
+      may(p.AREA), may(p.SEDE), may(p.OFICINA), 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
+      String(p.CORREO || '').trim().toLowerCase() || null]).filter((c) => c[1]);
     const ix = LineasUtil.paraCliente({
       columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo'],
       filas: filas, generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_colaboradores_v4', ix, 21600);
+    LineasDatos.cacheGuardar('indice_colaboradores_v5', ix, 21600);
     return ix;
   }
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4',
+    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5',
       'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
     equivalencias_ = null;

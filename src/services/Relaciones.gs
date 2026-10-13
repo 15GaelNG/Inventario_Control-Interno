@@ -1156,6 +1156,10 @@ const MAPA = {
     'ACCESORIOS CELULARES': { modulo: 'Inventario de Accesorios (Líneas)', uno: 'artículo', varios: 'artículos', familia: 'Líneas' },
     'MOVIMIENTOS_ACCESORIOS': { modulo: 'Movimientos de Accesorios', uno: 'movimiento', varios: 'movimientos', familia: 'Líneas' },
     'PERSONAS': { modulo: 'Capital Humano', uno: 'persona', varios: 'personas', familia: 'Capital Humano' },
+    'COLABORADORES ACTUALIZADO': { modulo: 'Capital Humano', uno: 'persona', varios: 'personas', familia: 'Capital Humano' },
+    'ASIGNACIONES': { modulo: 'Líneas Telefónicas', uno: 'asignación', varios: 'asignaciones', familia: 'Líneas' },
+    'UBER': { modulo: 'Uber', uno: 'usuario de Uber', varios: 'usuarios de Uber', familia: 'Otros' },
+    'TICKETS': { modulo: 'Tickets', uno: 'ticket', varios: 'tickets', familia: 'Otros' },
     // No son copias del MAPA, pero sí hijas en Entidades.REFERENCIAS: sin nombre aquí, el
     // aviso de "no se puede eliminar" diría "3 registros" en vez de "3 reasignaciones".
     'REASIGNACIONES_VEHICULOS': { modulo: 'Reasignaciones Vehiculares', uno: 'reasignación', varios: 'reasignaciones', familia: 'Vehículos' },

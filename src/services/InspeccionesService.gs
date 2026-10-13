@@ -441,6 +441,8 @@ const InspeccionesService = (function () {
         }
       });
 
+      // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
+      if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas

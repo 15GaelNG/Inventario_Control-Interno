@@ -635,10 +635,45 @@
       "padre": "PERSONAS"
     },
     {
-      "hoja": "LINEAS TELEFONICAS",
+      "hoja": "ASIGNACIONES",
       "columna": "ID PERSONA",
       "padre": "PERSONAS",
       "libro": "TELEFONIA"
+    },
+    {
+      "hoja": "RESPONSIVA VEHICULAR",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "ADHERENTE VEHICULAR",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "REASIGNACIONES_VEHICULOS",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "INSPECCION VEHICULAR",
+      "columna": "ID PERSONA CONDUCTOR",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "UBER",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "ARQUEOS",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
+    },
+    {
+      "hoja": "TICKETS",
+      "columna": "ID PERSONA",
+      "padre": "PERSONAS"
     }
   ],
   "referenciasMigracion": [

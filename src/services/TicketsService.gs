@@ -20,6 +20,8 @@ const TicketsService = (function () {
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     // Ojo: no confundir con la pestaña de respaldo "TICKETS 24/04/25"
     hoja: 'TICKETS',
+    // ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.LIGAS)
+    persona: true,
     columnas: COLUMNAS_LISTA,
     fila: (r) => {
       const fila = {};

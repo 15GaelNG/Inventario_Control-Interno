@@ -95,66 +95,6 @@ const REESTRUCTURA_COLUMNAS_CH = ['ID', 'No EMPLEADO', 'NOMBRE COMPLETO', 'DEPAR
   'OFICINA/DESARROLLO', 'ESTATUS COLABORADOR', 'DIRECTOR', 'JEFE DIRECTO', 'CORREO EMPRESARIAL', 'FECHA DE INGRESO',
   'FECHA DE BAJA', 'N. EMPLEADO ANTERIOR'];
 
-/** Pestaña del mismo libro con la base completa de Capital Humano: la pega Ayrton y Líneas solo la lee (4-oct). */
-const REESTRUCTURA_HOJA_CH = 'COLABORADORES ACTUALIZADO';
-/** Columna de CH → columna de COLABORADORES (las mismas que migracion/capital_humano/preparar_ch.py). */
-const REESTRUCTURA_DE_CH = [['No EMPLEADO', 'No EMPLEADO'], ['NOMBRE COMPLETO', 'NOMBRE COMPLETO'], ['DEPARTAMENTO', 'DEPARTAMENTO'],
-  ['AREA', 'AREA'], ['PUESTO', 'PUESTO'], ['SEDE', 'SEDE'], ['OFICINA/DESARROLLO', 'OFICINA/DESARROLLO'],
-  ['STATUS', 'ESTATUS COLABORADOR'], ['DIRECTOR', 'DIRECTOR'], ['JEFE DIRECTO', 'JEFE DIRECTO'],
-  ['CORREO EMPRESARIAL', 'CORREO EMPRESARIAL'], ['FECHA DE INGRESO', 'FECHA DE INGRESO'], ['FECHA DE BAJA', 'FECHA DE BAJA'],
-  ['N. EMPLEADO ANTERIOR', 'N. EMPLEADO ANTERIOR']];
-
-/**
- * Lee la pestaña de CH solo con las columnas acordadas (cada una por separado: la cuenta, la CURP, etc. ni se leen) y
- * la deja como la dejaba preparar_ch.py: texto en mayúsculas sin espacios de más, correo en minúsculas y fechas
- * yyyy-MM-dd. null si la pestaña no está.
- */
-function reestructuraLeerHojaCH_(ss) {
-  const hoja = ss.getSheetByName(REESTRUCTURA_HOJA_CH);
-  if (!hoja || hoja.getLastRow() < 2) return null;
-  const n = hoja.getLastRow() - 1;
-  const enc = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map((h) => String(h).replace(/\s+/g, ' ').trim());
-  const faltan = REESTRUCTURA_DE_CH.filter((p) => enc.indexOf(p[0]) < 0).map((p) => p[0]);
-  if (faltan.length) throw new Error('Faltan columnas en ' + REESTRUCTURA_HOJA_CH + ': ' + faltan.join(', '));
-  const texto = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
-  // La zona del libro una sola vez (usuario, 9-oct: pedirla por cada fecha, ~30 mil veces, eran ~20 s de la primera
-  // carga de un formulario sin caché)
-  const zona = ss.getSpreadsheetTimeZone();
-  // Con la misma zona en el script, la fecha se arma en JavaScript: Utilities.formatDate por cada una (~30 mil) eran
-  // otros ~18 s
-  const mismaZona = typeof Session !== 'undefined' && Session.getScriptTimeZone() === zona;
-  const dos = (x) => (x < 10 ? '0' : '') + x;
-  const fecha = (v) => {
-    if (v instanceof Date && !isNaN(v.getTime())) {
-      return mismaZona ? v.getFullYear() + '-' + dos(v.getMonth() + 1) + '-' + dos(v.getDate()) : Utilities.formatDate(v, zona, 'yyyy-MM-dd');
-    }
-    const t = texto(v);
-    let m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(t);
-    if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
-    m = /^(\d{4})-(\d{2})-(\d{2})/.exec(t);
-    return m ? m[0] : '';
-  };
-  // Un solo bloque de la primera a la última columna acordada (antes, 14 lecturas de una columna: ~22 s)
-  const t0 = Date.now();
-  const posiciones = REESTRUCTURA_DE_CH.map((p) => enc.indexOf(p[0]));
-  const desde = Math.min.apply(null, posiciones);
-  const bloque = hoja.getRange(2, desde + 1, n, Math.max.apply(null, posiciones) - desde + 1).getValues();
-  if (typeof LineasDatos !== 'undefined') LineasDatos.tiempo('leer CH ' + bloque[0].length + ' columnas × ' + n + ' filas', t0);
-  const salida = [];
-  for (let i = 0; i < n; i++) {
-    const fila = bloque[i];
-    if (posiciones.every((c) => texto(fila[c - desde]) === '')) continue;
-    const o = {};
-    REESTRUCTURA_DE_CH.forEach((p, k) => {
-      const v = fila[posiciones[k] - desde];
-      o[p[1]] = p[1].indexOf('FECHA') === 0 ? fecha(v) : (p[1] === 'CORREO EMPRESARIAL' ? texto(v).toLowerCase() : texto(v).toUpperCase());
-    });
-    salida.push(o);
-  }
-  if (typeof LineasDatos !== 'undefined') LineasDatos.tiempo('CH preparada (' + salida.length + ')', t0);
-  return salida;
-}
-
 /**
  * Carga en COLABORADORES la base de Capital Humano (solo la base de pruebas): activos y bajas, un renglón por ingreso,
  * guardado como lo escribe CH. Sale de los archivos temporales del proyecto (tmp_ch_NN.html, gzip + base64) que arma
@@ -168,11 +108,8 @@ function reestructuraLeerHojaCH_(ss) {
 function reestructuraCargarCapitalHumano() {
   soloEditor_();
   const ss = SpreadsheetApp.openById(leerConfig_('SS_ID_TELEFONIA'));
-  // Con la pestaña de Ayrton, Líneas la lee directo (LineasRepo.colaboradoresActivos_) y COLABORADORES no se toca
-  // (usuario, 4-oct: no romper lo que usan Ayrton y Jorge). Esta carga es solo para la base de pruebas.
-  if (ss.getSheetByName(REESTRUCTURA_HOJA_CH)) {
-    throw new Error('Este libro tiene ' + REESTRUCTURA_HOJA_CH + ': Líneas ya la lee directo y COLABORADORES no se reescribe.');
-  }
+  // Desde el 12-oct-2026 Líneas lee las personas de CapitalHumano (COLABORADORES ACTUALIZADO), no de COLABORADORES:
+  // esta carga solo queda para el libro de pruebas viejo, y se retira con COLABORADORES (docs/personas-unificar.md).
   return reestructuraEscribirCH_(ss, reestructuraLeerTmpCH_(), 'tmp_ch');
 }
 

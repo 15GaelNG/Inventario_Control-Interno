@@ -18,6 +18,7 @@ const Router = (function () {
   function renderShell(e) {
     const template = HtmlService.createTemplateFromFile('html/Index');
     template.apagados = JSON.stringify(Config.apagados());
+    template.temporada = TemporadaService.actual();
     return template
       .evaluate()
       .setTitle('Control Interno — Ciudad Maderas')

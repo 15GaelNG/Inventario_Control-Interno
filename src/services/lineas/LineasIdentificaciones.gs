@@ -64,9 +64,9 @@ const LineasIdentificaciones = (function () {
 
   function idPersona_(persona) {
     try {
-      return txt(CapitalHumano.idPara(LineasRepo.TAB.LINEAS, { 'RESPONSABLE': persona.nombre, 'NO EMPLEADO': persona.noEmpleado, 'EMAIL USUARIO': persona.correo }));
+      return txt(CapitalHumano.idPara('ASIGNACIONES', { 'RESPONSABLE': persona.nombre, 'NO EMPLEADO': persona.noEmpleado, 'CUENTA GOOGLE': persona.correo }));
     } catch (e) {
-      console.warn('Identificación: no se pudo buscar a ' + persona.nombre + ' en PERSONAS: ' + e.message);
+      console.warn('Identificación: no se pudo buscar a ' + persona.nombre + ' en Capital Humano: ' + e.message);
       return '';
     }
   }
