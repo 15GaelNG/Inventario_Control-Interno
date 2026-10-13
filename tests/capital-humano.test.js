@@ -346,6 +346,35 @@ console.log('\n9b. Bitácora vs caché: en una bitácora solo se llena el ID que
   ok(colDe(veh, 'ID PERSONA')[0] === p['HA00241|JUAN FULGENCIO'].id, 'en VEHICULOS (caché) el ID viejo sí se corrigió a su responsable de hoy');
 }
 
+console.log('\n9c. Dos personas en una hoja: cada una en su columna (13-oct: Reasignaciones e Inspección)');
+{
+  const hojas = escenarioLigas();
+  const p = personas(hojas);
+  const CH = cargar(hojas);
+  // Al guardar: las dos se calculan; los IDs que mande el cliente se ignoran
+  const reas = CH.conPersona('REASIGNACIONES_VEHICULOS', { 'Responsable Entrante': 'PERLA CRUZ', 'Responsable Saliente': 'JUAN FULGENCIO',
+    'No Empleado Saliente': 'HA00241', 'ID PERSONA SALIENTE': 'PER-TRAMPA' });
+  ok(reas['ID PERSONA'] === p['CIB00223|PERLA CRUZ'].id && reas['ID PERSONA SALIENTE'] === p['HA00241|JUAN FULGENCIO'].id,
+    'reasignación: el entrante en ID PERSONA y el saliente en ID PERSONA SALIENTE');
+  const insp = CH.conPersona('INSPECCION VEHICULAR', { CONDUCTOR: 'PERLA CRUZ', RESPONSABLE: 'JUAN FULGENCIO' });
+  ok(insp['ID PERSONA CONDUCTOR'] === p['CIB00223|PERLA CRUZ'].id && insp['ID PERSONA RESPONSABLE'] === p['HA00241|JUAN FULGENCIO'].id,
+    'inspección: el conductor y el responsable, cada uno en su columna');
+  const solo = CH.conPersona('INSPECCION VEHICULAR', { CONDUCTOR: 'PERLA CRUZ' }, { CONDUCTOR: 'PERLA CRUZ', RESPONSABLE: 'JUAN FULGENCIO' });
+  ok(!('ID PERSONA RESPONSABLE' in solo) && solo['ID PERSONA CONDUCTOR'], 'si solo cambia el conductor, el ID del responsable no se toca');
+  ok(CH.columnaPara('INSPECCION VEHICULAR') === 'ID PERSONA CONDUCTOR', 'la liga principal sigue siendo la misma (columnaPara)');
+  // Salud: cada liga es su propia tarjeta y escribe su propia columna
+  hojas['REASIGNACIONES_VEHICULOS'] = hojaFalsa(['ID', 'Responsable Entrante', 'No Empleado Entrante', 'Responsable Saliente', 'No Empleado Saliente'], [
+    { ID: 'RVE-1', 'Responsable Entrante': 'PERLA CRUZ', 'Responsable Saliente': 'JUAN FULGENCIO' },
+  ]);
+  const r = CH.revisarLigas({ detalle: true });
+  ok(r['REASIGNACIONES (persona entrante)'].diferencias === 1 && r['REASIGNACIONES (persona saliente)'].diferencias === 1,
+    'Salud ve dos tarjetas en Reasignaciones (entrante y saliente)');
+  CH.revisarLigas({ escribir: true, hojas: ['REASIGNACIONES (persona saliente)'] });
+  const h = hojas['REASIGNACIONES_VEHICULOS'];
+  ok(colDe(h, 'ID PERSONA SALIENTE')[0] === p['HA00241|JUAN FULGENCIO'].id && h.datos[0].indexOf('ID PERSONA') === -1,
+    'actualizar la del saliente crea y llena solo ID PERSONA SALIENTE');
+}
+
 console.log('\n10. Actualizar solo los seleccionados');
 {
   const hojas = escenarioLigas();

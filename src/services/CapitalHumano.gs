@@ -430,6 +430,9 @@ const CapitalHumano = (function () {
    * bitacora: el registro es de un día (quién firmó, quién manejaba, quién pidió): Salud solo llena el ID que falta y
    * nunca cambia uno que ya está (13-oct). Sin bitacora (VEHICULOS, CAJAS CHICAS) es el responsable de HOY: si cambia, su
    * ID se actualiza. Al guardar desde la app (conPersona) las dos recalculan el ID si cambia el nombre.
+   *
+   * Una hoja puede tener varias ligas, cada una con su columna (13-oct): la primera es la principal (idPara, columnaPara,
+   * columnasDePersona); conPersona las calcula todas.
    */
   const VEH = () => Config.SPREADSHEET_IDS.VEHICULOS();
   const TEL = () => Config.SPREADSHEET_IDS.TELEFONIA();
@@ -446,14 +449,23 @@ const CapitalHumano = (function () {
     { nombre: 'ADHERENTE VEHICULAR (persona)', hoja: 'ADHERENTE VEHICULAR', libro: VEH, columnaNombre: 'ADHERENTE', columnaNumero: 'NO EMPLEADO', etiqueta: 'ID', bitacora: true },
     { nombre: 'REASIGNACIONES (persona entrante)', hoja: 'REASIGNACIONES_VEHICULOS', libro: VEH, columnaNombre: 'Responsable Entrante',
       columnaNumero: 'No Empleado Entrante', etiqueta: 'ID', bitacora: true },
+    // Quien entregó el vehículo: la otra mitad de la reasignación
+    { nombre: 'REASIGNACIONES (persona saliente)', hoja: 'REASIGNACIONES_VEHICULOS', libro: VEH, columnaNombre: 'Responsable Saliente',
+      columnaNumero: 'No Empleado Saliente', etiqueta: 'ID', columna: 'ID PERSONA SALIENTE', bitacora: true },
     { nombre: 'INSPECCION VEHICULAR (conductor)', hoja: 'INSPECCION VEHICULAR', libro: VEH, columnaNombre: 'CONDUCTOR', etiqueta: 'ID INSPECCION',
       columna: 'ID PERSONA CONDUCTOR', bitacora: true },
+    // El responsable del vehículo ese día (no siempre es quien maneja)
+    { nombre: 'INSPECCION VEHICULAR (responsable)', hoja: 'INSPECCION VEHICULAR', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID INSPECCION',
+      columna: 'ID PERSONA RESPONSABLE', bitacora: true },
     { nombre: 'UBER (persona)', hoja: 'UBER', libro: VEH, columnaNombre: 'NOMBRE COMPLETO', columnaCorreo: 'CORREO ELECTRONICO', etiqueta: 'ID', bitacora: true },
     { nombre: 'ARQUEOS (responsable)', hoja: 'ARQUEOS', libro: VEH, columnaNombre: 'RESPONSABLE', etiqueta: 'ID ARQUEO', bitacora: true },
     { nombre: 'TICKETS (solicitante)', hoja: 'TICKETS', libro: VEH, columnaNombre: 'SOLICITANTE', etiqueta: 'TICKET', bitacora: true },
   ];
   const columnaDe_ = (l) => l.columna || COLUMNA;
-  const ligaDe_ = (hoja) => LIGAS.filter((x) => x.hoja === hoja)[0] || null;
+  const ligasDe_ = (hoja) => LIGAS.filter((x) => x.hoja === hoja);
+  const ligaDe_ = (hoja) => ligasDe_(hoja)[0] || null;
+  /** Las columnas de un registro de donde sale la persona de una liga */
+  const columnasDeLiga_ = (l) => [l.columnaNombre, l.columnaNumero, l.columnaCorreo].filter(Boolean);
 
   /**
    * Lo que se escribe donde iría una persona y NO es una persona: es normal, no un error.
@@ -632,7 +644,10 @@ const CapitalHumano = (function () {
    * hay IDs (y entonces no se toca nada).
    */
   function idPara(hoja, registro) {
-    const l = ligaDe_(hoja);
+    return idDeLiga_(ligaDe_(hoja), registro);
+  }
+
+  function idDeLiga_(l, registro) {
     if (!l) return null;
     let ix;
     try { ix = indiceGuardado_(); } catch (e) { return null; }
@@ -644,7 +659,7 @@ const CapitalHumano = (function () {
   /** Las columnas que, si cambian, cambian a la persona de un registro de `hoja`. */
   function columnasDePersona(hoja) {
     const l = ligaDe_(hoja);
-    return l ? [l.columnaNombre, l.columnaNumero, l.columnaCorreo].filter(Boolean) : [];
+    return l ? columnasDeLiga_(l) : [];
   }
 
   /** La columna donde va el ID de la persona en `hoja` ('ID PERSONA', o la suya: INSPECCION → ID PERSONA CONDUCTOR) */
@@ -659,22 +674,26 @@ const CapitalHumano = (function () {
    * lo pone al día Salud después. Lo usan HojaServicio (`persona: true`) y los servicios escritos a mano.
    */
   function conPersona(hoja, datos, registro) {
-    const columna = columnaPara(hoja);
-    delete datos[columna];
-    if (!columnasDePersona(hoja).some((c) => datos[c] !== undefined)) return datos;
-    try {
-      const id = idPara(hoja, registro || datos);
-      if (id !== null) datos[columna] = id;
-    } catch (err) {
-      console.error('CapitalHumano: no se pudo calcular la persona de ' + hoja + ': ' + err.message);
-    }
+    // Cada liga de la hoja por su lado (Inspección: conductor y responsable; Reasignaciones: entrante y saliente)
+    ligasDe_(hoja).forEach((l) => {
+      const columna = columnaDe_(l);
+      delete datos[columna];
+      if (!columnasDeLiga_(l).some((c) => datos[c] !== undefined)) return;
+      try {
+        const id = idDeLiga_(l, registro || datos);
+        if (id !== null) datos[columna] = id;
+      } catch (err) {
+        console.error('CapitalHumano: no se pudo calcular la persona de ' + l.nombre + ': ' + err.message);
+      }
+    });
     return datos;
   }
 
   /** Para Datos conectados y Salud: las ligas como si fueran copias del MAPA. */
   function describirLigas() {
+    // rol: lo de entre paréntesis del nombre (conductor, persona saliente…), para que Salud diga de quién es cada tarjeta
     return LIGAS.filter((l) => !l.opcional).map((l) => ({ nombre: l.nombre, hoja: l.hoja, columna: columnaDe_(l), etiqueta: l.etiqueta,
-      desde: [l.columnaCorreo, l.columnaNombre, l.columnaNumero].filter(Boolean) }));
+      rol: (/\(([^)]+)\)/.exec(l.nombre) || [])[1] || 'persona', desde: [l.columnaCorreo, l.columnaNombre, l.columnaNumero].filter(Boolean) }));
   }
 
   // ======================================================================
