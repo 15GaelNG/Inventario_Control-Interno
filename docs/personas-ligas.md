@@ -20,6 +20,21 @@ Se corrige el nombre en el ticket y el siguiente «Actualizar» le pone su ID.
 
 En TICKETS el ID es del **SOLICITANTE**, no de quien registró el ticket.
 
+## Salud nunca adivina (13-oct)
+
+**Manda el nombre.** El correo y el número solo desempatan a dos personas que se llaman igual.
+
+- Nombre de una persona y correo de otra → **a mano** («el nombre es de X y el correo es de Y; corrige el que esté mal»).
+  Muchos correos de Caja Chica son del puesto (asistente.ci@, especialista.admon…@) y pasan de una persona a otra.
+  Caso real: caja 201, responsable GABRIELA CHAVEZ RIVERA (baja 16/07/2026) con el correo especialista.admoncoyoacan@,
+  que hoy es de ADRIANA RAMIREZ GONZALEZ; la versión anterior la ligó a Adriana por el correo. En prod hay 26 cajas
+  donde el correo es de alguien distinto al nombre (algunas solo por cómo se escribe: MA./MA, ESPINOSA/ESPINOZA).
+- El nombre no está en CH pero el correo sí → a mano, diciendo de quién es el correo.
+- Sin nombre, solo correo (o solo número) → se usa.
+- Un número de OTRA persona se ignora (decisión del 01-oct: en VEHICULOS el número quedó viejo al reasignar).
+- Lo que va a mano no cambia ni borra el ID que ya tenía el registro: cuando se corrige el nombre o el correo, el
+  siguiente «Actualizar» lo pone bien.
+
 ## Caché vs. bitácora (13-oct, `bitacora: true` en `CapitalHumano.LIGAS`)
 
 El ID PERSONA no copia datos que cambian (puesto, departamento): dice **quién** fue, y el ID de una persona nunca
