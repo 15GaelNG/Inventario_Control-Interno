@@ -55,7 +55,13 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
 - **Decisión del usuario (13-oct):** las 60 restantes (OCR o una fecha dudosa) se quedan con el nombre del archivo: en
   15 revisadas a mano, el nombre siempre era el bueno. Regla: **una fecha leída con OCR o de un campo dudoso nunca
   corrige al nombre del archivo**.
-- Falta: foto nueva, plan, revisión y aplicar el resto.
+- **Corrida 1 completa (13-oct, 16:24–16:56):** foto `20261013b`, plan `20261013b/plan-app.json`, bitácora
+  `20261013-162447-insp-app.jsonl` (respaldada en Drive). 239 NUCO: 1,056 archivos movidos (98 PDF de REPORTES y 958
+  firmas y diagramas), 1,250 celdas con su liga, 289 carpetas creadas, 0 saltados. Verificación: todo en su lugar.
+  En la hoja quedan 307 de 309 PDF con liga (2 inspecciones sin PDF) y solo 4 celdas con ruta vieja, a propósito: 3
+  imágenes del NUCO 231 que no existen en Drive y la firma `data:,` del 471. Los originales de REPORTES de las
+  inspecciones que el área ya había copiado se quedaron donde estaban.
+- Siguen: corrida 2 (verificaciones), 3 (responsivas de sensores) y 4 (firmas de Responsiva y Adherente).
 
 ## También en el radar (no se hacen sin preguntar)
 
