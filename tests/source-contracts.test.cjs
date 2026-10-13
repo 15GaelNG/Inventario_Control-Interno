@@ -1519,7 +1519,8 @@ test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctr
 test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores viejos y departamento DISPONIBLE', () => {
   const repoSrc = read('src/services/lineas/LineasRepo.gs');
   // Listas acordadas con Líneas (sin acentos, como el AppSheet)
-  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\]/);
+  // PARA VENTA CON DETALLE, de resguardo (usuario, 13-oct)
+  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\]/);
   assert.match(repoSrc, /estatusLinea: \['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'\]/);
   // Quitar la línea deja ESTATUS LINEA en blanco (antes "SIN LINEA")
   assert.match(repoSrc, /'FIN PLAN': '', 'ESTATUS LINEA': '', 'FECHA CAMBIO TEMPORAL'/);
@@ -1656,7 +1657,7 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   ['formularioResguardo', 'mandarResguardo', 'mandarCancelacion'].forEach((f) =>
     assert.match(tel, new RegExp('function ' + f + '\\(token[^)]*\\) \\{\\s+const sesion = operar_\\(token\\);'), f + ' pide editar Líneas telefónicas'));
   assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
-  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO']);
+  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
 
   // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
   assert.match(src, /Object\.assign\(\{\}, LineasRepo\.VALORES_SIN_LINEA, \{ 'ESTATUS LINEA': 'CANCELADA' \}\)/);
@@ -1689,13 +1690,14 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
   // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
   assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
-  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa
-  assert.match(cliente, /'Estatus del equipo', 'escala', \{ opciones: form\.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS \}/);
+  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa, menos el que ya tiene si ya está en la
+  // bandeja (usuario, 13-oct; lo prueba lineas-resguardo-cancelacion)
+  assert.match(cliente, /const posibles = q\.opcionesEstatus \|\| form\.estatusEquipo;/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);
-  // Si ya estaba guardado no se pide otra recepción: se actualiza el renglón abierto de la bandeja
-  assert.match(resg, /const yaGuardado = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0;/);
+  // Si ya tiene su renglón abierto no se pide otra recepción: se actualiza; sin renglón abierto, Pau lo recibe
+  assert.match(resg, /const abierto = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0 \? abiertoDe_\(abiertos, f\) : null;/);
   assert.match(resg, /LineasDatos\.actualizarFila\(TAB, abierto\._fila,/);
-  assert.match(resg, /'ESTADO': yaGuardado \? ESTADO\.RESGUARDO : ESTADO\.PENDIENTE/);
+  assert.match(resg, /'ESTADO': ESTADO\.PENDIENTE, 'RECIBIO': '',/);
 });
 
 test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep)', () => {
@@ -1739,7 +1741,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /vista === 'RESGUARDOS' \? todas\.filter\(\(f\) => f\.ESTADO\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasMandarCancelacion\(token, ids, datos\)/);
   const resg = read('src/services/lineas/LineasResguardos.gs');
-  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario\)/);
+  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario, opciones\)/);
   assert.match(resg, /'SOLICITO_CORREO': usuario\.correo, 'SOLICITO_NOMBRE': usuario\.nombre, 'ESTADO': '',/);
   // Con cualquiera de los IDs del registro: la bandeja guarda el que tenía al mandarlo (reestructura, etapa 3)
   assert.match(resg, /if \(enCancelacion_\(cancelando, f, numero\)\)/);

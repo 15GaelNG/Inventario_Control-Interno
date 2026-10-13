@@ -183,6 +183,16 @@ test('de resguardo a uso con su persona (reasignar): abre la asignación con per
   assert.strictEqual(nueva['DEPARTAMENTO'], ''); // DISPONIBLE es de lo guardado
 });
 
+test('de resguardo a uso sin cambiar la línea: la línea DISPONIBLE se queda guardada y se separa (por eso Editar la pasa a USO)', () => {
+  // Error que encontró el usuario el 13-oct: en Editar, RESGUARDO → USO desvinculaba la línea. Escritura hace lo que le
+  // dicen los estatus; LineasRegistros.editar manda la línea a USO junto con el equipo (lineas-acciones lo revisa)
+  const t = cargar(BASE);
+  t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'RESPONSABLE': 'ANA' });
+  const delEquipo = t.vigentes().find((a) => a['ID EQUIPO'] === 'EQU-2');
+  assert.strictEqual(delEquipo['ID LINEA'], '');
+  assert.ok(t.tocados().indexOf('LIN-B') >= 0, 'la línea pasa a verse aparte');
+});
+
 test('lo que no tiene dónde guardarse avisa; la inspección (tolerante) lo ignora', () => {
   const t = cargar(BASE);
   assert.throws(() => t.guardar('EQU-3', { 'RESPONSABLE': 'PEDRO' }), /no tiene asignación vigente/);

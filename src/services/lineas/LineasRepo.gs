@@ -55,8 +55,8 @@ const LineasRepo = (function () {
     // muestran "(no está en la lista)" y Líneas los corrige; la conversión propuesta está en
     // migracion/CONVERSION_ESTATUS_LINEAS.md de la carpeta de documentación.
     // POSIBLE VENTA-DAÑO se quitó (usuario, 4-oct): los 42 que lo tenían regresan a POSIBLE VENTA, el de antes, y se corrigen
-    // en Correcciones de Líneas (40 tienen PDF de venta)
-    estatusEquipo: ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'],
+    // en Correcciones de Líneas (40 tienen PDF de venta). PARA VENTA CON DETALLE, de resguardo (usuario, 13-oct)
+    estatusEquipo: ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'],
     // Un registro sin línea deja ESTATUS LINEA en blanco (antes "SIN LINEA").
     estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
     companias: ['TELCEL', 'AT&T', 'BAIT'],

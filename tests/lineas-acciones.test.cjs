@@ -39,6 +39,9 @@ test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel d
   assert.match(reg, /ESTATUS_LINEA_PANEL\.indexOf\(estatusLinea\) >= 0/);
   // El equipo que se guarda deja DISPONIBLE su línea en uso
   assert.match(reg, /if \(sinPanel && aGuardado && !\('ESTATUS LINEA' in cambios\) && texto_\(base\['ESTATUS LINEA'\]\)\.toUpperCase\(\) === 'USO'\)/);
+  // Y al revés (usuario, 13-oct): el equipo guardado que pasa a USO se lleva su línea DISPONIBLE (antes se desvinculaba)
+  assert.match(reg, /const aUso = 'ESTATUS EQUIPO' in cambios && estatusEquipo === 'USO';/);
+  assert.match(reg, /if \(aUso && lineaConEquipo && !\('ESTATUS LINEA' in cambios\) && \['DISPONIBLE', 'RESGUARDO'\]\.indexOf\(texto_\(base\['ESTATUS LINEA'\]\)\.toUpperCase\(\)\) >= 0\) \{\s+cambios\['ESTATUS LINEA'\] = 'USO';/);
   assert.match(reg, /guardarCambiosRegistro\(fila, cambios, usuario, new Date\(\), \{ corregir: true \}\)/);
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /abrirCambioEstatus|fichaDeFila|texto: 'Cambiar estatus'/);
@@ -193,7 +196,11 @@ test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y �
     assert.deepEqual(pos.slice().sort((a, b) => a - b), pos, lista.join(' · '));
   };
   enOrden(equipo, ['[detalles,', "'Reasignar'", "'Mandar a resguardo'", "'Nueva inspección'", "'Nueva responsiva'", '    editar,',
-    "'Editar línea'", "'Vincular línea'", "'Cambiar línea'", "'Desvincular línea'", "'Ir a la línea'", 'historial];']);
+    "'Vincular línea'", "'Cambiar línea'", "'Desvincular línea'", "'Ir a la línea'", 'historial];']);
+  // En el clic derecho del equipo solo Editar equipo: la línea se edita desde la línea (usuario, 13-oct)
+  assert.doesNotMatch(equipo, /'Editar línea'/);
+  assert.match(barra, /texto: tipo === 'linea' \? 'Editar línea' : 'Editar equipo'/);
+  assert.doesNotMatch(cliente, /'Editar información'/);
   // Ver la última inspección o responsiva ya no va en el clic derecho del equipo
   assert.doesNotMatch(equipo, /Ver última/);
   enOrden(linea, ['[detalles,', "'Mandar a cancelación'", '  editar,', "'Vincular a equipo'", "'Cambiar de equipo'",
@@ -205,10 +212,10 @@ test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y �
   assert.doesNotMatch(ficha, /abrirEditor\(r\.lineaId, 'LINEA'\)/);
 });
 
-test('POSIBLE VENTA-DAÑO ya no existe: 8 estatus de equipo y los que lo tenían regresan a POSIBLE VENTA (usuario, 4-oct)', () => {
+test('POSIBLE VENTA-DAÑO ya no existe y PARA VENTA CON DETALLE sí: 9 estatus de equipo (usuario, 4-oct y 13-oct)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
-  assert.match(repo, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\],/);
-  assert.match(read('src/services/lineas/LineasResguardos.gs'), /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'PARA DESECHO'\];/);
+  assert.match(repo, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\],/);
+  assert.match(read('src/services/lineas/LineasResguardos.gs'), /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'\];/);
   const estructura = read('src/services/lineas/LineasEstructura.gs');
   assert.doesNotMatch(estructura, /'POSIBLE VENTA': 'POSIBLE VENTA-DAÑO'|'POSIBLE VENTA-DAÑO'/);
   assert.match(estructura, /'POSIBLE VENTA': 'RESGUARDO'/); // sigue guardado mientras Líneas lo corrige

@@ -638,6 +638,13 @@ const LineasRegistros = (function () {
       if (sinPanel && aGuardado && !('ESTATUS LINEA' in cambios) && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO') {
         cambios['ESTATUS LINEA'] = 'DISPONIBLE';
       }
+      // Y al revés (usuario, 13-oct): el equipo guardado que pasa a USO se lleva su línea DISPONIBLE, que queda en USO.
+      // Antes la línea se quedaba en la asignación de resguardo y se separaba del equipo
+      const aUso = 'ESTATUS EQUIPO' in cambios && estatusEquipo === 'USO';
+      const lineaConEquipo = parte === 'EQUIPO' && !!texto_(base['NUMERO TELEFONO']);
+      if (aUso && lineaConEquipo && !('ESTATUS LINEA' in cambios) && ['DISPONIBLE', 'RESGUARDO'].indexOf(texto_(base['ESTATUS LINEA']).toUpperCase()) >= 0) {
+        cambios['ESTATUS LINEA'] = 'USO';
+      }
       // Línea sola (usuario, 8-oct): «Quitar responsable» la deja DISPONIBLE; con un responsable nuevo pasa a USO; en USO
       // lleva responsable
       const lineaSola = parte === 'LINEA' && !edicion.lineaEnEquipo;
@@ -710,7 +717,7 @@ const LineasRegistros = (function () {
 
   /**
    * Campos del formulario de la acción. Reasignar usa los mismos campos, listas y autollenado del colaborador que
-   * "Editar información" (se toman de elementos_), editables siempre porque aquí no hay TIPO.
+   * "Editar equipo" (se toman de elementos_), editables siempre porque aquí no hay TIPO.
    */
   function elementosMasivos_(accion, catalogos, usuario) {
     const salida = [];
