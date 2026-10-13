@@ -56,9 +56,12 @@ function libroMock(hojasIniciales) {
   };
 }
 
-function carpetaRaizMock(subcarpetasIniciales) {
+/** Carpeta en memoria genérica (sirve para raíz, año, mes y la de la solicitud -- misma forma). */
+function carpetaMock(nombrePropio, subcarpetasIniciales) {
   const subcarpetas = Object.assign({}, subcarpetasIniciales);
   return {
+    getId: () => 'id-' + nombrePropio,
+    getUrl: () => 'https://drive.google.com/drive/folders/id-' + nombrePropio,
     getFoldersByName(nombre) {
       const existe = subcarpetas[nombre];
       const lista = existe ? [existe] : [];
@@ -66,7 +69,7 @@ function carpetaRaizMock(subcarpetasIniciales) {
       return { hasNext: () => i < lista.length, next: () => lista[i++] };
     },
     createFolder(nombre) {
-      const nueva = { getId: () => 'id-' + nombre, getUrl: () => 'https://drive.google.com/drive/folders/id-' + nombre };
+      const nueva = carpetaMock(nombre);
       subcarpetas[nombre] = nueva;
       return nueva;
     },
@@ -74,10 +77,17 @@ function carpetaRaizMock(subcarpetasIniciales) {
   };
 }
 
-function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasIniciales = {} } = {}) {
+// Utilities.formatDate/Session.getScriptTimeZone se fijan a enero -- así la carpeta del mes
+// siempre es "01. ENERO", sin importar qué día se corran las pruebas.
+const MES_FIJO = '01. ENERO';
+const ANIO_FIJO = '2026';
+
+function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {} } = {}) {
   const llamadas = { getFolderById: null, subirArchivo: [], permisoLeer: [], permisoEditar: [], tocarHoja: 0 };
   const libroVehiculos = libro || libroMock();
-  const raiz = carpetaRaizMock(subcarpetasIniciales);
+  const carpetaMes = carpetaMock(MES_FIJO, subcarpetasEnMes);
+  const carpetaAnio = carpetaMock(ANIO_FIJO, { [MES_FIJO]: carpetaMes });
+  const raiz = carpetaMock('raiz', { [ANIO_FIJO]: carpetaAnio });
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
     Permisos: {
@@ -89,7 +99,13 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasIniciales = 
     AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
     DriveUtils: {
       archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [],
+      carpetaDelAnio: (carpeta) => {
+        const ex = carpeta.getFoldersByName(ANIO_FIJO);
+        return ex.hasNext() ? ex.next() : carpeta.createFolder(ANIO_FIJO);
+      },
     },
+    Utilities: { formatDate: () => '1' },
+    Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     Ids: { nuevo: (prefijo) => prefijo + '-TEST-1' },
     Entidades: { prefijo: () => 'SOC' },
     CacheHojas: { tocarHoja: () => { llamadas.tocarHoja++; } },
@@ -107,13 +123,13 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasIniciales = 
     '\nthis.Servicio = SolicitudCompraService;',
     contexto
   );
-  return { contexto, llamadas, libro: libroVehiculos, raiz };
+  return { contexto, llamadas, libro: libroVehiculos, raiz, carpetaAnio, carpetaMes };
 }
 
 // ---------------------------------------------------------------------------------------- crear
 
-test('crear hace la hoja SOLICITUD COMPRA la primera vez, la subcarpeta "<FOLIO>-<NOMBRE>" y llena CARPETA_ID/LIGA_CARPETA/ESTATUS', () => {
-  const { contexto, llamadas, libro } = crearContexto();
+test('crear hace la hoja SOLICITUD COMPRA la primera vez, la subcarpeta "<FOLIO>-<NOMBRE>" dentro de AÑO/MES y llena CARPETA_ID/LIGA_CARPETA/ESTATUS', () => {
+  const { contexto, llamadas, libro, carpetaMes } = crearContexto();
   const creada = contexto.Servicio.crear('tok', { FOLIO: '30371', AREA: 'CONSTRUCCIÓN', NOMBRE: 'Camioneta para Construcción' });
 
   assert.equal(llamadas.permisoEditar[0], 'solicitud-compra');
@@ -125,6 +141,7 @@ test('crear hace la hoja SOLICITUD COMPRA la primera vez, la subcarpeta "<FOLIO>
   assert.ok(creada.FECHA, 'FECHA se pone sola y viaja como ISO');
   assert.ok(libro._hojas['SOLICITUD COMPRA'], 'la hoja se creó sola');
   assert.deepEqual(libro._hojas['SOLICITUD COMPRA']._filas[0], ENCABEZADOS);
+  assert.ok(carpetaMes._subcarpetas['30371-Camioneta para Construcción'], 'la carpeta quedó dentro de AÑO/MES, no suelta en la raíz');
 });
 
 test('crear truena sin folio o sin nombre, sin tocar Drive', () => {
@@ -134,26 +151,27 @@ test('crear truena sin folio o sin nombre, sin tocar Drive', () => {
   assert.equal(llamadas.getFolderById, null, 'nunca llegó a pedir la carpeta');
 });
 
-test('crear reusa la subcarpeta si ya existe una con ese mismo nombre (no crea una segunda)', () => {
+test('crear reusa la subcarpeta si ya existe una con ese mismo nombre dentro del mes (no crea una segunda)', () => {
   const existente = { getId: () => 'YA-EXISTE', getUrl: () => 'https://drive/ya-existe' };
-  const { contexto, raiz } = crearContexto({ subcarpetasIniciales: { '100-Prueba': existente } });
+  const { contexto, carpetaMes } = crearContexto({ subcarpetasEnMes: { '100-Prueba': existente } });
   const creada = contexto.Servicio.crear('tok', { FOLIO: '100', NOMBRE: 'Prueba' });
   assert.equal(creada.CARPETA_ID, 'YA-EXISTE');
-  assert.equal(Object.keys(raiz._subcarpetas).length, 1, 'sigue habiendo una sola carpeta con ese nombre');
+  assert.equal(Object.keys(carpetaMes._subcarpetas).length, 1, 'sigue habiendo una sola carpeta con ese nombre');
 });
 
 test('crear da un mensaje claro si la cuenta no tiene permiso de EDITOR en la carpeta real', () => {
-  const raizSinPermiso = {
-    getFoldersByName: () => ({ hasNext: () => false }),
-    createFolder: () => { throw new Error('You do not have permission to access the requested resource.'); },
-  };
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
     Permisos: { puedeEditar: () => {} },
     SpreadsheetApp: { openById: () => libroMock() },
-    DriveApp: { getFolderById: () => raizSinPermiso },
+    DriveApp: { getFolderById: () => ({}) },
     AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
-    DriveUtils: { archivosDeCarpeta: () => [] },
+    DriveUtils: {
+      archivosDeCarpeta: () => [],
+      carpetaDelAnio: () => { throw new Error('You do not have permission to access the requested resource.'); },
+    },
+    Utilities: { formatDate: () => '1' },
+    Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     Ids: { nuevo: () => 'SOC-TEST' },
     Entidades: { prefijo: () => 'SOC' },
     CacheHojas: { tocarHoja: () => {} },

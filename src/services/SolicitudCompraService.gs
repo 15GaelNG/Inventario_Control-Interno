@@ -6,15 +6,17 @@
  * del ticket, antes de que el vehículo nazca.
  *
  * Al crear una solicitud, esta app crea sola una carpeta de Drive nombrada "<FOLIO>-<NOMBRE>"
- * dentro de la raíz REAL de Adquisición Vehicular (RAIZ_ADQUISICION_VEHICULAR, la misma carpeta
- * de la cuenta de Gestión Vehicular que AdquisicionVehicularService.gs solo lee -- decisión del
- * usuario, 13-oct-2026: que las solicitudes nuevas ya nazcan en la carpeta real, no en una aparte
- * de esta app). Para que esto funcione, la cuenta que corre la app necesita permiso de EDITOR en
- * esa carpeta (antes solo hacía falta lectura); si no lo tiene, crear() truena con un mensaje que
- * lo explica. Repositorio de solo ver y subir documentos (nada de seguimiento de los 15 pasos del
- * proceso, por ahora). El botón "Ya crear vehículo" (app.html) manda el folio y la liga de esa
- * carpeta al alta de Vehículos (VehiculosService.gs, VEHICULOS.alCrear) y, si sale bien,
- * marcarConvertida deja esta solicitud como ABIERTA -> CONVERTIDA con el Nucco resultante.
+ * dentro de raíz/AÑO/MES de Adquisición Vehicular (RAIZ_ADQUISICION_VEHICULAR, la misma carpeta
+ * de la cuenta de Gestión Vehicular que AdquisicionVehicularService.gs solo lee) -- mismos 3
+ * niveles y misma convención de mes ("NN. MES", p. ej. "11. NOVIEMBRE") que ya usan sus carpetas
+ * reales (listarCarpetasAdquisicion_), así que una solicitud nueva ya nace en el lugar real, no
+ * en uno aparte de esta app (decisión del usuario, 13-oct-2026). Para que esto funcione, la
+ * cuenta que corre la app necesita permiso de EDITOR en esa carpeta (antes solo hacía falta
+ * lectura); si no lo tiene, crear() truena con un mensaje que lo explica. Repositorio de solo ver
+ * y subir documentos (nada de seguimiento de los 15 pasos del proceso, por ahora). El botón "Ya
+ * crear vehículo" (app.html) manda el folio y la liga de esa carpeta al alta de Vehículos
+ * (VehiculosService.gs, VEHICULOS.alCrear) y, si sale bien, marcarConvertida deja esta solicitud
+ * como ABIERTA -> CONVERTIDA con el Nucco resultante.
  *
  * Solo ADMIN/SUPER por ahora (sin fila en PERMISOS_SEMILLA -- entran por código, nadie más ve
  * ni lee este módulo).
@@ -28,6 +30,7 @@
 const SolicitudCompraService = (function () {
   const HOJA = 'SOLICITUD COMPRA';
   const ENCABEZADOS = ['ID', 'FOLIO', 'AREA', 'NOMBRE', 'FECHA', 'ESTATUS', 'LIGA_CARPETA', 'CARPETA_ID', 'NUCCO_RESULTANTE'];
+  const MESES_ES_ = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -46,22 +49,30 @@ const SolicitudCompraService = (function () {
     return hoja;
   }
 
-  /** La subcarpeta "<folio>-<nombre>" dentro de la raíz REAL de Adquisición Vehicular (la crea
-   *  si no existe) -- necesita permiso de EDITOR ahí, no solo lectura. */
+  /** La carpeta del mes en curso ("NN. MES", la misma convención que ya usan las carpetas reales
+   *  de Adquisición Vehicular -- p. ej. "11. NOVIEMBRE") dentro de la carpeta del año. La crea si
+   *  no existe. */
+  function carpetaDelMes_(carpetaAnio) {
+    const mes = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M'));
+    const nombreMes = String(mes).padStart(2, '0') + '. ' + MESES_ES_[mes - 1];
+    const existentes = carpetaAnio.getFoldersByName(nombreMes);
+    return existentes.hasNext() ? existentes.next() : carpetaAnio.createFolder(nombreMes);
+  }
+
+  /** La subcarpeta "<folio>-<nombre>" dentro de raíz/AÑO/MES de Adquisición Vehicular (misma
+   *  estructura de 3 niveles que ya usan sus carpetas reales -- listarCarpetasAdquisicion_,
+   *  AdquisicionVehicularService.gs) -- las crea si no existen. Necesita permiso de EDITOR ahí,
+   *  no solo lectura. */
   function carpetaDeSolicitud_(folio, nombre) {
-    let raiz;
-    try {
-      raiz = DriveApp.getFolderById(AdquisicionVehicularService.RAIZ_ADQUISICION_VEHICULAR);
-    } catch (e) {
-      throw new Error('No se pudo abrir la carpeta de Adquisición Vehicular (' + e.message + ').');
-    }
     const nombreCarpeta = String(folio).trim() + '-' + String(nombre).trim();
-    const existentes = raiz.getFoldersByName(nombreCarpeta);
-    if (existentes.hasNext()) return existentes.next();
     try {
-      return raiz.createFolder(nombreCarpeta);
+      const raiz = DriveApp.getFolderById(AdquisicionVehicularService.RAIZ_ADQUISICION_VEHICULAR);
+      const mesCarpeta = carpetaDelMes_(DriveUtils.carpetaDelAnio(raiz));
+      const existentes = mesCarpeta.getFoldersByName(nombreCarpeta);
+      return existentes.hasNext() ? existentes.next() : mesCarpeta.createFolder(nombreCarpeta);
     } catch (e) {
-      // "Acceso denegado" casi siempre = la cuenta puede VER la carpeta pero no EDITARLA
+      // "Acceso denegado" casi siempre = la cuenta puede VER la carpeta de Adquisición Vehicular
+      // pero no EDITARLA (falta carpeta de año o de mes, o la de la solicitud -- cualquiera).
       throw new Error('No se pudo crear la carpeta en Adquisición Vehicular (' + e.message + '). ' +
         'Verifica que la cuenta que corre la app tenga permiso de EDITOR en esa carpeta de Drive (no solo lectura).');
     }
