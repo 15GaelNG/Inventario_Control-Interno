@@ -58,12 +58,13 @@ function scriptAppMock() {
 const ENCABEZADOS_INDICE = ['SERIE', 'FOLIO', 'AREA', 'AÑO', 'LIGA_CARPETA', 'FUENTE', 'ACTUALIZADO'];
 
 function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () => [], fuentes = [{ año: '2024' }, { año: '2025' }],
-  buscarEnListaCarpetas = () => '', buscarCarpetaPorFolio = () => '', archivosPorCarpeta = {}, drivePropsStore } = {}) {
+  buscarEnListaCarpetas = () => '', buscarCarpetaPorFolio = () => '', archivosPorCarpeta = {}, drivePropsStore, listaFinal = [] } = {}) {
   const hoja = hojaIndice || hojaMock([ENCABEZADOS_INDICE]);
   const propiedades = drivePropsStore || propertiesServiceMock();
   const scriptApp = scriptAppMock();
   const contexto = vm.createContext({
     soloEditor_: () => {},
+    ADQUISICION_VEHICULAR_LISTA_FINAL_: listaFinal,
     AdquisicionVehicularService: {
       indiceHoja_: () => hoja,
       listarCarpetasAdquisicion_: listarCarpetas,
@@ -84,6 +85,7 @@ function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () 
       }),
     },
     DriveUtils: { carpetaEnRaiz: () => ({ getId: () => 'TEMP-FOLDER' }) },
+    CacheHojas: { tocarHoja: () => {} },
     Drive: { Files: { copy: (meta, id) => ({ id: 'copia-' + id }) } },
     DocumentApp: { openById: (id) => ({ getBody: () => ({ getText: () => (contexto._textoOcr || {})[id] || '' }) }) },
     PropertiesService: propiedades,
@@ -194,6 +196,43 @@ test('indiceAdqPasadaExcel_ usa el link del Excel como último recurso si Drive 
 
   contexto.indiceAdqPasadaExcel_();
   assert.equal(hojaIndice._filas[1][4], 'https://dropbox/x');
+});
+
+// ---------------------------------------------------------------------------------------- importar lista final (manual)
+
+test('adquisicionVehicularIndice_importarListaFinal_ carga la semilla con FUENTE=MANUAL', () => {
+  const hojaIndice = hojaMock([ENCABEZADOS_INDICE, ['VIEJA', '9', 'X', '2024', '', 'EXCEL-2024', 'ayer']]);
+  const { contexto } = crearContexto({
+    hojaIndice,
+    listaFinal: [
+      ['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '2024', 'https://drive.google.com/drive/folders/abc'],
+      ['9BD281HJ5SYG30459', '51', 'POSTVENTA', '2024', 'https://www.dropbox.com/scl/fo/xyz'],
+    ],
+  });
+
+  const informe = contexto.adquisicionVehicularIndice_importarListaFinal_();
+
+  assert.equal(informe, 'Cargadas 2 series con FUENTE=MANUAL.');
+  const filas = hojaIndice._filas.slice(1);
+  assert.equal(filas.some((r) => r[0] === 'VIEJA'), true, 'no toca lo que ya había de otra FUENTE');
+  const manual = filas.filter((r) => r[5] === 'MANUAL');
+  assert.equal(manual.length, 2);
+  assert.deepEqual(manual.map((r) => r[0]).sort(), ['3C7WRAKT9RG165067', '9BD281HJ5SYG30459']);
+  assert.equal(manual.find((r) => r[0] === '9BD281HJ5SYG30459')[4], 'https://www.dropbox.com/scl/fo/xyz', 'también carga ligas de Dropbox');
+});
+
+test('adquisicionVehicularIndice_importarListaFinal_ es idempotente: correrla dos veces no duplica', () => {
+  const hojaIndice = hojaMock([ENCABEZADOS_INDICE]);
+  const { contexto } = crearContexto({
+    hojaIndice,
+    listaFinal: [['3C7WRAKT9RG165067', '3', 'CONSTRUCCIÓN', '2024', 'https://drive.google.com/drive/folders/abc']],
+  });
+
+  contexto.adquisicionVehicularIndice_importarListaFinal_();
+  contexto.adquisicionVehicularIndice_importarListaFinal_();
+
+  const manual = hojaIndice._filas.slice(1).filter((r) => r[5] === 'MANUAL');
+  assert.equal(manual.length, 1, 'la segunda corrida reemplaza, no agrega');
 });
 
 // ---------------------------------------------------------------------------------------- estado / informe

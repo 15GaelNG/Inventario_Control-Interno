@@ -26,6 +26,9 @@
  *   adquisicionVehicularIndice_continuar()  blanco del trigger -- sigue la pasada B donde quedó
  *   adquisicionVehicularIndice_estado()     progreso, de solo lectura
  *   adquisicionVehicularIndice_detener()    para y borra el trigger
+ *   adquisicionVehicularIndice_importarListaFinal_()  carga, UNA vez, el trabajo manual de
+ *     AdquisicionVehicularListaFinalSemilla.gs (FUENTE="MANUAL") -- ligas que ni A ni B pueden
+ *     encontrar solas (hipervínculos ocultos de Excel viejo, carpetas de Dropbox)
  */
 const INDICE_ADQ_PROP = 'ADQUISICION_VEHICULAR_INDICE_ESTADO';
 const INDICE_ADQ_CONTINUAR = 'adquisicionVehicularIndice_continuar';
@@ -77,6 +80,19 @@ function adquisicionVehicularIndice_detener() {
   const st = indiceAdqLeer_();
   if (st && st.fase === 'OCR') { st.fase = 'DETENIDO'; indiceAdqGuardar_(st); }
   return indiceAdqInforme_(st);
+}
+
+/** Carga, de una sola vez, el trabajo manual de AdquisicionVehicularListaFinalSemilla.gs
+ *  (FUENTE="MANUAL") -- no necesita que A o B hayan corrido antes, ni corre nada de Drive/OCR.
+ *  Reemplaza solo las filas que ya tenían FUENTE="MANUAL" (indiceAdqReemplazarFuente_): se puede
+ *  volver a correr sin duplicar si se actualiza la semilla. */
+function adquisicionVehicularIndice_importarListaFinal_() {
+  soloEditor_();
+  const hoja = AdquisicionVehicularService.indiceHoja_(true);
+  const ahora = new Date().toISOString();
+  const filas = ADQUISICION_VEHICULAR_LISTA_FINAL_.map((f) => f.concat(['MANUAL', ahora]));
+  indiceAdqReemplazarFuente_(hoja, 'MANUAL', filas);
+  return 'Cargadas ' + filas.length + ' series con FUENTE=MANUAL.';
 }
 
 // ---------------------------------------------------------------------------------------------- estado
@@ -138,6 +154,9 @@ function indiceAdqReemplazarFuente_(hoja, fuenteNombre, filasNuevas) {
     }
   }
   if (filasNuevas.length) hoja.getRange(hoja.getLastRow() + 1, 1, filasNuevas.length, filasNuevas[0].length).setValues(filasNuevas);
+  // Escritura directa (sin SheetUtils ni HojaServicio): avisa a mano, si no buscar()/listar() no
+  // ven lo nuevo hasta que se les acabe la caché sola (TTL_INDICE_SEGUNDOS, 30 min).
+  CacheHojas.tocarHoja(hoja);
 }
 
 // ---------------------------------------------------------------------------------------------- pasada B (OCR)
@@ -228,4 +247,6 @@ function indiceAdqProcesarOcr_(candidatas, hoja, st, queda) {
     st.faltan--;
     indiceAdqGuardar_(st);
   }
+  // Mismo motivo que en indiceAdqReemplazarFuente_: escritura directa, hay que avisarle a la caché a mano.
+  CacheHojas.tocarHoja(hoja);
 }
