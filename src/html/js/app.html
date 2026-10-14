@@ -4370,6 +4370,8 @@
       }
     });
 
+    // El reporte de Looker Studio, con su sección (vehiculos.reporte): un CLIENT no la tiene
+    document.getElementById('btn-ver-reporte-vehiculos').hidden = !puede('vehiculos.reporte');
     document.getElementById('btn-ver-reporte-vehiculos').addEventListener('click', () => {
       // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que
       // encuentre después de "//" pensando que es un comentario — incluso
