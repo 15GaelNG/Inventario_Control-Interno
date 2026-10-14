@@ -3335,7 +3335,7 @@
           ['Diferencia', sinRenta ? '<span class="ln-tenue">Sin contrato</span>' : diferenciaTexto(f.diferencia), true],
           resumen ? null : ['Uso', usoTexto(f), true],
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
-        ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">Últimos ' + lista.length + (lista.length === 1 ? ' mes' : ' meses') +
+        ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
           icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
           (sinRenta ? 'Uso' : 'Diferencia') + '</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
       }
