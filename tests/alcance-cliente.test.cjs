@@ -109,8 +109,12 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   });
   assert.match(v, /function buscarPor_\(token, columna, valor\) \{[\s\S]*?Permisos\.dentroDeAlcance\(sesion\.alcance/);
   assert.match(leer('src/ClientApi.gs'), /function apiDocumentosVehiculo\(token, nucco\) \{[\s\S]*?nuccoEnAlcance/);
-  // La pestaña Adquisición de la ficha (13-oct): por serie, y por la liga de su carpeta
+  // La pestaña Adquisición de la ficha (13-oct): por serie, y por la liga de su carpeta. Con el permiso de
+  // Adquisición, no el de Vehículos (14-oct: POST VENTA, sin Adquisición, la veía)
   const adq = leer('src/services/AdquisicionVehicularService.gs');
+  assert.match(adq, /function buscar\(token, serie\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
+  assert.match(adq, /function archivos\(token, liga\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
+  assert.match(leer('src/html/js/app.html'), /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
   assert.match(adq, /function buscar\(token, serie\) \{[\s\S]*?sesion\.alcance && !VehiculosService\.serieEnAlcance/);
   assert.match(adq, /function archivos\(token, liga\) \{[\s\S]*?if \(sesion\.alcance\) \{[\s\S]*?serieEnAlcance/);
 });

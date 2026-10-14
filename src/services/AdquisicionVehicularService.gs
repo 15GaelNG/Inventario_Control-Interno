@@ -176,7 +176,7 @@ const AdquisicionVehicularService = (function () {
   /** Busca el expediente de un vehículo por su serie, en el índice propio -- no abre ningún
    *  archivo externo. Regresa { año, folio, area, liga } o null si no se encontró. */
   function buscar(token, serie) {
-    const sesion = Permisos.puedeLeer(token, 'vehiculos');
+    const sesion = Permisos.puedeLeer(token, 'adquisicion-vehicular');
     const serieBuscada = normalizarSerie_(serie);
     if (!serieBuscada) return null;
     // Rol CLIENT (Permisos.alcanceDe): solo el expediente de un vehículo de su departamento
@@ -184,9 +184,9 @@ const AdquisicionVehicularService = (function () {
     return mapaIndice_()[serieBuscada] || null;
   }
 
-  /** TODOS los expedientes del índice (no por serie) -- para el apartado "Adquisición vehicular"
-   *  (su propio permiso, 'adquisicion-vehicular' -- buscar()/archivos() siguen con 'vehiculos':
-   *  los usa la pestaña "Adquisición" de la ficha del vehículo, no este apartado).
+  /** TODOS los expedientes del índice (no por serie) -- para el apartado "Adquisición vehicular".
+   *  Todo pide 'adquisicion-vehicular' (14-oct): también buscar()/archivos(), que usa la pestaña
+   *  "Adquisición" de la ficha del vehículo.
    *  Solo las filas con serie (las de OCR sin serie encontrada son ruido de auditoría interna,
    *  no expedientes para mostrar). */
   function listar(token) {
@@ -216,7 +216,7 @@ const AdquisicionVehicularService = (function () {
    *  que ya espera el componente Galeria). { soportado: false } si la liga no es de Drive: ahí
    *  solo se puede abrir la carpeta tal cual, no listar su contenido. */
   function archivos(token, liga) {
-    const sesion = Permisos.puedeLeer(token, 'vehiculos');
+    const sesion = Permisos.puedeLeer(token, 'adquisicion-vehicular');
     // Rol CLIENT: la liga tiene que ser la de un expediente del índice, y su vehículo de su departamento
     if (sesion.alcance) {
       const mapa = mapaIndice_();

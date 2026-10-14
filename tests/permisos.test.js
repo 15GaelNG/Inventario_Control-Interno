@@ -256,6 +256,8 @@ console.log('7d. Un módulo por entrada del menú: nadie pierde lo que veía (se
   const c = Permisos.separacion_(reglas, gente);
   const tiene = (quien, modulo) => (c.find((x) => x.quien === quien && x.modulo === modulo) || {}).permiso;
   ok(tiene('CONTROL VEHICULAR', 'panorama-vehiculos') === 'LECTURA', 'quien tenía Vehículos recibe su Panorama (solo ver)');
+  ok(tiene('CONTROL VEHICULAR', 'adquisicion-vehicular') === 'LECTURA' && !tiene('POST VENTA', 'adquisicion-vehicular'),
+    'y Adquisición (su pestaña en la ficha colgaba de Vehículos), menos el CLIENT');
   ok(tiene('LINEAS', 'sistemas-lineas') === 'LECTURA' && !tiene('LINEAS', 'sistemas-vehiculos'),
     'Sistemas, solo de la familia donde ya tenía algo');
   ok(tiene('CONTROL VEHICULAR', 'sistemas-vehiculos') === undefined, 'una regla que ya existe no se toca');

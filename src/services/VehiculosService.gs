@@ -446,6 +446,8 @@ const VehiculosService = (function () {
    */
   function guardarExpedienteAdquisicion(token, id, datos) {
     Permisos.puedeEditar(token, 'vehiculos');
+    // La pestaña Adquisición de la ficha es de su propio permiso (14-oct)
+    Permisos.puedeLeer(token, 'adquisicion-vehicular');
     return SheetUtils.update(ssId(), SHEET_VEHICULOS, id, {
       'FOLIO ADQUISICION': datos['FOLIO ADQUISICION'] || '',
       'LIGA EXPEDIENTE ADQUISICION': datos['LIGA EXPEDIENTE ADQUISICION'] || '',

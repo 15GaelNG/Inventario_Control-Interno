@@ -3403,8 +3403,8 @@
 
     /** Contenido de la pestaña "Adquisición" de la ficha: folio y carpeta ya ligados (si los
      *  hay), o el botón para buscarlos (buscarExpedienteAdquisicionFicha, vía el dispatcher
-     *  genérico data-agregar) si todavía no se ha ligado ninguno. Visible a cualquiera que vea
-     *  la ficha -- el folio ya se ve igual en la pestaña Datos; solo "Buscar" necesita edición. */
+     *  genérico data-agregar) si todavía no se ha ligado ninguno. Solo con el permiso de
+     *  Adquisición (14-oct); "Buscar" además necesita edición de Vehículos (escribe en su renglón). */
     function contenidoAdquisicionFicha(completo, puedeEditar) {
       const folio = completo['FOLIO ADQUISICION'];
       const liga = completo['LIGA EXPEDIENTE ADQUISICION'];
@@ -3750,8 +3750,9 @@
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
           { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
           // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
-          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab)
-          { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
+          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab).
+          // Con el permiso de Adquisición, no el de Vehículos (14-oct)
+          permisoDe('adquisicion-vehicular') && { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
           verificaciones && {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
             contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
