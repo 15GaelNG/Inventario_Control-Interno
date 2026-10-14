@@ -31,6 +31,12 @@
  *               sección de sensor de la ficha de Vehículos es de Instalación de Sensores.
  *   soloEnlaces su pantalla solo tiene enlaces a otros sistemas (Sistemas, Encuestas): no cuenta
  *               como de la familia (no abre los datos de referencia de su grupo) ni exporta.
+ *   alcance     (fase 3, 14-oct) true: el nodo RESPETA el alcance ("solo lo de su área": el servidor
+ *               filtra sus renglones por departamento). Quien tiene alcance (un perfil que limita o el
+ *               rol CLIENT) solo puede tener los nodos con alcance: true (y los de soloEnlaces, que no
+ *               traen datos); los demás se le resuelven Sin acceso (Permisos.resolver_). Así un módulo
+ *               nuevo nace cerrado para quien está limitado, no abierto. Una sección lo declara aparte
+ *               (no lo hereda); su exportar, el de su módulo.
  * `source-contracts` revisa que esto, el servidor y la pantalla digan lo mismo.
  */
 
@@ -40,13 +46,13 @@ const Modulos = (function () {
       id: 'servicios-vehiculares', etiqueta: 'Servicios Vehiculares', icono: 'car',
       modulos: [
         // El resumen de la flota (lee la lista de Vehículos: VehiculosService.RESUMEN.leenTambien)
-        { id: 'panorama-vehiculos', etiqueta: 'Panorama de Vehículos' },
+        { id: 'panorama-vehiculos', etiqueta: 'Panorama de Vehículos', alcance: true },
         { id: 'incidencias', etiqueta: 'Incidencias' },
         {
-          id: 'vehiculos', etiqueta: 'Vehículos', referencia: 'el catálogo de vehículos para elegir la unidad',
+          id: 'vehiculos', etiqueta: 'Vehículos', referencia: 'el catálogo de vehículos para elegir la unidad', alcance: true,
           secciones: [
             // La carpeta del NUCO (factura, seguro, alta, tarjeta, tenencia)
-            { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-open' },
+            { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-open', alcance: true },
             { id: 'responsiva', etiqueta: 'Responsiva', icono: 'file-signature', antes: 'responsiva-vehicular' },
             { id: 'adherente', etiqueta: 'Adherentes', icono: 'users', antes: 'adherente-vehicular' },
           ],
@@ -78,16 +84,17 @@ const Modulos = (function () {
       modulos: [
         { id: 'panorama-lineas', etiqueta: 'Panorama de Líneas' },
         {
-          id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas',
+          id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', alcance: true,
           // Las pestañas de la ficha de un equipo o una línea (lineas.html, fichaEnPestanas)
           secciones: [
-            { id: 'detalles', etiqueta: 'Detalles', icono: 'clipboard-list' },
-            // Inspecciones y responsivas (de la hoja y de la carpeta del NUCO)
+            { id: 'detalles', etiqueta: 'Detalles', icono: 'clipboard-list', alcance: true },
+            // Inspecciones y responsivas (de la hoja y de la carpeta del NUCO). Sin alcance: el pasado del registro
+            // puede ser de cuando era de otro departamento (usuario, 14-oct)
             { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-check' },
             // Movimientos y asignaciones (números / NUCOs que tuvo)
             { id: 'historial', etiqueta: 'Historial', icono: 'history' },
             // Cuenta, plan y facturas del proveedor en la ficha
-            { id: 'facturacion', etiqueta: 'Facturación', icono: 'receipt' },
+            { id: 'facturacion', etiqueta: 'Facturación', icono: 'receipt', alcance: true },
           ],
         },
         { id: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones' },
@@ -177,6 +184,8 @@ const Modulos = (function () {
       seccionesDe_(m).forEach((s) => lista.push({
         id: m.id + SEPARADOR + s.id, seccion: s.id, etiqueta: s.etiqueta, icono: s.icono || '',
         padre: m.id, modulo: m.id, hereda: s.hereda !== false, antes: s.antes || '',
+        // exportar respeta el alcance si su módulo lo respeta (exporta lo mismo que la lista); las demás, lo suyo
+        alcance: s === EXPORTAR ? !!m.alcance : !!s.alcance,
       }));
     });
     nodos_ = lista;
@@ -187,6 +196,8 @@ const Modulos = (function () {
   }
 
   const ids = () => nodos().map((n) => n.id);
+  /** ¿Lo puede tener quien está limitado a lo de su área? (alcance: true, o solo enlaces: no trae datos) */
+  const respetaAlcance = (id) => { const n = nodos().find((x) => x.id === id); return !!n && (!!n.alcance || !!n.soloEnlaces); };
   const nodo = (id) => nodos().find((n) => n.id === id) || null;
   const padre = (id) => (nodo(id) || {}).padre || null;
   /** El módulo de un nodo: él mismo, o el de su sección */
@@ -245,5 +256,5 @@ const Modulos = (function () {
     return grupo ? grupo.modulos.filter((m) => !m.soloEnlaces || m.id === modulo).map((m) => m.id) : [modulo];
   }
 
-  return { GRUPOS, todos, nodos, ids, nodo, padre, raiz, secciones, existe, etiqueta, resolver, familia, SEPARADOR };
+  return { GRUPOS, todos, nodos, ids, nodo, padre, raiz, secciones, existe, etiqueta, resolver, familia, respetaAlcance, SEPARADOR };
 })();

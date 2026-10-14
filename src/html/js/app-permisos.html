@@ -22,8 +22,8 @@
    * efectivo() también: tests/permisos-pantalla.test.cjs corre los dos con los mismos casos.
    */
 
-  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar', HEREDA: 'Hereda', ASIGNADO: 'Asignado' };
-  const PERM_ICONO = { NINGUNO: 'eye-off', LECTURA: 'eye', EDICION: 'pencil', ASIGNADO: 'layers' };
+  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar', HEREDA: 'Hereda', ASIGNADO: 'Asignado', AREA: 'Solo su área' };
+  const PERM_ICONO = { NINGUNO: 'eye-off', LECTURA: 'eye', EDICION: 'pencil', ASIGNADO: 'layers', AREA: 'map-pin' };
   const PERM_ROLES_TOTALES = ['ADMIN', 'SUPER'];
 
   async function initPermisosAdmin() {
@@ -84,9 +84,10 @@
      * Permisos.resolver_ aquí, para pintar al instante (tests/permisos-pantalla.test.cjs exige que dé lo mismo):
      * `capas` son funciones (id) → nivel | undefined, de la más fuerte a la más débil (correo, área…); si ninguna
      * dice nada, el más alto de los `perfiles` que digan algo de ese nodo; si tampoco, una sección hereda de su
-     * módulo. Nunca más que su módulo; `soloConsultaTope` (VIEWER, CLIENT) deja Editar en Ver. → (id) → nivel.
+     * módulo. Nunca más que su módulo; `soloConsultaTope` (VIEWER, CLIENT) deja Editar en Ver; `limitado` (alcance:
+     * CLIENT o un perfil que limita) cierra lo que no respeta el alcance. → (id) → nivel.
      */
-    function resolvedor(capas, perfiles, soloConsultaTope) {
+    function resolvedor(capas, perfiles, soloConsultaTope, limitado) {
       const memo = {};
       const val = (id) => {
         if (id in memo) return memo[id];
@@ -100,12 +101,16 @@
         if (v === undefined) v = padre && n.hereda !== false ? val(padre) : 'NINGUNO';
         if (padre) v = tope(v, val(padre));
         if (soloConsultaTope && v === 'EDICION') v = 'LECTURA';
+        // Limitado a lo de su área (fase 3): solo lo que respeta el alcance (Modulos.gs: alcance; el panel lo manda)
+        if (limitado && !(n && n.alcance)) v = 'NINGUNO';
         return (memo[id] = v);
       };
       return val;
     }
     /** Lo de un área en un nodo (Permisos.resolver_ sin el correo): su regla, sus perfiles o lo que hereda */
-    const deArea = (area, id) => resolvedor([(x) => (area ? regla(area, x) : undefined)], perfilesDe(area), false)(id);
+    // Si un perfil del área limita a lo de su área (fase 3), lo que da el área también se cierra donde no se respeta
+    const deArea = (area, id) => resolvedor([(x) => (area ? regla(area, x) : undefined)], perfilesDe(area), false,
+      perfilesDe(area).some(perfilLimita))(id);
     /** Lo que da un perfil solo, con su herencia y el tope de su módulo */
     const dePerfil = (k, id) => resolvedor([(x) => reglaPerfil(k, x)], [], false)(id);
     const tieneTotal = (p) => PERM_ROLES_TOTALES.indexOf(p.rol) !== -1;
@@ -123,8 +128,11 @@
     function efectivo(p, id) {
       if (tieneTotal(p)) return 'EDICION';   // "usuarios" (lo único que SUPER no tiene) no está en esta lista
       return resolvedor([(x) => regla(p.correo, x), (x) => (p.area ? regla(p.area, x) : undefined)],
-        perfilesDe(p.area), soloConsulta(p))(id);
+        perfilesDe(p.area), soloConsulta(p), estaLimitado(p))(id);
     }
+    /** ¿Solo ve lo de su área? Un CLIENT, o (fase 3) quien tiene en su área un perfil que limita (Permisos.alcance_) */
+    const perfilLimita = (k) => (perfilesPorClave[k] || {}).alcance === 'AREA';
+    const estaLimitado = (p) => !tieneTotal(p) && (p.rol === 'CLIENT' || perfilesDe(p.area).some(perfilLimita));
     const excepcionesDe = (p) => (tieneTotal(p) ? [] : nodos().filter((m) => regla(p.correo, m.id) !== undefined));
     const conAcceso = (p) => modulos().filter((m) => efectivo(p, m.id) !== 'NINGUNO').length;
     const persona = (correo) => datos.personas.find((p) => normal(p.correo) === normal(correo));
@@ -146,7 +154,7 @@
       perfilesDeArea = {};
       datos.perfiles.forEach((pf) => {
         const k = normal(pf.nombre);
-        perfilesPorClave[k] = { nombre: pf.nombre, reglas: {}, areas: pf.areas || [] };
+        perfilesPorClave[k] = { nombre: pf.nombre, reglas: {}, areas: pf.areas || [], alcance: pf.alcance || '' };
         (pf.reglas || []).forEach((r) => { perfilesPorClave[k].reglas[r.modulo] = r.permiso; });
         (pf.areas || []).forEach((a) => { (perfilesDeArea[normal(a)] = perfilesDeArea[normal(a)] || []).push(k); });
       });
@@ -211,7 +219,8 @@
 
     // ---------------------------------------------------------------- historial
     /** Un nodo ("Vehículos › Documentos") o, en una asignación, el perfil ("Perfil Flotilla") */
-    const etiquetaModulo = (id) => (/^perfil:/i.test(id) ? 'Perfil ' + String(id).replace(/^perfil:/i, '') : etiquetaNodo(id));
+    const etiquetaModulo = (id) => (/^perfil:/i.test(id) ? 'Perfil ' + String(id).replace(/^perfil:/i, '')
+      : id === '@alcance' ? 'Alcance (solo lo de su área)' : etiquetaNodo(id));
     const esDePersona = (h) => h.quien.indexOf('@') !== -1;
     const esDePerfil = (h) => /^perfil:/i.test(h.quien);
     const esAsignacion = (h) => /^perfil:/i.test(h.modulo);
@@ -295,6 +304,11 @@
         const dptos = alcanceCliente(p);
         aviso = ['eye', 'Su rol CLIENT solo deja consultar, y en Vehículos y Líneas solo ve lo de ' +
           (dptos.length ? dptos.join(', ') : 'ningún departamento (no tiene área ni DPTOS PERMITIDOS)') + '.'];
+      }
+      else if (estaLimitado(p)) {
+        const limitan = perfilesDe(p.area).filter(perfilLimita).map((k) => perfilesPorClave[k].nombre);
+        aviso = ['map-pin', 'Su perfil ' + limitan.join(', ') + ' la limita a lo de su área (' + (alcanceCliente(p).join(', ') || 'ningún departamento') +
+          '): solo tiene lo que respeta ese límite, y ahí solo ve sus renglones.'];
       }
       else if (!p.area) aviso = ['info', 'No tiene área en USUARIOS: solo tiene las excepciones que se le den aquí.'];
 
@@ -425,13 +439,15 @@
       let html = migas() + '<div class="ln-detalle-header card">' +
         '<div class="ln-detalle-icono"><i data-lucide="layers" class="ico ln-icon"></i></div>' +
         '<div class="ln-detalle-titulo"><h2>' + escaparHtml(pf.nombre) + '</h2><div class="ln-chips">' +
-        '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span></div></div>' +
+        '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span>' +
+        (pf.alcance === 'AREA' ? '<span class="badge-estado pendiente">' + ico('map-pin') + ' Solo lo de su área</span>' : '') + '</div></div>' +
         '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
         '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
         '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button></div>' +
         '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
 
       const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo reciben todas las áreas que tienen este perfil (y sus personas). Si un área tiene varios perfiles, gana el más alto; lo que el área o la persona tengan como regla propia manda sobre el perfil.</div></div>' +
+        (pf.alcance === 'AREA' ? '<div class="usr-aviso">' + ico('map-pin') + '<div><b>Solo lo de su área.</b> Quien tenga este perfil (aunque sea USER) solo ve los renglones de su área (DPTOS PERMITIDOS o su AREA), y solo en lo que respeta ese límite (Vehículos y Líneas Telefónicas, sin el pasado de la ficha); lo demás se le cierra.</div></div>' : '') +
         listaDePermisos(
           (m) => dePerfil(k, m.id) !== 'NINGUNO',
           (m) => renglon(m, dePerfil(k, m.id), m.padre && reglaPerfil(k, m.id) === undefined ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
@@ -507,19 +523,19 @@
       const propia = (x) => (x === sin || edicion.valores[x] === '' || edicion.valores[x] === undefined ? undefined : edicion.valores[x]);
       if (edicion.tipo === 'persona') {
         const p = edicion.p;
-        return { capas: [propia, (x) => (p.area ? regla(p.area, x) : undefined)], perfiles: perfilesDe(p.area), tope: soloConsulta(p) };
+        return { capas: [propia, (x) => (p.area ? regla(p.area, x) : undefined)], perfiles: perfilesDe(p.area), tope: soloConsulta(p), limitado: estaLimitado(p) };
       }
-      return { capas: [propia], perfiles: edicion.tipo === 'area' ? perfilesDe(edicion.id) : [], tope: false };
+      return { capas: [propia], perfiles: edicion.tipo === 'area' ? perfilesDe(edicion.id) : [], tope: false, limitado: false };
     }
     /** Lo que tendría un nodo sin regla propia en la ventana (lo de su área o sus perfiles, o lo que hereda) */
     function heredadoDe(id) {
       const c = capasVentana(id);
-      return resolvedor(c.capas, c.perfiles, c.tope)(id);
+      return resolvedor(c.capas, c.perfiles, c.tope, c.limitado)(id);
     }
     /** El nivel que queda en la ventana; a VIEWER, Editar se le queda en Ver (como en efectivo) */
     function nivelEnVentana(id) {
       const c = capasVentana(null);
-      return resolvedor(c.capas, c.perfiles, c.tope)(id);
+      return resolvedor(c.capas, c.perfiles, c.tope, c.limitado)(id);
     }
     /** Elegir un nivel: el mismo que ya tendría sin regla (de su área, sus perfiles o heredado) no es regla propia */
     function elegir(id, nivel) {
@@ -596,7 +612,10 @@
       else {
         cuerpo.innerHTML = (edicion.tipo === 'perfil'
           ? '<label class="usr-perfil-nombre">Nombre del perfil <input type="text" id="usr-perfil-nombre" maxlength="60" autocomplete="off" value="' +
-            escaparHtml(edicion.nombre) + '" placeholder="P. ej. Flotilla - consulta"></label>' : '') +
+            escaparHtml(edicion.nombre) + '" placeholder="P. ej. Flotilla - consulta"></label>' +
+            '<button type="button" class="usr-asignar usr-perfil-alcance' + (edicion.alcance ? ' activa' : '') + (edicion.alcance !== edicion.alcanceInicial ? ' cambiada' : '') +
+            '" data-usr-alcance aria-pressed="' + edicion.alcance + '">' + ico(edicion.alcance ? 'square-check' : 'square') +
+            '<span class="usr-asignar-nombre">Solo lo de su área</span><span class="usr-asignar-detalle">Quien lo tenga solo ve sus renglones, y solo donde se respeta ese límite</span></button>' : '') +
           datos.grupos.map((g) => filaGrupo(g) + '<div class="usr-editar-lista">' + g.modulos.map(filaModulo).join('') + '</div>').join('') +
           tarjetaImplicaciones(implicaciones(nivelEnVentana));
       }
@@ -617,7 +636,8 @@
       const p = tipo === 'persona' ? persona(id) : null;
       if (p && tieneTotal(p)) return;
       const pf = tipo === 'perfil' && id ? perfil(id) : null;
-      edicion = { tipo: tipo, id: id, p: p, nombre: pf ? pf.nombre : '', original: pf ? pf.nombre : null, iniciales: {}, valores: {}, abiertos: {} };
+      edicion = { tipo: tipo, id: id, p: p, nombre: pf ? pf.nombre : '', original: pf ? pf.nombre : null, iniciales: {}, valores: {}, abiertos: {},
+        alcance: pf ? pf.alcance === 'AREA' : false, alcanceInicial: pf ? pf.alcance === 'AREA' : false };
       nodos().forEach((m) => {
         let valor;
         if (p) {
@@ -690,16 +710,21 @@
         const nombre = String(edicion.nombre || '').trim();
         if (!nombre) return [];
         const renombrado = edicion.original && normal(edicion.original) !== normal(nombre);
+        const alcance = (q) => (edicion.alcance !== edicion.alcanceInicial || (renombrado && edicion.alcance)
+          ? [{ quien: q, modulo: '@alcance', permiso: edicion.alcance ? 'AREA' : null }] : []);
         if (!renombrado) {
-          return Object.keys(edicion.valores).filter((m) => edicion.valores[m] !== edicion.iniciales[m])
+          const reglas = Object.keys(edicion.valores).filter((m) => edicion.valores[m] !== edicion.iniciales[m])
             .map((m) => ({ quien: quienPerfil(edicion.original || nombre), modulo: m, permiso: edicion.valores[m] || null }));
+          // Un perfil nuevo existe por sus reglas: el alcance solo no lo crea
+          return reglas.length || edicion.original ? reglas.concat(alcance(quienPerfil(edicion.original || nombre))) : [];
         }
         // Renombrar: sus reglas y sus asignaciones pasan al nombre nuevo
         const viejo = edicion.original;
         return Object.keys(edicion.iniciales).filter((m) => edicion.iniciales[m] !== '').map((m) => ({ quien: quienPerfil(viejo), modulo: m, permiso: null }))
           .concat(Object.keys(edicion.valores).filter((m) => edicion.valores[m] !== '').map((m) => ({ quien: quienPerfil(nombre), modulo: m, permiso: edicion.valores[m] })))
           .concat(...(perfil(viejo) || { areas: [] }).areas.map((a) => [
-            { quien: a, modulo: quienPerfil(viejo), permiso: null }, { quien: a, modulo: quienPerfil(nombre), permiso: 'ASIGNADO' }]));
+            { quien: a, modulo: quienPerfil(viejo), permiso: null }, { quien: a, modulo: quienPerfil(nombre), permiso: 'ASIGNADO' }]))
+          .concat(edicion.alcanceInicial ? [{ quien: quienPerfil(viejo), modulo: '@alcance', permiso: null }] : [], alcance(quienPerfil(nombre)));
       }
       return Object.keys(edicion.valores)
         .filter((m) => edicion.valores[m] !== edicion.iniciales[m])
@@ -708,6 +733,13 @@
 
     /** Un clic en la ventana: un nivel de un módulo, el de todo un grupo, quitar una regla o (asignar) una casilla */
     function alClicVentana(ev) {
+      if (ev.target.closest('[data-usr-alcance]')) {
+        edicion.alcance = !edicion.alcance;
+        pintarVentana();
+        const el = $('usr-modal-cuerpo').querySelector('[data-usr-alcance]');
+        if (el) el.focus();
+        return;
+      }
       const casilla = ev.target.closest('[data-usr-asignar-item]');
       if (casilla) {
         const k = casilla.dataset.usrAsignarItem;
@@ -800,7 +832,8 @@
       });
       if (!ok) return;
       const cambios = Object.keys(pf.reglas).map((m) => ({ quien: quienPerfil(pf.nombre), modulo: m, permiso: null }))
-        .concat(pf.areas.map((a) => ({ quien: a, modulo: quienPerfil(pf.nombre), permiso: null })));
+        .concat(pf.areas.map((a) => ({ quien: a, modulo: quienPerfil(pf.nombre), permiso: null })))
+        .concat(pf.alcance === 'AREA' ? [{ quien: quienPerfil(pf.nombre), modulo: '@alcance', permiso: null }] : []);
       try {
         await guardarCambios(cambios, () => { if (fichaActual && fichaActual.tipo === 'perfil') fichaActual = pila.pop() || null; });
       } catch (err) {
@@ -842,7 +875,7 @@
         const v = nivelEnMatriz(quien, x);
         return v === 'HEREDA' ? undefined : v;
       };
-      return resolvedor([propia], perfilesDeColumna(quien), false)(id);
+      return resolvedor([propia], perfilesDeColumna(quien), false, !esQuienPerfil(quien) && perfilesDe(quien).some(perfilLimita))(id);
     }
     const columnasMatriz = () => (modoMatriz === 'perfiles'
       ? datos.perfiles.map((pf) => ({ quien: quienPerfil(pf.nombre), etiqueta: pf.nombre,
@@ -1072,7 +1105,7 @@
     }
 
     const filaPerfil = (pf) => ({
-      ID: pf.nombre, NOMBRE: pf.nombre, REGLAS: pf.reglas.length, AREAS: pf.areas.join(', ') || '—',
+      ID: pf.nombre, NOMBRE: pf.nombre, REGLAS: pf.reglas.length, AREAS: pf.areas.join(', ') || '—', ALCANCE: pf.alcance === 'AREA' ? 'Solo su área' : 'Todo',
       PERSONAS: datos.personas.filter((p) => p.activo && pf.areas.some((a) => normal(a) === normal(p.area))).length,
     });
     const tablaPerfiles = DataTable.crear($('usr-tabla-perfiles'), {
@@ -1091,6 +1124,7 @@
         { campo: 'NOMBRE', titulo: 'Perfil', tipo: 'texto', fijada: true },
         { campo: 'REGLAS', titulo: 'Reglas', tipo: 'numero' },
         { campo: 'AREAS', titulo: 'Áreas', tipo: 'texto' },
+        { campo: 'ALCANCE', titulo: 'Alcance', tipo: 'lista' },
         { campo: 'PERSONAS', titulo: 'Personas activas', tipo: 'numero' },
       ],
       accionesFila: [

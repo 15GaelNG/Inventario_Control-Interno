@@ -147,7 +147,48 @@ un "Flotilla - consulta" común a varias áreas).
 2. `permisosMigrarCatalogo()` y luego `permisosCrearPerfiles()` en el editor de producción.
 3. Revisar con alguien de cada área que su menú y sus fichas sigan igual.
 
-## Fase 3 — Alcance como atributo del perfil (pendiente)
+## Fase 3 — Alcance como atributo del perfil (hecha, en `ayrton`)
 
-`ALCANCE` del perfil (vacío o `AREA`) en lugar del rol CLIENT, y las negaciones fijas del CLIENT (`sinAlcance_`,
-`sinPasado`) como nodos marcados `mezclaDepartamentos` en el catálogo.
+"Solo lo de su área" deja de ser exclusivo del rol CLIENT: es un atributo del perfil.
+
+Decisiones del usuario (14-oct): limita a **cualquiera** que tenga ese perfil (USER o CLIENT; el rol CLIENT queda
+como "solo consulta"), y si un área tiene varios perfiles **basta con que uno limite**. Además, para no abrir nada
+mientras no se corra la migración, **un CLIENT sigue limitado siempre**.
+
+### Cómo se guarda
+
+En PERMISOS: `QUIEN = perfil:Nombre` | `MODULO = @alcance` | `PERMISO = AREA`. Sin ese renglón, el perfil no limita.
+Una versión de antes lo ignora (`@alcance` no es un módulo; `AREA` no es un nivel).
+
+### Qué hace (`Permisos.alcance_` y `resolver_`)
+
+- Quien queda limitado ve los renglones de `DPTOS PERMITIDOS` o, si está vacío, de su `AREA` (igual que el CLIENT de
+  antes). ADMIN y SUPER nunca quedan limitados.
+- **Solo puede tener los nodos que respetan el alcance** (`alcance: true` en `Modulos.gs`, o los de solo enlaces); los
+  demás se le resuelven Sin acceso. Se eligió marcar lo que **sí** respeta el alcance (y no lo que "mezcla
+  departamentos") para que un módulo nuevo nazca **cerrado** para quien está limitado. Hoy lo respetan: `vehiculos`,
+  `vehiculos.documentos`, `vehiculos.exportar`, `panorama-vehiculos`, `lineas-telefonicas` y sus `detalles`,
+  `facturacion` y `exportar`. Documentos e Historial de Líneas no (el pasado del registro).
+- Como el mapa de permisos ya llega cerrado, la pantalla esconde sola lo que no va (menú, pestañas); las negaciones
+  del servidor (`sinAlcance_`, el filtro de `HojaServicio` y de `TelefoniaService`) se quedan como segunda defensa.
+- Pantalla: en la ventana del perfil, el interruptor "Solo lo de su área"; la ficha del perfil y la tabla de perfiles
+  dicen su alcance; la ficha de una persona limitada por perfil lo avisa. La paridad servidor = pantalla incluye
+  perfiles que limitan al azar.
+
+### Migración: `permisosAlcanceDesdeClientes()` (editor, después de `permisosCrearPerfiles()`)
+
+Marca "solo lo de su área" los perfiles de las áreas cuya gente activa es toda CLIENT. Se puede repetir.
+
+**Simulación contra producción (14-oct, solo lectura):** el único perfil que queda con alcance es **POST VENTA** y
+**nadie cambia** respecto a la fase 2. POST VENTA ve: Vehículos (con Documentos y Exportar) y Líneas Telefónicas (con
+Detalles, Facturación y Exportar); respecto a hoy en producción no pierde nada (no tenía Responsiva ni Adherente).
+
+## Para llevar las tres fases a producción (pendiente; el usuario decide cuándo)
+
+1. Juntar `ayrton` en master (sin las fotos del directorio) y desplegar con la GitHub Action.
+2. En el editor de producción, en este orden (cada una se puede repetir):
+   1. `permisosMigrarCatalogo()` — ids viejos a su id del catálogo (0 reglas nuevas, 4 renombradas).
+   2. `permisosCrearPerfiles()` — un perfil por área con sus mismas reglas (8 perfiles, nadie cambia).
+   3. `permisosAlcanceDesdeClientes()` — el perfil de POST VENTA queda "solo lo de su área" (nadie cambia).
+3. Revisar con alguien de cada área que su menú y sus fichas sigan igual, y luego consolidar perfiles comunes en la
+   pestaña Perfiles.

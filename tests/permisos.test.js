@@ -164,6 +164,30 @@ console.log('4c. Perfiles: paquetes de reglas que se asignan a áreas (fase 2, 1
   ok(iguales, 'pasar las reglas de cada área a su perfil deja a todos igual (40 casos al azar), y repetirla no hace nada');
 }
 
+console.log('4d. Alcance como atributo del perfil (fase 3, 14-oct)');
+{
+  const reglas = [['perfil:Cliente', 'vehiculos', 'LECTURA'], ['perfil:Cliente', 'verificaciones', 'LECTURA'], ['perfil:Cliente', '@alcance', 'AREA'],
+    ['POST VENTA', 'perfil:Cliente', 'ASIGNADO'], ['perfil:Flotilla', 'vehiculos', 'EDICION'], ['CI', 'perfil:Flotilla', 'ASIGNADO']];
+  const u = (extra) => usuario(Object.assign({ CORREO: 'x@ciudadmaderas.com', AREA: 'POST VENTA', ROL: 'USER' }, extra));
+  ok(JSON.stringify(Permisos.alcance_(u(), reglas)) === '["POST VENTA"]', 'un USER cuyo perfil limita queda limitado a su área (no hace falta ser CLIENT)');
+  p = Permisos.resolver_(u(), reglas, Modulos.ids());
+  ok(p.vehiculos === 'LECTURA' && p.verificaciones === undefined, 'y solo tiene lo que respeta el alcance (Verificaciones no filtra: cerrada)');
+  ok(Permisos.alcance_(u({ AREA: 'CI' }), reglas) === null && Permisos.resolver_(u({ AREA: 'CI' }), reglas, Modulos.ids()).vehiculos === 'EDICION',
+    'un perfil que no limita no limita');
+  ok(JSON.stringify(Permisos.alcance_(u(), reglas.concat([['perfil:Flotilla', 'verificaciones', 'EDICION'], ['POST VENTA', 'perfil:Flotilla', 'ASIGNADO']]))) === '["POST VENTA"]',
+    'con dos perfiles, basta con que uno limite');
+  ok(Permisos.alcance_(u({ ROL: 'SUPER' }), reglas) === null && Permisos.alcance_(u({ ROL: 'ADMIN' }), reglas) === null, 'ADMIN y SUPER nunca quedan limitados');
+  ok(JSON.stringify(Permisos.alcance_(u({ ROL: 'CLIENT', AREA: 'CI' }), reglas)) === '["CI"]', 'un CLIENT sigue limitado aunque su perfil no limite');
+  const pan = Permisos.perfilesDelPanel_(reglas);
+  ok(pan.find((x) => x.nombre === 'Cliente').alcance === 'AREA' && pan.find((x) => x.nombre === 'Flotilla').alcance === '' &&
+    pan.find((x) => x.nombre === 'Cliente').reglas.length === 2, 'el panel trae el alcance de cada perfil (y no lo cuenta como regla)');
+  const g = Permisos.aplicarCambios_(reglas, [{ quien: 'perfil:Flotilla', modulo: '@alcance', permiso: 'AREA' }], 'n');
+  ok(g.some((r) => r[0] === 'perfil:Flotilla' && r[1] === '@alcance' && r[2] === 'AREA'), 'guardar acepta el alcance de un perfil');
+  ok(Modulos.respetaAlcance('vehiculos') && Modulos.respetaAlcance('vehiculos.exportar') && Modulos.respetaAlcance('sistemas-vehiculos') &&
+    !Modulos.respetaAlcance('lineas-telefonicas.historial') && !Modulos.respetaAlcance('verificaciones'),
+    'el catálogo dice qué respeta el alcance (exportar, el de su módulo; los de solo enlaces, sí; un módulo nuevo, no)');
+}
+
 console.log('5. La semilla (traducción de AppSheet)');
 const semilla = (u) => Permisos.resolver_(u, PERMISOS_SEMILLA, Modulos.ids());
 ok(PERMISOS_SEMILLA.every((r) => Modulos.existe(r[1])), 'todos sus módulos existen en el catálogo');
@@ -315,7 +339,9 @@ ok(!d.length, 'lo que queda igual no se anota (ni Sin acceso a un área que ya n
 
 console.log('7c. Rol CLIENT: solo consulta, y solo sus departamentos (alcance_)');
 p = resolver(usuario({ ROL: 'CLIENT', AREA: 'CONTROL VEHICULAR' }));
-ok(p.vehiculos === 'LECTURA' && p.verificaciones === 'LECTURA', 'CLIENT: lo de su área, topado en lectura como VIEWER');
+ok(p.vehiculos === 'LECTURA' && p['vehiculos.documentos'] === 'LECTURA', 'CLIENT: lo de su área, topado en lectura como VIEWER');
+ok(p.verificaciones === undefined && p['vehiculos.responsiva'] === undefined,
+  'y solo lo que respeta su alcance (fase 3): Verificaciones y la Responsiva no filtran por departamento, se le cierran');
 ok(Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'Post  Venta' }))[0] === 'POST VENTA',
   'sin DPTOS PERMITIDOS ve su AREA, normalizada (mayúsculas, un solo espacio)');
 const varios = Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'POST VENTA', 'DPTOS PERMITIDOS': 'Construcción, OOAM TECNICO ,' }));

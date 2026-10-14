@@ -37,8 +37,8 @@ test('el servidor y la pantalla resuelven igual cada nodo, con herencia y excepc
   const nodos = M.ids();
   // El panel como lo arma Permisos.panel: módulos con sus secciones
   const grupos = M.GRUPOS.map((g) => ({ id: g.id, etiqueta: g.etiqueta, icono: g.icono,
-    modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta,
-      secciones: M.secciones(m.id).map((n) => ({ id: n.id, etiqueta: n.etiqueta, icono: n.icono || '', hereda: n.hereda })) })) }));
+    modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, alcance: M.respetaAlcance(m.id),
+      secciones: M.secciones(m.id).map((n) => ({ id: n.id, etiqueta: n.etiqueta, icono: n.icono || '', hereda: n.hereda, alcance: M.respetaAlcance(n.id) })) })) }));
   const AREAS = ['CI', 'LINEAS', 'POST VENTA'];
   const CORREOS = ['a@x.com', 'b@x.com', 'c@x.com', 'd@x.com'];
   const NIVELES = ['NINGUNO', 'LECTURA', 'EDICION'];
@@ -60,6 +60,8 @@ test('el servidor y la pantalla resuelven igual cada nodo, con herencia y excepc
     const asignaciones = [];
     AREAS.forEach((a) => PERFILES.forEach((pf) => { if (!azar(3)) asignaciones.push({ quien: a, modulo: 'perfil:' + pf, permiso: 'ASIGNADO' }); }));
     for (let i = 0; i < 20; i++) reglas.push(['perfil:' + uno(PERFILES), uno(nodos), uno(NIVELES), '']);
+    // Fase 3: a veces un perfil limita a "solo lo de su área"
+    PERFILES.forEach((pf) => { if (!azar(3)) reglas.push(['perfil:' + pf, '@alcance', 'AREA', '']); });
     const hoja = P.aplicarCambios_(P.aplicarCambios_([], asignaciones, ''), reglas.map((r) => ({ quien: r[0], modulo: r[1], permiso: r[2] })), '');
     // Como lo arma Permisos.panel: las reglas de áreas y personas, y los perfiles aparte
     const panel = { grupos: grupos,

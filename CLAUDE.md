@@ -183,15 +183,24 @@ El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
    folio (Sensores, Hologramas, Verificaciones… eligen la unidad) y la lista de cajas (Arqueos).
 4. **Campo** (`editaModulo` / `deOtroModulo`, abajo) y los campos secretos de Líneas (PIN,
    contraseñas: solo ADMIN y el área de Líneas, se ocultan en el servidor).
-5. **Registro** (qué renglones ve cada quien): el **rol CLIENT** (ROL en USUARIOS) solo consulta (como
-   VIEWER) y solo ve los renglones de sus departamentos: `DPTOS PERMITIDOS` (separado por comas) o, si
-   está vacía, su `AREA` (`Permisos.alcanceDe`, que llega como `sesion.alcance`; null = sin límite). Se
+   - **Perfiles** (fase 2): un paquete de reglas con nombre que se asigna a áreas, en la misma hoja PERMISOS
+     (`QUIEN = perfil:Nombre` = sus reglas; `AREA` + `MODULO = perfil:Nombre` + `ASIGNADO` = asignación). Por nodo:
+     correo > área > el más alto de los perfiles del área (cada uno con su herencia) > herencia. Pestaña Perfiles
+     y matriz "Por perfil" en Usuarios y permisos. `permisosCrearPerfiles()` pasa las reglas de cada área a su perfil.
+5. **Registro** (qué renglones ve cada quien): queda **limitado** a lo de su área quien tiene un perfil con
+   alcance (`perfil:Nombre` + `@alcance` + `AREA`; basta con uno) y el **rol CLIENT** (que además solo consulta,
+   como VIEWER). Ve los renglones de `DPTOS PERMITIDOS` (separado por comas) o, si está vacía, su `AREA`
+   (`Permisos.alcanceDe`, que llega como `sesion.alcance`; null = sin límite). Quien está limitado solo puede
+   tener los nodos que **respetan el alcance** (`alcance: true` en `Modulos.gs`, o de solo enlaces): los demás
+   se le resuelven Sin acceso, así un módulo nuevo nace cerrado para él. Hoy lo respetan Vehículos (su lista,
+   Documentos, Exportar, Panorama) y Líneas Telefónicas (lista, Detalles, Facturación, Exportar). Se
    filtra en el servidor **lo que se regresa, nunca la caché** (que es de todos): en `HojaServicio` con
    `alcance: 'COLUMNA'` en la definición (Vehículos: `DEPARTAMENTO`), y en Líneas con los ayudantes de
    `TelefoniaService` (`filtrarIndice_`, `exigirAlcance_` para la ficha, `sinAlcance_` para lo que mezcla
    departamentos o es el pasado del registro: historial, documentos). `tests/alcance-cliente.test.cjs` falla si una lectura nueva de Líneas no pasa por
-   ellos. Un módulo nuevo para un CLIENT necesita su `alcance` antes de darle el permiso. Hoy: POST VENTA,
-   con LECTURA en `vehiculos` y `lineas-telefonicas`.
+   ellos. Para que un módulo lo puedan usar los limitados: su servidor filtra por departamento y entonces se
+   marca `alcance: true` en el catálogo (nunca antes). Hoy: POST VENTA (CLIENT; su perfil con alcance tras
+   `permisosAlcanceDesdeClientes()`), con Ver en `vehiculos` y `lineas-telefonicas`.
 
 Cuando una pantalla muestra o edita algo de **otro** módulo (la ficha de Vehículos trae
 Sensores, Verificaciones, Cambios…):
