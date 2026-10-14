@@ -346,6 +346,22 @@
       document.getElementById('cch-ver-registro-cuerpo').innerHTML = '';
     }
 
+    /** "Generar liga de firma" (Responsable/Asistente) para un arqueo dentro de la ficha de Caja
+     *  Chica -- mismo botón que accionesFichaRegistro, pero su par regenerarLiga/regenerarLigaJefe
+     *  está pensado para el vocabulario principal/jefe de Responsiva/Adherente (app.html); Arqueos
+     *  usa responsable/asistente, así que se arma aparte, reusando generarLigaArqueoFicha_
+     *  (app-arqueos.html) -- la misma llamada que ya usa la tabla principal de Arqueos. */
+    function botonesLigaArqueoFicha_(a) {
+      let html = '';
+      if (!a.FIRMA_RESPONSABLE) {
+        html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="responsable" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Responsable)">' + Iconos.svg('link') + '</button>';
+      }
+      if (!a.FIRMA_ASISTENTE) {
+        html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="asistente" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Asistente)">' + Iconos.svg('link') + '</button>';
+      }
+      return html ? '<div class="ficha-acciones-fila">' + html + '</div>' : '';
+    }
+
     const TAB_FICHA_CAJACHICA_POR_TIPO = { arqueo: 'arqueos', 'cambio-monto': 'cambios-monto' };
     const API_ELIMINAR_FICHA_CAJACHICA = {
       arqueo: { api: 'apiEliminarArqueo', lista: 'apiListarArqueosResumen' },
@@ -428,7 +444,9 @@
               { t: 'Calificación', r: (a) => { const n = normalizarCalificacion_(a.CALIFICACION); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); } },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
               { t: 'Evidencia', r: (a) => a.EVIDENCIAS ? '<a href="' + escaparHtml(a.EVIDENCIAS) + '" target="_blank" rel="noopener">📎 Ver evidencia</a>' : '<span class="empty-state" style="margin:0">Sin evidencia</span>' },
-              { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) },
+              { t: 'Firma', r: (a) => badgeFirmaArqueo(a) },
+              { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) +
+                (puedeEditarModulo('arqueos') ? botonesLigaArqueoFicha_(a) : '') },
             ], arqueos, 'Sin arqueos registrados para esta caja chica.',
             puedeEditarModulo('arqueos') ? { tipo: 'arqueo', texto: 'Agregar' } : null),
           },
@@ -476,6 +494,14 @@
         });
         detalle.querySelectorAll('[data-ficha-eliminar]').forEach((btn) => {
           btn.addEventListener('click', () => eliminarRegistroFichaCajaChica(btn.dataset.fichaEliminar, btn.dataset.id, cResumen));
+        });
+        detalle.querySelectorAll('[data-arqueo-liga]').forEach((btn) => {
+          const quien = btn.dataset.arqueoLiga;
+          const etiqueta = quien === 'asistente' ? 'el Asistente' : 'el Responsable';
+          btn.addEventListener('click', () => generarLigaArqueoFicha_(btn.dataset.id, quien, etiqueta, () => {
+            invalidarCacheLista('apiFichaCajaChica', state.token);
+            abrirFichaCajaChica(cResumen, 'arqueos', true);
+          }));
         });
         refreshIcons();
       } catch (err) {
