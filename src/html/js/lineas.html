@@ -3495,7 +3495,7 @@
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['Razón social', l.razonSocial],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
-              (l ? tarjetaPlan(l, true, r.facturas) + (veSeccion('facturacion') ? tarjetaFacturacion(l, r.facturas, true) : '') : '') +
+              (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) + tarjetaFacturacion(l, r.facturas, true) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           cargarPatronesAppSheet(detalle);
@@ -3535,8 +3535,7 @@
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
               tarjetaCuenta(l, r.corte) +
-              tarjetaPlan(l, false, r.facturas) +
-              (veSeccion('facturacion') ? tarjetaFacturacion(l, r.facturas, false) : '') +
+              (veSeccion('facturacion') ? tarjetaPlan(l, false, r.facturas) + tarjetaFacturacion(l, r.facturas, false) : '') +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],

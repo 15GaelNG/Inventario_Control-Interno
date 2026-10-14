@@ -215,6 +215,16 @@ de esconderlas por rol, son una sección más: `vehiculos.carpetas` y `lineas-te
 - "Para agregar un documento: Editar → …" sale solo a quien edita Vehículos.
 - Escena de la vista previa: `vehiculos-documentos-sin-carpetas`.
 
+## Reportes: ningún CLIENT (14-oct)
+
+"Ningún CLIENT debe tener acceso a los reportes en general" (usuario). Igual que las carpetas, sin parches por rol:
+
+- `vehiculos.reporte`: el botón "Ver reporte" de la lista de Vehículos (Looker Studio) es una sección sin alcance;
+  hereda de Vehículos para los demás. Ojo: solo esconde el botón; quien abra la liga de Looker entra según cómo esté
+  compartido el tablero en Looker Studio (eso no lo controla la app).
+- `panorama-vehiculos` deja de tener `alcance: true`: aunque alguien se lo asigne a un CLIENT, se le resuelve Sin
+  acceso (POST VENTA no lo tenía; nadie cambia). Panorama de Líneas ya no lo tenía.
+
 ## Para llevar las tres fases a producción (pendiente; el usuario decide cuándo)
 
 1. Juntar `ayrton` en master (sin las fotos del directorio) y desplegar con la GitHub Action.

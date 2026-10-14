@@ -45,8 +45,9 @@ const Modulos = (function () {
     {
       id: 'servicios-vehiculares', etiqueta: 'Servicios Vehiculares', icono: 'car',
       modulos: [
-        // El resumen de la flota (lee la lista de Vehículos: VehiculosService.RESUMEN.leenTambien)
-        { id: 'panorama-vehiculos', etiqueta: 'Panorama de Vehículos', alcance: true },
+        // El resumen de la flota (lee la lista de Vehículos: VehiculosService.RESUMEN.leenTambien). Sin alcance: es un
+        // reporte, y ningún CLIENT (ni quien está limitado a su área) ve reportes (usuario, 14-oct)
+        { id: 'panorama-vehiculos', etiqueta: 'Panorama de Vehículos' },
         { id: 'incidencias', etiqueta: 'Incidencias' },
         {
           id: 'vehiculos', etiqueta: 'Vehículos', referencia: 'el catálogo de vehículos para elegir la unidad', alcance: true,
@@ -59,6 +60,8 @@ const Modulos = (function () {
             // "Carpeta" de cada documento y de cada inspección): operación interna. Sin alcance: un CLIENT no las ve
             // (usuario, 14-oct); los archivos sí, desde su pestaña
             { id: 'carpetas', etiqueta: 'Carpetas en Drive', icono: 'folder-tree' },
+            // El botón "Ver reporte" de la lista (Looker Studio): sin alcance, ningún CLIENT ve reportes (usuario, 14-oct)
+            { id: 'reporte', etiqueta: 'Ver reporte (Looker Studio)', icono: 'bar-chart-3' },
           ],
         },
         // Catálogo de expedientes de compra por serie (índice de Adquisición Vehicular, solo
@@ -97,8 +100,9 @@ const Modulos = (function () {
             { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-check' },
             // Movimientos y asignaciones (números / NUCOs que tuvo)
             { id: 'historial', etiqueta: 'Historial', icono: 'history' },
-            // Cuenta, plan y facturas del proveedor en la ficha
-            { id: 'facturacion', etiqueta: 'Facturación', icono: 'receipt', alcance: true },
+            // Los bloques "Plan" y "Facturación" de la ficha (y el día de corte y las facturas que manda el servidor). Sin
+            // alcance: ningún CLIENT los ve (usuario, 14-oct)
+            { id: 'facturacion', etiqueta: 'Plan y facturación', icono: 'receipt' },
             // "Ver carpeta en Drive" del ⋮ de la ficha (la carpeta del NUCO): operación interna, sin alcance (usuario, 14-oct)
             { id: 'carpetas', etiqueta: 'Carpetas en Drive', icono: 'folder-tree' },
           ],

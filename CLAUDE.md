@@ -189,7 +189,9 @@ El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
    (`Permisos.alcanceDe`, que llega como `sesion.alcance`; null = sin límite). Quien está limitado solo puede
    tener los nodos que **respetan el alcance** (`alcance: true` en `Modulos.gs`, o de solo enlaces): los demás
    se le resuelven Sin acceso, así un módulo nuevo nace cerrado para él. Hoy lo respetan Vehículos (su lista,
-   Documentos, Exportar, Panorama) y Líneas Telefónicas (lista, Detalles, Facturación, Exportar). Se
+   Documentos, Exportar) y Líneas Telefónicas (lista, Detalles, Facturación, Exportar). Lo que es operación interna o
+   reporte NO lo lleva aunque filtre (14-oct): Carpetas en Drive (`vehiculos.carpetas`, `lineas-telefonicas.carpetas`),
+   "Ver reporte" (`vehiculos.reporte`) y los panoramas. Se
    filtra en el servidor **lo que se regresa, nunca la caché** (que es de todos): en `HojaServicio` con
    `alcance: 'COLUMNA'` en la definición (Vehículos: `DEPARTAMENTO`), y en Líneas con los ayudantes de
    `TelefoniaService` (`filtrarIndice_`, `exigirAlcance_` para la ficha, `sinAlcance_` para lo que mezcla
