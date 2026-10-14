@@ -39,15 +39,19 @@ function viewportDelServidor() {
 
 /** Los grupos de módulos de src/config/Modulos.gs (los reales, con referencia / editaEn): así la
  *  vista previa no tiene su propia copia que se desfase */
-function gruposReales() {
+function catalogoReal() {
   const ctx = {};
-  require('vm').runInNewContext(fs.readFileSync(path.join(RAIZ, 'config', 'Modulos.gs'), 'utf8') + '\n;this.G = Modulos.GRUPOS;', ctx);
-  return ctx.G;
+  require('vm').runInNewContext(fs.readFileSync(path.join(RAIZ, 'config', 'Modulos.gs'), 'utf8') + '\n;this.M = Modulos;', ctx);
+  return ctx.M;
 }
+const gruposReales = () => catalogoReal().GRUPOS;
+/** Todos los nodos del catálogo (módulos y secciones, con su padre): para los permisos falsos */
+const nodosReales = () => catalogoReal().nodos();
 
 function construir() {
   let pagina = resolver('html/Index');
-  const falsos = 'window.__GRUPOS = ' + JSON.stringify(gruposReales()) + ';\n' + fs.readFileSync(path.join(__dirname, 'datos-falsos.js'), 'utf8');
+  const falsos = 'window.__GRUPOS = ' + JSON.stringify(gruposReales()) + ';\n' +
+    'window.__NODOS = ' + JSON.stringify(nodosReales()) + ';\n' + fs.readFileSync(path.join(__dirname, 'datos-falsos.js'), 'utf8');
   // El servidor falso va ANTES que todo: api.html usa google.script.run al cargar
   pagina = pagina.replace(/<head>/i, '<head>\n<meta name="viewport" content="' + viewportDelServidor() + '">' +
     '\n<script>\n' + falsos + '\n</script>');

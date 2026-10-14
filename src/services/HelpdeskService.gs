@@ -133,7 +133,8 @@ const HelpdeskService = (function () {
 
   /** La hoja, para HojaServicio: la copia la ve quien puede leer Tickets */
   const HELPDESK = {
-    modulo: 'tickets',
+    // Help Desk › Registrados: sección de Tickets (Modulos.gs)
+    modulo: 'tickets.helpdesk',
     nombre: 'el ticket del helpdesk',
     libro: libro_,
     hoja: HOJA,
@@ -142,7 +143,7 @@ const HelpdeskService = (function () {
 
   /** Los tickets guardados (pestaña "Guardados"). Vacío si la hoja todavía no existe. */
   function listarGuardados(token) {
-    Permisos.puedeLeer(token, 'tickets');
+    Permisos.puedeLeer(token, 'tickets.helpdesk');
     if (!hoja_(false)) return [];
     return HojaServicio.listar(HELPDESK, token);
   }
@@ -341,7 +342,7 @@ const HelpdeskService = (function () {
     });
 
     const otrosTickets = siPuede_(() => {
-      Permisos.puedeLeer(token, 'tickets');
+      Permisos.puedeLeer(token, 'tickets.helpdesk');
       if (!correo || !hoja_(false)) return { total: 0, abiertos: 0, ultimos: [] };
       const suyos = HojaServicio.listar(HELPDESK, token).filter((t) =>
         String(t['CORREO SOLICITANTE'] || '').trim().toLowerCase() === correo && Number(t[COL_HD]) !== idTicket);

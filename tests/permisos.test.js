@@ -74,10 +74,119 @@ ok(p.vehiculos === 'EDICION' && p.usuarios === 'EDICION', 'y en todos con edici�
 p = resolver(usuario({ ROL: 'ADMIN', CORREO: 'especial@ciudadmaderas.com' }));
 ok(p.vehiculos === 'EDICION', 'a un ADMIN no se le quita nada desde la hoja: es admin y punto');
 p = resolver(usuario({ ROL: 'SUPER' }));
-ok(p.usuarios === undefined && Object.keys(p).length === Modulos.ids().length - 1,
-  'SUPER: todo con edición menos Usuarios y permisos (como en AppSheet)');
+ok(p.usuarios === undefined && p['usuarios.exportar'] === undefined &&
+  Object.keys(p).length === Modulos.ids().filter((m) => Modulos.raiz(m) !== 'usuarios').length,
+  'SUPER: todo con edición menos Usuarios y permisos y sus secciones (como en AppSheet)');
 p = resolver(usuario({ ROL: 'VIEWER', AREA: 'CONTROL VEHICULAR' }));
 ok(p.vehiculos === 'LECTURA' && p.hologramas === 'LECTURA', 'VIEWER: lo de su área, pero topado en lectura');
+
+console.log('4b. Secciones: heredan de su módulo (catálogo en árbol, 14-oct)');
+{
+  const R = (reglas, extra) => Permisos.resolver_(usuario(Object.assign({ AREA: 'CI', CORREO: 'ana@ciudadmaderas.com' }, extra)), reglas, Modulos.ids());
+  p = R([['CI', 'vehiculos', 'EDICION']]);
+  ok(p['vehiculos.documentos'] === 'EDICION' && p['vehiculos.exportar'] === 'EDICION' && p['vehiculos.responsiva'] === 'EDICION',
+    'sin regla, cada sección tiene lo de su módulo');
+  p = R([['CI', 'vehiculos', 'EDICION'], ['CI', 'vehiculos.exportar', 'NINGUNO'], ['CI', 'vehiculos.documentos', 'LECTURA']]);
+  ok(p['vehiculos.exportar'] === undefined && p['vehiculos.documentos'] === 'LECTURA' && p.vehiculos === 'EDICION',
+    'una regla en la sección manda sobre la herencia (Sin acceso de un área corta la herencia)');
+  p = R([['CI', 'vehiculos', 'LECTURA'], ['CI', 'vehiculos.documentos', 'EDICION']]);
+  ok(p['vehiculos.documentos'] === 'LECTURA', 'una sección nunca pasa a su módulo');
+  p = R([['CI', 'vehiculos.documentos', 'EDICION']]);
+  ok(!p.vehiculos && !p['vehiculos.documentos'], 'sin el módulo, ninguna de sus secciones');
+  p = R([['CI', 'vehiculos', 'EDICION'], ['ana@ciudadmaderas.com', 'vehiculos.exportar', 'NINGUNO']]);
+  ok(p['vehiculos.exportar'] === undefined && p['vehiculos.documentos'] === 'EDICION', 'una excepción por correo en una sección');
+  p = R([['CI', 'vehiculos', 'EDICION'], ['CI', 'vehiculos.exportar', 'NINGUNO'], ['ana@ciudadmaderas.com', 'vehiculos.exportar', 'LECTURA']]);
+  ok(p['vehiculos.exportar'] === 'LECTURA', 'el correo manda sobre el área también en una sección');
+  p = R([['CI', 'responsiva-vehicular', 'LECTURA'], ['CI', 'vehiculos', 'EDICION']]);
+  ok(p['vehiculos.responsiva'] === 'LECTURA', 'el id viejo (responsiva-vehicular) sigue sirviendo: es la sección vehiculos.responsiva');
+  p = R([['CI', 'vehiculos', 'EDICION']], { ROL: 'VIEWER' });
+  ok(p['vehiculos.documentos'] === 'LECTURA', 'VIEWER: también las secciones, como mucho Ver');
+  ok(Modulos.resolver('Vehículos › Documentos') === 'vehiculos.documentos' && Modulos.resolver('adherente-vehicular') === 'vehiculos.adherente',
+    'en la hoja se acepta "Módulo › Sección" y el id viejo');
+  ok(Modulos.ids().every((m) => !Modulos.padre(m) || Modulos.ids().indexOf(Modulos.padre(m)) < Modulos.ids().indexOf(m)),
+    'en el catálogo cada módulo va antes que sus secciones (el resolvedor los recorre así)');
+  ok(Modulos.ids().filter((m) => Modulos.padre(m)).every((m) => /\.[a-z-]+$/.test(m)) &&
+    Modulos.todos().filter((m) => !m.soloEnlaces).every((m) => Modulos.ids().indexOf(m.id + '.exportar') !== -1),
+    'cada módulo con lista tiene su sección exportar');
+  // Sin acceso de un área: en una sección se guarda (corta la herencia); en un módulo es lo mismo que no tener regla
+  const g = Permisos.aplicarCambios_([], [{ quien: 'CI', modulo: 'vehiculos.exportar', permiso: 'NINGUNO' }, { quien: 'CI', modulo: 'uber', permiso: 'NINGUNO' }], 'n');
+  ok(g.length === 1 && g[0][1] === 'vehiculos.exportar' && g[0][2] === 'NINGUNO', 'Sin acceso de un área se guarda en una sección, no en un módulo');
+  ok(Permisos.aplicarCambios_([], [{ quien: 'CI', modulo: 'Vehículos › Documentos', permiso: 'LECTURA' }], 'n')[0][1] === 'vehiculos.documentos',
+    'se guarda siempre el id canónico');
+}
+
+console.log('4c. Perfiles: paquetes de reglas que se asignan a áreas (fase 2, 14-oct)');
+{
+  const R = (reglas, extra) => Permisos.resolver_(usuario(Object.assign({ AREA: 'CI', CORREO: 'ana@ciudadmaderas.com' }, extra)), reglas, Modulos.ids());
+  const asigna = (area, perfil) => [area, 'perfil:' + perfil, 'ASIGNADO'];
+  p = R([['perfil:Flotilla', 'vehiculos', 'EDICION'], ['perfil:Flotilla', 'verificaciones', 'LECTURA'], asigna('CI', 'Flotilla')]);
+  ok(p.vehiculos === 'EDICION' && p.verificaciones === 'LECTURA' && p['vehiculos.documentos'] === 'EDICION',
+    'un perfil asignado al área da sus reglas (y sus secciones heredan)');
+  ok(!R([['perfil:Flotilla', 'vehiculos', 'EDICION']]).vehiculos, 'un perfil sin asignar no da nada');
+  ok(!R([['perfil:Flotilla', 'vehiculos', 'EDICION'], asigna('LINEAS', 'Flotilla')]).vehiculos, 'ni asignado a otra área');
+  p = R([['perfil:A', 'vehiculos', 'EDICION'], ['perfil:A', 'vehiculos.exportar', 'NINGUNO'], ['perfil:B', 'vehiculos', 'LECTURA'],
+    asigna('CI', 'A'), asigna('CI', 'B')]);
+  ok(p.vehiculos === 'EDICION' && p['vehiculos.exportar'] === 'LECTURA',
+    'dos perfiles: gana el más alto por nodo, cada uno con su herencia (B deja exportar aunque A no)');
+  p = R([['perfil:A', 'vehiculos', 'EDICION'], asigna('CI', 'A'), ['CI', 'vehiculos', 'LECTURA']]);
+  ok(p.vehiculos === 'LECTURA', 'una regla del área manda sobre sus perfiles');
+  const conPerfil = Permisos.aplicarCambios_([['perfil:A', 'vehiculos', 'EDICION', ''], asigna('CI', 'A').concat([''])],
+    [{ quien: 'CI', modulo: 'vehiculos', permiso: 'NINGUNO' }], 'n');
+  ok(conPerfil.some((r) => r[0] === 'CI' && r[1] === 'vehiculos' && r[2] === 'NINGUNO') && !R(conPerfil).vehiculos,
+    'Sin acceso de un área con perfiles sí se guarda en un módulo: le quita lo que da su perfil');
+  p = R([['perfil:A', 'vehiculos', 'LECTURA'], asigna('CI', 'A'), ['ana@ciudadmaderas.com', 'vehiculos', 'EDICION']]);
+  ok(p.vehiculos === 'EDICION', 'y la del correo sobre todo');
+  p = R([['perfil:A', 'vehiculos', 'LECTURA'], ['perfil:A', 'vehiculos.documentos', 'EDICION'], asigna('CI', 'A')]);
+  ok(p['vehiculos.documentos'] === 'LECTURA', 'una sección del perfil tampoco pasa a su módulo');
+  ok(Permisos.aplicarCambios_([], [{ quien: 'perfil:Flotilla', modulo: 'vehiculos', permiso: 'EDICION' },
+    { quien: 'CI', modulo: 'perfil:Flotilla', permiso: 'ASIGNADO' }], 'n').length === 2, 'guardar acepta reglas de perfil y asignaciones');
+  const d = Permisos.diferencias_([], [{ quien: 'CI', modulo: 'perfil:Flotilla', permiso: 'ASIGNADO' }]);
+  ok(d.length === 1 && d[0].antes === '' && d[0].despues === 'ASIGNADO', 'el historial anota la asignación');
+
+  // Mover las reglas de cada área a un perfil con su nombre no cambia lo que nadie ve (casos al azar)
+  const nodos = Modulos.ids();
+  const AREAS = ['CI', 'LINEAS', 'POST VENTA'];
+  const CORREOS = ['a@x.com', 'b@x.com', 'c@x.com'];
+  let semilla = 11;
+  const azar = (n) => { semilla = (semilla * 1103515245 + 12345) % 2147483648; return semilla % n; };
+  let iguales = true;
+  for (let caso = 0; caso < 40 && iguales; caso++) {
+    const reglas = Permisos.aplicarCambios_([], Array.from({ length: 30 }, () => ({
+      quien: azar(4) ? AREAS[azar(3)] : CORREOS[azar(3)], modulo: nodos[azar(nodos.length)], permiso: ['NINGUNO', 'LECTURA', 'EDICION'][azar(3)],
+    })), '');
+    const m = Permisos.perfilesDesdeAreas_(reglas);
+    CORREOS.forEach((correo, i) => {
+      const u = usuario({ CORREO: correo, AREA: AREAS[i], ROL: ['USER', 'VIEWER', 'CLIENT'][i] });
+      if (JSON.stringify(Permisos.resolver_(u, reglas, nodos)) !== JSON.stringify(Permisos.resolver_(u, m.reglas, nodos))) iguales = false;
+    });
+    if (Permisos.perfilesDesdeAreas_(m.reglas).perfiles.length) iguales = false;   // correrla otra vez no hace nada
+  }
+  ok(iguales, 'pasar las reglas de cada área a su perfil deja a todos igual (40 casos al azar), y repetirla no hace nada');
+}
+
+console.log('4d. Alcance como atributo del perfil (fase 3, 14-oct)');
+{
+  const reglas = [['perfil:Cliente', 'vehiculos', 'LECTURA'], ['perfil:Cliente', 'verificaciones', 'LECTURA'], ['perfil:Cliente', '@alcance', 'AREA'],
+    ['POST VENTA', 'perfil:Cliente', 'ASIGNADO'], ['perfil:Flotilla', 'vehiculos', 'EDICION'], ['CI', 'perfil:Flotilla', 'ASIGNADO']];
+  const u = (extra) => usuario(Object.assign({ CORREO: 'x@ciudadmaderas.com', AREA: 'POST VENTA', ROL: 'USER' }, extra));
+  ok(JSON.stringify(Permisos.alcance_(u(), reglas)) === '["POST VENTA"]', 'un USER cuyo perfil limita queda limitado a su área (no hace falta ser CLIENT)');
+  p = Permisos.resolver_(u(), reglas, Modulos.ids());
+  ok(p.vehiculos === 'LECTURA' && p.verificaciones === undefined, 'y solo tiene lo que respeta el alcance (Verificaciones no filtra: cerrada)');
+  ok(Permisos.alcance_(u({ AREA: 'CI' }), reglas) === null && Permisos.resolver_(u({ AREA: 'CI' }), reglas, Modulos.ids()).vehiculos === 'EDICION',
+    'un perfil que no limita no limita');
+  ok(JSON.stringify(Permisos.alcance_(u(), reglas.concat([['perfil:Flotilla', 'verificaciones', 'EDICION'], ['POST VENTA', 'perfil:Flotilla', 'ASIGNADO']]))) === '["POST VENTA"]',
+    'con dos perfiles, basta con que uno limite');
+  ok(Permisos.alcance_(u({ ROL: 'SUPER' }), reglas) === null && Permisos.alcance_(u({ ROL: 'ADMIN' }), reglas) === null, 'ADMIN y SUPER nunca quedan limitados');
+  ok(JSON.stringify(Permisos.alcance_(u({ ROL: 'CLIENT', AREA: 'CI' }), reglas)) === '["CI"]', 'un CLIENT sigue limitado aunque su perfil no limite');
+  const pan = Permisos.perfilesDelPanel_(reglas);
+  ok(pan.find((x) => x.nombre === 'Cliente').alcance === 'AREA' && pan.find((x) => x.nombre === 'Flotilla').alcance === '' &&
+    pan.find((x) => x.nombre === 'Cliente').reglas.length === 2, 'el panel trae el alcance de cada perfil (y no lo cuenta como regla)');
+  const g = Permisos.aplicarCambios_(reglas, [{ quien: 'perfil:Flotilla', modulo: '@alcance', permiso: 'AREA' }], 'n');
+  ok(g.some((r) => r[0] === 'perfil:Flotilla' && r[1] === '@alcance' && r[2] === 'AREA'), 'guardar acepta el alcance de un perfil');
+  ok(Modulos.respetaAlcance('vehiculos') && Modulos.respetaAlcance('vehiculos.exportar') && Modulos.respetaAlcance('sistemas-vehiculos') &&
+    !Modulos.respetaAlcance('lineas-telefonicas.historial') && !Modulos.respetaAlcance('verificaciones'),
+    'el catálogo dice qué respeta el alcance (exportar, el de su módulo; los de solo enlaces, sí; un módulo nuevo, no)');
+}
 
 console.log('5. La semilla (traducción de AppSheet)');
 const semilla = (u) => Permisos.resolver_(u, PERMISOS_SEMILLA, Modulos.ids());
@@ -181,9 +290,16 @@ const PRUEBA = [
   usuario({ CORREO: CM('auxiliar3procesos.ci'), AREA: 'LINEAS' }),
   usuario({ CORREO: CM('analista4datos.ci'), AREA: 'ANALISIS DE DATOS' }),
 ];
+// AppSheet no tenía secciones: se comparan los módulos (y lo que AppSheet llamaba módulo y hoy es sección)
+const comoAppSheet = (mapa, esperado) => {
+  const llaves = Object.keys(esperado).map((m) => Modulos.resolver(m) || m);
+  const r = {};
+  Object.keys(mapa).forEach((m) => { if (!Modulos.padre(m) || llaves.indexOf(m) !== -1) r[m] = mapa[m]; });
+  return r;
+};
 PRUEBA.forEach((u) => {
   const esperado = appsheet(u);
-  const calculado = semilla(u);
+  const calculado = comoAppSheet(semilla(u), esperado);
   const modulos = Object.keys(Object.assign({}, esperado, calculado)).sort();
   const difs = modulos.filter((m) => esperado[m] !== calculado[m])
     .map((m) => m + ': AppSheet ' + (esperado[m] || '—') + ', app ' + (calculado[m] || '—'));
@@ -223,7 +339,9 @@ ok(!d.length, 'lo que queda igual no se anota (ni Sin acceso a un área que ya n
 
 console.log('7c. Rol CLIENT: solo consulta, y solo sus departamentos (alcance_)');
 p = resolver(usuario({ ROL: 'CLIENT', AREA: 'CONTROL VEHICULAR' }));
-ok(p.vehiculos === 'LECTURA' && p.verificaciones === 'LECTURA', 'CLIENT: lo de su área, topado en lectura como VIEWER');
+ok(p.vehiculos === 'LECTURA' && p['vehiculos.documentos'] === 'LECTURA', 'CLIENT: lo de su área, topado en lectura como VIEWER');
+ok(p.verificaciones === undefined && p['vehiculos.responsiva'] === undefined,
+  'y solo lo que respeta su alcance (fase 3): Verificaciones y la Responsiva no filtran por departamento, se le cierran');
 ok(Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'Post  Venta' }))[0] === 'POST VENTA',
   'sin DPTOS PERMITIDOS ve su AREA, normalizada (mayúsculas, un solo espacio)');
 const varios = Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'POST VENTA', 'DPTOS PERMITIDOS': 'Construcción, OOAM TECNICO ,' }));
@@ -271,6 +389,18 @@ console.log('7d. Un módulo por entrada del menú: nadie pierde lo que veía (se
   ok(Modulos.familia('vehiculos').indexOf('sistemas-vehiculos') === -1 && Modulos.familia('vehiculos').indexOf('panorama-vehiculos') !== -1,
     'Sistemas (solo enlaces) no cuenta como familia: no abre el catálogo de vehículos; el Panorama sí');
   ok(Modulos.familia('sistemas-vehiculos').indexOf('sistemas-vehiculos') !== -1, 'la familia de un módulo de enlaces lo incluye a él');
+
+  // permisosMigrarCatalogo: lo de separacion_ + los ids viejos a su id del catálogo, sin cambiar lo que cada quien ve
+  const conViejos = reglas.concat([['CONTROL VEHICULAR', 'responsiva-vehicular', 'LECTURA'], ['CONTROL VEHICULAR', 'Hologramas', 'EDICION']]);
+  const m = Permisos.migracion_(conViejos, gente);
+  ok(m.renombradas === 2 && m.reglas.some((x) => x[1] === 'vehiculos.responsiva') && m.reglas.some((x) => x[1] === 'hologramas') &&
+    !m.reglas.some((x) => x[1] === 'responsiva-vehicular'), 'migrar: los ids viejos y los nombres del menú quedan con su id del catálogo');
+  const quien = gente[0];
+  const antes = Permisos.resolver_(quien, Permisos.aplicarCambios_(conViejos, m.agregadas, 'n'), Modulos.ids());
+  const despues = Permisos.resolver_(quien, m.reglas, Modulos.ids());
+  ok(JSON.stringify(antes) === JSON.stringify(despues), 'migrar no cambia lo que la persona ve (solo cómo se escribe)');
+  ok(Permisos.migracion_(m.reglas, gente).agregadas.length === 0 && Permisos.migracion_(m.reglas, gente).renombradas === 0,
+    'correrla otra vez no hace nada');
 }
 
 console.log('8. Catálogo de módulos');

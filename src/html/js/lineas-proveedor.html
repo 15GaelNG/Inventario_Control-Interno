@@ -352,7 +352,9 @@
         revisar();
       });
       $('#lnp-limpiar', raiz).addEventListener('click', () => { archivos = []; pintarLista(); revisar(); });
-      $('#lnp-cargar', raiz).addEventListener('click', cargar);
+      // Cargar escribe: solo con edición de Proveedor (con Ver, se revisa qué pasaría pero no se carga)
+      if (puedeEditarModulo('proveedor-lineas')) $('#lnp-cargar', raiz).addEventListener('click', cargar);
+      else $('#lnp-cargar', raiz).remove();
     }
 
     return { init, leer };

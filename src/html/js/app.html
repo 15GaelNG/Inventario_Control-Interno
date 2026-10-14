@@ -327,14 +327,22 @@
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
-    // Permisos por módulo (PermisosService/Modulos.gs), se leen del servidor en cada carga
-    // (ver render). Deciden qué items del menú aparecen (NAV_GRUPOS, `requiere`), si se puede
-    // entrar a una vista (navegarA) y qué botones de edición enseña cada módulo.
+    // Permisos por nodo del catálogo (Modulos.gs: el módulo 'vehiculos' y sus secciones
+    // 'vehiculos.documentos', 'vehiculos.exportar'…), ya resueltos en el servidor con su herencia
+    // (Permisos.resolver_): aquí no se calcula nada, solo se pregunta. Se leen en cada carga (ver
+    // render) y deciden qué items del menú aparecen (NAV_GRUPOS, `requiere`), si se puede entrar a
+    // una vista (navegarA), qué pestañas pinta una ficha y qué botones enseña cada pantalla.
     permisos: {},
   };
 
-  /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
+  /** ¿Qué puede hacer esta persona en un módulo o una sección? 'LECTURA' | 'EDICION' | undefined */
   const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  /**
+   * La forma de preguntar: puede('vehiculos.documentos') (ver) o puede('vehiculos', 'EDICION').
+   * Un nodo es un módulo o una sección (Modulos.gs); su herencia ya viene resuelta del servidor.
+   */
+  const NIVEL_PERMISO = { LECTURA: 1, EDICION: 2 };
+  const puede = (nodo, nivel) => (NIVEL_PERMISO[permisoDe(nodo)] || 0) >= NIVEL_PERMISO[nivel || 'LECTURA'];
   // Las vistas que este proyecto tiene apagadas (MODULOS_APAGADOS en Entornos.gs; las pone
   // Index.html): ni el menú las pinta ni navegarA las abre. El servidor también las rechaza.
   const VISTAS_APAGADAS = (() => {
@@ -342,7 +350,17 @@
   })();
   // Apagar 'helpdesk' apaga su familia (el grupo y sus vistas 'helpdesk-…')
   const estaApagada = (entrada) => [entrada.vista, entrada.id].some((v) => v && VISTAS_APAGADAS.some((a) => v === a || v.indexOf(a + '-') === 0));
-  const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
+  const puedeEditarModulo = (modulo) => puede(modulo, 'EDICION');
+  /**
+   * ¿Se puede exportar en la vista abierta? La sección exportar de su módulo (vehiculos.exportar, Modulos.gs).
+   * DataTable lo pregunta al crear cada tabla. Lo que alguien ve lo puede copiar: es un control de la pantalla
+   * (y de los servicios que exportan, como Líneas), no una frontera de seguridad.
+   */
+  function puedeExportarAqui() {
+    const destino = vistaActual ? vistaDe(vistaActual) : null;
+    const modulo = destino && destino.requiere ? String(destino.requiere).split('.')[0] : '';
+    return !modulo || puede(modulo + '.exportar');
+  }
   /**
    * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
    * persona puede ver ese módulo; si no, da null y esa pestaña no se pinta. Si sí puede y
@@ -390,7 +408,7 @@
     verificaciones: ['apiListarVerificaciones'], 'inspeccion-vehicular': ['apiListarInspecciones'],
     'instalacion-sensores': ['apiListarSensores'], hologramas: ['apiListarHologramas'],
     uber: ['apiListarUberResumen'], tickets: ['apiListarTicketsResumen'],
-    'caja-chica': ['apiListarCajasChicasResumen', 'apiListarCambiosMontoCCH'], arqueos: ['apiListarArqueosResumen'],
+    'caja-chica': ['apiListarCajasChicasResumen'], 'caja-chica.cambios-monto': ['apiListarCambiosMontoCCH'], arqueos: ['apiListarArqueosResumen'],
   };
   function precargarListas() {
     const pendientes = Object.keys(LISTAS_POR_MODULO)
@@ -433,7 +451,8 @@
     }
   }
 
-  const llavePermisos_ = () => 'permisos_' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
+  // v2: los permisos traen secciones (permisos en árbol, 14-oct); una copia de antes no sirve
+  const llavePermisos_ = () => 'permisos_v2_' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
   function permisosGuardados_() {
     try { return JSON.parse(localStorage.getItem(llavePermisos_()) || 'null'); } catch (e) { return null; }
   }
@@ -746,7 +765,7 @@
         { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-cajachica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
         { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos(), ayuda: () => AYUDA_ARQUEOS },
         { vista: 'caja-chica', etiqueta: 'Caja chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica(), ayuda: () => AYUDA_CAJACHICA },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de monto', icono: 'repeat', requiere: 'caja-chica.cambios-monto', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
         { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-arqueos', plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
@@ -770,7 +789,7 @@
       items: [
         { vista: 'helpdesk', etiqueta: 'Bandeja', icono: 'inbox', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk(), ayuda: () => AYUDA_HELPDESK },
         { vista: 'helpdesk-formularios', etiqueta: 'Formularios', icono: 'list-checks', libre: true, plantilla: 'tpl-helpdesk-formularios', init: () => initHelpdeskFormularios() },
-        { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
+        { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets.helpdesk', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
         { vista: 'helpdesk-conexion', etiqueta: 'Conexión', icono: 'plug', libre: true, plantilla: 'tpl-helpdesk-conexion', init: () => initHelpdeskConexion() },
       ],
     },
@@ -3747,8 +3766,9 @@
         html += fichaEnPestanas([
           { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
-          // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
-          { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+          // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla.
+          // Su sección (vehiculos.documentos)
+          puede('vehiculos.documentos') && { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
           // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
           // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab).
           // Con el permiso de Adquisición, no el de Vehículos (14-oct)
@@ -3823,15 +3843,15 @@
               { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
               { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
               { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
-                eliminar: puedeEditarModulo('responsiva-vehicular'),
+                eliminar: puedeEditarModulo('vehiculos.responsiva'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
-                regenerarLiga: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
-                regenerarLigaJefe: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
-                devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
+                regenerarLiga: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
+                devolverPrestamo: puedeEditarModulo('vehiculos.responsiva') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
               }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
-            puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
+            puedeEditarModulo('vehiculos.responsiva') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
           },
           adherentes && {
             id: 'adherente', titulo: 'Adherentes', icono: 'users',
@@ -3844,15 +3864,16 @@
               { t: 'Firma', r: (r) => badgeEstadoFirma(r, 'adherente') },
               { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
               { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
-                estatus: r.ESTATUS || 'ACTIVO',
-                eliminar: puedeEditarModulo('adherente-vehicular'),
+                // Dar de baja / reactivar escribe: solo con edición (antes se veía y el servidor lo negaba)
+                estatus: puedeEditarModulo('vehiculos.adherente') ? r.ESTATUS || 'ACTIVO' : null,
+                eliminar: puedeEditarModulo('vehiculos.adherente'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
-                regenerarLiga: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
-                regenerarLigaJefe: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
+                regenerarLiga: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
               }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
-            puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
+            puedeEditarModulo('vehiculos.adherente') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
           },
         ].filter(Boolean));
 
@@ -4076,22 +4097,24 @@
       // baja" es la excepción, acepta varias a la vez. "Eliminar" NO se repite
       // aquí: ya la agrega cfg.alEliminar, con el chequeo de integridad
       // (apiQueImpideBorrar) que la vieja eliminarVehiculoRapido no tenía.
-      accionesSeleccion: puedeEditar ? [
-        {
+      // Cambiar el vehículo, con edición de Vehículos; capturar algo de otro módulo, con edición de ESE módulo
+      // (antes todo colgaba de Vehículos y el servidor negaba lo que no tocaba)
+      accionesSeleccion: [
+        puedeEditar && {
           icono: 'ban', texto: 'Dar de baja', enBarra: false, grupo: 'estado',
           visible: (filas) => filas.some((f) => String(f.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR'),
           alHacer: (filas) => darDeBajaVehiculo(filas),
         },
-        {
+        puedeEditar && {
           icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, enBarra: false, grupo: 'estado',
           alHacer: (filas) => cambiarEstatusRapidoVehiculo(filas[0]),
         },
-        { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
-        { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
-        { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
-        { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
-        { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
-      ] : [],
+        puedeEditarModulo('verificaciones') && { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
+        puedeEditarModulo('inspeccion-vehicular') && { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
+        puedeEditarModulo('instalacion-sensores') && { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
+        puedeEditarModulo('hologramas') && { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
+        puedeEditarModulo('incidencias') && { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
+      ].filter(Boolean),
       alEliminar: puedeEditar ? async (filas) => {
         // Primero se pregunta por todos: si alguno tiene historial, no se borra ninguno
         const imp = await callServer('apiQueImpideBorrar', state.token, 'VEHICULOS', filas.map((f) => f.ID_VEHICULO));

@@ -390,7 +390,8 @@ function usuarioProveedor_(sesion) {
 
 /** Qué pasaría con los archivos leídos en el navegador (no escribe). */
 function apiLineasProveedorRevisar(token, lote) {
-  Permisos.puedeEditar(token, LineasProveedor.MODULO);
+  // Solo dice qué pasaría (no escribe): basta con verlo
+  Permisos.puedeLeer(token, LineasProveedor.MODULO);
   return LineasUtil.paraCliente(LineasProveedor.revisar(lote));
 }
 

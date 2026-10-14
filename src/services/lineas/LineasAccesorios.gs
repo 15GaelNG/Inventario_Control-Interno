@@ -26,7 +26,12 @@ const LineasAccesorios = (function () {
   const CATEGORIAS = ['Micas', 'Fundas', 'Cargadores'];
 
   // Leer: cualquier módulo de Líneas (las fichas de equipos también muestran accesorios). Modificar: este.
-  const leer_ = (token) => Permisos.puedeLeerAlguno(token, TelefoniaService.MODULOS_LINEAS);
+  // El inventario de accesorios es de todos los departamentos (no está ligado a una línea): no para un rol CLIENT
+  const leer_ = (token) => {
+    const sesion = Permisos.puedeLeerAlguno(token, TelefoniaService.MODULOS_LINEAS);
+    if (sesion.alcance) throw new Error('No tienes acceso a esta parte de Líneas.');
+    return sesion;
+  };
   const operar_ = (token) => Permisos.puedeEditar(token, 'accesorios-lineas');
 
   const txt_ = (v) => LineasUtil.txt(v) || '';

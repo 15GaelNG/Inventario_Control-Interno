@@ -29,7 +29,8 @@ e.cargar('src/utils/CacheHojas.gs', 'src/utils/SheetUtils.gs', 'src/utils/HojaSe
   nombre: 'falsos.js',
   codigo: `
     var Config = { SPREADSHEET_IDS: { USUARIOS: () => 'usuarios' } };
-    var Modulos = { ids: () => ['tickets', 'uber'], resolver: (v) => String(v).trim().toLowerCase(), existe: () => true, GRUPOS: [] };
+    var Modulos = { ids: () => ['tickets', 'uber'], resolver: (v) => String(v).trim().toLowerCase(), existe: () => true, GRUPOS: [],
+      nodo: () => null, padre: () => null, raiz: (m) => m, familia: (m) => [m] };
     var Auth = { validarSesion: (t) => ({ correo: t, nombre: t }) };
   `,
 }, 'src/services/PermisosService.gs', {

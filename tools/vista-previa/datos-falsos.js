@@ -19,9 +19,13 @@
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
   const conEscenas = MODULOS.map((g) => g[0]);
   const grupos = (window.__GRUPOS || []).filter((g) => conEscenas.indexOf(g.id) !== -1)
-    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
+    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [],
+      // Sus secciones, como las manda Permisos.panel
+      secciones: (window.__NODOS || []).filter((n) => n.padre === m.id).map((n) => ({ id: n.id, etiqueta: n.etiqueta, icono: n.icono || '', hereda: n.hereda })) })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
+  // Y sus secciones (vehiculos.documentos, …): el servidor manda el mapa ya resuelto
+  (window.__NODOS || []).forEach((n) => { if (n.padre && permisos[n.padre]) permisos[n.id] = permisos[n.padre]; });
 
   const hace = (dias) => new Date(Date.now() - dias * 864e5).toISOString();
   const VEHICULO = {
@@ -192,7 +196,12 @@
       { quien: 'ANALISIS DE DATOS', modulo: 'vehiculos', permiso: 'LECTURA' }, { quien: 'ANALISIS DE DATOS', modulo: 'verificaciones', permiso: 'LECTURA' },
       { quien: 'ANALISIS DE DATOS', modulo: 'hologramas', permiso: 'LECTURA' }, { quien: 'TESORERIA', modulo: 'caja-chica', permiso: 'LECTURA' },
       { quien: 'TESORERIA', modulo: 'arqueos', permiso: 'LECTURA' }, { quien: 'CAPITAL HUMANO', modulo: 'uber', permiso: 'EDICION' },
+      // Una sección que corta la herencia de su módulo (permisos en árbol): TI ve Vehículos pero no exporta
+      { quien: 'TI', modulo: 'vehiculos.exportar', permiso: 'NINGUNO' },
     ],
+    // Perfiles (fase 2): un paquete con nombre asignado a un área (Capital Humano recibe lo de Flotilla - consulta)
+    perfiles: [{ nombre: 'Flotilla - consulta', reglas: [{ modulo: 'vehiculos', permiso: 'LECTURA' }, { modulo: 'verificaciones', permiso: 'LECTURA' },
+      { modulo: 'vehiculos.exportar', permiso: 'NINGUNO' }], areas: ['CAPITAL HUMANO'] }],
     // Lo que anota PERMISOS_HISTORIAL, del más reciente al más viejo
     historial: [
       ['2026-10-06T18:20:00Z', 'TI', 'verificaciones', 'EDICION', 'LECTURA'], ['2026-10-06T18:20:00Z', 'TI', 'vehiculos', 'LECTURA', 'EDICION'],
@@ -269,7 +278,7 @@
     apiBuscarVehiculoPorFolio: VEHICULO,
     apiFichaCajaChica: () => JSON.stringify({
       completo: FICHAS.apiBuscarCajaChicaPorId,
-      cambios: permisos['caja-chica'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
+      cambios: permisos['caja-chica.cambios-monto'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
       arqueos: permisos.arqueos ? JSON.parse(FICHAS.apiArqueosPorIdCch) : null,
     }),
     // Como el servidor: cada pestaña con el permiso de su módulo (null sin él; quitarPermisos lo quita)
@@ -282,7 +291,7 @@
         verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', [{ ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PUNTAJE: 96.3, INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' }]),
         sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
         incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
-        responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
+        responsivas: parte('vehiculos.responsiva', '[]'), adherentes: parte('vehiculos.adherente', '[]'),
       });
     },
     // Inspecciones del expediente del NUCO (ExpedienteNuco.inspecciones): carpetas con sus secciones y fotos
@@ -679,6 +688,13 @@
       (await hasta('[data-ficha-tab="documentos"]')).click();
       await hasta('.docs-veh-seccion'); await esperar(300);
     },
+    // Como un CLIENT (POST VENTA): sin vehiculos.carpetas, Documentos sin la cabecera ni los botones "Carpeta"
+    'vehiculos-documentos-sin-carpetas': async () => {
+      quitarPermisos('vehiculos.carpetas');
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="documentos"]')).click();
+      await hasta('.docs-veh-seccion'); await esperar(300);
+    },
     // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas
     // pestañas no aparecen y la sección de sensor del formulario sale bloqueada
     'vehiculos-ficha-sin-sensores': async () => {
@@ -720,6 +736,13 @@
       await esperar(300);
     },
     'usuarios-historial': () => abrir('usuarios', 'historial'),
+    // Perfiles (fase 2): la lista y la ficha de uno
+    'usuarios-perfiles': async () => { await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]'); },
+    'usuarios-perfil-ficha': async () => {
+      await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]');
+      (await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]')).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await hasta('#usr-detalle:not([hidden]) .ln-detalle-header'); await esperar(300);
+    },
     'usuarios-editar-permisos': async () => {
       await abrir('usuarios'); await abrirPrimeraFila();
       (await hasta('[data-usr-editar]')).click();

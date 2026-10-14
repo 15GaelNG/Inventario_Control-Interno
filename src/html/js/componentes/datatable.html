@@ -773,6 +773,9 @@
         menuContextual: [],
       }, config);
       if (cfg.exportar === true) cfg.exportar = { nombreArchivo: 'Datos' };
+      // Exportar es un permiso (la sección exportar del módulo de la pantalla, Modulos.gs): la app dice si
+      // aquí se puede (puedeExportarAqui, app.html). Sin permiso no hay "Exportar a Excel" ni "Exportar selección"
+      if (cfg.exportar && typeof puedeExportarAqui === 'function' && !puedeExportarAqui()) cfg.exportar = false;
       const columnas = cfg.columnas.map((c) => Object.assign(
         { tipo: 'texto', editable: false, filtrable: true, ordenable: true, visible: true, exportable: true, enDetalle: true }, c
       ));
