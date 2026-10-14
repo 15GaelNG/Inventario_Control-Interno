@@ -544,9 +544,11 @@
     }
     const textoSinRegla = () => (edicion.tipo === 'persona' ? 'Lo que le da su área' : edicion.tipo === 'area' ? 'Lo que le dan sus perfiles' : 'Sin regla');
 
-    function segmento(actual, heredado, atributos, conHereda) {
+    function segmento(actual, heredado, atributos, conHereda, tope) {
+      const max = tope ? NIVELES.indexOf(tope) : NIVELES.length;
       return '<div class="usr-segmento" role="radiogroup" ' + atributos + '>' + (conHereda ? ['HEREDA'] : []).concat(NIVELES).map((n) =>
         '<button type="button" role="radio" aria-checked="' + (n === actual) + '" data-nivel="' + n + '"' +
+        (NIVELES.indexOf(n) > max ? ' disabled title="No puede tener más que su módulo"' : '') +
         ' class="usr-op ' + n + (n === actual ? ' activa' : '') + (n === heredado ? ' heredada' : '') + '"' +
         (n === heredado ? ' title="' + (conHereda ? 'Lo que tendría sin regla propia' : textoSinRegla()) + '"' : '') + '>' + PERM_TEXTO[n] + '</button>').join('') + '</div>';
     }
@@ -576,25 +578,37 @@
     }
 
     /**
-     * Una pestaña (o Exportar) de un módulo con acceso, como chip: igual que el módulo, solo ver u oculta. Exportar,
-     * y cualquier pestaña de un módulo en Ver, solo van de igual a oculta.
+     * Exportar a Excel de un módulo, como un ícono junto a sus niveles: verde si puede, rojo si se le quitó. Clic: alterna
+     * (quitarlo es regla propia; volver a permitirlo la quita). Sin acceso al módulo no cuenta: gris y sin clic.
      */
-    function chipSeccion(m, s, nivelMod) {
-      const ef = nivelEnVentana(s.id);
-      const estado = ef === nivelMod ? 'igual' : ef === 'NINGUNO' ? 'oculta' : 'ver';
+    function botonExportar(s, nivelMod) {
+      if (!s) return '';
+      if (nivelMod === 'NINGUNO') return '<span class="usr-exp apagado" title="Exportar a Excel: sin acceso al módulo">' + ico('file-spreadsheet') + '</span>';
+      const permitido = nivelEnVentana(s.id) !== 'NINGUNO';
       const propia = edicion.valores[s.id] !== '';
-      const exportar = s.id === m.id + '.exportar';
-      const etiqueta = exportar ? 'Exportar a Excel' : s.etiqueta;
-      const texto = estado === 'igual' ? 'Igual que ' + m.etiqueta + ' (' + PERM_TEXTO[nivelMod] + ')'
-        : estado === 'ver' ? 'Solo ver' : 'Oculta: no la ve';
-      return '<button type="button" class="usr-chip-sec ' + estado + (exportar ? ' exportar' : '') + (propia ? ' propia' : '') +
-        (edicion.valores[s.id] !== edicion.iniciales[s.id] ? ' cambiada' : '') + '" data-usr-chip="' + s.id + '" aria-label="' +
-        escaparHtml(etiqueta + ': ' + texto) + '" title="' + escaparHtml(etiqueta + ': ' + texto + '. Clic para cambiar') + '">' +
-        ico(estado === 'oculta' ? 'eye-off' : estado === 'ver' ? 'eye' : (s.icono || (exportar ? 'file-spreadsheet' : 'check'))) +
-        escaparHtml(etiqueta) + (estado === 'ver' ? '<span class="usr-chip-sec-nota">solo ver</span>' : '') + '</button>';
+      const texto = 'Exportar a Excel: ' + (permitido ? 'puede exportar' : 'no puede exportar') + (propia ? ' (regla propia)' : '');
+      return '<button type="button" class="usr-exp ' + (permitido ? 'permitido' : 'prohibido') + (propia ? ' propia' : '') +
+        (edicion.valores[s.id] !== edicion.iniciales[s.id] ? ' cambiada' : '') + '" data-usr-chip="' + s.id + '" aria-pressed="' + permitido +
+        '" aria-label="' + texto + '" title="' + texto + '. Clic para cambiar">' + ico(permitido ? 'file-spreadsheet' : 'file-x') + '</button>';
     }
 
-    /** Un módulo: su nombre, de dónde viene (en texto), los tres niveles y, si tiene acceso, sus pestañas como chips */
+    /** Una pestaña: como un módulo, en chiquito, colgada de él en árbol; nunca pasa de su módulo (los niveles de más se apagan) */
+    function filaSeccion(m, s, nivelMod) {
+      const v = edicion.valores[s.id];
+      const nivel = nivelEnVentana(s.id);
+      const propia = v !== '';
+      // Con regla propia: qué tendría sin ella (lo del módulo, o lo que diga su área o perfil para esa pestaña)
+      const texto = propia ? (edicion.tipo === 'persona' ? 'Excepción' : 'Regla propia') + ' · sin ella: ' + PERM_TEXTO[heredadoDe(s.id)]
+        : nivel === nivelMod ? 'Igual que ' + m.etiqueta : origenVentana(s.id).texto;
+      return '<div class="usr-sec' + (v !== edicion.iniciales[s.id] ? ' cambiada' : '') + (propia ? ' propia' : '') + '" data-modulo="' + s.id + '">' +
+        '<div class="usr-sec-nombre"><span>' + escaparHtml(s.etiqueta) + '</span>' +
+        (texto ? '<span class="usr-mod-origen' + (propia ? ' propia' : '') + '">' + escaparHtml(texto) + '</span>' : '') + '</div>' +
+        (propia ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + s.id + '" title="Quitar la regla: igual que ' +
+          escaparHtml(m.etiqueta) + '" aria-label="Quitar la regla">' + ico('rotate-ccw') + '</button>' : '') +
+        segmento(nivel, null, 'aria-label="' + escaparHtml(m.etiqueta + ' › ' + s.etiqueta) + '"', false, nivelMod) + '</div>';
+    }
+
+    /** Un módulo: su nombre, de dónde viene (en texto), Exportar y los tres niveles; con acceso, sus pestañas en árbol debajo */
     function filaModulo(m) {
       const v = edicion.valores[m.id];
       const origen = origenVentana(m.id);
@@ -602,7 +616,7 @@
       const secs = seccionesDe(m);
       const quitable = (edicion.tipo === 'persona' || (edicion.tipo === 'area' && perfilesDe(edicion.id).length)) && v !== '';
       const pestanas = secs.filter((s) => s.id !== m.id + '.exportar');
-      const exportar = secs.filter((s) => s.id === m.id + '.exportar');
+      const exportar = secs.find((s) => s.id === m.id + '.exportar');
       return '<div class="usr-mod' + (v !== edicion.iniciales[m.id] || secs.some((s) => edicion.valores[s.id] !== edicion.iniciales[s.id]) ? ' cambiada' : '') +
         (origen.propia ? ' excepcion' : '') + (nivelMod === 'NINGUNO' ? ' sin-acceso' : '') + '" data-modulo="' + m.id + '">' +
         '<div class="usr-mod-cab">' + '<span class="usr-mod-ico">' + ico(iconoModulo(m.id)) + '</span>' +
@@ -610,11 +624,10 @@
         (origen.texto ? '<span class="usr-mod-origen' + (origen.propia ? ' propia' : '') + '">' + (origen.propia ? ico('sparkles') : '') + escaparHtml(origen.texto) + '</span>' : '') + '</div>' +
         (quitable ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + m.id + '" title="Quitar la regla: ' + textoSinRegla().toLowerCase() + '"' +
           ' aria-label="Quitar la regla">' + ico('rotate-ccw') + '</button>' : '') +
+        botonExportar(exportar, nivelMod) +
         segmento(nivelMod, null, 'aria-label="' + escaparHtml(m.etiqueta) + '"') + '</div>' +
-        // Las pestañas y Exportar solo cuentan con acceso al módulo (nunca pasan de él)
-        (nivelMod !== 'NINGUNO' && secs.length ? '<div class="usr-mod-secs">' +
-          (pestanas.length ? '<span class="usr-mod-secs-tit">Pestañas</span>' + pestanas.map((s) => chipSeccion(m, s, nivelMod)).join('') : '') +
-          exportar.map((s) => chipSeccion(m, s, nivelMod)).join('') + '</div>' : '') +
+        // Las pestañas solo cuentan con acceso al módulo (nunca pasan de él)
+        (nivelMod !== 'NINGUNO' && pestanas.length ? '<div class="usr-mod-secs">' + pestanas.map((s) => filaSeccion(m, s, nivelMod)).join('') + '</div>' : '') +
         '</div>';
     }
 
@@ -719,8 +732,9 @@
         : tipo === 'perfil' ? 'Lo reciben todas las áreas que tienen este perfil (y sus personas), salvo lo que el área o la persona tengan como regla propia.'
           : perfilesDe(id).length ? 'Lo que no cambies sigue lo de sus perfiles. Lo que elijas distinto queda como regla propia del área, para todas sus personas salvo quien tenga una excepción.'
             : 'Aplica a todas las personas del área, salvo quien tenga una excepción en ese módulo.';
-      $('usr-modal-leyenda').innerHTML = '<span class="usr-leyenda-chip">' + ico('check') + ' Pestaña igual que su módulo</span>' +
-        '<span class="usr-leyenda-chip ver">' + ico('eye') + ' Solo ver</span><span class="usr-leyenda-chip oculta">' + ico('eye-off') + ' Oculta</span>' +
+      $('usr-modal-leyenda').innerHTML = '<span><span class="usr-exp permitido mini">' + ico('file-spreadsheet') + '</span> Puede exportar a Excel</span>' +
+        '<span><span class="usr-exp prohibido mini">' + ico('file-x') + '</span> No puede exportar</span>' +
+        '<span>Las pestañas siguen a su módulo y nunca pasan de él</span>' +
         (p || (tipo === 'area' && perfilesDe(id).length) ? '<span>' + ico('rotate-ccw') + ' Quitar la regla propia</span>' : '');
       $('usr-modal-cuerpo').scrollTop = 0;
       pintarVentana();
@@ -810,7 +824,7 @@
         if (el) el.focus();
         return;
       }
-      // Una pestaña: igual que el módulo → solo ver → oculta → igual (Exportar, o con el módulo en Ver: igual ↔ oculta)
+      // Exportar: puede (igual que el módulo) ↔ no puede
       const chip = ev.target.closest('[data-usr-chip]');
       if (chip) {
         const id = chip.dataset.usrChip;

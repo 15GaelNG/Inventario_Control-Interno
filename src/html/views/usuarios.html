@@ -99,21 +99,29 @@
   .usr-mod-origen { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 400; color: var(--color-text-muted); }
   .usr-mod-origen.propia { color: var(--color-text); font-weight: 600; }
   .usr-mod-origen .ico { width: 12px; height: 12px; }
-  .usr-mod-secs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 9px 0 0 42px; }
-  .usr-mod-secs-tit { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin-right: 2px; }
-  .usr-chip-sec, .usr-leyenda-chip {
-    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font: inherit; font-size: 12px;
-    border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer;
+  /* Las pestañas en árbol, colgadas del módulo: como un módulo en chiquito */
+  .usr-mod-secs { margin: 8px 0 0 15px; padding-left: 26px; border-left: 2px solid var(--color-border); display: flex; flex-direction: column; }
+  .usr-sec { position: relative; display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .usr-sec::before { content: ''; position: absolute; left: -26px; top: 50%; width: 18px; border-top: 2px solid var(--color-border); }
+  .usr-sec-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 13px; font-weight: 500; }
+  .usr-sec .usr-mod-origen { font-size: 11px; }
+  .usr-sec.cambiada .usr-sec-nombre > span:first-child { font-weight: 700; }
+  .usr-sec .usr-segmento { border-radius: 7px; }
+  .usr-sec .usr-op { padding: 3px 9px; font-size: 11.5px; }
+  .usr-sec .usr-restablecer { width: 26px; height: 26px; }
+  .usr-op:disabled { opacity: .35; cursor: not-allowed; }
+  /* Exportar a Excel: un ícono junto a los niveles, verde si puede y rojo si se le quitó */
+  .usr-exp {
+    flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; padding: 0; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent); background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success);
   }
-  .usr-leyenda-chip { cursor: default; padding: 2px 8px; font-size: 11.5px; }
-  .usr-chip-sec .ico, .usr-leyenda-chip .ico { width: 13px; height: 13px; }
-  .usr-chip-sec:hover { border-color: var(--color-primary); }
-  .usr-chip-sec.ver, .usr-leyenda-chip.ver { background: var(--color-primary-soft); border-color: var(--color-primary); color: var(--color-primary); }
-  .usr-chip-sec.oculta, .usr-leyenda-chip.oculta { background: transparent; border-style: dashed; color: #b42318; text-decoration: line-through; }
-  .usr-chip-sec.propia { box-shadow: inset 0 0 0 1px var(--color-accent); }
-  .usr-chip-sec.cambiada { font-weight: 600; }
-  .usr-chip-sec.exportar { margin-left: auto; }
-  .usr-chip-sec-nota { font-size: 10.5px; opacity: .8; }
+  .usr-exp .ico { width: 16px; height: 16px; }
+  .usr-exp.prohibido { border-color: color-mix(in srgb, #b42318 45%, transparent); background: color-mix(in srgb, #b42318 12%, transparent); color: #b42318; }
+  .usr-exp.apagado { border-color: var(--color-border); background: transparent; color: var(--color-text-muted); opacity: .45; cursor: default; }
+  .usr-exp.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  .usr-exp.mini { width: 20px; height: 20px; border-radius: 6px; vertical-align: middle; cursor: default; }
+  .usr-exp.mini .ico { width: 12px; height: 12px; vertical-align: 0; }
+  .usr-modal-leyenda > span { display: inline-flex; align-items: center; gap: 6px; }
   .usr-perfil-cab { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 12px; }
   .usr-perfil-cab .usr-perfil-nombre, .usr-perfil-cab .usr-perfil-alcance { margin: 0; }
   @media (max-width: 640px) {
@@ -125,8 +133,11 @@
     .usr-editor-grupos { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
     .usr-editor-grupo { width: auto; flex: none; }
     .usr-mod-cab { flex-wrap: wrap; }
-    .usr-mod-secs { margin-left: 0; }
-    .usr-chip-sec.exportar { margin-left: 0; }
+    .usr-mod-secs { margin-left: 6px; padding-left: 14px; }
+    .usr-sec::before { left: -14px; width: 10px; }
+    .usr-sec { flex-wrap: wrap; }
+    .usr-sec .usr-segmento { flex: 1 1 100%; }
+    .usr-sec .usr-op { flex: 1; padding: 6px; }
     .usr-perfil-cab { grid-template-columns: 1fr; }
   }
 

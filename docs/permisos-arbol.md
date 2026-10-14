@@ -193,11 +193,13 @@ Se veía funcional pero recargada (puntos, cuatro opciones por sección, seccion
 - **Cada módulo es una tarjeta** con su ícono, los tres niveles (Sin acceso en rojo, Ver azul, Editar verde) y de
   dónde le viene en texto, en vez del punto: "Su área: Ver", "Excepción · su área: Sin acceso", "Por su perfil X",
   "Regla del área · sus perfiles: Ver". ↺ quita la regla propia.
-- **Las pestañas y Exportar son chips** debajo del módulo, solo si tiene acceso (nunca pasan de él). Clic: igual
-  que el módulo → solo ver → oculta → igual. Exportar, o cualquier pestaña con el módulo en Ver, solo va de igual a
-  oculta. Un chip que se aparta del módulo es regla propia de la sección; volver a "igual" la quita.
+- **Las pestañas van en árbol** debajo de su módulo (solo si tiene acceso): una fila chiquita como la del módulo,
+  con sus tres niveles; los que pasarían del módulo salen apagados. Dice "Igual que Vehículos" o, con regla propia,
+  "Excepción · sin ella: Editar" y ↺ la quita. (Se probaron como chips y el usuario prefirió el árbol.)
+- **Exportar a Excel es un ícono** a la izquierda de "Sin acceso" del módulo: verde si puede, rojo si se le quitó
+  (clic alterna); gris sin acceso al módulo.
 - Por dentro es lo mismo: los mismos valores en `edicion.valores` y los mismos cambios a `apiPermisosGuardar`.
-  `tools/vista-previa/probar-permisos.js` prueba la columna de grupos y los chips con clics.
+  `tools/vista-previa/probar-permisos.js` prueba la columna de grupos, las pestañas y Exportar con clics.
 
 ## Para llevar las tres fases a producción (pendiente; el usuario decide cuándo)
 

@@ -1,6 +1,6 @@
 /**
  * Clics de verdad en la ventana "Editar permisos" sobre la vista previa: la columna de grupos, "Todo el
- * grupo", una excepción, ↺, las pestañas de un módulo como chips (igual / solo ver / oculta), lo que
+ * grupo", una excepción, ↺, las pestañas en árbol bajo su módulo, Exportar como ícono, lo que
  * implica cada permiso y lo que se manda al guardar. Luego la matriz por área: el clic que cambia la celda (también la de una sección,
  * que pasa por Hereda), volver a como estaba y lo que manda Guardar. Necesita Chrome (por eso
  * no va en npm test, que corre en GitHub sin navegador):
@@ -65,30 +65,40 @@ const { construir } = require('./construir');
   e = await estado();
   ok(e.implica.some((t) => /En Vehículos no podrá editar la sección/.test(t)), 'Sensores solo en Ver: dice que en Vehículos no podrá editar esa sección');
 
-  // Pestañas de Vehículos (permisos en árbol): chips debajo del módulo; igual que el módulo → solo ver → oculta
-  const chip = (id) => p.evaluate((s) => {
+  // Pestañas de Vehículos (permisos en árbol): filas chiquitas colgadas del módulo, con sus tres niveles; Exportar es
+  // un ícono junto a los niveles del módulo (verde puede, rojo no)
+  const exp = (id) => p.evaluate((s) => {
     const c = document.querySelector('[data-usr-chip="' + s + '"]');
-    return c ? { estado: ['igual', 'ver', 'oculta'].find((k) => c.classList.contains(k)), propia: c.classList.contains('propia'),
-      texto: c.getAttribute('aria-label') } : null;
+    return c ? { permitido: c.classList.contains('permitido'), prohibido: c.classList.contains('prohibido'), propia: c.classList.contains('propia'),
+      enCabeza: !!c.closest('.usr-mod-cab') } : null;
   }, id);
-  let s = await chip('vehiculos.exportar');
-  ok(s && s.estado === 'igual' && !s.propia && /Igual que Vehículos \(Editar\)/.test(s.texto), 'Exportar sale como chip igual que Vehículos (' + (s && s.texto) + ')');
+  const pestana = (id) => p.evaluate((s) => {
+    const f = document.querySelector('.usr-sec[data-modulo="' + s + '"]');
+    return f ? { nivel: f.querySelector('.usr-op.activa').dataset.nivel, propia: f.classList.contains('propia'),
+      texto: f.querySelector('.usr-mod-origen').textContent,
+      apagados: Array.from(f.querySelectorAll('.usr-op:disabled')).map((b) => b.dataset.nivel) } : null;
+  }, id);
+  let s = await exp('vehiculos.exportar');
+  ok(s && s.permitido && !s.propia && s.enCabeza, 'Exportar: ícono verde en la cabeza del módulo');
   await clic('[data-usr-chip="vehiculos.exportar"]');
-  s = await chip('vehiculos.exportar');
-  ok(s.estado === 'oculta' && s.propia, 'un clic en Exportar: oculta, como regla propia');
+  s = await exp('vehiculos.exportar');
+  ok(s.prohibido && s.propia, 'un clic en Exportar: rojo, como regla propia');
   await clic('[data-usr-chip="vehiculos.exportar"]');
-  s = await chip('vehiculos.exportar');
-  ok(s.estado === 'igual' && !s.propia, 'otro clic: vuelve a ser igual que el módulo, sin regla');
-  await clic('[data-usr-chip="vehiculos.documentos"]');
-  s = await chip('vehiculos.documentos');
-  ok(s && s.estado === 'ver' && s.propia, 'Documentos (con Vehículos en Editar): un clic la deja en solo ver');
-  await clic('[data-usr-chip="vehiculos.documentos"]');
-  ok((await chip('vehiculos.documentos')).estado === 'oculta', 'otro: oculta');
-  await clic('[data-usr-chip="vehiculos.documentos"]');
-  s = await chip('vehiculos.documentos');
-  ok(s.estado === 'igual' && !s.propia, 'y otro: igual que el módulo otra vez');
+  s = await exp('vehiculos.exportar');
+  ok(s.permitido && !s.propia, 'otro clic: verde otra vez, sin regla');
+  let t = await pestana('vehiculos.documentos');
+  ok(t && t.nivel === 'EDICION' && !t.propia && /Igual que Vehículos/.test(t.texto), 'Documentos en el árbol: igual que Vehículos (' + (t && t.texto) + ')');
+  await clic('.usr-sec[data-modulo="vehiculos.documentos"] [data-nivel="LECTURA"]');
+  t = await pestana('vehiculos.documentos');
+  ok(t.nivel === 'LECTURA' && t.propia, 'Ver en Documentos: queda como regla propia de la pestaña');
+  await clic('[data-usr-restablecer="vehiculos.documentos"]');
+  t = await pestana('vehiculos.documentos');
+  ok(t.nivel === 'EDICION' && !t.propia, '↺ en la pestaña: igual que el módulo otra vez');
+  await clic('[data-modulo="vehiculos"] [data-nivel="LECTURA"]');
+  t = await pestana('vehiculos.documentos');
+  ok(t.nivel === 'LECTURA' && t.apagados.join() === 'EDICION', 'Vehículos en Ver: la pestaña no puede pasar de él (Editar apagado)');
   await clic('[data-modulo="vehiculos"] [data-nivel="NINGUNO"]');
-  ok(!(await chip('vehiculos.exportar')), 'Vehículos en Sin acceso: sus pestañas no se enseñan (nunca pasan del módulo)');
+  ok(!(await pestana('vehiculos.documentos')) && !(await exp('vehiculos.exportar')), 'Vehículos en Sin acceso: sin pestañas y Exportar apagado');
   await clic('[data-modulo="vehiculos"] [data-nivel="EDICION"]');
 
   await clic('[data-usr-grupo="servicios-vehiculares"] [data-nivel="NINGUNO"]');
