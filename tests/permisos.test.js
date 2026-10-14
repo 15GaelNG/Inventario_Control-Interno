@@ -244,6 +244,7 @@ console.log('7d. Un módulo por entrada del menú: nadie pierde lo que veía (se
     usuario({ CORREO: 'b@x.com', AREA: 'POST VENTA', ROL: 'CLIENT' }),
     usuario({ CORREO: 'c@x.com', AREA: 'LINEAS' }),
     usuario({ CORREO: 'd@x.com', AREA: 'CI', ACTIVO: 'FALSE' }),
+    usuario({ CORREO: 'e@x.com', AREA: '' }),
   ];
   const reglas = [
     ['CONTROL VEHICULAR', 'vehiculos', 'EDICION'],
@@ -261,7 +262,8 @@ console.log('7d. Un módulo por entrada del menú: nadie pierde lo que veía (se
   ok(tiene('nadie@x.com', 'panorama-vehiculos') === 'NINGUNO', 'a quien se le quitó Vehículos por correo, tampoco le llega el Panorama');
   ok(!c.some((x) => x.quien === 'POST VENTA'), 'el área CLIENT (POST VENTA) no recibe nada');
   ok(tiene('CONTROL VEHICULAR', 'encuestas-solicitudes') === 'LECTURA' && tiene('LINEAS', 'encuestas-solicitudes') === 'LECTURA' &&
-    !tiene('CI', 'encuestas-solicitudes'), 'Encuestas: cada área con gente activa');
+    !tiene('CI', 'encuestas-solicitudes') && tiene('e@x.com', 'encuestas-solicitudes') === 'LECTURA',
+    'Encuestas: cada área con gente activa y, sin área, la persona por su correo');
   const otraVez = Permisos.separacion_(Permisos.aplicarCambios_(reglas, c, 'n'), gente);
   ok(otraVez.length === 0, 'correrlo otra vez no agrega nada');
   ok(Modulos.familia('vehiculos').indexOf('sistemas-vehiculos') === -1 && Modulos.familia('vehiculos').indexOf('panorama-vehiculos') !== -1,

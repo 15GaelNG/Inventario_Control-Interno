@@ -492,7 +492,7 @@ const Permisos = (function () {
    *   de         quien tenía uno de estos módulos recibe el nuevo (y un NINGUNO por correo, también)
    *   familiaDe  quien tenía algún módulo de la familia de este (Sistemas solo salía en un grupo del
    *              menú con algo que ver)
-   *   todos      todas las áreas de USUARIOS (Encuestas lo veía cualquiera con sesión)
+   *   todos      todas las áreas de USUARIOS y, sin área, la persona (Encuestas lo veía cualquiera con sesión)
    * Salvo el rol CLIENT: sus áreas y correos no reciben nada (solo ven lo que se les dio a propósito).
    */
   const SEPARADOS = [
@@ -523,7 +523,8 @@ const Permisos = (function () {
     };
     SEPARADOS.forEach((s) => {
       if (s.todos) {
-        activos.forEach((u) => { if (limpiar_(u['AREA'])) dar(u['AREA'], s.nuevo, LECTURA); });
+        // Por su área; quien no tiene área, por su correo
+        activos.forEach((u) => dar(limpiar_(u['AREA']) ? u['AREA'] : u['CORREO'], s.nuevo, LECTURA));
         return;
       }
       const origen = s.de || Modulos.familia(s.familiaDe).filter((m) => !SEPARADOS.some((x) => x.nuevo === m));
