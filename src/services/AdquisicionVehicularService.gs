@@ -182,11 +182,13 @@ const AdquisicionVehicularService = (function () {
     return mapaIndice_()[serieBuscada] || null;
   }
 
-  /** TODOS los expedientes del índice (no por serie) -- para el apartado "Adquisición vehicular".
+  /** TODOS los expedientes del índice (no por serie) -- para el apartado "Adquisición vehicular"
+   *  (su propio permiso, 'adquisicion-vehicular' -- buscar()/archivos() siguen con 'vehiculos':
+   *  los usa la pestaña "Adquisición" de la ficha del vehículo, no este apartado).
    *  Solo las filas con serie (las de OCR sin serie encontrada son ruido de auditoría interna,
-   *  no expedientes para mostrar). Mismo permiso y misma caché que buscar()/mapaIndice_(). */
+   *  no expedientes para mostrar). */
   function listar(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
+    Permisos.puedeLeer(token, 'adquisicion-vehicular');
     return CacheHojas.recordar('adquisicion_vehicular_lista', [[Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_INDICE]], () => {
       const hoja = indiceHoja_(false);
       if (!hoja || hoja.getLastRow() < 2) return [];
