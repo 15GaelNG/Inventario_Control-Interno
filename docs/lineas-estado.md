@@ -326,8 +326,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
   `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk, Vínculos y Proveedor están apagados solo en producción).
   **Proveedor** (`proveedor-lineas`, entrada «Proveedor» de `Modulos.gs`): es la primera versión del 7-oct (etapa 1, adendums y barridos; `LineasProveedor.gs`,
-  `lineas-proveedor.html`), que volvió al código con la unión de Ayrton `ac4a560` (14-oct). En producción está apagada desde `fdac078` (14-oct; hasta que se publique, la
-  v116 todavía la enseña); en los DEV se ve. Se rehace (pendiente 1.10) y no se usa en lo que ya se cargó del proveedor. El menú lateral
+  `lineas-proveedor.html`), que volvió al código con la unión de Ayrton `ac4a560` (14-oct). En producción está apagada desde la v117 (14-oct, `fdac078`; la
+  v116 la enseñaba); en los DEV se ve. Se rehace (pendiente 1.10) y no se usa en lo que ya se cargó del proveedor. El menú lateral
   sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
   «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
   el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
