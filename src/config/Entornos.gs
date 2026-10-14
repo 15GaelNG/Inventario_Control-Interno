@@ -27,7 +27,9 @@ const ENTORNOS = {
     // Vínculos de Líneas (vinculos-lineas): una idea de Emmanuel que se queda así (8-oct-2026); en producción no se
     // enseña el modo Vínculos de Líneas telefónicas (lineas.html), en los DEV sí.
     // Correcciones de líneas (no está terminado) y Sistemas de Líneas (no tiene enlaces): apagados (12-oct-2026).
-    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas',
+    // Proveedor de Líneas (proveedor-lineas): la primera versión del 7-oct volvió con la v116; se rehace (pendiente 1.10),
+    // así que no se enseña ni se deja usar en producción (14-oct-2026).
+    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas,proveedor-lineas',
 
     // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
     SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
