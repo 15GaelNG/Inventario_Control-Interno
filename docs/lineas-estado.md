@@ -5,8 +5,9 @@ plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el P
 adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive sin
 `UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
 inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
-correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después
-(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-14
+correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y se rehace; los archivos de la primera
+versión volvieron al código el 14-oct con una unión de `master` y están apagados en producción (§1, Menú de Líneas; antecedente
+también en `_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-14
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -323,7 +324,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
 - **Menú de Líneas** (12-oct, `585d1c6`): Panorama, Líneas telefónicas, Resguardos y cancelaciones e Inventario de
   accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
-  `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción). El menú lateral
+  `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk, Vínculos y Proveedor están apagados solo en producción).
+  **Proveedor** (`proveedor-lineas`, entrada «Proveedor» de `Modulos.gs`): es la primera versión del 7-oct (etapa 1, adendums y barridos; `LineasProveedor.gs`,
+  `lineas-proveedor.html`), que volvió al código con la unión de Ayrton `ac4a560` (14-oct). En producción está apagada desde `fdac078` (14-oct; hasta que se publique, la
+  v116 todavía la enseña); en los DEV se ve. Se rehace (pendiente 1.10) y no se usa en lo que ya se cargó del proveedor. El menú lateral
   sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
   «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
   el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
@@ -397,6 +401,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
 | `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
+| `lineas/LineasProveedor.gs`, `html/js/lineas-proveedor.html`, `html/views/lineas/lineas-proveedor.html` | Primera versión del módulo Proveedor (7-oct), apagada en producción; se rehace (pendiente 1.10) |
 | `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
 | `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Desde el 13-oct, en un DEV, guardar una inspección, generar un PDF, Mandar a resguardo y Mandar a cancelación anotan sus pasos dentro del servidor (`TelefoniaService.conPasosEnDev_`, con `LineasDatos.tiempo` «@a los ms») y el medidor los pide con `apiLineasPasosServidor` y los escribe como «SERVIDOR …»; en producción no hacen nada. Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
@@ -421,3 +426,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 - Todo se escribe en mayúsculas (regla de `app.html`) salvo los campos con `data-respetar-texto`: PIN de WhatsApp,
   PIN o contraseña del equipo, contraseña del módem y correo (`literal` o `secreto` en el formulario). La excepción vive
   en `app.html`: al unir `master`, conservarla (`tests/lineas-pin-minusculas.test.cjs` falla si se pierde).
+- **Rol CLIENT** (POST VENTA, `45b97ba`, de Ayrton, 14-oct; `Permisos.alcanceDe`): solo ve los equipos y líneas de sus departamentos. La ficha se le muestra como está hoy: sin las
+  pestañas Documentos e Historial ni «Ver última inspección/responsiva» (`apiLineasPermisos` trae `conAlcance` y `lineas.html` lo usa en `sinPasado`), porque eso puede ser de cuando
+  el equipo era de otro departamento. El servidor se lo niega con `sinAlcance_` en `TelefoniaService.gs` (historial, asignaciones, evidencias, documentos, última inspección o responsiva
+  y el directorio de colaboradores de Capital Humano, que tampoco se pide en la precarga).
