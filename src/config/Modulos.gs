@@ -100,8 +100,9 @@ const Modulos = (function () {
             { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-check' },
             // Movimientos y asignaciones (números / NUCOs que tuvo)
             { id: 'historial', etiqueta: 'Historial', icono: 'history' },
-            // Cuenta, plan y facturas del proveedor en la ficha
-            { id: 'facturacion', etiqueta: 'Facturación', icono: 'receipt', alcance: true },
+            // Los bloques "Plan" y "Facturación" de la ficha (y el día de corte y las facturas que manda el servidor). Sin
+            // alcance: ningún CLIENT los ve (usuario, 14-oct)
+            { id: 'facturacion', etiqueta: 'Plan y facturación', icono: 'receipt' },
             // "Ver carpeta en Drive" del ⋮ de la ficha (la carpeta del NUCO): operación interna, sin alcance (usuario, 14-oct)
             { id: 'carpetas', etiqueta: 'Carpetas en Drive', icono: 'folder-tree' },
           ],

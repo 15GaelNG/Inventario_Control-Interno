@@ -2511,8 +2511,9 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   const css = read('src/html/lineas-estilos.html');
   // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
   // Facturación, con su sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
-  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*\(veSeccion\('facturacion'\) \? tarjetaFacturacion\(l, r\.facturas, false\) : ''\)/);
-  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ \(veSeccion\('facturacion'\) \? tarjetaFacturacion\(l, r\.facturas, true\) : ''\) : ''\)/);
+  // Plan y Facturación, los dos con la sección (un CLIENT no la tiene, 14-oct)
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*\(veSeccion\('facturacion'\) \? tarjetaPlan\(l, false, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, false\) : ''\)/);
+  assert.match(html, /\(l && veSeccion\('facturacion'\) \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
   assert.match(html, /function vidaPlan\(l\)/);
   assert.match(html, /'Vencido hace ' \+ n/);
   // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
