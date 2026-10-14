@@ -92,7 +92,7 @@ const LineasRepo = (function () {
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v7'; // v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v8'; // v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -277,6 +277,12 @@ const LineasRepo = (function () {
    * del más viejo al más nuevo. Solo los marcados como cambio de número desde el 8-oct; lo de antes sigue en la bitácora
    * del AppSheet («Números que ha tenido» del equipo) hasta que pase a MOVIMIENTOS (pendiente 4.1).
    */
+  /** Un número de teléfono, solo sus dígitos; lo que no es número (las líneas de DG se capturaron «D-004») tal cual. */
+  function numeroOTexto_(v) {
+    const d = digitos(v);
+    return d && d.length >= 10 ? d : (txt(v) || '');
+  }
+
   function cambiosDeNumero_() {
     if (!LineasDatos.existeTabla(TAB.MOV)) return {};
     // Lo que se acaba de escribir (el cambio de número de esta misma edición) tiene que estar en la hoja antes de leerla
@@ -290,7 +296,7 @@ const LineasRepo = (function () {
       const c = cambios.filter((x) => sinAcentos_(x.campo) === 'NUMERO TELEFONO')[0];
       if (!c) return;
       String(m['ID LINEA'] || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((k) => {
-        (salida[k] = salida[k] || []).push({ antes: digitos(c.antes) || txt(c.antes) || '', despues: digitos(c.despues) || txt(c.despues) || '',
+        (salida[k] = salida[k] || []).push({ antes: numeroOTexto_(c.antes), despues: numeroOTexto_(c.despues),
           fecha: fecha(m['FECHA']), comentario: txt(m['COMENTARIO']) || '', quien: txt(m['QUIEN']) || '' });
       });
     });

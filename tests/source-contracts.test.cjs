@@ -965,7 +965,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v7';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v8';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
