@@ -3342,6 +3342,8 @@
           ['Cobrado', dinero(f.cobrado, true)],
           sinRenta ? null : ['Diferencia', diferenciaTexto(f.diferencia), true],
           resumen ? null : ['Uso', usoTexto(f), true],
+          // Parcialidad del equipo que viene en la factura (usuario, 14-oct): ya está dentro de lo cobrado
+          f.equipo ? ['Equipo', esc('Parcialidad ' + f.equipo.parcialidad + ' · ' + f.equipo.nombre + ' · ' + dinero(f.equipo.cargo, true)), true] : null,
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
         ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
           icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
