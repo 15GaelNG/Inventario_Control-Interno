@@ -80,9 +80,10 @@ test('servidor: la imagen del patrón solo la piden ADMIN y el área de Líneas,
   const i = fuente.indexOf('  function patronAppSheet(');
   const f = fuente.indexOf('\n  }\n', i);
   assert.ok(i > 0 && f > i);
-  const correr = (puede, ruta) => {
+  const correr = (puede, ruta, alcance) => {
     const ctx = vm.createContext({
-      leer_: () => ({}), puedeVerSecretos_: () => puede,
+      leer_: () => ({ alcance: alcance || null }), puedeVerSecretos_: () => puede,
+      sinAlcance_: (s) => { if (s.alcance) throw new Error('No tienes acceso a esta parte de Líneas.'); return s; },
       LineasArchivos: { rutaAppSheet: (r) => r, resolver: () => ({ id: 'ID1' }) },
       DriveApp: { getFileById: () => ({ getBlob: () => ({ getContentType: () => 'image/png', getBytes: () => [1, 2, 3] }) }) },
       Utilities: { base64Encode: () => 'AQID' },
@@ -93,6 +94,8 @@ test('servidor: la imagen del patrón solo la piden ADMIN y el área de Líneas,
   assert.equal(correr(true, RUTA).imagen, 'data:image/png;base64,AQID');
   assert.throws(() => correr(false, RUTA), /administradores y el área de Líneas/);
   assert.throws(() => correr(true, 'Files/RESPONSIVA1.pdf'), /No es un patrón/);
+  // Rol CLIENT: una ruta suelta no dice de qué registro es
+  assert.throws(() => correr(true, RUTA, ['POST VENTA']), /No tienes acceso/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasPatronAppSheet\(token, ruta\) \{\s+return TelefoniaService\.patronAppSheet\(token, ruta\);/);
 });
 

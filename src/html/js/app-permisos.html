@@ -35,12 +35,19 @@
     const regla = (quien, modulo) => originales[llave(quien, modulo)];
     const deArea = (area, modulo) => (area ? regla(area, modulo) || 'NINGUNO' : 'NINGUNO');
     const tieneTotal = (p) => PERM_ROLES_TOTALES.indexOf(p.rol) !== -1;
-    /** Lo que tiene por su rol o su regla propia o su área; VIEWER no edita. (Sin ver si está activo: eso se avisa aparte.) */
+    /** VIEWER y CLIENT solo consultan: Editar se les queda en Ver (Permisos.resolver_) */
+    const soloConsulta = (p) => p.rol === 'VIEWER' || p.rol === 'CLIENT';
+    /** Los departamentos que ve un CLIENT (Permisos.alcance_): DPTOS PERMITIDOS o, si está vacío, su área */
+    const alcanceCliente = (p) => {
+      const lista = String(p.dptosPermitidos || '').split(',').map((d) => d.trim()).filter(Boolean);
+      return lista.length ? lista : (p.area ? [p.area] : []);
+    };
+    /** Lo que tiene por su rol o su regla propia o su área; VIEWER y CLIENT no editan. (Sin ver si está activo: eso se avisa aparte.) */
     function efectivo(p, modulo) {
       if (tieneTotal(p)) return 'EDICION';   // "usuarios" (lo único que SUPER no tiene) no está en esta lista
       const propio = regla(p.correo, modulo);
       const nivel = propio !== undefined ? propio : deArea(p.area, modulo);
-      return p.rol === 'VIEWER' && nivel === 'EDICION' ? 'LECTURA' : nivel;
+      return soloConsulta(p) && nivel === 'EDICION' ? 'LECTURA' : nivel;
     }
     const excepcionesDe = (p) => (tieneTotal(p) ? [] : modulos().filter((m) => regla(p.correo, m.id) !== undefined));
     const conAcceso = (p) => modulos().filter((m) => efectivo(p, m.id) !== 'NINGUNO').length;
@@ -178,6 +185,11 @@
       if (!p.activo) aviso = ['user-x', 'Está inactivo en USUARIOS: no puede entrar a la app. Abajo está lo que tendría si se reactiva.'];
       else if (total) aviso = ['shield-check', 'Su rol ' + p.rol + ' le da acceso total' + (p.rol === 'SUPER' ? ', menos Usuarios y permisos' : '') + '. Para quitárselo hay que cambiar su ROL en USUARIOS.'];
       else if (p.rol === 'VIEWER') aviso = ['eye', 'Su rol VIEWER solo deja consultar: aunque tenga Editar, no podrá modificar nada.'];
+      else if (p.rol === 'CLIENT') {
+        const dptos = alcanceCliente(p);
+        aviso = ['eye', 'Su rol CLIENT solo deja consultar, y en Vehículos y Líneas solo ve lo de ' +
+          (dptos.length ? dptos.join(', ') : 'ningún departamento (no tiene área ni DPTOS PERMITIDOS)') + '.'];
+      }
       else if (!p.area) aviso = ['info', 'No tiene área en USUARIOS: solo tiene las excepciones que se le den aquí.'];
 
       const resumen = [['Correo', p.correo], ['Área', p.area], ['Coordinación', p.coordinacion], ['Sede', [p.oficina, p.sede].filter(Boolean).join(' · ')]]
@@ -318,7 +330,7 @@
     function nivelEnVentana(m) {
       const v = edicion.valores[m];
       const nivel = edicion.p ? (v === '' ? heredadoDe(m) : v) : v;
-      return edicion.p && edicion.p.rol === 'VIEWER' && nivel === 'EDICION' ? 'LECTURA' : nivel;
+      return edicion.p && soloConsulta(edicion.p) && nivel === 'EDICION' ? 'LECTURA' : nivel;
     }
     /** Elegir un nivel: en una persona, el mismo que le da su área no es excepción */
     function elegir(m, nivel) {
@@ -382,7 +394,7 @@
       $('usr-modal-sub').textContent = p ? (p.nombre || p.correo) + (p.area ? ' · área ' + p.area : ' · sin área') : 'Área ' + id;
       $('usr-modal-regla').textContent = p
         ? 'El botón con punto es lo que le da su área: si lo dejas así, cambia cuando cambie su área. Cualquier otro queda como excepción solo para esta persona.' +
-          (p.rol === 'VIEWER' ? ' Su rol VIEWER solo deja ver: Editar se le queda en Ver.' : '')
+          (soloConsulta(p) ? ' Su rol ' + p.rol + ' solo deja ver: Editar se le queda en Ver.' : '')
         : 'Aplica a todas las personas del área, salvo quien tenga una excepción en ese módulo.';
       $('usr-modal-leyenda').innerHTML = p
         ? '<span class="usr-leyenda-punto">Lo que le da su área</span><span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>' +

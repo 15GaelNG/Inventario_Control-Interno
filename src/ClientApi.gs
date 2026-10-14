@@ -145,7 +145,10 @@ function apiFotosInspeccion(token, nucco, carpetaId) {
 }
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
 function apiDocumentosVehiculo(token, nucco) {
-  Permisos.puedeLeer(token, 'vehiculos');
+  // Un CLIENT solo abre el expediente de un vehículo de su departamento (Permisos.alcanceDe)
+  if (Permisos.puedeLeer(token, 'vehiculos').alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) {
+    throw new Error('No tienes acceso a este vehículo.');
+  }
   const exp = ExpedienteNuco.listar(nucco);
   exp.documentos = exp.documentos.filter((d) => DOCUMENTOS_FICHA.indexOf(d.clave) !== -1);
   return JSON.stringify(exp);
