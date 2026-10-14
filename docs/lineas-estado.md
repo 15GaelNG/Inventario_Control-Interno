@@ -69,12 +69,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
   pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
   «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
-  del corte; Renta, Cobrado, Diferencia, Uso (un SIM básico no lleva Renta ni Diferencia: su renta está en la tarjeta Plan), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
+  del corte; Renta, Cobrado (con la parcialidad del equipo dentro), Diferencia (contra la renta y sin la parcialidad: `cobrado - cargoEquipo - renta`), Uso (un SIM básico no lleva Renta ni Diferencia: su renta está en la tarjeta Plan),
+  Equipo (solo si la línea paga un equipo a plazos: «Parcialidad 10 de 24 · MOTOROLA 4G XT2521-2 G15 256GB GRIS · $52.08»; `3cce1da`, 14-oct), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
   «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
   WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
-  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; la columna MINUTOS de los SIM básicos sale del «DETALLE DE LLAMADAS» de su factura y no del
-  «Consumido» del resumen, que dice 0: cargada en el DEV el 14-oct, en producción falta, pendiente 1.16);
+  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
+  «Consumido» del resumen; la de los SIM básicos ya está en producción desde el 14-oct (con las llamadas recibidas incluidas; se corrige con los datos de septiembre, pendiente 1.15);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
   enlace a la línea), Plan de la línea, Facturación de la línea (sin renta, uso ni meses) y Responsable a todo el ancho. Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
@@ -341,7 +342,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | LINEAS, EQUIPOS | Una fila por línea y por equipo (IDs de `Entidades.gs`). EQUIPOS lleva PIN WHATSAPP desde el 14-oct |
 | ASIGNACIONES | Quién tiene qué, con FECHA INICIO / FECHA FIN (persona o resguardo), jefe directo y responsables adicionales |
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
-| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15); después la llenará la carga mensual del proveedor (1.10) |
+| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; las columnas nuevas y las correcciones están en el DEV y falta producción (pendiente 1.15); después la llenará la carga mensual del proveedor (1.10) |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |

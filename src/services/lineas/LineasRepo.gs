@@ -315,7 +315,8 @@ const LineasRepo = (function () {
    * al más viejo. El mes es el del corte; la diferencia es contra la renta del plan vigente. Una línea sin contrato
    * (SIM básico) no tiene renta ni diferencia; `parcial` marca el mes cobrado incompleto («Cargo del … al …»), para
    * no tomarlo como su renta (usuario, 14-oct: la renta del SIM básico sale de su factura). Sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no
-   * se entendía y no suma; los conceptos siguen en FACTURAS.
+   * se entendía y no suma; los conceptos siguen en FACTURAS. Lo cobrado trae la parcialidad del equipo (usuario, 14-oct:
+   * «Suma las parcialidades»); la diferencia contra la renta del plan es sin ella. MINUTOS son solo llamadas hechas.
    */
   function facturasDeLinea(linea, cuantas) {
     if (!linea || !LineasDatos.existeTabla('FACTURAS')) return [];
@@ -325,9 +326,11 @@ const LineasRepo = (function () {
     const renta = sinContrato ? null : linea.costoPlan;
     return LineasDatos.leerFilas([{ tabla: 'FACTURAS', filas: filas }])[0].map((x) => {
       const cobrado = LineasUtil.numero(x['TOTAL CON IVA']);
+      const cargoEquipo = LineasUtil.numero(x['CARGO EQUIPO']) || 0;
       return {
         corte: fecha(x['FECHA DE CORTE']), ciclo: txt(x['PERIODO']) || '', cobrado: cobrado, renta: renta,
-        diferencia: renta === null || renta === undefined || cobrado === null ? null : Math.round((cobrado - renta) * 100) / 100,
+        diferencia: renta === null || renta === undefined || cobrado === null ? null : Math.round((cobrado - cargoEquipo - renta) * 100) / 100,
+        equipo: cargoEquipo ? { nombre: txt(x['EQUIPO FACTURADO']) || '', parcialidad: txt(x['PARCIALIDAD']) || '', cargo: cargoEquipo } : null,
         parcial: /CARGO DEL .+ AL /.test(sinAcentos_(x['CONCEPTOS'])), numero: digitos(x['NUMERO EN FACTURA']),
         minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
         origen: txt(x['ARCHIVO']) || '',
