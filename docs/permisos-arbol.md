@@ -63,7 +63,7 @@ en la de Caja chica; la pestaña Adquisición) no es sección: pide el permiso d
   las capturas desde una lista ("Nueva verificación" desde Vehículos, "Nuevo arqueo" desde Caja chica) piden el
   módulo de lo que capturan. La copia de permisos del navegador cambió de llave (`permisos_v2_`).
 - **Usuarios y permisos**: las fichas listan debajo de cada módulo solo las secciones que se apartan de él; la
-  ventana Editar trae las secciones plegables de cada módulo (Hereda / propia, ↺); la matriz enseña las
+  ventana Editar trae las secciones de cada módulo (hoy como chips, ver "Rediseño de la ventana"); la matriz enseña las
   secciones con alguna regla (con "Ver todas las secciones") y su celda pasa por Hereda.
 - **Rol CLIENT**: además del alcance por departamento, no lee el expediente de inspecciones ni sus fotos de un
   vehículo ajeno, ni el inventario de accesorios.
@@ -182,6 +182,22 @@ Marca "solo lo de su área" los perfiles de las áreas cuya gente activa es toda
 **Simulación contra producción (14-oct, solo lectura):** el único perfil que queda con alcance es **POST VENTA** y
 **nadie cambia** respecto a la fase 2. POST VENTA ve: Vehículos (con Documentos y Exportar) y Líneas Telefónicas (con
 Detalles, Facturación y Exportar); respecto a hoy en producción no pierde nada (no tenía Responsiva ni Adherente).
+
+## Rediseño de la ventana "Editar permisos" (14-oct)
+
+Se veía funcional pero recargada (puntos, cuatro opciones por sección, secciones plegadas). Ahora:
+
+- **Ventana ancha a dos columnas** (hasta 1040 px): a la izquierda los grupos del menú, con cuántos módulos tienen
+  acceso ("2/12") y un punto si algo cambió; a la derecha solo los módulos del grupo elegido, con "Todo el grupo"
+  arriba. En celular los grupos se deslizan de lado y todo va en una columna.
+- **Cada módulo es una tarjeta** con su ícono, los tres niveles (Sin acceso en rojo, Ver azul, Editar verde) y de
+  dónde le viene en texto, en vez del punto: "Su área: Ver", "Excepción · su área: Sin acceso", "Por su perfil X",
+  "Regla del área · sus perfiles: Ver". ↺ quita la regla propia.
+- **Las pestañas y Exportar son chips** debajo del módulo, solo si tiene acceso (nunca pasan de él). Clic: igual
+  que el módulo → solo ver → oculta → igual. Exportar, o cualquier pestaña con el módulo en Ver, solo va de igual a
+  oculta. Un chip que se aparta del módulo es regla propia de la sección; volver a "igual" la quita.
+- Por dentro es lo mismo: los mismos valores en `edicion.valores` y los mismos cambios a `apiPermisosGuardar`.
+  `tools/vista-previa/probar-permisos.js` prueba la columna de grupos y los chips con clics.
 
 ## Para llevar las tres fases a producción (pendiente; el usuario decide cuándo)
 

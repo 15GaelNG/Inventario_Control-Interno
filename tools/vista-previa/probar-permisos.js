@@ -1,7 +1,7 @@
 /**
- * Clics de verdad en la ventana "Editar permisos" sobre la vista previa: "Todo el grupo", una
- * excepción, ↺, las secciones de un módulo (Hereda / propia), lo que implica cada permiso y lo que se
- * manda al guardar. Luego la matriz por área: el clic que cambia la celda (también la de una sección,
+ * Clics de verdad en la ventana "Editar permisos" sobre la vista previa: la columna de grupos, "Todo el
+ * grupo", una excepción, ↺, las pestañas de un módulo como chips (igual / solo ver / oculta), lo que
+ * implica cada permiso y lo que se manda al guardar. Luego la matriz por área: el clic que cambia la celda (también la de una sección,
  * que pasa por Hereda), volver a como estaba y lo que manda Guardar. Necesita Chrome (por eso
  * no va en npm test, que corre en GitHub sin navegador):
  *
@@ -34,8 +34,16 @@ const { construir } = require('./construir');
   const clic = (sel) => p.evaluate((s) => document.querySelector(s).click(), sel);
   const ok = (c, t) => { console.log((c ? '  ✔ ' : '  ✘ ') + t); if (!c) fallas++; };
 
-  const enGrupo = await p.evaluate(() => document.querySelector('[data-usr-grupo="servicios-vehiculares"]').closest('.usr-editar-grupo')
-    .nextElementSibling.querySelectorAll('[data-modulo]').length);
+  // La ventana es a dos columnas: los grupos a la izquierda y solo los módulos del grupo elegido a la derecha
+  const grupos = await p.evaluate(() => Array.from(document.querySelectorAll('[data-usr-ir-grupo]')).map((b) => ({
+    id: b.dataset.usrIrGrupo, activa: b.classList.contains('activa'), cuenta: b.querySelector('.usr-editor-grupo-cuenta').textContent })));
+  ok(grupos.length > 1 && grupos.filter((g) => g.activa).length === 1 && grupos.every((g) => /^\d+\/\d+$/.test(g.cuenta)),
+    'columna de grupos: ' + grupos.length + ' grupos, uno elegido, cada uno con "n/total con acceso"');
+  const otro = grupos.find((g) => g.id !== 'servicios-vehiculares').id;
+  await clic('[data-usr-ir-grupo="' + otro + '"]');
+  ok(await p.evaluate(() => !document.querySelector('.usr-editor-modulos [data-modulo="vehiculos"]')), 'al elegir otro grupo, Vehículos ya no está a la derecha');
+  await clic('[data-usr-ir-grupo="servicios-vehiculares"]');
+  const enGrupo = await p.evaluate(() => document.querySelectorAll('.usr-editor-modulos .usr-mod[data-modulo]').length);
   let e = await estado();
   ok(e.cuenta === 'Sin cambios' && !e.guardar && e.hologramas === 'EDICION' && e.holoExcepcion, 'al abrir: sin cambios, Hologramas es excepción en Editar');
 
@@ -57,22 +65,31 @@ const { construir } = require('./construir');
   e = await estado();
   ok(e.implica.some((t) => /En Vehículos no podrá editar la sección/.test(t)), 'Sensores solo en Ver: dice que en Vehículos no podrá editar esa sección');
 
-  // Secciones de Vehículos (permisos en árbol): plegadas; al abrirlas, cada una hereda
-  const seccion = (id) => p.evaluate((s) => {
-    const fila = document.querySelector('[data-modulo="' + s + '"]');
-    return fila ? { activa: fila.querySelector('.usr-op.activa').dataset.nivel, propia: fila.classList.contains('excepcion'),
-      texto: fila.querySelector('.usr-editar-hereda').textContent } : null;
+  // Pestañas de Vehículos (permisos en árbol): chips debajo del módulo; igual que el módulo → solo ver → oculta
+  const chip = (id) => p.evaluate((s) => {
+    const c = document.querySelector('[data-usr-chip="' + s + '"]');
+    return c ? { estado: ['igual', 'ver', 'oculta'].find((k) => c.classList.contains(k)), propia: c.classList.contains('propia'),
+      texto: c.getAttribute('aria-label') } : null;
   }, id);
-  ok(!(await seccion('vehiculos.exportar')), 'las secciones de un módulo salen plegadas');
-  await clic('[data-usr-secciones="vehiculos"]');
-  let s = await seccion('vehiculos.exportar');
-  ok(s && s.activa === 'HEREDA' && !s.propia && /Hereda: Editar/.test(s.texto), 'al abrirlas, Exportar hereda lo de Vehículos (' + (s && s.texto) + ')');
-  await clic('[data-modulo="vehiculos.exportar"] [data-nivel="NINGUNO"]');
-  s = await seccion('vehiculos.exportar');
-  ok(s.activa === 'NINGUNO' && s.propia && s.texto === 'Propia', 'Sin acceso en Exportar: queda como regla propia de la sección');
-  await clic('[data-usr-restablecer="vehiculos.exportar"]');
-  s = await seccion('vehiculos.exportar');
-  ok(s.activa === 'HEREDA' && !s.propia, '↺ en la sección: vuelve a heredar');
+  let s = await chip('vehiculos.exportar');
+  ok(s && s.estado === 'igual' && !s.propia && /Igual que Vehículos \(Editar\)/.test(s.texto), 'Exportar sale como chip igual que Vehículos (' + (s && s.texto) + ')');
+  await clic('[data-usr-chip="vehiculos.exportar"]');
+  s = await chip('vehiculos.exportar');
+  ok(s.estado === 'oculta' && s.propia, 'un clic en Exportar: oculta, como regla propia');
+  await clic('[data-usr-chip="vehiculos.exportar"]');
+  s = await chip('vehiculos.exportar');
+  ok(s.estado === 'igual' && !s.propia, 'otro clic: vuelve a ser igual que el módulo, sin regla');
+  await clic('[data-usr-chip="vehiculos.documentos"]');
+  s = await chip('vehiculos.documentos');
+  ok(s && s.estado === 'ver' && s.propia, 'Documentos (con Vehículos en Editar): un clic la deja en solo ver');
+  await clic('[data-usr-chip="vehiculos.documentos"]');
+  ok((await chip('vehiculos.documentos')).estado === 'oculta', 'otro: oculta');
+  await clic('[data-usr-chip="vehiculos.documentos"]');
+  s = await chip('vehiculos.documentos');
+  ok(s.estado === 'igual' && !s.propia, 'y otro: igual que el módulo otra vez');
+  await clic('[data-modulo="vehiculos"] [data-nivel="NINGUNO"]');
+  ok(!(await chip('vehiculos.exportar')), 'Vehículos en Sin acceso: sus pestañas no se enseñan (nunca pasan del módulo)');
+  await clic('[data-modulo="vehiculos"] [data-nivel="EDICION"]');
 
   await clic('[data-usr-grupo="servicios-vehiculares"] [data-nivel="NINGUNO"]');
   e = await estado();

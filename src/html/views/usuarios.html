@@ -53,8 +53,6 @@
   .usr-modal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--color-text-muted); }
   .usr-modal-leyenda:empty { display: none; }
   .usr-modal-leyenda .ico { width: 13px; height: 13px; vertical-align: -2px; }
-  .usr-leyenda-punto { display: inline-flex; align-items: center; gap: 6px; }
-  .usr-leyenda-punto::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); }
 
   /* Título de cada grupo, con "Todo el grupo" a la derecha */
   .usr-editar-grupo {
@@ -67,16 +65,70 @@
   .usr-editar-grupo-todo { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 11.5px; }
   .usr-editar-grupo .usr-op { padding: 3px 9px; font-size: 11.5px; }
 
-  .usr-editar-lista { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
-  .usr-editar-fila { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 12px; margin: 0; }
-  .usr-editar-fila + .usr-editar-fila { border-top: 1px solid var(--color-border); }
-  .usr-editar-fila:hover { background: var(--color-bg); }
-  .usr-editar-fila > .ico { flex: none; width: 15px; height: 15px; color: var(--color-text-muted); }
-  .usr-editar-fila.excepcion { background: var(--color-accent-soft); }
-  .usr-editar-nombre { flex: 1; min-width: 0; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
-  .usr-editar-nombre::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: transparent; flex: none; }
-  .usr-editar-fila.cambiada .usr-editar-nombre::after { background: var(--color-accent); }
-  .usr-editar-fila.cambiada .usr-editar-nombre { font-weight: 600; }
+  /* Ventana "Editar permisos" (rediseño 14-oct): ancha, a dos columnas — grupos | módulos del grupo */
+  .modal-card.usr-modal-editor { max-width: 1040px; width: calc(100vw - 48px); }
+  .usr-modal-editor #usr-modal-cuerpo { height: min(66vh, 680px); max-height: none; overflow: hidden; display: flex; flex-direction: column; }
+  .usr-editor { display: grid; grid-template-columns: 230px 1fr; gap: 18px; min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
+  .usr-editor-grupos { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; padding-right: 2px; }
+  .usr-editor-grupo {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border: 1px solid transparent; border-radius: 10px;
+    background: transparent; color: var(--color-text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+  }
+  .usr-editor-grupo .ico { width: 16px; height: 16px; color: var(--color-text-muted); flex: none; }
+  .usr-editor-grupo:hover { background: var(--color-bg); }
+  .usr-editor-grupo.activa { background: var(--color-primary-soft); border-color: var(--color-primary); font-weight: 600; }
+  .usr-editor-grupo.activa .ico { color: var(--color-primary); }
+  .usr-editor-grupo-nombre { flex: 1; min-width: 0; }
+  .usr-editor-grupo-cuenta { font-size: 11.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+  .usr-editor-grupo.cambiada .usr-editor-grupo-cuenta::after {
+    content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--color-accent); vertical-align: 1px;
+  }
+  .usr-editor-modulos { overflow-y: auto; min-width: 0; padding-right: 4px; }
+  .usr-editor-modulos .usr-editar-grupo { position: sticky; top: 0; z-index: 1; margin: 0 0 8px; padding: 2px 2px 8px; background: var(--color-surface); }
+
+  /* Un módulo: nombre y de dónde le viene; los tres niveles a la derecha; sus pestañas como chips debajo */
+  .usr-editar-lista { display: flex; flex-direction: column; gap: 8px; }
+  .usr-mod { border: 1px solid var(--color-border); border-radius: 12px; padding: 10px 12px; background: var(--color-surface); }
+  .usr-mod.excepcion { border-color: var(--color-accent); background: var(--color-accent-soft); }
+  .usr-mod.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  .usr-mod-cab { display: flex; align-items: center; gap: 10px; }
+  .usr-mod-ico { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
+  .usr-mod-ico .ico { width: 16px; height: 16px; }
+  .usr-mod.sin-acceso .usr-mod-ico { opacity: .55; }
+  .usr-mod-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-weight: 600; }
+  .usr-mod-origen { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 400; color: var(--color-text-muted); }
+  .usr-mod-origen.propia { color: var(--color-text); font-weight: 600; }
+  .usr-mod-origen .ico { width: 12px; height: 12px; }
+  .usr-mod-secs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 9px 0 0 42px; }
+  .usr-mod-secs-tit { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-muted); margin-right: 2px; }
+  .usr-chip-sec, .usr-leyenda-chip {
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 999px; font: inherit; font-size: 12px;
+    border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer;
+  }
+  .usr-leyenda-chip { cursor: default; padding: 2px 8px; font-size: 11.5px; }
+  .usr-chip-sec .ico, .usr-leyenda-chip .ico { width: 13px; height: 13px; }
+  .usr-chip-sec:hover { border-color: var(--color-primary); }
+  .usr-chip-sec.ver, .usr-leyenda-chip.ver { background: var(--color-primary-soft); border-color: var(--color-primary); color: var(--color-primary); }
+  .usr-chip-sec.oculta, .usr-leyenda-chip.oculta { background: transparent; border-style: dashed; color: #b42318; text-decoration: line-through; }
+  .usr-chip-sec.propia { box-shadow: inset 0 0 0 1px var(--color-accent); }
+  .usr-chip-sec.cambiada { font-weight: 600; }
+  .usr-chip-sec.exportar { margin-left: auto; }
+  .usr-chip-sec-nota { font-size: 10.5px; opacity: .8; }
+  .usr-perfil-cab { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 12px; }
+  .usr-perfil-cab .usr-perfil-nombre, .usr-perfil-cab .usr-perfil-alcance { margin: 0; }
+  @media (max-width: 640px) {
+    .modal-card.usr-modal-editor { width: auto; }
+    .usr-modal-editor #usr-modal-cuerpo { height: auto; overflow-y: auto; display: block; }
+    .usr-editor { grid-template-columns: 1fr; grid-template-rows: auto; }
+    .usr-editor-modulos { overflow: visible; }
+    .usr-editor-modulos .usr-editar-grupo { position: static; }
+    .usr-editor-grupos { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+    .usr-editor-grupo { width: auto; flex: none; }
+    .usr-mod-cab { flex-wrap: wrap; }
+    .usr-mod-secs { margin-left: 0; }
+    .usr-chip-sec.exportar { margin-left: 0; }
+    .usr-perfil-cab { grid-template-columns: 1fr; }
+  }
 
   /* Los tres niveles con el color de la ficha: Sin acceso rojo, Ver azul, Editar verde. El que
      le da su área a la persona lleva un punto */
@@ -92,10 +144,6 @@
   .usr-op.activa.NINGUNO { background: #b42318; }
   .usr-op.activa.LECTURA { background: var(--color-primary); }
   .usr-op.activa.EDICION { background: var(--color-success); }
-  .usr-op.heredada::after {
-    content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--color-primary);
-  }
-  .usr-op.heredada.activa::after { background: #fff; }
 
   .usr-restablecer {
     flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0;
@@ -171,16 +219,6 @@
   .usr-permiso.usr-seccion { padding-left: 28px; }
   .usr-permiso.usr-seccion .usr-permiso-ico { width: 26px; height: 26px; }
   .usr-permiso.usr-seccion .usr-permiso-nombre { font-weight: 500; font-size: 12.5px; }
-  .usr-editar-fila.usr-seccion { padding-left: 34px; }
-  .usr-editar-fila.usr-seccion .usr-editar-nombre { font-size: 12.5px; }
-  .usr-editar-hereda { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
-  .usr-secciones-btn {
-    display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border: 1px solid var(--color-border);
-    border-radius: 999px; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 11px; cursor: pointer;
-  }
-  .usr-secciones-btn .ico { width: 12px; height: 12px; }
-  .usr-secciones-btn:hover { color: var(--color-text); background: var(--color-bg); }
-  .usr-op.activa.HEREDA { background: var(--color-text-muted); }
   /* Perfiles (fase 2) */
   .usr-perfiles-barra { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
   .usr-perfiles-barra p { flex: 1; margin: 0; font-size: 13px; color: var(--color-text-muted); }
@@ -223,9 +261,9 @@
 
   /* Celular: el nombre arriba y los tres niveles a todo lo ancho, para el dedo */
   @media (max-width: 640px) {
-    .usr-editar-fila { flex-wrap: wrap; }
-    .usr-editar-fila .usr-segmento { flex: 1 1 100%; }
-    .usr-editar-fila .usr-op { flex: 1; padding: 8px 6px; }
+    .usr-mod-cab { flex-wrap: wrap; }
+    .usr-mod-cab .usr-segmento { flex: 1 1 100%; }
+    .usr-mod-cab .usr-op { flex: 1; padding: 8px 6px; }
     .usr-editar-grupo { flex-wrap: wrap; }
     .usr-editar-grupo .usr-segmento { flex: 1 1 100%; }
     .usr-editar-grupo .usr-op { flex: 1; }

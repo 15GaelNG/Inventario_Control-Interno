@@ -506,14 +506,15 @@
 
     // ---------------------------------------------------------------- ventana "Editar permisos"
     /**
-     * Un renglón por módulo con tres botones (Sin acceso · Ver · Editar), todos a la vista. El botón con punto es lo
-     * que tendría sin regla propia (en una persona, lo de su área; en un área, lo de sus perfiles): elegirlo es no
-     * tener regla (valor ''); cualquier otro es una regla propia (dorada, con ↺ para quitarla). Arriba de cada grupo,
-     * "Todo el grupo" pone el mismo nivel a todos sus módulos. Cada módulo tiene sus secciones plegadas debajo, con un
-     * botón más: Hereda. Abajo, lo que implica lo elegido fuera de las pantallas (implicaciones), en vivo.
+     * Ventana ancha a dos columnas (rediseño 14-oct): a la izquierda los grupos (cuántos módulos tienen acceso, si algo
+     * cambió); a la derecha los módulos del grupo elegido, con "Todo el grupo" arriba. Cada módulo: su nombre, de dónde
+     * le viene en texto ("Su área: Ver", "Excepción · su área: Sin acceso ↺", "Por su perfil X") y los tres niveles
+     * (Sin acceso rojo, Ver azul, Editar verde). Elegir lo que ya tendría sin regla propia es no tener regla (valor '');
+     * otro nivel es una regla propia (dorada, con ↺). Con acceso, sus pestañas y Exportar van debajo como chips (igual
+     * que el módulo → solo ver → oculta). Abajo, lo que implica lo elegido fuera de las pantallas (implicaciones).
      *
      * edicion = { tipo: 'persona' | 'area' | 'perfil', id, p (la persona o null), nombre / original (el perfil),
-     *   iniciales: {nodo: valor}, valores: {nodo: valor}, abiertos: {modulo: true} }; valor = la regla propia o ''.
+     *   iniciales: {nodo: valor}, valores: {nodo: valor}, grupo (el que está a la vista) }; valor = la regla propia o ''.
      * La misma ventana asigna perfiles: { tipo: 'asignar', de: 'area' | 'perfil', id, iniciales/valores: {clave: bool} }.
      */
     let edicion = null;
@@ -550,45 +551,92 @@
         (n === heredado ? ' title="' + (conHereda ? 'Lo que tendría sin regla propia' : textoSinRegla()) + '"' : '') + '>' + PERM_TEXTO[n] + '</button>').join('') + '</div>';
     }
 
-    function filaModulo(m) {
-      const v = edicion.valores[m.id];
-      const propia = v !== '';
-      const secs = seccionesDe(m);
-      const propias = secs.filter((s) => edicion.valores[s.id] !== '').length;
-      // Sin perfiles ni área de por medio (un área sin perfiles, un perfil), el punto no aporta: es Sin acceso
-      const conPunto = edicion.tipo === 'persona' || (edicion.tipo === 'area' && perfilesDe(edicion.id).length);
-      return '<div class="usr-editar-fila' + (v !== edicion.iniciales[m.id] ? ' cambiada' : '') + (propia && conPunto ? ' excepcion' : '') + '" data-modulo="' + m.id + '">' +
-        ico(iconoModulo(m.id)) +
-        '<span class="usr-editar-nombre">' + escaparHtml(m.etiqueta) +
-        (secs.length ? ' <button type="button" class="usr-secciones-btn" data-usr-secciones="' + m.id + '" aria-expanded="' + !!edicion.abiertos[m.id] + '">' +
-          ico(edicion.abiertos[m.id] ? 'chevron-down' : 'chevron-right') + plural(secs.length, 'sección', 'secciones') +
-          (propias ? ' · ' + plural(propias, 'propia', 'propias') : '') + '</button>' : '') + '</span>' +
-        (conPunto ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + m.id + '" title="Quitar su regla: ' + textoSinRegla().toLowerCase() + '"' +
-          ' aria-label="Quitar su regla"' + (propia ? '' : ' hidden') + '>' + ico('rotate-ccw') + '</button>' : '') +
-        segmento(nivelEnVentana(m.id), conPunto ? heredadoDe(m.id) : null, 'aria-label="' + escaparHtml(m.etiqueta) + '"') +
-        '</div>' + (edicion.abiertos[m.id] ? secs.map((s) => filaSeccion(m, s)).join('') : '');
+    /**
+     * De dónde le viene a un nodo lo que tiene en la ventana, en texto (en vez del punto de antes): "Su área: Ver",
+     * "Excepción · su área: Sin acceso", "Por su perfil Flotilla", "Regla del área · sus perfiles: Ver". { texto, propia }
+     */
+    function origenVentana(id) {
+      const v = edicion.valores[id];
+      const sinRegla = heredadoDe(id);
+      if (edicion.tipo === 'persona') {
+        const p = edicion.p;
+        if (v !== '') return { texto: 'Excepción' + (p.area ? ' · su área: ' + PERM_TEXTO[sinRegla] : ''), propia: true };
+        if (p.area && regla(p.area, id) !== undefined) return { texto: 'Su área: ' + PERM_TEXTO[sinRegla] };
+        const pf = perfilesQueDan(perfilesDe(p.area), id);
+        if (pf.length) return { texto: 'Por su perfil ' + pf.join(', ') };
+        return { texto: p.area ? 'Su área no le da acceso' : 'Sin área en USUARIOS' };
+      }
+      if (edicion.tipo === 'area') {
+        const conPerfiles = perfilesDe(edicion.id).length > 0;
+        if (v !== '') return { texto: conPerfiles ? 'Regla del área · sus perfiles: ' + PERM_TEXTO[sinRegla] : '', propia: conPerfiles };
+        const pf = perfilesQueDan(perfilesDe(edicion.id), id);
+        return { texto: pf.length ? 'Por su perfil ' + pf.join(', ') : '' };
+      }
+      return { texto: '' };
     }
 
-    /** Una sección: Hereda (sin regla propia) o un nivel propio, que nunca pasa del de su módulo */
-    function filaSeccion(m, s) {
-      const v = edicion.valores[s.id];
-      const propia = v !== '';
-      return '<div class="usr-editar-fila usr-seccion' + (v !== edicion.iniciales[s.id] ? ' cambiada' : '') + (propia ? ' excepcion' : '') + '" data-modulo="' + s.id + '">' +
-        ico(s.icono || iconoModulo(m.id)) +
-        '<span class="usr-editar-nombre">' + escaparHtml(s.etiqueta) +
-        '<span class="usr-editar-hereda">' + (propia ? 'Propia' : 'Hereda: ' + PERM_TEXTO[nivelEnVentana(s.id)]) + '</span></span>' +
-        '<button type="button" class="usr-restablecer" data-usr-restablecer="' + s.id + '" title="Volver a heredar" aria-label="Volver a heredar"' +
-          (propia ? '' : ' hidden') + '>' + ico('rotate-ccw') + '</button>' +
-        segmento(propia ? nivelEnVentana(s.id) : 'HEREDA', null, 'aria-label="' + escaparHtml(etiquetaNodo(s.id)) + '"', true) +
+    /**
+     * Una pestaña (o Exportar) de un módulo con acceso, como chip: igual que el módulo, solo ver u oculta. Exportar,
+     * y cualquier pestaña de un módulo en Ver, solo van de igual a oculta.
+     */
+    function chipSeccion(m, s, nivelMod) {
+      const ef = nivelEnVentana(s.id);
+      const estado = ef === nivelMod ? 'igual' : ef === 'NINGUNO' ? 'oculta' : 'ver';
+      const propia = edicion.valores[s.id] !== '';
+      const exportar = s.id === m.id + '.exportar';
+      const etiqueta = exportar ? 'Exportar a Excel' : s.etiqueta;
+      const texto = estado === 'igual' ? 'Igual que ' + m.etiqueta + ' (' + PERM_TEXTO[nivelMod] + ')'
+        : estado === 'ver' ? 'Solo ver' : 'Oculta: no la ve';
+      return '<button type="button" class="usr-chip-sec ' + estado + (exportar ? ' exportar' : '') + (propia ? ' propia' : '') +
+        (edicion.valores[s.id] !== edicion.iniciales[s.id] ? ' cambiada' : '') + '" data-usr-chip="' + s.id + '" aria-label="' +
+        escaparHtml(etiqueta + ': ' + texto) + '" title="' + escaparHtml(etiqueta + ': ' + texto + '. Clic para cambiar') + '">' +
+        ico(estado === 'oculta' ? 'eye-off' : estado === 'ver' ? 'eye' : (s.icono || (exportar ? 'file-spreadsheet' : 'check'))) +
+        escaparHtml(etiqueta) + (estado === 'ver' ? '<span class="usr-chip-sec-nota">solo ver</span>' : '') + '</button>';
+    }
+
+    /** Un módulo: su nombre, de dónde viene (en texto), los tres niveles y, si tiene acceso, sus pestañas como chips */
+    function filaModulo(m) {
+      const v = edicion.valores[m.id];
+      const origen = origenVentana(m.id);
+      const nivelMod = nivelEnVentana(m.id);
+      const secs = seccionesDe(m);
+      const quitable = (edicion.tipo === 'persona' || (edicion.tipo === 'area' && perfilesDe(edicion.id).length)) && v !== '';
+      const pestanas = secs.filter((s) => s.id !== m.id + '.exportar');
+      const exportar = secs.filter((s) => s.id === m.id + '.exportar');
+      return '<div class="usr-mod' + (v !== edicion.iniciales[m.id] || secs.some((s) => edicion.valores[s.id] !== edicion.iniciales[s.id]) ? ' cambiada' : '') +
+        (origen.propia ? ' excepcion' : '') + (nivelMod === 'NINGUNO' ? ' sin-acceso' : '') + '" data-modulo="' + m.id + '">' +
+        '<div class="usr-mod-cab">' + '<span class="usr-mod-ico">' + ico(iconoModulo(m.id)) + '</span>' +
+        '<div class="usr-mod-nombre"><span>' + escaparHtml(m.etiqueta) + '</span>' +
+        (origen.texto ? '<span class="usr-mod-origen' + (origen.propia ? ' propia' : '') + '">' + (origen.propia ? ico('sparkles') : '') + escaparHtml(origen.texto) + '</span>' : '') + '</div>' +
+        (quitable ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + m.id + '" title="Quitar la regla: ' + textoSinRegla().toLowerCase() + '"' +
+          ' aria-label="Quitar la regla">' + ico('rotate-ccw') + '</button>' : '') +
+        segmento(nivelMod, null, 'aria-label="' + escaparHtml(m.etiqueta) + '"') + '</div>' +
+        // Las pestañas y Exportar solo cuentan con acceso al módulo (nunca pasan de él)
+        (nivelMod !== 'NINGUNO' && secs.length ? '<div class="usr-mod-secs">' +
+          (pestanas.length ? '<span class="usr-mod-secs-tit">Pestañas</span>' + pestanas.map((s) => chipSeccion(m, s, nivelMod)).join('') : '') +
+          exportar.map((s) => chipSeccion(m, s, nivelMod)).join('') + '</div>' : '') +
         '</div>';
     }
 
+    /** "Todo el grupo": el mismo nivel a todos sus módulos (y sus pestañas vuelven a ser iguales a su módulo) */
     function filaGrupo(g) {
       const niveles = g.modulos.map((m) => nivelEnVentana(m.id));
       const todos = niveles.every((n) => n === niveles[0]) ? niveles[0] : null;   // si son distintos, ninguno marcado
       return '<div class="usr-editar-grupo">' + ico(g.icono) + '<span class="usr-editar-grupo-nombre">' + escaparHtml(g.etiqueta) + '</span>' +
         '<span class="usr-editar-grupo-todo">Todo el grupo</span>' +
         segmento(todos, null, 'data-usr-grupo="' + g.id + '" aria-label="Todo ' + escaparHtml(g.etiqueta) + '"') + '</div>';
+    }
+
+    /** La columna de los grupos: cuántos módulos tienen acceso y si algo cambió */
+    function navGrupos() {
+      return '<nav class="usr-editor-grupos" aria-label="Grupos de módulos" data-scroll-x>' + datos.grupos.map((g) => {
+        const con = g.modulos.filter((m) => nivelEnVentana(m.id) !== 'NINGUNO').length;
+        const cambio = g.modulos.some((m) => [m].concat(seccionesDe(m)).some((n) => edicion.valores[n.id] !== edicion.iniciales[n.id]));
+        return '<button type="button" class="usr-editor-grupo' + (g.id === edicion.grupo ? ' activa' : '') + (cambio ? ' cambiada' : '') +
+          '" data-usr-ir-grupo="' + g.id + '" aria-current="' + (g.id === edicion.grupo) + '">' + ico(g.icono) +
+          '<span class="usr-editor-grupo-nombre">' + escaparHtml(g.etiqueta) + '</span>' +
+          '<span class="usr-editor-grupo-cuenta">' + con + '/' + g.modulos.length + '</span></button>';
+      }).join('') + '</nav>';
     }
 
     /** Asignar perfiles a un área (o áreas a un perfil): una casilla por cada uno */
@@ -607,19 +655,24 @@
 
     function pintarVentana() {
       const cuerpo = $('usr-modal-cuerpo');
-      const scroll = cuerpo.scrollTop;
+      const lista = cuerpo.querySelector('.usr-editor-modulos');
+      const scroll = lista ? lista.scrollTop : cuerpo.scrollTop;
+      $('usr-modal').querySelector('.modal-card').classList.toggle('usr-modal-editor', edicion.tipo !== 'asignar');
       if (edicion.tipo === 'asignar') cuerpo.innerHTML = cuerpoAsignar();
       else {
+        const g = datos.grupos.find((x) => x.id === edicion.grupo) || datos.grupos[0];
         cuerpo.innerHTML = (edicion.tipo === 'perfil'
-          ? '<label class="usr-perfil-nombre">Nombre del perfil <input type="text" id="usr-perfil-nombre" maxlength="60" autocomplete="off" value="' +
+          ? '<div class="usr-perfil-cab"><label class="usr-perfil-nombre">Nombre del perfil <input type="text" id="usr-perfil-nombre" maxlength="60" autocomplete="off" value="' +
             escaparHtml(edicion.nombre) + '" placeholder="P. ej. Flotilla - consulta"></label>' +
             '<button type="button" class="usr-asignar usr-perfil-alcance' + (edicion.alcance ? ' activa' : '') + (edicion.alcance !== edicion.alcanceInicial ? ' cambiada' : '') +
             '" data-usr-alcance aria-pressed="' + edicion.alcance + '">' + ico(edicion.alcance ? 'square-check' : 'square') +
-            '<span class="usr-asignar-nombre">Solo lo de su área</span><span class="usr-asignar-detalle">Quien lo tenga solo ve sus renglones, y solo donde se respeta ese límite</span></button>' : '') +
-          datos.grupos.map((g) => filaGrupo(g) + '<div class="usr-editar-lista">' + g.modulos.map(filaModulo).join('') + '</div>').join('') +
-          tarjetaImplicaciones(implicaciones(nivelEnVentana));
+            '<span class="usr-asignar-nombre">Solo lo de su área</span><span class="usr-asignar-detalle">Quien lo tenga solo ve sus renglones, y solo donde se respeta ese límite</span></button></div>' : '') +
+          '<div class="usr-editor">' + navGrupos() +
+          '<div class="usr-editor-modulos">' + filaGrupo(g) + '<div class="usr-editar-lista">' + g.modulos.map(filaModulo).join('') + '</div>' +
+          tarjetaImplicaciones(implicaciones(nivelEnVentana)) + '</div></div>';
       }
-      cuerpo.scrollTop = scroll;
+      const nueva = cuerpo.querySelector('.usr-editor-modulos');
+      if (nueva) nueva.scrollTop = scroll; else cuerpo.scrollTop = scroll;
       pintarPieVentana();
       refreshIcons();
     }
@@ -636,7 +689,7 @@
       const p = tipo === 'persona' ? persona(id) : null;
       if (p && tieneTotal(p)) return;
       const pf = tipo === 'perfil' && id ? perfil(id) : null;
-      edicion = { tipo: tipo, id: id, p: p, nombre: pf ? pf.nombre : '', original: pf ? pf.nombre : null, iniciales: {}, valores: {}, abiertos: {},
+      edicion = { tipo: tipo, id: id, p: p, nombre: pf ? pf.nombre : '', original: pf ? pf.nombre : null, iniciales: {}, valores: {}, grupo: null,
         alcance: pf ? pf.alcance === 'AREA' : false, alcanceInicial: pf ? pf.alcance === 'AREA' : false };
       nodos().forEach((m) => {
         let valor;
@@ -653,24 +706,22 @@
         }
         edicion.iniciales[m.id] = valor;
         edicion.valores[m.id] = valor;
-        // Se abren solas las secciones de un módulo que ya tiene alguna con regla propia
-        if (m.padre && valor !== '') edicion.abiertos[m.padre] = true;
       });
+      // Se abre en el primer grupo donde tiene algo (o el primero)
+      edicion.grupo = (datos.grupos.find((g) => g.modulos.some((m) => nivelEnVentana(m.id) !== 'NINGUNO')) || datos.grupos[0] || {}).id;
       $('usr-modal-titulo').textContent = tipo === 'perfil' ? (pf ? 'Editar perfil' : 'Nuevo perfil') : 'Editar permisos';
       $('usr-modal-sub').textContent = p ? (p.nombre || p.correo) + (p.area ? ' · área ' + p.area : ' · sin área')
         : tipo === 'perfil' ? (pf ? 'Perfil ' + pf.nombre + ' · ' + plural(pf.areas.length, 'área', 'áreas') : 'Un paquete de permisos con nombre que se asigna a áreas')
           : 'Área ' + id + (perfilesDe(id).length ? ' · perfiles: ' + perfilesDe(id).map((k) => perfilesPorClave[k].nombre).join(', ') : '');
       $('usr-modal-regla').textContent = p
-        ? 'El botón con punto es lo que le da su área: si lo dejas así, cambia cuando cambie su área. Cualquier otro queda como excepción solo para esta persona.' +
+        ? 'Lo que no cambies sigue lo de su área (y se mueve si cambia su área). Lo que elijas distinto queda como excepción solo para esta persona.' +
           (soloConsulta(p) ? ' Su rol ' + p.rol + ' solo deja ver: Editar se le queda en Ver.' : '')
         : tipo === 'perfil' ? 'Lo reciben todas las áreas que tienen este perfil (y sus personas), salvo lo que el área o la persona tengan como regla propia.'
-          : perfilesDe(id).length ? 'El botón con punto es lo que le dan sus perfiles. Otro nivel queda como regla propia del área, para todas sus personas salvo quien tenga una excepción.'
+          : perfilesDe(id).length ? 'Lo que no cambies sigue lo de sus perfiles. Lo que elijas distinto queda como regla propia del área, para todas sus personas salvo quien tenga una excepción.'
             : 'Aplica a todas las personas del área, salvo quien tenga una excepción en ese módulo.';
-      const conPunto = p || (tipo === 'area' && perfilesDe(id).length);
-      $('usr-modal-leyenda').innerHTML = conPunto
-        ? '<span class="usr-leyenda-punto">' + textoSinRegla() + '</span><span class="usr-origen excepcion">' + ico('sparkles') + (p ? ' Excepción' : ' Regla del área') + '</span>' +
-          '<span>' + ico('rotate-ccw') + ' Quitar la regla</span>'
-        : '';
+      $('usr-modal-leyenda').innerHTML = '<span class="usr-leyenda-chip">' + ico('check') + ' Pestaña igual que su módulo</span>' +
+        '<span class="usr-leyenda-chip ver">' + ico('eye') + ' Solo ver</span><span class="usr-leyenda-chip oculta">' + ico('eye-off') + ' Oculta</span>' +
+        (p || (tipo === 'area' && perfilesDe(id).length) ? '<span>' + ico('rotate-ccw') + ' Quitar la regla propia</span>' : '');
       $('usr-modal-cuerpo').scrollTop = 0;
       pintarVentana();
       $('usr-modal').hidden = false;
@@ -749,12 +800,26 @@
         if (el) el.focus();
         return;
       }
-      const plegar = ev.target.closest('[data-usr-secciones]');
-      if (plegar) {
-        const m = plegar.dataset.usrSecciones;
-        edicion.abiertos[m] = !edicion.abiertos[m];
+      const irGrupo = ev.target.closest('[data-usr-ir-grupo]');
+      if (irGrupo) {
+        edicion.grupo = irGrupo.dataset.usrIrGrupo;
         pintarVentana();
-        const el = $('usr-modal-cuerpo').querySelector('[data-usr-secciones="' + m + '"]');
+        const lista = $('usr-modal-cuerpo').querySelector('.usr-editor-modulos');
+        if (lista) lista.scrollTop = 0;
+        const el = $('usr-modal-cuerpo').querySelector('[data-usr-ir-grupo="' + edicion.grupo + '"]');
+        if (el) el.focus();
+        return;
+      }
+      // Una pestaña: igual que el módulo → solo ver → oculta → igual (Exportar, o con el módulo en Ver: igual ↔ oculta)
+      const chip = ev.target.closest('[data-usr-chip]');
+      if (chip) {
+        const id = chip.dataset.usrChip;
+        const nivelMod = nivelEnVentana(padreDe(id));
+        const ef = nivelEnVentana(id);
+        const binario = /\.exportar$/.test(id) || nivelMod === 'LECTURA';
+        elegir(id, ef === nivelMod ? (binario ? 'NINGUNO' : 'LECTURA') : ef === 'LECTURA' ? 'NINGUNO' : nivelMod);
+        pintarVentana();
+        const el = $('usr-modal-cuerpo').querySelector('[data-usr-chip="' + id + '"]');
         if (el) el.focus();
         return;
       }
