@@ -2512,15 +2512,13 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   assert.match(servicio, /corte: LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\),/);
 });
 
-test('el motivo de la diferencia sale de los conceptos cobrados', () => {
+test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no se entendía', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
-  const cuerpo = repo.slice(repo.indexOf('  function motivoFactura('), repo.indexOf('  /** Día de corte de una cuenta padre'));
-  const sinAcentos_ = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
-  const motivo = new Function('sinAcentos_', cuerpo + '\nreturn motivoFactura;')(sinAcentos_);
-  assert.strictEqual(motivo(299, 299, ''), '');
-  assert.strictEqual(motivo(299, 269.78, 'Corporate RC Add-on and Base Plan Discount 18% -$59.22'), 'Descuento');
-  assert.strictEqual(motivo(299, 120, 'ATT Ármalo $299 Cargo del 04 sep al 15 sep $120.00'), 'Prorrateo');
-  assert.strictEqual(motivo(299, 350, 'Consumo adicional de datos $51.00'), 'Consumo extra');
-  assert.strictEqual(motivo(299, -45.8, ''), 'Nota de crédito');
-  assert.strictEqual(motivo(null, 29, ''), ''); // SIM básico: sin renta
+  assert.doesNotMatch(repo, /motivoFactura/);
+  const facturas = repo.slice(repo.indexOf('  function facturasDeLinea('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  assert.doesNotMatch(facturas, /motivo/);
+  const cliente = read('src/html/js/lineas.html');
+  const tarjeta = cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable('));
+  assert.ok(tarjeta.length > 100);
+  assert.doesNotMatch(tarjeta, /motivo|Motivo/);
 });

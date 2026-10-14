@@ -3328,17 +3328,16 @@
         const sinRenta = f.renta === null || f.renta === undefined;
         const meses = lista.map((x) => '<div class="ln-meses-fila"><span>' + esc(mesDe(x.corte).replace(/ \d{4}$/, '')) + '</span><span>' +
           esc(dinero(x.cobrado, true) || '—') + '</span><span>' + (sinRenta ? '' : diferenciaTexto(x.diferencia)) +
-          (x.motivo ? ' <span class="ln-tenue">· ' + esc(x.motivo) + '</span>' : '') + (sinUso(x) ? ' <span class="ln-chip ambar">Sin uso</span>' : '') + '</span></div>').join('');
+          (sinUso(x) ? ' <span class="ln-chip ambar">Sin uso</span>' : '') + '</span></div>').join('');
         return tarjeta(titulo, campos([
           resumen || sinRenta ? null : ['Renta', dinero(f.renta, true)],
           ['Cobrado', dinero(f.cobrado, true)],
           ['Diferencia', sinRenta ? '<span class="ln-tenue">Sin contrato</span>' : diferenciaTexto(f.diferencia), true],
-          ['Motivo', f.motivo],
           resumen ? null : ['Uso', usoTexto(f), true],
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
         ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">Últimos ' + lista.length + (lista.length === 1 ? ' mes' : ' meses') +
           icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
-          (sinRenta ? 'Uso' : 'Diferencia · motivo') + '</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
+          (sinRenta ? 'Uso' : 'Diferencia') + '</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
       }
 
       function tarjetaResponsable(r, titulo, clase) {
