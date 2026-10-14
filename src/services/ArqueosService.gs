@@ -44,6 +44,10 @@ const ArqueosService = (function () {
   const NOMBRE_HOJA = 'ARQUEOS';
   const ID_COLUMN = 'ID ARQUEO';
 
+  // Firma a distancia (Responsable/Asistente, 14-oct-2026): cuánto dura cada liga antes de que
+  // haya que mandar una nueva -- mismo plazo que Responsiva/Adherente Vehicular.
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
+
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
@@ -318,10 +322,16 @@ const ArqueosService = (function () {
     // ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.LIGAS)
     persona: true,
     id: ID_COLUMN,
-    // Catálogo ligero para la tabla (12 columnas, no las 79 completas)
+    // Catálogo ligero para la tabla (12 columnas, no las 79 completas) + lo que necesita el
+    // badge/los botones de firma a distancia del Responsable y el Asistente (14-oct-2026): si
+    // esa firma está vacía, si ya se mandó una liga (el token) y si firmó por liga o presencial
+    // (FIRMADO POR). La fecha de vencimiento del token no hace falta en el cliente: regenerar no
+    // depende de si venció (igual que en Responsiva/Adherente Vehicular).
     columnas: [
       'ID ARQUEO', 'ESTATUS ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
       'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
+      'FIRMA RESPONSABLE', 'FIRMA ASISTENTE',
+      'TOKEN FIRMA RESPONSABLE', 'FIRMADO POR RESPONSABLE', 'TOKEN FIRMA ASISTENTE', 'FIRMADO POR ASISTENTE',
     ],
     fila: (r) => ({
       ID: r['ID ARQUEO'],
@@ -336,6 +346,12 @@ const ArqueosService = (function () {
       ESTADO_PDF: r['ESTADO PDF'] || '',
       FORMATO_ARQUEO: r['FORMATO ARQUEO'] || '',
       EVIDENCIAS: r['EVIDENCIAS'] || '',
+      FIRMA_RESPONSABLE: r['FIRMA RESPONSABLE'] || '',
+      FIRMA_ASISTENTE: r['FIRMA ASISTENTE'] || '',
+      TOKEN_FIRMA_RESPONSABLE: r['TOKEN FIRMA RESPONSABLE'] || '',
+      FIRMADO_POR_RESPONSABLE: r['FIRMADO POR RESPONSABLE'] || '',
+      TOKEN_FIRMA_ASISTENTE: r['TOKEN FIRMA ASISTENTE'] || '',
+      FIRMADO_POR_ASISTENTE: r['FIRMADO POR ASISTENTE'] || '',
     }),
     orden: { campo: 'FECHA_INICIO', desc: true },
     // Las 3 firmas ("<ID ARQUEO>_<quién firma>_<fecha>") y la evidencia, una vez que se sabe el ID
@@ -420,6 +436,165 @@ const ArqueosService = (function () {
       if (url) return url;
     }
     throw new Error('No se encontró "' + ruta + '" en Drive.');
+  }
+
+  // ---------- Firma a distancia (Responsable y Asistente, 14-oct-2026) ----------
+  // El Especialista de CI (quien captura, por Meet) sigue firmando siempre presencial, como
+  // "quien entrega" en Responsiva/Adherente Vehicular -- no cambia nada de FIRMA ESPECIALISTA.
+  // Responsable y Asistente pueden firmar a distancia: mismo patrón de liga con token (5 días),
+  // "Generar liga"/"Generar nueva liga" y página externa sin cuenta (FirmaExterna.html) que ya
+  // existe para Vehicular -- ver el comentario largo de ResponsivaVehicularService.gs.
+  //
+  // A diferencia de Vehicular, aquí NO hace falta un ESTADO FIRMA guardado ni columnas …TEMP:
+  // ninguna de las 3 firmas es obligatoria al crear (ya se podía guardar un arqueo con cualquiera
+  // en blanco) y ya se puede editar después para completarla, así que "pendiente" se calcula
+  // mirando si FIRMA RESPONSABLE/FIRMA ASISTENTE están vacías -- y generarLigaArqueo_ sirve igual
+  // para mandar la primera liga de un arqueo que ya existe (capturado hoy o de antes de este
+  // cambio) que para regenerar una que venció o se firmó mal. Las firmas ya se suben a Drive al
+  // dibujarlas (subirFirma, arriba) y la celda solo guarda la URL -- nunca hubo aquí el problema
+  // de los 50,000 caracteres por celda que sí tuvo Vehicular, así que no hay nada que migrar.
+
+  /** [columna de la firma, del token, de su vencimiento, de quién la firmó, etiqueta] según
+   *  `quien` -- 'asistente', o Responsable si no. */
+  function columnasFirmaArqueo_(quien) {
+    return quien === 'asistente'
+      ? { firma: 'FIRMA ASISTENTE', token: 'TOKEN FIRMA ASISTENTE', expira: 'TOKEN FIRMA ASISTENTE EXPIRA', firmadoPor: 'FIRMADO POR ASISTENTE', etiqueta: 'Asistente' }
+      : { firma: 'FIRMA RESPONSABLE', token: 'TOKEN FIRMA RESPONSABLE', expira: 'TOKEN FIRMA RESPONSABLE EXPIRA', firmadoPor: 'FIRMADO POR RESPONSABLE', etiqueta: 'Responsable' };
+  }
+
+  /** La liga que se manda a firmar a distancia -- igual que construirLiga_ de
+   *  ResponsivaVehicularService.gs: usa el despliegue público si ya está configurado, para que la
+   *  pueda abrir alguien sin cuenta del dominio. */
+  function construirLigaArqueo_(tokenFirma, quien) {
+    const base = Config.urlFirmaPublica() || ScriptApp.getService().getUrl();
+    return base + '?firmar=1&tipo=arqueo' + (quien === 'asistente' ? '&quien=asistente' : '') +
+      '&token=' + encodeURIComponent(tokenFirma);
+  }
+
+  /** "Copiar liga de nuevo" sin generar una nueva -- siempre armada aquí, nunca en el navegador
+   *  (mismo motivo que ligaDeToken en Vehicular: dentro de la app, location.origin es el sandbox
+   *  de Apps Script, no la URL real). */
+  function copiarLigaArqueo(token, tokenFirma, quien) {
+    Permisos.puedeLeer(token, 'arqueos');
+    return construirLigaArqueo_(tokenFirma, quien);
+  }
+
+  /** "Generar liga" (botón manual, tabla/ficha de Arqueos): manda la primera liga de firma a
+   *  distancia del Responsable o el Asistente de un arqueo que ya existe, o genera una nueva si
+   *  la anterior venció o se firmó mal -- sin tocar candadoAlCrear/alActualizar/despues (no hace
+   *  falta recalcular totales ni regenerar el PDF solo por mandar una liga). El link viejo deja
+   *  de servir solo: buscarPorTokenArqueo_ ya no lo encuentra en cuanto se sobrescribe. */
+  function generarLigaArqueo(token, id, quien) {
+    Permisos.puedeEditar(token, 'arqueos');
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el arqueo.');
+    const fila = encontrado.data;
+    if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE']) {
+      throw new Error('Ya se completaron las dos firmas; no se puede generar una liga.');
+    }
+    const col = columnasFirmaArqueo_(quien);
+    // Si ya tiene firma pero nunca tuvo token ni "firmado por" es que firmó presencial -- no hay
+    // liga que mandar ni regenerar (mismo guard que regenerarLiga en Responsiva/Adherente).
+    if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor]) {
+      throw new Error('El ' + col.etiqueta + ' firmó presencial, no a distancia; no hay liga que generar.');
+    }
+    // Si ya había una firma por liga (completa o pendiente) para este lado, se descarta.
+    if (fila[col.firma]) {
+      const fileId = extraerIdDrive_(fila[col.firma]);
+      if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ } }
+    }
+    const tokenNuevo = Utilities.getUuid();
+    const cambios = {};
+    cambios[col.token] = tokenNuevo;
+    cambios[col.expira] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
+    cambios[col.firma] = '';
+    cambios[col.firmadoPor] = '';
+    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+    return construirLigaArqueo_(tokenNuevo, quien);
+  }
+
+  /** El renglón completo por el token vigente de la columna dada; null si no hay match. */
+  function buscarPorTokenArqueo_(tokenFirma, columna) {
+    const limpio = String(tokenFirma || '').trim();
+    if (!limpio) return null;
+    return SheetUtils.getAll(ssId(), hoja_().getName()).find((f) => String(f[columna] || '') === limpio) || null;
+  }
+
+  /** Lo que ve quien abre la liga, sin sesión (el token es la credencial, igual que
+   *  obtenerPendientePorToken en Vehicular) -- nunca el renglón completo. */
+  function obtenerPendienteArqueoPorToken(tokenFirma, quien) {
+    const col = columnasFirmaArqueo_(quien);
+    const fila = buscarPorTokenArqueo_(tokenFirma, col.token);
+    if (!fila) return { vigente: false, motivo: 'no-existe' };
+    if (fila[col.firma]) return { vigente: false, motivo: 'ya-firmado' };
+    const expira = fila[col.expira] ? new Date(fila[col.expira]) : null;
+    if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+      return { vigente: false, motivo: 'vencido' };
+    }
+    return {
+      vigente: true,
+      documento: 'Arqueo ' + fila['ID ARQUEO'],
+      nombre: quien === 'asistente' ? (fila['NOMBRE ASISTENTE'] || '') : (fila['RESPONSABLE'] || ''),
+      detalles: [
+        { etiqueta: 'Caja chica', valor: fila['ID CCH'] || '' },
+        { etiqueta: 'Fecha', valor: fila['FECHA INICIO'] ? Utilities.formatDate(new Date(fila['FECHA INICIO']), 'America/Mexico_City', 'dd/MM/yyyy') : '' },
+        { etiqueta: 'Total general', valor: fila['TOTAL GENERAL'] || '' },
+        { etiqueta: 'Diferencia', valor: fila['DIFERENCIA'] || '' },
+      ],
+    };
+  }
+
+  /** Completa la firma del Responsable o el Asistente que llegó por su liga -- sin sesión (el
+   *  token es la credencial, igual que completarFirma en Responsiva/Adherente Vehicular). Si
+   *  todavía falta la otra firma, solo se guarda y se espera; si ya no falta ninguna, se genera el
+   *  PDF con la firma nueva ya puesta -- mismo generador que ya usa actualizarPdfArqueo_ en cada
+   *  alta/edición normal, llamado directo porque aquí no hay sesión para pasar por
+   *  HojaServicio.actualizar. Si algo falla generando el PDF, la firma ya quedó guardada -- se
+   *  avisa en vez de perderla (mismo criterio que el resto de la app). */
+  function completarFirmaArqueo(tokenFirma, quien, firma) {
+    if (!firma || !firma.base64) throw new Error('Falta la firma.');
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const col = columnasFirmaArqueo_(quien);
+      const fila = buscarPorTokenArqueo_(tokenFirma, col.token);
+      if (!fila) throw new Error('Esta liga no es válida.');
+      if (fila[col.firma]) throw new Error('Esta liga ya se usó.');
+      const expira = fila[col.expira] ? new Date(fila[col.expira]) : null;
+      if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+        throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
+      }
+
+      const nombreImagen = 'Firma ' + col.etiqueta + ' ' + fila['ID ARQUEO'] + '.png';
+      const subida = HojaServicio.subirArchivo(
+        DriveUtils.carpetaEnRaiz('ARQUEOS_Images').getId(), 'de la firma remota de Arqueo',
+        nombreImagen, firma.mimeType || 'image/png', firma.base64);
+
+      fila[col.firma] = subida.url;
+      const cambios = {};
+      cambios[col.firma] = subida.url;
+      cambios[col.token] = '';
+      cambios[col.expira] = '';
+      cambios[col.firmadoPor] = Session.getActiveUser().getEmail() || '';
+
+      const otroQuien = quien === 'asistente' ? 'Responsable' : 'Asistente';
+      if (!fila['FIRMA RESPONSABLE'] || !fila['FIRMA ASISTENTE']) {
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID ARQUEO'], cambios, ID_COLUMN);
+        return { PDF: null, aviso: 'Tu firma quedó registrada. Falta la del ' + otroQuien + ' para generar el documento final.' };
+      }
+      try {
+        cambios['FORMATO ARQUEO'] = generarPdfArqueo_(fila);
+        cambios['ESTADO PDF'] = 'Generado';
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID ARQUEO'], cambios, ID_COLUMN);
+        return { PDF: cambios['FORMATO ARQUEO'], aviso: '' };
+      } catch (err) {
+        cambios['ESTADO PDF'] = 'Error al generar: ' + err.message;
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID ARQUEO'], cambios, ID_COLUMN);
+        return { PDF: null, aviso: 'Tu firma quedó registrada, pero no se pudo generar el documento final: ' + err.message };
+      }
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------
@@ -671,5 +846,10 @@ const ArqueosService = (function () {
     subirEvidencia: (token, nombre, tipo, base64) => subirEn_(token, () => DriveUtils.carpetaEnRaiz('ARQUEOS_Files_'), 'evidencias', nombre, tipo, base64),
     /** URL real de FORMATO ARQUEO/EVIDENCIAS, resolviendo la ruta vieja de AppSheet si no es una URL ya */
     resolverArchivo,
+    // Firma a distancia del Responsable/Asistente (14-oct-2026)
+    copiarLigaArqueo,
+    generarLigaArqueo,
+    obtenerPendienteArqueoPorToken,
+    completarFirmaArqueo,
   };
 })();

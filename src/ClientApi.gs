@@ -489,35 +489,45 @@ function apiEliminarAdherenteVehicular(token, id) {
   return AdherenteVehicularService.eliminar(token, id);
 }
 
-// --- Firma a distancia (Responsiva/Adherente Vehicular) ---
+// --- Firma a distancia (Responsiva/Adherente Vehicular, Arqueos) ---
 // Sin `token` de sesión: quien firma por la liga puede no tener usuario en el sistema. El
-// TOKEN FIRMA (o TOKEN FIRMA JEFE) de la liga ya es la credencial de estas llamadas (ver el
-// comentario al inicio de ResponsivaVehicularService.gs). `quien` distingue cuál de las dos
-// ligas es (el responsable/adherente, o el jefe directo -- cada uno con la suya).
+// TOKEN FIRMA (o TOKEN FIRMA JEFE/ASISTENTE) de la liga ya es la credencial de estas llamadas
+// (ver el comentario al inicio de ResponsivaVehicularService.gs). `quien` distingue cuál de las
+// dos ligas es (el responsable/adherente, o el jefe directo/asistente -- cada uno con la suya).
+function servicioFirmaRemota_(tipo) {
+  if (tipo === 'adherente') return AdherenteVehicularService;
+  if (tipo === 'arqueo') return ArqueosService;
+  return ResponsivaVehicularService;
+}
 function apiFirmaRemotaObtener(tipo, quien, tokenFirma) {
-  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  const servicio = servicioFirmaRemota_(tipo);
+  if (tipo === 'arqueo') return servicio.obtenerPendienteArqueoPorToken(tokenFirma, quien);
   return quien === 'jefe' ? servicio.obtenerPendienteJefePorToken(tokenFirma) : servicio.obtenerPendientePorToken(tokenFirma);
 }
+// Arqueos no tiene vista previa sin guardar (su PDF se genera con Google Docs, no PdfService) --
+// FirmaExterna.html oculta el botón para ese tipo, así que esta llamada no se hace.
 function apiFirmaRemotaVistaPrevia(tipo, quien, tokenFirma) {
-  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  const servicio = servicioFirmaRemota_(tipo);
   return servicio.vistaPrevia(tokenFirma, quien);
 }
 function apiFirmaRemotaCompletar(tipo, quien, tokenFirma, imagen) {
-  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  const servicio = servicioFirmaRemota_(tipo);
+  if (tipo === 'arqueo') return servicio.completarFirmaArqueo(tokenFirma, quien, imagen);
   return quien === 'jefe' ? servicio.completarFirmaJefe(tokenFirma, imagen) : servicio.completarFirma(tokenFirma, imagen);
 }
 // Esta SÍ lleva `token` de sesión: la pide el operador desde la ficha ("Copiar liga de
 // nuevo"), no quien va a firmar. Se arma siempre en el servidor -- nunca en el navegador,
 // donde location.origin es el sandbox de Apps Script, no la URL real (ver ligaDeToken).
 function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
-  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
-  return servicio.ligaDeToken(token, tokenFirma, quien);
+  const servicio = servicioFirmaRemota_(tipo);
+  return tipo === 'arqueo' ? servicio.copiarLigaArqueo(token, tokenFirma, quien) : servicio.ligaDeToken(token, tokenFirma, quien);
 }
-// "Generar nueva liga" (botón manual en la ficha, ESTADO FIRMA sigue PENDIENTE pero la liga
-// anterior venció o se perdió): token nuevo sobre el MISMO registro, sin crear otro.
+// "Generar liga"/"Generar nueva liga" (botón manual en la tabla/ficha): token nuevo sobre el
+// MISMO registro, sin crear otro -- en Arqueos también sirve para mandar la primera liga de un
+// arqueo que ya existe (ver el comentario de generarLigaArqueo en ArqueosService.gs).
 function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien) {
-  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
-  return servicio.regenerarLiga(token, id, quien);
+  const servicio = servicioFirmaRemota_(tipo);
+  return tipo === 'arqueo' ? servicio.generarLigaArqueo(token, id, quien) : servicio.regenerarLiga(token, id, quien);
 }
 
 // --- Arqueos ---
