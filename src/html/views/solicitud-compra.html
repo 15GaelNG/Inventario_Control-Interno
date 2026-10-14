@@ -34,6 +34,29 @@
     </div>
   </div>
 
+  <!-- Modal: editar (el nombre también renombra la carpeta real en Drive) -->
+  <div class="modal-backdrop" id="modal-editar-solicitud-compra" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div><h3 style="margin:0">Editar solicitud</h3></div>
+        <button type="button" class="modal-close" id="btn-cerrar-editar-solicitud-compra"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="form-editar-solicitud-compra">
+        <div class="form-rejilla" data-columnas="1">
+          <div class="field"><label>Folio (del ticket)</label><input type="text" id="soc-editar-folio" disabled /></div>
+          <div class="field"><label>Área</label><input type="text" id="soc-editar-area" /></div>
+          <div class="field">
+            <label>Nombre</label>
+            <input type="text" id="soc-editar-nombre" required />
+            <p class="page-subtitle" style="margin:4px 0 0">Si lo cambias, también se renombra la carpeta real en Drive. Si alguien la renombra directo en Drive, este nombre se actualiza solo al volver a abrir la lista.</p>
+          </div>
+        </div>
+        <div class="error-msg" id="soc-editar-error" hidden></div>
+        <button type="submit" style="width:100%; margin-top:10px"><i data-lucide="save" class="ico"></i> Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal: archivos de una solicitud (atajo para subir sin tener que abrir el detalle) -->
   <div class="modal-backdrop" id="modal-archivos-solicitud-compra" hidden>
     <div class="modal-card modal-card-wide">

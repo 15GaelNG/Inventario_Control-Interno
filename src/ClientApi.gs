@@ -437,6 +437,9 @@ function apiListarSolicitudesCompra(token) {
 function apiCrearSolicitudCompra(token, datos) {
   return SolicitudCompraService.crear(token, datos);
 }
+function apiActualizarSolicitudCompra(token, id, datos) {
+  return SolicitudCompraService.actualizar(token, id, datos);
+}
 function apiEliminarSolicitudCompra(token, id) {
   return SolicitudCompraService.eliminar(token, id);
 }

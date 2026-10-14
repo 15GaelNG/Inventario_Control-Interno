@@ -56,12 +56,17 @@ function libroMock(hojasIniciales) {
   };
 }
 
-/** Carpeta en memoria genérica (sirve para raíz, año, mes y la de la solicitud -- misma forma). */
+/** Carpeta en memoria genérica (sirve para raíz, año, mes y la de la solicitud -- misma forma).
+ *  getName/setName llevan un estado mutable aparte: el ID (getId/getUrl) nunca cambia al
+ *  renombrar, igual que en Drive de verdad. */
 function carpetaMock(nombrePropio, subcarpetasIniciales) {
   const subcarpetas = Object.assign({}, subcarpetasIniciales);
+  const estado = { nombre: nombrePropio };
   return {
     getId: () => 'id-' + nombrePropio,
     getUrl: () => 'https://drive.google.com/drive/folders/id-' + nombrePropio,
+    getName: () => estado.nombre,
+    setName(nuevo) { estado.nombre = nuevo; return this; },
     getFoldersByName(nombre) {
       const existe = subcarpetas[nombre];
       const lista = existe ? [existe] : [];
@@ -82,8 +87,8 @@ function carpetaMock(nombrePropio, subcarpetasIniciales) {
 const MES_FIJO = '01. ENERO';
 const ANIO_FIJO = '2026';
 
-function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {} } = {}) {
-  const llamadas = { getFolderById: null, subirArchivo: [], permisoLeer: [], permisoEditar: [], tocarHoja: 0 };
+function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {}, carpetasPorId = {} } = {}) {
+  const llamadas = { getFolderById: null, getFolderByIdTodas: [], subirArchivo: [], permisoLeer: [], permisoEditar: [], tocarHoja: 0 };
   const libroVehiculos = libro || libroMock();
   const carpetaMes = carpetaMock(MES_FIJO, subcarpetasEnMes);
   const carpetaAnio = carpetaMock(ANIO_FIJO, { [MES_FIJO]: carpetaMes });
@@ -95,7 +100,15 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {} }
       puedeEditar: (token, modulo) => { llamadas.permisoEditar.push(modulo); },
     },
     SpreadsheetApp: { openById: (id) => libroVehiculos },
-    DriveApp: { getFolderById: (id) => { llamadas.getFolderById = id; return raiz; } },
+    DriveApp: {
+      getFolderById: (id) => {
+        llamadas.getFolderById = id;
+        llamadas.getFolderByIdTodas.push(id);
+        if (id === 'RAIZ-ADQ-TEST') return raiz;
+        if (carpetasPorId[id]) return carpetasPorId[id];
+        throw new Error('Carpeta no encontrada (mock): ' + id);
+      },
+    },
     AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
     DriveUtils: {
       archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [],
@@ -215,6 +228,54 @@ test('eliminar quita el renglón correcto y no truena si el ID no existe', () =>
   assert.equal(contexto.Servicio.eliminar('tok', 'NO-EXISTE'), false);
 });
 
+// ---------------------------------------------------------------- listar: sincroniza NOMBRE desde Drive
+
+test('listar se entera si alguien renombró la carpeta real en Drive (no desde la app) y actualiza NOMBRE en la hoja', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '30371', 'X', 'Camioneta Vieja', '', 'ABIERTA', '', 'carpeta-1', ''],
+  ]) });
+  const carpeta = carpetaMock('ya-renombrada');
+  carpeta.setName('30371-Camioneta Reparada');   // alguien la renombró directo en Drive
+  const { contexto, llamadas, libro: libroDevuelto } = crearContexto({ libro, carpetasPorId: { 'carpeta-1': carpeta } });
+
+  const lista = contexto.Servicio.listar('tok');
+  assert.equal(lista[0].NOMBRE, 'Camioneta Reparada', 'se queda con el nombre real, sin el folio al frente');
+  assert.equal(llamadas.tocarHoja, 1, 'avisa que la hoja cambió');
+  assert.equal(libroDevuelto._hojas['SOLICITUD COMPRA']._filas[1][3], 'Camioneta Reparada', 'quedó escrito en la hoja, no solo en lo que regresa');
+});
+
+test('listar usa el nombre completo de Drive si ya no trae el folio al frente', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '30371', '', 'Camioneta Vieja', '', 'ABIERTA', '', 'carpeta-1', ''],
+  ]) });
+  const carpeta = carpetaMock('x');
+  carpeta.setName('Otro nombre sin folio');
+  const { contexto } = crearContexto({ libro, carpetasPorId: { 'carpeta-1': carpeta } });
+  assert.equal(contexto.Servicio.listar('tok')[0].NOMBRE, 'Otro nombre sin folio');
+});
+
+test('listar no toca Drive de las CONVERTIDA (ya no cambian) ni truena si la carpeta ya no se puede leer', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '1', '', 'Convertida', '', 'CONVERTIDA', '', 'carpeta-convertida', '0451'],
+    ['SOC-2', '2', '', 'Abierta sin acceso', '', 'ABIERTA', '', 'carpeta-sin-acceso', ''],
+  ]) });
+  const { contexto, llamadas } = crearContexto({ libro });   // carpetasPorId vacío: getFolderById truena para ambas
+  const lista = contexto.Servicio.listar('tok');
+  assert.equal(lista.find((f) => f.ID === 'SOC-1').NOMBRE, 'Convertida', 'se queda igual, sin pedirle nada a Drive');
+  assert.equal(lista.find((f) => f.ID === 'SOC-2').NOMBRE, 'Abierta sin acceso', 'no truena listar(); se queda con lo que ya había');
+  assert.ok(!llamadas.getFolderByIdTodas.includes('carpeta-convertida'), 'nunca le preguntó a Drive por la CONVERTIDA');
+});
+
+test('listar no reescribe la hoja si el nombre real sigue igual al esperado (nadie la tocó desde fuera)', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '30371', '', 'Camioneta', '', 'ABIERTA', '', 'carpeta-1', ''],
+  ]) });
+  const carpeta = carpetaMock('30371-Camioneta');
+  const { contexto, llamadas } = crearContexto({ libro, carpetasPorId: { 'carpeta-1': carpeta } });
+  assert.equal(contexto.Servicio.listar('tok')[0].NOMBRE, 'Camioneta');
+  assert.equal(llamadas.tocarHoja, 0, 'nada cambió: no hay por qué avisar que la hoja se tocó');
+});
+
 // ---------------------------------------------------------------------------------------- archivos / subirArchivo
 
 test('archivos delega en DriveUtils.archivosDeCarpeta con el CARPETA_ID de la solicitud', () => {
@@ -265,4 +326,54 @@ test('marcarConvertida escribe ESTATUS=CONVERTIDA y NUCCO_RESULTANTE en el rengl
 test('marcarConvertida truena si la solicitud no existe', () => {
   const { contexto } = crearContexto();
   assert.throws(() => contexto.Servicio.marcarConvertida('tok', 'NO-EXISTE', '0451'));
+});
+
+// ---------------------------------------------------------------------------------------- actualizar
+
+test('actualizar cambia AREA/NOMBRE en la hoja y, como el nombre cambió, renombra la carpeta real en Drive', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '30371', 'CONSTRUCCIÓN', 'Camioneta Vieja', '', 'ABIERTA', '', 'carpeta-1', ''],
+  ]) });
+  const carpeta = carpetaMock('30371-Camioneta Vieja');
+  const { contexto, llamadas } = crearContexto({ libro, carpetasPorId: { 'carpeta-1': carpeta } });
+
+  const r = contexto.Servicio.actualizar('tok', 'SOC-1', { AREA: 'OPERACIONES', NOMBRE: 'Camioneta Nueva' });
+  assert.equal(llamadas.permisoEditar[0], 'solicitud-compra');
+  assert.equal(r.NOMBRE, 'Camioneta Nueva');
+  assert.equal(r.AREA, 'OPERACIONES');
+  assert.equal(carpeta.getName(), '30371-Camioneta Nueva', 'la carpeta real quedó renombrada, con el folio al frente');
+  const filas = libro._hojas['SOLICITUD COMPRA']._filas;
+  assert.equal(filas[1][3], 'Camioneta Nueva');
+  assert.equal(filas[1][2], 'OPERACIONES');
+});
+
+test('actualizar no toca Drive si el nombre no cambió (solo AREA)', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '30371', 'CONSTRUCCIÓN', 'Camioneta', '', 'ABIERTA', '', 'carpeta-1', ''],
+  ]) });
+  const { contexto, llamadas } = crearContexto({ libro });   // sin registrar carpeta-1: si la pidiera, tronaría
+  contexto.Servicio.actualizar('tok', 'SOC-1', { AREA: 'OPERACIONES', NOMBRE: 'Camioneta' });
+  assert.equal(llamadas.getFolderById, null, 'nunca pidió la carpeta');
+});
+
+test('actualizar truena y no cambia la hoja si falla el renombrado en Drive (p. ej. sin permiso)', () => {
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '30371', '', 'Camioneta Vieja', '', 'ABIERTA', '', 'carpeta-1', ''],
+  ]) });
+  const carpeta = carpetaMock('30371-Camioneta Vieja');
+  carpeta.setName = () => { throw new Error('No access'); };
+  const { contexto } = crearContexto({ libro, carpetasPorId: { 'carpeta-1': carpeta } });
+  assert.throws(() => contexto.Servicio.actualizar('tok', 'SOC-1', { NOMBRE: 'Camioneta Nueva' }), /No se pudo renombrar/);
+  assert.equal(libro._hojas['SOLICITUD COMPRA']._filas[1][3], 'Camioneta Vieja', 'la hoja se quedó como estaba');
+});
+
+test('actualizar exige nombre y truena si el ID no existe', () => {
+  const { contexto } = crearContexto();
+  assert.throws(() => contexto.Servicio.actualizar('tok', 'SOC-1', { NOMBRE: '' }), /nombre/i);
+
+  const libro = libroMock({ 'SOLICITUD COMPRA': hojaMock([ENCABEZADOS,
+    ['SOC-1', '1', '', 'X', '', 'ABIERTA', '', 'c1', ''],
+  ]) });
+  const { contexto: ctx2 } = crearContexto({ libro });
+  assert.throws(() => ctx2.Servicio.actualizar('tok', 'NO-EXISTE', { NOMBRE: 'Y' }), /No se encontró/);
 });
