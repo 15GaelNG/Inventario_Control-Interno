@@ -313,7 +313,8 @@ const LineasRepo = (function () {
   /**
    * Facturación de una línea (usuario, 13-oct; pendiente 1.11): sus últimos `cuantas` cobros de FACTURAS, del más nuevo
    * al más viejo. El mes es el del corte; la diferencia es contra la renta del plan vigente. Una línea sin contrato
-   * (SIM básico) no tiene renta ni diferencia. Sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no
+   * (SIM básico) no tiene renta ni diferencia; `parcial` marca el mes cobrado incompleto («Cargo del … al …»), para
+   * no tomarlo como su renta (usuario, 14-oct: la renta del SIM básico sale de su factura). Sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no
    * se entendía y no suma; los conceptos siguen en FACTURAS.
    */
   function facturasDeLinea(linea, cuantas) {
@@ -327,7 +328,7 @@ const LineasRepo = (function () {
       return {
         corte: fecha(x['FECHA DE CORTE']), ciclo: txt(x['PERIODO']) || '', cobrado: cobrado, renta: renta,
         diferencia: renta === null || renta === undefined || cobrado === null ? null : Math.round((cobrado - renta) * 100) / 100,
-        numero: digitos(x['NUMERO EN FACTURA']),
+        parcial: /CARGO DEL .+ AL /.test(sinAcentos_(x['CONCEPTOS'])), numero: digitos(x['NUMERO EN FACTURA']),
         minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
         origen: txt(x['ARCHIVO']) || '',
       };

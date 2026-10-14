@@ -2497,8 +2497,8 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   const html = read('src/html/js/lineas.html');
   const css = read('src/html/lineas-estilos.html');
   // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
-  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
-  assert.match(html, /\(l \? tarjetaPlan\(l, true\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
+  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
   assert.match(html, /function vidaPlan\(l\)/);
   assert.match(html, /'Vencido hace ' \+ n/);
   // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
@@ -2521,4 +2521,14 @@ test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los c
   const tarjeta = cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable('));
   assert.ok(tarjeta.length > 100);
   assert.doesNotMatch(tarjeta, /motivo|Motivo/);
+});
+
+test('SIM básico: la renta sale de su último mes completo facturado (usuario, 14-oct)', () => {
+  const html = read('src/html/js/lineas.html');
+  const ini = html.indexOf('      const rentaSimBasico = ');
+  const renta = new Function('return ' + html.slice(ini, html.indexOf('\n', ini)).replace('      const rentaSimBasico = ', '').replace(/;\s*$/, ''))();
+  assert.strictEqual(renta([{ cobrado: -7.74 }, { cobrado: 12, parcial: true }, { cobrado: 29, origen: 'x' }]).cobrado, 29);
+  assert.strictEqual(renta([{ cobrado: 0 }]), null);
+  assert.match(html, /\['Renta', dinero\(f\.cobrado, true\) \+ ' al mes'\], \['Plazo', 'Sin plazo forzoso'\]/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });

@@ -3311,9 +3311,17 @@
         ]));
       }
       /** `resumen`: en la ficha del equipo, sin el nombre del plan ni su origen. */
-      function tarjetaPlan(l, resumen) {
+      const esSimBasico = (l) => String(l.tipoLinea || '').toUpperCase() === 'SIM BASICO';
+      /** Renta del SIM básico (usuario, 14-oct): no tiene adendum; es lo cobrado en su último mes completo. */
+      const rentaSimBasico = (facturas) => (facturas || []).filter((f) => f.cobrado > 0 && !f.parcial)[0] || null;
+      function tarjetaPlan(l, resumen, facturas) {
         const titulo = icono('file-text') + (resumen ? ' Plan de la línea' : ' Plan');
-        if (String(l.tipoLinea || '').toUpperCase() === 'SIM BASICO') return tarjeta(titulo, '<p class="empty-state">SIM básico: sin contrato ni plazo.</p>');
+        if (esSimBasico(l)) {
+          const f = rentaSimBasico(facturas);
+          if (!f) return tarjeta(titulo, '<p class="empty-state">SIM básico: sin contrato ni plazo.</p>');
+          return tarjeta(titulo, campos([['Renta', dinero(f.cobrado, true) + ' al mes'], ['Plazo', 'Sin plazo forzoso']]) +
+            (resumen ? '' : pieOrigen(f.origen, true)));
+        }
         return tarjeta(titulo, campos([
           resumen ? null : ['Plan', l.plan],
           ['Renta', dinero(l.costoPlan)], ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
@@ -3332,7 +3340,7 @@
         return tarjeta(titulo, campos([
           resumen || sinRenta ? null : ['Renta', dinero(f.renta, true)],
           ['Cobrado', dinero(f.cobrado, true)],
-          ['Diferencia', sinRenta ? '<span class="ln-tenue">Sin contrato</span>' : diferenciaTexto(f.diferencia), true],
+          sinRenta ? null : ['Diferencia', diferenciaTexto(f.diferencia), true],
           resumen ? null : ['Uso', usoTexto(f), true],
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
         ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
@@ -3458,7 +3466,7 @@
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['Razón social', l.razonSocial],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
-              (l ? tarjetaPlan(l, true) + tarjetaFacturacion(l, r.facturas, true) : '') +
+              (l ? tarjetaPlan(l, true, r.facturas) + tarjetaFacturacion(l, r.facturas, true) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           cargarPatronesAppSheet(detalle);
@@ -3498,7 +3506,7 @@
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
               tarjetaCuenta(l, r.corte) +
-              tarjetaPlan(l, false) +
+              tarjetaPlan(l, false, r.facturas) +
               tarjetaFacturacion(l, r.facturas, false) +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
