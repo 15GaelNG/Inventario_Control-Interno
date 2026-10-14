@@ -75,7 +75,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
   WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
   `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
-  «Consumido» del resumen; la de los SIM básicos ya está en producción desde el 14-oct (con las llamadas recibidas incluidas; se corrige con los datos de septiembre, pendiente 1.15);
+  «Consumido» del resumen; la de los SIM básicos está en producción desde el 14-oct y, con la actualización del mismo día, solo con llamadas hechas (pendiente 1.15);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
   enlace a la línea), Plan de la línea, Facturación de la línea (sin renta, uso ni meses) y Responsable a todo el ancho. Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
@@ -342,7 +342,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | LINEAS, EQUIPOS | Una fila por línea y por equipo (IDs de `Entidades.gs`). EQUIPOS lleva PIN WHATSAPP desde el 14-oct |
 | ASIGNACIONES | Quién tiene qué, con FECHA INICIO / FECHA FIN (persona o resguardo), jefe directo y responsables adicionales |
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
-| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; las columnas nuevas y las correcciones están en el DEV y falta producción (pendiente 1.15); después la llenará la carga mensual del proveedor (1.10) |
+| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae junio a septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15; `COMO SE HACE ESTE REPORTE.md` §11.8); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; las columnas nuevas y las correcciones están en el DEV y en producción (14-oct); 373 renglones de junio a agosto no tienen ID LINEA (el número no es de ninguna línea del sistema; pendiente 1.19) y no salen en ninguna ficha; después la llenará la carga mensual del proveedor (1.10) |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
