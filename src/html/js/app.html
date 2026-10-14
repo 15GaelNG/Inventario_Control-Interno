@@ -314,7 +314,8 @@
       clearTimeout(espera);
       espera = setTimeout(() => sidebar.classList.toggle('collapsed', !abrir), ms);
     };
-    sidebar.addEventListener('mouseenter', () => cambiar(true, 120));
+    // 400 ms al entrar: que no se abra solo por cruzarlo con el cursor (usuario, 12-oct)
+    sidebar.addEventListener('mouseenter', () => cambiar(true, 400));
     sidebar.addEventListener('mouseleave', () => cambiar(false, 300));
   })();
 
@@ -620,6 +621,15 @@
     navegarA('caja-chica', 'Caja chica');
   }
 
+  // Mismo mecanismo, para "Ya crear vehículo" (modulos/solicitud-compra.html): abre Vehículos en
+  // la pestaña Registrar con el folio/carpeta de la solicitud ya puestos.
+  let solicitudCompraPendienteVehiculo = null;
+  function crearVehiculoDesdeSolicitudCompra(solicitud) {
+    if (!solicitud) return;
+    solicitudCompraPendienteVehiculo = solicitud;
+    navegarA('vehiculos', 'Vehículos');
+  }
+
   // Qué vista está montada ahora mismo -- lo usa el asistente flotante (más abajo) para saber
   // si esta pantalla tiene un tour (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `tour`). Se guarda
   // aquí, no se adivina del menú (⟵ llega igual por el historial o un enlace entre módulos).
@@ -703,7 +713,9 @@
       items: [
         { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
-        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculos(), ayuda: () => AYUDA_VEHICULOS },
+        { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
+        { vista: 'adquisicion-vehicular', etiqueta: 'Adquisición', icono: 'folder-open', requiere: 'adquisicion-vehicular', plantilla: 'tpl-adquisicion-vehicular', init: () => initAdquisicionVehicular(), ayuda: () => AYUDA_ADQUISICION_VEHICULAR },
+        { vista: 'solicitud-compra', etiqueta: 'Solicitud de compra', icono: 'file-plus-2', requiere: 'solicitud-compra', plantilla: 'tpl-solicitud-compra', init: () => initSolicitudCompra() },
         { vista: 'cambios-vehiculos', etiqueta: 'Cambios vehículos', icono: 'history', requiere: 'cambios-vehiculos', plantilla: 'tpl-cambios-vehiculos', init: () => initCambiosVehiculos(), ayuda: () => AYUDA_CAMBIOS_VEHICULOS },
         { vista: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones vehiculares', icono: 'arrow-left-right', requiere: 'reasignaciones-vehiculares', plantilla: 'tpl-reasignaciones-vehiculares', init: () => initReasignacionesVehiculares(), ayuda: () => AYUDA_REASIGNACIONES },
         { vista: 'verificaciones', etiqueta: 'Verificaciones', icono: 'badge-check', requiere: 'verificaciones', plantilla: 'tpl-verificaciones', init: () => initVerificaciones(), ayuda: () => AYUDA_VERIFICACIONES },
@@ -1485,6 +1497,12 @@
       grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text',
       soloLectura: true, placeholder: 'Se genera solo (consecutivo)',
     },
+    // La llena guardarExpedienteAdquisicion (botón "Buscar expediente de adquisición" en la
+    // ficha, ver abrirFichaVehiculo) -- nunca se escribe a mano aquí.
+    {
+      grupo: 'Identificación', clave: 'FOLIO ADQUISICION', etiqueta: 'Folio de adquisición', tipo: 'text',
+      soloLectura: true, placeholder: 'Se llena al buscar el expediente',
+    },
 
     { grupo: 'Documentación y seguro', clave: 'ADJUNTAR FACTURA', etiqueta: 'Factura', tipo: 'file' },
     { grupo: 'Documentación y seguro', clave: 'TARJETA CIRCULACION', etiqueta: 'Tarjeta de circulación', tipo: 'file' },
@@ -2120,7 +2138,8 @@
    *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
-    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null, devolverPrestamo: false }, opciones);
+    const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null,
+      regenerarLiga: false, regenerarLigaJefe: false, devolverPrestamo: false }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
@@ -2143,6 +2162,15 @@
     }
     if (o.copiarLigaJefe) {
       html += '<button type="button" class="ficha-btn-fila" data-ficha-copiar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" data-token="' + escaparHtml(o.copiarLigaJefe) + '" title="Copiar liga del jefe directo">' + Iconos.svg('copiar') + '</button>';
+    }
+    // regenerarLiga/regenerarLigaJefe: booleano (no el token) -- misma condición que
+    // copiarLiga/copiarLigaJefe (sigue PENDIENTE). Botón manual: la persona decide cuándo pedir
+    // una liga nueva (la de antes venció o se perdió), no un trigger automático.
+    if (o.regenerarLiga) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-regenerar-liga="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Generar una liga nueva del responsable/adherente (la anterior deja de servir)">' + Iconos.svg('refresh-ccw') + '</button>';
+    }
+    if (o.regenerarLigaJefe) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-regenerar-liga-jefe="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Generar una liga nueva del jefe directo (la anterior deja de servir)">' + Iconos.svg('refresh-ccw') + '</button>';
     }
     // devolverPrestamo: Préstamo Vehicular en curso -- un clic regresa el vehículo a quien lo
     // tenía antes, sin pedir firma ni generar PDF (ver devolverPrestamoFicha).
@@ -2266,6 +2294,11 @@
     let todosLosVehiculos = [];
     /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
     let fichaVehiculoAbierta = null;
+    /** Series (normalizadas) con expediente de Adquisición Vehicular ya encontrado en el índice
+     *  (apiAdquisicionVehicularLista) -- para la columna "Adquisición" del catálogo, se llena en
+     *  cargar(). No es lo mismo que FOLIO ADQUISICION en la ficha (eso solo queda cuando alguien
+     *  le dio clic a "Buscar expediente" en ESE vehículo); esto refleja el índice completo. */
+    let adquisicionEncontrada = new Set();
 
     document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
     document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true, 2);
@@ -3200,6 +3233,7 @@
       mostrarPestanaFicha(detalle, nombre);
       if (nombre === 'documentos') DocumentosVehiculo.cargar(detalle.querySelector('[data-docs-vehiculo]'));
       if (nombre === 'inspecciones') InspeccionesFicha.cargar(detalle.querySelector('[data-insp-ficha]'));
+      if (nombre === 'adquisicion') cargarArchivosAdquisicionFichaTab(detalle.querySelector('[data-adq-ficha-archivos]'));
     }
 
     // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
@@ -3307,12 +3341,107 @@
       }
     }
 
+    /** Busca, por SERIE VEHICULO, el folio y la carpeta de la compra en Adquisición Vehicular
+     *  (proceso externo -- ver AdquisicionVehicularService.gs) y, si la persona confirma, lo
+     *  guarda en la ficha. Nunca escribe nada afuera, solo lee. */
+    async function buscarExpedienteAdquisicionFicha(vResumen, completo) {
+      const serie = completo['SERIE VEHICULO'];
+      if (!serie) { toastError('Este vehículo no tiene número de serie registrado.'); return; }
+      try {
+        const encontrado = await callServer('apiBuscarExpedienteAdquisicion', state.token, serie);
+        if (!encontrado) { toastError('No se encontró un expediente de adquisición con esa serie.'); return; }
+        const ok = await Confirmar.pedir({
+          titulo: 'Expediente encontrado',
+          mensaje: 'Folio ' + encontrado.folio + ' · ' + (encontrado.area || 'sin área') + ' (' + encontrado.año + ')' +
+            (encontrado.liga ? '' : ' — no se encontró la carpeta en Drive, solo se guardará el folio.'),
+          textoConfirmar: 'Guardar en la ficha',
+        });
+        if (!ok) return;
+        await callServer('apiGuardarExpedienteAdquisicion', state.token, vResumen.ID_VEHICULO, {
+          'FOLIO ADQUISICION': encontrado.folio, 'LIGA EXPEDIENTE ADQUISICION': encontrado.liga || '',
+        });
+        toastExito('Expediente guardado');
+        abrirFichaVehiculo(vResumen, 'general');
+      } catch (err) {
+        toastError('No se pudo buscar el expediente: ' + err.message);
+      }
+    }
+
+    /** Contenido de la pestaña "Adquisición" de la ficha: folio y carpeta ya ligados (si los
+     *  hay), o el botón para buscarlos (buscarExpedienteAdquisicionFicha, vía el dispatcher
+     *  genérico data-agregar) si todavía no se ha ligado ninguno. Visible a cualquiera que vea
+     *  la ficha -- el folio ya se ve igual en la pestaña Datos; solo "Buscar" necesita edición. */
+    function contenidoAdquisicionFicha(completo, puedeEditar) {
+      const folio = completo['FOLIO ADQUISICION'];
+      const liga = completo['LIGA EXPEDIENTE ADQUISICION'];
+      const boton = puedeEditar
+        ? '<button type="button" class="secondary" data-agregar="adquisicion" style="margin-left:auto">' +
+          Iconos.svg('ver') + (folio ? ' Buscar de nuevo' : ' Buscar expediente') + '</button>' : '';
+      if (!folio) {
+        return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+          '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' + boton + '</h3>' +
+          '<p class="empty-state">Todavía no se ha ligado el expediente de compra de este vehículo.</p></div>';
+      }
+      return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+        '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' +
+        (liga ? '<span style="margin-left:auto">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</span>' : boton) + '</h3>' +
+        '<dl class="ln-resumen-rapido"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
+        (liga ? '<div data-adq-ficha-archivos data-liga="' + escaparHtml(liga) + '" style="margin-top:12px">' +
+          '<p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>'
+          : '<p class="empty-state" style="margin-top:12px">No se encontró la carpeta en Drive.</p>') +
+        '</div>';
+    }
+
+    /** Los archivos de la carpeta (Galeria), pedidos solo al abrir la pestaña -- mismo
+     *  apiAdquisicionVehicularArchivos que usa el apartado "Adquisición". */
+    async function cargarArchivosAdquisicionFichaTab(contenedor) {
+      if (!contenedor || contenedor.dataset.cargado) return;
+      contenedor.dataset.cargado = '1';
+      try {
+        const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, contenedor.dataset.liga));
+        if (!document.body.contains(contenedor)) return;
+        if (!r.soportado) {
+          contenedor.innerHTML = '<p class="empty-state">Esta carpeta no es de Drive (por ejemplo, Dropbox) — no se pueden listar sus archivos aquí. Usa "Abrir carpeta" arriba.</p>';
+          return;
+        }
+        if (!r.archivos.length) { contenedor.innerHTML = '<p class="empty-state">La carpeta no tiene archivos todavía.</p>'; return; }
+        const grupos = [{ titulo: 'Archivos', fotos: r.archivos }];
+        contenedor.innerHTML = Galeria.html(grupos);
+        Galeria.ligar(contenedor, grupos, { titulo: 'Adquisición' });
+      } catch (err) {
+        contenedor.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
+      }
+    }
+
     /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
      *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
      *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
     async function copiarLigaFicha_(tipo, quien, tokenFirma) {
       try {
         mostrarLigaFirma_(await callServer('apiFirmaRemotaLiga', state.token, tipo, quien, tokenFirma));
+      } catch (err) {
+        toastError('No se pudo generar la liga: ' + err.message);
+      }
+    }
+
+    /** "Generar nueva liga" (botón manual): la anterior queda muerta en cuanto se genera la
+     *  nueva (apiFirmaRemotaRegenerarLiga sobrescribe el token/la fecha de expira del mismo
+     *  registro) -- se pide confirmar antes porque no hay vuelta atrás, y se repinta la pestaña
+     *  después (el token cambió, aunque no se vea distinto en pantalla). */
+    async function regenerarLigaFicha_(tipo, quien, id, vResumen) {
+      const ok = await Confirmar.pedir({
+        titulo: 'Generar nueva liga',
+        mensaje: 'La liga anterior deja de funcionar en cuanto generes la nueva -- y si esa parte ' +
+          'ya había firmado (por ejemplo, si firmó mal), esa firma se descarta: va a tener que volver ' +
+          'a firmar con la liga nueva. ¿Continuar?',
+        textoConfirmar: 'Generar nueva liga',
+      });
+      if (!ok) return;
+      toastCargando('Generando liga…');
+      try {
+        mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, tipo, id, quien));
+        toastExito('Liga generada');
+        abrirFichaVehiculo(vResumen, tipo === 'responsiva' ? 'responsiva' : 'adherente', true);
       } catch (err) {
         toastError('No se pudo generar la liga: ' + err.message);
       }
@@ -3586,6 +3715,9 @@
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
           { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+          // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
+          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab)
+          { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
           verificaciones && {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
             contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
@@ -3659,6 +3791,8 @@
                 eliminar: puedeEditarModulo('responsiva-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                regenerarLiga: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
                 devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
               }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
@@ -3679,6 +3813,8 @@
                 eliminar: puedeEditarModulo('adherente-vehicular'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                regenerarLiga: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
               }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
             puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
@@ -3705,6 +3841,7 @@
             else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas || []);
             else if (tipo === 'responsiva') abrirAgregarResponsivaVehicular(vResumen, completo);
             else if (tipo === 'adherente') abrirAgregarAdherenteVehicular(vResumen, completo);
+            else if (tipo === 'adquisicion') buscarExpedienteAdquisicionFicha(vResumen, completo);
           });
         });
         // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar) ya
@@ -3742,6 +3879,12 @@
         });
         detalle.querySelectorAll('[data-ficha-copiar-liga-jefe]').forEach((btn) => {
           btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLigaJefe, 'jefe', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-regenerar-liga]').forEach((btn) => {
+          btn.addEventListener('click', () => regenerarLigaFicha_(btn.dataset.fichaRegenerarLiga, 'principal', btn.dataset.id, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-regenerar-liga-jefe]').forEach((btn) => {
+          btn.addEventListener('click', () => regenerarLigaFicha_(btn.dataset.fichaRegenerarLigaJefe, 'jefe', btn.dataset.id, vResumen));
         });
         detalle.querySelectorAll('[data-ficha-devolver-prestamo]').forEach((btn) => {
           btn.addEventListener('click', () => devolverPrestamoFicha(btn.dataset.id, vResumen));
@@ -3869,6 +4012,16 @@
         // normalizando "_"->" " contra el encabezado real de la hoja ("SERIE VEHICULO") -- con
         // otra clave no la reconoce como la misma y agrega una segunda columna duplicada.
         { campo: 'SERIE_VEHICULO', titulo: 'Serie Vehículo', tipo: 'texto', enDetalle: false },
+        {
+          // Computada (apiAdquisicionVehicularLista, cargar()): si el índice de Adquisición
+          // Vehicular ya tiene carpeta para esta serie -- no depende de que alguien le haya
+          // dado clic a "Buscar expediente" en la ficha de ESTE vehículo (ver adquisicionEncontrada).
+          campo: 'ADQUISICION', titulo: 'Adquisición', tipo: 'lista', enDetalle: false,
+          valor: (v) => (adquisicionEncontrada.has(serieNormalizada(v.SERIE_VEHICULO)) ? 'Encontrada' : ''),
+          render: (val) => (val
+            ? '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Encontrada</span>'
+            : '<span style="color:var(--color-text-muted)">—</span>'),
+        },
         // 'texto' (no 'lista'): ESTATUS trae varias razones de baja distintas
         // ("BAJA VEHICULAR", etc.) — contiene/no contiene "BAJA" cubre todas
         // sin tener que enumerarlas, igual que hacía el filtro de KPI de antes.
@@ -4063,8 +4216,14 @@
     async function cargar() {
       tabla.setCargando(true);
       try {
-        const texto = await callServerListaCacheada('apiListarVehiculosResumen', state.token);
+        const [texto, textoAdq] = await Promise.all([
+          callServerListaCacheada('apiListarVehiculosResumen', state.token),
+          callServerCacheado('apiAdquisicionVehicularLista', state.token).catch(() => '[]'),
+        ]);
         todosLosVehiculos = texto ? JSON.parse(texto) : [];
+        adquisicionEncontrada = new Set(
+          (JSON.parse(textoAdq || '[]') || []).filter((f) => f.liga).map((f) => serieNormalizada(f.serie))
+        );
       } catch (err) {
         tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
         return;
@@ -4154,7 +4313,22 @@
       try {
         const archivos = await subirArchivosVehiculo('veh');
         const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
-        await callServer('apiCrearVehiculo', state.token, datos);
+        // "FOLIO ADQUISICION" es soloLectura -- CamposHoja.recolectar no lo manda; viene de la
+        // solicitud de compra pendiente, no de lo que se ve en el formulario.
+        const pendienteSolicitud = solicitudCompraPendienteVehiculo;
+        if (pendienteSolicitud) {
+          datos['FOLIO ADQUISICION'] = pendienteSolicitud.FOLIO;
+          datos['LIGA EXPEDIENTE ADQUISICION'] = pendienteSolicitud.LIGA_CARPETA;
+        }
+        const creado = await callServer('apiCrearVehiculo', state.token, datos);
+        if (pendienteSolicitud) {
+          solicitudCompraPendienteVehiculo = null;
+          try {
+            await callServer('apiSolicitudCompraMarcarConvertida', state.token, pendienteSolicitud.ID, creado.NUCCO);
+          } catch (err) {
+            console.error('El vehículo se creó, pero no se pudo marcar la solicitud de compra como convertida:', err);
+          }
+        }
         ev.target.reset();
         pasosAltaVeh.ir(0);
         document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
@@ -4193,6 +4367,17 @@
       const v = todosLosVehiculos.find((x) => x.FOLIO === folio);
       if (v) abrirFichaVehiculo(v);
       else toastError('No se encontró el vehículo con folio ' + folio);
+    }
+
+    // Se llegó aquí desde "Ya crear vehículo" (modulos/solicitud-compra.html,
+    // crearVehiculoDesdeSolicitudCompra): abre la pestaña Registrar con el folio de
+    // adquisición ya puesto (soloLectura en CAMPOS_VEHICULO). Se queda en
+    // solicitudCompraPendienteVehiculo (no se limpia aquí) para que el submit más abajo
+    // mande también la liga y, si sale bien, marque la solicitud como convertida.
+    if (solicitudCompraPendienteVehiculo && puedeEditar) {
+      const btnRegistrar = document.querySelector('#veh-tabs [data-tab="registrar"]');
+      if (btnRegistrar) btnRegistrar.click();
+      poblarFormularioVehiculo('veh', { 'FOLIO ADQUISICION': solicitudCompraPendienteVehiculo.FOLIO });
     }
   }
 
@@ -4245,6 +4430,38 @@
         texto: 'Doble clic (o toca) una fila para ver su ficha completa. El ⋮ o clic derecho trae más acciones: editar, dar de baja (una o varias a la vez) y más.',
       },
     ]);
+  }
+
+  // Tour de la ficha de un vehículo (distinto al de la lista, usuario 9-oct): el asistente
+  // flotante elige uno u otro según si la ficha ya está abierta cuando lo pican -- ver el
+  // dispatcher en iniciarTourVehiculos más abajo.
+  function iniciarTourFichaVehiculo() {
+    Tour.iniciar([
+      {
+        selector: '.ln-detalle-header',
+        titulo: 'La ficha de un vehículo',
+        texto: 'Nucco, estatus, departamento, responsable y placa de un vistazo. "Volver" (arriba) regresa a la lista; "Editar" corrige cualquier dato del vehículo.',
+      },
+      {
+        selector: '.ln-ficha-tabs',
+        titulo: 'El desglose por pestañas',
+        texto: 'Debajo, la ficha se reparte en pestañas: General, Detalles, Historial, Verificaciones, Inspecciones, Sensor, Hologramas, Incidencias, Responsiva… cada una con lo que le toca a ese vehículo.',
+      },
+      {
+        selector: '.ln-ficha-tabs',
+        titulo: 'Si llegaste desde otro lado',
+        texto: 'Al abrir la ficha desde una Incidencia, una Responsiva u otro módulo, arranca directo en esa pestaña en vez de en General -- no es un error, solo cambia por dónde empieza: las demás siguen aquí mismo, a un clic.',
+      },
+    ]);
+  }
+
+  /** Decide qué tour mostrar para la vista Vehículos: el de la ficha si ya está abierta
+   *  (detalle visible), el de la lista si no. Es lo que llama el asistente flotante -- la
+   *  vista sigue siendo una sola ('vehiculos'), por eso el dispatcher va aquí y no en NAV_GRUPOS. */
+  function iniciarTourVehiculosSegunPantalla() {
+    const detalle = document.getElementById('veh-detalle');
+    if (detalle && !detalle.hidden) { iniciarTourFichaVehiculo(); return; }
+    iniciarTourVehiculos();
   }
 
   // Preguntas frecuentes de Vehículos (usuario, 7-oct): igual que iniciarTourVehiculos, a

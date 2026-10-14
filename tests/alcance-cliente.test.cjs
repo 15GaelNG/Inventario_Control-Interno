@@ -66,7 +66,8 @@ test('la ficha y sus documentos: solo de un registro de su departamento', () => 
 test('toda lectura de Líneas pasa por el alcance', () => {
   // Una función nueva que lea con leer_ debe filtrar, revisar el registro, negarse al rol CLIENT o pasarle
   // su alcance a quien arma la respuesta (exportarBase → LineasExportar)
-  const NO_SON_DE_UN_DEPARTAMENTO = ['permisos', 'catalogos', 'colaboradores', 'registrarMediciones'];
+  // (registrarMediciones y pasosServidor son el medidor de tiempos del DEV: no regresan datos de nadie)
+  const NO_SON_DE_UN_DEPARTAMENTO = ['permisos', 'catalogos', 'colaboradores', 'registrarMediciones', 'pasosServidor'];
   const funciones = telefonia.split(/\n  function /).slice(1).map((t) => ({ nombre: t.match(/^(\w+)/)[1], cuerpo: t }));
   const leen = funciones.filter((f) => /\bleer_\(token\)/.test(f.cuerpo) && NO_SON_DE_UN_DEPARTAMENTO.indexOf(f.nombre) === -1);
   assert.ok(leen.length >= 12, leen.length + ' funciones leen');

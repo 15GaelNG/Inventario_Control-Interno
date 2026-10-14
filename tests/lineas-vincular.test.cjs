@@ -67,7 +67,8 @@ test('el clic derecho de la lista trae las mismas acciones que el ⋮ de la fich
   [["'link', 'Vincular línea', 'VINCULAR_LINEA'"], ["'arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA'"], ["'unlink', 'Desvincular línea', 'DESVINCULAR'"],
     ["'link', 'Vincular a equipo', 'VINCULAR_EQUIPO'"], ["'arrow-left-right', 'Cambiar de equipo', 'CAMBIAR_EQUIPO'"], ["'unlink', 'Desvincular del equipo', 'DESVINCULAR'"]]
     .forEach(([t]) => assert.ok(fn.includes('vinculo(' + t), t));
-  assert.match(fn, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId/);
+  // Sin Editar línea en el equipo (usuario, 13-oct): en los dos, el editar de su tipo
+  assert.doesNotMatch(fn, /abrirEditor\(f\[0\]\.lineaId, 'LINEA'\)/);
   // Desde la lista no abre la ficha al terminar (como Reasignar)
   assert.match(html, /if \(vigente\(\) && pila\.length\) abrir\('equipo', equipo\.id, true\);/);
 });

@@ -294,6 +294,17 @@ const DriveUtils = (function () {
     return existentes.hasNext() ? existentes.next() : carpeta.createFolder(anio);
   }
 
+  /** Los archivos de una carpeta de Drive, en el formato que ya espera el componente Galeria
+   *  ({id,nombre,mime,miniatura,enlace}) -- lo usan AdquisicionVehicularService.archivos y
+   *  SolicitudCompraService.archivos. */
+  function archivosDeCarpeta(carpetaId) {
+    const r = Drive.Files.list({
+      q: "'" + carpetaId + "' in parents and trashed = false", pageSize: 200, orderBy: 'name',
+      fields: 'files(id,name,mimeType,thumbnailLink,webViewLink)', supportsAllDrives: true, includeItemsFromAllDrives: true,
+    });
+    return (r.files || []).map((f) => ({ id: f.id, nombre: f.name, mime: f.mimeType, miniatura: f.thumbnailLink || '', enlace: f.webViewLink || '' }));
+  }
+
   /**
    * Deja en la descripción del archivo quién lo subió y cuándo. La app corre como quien la
    * desplegó (USER_DEPLOYING), así que Drive pone a ESA cuenta como dueña de todo lo que se
@@ -315,6 +326,6 @@ const DriveUtils = (function () {
   return {
     blobRevisado, idDeLiga, guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
-    marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio,
+    marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio, archivosDeCarpeta,
   };
 })();

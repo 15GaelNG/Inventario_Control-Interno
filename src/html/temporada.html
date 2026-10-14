@@ -382,17 +382,45 @@
     font-family: var(--dm-letra); font-size: 28px; font-weight: 600; font-variation-settings: 'opsz' 96, 'SOFT' 50;
   }
   .dm-ofrenda-sub { position: relative; margin: 6px auto 0; max-width: 400px; text-align: center; font-size: 12.5px; line-height: 1.5; color: rgba(244, 236, 216, .75); }
-  /* El altar: tres escalones con su orilla de cempasúchil y las velas encima */
-  .dm-altar { position: relative; margin: 18px auto 0; max-width: 420px; }
+  /* El marco: guirnalda de cempasúchil con su fleco de papel picado, arriba del altar */
+  .dm-altar-marco {
+    position: relative; height: 30px; margin: 4px auto 0; max-width: 420px;
+    background: var(--dm-guirnalda-altar) center / auto 30px repeat-x;
+  }
+  /* El altar: tres escalones con su mantel, veta de madera, orilla de cempasúchil y las velas encima */
+  .dm-altar { position: relative; margin: 10px auto 0; max-width: 420px; }
   .dm-escalon {
     position: relative; display: flex; justify-content: center; align-items: flex-end; flex-wrap: wrap; gap: 6px 9px;
     min-height: 40px; margin: 0 auto; padding: 18px 10px 6px;
     border-bottom: 9px solid #6b3a1f; border-radius: 2px;
-    background: linear-gradient(180deg, transparent 0 55%, rgba(107, 58, 31, .35));
+    background:
+      repeating-linear-gradient(90deg, var(--dm-rosa) 0 8%, var(--dm-cempa) 8% 16%, var(--dm-morado) 16% 24%, var(--dm-turquesa) 24% 32%, var(--dm-oro) 32% 40%, var(--dm-rosa) 40% 48%) top left / 100% 5px no-repeat,
+      repeating-linear-gradient(90deg, rgba(60, 32, 16, .22) 0 3px, transparent 3px 11px) bottom left / 100% 9px no-repeat,
+      linear-gradient(180deg, transparent 0 55%, rgba(107, 58, 31, .35));
   }
   .dm-escalon::after {   /* la orilla de flores */
     content: ''; position: absolute; left: -2px; right: -2px; bottom: -12px; height: 9px;
     background: radial-gradient(circle at 5px 5px, #f29a2e 3.4px, #d9660b 4.4px, transparent 4.8px) 0 0 / 10px 9px repeat-x;
+  }
+  /* Un objeto tradicional por escalón, en ::before (la orilla de flores de arriba ya usa ::after
+     en todos; esto no entra al innerHTML que pinta pintarAltar, así que no le importa cuántas
+     velas haya) */
+  .dm-escalon:nth-child(1)::before {
+    content: ''; position: absolute; right: 4%; top: -14px; width: 26px; height: 20px;
+    background: var(--dm-pan-muerto) center / contain no-repeat;
+  }
+  .dm-escalon:nth-child(2)::before {
+    content: ''; position: absolute; left: 4%; top: -15px; width: 22px; height: 17px;
+    background: var(--dm-calaverita-dulce) center / contain no-repeat;
+  }
+  .dm-escalon:nth-child(3)::before {
+    content: ''; position: absolute; right: 6%; top: -22px; width: 16px; height: 20px;
+    background: var(--dm-copal) bottom center / contain no-repeat;
+    animation: dmCopalHumo 4s ease-in-out infinite;
+  }
+  @keyframes dmCopalHumo {
+    0%, 100% { opacity: .82; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-2px); }
   }
   .dm-escalon:nth-child(1) { width: 56%; }
   .dm-escalon:nth-child(2) { width: 78%; }
@@ -481,6 +509,7 @@
     body[data-temporada="muertos"] .nav-item.active::after,
     body[data-temporada="muertos"] .nav-subitem.active::after { animation: none; }
     .dm-escalon .dm-vela.dm-nueva { animation: none; }
+    .dm-escalon:nth-child(3)::before { animation: none; }
   }
 </style>
 
@@ -671,6 +700,53 @@
       return p + `<circle cx="${x}" cy="${y}" r="${(r * .18).toFixed(2)}" fill="#9A4A0B"/>`;
     }
 
+    /** El marco del altar: una fila de flores de cempasúchil sobre un fleco de papel picado
+     *  (reusa banderas(), el mismo motivo que la guirnalda de la barra). Se tila con repeat-x. */
+    function guirnaldaAltar() {
+      const b = banderas('dma', 34, 3);
+      const W = b.ancho, H = 30;
+      let flores = '';
+      const n = 9;
+      for (let i = 0; i < n; i++) {
+        const x = (i + .5) * (W / n);
+        const y = 6 + 4 * Math.sin(Math.PI * i / (n - 1));
+        flores += florChica(x, y, 5.4);
+      }
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" preserveAspectRatio="none">` +
+        `<defs>${b.defs}</defs><g fill="none" stroke="rgba(0,0,0,.18)" stroke-width=".6">${b.hilos}</g>${b.cuerpo}${flores}</svg>`;
+    }
+
+    /** Pan de muerto: pan redondo con su cruz de tiras y azúcar, para una esquina del altar */
+    function panDeMuerto() {
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 32 24">` +
+        '<ellipse cx="16" cy="15" rx="13" ry="8" fill="#CDB46A"/><ellipse cx="16" cy="13" rx="13" ry="8" fill="#E2C788"/>' +
+        '<path d="M16 6C16 10 16 16 16 20M9 9C11 12 13 15 16 16M23 9C21 12 19 15 16 16M9 16C11 14 13 12 16 11M23 16C21 14 19 12 16 11" ' +
+        'fill="none" stroke="#B5832E" stroke-width="1.6" stroke-linecap="round"/>' +
+        '<circle cx="10" cy="11" r=".8" fill="#fff"/><circle cx="22" cy="11" r=".8" fill="#fff"/><circle cx="16" cy="8" r=".8" fill="#fff"/>' +
+        '<circle cx="12" cy="15" r=".8" fill="#fff"/><circle cx="20" cy="15" r=".8" fill="#fff"/></svg>';
+    }
+
+    /** Calaverita de azúcar a color (no de líneas, para no confundirla con calaveraIcono), para otra esquina */
+    function calaveritaDulce() {
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 24 18">` +
+        '<ellipse cx="12" cy="8" rx="6.6" ry="6" fill="#f4efe4" stroke="#c9bea6" stroke-width=".5"/>' +
+        '<rect x="8" y="11" width="8" height="5.4" rx="1.8" fill="#f4efe4" stroke="#c9bea6" stroke-width=".5"/>' +
+        '<circle cx="9.4" cy="8.1" r="1.9" fill="#8257A8"/><circle cx="14.6" cy="8.1" r="1.9" fill="#2A9D8F"/>' +
+        '<path d="M12 9.8l1 1.8h-2z" fill="#F29A2E"/>' +
+        '<rect x="10.3" y="13.2" width=".6" height="2.2" fill="#c9bea6"/><rect x="13.1" y="13.2" width=".6" height="2.2" fill="#c9bea6"/>' +
+        '<g stroke="#E2457B" stroke-width=".9" stroke-linecap="round" fill="none">' +
+        '<path d="M4.8 7.6l1.6-.4M4.8 8.6l1.6.1M4.8 9.6l1.5.5"/><path d="M19.2 7.6l-1.6-.4M19.2 8.6l-1.6.1M19.2 9.6l-1.5.5"/></g></svg>';
+    }
+
+    /** Vasija de copal con un hilo de humo ya dibujado (la animación de "respirar" va en el CSS) */
+    function vasijaCopal() {
+      return `<svg xmlns="${XMLNS}" viewBox="0 0 20 30">` +
+        '<path d="M8 6C4 10 3 13 5 16" fill="none" stroke="rgba(230,224,255,.55)" stroke-width="1.6" stroke-linecap="round"/>' +
+        '<path d="M11 3C13 8 14 11 10 15" fill="none" stroke="rgba(230,224,255,.4)" stroke-width="1.3" stroke-linecap="round"/>' +
+        '<path d="M3 19C3 23 5 26 10 26 15 26 17 23 17 19Z" fill="#8a4a2a"/><ellipse cx="10" cy="19" rx="7" ry="2" fill="#a85f34"/>' +
+        '<rect x="7" y="26" width="6" height="1.6" rx=".6" fill="#6b3a1f"/></svg>';
+    }
+
     /**
      * El cielo del menú: estrellas fijas, más y más brillantes arriba, cada vez menos y más tenues
      * hacia abajo (anochecer). Unas pocas titilan (animación dentro del propio SVG). Se arma una vez.
@@ -759,6 +835,10 @@
       raiz.setProperty('--dm-corona', url(corona()));
       raiz.setProperty('--dm-cielo-menu', url(cieloMenu()));
       raiz.setProperty('--dm-calavera', url(calaveraIcono()));
+      raiz.setProperty('--dm-guirnalda-altar', url(guirnaldaAltar()));
+      raiz.setProperty('--dm-pan-muerto', url(panDeMuerto()));
+      raiz.setProperty('--dm-calaverita-dulce', url(calaveritaDulce()));
+      raiz.setProperty('--dm-copal', url(vasijaCopal()));
       raiz.setProperty('--dm-ala-der', url(ala(false)));
       raiz.setProperty('--dm-ala-izq', url(ala(true)));
       raiz.setProperty('--dm-petalo-0', url(petalo('#FBBF3A', '#E8780F')));
@@ -1271,6 +1351,7 @@
           '<button type="button" class="dm-ofrenda-cerrar" aria-label="Cerrar">×</button>' +
           '<h3 id="dm-ofrenda-titulo">Nuestra ofrenda</h3>' +
           '<p class="dm-ofrenda-sub">Enciende una vela por quien recuerdas. Aquí solo se ve el nombre que escribas, nunca quién encendió la vela.</p>' +
+          '<div class="dm-altar-marco" aria-hidden="true"></div>' +
           '<div class="dm-altar" aria-hidden="true"></div>' +
           '<div class="dm-ofrenda-total" aria-live="polite"></div>' +
           '<form class="dm-ofrenda-form"><input type="text" maxlength="80" autocomplete="off" placeholder="¿A quién recuerdas? (opcional)" aria-label="A quién recuerdas">' +

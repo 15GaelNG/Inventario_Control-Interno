@@ -6,8 +6,9 @@
  * Todo cambio al inventario pasa por LineasRepo.guardarCambiosRegistro (editar, cambiar estatus, reasignar, mandar a
  * resguardo o a cancelación, la bandeja de Pau y la inspección) o por LineasRepo.agregarRegistro (alta). Con el
  * interruptor encendido, esas dos funciones llaman a este archivo, que reparte cada columna de la hoja vieja a su hoja:
- *   EQUIPOS       EQUIPO (→ MODELO), COLOR, IMEI, ACCESORIOS, PIN EQUIPO, PATRON, CONTRASEÑA MODEM, ESTATUS EQUIPO y NUCO
- *   LINEAS        NUMERO TELEFONO, NUMERO SIM, COMPAÑIA, RAZON SOCIAL, PIN WHATSAPP y ESTATUS LINEA
+ *   EQUIPOS       EQUIPO (→ MODELO), COLOR, IMEI, ACCESORIOS, PIN EQUIPO, PATRON, CONTRASEÑA MODEM, ESTATUS EQUIPO, NUCO y
+ *                 PIN WHATSAPP (del equipo desde el 13-oct, pendiente 2.25: se borra cuando la línea deja al equipo)
+ *   LINEAS        NUMERO TELEFONO, NUMERO SIM, COMPAÑIA, RAZON SOCIAL y ESTATUS LINEA
  *   ADENDUMS      COSTO PLAN, INICIO PLAN y FIN PLAN, en el adendum más reciente (los que vienen de un archivo del
  *                 proveedor no se corrigen a mano: los corrige su carga)
  *   ASIGNACIONES  la persona y la ubicación
@@ -41,9 +42,9 @@ const LineasEscritura = (function () {
 
   // Columna de la hoja vieja (como la manda el formulario) → columna de la hoja nueva
   const A_EQUIPO = { 'EQUIPO': 'MODELO', 'COLOR': 'COLOR', 'IMEI': 'IMEI', 'ACCESORIOS': 'ACCESORIOS', 'PIN EQUIPO': 'PIN EQUIPO', 'PATRON': 'PATRON',
-    'CONTRASEÑA MODEM': 'CONTRASEÑA MODEM', 'ESTATUS EQUIPO': 'ESTATUS EQUIPO', 'NUCO': 'NUCO' };
+    'CONTRASEÑA MODEM': 'CONTRASEÑA MODEM', 'ESTATUS EQUIPO': 'ESTATUS EQUIPO', 'NUCO': 'NUCO', 'PIN WHATSAPP': 'PIN WHATSAPP' };
   const A_LINEA = { 'NUMERO TELEFONO': 'NUMERO TELEFONO', 'NUMERO SIM': 'NUMERO SIM', 'COMPAÑIA': 'COMPAÑIA',
-    'RAZON SOCIAL': 'RAZON SOCIAL', 'PIN WHATSAPP': 'PIN WHATSAPP', 'ESTATUS LINEA': 'ESTATUS LINEA', 'TIPO DE LINEA': 'TIPO DE LINEA' };
+    'RAZON SOCIAL': 'RAZON SOCIAL', 'ESTATUS LINEA': 'ESTATUS LINEA', 'TIPO DE LINEA': 'TIPO DE LINEA' };
   const A_ADENDUM = ['COSTO PLAN', 'INICIO PLAN', 'FIN PLAN'];
   /** Hasta cuatro responsables más, con su número de empleado y su nombre (usuario, 6-oct; como el AppSheet). */
   const ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
@@ -100,6 +101,7 @@ const LineasEscritura = (function () {
   function asegurarJefeDirecto_() {
     if (typeof LineasDatos.asegurarColumnas !== 'function') return; // pruebas con hojas simuladas
     LineasDatos.asegurarColumnas(HOJA.ASIGNACIONES, ['JEFE DIRECTO'].concat(ADICIONALES));
+    LineasDatos.asegurarColumnas(HOJA.EQUIPOS, ['PIN WHATSAPP']); // el PIN de WhatsApp es del equipo (13-oct)
   }
 
   function hojas() {
@@ -127,7 +129,19 @@ const LineasEscritura = (function () {
 
   /** En ASIGNACIONES, el ID PERSONA de quien queda: se calcula de su nombre, número y cuenta (CapitalHumano, 12-oct) */
   function conPersona_(k, cambios, registro) {
-    if (k === 'ASIGNACIONES' && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('ASIGNACIONES', cambios, registro);
+    if (k !== 'ASIGNACIONES' || typeof CapitalHumano === 'undefined') return cambios;
+    // Sin persona (una asignación de resguardo, o se quitó al responsable) el ID PERSONA queda en blanco, sin buscarla:
+    // CapitalHumano arma su índice leyendo toda la base de CH (~6.8 s en Mandar a resguardo, 13-oct) para contestar lo
+    // mismo. Con persona se busca como siempre
+    const columnas = CapitalHumano.columnasDePersona('ASIGNACIONES');
+    const tocaPersona = columnas.some((c) => cambios[c] !== undefined);
+    // Sin cambio de persona (p. ej. solo la FECHA FIN), lo mismo que hace CapitalHumano.conPersona: el ID no se manda
+    if (!tocaPersona) { delete cambios['ID PERSONA']; return cambios; }
+    if (columnas.every((c) => limpio_(registro[c]) === '')) {
+      cambios['ID PERSONA'] = '';
+      return cambios;
+    }
+    CapitalHumano.conPersona('ASIGNACIONES', cambios, registro);
     return cambios;
   }
 
@@ -376,6 +390,7 @@ const LineasEscritura = (function () {
     // La línea deja al equipo (se canceló o quedó en otra asignación): el número sale del NUCO y se ve aparte
     if (e && l && !(vigente && vigente['ID LINEA'] === l['ID'] && vigente['ID EQUIPO'] === e['ID'])) {
       campos.push({ campo: 'NUMERO TELEFONO', antes: texto_(l['NUMERO TELEFONO']), despues: '' });
+      sinPinWhatsapp_(e, campos);
       tocados_.push(String(l['ID']));
     }
     if (campos.length) LineasLectura.olvidar();
@@ -409,7 +424,7 @@ const LineasEscritura = (function () {
     const nueva = agregar_('LINEAS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUMERO TELEFONO': num, 'TIPO DE LINEA': limpio_(cambios['TIPO DE LINEA']) || 'PLAN',
       'COMPAÑIA': limpio_(cambios['COMPAÑIA']), 'CUENTA PADRE': '', 'CUENTA': '', 'RAZON SOCIAL': limpio_(cambios['RAZON SOCIAL']), 'NUMERO SIM': sim,
-      'PIN WHATSAPP': limpio_(cambios['PIN WHATSAPP']), 'ESTATUS LINEA': estatus, 'FECHA DE ALTA': ahora,
+      'ESTATUS LINEA': estatus, 'FECHA DE ALTA': ahora,
     });
     cambios['ESTATUS LINEA'] = estatus;
     return { linea: nueva, enlazada: false };
@@ -434,11 +449,12 @@ const LineasEscritura = (function () {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUCO': LineasUtil.nucoVisible(v('NUCO')) || '', 'TIPO DE EQUIPO': ESTRUCTURA_TIPO_EQUIPO[tipo],
       'MODELO': v('EQUIPO'), 'COLOR': v('COLOR'), 'IMEI': v('IMEI'), 'ACCESORIOS': v('ACCESORIOS'), 'PIN EQUIPO': v('PIN EQUIPO'), 'PATRON': v('PATRON'),
       'CONTRASEÑA MODEM': v('CONTRASEÑA MODEM'), 'ESTATUS EQUIPO': v('ESTATUS EQUIPO'), 'FECHA DE ALTA': ahora,
+      'PIN WHATSAPP': conLinea ? v('PIN WHATSAPP') : '',
     }) : null;
     const l = conLinea ? agregar_('LINEAS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUMERO TELEFONO': numero, 'TIPO DE LINEA': v('TIPO DE LINEA') || ESTRUCTURA_TIPO_LINEA[tipo] || '',
       'COMPAÑIA': v('COMPAÑIA'), 'CUENTA PADRE': '', 'CUENTA': '', 'RAZON SOCIAL': v('RAZON SOCIAL'), 'NUMERO SIM': sim,
-      'PIN WHATSAPP': v('PIN WHATSAPP'), 'ESTATUS LINEA': v('ESTATUS LINEA'), 'FECHA DE ALTA': ahora,
+      'ESTATUS LINEA': v('ESTATUS LINEA'), 'FECHA DE ALTA': ahora,
     }) : null;
     if (e) refs.push(e['ID']);
     if (l) refs.push(l['ID']);
@@ -509,6 +525,7 @@ const LineasEscritura = (function () {
       'TIPO': 'RESGUARDO', 'ID LINEA': l['ID'], 'ID EQUIPO': '', 'FECHA INICIO': ahora, 'FECHA FIN': '',
     }))['ID']);
     const campos = [{ campo: 'NUMERO TELEFONO', antes: texto_(l['NUMERO TELEFONO']), despues: '' }];
+    sinPinWhatsapp_(e, campos);
     if (may(l['ESTATUS LINEA']) !== 'DISPONIBLE') {
       campos.push({ campo: 'ESTATUS LINEA', antes: texto_(l['ESTATUS LINEA']), despues: 'DISPONIBLE' });
       actualizar_('LINEAS', l, { 'ESTATUS LINEA': 'DISPONIBLE' });
@@ -516,6 +533,14 @@ const LineasEscritura = (function () {
     tocados_.push(String(l['ID']));
     LineasLectura.olvidar();
     return { idLinea: String(l['ID']), campos: campos, refs: refs };
+  }
+
+  /** Un equipo sin línea no tiene PIN de WhatsApp (pendiente 2.25): se borra cuando la línea lo deja. */
+  function sinPinWhatsapp_(e, campos) {
+    const pin = limpio_(e['PIN WHATSAPP']);
+    if (!pin) return;
+    actualizar_('EQUIPOS', e, { 'PIN WHATSAPP': '' });
+    campos.push({ campo: 'PIN WHATSAPP', antes: texto_(pin), despues: '' });
   }
 
   return {

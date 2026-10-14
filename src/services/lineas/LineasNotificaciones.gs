@@ -27,6 +27,7 @@ const LineasNotificaciones = (function () {
   const DIAS_AVISO = 7;
   const PROP_DESDE = 'LINEAS_NOTIF_ADENDUM_DESDE';
   const CLAVE_REVISION = 'ln_notif_revision_v2'; // v2 (30-sep): también los avisos de seguimiento
+  const CLAVE_ESQUEMA = 'ln_notif_esquema_v1'; // la pestaña ya tiene todas sus columnas (crear, 13-oct)
   const SEG_REVISION = 30 * 60;
   /** Estatus en los que la línea ya no corre (no tiene caso avisar su adendum). */
   const ESTATUS_SIN_LINEA = ['CANCELADA', 'SIN LINEA', 'EN PROCESO DE CANCELACION'];
@@ -234,7 +235,13 @@ const LineasNotificaciones = (function () {
    */
   function crear(n) {
     return LineasDatos.conCandado(() => {
-      LineasDatos.asegurarPestana(TAB, ENCABEZADOS); // agrega PARA si la pestaña ya existía sin ella
+      // Agrega PARA si la pestaña ya existía sin ella. Una vez cada 6 h, no en cada aviso: revisar la pestaña tardaba
+      // 0.7–3.9 s en Mandar a resguardo y en Mandar a cancelación (13-oct)
+      const cache = CacheService.getScriptCache();
+      if (cache.get(CLAVE_ESQUEMA) !== '1' || !LineasDatos.existeTabla(TAB)) {
+        LineasDatos.asegurarPestana(TAB, ENCABEZADOS);
+        cache.put(CLAVE_ESQUEMA, '1', 21600);
+      }
       const ahora = new Date();
       const clave = txt(n.clave) ? txt(n.tipo) + '|' + txt(n.clave) : txt(n.tipo) + '|' + ahora.getTime();
       if (txt(n.clave) && LineasDatos.leerTabla(TAB).some((x) => txt(x['CLAVE']) === clave)) return false;

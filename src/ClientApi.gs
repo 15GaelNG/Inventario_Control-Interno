@@ -439,6 +439,43 @@ function apiDevolverPrestamoVehicular(token, id) {
   return ResponsivaVehicularService.devolverPrestamo(token, id);
 }
 
+// --- Adquisición Vehicular (expediente externo, solo lectura) ---
+function apiBuscarExpedienteAdquisicion(token, serie) {
+  return AdquisicionVehicularService.buscar(token, serie);
+}
+function apiGuardarExpedienteAdquisicion(token, id, datos) {
+  return VehiculosService.guardarExpedienteAdquisicion(token, id, datos);
+}
+function apiAdquisicionVehicularLista(token) {
+  return JSON.stringify(AdquisicionVehicularService.listar(token));
+}
+function apiAdquisicionVehicularArchivos(token, liga) {
+  return JSON.stringify(AdquisicionVehicularService.archivos(token, liga));
+}
+
+// --- Solicitud de compra (puente hacia Adquisición Vehicular, antes de que exista el vehículo) ---
+function apiListarSolicitudesCompra(token) {
+  return JSON.stringify(SolicitudCompraService.listar(token));
+}
+function apiCrearSolicitudCompra(token, datos) {
+  return SolicitudCompraService.crear(token, datos);
+}
+function apiActualizarSolicitudCompra(token, id, datos) {
+  return SolicitudCompraService.actualizar(token, id, datos);
+}
+function apiEliminarSolicitudCompra(token, id) {
+  return SolicitudCompraService.eliminar(token, id);
+}
+function apiSolicitudCompraArchivos(token, id) {
+  return JSON.stringify(SolicitudCompraService.archivos(token, id));
+}
+function apiSolicitudCompraSubirArchivo(token, id, nombreArchivo, mimeType, base64Data) {
+  return SolicitudCompraService.subirArchivo(token, id, nombreArchivo, mimeType, base64Data);
+}
+function apiSolicitudCompraMarcarConvertida(token, id, nucco) {
+  return SolicitudCompraService.marcarConvertida(token, id, nucco);
+}
+
 // --- Adherente Vehicular ---
 function apiListarAdherentesVehicularesPorFolio(token, folio) {
   return JSON.stringify(AdherenteVehicularService.listarPorFolio(token, folio));
@@ -479,6 +516,12 @@ function apiFirmaRemotaCompletar(tipo, quien, tokenFirma, imagen) {
 function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
   const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
   return servicio.ligaDeToken(token, tokenFirma, quien);
+}
+// "Generar nueva liga" (botón manual en la ficha, ESTADO FIRMA sigue PENDIENTE pero la liga
+// anterior venció o se perdió): token nuevo sobre el MISMO registro, sin crear otro.
+function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien) {
+  const servicio = tipo === 'adherente' ? AdherenteVehicularService : ResponsivaVehicularService;
+  return servicio.regenerarLiga(token, id, quien);
 }
 
 // --- Arqueos ---
@@ -655,6 +698,9 @@ function apiLineasMediciones(token, filas) {
 function apiLineasMedirServidor(token, que, id) {
   return TelefoniaService.medirServidor(token, que, id);
 }
+function apiLineasPasosServidor(token, nombre) {
+  return TelefoniaService.pasosServidor(token, nombre);
+}
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
@@ -678,6 +724,9 @@ function apiLineasVincular(token, datos) {
 }
 function apiLineasFotosInspeccion(token, id, accion) {
   return TelefoniaService.fotosInspeccion(token, id, accion);
+}
+function apiLineasQuitarFotoInspeccion(token, id, archivoId, comentario) {
+  return TelefoniaService.quitarFotoInspeccion(token, id, archivoId, comentario);
 }
 function apiLineasAccesoriosIndice(token) {
   return LineasAccesorios.indice(token);

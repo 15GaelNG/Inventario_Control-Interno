@@ -61,7 +61,8 @@ test('al cambiar el número se dice si es cambio de número o corrección de cap
   assert.match(repo, /CAMBIO_NUMERO: 'Cambio de número'/);
   assert.match(repo, /LineasDatos\.buscarFilas\(TAB\.MOV, 'ACCION', ACCION_CAMBIO_NUMERO\)/);
   assert.match(repo, /idLinea: txt\(col\(f, 'ID LINEA'\)\) \|\| id,/);
-  assert.match(read('src/services/TelefoniaService.gs'), /numeros: LineasRepo\.numerosDeLinea\(r\.linea\)/);
+  // «Números de esta línea» se quitó de la ficha (usuario, 13-oct): los anteriores van abajo del número y en el historial
+  assert.doesNotMatch(read('src/services/TelefoniaService.gs'), /numeros: LineasRepo\.numerosDeLinea\(r\.linea\)/);
 });
 
 test('línea sola: Quitar responsable y responsable para USO', () => {
@@ -79,8 +80,9 @@ test('línea sola: Quitar responsable y responsable para USO', () => {
 
 test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por número anterior', () => {
   const html = read('src/html/js/lineas.html');
-  // En la lista, Editar línea también desde el equipo; en la ficha, solo desde la línea (usuario, 12-oct; pendiente 2.34)
-  assert.match(html, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId,/);
+  // Editar línea solo desde la línea, en la lista y en la ficha; el equipo trae Editar equipo (usuario, 13-oct)
+  assert.doesNotMatch(html, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId/);
+  assert.match(html, /texto: 'Editar equipo', separador: true, alHacer: \(\) => abrirEditor\(id\)/);
   assert.match(html, /texto: 'Editar línea', separador: true, alHacer: \(\) => abrirEditor\(id, 'LINEA'\)/);
   assert.match(html, /if \(cond\.cambio\) return/);
   // La búsqueda encuentra la línea por un número anterior, pero en la celda solo va el actual; los anteriores, en la ficha
@@ -88,7 +90,7 @@ test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por n�
   assert.match(html, /valor: \(r\) => \[r\.numero, r\.numerosAnteriores\]\.filter\(Boolean\)\.join\(' '\),/);
   assert.doesNotMatch(html, />antes ' \+ esc\(r\.numerosAnteriores\)/);
   assert.match(html, /anteriores \? 'Antes <span class="ln-mono">' \+ esc\(anteriores\) \+ '<\/span>' : ''\)/);
-  assert.match(html, /function tarjetaNumeros\(l, cambios\)/);
+  assert.doesNotMatch(html, /tarjetaNumeros|Números de esta línea/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores'\];/);
 });
 

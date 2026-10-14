@@ -121,8 +121,11 @@ const LineasAcciones = (function () {
       if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
       LineasDatos.conCandado(() => { hecho = aplicarVinculo_(equipoId, lineaId, d.anterior, comentario, ticket, usuario, new Date()); });
     }
-    // La línea que deja el equipo y va a cancelación entra a la bandeja de Pau, como con «Mandar a cancelación»
-    if (hecho.anteriorACancelar) LineasResguardos.mandarCancelacion([hecho.anteriorACancelar], { comentario: comentario, ticket: ticket }, usuario);
+    // La línea que deja el equipo y va a cancelación entra a la bandeja de Pau, como con «Mandar a cancelación»; su motivo
+    // sale del adendum (13-oct)
+    if (hecho.anteriorACancelar) {
+      LineasResguardos.mandarCancelacion([hecho.anteriorACancelar], { comentario: comentario, ticket: ticket }, usuario, { motivoDelAdendum: true });
+    }
     const filas = LineasRepo.refrescarIndice([equipoId].concat(hecho.tocados));
     return { id: responsivaId || equipoId, responsivaId: responsivaId, equipoId: equipoId, pdfPendiente: !!responsivaId, filas: filas };
   }
@@ -188,5 +191,6 @@ const LineasAcciones = (function () {
     return { tocados: tocados, anteriorACancelar: anteriorACancelar };
   }
 
-  return { reasignar, vincular, PERSONA_DE_RESPONSIVA, datoDeCH_ };
+  // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado
+  return { reasignar, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_ };
 })();

@@ -118,6 +118,8 @@ const enAreas = (u, areas) => areas.indexOf(u.AREA) !== -1;
 const VER = {
   incidencias: (u) => enAreas(u, ['ANALISIS DE DATOS', 'SERVICIOS VEHICULARES']),
   vehiculos: (u) => enAreas(u, ['ANALISIS DE DATOS', 'CI', 'SERVICIOS VEHICULARES', 'CONTROL VEHICULAR', 'AUDITORIAS']),
+  // Nació después de AppSheet (14-oct-2026), separado de 'vehiculos' con las mismas áreas que ya lo veían
+  'adquisicion-vehicular': (u) => enAreas(u, ['ANALISIS DE DATOS', 'CI', 'SERVICIOS VEHICULARES', 'CONTROL VEHICULAR', 'AUDITORIAS']),
   'cambios-vehiculos': (u) => enAreas(u, ['ANALISIS DE DATOS', 'SERVICIOS VEHICULARES', 'CI']),
   'reasignaciones-vehiculares': (u) => enAreas(u, ['ANALISIS DE DATOS', 'CI', 'SERVICIOS VEHICULARES', 'CONTROL VEHICULAR', 'AUDITORIAS']),
   verificaciones: (u) => enAreas(u, ['ANALISIS DE DATOS', 'CI', 'SERVICIOS VEHICULARES', 'CONTROL VEHICULAR']),
@@ -143,6 +145,7 @@ const EDITA = {   // si no está aquí, la tabla la editaba todo el que la veía
   'accesorios-lineas': (u) => LISTAS.accesoriosEditar.indexOf(u.CORREO) !== -1,
   verificaciones: (u) => LISTAS.verificacionesEditar.indexOf(u.CORREO) !== -1,
   'gestion-activos': () => false,   // solo se ve: lo que se edita ahí lo decide lineas-telefonicas
+  'adquisicion-vehicular': () => false,   // solo lectura: el servicio no tiene puedeEditar
 };
 ['panorama-lineas', 'resguardos-lineas', 'correcciones-lineas'].forEach((m) => { EDITA[m] = EDITA['lineas-telefonicas']; });
 // Se aparta del AppSheet (usuario, 12-oct): Resguardos y cancelaciones solo lo edita Pau; el área de Líneas lo ve y

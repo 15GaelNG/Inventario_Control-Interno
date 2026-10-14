@@ -386,9 +386,11 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   // ListasService guarda catálogos (no la lista de un módulo) con su propio tiempo de vida,
   // CapitalHumano el de colaboradores (una persona por nombre+departamento, sin permiso de módulo)
   // y PermisosService las reglas y personas que revisa en cada llamada (no es un módulo: es el permiso);
-  // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración)
-  // y TemporadaService la ofrenda de Día de Muertos (no es un módulo: cualquiera con sesión enciende su vela)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'TemporadaService.gs'];
+  // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración);
+  // AdquisicionVehicularService, el índice propio de Adquisición Vehicular (AdquisicionVehicularIndice.gs lo
+  // llena) -- no es la lista de un módulo, es una búsqueda por serie; y TemporadaService la ofrenda de Día
+  // de Muertos (no es un módulo: cualquiera con sesión enciende su vela)
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'AdquisicionVehicularService.gs', 'TemporadaService.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
@@ -540,11 +542,11 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   // Responsiva: una sola fecha como la inspección (usuario, 4-oct); DIA, MES y AÑO ya no se capturan
   assert.equal(control(resp, 'FECHA RESPONSIVA'), 'fechaHora', 'responsiva FECHA RESPONSIVA');
   ['DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(resp, c), undefined, 'responsiva sin ' + c));
-  assert.match(repo, /catalogos_telefonia_v7/);
+  assert.match(repo, /catalogos_telefonia_v8/);
   // Reestructura (§3): los datos del responsable salen solo de Capital Humano (personas activas)
   ['sedes', 'areas', 'oficinas', 'puestos', 'jefes', 'directores'].forEach((k) => assert.match(repo, new RegExp(k + ": unicos\\(ch, '")));
   assert.match(repo, /CapitalHumano\.activos\(\)/);
-  assert.match(repo, /indice_colaboradores_v5/);
+  assert.match(repo, /indice_colaboradores_v6/);
   ['DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
   // "Agregar 'x'": lo tecleado sin elegirlo no se guarda, y solo en los datos del responsable
   const cbx = read('src/html/js/componentes/combobox.html');
@@ -843,7 +845,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
   assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
   assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
-  assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
+  assert.match(lineas, /\['Tipo', l\.tipoLinea \|\| tipoRegistro\(l\.legado\), !l\.tipoLinea\],/);
   // La página de la responsiva (apiLineasResponsiva, usuario 6-oct) usa los PDF de NUCOS y del sistema, nunca pdfRuta
   assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
   const servicio = read('src/services/TelefoniaService.gs');
@@ -942,7 +944,7 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
   // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
-  assert.match(servicio, /if \(\/\^\(FIRMA\|PATRON\)\/i\.test\(f\.name\)\) return;/);
+  assert.ok(servicio.includes("const esFotoDeInspeccion_ = (nombre, mime) => /^(image|video)\\//.test(mime) && !/^(FIRMA|PATRON)/i.test(nombre);"), 'las firmas y el patrón no son fotos de la inspección');
   assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
   // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
   assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
@@ -964,7 +966,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v7';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v8';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1540,7 +1542,8 @@ test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctr
 test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores viejos y departamento DISPONIBLE', () => {
   const repoSrc = read('src/services/lineas/LineasRepo.gs');
   // Listas acordadas con Líneas (sin acentos, como el AppSheet)
-  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\]/);
+  // PARA VENTA CON DETALLE, de resguardo (usuario, 13-oct)
+  assert.match(repoSrc, /estatusEquipo: \['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'\]/);
   assert.match(repoSrc, /estatusLinea: \['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'\]/);
   // Quitar la línea deja ESTATUS LINEA en blanco (antes "SIN LINEA")
   assert.match(repoSrc, /'FIN PLAN': '', 'ESTATUS LINEA': '', 'FECHA CAMBIO TEMPORAL'/);
@@ -1677,7 +1680,7 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   ['formularioResguardo', 'mandarResguardo', 'mandarCancelacion'].forEach((f) =>
     assert.match(tel, new RegExp('function ' + f + '\\(token[^)]*\\) \\{\\s+const sesion = operar_\\(token\\);'), f + ' pide editar Líneas telefónicas'));
   assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
-  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA DESECHO']);
+  assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
 
   // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
   assert.match(src, /Object\.assign\(\{\}, LineasRepo\.VALORES_SIN_LINEA, \{ 'ESTATUS LINEA': 'CANCELADA' \}\)/);
@@ -1689,9 +1692,9 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   // Cliente: Mandar a resguardo desde 1, con su propio formulario; vista de la bandeja
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /async function abrirResguardo\(filas, opciones\)/);
-  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\), \{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo, inspecciones: inspecciones \}\)/);
+  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\),\s+Object\.assign\(\{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo \}, extra\)\)/);
   // La inspección de cada equipo que viene de una persona, dentro de la acción (pendiente 2.6; usuario, 3-oct)
-  assert.match(cliente, /inspecciones = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo'\);/);
+  assert.match(cliente, /const hechas = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo', \{/);
   assert.match(src, /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\], LineasDatos\.idsDeFila\(f\),/);
   assert.match(cliente, /function initResguardos\(\)/);
   assert.match(read('src/html/js/app.html'), /vista: 'resguardos-lineas'[^\n]*plantilla: 'tpl-lineas-resguardos', init: \(\) => Lineas\.initResguardos\(\)/);
@@ -1710,13 +1713,14 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
   // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
   assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
-  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa
-  assert.match(cliente, /'Estatus del equipo', 'escala', \{ opciones: form\.estatusEquipo, valor: estatusInicial, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS \}/);
+  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa, menos el que ya tiene si ya está en la
+  // bandeja (usuario, 13-oct; lo prueba lineas-resguardo-cancelacion)
+  assert.match(cliente, /const posibles = q\.opcionesEstatus \|\| form\.estatusEquipo;/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);
-  // Si ya estaba guardado no se pide otra recepción: se actualiza el renglón abierto de la bandeja
-  assert.match(resg, /const yaGuardado = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0;/);
+  // Si ya tiene su renglón abierto no se pide otra recepción: se actualiza; sin renglón abierto, Pau lo recibe
+  assert.match(resg, /const abierto = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0 \? abiertoDe_\(abiertos, f\) : null;/);
   assert.match(resg, /LineasDatos\.actualizarFila\(TAB, abierto\._fila,/);
-  assert.match(resg, /'ESTADO': yaGuardado \? ESTADO\.RESGUARDO : ESTADO\.PENDIENTE/);
+  assert.match(resg, /'ESTADO': ESTADO\.PENDIENTE, 'RECIBIO': '',/);
 });
 
 test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep)', () => {
@@ -1760,7 +1764,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /vista === 'RESGUARDOS' \? todas\.filter\(\(f\) => f\.ESTADO\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasMandarCancelacion\(token, ids, datos\)/);
   const resg = read('src/services/lineas/LineasResguardos.gs');
-  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario\)/);
+  assert.match(resg, /function mandarCancelacion\(ids, datos, usuario, opciones\)/);
   assert.match(resg, /'SOLICITO_CORREO': usuario\.correo, 'SOLICITO_NOMBRE': usuario\.nombre, 'ESTADO': '',/);
   // Con cualquiera de los IDs del registro: la bandeja guarda el que tenía al mandarlo (reestructura, etapa 3)
   assert.match(resg, /if \(enCancelacion_\(cancelando, f, numero\)\)/);
@@ -2347,8 +2351,10 @@ test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de
   const css = read('src/html/styles.html');
   assert.match(index, /<nav id="sidebar" class="collapsed">/);
   assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
-  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 120\)\);/);
+  assert.match(app, /sidebar\.addEventListener\('mouseenter', \(\) => cambiar\(true, 400\)\);/);
   assert.match(app, /sidebar\.addEventListener\('mouseleave', \(\) => cambiar\(false, 300\)\);/);
+  // El panel de tipos de las tablas de Líneas también tarda 400 ms en abrirse con el cursor
+  assert.match(read('src/html/lineas-estilos.html'), /\.ln-modulo \.filtro-tipo:hover \.filtro-tipo-panel \{ transition-delay: \.4s; \}/);
   // Abierto mide 308px (caben «Resguardos y cancelaciones» y «Reasignaciones vehiculares») pero ocupa 92px: queda
   // encima del contenido, por debajo de los modales. En celular y tableta, el mismo ancho
   assert.match(css, /#sidebar \{\s*width: 308px;/);
@@ -2486,4 +2492,52 @@ test('lo que un módulo le pide a ExportarExcel existe (prod: «ExportarExcel.ca
   });
   const faltan = [...usados].filter((u) => exporta.indexOf(u) === -1);
   assert.deepEqual(faltan, [], 'ExportarExcel no exporta: ' + faltan.join(', '));
+});
+
+test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Facturación del proveedor', () => {
+  const html = read('src/html/js/lineas.html');
+  const css = read('src/html/lineas-estilos.html');
+  // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
+  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  assert.match(html, /function vidaPlan\(l\)/);
+  assert.match(html, /'Vencido hace ' \+ n/);
+  // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
+  assert.match(html, /function mesDe\(iso\)/);
+  assert.match(html, /\(d > 0 \? ' de más' : ' de menos'\)/);
+  // Últimos 3 meses: se abren al pasar el cursor o al tocarlos
+  assert.match(css, /\.ln-meses:hover \.ln-meses-cuerpo, \.ln-meses:focus-within \.ln-meses-cuerpo \{ display: block; \}/);
+  // Servidor: facturas de la línea y el día de corte de su cuenta
+  const servicio = read('src/services/TelefoniaService.gs');
+  assert.match(servicio, /facturas: LineasRepo\.facturasDeLinea\(r\.linea, 3\),/);
+  assert.match(servicio, /corte: LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\),/);
+});
+
+test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no se entendía', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.doesNotMatch(repo, /motivoFactura/);
+  const facturas = repo.slice(repo.indexOf('  function facturasDeLinea('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  assert.doesNotMatch(facturas, /motivo/);
+  const cliente = read('src/html/js/lineas.html');
+  const tarjeta = cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable('));
+  assert.ok(tarjeta.length > 100);
+  assert.doesNotMatch(tarjeta, /motivo|Motivo/);
+});
+
+test('SIM básico: la renta sale de su último mes completo facturado (usuario, 14-oct)', () => {
+  const html = read('src/html/js/lineas.html');
+  const ini = html.indexOf('      const rentaSimBasico = ');
+  const renta = new Function('return ' + html.slice(ini, html.indexOf('\n', ini)).replace('      const rentaSimBasico = ', '').replace(/;\s*$/, ''))();
+  assert.strictEqual(renta([{ cobrado: -7.74 }, { cobrado: 12, parcial: true }, { cobrado: 29, origen: 'x' }]).cobrado, 29);
+  assert.strictEqual(renta([{ cobrado: 0 }]), null);
+  assert.match(html, /\['Renta', dinero\(f\.cobrado, true\) \+ ' al mes'\], \['Plazo', 'Sin plazo forzoso'\]/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
+});
+
+test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
+  assert.match(repo, /Math\.round\(\(cobrado - cargoEquipo - renta\) \* 100\) \/ 100/);
+  assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
+  assert.match(read('src/html/js/lineas.html'), /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
 });
