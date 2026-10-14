@@ -11,7 +11,7 @@
  */
 
 const TelefoniaService = (function () {
-  const CAMPOS_SECRETOS_EQUIPO = ['pinEquipo', 'patronRuta', 'contrasenaModem'];
+  const CAMPOS_SECRETOS_EQUIPO = ['pinEquipo', 'patronRuta', 'contrasenaModem', 'pinWhatsapp'];
   const CAMPOS_SECRETOS_LINEA = ['pinWhatsapp'];
 
   /**
@@ -93,6 +93,9 @@ const TelefoniaService = (function () {
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       detalles: r.detalles,
+      // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros
+      corte: r.linea ? LineasRepo.diaDeCorte(r.linea.cuentaPadre) : null,
+      facturas: LineasRepo.facturasDeLinea(r.linea, 3),
     });
   }
 
@@ -105,8 +108,10 @@ const TelefoniaService = (function () {
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
       detalles: r.detalles,
-      // «Números de esta línea»: sus cambios de número (Editar línea, 8-oct)
-      numeros: LineasRepo.numerosDeLinea(r.linea),
+      // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros. «Números de esta línea» se quitó:
+      // los anteriores se ven abajo del número («Antes …») y en el historial
+      corte: LineasRepo.diaDeCorte(r.linea.cuentaPadre),
+      facturas: LineasRepo.facturasDeLinea(r.linea, 3),
     });
   }
 

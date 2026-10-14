@@ -128,7 +128,7 @@ test('mandar a resguardo: asignación de resguardo sin persona, con departamento
   assert.strictEqual(nueva['SEDE'], 'CANCUN');
   assert.strictEqual(t.hojas.EQUIPOS[0]['ESTATUS EQUIPO'], 'RESGUARDO');
   assert.strictEqual(t.hojas.LINEAS[0]['ESTATUS LINEA'], 'DISPONIBLE');
-  assert.strictEqual(t.hojas.LINEAS[0]['PIN WHATSAPP'], ''); // N/A se guarda en blanco
+  assert.strictEqual(t.hojas.EQUIPOS[0]['PIN WHATSAPP'], ''); // N/A se guarda en blanco, en el equipo (13-oct)
   const campos = r.campos.map((c) => c.campo);
   assert.ok(campos.indexOf('COMENTARIOS') >= 0, 'el comentario va al historial');
   assert.ok(campos.indexOf('RESPONSABLE') >= 0, 'la salida de la persona queda en el historial');
@@ -231,7 +231,8 @@ test('alta: equipo, línea, adendum y asignación en las hojas nuevas; el ID del
   assert.strictEqual(e['NUCO'], '0077');
   const l = t.hojas.LINEAS.find((x) => x['NUMERO TELEFONO'] === '4420000000');
   assert.strictEqual(l['TIPO DE LINEA'], 'PLAN');
-  assert.strictEqual(l['PIN WHATSAPP'], '');
+  assert.strictEqual(e['PIN WHATSAPP'], ''); // del equipo desde el 13-oct
+  assert.ok(!l['PIN WHATSAPP']);
   assert.strictEqual(t.hojas.ADENDUMS.find((x) => x['ID LINEA'] === l['ID'])['FUENTE'], 'CAPTURA A MANO');
   const a = t.vigentes().find((x) => x['ID EQUIPO'] === r.id);
   assert.strictEqual(a['ID LINEA'], l['ID']); // la línea sin estatus va con su equipo

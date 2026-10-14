@@ -844,7 +844,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
   assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
   assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
-  assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
+  assert.match(lineas, /\['Tipo', l\.tipoLinea \|\| tipoRegistro\(l\.legado\), !l\.tipoLinea\],/);
   // La página de la responsiva (apiLineasResponsiva, usuario 6-oct) usa los PDF de NUCOS y del sistema, nunca pdfRuta
   assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
   const servicio = read('src/services/TelefoniaService.gs');
@@ -965,7 +965,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v7';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v8';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -2491,4 +2491,44 @@ test('lo que un módulo le pide a ExportarExcel existe (prod: «ExportarExcel.ca
   });
   const faltan = [...usados].filter((u) => exporta.indexOf(u) === -1);
   assert.deepEqual(faltan, [], 'ExportarExcel no exporta: ' + faltan.join(', '));
+});
+
+test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Facturación del proveedor', () => {
+  const html = read('src/html/js/lineas.html');
+  const css = read('src/html/lineas-estilos.html');
+  // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
+  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  assert.match(html, /function vidaPlan\(l\)/);
+  assert.match(html, /'Vencido hace ' \+ n/);
+  // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
+  assert.match(html, /function mesDe\(iso\)/);
+  assert.match(html, /\(d > 0 \? ' de más' : ' de menos'\)/);
+  // Últimos 3 meses: se abren al pasar el cursor o al tocarlos
+  assert.match(css, /\.ln-meses:hover \.ln-meses-cuerpo, \.ln-meses:focus-within \.ln-meses-cuerpo \{ display: block; \}/);
+  // Servidor: facturas de la línea y el día de corte de su cuenta
+  const servicio = read('src/services/TelefoniaService.gs');
+  assert.match(servicio, /facturas: LineasRepo\.facturasDeLinea\(r\.linea, 3\),/);
+  assert.match(servicio, /corte: LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\),/);
+});
+
+test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no se entendía', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.doesNotMatch(repo, /motivoFactura/);
+  const facturas = repo.slice(repo.indexOf('  function facturasDeLinea('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  assert.doesNotMatch(facturas, /motivo/);
+  const cliente = read('src/html/js/lineas.html');
+  const tarjeta = cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable('));
+  assert.ok(tarjeta.length > 100);
+  assert.doesNotMatch(tarjeta, /motivo|Motivo/);
+});
+
+test('SIM básico: la renta sale de su último mes completo facturado (usuario, 14-oct)', () => {
+  const html = read('src/html/js/lineas.html');
+  const ini = html.indexOf('      const rentaSimBasico = ');
+  const renta = new Function('return ' + html.slice(ini, html.indexOf('\n', ini)).replace('      const rentaSimBasico = ', '').replace(/;\s*$/, ''))();
+  assert.strictEqual(renta([{ cobrado: -7.74 }, { cobrado: 12, parcial: true }, { cobrado: 29, origen: 'x' }]).cobrado, 29);
+  assert.strictEqual(renta([{ cobrado: 0 }]), null);
+  assert.match(html, /\['Renta', dinero\(f\.cobrado, true\) \+ ' al mes'\], \['Plazo', 'Sin plazo forzoso'\]/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });

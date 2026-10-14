@@ -6,7 +6,7 @@ adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpet
 `UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
 inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
 correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y queda para después
-(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-13
+(`_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-14
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -57,8 +57,27 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   pasa a USO con su línea DISPONIBLE (o RESGUARDO, el valor viejo) en el mismo registro la lleva a USO; antes la línea se
   quedaba en la asignación de resguardo y se separaba del equipo (`LineasRegistros.editar`; `LineasEscritura.guardar`
   hace lo que dicen los estatus). Al panel de Pau se llega con «Mandar a resguardo» y «Mandar a cancelación».
-- **PIN de WhatsApp** (8-oct): en la ficha va en la información del equipo (General → Equipo, y Equipo en la ficha de
-  la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni lo pide (pendiente 2.25).
+- **PIN de WhatsApp** (8-oct; columna de EQUIPOS desde el 14-oct, `4e00ac9`): en la ficha va en la información del equipo
+  (General → Equipo, y Equipo en la ficha de la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni
+  lo pide. Se guarda en la columna PIN WHATSAPP de EQUIPOS (`asegurarColumnas` la crea al escribir) y se borra cuando la línea
+  deja al equipo (`sinPinWhatsapp_` en `guardar` y `separarLinea` de `LineasEscritura`, con su renglón en el historial). Se lee
+  del equipo y, si el equipo no tiene, del que traiga LINEAS (`LineasLectura`). En producción y en el DEV el PIN ya está en EQUIPOS (14-oct); las líneas sin equipo no tienen PIN.
+- **Pestaña General** (14-oct, `4e00ac9`, `a91decd`; usuario, 13-oct; las reglas de nombres, en plan §4.9). **Línea:** tarjetas
+  Línea (tipo, compañía, SIM, estatus), Cuenta (razón social, cuenta padre, cuenta y «Día N de cada mes», de CUENTAS por
+  `LineasRepo.diaDeCorte`), Plan (plan, renta, inicio y fin de plan y una barra con la vida del plazo: verde vigente, ámbar a 3
+  meses o menos, rojo vencido, con «Faltan N meses» o «Vencido hace N meses» y «X de Y meses»; abajo, de dónde salió el plan en
+  palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
+  pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
+  «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
+  del corte; Renta, Cobrado, Diferencia, Uso (un SIM básico no lleva Renta ni Diferencia: su renta está en la tarjeta Plan), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
+  «Último mes»), que se
+  despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
+  WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
+  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; la columna MINUTOS de los SIM básicos sale del «DETALLE DE LLAMADAS» de su factura y no del
+  «Consumido» del resumen, que dice 0: cargada en el DEV el 14-oct, en producción falta, pendiente 1.16);
+  `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
+  enlace a la línea), Plan de la línea, Facturación de la línea (sin renta, uso ni meses) y Responsable a todo el ancho. Cada
+  tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
 - **Editar línea y Editar equipo** (8-oct; «Editar información» hasta el 13-oct): la línea se edita aparte (⋮ de la línea
   y la tabla de líneas; el equipo no la trae desde el 12-oct; `apiLineasFormularioRegistro(id, 'LINEA')`,
   `LineasRegistros.contextoEdicion_`). Una línea de un NUCO
@@ -96,11 +115,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   solo se ve y se arma. Clic = vista rápida (en el grafo, elige la relación); doble clic = ficha.
 - **Cambio de número** (8-oct): al cambiar el número en Editar línea se elige el motivo, CAMBIO DE NUMERO (la línea
   ahora tiene otro: movimiento `CAMBIO_NUMERO`, «Cambio de número» en el historial) o CORRECCION DE CAPTURA (Edición).
-  La ficha de la línea tiene «Números de esta línea» (el actual y los anteriores con fecha y comentario,
-  `LineasRepo.numerosDeLinea`). Los anteriores van en la ficha de la línea, abajo del número y arriba de los chips
-  («Antes 9990000001», gris y chico; parámetro `subtitulo` de `encabezado`, 12-oct, `4d07afa`); la columna Número de
+  Los números anteriores (con fecha y comentario, `LineasRepo.numerosDeLinea`) van en la ficha de la línea, abajo del número y
+  arriba de los chips; «Números de esta línea», la tarjeta que los listaba, se quitó el 14-oct
+  («Antes 9990000001», gris y chico; el número anterior que no es un teléfono, como el «D-004» de las líneas de DG, conserva su texto, `indice_telefonia_v8`; parámetro `subtitulo` de `encabezado`, 12-oct, `4d07afa`); la columna Número de
   la tabla ya no los enseña, pero la búsqueda sigue encontrando la línea por uno anterior (índice `numerosAnteriores`,
-  caché `indice_telefonia_v7`). Lo de antes del 8-oct sigue solo en la bitácora
+  caché `indice_telefonia_v8`). Lo de antes del 8-oct sigue solo en la bitácora
   del AppSheet («Números que ha tenido» del equipo; pendiente 4.1).
 - **Acciones con nombre:** nueva inspección, nueva responsiva, Reasignar (responsiva y luego inspección, las dos
   obligatorias; el servidor exige la inspección del día; el equipo queda en USO; el director sale de la responsiva y
@@ -319,10 +338,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 
 | Hoja | Qué guarda |
 |---|---|
-| LINEAS, EQUIPOS | Una fila por línea y por equipo (IDs de `Entidades.gs`) |
+| LINEAS, EQUIPOS | Una fila por línea y por equipo (IDs de `Entidades.gs`). EQUIPOS lleva PIN WHATSAPP desde el 14-oct |
 | ASIGNACIONES | Quién tiene qué, con FECHA INICIO / FECHA FIN (persona o resguardo), jefe directo y responsables adicionales |
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
-| FACTURAS | Vacía: la llenará la carga mensual del proveedor |
+| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15); después la llenará la carga mensual del proveedor (1.10) |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |

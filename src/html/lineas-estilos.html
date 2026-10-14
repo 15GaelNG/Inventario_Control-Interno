@@ -158,6 +158,52 @@
   .ln-campos dt { color: var(--color-text-muted); font-weight: 500; }
   .ln-campos dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 
+  /* Pestaña General de las fichas (usuario, 13-oct): cada tarjeta con su título en una franja separada de sus datos,
+     las etiquetas en una columna fija y un renglón por dato; las de un mismo renglón miden lo mismo */
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > * { margin-left: 16px; margin-right: 16px; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > h3 { margin: 0 0 4px; padding: 10px 16px; background: var(--color-bg);
+    border-bottom: 1px solid var(--color-border); font-size: 13.5px; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos { grid-template-columns: 120px minmax(0, 1fr); gap: 0 12px; margin-bottom: 10px; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dt,
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dd { padding: 7px 0; border-bottom: 1px solid var(--color-border); }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dt:last-of-type,
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dd:last-of-type { border-bottom: none; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .empty-state { margin-top: 12px; margin-bottom: 16px; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card-ancha { grid-column: 1 / -1; }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
+  .ln-card-titulo-dato { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--color-text-muted); }
+  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-card-pie { margin: auto 0 0; padding: 8px 16px; border-top: 1px solid var(--color-border);
+    display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-text-muted); }
+  .ln-card-pie .ln-icon { width: 14px; height: 14px; }
+  /* Vida del plan: verde vigente, ámbar a 3 meses o menos, rojo vencido */
+  .ln-vida { margin-bottom: 14px; }
+  .ln-vida-barra { height: 8px; border-radius: 4px; background: var(--color-bg); border: 1px solid var(--color-border); overflow: hidden; }
+  .ln-vida-barra > span { display: block; height: 100%; }
+  .ln-vida-texto { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; font-size: 12px; }
+  .ln-vida-vigente .ln-vida-barra > span { background: var(--ln-verde-tx); }
+  .ln-vida-vigente .ln-vida-texto > span:first-child { color: var(--ln-verde-tx); }
+  .ln-vida-por-vencer .ln-vida-barra > span { background: var(--ln-ambar-tx); }
+  .ln-vida-por-vencer .ln-vida-texto > span:first-child { color: var(--ln-ambar-tx); }
+  .ln-vida-vencido .ln-vida-barra > span { background: var(--color-danger); }
+  .ln-vida-vencido .ln-vida-texto > span:first-child { color: var(--color-danger); }
+  /* Diferencia contra la renta: de más en rojo, de menos en verde */
+  .ln-dif-mas { color: var(--color-danger); font-weight: 500; }
+  .ln-dif-menos { color: var(--ln-verde-tx); font-weight: 500; }
+  .ln-dif-igual { color: var(--color-text-muted); }
+  /* Últimos meses de facturación: se abre al pasar el cursor (o al tocarlo) */
+  .ln-meses { border: 1px solid var(--color-border); border-radius: 8px; margin-bottom: 14px; outline: none; }
+  .ln-meses-titulo { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; font-size: 12.5px; color: var(--color-text-muted); }
+  .ln-meses-titulo .ln-icon { width: 15px; height: 15px; transition: transform .15s; }
+  .ln-meses-cuerpo { display: none; padding: 0 10px 6px; }
+  .ln-meses:hover .ln-meses-cuerpo, .ln-meses:focus-within .ln-meses-cuerpo { display: block; }
+  .ln-meses:hover .ln-meses-titulo .ln-icon, .ln-meses:focus-within .ln-meses-titulo .ln-icon { transform: rotate(180deg); }
+  .ln-meses-fila { display: grid; grid-template-columns: 88px 82px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--color-border); font-size: 12.5px; }
+  .ln-meses-encabezado { color: var(--color-text-muted); font-size: 11.5px; }
+  @media (max-width: 640px) {
+    [data-ficha-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 110px minmax(0, 1fr); }
+  }
+
   .ln-nota {
     background: var(--color-note-bg); border: 1px solid var(--color-border); border-radius: 10px;
     padding: 10px 14px; font-size: 12.5px; margin-bottom: 14px;

@@ -158,6 +158,9 @@ test('la responsiva pasa a la línea el PIN de WhatsApp', () => {
   assert.match(resp, /if \(obj\.linea && 'PIN WHATSAPP' in valores\) copia\['PIN WHATSAPP'\] = valores\['PIN WHATSAPP'\];\s*const g = Object\.keys\(copia\)\.length \? LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia/);
   // Después de la acción (Vincular, Cambiar línea, Reasignar): obj es el registro como quedó, con la línea que se puso
   assert.ok(resp.indexOf("if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });") < resp.indexOf("copia['PIN WHATSAPP']"));
-  // PIN WHATSAPP va a la hoja LINEAS
-  assert.match(read('src/services/lineas/LineasEscritura.gs'), /'PIN WHATSAPP': 'PIN WHATSAPP', 'ESTATUS LINEA': 'ESTATUS LINEA'/);
+  // PIN WHATSAPP va a la hoja EQUIPOS (usuario, 13-oct; pendiente 2.25) y se borra cuando la línea deja al equipo
+  const esc = read('src/services/lineas/LineasEscritura.gs');
+  assert.match(esc, /'NUCO': 'NUCO', 'PIN WHATSAPP': 'PIN WHATSAPP' \};/);
+  assert.doesNotMatch(esc, /'RAZON SOCIAL': 'RAZON SOCIAL', 'PIN WHATSAPP'/);
+  assert.match(esc, /function sinPinWhatsapp_\(e, campos\)/);
 });

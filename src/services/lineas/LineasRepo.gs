@@ -92,7 +92,7 @@ const LineasRepo = (function () {
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v7'; // v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v8'; // v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -173,6 +173,8 @@ const LineasRepo = (function () {
       pinEquipo: texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
       cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
       color: texto('COLOR'),
+      // El PIN de WhatsApp es del equipo (pendiente 2.25); sin línea no tiene
+      pinWhatsapp: tieneLinea ? texto('PIN WHATSAPP') : null,
       estatus: txt(col(f, 'ESTATUS EQUIPO')), lineaId: tieneLinea ? id : null, responsable: datosResponsable,
       carpetaDriveId: nuco && carpetas ? (carpetas[nuco] || null) : null, legado: legado,
       actualizadoEn: legado.fechaRegistro,
@@ -183,6 +185,9 @@ const LineasRepo = (function () {
       _id: id, numero: digitos(col(f, 'NUMERO TELEFONO')), sim: sim, compania: txt(col(f, 'COMPAÑIA')),
       costoPlan: LineasUtil.numero(col(f, 'COSTO PLAN')), inicioPlan: fecha(col(f, 'INICIO PLAN')), finPlan: fecha(col(f, 'FIN PLAN')),
       razonSocial: txt(col(f, 'RAZON SOCIAL')), pinWhatsapp: texto('PIN WHATSAPP'), estatus: estatusLinea,
+      // Del proveedor (usuario, 13-oct): la cuenta, el plan y de dónde salió (ORIGEN PLAN, p. ej. «Adendum Telcel FRO · septiembre 2026»)
+      tipoLinea: txt(col(f, 'TIPO DE LINEA')), cuentaPadre: txt(col(f, 'CUENTA PADRE')), cuenta: txt(col(f, 'CUENTA')),
+      plan: txt(col(f, 'PLAN')), fuentePlan: txt(col(f, 'FUENTE PLAN')), origenPlan: txt(col(f, 'ORIGEN PLAN')),
       usoTemporal: estatusLinea === 'USO TEMPORAL' ? { desde: fecha(col(f, 'FECHA CAMBIO TEMPORAL')), correo: txt(col(f, 'EMAIL USUARIO')) } : null,
       equipoId: tieneEquipo ? id : null,
       // El ID de la hoja LINEAS (el registro de una línea en un equipo es el del equipo): con él se leen sus cambios de número
@@ -272,6 +277,12 @@ const LineasRepo = (function () {
    * del más viejo al más nuevo. Solo los marcados como cambio de número desde el 8-oct; lo de antes sigue en la bitácora
    * del AppSheet («Números que ha tenido» del equipo) hasta que pase a MOVIMIENTOS (pendiente 4.1).
    */
+  /** Un número de teléfono, solo sus dígitos; lo que no es número (las líneas de DG se capturaron «D-004») tal cual. */
+  function numeroOTexto_(v) {
+    const d = digitos(v);
+    return d && d.length >= 10 ? d : (txt(v) || '');
+  }
+
   function cambiosDeNumero_() {
     if (!LineasDatos.existeTabla(TAB.MOV)) return {};
     // Lo que se acaba de escribir (el cambio de número de esta misma edición) tiene que estar en la hoja antes de leerla
@@ -285,7 +296,7 @@ const LineasRepo = (function () {
       const c = cambios.filter((x) => sinAcentos_(x.campo) === 'NUMERO TELEFONO')[0];
       if (!c) return;
       String(m['ID LINEA'] || '').split(',').map((x) => x.trim()).filter(Boolean).forEach((k) => {
-        (salida[k] = salida[k] || []).push({ antes: digitos(c.antes) || txt(c.antes) || '', despues: digitos(c.despues) || txt(c.despues) || '',
+        (salida[k] = salida[k] || []).push({ antes: numeroOTexto_(c.antes), despues: numeroOTexto_(c.despues),
           fecha: fecha(m['FECHA']), comentario: txt(m['COMENTARIO']) || '', quien: txt(m['QUIEN']) || '' });
       });
     });
@@ -297,6 +308,39 @@ const LineasRepo = (function () {
   function numerosDeLinea(linea, cambios) {
     if (!linea) return [];
     return ((cambios || cambiosDeNumero_())[linea.idLinea || linea._id] || []).slice();
+  }
+
+  /**
+   * Facturación de una línea (usuario, 13-oct; pendiente 1.11): sus últimos `cuantas` cobros de FACTURAS, del más nuevo
+   * al más viejo. El mes es el del corte; la diferencia es contra la renta del plan vigente. Una línea sin contrato
+   * (SIM básico) no tiene renta ni diferencia; `parcial` marca el mes cobrado incompleto («Cargo del … al …»), para
+   * no tomarlo como su renta (usuario, 14-oct: la renta del SIM básico sale de su factura). Sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no
+   * se entendía y no suma; los conceptos siguen en FACTURAS.
+   */
+  function facturasDeLinea(linea, cuantas) {
+    if (!linea || !LineasDatos.existeTabla('FACTURAS')) return [];
+    const filas = LineasDatos.buscarFilas('FACTURAS', 'ID LINEA', linea.idLinea || linea._id);
+    if (!filas.length) return [];
+    const sinContrato = String(linea.tipoLinea || '').toUpperCase() === 'SIM BASICO';
+    const renta = sinContrato ? null : linea.costoPlan;
+    return LineasDatos.leerFilas([{ tabla: 'FACTURAS', filas: filas }])[0].map((x) => {
+      const cobrado = LineasUtil.numero(x['TOTAL CON IVA']);
+      return {
+        corte: fecha(x['FECHA DE CORTE']), ciclo: txt(x['PERIODO']) || '', cobrado: cobrado, renta: renta,
+        diferencia: renta === null || renta === undefined || cobrado === null ? null : Math.round((cobrado - renta) * 100) / 100,
+        parcial: /CARGO DEL .+ AL /.test(sinAcentos_(x['CONCEPTOS'])), numero: digitos(x['NUMERO EN FACTURA']),
+        minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
+        origen: txt(x['ARCHIVO']) || '',
+      };
+    }).sort((a, b) => (b.corte || 0) - (a.corte || 0)).slice(0, cuantas || 3);
+  }
+
+  /** Día de corte de una cuenta padre (hoja CUENTAS), o null. */
+  function diaDeCorte(cuentaPadre) {
+    if (!cuentaPadre || !LineasDatos.existeTabla('CUENTAS')) return null;
+    const c = LineasDatos.leerTabla('CUENTAS').filter((x) => String(x['CUENTA PADRE'] || '').trim() === String(cuentaPadre).trim())[0];
+    const d = c ? LineasUtil.numero(c['DIA DE CORTE']) : null;
+    return d || null;
   }
 
   /** Valores de la fila para la vista de tabla del AppSheet: [id, …COLS_VISTA_LINEAS]. */
@@ -1511,7 +1555,7 @@ const LineasRepo = (function () {
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
-    ACCION_CAMBIO_NUMERO, numerosDeLinea,
+    ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, diaDeCorte,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

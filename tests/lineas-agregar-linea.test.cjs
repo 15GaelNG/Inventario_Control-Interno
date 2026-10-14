@@ -70,7 +70,7 @@ test('la pantalla hace las mismas cuentas y los campos con «_» no se escriben 
   assert.match(reg, /e\.columna\.charAt\(0\) !== '_'/);
   assert.match(reg, /function crearLineaEnEquipo_/);
   assert.doesNotMatch(reg + html, /'_CANCELACION'/); // el campo del alta que se quitó (MOTIVO_CANCELACION de la bandeja sí, 13-oct)
-  // PIN de WhatsApp en la información del equipo, no en la línea (usuario, 8-oct)
-  assert.match(html, /l \? \['PIN WhatsApp', l\.pinWhatsapp\] : null,/);
-  assert.doesNotMatch(html, /\['SIM', l\.sim\], \['PIN WhatsApp', l\.pinWhatsapp\]/);
+  // PIN de WhatsApp en la información del equipo, no en la línea (usuario, 8 y 13-oct: también se guarda en EQUIPOS)
+  assert.match(html, /l \? \['PIN WhatsApp', e\.pinWhatsapp\] : null,/);
+  assert.doesNotMatch(html, /l\.pinWhatsapp/);
 });

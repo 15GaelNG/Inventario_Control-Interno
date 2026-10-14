@@ -618,7 +618,7 @@ const LineasCaptura = (function () {
       }
       // Con PIN, contraseña o sin bloqueo, el patrón del equipo se borra y su PIN EQUIPO queda el de la responsiva
       if (LineasUtil.bloqueoSinPatron(datos)) { copia['PATRON'] = ''; copia['PIN EQUIPO'] = valores['PIN EQUIPO'] || ''; }
-      // El PIN de WhatsApp es de la línea: el de la responsiva pasa a ella, como el de la inspección (usuario, 13-oct: el
+      // El PIN de WhatsApp (del equipo con línea desde el 13-oct, pendiente 2.25) pasa de la responsiva al registro, como el de la inspección (usuario, 13-oct: el
       // NUCO 1712 se vinculó con su responsiva el 12-oct y el PIN se quedó el de antes hasta corregirlo con Editar)
       if (obj.linea && 'PIN WHATSAPP' in valores) copia['PIN WHATSAPP'] = valores['PIN WHATSAPP'];
       const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;

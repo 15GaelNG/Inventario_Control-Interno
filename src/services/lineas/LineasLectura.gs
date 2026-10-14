@@ -35,7 +35,7 @@ const LineasLectura = (function () {
   const PROPIEDAD = 'LINEAS_LECTURA';
   const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v3'; // v3: TIPO SIM BASICO en vez de LINEA BASICA (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v4'; // v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
@@ -48,7 +48,9 @@ const LineasLectura = (function () {
     'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS',
     'FECHA INSPECCION', 'FORMATO INSPECCION', 'ID PERSONA',
     // Referencias de la estructura nueva
-    'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'TIPO ASIGNACION', 'TIPO DE LINEA', 'TIPO DE EQUIPO']);
+    'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'TIPO ASIGNACION', 'TIPO DE LINEA', 'TIPO DE EQUIPO',
+    // Cuenta y plan del proveedor (usuario, 13-oct: la pestaña General de la línea los muestra)
+    'CUENTA PADRE', 'CUENTA', 'PLAN', 'FUENTE PLAN', 'ORIGEN PLAN']);
   // De la hoja vieja, solo de consulta, hasta la migración (ver la cabecera)
   const DE_LA_HOJA_VIEJA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'SEDE',
@@ -178,13 +180,16 @@ const LineasLectura = (function () {
         'EQUIPO': v(e, 'MODELO'), 'COLOR': v(e, 'COLOR'), 'IMEI': v(e, 'IMEI'), 'NUMERO SIM': v(l, 'NUMERO SIM'), 'ACCESORIOS': v(e, 'ACCESORIOS'),
         'SEDE': v(a, 'SEDE'), 'OFICINA / DESARROLLO': v(a, 'OFICINA / DESARROLLO'), 'DEPARTAMENTO': v(a, 'DEPARTAMENTO'),
         'AREA': v(a, 'AREA'), 'JEFE DIRECTO': v(a, 'JEFE DIRECTO'), 'DIRECTOR': v(a, 'DIRECTOR'), 'RAZON SOCIAL': v(l, 'RAZON SOCIAL'),
-        'PIN WHATSAPP': v(l, 'PIN WHATSAPP'), 'PIN EQUIPO': v(e, 'PIN EQUIPO'), 'CONTRASEÑA MODEM': v(e, 'CONTRASEÑA MODEM'),
+        // El PIN de WhatsApp es del equipo (usuario, 8 y 13-oct; pendiente 2.25): el de LINEAS solo mientras no se pase
+        'PIN WHATSAPP': e ? (v(e, 'PIN WHATSAPP') || v(l, 'PIN WHATSAPP')) : '', 'PIN EQUIPO': v(e, 'PIN EQUIPO'), 'CONTRASEÑA MODEM': v(e, 'CONTRASEÑA MODEM'),
         'PATRON': v(e, 'PATRON'), 'CUENTA GOOGLE': v(a, 'CUENTA GOOGLE'), 'COMPAÑIA': v(l, 'COMPAÑIA'),
         'COSTO PLAN': v(d, 'COSTO PLAN'), 'FECHA REGISTRO': v(e || l, 'FECHA DE ALTA'), 'INICIO PLAN': v(d, 'INICIO PLAN'),
         'FIN PLAN': v(d, 'FIN PLAN'), 'ESTATUS LINEA': v(l, 'ESTATUS LINEA'), 'ESTATUS EQUIPO': v(e, 'ESTATUS EQUIPO'),
         'ID PERSONA': v(a, 'ID PERSONA'),
         'ID EQUIPO': e ? String(e['ID']) : '', 'ID LINEA': l ? String(l['ID']) : '', 'ID ASIGNACION': v(a, 'ID'),
         'TIPO ASIGNACION': v(a, 'TIPO'), 'TIPO DE LINEA': v(l, 'TIPO DE LINEA'), 'TIPO DE EQUIPO': v(e, 'TIPO DE EQUIPO'),
+        'CUENTA PADRE': v(l, 'CUENTA PADRE'), 'CUENTA': v(l, 'CUENTA'), 'PLAN': v(d, 'PLAN'), 'FUENTE PLAN': v(d, 'FUENTE'),
+        'ORIGEN PLAN': v(d, 'ARCHIVO'),
       };
       ADICIONALES.forEach((c) => { o[c] = v(a, c); });
       DE_LA_HOJA_VIEJA.forEach((c) => { o[c] = v(e, c) || v(l, c) || v(viejo, c); });
