@@ -577,38 +577,58 @@ const Permisos = (function () {
   }
 
   /**
-   * Escribe en PERMISOS lo que falta de separacion_ y lo anota en el historial. Se puede correr las
-   * veces que sea: lo que ya existe no se toca. Lo corre permisosSepararModulos() desde el editor.
+   * Las reglas como quedan en el catálogo en árbol (14-oct-2026), sin tocar Sheets: con lo que falta
+   * de separacion_ y cada MODULO escrito con su id canónico (un id viejo como "responsiva-vehicular"
+   * pasa a "vehiculos.responsiva"; lo que no está en el catálogo se deja como está para que
+   * revisarCatalogo lo reporte). { reglas, agregadas, renombradas }
    */
-  function separarModulos(quienCorre) {
+  function migracion_(vigentes, usuarios) {
+    const agregadas = separacion_(vigentes, usuarios);
+    const nota = 'Separar módulos (14-oct-2026)';
+    let renombradas = 0;
+    const reglas = aplicarCambios_(vigentes, agregadas, nota).map((r) => {
+      const canonico = Modulos.resolver(r[1]);
+      if (!canonico || canonico === limpiar_(r[1])) return r;
+      renombradas++;
+      return [r[0], canonico, r[2], r[3]];
+    });
+    return { reglas: reglas, agregadas: agregadas, renombradas: renombradas };
+  }
+
+  /**
+   * Deja PERMISOS como el catálogo en árbol la necesita (migracion_) y lo anota en el historial. Se puede
+   * correr las veces que sea: lo que ya está no se toca. Lo corre permisosMigrarCatalogo() desde el editor.
+   */
+  function migrarCatalogo(quienCorre) {
     const candado = LockService.getScriptLock();
     candado.waitLock(20000);
-    let cambios;
+    let m;
     try {
       const vigentes = reglas_(true).filas;
-      cambios = separacion_(vigentes, usuarios_());
-      if (!cambios.length) return 'No faltaba ninguna regla: los módulos ya estaban separados.';
+      m = migracion_(vigentes, usuarios_());
+      if (!m.agregadas.length && !m.renombradas) return 'No faltaba nada: PERMISOS ya estaba como el catálogo en árbol.';
       const ss = SpreadsheetApp.openById(ssId());
       const hoja = ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS);
-      escribirHoja_(hoja, aplicarCambios_(vigentes, cambios, 'Separar módulos (14-oct-2026)'));
-      anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Separar módulos' }, diferencias_(vigentes, cambios));
+      escribirHoja_(hoja, m.reglas);
+      anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Migrar catálogo' }, diferencias_(vigentes, m.agregadas));
       SpreadsheetApp.flush();
     } finally {
       candado.releaseLock();
     }
     CacheService.getScriptCache().removeAll(usuarios_().map((u) => 'permisos_' + clave_(u['CORREO'])));
     const porModulo = {};
-    cambios.forEach((c) => { porModulo[c.modulo] = (porModulo[c.modulo] || 0) + 1; });
-    return 'Se agregaron ' + cambios.length + ' reglas: ' +
-      Object.keys(porModulo).map((m) => m + ' ' + porModulo[m]).join(', ') + '. Quedaron en PERMISOS_HISTORIAL.';
+    m.agregadas.forEach((c) => { porModulo[c.modulo] = (porModulo[c.modulo] || 0) + 1; });
+    return 'Se agregaron ' + m.agregadas.length + ' reglas' +
+      (m.agregadas.length ? ' (' + Object.keys(porModulo).map((x) => x + ' ' + porModulo[x]).join(', ') + ')' : '') +
+      ' y se renombraron ' + m.renombradas + ' a su id del catálogo. Lo agregado quedó en PERMISOS_HISTORIAL.';
   }
 
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
     deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
     firmaDeLectura, esFaltaDePermiso, alcanceDe, dentroDeAlcance, ROL_CLIENTE,
-    panel, guardar, separarModulos,
-    resolver_, alcance_, separacion_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
+    panel, guardar, migrarCatalogo,
+    resolver_, alcance_, separacion_, migracion_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
   };
 })();
 
@@ -624,13 +644,20 @@ function permisosCrearHoja() {
 }
 
 /**
- * Una vez por proyecto (14-oct-2026): da los módulos nuevos de los panoramas, Sistemas y Encuestas a
- * quien ya los veía, para que nadie pierda nada al separarlos (Permisos.separarModulos). Correr desde
- * el editor; se puede repetir sin problema.
+ * Una vez por proyecto, justo después de desplegar el catálogo en árbol (14-oct-2026): da los módulos
+ * nuevos (panoramas, Sistemas, Encuestas, Adquisición) a quien ya los veía para que nadie pierda nada, y
+ * reescribe los ids viejos de PERMISOS a su id del catálogo (Permisos.migrarCatalogo). Correr desde el
+ * editor; se puede repetir sin problema.
  */
-function permisosSepararModulos() {
+function permisosMigrarCatalogo() {
   soloEditor_();
-  const mensaje = Permisos.separarModulos(Session.getActiveUser().getEmail());
+  const mensaje = Permisos.migrarCatalogo(Session.getActiveUser().getEmail());
   Logger.log(mensaje);
   return mensaje;
+}
+
+/** El nombre de antes (14-oct): hace lo mismo que permisosMigrarCatalogo */
+function permisosSepararModulos() {
+  soloEditor_();
+  return permisosMigrarCatalogo();
 }

@@ -314,6 +314,18 @@ console.log('7d. Un módulo por entrada del menú: nadie pierde lo que veía (se
   ok(Modulos.familia('vehiculos').indexOf('sistemas-vehiculos') === -1 && Modulos.familia('vehiculos').indexOf('panorama-vehiculos') !== -1,
     'Sistemas (solo enlaces) no cuenta como familia: no abre el catálogo de vehículos; el Panorama sí');
   ok(Modulos.familia('sistemas-vehiculos').indexOf('sistemas-vehiculos') !== -1, 'la familia de un módulo de enlaces lo incluye a él');
+
+  // permisosMigrarCatalogo: lo de separacion_ + los ids viejos a su id del catálogo, sin cambiar lo que cada quien ve
+  const conViejos = reglas.concat([['CONTROL VEHICULAR', 'responsiva-vehicular', 'LECTURA'], ['CONTROL VEHICULAR', 'Hologramas', 'EDICION']]);
+  const m = Permisos.migracion_(conViejos, gente);
+  ok(m.renombradas === 2 && m.reglas.some((x) => x[1] === 'vehiculos.responsiva') && m.reglas.some((x) => x[1] === 'hologramas') &&
+    !m.reglas.some((x) => x[1] === 'responsiva-vehicular'), 'migrar: los ids viejos y los nombres del menú quedan con su id del catálogo');
+  const quien = gente[0];
+  const antes = Permisos.resolver_(quien, Permisos.aplicarCambios_(conViejos, m.agregadas, 'n'), Modulos.ids());
+  const despues = Permisos.resolver_(quien, m.reglas, Modulos.ids());
+  ok(JSON.stringify(antes) === JSON.stringify(despues), 'migrar no cambia lo que la persona ve (solo cómo se escribe)');
+  ok(Permisos.migracion_(m.reglas, gente).agregadas.length === 0 && Permisos.migracion_(m.reglas, gente).renombradas === 0,
+    'correrla otra vez no hace nada');
 }
 
 console.log('8. Catálogo de módulos');

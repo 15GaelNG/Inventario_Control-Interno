@@ -68,7 +68,9 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   // (registrarMediciones y pasosServidor son el medidor de tiempos del DEV: no regresan datos de nadie)
   const NO_SON_DE_UN_DEPARTAMENTO = ['permisos', 'catalogos', 'colaboradores', 'registrarMediciones', 'pasosServidor'];
   const funciones = telefonia.split(/\n  function /).slice(1).map((t) => ({ nombre: t.match(/^(\w+)/)[1], cuerpo: t }));
-  const leen = funciones.filter((f) => /\bleer_\(token\)/.test(f.cuerpo) && NO_SON_DE_UN_DEPARTAMENTO.indexOf(f.nombre) === -1);
+  // Lee quien pide leer: con leer_ (cualquier pantalla de Líneas), su sección o un módulo (permisos en árbol)
+  const leen = funciones.filter((f) => /\bleer_\(token\)|\bleerSeccion_\(token|Permisos\.puedeLeer\(token/.test(f.cuerpo) &&
+    NO_SON_DE_UN_DEPARTAMENTO.indexOf(f.nombre) === -1);
   assert.ok(leen.length >= 12, leen.length + ' funciones leen');
   const sueltas = leen.filter((f) => !/exigirAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance\)/.test(f.cuerpo));
   assert.deepEqual(sueltas.map((f) => f.nombre), [], 'leen Líneas sin revisar el alcance del rol CLIENT');

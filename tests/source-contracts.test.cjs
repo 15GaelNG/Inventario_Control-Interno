@@ -2519,8 +2519,9 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   assert.match(css, /\.ln-meses:hover \.ln-meses-cuerpo, \.ln-meses:focus-within \.ln-meses-cuerpo \{ display: block; \}/);
   // Servidor: facturas de la línea y el día de corte de su cuenta
   const servicio = read('src/services/TelefoniaService.gs');
-  assert.match(servicio, /facturas: LineasRepo\.facturasDeLinea\(r\.linea, 3\),/);
-  assert.match(servicio, /corte: LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\),/);
+  // Lo del proveedor, solo con la sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
+  assert.match(servicio, /facturas: veFacturacion_\(sesion\) \? LineasRepo\.facturasDeLinea\(r\.linea, 3\) : null,/);
+  assert.match(servicio, /corte: veFacturacion_\(sesion\) \? LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\) : null,/);
 });
 
 test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no se entendía', () => {
@@ -2550,4 +2551,17 @@ test('Facturación: la parcialidad del equipo se ve y la diferencia contra la re
   assert.match(repo, /Math\.round\(\(cobrado - cargoEquipo - renta\) \* 100\) \/ 100/);
   assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
   assert.match(read('src/html/js/lineas.html'), /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
+});
+
+test('apiListaConHuella solo despacha listas, y cada lista que la pantalla pide así está permitida', () => {
+  // Antes despachaba cualquier api… con el token (14-oct): ahora una lista blanca por nombre
+  const api = read('src/ClientApi.gs');
+  const m = /const LISTAS_CON_HUELLA_ = (\/.+\/);/.exec(api);
+  assert.ok(m, 'ClientApi.gs declara LISTAS_CON_HUELLA_');
+  const permitidas = new Function('return ' + m[1])();
+  const js = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  const pedidas = [...new Set([...js.matchAll(/callServerListaCacheada\('(api\w+)'/g)].map((x) => x[1]))];
+  assert.ok(pedidas.length >= 10, pedidas.length + ' listas');
+  assert.deepEqual(pedidas.filter((f) => !permitidas.test(f)), [], 'listas que la pantalla pide y el servidor no despacharía');
+  ['apiFirmaRemotaCompletar', 'apiPermisosGuardar', 'apiLogin', 'apiListaConHuella'].forEach((f) => assert.ok(!permitidas.test(f), f + ' no se despacha'));
 });

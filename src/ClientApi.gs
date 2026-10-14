@@ -16,10 +16,11 @@ function apiPing() {
 // --- Pantallas que se actualizan solas (api.html: pedirLista_ y el vigía) ---
 // Una lista de la app (apiListar…, apiFicha…, apiResumenInicio) con su huella: de qué versiones de hoja salió
 // (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
+// Solo las listas (apiListar…, apiFicha…, el Inicio y las campanitas), no cualquier api…: source-contracts revisa que
+// cada callServerListaCacheada de la pantalla entre aquí
+const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|NotificacionesPendientes|LineasNotificaciones)$/;
 function apiListaConHuella(token, fn, args) {
-  if (!/^api[A-Z][A-Za-z0-9]*$/.test(String(fn)) || /^api(ListaConHuella|HuellasVigentes)$/.test(fn)) {
-    throw new Error('Lista desconocida: ' + fn);
-  }
+  if (!LISTAS_CON_HUELLA_.test(String(fn))) throw new Error('Lista desconocida: ' + fn);
   const f = globalThis[fn];
   if (typeof f !== 'function') throw new Error('Lista desconocida: ' + fn);
   const r = CacheHojas.conHuella(() => f.apply(null, [token].concat(args || [])));
@@ -886,7 +887,8 @@ function apiMisPermisos(token) {
   return Permisos.mios(token);
 }
 function apiRevisarCatalogoPermisos(token) {
-  Permisos.puedeEditar(token, 'usuarios');
+  // Solo revisa (no escribe)
+  Permisos.puedeLeer(token, 'usuarios');
   return Permisos.revisarCatalogo();
 }
 // Administración > Usuarios y permisos (solo ADMIN): lo que pinta la pantalla, y guardar sus cambios
