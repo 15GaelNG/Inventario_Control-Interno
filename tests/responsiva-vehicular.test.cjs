@@ -462,6 +462,27 @@ test('regenerarLiga: si esa parte ya firmó MAL y la otra sigue pendiente, se pu
   assert.equal(archivosDrive[archivoFirmaMala].trashed, true, 'el archivo de Drive de la firma mala también se tira');
 });
 
+test('regenerarLiga: después de regenerar, SÍ se puede volver a firmar con el token nuevo', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  const tokenOriginal = llamadas.insert[0]['TOKEN FIRMA'];
+  contexto.Servicio.completarFirma(tokenOriginal, { base64: 'firmo-mal', mimeType: 'image/png' });
+
+  contexto.Servicio.regenerarLiga('tok', id, 'principal');
+  const tokenNuevo = llamadas.insert[0]['TOKEN FIRMA'];
+  assert.ok(tokenNuevo && tokenNuevo !== tokenOriginal);
+
+  const pendiente = contexto.Servicio.obtenerPendientePorToken(tokenNuevo);
+  assert.equal(pendiente.vigente, true, 'la liga nueva se ve vigente antes de firmar');
+
+  const resultado = contexto.Servicio.completarFirma(tokenNuevo, { base64: 'firmo-bien', mimeType: 'image/png' });
+  assert.equal(resultado.pendiente, true, 'el jefe sigue sin firmar -- se guarda y se espera, sin tronar');
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA'], '', 'el token nuevo ya se consumió, correcto');
+  assert.ok(llamadas.insert[0]['FIRMADO POR'], 'quedó registrado quién firmó esta vez');
+});
+
 test('regenerarLiga: truena si esa parte firmó presencial (nunca tuvo liga) -- no hay nada que regenerar', () => {
   const { contexto, llamadas } = crearContexto();
   // Jefe firma presencial al crear (imagen directa); responsable se difiere -- el documento

@@ -45,6 +45,8 @@ const PERMISOS_SEMILLA = (function () {
 
   dar(['incidencias'], [ANALISIS, SERVICIOS], 'EDICION', 'AppSheet: INCIDENCIAS');
   dar(['vehiculos'], [ANALISIS, CI, SERVICIOS, CONTROL, AUDITORIAS], 'EDICION', 'AppSheet: VEHICULOS');
+  dar(['adquisicion-vehicular'], [ANALISIS, CI, SERVICIOS, CONTROL, AUDITORIAS], 'LECTURA',
+    'Catálogo de expedientes de compra por serie -- mismas áreas que ya veían Vehículos antes de separarse (14-oct-2026)');
   dar(['cambios-vehiculos'], [ANALISIS, SERVICIOS, CI], 'EDICION', 'AppSheet: CAMBIOS VEHICULOS (solo agregar)');
   dar(['reasignaciones-vehiculares'], [ANALISIS, CI, SERVICIOS, CONTROL, AUDITORIAS], 'EDICION',
     'AppSheet: REASIGNACIONES VEHICULARES (solo agregar)');
