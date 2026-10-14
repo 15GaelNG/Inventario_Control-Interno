@@ -61,7 +61,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (General → Equipo, y Equipo en la ficha de la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni
   lo pide. Se guarda en la columna PIN WHATSAPP de EQUIPOS (`asegurarColumnas` la crea al escribir) y se borra cuando la línea
   deja al equipo (`sinPinWhatsapp_` en `guardar` y `separarLinea` de `LineasEscritura`, con su renglón en el historial). Se lee
-  del equipo y, mientras no se pase, del que traiga LINEAS (`LineasLectura`). Qué falta para los datos: pendiente 2.25.
+  del equipo y, si el equipo no tiene, del que traiga LINEAS (`LineasLectura`). En producción y en el DEV el PIN ya está en EQUIPOS (14-oct); las líneas sin equipo no tienen PIN.
 - **Pestaña General** (14-oct, `4e00ac9`, `a91decd`; usuario, 13-oct; las reglas de nombres, en plan §4.9). **Línea:** tarjetas
   Línea (tipo, compañía, SIM, estatus), Cuenta (razón social, cuenta padre, cuenta y «Día N de cada mes», de CUENTAS por
   `LineasRepo.diaDeCorte`), Plan (plan, renta, inicio y fin de plan y una barra con la vida del plazo: verde vigente, ámbar a 3
