@@ -415,7 +415,11 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
 
   const plantillas = [...index.matchAll(/include\('(html\/[^']+)'\)/g)].map((m) => read('src/' + m[1] + '.html')).join('\n');
   const js = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
-  const modulos = [...read('src/config/Modulos.gs').matchAll(/\{ id: '([^']+)', etiqueta/g)].map((m) => m[1]);
+  // El catálogo de verdad (Modulos.gs): todos los nodos (módulos y secciones) y los módulos solos
+  const catalogo = {};
+  require('vm').runInNewContext(read('src/config/Modulos.gs') + '\n;this.M = Modulos;', catalogo);
+  const modulos = catalogo.M.ids();
+  const raices = catalogo.M.todos().map((m) => m.id);
   const problemas = [];
   entradas.filter((e) => e.vista).forEach((e) => {
     const quien = e.vista + ': ';
@@ -429,12 +433,10 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
     if (e.requiere && !modulos.includes(e.requiere)) problemas.push(quien + 'requiere ' + e.requiere + ', que no está en Modulos.gs');
     if (!fuera.includes(e) && !e.requiere && !e.libre) problemas.push(quien + 'en el menú sin requiere ni libre');
   });
-  // Y al revés: cada módulo de Modulos.gs tiene por dónde entrar: su vista, o la ficha de otro
-  // módulo (`enFicha`), que lo pide con deModulo para que sin permiso su pestaña no aparezca
-  const enFicha = Object.fromEntries([...read('src/config/Modulos.gs').matchAll(/{ id: '([^']+)', etiqueta.*enFicha: '([^']+)'/g)].map((m) => [m[1], m[2]]));
-  modulos.forEach((m) => {
-    if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`) && !read('src/ClientApi.gs').includes(`parte('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo (ni con parte en el servidor)'); }
-    else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
+  // Y al revés: cada MÓDULO de Modulos.gs tiene por dónde entrar (su vista). Las secciones viven
+  // dentro de la vista de su módulo (las pestañas de una ficha, Exportar…): no necesitan una propia
+  raices.forEach((m) => {
+    if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
   });
   // Cada entrada del menú tiene su propio permiso (14-oct): dos no comparten módulo, salvo las que
   // son parte de otro a propósito. Y `libre` (sin permiso) solo en Help Desk
@@ -2205,7 +2207,7 @@ test('las fichas van en una llamada y piden lo de otro módulo solo si la person
     const i = api.indexOf('function ' + f.servidor + '(');
     assert.ok(i >= 0, f.servidor + ' existe');
     const cuerpo = api.slice(i, api.indexOf('\n}', i));
-    const sueltas = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPor\w+\(/.test(l) && !/parte\('[a-z-]+'/.test(l));
+    const sueltas = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPor\w+\(/.test(l) && !/parte\('[a-z.-]+'/.test(l));
     assert.deepEqual(sueltas, [], f.servidor + ': cada pestaña va con parte(modulo, …)');
     const texto = read(f.archivo);
     const desde = texto.indexOf('async function ' + f.funcion + '(');

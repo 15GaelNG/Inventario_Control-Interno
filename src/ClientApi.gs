@@ -121,8 +121,8 @@ function apiFichaVehiculo(token, idVehiculo) {
     // Hologramas queda fuera del cambio (se trata aparte): su FOLIO ya sale del catálogo por la serie
     hologramas: parte('hologramas', () => HologramasService.listarPorFolio(token, completo['FOLIO'])),
     incidencias: parte('incidencias', () => IncidenciasService.listarPorVehiculo(token, id)),
-    responsivas: parte('responsiva-vehicular', () => ResponsivaVehicularService.listarPorVehiculo(token, id)),
-    adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorVehiculo(token, id)),
+    responsivas: parte('vehiculos.responsiva', () => ResponsivaVehicularService.listarPorVehiculo(token, id)),
+    adherentes: parte('vehiculos.adherente', () => AdherenteVehicularService.listarPorVehiculo(token, id)),
   });
 }
 /**

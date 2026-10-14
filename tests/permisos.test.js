@@ -74,10 +74,46 @@ ok(p.vehiculos === 'EDICION' && p.usuarios === 'EDICION', 'y en todos con edici�
 p = resolver(usuario({ ROL: 'ADMIN', CORREO: 'especial@ciudadmaderas.com' }));
 ok(p.vehiculos === 'EDICION', 'a un ADMIN no se le quita nada desde la hoja: es admin y punto');
 p = resolver(usuario({ ROL: 'SUPER' }));
-ok(p.usuarios === undefined && Object.keys(p).length === Modulos.ids().length - 1,
-  'SUPER: todo con edición menos Usuarios y permisos (como en AppSheet)');
+ok(p.usuarios === undefined && p['usuarios.exportar'] === undefined &&
+  Object.keys(p).length === Modulos.ids().filter((m) => Modulos.raiz(m) !== 'usuarios').length,
+  'SUPER: todo con edición menos Usuarios y permisos y sus secciones (como en AppSheet)');
 p = resolver(usuario({ ROL: 'VIEWER', AREA: 'CONTROL VEHICULAR' }));
 ok(p.vehiculos === 'LECTURA' && p.hologramas === 'LECTURA', 'VIEWER: lo de su área, pero topado en lectura');
+
+console.log('4b. Secciones: heredan de su módulo (catálogo en árbol, 14-oct)');
+{
+  const R = (reglas, extra) => Permisos.resolver_(usuario(Object.assign({ AREA: 'CI', CORREO: 'ana@ciudadmaderas.com' }, extra)), reglas, Modulos.ids());
+  p = R([['CI', 'vehiculos', 'EDICION']]);
+  ok(p['vehiculos.documentos'] === 'EDICION' && p['vehiculos.exportar'] === 'EDICION' && p['vehiculos.responsiva'] === 'EDICION',
+    'sin regla, cada sección tiene lo de su módulo');
+  p = R([['CI', 'vehiculos', 'EDICION'], ['CI', 'vehiculos.exportar', 'NINGUNO'], ['CI', 'vehiculos.documentos', 'LECTURA']]);
+  ok(p['vehiculos.exportar'] === undefined && p['vehiculos.documentos'] === 'LECTURA' && p.vehiculos === 'EDICION',
+    'una regla en la sección manda sobre la herencia (Sin acceso de un área corta la herencia)');
+  p = R([['CI', 'vehiculos', 'LECTURA'], ['CI', 'vehiculos.documentos', 'EDICION']]);
+  ok(p['vehiculos.documentos'] === 'LECTURA', 'una sección nunca pasa a su módulo');
+  p = R([['CI', 'vehiculos.documentos', 'EDICION']]);
+  ok(!p.vehiculos && !p['vehiculos.documentos'], 'sin el módulo, ninguna de sus secciones');
+  p = R([['CI', 'vehiculos', 'EDICION'], ['ana@ciudadmaderas.com', 'vehiculos.exportar', 'NINGUNO']]);
+  ok(p['vehiculos.exportar'] === undefined && p['vehiculos.documentos'] === 'EDICION', 'una excepción por correo en una sección');
+  p = R([['CI', 'vehiculos', 'EDICION'], ['CI', 'vehiculos.exportar', 'NINGUNO'], ['ana@ciudadmaderas.com', 'vehiculos.exportar', 'LECTURA']]);
+  ok(p['vehiculos.exportar'] === 'LECTURA', 'el correo manda sobre el área también en una sección');
+  p = R([['CI', 'responsiva-vehicular', 'LECTURA'], ['CI', 'vehiculos', 'EDICION']]);
+  ok(p['vehiculos.responsiva'] === 'LECTURA', 'el id viejo (responsiva-vehicular) sigue sirviendo: es la sección vehiculos.responsiva');
+  p = R([['CI', 'vehiculos', 'EDICION']], { ROL: 'VIEWER' });
+  ok(p['vehiculos.documentos'] === 'LECTURA', 'VIEWER: también las secciones, como mucho Ver');
+  ok(Modulos.resolver('Vehículos › Documentos') === 'vehiculos.documentos' && Modulos.resolver('adherente-vehicular') === 'vehiculos.adherente',
+    'en la hoja se acepta "Módulo › Sección" y el id viejo');
+  ok(Modulos.ids().every((m) => !Modulos.padre(m) || Modulos.ids().indexOf(Modulos.padre(m)) < Modulos.ids().indexOf(m)),
+    'en el catálogo cada módulo va antes que sus secciones (el resolvedor los recorre así)');
+  ok(Modulos.ids().filter((m) => Modulos.padre(m)).every((m) => /\.[a-z-]+$/.test(m)) &&
+    Modulos.todos().filter((m) => !m.soloEnlaces).every((m) => Modulos.ids().indexOf(m.id + '.exportar') !== -1),
+    'cada módulo con lista tiene su sección exportar');
+  // Sin acceso de un área: en una sección se guarda (corta la herencia); en un módulo es lo mismo que no tener regla
+  const g = Permisos.aplicarCambios_([], [{ quien: 'CI', modulo: 'vehiculos.exportar', permiso: 'NINGUNO' }, { quien: 'CI', modulo: 'uber', permiso: 'NINGUNO' }], 'n');
+  ok(g.length === 1 && g[0][1] === 'vehiculos.exportar' && g[0][2] === 'NINGUNO', 'Sin acceso de un área se guarda en una sección, no en un módulo');
+  ok(Permisos.aplicarCambios_([], [{ quien: 'CI', modulo: 'Vehículos › Documentos', permiso: 'LECTURA' }], 'n')[0][1] === 'vehiculos.documentos',
+    'se guarda siempre el id canónico');
+}
 
 console.log('5. La semilla (traducción de AppSheet)');
 const semilla = (u) => Permisos.resolver_(u, PERMISOS_SEMILLA, Modulos.ids());
@@ -181,9 +217,16 @@ const PRUEBA = [
   usuario({ CORREO: CM('auxiliar3procesos.ci'), AREA: 'LINEAS' }),
   usuario({ CORREO: CM('analista4datos.ci'), AREA: 'ANALISIS DE DATOS' }),
 ];
+// AppSheet no tenía secciones: se comparan los módulos (y lo que AppSheet llamaba módulo y hoy es sección)
+const comoAppSheet = (mapa, esperado) => {
+  const llaves = Object.keys(esperado).map((m) => Modulos.resolver(m) || m);
+  const r = {};
+  Object.keys(mapa).forEach((m) => { if (!Modulos.padre(m) || llaves.indexOf(m) !== -1) r[m] = mapa[m]; });
+  return r;
+};
 PRUEBA.forEach((u) => {
   const esperado = appsheet(u);
-  const calculado = semilla(u);
+  const calculado = comoAppSheet(semilla(u), esperado);
   const modulos = Object.keys(Object.assign({}, esperado, calculado)).sort();
   const difs = modulos.filter((m) => esperado[m] !== calculado[m])
     .map((m) => m + ': AppSheet ' + (esperado[m] || '—') + ', app ' + (calculado[m] || '—'));

@@ -75,6 +75,12 @@ const Permisos = (function () {
   const mayor_ = (a, b) => (NIVEL[a] >= NIVEL[b] ? a : b);
   /** Una regla es la misma si es del mismo área (o correo) y módulo, se escriba como se escriba */
   const llaveRegla_ = (quien, modulo) => (esCorreo_(quien) ? clave_(quien) : area_(quien)) + '|' + idModulo_(modulo);
+  /**
+   * ¿Un NINGUNO en esta regla dice algo? En un correo, sí (le quita a la persona lo de su área).
+   * En un área, solo en una sección: corta la herencia de su módulo. En un módulo raíz es lo
+   * mismo que no tener regla.
+   */
+  const ningunoCuenta_ = (quien, modulo) => esCorreo_(quien) || !!Modulos.padre(idModulo_(modulo));
 
   function ssId() {
     return Config.SPREADSHEET_IDS.USUARIOS();
@@ -105,18 +111,27 @@ const Permisos = (function () {
   }
 
   /**
-   * Permisos de una persona: { modulo: 'LECTURA' | 'EDICION' }. Función pura respecto a
-   * las hojas (recibe ya leídos usuario y reglas) para poder probarla sin Sheets.
+   * Permisos de una persona: { nodo: 'LECTURA' | 'EDICION' }, con cada módulo y cada sección del
+   * catálogo (Modulos.gs) ya resueltos: la pantalla pregunta permisoDe('vehiculos.documentos') sin
+   * saber de herencias. Función pura respecto a las hojas (recibe ya leídos usuario y reglas)
+   * para poder probarla sin Sheets. Por nodo, padre antes que hijo:
+   *   1. su regla: la de su correo y, si no hay, la de su área;
+   *   2. sin regla, una sección hereda el nivel de su módulo (con hereda: false, nada);
+   *   3. nunca más que su módulo (sin ver Vehículos no se ven sus Documentos);
+   *   4. VIEWER y CLIENT, como mucho LECTURA.
+   * ADMIN: todo. SUPER: todo menos Usuarios y permisos (y sus secciones).
    */
   function resolver_(usuario, reglas, modulosConocidos) {
     if (!usuario || clave_(usuario['ACTIVO']) !== 'TRUE') return {};
     const rol = clave_(usuario['ROL']);
+    const conocidos = (modulosConocidos || []).map(idModulo_);
 
     if (rol === 'ADMIN' || rol === 'SUPER') {
       const todo = {};
-      (modulosConocidos || []).forEach((m) => { todo[idModulo_(m)] = EDICION; });
+      conocidos.forEach((m) => {
+        if (rol === 'ADMIN' || Modulos.raiz(m) !== MODULO_USUARIOS) todo[m] = EDICION;
+      });
       if (rol === 'ADMIN') todo[MODULO_USUARIOS] = EDICION;
-      else delete todo[MODULO_USUARIOS];
       return todo;
     }
 
@@ -135,11 +150,22 @@ const Permisos = (function () {
       }
     });
 
-    const mapa = Object.assign(base, propias);
-    Object.keys(mapa).forEach((modulo) => {
-      if ((rol === 'VIEWER' || rol === ROL_CLIENTE) && mapa[modulo] === EDICION) mapa[modulo] = LECTURA;
-      // NINGUNO no se guarda: un módulo sin permiso simplemente no aparece
-      if (mapa[modulo] === NINGUNO) delete mapa[modulo];
+    // Por nodo, la regla del correo reemplaza a la del área
+    const explicito = Object.assign(base, propias);
+    const soloConsulta = rol === 'VIEWER' || rol === ROL_CLIENTE;
+    // Padres antes que hijos (el orden del catálogo); lo que no está en el catálogo, al final tal cual
+    const orden = conocidos.concat(Object.keys(explicito).filter((m) => conocidos.indexOf(m) === -1));
+    const nivel = {};
+    const mapa = {};
+    orden.forEach((m) => {
+      const n = Modulos.nodo(m);
+      const padre = n && n.padre;
+      let v = explicito[m] !== undefined ? explicito[m] : (padre && n.hereda ? nivel[padre] || NINGUNO : NINGUNO);
+      if (padre && NIVEL[v] > NIVEL[nivel[padre] || NINGUNO]) v = nivel[padre] || NINGUNO;
+      if (soloConsulta && v === EDICION) v = LECTURA;
+      nivel[m] = v;
+      // NINGUNO no se guarda: un nodo sin permiso simplemente no aparece
+      if (v !== NINGUNO) mapa[m] = v;
     });
     return mapa;
   }
@@ -383,7 +409,7 @@ const Permisos = (function () {
         if (llaveRegla_(resultado[i][0], resultado[i][1]) === k) resultado.splice(i, 1);
       }
       const permiso = c.permiso == null ? null : nivelValido_(c.permiso);
-      if (!permiso || (permiso === NINGUNO && !esCorreo_(c.quien))) return;
+      if (!permiso || (permiso === NINGUNO && !ningunoCuenta_(c.quien, c.modulo))) return;
       resultado.push([limpiar_(c.quien), idModulo_(c.modulo), permiso, nota]);
     });
     return resultado;
@@ -394,14 +420,14 @@ const Permisos = (function () {
    * [{ quien, modulo, antes, despues }] con '' = sin regla. Un cambio que deja lo mismo no cuenta.
    */
   function diferencias_(reglas, cambios) {
-    /** El nivel de esa regla en estas reglas ('' sin regla; NINGUNO de un área es lo mismo) */
+    /** El nivel de esa regla en estas reglas ('' sin regla; NINGUNO de un área en un módulo es lo mismo) */
     const nivelEn = (lista, quien, modulo) => {
       const k = llaveRegla_(quien, modulo);
       const nivel = lista.reduce((n, r) => {
         const p = nivelValido_(r[2]);
         return p && llaveRegla_(r[0], r[1]) === k ? (n ? mayor_(p, n) : p) : n;
       }, '');
-      return nivel === NINGUNO && !esCorreo_(quien) ? '' : nivel;
+      return nivel === NINGUNO && !ningunoCuenta_(quien, modulo) ? '' : nivel;
     };
     const nuevas = aplicarCambios_(reglas, cambios, '');
     const vistas = {};

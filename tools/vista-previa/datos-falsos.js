@@ -282,7 +282,7 @@
         verificaciones: parte('verificaciones', '[]'), inspecciones: parte('inspeccion-vehicular', [{ ID: '2026_24_292', FOLIO: 'AUT0024', TIPO: 'RIFTER', FECHA: hace(1), PUNTAJE: 96.3, INSPECTOR: 'AYRTON SEPULVEDA', PDF: 'x.pdf' }]),
         sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
         incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
-        responsivas: parte('responsiva-vehicular', '[]'), adherentes: parte('adherente-vehicular', '[]'),
+        responsivas: parte('vehiculos.responsiva', '[]'), adherentes: parte('vehiculos.adherente', '[]'),
       });
     },
     // Inspecciones del expediente del NUCO (ExpedienteNuco.inspecciones): carpetas con sus secciones y fotos
