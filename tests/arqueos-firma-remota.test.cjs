@@ -48,14 +48,16 @@ function crearContexto(filas) {
       formatDate: () => '01/10/2026',
     },
     DriveApp: {
-      // Un solo fake genérico: sirve tanto para abrir la plantilla (makeCopy) como para
-      // exportar/borrar la copia después (getAs/setTrashed) -- no hace falta distinguir el id,
-      // nada de esto se usa para revisar contenido real del PDF.
+      // Un solo fake genérico: sirve para abrir la plantilla (makeCopy), para exportar/borrar la
+      // copia después (getAs/setTrashed) y para leer la imagen de una firma (getBlob, la usa
+      // insertarFirma_) -- no hace falta distinguir el id salvo cuando una prueba lo sobreescribe
+      // a propósito (ver "no se pudo leer una firma").
       getFileById: (id) => ({
         getId: () => id,
         makeCopy: (nombre) => ({ getId: () => 'copia-' + id, getName: () => nombre }),
         getAs: () => ({ bytes: 'pdf-bytes', mimeType: 'application/pdf' }),
         setTrashed: (v) => { llamadas.trasheados.push({ id, v }); },
+        getBlob: () => ({ getBytes: () => 'bytes', getContentType: () => 'image/png' }),
       }),
     },
     DriveUtils: {
@@ -73,9 +75,13 @@ function crearContexto(filas) {
     DocumentApp: {
       openById: () => {
         llamadas.docAbiertos++;
+        const parrafo = { clear: () => {}, appendInlineImage: () => ({ getWidth: () => 100, getHeight: () => 40, setWidth: () => {}, setHeight: () => {} }) };
         return {
           getBody: () => ({
-            findText: () => null,       // insertarFirma_ no encuentra marcador -- no-op, no truena
+            // "Encuentra" cualquier marcador, para que insertarFirma_ sí intente leer el
+            // archivo de Drive (DriveApp.getFileById().getBlob()) -- el caso real que importa
+            // probar (una firma que ya no se puede leer) solo se dispara si se llega ahí.
+            findText: () => ({ getElement: () => ({ getParent: () => ({ asParagraph: () => parrafo }) }) }),
             replaceText: () => {},       // reemplazarMarcador_
           }),
           saveAndClose: () => {},
@@ -277,6 +283,31 @@ test('completarFirmaArqueo: cierra y genera el PDF cuando ya no falta ninguna fi
   assert.equal(fila['FORMATO ARQUEO'], r.PDF);
   assert.equal(fila['FIRMADO POR ASISTENTE'], 'firmante@ciudadmaderas.com');
   assert.equal(fila['TOKEN FIRMA ASISTENTE'], '');
+});
+
+test('completarFirmaArqueo: si la firma del Responsable (ya guardada) no se puede leer al cerrar, NO se marca Generado ni se pierde la firma del Asistente que sí se acaba de completar', () => {
+  const { contexto, hoja } = crearContexto([filaBase({
+    'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/R1/view', 'FIRMADO POR RESPONSABLE': 'responsable@ciudadmaderas.com',
+    'TOKEN FIRMA ASISTENTE': 'tok-asis', 'TOKEN FIRMA ASISTENTE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  // El archivo de la firma del Responsable (R1) ya no se puede leer -- el resto de Drive
+  // (plantilla, carpeta del año, la firma nueva que se está subiendo) sigue funcionando normal.
+  const original = contexto.DriveApp.getFileById;
+  contexto.DriveApp.getFileById = (id) => {
+    if (id === 'R1') throw new Error('Archivo no encontrado o sin permiso');
+    return original(id);
+  };
+  const r = contexto.Servicio.completarFirmaArqueo('tok-asis', 'asistente', FIRMA_IMG);
+  assert.equal(r.PDF, null);
+  assert.match(r.aviso, /no se pudo generar el documento final/i);
+  const fila = hoja[0];
+  // La firma del Asistente, recién completada, NO se pierde -- solo el cierre/PDF se detiene.
+  assert.match(fila['FIRMA ASISTENTE'], /^https:\/\/drive\.google\.com/);
+  assert.equal(fila['TOKEN FIRMA ASISTENTE'], '');
+  assert.equal(fila['FIRMADO POR ASISTENTE'], 'firmante@ciudadmaderas.com');
+  assert.match(fila['ESTADO PDF'], /^Error al generar:/);
+  assert.notEqual(fila['ESTADO PDF'], 'Generado');
+  assert.equal(fila['FORMATO ARQUEO'], undefined);
 });
 
 test('completarFirmaArqueo: token inválido', () => {

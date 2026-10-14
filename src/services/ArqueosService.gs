@@ -626,17 +626,26 @@ const ArqueosService = (function () {
   /** Busca el marcador de una firma y, si hay archivo, inserta la imagen ahí
    * mismo (mismo patrón que {{DIAGRAMA}} en PdfService.gs); si no hay
    * archivo o no es una imagen, solo borra el texto del marcador. Achica la
-   * imagen si viene más ancha de 150pt, para que no se salga de la celda. */
+   * imagen si viene más ancha de 150pt, para que no se salga de la celda.
+   *
+   * Regresa false SOLO cuando `urlArchivo` sí traía una firma (la celda no estaba vacía) pero el
+   * archivo de Drive ya no se pudo leer (borrado, sin permiso…) -- generarPdfArqueo_ usa esto
+   * para NO cerrar el documento como si estuviera completo (bug real, visto en producción
+   * 14-oct-2026 en Responsiva/Adherente Vehicular: un PDF "completo" al que en realidad le
+   * faltaba una firma, sin ningún aviso, y ya no se podía volver a mandar liga). Si no había
+   * firma todavía (celda vacía) o la URL no es un link de Drive reconocible (dato migrado de
+   * AppSheet en otro formato), se considera válido -- no es el mismo caso. */
   function insertarFirma_(body, marcadorLiteral, urlArchivo) {
     const encontrado = body.findText(escaparRegex_(marcadorLiteral));
-    if (!encontrado) return;
+    if (!encontrado) return true;
     const parrafo = encontrado.getElement().getParent().asParagraph();
     parrafo.clear();
+    if (!urlArchivo) return true;
     const fileId = extraerIdDrive_(urlArchivo);
-    if (!fileId) return;
+    if (!fileId) return true;
     try {
       const blob = DriveApp.getFileById(fileId).getBlob();
-      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return;
+      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return true;
       const imagen = parrafo.appendInlineImage(blob);
       const ANCHO_MAX = 150;
       if (imagen.getWidth() > ANCHO_MAX) {
@@ -644,9 +653,11 @@ const ArqueosService = (function () {
         imagen.setHeight(Math.round(imagen.getHeight() * proporcion));
         imagen.setWidth(ANCHO_MAX);
       }
+      return true;
     } catch (err) {
-      // No se pudo leer/insertar la imagen (archivo borrado, sin permiso,
-      // etc.) — se deja el marcador vacío, no se rompe todo el PDF por esto.
+      // No se pudo leer/insertar la imagen (archivo borrado, sin permiso, etc.) -- el marcador
+      // ya quedó vacío (parrafo.clear() arriba); generarPdfArqueo_ decide si eso trona o no.
+      return false;
     }
   }
 
@@ -754,10 +765,19 @@ const ArqueosService = (function () {
       reemplazarMarcador_(body, '<<[' + item.clave + ']>>', texto(fila[item.clave]));
     });
 
-    // Firmas — se insertan como imagen, no como texto.
-    insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE']);
-    insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA']);
-    insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE']);
+    // Firmas — se insertan como imagen, no como texto. Si alguna YA tenía firma guardada pero su
+    // archivo de Drive ya no se pudo leer, no se sigue como si el documento estuviera completo
+    // (ver el comentario largo de insertarFirma_) -- se trona ANTES de guardar/exportar el PDF,
+    // para que ni actualizarPdfArqueo_ ni completarFirmaArqueo (los dos únicos que llaman esta
+    // función) terminen marcando "Generado"/cerrando el arqueo con una firma faltante en silencio.
+    const faltantes = [];
+    if (!insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE'])) faltantes.push('Responsable');
+    if (!insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA'])) faltantes.push('Especialista');
+    if (!insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'])) faltantes.push('Asistente');
+    if (faltantes.length) {
+      throw new Error('No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
+        ' en Drive (archivo borrado o sin permiso) -- avisa a soporte para recuperar esa firma.');
+    }
 
     try {
       doc.saveAndClose();
