@@ -115,6 +115,51 @@ console.log('4b. Secciones: heredan de su módulo (catálogo en árbol, 14-oct)'
     'se guarda siempre el id canónico');
 }
 
+console.log('4c. Perfiles: paquetes de reglas que se asignan a áreas (fase 2, 14-oct)');
+{
+  const R = (reglas, extra) => Permisos.resolver_(usuario(Object.assign({ AREA: 'CI', CORREO: 'ana@ciudadmaderas.com' }, extra)), reglas, Modulos.ids());
+  const asigna = (area, perfil) => [area, 'perfil:' + perfil, 'ASIGNADO'];
+  p = R([['perfil:Flotilla', 'vehiculos', 'EDICION'], ['perfil:Flotilla', 'verificaciones', 'LECTURA'], asigna('CI', 'Flotilla')]);
+  ok(p.vehiculos === 'EDICION' && p.verificaciones === 'LECTURA' && p['vehiculos.documentos'] === 'EDICION',
+    'un perfil asignado al área da sus reglas (y sus secciones heredan)');
+  ok(!R([['perfil:Flotilla', 'vehiculos', 'EDICION']]).vehiculos, 'un perfil sin asignar no da nada');
+  ok(!R([['perfil:Flotilla', 'vehiculos', 'EDICION'], asigna('LINEAS', 'Flotilla')]).vehiculos, 'ni asignado a otra área');
+  p = R([['perfil:A', 'vehiculos', 'EDICION'], ['perfil:A', 'vehiculos.exportar', 'NINGUNO'], ['perfil:B', 'vehiculos', 'LECTURA'],
+    asigna('CI', 'A'), asigna('CI', 'B')]);
+  ok(p.vehiculos === 'EDICION' && p['vehiculos.exportar'] === 'LECTURA',
+    'dos perfiles: gana el más alto por nodo, cada uno con su herencia (B deja exportar aunque A no)');
+  p = R([['perfil:A', 'vehiculos', 'EDICION'], asigna('CI', 'A'), ['CI', 'vehiculos', 'LECTURA']]);
+  ok(p.vehiculos === 'LECTURA', 'una regla del área manda sobre sus perfiles');
+  p = R([['perfil:A', 'vehiculos', 'LECTURA'], asigna('CI', 'A'), ['ana@ciudadmaderas.com', 'vehiculos', 'EDICION']]);
+  ok(p.vehiculos === 'EDICION', 'y la del correo sobre todo');
+  p = R([['perfil:A', 'vehiculos', 'LECTURA'], ['perfil:A', 'vehiculos.documentos', 'EDICION'], asigna('CI', 'A')]);
+  ok(p['vehiculos.documentos'] === 'LECTURA', 'una sección del perfil tampoco pasa a su módulo');
+  ok(Permisos.aplicarCambios_([], [{ quien: 'perfil:Flotilla', modulo: 'vehiculos', permiso: 'EDICION' },
+    { quien: 'CI', modulo: 'perfil:Flotilla', permiso: 'ASIGNADO' }], 'n').length === 2, 'guardar acepta reglas de perfil y asignaciones');
+  const d = Permisos.diferencias_([], [{ quien: 'CI', modulo: 'perfil:Flotilla', permiso: 'ASIGNADO' }]);
+  ok(d.length === 1 && d[0].antes === '' && d[0].despues === 'ASIGNADO', 'el historial anota la asignación');
+
+  // Mover las reglas de cada área a un perfil con su nombre no cambia lo que nadie ve (casos al azar)
+  const nodos = Modulos.ids();
+  const AREAS = ['CI', 'LINEAS', 'POST VENTA'];
+  const CORREOS = ['a@x.com', 'b@x.com', 'c@x.com'];
+  let semilla = 11;
+  const azar = (n) => { semilla = (semilla * 1103515245 + 12345) % 2147483648; return semilla % n; };
+  let iguales = true;
+  for (let caso = 0; caso < 40 && iguales; caso++) {
+    const reglas = Permisos.aplicarCambios_([], Array.from({ length: 30 }, () => ({
+      quien: azar(4) ? AREAS[azar(3)] : CORREOS[azar(3)], modulo: nodos[azar(nodos.length)], permiso: ['NINGUNO', 'LECTURA', 'EDICION'][azar(3)],
+    })), '');
+    const m = Permisos.perfilesDesdeAreas_(reglas);
+    CORREOS.forEach((correo, i) => {
+      const u = usuario({ CORREO: correo, AREA: AREAS[i], ROL: ['USER', 'VIEWER', 'CLIENT'][i] });
+      if (JSON.stringify(Permisos.resolver_(u, reglas, nodos)) !== JSON.stringify(Permisos.resolver_(u, m.reglas, nodos))) iguales = false;
+    });
+    if (Permisos.perfilesDesdeAreas_(m.reglas).perfiles.length) iguales = false;   // correrla otra vez no hace nada
+  }
+  ok(iguales, 'pasar las reglas de cada área a su perfil deja a todos igual (40 casos al azar), y repetirla no hace nada');
+}
+
 console.log('5. La semilla (traducción de AppSheet)');
 const semilla = (u) => Permisos.resolver_(u, PERMISOS_SEMILLA, Modulos.ids());
 ok(PERMISOS_SEMILLA.every((r) => Modulos.existe(r[1])), 'todos sus módulos existen en el catálogo');

@@ -59,6 +59,19 @@ const Permisos = (function () {
   /** Ve solo lo de sus departamentos y nunca edita (punto 6 de arriba) */
   const ROL_CLIENTE = 'CLIENT';
 
+  /**
+   * PERFILES (fase 2, 14-oct-2026): un paquete de reglas con nombre que se asigna a áreas. Viven en la misma hoja
+   * PERMISOS, para tener una sola caché, un solo guardar y un solo historial:
+   *   QUIEN = "perfil:Nombre" | MODULO = nodo     | PERMISO = nivel      → una regla del perfil
+   *   QUIEN = AREA            | MODULO = "perfil:Nombre" | PERMISO = ASIGNADO → el área tiene ese perfil
+   * Una versión de antes los ignora sin tronar (QUIEN no es un área real; ASIGNADO no es un nivel).
+   */
+  const PREFIJO_PERFIL = 'perfil:';
+  const ASIGNADO = 'ASIGNADO';
+  const esPerfil_ = (texto) => /^perfil:/i.test(limpiar_(texto));
+  const nombrePerfil_ = (texto) => limpiar_(texto).replace(/^perfil:\s*/i, '');
+  const clavePerfil_ = (texto) => area_(nombrePerfil_(texto));
+
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
   const clave_ = (v) => limpiar_(v).toUpperCase();
   /** Para comparar áreas: sin acentos, mayúsculas y un solo espacio ("Análisis  de datos" = "ANALISIS DE DATOS") */
@@ -70,17 +83,23 @@ const Permisos = (function () {
    * Lo que no corresponda a ningún módulo se conserva tal cual para que
    * revisarCatalogo() lo pueda reportar en vez de tragárselo en silencio.
    */
-  const idModulo_ = (v) => Modulos.resolver(v) || limpiar_(v).toLowerCase().replace(/\s+/g, '-');
+  const idModulo_ = (v) => (esPerfil_(v) ? PREFIJO_PERFIL + nombrePerfil_(v)
+    : Modulos.resolver(v) || limpiar_(v).toLowerCase().replace(/\s+/g, '-'));
   const nivelValido_ = (v) => (NIVEL[clave_(v)] === undefined ? null : clave_(v));
+  /** Un nivel, o ASIGNADO (la asignación de un perfil a un área) */
+  const permisoValido_ = (v) => (clave_(v) === ASIGNADO ? ASIGNADO : nivelValido_(v));
   const mayor_ = (a, b) => (NIVEL[a] >= NIVEL[b] ? a : b);
-  /** Una regla es la misma si es del mismo área (o correo) y módulo, se escriba como se escriba */
-  const llaveRegla_ = (quien, modulo) => (esCorreo_(quien) ? clave_(quien) : area_(quien)) + '|' + idModulo_(modulo);
+  /** Una regla es la misma si es del mismo área (o correo, o perfil) y módulo, se escriba como se escriba */
+  const llaveRegla_ = (quien, modulo) => (esCorreo_(quien) ? clave_(quien) : esPerfil_(quien) ? PREFIJO_PERFIL + clavePerfil_(quien) : area_(quien)) +
+    '|' + (esPerfil_(modulo) ? PREFIJO_PERFIL + clavePerfil_(modulo) : idModulo_(modulo));
   /**
    * ¿Un NINGUNO en esta regla dice algo? En un correo, sí (le quita a la persona lo de su área).
    * En un área, solo en una sección: corta la herencia de su módulo. En un módulo raíz es lo
    * mismo que no tener regla.
    */
   const ningunoCuenta_ = (quien, modulo) => esCorreo_(quien) || !!Modulos.padre(idModulo_(modulo));
+  /** El tipo de un renglón de PERMISOS: 'correo' | 'area' | 'perfil' (regla de un perfil) | 'asignacion' */
+  const tipoRegla_ = (r) => (esPerfil_(r[0]) ? 'perfil' : esCorreo_(r[0]) ? 'correo' : esPerfil_(r[1]) ? 'asignacion' : 'area');
 
   function ssId() {
     return Config.SPREADSHEET_IDS.USUARIOS();
@@ -116,7 +135,9 @@ const Permisos = (function () {
    * saber de herencias. Función pura respecto a las hojas (recibe ya leídos usuario y reglas)
    * para poder probarla sin Sheets. Por nodo, padre antes que hijo:
    *   1. su regla: la de su correo y, si no hay, la de su área;
-   *   2. sin regla, una sección hereda el nivel de su módulo (con hereda: false, nada);
+   *   1b. si no hay, lo de los PERFILES de su área (si alguno dice algo de ese nodo): cada perfil se resuelve
+   *       solo, con su propia herencia, y gana el más alto (un perfil nunca le quita a otro);
+   *   2. sin nada de eso, una sección hereda el nivel de su módulo (con hereda: false, nada);
    *   3. nunca más que su módulo (sin ver Vehículos no se ven sus Documentos);
    *   4. VIEWER y CLIENT, como mucho LECTURA.
    * ADMIN: todo. SUPER: todo menos Usuarios y permisos (y sus secciones).
@@ -139,28 +160,50 @@ const Permisos = (function () {
     const correo = clave_(usuario['CORREO']);
     const base = {};
     const propias = {};
+    const suyos = [];          // claves de los perfiles asignados a su área
+    const deLosPerfiles = {};  // clave del perfil → { nodo: nivel } (sus reglas)
     (reglas || []).forEach((r) => {
+      if (!limpiar_(r[0])) return;
+      const tipo = tipoRegla_(r);
+      if (tipo === 'asignacion') {
+        if (area && area_(r[0]) === area && clave_(r[2]) === ASIGNADO) suyos.push(clavePerfil_(r[1]));
+        return;
+      }
       const modulo = idModulo_(r[1]);
       const permiso = nivelValido_(r[2]);
-      if (!limpiar_(r[0]) || !modulo || !permiso) return;
-      if (esCorreo_(r[0])) {
+      if (!modulo || !permiso) return;
+      if (tipo === 'perfil') {
+        const p = deLosPerfiles[clavePerfil_(r[0])] || (deLosPerfiles[clavePerfil_(r[0])] = {});
+        p[modulo] = mayor_(permiso, p[modulo] || NINGUNO);
+      } else if (tipo === 'correo') {
         if (clave_(r[0]) === correo) propias[modulo] = mayor_(permiso, propias[modulo] || NINGUNO);
       } else if (area && area_(r[0]) === area) {
         base[modulo] = mayor_(permiso, base[modulo] || NINGUNO);
       }
     });
+    const perfiles = suyos.filter((k, i) => suyos.indexOf(k) === i).map((k) => deLosPerfiles[k] || {});
 
     // Por nodo, la regla del correo reemplaza a la del área
     const explicito = Object.assign(base, propias);
     const soloConsulta = rol === 'VIEWER' || rol === ROL_CLIENTE;
     // Padres antes que hijos (el orden del catálogo); lo que no está en el catálogo, al final tal cual
-    const orden = conocidos.concat(Object.keys(explicito).filter((m) => conocidos.indexOf(m) === -1));
+    const extra = Object.keys(explicito).concat(...perfiles.map((p) => Object.keys(p)));
+    const orden = conocidos.concat(extra.filter((m, i) => conocidos.indexOf(m) === -1 && extra.indexOf(m) === i));
     const nivel = {};
     const mapa = {};
+    // Cada perfil, resuelto solo (con su herencia, sin tope: el tope se aplica una vez, abajo)
+    const enPerfil = perfiles.map(() => ({}));
     orden.forEach((m) => {
       const n = Modulos.nodo(m);
       const padre = n && n.padre;
-      let v = explicito[m] !== undefined ? explicito[m] : (padre && n.hereda ? nivel[padre] || NINGUNO : NINGUNO);
+      perfiles.forEach((p, i) => {
+        enPerfil[i][m] = p[m] !== undefined ? p[m] : (padre && n.hereda ? enPerfil[i][padre] || NINGUNO : NINGUNO);
+      });
+      const loDiceUnPerfil = perfiles.some((p) => p[m] !== undefined);
+      let v;
+      if (explicito[m] !== undefined) v = explicito[m];
+      else if (loDiceUnPerfil) v = enPerfil.reduce((mx, e) => mayor_(e[m], mx), NINGUNO);
+      else v = padre && n.hereda ? nivel[padre] || NINGUNO : NINGUNO;
       if (padre && NIVEL[v] > NIVEL[nivel[padre] || NINGUNO]) v = nivel[padre] || NINGUNO;
       if (soloConsulta && v === EDICION) v = LECTURA;
       nivel[m] = v;
@@ -315,11 +358,19 @@ const Permisos = (function () {
     const areas = new Set(usuarios.map((u) => area_(u['AREA'])).filter(Boolean));
     const correos = new Set(usuarios.map((u) => clave_(u['CORREO'])));
     const problemas = [];
+    const perfiles = new Set(reglas.filas.filter((r) => tipoRegla_(r) === 'perfil').map((r) => clavePerfil_(r[0])));
     reglas.filas.forEach((r, i) => {
       const donde = (reglas.fuente === 'hoja' ? 'renglón ' + (i + 2) : 'semilla #' + (i + 1)) + ' (' + limpiar_(r[0]) + ')';
-      if (!Modulos.existe(r[1])) problemas.push(donde + ': el módulo "' + limpiar_(r[1]) + '" no existe');
-      if (!nivelValido_(r[2])) problemas.push(donde + ': el permiso "' + limpiar_(r[2]) + '" no es LECTURA, EDICION ni NINGUNO');
-      if (esCorreo_(r[0]) ? !correos.has(clave_(r[0])) : !areas.has(area_(r[0]))) {
+      const tipo = tipoRegla_(r);
+      if (tipo === 'asignacion') {
+        if (!perfiles.has(clavePerfil_(r[1]))) problemas.push(donde + ': el perfil "' + nombrePerfil_(r[1]) + '" no tiene ninguna regla');
+        if (clave_(r[2]) !== ASIGNADO) problemas.push(donde + ': una asignación de perfil lleva ' + ASIGNADO + ' en PERMISO');
+      } else {
+        if (!Modulos.existe(r[1])) problemas.push(donde + ': el módulo "' + limpiar_(r[1]) + '" no existe');
+        if (!nivelValido_(r[2])) problemas.push(donde + ': el permiso "' + limpiar_(r[2]) + '" no es LECTURA, EDICION ni NINGUNO');
+      }
+      if (tipo === 'perfil') { if (!nombrePerfil_(r[0])) problemas.push(donde + ': perfil sin nombre'); }
+      else if (esCorreo_(r[0]) ? !correos.has(clave_(r[0])) : !areas.has(area_(r[0]))) {
         problemas.push(donde + ': "' + limpiar_(r[0]) + '" no es ' + (esCorreo_(r[0]) ? 'un correo' : 'un AREA') + ' de USUARIOS');
       }
     });
@@ -390,11 +441,31 @@ const Permisos = (function () {
         noEmpleado: limpiar_(u['NO_EMPLEADO']), oficina: limpiar_(u['OFICINA']), sede: limpiar_(u['SEDE']),
         coordinacion: limpiar_(u['COORDINACION']), dptosPermitidos: limpiar_(u['DPTOS PERMITIDOS']),
       })),
+      // Las reglas de áreas y de personas; las de los perfiles van en perfiles
       reglas: reglas.filas
-        .filter((r) => limpiar_(r[0]) && nivelValido_(r[2]))
+        .filter((r) => limpiar_(r[0]) && nivelValido_(r[2]) && (tipoRegla_(r) === 'area' || tipoRegla_(r) === 'correo'))
         .map((r) => ({ quien: limpiar_(r[0]), modulo: idModulo_(r[1]), permiso: nivelValido_(r[2]), nota: limpiar_(r[3]) })),
+      perfiles: perfilesDelPanel_(reglas.filas),
       historial: historial_(),
     };
+  }
+
+  /**
+   * Los perfiles como los pinta la pantalla: [{ nombre, reglas: [{ modulo, permiso }], areas: [área] }], por nombre.
+   * Un perfil existe mientras tenga reglas (crearlo es darle su primera regla; borrarlo, quitarle todas).
+   */
+  function perfilesDelPanel_(filas) {
+    const porClave = {};
+    const de = (texto) => porClave[clavePerfil_(texto)] ||
+      (porClave[clavePerfil_(texto)] = { nombre: nombrePerfil_(texto), reglas: [], areas: [] });
+    filas.forEach((r) => {
+      const tipo = tipoRegla_(r);
+      if (tipo === 'perfil' && nivelValido_(r[2])) de(r[0]).reglas.push({ modulo: idModulo_(r[1]), permiso: nivelValido_(r[2]) });
+    });
+    filas.forEach((r) => {
+      if (tipoRegla_(r) === 'asignacion' && clave_(r[2]) === ASIGNADO && porClave[clavePerfil_(r[1])]) porClave[clavePerfil_(r[1])].areas.push(limpiar_(r[0]));
+    });
+    return Object.keys(porClave).sort().map((k) => porClave[k]);
   }
 
   /**
@@ -410,9 +481,9 @@ const Permisos = (function () {
       for (let i = resultado.length - 1; i >= 0; i--) {
         if (llaveRegla_(resultado[i][0], resultado[i][1]) === k) resultado.splice(i, 1);
       }
-      const permiso = c.permiso == null ? null : nivelValido_(c.permiso);
+      const permiso = c.permiso == null ? null : permisoValido_(c.permiso);
       if (!permiso || (permiso === NINGUNO && !ningunoCuenta_(c.quien, c.modulo))) return;
-      resultado.push([limpiar_(c.quien), idModulo_(c.modulo), permiso, nota]);
+      resultado.push([esPerfil_(c.quien) ? PREFIJO_PERFIL + nombrePerfil_(c.quien) : limpiar_(c.quien), idModulo_(c.modulo), permiso, nota]);
     });
     return resultado;
   }
@@ -426,8 +497,9 @@ const Permisos = (function () {
     const nivelEn = (lista, quien, modulo) => {
       const k = llaveRegla_(quien, modulo);
       const nivel = lista.reduce((n, r) => {
-        const p = nivelValido_(r[2]);
-        return p && llaveRegla_(r[0], r[1]) === k ? (n ? mayor_(p, n) : p) : n;
+        const p = permisoValido_(r[2]);
+        if (!p || llaveRegla_(r[0], r[1]) !== k) return n;
+        return p === ASIGNADO || !n ? p : mayor_(p, n);
       }, '');
       return nivel === NINGUNO && !ningunoCuenta_(quien, modulo) ? '' : nivel;
     };
@@ -468,7 +540,7 @@ const Permisos = (function () {
       }
       return SheetUtils.getAll(ssId(), HOJA_HISTORIAL).slice(-HISTORIAL_EN_PANTALLA).reverse().map((f) => ({
         fecha: HojaServicio.fechaISO(f['FECHA']), correo: limpiar_(f['CORREO']), nombre: limpiar_(f['NOMBRE']),
-        quien: limpiar_(f['QUIEN']), modulo: idModulo_(f['MODULO']), antes: nivelValido_(f['ANTES']) || '', despues: nivelValido_(f['DESPUES']) || '',
+        quien: limpiar_(f['QUIEN']), modulo: idModulo_(f['MODULO']), antes: permisoValido_(f['ANTES']) || '', despues: permisoValido_(f['DESPUES']) || '',
       }));
     });
   }
@@ -481,12 +553,20 @@ const Permisos = (function () {
     const areas = new Set(usuarios.map((u) => area_(u['AREA'])).filter(Boolean));
     const correos = new Set(usuarios.map((u) => clave_(u['CORREO'])));
     cambios.forEach((c) => {
-      if (!Modulos.existe(c.modulo) || idModulo_(c.modulo) === MODULO_USUARIOS) {
+      // Asignar (o quitar) un perfil a un área: { quien: AREA, modulo: 'perfil:Nombre', permiso: 'ASIGNADO' | null }
+      if (esPerfil_(c.modulo)) {
+        if (!nombrePerfil_(c.modulo)) throw new Error('Falta el nombre del perfil.');
+        if (c.permiso != null && clave_(c.permiso) !== ASIGNADO) throw new Error('Una asignación de perfil es ' + ASIGNADO + ' o nada.');
+        if (esCorreo_(c.quien) || esPerfil_(c.quien) || !areas.has(area_(c.quien))) throw new Error('Un perfil se asigna a un área de USUARIOS.');
+        return;
+      }
+      if (!Modulos.existe(c.modulo) || Modulos.raiz(idModulo_(c.modulo)) === MODULO_USUARIOS) {
         throw new Error('El módulo "' + c.modulo + '" no se puede asignar.');
       }
       if (c.permiso != null && !nivelValido_(c.permiso)) throw new Error('Permiso inválido: ' + c.permiso);
+      if (esPerfil_(c.quien)) { if (!nombrePerfil_(c.quien)) throw new Error('Falta el nombre del perfil.'); return; }
       if (esCorreo_(c.quien) ? !correos.has(clave_(c.quien)) : !areas.has(area_(c.quien))) {
-        throw new Error('"' + c.quien + '" no es un área ni un correo de USUARIOS.');
+        throw new Error('"' + c.quien + '" no es un área, un correo ni un perfil.');
       }
     });
 
@@ -625,12 +705,59 @@ const Permisos = (function () {
       ' y se renombraron ' + m.renombradas + ' a su id del catálogo. Lo agregado quedó en PERMISOS_HISTORIAL.';
   }
 
+  // ---------------------------------------------------------------- perfiles desde las áreas (fase 2, 14-oct-2026)
+
+  /**
+   * Las reglas de cada área pasan a un perfil con el nombre del área, asignado a ella, sin cambiar lo que nadie
+   * ve (las reglas por correo se quedan). Un área que ya tiene un perfil con su nombre se salta. Función pura:
+   * { reglas, perfiles: [nombre] }. Después, en la pantalla, se juntan áreas en perfiles comunes.
+   */
+  function perfilesDesdeAreas_(vigentes) {
+    const yaHay = new Set(vigentes.filter((r) => tipoRegla_(r) === 'perfil').map((r) => clavePerfil_(r[0])));
+    const nombres = {};
+    vigentes.forEach((r) => {
+      if (tipoRegla_(r) !== 'area' || !limpiar_(r[0]) || !nivelValido_(r[2])) return;
+      if (!yaHay.has(area_(r[0])) && !nombres[area_(r[0])]) nombres[area_(r[0])] = limpiar_(r[0]);
+    });
+    const nota = 'Perfiles desde las áreas (14-oct-2026)';
+    const reglas = [];
+    vigentes.forEach((r) => {
+      const nombre = tipoRegla_(r) === 'area' && limpiar_(r[0]) ? nombres[area_(r[0])] : null;
+      if (nombre && nivelValido_(r[2])) reglas.push([PREFIJO_PERFIL + nombre, idModulo_(r[1]), nivelValido_(r[2]), nota]);
+      else if (!nombre) reglas.push(r.slice(0, 4));
+    });
+    Object.keys(nombres).forEach((k) => reglas.push([nombres[k], PREFIJO_PERFIL + nombres[k], ASIGNADO, nota]));
+    return { reglas: reglas, perfiles: Object.keys(nombres).map((k) => nombres[k]) };
+  }
+
+  /** Corre perfilesDesdeAreas_ sobre PERMISOS y lo anota en el historial. Lo corre permisosCrearPerfiles() */
+  function crearPerfilesDesdeAreas(quienCorre) {
+    const candado = LockService.getScriptLock();
+    candado.waitLock(20000);
+    let r;
+    try {
+      const vigentes = reglas_(true).filas;
+      r = perfilesDesdeAreas_(vigentes);
+      if (!r.perfiles.length) return 'No faltaba nada: ninguna área tiene reglas fuera de un perfil.';
+      const ss = SpreadsheetApp.openById(ssId());
+      escribirHoja_(ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS), r.reglas);
+      // En el historial: cada perfil nuevo y su asignación (las reglas del área pasan tal cual al perfil)
+      anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Perfiles desde las áreas' },
+        r.perfiles.map((p) => ({ quien: p, modulo: PREFIJO_PERFIL + p, antes: '', despues: ASIGNADO })));
+      SpreadsheetApp.flush();
+    } finally {
+      candado.releaseLock();
+    }
+    CacheService.getScriptCache().removeAll(usuarios_().map((u) => 'permisos_' + clave_(u['CORREO'])));
+    return 'Se crearon ' + r.perfiles.length + ' perfiles (uno por área, con sus mismas reglas): ' + r.perfiles.join(', ') + '.';
+  }
+
   return {
-    LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
+    LECTURA, EDICION, NINGUNO, MODULO_USUARIOS, PREFIJO_PERFIL, ASIGNADO,
     deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
     firmaDeLectura, esFaltaDePermiso, alcanceDe, dentroDeAlcance, ROL_CLIENTE,
-    panel, guardar, migrarCatalogo,
-    resolver_, alcance_, separacion_, migracion_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
+    panel, guardar, migrarCatalogo, crearPerfilesDesdeAreas,
+    resolver_, alcance_, separacion_, migracion_, perfilesDesdeAreas_, perfilesDelPanel_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
   };
 })();
 
@@ -654,6 +781,18 @@ function permisosCrearHoja() {
 function permisosMigrarCatalogo() {
   soloEditor_();
   const mensaje = Permisos.migrarCatalogo(Session.getActiveUser().getEmail());
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
+ * Fase 2 de permisos (perfiles, 14-oct-2026), una vez por proyecto y después de desplegarla: las reglas de cada área
+ * pasan a un perfil con su nombre, asignado a ella, sin cambiar lo que nadie ve (Permisos.crearPerfilesDesdeAreas).
+ * Correr desde el editor; se puede repetir sin problema. ANTES de desplegar NO: la versión de antes no lee perfiles.
+ */
+function permisosCrearPerfiles() {
+  soloEditor_();
+  const mensaje = Permisos.crearPerfilesDesdeAreas(Session.getActiveUser().getEmail());
   Logger.log(mensaje);
   return mensaje;
 }
