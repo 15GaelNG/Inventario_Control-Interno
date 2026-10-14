@@ -2338,6 +2338,13 @@
       }
     }
 
+    /**
+     * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado (Historial, Documentos, la
+     * última inspección o responsiva), que puede ser de cuando el equipo era de otro departamento. El
+     * servidor se lo niega igual (TelefoniaService.sinAlcance_); esto solo no pinta lo que no va a abrir.
+     */
+    const sinPasado = () => !!(memoria.permisos && memoria.permisos.conAlcance);
+
     function cargarPermisos() {
       if (memoria.permisos) return Promise.resolve(memoria.permisos);
       return llamar('apiLineasPermisos').then((p) => (memoria.permisos = p));
@@ -2383,7 +2390,8 @@
     /** Calienta en segundo plano lo que usan las vistas y los formularios (no bloquea nada). */
     function precargar() {
       Promise.all([cargarPermisos(), cargarIndice()])
-        .then(() => Promise.all([cargarCatalogos(), cargarColaboradores()]))
+        // Un CLIENT no usa los formularios: el directorio de Capital Humano ni se pide (el servidor se lo niega)
+        .then(() => Promise.all([cargarCatalogos(), sinPasado() ? null : cargarColaboradores()]))
         .catch(() => {});
     }
 
@@ -2420,6 +2428,7 @@
     ];
     /** "Ver": abre la última inspección o responsiva de la carpeta del NUCO en NUCOS (se busca al hacer clic). */
     function botonUltimoNucos(tipo, id) {
+      if (sinPasado()) return '';
       const titulo = (tipo === 'INSPECCION' ? 'Última inspección' : 'Última responsiva') + ' en la carpeta NUCOS';
       return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-ultimo="' + tipo + '" data-id="' + esc(id) + '" title="' + titulo + '">' +
         icono('file-text') + ' Ver</button>';
@@ -3396,8 +3405,10 @@
        * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
        */
       function fichaEnPestanas(general, detalles, conDocumentos) {
+        const pasado = !sinPasado();
+        conDocumentos = conDocumentos && pasado;
         const pestanas = [['general', 'General', 'layout-grid'], ['detalles', 'Detalles', 'clipboard-list'],
-          conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, ['historial', 'Historial', 'history']].filter(Boolean);
+          conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, pasado ? ['historial', 'Historial', 'history'] : null].filter(Boolean);
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
         const guardada = (pila[pila.length - 1] || {}).pestana;
         const activa = pestanas.some((t) => t[0] === guardada) ? guardada : 'general';
@@ -3408,7 +3419,7 @@
           '<div data-ficha-panel="general"' + (activa === 'general' ? '' : ' hidden') + '>' + general + '</div>' +
           '<div data-ficha-panel="detalles"' + (activa === 'detalles' ? '' : ' hidden') + '>' + detalles + '</div>' +
           (conDocumentos ? '<div data-ficha-panel="documentos"' + (activa === 'documentos' ? '' : ' hidden') + '><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
-          '<div data-ficha-panel="historial"' + (activa === 'historial' ? '' : ' hidden') + '><div id="ln-historial">' + cargando + '</div></div>';
+          (pasado ? '<div data-ficha-panel="historial"' + (activa === 'historial' ? '' : ' hidden') + '><div id="ln-historial">' + cargando + '</div></div>' : '');
       }
 
       function mostrarPestanaFicha(nombre) {
@@ -3560,8 +3571,8 @@
         const drive = carpeta ? [{ icono: 'folder-open', texto: 'Ver carpeta en Drive', separador: true,
           alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') }] : [];
         const documentos = [
-          tieneNuco(r) ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
-          tieneNuco(r) ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
+          tieneNuco(r) && !sinPasado() ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          tieneNuco(r) && !sinPasado() ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
         ].filter(Boolean);
         if (documentos.length) documentos[0].titulo = 'Documentos';
         // Vincular, cambiar y desvincular (etapa 3, usuario 8-oct)
@@ -3647,6 +3658,7 @@
       }
 
       function cargarEvidencias(id) {
+        if (sinPasado()) return;
         const pila0 = pila.length;
         llamar('apiLineasEvidencias', id).then((ev) => {
           const cont = $('#ln-evidencias', raiz);
@@ -5260,6 +5272,7 @@
       }
 
       function cargarHistorial(id, nombre, vista) {
+        if (sinPasado()) return;
         if (nombre) nombreHistorial = nombre; else nombre = nombreHistorial;
         if (vista) vistaHistorial = vista; else vista = vistaHistorial;
         const abierta = pila[pila.length - 1];
