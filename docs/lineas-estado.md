@@ -67,10 +67,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `LineasRepo.diaDeCorte`), Plan (plan, renta, inicio y fin de plan y una barra con la vida del plazo: verde vigente, ámbar a 3
   meses o menos, rojo vencido, con «Faltan N meses» o «Vencido hace N meses» y «X de Y meses»; abajo, de dónde salió el plan en
   palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico dice «sin contrato ni plazo»), Facturación (título con el mes
-  del corte; Renta, Cobrado, Diferencia, Motivo, Uso, «Cobrado como» solo si el número facturado es otro; «Últimos N meses», que se
+  del corte; Renta, Cobrado, Diferencia, Uso, «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
+  «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
   WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
-  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; `motivoFactura`);
+  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
   enlace a la línea), Plan de la línea, Facturación de la línea (sin renta, uso ni meses) y Responsable a todo el ancho. Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
