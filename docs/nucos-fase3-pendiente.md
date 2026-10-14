@@ -71,7 +71,7 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
   (pestaña Revisar de `.cache/verificaciones/20261013/plan-app.xlsx`): ~126 sin serie legible, ~84 cuya serie es de OTRO
   vehículo (los mal ligados desde AppSheet), ~40 con otra fecha en el certificado, 5 sin folio para comparar y casos
   sueltos. Para el área.
-- **Corrida 2 bis, verificaciones revisadas a mano (14-oct).** `verificaciones-completo.xlsx` (cada registro contra el
+- **Corrida 2 bis, verificaciones revisadas a mano (14-oct; detalle en `nucos-verificaciones-app.md`).** `verificaciones-completo.xlsx` (cada registro contra el
   inventario y el certificado; la serie y la placa se buscan también con errores de OCR: `verificaciones.series_aprox` /
   `placas_aprox`, probadas con 422 certificados conocidos sin un solo vehículo equivocado). El usuario llenó NUCO CORRECTO;
   los de confianza MEDIA toman el NUCO sugerido; la fecha es la capturada salvo FECHA CORRECTA.

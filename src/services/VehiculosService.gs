@@ -156,6 +156,8 @@ const VehiculosService = (function () {
    * el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna 'ID'.
    */
   const RESUMEN = Object.assign({}, VEHICULOS, {
+    // El Panorama de Vehículos se arma con esta lista (su propio permiso desde el 14-oct)
+    leenTambien: ['panorama-vehiculos'],
     columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
       'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI'],
     incluir: (r) => !!r['FOLIO'],

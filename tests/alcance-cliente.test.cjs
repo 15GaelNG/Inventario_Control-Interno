@@ -19,7 +19,7 @@ function ayudantes(registros) {
     LineasRepo: { leerRegistroPorId: (id) => registros[id] || null, convertirRegistro: (f) => f },
   });
   vm.runInContext(permisos + '\n' + telefonia.slice(ini, fin) +
-    '\nthis.r = { deptoDeRegistro_, exigirAlcance_, exigirRegistroEnAlcance_, sinAlcance_, filtrarIndice_ };', ctx);
+    '\nthis.r = { deptoDeRegistro_, exigirAlcance_, sinAlcance_, filtrarIndice_ };', ctx);
   return ctx.r;
 }
 
@@ -53,12 +53,11 @@ test('la ficha y sus documentos: solo de un registro de su departamento', () => 
   };
   const a = ayudantes(regs);
   assert.equal(a.deptoDeRegistro_(regs.R5), 'POST VENTA', 'una línea suelta: el de su responsable');
-  assert.doesNotThrow(() => a.exigirRegistroEnAlcance_(CLIENTE, 'R1'));
-  assert.doesNotThrow(() => a.exigirRegistroEnAlcance_(CLIENTE, 'R5'));
-  assert.throws(() => a.exigirRegistroEnAlcance_(CLIENTE, 'R2'), /No tienes acceso a este registro/);
-  assert.throws(() => a.exigirRegistroEnAlcance_(CLIENTE, 'NO-EXISTE'), /No tienes acceso/);
-  assert.throws(() => a.exigirRegistroEnAlcance_(CLIENTE, null), /No tienes acceso/);
-  assert.doesNotThrow(() => a.exigirRegistroEnAlcance_(TODOS, 'R2'), 'sin alcance no se revisa');
+  assert.doesNotThrow(() => a.exigirAlcance_(CLIENTE, regs.R1));
+  assert.doesNotThrow(() => a.exigirAlcance_(CLIENTE, regs.R5));
+  assert.throws(() => a.exigirAlcance_(CLIENTE, regs.R2), /No tienes acceso a este registro/);
+  assert.throws(() => a.exigirAlcance_(CLIENTE, null), /No tienes acceso/, 'sin registro no se sabe de quién es');
+  assert.doesNotThrow(() => a.exigirAlcance_(TODOS, regs.R2), 'sin alcance no se revisa');
   assert.throws(() => a.sinAlcance_(CLIENTE), /No tienes acceso a esta parte de Líneas/);
   assert.equal(a.sinAlcance_(TODOS), TODOS);
 });
@@ -71,11 +70,27 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   const funciones = telefonia.split(/\n  function /).slice(1).map((t) => ({ nombre: t.match(/^(\w+)/)[1], cuerpo: t }));
   const leen = funciones.filter((f) => /\bleer_\(token\)/.test(f.cuerpo) && NO_SON_DE_UN_DEPARTAMENTO.indexOf(f.nombre) === -1);
   assert.ok(leen.length >= 12, leen.length + ' funciones leen');
-  const sueltas = leen.filter((f) => !/exigirAlcance_|exigirRegistroEnAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance\)/.test(f.cuerpo));
+  const sueltas = leen.filter((f) => !/exigirAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance\)/.test(f.cuerpo));
   assert.deepEqual(sueltas.map((f) => f.nombre), [], 'leen Líneas sin revisar el alcance del rol CLIENT');
   assert.match(telefonia, /function notificaciones\(token, limite\) \{[^}]*Permisos\.alcanceDe\(sesion\.correo\)/,
     'la campana de Líneas sale vacía para un CLIENT');
   assert.match(telefonia, /function bandejaResguardos\(token\) \{\s+const sesion = sinAlcance_\(/);
+  // Sin historial (usuario, 14-oct): el pasado del registro puede ser de otro departamento; ni el directorio de CH
+  ['historial', 'asignaciones', 'evidencias', 'documento_', 'ultimoDocumentoNuco', 'colaboradores', 'panorama', 'bitacora'].forEach((n) => {
+    const f = funciones.find((x) => x.nombre === n);
+    assert.ok(f && /sinAlcance_\(/.test(f.cuerpo), n + ' se le niega al rol CLIENT');
+  });
+  // Y la pantalla no pinta las pestañas ni los botones que no va a poder abrir
+  const lineas = leer('src/html/js/lineas.html');
+  assert.match(lineas, /const sinPasado = \(\) => !!\(memoria\.permisos && memoria\.permisos\.conAlcance\);/);
+  assert.match(lineas, /function cargarEvidencias\(id\) \{\s+if \(sinPasado\(\)\) return;/);
+  assert.match(lineas, /function cargarHistorial\(id, nombre, vista\) \{\s+if \(sinPasado\(\)\) return;/);
+  assert.match(lineas, /function botonUltimoNucos\(tipo, id\) \{\s+if \(sinPasado\(\)\) return '';/);
+  assert.match(lineas, /pasado \? \['historial', 'Historial', 'history'\] : null/);
+  assert.match(telefonia, /conAlcance: !!sesion\.alcance,/);
+  // El directorio de CH que piden los formularios de Vehículos (solo pedía sesión)
+  assert.match(leer('src/services/CapitalHumano.gs'),
+    /function listarColaboradores\(token\) \{\s+const sesion = Auth\.validarSesion\(token\);[^\n]*\n[^\n]*\n\s+if \(Permisos\.alcanceDe\(sesion\.correo\)\) return \[\];/);
   assert.match(leer('src/services/lineas/LineasCorrecciones.gs'), /puedeLeer\(token, 'correcciones-lineas'\);\s+\/\/[^\n]*\n\s+if \(sesion\.alcance\) throw/);
   assert.match(leer('src/services/lineas/LineasExportar.gs'), /if \(alcance && tablas\.some/, 'exportar: solo el inventario');
 });

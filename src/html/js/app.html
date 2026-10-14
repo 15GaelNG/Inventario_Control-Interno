@@ -696,10 +696,10 @@
    *   plantilla  el <template> de html/views que se monta
    *   init       lo que corre al montarla; va como función flecha porque casi todas viven en
    *              archivos que cargan después de este (app-verificaciones, modulos/*, lineas)
-   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item: los panoramas y
-   *              Cambios de Monto no son módulos propios, cuelgan de su padre. `libre: true` = no
-   *              pide permiso (Sistemas y Encuestas: solo enlaces a sistemas externos). Sin ninguno
-   *              de los dos, el item no se pinta.
+   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item. Desde el 14-oct cada
+   *              entrada tiene el suyo (panoramas, Sistemas, Encuestas); solo Cambios de Monto cuelga
+   *              de Caja chica. `libre: true` = no pide permiso (hoy solo Help Desk, apagado en prod).
+   *              Sin ninguno de los dos, el item no se pinta.
    *   sinAsistente  en esa vista no sale el asistente flotante; en un grupo, vale para todos sus items
    * source-contracts revisa que cada plantilla, función y módulo exista.
    */
@@ -707,7 +707,7 @@
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
         { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
         { vista: 'adquisicion-vehicular', etiqueta: 'Adquisición', icono: 'folder-open', requiere: 'adquisicion-vehicular', plantilla: 'tpl-adquisicion-vehicular', init: () => initAdquisicionVehicular(), ayuda: () => AYUDA_ADQUISICION_VEHICULAR },
@@ -718,7 +718,7 @@
         { vista: 'inspeccion-vehicular', etiqueta: 'Inspección vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones(), ayuda: () => AYUDA_INSPECCIONES },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores(), ayuda: () => AYUDA_SENSORES },
         { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas(), ayuda: () => AYUDA_HOLOGRAMAS },
-        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-vehiculos', plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
       ],
     },
     {
@@ -737,17 +737,17 @@
         // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de cambios - Líneas', icono: 'eye' },
-        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-lineas', plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-cajachica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
         { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos(), ayuda: () => AYUDA_ARQUEOS },
         { vista: 'caja-chica', etiqueta: 'Caja chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica(), ayuda: () => AYUDA_CAJACHICA },
         { vista: 'cambios-monto-cch', etiqueta: 'Cambios de monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
-        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-arqueos', plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
     {
@@ -761,7 +761,7 @@
     { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos(), sinAsistente: true },
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
-    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', requiere: 'encuestas-solicitudes', plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
     // Los tickets del helpdesk de TI (05/10/2026; su propia familia el 07/10). Todos lo ven (cada
     // quien, lo que su cuenta ve allá): por eso el grupo es `libre` aunque casi todo sea libre.
     // Registrados es la copia en la hoja: solo quien lee Tickets.
@@ -855,10 +855,9 @@
     const contenedor = document.getElementById('nav-groups');
     // Una entrada con `vista` y sin `items` es un acceso directo suelto
     // (sin desplegable), como Gestión de Activos (rama emmanuel).
-    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (accesos a
-    // sistemas externos, sin datos de la app) no piden permiso, pero no bastan para que se vea
-    // su grupo: un grupo sin ningún módulo con permiso no se pinta. Por eso esto se vuelve a
-    // llamar al llegar los permisos.
+    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (Help Desk) no
+    // piden permiso, pero no bastan para que se vea su grupo: un grupo sin ningún módulo con
+    // permiso no se pinta. Por eso esto se vuelve a llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
       .filter((g) => !estaApagada(g))
       .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !estaApagada(it) && (it.libre || permisoDe(it.requiere))) }) : g))

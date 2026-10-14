@@ -31,9 +31,11 @@ const TelefoniaService = (function () {
   /**
    * Rol CLIENT (Permisos.alcanceDe; POST VENTA, 14-oct): solo ve los equipos y líneas de sus departamentos, el
    * DEPARTAMENTO de su asignación actual (una en resguardo queda DISPONIBLE y deja de verse). La caché del índice es
-   * de todos: se filtra lo que se regresa (filtrarIndice_), como con los PIN. Lo que mezcla departamentos o no dice de
-   * quién es (Panorama, bitácora, rutas sueltas del AppSheet) se le niega con sinAlcance_. Toda función pública que
-   * llama leer_ pasa por exigirAlcance_, exigirRegistroEnAlcance_, filtrarIndice_ o sinAlcance_ (source-contracts).
+   * de todos: se filtra lo que se regresa (filtrarIndice_), como con los PIN. La ficha, solo como está hoy
+   * (exigirAlcance_). Lo que mezcla departamentos o no dice de quién es se le niega con sinAlcance_: Panorama,
+   * bitácora, rutas sueltas del AppSheet, el directorio de CH y el pasado del registro (historial, asignaciones,
+   * documentos: puede ser de cuando era de otro departamento; usuario, 14-oct). Toda función pública que llama leer_
+   * pasa por exigirAlcance_, filtrarIndice_ o sinAlcance_ (tests/alcance-cliente.test.cjs).
    */
   const deptoDeRegistro_ = (r) =>
     ((r && r.equipo && r.equipo.responsable) || (r && r.linea && r.linea.responsable) || {}).departamento || '';
@@ -43,13 +45,6 @@ const TelefoniaService = (function () {
       throw new Error('No tienes acceso a este registro.');
     }
     return r;
-  }
-
-  /** Como exigirAlcance_, por id del registro (solo lo lee si la sesión tiene alcance) */
-  function exigirRegistroEnAlcance_(sesion, id) {
-    if (!sesion.alcance) return;
-    const f = id ? LineasRepo.leerRegistroPorId(id) : null;
-    exigirAlcance_(sesion, f ? LineasRepo.convertirRegistro(f) : null);
   }
 
   function sinAlcance_(sesion) {
@@ -101,6 +96,8 @@ const TelefoniaService = (function () {
       puedeOperar: puedeOperar_(sesion),
       puedeVerSecretos: puedeVerSecretos_(sesion),
       esAdmin: sesion.rol === Config.ROLES.ADMIN,
+      // Rol CLIENT: la ficha sin su pasado (Historial, Documentos), que el servidor le niega con sinAlcance_
+      conAlcance: !!sesion.alcance,
       puedeAprobarResguardos: LineasResguardos.puedeAprobar(usuarioResguardo_(sesion)),
     };
   }
@@ -203,7 +200,7 @@ const TelefoniaService = (function () {
   function ultimoDocumentoNuco(token, id, tipo) {
     const sesion = leer_(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
-    exigirRegistroEnAlcance_(sesion, id);
+    sinAlcance_(sesion);
     const nombreTipo = tipo === 'INSPECCION' ? 'inspección' : 'responsiva';
     const r = carpetaNucoDe_(id, sesion, tipo);
     if (!r.nuco) throw new Error('Este registro no tiene NUCO: no tiene carpeta en NUCOS.');
@@ -291,8 +288,8 @@ const TelefoniaService = (function () {
    * NUCOS. Una de la hoja sin carpeta y del mismo día que una de NUCOS toma su PDF y su carpeta (no se repite).
    */
   function evidencias(token, id) {
-    const sesion = leer_(token);
-    exigirRegistroEnAlcance_(sesion, id);
+    // Rol CLIENT: sin el pasado del registro (usuario, 14-oct: puede ser de otro departamento)
+    const sesion = sinAlcance_(leer_(token));
     const ev = LineasRepo.evidenciasDeRegistro(id);
     let nucos = [];
     try {
@@ -369,14 +366,13 @@ const TelefoniaService = (function () {
 
   /** Historial de un registro (bitácora, reasignaciones, desechos y operaciones del sistema). */
   function historial(token, id) {
-    const sesion = leer_(token);
-    exigirRegistroEnAlcance_(sesion, id);
+    const sesion = sinAlcance_(leer_(token));
     return LineasUtil.paraCliente(LineasRepo.historialDeRegistro(id, puedeVerSecretos_(sesion)));
   }
 
   /** Números que ha tenido el NUCO del registro (vista 'equipo') o NUCOs por los que pasó su número (vista 'linea'). */
   function asignaciones(token, id, vista) {
-    exigirRegistroEnAlcance_(leer_(token), id);
+    sinAlcance_(leer_(token));
     return LineasUtil.paraCliente(LineasRepo.asignacionesDeRegistro(id, vista));
   }
 
@@ -406,16 +402,13 @@ const TelefoniaService = (function () {
   }
 
   function documento_(token, id, tipo) {
-    const sesion = leer_(token);
+    const sesion = sinAlcance_(leer_(token));
     const esInspeccion = tipo === 'INSPECCION';
     const t0 = Date.now();
     const doc = (esInspeccion ? LineasRepo.leerInspeccion(id) : LineasRepo.leerResponsiva(id)) ||
       (/^drive_/.test(id) ? documentoNucos_(id.slice(6), tipo) : null);
     LineasDatos.tiempo('documento: leído', t0);
     if (!doc) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
-    // Una de NUCOS sin registro ligado no dice de quién es: un CLIENT no la abre
-    if (sesion.alcance && !doc.registroId) throw new Error('No tienes acceso a este registro.');
-    exigirRegistroEnAlcance_(sesion, doc.registroId);
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
     if (esInspeccion && !puedeVerSecretos_(sesion)) {
       doc.pinEquipo = doc.pinEquipo ? '••••' : null;
@@ -560,7 +553,8 @@ const TelefoniaService = (function () {
 
   /** Catálogo de colaboradores para autocompletar. */
   function colaboradores(token) {
-    leer_(token);
+    // El directorio de Capital Humano es de todos los departamentos (solo sirve para los formularios)
+    sinAlcance_(leer_(token));
     return LineasRepo.indiceColaboradores();
   }
 
