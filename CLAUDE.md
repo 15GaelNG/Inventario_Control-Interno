@@ -156,9 +156,27 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
 El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
 
 1. **Sesión** (`Auth.validarSesion`): sin ella, nada.
-2. **Módulo** (`Permisos.puedeLeer` / `puedeEditar`, LECTURA / EDICION por área o correo): decide
-   si se ve la pantalla y si se lee la lista del módulo. Todo se revisa **en el servidor**; lo
+2. **Módulo y sección** (`Permisos.puedeLeer` / `puedeEditar`, LECTURA / EDICION por área o correo): decide
+   si se ve la pantalla, sus pestañas y si se lee la lista del módulo. Todo se revisa **en el servidor**; lo
    que esconde la pantalla es solo comodidad (igual que el Editable_If de AppSheet no protegía nada).
+   **El catálogo es un árbol** (`config/Modulos.gs`, 14-oct): módulo → sección (`modulo.seccion`: las
+   pestañas de su ficha y `exportar`). Una sección **hereda** el nivel de su módulo salvo regla propia
+   (un "Sin acceso" de área en una sección corta la herencia) y nunca pasa de él; `hereda: false` la hace
+   darse aparte. El servidor resuelve el árbol (`Permisos.resolver_`) y la pantalla recibe el mapa ya
+   resuelto: se pregunta con `puede('vehiculos.documentos')` / `puedeEditarModulo('…')`, nunca se calcula
+   herencia en la pantalla (salvo `app-permisos.html`, que la repite para pintar al instante:
+   `tests/permisos-pantalla.test.cjs` exige que dé lo mismo que el servidor).
+   - **Una pestaña nueva de una ficha** es una sección en `Modulos.gs` (`secciones: [{ id, etiqueta }]`); la
+     pantalla la pinta con `puede('modulo.seccion') && {…}` y el servidor la pide con
+     `Permisos.puedeLeer(token, 'modulo.seccion')` o `parte('modulo.seccion', …)`. Como hereda, nadie pierde
+     nada al crearla. Una pestaña con datos de OTRO módulo no es sección: pide ese módulo (el dato manda).
+   - **Exportar**: cada módulo con lista tiene su `exportar` (se agrega solo). `DataTable` lo pregunta solo
+     (`puedeExportarAqui`, por el módulo de la vista abierta). Lo que se ve se puede copiar: es control de
+     pantalla y de los servicios que exportan (Líneas), no una frontera de seguridad.
+   - **Un id viejo** sigue sirviendo como alias (`antes:` en la sección: `responsiva-vehicular` →
+     `vehiculos.responsiva`); `permisosMigrarCatalogo()` (editor) reescribe PERMISOS con los ids del catálogo.
+   - `source-contracts` falla si se pide un permiso (`permisoDe`, `puede`, `deModulo`, `parte`,
+     `Permisos.puedeLeer`…) con un id que no está en el catálogo. Detalle: `docs/permisos-arbol.md`.
 3. **Referencia por familia** (`Permisos.puedeLeerFamilia`, `referencia: true` en `HojaServicio`):
    los catálogos que una familia necesita para trabajar los lee cualquiera de sus módulos. La
    familia es el grupo del menú (`Modulos.familia`). Hoy: el básico de vehículos y la búsqueda por
@@ -170,8 +188,8 @@ El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
    está vacía, su `AREA` (`Permisos.alcanceDe`, que llega como `sesion.alcance`; null = sin límite). Se
    filtra en el servidor **lo que se regresa, nunca la caché** (que es de todos): en `HojaServicio` con
    `alcance: 'COLUMNA'` en la definición (Vehículos: `DEPARTAMENTO`), y en Líneas con los ayudantes de
-   `TelefoniaService` (`filtrarIndice_`, `exigirRegistroEnAlcance_`, `sinAlcance_` para lo que mezcla
-   departamentos). `tests/alcance-cliente.test.cjs` falla si una lectura nueva de Líneas no pasa por
+   `TelefoniaService` (`filtrarIndice_`, `exigirAlcance_` para la ficha, `sinAlcance_` para lo que mezcla
+   departamentos o es el pasado del registro: historial, documentos). `tests/alcance-cliente.test.cjs` falla si una lectura nueva de Líneas no pasa por
    ellos. Un módulo nuevo para un CLIENT necesita su `alcance` antes de darle el permiso. Hoy: POST VENTA,
    con LECTURA en `vehiculos` y `lineas-telefonicas`.
 

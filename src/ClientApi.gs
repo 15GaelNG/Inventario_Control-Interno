@@ -136,21 +136,22 @@ function apiFichaVehiculo(token, idVehiculo) {
  * por sección. Con permiso de Inspección vehicular (el mismo de la pestaña). Texto JSON.
  */
 function apiInspeccionesExpediente(token, nucco) {
-  Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'inspeccion-vehicular'), token, nucco);
   return JSON.stringify(ExpedienteNuco.inspecciones(nucco));
 }
 /** Las fotos de UNA inspección del expediente (solo al abrirla), por sección y con miniatura. Texto JSON. */
 function apiFotosInspeccion(token, nucco, carpetaId) {
-  Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'inspeccion-vehicular'), token, nucco);
   return JSON.stringify(ExpedienteNuco.fotosInspeccion(nucco, carpetaId));
 }
+/** Rol CLIENT (Permisos.alcanceDe): lo del expediente de un NUCO, solo de un vehículo de su departamento */
+function exigirNuccoEnAlcance_(sesion, token, nucco) {
+  if (sesion.alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) throw new Error('No tienes acceso a este vehículo.');
+}
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
+// Con su sección de la ficha (vehiculos.documentos); un CLIENT, solo el expediente de un vehículo de su departamento
 function apiDocumentosVehiculo(token, nucco) {
-  // Un CLIENT solo abre el expediente de un vehículo de su departamento (Permisos.alcanceDe)
-  // Su sección de la ficha (vehiculos.documentos)
-  if (Permisos.puedeLeer(token, 'vehiculos.documentos').alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) {
-    throw new Error('No tienes acceso a este vehículo.');
-  }
+  exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'vehiculos.documentos'), token, nucco);
   const exp = ExpedienteNuco.listar(nucco);
   exp.documentos = exp.documentos.filter((d) => DOCUMENTOS_FICHA.indexOf(d.clave) !== -1);
   return JSON.stringify(exp);
