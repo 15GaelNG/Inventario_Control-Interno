@@ -173,6 +173,8 @@ const LineasRepo = (function () {
       pinEquipo: texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
       cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
       color: texto('COLOR'),
+      // El PIN de WhatsApp es del equipo (pendiente 2.25); sin línea no tiene
+      pinWhatsapp: tieneLinea ? texto('PIN WHATSAPP') : null,
       estatus: txt(col(f, 'ESTATUS EQUIPO')), lineaId: tieneLinea ? id : null, responsable: datosResponsable,
       carpetaDriveId: nuco && carpetas ? (carpetas[nuco] || null) : null, legado: legado,
       actualizadoEn: legado.fechaRegistro,
@@ -183,6 +185,9 @@ const LineasRepo = (function () {
       _id: id, numero: digitos(col(f, 'NUMERO TELEFONO')), sim: sim, compania: txt(col(f, 'COMPAÑIA')),
       costoPlan: LineasUtil.numero(col(f, 'COSTO PLAN')), inicioPlan: fecha(col(f, 'INICIO PLAN')), finPlan: fecha(col(f, 'FIN PLAN')),
       razonSocial: txt(col(f, 'RAZON SOCIAL')), pinWhatsapp: texto('PIN WHATSAPP'), estatus: estatusLinea,
+      // Del proveedor (usuario, 13-oct): la cuenta, el plan y de dónde salió (ORIGEN PLAN, p. ej. «Adendum Telcel FRO · septiembre 2026»)
+      tipoLinea: txt(col(f, 'TIPO DE LINEA')), cuentaPadre: txt(col(f, 'CUENTA PADRE')), cuenta: txt(col(f, 'CUENTA')),
+      plan: txt(col(f, 'PLAN')), fuentePlan: txt(col(f, 'FUENTE PLAN')), origenPlan: txt(col(f, 'ORIGEN PLAN')),
       usoTemporal: estatusLinea === 'USO TEMPORAL' ? { desde: fecha(col(f, 'FECHA CAMBIO TEMPORAL')), correo: txt(col(f, 'EMAIL USUARIO')) } : null,
       equipoId: tieneEquipo ? id : null,
       // El ID de la hoja LINEAS (el registro de una línea en un equipo es el del equipo): con él se leen sus cambios de número
@@ -297,6 +302,54 @@ const LineasRepo = (function () {
   function numerosDeLinea(linea, cambios) {
     if (!linea) return [];
     return ((cambios || cambiosDeNumero_())[linea.idLinea || linea._id] || []).slice();
+  }
+
+  /**
+   * Facturación de una línea (usuario, 13-oct; pendiente 1.11): sus últimos `cuantas` cobros de FACTURAS, del más nuevo
+   * al más viejo. El mes es el del corte; la diferencia es contra la renta del plan vigente y el motivo sale de los
+   * conceptos cobrados (motivoFactura). Una línea sin contrato (SIM básico) no tiene renta ni diferencia.
+   */
+  function facturasDeLinea(linea, cuantas) {
+    if (!linea || !LineasDatos.existeTabla('FACTURAS')) return [];
+    const filas = LineasDatos.buscarFilas('FACTURAS', 'ID LINEA', linea.idLinea || linea._id);
+    if (!filas.length) return [];
+    const sinContrato = String(linea.tipoLinea || '').toUpperCase() === 'SIM BASICO';
+    const renta = sinContrato ? null : linea.costoPlan;
+    return LineasDatos.leerFilas([{ tabla: 'FACTURAS', filas: filas }])[0].map((x) => {
+      const cobrado = LineasUtil.numero(x['TOTAL CON IVA']);
+      return {
+        corte: fecha(x['FECHA DE CORTE']), ciclo: txt(x['PERIODO']) || '', cobrado: cobrado, renta: renta,
+        diferencia: renta === null || renta === undefined || cobrado === null ? null : Math.round((cobrado - renta) * 100) / 100,
+        motivo: motivoFactura(renta, cobrado, txt(x['CONCEPTOS']) || ''), numero: digitos(x['NUMERO EN FACTURA']),
+        minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
+        origen: txt(x['ARCHIVO']) || '',
+      };
+    }).sort((a, b) => (b.corte || 0) - (a.corte || 0)).slice(0, cuantas || 3);
+  }
+
+  /**
+   * Por qué lo cobrado no es la renta, en palabras (usuario, 13-oct: «Motivo» en vez de la lista de conceptos del
+   * reporte). `conceptos` es el texto de FACTURAS («Concepto $123.45 | …»).
+   */
+  function motivoFactura(renta, cobrado, conceptos) {
+    if (cobrado === null || cobrado === undefined) return '';
+    if (cobrado < 0) return 'Nota de crédito';
+    if (renta === null || renta === undefined || renta === '') return '';
+    const dif = cobrado - renta;
+    if (Math.abs(dif) <= 0.01) return '';
+    const c = sinAcentos_(conceptos);
+    if (/CARGO DEL .+ AL |PRORRATE|PARCIAL/.test(c)) return 'Prorrateo';
+    if (dif < 0) return 'Descuento';
+    if (/CONSUMO|EXCEDENTE|ADICIONAL|LARGA DISTANCIA|ROAMING|INTERNACIONAL|MENSAJE|MINUTO|DATOS/.test(c)) return 'Consumo extra';
+    return 'Cargo extra';
+  }
+
+  /** Día de corte de una cuenta padre (hoja CUENTAS), o null. */
+  function diaDeCorte(cuentaPadre) {
+    if (!cuentaPadre || !LineasDatos.existeTabla('CUENTAS')) return null;
+    const c = LineasDatos.leerTabla('CUENTAS').filter((x) => String(x['CUENTA PADRE'] || '').trim() === String(cuentaPadre).trim())[0];
+    const d = c ? LineasUtil.numero(c['DIA DE CORTE']) : null;
+    return d || null;
   }
 
   /** Valores de la fila para la vista de tabla del AppSheet: [id, …COLS_VISTA_LINEAS]. */
@@ -1511,7 +1564,7 @@ const LineasRepo = (function () {
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
-    ACCION_CAMBIO_NUMERO, numerosDeLinea,
+    ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, motivoFactura, diaDeCorte,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

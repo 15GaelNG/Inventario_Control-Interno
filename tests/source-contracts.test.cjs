@@ -844,7 +844,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Sin la tarjeta "Registro en la hoja" (ID, folio, fila, estatus general, fechas, comentarios); Tipo en Equipo o Línea
   assert.doesNotMatch(lineas, /tarjetaRegistro|Registro en la hoja|ln-solo-escritorio/);
   assert.match(lineas, /\['Tipo', tipoRegistro\(e\.legado\), true\],/);
-  assert.match(lineas, /!e \? \['Tipo', tipoRegistro\(l\.legado\), true\] : null,/);
+  assert.match(lineas, /\['Tipo', l\.tipoLinea \|\| tipoRegistro\(l\.legado\), !l\.tipoLinea\],/);
   // La página de la responsiva (apiLineasResponsiva, usuario 6-oct) usa los PDF de NUCOS y del sistema, nunca pdfRuta
   assert.doesNotMatch(lineas, /d\.pdfRuta|responsivaRuta|formatoInspeccionRuta|apiLineasDocumentosNuco|ln-docs-nucos|totalRotaciones/);
   const servicio = read('src/services/TelefoniaService.gs');
@@ -2491,4 +2491,36 @@ test('lo que un módulo le pide a ExportarExcel existe (prod: «ExportarExcel.ca
   });
   const faltan = [...usados].filter((u) => exporta.indexOf(u) === -1);
   assert.deepEqual(faltan, [], 'ExportarExcel no exporta: ' + faltan.join(', '));
+});
+
+test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Facturación del proveedor', () => {
+  const html = read('src/html/js/lineas.html');
+  const css = read('src/html/lineas-estilos.html');
+  // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
+  assert.match(html, /\(l \? tarjetaPlan\(l, true\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  assert.match(html, /function vidaPlan\(l\)/);
+  assert.match(html, /'Vencido hace ' \+ n/);
+  // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
+  assert.match(html, /function mesDe\(iso\)/);
+  assert.match(html, /\(d > 0 \? ' de más' : ' de menos'\)/);
+  // Últimos 3 meses: se abren al pasar el cursor o al tocarlos
+  assert.match(css, /\.ln-meses:hover \.ln-meses-cuerpo, \.ln-meses:focus-within \.ln-meses-cuerpo \{ display: block; \}/);
+  // Servidor: facturas de la línea y el día de corte de su cuenta
+  const servicio = read('src/services/TelefoniaService.gs');
+  assert.match(servicio, /facturas: LineasRepo\.facturasDeLinea\(r\.linea, 3\),/);
+  assert.match(servicio, /corte: LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\),/);
+});
+
+test('el motivo de la diferencia sale de los conceptos cobrados', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const cuerpo = repo.slice(repo.indexOf('  function motivoFactura('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  const sinAcentos_ = (v) => String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const motivo = new Function('sinAcentos_', cuerpo + '\nreturn motivoFactura;')(sinAcentos_);
+  assert.strictEqual(motivo(299, 299, ''), '');
+  assert.strictEqual(motivo(299, 269.78, 'Corporate RC Add-on and Base Plan Discount 18% -$59.22'), 'Descuento');
+  assert.strictEqual(motivo(299, 120, 'ATT Ármalo $299 Cargo del 04 sep al 15 sep $120.00'), 'Prorrateo');
+  assert.strictEqual(motivo(299, 350, 'Consumo adicional de datos $51.00'), 'Consumo extra');
+  assert.strictEqual(motivo(299, -45.8, ''), 'Nota de crédito');
+  assert.strictEqual(motivo(null, 29, ''), ''); // SIM básico: sin renta
 });

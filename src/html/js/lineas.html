@@ -3242,19 +3242,106 @@
         return '<div class="card ln-card ' + (clase || '') + '"><h3>' + titulo + '</h3>' + cuerpo + '</div>';
       }
 
-      /**
-       * «Números de esta línea» (usuario, 8-oct): el actual y los que tuvo por un cambio de número (Editar línea), del más
-       * nuevo al más viejo, con la fecha del cambio y su comentario.
-       */
-      function tarjetaNumeros(l, cambios) {
-        const ultimo = cambios[cambios.length - 1];
-        const filas = [['Actual', '<span class="ln-mono">' + esc(l.numero || '—') + '</span>' + (ultimo ? ' <span class="ln-tenue">desde ' + esc(fecha(ultimo.fecha)) + '</span>' : ''), true]]
-          .concat(cambios.slice().reverse().map((c) => [fecha(c.fecha) || '—', '<span class="ln-mono">' + esc(c.antes || '—') + '</span>' +
-            ' <span class="ln-tenue">→ ' + esc(c.despues || '—') + (c.comentario ? ' · ' + esc(c.comentario) : '') + '</span>', true]));
-        return tarjeta(icono('phone') + ' Números de esta línea', campos(filas));
+      // ---- Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan y Facturación, con lo que dice el proveedor ----
+      const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+      /** «Septiembre 2026»: el mes del corte (los periodos se nombran por mes, no por día). */
+      function mesDe(iso) {
+        const d = iso ? new Date(iso) : null;
+        if (!d || isNaN(d)) return '';
+        const m = MESES_LARGOS[d.getMonth()];
+        return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear();
+      }
+      function dinero(n, centavos) {
+        if (n === null || n === undefined || n === '' || isNaN(Number(n))) return null;
+        return '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
+      }
+      /** «$29.22 de menos» / «$51.00 de más» / «Igual», con su color. */
+      function diferenciaTexto(d) {
+        if (d === null || d === undefined) return vacio;
+        if (Math.abs(d) <= 0.01) return '<span class="ln-dif-igual">Igual</span>';
+        return '<span class="' + (d > 0 ? 'ln-dif-mas' : 'ln-dif-menos') + '">' + esc(dinero(Math.abs(d), true)) + (d > 0 ? ' de más' : ' de menos') + '</span>';
+      }
+      const sinUso = (f) => !f.minutos && !f.mensajes && !f.datosMb;
+      function usoTexto(f) {
+        if (sinUso(f)) return '<span class="ln-chip ambar">Sin uso</span>';
+        const gb = (Number(f.datosMb) || 0) / 1024;
+        return esc(miles(f.minutos) + ' min · ' + miles(f.mensajes) + ' mensajes · ' + gb.toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' GB');
+      }
+      /** De dónde salió el plan, en palabras. Lo que vino del AppSheet o se capturó a mano también se dice. */
+      function origenPlan(l) {
+        const fuente = String(l.fuentePlan || '').toUpperCase();
+        if (l.origenPlan) return l.origenPlan;
+        if (fuente === 'CAPTURA A MANO') return 'Captura a mano';
+        if (fuente.indexOf('INVENTARIO') === 0) return 'Inventario, sin confirmar con el proveedor';
+        return '';
+      }
+      function pieOrigen(texto, confirmado) {
+        return texto ? '<div class="ln-card-pie">' + icono(confirmado ? 'circle-check' : 'circle-help') + ' ' + esc(texto) + '</div>' : '';
+      }
+      /** Barra de la vida del plan: cuánto lleva de su plazo y cuánto le falta, o hace cuánto venció. */
+      function vidaPlan(l) {
+        const ini = l.inicioPlan ? new Date(l.inicioPlan) : null;
+        const fin = l.finPlan ? new Date(l.finPlan) : null;
+        if (!fin || isNaN(fin)) return '';
+        const hoy = new Date();
+        const meses = (a, b) => (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth());
+        const total = ini && !isNaN(ini) ? Math.max(1, meses(ini, fin)) : null;
+        const llevados = total ? Math.min(total, Math.max(0, meses(ini, hoy))) : null;
+        const faltan = meses(hoy, fin);
+        let clase;
+        let texto;
+        if (fin < hoy) {
+          const n = meses(fin, hoy);
+          clase = 'vencido';
+          texto = n <= 0 ? 'Venció este mes' : 'Vencido hace ' + n + (n === 1 ? ' mes' : ' meses');
+        } else {
+          clase = faltan <= 3 ? 'por-vencer' : 'vigente';
+          texto = faltan <= 0 ? 'Vence este mes' : 'Faltan ' + faltan + (faltan === 1 ? ' mes' : ' meses');
+        }
+        const pct = fin < hoy ? 100 : (total ? Math.round(llevados * 100 / total) : 0);
+        return '<div class="ln-vida ln-vida-' + clase + '"><div class="ln-vida-barra"><span style="width:' + pct + '%"></span></div>' +
+          '<div class="ln-vida-texto"><span>' + texto + '</span>' + (total ? '<span class="ln-tenue">' + llevados + ' de ' + total + ' meses</span>' : '') + '</div></div>';
+      }
+      function tarjetaCuenta(l, corte) {
+        return tarjeta(icono('building-2') + ' Cuenta', campos([
+          ['Razón social', l.razonSocial],
+          ['Cuenta padre', l.cuentaPadre ? '<span class="ln-mono">' + esc(l.cuentaPadre) + '</span>' : '', true],
+          l.cuenta ? ['Cuenta', '<span class="ln-mono">' + esc(l.cuenta) + '</span>', true] : null,
+          ['Corte', corte ? 'Día ' + corte + ' de cada mes' : ''],
+        ]));
+      }
+      /** `resumen`: en la ficha del equipo, sin el nombre del plan ni su origen. */
+      function tarjetaPlan(l, resumen) {
+        const titulo = icono('file-text') + (resumen ? ' Plan de la línea' : ' Plan');
+        if (String(l.tipoLinea || '').toUpperCase() === 'SIM BASICO') return tarjeta(titulo, '<p class="empty-state">SIM básico: sin contrato ni plazo.</p>');
+        return tarjeta(titulo, campos([
+          resumen ? null : ['Plan', l.plan],
+          ['Renta', dinero(l.costoPlan)], ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
+        ]) + vidaPlan(l) + (resumen ? '' : pieOrigen(origenPlan(l), !!l.origenPlan)));
+      }
+      function tarjetaFacturacion(l, facturas, resumen) {
+        const lista = facturas || [];
+        const f = lista[0];
+        const titulo = icono('receipt') + (resumen ? ' Facturación de la línea' : ' Facturación') +
+          (f ? '<span class="ln-card-titulo-dato">' + esc(mesDe(f.corte)) + '</span>' : '');
+        if (!f) return tarjeta(titulo, '<p class="empty-state">Sin facturas cargadas.</p>');
+        const sinRenta = f.renta === null || f.renta === undefined;
+        const meses = lista.map((x) => '<div class="ln-meses-fila"><span>' + esc(mesDe(x.corte).replace(/ \d{4}$/, '')) + '</span><span>' +
+          esc(dinero(x.cobrado, true) || '—') + '</span><span>' + (sinRenta ? '' : diferenciaTexto(x.diferencia)) +
+          (x.motivo ? ' <span class="ln-tenue">· ' + esc(x.motivo) + '</span>' : '') + (sinUso(x) ? ' <span class="ln-chip ambar">Sin uso</span>' : '') + '</span></div>').join('');
+        return tarjeta(titulo, campos([
+          resumen || sinRenta ? null : ['Renta', dinero(f.renta, true)],
+          ['Cobrado', dinero(f.cobrado, true)],
+          ['Diferencia', sinRenta ? '<span class="ln-tenue">Sin contrato</span>' : diferenciaTexto(f.diferencia), true],
+          ['Motivo', f.motivo],
+          resumen ? null : ['Uso', usoTexto(f), true],
+          f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
+        ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">Últimos ' + lista.length + (lista.length === 1 ? ' mes' : ' meses') +
+          icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
+          (sinRenta ? 'Uso' : 'Diferencia · motivo') + '</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
       }
 
-      function tarjetaResponsable(r, titulo) {
+      function tarjetaResponsable(r, titulo, clase) {
         r = r || {};
         const adicionales = (r.usuariosAdicionales || []).length
           ? '<div class="ln-subtitulo">Responsables adicionales</div>' + campos(r.usuariosAdicionales.map((u) => [u.rol, esc(u.nombre) + (u.noEmpleado ? ' <span class="ln-tenue">· ' + esc(u.noEmpleado) + '</span>' : ''), true]))
@@ -3271,7 +3358,7 @@
           ['Jefe directo', r.jefeDirecto],
           ['Director', r.director],
           // La razón social es de la línea (el contrato), no del responsable: se ve en la tarjeta de la línea
-        ]) + adicionales);
+        ]) + adicionales, clase);
       }
 
       /** TIPO del registro (columna TIPO del AppSheet) con su color e ícono. */
@@ -3339,7 +3426,6 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'equipo' || pila[pila.length - 1].id !== id) return;
           const e = r.equipo;
           const l = r.linea;
-          const costo = l && l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
@@ -3364,16 +3450,17 @@
                   ? ['PIN equipo', e.pinEquipo] : null,
                 e.patronRuta ? ['Patrón', vistaPatron(e.patronRuta), true] : null,   // sin patrón (ni del AppSheet ni trazado) no se muestra
                 e.tipo === 'MODEM' || e.tipo === 'BANDA_ANCHA' ? ['Contraseña módem', e.contrasenaModem] : null,
-                // PIN de WhatsApp: del equipo; sin línea no hay (usuario, 8-oct)
-                l ? ['PIN WhatsApp', l.pinWhatsapp] : null,
+                // PIN de WhatsApp: del equipo; sin línea no hay (usuario, 8 y 13-oct; pendiente 2.25)
+                l ? ['PIN WhatsApp', e.pinWhatsapp] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
-              tarjeta(icono('card-sim') + ' Línea asignada', l ? campos([
-                ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + icono('phone') + ' ' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Compañía', l.compania], ['Razón social', l.razonSocial], ['Estatus', chip(l.estatus), true], ['SIM', l.sim],
-                ['Costo plan', costo], ['Plan', [fecha(l.inicioPlan), fecha(l.finPlan)].filter(Boolean).join(' → ')],
+              // La línea, resumida en las mismas tarjetas que su ficha (usuario, 13-oct): Línea, Plan y Facturación
+              tarjeta(icono('card-sim') + ' Línea', l ? campos([
+                ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
+                ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['Razón social', l.razonSocial],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
-              tarjetaResponsable(e.responsable) +
+              (l ? tarjetaPlan(l, true) + tarjetaFacturacion(l, r.facturas, true) : '') +
+              tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           cargarPatronesAppSheet(detalle);
           cargarEvidencias(id);
@@ -3386,7 +3473,6 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'linea' || pila[pila.length - 1].id !== id) return;
           const l = r.linea;
           const e = r.equipo;
-          const costo = l.costoPlan !== null && l.costoPlan !== undefined ? '$' + Number(l.costoPlan).toLocaleString('es-MX') : null;
           const puedeOperarLinea = memoria.permisos && memoria.permisos.puedeOperar;
           // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
@@ -3404,20 +3490,23 @@
               anteriores ? 'Antes <span class="ln-mono">' + esc(anteriores) + '</span>' : '') +
             fichaEnPestanas(
             '<div class="ln-grid-2">' +
+              // Usuario, 13-oct: Línea, Cuenta, Plan y Facturación (del proveedor), luego Equipo y Responsable. «Números de esta
+              // línea» se quitó: los anteriores salen abajo del número y en el historial
               tarjeta(icono('card-sim') + ' Línea', campos([
-                !e ? ['Tipo', tipoRegistro(l.legado), true] : null,
-                ['Compañía', l.compania], ['SIM', l.sim], ['Razón social', l.razonSocial],
-                ['Costo plan', costo], ['Inicio plan', fecha(l.inicioPlan)], ['Fin plan', fecha(l.finPlan)],
+                ['Tipo', l.tipoLinea || tipoRegistro(l.legado), !l.tipoLinea],
+                ['Compañía', l.compania], ['SIM', l.sim ? '<span class="ln-mono">' + esc(l.sim) + '</span>' : '', true], ['Estatus', chip(l.estatus), true],
                 l.usoTemporal ? ['Uso temporal', 'Desde ' + esc(fecha(l.usoTemporal.desde) || '—') + ' · ' + esc(l.usoTemporal.correo || ''), true] : null,
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
+              tarjetaCuenta(l, r.corte) +
+              tarjetaPlan(l, false) +
+              tarjetaFacturacion(l, r.facturas, false) +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
-                ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' ' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Tipo', tipoRegistro(e.legado), true], ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
-                ['PIN WhatsApp', l.pinWhatsapp],
+                ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
+                ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
+                ['PIN WhatsApp', e.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
-              tarjetaNumeros(l, r.numeros || []) +
             '</div>', tarjetaDetallesCopiar(r.detalles), !e);
           if (!e) cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id), 'linea');
