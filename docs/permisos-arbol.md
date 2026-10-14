@@ -90,7 +90,7 @@ Con PERMISOS y USUARIOS de producción (148 reglas, 51 personas; ya se había co
    repetir).
 3. Revisar con alguien de cada área que su menú y sus fichas sigan igual.
 
-## Fase 2 — Perfiles (hecha, en )
+## Fase 2 — Perfiles (hecha, en `ayrton`)
 
 Un **perfil** es un paquete de reglas con nombre ("Flotilla - consulta") que se asigna a una o varias áreas, para que
 la matriz del día a día sea área × perfil y no área × cada sección.
@@ -101,12 +101,12 @@ En la **misma hoja PERMISOS** (una sola caché, un solo guardar, un solo histori
 
 | QUIEN | MODULO | PERMISO | Qué es |
 |---|---|---|---|
-|  | un nodo (, …) | Sin acceso / Ver / Editar | una regla del perfil |
-| un AREA () |  |  | el área tiene ese perfil |
+| `perfil:Flotilla` | un nodo (`vehiculos`, `vehiculos.exportar`, …) | Sin acceso / Ver / Editar | una regla del perfil |
+| un AREA (`CI`) | `perfil:Flotilla` | `ASIGNADO` | el área tiene ese perfil |
 
-Una versión de antes los ignora sin tronar ( no es un área real;  no es un nivel).
+Una versión de antes los ignora sin tronar (`perfil:…` no es un área real; `ASIGNADO` no es un nivel).
 
-### Cómo se resuelve ( y la misma cuenta en la pantalla)
+### Cómo se resuelve (`Permisos.resolver_` y la misma cuenta en la pantalla)
 
 Por nodo: **regla del correo > regla del área > lo de los perfiles del área > herencia**.
 
@@ -126,17 +126,17 @@ Por nodo: **regla del correo > regla del área > lo de los perfiles del área > 
   "Regla del área". **Ficha de persona**: "Por su perfil X".
 - **Matriz**: "Por área" y "Por perfil". En un área con perfiles la celda de un módulo también pasa por Hereda (lo de sus
   perfiles). Los cambios pendientes de un modo no se pierden al cambiar al otro.
-- Pruebas: precedencia y combinación de perfiles, "Sin acceso" de un área con perfiles (); la
-  paridad servidor = pantalla ahora también con perfiles al azar (); clics en la matriz
-  con un área con perfil y el modo Por perfil ().
+- Pruebas: precedencia y combinación de perfiles, "Sin acceso" de un área con perfiles (`permisos.test.js`); la
+  paridad servidor = pantalla ahora también con perfiles al azar (`permisos-pantalla.test.cjs`); clics en la matriz
+  con un área con perfil y el modo Por perfil (`probar-permisos.js`).
 
-### Migración:  (editor)
+### Migración: `permisosCrearPerfiles()` (editor)
 
 Pasa las reglas de cada área a un perfil con su mismo nombre, asignado a ella (las excepciones por correo se quedan).
 Se puede repetir (un área que ya tiene su perfil se salta). **Solo después de desplegar la fase 2**: la versión de
 antes no lee perfiles y esas áreas se quedarían sin nada.
 
-**Simulación contra producción (14-oct, solo lectura):** después de , crearía **8 perfiles**
+**Simulación contra producción (14-oct, solo lectura):** después de `permisosMigrarCatalogo()`, crearía **8 perfiles**
 (ANALISIS DE DATOS, SERVICIOS VEHICULARES, CI, CONTROL VEHICULAR, AUDITORIAS, LINEAS, POST VENTA, PROCESOS), la hoja
 pasaría de 148 a 156 renglones y **ninguna persona activa cambia**. Después se consolidan a mano en la pantalla (p. ej.
 un "Flotilla - consulta" común a varias áreas).
@@ -144,7 +144,7 @@ un "Flotilla - consulta" común a varias áreas).
 ### Para llevarlo a producción (pendiente; el usuario decide cuándo)
 
 1. Desplegar (con la fase 1).
-2.  y luego  en el editor de producción.
+2. `permisosMigrarCatalogo()` y luego `permisosCrearPerfiles()` en el editor de producción.
 3. Revisar con alguien de cada área que su menú y sus fichas sigan igual.
 
 ## Fase 3 — Alcance como atributo del perfil (pendiente)
