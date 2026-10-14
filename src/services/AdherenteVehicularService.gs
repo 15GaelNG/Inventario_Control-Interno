@@ -631,14 +631,20 @@ const AdherenteVehicularService = (function () {
   }
 
   /** ACTIVO/BAJA: para saber qué adherentes siguen usando el vehículo sin perder el historial
-   *  de los demás (no se eliminan solo porque ya no aplican). No toca ninguna otra columna. */
+   *  de los demás (no se eliminan solo porque ya no aplican). No toca ninguna otra columna a
+   *  propósito -- salvo que alguna …TEMP siga con el base64 crudo de antes del 9-oct, que se
+   *  migra de paso (mismo motivo que en regenerarLiga: SheetUtils.update reescribe el renglón
+   *  completo y este registro puede seguir PENDIENTE de firma cuando se da de baja). */
   function cambiarEstatus(token, id, estatus) {
     Permisos.puedeEditar(token, MODULO);
     const limpio = String(estatus || '').trim().toUpperCase();
     if (ESTATUS_VALIDOS.indexOf(limpio) === -1) {
       throw new Error('Estatus inválido: "' + estatus + '" (debe ser ACTIVO o BAJA).');
     }
-    SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS': limpio }, ID_COLUMN);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    SheetUtils.update(ssId(), hoja_().getName(), id,
+      Object.assign({ 'ESTATUS': limpio }, migrarOtrasFirmasTempSiHaceFalta_(encontrado.data, null)), ID_COLUMN);
     return { ID: id, ESTATUS: limpio };
   }
 

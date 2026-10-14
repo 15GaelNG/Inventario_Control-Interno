@@ -733,7 +733,11 @@ const ResponsivaVehicularService = (function () {
           'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
         }, { candadoTomado: true });
       }
-      SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, ID_COLUMN);
+      // Este préstamo puede seguir PENDIENTE de firma cuando se devuelve (se entrega antes de
+      // que se termine el papeleo): si alguna …TEMP se quedó con el base64 crudo de antes del
+      // 9-oct, se migra de paso (mismo motivo que en regenerarLiga).
+      SheetUtils.update(ssId(), hoja_().getName(), id,
+        Object.assign({ 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, migrarOtrasFirmasTempSiHaceFalta_(fila, null)), ID_COLUMN);
       return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
     } finally {
       lock.releaseLock();

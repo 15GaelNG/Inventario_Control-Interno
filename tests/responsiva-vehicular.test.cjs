@@ -677,3 +677,22 @@ test('devolverPrestamo truena si el préstamo ya se devolvió (de un solo uso)',
   contexto.Servicio.devolverPrestamo('tok', id);
   assert.throws(() => contexto.Servicio.devolverPrestamo('tok', id), /ya se devolvió/);
 });
+
+test('devolverPrestamo: si alguna firma …TEMP se quedó con el base64 crudo de antes del 9-oct, la migra a Drive al guardar -- puede devolverse con la firma todavía PENDIENTE', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], 'EN PRESTAMO');
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE', 'se devuelve antes de que se termine de firmar');
+  // Simula un renglón viejo: la firma de CI quedó con el formato de antes del arreglo del 9-oct.
+  llamadas.insert[0]['FIRMA CI TEMP'] = JSON.stringify({ base64: 'w'.repeat(200000), mimeType: 'image/jpeg' });
+
+  const res = contexto.Servicio.devolverPrestamo('tok', id);
+
+  assert.equal(res.ESTATUS_PRESTAMO, 'DEVUELTO');
+  const migrada = JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']);
+  assert.ok(migrada.archivoId, 'la firma de CI quedó migrada a archivo de Drive');
+  assert.ok(!migrada.base64, 'el base64 crudo ya no vive en la celda');
+});
