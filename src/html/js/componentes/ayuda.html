@@ -17,6 +17,11 @@
   .ayuda-item summary::before { content: '+'; color: var(--color-accent); font-weight: 700; width: 14px; flex-shrink: 0; }
   .ayuda-item[open] summary::before { content: '–'; }
   .ayuda-item summary:hover { background: var(--color-bg); }
+  .ayuda-pantalla {
+    display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .02em; color: var(--color-accent); border-radius: 4px; padding: 1px 6px;
+    margin-right: 4px; background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+  }
   .ayuda-item p {
     margin: 0; padding: 0 12px 12px 34px; font-size: 13px; color: var(--color-text-muted); line-height: 1.5;
   }
@@ -35,11 +40,20 @@
    *
    *   Ayuda.abrir([
    *     { pregunta: '¿Cómo busco un vehículo por su serie?', respuesta: 'Usa el cuadro…' },
-   *   ], { onTour: () => iniciarTourVehiculos() });   // opcional: liga a un Tour.iniciar si el módulo ya tiene uno
+   *   ], {
+   *     onTour: () => iniciarTourVehiculos(),      // opcional: liga a un Tour.iniciar si el módulo ya tiene uno
+   *     buscarEnTodas: () => todaLaAyuda_(),        // opcional: buscador general (14-oct-2026, ver abajo)
+   *   });
    *
-   * Esc, clic fuera o la X → cierra. Con más de 6 preguntas aparece un buscador (filtra
-   * pregunta + respuesta). No guarda nada ni manda nada al servidor -- es contenido fijo que
-   * declara cada módulo (ver NAV_GRUPOS.ayuda en app.html), no un chat.
+   * Sin escribir nada, se ven las preguntas de ESTA pantalla nomás (como siempre). En cuanto se
+   * escribe algo en el buscador, si se dio `buscarEnTodas`, deja de filtrar solo las de aquí y
+   * busca en TODAS las de la app (pregunta + respuesta), cada resultado con una etiqueta de qué
+   * pantalla es -- para cuando no sabes en qué módulo vive lo que buscas. El buscador aparece
+   * siempre que haya `buscarEnTodas`, aunque esta pantalla tenga pocas preguntas (o ninguna); sin
+   * él, aparece solo con más de 6 preguntas locales, como antes.
+   *
+   * Esc, clic fuera o la X → cierra. No guarda nada ni manda nada al servidor -- es contenido fijo
+   * que declara cada módulo (ver NAV_GRUPOS.ayuda en app.html), no un chat.
    */
   const Ayuda = (function () {
     const UMBRAL_BUSCADOR = 6;
@@ -70,7 +84,7 @@
             </div>
             <button type="button" class="modal-close" data-ayuda-cerrar aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button>
           </div>
-          ${preguntas.length > UMBRAL_BUSCADOR ? '<input type="search" class="ayuda-buscar" placeholder="Buscar…" aria-label="Buscar en las preguntas" />' : ''}
+          ${(preguntas.length > UMBRAL_BUSCADOR || o.buscarEnTodas) ? '<input type="search" class="ayuda-buscar" placeholder="' + (o.buscarEnTodas ? 'Buscar en toda la ayuda…' : 'Buscar…') + '" aria-label="Buscar en las preguntas" />' : ''}
           <div class="ayuda-lista" data-ayuda-lista></div>
           ${o.onTour ? '<div class="ayuda-pie"><button type="button" class="secondary" data-ayuda-tour>¿Prefieres un recorrido guiado?</button></div>' : ''}
         </div>`;
@@ -78,15 +92,26 @@
       if (typeof lucide !== 'undefined') lucide.createIcons();
 
       const lista = fondo.querySelector('[data-ayuda-lista]');
+      function item(p, abierta) {
+        const etiqueta = p.pantalla ? '<span class="ayuda-pantalla">' + esc(p.pantalla) + '</span>' : '';
+        return '<details class="ayuda-item"' + (abierta ? ' open' : '') + '>' +
+          '<summary>' + etiqueta + esc(p.pregunta) + '</summary>' +
+          '<p>' + esc(p.respuesta) + '</p></details>';
+      }
       function pintar(texto) {
         const q = normalizar(texto);
-        const filtradas = !q ? preguntas : preguntas.filter((p) => normalizar(p.pregunta).includes(q) || normalizar(p.respuesta).includes(q));
+        if (!q) {
+          lista.innerHTML = preguntas.length
+            ? preguntas.map((p, i) => item(p, i === 0)).join('')
+            : '<p class="ayuda-vacio">' + (o.buscarEnTodas
+              ? 'No hay preguntas para esta pantalla todavía -- busca arriba para ver las de toda la app.'
+              : 'Todavía no hay preguntas para esta pantalla.') + '</p>';
+          return;
+        }
+        const fuente = o.buscarEnTodas ? o.buscarEnTodas() : preguntas;
+        const filtradas = fuente.filter((p) => normalizar(p.pregunta).includes(q) || normalizar(p.respuesta).includes(q));
         lista.innerHTML = filtradas.length
-          ? filtradas.map((p, i) => `
-            <details class="ayuda-item"${i === 0 && !q ? ' open' : ''}>
-              <summary>${esc(p.pregunta)}</summary>
-              <p>${esc(p.respuesta)}</p>
-            </details>`).join('')
+          ? filtradas.map((p) => item(p, false)).join('')
           : '<p class="ayuda-vacio">Nada encontrado -- prueba con otra palabra.</p>';
       }
       pintar('');
@@ -107,7 +132,8 @@
       const btnTour = fondo.querySelector('[data-ayuda-tour]');
       if (btnTour) btnTour.addEventListener('click', () => { terminar(); o.onTour(); });
 
-      (buscador || fondo.querySelector('.ayuda-item summary')).focus();
+      const elementoAEnfocar = buscador || fondo.querySelector('.ayuda-item summary');
+      if (elementoAEnfocar) elementoAEnfocar.focus();
     }
 
     return { abrir };
