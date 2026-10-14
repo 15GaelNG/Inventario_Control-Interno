@@ -163,6 +163,24 @@
   .usr-celda:hover { filter: brightness(.94); }
   .usr-celda:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
   .usr-celda.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  /* Secciones de un módulo (permisos en árbol): debajo de su módulo, más chicas; la que hereda, tenue */
+  .usr-celda.heredada { opacity: .45; }
+  /* Por omisión solo las secciones con alguna regla; "Ver todas las secciones" las enseña todas */
+  .usr-matriz.solo-con-regla .usr-matriz-seccion:not(.con-regla) { display: none; }
+  .usr-matriz-seccion .usr-matriz-mod { padding-left: 30px; font-weight: 400; font-size: 12px; color: var(--color-text-muted); }
+  .usr-permiso.usr-seccion { padding-left: 28px; }
+  .usr-permiso.usr-seccion .usr-permiso-ico { width: 26px; height: 26px; }
+  .usr-permiso.usr-seccion .usr-permiso-nombre { font-weight: 500; font-size: 12.5px; }
+  .usr-editar-fila.usr-seccion { padding-left: 34px; }
+  .usr-editar-fila.usr-seccion .usr-editar-nombre { font-size: 12.5px; }
+  .usr-editar-hereda { font-size: 11px; color: var(--color-text-muted); font-weight: 400; }
+  .usr-secciones-btn {
+    display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; border: 1px solid var(--color-border);
+    border-radius: 999px; background: transparent; color: var(--color-text-muted); font: inherit; font-size: 11px; cursor: pointer;
+  }
+  .usr-secciones-btn .ico { width: 12px; height: 12px; }
+  .usr-secciones-btn:hover { color: var(--color-text); background: var(--color-bg); }
+  .usr-op.activa.HEREDA { background: var(--color-text-muted); }
   .usr-celda.con-excepcion::after {
     content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%;
     background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-surface);
@@ -239,6 +257,8 @@
           <span class="usr-matriz-leyenda"><span class="usr-celda LECTURA" aria-hidden="true"></span> Ver</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO" aria-hidden="true"></span> Sin acceso</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO con-excepcion" aria-hidden="true"></span> Alguien del área tiene excepción</span>
+          <span class="usr-matriz-leyenda"><span class="usr-celda EDICION heredada" aria-hidden="true"></span> Sección que hereda</span>
+          <button type="button" class="secondary" id="usr-matriz-secciones" aria-pressed="false"><i data-lucide="list-tree" class="ico"></i> Ver todas las secciones</button>
           <p id="usr-matriz-cuenta">Clic en una celda para cambiarla</p>
           <button type="button" class="secondary" id="usr-matriz-descartar" hidden>Descartar</button>
           <button type="button" id="usr-matriz-guardar" disabled><i data-lucide="save" class="ico"></i> <span>Guardar</span></button>

@@ -12,11 +12,17 @@
    * (cada cambio guardado: el servidor lo anota en PERMISOS_HISTORIAL y lo manda en el panel).
    * Cada ficha trae también su pestaña Historial, solo con lo de esa persona o esa área.
    *
+   * Permisos en árbol (14-oct-2026): cada módulo tiene secciones (sus pestañas, Exportar…; Modulos.gs)
+   * que HEREDAN su nivel salvo una regla propia, y nunca pasan de él. En las fichas solo se listan las
+   * secciones que se apartan de su módulo; en la ventana y la matriz cada sección tiene además
+   * "Hereda" (sin regla propia).
+   *
    * La cuenta de qué tiene cada quien se repite aquí para pintar al instante; la que manda es
-   * la del servidor (Permisos.resolver_). Si cambian las reglas de allá, cambiar efectivo() también.
+   * la del servidor (Permisos.resolver_). Si cambian las reglas de allá, cambiar deArea() y
+   * efectivo() también: tests/permisos-pantalla.test.cjs corre los dos con los mismos casos.
    */
 
-  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar' };
+  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar', HEREDA: 'Hereda' };
   const PERM_ICONO = { NINGUNO: 'eye-off', LECTURA: 'eye', EDICION: 'pencil' };
   const PERM_ROLES_TOTALES = ['ADMIN', 'SUPER'];
 
@@ -32,8 +38,24 @@
       .toUpperCase().trim().replace(/\s+/g, ' ');
     const llave = (quien, modulo) => normal(quien) + '|' + modulo;
     const modulos = () => datos.grupos.reduce((t, g) => t.concat(g.modulos), []);
+    /** Las secciones de un módulo (o []), como las manda el panel: { id, etiqueta, icono, hereda } */
+    const seccionesDe = (m) => m.secciones || [];
+    /** Módulos y secciones, cada sección con su padre */
+    const nodos = () => modulos().reduce((t, m) => t.concat([m], seccionesDe(m).map((s) => Object.assign({ padre: m.id }, s))), []);
+    const nodo = (id) => nodos().find((n) => n.id === id) || null;
+    const padreDe = (id) => (nodo(id) || {}).padre || null;
     const regla = (quien, modulo) => originales[llave(quien, modulo)];
-    const deArea = (area, modulo) => (area ? regla(area, modulo) || 'NINGUNO' : 'NINGUNO');
+    const NIVEL_N = { NINGUNO: 0, LECTURA: 1, EDICION: 2 };
+    /** Nunca más que su módulo */
+    const tope = (v, padre) => (NIVEL_N[v] > NIVEL_N[padre] ? padre : v);
+    /** Lo de un área en un nodo (Permisos.resolver_ sin el correo): su regla, o lo que hereda de su módulo */
+    function deArea(area, id) {
+      const n = nodo(id);
+      const propio = area ? regla(area, id) : undefined;
+      if (!n || !n.padre) return propio || 'NINGUNO';
+      const delPadre = deArea(area, n.padre);
+      return tope(propio !== undefined ? propio : (n.hereda === false ? 'NINGUNO' : delPadre), delPadre);
+    }
     const tieneTotal = (p) => PERM_ROLES_TOTALES.indexOf(p.rol) !== -1;
     /** VIEWER y CLIENT solo consultan: Editar se les queda en Ver (Permisos.resolver_) */
     const soloConsulta = (p) => p.rol === 'VIEWER' || p.rol === 'CLIENT';
@@ -42,14 +64,24 @@
       const lista = String(p.dptosPermitidos || '').split(',').map((d) => d.trim()).filter(Boolean);
       return lista.length ? lista : (p.area ? [p.area] : []);
     };
-    /** Lo que tiene por su rol o su regla propia o su área; VIEWER y CLIENT no editan. (Sin ver si está activo: eso se avisa aparte.) */
-    function efectivo(p, modulo) {
+    /**
+     * Lo que tiene por su rol, su regla propia o la de su área en ese nodo, o lo que hereda de su módulo
+     * (Permisos.resolver_); VIEWER y CLIENT no editan. (Sin ver si está activo: eso se avisa aparte.)
+     */
+    function efectivo(p, id) {
       if (tieneTotal(p)) return 'EDICION';   // "usuarios" (lo único que SUPER no tiene) no está en esta lista
-      const propio = regla(p.correo, modulo);
-      const nivel = propio !== undefined ? propio : deArea(p.area, modulo);
+      const n = nodo(id);
+      const propio = regla(p.correo, id);
+      const delArea = p.area ? regla(p.area, id) : undefined;
+      let nivel;
+      if (!n || !n.padre) nivel = propio !== undefined ? propio : (delArea || 'NINGUNO');
+      else {
+        const delPadre = efectivo(p, n.padre);
+        nivel = tope(propio !== undefined ? propio : delArea !== undefined ? delArea : (n.hereda === false ? 'NINGUNO' : delPadre), delPadre);
+      }
       return soloConsulta(p) && nivel === 'EDICION' ? 'LECTURA' : nivel;
     }
-    const excepcionesDe = (p) => (tieneTotal(p) ? [] : modulos().filter((m) => regla(p.correo, m.id) !== undefined));
+    const excepcionesDe = (p) => (tieneTotal(p) ? [] : nodos().filter((m) => regla(p.correo, m.id) !== undefined));
     const conAcceso = (p) => modulos().filter((m) => efectivo(p, m.id) !== 'NINGUNO').length;
     const persona = (correo) => datos.personas.find((p) => normal(p.correo) === normal(correo));
     const area = (nombre) => datos.areas.find((a) => normal(a.nombre) === normal(nombre));
@@ -60,8 +92,8 @@
       datos.historial = datos.historial || [];
       originales = {};
       datos.reglas.forEach((r) => {
-        // NINGUNO de un área es lo mismo que no tener regla
-        if (r.permiso === 'NINGUNO' && r.quien.indexOf('@') === -1) return;
+        // NINGUNO de un área en un módulo es lo mismo que no tener regla (en una sección no: corta la herencia)
+        if (r.permiso === 'NINGUNO' && r.quien.indexOf('@') === -1 && !padreDe(r.modulo)) return;
         originales[llave(r.quien, r.modulo)] = r.permiso;
       });
     }
@@ -69,14 +101,22 @@
     // ---------------------------------------------------------------- piezas de HTML
     const ico = (nombre) => '<i data-lucide="' + nombre + '" class="ico"></i>';
     const nivel = (v) => '<span class="usr-nivel ' + v + '">' + ico(PERM_ICONO[v]) + PERM_TEXTO[v] + '</span>';
+    /** "Vehículos › Documentos" */
+    const etiquetaNodo = (id) => {
+      const n = nodo(id);
+      if (!n) return id;
+      return n.padre ? (nodo(n.padre) || {}).etiqueta + ' › ' + n.etiqueta : n.etiqueta;
+    };
     const badgeRol = (rol) => (rol === 'USER' ? '' : '<span class="badge-estado pendiente">' + escaparHtml(rol) + '</span>');
     const badgeActivo = (activo) => '<span class="badge-estado ' + (activo ? 'activo' : 'baja') + '">' + (activo ? 'Activo' : 'Inactivo') + '</span>';
     const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
 
     /** El ícono de cada módulo es el mismo que tiene su vista (NAV_GRUPOS, app.html); el que vive en la ficha de otro lo trae en Modulos.gs */
     function iconoModulo(id) {
+      const n = nodo(id);
+      if (n && n.padre) return n.icono || iconoModulo(n.padre);   // una sección: su ícono o el de su módulo
       const vista = vistaDe(id);
-      return vista ? vista.icono : ((modulos().find((m) => m.id === id) || {}).icono || 'square');
+      return vista ? vista.icono : ((n || {}).icono || 'square');
     }
 
     // ---------------------------------------------------------------- lo que implica un permiso
@@ -116,15 +156,16 @@
     }
 
     // ---------------------------------------------------------------- historial
-    const etiquetaModulo = (id) => (modulos().find((m) => m.id === id) || { etiqueta: id }).etiqueta;
+    const etiquetaModulo = (id) => etiquetaNodo(id);
     const esDePersona = (h) => h.quien.indexOf('@') !== -1;
-    /** '' en el historial = sin regla: la persona tiene lo de su área; el área, sin acceso */
-    const textoHistorial = (valor, dePersona) => (valor ? PERM_TEXTO[valor] : (dePersona ? 'Lo de su área' : PERM_TEXTO.NINGUNO));
-    const chipHistorial = (valor, dePersona) => (valor || !dePersona
-      ? nivel(valor || 'NINGUNO')
-      : '<span class="usr-origen area">' + ico('users') + ' Lo de su área</span>');
-    const cambioHistorial = (h) => '<span class="usr-historial-cambio">' + chipHistorial(h.antes, esDePersona(h)) + ico('arrow-right') +
-      chipHistorial(h.despues, esDePersona(h)) + '</span>';
+    /** '' en el historial = sin regla: la persona tiene lo de su área; el área, sin acceso (en una sección: hereda) */
+    const textoHistorial = (valor, dePersona, modulo) => (valor ? PERM_TEXTO[valor]
+      : (dePersona ? 'Lo de su área' : padreDe(modulo) ? PERM_TEXTO.HEREDA : PERM_TEXTO.NINGUNO));
+    const chipHistorial = (valor, dePersona, modulo) => (valor ? nivel(valor)
+      : dePersona ? '<span class="usr-origen area">' + ico('users') + ' Lo de su área</span>'
+        : padreDe(modulo) ? '<span class="usr-origen area">' + ico('corner-down-right') + ' Hereda</span>' : nivel('NINGUNO'));
+    const cambioHistorial = (h) => '<span class="usr-historial-cambio">' + chipHistorial(h.antes, esDePersona(h), h.modulo) + ico('arrow-right') +
+      chipHistorial(h.despues, esDePersona(h), h.modulo) + '</span>';
     const fechaHora = (iso) => (iso ? formatearFecha(iso) + ' ' + new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—');
     const historialDe = (quien) => datos.historial.filter((h) => normal(h.quien) === normal(quien));
 
@@ -144,7 +185,7 @@
     }
 
     function renglon(m, valor, origen, excepcion) {
-      return '<div class="usr-permiso' + (excepcion ? ' excepcion' : '') + '">' +
+      return '<div class="usr-permiso' + (excepcion ? ' excepcion' : '') + (padreDe(m.id) ? ' usr-seccion' : '') + '">' +
         '<span class="usr-permiso-ico">' + ico(iconoModulo(m.id)) + '</span>' +
         '<div class="usr-permiso-nombre">' + escaparHtml(m.etiqueta) + (origen ? '<div class="usr-permiso-origen">' + origen + '</div>' : '') + '</div>' +
         nivel(valor) + '</div>';
@@ -154,14 +195,18 @@
      * Los módulos por grupo, una tarjeta por grupo. `mostrar(m)` decide qué renglón va arriba;
      * el resto se junta al final en "Sin acceso a N módulos", plegado.
      */
-    function listaDePermisos(mostrar, pintarRenglon) {
+    function listaDePermisos(mostrar, pintarRenglon, nivelDe, conRegla) {
       let html = '';
       const ocultos = [];
+      // Debajo de cada módulo, solo las secciones que se apartan de él (las que heredan van implícitas)
+      const conSecciones = (m) => pintarRenglon(m) + seccionesDe(m)
+        .filter((s) => nivelDe(s.id) !== nivelDe(m.id) || conRegla(s.id))
+        .map((s) => pintarRenglon(Object.assign({ padre: m.id }, s))).join('');
       datos.grupos.forEach((g) => {
         const visibles = g.modulos.filter((m) => { const si = mostrar(m); if (!si) ocultos.push(m); return si; });
         if (!visibles.length) return;
         html += '<div class="card ln-card"><h3>' + ico(g.icono) + ' ' + escaparHtml(g.etiqueta) + '</h3>' +
-          visibles.map(pintarRenglon).join('') + '</div>';
+          visibles.map(conSecciones).join('') + '</div>';
       });
       if (!html) html = '<div class="card ln-card"><p class="empty-state">No tiene acceso a ningún módulo.</p></div>';
       if (ocultos.length) {
@@ -220,9 +265,13 @@
             else if (propio !== undefined) {
               origen = '<span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>' +
                 (p.area ? '<span>su área: ' + PERM_TEXTO[deArea(p.area, m.id)] + '</span>' : '');
-            } else if (deArea(p.area, m.id) !== 'NINGUNO') origen = '<span class="usr-origen area">' + ico('users') + ' Por su área</span>';
+            } else if (m.padre && (!p.area || regla(p.area, m.id) === undefined)) {
+              origen = '<span class="usr-origen area">' + ico('corner-down-right') + ' ' + (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>';
+            } else if (deArea(p.area, m.id) !== 'NINGUNO' || m.padre) origen = '<span class="usr-origen area">' + ico('users') + ' Por su área</span>';
             return renglon(m, efectivo(p, m.id), origen, propio !== undefined);
-          }) +
+          },
+          (id) => efectivo(p, id),
+          (id) => !total && (regla(p.correo, id) !== undefined || (!!p.area && regla(p.area, id) !== undefined))) +
         tarjetaImplicaciones(implicaciones((id) => efectivo(p, id)));
 
       const datosHoja = '<div class="card ln-card"><h3>' + ico('id-card') + ' Datos en USUARIOS</h3><div class="info-grid">' +
@@ -261,9 +310,13 @@
               ? '<button type="button" class="usr-enlace" data-usr-persona="' + escaparHtml(conExc[0].correo) + '" title="' +
                 escaparHtml(conExc.map((p) => (p.nombre || p.correo) + ': ' + PERM_TEXTO[regla(p.correo, m.id)]).join('\n')) + '">' +
                 ico('sparkles') + ' ' + (conExc.length === 1 ? escaparHtml(conExc[0].nombre || conExc[0].correo) + ' tiene una excepción' : conExc.length + ' personas con excepción') + '</button>'
-              : '';
+              : (m.padre && regla(a.nombre, m.id) === undefined ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
+                (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>' : '');
             return renglon(m, deArea(a.nombre, m.id), origen, false);
-          }) +
+          },
+          (id) => deArea(a.nombre, id),
+          (id) => regla(a.nombre, id) !== undefined ||
+            activas.some((p) => !tieneTotal(p) && regla(p.correo, id) !== undefined)) +
         tarjetaImplicaciones(implicaciones((id) => deArea(a.nombre, id)));
 
       const personas = '<div class="card ln-card"><h3>' + ico('users') + ' Personas del área</h3>' + (gente.length
@@ -320,39 +373,72 @@
      * área). Arriba de cada grupo, "Todo el grupo" pone el mismo nivel a todos sus módulos.
      * Abajo, lo que implica lo elegido fuera de las pantallas (implicaciones), en vivo.
      *
-     * edicion = { tipo, id, p (la persona o null), iniciales: {modulo: valor}, valores: {modulo: valor} }
-     * valor: persona → '' (lo de su área) o el nivel de la excepción; área → el nivel.
+     * edicion = { tipo, id, p (la persona o null), iniciales: {nodo: valor}, valores: {nodo: valor}, abiertos: {modulo: true} }
+     * valor: persona → '' (lo de su área / lo que hereda) o el nivel de la excepción; área → el nivel
+     * (en un módulo, NINGUNO es "sin regla"; en una sección, '' es "hereda" y NINGUNO la corta).
+     * Cada módulo tiene sus secciones plegadas debajo ("Secciones"), con un botón más: Hereda.
      */
     let edicion = null;
 
-    const heredadoDe = (m) => (edicion.p ? deArea(edicion.p.area, m) : null);
+    /** Lo que tendría un nodo sin regla propia en la ventana (lo de su área, o lo que hereda de su módulo) */
+    function heredadoDe(id) {
+      const n = nodo(id);
+      const delArea = edicion.p && edicion.p.area ? regla(edicion.p.area, id) : undefined;
+      if (!n || !n.padre) return edicion.p ? (delArea || 'NINGUNO') : 'NINGUNO';
+      const delPadre = nivelEnVentana(n.padre);
+      return tope(delArea !== undefined ? delArea : (n.hereda === false ? 'NINGUNO' : delPadre), delPadre);
+    }
     /** El nivel que queda en la ventana; a VIEWER, Editar se le queda en Ver (como en efectivo) */
-    function nivelEnVentana(m) {
-      const v = edicion.valores[m];
-      const nivel = edicion.p ? (v === '' ? heredadoDe(m) : v) : v;
+    function nivelEnVentana(id) {
+      const v = edicion.valores[id];
+      const n = nodo(id);
+      let nivel = v === '' || v === undefined ? heredadoDe(id) : v;
+      if (n && n.padre) nivel = tope(nivel, nivelEnVentana(n.padre));
       return edicion.p && soloConsulta(edicion.p) && nivel === 'EDICION' ? 'LECTURA' : nivel;
     }
-    /** Elegir un nivel: en una persona, el mismo que le da su área no es excepción */
-    function elegir(m, nivel) {
-      edicion.valores[m] = edicion.p && nivel === heredadoDe(m) ? '' : nivel;
+    /** Elegir un nivel: el mismo que ya tendría sin regla (de su área o heredado) no es regla propia */
+    function elegir(id, nivel) {
+      if (nivel === 'HEREDA') { edicion.valores[id] = ''; return; }
+      const sinRegla = heredadoDe(id);
+      if (padreDe(id)) edicion.valores[id] = nivel === sinRegla && edicion.p ? '' : nivel;
+      else edicion.valores[id] = edicion.p && nivel === sinRegla ? '' : nivel;
     }
 
-    function segmento(actual, heredado, atributos) {
-      return '<div class="usr-segmento" role="radiogroup" ' + atributos + '>' + NIVELES.map((n) =>
+    function segmento(actual, heredado, atributos, conHereda) {
+      return '<div class="usr-segmento" role="radiogroup" ' + atributos + '>' + (conHereda ? ['HEREDA'] : []).concat(NIVELES).map((n) =>
         '<button type="button" role="radio" aria-checked="' + (n === actual) + '" data-nivel="' + n + '"' +
         ' class="usr-op ' + n + (n === actual ? ' activa' : '') + (n === heredado ? ' heredada' : '') + '"' +
-        (n === heredado ? ' title="Lo que le da su área"' : '') + '>' + PERM_TEXTO[n] + '</button>').join('') + '</div>';
+        (n === heredado ? ' title="' + (conHereda ? 'Lo que tendría sin regla propia' : 'Lo que le da su área') + '"' : '') + '>' + PERM_TEXTO[n] + '</button>').join('') + '</div>';
     }
 
     function filaModulo(m) {
       const v = edicion.valores[m.id];
       const excepcion = !!edicion.p && v !== '';
+      const secs = seccionesDe(m);
+      const propias = secs.filter((s) => edicion.valores[s.id] !== '').length;
       return '<div class="usr-editar-fila' + (v !== edicion.iniciales[m.id] ? ' cambiada' : '') + (excepcion ? ' excepcion' : '') + '" data-modulo="' + m.id + '">' +
         ico(iconoModulo(m.id)) +
-        '<span class="usr-editar-nombre">' + escaparHtml(m.etiqueta) + '</span>' +
+        '<span class="usr-editar-nombre">' + escaparHtml(m.etiqueta) +
+        (secs.length ? ' <button type="button" class="usr-secciones-btn" data-usr-secciones="' + m.id + '" aria-expanded="' + !!edicion.abiertos[m.id] + '">' +
+          ico(edicion.abiertos[m.id] ? 'chevron-down' : 'chevron-right') + plural(secs.length, 'sección', 'secciones') +
+          (propias ? ' · ' + plural(propias, 'propia', 'propias') : '') + '</button>' : '') + '</span>' +
         (edicion.p ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + m.id + '" title="Volver a lo de su área"' +
           ' aria-label="Volver a lo de su área"' + (excepcion ? '' : ' hidden') + '>' + ico('rotate-ccw') + '</button>' : '') +
         segmento(nivelEnVentana(m.id), edicion.p ? heredadoDe(m.id) : null, 'aria-label="' + escaparHtml(m.etiqueta) + '"') +
+        '</div>' + (edicion.abiertos[m.id] ? secs.map((s) => filaSeccion(m, s)).join('') : '');
+    }
+
+    /** Una sección: Hereda (sin regla propia) o un nivel propio, que nunca pasa del de su módulo */
+    function filaSeccion(m, s) {
+      const v = edicion.valores[s.id];
+      const propia = v !== '';
+      return '<div class="usr-editar-fila usr-seccion' + (v !== edicion.iniciales[s.id] ? ' cambiada' : '') + (propia ? ' excepcion' : '') + '" data-modulo="' + s.id + '">' +
+        ico(s.icono || iconoModulo(m.id)) +
+        '<span class="usr-editar-nombre">' + escaparHtml(s.etiqueta) +
+        '<span class="usr-editar-hereda">' + (propia ? 'Propia' : 'Hereda: ' + PERM_TEXTO[nivelEnVentana(s.id)]) + '</span></span>' +
+        '<button type="button" class="usr-restablecer" data-usr-restablecer="' + s.id + '" title="Volver a heredar" aria-label="Volver a heredar"' +
+          (propia ? '' : ' hidden') + '>' + ico('rotate-ccw') + '</button>' +
+        segmento(propia ? nivelEnVentana(s.id) : 'HEREDA', null, 'aria-label="' + escaparHtml(etiquetaNodo(s.id)) + '"', true) +
         '</div>';
     }
 
@@ -379,17 +465,20 @@
     function abrirEditar(tipo, id) {
       const p = tipo === 'persona' ? persona(id) : null;
       if (p && tieneTotal(p)) return;
-      edicion = { tipo: tipo, id: id, p: p, iniciales: {}, valores: {} };
-      modulos().forEach((m) => {
+      edicion = { tipo: tipo, id: id, p: p, iniciales: {}, valores: {}, abiertos: {} };
+      nodos().forEach((m) => {
         let valor;
         if (p) {
           const propio = regla(p.correo, m.id);
-          valor = propio === undefined || propio === deArea(p.area, m.id) ? '' : propio;
+          valor = propio === undefined || (!m.padre && propio === deArea(p.area, m.id)) ? '' : propio;
         } else {
-          valor = deArea(id, m.id);
+          // Un módulo, su nivel; una sección, su regla o '' (hereda)
+          valor = m.padre ? (regla(id, m.id) || '') : deArea(id, m.id);
         }
         edicion.iniciales[m.id] = valor;
         edicion.valores[m.id] = valor;
+        // Se abren solas las secciones de un módulo que ya tiene alguna con regla propia
+        if (m.padre && valor !== '') edicion.abiertos[m.padre] = true;
       });
       $('usr-modal-sub').textContent = p ? (p.nombre || p.correo) + (p.area ? ' · área ' + p.area : ' · sin área') : 'Área ' + id;
       $('usr-modal-regla').textContent = p
@@ -414,12 +503,22 @@
           const v = edicion.valores[m];
           return edicion.tipo === 'persona'
             ? { quien: edicion.p.correo, modulo: m, permiso: v || null }
-            : { quien: edicion.id, modulo: m, permiso: v === 'NINGUNO' ? null : v };
+            // En un módulo de un área, Sin acceso es "sin regla"; en una sección, '' es hereda y NINGUNO se guarda
+            : { quien: edicion.id, modulo: m, permiso: padreDe(m) ? (v || null) : (v === 'NINGUNO' ? null : v) };
         });
     }
 
     /** Un clic en la ventana: un nivel de un módulo, el de todo un grupo, o volver a lo del área */
     function alClicVentana(ev) {
+      const plegar = ev.target.closest('[data-usr-secciones]');
+      if (plegar) {
+        const m = plegar.dataset.usrSecciones;
+        edicion.abiertos[m] = !edicion.abiertos[m];
+        pintarVentana();
+        const el = $('usr-modal-cuerpo').querySelector('[data-usr-secciones="' + m + '"]');
+        if (el) el.focus();
+        return;
+      }
       const reset = ev.target.closest('[data-usr-restablecer]');
       const op = ev.target.closest('.usr-op');
       if (!reset && !op) return;
@@ -431,7 +530,11 @@
         const grupo = op.closest('[data-usr-grupo]');
         const nivel = op.dataset.nivel;
         if (grupo) {
-          (datos.grupos.find((g) => g.id === grupo.dataset.usrGrupo) || { modulos: [] }).modulos.forEach((m) => elegir(m.id, nivel));
+          // Todo el grupo: el nivel en cada módulo, y sus secciones vuelven a heredar
+          (datos.grupos.find((g) => g.id === grupo.dataset.usrGrupo) || { modulos: [] }).modulos.forEach((m) => {
+            elegir(m.id, nivel);
+            seccionesDe(m).forEach((s) => { edicion.valores[s.id] = ''; });
+          });
           enfocar = '[data-usr-grupo="' + grupo.dataset.usrGrupo + '"] [data-nivel="' + nivel + '"]';
         } else {
           const m = op.closest('[data-modulo]').dataset.modulo;
@@ -478,24 +581,38 @@
      */
     const ICONO_CELDA = { NINGUNO: 'minus', LECTURA: 'eye', EDICION: 'pencil' };
     const SIGUIENTE_NIVEL = { NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'NINGUNO' };
-    let pendientesMatriz = {};   // 'área|módulo' → nivel elegido en la matriz
+    // Una sección pasa además por Hereda (sin regla propia): Hereda → Sin acceso → Ver → Editar → Hereda
+    const SIGUIENTE_EN_SECCION = { HEREDA: 'NINGUNO', NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'HEREDA' };
+    let pendientesMatriz = {};   // 'área|nodo' → nivel elegido en la matriz (en una sección, 'HEREDA' = sin regla)
+    let todasLasSecciones = false;   // "Ver todas las secciones"; si no, solo las que tienen alguna regla o un cambio
     const llaveCelda = (area, modulo) => area + '|' + modulo;
+    /** Lo que dice la hoja para la celda: en un módulo, su nivel; en una sección, su regla o HEREDA */
+    const enHoja = (area, id) => (padreDe(id) ? regla(area, id) || 'HEREDA' : deArea(area, id));
     const nivelEnMatriz = (area, modulo) => {
       const k = llaveCelda(area, modulo);
-      return k in pendientesMatriz ? pendientesMatriz[k] : deArea(area, modulo);
+      return k in pendientesMatriz ? pendientesMatriz[k] : enHoja(area, modulo);
     };
+    /** Con lo que hay en la matriz, el nivel que de verdad queda (una sección que hereda toma el de su módulo) */
+    function nivelResueltoEnMatriz(area, id) {
+      const n = nodo(id);
+      const v = nivelEnMatriz(area, id);
+      if (!n || !n.padre) return v;
+      const delPadre = nivelResueltoEnMatriz(area, n.padre);
+      return tope(v === 'HEREDA' ? (n.hereda === false ? 'NINGUNO' : delPadre) : v, delPadre);
+    }
 
     function celdaMatriz(a, m) {
       const n = nivelEnMatriz(a.nombre, m.id);
-      const antes = deArea(a.nombre, m.id);
+      const antes = enHoja(a.nombre, m.id);
+      const resuelto = nivelResueltoEnMatriz(a.nombre, m.id);
       const conExc = delArea(a.nombre).filter((p) => p.activo && !tieneTotal(p) && regla(p.correo, m.id) !== undefined);
-      const titulo = a.nombre + ' · ' + m.etiqueta + ': ' + PERM_TEXTO[n] +
+      const titulo = a.nombre + ' · ' + etiquetaNodo(m.id) + ': ' + (n === 'HEREDA' ? 'Hereda (' + PERM_TEXTO[resuelto] + ')' : PERM_TEXTO[n]) +
         (n !== antes ? ' (antes: ' + PERM_TEXTO[antes] + ')' : '') +
         (conExc.length ? '\nCon excepción: ' + conExc.map((p) => (p.nombre || p.correo) + ' (' + PERM_TEXTO[regla(p.correo, m.id)] + ')').join(', ') : '') +
         '\nClic para cambiar';
-      return '<button type="button" class="usr-celda ' + n + (n !== antes ? ' cambiada' : '') + (conExc.length ? ' con-excepcion' : '') + '"' +
+      return '<button type="button" class="usr-celda ' + resuelto + (n === 'HEREDA' ? ' heredada' : '') + (n !== antes ? ' cambiada' : '') + (conExc.length ? ' con-excepcion' : '') + '"' +
         ' data-celda-area="' + escaparHtml(a.nombre) + '" data-celda-modulo="' + m.id + '"' +
-        ' title="' + escaparHtml(titulo) + '" aria-label="' + escaparHtml(titulo) + '">' + Iconos.svg(ICONO_CELDA[n]) + '</button>';
+        ' title="' + escaparHtml(titulo) + '" aria-label="' + escaparHtml(titulo) + '">' + Iconos.svg(ICONO_CELDA[resuelto]) + '</button>';
     }
 
     function cambiosDeLaMatriz() {
@@ -503,8 +620,9 @@
         const i = k.lastIndexOf('|');
         return { quien: k.slice(0, i), modulo: k.slice(i + 1), nivel: pendientesMatriz[k] };
       })
-        .filter((c) => c.nivel !== deArea(c.quien, c.modulo))
-        .map((c) => ({ quien: c.quien, modulo: c.modulo, permiso: c.nivel === 'NINGUNO' ? null : c.nivel }));
+        .filter((c) => c.nivel !== enHoja(c.quien, c.modulo))
+        .map((c) => ({ quien: c.quien, modulo: c.modulo,
+          permiso: c.nivel === 'HEREDA' || (c.nivel === 'NINGUNO' && !padreDe(c.modulo)) ? null : c.nivel }));
     }
 
     function pintarCuentaMatriz() {
@@ -525,13 +643,16 @@
       }
       const arriba = caja.scrollTop;
       const izquierda = caja.scrollLeft;
-      caja.innerHTML = '<table class="usr-matriz"><thead><tr><th class="usr-matriz-mod">Módulo</th>' +
+      // Una sección con alguna regla de un área (o un cambio sin guardar) siempre se ve; las demás, con el botón
+      const conRegla = (id) => datos.areas.some((a) => regla(a.nombre, id) !== undefined || llaveCelda(a.nombre, id) in pendientesMatriz);
+      caja.innerHTML = '<table class="usr-matriz' + (todasLasSecciones ? '' : ' solo-con-regla') + '"><thead><tr><th class="usr-matriz-mod">Módulo</th>' +
         datos.areas.map((a) => '<th><button type="button" class="usr-matriz-area" data-usr-area="' + escaparHtml(a.nombre) + '"' +
           ' title="' + escaparHtml(a.nombre + ' · ' + plural(delArea(a.nombre).filter((p) => p.activo).length, 'persona activa', 'personas activas') + '. Clic para abrir el área') + '">' +
           escaparHtml(a.nombre) + '</button></th>').join('') + '</tr></thead><tbody>' +
         datos.grupos.map((g) => '<tr class="usr-matriz-grupo"><th class="usr-matriz-mod">' + escaparHtml(g.etiqueta) + '</th><td colspan="' + datos.areas.length + '"></td></tr>' +
-          g.modulos.map((m) => '<tr><th class="usr-matriz-mod">' + Iconos.svg(iconoModulo(m.id)) + escaparHtml(m.etiqueta) + '</th>' +
-            datos.areas.map((a) => '<td>' + celdaMatriz(a, m) + '</td>').join('') + '</tr>').join('')).join('') +
+          g.modulos.map((m) => [m].concat(seccionesDe(m).map((s) => Object.assign({ padre: m.id }, s))).map((n) =>
+            '<tr' + (n.padre ? ' class="usr-matriz-seccion' + (conRegla(n.id) ? ' con-regla' : '') + '"' : '') + '><th class="usr-matriz-mod">' + Iconos.svg(iconoModulo(n.id)) + escaparHtml(n.etiqueta) + '</th>' +
+            datos.areas.map((a) => '<td>' + celdaMatriz(a, n) + '</td>').join('') + '</tr>').join('')).join('')).join('') +
         '</tbody></table>';
       caja.scrollTop = arriba;
       caja.scrollLeft = izquierda;
@@ -542,12 +663,14 @@
       const celda = ev.target.closest('[data-celda-modulo]');
       if (celda) {
         const a = area(celda.dataset.celdaArea);
-        const m = modulos().find((x) => x.id === celda.dataset.celdaModulo);
+        const m = nodo(celda.dataset.celdaModulo);
         if (!a || !m) return;
         const k = llaveCelda(a.nombre, m.id);
-        const nuevo = SIGUIENTE_NIVEL[nivelEnMatriz(a.nombre, m.id)];
-        if (nuevo === deArea(a.nombre, m.id)) delete pendientesMatriz[k];
+        const nuevo = (m.padre ? SIGUIENTE_EN_SECCION : SIGUIENTE_NIVEL)[nivelEnMatriz(a.nombre, m.id)];
+        if (nuevo === enHoja(a.nombre, m.id)) delete pendientesMatriz[k];
         else pendientesMatriz[k] = nuevo;
+        // Un módulo cambia lo que heredan sus secciones: se repinta la tabla; una sección, solo su celda
+        if (!m.padre) { pintarMatriz(); const el = $('usr-matriz').querySelector('[data-celda-area="' + CSS.escape(a.nombre) + '"][data-celda-modulo="' + m.id + '"]'); if (el) el.focus(); return; }
         celda.parentNode.innerHTML = celdaMatriz(a, m);   // solo esa celda: la tabla no salta
         const otra = $('usr-matriz').querySelector('[data-celda-area="' + CSS.escape(a.nombre) + '"][data-celda-modulo="' + m.id + '"]');
         if (otra) otra.focus();
@@ -659,7 +782,7 @@
       return {
         ID: i, FECHA: h.fecha, HORA: h.fecha ? new Date(h.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
         QUIEN: h.quien, A_QUIEN: p ? (p.nombre || p.correo) : h.quien, TIPO: dePersona ? 'Persona' : 'Área',
-        MODULO: etiquetaModulo(h.modulo), ANTES: textoHistorial(h.antes, dePersona), DESPUES: textoHistorial(h.despues, dePersona),
+        MODULO: etiquetaModulo(h.modulo), ANTES: textoHistorial(h.antes, dePersona, h.modulo), DESPUES: textoHistorial(h.despues, dePersona, h.modulo),
         CAMBIO: cambioHistorial(h), LO_CAMBIO: h.nombre || h.correo || '—',
       };
     };
@@ -752,6 +875,12 @@
     $('usr-matriz').addEventListener('click', alClicMatriz);
     $('usr-matriz-guardar').addEventListener('click', guardarMatriz);
     $('usr-matriz-descartar').addEventListener('click', () => { pendientesMatriz = {}; pintarMatriz(); });
+    $('usr-matriz-secciones').addEventListener('click', (ev) => {
+      todasLasSecciones = !todasLasSecciones;
+      ev.currentTarget.setAttribute('aria-pressed', String(todasLasSecciones));
+      ev.currentTarget.lastChild.textContent = todasLasSecciones ? ' Solo secciones con reglas' : ' Ver todas las secciones';
+      pintarMatriz();
+    });
 
     $('usr-modal-cuerpo').addEventListener('click', alClicVentana);
     $('usr-modal-guardar').addEventListener('click', guardarEdicion);
@@ -781,5 +910,6 @@
     { pregunta: '¿Qué es una "excepción" (dorado)?', respuesta: 'Un permiso distinto al que le da su área -- por ejemplo, alguien con Ver en un módulo donde su área en general no tiene acceso.' },
     { pregunta: '¿Qué pasa si cambio el permiso de un área en vez de una persona?', respuesta: 'Afecta a todas las personas de esa área que no tengan ya una excepción propia en ese módulo.' },
     { pregunta: '¿Dónde veo quién cambió qué permiso y cuándo?', respuesta: 'Pestaña "Historial" -- cada cambio real queda registrado con fecha, quién lo hizo, a quién y el antes/después.' },
+    { pregunta: '¿Qué son las secciones de un módulo?', respuesta: 'Las pestañas de su ficha (Documentos, Historial…) y Exportar a Excel. Heredan el nivel del módulo, así que normalmente no hay que tocarlas; para quitarle a alguien solo una, ponle "Sin acceso" en esa sección. Nunca pasan del nivel del módulo.' },
   ];
 </script>

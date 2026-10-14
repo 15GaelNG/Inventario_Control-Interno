@@ -19,7 +19,9 @@
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
   const conEscenas = MODULOS.map((g) => g[0]);
   const grupos = (window.__GRUPOS || []).filter((g) => conEscenas.indexOf(g.id) !== -1)
-    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
+    .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [],
+      // Sus secciones, como las manda Permisos.panel
+      secciones: (window.__NODOS || []).filter((n) => n.padre === m.id).map((n) => ({ id: n.id, etiqueta: n.etiqueta, icono: n.icono || '', hereda: n.hereda })) })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
   // Y sus secciones (vehiculos.documentos, …): el servidor manda el mapa ya resuelto
@@ -194,6 +196,8 @@
       { quien: 'ANALISIS DE DATOS', modulo: 'vehiculos', permiso: 'LECTURA' }, { quien: 'ANALISIS DE DATOS', modulo: 'verificaciones', permiso: 'LECTURA' },
       { quien: 'ANALISIS DE DATOS', modulo: 'hologramas', permiso: 'LECTURA' }, { quien: 'TESORERIA', modulo: 'caja-chica', permiso: 'LECTURA' },
       { quien: 'TESORERIA', modulo: 'arqueos', permiso: 'LECTURA' }, { quien: 'CAPITAL HUMANO', modulo: 'uber', permiso: 'EDICION' },
+      // Una sección que corta la herencia de su módulo (permisos en árbol): TI ve Vehículos pero no exporta
+      { quien: 'TI', modulo: 'vehiculos.exportar', permiso: 'NINGUNO' },
     ],
     // Lo que anota PERMISOS_HISTORIAL, del más reciente al más viejo
     historial: [

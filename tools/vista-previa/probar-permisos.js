@@ -1,7 +1,8 @@
 /**
  * Clics de verdad en la ventana "Editar permisos" sobre la vista previa: "Todo el grupo", una
- * excepción, ↺, lo que implica cada permiso y lo que se manda al guardar. Luego la matriz por
- * área: el clic que cambia la celda, volver a como estaba y lo que manda Guardar. Necesita Chrome (por eso
+ * excepción, ↺, las secciones de un módulo (Hereda / propia), lo que implica cada permiso y lo que se
+ * manda al guardar. Luego la matriz por área: el clic que cambia la celda (también la de una sección,
+ * que pasa por Hereda), volver a como estaba y lo que manda Guardar. Necesita Chrome (por eso
  * no va en npm test, que corre en GitHub sin navegador):
  *
  *   node tools/vista-previa/probar-permisos.js
@@ -56,6 +57,23 @@ const { construir } = require('./construir');
   e = await estado();
   ok(e.implica.some((t) => /En Vehículos no podrá editar la sección/.test(t)), 'Sensores solo en Ver: dice que en Vehículos no podrá editar esa sección');
 
+  // Secciones de Vehículos (permisos en árbol): plegadas; al abrirlas, cada una hereda
+  const seccion = (id) => p.evaluate((s) => {
+    const fila = document.querySelector('[data-modulo="' + s + '"]');
+    return fila ? { activa: fila.querySelector('.usr-op.activa').dataset.nivel, propia: fila.classList.contains('excepcion'),
+      texto: fila.querySelector('.usr-editar-hereda').textContent } : null;
+  }, id);
+  ok(!(await seccion('vehiculos.exportar')), 'las secciones de un módulo salen plegadas');
+  await clic('[data-usr-secciones="vehiculos"]');
+  let s = await seccion('vehiculos.exportar');
+  ok(s && s.activa === 'HEREDA' && !s.propia && /Hereda: Editar/.test(s.texto), 'al abrirlas, Exportar hereda lo de Vehículos (' + (s && s.texto) + ')');
+  await clic('[data-modulo="vehiculos.exportar"] [data-nivel="NINGUNO"]');
+  s = await seccion('vehiculos.exportar');
+  ok(s.activa === 'NINGUNO' && s.propia && s.texto === 'Propia', 'Sin acceso en Exportar: queda como regla propia de la sección');
+  await clic('[data-usr-restablecer="vehiculos.exportar"]');
+  s = await seccion('vehiculos.exportar');
+  ok(s.activa === 'HEREDA' && !s.propia, '↺ en la sección: vuelve a heredar');
+
   await clic('[data-usr-grupo="servicios-vehiculares"] [data-nivel="NINGUNO"]');
   e = await estado();
   ok(e.cuenta === '1 cambio sin guardar', 'Todo el grupo → Sin acceso: solo queda 1 cambio (quitar la excepción de Hologramas) (' + e.cuenta + ')');
@@ -89,6 +107,19 @@ const { construir } = require('./construir');
   await clic(celda('TESORERIA', 'vehiculos'));
   m = await matriz('TESORERIA', 'vehiculos');
   ok(m.nivel === 'NINGUNO' && !m.cambiada && m.cuenta === '1 cambio sin guardar', 'y otro vuelve a como estaba: deja de contar (' + m.cuenta + ')');
+
+  // Secciones en la matriz: TI tiene Vehículos con Editar y Exportar cortado con Sin acceso (datos-falsos.js)
+  const heredada = (area, modulo) => p.evaluate((sel) => document.querySelector(sel).classList.contains('heredada'), celda(area, modulo));
+  m = await matriz('TI', 'vehiculos.exportar');
+  ok(m.nivel === 'NINGUNO' && !(await heredada('TI', 'vehiculos.exportar')), 'TI · Vehículos › Exportar: su regla (Sin acceso), no heredada');
+  m = await matriz('TI', 'vehiculos.documentos');
+  ok(m.nivel === 'EDICION' && await heredada('TI', 'vehiculos.documentos'), 'TI · Vehículos › Documentos: hereda Editar (tenue)');
+  await clic(celda('TI', 'vehiculos.documentos'));
+  m = await matriz('TI', 'vehiculos.documentos');
+  ok(m.nivel === 'NINGUNO' && m.cambiada && !(await heredada('TI', 'vehiculos.documentos')), 'un clic en una sección que hereda: Sin acceso propio');
+  for (let i = 0; i < 3; i++) await clic(celda('TI', 'vehiculos.documentos'));
+  m = await matriz('TI', 'vehiculos.documentos');
+  ok(await heredada('TI', 'vehiculos.documentos') && !m.cambiada && m.cuenta === '1 cambio sin guardar', 'Ver, Editar y otra vez Hereda: como estaba (' + m.cuenta + ')');
   const enviadoMatriz = await p.evaluate(() => new Promise((resolve) => {
     const original = window.callServer;
     window.callServer = (fn, ...a) => { if (fn === 'apiPermisosGuardar') { resolve(a[1]); return new Promise(() => {}); } return original(fn, ...a); };

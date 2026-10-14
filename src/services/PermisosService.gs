@@ -378,7 +378,9 @@ const Permisos = (function () {
         id: g.id, etiqueta: g.etiqueta, icono: g.icono,
         // referencia / editaEn: lo que el permiso implica fuera de su pantalla (Modulos.gs)
         modulos: g.modulos.filter((m) => m.id !== MODULO_USUARIOS)
-          .map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })),
+          .map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [],
+            // Sus secciones (pestañas, exportar…): heredan del módulo salvo regla propia (resolver_)
+            secciones: Modulos.secciones(m.id).map((n) => ({ id: n.id, etiqueta: n.etiqueta, icono: n.icono || '', hereda: n.hereda })) })),
       })).filter((g) => g.modulos.length),
       areas: Object.keys(porArea).sort().map((k) => porArea[k]),
       // Campo por campo, a propósito: CONTRASEÑA (y SALT/PASSWORD_HASH) nunca salen de aquí
