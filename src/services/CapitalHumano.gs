@@ -725,7 +725,9 @@ const CapitalHumano = (function () {
    * ni nada sensible. Líneas usa esta misma lista (LineasRepo.indiceColaboradores).
    */
   function listarColaboradores(token) {
-    Auth.validarSesion(token);
+    const sesion = Auth.validarSesion(token);
+    // Rol CLIENT: el directorio es de todos los departamentos y solo sirve para los formularios, que no usa
+    if (Permisos.alcanceDe(sesion.correo)) return [];
     return colaboradores_(false);
   }
   const activos = () => colaboradores_(false);

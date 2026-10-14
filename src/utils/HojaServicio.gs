@@ -46,6 +46,9 @@
  *   referencia   true: es un catálogo que toda la familia del módulo necesita para trabajar (el
  *                básico de vehículos, la lista de cajas): listar / listarPor / buscarPorId
  *                los lee quien tenga cualquier módulo de la familia, no solo este
+ *   leenTambien  ['modulo', …]: otros módulos cuya pantalla se arma con esta lista (el Panorama de
+ *                Vehículos con el resumen de Vehículos): listar / listarPor / buscarPorId también
+ *                los dejan leer. Exportar (completo) sigue pidiendo el del módulo
  *   orden        { campo, desc } (como texto; las fechas ya van en ISO), { campo, numero: true },
  *                o una función (a, b) => …
  *   ultimosPrimero  el orden de la hoja al revés (bitácoras que solo crecen)
@@ -53,6 +56,9 @@
  *   tambienLee   otras hojas del mismo libro que usa fila(): si cambian, la caché se rehace
  *                (la llave de la caché sale de la definición: dos listas distintas de la misma
  *                hoja no se pisan)
+ *   alcance      columna (y campo de fila(), con el mismo nombre) que dice de qué departamento es
+ *                el renglón, p. ej. 'DEPARTAMENTO'. Un rol CLIENT solo ve los de su alcance
+ *                (Permisos.alcanceDe): se filtra lo que se regresa, nunca la caché, que es de todos.
  * Al escribir (crear / actualizar)
  *   campos       { CLAVE_QUE_MANDA_EL_CLIENTE: 'COLUMNA' }: solo eso se acepta, ya traducido
  *   fechas       columnas que llegan como texto ("yyyy-MM-dd" = medianoche local) y se guardan
@@ -206,12 +212,23 @@ const HojaServicio = (function () {
    * pide el del módulo.
    */
   function leer_(def, token) {
-    return def.referencia ? Permisos.puedeLeerFamilia(token, def.modulo) : Permisos.puedeLeer(token, def.modulo);
+    if (def.referencia) return Permisos.puedeLeerFamilia(token, def.modulo);
+    if (def.leenTambien) return Permisos.puedeLeerAlguno(token, [def.modulo].concat(def.leenTambien));
+    return Permisos.puedeLeer(token, def.modulo);
   }
 
   function listar(def, token) {
-    leer_(def, token);
-    return listaGuardada_(def);
+    return enAlcance_(def, leer_(def, token), listaGuardada_(def));
+  }
+
+  /**
+   * Lo de la lista que le toca a esta sesión: todo, salvo a un rol CLIENT con def.alcance (solo
+   * los renglones de sus departamentos). Una definición sin alcance no se filtra: un CLIENT
+   * solo llega a ella si se le dio permiso del módulo.
+   */
+  function enAlcance_(def, sesion, lista) {
+    if (!def.alcance || !sesion || !sesion.alcance) return lista;
+    return lista.filter((r) => Permisos.dentroDeAlcance(sesion.alcance, r[def.alcance]));
   }
 
   function listaGuardada_(def, rehacer) {
@@ -250,12 +267,12 @@ const HojaServicio = (function () {
    * vehículo, de una caja… Si la lista está cortada (maximo), se busca en toda la hoja.
    */
   function listarPor(def, token, campo, valor, opciones) {
-    leer_(def, token);
+    const sesion = leer_(def, token);
     if (!valor) return [];
     const tope = (opciones && opciones.maximo) || 0;
     const coincide = (f) => String(f[campo] === undefined ? '' : f[campo]) === String(valor);
-    if (def.maximo) return armarLista_(def, coincide, tope);
-    const lista = listaGuardada_(def).filter(coincide);
+    if (def.maximo) return enAlcance_(def, sesion, armarLista_(def, coincide, tope));
+    const lista = enAlcance_(def, sesion, listaGuardada_(def).filter(coincide));
     return tope ? lista.slice(0, tope) : lista;
   }
 
@@ -269,15 +286,15 @@ const HojaServicio = (function () {
 
   /** Todas las columnas de todos los renglones (exportar / "Vista"), sin caché */
   function completo(def, token) {
-    Permisos.puedeLeer(token, def.modulo);
-    return SheetUtils.getAll(libro(def), nombreHoja(def));
+    return enAlcance_(def, Permisos.puedeLeer(token, def.modulo), SheetUtils.getAll(libro(def), nombreHoja(def)));
   }
 
   /** El renglón completo (todas las columnas, fechas en ISO), o null */
   function buscarPorId(def, token, id) {
-    leer_(def, token);
+    const sesion = leer_(def, token);
     const encontrado = SheetUtils.findById(libro(def), nombreHoja(def), id, columnaId(def));
-    return encontrado ? sinFechas(encontrado.data) : null;
+    if (!encontrado || !enAlcance_(def, sesion, [encontrado.data]).length) return null;
+    return sinFechas(encontrado.data);
   }
 
   // ------------------------------------------------------------------ escribir

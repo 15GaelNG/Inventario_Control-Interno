@@ -18,6 +18,11 @@
  * (VehiculosService.gs, VEHICULOS.alCrear) y, si sale bien, marcarConvertida deja esta solicitud
  * como ABIERTA -> CONVERTIDA con el Nucco resultante.
  *
+ * El nombre va en los dos sentidos (14-oct-2026): actualizar() edita NOMBRE desde la app y
+ * renombra la carpeta real en Drive para que haga juego; si alguien la renombra AL REVÉS, directo
+ * en Drive, listar() se entera sola (nombreSincronizadoDesdeCarpeta_) y actualiza NOMBRE en la
+ * hoja -- solo mientras la solicitud sigue ABIERTA.
+ *
  * Solo ADMIN/SUPER por ahora (sin fila en PERMISOS_SEMILLA -- entran por código, nadie más ve
  * ni lee este módulo).
  *
@@ -93,12 +98,45 @@ const SolicitudCompraService = (function () {
     return encontrada ? filaAObjeto_(encontrada) : null;
   }
 
+  /** Si alguien renombró la carpeta REAL en Drive (en vez de usar "Editar" en la app), la hoja se
+   *  entera sola al listar: compara el nombre actual de la carpeta contra "<FOLIO>-<NOMBRE>" (lo
+   *  que se esperaría si nadie la tocó desde fuera) y, si cambió, deja NOMBRE como quedó en Drive
+   *  (sin el folio al frente, para que se vea igual que si se hubiera editado desde la app). Solo
+   *  para las ABIERTAS -- las CONVERTIDA ya no cambian. Nunca truena listar() por esto: si la
+   *  carpeta se borró o no se puede leer, se deja el NOMBRE que ya había. */
+  function nombreSincronizadoDesdeCarpeta_(fila) {
+    if (fila.ESTATUS !== 'ABIERTA' || !fila.CARPETA_ID) return fila.NOMBRE;
+    let nombreReal;
+    try {
+      nombreReal = DriveApp.getFolderById(fila.CARPETA_ID).getName();
+    } catch (e) {
+      return fila.NOMBRE;
+    }
+    const prefijo = String(fila.FOLIO).trim() + '-';
+    if (nombreReal === prefijo + fila.NOMBRE) return fila.NOMBRE;
+    return nombreReal.indexOf(prefijo) === 0 ? nombreReal.slice(prefijo.length) : nombreReal;
+  }
+
   function listar(token) {
     Permisos.puedeLeer(token, 'solicitud-compra');
     const hoja = hoja_(false);
     if (!hoja || hoja.getLastRow() < 2) return [];
-    return hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues()
-      .map(filaAObjeto_).filter((f) => f.ID).reverse();   // más nuevas primero (se agregan al final)
+    const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
+    const colNombre = ENCABEZADOS.indexOf('NOMBRE') + 1;
+    let tocoAlgo = false;
+    const filas = valores.map((v, i) => {
+      const f = filaAObjeto_(v);
+      if (!f.ID) return f;
+      const nombreSincronizado = nombreSincronizadoDesdeCarpeta_(f);
+      if (nombreSincronizado !== f.NOMBRE) {
+        hoja.getRange(i + 2, colNombre, 1, 1).setValue(nombreSincronizado);
+        f.NOMBRE = nombreSincronizado;
+        tocoAlgo = true;
+      }
+      return f;
+    }).filter((f) => f.ID);
+    if (tocoAlgo) CacheHojas.tocarHoja(hoja);
+    return filas.reverse();   // más nuevas primero (se agregan al final)
   }
 
   function crear(token, datos) {
@@ -123,6 +161,40 @@ const SolicitudCompraService = (function () {
     hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
     CacheHojas.tocarHoja(hoja);
     return Object.assign({}, fila, { FECHA: HojaServicio.fechaISO(fila.FECHA) });
+  }
+
+  /** Edita AREA y NOMBRE de una solicitud -- si el nombre cambia, también renombra la carpeta
+   *  REAL de Drive (DriveApp...setName) para que siga siendo "<FOLIO>-<NOMBRE>", igual que al
+   *  crearla. El folio no se edita aquí: es la referencia fija del ticket. Si falla el renombrado
+   *  en Drive (p. ej. la cuenta ya no tiene permiso), truena y no cambia nada en la hoja. */
+  function actualizar(token, id, datos) {
+    Permisos.puedeEditar(token, 'solicitud-compra');
+    const nombreNuevo = String((datos || {}).NOMBRE || '').trim();
+    if (!nombreNuevo) throw new Error('El nombre es obligatorio');
+    const areaNueva = String((datos || {}).AREA || '').trim();
+    const hoja = hoja_(false);
+    if (!hoja || hoja.getLastRow() < 2) throw new Error('No se encontró la solicitud.');
+    const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
+    const colFolio = ENCABEZADOS.indexOf('FOLIO');
+    const colNombre = ENCABEZADOS.indexOf('NOMBRE');
+    const colArea = ENCABEZADOS.indexOf('AREA');
+    const colCarpeta = ENCABEZADOS.indexOf('CARPETA_ID');
+    for (let i = 0; i < valores.length; i++) {
+      if (valores[i][0] !== id) continue;
+      const carpetaId = valores[i][colCarpeta];
+      if (nombreNuevo !== valores[i][colNombre] && carpetaId) {
+        try {
+          DriveApp.getFolderById(carpetaId).setName(String(valores[i][colFolio]).trim() + '-' + nombreNuevo);
+        } catch (e) {
+          throw new Error('No se pudo renombrar la carpeta en Drive (' + e.message + '). El nombre no se cambió.');
+        }
+      }
+      hoja.getRange(i + 2, colNombre + 1, 1, 1).setValue(nombreNuevo);
+      hoja.getRange(i + 2, colArea + 1, 1, 1).setValue(areaNueva);
+      CacheHojas.tocarHoja(hoja);
+      return { NOMBRE: nombreNuevo, AREA: areaNueva };
+    }
+    throw new Error('No se encontró la solicitud.');
   }
 
   function eliminar(token, id) {
@@ -175,5 +247,5 @@ const SolicitudCompraService = (function () {
     throw new Error('No se encontró la solicitud.');
   }
 
-  return { listar, crear, eliminar, archivos, subirArchivo, marcarConvertida };
+  return { listar, crear, actualizar, eliminar, archivos, subirArchivo, marcarConvertida };
 })();

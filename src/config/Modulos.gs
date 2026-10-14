@@ -17,6 +17,12 @@
  *               sección de sensor de la ficha de Vehículos es de Instalación de Sensores.
  *   enFicha     id del módulo en cuya ficha vive como pestaña, cuando no tiene pantalla propia
  *               (Responsiva y Adherente están en la ficha de Vehículos); con `icono`, el de su pestaña.
+ *   soloEnlaces su pantalla solo tiene enlaces a otros sistemas (Sistemas, Encuestas): no cuenta
+ *               como de la familia, así que no abre los datos de referencia de su grupo.
+ *
+ * Cada entrada del menú tiene su propio módulo (14-oct-2026): los panoramas, Sistemas y Encuestas
+ * ya no cuelgan de otro permiso ni se ven sin él. permisosSepararModulos() (PermisosService.gs)
+ * copió los permisos de entonces para que nadie perdiera nada.
  * `source-contracts` revisa que esto y el servidor digan lo mismo.
  */
 
@@ -25,6 +31,8 @@ const Modulos = (function () {
     {
       id: 'servicios-vehiculares', etiqueta: 'Servicios Vehiculares', icono: 'car',
       modulos: [
+        // El resumen de la flota (lee la lista de Vehículos: VehiculosService.RESUMEN.leenTambien)
+        { id: 'panorama-vehiculos', etiqueta: 'Panorama de Vehículos', listo: true },
         { id: 'incidencias', etiqueta: 'Incidencias', listo: true },
         { id: 'vehiculos', etiqueta: 'Vehículos', listo: true, referencia: 'el catálogo de vehículos para elegir la unidad' },
         // Catálogo de expedientes de compra por serie (índice de Adquisición Vehicular, solo
@@ -47,6 +55,7 @@ const Modulos = (function () {
         // el ticket, antes de que exista el vehículo -- solo ADMIN/SUPER por ahora (sin fila en
         // PERMISOS_SEMILLA, ver PermisosService.gs).
         { id: 'solicitud-compra', etiqueta: 'Solicitud de compra', listo: true },
+        { id: 'sistemas-vehiculos', etiqueta: 'Sistemas - Control vehicular', listo: true, soloEnlaces: true },
       ],
     },
     {
@@ -61,9 +70,12 @@ const Modulos = (function () {
         // TEMPORAL (30-sep): Líneas corrige los casos de la conciliación y después se elimina (LineasCorrecciones.gs)
         { id: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas', listo: true },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios', listo: true },
+        // Adendums y facturas del mes (parte 7, 7-oct): solo para quienes los piden al proveedor
+        { id: 'proveedor-lineas', etiqueta: 'Proveedor', listo: true },
         // Control de Cambios queda fuera del menú (30-sep). Reactivación, Solicitud, Reasignaciones y Desechos se
         // retiraron con sus pestañas (30-sep, reunión con Líneas).
         { id: 'cambios-lineas', etiqueta: 'Control de Cambios - Líneas', listo: true },
+        { id: 'sistemas-lineas', etiqueta: 'Sistemas - Líneas', listo: true, soloEnlaces: true },
       ],
     },
     {
@@ -78,6 +90,16 @@ const Modulos = (function () {
       modulos: [
         { id: 'arqueos', etiqueta: 'Arqueos' },
         { id: 'caja-chica', etiqueta: 'Caja Chica', referencia: 'la lista de cajas chicas para elegir la caja' },
+        // Lee la lista de cajas, que ya es de referencia para la familia
+        { id: 'panorama-cajachica', etiqueta: 'Panorama de Caja Chica' },
+        { id: 'sistemas-arqueos', etiqueta: 'Sistemas - Arqueos', soloEnlaces: true },
+      ],
+    },
+    {
+      // Enlaces a las encuestas y solicitudes de otras áreas
+      id: 'encuestas-solicitudes', etiqueta: 'Encuestas/solicitudes', icono: 'clipboard-list',
+      modulos: [
+        { id: 'encuestas-solicitudes', etiqueta: 'Encuestas/solicitudes', listo: true, soloEnlaces: true },
       ],
     },
     {
@@ -133,7 +155,8 @@ const Modulos = (function () {
    */
   function familia(id) {
     const grupo = GRUPOS.find((g) => g.modulos.some((m) => m.id === id));
-    return grupo ? grupo.modulos.map((m) => m.id) : [id];
+    // Los de soloEnlaces no cuentan: ver la pantalla de Sistemas no abre el catálogo de su grupo
+    return grupo ? grupo.modulos.filter((m) => !m.soloEnlaces || m.id === id).map((m) => m.id) : [id];
   }
 
   return { GRUPOS, todos, ids, existe, etiqueta, resolver, familia };

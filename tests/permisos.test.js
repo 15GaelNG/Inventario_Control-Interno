@@ -221,6 +221,56 @@ ok(d.length === 2 && d[0].antes === 'EDICION' && d[0].despues === '' && d[1].des
 d = Permisos.diferencias_(base, [{ quien: 'CI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'CI', modulo: 'arqueos', permiso: 'NINGUNO' }]);
 ok(!d.length, 'lo que queda igual no se anota (ni Sin acceso a un área que ya no tenía nada)');
 
+console.log('7c. Rol CLIENT: solo consulta, y solo sus departamentos (alcance_)');
+p = resolver(usuario({ ROL: 'CLIENT', AREA: 'CONTROL VEHICULAR' }));
+ok(p.vehiculos === 'LECTURA' && p.verificaciones === 'LECTURA', 'CLIENT: lo de su área, topado en lectura como VIEWER');
+ok(Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'Post  Venta' }))[0] === 'POST VENTA',
+  'sin DPTOS PERMITIDOS ve su AREA, normalizada (mayúsculas, un solo espacio)');
+const varios = Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'POST VENTA', 'DPTOS PERMITIDOS': 'Construcción, OOAM TECNICO ,' }));
+ok(JSON.stringify(varios) === JSON.stringify(['CONSTRUCCION', 'OOAM TECNICO']),
+  'DPTOS PERMITIDOS gana sobre el AREA, separado por comas y sin acentos ' + JSON.stringify(varios));
+ok(JSON.stringify(Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: '' }))) === '[]', 'un CLIENT sin área ni DPTOS PERMITIDOS no ve nada ([])');
+ok(Permisos.alcance_(usuario({ ROL: 'USER', AREA: 'POST VENTA', 'DPTOS PERMITIDOS': 'CONSTRUCCION' })) === null &&
+  Permisos.alcance_(usuario({ ROL: 'ADMIN' })) === null && Permisos.alcance_(undefined) === null,
+  'quien no es CLIENT no tiene límite (null), aunque tenga DPTOS PERMITIDOS');
+ok(Permisos.dentroDeAlcance(['POST VENTA'], 'Post Venta') && !Permisos.dentroDeAlcance(['POST VENTA'], 'DISPONIBLE') &&
+  !Permisos.dentroDeAlcance([], 'POST VENTA') && Permisos.dentroDeAlcance(null, 'lo que sea'),
+  'dentroDeAlcance: compara normalizado; [] no deja ver nada; null deja ver todo');
+
+console.log('7d. Un módulo por entrada del menú: nadie pierde lo que veía (separacion_)');
+{
+  const gente = [
+    usuario({ CORREO: 'a@x.com', AREA: 'CONTROL VEHICULAR' }),
+    usuario({ CORREO: 'b@x.com', AREA: 'POST VENTA', ROL: 'CLIENT' }),
+    usuario({ CORREO: 'c@x.com', AREA: 'LINEAS' }),
+    usuario({ CORREO: 'd@x.com', AREA: 'CI', ACTIVO: 'FALSE' }),
+    usuario({ CORREO: 'e@x.com', AREA: '' }),
+  ];
+  const reglas = [
+    ['CONTROL VEHICULAR', 'vehiculos', 'EDICION'],
+    ['POST VENTA', 'vehiculos', 'LECTURA'],
+    ['LINEAS', 'accesorios-lineas', 'EDICION'],
+    ['nadie@x.com', 'vehiculos', 'NINGUNO'],
+    ['CONTROL VEHICULAR', 'sistemas-vehiculos', 'NINGUNO'],
+  ];
+  const c = Permisos.separacion_(reglas, gente);
+  const tiene = (quien, modulo) => (c.find((x) => x.quien === quien && x.modulo === modulo) || {}).permiso;
+  ok(tiene('CONTROL VEHICULAR', 'panorama-vehiculos') === 'LECTURA', 'quien tenía Vehículos recibe su Panorama (solo ver)');
+  ok(tiene('LINEAS', 'sistemas-lineas') === 'LECTURA' && !tiene('LINEAS', 'sistemas-vehiculos'),
+    'Sistemas, solo de la familia donde ya tenía algo');
+  ok(tiene('CONTROL VEHICULAR', 'sistemas-vehiculos') === undefined, 'una regla que ya existe no se toca');
+  ok(tiene('nadie@x.com', 'panorama-vehiculos') === 'NINGUNO', 'a quien se le quitó Vehículos por correo, tampoco le llega el Panorama');
+  ok(!c.some((x) => x.quien === 'POST VENTA'), 'el área CLIENT (POST VENTA) no recibe nada');
+  ok(tiene('CONTROL VEHICULAR', 'encuestas-solicitudes') === 'LECTURA' && tiene('LINEAS', 'encuestas-solicitudes') === 'LECTURA' &&
+    !tiene('CI', 'encuestas-solicitudes') && tiene('e@x.com', 'encuestas-solicitudes') === 'LECTURA',
+    'Encuestas: cada área con gente activa y, sin área, la persona por su correo');
+  const otraVez = Permisos.separacion_(Permisos.aplicarCambios_(reglas, c, 'n'), gente);
+  ok(otraVez.length === 0, 'correrlo otra vez no agrega nada');
+  ok(Modulos.familia('vehiculos').indexOf('sistemas-vehiculos') === -1 && Modulos.familia('vehiculos').indexOf('panorama-vehiculos') !== -1,
+    'Sistemas (solo enlaces) no cuenta como familia: no abre el catálogo de vehículos; el Panorama sí');
+  ok(Modulos.familia('sistemas-vehiculos').indexOf('sistemas-vehiculos') !== -1, 'la familia de un módulo de enlaces lo incluye a él');
+}
+
 console.log('8. Catálogo de módulos');
 ok(Modulos.existe('instalacion-sensores') && Modulos.existe(' Vehiculos '),
   'el id tolera mayúsculas y espacios: escribir "Vehiculos" en la hoja sí funciona');

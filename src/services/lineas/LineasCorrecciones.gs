@@ -457,6 +457,8 @@ function usuarioCorrecciones_(sesion) {
 /** Casos y lo aplicado solo. Viaja como texto JSON (como las demás tablas grandes). */
 function apiLineasCorrecciones(token, forzar) {
   const sesion = Permisos.puedeLeer(token, 'correcciones-lineas');
+  // Los casos son de todos los departamentos: no para un rol CLIENT (Permisos.alcanceDe)
+  if (sesion.alcance) throw new Error('No tienes acceso a esta parte de Líneas.');
   return JSON.stringify(LineasUtil.paraCliente(LineasCorrecciones.estado(usuarioCorrecciones_(sesion), !!forzar)));
 }
 

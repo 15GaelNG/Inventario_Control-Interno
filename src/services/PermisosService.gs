@@ -23,6 +23,10 @@
  *   4. Las filas de su correo reemplazan a la base, módulo por módulo: sirven para dar y
  *      para quitar (NINGUNO).
  *   5. ROL VIEWER: todo se topa en LECTURA.
+ *   6. ROL CLIENT: como VIEWER, y además solo ve los renglones de sus departamentos (su
+ *      ALCANCE: DPTOS PERMITIDOS separado por comas o, si está vacío, su AREA). Lo aplican los
+ *      servicios que lo declaran (`alcance` en HojaServicio, TelefoniaService) sobre lo que
+ *      regresan, nunca sobre la caché compartida. Hoy: Vehículos y Líneas (POST VENTA, 14-oct).
  *
  * Sin la hoja PERMISOS se usa PERMISOS_SEMILLA (config/PermisosSemilla.gs): las mismas
  * reglas, traducidas de AppSheet. `permisosCrearHoja()` la crea con esa semilla.
@@ -52,6 +56,8 @@ const Permisos = (function () {
 
   /** Módulo de administración: solo ADMIN */
   const MODULO_USUARIOS = 'usuarios';
+  /** Ve solo lo de sus departamentos y nunca edita (punto 6 de arriba) */
+  const ROL_CLIENTE = 'CLIENT';
 
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
   const clave_ = (v) => limpiar_(v).toUpperCase();
@@ -91,7 +97,7 @@ const Permisos = (function () {
     } catch (e) {
       // Solo la hoja faltante cae a la semilla; un libro que no abre debe tronar, no esconderse
       if (String(e.message).indexOf('No existe la hoja') === -1) throw e;
-      return { fuente: 'semilla', filas: PERMISOS_SEMILLA };
+      return { fuente: 'semilla', filas: semilla_() };
     }
     const filas = SheetUtils.getAll(ssId(), HOJA_PERMISOS)
       .map((f) => [f['QUIEN'], f['MODULO'], f['PERMISO'], f['NOTA']]);
@@ -131,7 +137,7 @@ const Permisos = (function () {
 
     const mapa = Object.assign(base, propias);
     Object.keys(mapa).forEach((modulo) => {
-      if (rol === 'VIEWER' && mapa[modulo] === EDICION) mapa[modulo] = LECTURA;
+      if ((rol === 'VIEWER' || rol === ROL_CLIENTE) && mapa[modulo] === EDICION) mapa[modulo] = LECTURA;
       // NINGUNO no se guarda: un módulo sin permiso simplemente no aparece
       if (mapa[modulo] === NINGUNO) delete mapa[modulo];
     });
@@ -143,7 +149,7 @@ const Permisos = (function () {
    * contraseña, hash ni sal (esto se guarda en CacheService). Guardadas mientras la hoja no
    * cambie; lo que se edite a mano en la hoja se ve a más tardar en 10 min.
    */
-  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE'];
+  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE', 'DPTOS PERMITIDOS'];
   function usuarios_() {
     return CacheHojas.recordar('permisos_usuarios_v1', [[ssId(), HOJA_USUARIOS]], () =>
       SheetUtils.getAll(ssId(), HOJA_USUARIOS).map((u) => {
@@ -166,9 +172,43 @@ const Permisos = (function () {
     return mapa;
   }
 
+  /**
+   * Los departamentos cuyos renglones puede ver alguien: null = sin límite (todo el que no es
+   * CLIENT); para un CLIENT, DPTOS PERMITIDOS (separado por comas) o, si está vacío, su AREA,
+   * normalizados como area_. Un CLIENT sin ninguno → [] (no ve nada). Función pura.
+   */
+  function alcance_(usuario) {
+    if (!usuario || clave_(usuario['ROL']) !== ROL_CLIENTE) return null;
+    const lista = limpiar_(usuario['DPTOS PERMITIDOS']).split(',').map(area_).filter(Boolean);
+    if (lista.length) return lista;
+    const area = area_(usuario['AREA']);
+    return area ? [area] : [];
+  }
+
+  /** ¿Un renglón de este departamento está dentro del alcance? (null = sin límite) */
+  function dentroDeAlcance(alcance, departamento) {
+    return !alcance || alcance.indexOf(area_(departamento)) !== -1;
+  }
+
+  /** El alcance de un correo (alcance_), con el mismo caché corto que deCorreo */
+  function alcanceDe(correo) {
+    const clave = 'alcance_' + clave_(correo);
+    const guardado = CacheService.getScriptCache().get(clave);
+    if (guardado) {
+      try { return JSON.parse(guardado).a; } catch (e) { /* recargar */ }
+    }
+    const alcance = alcance_(usuarios_().find((u) => clave_(u['CORREO']) === clave_(correo)));
+    try { CacheService.getScriptCache().put(clave, JSON.stringify({ a: alcance }), SEGUNDOS_CACHE); } catch (e) { /* no-op */ }
+    return alcance;
+  }
+
+  /** La sesión con lo que se revisó: sus permisos y su alcance (lo que se lee en el servidor) */
+  const conPermisos_ = (sesion, permisos) =>
+    Object.assign({}, sesion, { permisos: permisos, alcance: alcanceDe(sesion.correo) });
+
   /** Olvida lo cacheado de alguien (al cambiarle permisos, para que aplique de inmediato) */
   function olvidar(correo) {
-    CacheService.getScriptCache().remove('permisos_' + clave_(correo));
+    CacheService.getScriptCache().removeAll(['permisos_' + clave_(correo), 'alcance_' + clave_(correo)]);
   }
 
   /**
@@ -185,7 +225,7 @@ const Permisos = (function () {
         ? 'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.'
         : 'Solo puedes consultar este módulo, no modificarlo.');
     }
-    return Object.assign({}, sesion, { permisos: permisos });
+    return conPermisos_(sesion, permisos);
   }
 
   /**
@@ -194,7 +234,9 @@ const Permisos = (function () {
    * así que pueden compartir lo ya calculado (CacheHojas.calculo).
    */
   function firmaDeLectura(correo) {
-    const texto = Object.keys(deCorreo(correo)).sort().join(',');
+    // Con su alcance: un CLIENT no comparte el Inicio con quien ve los mismos módulos sin límite
+    const alcance = alcanceDe(correo);
+    const texto = Object.keys(deCorreo(correo)).sort().join(',') + (alcance ? '|' + alcance.slice().sort().join(',') : '');
     let h = 5381;
     for (let i = 0; i < texto.length; i++) h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
     return h.toString(36);
@@ -223,7 +265,7 @@ const Permisos = (function () {
     if (!modulos.some((m) => permisos[idModulo_(m)])) {
       throw new Error('No tienes acceso a este módulo. Pídeselo a quien administra los permisos.');
     }
-    return Object.assign({}, sesion, { permisos: permisos });
+    return conPermisos_(sesion, permisos);
   }
 
   /** Lo que la app necesita para armar el menú y decidir qué botones mostrar */
@@ -272,8 +314,9 @@ const Permisos = (function () {
     if (ss.getSheetByName(HOJA_PERMISOS)) {
       return 'La hoja PERMISOS ya existe en "' + ss.getName() + '": no se tocó.';
     }
-    escribirHoja_(ss.insertSheet(HOJA_PERMISOS), PERMISOS_SEMILLA);
-    return 'Hoja PERMISOS creada en "' + ss.getName() + '" con ' + PERMISOS_SEMILLA.length + ' reglas.';
+    const reglas = semilla_();
+    escribirHoja_(ss.insertSheet(HOJA_PERMISOS), reglas);
+    return 'Hoja PERMISOS creada en "' + ss.getName() + '" con ' + reglas.length + ' reglas.';
   }
 
   /** Reemplaza el contenido de la hoja PERMISOS por estas reglas ([QUIEN, MODULO, PERMISO, NOTA]) */
@@ -435,16 +478,107 @@ const Permisos = (function () {
       candado.releaseLock();
     }
     // Que el cambio aplique ya, no en 5 minutos
-    CacheService.getScriptCache().removeAll(usuarios.map((u) => 'permisos_' + clave_(u['CORREO'])));
+    CacheService.getScriptCache().removeAll([].concat.apply([], usuarios.map((u) =>
+      ['permisos_' + clave_(u['CORREO']), 'alcance_' + clave_(u['CORREO'])])));
     return panel(token);
+  }
+
+  // ---------------------------------------------------------------- un módulo por entrada del menú (14-oct-2026)
+
+  /**
+   * Las entradas del menú que antes colgaban de otro permiso (los panoramas) o no pedían ninguno
+   * (Sistemas, Encuestas) y ahora tienen su propio módulo. Para que nadie perdiera nada, se copian
+   * los permisos de entonces (separacion_):
+   *   de         quien tenía uno de estos módulos recibe el nuevo (y un NINGUNO por correo, también)
+   *   familiaDe  quien tenía algún módulo de la familia de este (Sistemas solo salía en un grupo del
+   *              menú con algo que ver)
+   *   todos      todas las áreas de USUARIOS y, sin área, la persona (Encuestas lo veía cualquiera con sesión)
+   * Salvo el rol CLIENT: sus áreas y correos no reciben nada (solo ven lo que se les dio a propósito).
+   */
+  const SEPARADOS = [
+    { nuevo: 'panorama-vehiculos', de: ['vehiculos'] },
+    { nuevo: 'panorama-cajachica', de: ['caja-chica'] },
+    { nuevo: 'sistemas-vehiculos', familiaDe: 'vehiculos' },
+    { nuevo: 'sistemas-lineas', familiaDe: 'lineas-telefonicas' },
+    { nuevo: 'sistemas-arqueos', familiaDe: 'arqueos' },
+    { nuevo: 'encuestas-solicitudes', todos: true },
+  ];
+
+  /** Las reglas que faltan para que cada quien conserve lo que veía ({ quien, modulo, permiso }). Función pura. */
+  function separacion_(reglas, usuarios) {
+    const activos = (usuarios || []).filter((u) => clave_(u['ACTIVO']) === 'TRUE');
+    const esCliente = (quien) => {
+      const suyos = esCorreo_(quien)
+        ? activos.filter((u) => clave_(u['CORREO']) === clave_(quien))
+        : activos.filter((u) => area_(u['AREA']) === area_(quien));
+      return suyos.length > 0 && suyos.every((u) => clave_(u['ROL']) === ROL_CLIENTE);
+    };
+    const existentes = new Set((reglas || []).map((r) => llaveRegla_(r[0], r[1])));
+    const cambios = [];
+    const dar = (quien, modulo, permiso) => {
+      const llave = llaveRegla_(quien, modulo);
+      if (!limpiar_(quien) || existentes.has(llave) || esCliente(quien)) return;
+      existentes.add(llave);
+      cambios.push({ quien: limpiar_(quien), modulo: modulo, permiso: permiso });
+    };
+    SEPARADOS.forEach((s) => {
+      if (s.todos) {
+        // Por su área; quien no tiene área, por su correo
+        activos.forEach((u) => dar(limpiar_(u['AREA']) ? u['AREA'] : u['CORREO'], s.nuevo, LECTURA));
+        return;
+      }
+      const origen = s.de || Modulos.familia(s.familiaDe).filter((m) => !SEPARADOS.some((x) => x.nuevo === m));
+      (reglas || []).forEach((r) => {
+        const nivel = nivelValido_(r[2]);
+        if (!nivel || origen.indexOf(idModulo_(r[1])) === -1) return;
+        if (nivel !== NINGUNO) dar(r[0], s.nuevo, LECTURA);
+        // A quien se le quitó el módulo de origen por correo, tampoco le llega el nuevo por su área
+        else if (s.de && esCorreo_(r[0])) dar(r[0], s.nuevo, NINGUNO);
+      });
+    });
+    return cambios;
+  }
+
+  /** La semilla (sin hoja PERMISOS) con los módulos separados, como si hubiera pasado por separarModulos */
+  function semilla_() {
+    let usuarios = [];
+    try { usuarios = usuarios_(); } catch (e) { /* sin USUARIOS: solo lo que sale de las reglas */ }
+    return aplicarCambios_(PERMISOS_SEMILLA, separacion_(PERMISOS_SEMILLA, usuarios), 'Separar módulos (14-oct-2026)');
+  }
+
+  /**
+   * Escribe en PERMISOS lo que falta de separacion_ y lo anota en el historial. Se puede correr las
+   * veces que sea: lo que ya existe no se toca. Lo corre permisosSepararModulos() desde el editor.
+   */
+  function separarModulos(quienCorre) {
+    const candado = LockService.getScriptLock();
+    candado.waitLock(20000);
+    let cambios;
+    try {
+      const vigentes = reglas_(true).filas;
+      cambios = separacion_(vigentes, usuarios_());
+      if (!cambios.length) return 'No faltaba ninguna regla: los módulos ya estaban separados.';
+      const ss = SpreadsheetApp.openById(ssId());
+      const hoja = ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS);
+      escribirHoja_(hoja, aplicarCambios_(vigentes, cambios, 'Separar módulos (14-oct-2026)'));
+      anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Separar módulos' }, diferencias_(vigentes, cambios));
+      SpreadsheetApp.flush();
+    } finally {
+      candado.releaseLock();
+    }
+    CacheService.getScriptCache().removeAll(usuarios_().map((u) => 'permisos_' + clave_(u['CORREO'])));
+    const porModulo = {};
+    cambios.forEach((c) => { porModulo[c.modulo] = (porModulo[c.modulo] || 0) + 1; });
+    return 'Se agregaron ' + cambios.length + ' reglas: ' +
+      Object.keys(porModulo).map((m) => m + ' ' + porModulo[m]).join(', ') + '. Quedaron en PERMISOS_HISTORIAL.';
   }
 
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
     deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
-    firmaDeLectura, esFaltaDePermiso,
-    panel, guardar,
-    resolver_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
+    firmaDeLectura, esFaltaDePermiso, alcanceDe, dentroDeAlcance, ROL_CLIENTE,
+    panel, guardar, separarModulos,
+    resolver_, alcance_, separacion_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
   };
 })();
 
@@ -455,6 +589,18 @@ const Permisos = (function () {
 function permisosCrearHoja() {
   soloEditor_();
   const mensaje = Permisos.crearHoja();
+  Logger.log(mensaje);
+  return mensaje;
+}
+
+/**
+ * Una vez por proyecto (14-oct-2026): da los módulos nuevos de los panoramas, Sistemas y Encuestas a
+ * quien ya los veía, para que nadie pierda nada al separarlos (Permisos.separarModulos). Correr desde
+ * el editor; se puede repetir sin problema.
+ */
+function permisosSepararModulos() {
+  soloEditor_();
+  const mensaje = Permisos.separarModulos(Session.getActiveUser().getEmail());
   Logger.log(mensaje);
   return mensaje;
 }

@@ -3,7 +3,9 @@
    * solicitud-compra.js — Puente hacia Adquisición Vehicular: repositorio de documentos de una
    * compra desde el folio del ticket, antes de que exista el vehículo (SolicitudCompraService.gs).
    * Solo ADMIN/SUPER por ahora. "Ya crear vehículo" abre el alta de Vehículos ya con el folio y
-   * la carpeta puestos (crearVehiculoDesdeSolicitudCompra, app.html).
+   * la carpeta puestos (crearVehiculoDesdeSolicitudCompra, app.html). "Editar" cambia AREA/NOMBRE
+   * y, si el nombre cambió, también renombra la carpeta real en Drive; si alguien la renombra AL
+   * REVÉS, directo en Drive, la próxima vez que se liste el catálogo se entera sola.
    */
 
   function badgeEstatusSolicitudCompra(estatus) {
@@ -73,6 +75,20 @@
     document.getElementById('modal-nueva-solicitud-compra').hidden = true;
   }
 
+  /** Editar AREA/NOMBRE de una solicitud -- el ID va en el dataset del form (apiActualizarSolicitudCompra renombra la carpeta real si el nombre cambió). */
+  function abrirModalEditarSolicitudCompra(fila) {
+    const form = document.getElementById('form-editar-solicitud-compra');
+    form.dataset.id = fila.ID;
+    document.getElementById('soc-editar-folio').value = fila.FOLIO;
+    document.getElementById('soc-editar-area').value = fila.AREA || '';
+    document.getElementById('soc-editar-nombre').value = fila.NOMBRE || '';
+    document.getElementById('soc-editar-error').hidden = true;
+    document.getElementById('modal-editar-solicitud-compra').hidden = false;
+  }
+  function cerrarModalEditarSolicitudCompra() {
+    document.getElementById('modal-editar-solicitud-compra').hidden = true;
+  }
+
   /** Atajo para subir/ver archivos sin tener que abrir el detalle de la fila (el "ojito") --
    *  misma pintarArchivosSolicitudCompra de arriba, nomás que en una ventana aparte. */
   function abrirModalArchivosSolicitudCompra(fila) {
@@ -117,6 +133,7 @@
         },
       ],
       accionesFila: [
+        { icono: 'pencil', titulo: 'Editar', alHacer: (f) => abrirModalEditarSolicitudCompra(f) },
         { icono: 'upload', titulo: 'Subir archivos', alHacer: (f) => abrirModalArchivosSolicitudCompra(f) },
         { icono: 'external-link', titulo: 'Abrir carpeta', alHacer: (f) => window.open(f.LIGA_CARPETA, '_blank'), visible: (f) => !!f.LIGA_CARPETA },
         { icono: 'car', titulo: 'Ya crear vehículo', visible: (f) => f.ESTATUS === 'ABIERTA', alHacer: (f) => crearVehiculoDesdeSolicitudCompra(f) },
@@ -131,6 +148,33 @@
 
     document.getElementById('soc-btn-nueva').addEventListener('click', abrirModalNuevaSolicitudCompra);
     document.getElementById('btn-cerrar-nueva-solicitud-compra').addEventListener('click', cerrarModalNuevaSolicitudCompra);
+    document.getElementById('btn-cerrar-editar-solicitud-compra').addEventListener('click', cerrarModalEditarSolicitudCompra);
+    document.getElementById('form-editar-solicitud-compra').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const form = ev.target;
+      const errorBox = document.getElementById('soc-editar-error');
+      errorBox.hidden = true;
+      const btn = form.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        await callServer('apiActualizarSolicitudCompra', state.token, form.dataset.id, {
+          AREA: document.getElementById('soc-editar-area').value.trim(),
+          NOMBRE: document.getElementById('soc-editar-nombre').value.trim(),
+        });
+        cerrarModalEditarSolicitudCompra();
+        await recargarLista();
+        toastExito('Cambios guardados');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
     const modalArchivos = document.getElementById('modal-archivos-solicitud-compra');
     document.getElementById('btn-cerrar-archivos-solicitud-compra').addEventListener('click', cerrarModalArchivosSolicitudCompra);
     modalArchivos.addEventListener('click', (ev) => { if (ev.target === modalArchivos) cerrarModalArchivosSolicitudCompra(); });

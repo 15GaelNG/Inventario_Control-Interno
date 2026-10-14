@@ -1,0 +1,360 @@
+<script>
+  /**
+   * Módulo «Proveedor» de Líneas (parte 7, plan §7.1; usuario, 7-oct): quien pide los archivos del mes los sube, el
+   * navegador los lee y el servidor (LineasProveedor.gs) revisa contra el inventario y carga ADENDUMS, FACTURAS y
+   * LINEAS. Etapa 1: adendums de Telcel (.xlsx) y barridos de AT&T (.xls).
+   *
+   *   LineasProveedor.init()    vista 'proveedor-lineas' (tpl-lineas-proveedor)
+   *   LineasProveedor.leer      lectura de cada archivo (sin pantalla; la usan las pruebas)
+   */
+  const LineasProveedor = (function () {
+    'use strict';
+
+    // ---------------- Lectura: un archivo del proveedor → { tipo, cuentas, fecha, lineas } ----------------
+    // Reglas de reporte_lineas/scripts (conciliacion.py: carga_adendums y carga_barridos; generar.py: _leer_adendum).
+
+    const txt = (v) => (v === null || v === undefined ? '' : String(v).trim());
+    /** Sin el «.0» con que Excel deja los números enteros. */
+    const entero = (v) => txt(v).replace(/\.0+$/, '');
+    function telefono(v) {
+      const d = entero(v).replace(/\D/g, '');
+      return d.length >= 10 ? d.slice(-10) : '';
+    }
+    /** ICCID tal cual, sin la «F» final de AT&T. Vacío si Excel lo dejó en notación científica. */
+    function sim(v) {
+      const s = txt(v).toUpperCase();
+      if (/E\+/.test(s)) return '';
+      const d = s.replace(/\D/g, '');
+      return d.length >= 18 ? d : '';
+    }
+    function imei(v) {
+      const s = entero(v);
+      if (/E\+/i.test(s)) return '';
+      const d = s.replace(/\D/g, '');
+      return d.length >= 14 ? d : '';
+    }
+    /** «$ 1,549.00», 1549 o «1549.00» → 1549; vacío → null. */
+    function monto(v) {
+      if (typeof v === 'number') return v;
+      const m = txt(v).replace(/[$\s,]/g, '').match(/^-?\d+(\.\d+)?$/);
+      return m ? Number(m[0]) : null;
+    }
+
+    /**
+     * Fecha del proveedor tal como viene escrita (usuario, 30-sep: sin conversiones de horario; cada formato manda en su
+     * archivo): «24/05/2026» → 2026-05-24; «2026-05-25T05:59:59.000+00:00» y «2026-04-08 00:00:00» → su día escrito.
+     */
+    function fecha(v) {
+      // Una celda de fecha de Excel llega como número de serie (días desde el 30-dic-1899)
+      if (typeof v === 'number' && v > 20000 && v < 80000) return new Date(Date.UTC(1899, 11, 30) + Math.round(v) * 86400000).toISOString().slice(0, 10);
+      const s = txt(v);
+      let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) return m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+      m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      return m ? m[1] + '-' + m[2] + '-' + m[3] : '';
+    }
+    /** yyyy-mm-dd + n meses (el día se ajusta al último del mes). */
+    function masMeses(ymd, n) {
+      const [y, m, d] = ymd.split('-').map(Number);
+      const total = m - 1 + n;
+      const anio = y + Math.floor(total / 12);
+      const mes = ((total % 12) + 12) % 12;
+      const ultimo = new Date(Date.UTC(anio, mes + 1, 0)).getUTCDate();
+      return anio + '-' + ('0' + (mes + 1)).slice(-2) + '-' + ('0' + Math.min(d, ultimo)).slice(-2);
+    }
+    const diasEntre = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+    /**
+     * Fin del contrato o fecha de baja. En una baja, «Fecha Fin de Servicio» es el día de la baja: no cuadra con inicio +
+     * plazo. Verificado el 7-oct en los 7 adendums: en el formato viejo son justo las 19 con hora que no es «:59:59», y
+     * en el nuevo, las 38 «Pre-desactivado».
+     */
+    function finOBaja(inicio, fin, plazo) {
+      if (!fin || !inicio || !(plazo > 0)) return { fin: fin, baja: '' };
+      return Math.abs(diasEntre(masMeses(inicio, plazo), fin)) <= 3 ? { fin: fin, baja: '' } : { fin: '', baja: fin };
+    }
+
+    /** Fecha en el nombre: «TAL050620CI1_28_09_2026_387550.xlsx» o «…_2026-09-28…». Vacío si no trae. */
+    function fechaDelNombre(nombre) {
+      const s = txt(nombre);
+      let m = s.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return m[1] + '-' + m[2] + '-' + m[3];
+      m = s.match(/(\d{2})_(\d{2})_(\d{4})/);
+      if (m) return m[3] + '-' + m[2] + '-' + m[1];
+      m = s.match(/descargado (\d{2})-(\d{2})-(\d{4})/i);
+      return m ? m[3] + '-' + m[2] + '-' + m[1] : '';
+    }
+
+    /** Renglón de encabezados: el primero que trae todas las columnas pedidas (sin acentos ni mayúsculas). */
+    const sinAcentos = (s) => txt(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    function encabezados(filas, pedidas) {
+      for (let i = 0; i < Math.min(filas.length, 15); i++) {
+        const h = (filas[i] || []).map(sinAcentos);
+        if (pedidas.every((p) => h.indexOf(p) >= 0)) return { fila: i, col: (nombre) => h.indexOf(sinAcentos(nombre)) };
+      }
+      return null;
+    }
+
+    /**
+     * Adendum de Telcel: el «Reporte de Cálculo de Penalización» (hoja report) o el formato corto del portal (Hoja1).
+     * Una cuenta padre por renglón; el RFC dice la razón social.
+     */
+    function adendumTelcel(filas, nombre) {
+      const e = encabezados(filas, ['telefono', 'iccid', 'fecha fin de servicio']);
+      if (!e) return null;
+      const v = (r, c) => (e.col(c) >= 0 ? r[e.col(c)] : null);
+      const lineas = [];
+      filas.slice(e.fila + 1).forEach((r) => {
+        const numero = telefono(v(r, 'Telefono'));
+        if (!numero) return;
+        const inicio = fecha(v(r, 'Fecha Inicio de Servicio'));
+        const plazo = Number(entero(v(r, 'Plazo de Servicio'))) || null;
+        const f = finOBaja(inicio, fecha(v(r, 'Fecha Fin de Servicio')), plazo);
+        lineas.push({
+          numero: numero, cuentaPadre: entero(v(r, 'Cuenta Responsabilidad de Pago')), cuenta: entero(v(r, 'Cuenta')),
+          rfc: txt(v(r, 'RFC')).toUpperCase(), estatus: txt(v(r, 'Estatus Suscripcion')), sim: sim(v(r, 'ICCID')), imei: imei(v(r, 'IMEI')),
+          plan: txt(v(r, 'Nombre de Oferta Primaria')), renta: monto(v(r, 'Monto de Renta con IVA')), equipo: txt(v(r, 'Equipo')),
+          plazo: plazo, inicio: inicio, fin: f.fin, baja: f.baja,
+          penalizacion: e.col('Penalizacion por Cancelacion de Servicio') >= 0 ? monto(v(r, 'Penalizacion por Cancelacion de Servicio')) : null,
+        });
+      });
+      return { tipo: 'ADENDUM', compania: 'TELCEL', fecha: fechaDelNombre(nombre), lineas: lineas };
+    }
+
+    /**
+     * Barrido de AT&T (ReporteEmpresarial .xls): no trae fecha adentro ni renta. El «$399_ARR» del nombre del plan no es
+     * la renta (en el DEV, 165 líneas con otra en el inventario, 7-oct): la renta llega con la factura.
+     */
+    function barridoAtt(filas, nombre) {
+      const e = encabezados(filas, ['cuenta', 'sim', 'fecha fin plazo']);
+      if (!e) return null;
+      const h = (filas[e.fila] || []).map(sinAcentos);
+      const iNumero = h.findIndex((x) => /^n/.test(x) && x.indexOf('tel') >= 0);
+      const v = (r, c) => (e.col(c) >= 0 ? r[e.col(c)] : null);
+      const lineas = [];
+      filas.slice(e.fila + 1).forEach((r) => {
+        const numero = telefono(r[iNumero]);
+        if (!numero) return;
+        lineas.push({
+          numero: numero, cuentaPadre: entero(v(r, 'Cuenta')), cuenta: '', rfc: '', estatus: txt(v(r, 'Estatus')),
+          sim: sim(v(r, 'SIM')), imei: imei(v(r, 'IMEI')), plan: txt(v(r, 'Plan Tarifario')), renta: null,
+          equipo: txt(v(r, 'Modelo del equipo')), plazo: Number(entero(v(r, 'Plazo'))) || null,
+          inicio: fecha(v(r, 'Fecha inicio plazo')), fin: fecha(v(r, 'Fecha fin plazo')), baja: '', penalizacion: null,
+        });
+      });
+      return { tipo: 'BARRIDO', compania: 'AT&T', fecha: fechaDelNombre(nombre), lineas: lineas };
+    }
+
+    /** Cualquier Excel del proveedor: { nombre, hojas: [{ nombre, filas }] } → el primero que se reconoce, o null. */
+    function excel(nombre, hojas) {
+      for (const h of hojas || []) {
+        const r = adendumTelcel(h.filas, nombre) || barridoAtt(h.filas, nombre);
+        if (r && r.lineas.length) return Object.assign(r, { archivo: nombre, hoja: h.nombre });
+      }
+      return null;
+    }
+
+    const leer = { excel, adendumTelcel, barridoAtt, fecha, finOBaja, fechaDelNombre, telefono, sim, imei, monto };
+
+    // ---------------- Pantalla ----------------
+
+    const NOMBRE_TIPO = { ADENDUM: 'Adendum Telcel', BARRIDO: 'Barrido AT&T' };
+    let montaje = 0;
+
+    function init() {
+      const C = Lineas.comun;
+      const { $, esc, miles, ico, chip, aviso, icono, mensajeError } = C;
+      const n = ++montaje;
+      const raiz = document.getElementById('ln-proveedor');
+      const vigente = () => n === montaje && document.body.contains(raiz);
+      let archivos = []; // { archivo, tipo, compania, fecha, lineas } o { archivo, error }
+      let revision = 0;
+      let listo = false;
+      refreshIcons();
+
+      const fechaCorta = (f) => (f ? f.slice(8, 10) + '/' + f.slice(5, 7) + '/' + f.slice(0, 4) : '');
+      const validos = () => archivos.filter((a) => !a.error);
+      const lote = () => ({ archivos: validos().map((a) => ({ tipo: a.tipo, archivo: a.archivo, fecha: a.fecha, lineas: a.lineas })) });
+      const mono = (v) => '<span class="ln-mono">' + esc(v || '—') + '</span>';
+      const tabla = (titulos, filas) => '<div data-scroll-x><table><thead><tr>' + titulos.map((t) => '<th>' + esc(t) + '</th>').join('') +
+        '</tr></thead><tbody>' + filas.map((f) => '<tr>' + f.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
+      const seccion = (icon, titulo, cuantos, cuerpo) => (cuantos ? '<details class="card card-compacta lnp-seccion"><summary>' + ico(icon) + ' ' +
+        esc(titulo) + ' · ' + miles(cuantos) + '</summary>' + cuerpo + '</details>' : '');
+      const tile = (icon, valor, etiqueta, clase) => '<div class="stat-tile ' + (clase || '') + '"><div class="stat-icon">' + ico(icon) +
+        '</div><div><div class="stat-value">' + esc(valor) + '</div><div class="stat-label">' + esc(etiqueta) + '</div></div></div>';
+
+      async function agregar(lista) {
+        const nuevos = Array.from(lista || []);
+        if (!nuevos.length) return;
+        pintarEspera('Leyendo ' + nuevos.length + (nuevos.length === 1 ? ' archivo' : ' archivos'));
+        let XLSX;
+        try { XLSX = await ExportarExcel.cargarLibreria(); } catch (e) { aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 9000); pintarLista(); return; }
+        for (const f of nuevos) {
+          let leido;
+          try {
+            const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+            const hojas = wb.SheetNames.map((h) => ({ nombre: h, filas: XLSX.utils.sheet_to_json(wb.Sheets[h], { header: 1, raw: true, defval: null }) }));
+            leido = excel(f.name, hojas) || { archivo: f.name, error: 'No es un adendum de Telcel ni un barrido de AT&T' };
+          } catch (e) {
+            leido = { archivo: f.name, error: 'No se pudo leer: ' + mensajeError(e) };
+          }
+          archivos = archivos.filter((a) => a.archivo !== f.name).concat([leido]);
+        }
+        if (!vigente()) return;
+        pintarLista();
+        revisar();
+      }
+
+      function pintarEspera(texto) {
+        const lista = $('#lnp-lista', raiz);
+        lista.hidden = false;
+        lista.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> ' + esc(texto) + '…</p>';
+      }
+
+      function pintarLista() {
+        const lista = $('#lnp-lista', raiz);
+        lista.hidden = !archivos.length;
+        $('#lnp-limpiar', raiz).hidden = !archivos.length;
+        lista.innerHTML = archivos.length ? tabla(['Archivo', 'Tipo', 'Fecha', 'Líneas', ''], archivos.map((a, i) => [
+          ico(a.error ? 'file-x' : 'file-spreadsheet') + ' ' + esc(a.archivo),
+          a.error ? chip('No reconocido', 'rojo') : esc(NOMBRE_TIPO[a.tipo]) + ' · ' + mono(a.lineas[0] && a.lineas[0].cuentaPadre),
+          a.error ? '<span class="ln-tenue">' + esc(a.error) + '</span>'
+            : '<input type="date" class="lnp-fecha" data-i="' + i + '" value="' + esc(a.fecha) + '" required' + (a.fecha ? '' : ' aria-invalid="true"') + '>',
+          a.error ? '' : miles(a.lineas.length),
+          '<button type="button" class="icon-btn" data-quitar="' + i + '" title="Quitar">' + ico('x') + '</button>',
+        ])) : '';
+        refreshIcons();
+      }
+
+      async function revisar() {
+        const yo = ++revision;
+        listo = false;
+        $('#lnp-cargar', raiz).disabled = true;
+        const kpis = $('#lnp-kpis', raiz);
+        const detalle = $('#lnp-detalle', raiz);
+        if (!validos().length) { kpis.hidden = true; detalle.innerHTML = ''; return; }
+        const sinFecha = validos().filter((a) => !a.fecha);
+        if (sinFecha.length) {
+          kpis.hidden = true;
+          detalle.innerHTML = '<div class="error-msg">' + ico('calendar-x') + ' Falta la fecha de ' + sinFecha.map((a) => esc(a.archivo)).join(', ') + '</div>';
+          refreshIcons();
+          return;
+        }
+        kpis.hidden = false;
+        kpis.innerHTML = tile('loader-circle', '…', 'Revisando contra el inventario');
+        detalle.innerHTML = '';
+        refreshIcons();
+        try {
+          const r = await C.llamar('apiLineasProveedorRevisar', lote());
+          if (yo !== revision || !vigente()) return;
+          pintarRevision(r);
+          marcarAnteriores(r.anteriores);
+          listo = r.total > 0 && !r.anteriores.length;
+          $('#lnp-cargar', raiz).disabled = !listo;
+        } catch (e) {
+          if (yo !== revision || !vigente()) return;
+          kpis.hidden = true;
+          detalle.innerHTML = '<div class="error-msg">' + esc(mensajeError(e)) + '</div>';
+        }
+      }
+
+      /** Un archivo anterior al último cargado de su cuenta no se carga: se marca en la lista y no deja Cargar. */
+      function marcarAnteriores(anteriores) {
+        anteriores.forEach((x) => {
+          const i = archivos.findIndex((a) => a.archivo === x.archivo);
+          const fila = i >= 0 && $('#lnp-lista', raiz).querySelector('[data-quitar="' + i + '"]');
+          const celda = fila && fila.closest('tr').children[1];
+          if (celda) celda.innerHTML += ' ' + chip('Anterior al ' + fechaCorta(x.masNuevo), 'rojo');
+        });
+      }
+
+      function pintarRevision(r) {
+        const c = r.contratos;
+        $('#lnp-kpis', raiz).innerHTML = [
+          tile('list', miles(r.total), 'Líneas por cargar'),
+          r.yaCargadas ? tile('check-check', miles(r.yaCargadas), 'Ya cargadas') : '',
+          tile('file-pen', miles(c.cambian), 'Contratos distintos', c.cambian ? 'stat-tile-warn' : ''),
+          tile('card-sim', miles(r.sims.length), 'SIM cambiadas'),
+          tile('circle-plus', miles(r.altas.length), 'Altas (sueltas)'),
+          tile('arrow-left-right', miles(r.cambiosNumero.length), 'Número distinto', r.cambiosNumero.length ? 'stat-tile-warn' : ''),
+          tile('circle-alert', miles(r.estatus.length), 'Estatus distinto', r.estatus.length ? 'stat-tile-warn' : ''),
+        ].join('');
+        const notas = [
+          c.nuevos ? miles(c.nuevos) + ' sin adendum anterior' : '',
+          c.iguales ? miles(c.iguales) + ' iguales' : '',
+          c.completan ? miles(c.completan) + ' completan datos que faltaban' : '',
+          c.formato ? miles(c.formato) + ' con un día de diferencia por el formato de fecha del proveedor' : '',
+          c.bajas ? miles(c.bajas) + ' dadas de baja por el proveedor' : '',
+          r.cuentas ? miles(r.cuentas) + ' llenan cuenta y razón social' : '',
+          r.ligadas ? miles(r.ligadas) + ' fotos anteriores se ligan a su línea' : '',
+        ].filter(Boolean);
+        const sinVacios = (lista) => esc(lista.filter((v) => v !== null && v !== '').join(' · '));
+        $('#lnp-detalle', raiz).innerHTML =
+          (r.anteriores.length ? '<div class="error-msg">' + ico('calendar-x') + ' ' + r.anteriores.map((x) => esc(x.archivo) + ' es del ' + fechaCorta(x.fecha) +
+            '; ya está cargado el del ' + fechaCorta(x.masNuevo)).join(' · ') + '. Solo se carga lo más reciente: quítalo para seguir.</div>' : '') +
+          (notas.length ? '<p class="ln-tenue lnp-notas">' + esc(notas.join(' · ')) + '</p>' : '') +
+          seccion('arrow-left-right', 'Número distinto en el inventario y en el proveedor (aviso a Líneas, no se aplica)', r.cambiosNumero.length,
+            tabla(['Inventario', 'Proveedor', 'Pista', 'Estatus'], r.cambiosNumero.map((x) => [mono(x.inventario), mono(x.proveedor), esc(x.pista), esc(x.estatusInventario)]))) +
+          seccion('history', 'El proveedor trae el número anterior (ya registrado en el historial)', r.numerosRegistrados.length,
+            tabla(['Inventario', 'Proveedor', 'Cambio registrado'], r.numerosRegistrados.map((x) => [mono(x.inventario), mono(x.proveedor), esc(x.registrado)]))) +
+          seccion('circle-alert', 'Suspendidas o dadas de baja por el proveedor (aviso a Líneas)', r.estatus.length,
+            tabla(['Número', 'Inventario', 'Proveedor'], r.estatus.map((x) => [mono(x.numero), esc(x.inventario), esc(x.proveedor)]))) +
+          seccion('file-pen', 'Contratos distintos', c.cambian,
+            tabla(['Número', 'Antes', 'Ahora'], c.ejemplos.map((x) => [mono(x.numero), sinVacios(x.antes), sinVacios(x.despues)])) +
+            (c.cambian > c.ejemplos.length ? '<p class="ln-tenue">Primeros ' + c.ejemplos.length + '</p>' : '')) +
+          seccion('card-sim', 'SIM cambiadas (se actualizan)', r.sims.length,
+            tabla(['Número', 'Antes', 'Ahora'], r.sims.map((x) => [mono(x.numero), mono(x.antes), mono(x.despues)]))) +
+          seccion('circle-plus', 'Altas como línea suelta, sin responsable', r.altas.length,
+            tabla(['Número', 'Compañía', 'Cuenta padre', 'Plan', 'Estatus'], r.altas.map((x) => [mono(x.numero), esc(x.compania), mono(x.cuentaPadre), esc(x.plan), esc(x.estatus)]))) +
+          seccion('circle-off', 'Dadas de baja por el proveedor y sin registro (no se dan de alta)', r.sinAlta.length,
+            tabla(['Número', 'Estatus'], r.sinAlta.map((x) => [mono(x.numero), esc(x.estatus)])));
+        refreshIcons();
+      }
+
+      async function cargar() {
+        if (!listo) return;
+        const b = $('#lnp-cargar', raiz);
+        b.disabled = true;
+        const original = b.innerHTML;
+        b.innerHTML = '<span class="ln-spinner"></span> Cargando';
+        try {
+          const r = await C.llamar('apiLineasProveedorCargar', lote());
+          aviso(icono('circle-check') + ' Cargado: ' + miles(r.cargadas) + ' líneas' + (r.altas.length ? ', ' + miles(r.altas.length) + ' altas' : '') +
+            (r.cambiosNumero.length || r.estatus.length ? ' · avisos a Líneas' : ''), 10000);
+          if (!vigente()) return;
+          archivos = [];
+          pintarLista();
+          revisar();
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000);
+          b.disabled = false;
+        } finally {
+          b.innerHTML = original;
+          refreshIcons();
+        }
+      }
+
+      const entrada = $('#lnp-archivos', raiz);
+      entrada.addEventListener('change', () => { agregar(entrada.files); entrada.value = ''; });
+      raiz.addEventListener('dragover', (ev) => ev.preventDefault());
+      raiz.addEventListener('drop', (ev) => { ev.preventDefault(); agregar(ev.dataTransfer.files); });
+      $('#lnp-lista', raiz).addEventListener('click', (ev) => {
+        const q = ev.target.closest('[data-quitar]');
+        if (!q) return;
+        archivos.splice(Number(q.dataset.quitar), 1);
+        pintarLista();
+        revisar();
+      });
+      $('#lnp-lista', raiz).addEventListener('change', (ev) => {
+        const f = ev.target.closest('.lnp-fecha');
+        if (!f) return;
+        archivos[Number(f.dataset.i)].fecha = f.value;
+        f.toggleAttribute('aria-invalid', !f.value);
+        revisar();
+      });
+      $('#lnp-limpiar', raiz).addEventListener('click', () => { archivos = []; pintarLista(); revisar(); });
+      $('#lnp-cargar', raiz).addEventListener('click', cargar);
+    }
+
+    return { init, leer };
+  })();
+</script>

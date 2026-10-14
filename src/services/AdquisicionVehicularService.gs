@@ -176,9 +176,11 @@ const AdquisicionVehicularService = (function () {
   /** Busca el expediente de un vehículo por su serie, en el índice propio -- no abre ningún
    *  archivo externo. Regresa { año, folio, area, liga } o null si no se encontró. */
   function buscar(token, serie) {
-    Permisos.puedeLeer(token, 'vehiculos');
+    const sesion = Permisos.puedeLeer(token, 'vehiculos');
     const serieBuscada = normalizarSerie_(serie);
     if (!serieBuscada) return null;
+    // Rol CLIENT (Permisos.alcanceDe): solo el expediente de un vehículo de su departamento
+    if (sesion.alcance && !VehiculosService.serieEnAlcance(token, serie)) return null;
     return mapaIndice_()[serieBuscada] || null;
   }
 
@@ -214,7 +216,13 @@ const AdquisicionVehicularService = (function () {
    *  que ya espera el componente Galeria). { soportado: false } si la liga no es de Drive: ahí
    *  solo se puede abrir la carpeta tal cual, no listar su contenido. */
   function archivos(token, liga) {
-    Permisos.puedeLeer(token, 'vehiculos');
+    const sesion = Permisos.puedeLeer(token, 'vehiculos');
+    // Rol CLIENT: la liga tiene que ser la de un expediente del índice, y su vehículo de su departamento
+    if (sesion.alcance) {
+      const mapa = mapaIndice_();
+      const serie = Object.keys(mapa).filter((s) => mapa[s].liga === String(liga || ''))[0];
+      if (!serie || !VehiculosService.serieEnAlcance(token, serie)) throw new Error('No tienes acceso a este expediente.');
+    }
     const carpetaId = idCarpetaDrive_(liga);
     if (!carpetaId) return { soportado: false };
     return { soportado: true, archivos: DriveUtils.archivosDeCarpeta(carpetaId) };

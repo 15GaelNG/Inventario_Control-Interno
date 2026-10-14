@@ -340,7 +340,8 @@
   const VISTAS_APAGADAS = (() => {
     try { return JSON.parse(document.body.dataset.apagados || '[]'); } catch (e) { return []; }
   })();
-  const estaApagada = (entrada) => VISTAS_APAGADAS.indexOf(entrada.vista) !== -1;
+  // Apagar 'helpdesk' apaga su familia (el grupo y sus vistas 'helpdesk-…')
+  const estaApagada = (entrada) => [entrada.vista, entrada.id].some((v) => v && VISTAS_APAGADAS.some((a) => v === a || v.indexOf(a + '-') === 0));
   const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
   /**
    * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
@@ -539,6 +540,19 @@
     }, duracionTotal + 250);
   }
 
+  /**
+   * Una vista puede poner algo en la barra de arriba (Help Desk: su marca junto al logo y su
+   * búsqueda al centro, para usar toda la pantalla). Lo que pone lleva data-de-vista y navegarA
+   * lo quita al cambiar de vista. donde: 'izquierda' (junto al logo) o 'centro'.
+   */
+  function ponerEnBarraSuperior(el, donde) {
+    const barra = document.querySelector('.topbar');
+    el.setAttribute('data-de-vista', '');
+    if (donde === 'izquierda') barra.querySelector('.topbar-left').appendChild(el);
+    else barra.insertBefore(el, barra.querySelector('.topbar-right'));
+    return el;
+  }
+
   function montarVista(templateId, initFn, container) {
     container = container || document.getElementById('view-container');
     const tpl = document.getElementById(templateId);
@@ -643,6 +657,7 @@
       // El menú ya esconde lo que no se puede ver, pero a una vista también se llega por el
       // historial del navegador o por los enlaces entre módulos ("Ver vehículo")
       // Adónde lleva cada vista está en NAV_GRUPOS / VISTAS_FUERA_DEL_MENU, no aquí
+      document.querySelectorAll('.topbar [data-de-vista]').forEach((el) => el.remove());   // lo que puso la vista anterior
       const destino = vistaDe(vista);
       if (!destino || estaApagada(destino)) { mostrarProximamente(etiqueta || vista); return; }
       if (destino.requiere && !permisoDe(destino.requiere)) { mostrarSinAcceso(etiqueta || destino.etiqueta); return; }
@@ -681,10 +696,10 @@
    *   plantilla  el <template> de html/views que se monta
    *   init       lo que corre al montarla; va como función flecha porque casi todas viven en
    *              archivos que cargan después de este (app-verificaciones, modulos/*, lineas)
-   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item: los panoramas y
-   *              Cambios de Monto no son módulos propios, cuelgan de su padre. `libre: true` = no
-   *              pide permiso (Sistemas y Encuestas: solo enlaces a sistemas externos). Sin ninguno
-   *              de los dos, el item no se pinta.
+   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item. Desde el 14-oct cada
+   *              entrada tiene el suyo (panoramas, Sistemas, Encuestas); solo Cambios de Monto cuelga
+   *              de Caja chica. `libre: true` = no pide permiso (hoy solo Help Desk, apagado en prod).
+   *              Sin ninguno de los dos, el item no se pinta.
    *   sinAsistente  en esa vista no sale el asistente flotante; en un grupo, vale para todos sus items
    * source-contracts revisa que cada plantilla, función y módulo exista.
    */
@@ -692,7 +707,7 @@
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
         { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
         { vista: 'adquisicion-vehicular', etiqueta: 'Adquisición', icono: 'folder-open', requiere: 'adquisicion-vehicular', plantilla: 'tpl-adquisicion-vehicular', init: () => initAdquisicionVehicular(), ayuda: () => AYUDA_ADQUISICION_VEHICULAR },
@@ -703,7 +718,7 @@
         { vista: 'inspeccion-vehicular', etiqueta: 'Inspección vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones(), ayuda: () => AYUDA_INSPECCIONES },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores(), ayuda: () => AYUDA_SENSORES },
         { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas(), ayuda: () => AYUDA_HOLOGRAMAS },
-        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-vehiculos', plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
       ],
     },
     {
@@ -717,21 +732,22 @@
         { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas', plantilla: 'tpl-lineas-resguardos', init: () => Lineas.initResguardos() },
         { vista: 'correcciones-lineas', etiqueta: 'Correcciones de líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas', plantilla: 'tpl-lineas-correcciones', init: () => LineasCorrecciones.init() }, // temporal (30-sep)
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de accesorios', icono: 'boxes', requiere: 'accesorios-lineas', plantilla: 'tpl-lineas-accesorios', init: () => Lineas.initAccesoriosLineas() },
+        { vista: 'proveedor-lineas', etiqueta: 'Proveedor', icono: 'file-spreadsheet', requiere: 'proveedor-lineas', plantilla: 'tpl-lineas-proveedor', init: () => LineasProveedor.init() },
         // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en VISTAS_FUERA_DEL_MENU: su pestaña es la
         // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de cambios - Líneas', icono: 'eye' },
-        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-lineas', plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-cajachica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
         { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos(), ayuda: () => AYUDA_ARQUEOS },
         { vista: 'caja-chica', etiqueta: 'Caja chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica(), ayuda: () => AYUDA_CAJACHICA },
         { vista: 'cambios-monto-cch', etiqueta: 'Cambios de monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
-        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-arqueos', plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
     {
@@ -745,9 +761,19 @@
     { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos(), sinAsistente: true },
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
-    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
-    // Los tickets del helpdesk de TI (05/10/2026): todos lo ven; cada quien, lo que su cuenta ve allá
-    { id: 'helpdesk', vista: 'helpdesk', icono: 'headset', etiqueta: 'Help desk', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk(), ayuda: () => AYUDA_HELPDESK },
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', requiere: 'encuestas-solicitudes', plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
+    // Los tickets del helpdesk de TI (05/10/2026; su propia familia el 07/10). Todos lo ven (cada
+    // quien, lo que su cuenta ve allá): por eso el grupo es `libre` aunque casi todo sea libre.
+    // Registrados es la copia en la hoja: solo quien lee Tickets.
+    {
+      id: 'helpdesk', icono: 'headset', etiqueta: 'Help desk', libre: true,
+      items: [
+        { vista: 'helpdesk', etiqueta: 'Bandeja', icono: 'inbox', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk(), ayuda: () => AYUDA_HELPDESK },
+        { vista: 'helpdesk-formularios', etiqueta: 'Formularios', icono: 'list-checks', libre: true, plantilla: 'tpl-helpdesk-formularios', init: () => initHelpdeskFormularios() },
+        { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
+        { vista: 'helpdesk-conexion', etiqueta: 'Conexión', icono: 'plug', libre: true, plantilla: 'tpl-helpdesk-conexion', init: () => initHelpdeskConexion() },
+      ],
+    },
     {
       id: 'administracion', icono: 'settings', etiqueta: 'Administración',
       items: [
@@ -771,17 +797,56 @@
   ];
 
   /**
+   * Todas las entradas de vista (NAV_GRUPOS + VISTAS_FUERA_DEL_MENU) en una sola lista plana, cada
+   * una con `sinAsistente` ya resuelto (el del item si dice algo, si no el de su grupo) -- la usan
+   * vistaDe (abajo) y el buscador general del asistente flotante (todaLaAyuda_, más abajo).
+   */
+  function todasLasVistas_() {
+    const planas = [];
+    NAV_GRUPOS.forEach((g) => {
+      if (g.vista) planas.push(Object.assign({ iconoArea: g.icono }, g));
+      (g.items || []).forEach((it) => planas.push(Object.assign({ iconoArea: g.icono, sinAsistente: g.sinAsistente }, it)));
+    });
+    VISTAS_FUERA_DEL_MENU.forEach((v) => planas.push(Object.assign({ iconoArea: v.icono }, v)));
+    return planas;
+  }
+
+  /**
    * La entrada de una vista (de NAV_GRUPOS o de VISTAS_FUERA_DEL_MENU), con `iconoArea`: el ícono
    * de su grupo del menú. null si no existe.
    */
   function vistaDe(vista) {
-    for (const g of NAV_GRUPOS) {
-      if (g.vista === vista) return Object.assign({ iconoArea: g.icono }, g);
-      const item = (g.items || []).find((it) => it.vista === vista);
-      if (item) return Object.assign({ iconoArea: g.icono, sinAsistente: g.sinAsistente }, item);
-    }
-    const suelta = VISTAS_FUERA_DEL_MENU.find((v) => v.vista === vista);
-    return suelta ? Object.assign({ iconoArea: suelta.icono }, suelta) : null;
+    return todasLasVistas_().find((v) => v.vista === vista) || null;
+  }
+
+  /**
+   * Todas las preguntas de ayuda de la app en una sola lista, cada una con de qué pantalla es --
+   * la usa el buscador general del asistente flotante (Ayuda.abrir -> buscarEnTodas, 14-oct-2026)
+   * cuando lo que buscas no está en la pantalla en la que estás. Salta las `sinAsistente` y las
+   * que no declaran `ayuda`; se arma al vuelo, no se guarda.
+   *
+   * AYUDA_SUELTA: módulos sin pantalla propia (viven como pestaña en la ficha de otro, `enFicha`
+   * en Modulos.gs -- hoy Responsiva y Adherente Vehicular, en la ficha de Vehículos). No hay una
+   * `vista` que los traiga solos, así que sus preguntas se agregan aquí a mano para que el
+   * buscador general igual las encuentre.
+   */
+  // Nota: `ayuda` siempre como función (`() => AYUDA_X`), nunca el arreglo directo -- AYUDA_X se
+  // declara mucho más abajo en este mismo script (junto a su módulo) y a esta altura todavía no
+  // existe (mismo motivo por el que NAV_GRUPOS ya usa `ayuda: () => AYUDA_VEHICULOS`).
+  const AYUDA_SUELTA = [
+    { pantalla: 'Responsiva Vehicular', ayuda: () => AYUDA_RESPONSIVA_VEHICULAR },
+    { pantalla: 'Adherente Vehicular', ayuda: () => AYUDA_ADHERENTE_VEHICULAR },
+  ];
+  function todaLaAyuda_() {
+    const resultado = [];
+    todasLasVistas_().forEach((v) => {
+      if (v.sinAsistente || !v.ayuda) return;
+      (v.ayuda() || []).forEach((p) => resultado.push({ pantalla: v.etiqueta, pregunta: p.pregunta, respuesta: p.respuesta }));
+    });
+    AYUDA_SUELTA.forEach((grupo) => {
+      grupo.ayuda().forEach((p) => resultado.push({ pantalla: grupo.pantalla, pregunta: p.pregunta, respuesta: p.respuesta }));
+    });
+    return resultado;
   }
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
@@ -790,14 +855,14 @@
     const contenedor = document.getElementById('nav-groups');
     // Una entrada con `vista` y sin `items` es un acceso directo suelto
     // (sin desplegable), como Gestión de Activos (rama emmanuel).
-    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (accesos a
-    // sistemas externos, sin datos de la app) no piden permiso, pero no bastan para que se vea
-    // su grupo: un grupo sin ningún módulo con permiso no se pinta. Por eso esto se vuelve a
-    // llamar al llegar los permisos.
+    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (Help Desk) no
+    // piden permiso, pero no bastan para que se vea su grupo: un grupo sin ningún módulo con
+    // permiso no se pinta. Por eso esto se vuelve a llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
       .filter((g) => !estaApagada(g))
       .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !estaApagada(it) && (it.libre || permisoDe(it.requiere))) }) : g))
-      .filter((g) => (g.items ? g.items.some((it) => !it.libre) : g.libre || permisoDe(g.requiere)));
+      // Un grupo `libre` (Help Desk) se ve aunque solo le queden items libres
+      .filter((g) => (g.items ? g.items.length && (g.libre || g.items.some((it) => !it.libre)) : g.libre || permisoDe(g.requiere)));
     contenedor.innerHTML = visibles.map((grupo) => (grupo.vista ? `
       <div class="nav-item" data-view="${grupo.vista}" data-etiqueta="${grupo.etiqueta}">
         <span class="nav-icon"><i data-lucide="${grupo.icono}" class="ico"></i></span><span class="nav-label">${grupo.etiqueta}</span>
@@ -913,8 +978,8 @@
       const identidad = await callServer('apiIdentidadGoogle');
       if (!identidad || !identidad.coincide) return; // se queda solo el formulario manual
 
-      document.getElementById('google-account-avatar').textContent =
-        (identidad.nombre || identidad.correo).trim().charAt(0).toUpperCase();
+      document.getElementById('google-account-avatar').innerHTML =
+        Avatar.html(identidad.correo, identidad.nombre, { tam: 34, foto: identidad.foto });
       document.getElementById('google-account-name').textContent = identidad.nombre || identidad.correo;
       document.getElementById('google-account-email').textContent = identidad.correo;
       chip.hidden = false;
@@ -4463,6 +4528,52 @@
     },
   ];
 
+  // Responsiva y Adherente Vehicular no tienen pantalla propia en el menú (viven como pestaña
+  // en la ficha de Vehículos, enFicha en Modulos.gs) -- por eso su ayuda no está en NAV_GRUPOS
+  // como la de un módulo normal, sino en AYUDA_SUELTA (ver todaLaAyuda_, 14-oct-2026) para que el
+  // buscador general del asistente flotante igual las encuentre.
+  const AYUDA_RESPONSIVA_VEHICULAR = [
+    {
+      pregunta: '¿Dónde registro o veo la responsiva de un vehículo?',
+      respuesta: 'No tiene pantalla propia: es la pestaña "Responsiva" dentro de la ficha del vehículo (Vehículos → abre la ficha de la unidad).',
+    },
+    {
+      pregunta: '¿Qué diferencia hay entre una responsiva Definitiva y un Préstamo?',
+      respuesta: 'Al generarla, el Tipo puede quedar en Definitiva (como siempre) o Préstamo, con su fecha de fin. Mientras está en préstamo, el badge avisa si va en curso, si ya venció o si ya se devolvió -- "Devolver préstamo" lo cierra.',
+    },
+    {
+      pregunta: '¿Cómo se firma a distancia, sin que la persona esté presente?',
+      respuesta: 'Al registrar la responsiva, si el responsable o el jefe directo no están ahí para firmar en el momento, "Enviar liga(s) para firmar a distancia" genera un link por cada quien falte -- lo firman desde su celular, sin necesidad de entrar a la app.',
+    },
+    {
+      pregunta: 'Mandé la liga de firma pero se perdió o ya venció. ¿Ahora qué?',
+      respuesta: '"Generar nueva liga" (junto a "Copiar liga", en la fila de la responsiva) crea un token nuevo sobre el mismo registro y la liga anterior deja de servir sola -- no hace falta dar de baja ni volver a capturar nada. Las ligas duran 5 días.',
+    },
+    {
+      pregunta: '¿Puedo volver a mandar una liga que ya envié, sin generar una nueva?',
+      respuesta: 'Sí: "Copiar liga" / "Copiar liga jefe" la vuelve a mostrar tal cual, útil si se perdió el mensaje. Si ya venció, en vez de eso usa "Generar nueva liga".',
+    },
+  ];
+
+  const AYUDA_ADHERENTE_VEHICULAR = [
+    {
+      pregunta: '¿Qué es un Adherente Vehicular?',
+      respuesta: 'Quien usa el vehículo además del responsable (p. ej. un familiar o compañero autorizado). Se registra en la pestaña "Adherentes" de la ficha del vehículo -- tampoco tiene pantalla propia en el menú.',
+    },
+    {
+      pregunta: '¿El adherente también firma?',
+      respuesta: 'Sí, igual que en Responsiva: si no está presente al capturarlo, se le puede mandar una liga para firmar a distancia desde su celular ("Enviar liga(s) para firmar a distancia").',
+    },
+    {
+      pregunta: 'Se venció o se perdió la liga de firma del adherente, ¿cómo mando una nueva?',
+      respuesta: '"Generar nueva liga" crea un token nuevo sobre el mismo registro -- la liga anterior deja de funcionar sola. "Copiar liga" nomás repite la que ya existe, sin generar una nueva.',
+    },
+    {
+      pregunta: '¿Cómo doy de baja a un adherente sin borrar su historial?',
+      respuesta: 'El botón de estatus lo manda a "Baja" (y se puede "Reactivar" después) -- es distinto de "Eliminar", que sí quita el registro.',
+    },
+  ];
+
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -5037,15 +5148,15 @@
     el.addEventListener('click', () => navegarA(el.dataset.view));
   });
 
-  // Asistente flotante (usuario, 7-oct): abre las preguntas frecuentes de la pantalla en la
-  // que estés (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `ayuda`) -- el panel, a su vez, ofrece el
-  // recorrido guiado (`tour`) si esa vista también tiene uno. Sin ninguno de los dos, lo avisa
-  // en vez de no hacer nada.
+  // Asistente flotante (usuario, 7-oct): abre las preguntas frecuentes de la pantalla en la que
+  // estés (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `ayuda`) -- el panel, a su vez, ofrece el
+  // recorrido guiado (`tour`) si esa vista también tiene uno. Buscador general (14-oct-2026,
+  // todaLaAyuda_): aunque esta pantalla no tenga preguntas propias (Capital humano, Mi perfil,
+  // Sistemas…), siempre se puede buscar en las de toda la app -- ya no hace falta el aviso de
+  // "todavía no hay ayuda aquí".
   document.getElementById('asistente-flotante').addEventListener('click', () => {
-    const destino = vistaDe(vistaActual);
-    if (destino && destino.ayuda) { Ayuda.abrir(destino.ayuda(), { onTour: destino.tour }); return; }
-    if (destino && destino.tour) { destino.tour(); return; }
-    Notificar.info('Todavía no hay ayuda para esta pantalla -- por ahora pícame en Vehículos.');
+    const destino = vistaDe(vistaActual) || {};
+    Ayuda.abrir(destino.ayuda ? destino.ayuda() : [], { onTour: destino.tour, buscarEnTodas: todaLaAyuda_ });
   });
   // Quita la clase de "caminando" (caminarAsistente) en cuanto termina -- si no se quitara,
   // la respiración (animación por default) ya no volvería a correr.

@@ -66,8 +66,9 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
   // Correcciones de Líneas: módulo temporal (30-sep), después de Resguardos; se quita cuando Líneas termine
+  // Proveedor (adendums y facturas del mes, 7-oct) después de Accesorios
   // sistemas-lineas: accesos a sistemas externos (jorge, 2-oct), al final del grupo
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'sistemas-lineas'];
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'proveedor-lineas', 'sistemas-lineas'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -435,6 +436,14 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
     if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`) && !read('src/ClientApi.gs').includes(`parte('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo (ni con parte en el servidor)'); }
     else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
   });
+  // Cada entrada del menú tiene su propio permiso (14-oct): dos no comparten módulo, salvo las que
+  // son parte de otro a propósito. Y `libre` (sin permiso) solo en Help Desk
+  const COMPARTEN = { 'cambios-monto-cch': 'caja-chica', 'helpdesk-registrados': 'tickets' };
+  entradas.filter((e) => e.vista && e.requiere && !COMPARTEN[e.vista]).forEach((e, _, todas) => {
+    const otras = todas.filter((x) => x !== e && x.requiere === e.requiere).map((x) => x.vista);
+    if (otras.length) problemas.push(e.vista + ': comparte el permiso ' + e.requiere + ' con ' + otras.join(', '));
+  });
+  entradas.filter((e) => e.libre && !/^helpdesk/.test(e.vista || e.id || '')).forEach((e) => problemas.push((e.vista || e.id) + ': libre (sin permiso) fuera de Help Desk'));
   assert.deepEqual(problemas, []);
 
   // navegarA busca la entrada; no vuelve la cadena de if por vista

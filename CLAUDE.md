@@ -61,7 +61,11 @@ que dependen de sus helpers.
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
 de esa entrada: no se agrega otro `if (vista === …)`. `source-contracts` revisa que la
-plantilla, la función y el módulo existan.
+plantilla, la función y el módulo existan. **Cada entrada del menú pide su propio módulo** (14-oct: los
+panoramas, Sistemas y Encuestas dejaron de colgar de otro permiso o de no pedir ninguno); dos entradas no
+comparten `requiere` y `libre` solo queda en Help Desk (contrato). Si su pantalla lee la lista de otro
+módulo, esa definición lo declara en `leenTambien` (HojaServicio); un módulo de solo enlaces lleva
+`soloEnlaces: true` en `Modulos.gs` (no cuenta como familia).
 
 ## Componentes (`src/html/js/componentes/`)
 
@@ -157,8 +161,15 @@ El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
    folio (Sensores, Hologramas, Verificaciones… eligen la unidad) y la lista de cajas (Arqueos).
 4. **Campo** (`editaModulo` / `deOtroModulo`, abajo) y los campos secretos de Líneas (PIN,
    contraseñas: solo ADMIN y el área de Líneas, se ocultan en el servidor).
-5. **Registro** (qué renglones ve cada quien, p. ej. solo los de su departamento): no se usa
-   todavía. Si hace falta, va en el servidor, como un filtro en la definición de la hoja.
+5. **Registro** (qué renglones ve cada quien): el **rol CLIENT** (ROL en USUARIOS) solo consulta (como
+   VIEWER) y solo ve los renglones de sus departamentos: `DPTOS PERMITIDOS` (separado por comas) o, si
+   está vacía, su `AREA` (`Permisos.alcanceDe`, que llega como `sesion.alcance`; null = sin límite). Se
+   filtra en el servidor **lo que se regresa, nunca la caché** (que es de todos): en `HojaServicio` con
+   `alcance: 'COLUMNA'` en la definición (Vehículos: `DEPARTAMENTO`), y en Líneas con los ayudantes de
+   `TelefoniaService` (`filtrarIndice_`, `exigirRegistroEnAlcance_`, `sinAlcance_` para lo que mezcla
+   departamentos). `tests/alcance-cliente.test.cjs` falla si una lectura nueva de Líneas no pasa por
+   ellos. Un módulo nuevo para un CLIENT necesita su `alcance` antes de darle el permiso. Hoy: POST VENTA,
+   con LECTURA en `vehiculos` y `lineas-telefonicas`.
 
 Cuando una pantalla muestra o edita algo de **otro** módulo (la ficha de Vehículos trae
 Sensores, Verificaciones, Cambios…):
@@ -227,6 +238,11 @@ versión en cada subida a prod:
    `https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec`
 
 Revisa con `npx clasp -P .clasp.prod.json list-deployments` que ambos digan `@N`.
+
+**Un permiso nuevo en `oauthScopes` (appsscript.json) tumba la app hasta que se autorice.** La app
+corre como quien la desplegó: si el manifiesto pide un permiso que esa cuenta no ha aceptado, NADIE
+puede entrar. Antes de mover los despliegues, quien desplegó corre en el editor de ESE proyecto una
+función que lo use y acepta (para `directory.readonly`, de las fotos: `revisarFotosDirectorio()`).
 
 `node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
 mueve los dos despliegues. **Solo corre en la GitHub Action** (botón "Run workflow" sobre `master`,
