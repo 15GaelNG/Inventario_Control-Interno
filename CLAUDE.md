@@ -61,7 +61,11 @@ que dependen de sus helpers.
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
 de esa entrada: no se agrega otro `if (vista === …)`. `source-contracts` revisa que la
-plantilla, la función y el módulo existan.
+plantilla, la función y el módulo existan. **Cada entrada del menú pide su propio módulo** (14-oct: los
+panoramas, Sistemas y Encuestas dejaron de colgar de otro permiso o de no pedir ninguno); dos entradas no
+comparten `requiere` y `libre` solo queda en Help Desk (contrato). Si su pantalla lee la lista de otro
+módulo, esa definición lo declara en `leenTambien` (HojaServicio); un módulo de solo enlaces lleva
+`soloEnlaces: true` en `Modulos.gs` (no cuenta como familia).
 
 ## Componentes (`src/html/js/componentes/`)
 

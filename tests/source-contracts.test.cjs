@@ -436,6 +436,14 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
     if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`) && !read('src/ClientApi.gs').includes(`parte('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo (ni con parte en el servidor)'); }
     else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
   });
+  // Cada entrada del menú tiene su propio permiso (14-oct): dos no comparten módulo, salvo las que
+  // son parte de otro a propósito. Y `libre` (sin permiso) solo en Help Desk
+  const COMPARTEN = { 'cambios-monto-cch': 'caja-chica', 'helpdesk-registrados': 'tickets' };
+  entradas.filter((e) => e.vista && e.requiere && !COMPARTEN[e.vista]).forEach((e, _, todas) => {
+    const otras = todas.filter((x) => x !== e && x.requiere === e.requiere).map((x) => x.vista);
+    if (otras.length) problemas.push(e.vista + ': comparte el permiso ' + e.requiere + ' con ' + otras.join(', '));
+  });
+  entradas.filter((e) => e.libre && !/^helpdesk/.test(e.vista || e.id || '')).forEach((e) => problemas.push((e.vista || e.id) + ': libre (sin permiso) fuera de Help Desk'));
   assert.deepEqual(problemas, []);
 
   // navegarA busca la entrada; no vuelve la cadena de if por vista
