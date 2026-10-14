@@ -22,8 +22,8 @@
    * efectivo() también: tests/permisos-pantalla.test.cjs corre los dos con los mismos casos.
    */
 
-  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar', HEREDA: 'Hereda' };
-  const PERM_ICONO = { NINGUNO: 'eye-off', LECTURA: 'eye', EDICION: 'pencil' };
+  const PERM_TEXTO = { NINGUNO: 'Sin acceso', LECTURA: 'Ver', EDICION: 'Editar', HEREDA: 'Hereda', ASIGNADO: 'Asignado' };
+  const PERM_ICONO = { NINGUNO: 'eye-off', LECTURA: 'eye', EDICION: 'pencil', ASIGNADO: 'layers' };
   const PERM_ROLES_TOTALES = ['ADMIN', 'SUPER'];
 
   async function initPermisosAdmin() {
@@ -31,7 +31,7 @@
     let datos = null;
     let originales = {};   // llave → permiso, como están en la hoja
     let pila = [];         // fichas abiertas antes de la actual: "Volver" regresa a la anterior
-    let fichaActual = null;   // { tipo: 'persona' | 'area', id, pestana }
+    let fichaActual = null;   // { tipo: 'persona' | 'area' | 'perfil', id, pestana }
 
     // ---------------------------------------------------------------- reglas
     const normal = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -40,22 +40,74 @@
     const modulos = () => datos.grupos.reduce((t, g) => t.concat(g.modulos), []);
     /** Las secciones de un módulo (o []), como las manda el panel: { id, etiqueta, icono, hereda } */
     const seccionesDe = (m) => m.secciones || [];
-    /** Módulos y secciones, cada sección con su padre */
-    const nodos = () => modulos().reduce((t, m) => t.concat([m], seccionesDe(m).map((s) => Object.assign({ padre: m.id }, s))), []);
-    const nodo = (id) => nodos().find((n) => n.id === id) || null;
+    /** Módulos y secciones, cada sección con su padre (se arma una vez por carga: la matriz pregunta mucho) */
+    let nodos_ = null;
+    let porId_ = {};
+    function nodos() {
+      if (!nodos_) {
+        nodos_ = modulos().reduce((t, m) => t.concat([m], seccionesDe(m).map((s) => Object.assign({ padre: m.id }, s))), []);
+        porId_ = {};
+        nodos_.forEach((n) => { porId_[n.id] = n; });
+      }
+      return nodos_;
+    }
+    const nodo = (id) => (nodos(), porId_[id] || null);
     const padreDe = (id) => (nodo(id) || {}).padre || null;
     const regla = (quien, modulo) => originales[llave(quien, modulo)];
     const NIVEL_N = { NINGUNO: 0, LECTURA: 1, EDICION: 2 };
     /** Nunca más que su módulo */
     const tope = (v, padre) => (NIVEL_N[v] > NIVEL_N[padre] ? padre : v);
-    /** Lo de un área en un nodo (Permisos.resolver_ sin el correo): su regla, o lo que hereda de su módulo */
-    function deArea(area, id) {
+    const mayor = (a, b) => (NIVEL_N[a] >= NIVEL_N[b] ? a : b);
+
+    // ---- perfiles (fase 2): paquetes de reglas con nombre que se asignan a áreas
+    let perfilesPorClave = {};   // normal(nombre) → { nombre, reglas: { nodo: nivel }, areas: [área] }
+    let perfilesDeArea = {};     // normal(área) → [normal(nombre)]
+    const quienPerfil = (nombre) => 'perfil:' + nombre;
+    const perfilesDe = (area) => (area ? perfilesDeArea[normal(area)] || [] : []);
+    const reglaPerfil = (k, id) => (perfilesPorClave[k] || { reglas: {} }).reglas[id];
+    /** Lo que da un perfil solo en un nodo: su regla o, en una sección, lo que hereda dentro del perfil (sin tope) */
+    function valorPerfil(k, id) {
+      const v = reglaPerfil(k, id);
+      if (v !== undefined) return v;
       const n = nodo(id);
-      const propio = area ? regla(area, id) : undefined;
-      if (!n || !n.padre) return propio || 'NINGUNO';
-      const delPadre = deArea(area, n.padre);
-      return tope(propio !== undefined ? propio : (n.hereda === false ? 'NINGUNO' : delPadre), delPadre);
+      return n && n.padre && n.hereda !== false ? valorPerfil(k, n.padre) : 'NINGUNO';
     }
+    /** Los perfiles de esa lista que dicen algo de ese nodo y dan lo más alto (para decir "por su perfil X") */
+    function perfilesQueDan(perfiles, id) {
+      const dicen = perfiles.filter((k) => reglaPerfil(k, id) !== undefined);
+      if (!dicen.length) return [];
+      const mx = dicen.reduce((m, k) => mayor(valorPerfil(k, id), m), 'NINGUNO');
+      return dicen.filter((k) => valorPerfil(k, id) === mx).map((k) => perfilesPorClave[k].nombre);
+    }
+
+    /**
+     * Permisos.resolver_ aquí, para pintar al instante (tests/permisos-pantalla.test.cjs exige que dé lo mismo):
+     * `capas` son funciones (id) → nivel | undefined, de la más fuerte a la más débil (correo, área…); si ninguna
+     * dice nada, el más alto de los `perfiles` que digan algo de ese nodo; si tampoco, una sección hereda de su
+     * módulo. Nunca más que su módulo; `soloConsultaTope` (VIEWER, CLIENT) deja Editar en Ver. → (id) → nivel.
+     */
+    function resolvedor(capas, perfiles, soloConsultaTope) {
+      const memo = {};
+      const val = (id) => {
+        if (id in memo) return memo[id];
+        const n = nodo(id);
+        const padre = n && n.padre;
+        let v;
+        for (let i = 0; i < capas.length && v === undefined; i++) v = capas[i](id);
+        if (v === undefined && perfiles.some((k) => reglaPerfil(k, id) !== undefined)) {
+          v = perfiles.reduce((mx, k) => mayor(valorPerfil(k, id), mx), 'NINGUNO');
+        }
+        if (v === undefined) v = padre && n.hereda !== false ? val(padre) : 'NINGUNO';
+        if (padre) v = tope(v, val(padre));
+        if (soloConsultaTope && v === 'EDICION') v = 'LECTURA';
+        return (memo[id] = v);
+      };
+      return val;
+    }
+    /** Lo de un área en un nodo (Permisos.resolver_ sin el correo): su regla, sus perfiles o lo que hereda */
+    const deArea = (area, id) => resolvedor([(x) => (area ? regla(area, x) : undefined)], perfilesDe(area), false)(id);
+    /** Lo que da un perfil solo, con su herencia y el tope de su módulo */
+    const dePerfil = (k, id) => resolvedor([(x) => reglaPerfil(k, x)], [], false)(id);
     const tieneTotal = (p) => PERM_ROLES_TOTALES.indexOf(p.rol) !== -1;
     /** VIEWER y CLIENT solo consultan: Editar se les queda en Ver (Permisos.resolver_) */
     const soloConsulta = (p) => p.rol === 'VIEWER' || p.rol === 'CLIENT';
@@ -65,36 +117,38 @@
       return lista.length ? lista : (p.area ? [p.area] : []);
     };
     /**
-     * Lo que tiene por su rol, su regla propia o la de su área en ese nodo, o lo que hereda de su módulo
-     * (Permisos.resolver_); VIEWER y CLIENT no editan. (Sin ver si está activo: eso se avisa aparte.)
+     * Lo que tiene por su rol, su regla propia, la de su área, los perfiles de su área o lo que hereda de su
+     * módulo (Permisos.resolver_); VIEWER y CLIENT no editan. (Sin ver si está activo: eso se avisa aparte.)
      */
     function efectivo(p, id) {
       if (tieneTotal(p)) return 'EDICION';   // "usuarios" (lo único que SUPER no tiene) no está en esta lista
-      const n = nodo(id);
-      const propio = regla(p.correo, id);
-      const delArea = p.area ? regla(p.area, id) : undefined;
-      let nivel;
-      if (!n || !n.padre) nivel = propio !== undefined ? propio : (delArea || 'NINGUNO');
-      else {
-        const delPadre = efectivo(p, n.padre);
-        nivel = tope(propio !== undefined ? propio : delArea !== undefined ? delArea : (n.hereda === false ? 'NINGUNO' : delPadre), delPadre);
-      }
-      return soloConsulta(p) && nivel === 'EDICION' ? 'LECTURA' : nivel;
+      return resolvedor([(x) => regla(p.correo, x), (x) => (p.area ? regla(p.area, x) : undefined)],
+        perfilesDe(p.area), soloConsulta(p))(id);
     }
     const excepcionesDe = (p) => (tieneTotal(p) ? [] : nodos().filter((m) => regla(p.correo, m.id) !== undefined));
     const conAcceso = (p) => modulos().filter((m) => efectivo(p, m.id) !== 'NINGUNO').length;
     const persona = (correo) => datos.personas.find((p) => normal(p.correo) === normal(correo));
     const area = (nombre) => datos.areas.find((a) => normal(a.nombre) === normal(nombre));
     const delArea = (nombre) => datos.personas.filter((p) => normal(p.area) === normal(nombre));
+    const perfil = (nombre) => perfilesPorClave[normal(nombre)] || null;
 
     function cargar(respuesta) {
       datos = respuesta;
       datos.historial = datos.historial || [];
+      datos.perfiles = datos.perfiles || [];
+      nodos_ = null;
       originales = {};
       datos.reglas.forEach((r) => {
-        // NINGUNO de un área en un módulo es lo mismo que no tener regla (en una sección no: corta la herencia)
-        if (r.permiso === 'NINGUNO' && r.quien.indexOf('@') === -1 && !padreDe(r.modulo)) return;
+        // NINGUNO de un área sin perfiles en un módulo es lo mismo que no tener regla (el servidor ya no lo guarda)
         originales[llave(r.quien, r.modulo)] = r.permiso;
+      });
+      perfilesPorClave = {};
+      perfilesDeArea = {};
+      datos.perfiles.forEach((pf) => {
+        const k = normal(pf.nombre);
+        perfilesPorClave[k] = { nombre: pf.nombre, reglas: {}, areas: pf.areas || [] };
+        (pf.reglas || []).forEach((r) => { perfilesPorClave[k].reglas[r.modulo] = r.permiso; });
+        (pf.areas || []).forEach((a) => { (perfilesDeArea[normal(a)] = perfilesDeArea[normal(a)] || []).push(k); });
       });
     }
 
@@ -156,18 +210,25 @@
     }
 
     // ---------------------------------------------------------------- historial
-    const etiquetaModulo = (id) => etiquetaNodo(id);
+    /** Un nodo ("Vehículos › Documentos") o, en una asignación, el perfil ("Perfil Flotilla") */
+    const etiquetaModulo = (id) => (/^perfil:/i.test(id) ? 'Perfil ' + String(id).replace(/^perfil:/i, '') : etiquetaNodo(id));
     const esDePersona = (h) => h.quien.indexOf('@') !== -1;
-    /** '' en el historial = sin regla: la persona tiene lo de su área; el área, sin acceso (en una sección: hereda) */
+    const esDePerfil = (h) => /^perfil:/i.test(h.quien);
+    const esAsignacion = (h) => /^perfil:/i.test(h.modulo);
+    /** '' en el historial = sin regla: la persona tiene lo de su área; el área, sin acceso (en una sección: hereda;
+     *  en una asignación de perfil: sin asignar) */
     const textoHistorial = (valor, dePersona, modulo) => (valor ? PERM_TEXTO[valor]
-      : (dePersona ? 'Lo de su área' : padreDe(modulo) ? PERM_TEXTO.HEREDA : PERM_TEXTO.NINGUNO));
+      : (/^perfil:/i.test(modulo) ? 'Sin asignar' : dePersona ? 'Lo de su área' : padreDe(modulo) ? PERM_TEXTO.HEREDA : PERM_TEXTO.NINGUNO));
     const chipHistorial = (valor, dePersona, modulo) => (valor ? nivel(valor)
-      : dePersona ? '<span class="usr-origen area">' + ico('users') + ' Lo de su área</span>'
-        : padreDe(modulo) ? '<span class="usr-origen area">' + ico('corner-down-right') + ' Hereda</span>' : nivel('NINGUNO'));
+      : /^perfil:/i.test(modulo) ? '<span class="usr-origen area">' + ico('square') + ' Sin asignar</span>'
+        : dePersona ? '<span class="usr-origen area">' + ico('users') + ' Lo de su área</span>'
+          : padreDe(modulo) ? '<span class="usr-origen area">' + ico('corner-down-right') + ' Hereda</span>' : nivel('NINGUNO'));
     const cambioHistorial = (h) => '<span class="usr-historial-cambio">' + chipHistorial(h.antes, esDePersona(h), h.modulo) + ico('arrow-right') +
       chipHistorial(h.despues, esDePersona(h), h.modulo) + '</span>';
     const fechaHora = (iso) => (iso ? formatearFecha(iso) + ' ' + new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—');
-    const historialDe = (quien) => datos.historial.filter((h) => normal(h.quien) === normal(quien));
+    /** Lo de ese área, correo o perfil; de un perfil, también sus asignaciones (que se anotan con el área) */
+    const historialDe = (quien) => datos.historial.filter((h) => normal(h.quien) === normal(quien) ||
+      (/^perfil:/i.test(quien) && normal(h.modulo) === normal(quien)));
 
     function pestanaHistorial(quien) {
       const lista = historialDe(quien);
@@ -218,7 +279,7 @@
 
     function migas() {
       const anterior = pila.length ? pila[pila.length - 1] : null;
-      const texto = anterior ? (anterior.tipo === 'area' ? anterior.id : ((persona(anterior.id) || {}).nombre || anterior.id)) : 'Usuarios y permisos';
+      const texto = anterior ? (anterior.tipo === 'persona' ? ((persona(anterior.id) || {}).nombre || anterior.id) : anterior.id) : 'Usuarios y permisos';
       return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-usr-volver>' + ico('chevron-left') + ' Volver</button>' +
         '<span>' + escaparHtml(texto) + '</span></div>';
     }
@@ -248,11 +309,14 @@
         '<div class="ln-detalle-botones">' + (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') + '</div>' +
         '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(d[1]) + '</dd></div>').join('') + '</dl></div>';
 
-      // En una línea: cuánto le viene de su área y cuánto es solo suyo
+      // En una línea: cuánto le viene de su área (y sus perfiles) y cuánto es solo suyo
       const porSuArea = modulos().filter((m) => regla(p.correo, m.id) === undefined && deArea(p.area, m.id) !== 'NINGUNO').length;
       const excepciones = excepcionesDe(p).length;
+      const susPerfiles = perfilesDe(p.area).map((k) => perfilesPorClave[k].nombre);
       const herencia = total ? '' : '<p class="usr-herencia">' + ico('users') + '<span>' +
-        (p.area ? 'Su área <b>' + escaparHtml(p.area) + '</b> le da ' + plural(porSuArea, 'módulo', 'módulos') : 'Sin área en USUARIOS') +
+        (p.area ? 'Su área <b>' + escaparHtml(p.area) + '</b>' + (susPerfiles.length ? ' (perfiles: ' + susPerfiles.map((n) =>
+          '<button type="button" class="usr-enlace" data-usr-perfil="' + escaparHtml(n) + '">' + escaparHtml(n) + '</button>').join(', ') + ')' : '') +
+          ' le da ' + plural(porSuArea, 'módulo', 'módulos') : 'Sin área en USUARIOS') +
         (excepciones ? ' · más ' + plural(excepciones, 'excepción propia', 'excepciones propias') : ' · sin excepciones') + '</span></p>';
 
       const permisos = (aviso ? '<div class="usr-aviso">' + ico(aviso[0]) + '<div>' + aviso[1] + '</div></div>' : '') + herencia +
@@ -260,18 +324,23 @@
           (m) => efectivo(p, m.id) !== 'NINGUNO' || regla(p.correo, m.id) !== undefined,
           (m) => {
             const propio = total ? undefined : regla(p.correo, m.id);
+            const reglaArea = p.area ? regla(p.area, m.id) : undefined;
+            const porPerfil = perfilesQueDan(perfilesDe(p.area), m.id);
             let origen;
             if (total) origen = '<span class="usr-origen rol">' + ico('shield-check') + ' Por su rol ' + escaparHtml(p.rol) + '</span>';
             else if (propio !== undefined) {
               origen = '<span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>' +
                 (p.area ? '<span>su área: ' + PERM_TEXTO[deArea(p.area, m.id)] + '</span>' : '');
-            } else if (m.padre && (!p.area || regla(p.area, m.id) === undefined)) {
+            } else if (reglaArea !== undefined) origen = '<span class="usr-origen area">' + ico('users') + ' Por su área</span>';
+            else if (porPerfil.length) origen = '<span class="usr-origen area">' + ico('layers') + ' Por su perfil ' + escaparHtml(porPerfil.join(', ')) + '</span>';
+            else if (m.padre) {
               origen = '<span class="usr-origen area">' + ico('corner-down-right') + ' ' + (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>';
-            } else if (deArea(p.area, m.id) !== 'NINGUNO' || m.padre) origen = '<span class="usr-origen area">' + ico('users') + ' Por su área</span>';
+            }
             return renglon(m, efectivo(p, m.id), origen, propio !== undefined);
           },
           (id) => efectivo(p, id),
-          (id) => !total && (regla(p.correo, id) !== undefined || (!!p.area && regla(p.area, id) !== undefined))) +
+          (id) => !total && (regla(p.correo, id) !== undefined || (!!p.area && regla(p.area, id) !== undefined) ||
+            perfilesDe(p.area).some((k) => reglaPerfil(k, id) !== undefined))) +
         tarjetaImplicaciones(implicaciones((id) => efectivo(p, id)));
 
       const datosHoja = '<div class="card ln-card"><h3>' + ico('id-card') + ' Datos en USUARIOS</h3><div class="info-grid">' +
@@ -301,7 +370,14 @@
         '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button></div>' +
         '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
 
-      const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo que tenga el área lo reciben todas sus personas, salvo quien tenga una excepción en ese módulo. ADMIN y SUPER tienen todo por su rol.</div></div>' +
+      const susPerfiles = perfilesDe(a.nombre).map((k) => perfilesPorClave[k].nombre);
+      const tarjetaPerfiles = '<div class="card ln-card usr-perfiles-area"><h3>' + ico('layers') + ' Perfiles' +
+        '<button type="button" class="secondary usr-btn-chico" data-usr-asignar>' + ico('pencil') + ' Asignar perfiles</button></h3>' +
+        (susPerfiles.length ? '<div class="usr-chips-perfil">' + susPerfiles.map((n) => '<button type="button" class="usr-chip-perfil" data-usr-perfil="' +
+          escaparHtml(n) + '">' + ico('layers') + ' ' + escaparHtml(n) + '</button>').join('') + '</div>'
+          : '<p class="ln-tenue" style="margin:0">Sin perfiles: solo sus reglas propias.</p>') + '</div>';
+      const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo que tenga el área (sus perfiles y sus reglas propias, que mandan sobre los perfiles) lo reciben todas sus personas, salvo quien tenga una excepción en ese módulo. ADMIN y SUPER tienen todo por su rol.</div></div>' +
+        tarjetaPerfiles +
         listaDePermisos(
           (m) => deArea(a.nombre, m.id) !== 'NINGUNO',
           (m) => {
@@ -310,12 +386,15 @@
               ? '<button type="button" class="usr-enlace" data-usr-persona="' + escaparHtml(conExc[0].correo) + '" title="' +
                 escaparHtml(conExc.map((p) => (p.nombre || p.correo) + ': ' + PERM_TEXTO[regla(p.correo, m.id)]).join('\n')) + '">' +
                 ico('sparkles') + ' ' + (conExc.length === 1 ? escaparHtml(conExc[0].nombre || conExc[0].correo) + ' tiene una excepción' : conExc.length + ' personas con excepción') + '</button>'
-              : (m.padre && regla(a.nombre, m.id) === undefined ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
-                (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>' : '');
+              : regla(a.nombre, m.id) !== undefined ? (susPerfiles.length ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' Regla del área</span>' : '')
+                : perfilesQueDan(perfilesDe(a.nombre), m.id).length
+                  ? '<span class="usr-origen area">' + ico('layers') + ' Por su perfil ' + escaparHtml(perfilesQueDan(perfilesDe(a.nombre), m.id).join(', ')) + '</span>'
+                  : (m.padre ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
+                    (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>' : '');
             return renglon(m, deArea(a.nombre, m.id), origen, false);
           },
           (id) => deArea(a.nombre, id),
-          (id) => regla(a.nombre, id) !== undefined ||
+          (id) => regla(a.nombre, id) !== undefined || perfilesDe(a.nombre).some((k) => reglaPerfil(k, id) !== undefined) ||
             activas.some((p) => !tieneTotal(p) && regla(p.correo, id) !== undefined)) +
         tarjetaImplicaciones(implicaciones((id) => deArea(a.nombre, id)));
 
@@ -335,6 +414,48 @@
       ]);
     }
 
+    // ---------------------------------------------------------------- ficha de perfil
+    function fichaPerfil(pf) {
+      const k = normal(pf.nombre);
+      const areas = pf.areas.map((n) => area(n) || { nombre: n });
+      const gente = datos.personas.filter((p) => p.activo && pf.areas.some((a) => normal(a) === normal(p.area)));
+      const cuenta = (v) => modulos().filter((m) => dePerfil(k, m.id) === v).length;
+      const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
+        ['Lo reciben', plural(gente.length, 'persona activa', 'personas activas')]];
+      let html = migas() + '<div class="ln-detalle-header card">' +
+        '<div class="ln-detalle-icono"><i data-lucide="layers" class="ico ln-icon"></i></div>' +
+        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(pf.nombre) + '</h2><div class="ln-chips">' +
+        '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span></div></div>' +
+        '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
+        '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
+        '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button></div>' +
+        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
+
+      const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo reciben todas las áreas que tienen este perfil (y sus personas). Si un área tiene varios perfiles, gana el más alto; lo que el área o la persona tengan como regla propia manda sobre el perfil.</div></div>' +
+        listaDePermisos(
+          (m) => dePerfil(k, m.id) !== 'NINGUNO',
+          (m) => renglon(m, dePerfil(k, m.id), m.padre && reglaPerfil(k, m.id) === undefined ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
+            (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>' : '', false),
+          (id) => dePerfil(k, id),
+          (id) => reglaPerfil(k, id) !== undefined) +
+        tarjetaImplicaciones(implicaciones((id) => dePerfil(k, id)));
+
+      const listaAreas = '<div class="card ln-card"><h3>' + ico('users') + ' Áreas con este perfil' +
+        '<button type="button" class="secondary usr-btn-chico" data-usr-asignar>' + ico('pencil') + ' Cambiar</button></h3>' + (areas.length
+        ? tablaFicha([
+          { t: 'Área', r: (a) => '<button type="button" class="usr-enlace" data-usr-area="' + escaparHtml(a.nombre) + '">' + escaparHtml(a.nombre) + '</button>' },
+          { t: 'Personas activas', r: (a) => String(delArea(a.nombre).filter((p) => p.activo).length) },
+          { t: 'Otros perfiles', r: (a) => escaparHtml(perfilesDe(a.nombre).filter((x) => x !== k).map((x) => perfilesPorClave[x].nombre).join(', ') || '—') },
+        ], areas)
+        : '<p class="empty-state">Ninguna área tiene este perfil todavía.</p>') + '</div>';
+
+      return html + fichaEnPestanas([
+        { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
+        { id: 'areas', titulo: 'Áreas', icono: 'users', contenido: listaAreas, num: areas.length },
+        pestanaHistorial(quienPerfil(pf.nombre)),
+      ]);
+    }
+
     // ---------------------------------------------------------------- abrir / cerrar fichas
     function pintarFicha() {
       const detalle = $('usr-detalle');
@@ -345,7 +466,9 @@
         tablaActiva().ajustarAlto();
         return;
       }
-      const html = fichaActual.tipo === 'area' ? fichaArea(area(fichaActual.id) || { nombre: fichaActual.id, personas: 0 }) : fichaPersona(persona(fichaActual.id));
+      if (fichaActual.tipo === 'perfil' && !perfil(fichaActual.id)) { fichaActual = pila.pop() || null; pintarFicha(); return; }   // se eliminó
+      const html = fichaActual.tipo === 'area' ? fichaArea(area(fichaActual.id) || { nombre: fichaActual.id, personas: 0 })
+        : fichaActual.tipo === 'perfil' ? fichaPerfil(perfil(fichaActual.id)) : fichaPersona(persona(fichaActual.id));
       $('usr-listado').hidden = true;
       detalle.hidden = false;
       detalle.innerHTML = html;
@@ -367,64 +490,66 @@
 
     // ---------------------------------------------------------------- ventana "Editar permisos"
     /**
-     * Un renglón por módulo con tres botones (Sin acceso · Ver · Editar), todos a la vista. En
-     * una persona, el botón que coincide con lo de su área lleva un punto: elegirlo es heredar
-     * (valor ''), cualquier otro es una excepción solo suya (dorada, con ↺ para volver a lo del
-     * área). Arriba de cada grupo, "Todo el grupo" pone el mismo nivel a todos sus módulos.
-     * Abajo, lo que implica lo elegido fuera de las pantallas (implicaciones), en vivo.
+     * Un renglón por módulo con tres botones (Sin acceso · Ver · Editar), todos a la vista. El botón con punto es lo
+     * que tendría sin regla propia (en una persona, lo de su área; en un área, lo de sus perfiles): elegirlo es no
+     * tener regla (valor ''); cualquier otro es una regla propia (dorada, con ↺ para quitarla). Arriba de cada grupo,
+     * "Todo el grupo" pone el mismo nivel a todos sus módulos. Cada módulo tiene sus secciones plegadas debajo, con un
+     * botón más: Hereda. Abajo, lo que implica lo elegido fuera de las pantallas (implicaciones), en vivo.
      *
-     * edicion = { tipo, id, p (la persona o null), iniciales: {nodo: valor}, valores: {nodo: valor}, abiertos: {modulo: true} }
-     * valor: persona → '' (lo de su área / lo que hereda) o el nivel de la excepción; área → el nivel
-     * (en un módulo, NINGUNO es "sin regla"; en una sección, '' es "hereda" y NINGUNO la corta).
-     * Cada módulo tiene sus secciones plegadas debajo ("Secciones"), con un botón más: Hereda.
+     * edicion = { tipo: 'persona' | 'area' | 'perfil', id, p (la persona o null), nombre / original (el perfil),
+     *   iniciales: {nodo: valor}, valores: {nodo: valor}, abiertos: {modulo: true} }; valor = la regla propia o ''.
+     * La misma ventana asigna perfiles: { tipo: 'asignar', de: 'area' | 'perfil', id, iniciales/valores: {clave: bool} }.
      */
     let edicion = null;
 
-    /** Lo que tendría un nodo sin regla propia en la ventana (lo de su área, o lo que hereda de su módulo) */
+    /** Las capas y los perfiles con los que se resuelve en la ventana (como resolvedor), sin la regla de `sin` */
+    function capasVentana(sin) {
+      const propia = (x) => (x === sin || edicion.valores[x] === '' || edicion.valores[x] === undefined ? undefined : edicion.valores[x]);
+      if (edicion.tipo === 'persona') {
+        const p = edicion.p;
+        return { capas: [propia, (x) => (p.area ? regla(p.area, x) : undefined)], perfiles: perfilesDe(p.area), tope: soloConsulta(p) };
+      }
+      return { capas: [propia], perfiles: edicion.tipo === 'area' ? perfilesDe(edicion.id) : [], tope: false };
+    }
+    /** Lo que tendría un nodo sin regla propia en la ventana (lo de su área o sus perfiles, o lo que hereda) */
     function heredadoDe(id) {
-      const n = nodo(id);
-      const delArea = edicion.p && edicion.p.area ? regla(edicion.p.area, id) : undefined;
-      if (!n || !n.padre) return edicion.p ? (delArea || 'NINGUNO') : 'NINGUNO';
-      const delPadre = nivelEnVentana(n.padre);
-      return tope(delArea !== undefined ? delArea : (n.hereda === false ? 'NINGUNO' : delPadre), delPadre);
+      const c = capasVentana(id);
+      return resolvedor(c.capas, c.perfiles, c.tope)(id);
     }
     /** El nivel que queda en la ventana; a VIEWER, Editar se le queda en Ver (como en efectivo) */
     function nivelEnVentana(id) {
-      const v = edicion.valores[id];
-      const n = nodo(id);
-      let nivel = v === '' || v === undefined ? heredadoDe(id) : v;
-      if (n && n.padre) nivel = tope(nivel, nivelEnVentana(n.padre));
-      return edicion.p && soloConsulta(edicion.p) && nivel === 'EDICION' ? 'LECTURA' : nivel;
+      const c = capasVentana(null);
+      return resolvedor(c.capas, c.perfiles, c.tope)(id);
     }
-    /** Elegir un nivel: el mismo que ya tendría sin regla (de su área o heredado) no es regla propia */
+    /** Elegir un nivel: el mismo que ya tendría sin regla (de su área, sus perfiles o heredado) no es regla propia */
     function elegir(id, nivel) {
-      if (nivel === 'HEREDA') { edicion.valores[id] = ''; return; }
-      const sinRegla = heredadoDe(id);
-      if (padreDe(id)) edicion.valores[id] = nivel === sinRegla && edicion.p ? '' : nivel;
-      else edicion.valores[id] = edicion.p && nivel === sinRegla ? '' : nivel;
+      edicion.valores[id] = nivel === 'HEREDA' || nivel === heredadoDe(id) ? '' : nivel;
     }
+    const textoSinRegla = () => (edicion.tipo === 'persona' ? 'Lo que le da su área' : edicion.tipo === 'area' ? 'Lo que le dan sus perfiles' : 'Sin regla');
 
     function segmento(actual, heredado, atributos, conHereda) {
       return '<div class="usr-segmento" role="radiogroup" ' + atributos + '>' + (conHereda ? ['HEREDA'] : []).concat(NIVELES).map((n) =>
         '<button type="button" role="radio" aria-checked="' + (n === actual) + '" data-nivel="' + n + '"' +
         ' class="usr-op ' + n + (n === actual ? ' activa' : '') + (n === heredado ? ' heredada' : '') + '"' +
-        (n === heredado ? ' title="' + (conHereda ? 'Lo que tendría sin regla propia' : 'Lo que le da su área') + '"' : '') + '>' + PERM_TEXTO[n] + '</button>').join('') + '</div>';
+        (n === heredado ? ' title="' + (conHereda ? 'Lo que tendría sin regla propia' : textoSinRegla()) + '"' : '') + '>' + PERM_TEXTO[n] + '</button>').join('') + '</div>';
     }
 
     function filaModulo(m) {
       const v = edicion.valores[m.id];
-      const excepcion = !!edicion.p && v !== '';
+      const propia = v !== '';
       const secs = seccionesDe(m);
       const propias = secs.filter((s) => edicion.valores[s.id] !== '').length;
-      return '<div class="usr-editar-fila' + (v !== edicion.iniciales[m.id] ? ' cambiada' : '') + (excepcion ? ' excepcion' : '') + '" data-modulo="' + m.id + '">' +
+      // Sin perfiles ni área de por medio (un área sin perfiles, un perfil), el punto no aporta: es Sin acceso
+      const conPunto = edicion.tipo === 'persona' || (edicion.tipo === 'area' && perfilesDe(edicion.id).length);
+      return '<div class="usr-editar-fila' + (v !== edicion.iniciales[m.id] ? ' cambiada' : '') + (propia && conPunto ? ' excepcion' : '') + '" data-modulo="' + m.id + '">' +
         ico(iconoModulo(m.id)) +
         '<span class="usr-editar-nombre">' + escaparHtml(m.etiqueta) +
         (secs.length ? ' <button type="button" class="usr-secciones-btn" data-usr-secciones="' + m.id + '" aria-expanded="' + !!edicion.abiertos[m.id] + '">' +
           ico(edicion.abiertos[m.id] ? 'chevron-down' : 'chevron-right') + plural(secs.length, 'sección', 'secciones') +
           (propias ? ' · ' + plural(propias, 'propia', 'propias') : '') + '</button>' : '') + '</span>' +
-        (edicion.p ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + m.id + '" title="Volver a lo de su área"' +
-          ' aria-label="Volver a lo de su área"' + (excepcion ? '' : ' hidden') + '>' + ico('rotate-ccw') + '</button>' : '') +
-        segmento(nivelEnVentana(m.id), edicion.p ? heredadoDe(m.id) : null, 'aria-label="' + escaparHtml(m.etiqueta) + '"') +
+        (conPunto ? '<button type="button" class="usr-restablecer" data-usr-restablecer="' + m.id + '" title="Quitar su regla: ' + textoSinRegla().toLowerCase() + '"' +
+          ' aria-label="Quitar su regla"' + (propia ? '' : ' hidden') + '>' + ico('rotate-ccw') + '</button>' : '') +
+        segmento(nivelEnVentana(m.id), conPunto ? heredadoDe(m.id) : null, 'aria-label="' + escaparHtml(m.etiqueta) + '"') +
         '</div>' + (edicion.abiertos[m.id] ? secs.map((s) => filaSeccion(m, s)).join('') : '');
     }
 
@@ -450,66 +575,148 @@
         segmento(todos, null, 'data-usr-grupo="' + g.id + '" aria-label="Todo ' + escaparHtml(g.etiqueta) + '"') + '</div>';
     }
 
+    /** Asignar perfiles a un área (o áreas a un perfil): una casilla por cada uno */
+    function cuerpoAsignar() {
+      const items = edicion.de === 'area'
+        ? datos.perfiles.map((pf) => ({ clave: normal(pf.nombre), etiqueta: pf.nombre, detalle: plural(pf.reglas.length, 'regla', 'reglas') }))
+        : datos.areas.map((a) => ({ clave: normal(a.nombre), etiqueta: a.nombre, detalle: plural(delArea(a.nombre).filter((p) => p.activo).length, 'persona activa', 'personas activas') }));
+      if (!items.length) return '<p class="empty-state">' + (edicion.de === 'area' ? 'Todavía no hay perfiles: créalos en la pestaña Perfiles.' : 'Nadie tiene área en USUARIOS.') + '</p>';
+      return '<div class="usr-asignar-lista">' + items.map((it) => {
+        const on = !!edicion.valores[it.clave];
+        return '<button type="button" class="usr-asignar' + (on ? ' activa' : '') + (on !== !!edicion.iniciales[it.clave] ? ' cambiada' : '') +
+          '" data-usr-asignar-item="' + escaparHtml(it.clave) + '" aria-pressed="' + on + '">' + ico(on ? 'square-check' : 'square') +
+          '<span class="usr-asignar-nombre">' + escaparHtml(it.etiqueta) + '</span><span class="usr-asignar-detalle">' + escaparHtml(it.detalle) + '</span></button>';
+      }).join('') + '</div>';
+    }
+
     function pintarVentana() {
       const cuerpo = $('usr-modal-cuerpo');
       const scroll = cuerpo.scrollTop;
-      cuerpo.innerHTML = datos.grupos.map((g) => filaGrupo(g) + '<div class="usr-editar-lista">' + g.modulos.map(filaModulo).join('') + '</div>').join('') +
-        tarjetaImplicaciones(implicaciones(nivelEnVentana));
+      if (edicion.tipo === 'asignar') cuerpo.innerHTML = cuerpoAsignar();
+      else {
+        cuerpo.innerHTML = (edicion.tipo === 'perfil'
+          ? '<label class="usr-perfil-nombre">Nombre del perfil <input type="text" id="usr-perfil-nombre" maxlength="60" autocomplete="off" value="' +
+            escaparHtml(edicion.nombre) + '" placeholder="P. ej. Flotilla - consulta"></label>' : '') +
+          datos.grupos.map((g) => filaGrupo(g) + '<div class="usr-editar-lista">' + g.modulos.map(filaModulo).join('') + '</div>').join('') +
+          tarjetaImplicaciones(implicaciones(nivelEnVentana));
+      }
       cuerpo.scrollTop = scroll;
-      const n = cambiosDeLaVentana().length;
-      $('usr-modal-guardar').disabled = !n;
-      $('usr-modal-cuenta').textContent = n ? plural(n, 'cambio sin guardar', 'cambios sin guardar') : 'Sin cambios';
+      pintarPieVentana();
       refreshIcons();
+    }
+    function pintarPieVentana() {
+      const n = cambiosDeLaVentana().length;
+      const sinNombre = edicion.tipo === 'perfil' && !String(edicion.nombre || '').trim();
+      const repetido = edicion.tipo === 'perfil' && !sinNombre && perfil(edicion.nombre) && normal(edicion.nombre) !== normal(edicion.original || '');
+      $('usr-modal-guardar').disabled = !n || sinNombre || !!repetido;
+      $('usr-modal-cuenta').textContent = sinNombre ? 'Ponle un nombre al perfil' : repetido ? 'Ya hay un perfil con ese nombre'
+        : n ? plural(n, 'cambio sin guardar', 'cambios sin guardar') : 'Sin cambios';
     }
 
     function abrirEditar(tipo, id) {
       const p = tipo === 'persona' ? persona(id) : null;
       if (p && tieneTotal(p)) return;
-      edicion = { tipo: tipo, id: id, p: p, iniciales: {}, valores: {}, abiertos: {} };
+      const pf = tipo === 'perfil' && id ? perfil(id) : null;
+      edicion = { tipo: tipo, id: id, p: p, nombre: pf ? pf.nombre : '', original: pf ? pf.nombre : null, iniciales: {}, valores: {}, abiertos: {} };
       nodos().forEach((m) => {
         let valor;
         if (p) {
+          // Una excepción igual a lo que ya le da su área (o sus perfiles) no dice nada: se enseña como sin regla
           const propio = regla(p.correo, m.id);
           valor = propio === undefined || (!m.padre && propio === deArea(p.area, m.id)) ? '' : propio;
+        } else if (tipo === 'perfil') {
+          valor = pf ? reglaPerfil(normal(pf.nombre), m.id) || '' : '';
         } else {
-          // Un módulo, su nivel; una sección, su regla o '' (hereda)
-          valor = m.padre ? (regla(id, m.id) || '') : deArea(id, m.id);
+          valor = regla(id, m.id) || '';
+          // Sin perfiles, Sin acceso en un módulo es lo mismo que no tener regla
+          if (valor === 'NINGUNO' && !m.padre && !perfilesDe(id).length) valor = '';
         }
         edicion.iniciales[m.id] = valor;
         edicion.valores[m.id] = valor;
         // Se abren solas las secciones de un módulo que ya tiene alguna con regla propia
         if (m.padre && valor !== '') edicion.abiertos[m.padre] = true;
       });
-      $('usr-modal-sub').textContent = p ? (p.nombre || p.correo) + (p.area ? ' · área ' + p.area : ' · sin área') : 'Área ' + id;
+      $('usr-modal-titulo').textContent = tipo === 'perfil' ? (pf ? 'Editar perfil' : 'Nuevo perfil') : 'Editar permisos';
+      $('usr-modal-sub').textContent = p ? (p.nombre || p.correo) + (p.area ? ' · área ' + p.area : ' · sin área')
+        : tipo === 'perfil' ? (pf ? 'Perfil ' + pf.nombre + ' · ' + plural(pf.areas.length, 'área', 'áreas') : 'Un paquete de permisos con nombre que se asigna a áreas')
+          : 'Área ' + id + (perfilesDe(id).length ? ' · perfiles: ' + perfilesDe(id).map((k) => perfilesPorClave[k].nombre).join(', ') : '');
       $('usr-modal-regla').textContent = p
         ? 'El botón con punto es lo que le da su área: si lo dejas así, cambia cuando cambie su área. Cualquier otro queda como excepción solo para esta persona.' +
           (soloConsulta(p) ? ' Su rol ' + p.rol + ' solo deja ver: Editar se le queda en Ver.' : '')
-        : 'Aplica a todas las personas del área, salvo quien tenga una excepción en ese módulo.';
-      $('usr-modal-leyenda').innerHTML = p
-        ? '<span class="usr-leyenda-punto">Lo que le da su área</span><span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>' +
-          '<span>' + ico('rotate-ccw') + ' Volver a lo del área</span>'
+        : tipo === 'perfil' ? 'Lo reciben todas las áreas que tienen este perfil (y sus personas), salvo lo que el área o la persona tengan como regla propia.'
+          : perfilesDe(id).length ? 'El botón con punto es lo que le dan sus perfiles. Otro nivel queda como regla propia del área, para todas sus personas salvo quien tenga una excepción.'
+            : 'Aplica a todas las personas del área, salvo quien tenga una excepción en ese módulo.';
+      const conPunto = p || (tipo === 'area' && perfilesDe(id).length);
+      $('usr-modal-leyenda').innerHTML = conPunto
+        ? '<span class="usr-leyenda-punto">' + textoSinRegla() + '</span><span class="usr-origen excepcion">' + ico('sparkles') + (p ? ' Excepción' : ' Regla del área') + '</span>' +
+          '<span>' + ico('rotate-ccw') + ' Quitar la regla</span>'
         : '';
       $('usr-modal-cuerpo').scrollTop = 0;
       pintarVentana();
       $('usr-modal').hidden = false;
-      const primero = $('usr-modal-cuerpo').querySelector('.usr-op.activa');
+      const primero = $('usr-modal-cuerpo').querySelector(tipo === 'perfil' && !pf ? '#usr-perfil-nombre' : '.usr-op.activa');
       if (primero) primero.focus();
     }
 
-    function cambiosDeLaVentana() {
-      return Object.keys(edicion.valores)
-        .filter((m) => edicion.valores[m] !== edicion.iniciales[m])
-        .map((m) => {
-          const v = edicion.valores[m];
-          return edicion.tipo === 'persona'
-            ? { quien: edicion.p.correo, modulo: m, permiso: v || null }
-            // En un módulo de un área, Sin acceso es "sin regla"; en una sección, '' es hereda y NINGUNO se guarda
-            : { quien: edicion.id, modulo: m, permiso: padreDe(m) ? (v || null) : (v === 'NINGUNO' ? null : v) };
-        });
+    /** La ventana para asignar perfiles a un área (de: 'area') o áreas a un perfil (de: 'perfil') */
+    function abrirAsignar(de, id) {
+      edicion = { tipo: 'asignar', de: de, id: id, iniciales: {}, valores: {} };
+      if (de === 'area') perfilesDe(id).forEach((k) => { edicion.iniciales[k] = true; });
+      else (perfil(id) || { areas: [] }).areas.forEach((a) => { edicion.iniciales[normal(a)] = true; });
+      edicion.valores = Object.assign({}, edicion.iniciales);
+      $('usr-modal-titulo').textContent = de === 'area' ? 'Perfiles del área' : 'Áreas con este perfil';
+      $('usr-modal-sub').textContent = de === 'area' ? 'Área ' + id : 'Perfil ' + id;
+      $('usr-modal-regla').textContent = de === 'area'
+        ? 'Sus personas reciben lo de cada perfil marcado (si dos dan distinto, el más alto), salvo lo que el área o la persona tengan como regla propia.'
+        : 'Cada área marcada recibe lo de este perfil, salvo lo que el área o sus personas tengan como regla propia.';
+      $('usr-modal-leyenda').innerHTML = '';
+      $('usr-modal-cuerpo').scrollTop = 0;
+      pintarVentana();
+      $('usr-modal').hidden = false;
     }
 
-    /** Un clic en la ventana: un nivel de un módulo, el de todo un grupo, o volver a lo del área */
+    function cambiosDeLaVentana() {
+      if (edicion.tipo === 'asignar') {
+        return Object.keys(Object.assign({}, edicion.iniciales, edicion.valores))
+          .filter((k) => !!edicion.valores[k] !== !!edicion.iniciales[k])
+          .map((k) => {
+            const asignado = edicion.valores[k] ? 'ASIGNADO' : null;
+            return edicion.de === 'area'
+              ? { quien: edicion.id, modulo: quienPerfil(perfilesPorClave[k].nombre), permiso: asignado }
+              : { quien: (area(k) || { nombre: k }).nombre, modulo: quienPerfil(edicion.id), permiso: asignado };
+          });
+      }
+      if (edicion.tipo === 'perfil') {
+        const nombre = String(edicion.nombre || '').trim();
+        if (!nombre) return [];
+        const renombrado = edicion.original && normal(edicion.original) !== normal(nombre);
+        if (!renombrado) {
+          return Object.keys(edicion.valores).filter((m) => edicion.valores[m] !== edicion.iniciales[m])
+            .map((m) => ({ quien: quienPerfil(edicion.original || nombre), modulo: m, permiso: edicion.valores[m] || null }));
+        }
+        // Renombrar: sus reglas y sus asignaciones pasan al nombre nuevo
+        const viejo = edicion.original;
+        return Object.keys(edicion.iniciales).filter((m) => edicion.iniciales[m] !== '').map((m) => ({ quien: quienPerfil(viejo), modulo: m, permiso: null }))
+          .concat(Object.keys(edicion.valores).filter((m) => edicion.valores[m] !== '').map((m) => ({ quien: quienPerfil(nombre), modulo: m, permiso: edicion.valores[m] })))
+          .concat(...(perfil(viejo) || { areas: [] }).areas.map((a) => [
+            { quien: a, modulo: quienPerfil(viejo), permiso: null }, { quien: a, modulo: quienPerfil(nombre), permiso: 'ASIGNADO' }]));
+      }
+      return Object.keys(edicion.valores)
+        .filter((m) => edicion.valores[m] !== edicion.iniciales[m])
+        .map((m) => ({ quien: edicion.tipo === 'persona' ? edicion.p.correo : edicion.id, modulo: m, permiso: edicion.valores[m] || null }));
+    }
+
+    /** Un clic en la ventana: un nivel de un módulo, el de todo un grupo, quitar una regla o (asignar) una casilla */
     function alClicVentana(ev) {
+      const casilla = ev.target.closest('[data-usr-asignar-item]');
+      if (casilla) {
+        const k = casilla.dataset.usrAsignarItem;
+        edicion.valores[k] = !edicion.valores[k];
+        pintarVentana();
+        const el = $('usr-modal-cuerpo').querySelector('[data-usr-asignar-item="' + CSS.escape(k) + '"]');
+        if (el) el.focus();
+        return;
+      }
       const plegar = ev.target.closest('[data-usr-secciones]');
       if (plegar) {
         const m = plegar.dataset.usrSecciones;
@@ -532,8 +739,8 @@
         if (grupo) {
           // Todo el grupo: el nivel en cada módulo, y sus secciones vuelven a heredar
           (datos.grupos.find((g) => g.id === grupo.dataset.usrGrupo) || { modulos: [] }).modulos.forEach((m) => {
-            elegir(m.id, nivel);
             seccionesDe(m).forEach((s) => { edicion.valores[s.id] = ''; });
+            elegir(m.id, nivel);
           });
           enfocar = '[data-usr-grupo="' + grupo.dataset.usrGrupo + '"] [data-nivel="' + nivel + '"]';
         } else {
@@ -552,66 +759,110 @@
       edicion = null;
     }
 
+    /** Manda cambios a apiPermisosGuardar y vuelve a pintar todo con lo que regresa (el panel completo) */
+    async function guardarCambios(cambios, alTerminar) {
+      toastCargando('Guardando permisos…');
+      cargar(await callServer('apiPermisosGuardar', state.token, cambios));
+      if (alTerminar) alTerminar();
+      refrescarListado();
+      pintarFicha();
+      toastExito('Permisos guardados: ' + plural(cambios.length, 'cambio', 'cambios'));
+      // Si alguien se cambió a sí mismo, su menú se pone al día
+      callServer('apiMisPermisos', state.token).then((info) => { state.permisos = (info && info.permisos) || {}; renderNavGrupos(); }).catch(() => {});
+    }
+
     async function guardarEdicion() {
       const cambios = cambiosDeLaVentana();
       if (!cambios.length) return;
       const boton = $('usr-modal-guardar');
       boton.disabled = true;
-      toastCargando('Guardando permisos…');
+      // Un perfil renombrado o nuevo: su ficha sigue abierta con el nombre que quedó
+      const nombrePerfil = edicion.tipo === 'perfil' ? String(edicion.nombre).trim() : null;
       try {
-        cargar(await callServer('apiPermisosGuardar', state.token, cambios));
-        cerrarEditar();
-        refrescarListado();
-        pintarFicha();
-        toastExito('Permisos guardados: ' + plural(cambios.length, 'cambio', 'cambios'));
-        // Si alguien se cambió a sí mismo, su menú se pone al día
-        callServer('apiMisPermisos', state.token).then((info) => { state.permisos = (info && info.permisos) || {}; renderNavGrupos(); }).catch(() => {});
+        await guardarCambios(cambios, () => {
+          cerrarEditar();
+          if (nombrePerfil && fichaActual && fichaActual.tipo === 'perfil') fichaActual.id = nombrePerfil;
+        });
       } catch (err) {
         toastError('No se guardaron: ' + err.message);
         boton.disabled = false;
       }
     }
 
-    // ---------------------------------------------------------------- matriz por área
+    /** Eliminar un perfil: sus reglas y sus asignaciones (las áreas se quedan con sus reglas propias) */
+    async function eliminarPerfil(nombre) {
+      const pf = perfil(nombre);
+      if (!pf) return;
+      const ok = await Confirmar.pedir({
+        titulo: '¿Eliminar el perfil ' + pf.nombre + '?',
+        mensaje: pf.areas.length ? 'Estas áreas dejan de recibir lo que da (se quedan con sus reglas propias):' : 'No está asignado a ninguna área.',
+        detalle: pf.areas, textoConfirmar: 'Eliminar perfil', peligro: true,
+      });
+      if (!ok) return;
+      const cambios = Object.keys(pf.reglas).map((m) => ({ quien: quienPerfil(pf.nombre), modulo: m, permiso: null }))
+        .concat(pf.areas.map((a) => ({ quien: a, modulo: quienPerfil(pf.nombre), permiso: null })));
+      try {
+        await guardarCambios(cambios, () => { if (fichaActual && fichaActual.tipo === 'perfil') fichaActual = pila.pop() || null; });
+      } catch (err) {
+        toastError('No se eliminó: ' + err.message);
+      }
+    }
+
+    // ---------------------------------------------------------------- matriz por área / por perfil
     /**
-     * Módulos (renglones, por grupo) contra áreas (columnas). Un clic en una celda pasa al
-     * siguiente nivel (Sin acceso → Ver → Editar → Sin acceso); nada se guarda hasta "Guardar",
-     * que manda todos los cambios juntos. Solo cambia lo del área: las excepciones de cada
-     * persona se respetan (la celda lleva un punto dorado si alguien del área tiene una).
+     * Módulos y secciones (renglones, por grupo) contra áreas o perfiles (columnas; "Por área" / "Por perfil"). Un
+     * clic en una celda pasa al siguiente nivel; nada se guarda hasta "Guardar", que manda todos los cambios juntos
+     * (también los del otro modo). En una sección, o en un área que tiene perfiles, el ciclo pasa además por Hereda
+     * (sin regla propia: lo de sus perfiles o de su módulo); en lo demás, Sin acceso es no tener regla. Las
+     * excepciones de cada persona se respetan (la celda de un área lleva un punto dorado si alguien tiene una).
      */
     const ICONO_CELDA = { NINGUNO: 'minus', LECTURA: 'eye', EDICION: 'pencil' };
     const SIGUIENTE_NIVEL = { NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'NINGUNO' };
-    // Una sección pasa además por Hereda (sin regla propia): Hereda → Sin acceso → Ver → Editar → Hereda
-    const SIGUIENTE_EN_SECCION = { HEREDA: 'NINGUNO', NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'HEREDA' };
-    let pendientesMatriz = {};   // 'área|nodo' → nivel elegido en la matriz (en una sección, 'HEREDA' = sin regla)
+    const SIGUIENTE_CON_HEREDA = { HEREDA: 'NINGUNO', NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'HEREDA' };
+    let pendientesMatriz = {};   // 'quien|nodo' → nivel elegido ('HEREDA' = sin regla); quien = área o 'perfil:Nombre'
     let todasLasSecciones = false;   // "Ver todas las secciones"; si no, solo las que tienen alguna regla o un cambio
-    const llaveCelda = (area, modulo) => area + '|' + modulo;
-    /** Lo que dice la hoja para la celda: en un módulo, su nivel; en una sección, su regla o HEREDA */
-    const enHoja = (area, id) => (padreDe(id) ? regla(area, id) || 'HEREDA' : deArea(area, id));
-    const nivelEnMatriz = (area, modulo) => {
-      const k = llaveCelda(area, modulo);
-      return k in pendientesMatriz ? pendientesMatriz[k] : enHoja(area, modulo);
+    let modoMatriz = 'areas';        // 'areas' | 'perfiles'
+    const llaveCelda = (quien, modulo) => quien + '|' + modulo;
+    const esQuienPerfil = (quien) => /^perfil:/i.test(quien);
+    const nombreDeQuien = (quien) => String(quien).replace(/^perfil:/i, '');
+    /** La regla que tiene en la hoja ese renglón (área o perfil) en ese nodo */
+    const reglaDe = (quien, id) => (esQuienPerfil(quien) ? reglaPerfil(normal(nombreDeQuien(quien)), id) : regla(quien, id));
+    const perfilesDeColumna = (quien) => (esQuienPerfil(quien) ? [] : perfilesDe(quien));
+    /** ¿La celda tiene el estado Hereda? En una sección siempre; en un módulo, si el área tiene perfiles */
+    const conHereda = (quien, id) => !!padreDe(id) || perfilesDeColumna(quien).length > 0;
+    /** Lo que dice la hoja para la celda: la regla, HEREDA (sin regla, si la celda lo tiene) o NINGUNO */
+    const enHoja = (quien, id) => reglaDe(quien, id) || (conHereda(quien, id) ? 'HEREDA' : 'NINGUNO');
+    const nivelEnMatriz = (quien, modulo) => {
+      const k = llaveCelda(quien, modulo);
+      return k in pendientesMatriz ? pendientesMatriz[k] : enHoja(quien, modulo);
     };
-    /** Con lo que hay en la matriz, el nivel que de verdad queda (una sección que hereda toma el de su módulo) */
-    function nivelResueltoEnMatriz(area, id) {
-      const n = nodo(id);
-      const v = nivelEnMatriz(area, id);
-      if (!n || !n.padre) return v;
-      const delPadre = nivelResueltoEnMatriz(area, n.padre);
-      return tope(v === 'HEREDA' ? (n.hereda === false ? 'NINGUNO' : delPadre) : v, delPadre);
+    /** Con lo que hay en la matriz, el nivel que de verdad queda (con sus perfiles y la herencia de su módulo) */
+    function nivelResueltoEnMatriz(quien, id) {
+      const propia = (x) => {
+        const v = nivelEnMatriz(quien, x);
+        return v === 'HEREDA' ? undefined : v;
+      };
+      return resolvedor([propia], perfilesDeColumna(quien), false)(id);
     }
+    const columnasMatriz = () => (modoMatriz === 'perfiles'
+      ? datos.perfiles.map((pf) => ({ quien: quienPerfil(pf.nombre), etiqueta: pf.nombre,
+        titulo: 'Perfil ' + pf.nombre + ' · ' + plural(pf.areas.length, 'área', 'áreas') + '. Clic para abrir el perfil', abrir: 'data-usr-perfil' }))
+      : datos.areas.map((a) => ({ quien: a.nombre, etiqueta: a.nombre,
+        titulo: a.nombre + ' · ' + plural(delArea(a.nombre).filter((p) => p.activo).length, 'persona activa', 'personas activas') + '. Clic para abrir el área',
+        abrir: 'data-usr-area' })));
 
-    function celdaMatriz(a, m) {
-      const n = nivelEnMatriz(a.nombre, m.id);
-      const antes = enHoja(a.nombre, m.id);
-      const resuelto = nivelResueltoEnMatriz(a.nombre, m.id);
-      const conExc = delArea(a.nombre).filter((p) => p.activo && !tieneTotal(p) && regla(p.correo, m.id) !== undefined);
-      const titulo = a.nombre + ' · ' + etiquetaNodo(m.id) + ': ' + (n === 'HEREDA' ? 'Hereda (' + PERM_TEXTO[resuelto] + ')' : PERM_TEXTO[n]) +
+    function celdaMatriz(col, m) {
+      const quien = col.quien;
+      const n = nivelEnMatriz(quien, m.id);
+      const antes = enHoja(quien, m.id);
+      const resuelto = nivelResueltoEnMatriz(quien, m.id);
+      const conExc = esQuienPerfil(quien) ? [] : delArea(quien).filter((p) => p.activo && !tieneTotal(p) && regla(p.correo, m.id) !== undefined);
+      const titulo = col.etiqueta + ' · ' + etiquetaNodo(m.id) + ': ' + (n === 'HEREDA' ? 'Hereda (' + PERM_TEXTO[resuelto] + ')' : PERM_TEXTO[n]) +
         (n !== antes ? ' (antes: ' + PERM_TEXTO[antes] + ')' : '') +
         (conExc.length ? '\nCon excepción: ' + conExc.map((p) => (p.nombre || p.correo) + ' (' + PERM_TEXTO[regla(p.correo, m.id)] + ')').join(', ') : '') +
         '\nClic para cambiar';
       return '<button type="button" class="usr-celda ' + resuelto + (n === 'HEREDA' ? ' heredada' : '') + (n !== antes ? ' cambiada' : '') + (conExc.length ? ' con-excepcion' : '') + '"' +
-        ' data-celda-area="' + escaparHtml(a.nombre) + '" data-celda-modulo="' + m.id + '"' +
+        ' data-celda-area="' + escaparHtml(quien) + '" data-celda-modulo="' + m.id + '"' +
         ' title="' + escaparHtml(titulo) + '" aria-label="' + escaparHtml(titulo) + '">' + Iconos.svg(ICONO_CELDA[resuelto]) + '</button>';
     }
 
@@ -622,7 +873,7 @@
       })
         .filter((c) => c.nivel !== enHoja(c.quien, c.modulo))
         .map((c) => ({ quien: c.quien, modulo: c.modulo,
-          permiso: c.nivel === 'HEREDA' || (c.nivel === 'NINGUNO' && !padreDe(c.modulo)) ? null : c.nivel }));
+          permiso: c.nivel === 'HEREDA' || (c.nivel === 'NINGUNO' && !conHereda(c.quien, c.modulo)) ? null : c.nivel }));
     }
 
     function pintarCuentaMatriz() {
@@ -636,23 +887,27 @@
 
     function pintarMatriz() {
       const caja = $('usr-matriz');
-      if (!datos.areas.length) {
-        caja.innerHTML = '<p class="empty-state">Nadie tiene área en USUARIOS.</p>';
+      $('usr-matriz-modo').querySelectorAll('[data-modo]').forEach((b) => {
+        b.classList.toggle('activa', b.dataset.modo === modoMatriz);
+        b.setAttribute('aria-pressed', String(b.dataset.modo === modoMatriz));
+      });
+      const cols = columnasMatriz();
+      if (!cols.length) {
+        caja.innerHTML = '<p class="empty-state">' + (modoMatriz === 'perfiles' ? 'Todavía no hay perfiles: créalos en la pestaña Perfiles.' : 'Nadie tiene área en USUARIOS.') + '</p>';
         pintarCuentaMatriz();
         return;
       }
       const arriba = caja.scrollTop;
       const izquierda = caja.scrollLeft;
-      // Una sección con alguna regla de un área (o un cambio sin guardar) siempre se ve; las demás, con el botón
-      const conRegla = (id) => datos.areas.some((a) => regla(a.nombre, id) !== undefined || llaveCelda(a.nombre, id) in pendientesMatriz);
+      // Una sección con alguna regla (o un cambio sin guardar) siempre se ve; las demás, con el botón
+      const conRegla = (id) => cols.some((c) => reglaDe(c.quien, id) !== undefined || llaveCelda(c.quien, id) in pendientesMatriz);
       caja.innerHTML = '<table class="usr-matriz' + (todasLasSecciones ? '' : ' solo-con-regla') + '"><thead><tr><th class="usr-matriz-mod">Módulo</th>' +
-        datos.areas.map((a) => '<th><button type="button" class="usr-matriz-area" data-usr-area="' + escaparHtml(a.nombre) + '"' +
-          ' title="' + escaparHtml(a.nombre + ' · ' + plural(delArea(a.nombre).filter((p) => p.activo).length, 'persona activa', 'personas activas') + '. Clic para abrir el área') + '">' +
-          escaparHtml(a.nombre) + '</button></th>').join('') + '</tr></thead><tbody>' +
-        datos.grupos.map((g) => '<tr class="usr-matriz-grupo"><th class="usr-matriz-mod">' + escaparHtml(g.etiqueta) + '</th><td colspan="' + datos.areas.length + '"></td></tr>' +
+        cols.map((c) => '<th><button type="button" class="usr-matriz-area" ' + c.abrir + '="' + escaparHtml(c.abrir === 'data-usr-perfil' ? c.etiqueta : c.quien) + '"' +
+          ' title="' + escaparHtml(c.titulo) + '">' + escaparHtml(c.etiqueta) + '</button></th>').join('') + '</tr></thead><tbody>' +
+        datos.grupos.map((g) => '<tr class="usr-matriz-grupo"><th class="usr-matriz-mod">' + escaparHtml(g.etiqueta) + '</th><td colspan="' + cols.length + '"></td></tr>' +
           g.modulos.map((m) => [m].concat(seccionesDe(m).map((s) => Object.assign({ padre: m.id }, s))).map((n) =>
             '<tr' + (n.padre ? ' class="usr-matriz-seccion' + (conRegla(n.id) ? ' con-regla' : '') + '"' : '') + '><th class="usr-matriz-mod">' + Iconos.svg(iconoModulo(n.id)) + escaparHtml(n.etiqueta) + '</th>' +
-            datos.areas.map((a) => '<td>' + celdaMatriz(a, n) + '</td>').join('') + '</tr>').join('')).join('')).join('') +
+            cols.map((c) => '<td>' + celdaMatriz(c, n) + '</td>').join('') + '</tr>').join('')).join('')).join('') +
         '</tbody></table>';
       caja.scrollTop = arriba;
       caja.scrollLeft = izquierda;
@@ -662,23 +917,27 @@
     function alClicMatriz(ev) {
       const celda = ev.target.closest('[data-celda-modulo]');
       if (celda) {
-        const a = area(celda.dataset.celdaArea);
+        const quien = celda.dataset.celdaArea;
+        const col = columnasMatriz().find((c) => c.quien === quien);
         const m = nodo(celda.dataset.celdaModulo);
-        if (!a || !m) return;
-        const k = llaveCelda(a.nombre, m.id);
-        const nuevo = (m.padre ? SIGUIENTE_EN_SECCION : SIGUIENTE_NIVEL)[nivelEnMatriz(a.nombre, m.id)];
-        if (nuevo === enHoja(a.nombre, m.id)) delete pendientesMatriz[k];
+        if (!col || !m) return;
+        const k = llaveCelda(quien, m.id);
+        const nuevo = (conHereda(quien, m.id) ? SIGUIENTE_CON_HEREDA : SIGUIENTE_NIVEL)[nivelEnMatriz(quien, m.id)];
+        if (nuevo === enHoja(quien, m.id)) delete pendientesMatriz[k];
         else pendientesMatriz[k] = nuevo;
+        const selector = '[data-celda-area="' + CSS.escape(quien) + '"][data-celda-modulo="' + m.id + '"]';
         // Un módulo cambia lo que heredan sus secciones: se repinta la tabla; una sección, solo su celda
-        if (!m.padre) { pintarMatriz(); const el = $('usr-matriz').querySelector('[data-celda-area="' + CSS.escape(a.nombre) + '"][data-celda-modulo="' + m.id + '"]'); if (el) el.focus(); return; }
-        celda.parentNode.innerHTML = celdaMatriz(a, m);   // solo esa celda: la tabla no salta
-        const otra = $('usr-matriz').querySelector('[data-celda-area="' + CSS.escape(a.nombre) + '"][data-celda-modulo="' + m.id + '"]');
+        if (!m.padre) { pintarMatriz(); const el = $('usr-matriz').querySelector(selector); if (el) el.focus(); return; }
+        celda.parentNode.innerHTML = celdaMatriz(col, m);   // solo esa celda: la tabla no salta
+        const otra = $('usr-matriz').querySelector(selector);
         if (otra) otra.focus();
         pintarCuentaMatriz();
         return;
       }
-      const encabezado = ev.target.closest('[data-usr-area]');
-      if (encabezado) abrirFicha('area', encabezado.dataset.usrArea);
+      const encabezadoArea = ev.target.closest('[data-usr-area]');
+      if (encabezadoArea) { abrirFicha('area', encabezadoArea.dataset.usrArea); return; }
+      const dePerfilBtn = ev.target.closest('[data-usr-perfil]');
+      if (dePerfilBtn) abrirFicha('perfil', dePerfilBtn.dataset.usrPerfil);
     }
 
     async function guardarMatriz() {
@@ -686,13 +945,8 @@
       if (!cambios.length) return;
       const boton = $('usr-matriz-guardar');
       boton.disabled = true;
-      toastCargando('Guardando permisos…');
       try {
-        cargar(await callServer('apiPermisosGuardar', state.token, cambios));
-        pendientesMatriz = {};
-        refrescarListado();
-        toastExito('Permisos guardados: ' + plural(cambios.length, 'cambio', 'cambios'));
-        callServer('apiMisPermisos', state.token).then((info) => { state.permisos = (info && info.permisos) || {}; renderNavGrupos(); }).catch(() => {});
+        await guardarCambios(cambios, () => { pendientesMatriz = {}; });
       } catch (err) {
         toastError('No se guardaron: ' + err.message);
         boton.disabled = false;
@@ -781,7 +1035,8 @@
       const p = dePersona ? persona(h.quien) : null;
       return {
         ID: i, FECHA: h.fecha, HORA: h.fecha ? new Date(h.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
-        QUIEN: h.quien, A_QUIEN: p ? (p.nombre || p.correo) : h.quien, TIPO: dePersona ? 'Persona' : 'Área',
+        QUIEN: h.quien, A_QUIEN: p ? (p.nombre || p.correo) : esDePerfil(h) ? 'Perfil ' + h.quien.replace(/^perfil:/i, '') : h.quien,
+        TIPO: dePersona ? 'Persona' : esDePerfil(h) ? 'Perfil' : 'Área',
         MODULO: etiquetaModulo(h.modulo), ANTES: textoHistorial(h.antes, dePersona, h.modulo), DESPUES: textoHistorial(h.despues, dePersona, h.modulo),
         CAMBIO: cambioHistorial(h), LO_CAMBIO: h.nombre || h.correo || '—',
       };
@@ -793,8 +1048,8 @@
       exportar: { nombreArchivo: 'Usuarios y permisos - historial' },
       etiquetaFila: (f) => f.A_QUIEN + ' · ' + f.MODULO,
       detalle: false,
-      alAbrirFila: (f) => abrirFicha(f.TIPO === 'Persona' ? 'persona' : 'area', f.QUIEN),
-      alTocarFila: (f) => abrirFicha(f.TIPO === 'Persona' ? 'persona' : 'area', f.QUIEN),
+      alAbrirFila: (f) => abrirDesdeHistorial(f),
+      alTocarFila: (f) => abrirDesdeHistorial(f),
       columnas: [
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
         { campo: 'HORA', titulo: 'Hora', tipo: 'texto' },
@@ -807,13 +1062,46 @@
         { campo: 'LO_CAMBIO', titulo: 'Lo cambió', tipo: 'lista' },
       ],
       accionesFila: [
-        { icono: 'eye', titulo: 'Ver ficha', alHacer: (f) => abrirFicha(f.TIPO === 'Persona' ? 'persona' : 'area', f.QUIEN) },
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (f) => abrirDesdeHistorial(f) },
+      ],
+    });
+    function abrirDesdeHistorial(f) {
+      if (f.TIPO === 'Persona') abrirFicha('persona', f.QUIEN);
+      else if (f.TIPO === 'Perfil') abrirFicha('perfil', f.QUIEN.replace(/^perfil:/i, ''));
+      else abrirFicha('area', f.QUIEN);
+    }
+
+    const filaPerfil = (pf) => ({
+      ID: pf.nombre, NOMBRE: pf.nombre, REGLAS: pf.reglas.length, AREAS: pf.areas.join(', ') || '—',
+      PERSONAS: datos.personas.filter((p) => p.activo && pf.areas.some((a) => normal(a) === normal(p.area))).length,
+    });
+    const tablaPerfiles = DataTable.crear($('usr-tabla-perfiles'), {
+      idCampo: 'ID',
+      idTabla: 'usuarios-perfiles',
+      textoVacio: 'Todavía no hay perfiles. Un perfil es un paquete de permisos con nombre que se asigna a áreas: créalo con "Nuevo perfil".',
+      exportar: { nombreArchivo: 'Usuarios y permisos - perfiles' },
+      etiquetaFila: (f) => f.NOMBRE,
+      detalle: false,
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (f) => abrirFicha('perfil', f.ID),
+      alTocarFila: (f) => abrirFicha('perfil', f.ID),
+      ordenInicial: { campo: 'NOMBRE', dir: 'asc' },
+      columnas: [
+        { campo: 'NOMBRE', titulo: 'Perfil', tipo: 'texto', fijada: true },
+        { campo: 'REGLAS', titulo: 'Reglas', tipo: 'numero' },
+        { campo: 'AREAS', titulo: 'Áreas', tipo: 'texto' },
+        { campo: 'PERSONAS', titulo: 'Personas activas', tipo: 'numero' },
+      ],
+      accionesFila: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (f) => abrirFicha('perfil', f.ID) },
+        { icono: 'pencil', titulo: 'Editar permisos', alHacer: (f) => abrirEditar('perfil', f.ID) },
       ],
     });
 
     const tablaActiva = () => {
       const pestana = $('usr-tabs').querySelector('.tab-btn.active').dataset.tab;
-      return pestana === 'areas' ? tablaAreas : pestana === 'historial' ? tablaHistorial : tablaPersonas;
+      return pestana === 'areas' ? tablaAreas : pestana === 'perfiles' ? tablaPerfiles : pestana === 'historial' ? tablaHistorial : tablaPersonas;
     };
 
     /** Cada tarjeta filtra la tabla de personas; otro clic en la misma la quita */
@@ -852,6 +1140,7 @@
     function refrescarListado() {
       tablaPersonas.setDatos(datos.personas.map(filaPersona));
       tablaAreas.setDatos(datos.areas.map(filaArea));
+      tablaPerfiles.setDatos(datos.perfiles.map(filaPerfil));
       tablaHistorial.setDatos(datos.historial.map(filaHistorial));
       pintarMatriz();
       Object.keys(KPIS).forEach((id) => { $(id).querySelector('.stat-value').textContent = KPIS[id].cuenta(); });
@@ -868,6 +1157,9 @@
       if (el.dataset.fichaTab) { fichaActual.pestana = el.dataset.fichaTab; mostrarPestanaFicha($('usr-detalle'), el.dataset.fichaTab); return; }
       if (el.hasAttribute('data-usr-volver')) { volver(); return; }
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
+      if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(fichaActual.tipo, fichaActual.id); return; }
+      if (el.hasAttribute('data-usr-eliminar-perfil')) { eliminarPerfil(fichaActual.id); return; }
+      if (el.dataset.usrPerfil) { abrirFicha('perfil', el.dataset.usrPerfil, true); return; }
       if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
       if (el.dataset.usrPersona) abrirFicha('persona', el.dataset.usrPersona, true);
     });
@@ -883,6 +1175,19 @@
     });
 
     $('usr-modal-cuerpo').addEventListener('click', alClicVentana);
+    // El nombre de un perfil se escribe sin repintar (si no, el cursor se perdería): solo el pie
+    $('usr-modal-cuerpo').addEventListener('input', (ev) => {
+      if (ev.target.id !== 'usr-perfil-nombre' || !edicion) return;
+      edicion.nombre = ev.target.value;
+      pintarPieVentana();
+    });
+    $('usr-nuevo-perfil').addEventListener('click', () => abrirEditar('perfil', null));
+    $('usr-matriz-modo').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-modo]');
+      if (!b || b.dataset.modo === modoMatriz) return;
+      modoMatriz = b.dataset.modo;
+      pintarMatriz();
+    });
     $('usr-modal-guardar').addEventListener('click', guardarEdicion);
     $('usr-modal-cancelar').addEventListener('click', cerrarEditar);
     $('usr-modal-cerrar').addEventListener('click', cerrarEditar);
@@ -892,11 +1197,12 @@
     // ---------------------------------------------------------------- carga
     tablaPersonas.setCargando(true);
     tablaAreas.setCargando(true);
+    tablaPerfiles.setCargando(true);
     tablaHistorial.setCargando(true);
     try {
       cargar(await callServer('apiPermisosPanel', state.token));
     } catch (err) {
-      [tablaPersonas, tablaAreas, tablaHistorial].forEach((t) => t.setError('No se pudieron cargar los permisos: ' + err.message));
+      [tablaPersonas, tablaAreas, tablaPerfiles, tablaHistorial].forEach((t) => t.setError('No se pudieron cargar los permisos: ' + err.message));
       return;
     }
     if (!document.body.contains($('usr-listado'))) return;   // se navegó a otra vista mientras cargaba
@@ -910,6 +1216,7 @@
     { pregunta: '¿Qué es una "excepción" (dorado)?', respuesta: 'Un permiso distinto al que le da su área -- por ejemplo, alguien con Ver en un módulo donde su área en general no tiene acceso.' },
     { pregunta: '¿Qué pasa si cambio el permiso de un área en vez de una persona?', respuesta: 'Afecta a todas las personas de esa área que no tengan ya una excepción propia en ese módulo.' },
     { pregunta: '¿Dónde veo quién cambió qué permiso y cuándo?', respuesta: 'Pestaña "Historial" -- cada cambio real queda registrado con fecha, quién lo hizo, a quién y el antes/después.' },
+    { pregunta: '¿Qué es un perfil?', respuesta: 'Un paquete de permisos con nombre (p. ej. "Flotilla - consulta") que se asigna a una o varias áreas: sus personas reciben lo que da. Si un área tiene varios, gana el más alto; lo que el área tenga como regla propia, y las excepciones de cada persona, mandan sobre el perfil. Pestaña Perfiles.' },
     { pregunta: '¿Qué son las secciones de un módulo?', respuesta: 'Las pestañas de su ficha (Documentos, Historial…) y Exportar a Excel. Heredan el nivel del módulo, así que normalmente no hay que tocarlas; para quitarle a alguien solo una, ponle "Sin acceso" en esa sección. Nunca pasan del nivel del módulo.' },
   ];
 </script>

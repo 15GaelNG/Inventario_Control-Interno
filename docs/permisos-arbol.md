@@ -90,12 +90,62 @@ Con PERMISOS y USUARIOS de producción (148 reglas, 51 personas; ya se había co
    repetir).
 3. Revisar con alguien de cada área que su menú y sus fichas sigan igual.
 
-## Fase 2 — Perfiles (en curso)
+## Fase 2 — Perfiles (hecha, en )
 
-Paquetes de reglas con nombre que se asignan a áreas, para que la matriz del día a día sea área × perfil y no
-área × cada sección. Hojas nuevas en el libro de USUARIOS (`PERMISOS_PERFILES`, `PERMISOS_AREAS`; el nombre evita
-la hoja `PERFILES` vieja). Orden: regla por correo > regla del área > el más alto de los perfiles del área >
-herencia. Una función de editor convierte las reglas de cada área en un perfil "Área X" para que nada cambie.
+Un **perfil** es un paquete de reglas con nombre ("Flotilla - consulta") que se asigna a una o varias áreas, para que
+la matriz del día a día sea área × perfil y no área × cada sección.
+
+### Dónde viven
+
+En la **misma hoja PERMISOS** (una sola caché, un solo guardar, un solo historial; no hay hojas nuevas):
+
+| QUIEN | MODULO | PERMISO | Qué es |
+|---|---|---|---|
+|  | un nodo (, …) | Sin acceso / Ver / Editar | una regla del perfil |
+| un AREA () |  |  | el área tiene ese perfil |
+
+Una versión de antes los ignora sin tronar ( no es un área real;  no es un nivel).
+
+### Cómo se resuelve ( y la misma cuenta en la pantalla)
+
+Por nodo: **regla del correo > regla del área > lo de los perfiles del área > herencia**.
+
+- Varios perfiles: cada uno se resuelve solo, con su propia herencia, y por nodo **gana el más alto** (un perfil
+  nunca le quita a otro). Ej.: A da Vehículos con Editar y le corta Exportar; B da Vehículos con Ver → la persona
+  edita Vehículos y exporta (por B).
+- Lo propio del área manda sobre sus perfiles: un "Sin acceso" del área en un módulo **se guarda solo si el área
+  tiene perfiles** (les quita lo que dan); sin perfiles es lo mismo que no tener regla, como antes.
+- Lo propio de la persona (excepción por correo) manda sobre todo, como siempre.
+
+### Pantalla
+
+- Pestaña **Perfiles** (lista con reglas, áreas y personas) y **ficha del perfil** (Permisos, Áreas, Historial;
+  Editar permisos, cambiar sus áreas, eliminar). "Nuevo perfil" abre la ventana Editar con el nombre arriba; cambiarle
+  el nombre mueve sus reglas y sus asignaciones.
+- **Ficha de área**: tarjeta de sus perfiles con "Asignar perfiles"; cada permiso dice si viene "Por su perfil X" o es
+  "Regla del área". **Ficha de persona**: "Por su perfil X".
+- **Matriz**: "Por área" y "Por perfil". En un área con perfiles la celda de un módulo también pasa por Hereda (lo de sus
+  perfiles). Los cambios pendientes de un modo no se pierden al cambiar al otro.
+- Pruebas: precedencia y combinación de perfiles, "Sin acceso" de un área con perfiles (); la
+  paridad servidor = pantalla ahora también con perfiles al azar (); clics en la matriz
+  con un área con perfil y el modo Por perfil ().
+
+### Migración:  (editor)
+
+Pasa las reglas de cada área a un perfil con su mismo nombre, asignado a ella (las excepciones por correo se quedan).
+Se puede repetir (un área que ya tiene su perfil se salta). **Solo después de desplegar la fase 2**: la versión de
+antes no lee perfiles y esas áreas se quedarían sin nada.
+
+**Simulación contra producción (14-oct, solo lectura):** después de , crearía **8 perfiles**
+(ANALISIS DE DATOS, SERVICIOS VEHICULARES, CI, CONTROL VEHICULAR, AUDITORIAS, LINEAS, POST VENTA, PROCESOS), la hoja
+pasaría de 148 a 156 renglones y **ninguna persona activa cambia**. Después se consolidan a mano en la pantalla (p. ej.
+un "Flotilla - consulta" común a varias áreas).
+
+### Para llevarlo a producción (pendiente; el usuario decide cuándo)
+
+1. Desplegar (con la fase 1).
+2.  y luego  en el editor de producción.
+3. Revisar con alguien de cada área que su menú y sus fichas sigan igual.
 
 ## Fase 3 — Alcance como atributo del perfil (pendiente)
 

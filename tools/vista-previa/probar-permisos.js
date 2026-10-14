@@ -120,6 +120,16 @@ const { construir } = require('./construir');
   for (let i = 0; i < 3; i++) await clic(celda('TI', 'vehiculos.documentos'));
   m = await matriz('TI', 'vehiculos.documentos');
   ok(await heredada('TI', 'vehiculos.documentos') && !m.cambiada && m.cuenta === '1 cambio sin guardar', 'Ver, Editar y otra vez Hereda: como estaba (' + m.cuenta + ')');
+
+  // Perfiles en la matriz: CAPITAL HUMANO tiene el perfil Flotilla - consulta (Vehículos en Ver, Exportar cortado)
+  m = await matriz('CAPITAL HUMANO', 'vehiculos');
+  ok(m.nivel === 'LECTURA' && await heredada('CAPITAL HUMANO', 'vehiculos'), 'un área con perfil: Vehículos en Ver, de su perfil (Hereda, tenue)');
+  ok((await matriz('CAPITAL HUMANO', 'vehiculos.exportar')).nivel === 'NINGUNO', 'y Exportar cortado por el perfil');
+  await clic('#usr-matriz-modo [data-modo="perfiles"]');
+  m = await matriz('perfil:Flotilla - consulta', 'vehiculos');
+  ok(m.nivel === 'LECTURA' && !(await heredada('perfil:Flotilla - consulta', 'vehiculos')) && m.cuenta === '1 cambio sin guardar',
+    'Por perfil: la columna del perfil con su regla (Ver), sin perder el cambio pendiente del otro modo');
+  await clic('#usr-matriz-modo [data-modo="areas"]');
   const enviadoMatriz = await p.evaluate(() => new Promise((resolve) => {
     const original = window.callServer;
     window.callServer = (fn, ...a) => { if (fn === 'apiPermisosGuardar') { resolve(a[1]); return new Promise(() => {}); } return original(fn, ...a); };

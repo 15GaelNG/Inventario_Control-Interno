@@ -54,9 +54,17 @@ test('el servidor y la pantalla resuelven igual cada nodo, con herencia y excepc
       reglas.push([quien, uno(nodos), uno(NIVELES), '']);
     }
     // Como la hoja después de guardar (aplicarCambios_ descarta lo que no cuenta) y como lo manda el panel
-    const hoja = P.aplicarCambios_([], reglas.map((r) => ({ quien: r[0], modulo: r[1], permiso: r[2] })), '');
-    const panel = { grupos: grupos, reglas: hoja.map((r) => ({ quien: r[0], modulo: r[1], permiso: r[2], nota: '' })),
-      personas: [], areas: [], historial: [] };
+    // Perfiles (fase 2): dos o tres paquetes al azar, asignados a algunas áreas (las asignaciones primero, para que
+    // un "Sin acceso" de un área con perfiles se guarde como en la hoja de verdad)
+    const PERFILES = ['Flotilla', 'Consulta', 'Lineas'];
+    const asignaciones = [];
+    AREAS.forEach((a) => PERFILES.forEach((pf) => { if (!azar(3)) asignaciones.push({ quien: a, modulo: 'perfil:' + pf, permiso: 'ASIGNADO' }); }));
+    for (let i = 0; i < 20; i++) reglas.push(['perfil:' + uno(PERFILES), uno(nodos), uno(NIVELES), '']);
+    const hoja = P.aplicarCambios_(P.aplicarCambios_([], asignaciones, ''), reglas.map((r) => ({ quien: r[0], modulo: r[1], permiso: r[2] })), '');
+    // Como lo arma Permisos.panel: las reglas de áreas y personas, y los perfiles aparte
+    const panel = { grupos: grupos,
+      reglas: hoja.filter((r) => !/^perfil:/i.test(r[0]) && !/^perfil:/i.test(r[1])).map((r) => ({ quien: r[0], modulo: r[1], permiso: r[2], nota: '' })),
+      perfiles: JSON.parse(JSON.stringify(P.perfilesDelPanel_(hoja))), personas: [], areas: [], historial: [] };
     const ui = pantalla(panel);
     CORREOS.forEach((correo, i) => {
       const rol = ['USER', 'USER', 'VIEWER', 'CLIENT'][i];

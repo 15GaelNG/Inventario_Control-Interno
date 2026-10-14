@@ -130,6 +130,10 @@ console.log('4c. Perfiles: paquetes de reglas que se asignan a áreas (fase 2, 1
     'dos perfiles: gana el más alto por nodo, cada uno con su herencia (B deja exportar aunque A no)');
   p = R([['perfil:A', 'vehiculos', 'EDICION'], asigna('CI', 'A'), ['CI', 'vehiculos', 'LECTURA']]);
   ok(p.vehiculos === 'LECTURA', 'una regla del área manda sobre sus perfiles');
+  const conPerfil = Permisos.aplicarCambios_([['perfil:A', 'vehiculos', 'EDICION', ''], asigna('CI', 'A').concat([''])],
+    [{ quien: 'CI', modulo: 'vehiculos', permiso: 'NINGUNO' }], 'n');
+  ok(conPerfil.some((r) => r[0] === 'CI' && r[1] === 'vehiculos' && r[2] === 'NINGUNO') && !R(conPerfil).vehiculos,
+    'Sin acceso de un área con perfiles sí se guarda en un módulo: le quita lo que da su perfil');
   p = R([['perfil:A', 'vehiculos', 'LECTURA'], asigna('CI', 'A'), ['ana@ciudadmaderas.com', 'vehiculos', 'EDICION']]);
   ok(p.vehiculos === 'EDICION', 'y la del correo sobre todo');
   p = R([['perfil:A', 'vehiculos', 'LECTURA'], ['perfil:A', 'vehiculos.documentos', 'EDICION'], asigna('CI', 'A')]);

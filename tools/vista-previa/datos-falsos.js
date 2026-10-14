@@ -199,6 +199,9 @@
       // Una sección que corta la herencia de su módulo (permisos en árbol): TI ve Vehículos pero no exporta
       { quien: 'TI', modulo: 'vehiculos.exportar', permiso: 'NINGUNO' },
     ],
+    // Perfiles (fase 2): un paquete con nombre asignado a un área (Capital Humano recibe lo de Flotilla - consulta)
+    perfiles: [{ nombre: 'Flotilla - consulta', reglas: [{ modulo: 'vehiculos', permiso: 'LECTURA' }, { modulo: 'verificaciones', permiso: 'LECTURA' },
+      { modulo: 'vehiculos.exportar', permiso: 'NINGUNO' }], areas: ['CAPITAL HUMANO'] }],
     // Lo que anota PERMISOS_HISTORIAL, del más reciente al más viejo
     historial: [
       ['2026-10-06T18:20:00Z', 'TI', 'verificaciones', 'EDICION', 'LECTURA'], ['2026-10-06T18:20:00Z', 'TI', 'vehiculos', 'LECTURA', 'EDICION'],
@@ -726,6 +729,13 @@
       await esperar(300);
     },
     'usuarios-historial': () => abrir('usuarios', 'historial'),
+    // Perfiles (fase 2): la lista y la ficha de uno
+    'usuarios-perfiles': async () => { await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]'); },
+    'usuarios-perfil-ficha': async () => {
+      await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]');
+      (await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]')).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await hasta('#usr-detalle:not([hidden]) .ln-detalle-header'); await esperar(300);
+    },
     'usuarios-editar-permisos': async () => {
       await abrir('usuarios'); await abrirPrimeraFila();
       (await hasta('[data-usr-editar]')).click();

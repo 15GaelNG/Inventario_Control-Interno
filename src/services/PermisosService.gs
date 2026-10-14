@@ -93,11 +93,17 @@ const Permisos = (function () {
   const llaveRegla_ = (quien, modulo) => (esCorreo_(quien) ? clave_(quien) : esPerfil_(quien) ? PREFIJO_PERFIL + clavePerfil_(quien) : area_(quien)) +
     '|' + (esPerfil_(modulo) ? PREFIJO_PERFIL + clavePerfil_(modulo) : idModulo_(modulo));
   /**
-   * ¿Un NINGUNO en esta regla dice algo? En un correo, sí (le quita a la persona lo de su área).
-   * En un área, solo en una sección: corta la herencia de su módulo. En un módulo raíz es lo
-   * mismo que no tener regla.
+   * ¿Un NINGUNO en esta regla dice algo? En un correo, sí (le quita a la persona lo de su área). En una sección, sí:
+   * corta la herencia de su módulo. En un módulo, de un área solo si tiene perfiles (fase 2: les quita lo que dan);
+   * sin perfiles es lo mismo que no tener regla, y así la hoja no se llena de renglones que no dicen nada. En un
+   * perfil, nunca en un módulo (un perfil no le quita nada a otro). `reglas`: las de la hoja, para saber qué áreas
+   * tienen perfiles.
    */
-  const ningunoCuenta_ = (quien, modulo) => esCorreo_(quien) || !!Modulos.padre(idModulo_(modulo));
+  function ningunoCuenta_(quien, modulo, reglas) {
+    if (esCorreo_(quien) || Modulos.padre(idModulo_(modulo))) return true;
+    if (esPerfil_(quien)) return false;
+    return (reglas || []).some((r) => tipoRegla_(r) === 'asignacion' && area_(r[0]) === area_(quien) && clave_(r[2]) === ASIGNADO);
+  }
   /** El tipo de un renglón de PERMISOS: 'correo' | 'area' | 'perfil' (regla de un perfil) | 'asignacion' */
   const tipoRegla_ = (r) => (esPerfil_(r[0]) ? 'perfil' : esCorreo_(r[0]) ? 'correo' : esPerfil_(r[1]) ? 'asignacion' : 'area');
 
@@ -482,7 +488,7 @@ const Permisos = (function () {
         if (llaveRegla_(resultado[i][0], resultado[i][1]) === k) resultado.splice(i, 1);
       }
       const permiso = c.permiso == null ? null : permisoValido_(c.permiso);
-      if (!permiso || (permiso === NINGUNO && !ningunoCuenta_(c.quien, c.modulo))) return;
+      if (!permiso || (permiso === NINGUNO && !ningunoCuenta_(c.quien, c.modulo, resultado))) return;
       resultado.push([esPerfil_(c.quien) ? PREFIJO_PERFIL + nombrePerfil_(c.quien) : limpiar_(c.quien), idModulo_(c.modulo), permiso, nota]);
     });
     return resultado;
@@ -501,7 +507,7 @@ const Permisos = (function () {
         if (!p || llaveRegla_(r[0], r[1]) !== k) return n;
         return p === ASIGNADO || !n ? p : mayor_(p, n);
       }, '');
-      return nivel === NINGUNO && !ningunoCuenta_(quien, modulo) ? '' : nivel;
+      return nivel === NINGUNO && !ningunoCuenta_(quien, modulo, lista) ? '' : nivel;
     };
     const nuevas = aplicarCambios_(reglas, cambios, '');
     const vistas = {};

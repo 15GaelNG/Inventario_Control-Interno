@@ -181,6 +181,36 @@
   .usr-secciones-btn .ico { width: 12px; height: 12px; }
   .usr-secciones-btn:hover { color: var(--color-text); background: var(--color-bg); }
   .usr-op.activa.HEREDA { background: var(--color-text-muted); }
+  /* Perfiles (fase 2) */
+  .usr-perfiles-barra { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+  .usr-perfiles-barra p { flex: 1; margin: 0; font-size: 13px; color: var(--color-text-muted); }
+  .usr-perfil-nombre { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+  .usr-perfil-nombre input { font-size: 14px; }
+  .usr-btn-chico { margin-left: auto; padding: 4px 10px; font-size: 12px; }
+  .ln-card h3 .usr-btn-chico { display: inline-flex; align-items: center; gap: 5px; }
+  .usr-chips-perfil { display: flex; flex-wrap: wrap; gap: 8px; }
+  .usr-chip-perfil {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: 12.5px;
+    border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer;
+  }
+  .usr-chip-perfil:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .usr-chip-perfil .ico, .usr-asignar .ico { width: 14px; height: 14px; }
+  .usr-asignar-lista { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
+  .usr-asignar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; font: inherit;
+    text-align: left; color: var(--color-text); cursor: pointer;
+  }
+  .usr-asignar + .usr-asignar { border-top: 1px solid var(--color-border); }
+  .usr-asignar:hover { background: var(--color-bg); }
+  .usr-asignar.activa .ico { color: var(--color-primary); }
+  .usr-asignar.cambiada .usr-asignar-nombre { font-weight: 600; }
+  .usr-asignar-nombre { flex: 1; font-size: 13.5px; }
+  .usr-asignar-detalle { font-size: 11.5px; color: var(--color-text-muted); }
+  .usr-matriz-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+  .usr-matriz-modo button { border: 0; border-radius: 0; background: transparent; color: var(--color-text-muted); padding: 5px 11px; font-size: 12px; }
+  .usr-matriz-modo button + button { border-left: 1px solid var(--color-border); }
+  .usr-matriz-modo button.activa { background: var(--color-primary); color: #fff; }
+  @media (max-width: 640px) { .usr-perfiles-barra { flex-direction: column; align-items: stretch; } }
   .usr-celda.con-excepcion::after {
     content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%;
     background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-surface);
@@ -240,7 +270,8 @@
     <div class="tabs-simple" id="usr-tabs">
       <button type="button" class="tab-btn active" data-tab="personas"><i data-lucide="user" class="ico"></i> Personas</button>
       <button type="button" class="tab-btn" data-tab="areas"><i data-lucide="users" class="ico"></i> Áreas</button>
-      <button type="button" class="tab-btn" data-tab="matriz"><i data-lucide="grid-3x3" class="ico"></i> Matriz por área</button>
+      <button type="button" class="tab-btn" data-tab="perfiles"><i data-lucide="layers" class="ico"></i> Perfiles</button>
+      <button type="button" class="tab-btn" data-tab="matriz"><i data-lucide="grid-3x3" class="ico"></i> Matriz</button>
       <button type="button" class="tab-btn" data-tab="historial"><i data-lucide="history" class="ico"></i> Historial</button>
     </div>
     <div class="tab-panel" data-tab-panel="personas">
@@ -249,10 +280,22 @@
     <div class="tab-panel" data-tab-panel="areas" hidden>
       <div class="card card-compacta"><div id="usr-tabla-areas"></div></div>
     </div>
+    <!-- Perfiles: paquetes de permisos con nombre que se asignan a áreas (fase 2) -->
+    <div class="tab-panel" data-tab-panel="perfiles" hidden>
+      <div class="usr-perfiles-barra">
+        <p>Un perfil es un paquete de permisos con nombre que se asigna a una o varias áreas. Sus personas reciben lo que da; lo propio del área y de cada persona manda sobre él.</p>
+        <button type="button" id="usr-nuevo-perfil"><i data-lucide="plus" class="ico"></i> Nuevo perfil</button>
+      </div>
+      <div class="card card-compacta"><div id="usr-tabla-perfiles"></div></div>
+    </div>
     <!-- Todas las áreas contra todos los módulos: clic en una celda la cambia; se guarda junto -->
     <div class="tab-panel" data-tab-panel="matriz" hidden>
       <div class="card card-compacta usr-matriz-card">
         <div class="usr-matriz-barra">
+          <div class="usr-matriz-modo" id="usr-matriz-modo" role="group" aria-label="Columnas de la matriz">
+            <button type="button" data-modo="areas" class="activa" aria-pressed="true">Por área</button>
+            <button type="button" data-modo="perfiles" aria-pressed="false">Por perfil</button>
+          </div>
           <span class="usr-matriz-leyenda"><span class="usr-celda EDICION" aria-hidden="true"></span> Editar</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda LECTURA" aria-hidden="true"></span> Ver</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO" aria-hidden="true"></span> Sin acceso</span>
