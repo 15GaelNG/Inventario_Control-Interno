@@ -688,6 +688,13 @@
       (await hasta('[data-ficha-tab="documentos"]')).click();
       await hasta('.docs-veh-seccion'); await esperar(300);
     },
+    // Como un CLIENT (POST VENTA): sin vehiculos.carpetas, Documentos sin la cabecera ni los botones "Carpeta"
+    'vehiculos-documentos-sin-carpetas': async () => {
+      quitarPermisos('vehiculos.carpetas');
+      await abrir('vehiculos'); await abrirPrimeraFila();
+      (await hasta('[data-ficha-tab="documentos"]')).click();
+      await hasta('.docs-veh-seccion'); await esperar(300);
+    },
     // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas
     // pestañas no aparecen y la sección de sensor del formulario sale bloqueada
     'vehiculos-ficha-sin-sensores': async () => {

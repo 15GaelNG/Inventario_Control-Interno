@@ -201,6 +201,20 @@ Se veía funcional pero recargada (puntos, cuatro opciones por sección, seccion
 - Por dentro es lo mismo: los mismos valores en `edicion.valores` y los mismos cambios a `apiPermisosGuardar`.
   `tools/vista-previa/probar-permisos.js` prueba la columna de grupos, las pestañas y Exportar con clics.
 
+## Sección "Carpetas en Drive" (14-oct)
+
+Las ligas a las carpetas de Drive del expediente son operación interna: un CLIENT (POST VENTA) no debe verlas. En vez
+de esconderlas por rol, son una sección más: `vehiculos.carpetas` y `lineas-telefonicas.carpetas` (Modulos.gs).
+
+- Hereda de su módulo: nadie de adentro pierde nada. Sin `alcance: true`: quien está limitado (CLIENT o un perfil
+  "Solo lo de su área") la tiene en Sin acceso solo. Se puede quitar a cualquier área o perfil desde la ventana Editar.
+- Sin ella, la pantalla no pinta la cabecera de Documentos (el texto y las ligas NUCO / 1.-DOCUMENTACIÓN…), los botones
+  "Carpeta" de cada documento y de cada inspección, ni "Ver carpeta en Drive" del ⋮ de la ficha de Líneas. Los
+  archivos sí se ven. El servidor tampoco manda las ligas (`apiDocumentosVehiculo`, `apiInspeccionesExpediente`,
+  `TelefoniaService.equipo/linea`).
+- "Para agregar un documento: Editar → …" sale solo a quien edita Vehículos.
+- Escena de la vista previa: `vehiculos-documentos-sin-carpetas`.
+
 ## Para llevar las tres fases a producción (pendiente; el usuario decide cuándo)
 
 1. Juntar `ayrton` en master (sin las fotos del directorio) y desplegar con la GitHub Action.
