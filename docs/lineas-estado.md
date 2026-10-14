@@ -66,12 +66,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   Línea (tipo, compañía, SIM, estatus), Cuenta (razón social, cuenta padre, cuenta y «Día N de cada mes», de CUENTAS por
   `LineasRepo.diaDeCorte`), Plan (plan, renta, inicio y fin de plan y una barra con la vida del plazo: verde vigente, ámbar a 3
   meses o menos, rojo vencido, con «Faltan N meses» o «Vencido hace N meses» y «X de Y meses»; abajo, de dónde salió el plan en
-  palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico dice «sin contrato ni plazo»), Facturación (título con el mes
-  del corte; Renta, Cobrado, Diferencia, Uso, «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
+  palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
+  pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
+  «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
+  del corte; Renta, Cobrado, Diferencia, Uso (un SIM básico no lleva Renta ni Diferencia: su renta está en la tarjeta Plan), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
   «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
   WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
-  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea);
+  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; la columna MINUTOS de los SIM básicos sale del «DETALLE DE LLAMADAS» de su factura y no del
+  «Consumido» del resumen, que dice 0: cargada en el DEV el 14-oct, en producción falta, pendiente 1.16);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
   enlace a la línea), Plan de la línea, Facturación de la línea (sin renta, uso ni meses) y Responsable a todo el ancho. Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
