@@ -2562,9 +2562,15 @@
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });
       });
-      // Agregar equipo o línea (usuario, 4-oct): el TIPO ya no se elige, se asigna solo
-      $('#ln-nuevo-equipo', raiz).addEventListener('click', () => abrirEditor(null, 'EQUIPO'));
-      $('#ln-nueva-linea', raiz).addEventListener('click', () => abrirEditor(null, 'LINEA'));
+      // Agregar equipo o línea (usuario, 4-oct): el TIPO ya no se elige, se asigna solo. Solo con edición (antes se
+      // veían y el servidor lo negaba al guardar)
+      if (puedeEditarModulo('lineas-telefonicas')) {
+        $('#ln-nuevo-equipo', raiz).addEventListener('click', () => abrirEditor(null, 'EQUIPO'));
+        $('#ln-nueva-linea', raiz).addEventListener('click', () => abrirEditor(null, 'LINEA'));
+      } else {
+        $('#ln-nuevo-equipo', raiz).remove();
+        $('#ln-nueva-linea', raiz).remove();
+      }
       raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => b.addEventListener('click', () => {
         memoria.modoVista = b.dataset.modo;
         try { localStorage.setItem('lineas.modoVista', memoria.modoVista); } catch (e) { /* solo no se recuerda */ }
@@ -3842,7 +3848,7 @@
             doc('eye', 'Ver responsiva', 'ver', true, (d) => d.documento === 'Responsiva', (d) => abrir('responsiva', d.id)),
             doc('file-text', 'Ver PDF', 'ver', true, (d) => !!d.pdfId,
               (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
-            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
+            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
             doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'), (d) => subirPdfFirmado(id, d)),
             doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
@@ -6598,7 +6604,9 @@
 
       $('#lnga-filtro-activos', raiz).addEventListener('change', aplicarFiltros);
       $('#lnga-mas', raiz).addEventListener('click', () => { visibles += paso; pintarCuadros(); });
-      $('#lnga-exportar', raiz).addEventListener('click', (ev) => exportarActivos(ev.currentTarget));
+      // Exportar con su permiso (gestion-activos.exportar, Modulos.gs), como las tablas (puedeExportarAqui)
+      if (puede('gestion-activos.exportar')) $('#lnga-exportar', raiz).addEventListener('click', (ev) => exportarActivos(ev.currentTarget));
+      else $('#lnga-exportar', raiz).remove();
       raiz.addEventListener('click', (ev) => {
         const sug = ev.target.closest('[data-colaborador-i]');
         if (sug) {

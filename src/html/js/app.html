@@ -352,6 +352,16 @@
   const estaApagada = (entrada) => [entrada.vista, entrada.id].some((v) => v && VISTAS_APAGADAS.some((a) => v === a || v.indexOf(a + '-') === 0));
   const puedeEditarModulo = (modulo) => puede(modulo, 'EDICION');
   /**
+   * ¿Se puede exportar en la vista abierta? La sección exportar de su módulo (vehiculos.exportar, Modulos.gs).
+   * DataTable lo pregunta al crear cada tabla. Lo que alguien ve lo puede copiar: es un control de la pantalla
+   * (y de los servicios que exportan, como Líneas), no una frontera de seguridad.
+   */
+  function puedeExportarAqui() {
+    const destino = vistaActual ? vistaDe(vistaActual) : null;
+    const modulo = destino && destino.requiere ? String(destino.requiere).split('.')[0] : '';
+    return !modulo || puede(modulo + '.exportar');
+  }
+  /**
    * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
    * persona puede ver ese módulo; si no, da null y esa pestaña no se pinta. Si sí puede y
    * falla por otra cosa, da `vacio` y las demás siguen. Ver CLAUDE.md, "Permisos entre módulos".
@@ -4052,22 +4062,24 @@
       // baja" es la excepción, acepta varias a la vez. "Eliminar" NO se repite
       // aquí: ya la agrega cfg.alEliminar, con el chequeo de integridad
       // (apiQueImpideBorrar) que la vieja eliminarVehiculoRapido no tenía.
-      accionesSeleccion: puedeEditar ? [
-        {
+      // Cambiar el vehículo, con edición de Vehículos; capturar algo de otro módulo, con edición de ESE módulo
+      // (antes todo colgaba de Vehículos y el servidor negaba lo que no tocaba)
+      accionesSeleccion: [
+        puedeEditar && {
           icono: 'ban', texto: 'Dar de baja', enBarra: false, grupo: 'estado',
           visible: (filas) => filas.some((f) => String(f.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR'),
           alHacer: (filas) => darDeBajaVehiculo(filas),
         },
-        {
+        puedeEditar && {
           icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, enBarra: false, grupo: 'estado',
           alHacer: (filas) => cambiarEstatusRapidoVehiculo(filas[0]),
         },
-        { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
-        { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
-        { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
-        { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
-        { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
-      ] : [],
+        puedeEditarModulo('verificaciones') && { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
+        puedeEditarModulo('inspeccion-vehicular') && { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
+        puedeEditarModulo('instalacion-sensores') && { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
+        puedeEditarModulo('hologramas') && { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
+        puedeEditarModulo('incidencias') && { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
+      ].filter(Boolean),
       alEliminar: puedeEditar ? async (filas) => {
         // Primero se pregunta por todos: si alguno tiene historial, no se borra ninguno
         const imp = await callServer('apiQueImpideBorrar', state.token, 'VEHICULOS', filas.map((f) => f.ID_VEHICULO));

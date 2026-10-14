@@ -864,7 +864,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
   assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',\s+filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
-  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => !!d\.pdfPendiente,/);
+  // Solo con edición (operar): antes se veía y el servidor lo negaba (permisos en árbol, 14-oct)
+  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => operar && !!d\.pdfPendiente,/);
   // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
   assert.match(lineas, /idTabla: 'lineas-documentos-v1',\s+exportar: false,/);
   assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
@@ -2566,4 +2567,37 @@ test('apiListaConHuella solo despacha listas, y cada lista que la pantalla pide 
   assert.ok(pedidas.length >= 10, pedidas.length + ' listas');
   assert.deepEqual(pedidas.filter((f) => !permitidas.test(f)), [], 'listas que la pantalla pide y el servidor no despacharía');
   ['apiFirmaRemotaCompletar', 'apiPermisosGuardar', 'apiLogin', 'apiListaConHuella'].forEach((f) => assert.ok(!permitidas.test(f), f + ' no se despacha'));
+});
+
+test('cada permiso que se pide (pantalla y servidor) existe en el catálogo en árbol', () => {
+  // Un id mal escrito ('vehiculo.documentos') no truena: deja la pestaña escondida para todos o al servidor negando
+  // siempre. Aquí se junta cada id escrito tal cual en una pregunta de permiso y se busca en Modulos.gs
+  const catalogo = {};
+  require('vm').runInNewContext(read('src/config/Modulos.gs') + '\n;this.M = Modulos;', catalogo);
+  const ids = new Set(catalogo.M.ids());
+  const fuentes = filesBelow(path.join(root, 'src')).filter((f) => /\.(gs|html)$/.test(f)).map((f) => [path.relative(root, f), fs.readFileSync(f, 'utf8')]);
+  const pregunta = /\b(?:permisoDe|puede|puedeEditarModulo|deModulo|parte|veSeccion|Permisos\.(?:puedeLeer|puedeEditar|exigir|puedeLeerFamilia))\((?:token, )?'([a-z][a-z.-]*)'/g;
+  const faltan = [];
+  let n = 0;
+  fuentes.forEach(([archivo, texto]) => {
+    for (const m of texto.matchAll(pregunta)) {
+      if (m[1].endsWith('.')) continue;   // se completa al correr ('lineas-telefonicas.' + seccion)
+      n++;
+      // veSeccion (lineas.html) pregunta por una sección de Líneas Telefónicas
+      const id = /veSeccion\(/.test(m[0]) ? 'lineas-telefonicas.' + m[1] : m[1];
+      if (!ids.has(id)) faltan.push(archivo + ': ' + id);
+    }
+  });
+  assert.ok(n >= 80, n + ' preguntas de permiso');
+  assert.deepEqual([...new Set(faltan)], [], 'ids que no están en Modulos.gs');
+  // Y los nodos escritos como texto en los servicios de Líneas (SECCION, EXPORTA)
+  const tel = read('src/services/TelefoniaService.gs');
+  [...tel.matchAll(/'((?:lineas-telefonicas|cambios-lineas|accesorios-lineas)\.[a-z-]+)'/g)].forEach((m) => assert.ok(ids.has(m[1]), m[1]));
+});
+
+test('Exportar es la sección exportar del módulo de la pantalla', () => {
+  const dt = read('src/html/js/componentes/datatable.html');
+  assert.match(dt, /if \(cfg\.exportar && typeof puedeExportarAqui === 'function' && !puedeExportarAqui\(\)\) cfg\.exportar = false;/);
+  const app = read('src/html/js/app.html');
+  assert.match(app, /function puedeExportarAqui\(\) \{[\s\S]*?return !modulo \|\| puede\(modulo \+ '\.exportar'\);/);
 });

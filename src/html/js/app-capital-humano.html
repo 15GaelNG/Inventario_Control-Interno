@@ -147,6 +147,12 @@
       const archivo = document.getElementById('ch-archivo');
       const revisar = document.getElementById('ch-revisar');
       const caja = document.getElementById('ch-ensayo');
+      // Subir la lista escribe (y el ensayo también lo pide el servidor con edición): sin ella, solo se consulta
+      if (!puedeEditarModulo('capital-humano')) {
+        archivo.disabled = true;
+        revisar.disabled = true;
+        revisar.title = 'Tu permiso en Capital humano es de solo lectura';
+      }
       let comprimido = null;
       const nombre = document.getElementById('ch-archivo-nombre');
       archivo.addEventListener('change', () => {

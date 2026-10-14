@@ -101,6 +101,10 @@
   }
 
   async function initSolicitudCompra() {
+    // Lo que escribe, solo con edición (antes se veía y el servidor lo negaba). "Ya crear vehículo" además da
+    // de alta un vehículo: también pide editar Vehículos
+    const puedeEditar = puedeEditarModulo('solicitud-compra');
+    const creaVehiculo = puedeEditar && puedeEditarModulo('vehiculos');
     async function recargarLista() {
       tabla.setCargando(true);
       try {
@@ -133,20 +137,22 @@
         },
       ],
       accionesFila: [
-        { icono: 'pencil', titulo: 'Editar', alHacer: (f) => abrirModalEditarSolicitudCompra(f) },
-        { icono: 'upload', titulo: 'Subir archivos', alHacer: (f) => abrirModalArchivosSolicitudCompra(f) },
+        puedeEditar && { icono: 'pencil', titulo: 'Editar', alHacer: (f) => abrirModalEditarSolicitudCompra(f) },
+        puedeEditar && { icono: 'upload', titulo: 'Subir archivos', alHacer: (f) => abrirModalArchivosSolicitudCompra(f) },
         { icono: 'external-link', titulo: 'Abrir carpeta', alHacer: (f) => window.open(f.LIGA_CARPETA, '_blank'), visible: (f) => !!f.LIGA_CARPETA },
-        { icono: 'car', titulo: 'Ya crear vehículo', visible: (f) => f.ESTATUS === 'ABIERTA', alHacer: (f) => crearVehiculoDesdeSolicitudCompra(f) },
-      ],
+        creaVehiculo && { icono: 'car', titulo: 'Ya crear vehículo', visible: (f) => f.ESTATUS === 'ABIERTA', alHacer: (f) => crearVehiculoDesdeSolicitudCompra(f) },
+      ].filter(Boolean),
       seleccionable: true,
-      alEliminar: async (filas) => {
+      alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarSolicitudCompra', state.token, f.ID)));
-      },
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
     await recargarLista();
 
-    document.getElementById('soc-btn-nueva').addEventListener('click', abrirModalNuevaSolicitudCompra);
+    if (puedeEditar) document.getElementById('soc-btn-nueva').addEventListener('click', abrirModalNuevaSolicitudCompra);
+    else document.getElementById('soc-btn-nueva').remove();
     document.getElementById('btn-cerrar-nueva-solicitud-compra').addEventListener('click', cerrarModalNuevaSolicitudCompra);
     document.getElementById('btn-cerrar-editar-solicitud-compra').addEventListener('click', cerrarModalEditarSolicitudCompra);
     document.getElementById('form-editar-solicitud-compra').addEventListener('submit', async (ev) => {
