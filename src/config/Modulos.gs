@@ -37,9 +37,8 @@ const Modulos = (function () {
         { id: 'vehiculos', etiqueta: 'Vehículos', listo: true, referencia: 'el catálogo de vehículos para elegir la unidad' },
         // Catálogo de expedientes de compra por serie (índice de Adquisición Vehicular, solo
         // lectura). Antes vivía dentro del permiso de Vehículos; ahora tiene su propio permiso
-        // (14-oct-2026) para poder asignarse aparte desde la Matriz, como Reasignaciones. La
-        // pestaña "Adquisición" DENTRO de la ficha de un vehículo (buscar/ver su expediente) sigue
-        // siendo del permiso de Vehículos -- no de este.
+        // (14-oct-2026) para poder asignarse aparte desde la Matriz, como Reasignaciones. También
+        // la pestaña "Adquisición" de la ficha de un vehículo (buscar/ver su expediente).
         { id: 'adquisicion-vehicular', etiqueta: 'Adquisición', listo: true },
         { id: 'cambios-vehiculos', etiqueta: 'Cambios Vehículos' },
         { id: 'reasignaciones-vehiculares', etiqueta: 'Reasignaciones Vehiculares' },

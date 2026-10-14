@@ -489,7 +489,8 @@ const Permisos = (function () {
    * Las entradas del menú que antes colgaban de otro permiso (los panoramas) o no pedían ninguno
    * (Sistemas, Encuestas) y ahora tienen su propio módulo. Para que nadie perdiera nada, se copian
    * los permisos de entonces (separacion_):
-   *   de         quien tenía uno de estos módulos recibe el nuevo (y un NINGUNO por correo, también)
+   *   de         quien tenía uno de estos módulos recibe el nuevo (y un NINGUNO por correo, también);
+   *              yaExistia: el módulo ya estaba (Adquisición), pero una parte suya colgaba de otro
    *   familiaDe  quien tenía algún módulo de la familia de este (Sistemas solo salía en un grupo del
    *              menú con algo que ver)
    *   todos      todas las áreas de USUARIOS y, sin área, la persona (Encuestas lo veía cualquiera con sesión)
@@ -497,6 +498,8 @@ const Permisos = (function () {
    */
   const SEPARADOS = [
     { nuevo: 'panorama-vehiculos', de: ['vehiculos'] },
+    // La pestaña Adquisición de la ficha colgaba de Vehículos (también el apartado, antes del 14-oct)
+    { nuevo: 'adquisicion-vehicular', de: ['vehiculos'], yaExistia: true },
     { nuevo: 'panorama-cajachica', de: ['caja-chica'] },
     { nuevo: 'sistemas-vehiculos', familiaDe: 'vehiculos' },
     { nuevo: 'sistemas-lineas', familiaDe: 'lineas-telefonicas' },
@@ -527,7 +530,8 @@ const Permisos = (function () {
         activos.forEach((u) => dar(limpiar_(u['AREA']) ? u['AREA'] : u['CORREO'], s.nuevo, LECTURA));
         return;
       }
-      const origen = s.de || Modulos.familia(s.familiaDe).filter((m) => !SEPARADOS.some((x) => x.nuevo === m));
+      // Cuenta como "tenía algo de la familia" todo módulo que ya existía (no los que nacen aquí)
+      const origen = s.de || Modulos.familia(s.familiaDe).filter((m) => !SEPARADOS.some((x) => x.nuevo === m && !x.yaExistia));
       (reglas || []).forEach((r) => {
         const nivel = nivelValido_(r[2]);
         if (!nivel || origen.indexOf(idModulo_(r[1])) === -1) return;
