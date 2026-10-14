@@ -71,6 +71,22 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
   (pestaña Revisar de `.cache/verificaciones/20261013/plan-app.xlsx`): ~126 sin serie legible, ~84 cuya serie es de OTRO
   vehículo (los mal ligados desde AppSheet), ~40 con otra fecha en el certificado, 5 sin folio para comparar y casos
   sueltos. Para el área.
+- **Corrida 2 bis, verificaciones revisadas a mano (14-oct).** `verificaciones-completo.xlsx` (cada registro contra el
+  inventario y el certificado; la serie y la placa se buscan también con errores de OCR: `verificaciones.series_aprox` /
+  `placas_aprox`, probadas con 422 certificados conocidos sin un solo vehículo equivocado). El usuario llenó NUCO CORRECTO;
+  los de confianza MEDIA toman el NUCO sugerido; la fecha es la capturada salvo FECHA CORRECTA.
+  1. `religar_manual.py`: 148 registros re-ligados (ID VEHICULO, FOLIO VEHICULO, PLACA, NUCCO; 592 celdas),
+     bitácora `20261014-115626-religar-manual`.
+  2. `verificaciones_app.py plan … --decididos`: **nada se queda en VERIFICACIONES_Images** (usuario). Duplicados (mismo
+     md5 o mismo folio que otro comprobante del NUCO ese día) → `DUPLICADOS` junto al bueno, y la celda apunta al bueno;
+     también los 55 originales que la corrida 2 había dejado. Piloto 180, 95, 2, 37, 330 (`20261014-115727`); resto
+     `20261014-122128-verif-app`: 297 archivos, 297 celdas, 316 carpetas, 0 saltados.
+  3. `verif_sueltos.py`: los 50 que ningún registro citaba → `<NUCO>/3.-VERIFICACIONES/_POR REVISAR/SIN REGISTRO` (43, por
+     serie o placa), `DUPLICADOS` (2 versiones anteriores), `_POR REVISAR` del NUCO 98 (la duda con dos archivos del mismo
+     nombre) y `NUCOS VEHICULOS/_POR REVISAR/VERIFICACIONES SIN NUCO` (3). Bitácora `20261014-125116-verif-sueltos`.
+  Resultado: VERIFICACIONES_Images vacía; 411 de 430 registros con liga a su NUCO (18 sin comprobante, 1 "Unable to load
+  image data"); 144 duplicados, cada uno junto a su bueno. Dudas en `_POR REVISAR`: VER-000000365GE36X (NUCO 98) y
+  VER-0000003425V10P (NUCO 2). Unos 23 registros son el mismo certificado capturado dos veces en AppSheet (19 con el mismo folio): para el usuario.
 - Siguen: corrida 3 (responsivas de sensores) y 4 (firmas de Responsiva y Adherente).
 
 ## También en el radar (no se hacen sin preguntar)
