@@ -43,10 +43,6 @@ function apiResumenInicio(token) {
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
 }
-// Las fotos de perfil del directorio ({ correo: url }), para el componente Avatar
-function apiFotosPerfil(token) {
-  return FotosDirectorio.todas(token);
-}
 // Mi perfil (el usuario al pie del menú): lo de quien entró
 function apiMiPerfil(token) {
   return UsuariosService.miPerfil(token);

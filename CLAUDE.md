@@ -71,10 +71,6 @@ validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
 `Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar` y `Apariencia`. Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
-- **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
-  su perfil de Google, del directorio del dominio (`FotosDirectorio.gs`, People API, guardada en
-  caché y rehecha por el Calentador). No pintes iniciales a mano.
-
 - **Formularios declarados por columnas de una hoja → `CamposHoja`.** Vehículos
   (`CAMPOS_VEHICULO`), Caja Chica (`CAMPOS_CAJACHICA`), Arqueos (`CAMPOS_ARQUEO`),
   Uber, Tickets, Incidencias, Reasignaciones y Cambios de Monto son una lista de

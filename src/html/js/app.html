@@ -454,10 +454,6 @@
     document.getElementById('user-avatar').innerHTML = Avatar.html(state.sesion.correo, state.sesion.nombre, { tam: 34 });
     pintarUsuarioMenu(null);
     pedirMiPerfil().then(pintarUsuarioMenu).catch(() => { /* se queda con el rol y el área */ });
-    // Las fotos de todos (una vez; con copia de la visita anterior salen al instante). Una copia
-    // vacía (de cuando el directorio todavía no respondía) no se usa: se piden frescas
-    Avatar.cargar(() => callServerCacheado('apiFotosPerfil', state.token).then((copia) =>
-      (copia && Object.keys(copia).length ? copia : callServer('apiFotosPerfil', state.token))));
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
     // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
