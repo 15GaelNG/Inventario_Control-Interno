@@ -3583,7 +3583,8 @@
           ? { icono: 'pencil', texto: 'Editar equipo', separador: true, alHacer: () => abrirEditor(id) }
           : { icono: 'pencil', texto: 'Editar línea', separador: true, alHacer: () => abrirEditor(id, 'LINEA') }];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
-        const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
+        // Con su sección (lineas-telefonicas.carpetas): operación interna, un CLIENT no la tiene (el servidor ni la manda)
+        const carpeta = fichaActual && fichaActual.id === id && puede('lineas-telefonicas.carpetas') ? fichaActual.carpetaDriveId : null;
         const drive = carpeta ? [{ icono: 'folder-open', texto: 'Ver carpeta en Drive', separador: true,
           alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') }] : [];
         const documentos = [

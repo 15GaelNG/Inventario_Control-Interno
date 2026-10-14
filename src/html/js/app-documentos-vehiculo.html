@@ -66,7 +66,7 @@
       const total = d.vigentes.length + anteriores;
       const filas = d.vigentes.map((a) => fila(a, chip(d.vigentes.length > 1 ? 'En la carpeta' : 'Vigente', 'activo')))
         .concat(...d.anteriores.map((g) => g.archivos.map((a) => fila(a, chip(g.grupo, 'docs-veh-anterior')))));
-      const abrir = d.url ? '<span class="docs-veh-carpeta">' + TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</span>' : '';
+      const abrir = d.url && puede('vehiculos.carpetas') ? '<span class="docs-veh-carpeta">' + TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</span>' : '';
       return '<div class="card ln-card docs-veh-seccion">' +
         '<h3>' + Iconos.svg(ICONO[d.clave] || 'file') + ' ' + escaparHtml(d.titulo) +
         ' <span class="ln-tab-num">' + total + '</span>' + abrir + '</h3>' +
@@ -83,9 +83,11 @@
         return;
       }
       const otros = exp.otros.reduce((n, g) => n + g.archivos.length, 0);
-      let html = '<div class="card ln-card docs-veh-cabecera">' +
-        '<p class="ln-tenue">Lo que hay en la carpeta del NUCO ' + escaparHtml(exp.nuco) + ', del más nuevo al más viejo. ' +
-        'Para agregar un documento: <b>Editar</b> → Documentación y seguro.</p>' +
+      // La cabecera (de dónde sale, cómo se agrega, las ligas a las carpetas) es operación interna: con vehiculos.carpetas
+      // (un CLIENT no la tiene); cómo agregar, solo a quien puede editar el vehículo
+      let html = !puede('vehiculos.carpetas') ? '' : '<div class="card ln-card docs-veh-cabecera">' +
+        '<p class="ln-tenue">Lo que hay en la carpeta del NUCO ' + escaparHtml(exp.nuco) + ', del más nuevo al más viejo.' +
+        (puede('vehiculos', 'EDICION') ? ' Para agregar un documento: <b>Editar</b> → Documentación y seguro.' : '') + '</p>' +
         '<div class="docs-veh-carpetas"><a href="' + escaparHtml(exp.url) + '" target="_blank" rel="noopener" class="secondary">' +
         '' + Iconos.svg('folder-open') + ' NUCO ' + escaparHtml(exp.nuco) + '</a>' +
         exp.carpetas.map((c) => '<a href="' + escaparHtml(c.url) + '" target="_blank" rel="noopener" class="secondary">' +

@@ -136,14 +136,19 @@ function apiFichaVehiculo(token, idVehiculo) {
  * por sección. Con permiso de Inspección vehicular (el mismo de la pestaña). Texto JSON.
  */
 function apiInspeccionesExpediente(token, nucco) {
-  exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'inspeccion-vehicular'), token, nucco);
-  return JSON.stringify(ExpedienteNuco.inspecciones(nucco));
+  const sesion = Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  exigirNuccoEnAlcance_(sesion, token, nucco);
+  const lista = ExpedienteNuco.inspecciones(nucco);
+  // La liga a la carpeta de cada inspección, solo con vehiculos.carpetas (los PDF y las fotos sí)
+  return JSON.stringify(veCarpetasNuco_(sesion) ? lista : lista.map((d) => Object.assign({}, d, { url: '' })));
 }
 /** Las fotos de UNA inspección del expediente (solo al abrirla), por sección y con miniatura. Texto JSON. */
 function apiFotosInspeccion(token, nucco, carpetaId) {
   exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'inspeccion-vehicular'), token, nucco);
   return JSON.stringify(ExpedienteNuco.fotosInspeccion(nucco, carpetaId));
 }
+/** Las ligas a las carpetas de Drive del expediente de un NUCO: con su sección (Modulos.gs; un CLIENT no la tiene) */
+const veCarpetasNuco_ = (sesion) => !!(sesion.permisos || {})['vehiculos.carpetas'];
 /** Rol CLIENT (Permisos.alcanceDe): lo del expediente de un NUCO, solo de un vehículo de su departamento */
 function exigirNuccoEnAlcance_(sesion, token, nucco) {
   if (sesion.alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) throw new Error('No tienes acceso a este vehículo.');
@@ -151,9 +156,16 @@ function exigirNuccoEnAlcance_(sesion, token, nucco) {
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
 // Con su sección de la ficha (vehiculos.documentos); un CLIENT, solo el expediente de un vehículo de su departamento
 function apiDocumentosVehiculo(token, nucco) {
-  exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'vehiculos.documentos'), token, nucco);
-  const exp = ExpedienteNuco.listar(nucco);
+  const sesion = Permisos.puedeLeer(token, 'vehiculos.documentos');
+  exigirNuccoEnAlcance_(sesion, token, nucco);
+  const exp = Object.assign({}, ExpedienteNuco.listar(nucco));
   exp.documentos = exp.documentos.filter((d) => DOCUMENTOS_FICHA.indexOf(d.clave) !== -1);
+  // Sin vehiculos.carpetas: los archivos sí, las ligas a las carpetas no (la pantalla esconde la cabecera)
+  if (!veCarpetasNuco_(sesion)) {
+    exp.url = '';
+    exp.carpetas = [];
+    exp.documentos = exp.documentos.map((d) => Object.assign({}, d, { url: '' }));
+  }
   return JSON.stringify(exp);
 }
 

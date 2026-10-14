@@ -116,7 +116,7 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   // Lo que se lee de la carpeta de un NUCO (documentos, inspecciones y sus fotos): solo de un vehículo suyo
   const api = leer('src/ClientApi.gs');
   ['apiDocumentosVehiculo', 'apiInspeccionesExpediente', 'apiFotosInspeccion'].forEach((f) =>
-    assert.match(api, new RegExp('function ' + f + '\\(token, nucco[^)]*\\) \\{\\s+exigirNuccoEnAlcance_\\('), f));
+    assert.match(api, new RegExp('function ' + f + '\\(token, nucco[^)]*\\) \\{\\s+(const sesion = Permisos\\.puedeLeer\\([^;]+;\\s+exigirNuccoEnAlcance_\\(sesion|exigirNuccoEnAlcance_\\()'), f));
   assert.match(api, /function exigirNuccoEnAlcance_\(sesion, token, nucco\) \{\s+if \(sesion\.alcance && !VehiculosService\.nuccoEnAlcance\(token, nucco\)\)/);
   assert.match(leer('src/services/lineas/LineasAccesorios.gs'), /if \(sesion\.alcance\) throw new Error\('No tienes acceso a esta parte de Líneas\.'\);/);
   // La pestaña Adquisición de la ficha (13-oct): por serie, y por la liga de su carpeta. Con el permiso de

@@ -55,6 +55,10 @@ const Modulos = (function () {
             { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-open', alcance: true },
             { id: 'responsiva', etiqueta: 'Responsiva', icono: 'file-signature', antes: 'responsiva-vehicular' },
             { id: 'adherente', etiqueta: 'Adherentes', icono: 'users', antes: 'adherente-vehicular' },
+            // Las ligas a las carpetas de Drive del expediente (la cabecera de Documentos con NUCO / 1.-DOCUMENTACIÓN…,
+            // "Carpeta" de cada documento y de cada inspección): operación interna. Sin alcance: un CLIENT no las ve
+            // (usuario, 14-oct); los archivos sí, desde su pestaña
+            { id: 'carpetas', etiqueta: 'Carpetas en Drive', icono: 'folder-tree' },
           ],
         },
         // Catálogo de expedientes de compra por serie (índice de Adquisición Vehicular, solo
@@ -95,6 +99,8 @@ const Modulos = (function () {
             { id: 'historial', etiqueta: 'Historial', icono: 'history' },
             // Cuenta, plan y facturas del proveedor en la ficha
             { id: 'facturacion', etiqueta: 'Facturación', icono: 'receipt', alcance: true },
+            // "Ver carpeta en Drive" del ⋮ de la ficha (la carpeta del NUCO): operación interna, sin alcance (usuario, 14-oct)
+            { id: 'carpetas', etiqueta: 'Carpetas en Drive', icono: 'folder-tree' },
           ],
         },
         { id: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones' },

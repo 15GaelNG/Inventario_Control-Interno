@@ -30,10 +30,15 @@ const TelefoniaService = (function () {
    * ficha los lee cualquiera de las pantallas de Líneas (leer_), pero lo de una pestaña pide su sección.
    */
   const SECCION = { documentos: 'lineas-telefonicas.documentos', historial: 'lineas-telefonicas.historial',
-    facturacion: 'lineas-telefonicas.facturacion' };
+    facturacion: 'lineas-telefonicas.facturacion', carpetas: 'lineas-telefonicas.carpetas' };
   const leerSeccion_ = (token, seccion) => Permisos.puedeLeer(token, SECCION[seccion]);
   /** Lo del proveedor en la ficha (día de corte y últimas facturas), solo con su sección */
   const veFacturacion_ = (sesion) => !!(sesion.permisos || {})[SECCION.facturacion];
+  /** La carpeta de Drive del NUCO (el ⋮ de la ficha), solo con su sección: operación interna (un CLIENT no la tiene) */
+  const sinCarpeta_ = (doc, sesion) => {
+    if (doc && !(sesion.permisos || {})[SECCION.carpetas]) doc.carpetaDriveId = null;
+    return doc;
+  };
   /** Qué sección pide exportar cada base (LineasExportar.baseCompleta) */
   const EXPORTA = { INVENTARIO: 'lineas-telefonicas.exportar', CAMBIOS: 'cambios-lineas.exportar', ACCESORIOS: 'accesorios-lineas.exportar' };
   const operar_ = (token) => Permisos.puedeEditar(token, MODULO_OPERAR);
@@ -145,7 +150,7 @@ const TelefoniaService = (function () {
     if (!r || !r.equipo) throw new Error('No existe el equipo ' + id);
     exigirAlcance_(sesion, r);
     return LineasUtil.paraCliente({
-      equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+      equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       detalles: r.detalles,
       // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros (con su sección)
@@ -162,7 +167,7 @@ const TelefoniaService = (function () {
     exigirAlcance_(sesion, r);
     return LineasUtil.paraCliente({
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
-      equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+      equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
       detalles: r.detalles,
       // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros. «Números de esta línea» se quitó:
       // los anteriores se ven abajo del número («Antes …») y en el historial
