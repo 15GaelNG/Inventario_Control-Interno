@@ -5,9 +5,8 @@ plantillas «(SISTEMA)», página de la responsiva, patrón con 9 puntos en el P
 adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpeta, PIN en minúsculas y Drive sin
 `UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
 inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
-correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y se rehace; los archivos de la primera
-versión volvieron al código el 14-oct con una unión de `master` y están apagados en producción (§1, Menú de Líneas; antecedente
-también en `_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-14
+correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y se rehace; la primera versión volvió al código el 14-oct con una unión de `master`
+y se quitó otra vez el mismo día, sin publicar (§1, Menú de Líneas; antecedente en el historial de git y en `_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-14
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -70,15 +69,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
   pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
   «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
-  del corte; Renta, Cobrado (con la parcialidad del equipo dentro), Diferencia (contra la renta y sin la parcialidad: `cobrado - cargoEquipo - renta`), Uso (un SIM básico no lleva Renta ni Diferencia: su renta está en la tarjeta Plan),
+  del corte; Cobrado (con la parcialidad del equipo dentro), Habitual (el cobro habitual de la línea) y Diferencia (cobrado menos habitual: «Igual», «$200.00 de más» o «de menos»; menos de $0.05 cuenta como igual, el centavo de redondeo de Telcel; `fd25efd`, 14-oct, pendiente 1.17: ya no es contra la renta del adendum, que en AT&T es el precio de lista y no lo que se paga con el descuento corporativo; la renta sigue en la tarjeta Plan), Uso (un SIM básico también tiene Habitual y Diferencia; lleva su renta en la tarjeta Plan),
   Equipo (solo si la línea paga un equipo a plazos: «Parcialidad 10 de 24 · MOTOROLA 4G XT2521-2 G15 256GB GRIS · $52.08»; `3cce1da`, 14-oct), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
   «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
   WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
-  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
+  `estructura_virtual_v4`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea, pero leyendo toda su historia para calcular el habitual de cada mes: `LineasRepo.cobroHabitual` toma lo que más veces cobraron los 3 meses anteriores completos —sin meses parciales ni notas de crédito—, y si ninguno se repite, el del mes anterior; un mes sin meses anteriores no muestra Habitual ni Diferencia, y con pocos meses de historia un mes raro se puede marcar también en el siguiente; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
   «Consumido» del resumen; la de los SIM básicos está en producción desde el 14-oct y, con la actualización del mismo día, solo con llamadas hechas (pendiente 1.15);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
-  enlace a la línea), Plan de la línea, Facturación de la línea (sin renta, uso ni meses) y Responsable a todo el ancho. Cada
+  enlace a la línea), Plan de la línea, Facturación de la línea (sin habitual, uso ni meses) y Responsable a todo el ancho. Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
 - **Editar línea y Editar equipo** (8-oct; «Editar información» hasta el 13-oct): la línea se edita aparte (⋮ de la línea
   y la tabla de líneas; el equipo no la trae desde el 12-oct; `apiLineasFormularioRegistro(id, 'LINEA')`,
@@ -324,10 +323,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
 - **Menú de Líneas** (12-oct, `585d1c6`): Panorama, Líneas telefónicas, Resguardos y cancelaciones e Inventario de
   accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
-  `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk, Vínculos y Proveedor están apagados solo en producción).
-  **Proveedor** (`proveedor-lineas`, entrada «Proveedor» de `Modulos.gs`): es la primera versión del 7-oct (etapa 1, adendums y barridos; `LineasProveedor.gs`,
-  `lineas-proveedor.html`), que volvió al código con la unión de Ayrton `ac4a560` (14-oct). En producción está apagada desde la v117 (14-oct, `fdac078`; la
-  v116 la enseñaba); en los DEV se ve. Se rehace (pendiente 1.10) y no se usa en lo que ya se cargó del proveedor. El menú lateral
+  `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción).
+  **Sin «Proveedor» en el menú** (14-oct, `a6243a2`; usuario, opción B): la primera versión del 7-oct (`proveedor-lineas`) volvió al código con la unión de Ayrton `ac4a560` (v116) y se apagó en producción
+  con la v117; ahora se quitó (entrada del menú, módulo de `Modulos.gs`, `include`, pruebas y `MODULOS_APAGADOS`). Sus tres archivos quedan vacíos (`35d0fb2`, ver la tabla de archivos). Está en `emmanuel`, sin
+  `master` ni publicar: mientras no se publique, producción sigue con la v117 (Proveedor apagado). Se rehace (pendiente 1.10). El menú lateral
   sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
   «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
   el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
@@ -401,7 +400,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
 | `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
-| `lineas/LineasProveedor.gs`, `html/js/lineas-proveedor.html`, `html/views/lineas/lineas-proveedor.html` | Primera versión del módulo Proveedor (7-oct), apagada en producción; se rehace (pendiente 1.10) |
+| `lineas/LineasProveedor.gs`, `html/js/lineas-proveedor.html`, `html/views/lineas/lineas-proveedor.html` | **Vacíos** (`35d0fb2`, 14-oct): `subir.js` conserva en Apps Script los archivos que ya no están en git y estos sobrescriben a los de la primera versión del Proveedor (7-oct); se borran cuando el módulo nuevo (pendiente 1.10) los reemplace o `subir.js` sepa retirar archivos |
 | `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
 | `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Desde el 13-oct, en un DEV, guardar una inspección, generar un PDF, Mandar a resguardo y Mandar a cancelación anotan sus pasos dentro del servidor (`TelefoniaService.conPasosEnDev_`, con `LineasDatos.tiempo` «@a los ms») y el medidor los pide con `apiLineasPasosServidor` y los escribe como «SERVIDOR …»; en producción no hacen nada. Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
