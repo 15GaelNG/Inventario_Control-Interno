@@ -118,6 +118,8 @@ const Config = (function () {
       ADMIN: 'ADMIN',
       OPERADOR: 'OPERADOR',
       LECTURA: 'LECTURA',
+      // Solo consulta, y solo los renglones de sus departamentos (Permisos.alcanceDe)
+      CLIENTE: 'CLIENT',
     },
   };
 })();

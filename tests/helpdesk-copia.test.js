@@ -111,6 +111,18 @@ console.log('1. La copia se llena sola, sin llamar de más al helpdesk');
     'sin candado: la copia se salta (la siguiente consulta la pone al día) y la pantalla igual recibe su lista');
 }
 
+{
+  // La lista del inicio del helpdesk trae menos campos: lo que no trae no borra lo guardado
+  const { e, srv, fila, col } = entorno();
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', CORREO_SOLICITANTE: 'a@ejemplo.com', ESTATUS: 'Abierto', FORMULARIO: 'F' }], 'ana@ejemplo.com');
+  e.avanzar(60000);
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', CORREO_SOLICITANTE: '', ESTATUS: 'Resuelto', FORMULARIO: '' }], 'luis@ejemplo.com', true);
+  ok(fila(950)[col('ESTATUS')] === 'Resuelto' && fila(950)[col('CORREO SOLICITANTE')] === 'a@ejemplo.com' && fila(950)[col('FORMULARIO')] === 'F',
+    'parcial: actualiza lo que sí vino (estatus) y no borra lo que no vino (correo, formulario)');
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', CORREO_SOLICITANTE: '', ESTATUS: 'Resuelto', FORMULARIO: '' }], 'luis@ejemplo.com');
+  ok(fila(950)[col('CORREO SOLICITANTE')] === '', 'completo (lista o detalle): lo vacío sí cuenta');
+}
+
 // ---------------------------------------------------------------------------------- 2
 console.log('\n2. Registrar en Tickets');
 {
@@ -126,7 +138,29 @@ console.log('\n2. Registrar en Tickets');
   ok(t[4] === '2026-10-02T06:00:00.000Z', 'la fecha, como medianoche local (por HojaServicio)');
   ok(fila(901)[col('ID TICKET CI')] === r.ID, 'y la copia queda ligada a ese ticket: ' + r.ID);
   ok(/ya está registrado/.test(truena(() => srv.registrarEnTickets('tok-ana', 901, datos))), 'no se registra dos veces');
-  ok(JSON.stringify(srv.registrados('tok-luis', [901, 902])) === JSON.stringify({ 901: r.ID }), 'registrados() dice cuáles ya están (para la pantalla)');
+  ok(JSON.stringify(srv.registrados('tok-ana', [901, 902])) === JSON.stringify({ 901: r.ID }), 'registrados() dice cuáles ya están (para la pantalla)');
+}
+{
+  // "En Tickets / Falta registrar": cuenta también lo capturado a mano en Tickets (la columna
+  // TICKET es el folio del helpdesk), aunque nunca se haya abierto aquí
+  const { e, srv } = entorno();
+  const tickets = e.libros.libro.getSheetByName('TICKETS')._datos;
+  tickets.push(['TCK-20', '61800 Y 61801', '', '', '', '', '', 'NIP EOX', '', '']);
+  tickets.push(['TCK-21', '#62000', '', '', '', '', '', 'NIP EOX', '', '']);
+  tickets.push(['TCK-22', 'PENDIENTE', '', '', '', '', '', 'NIP EOX', '', '']);
+  const r = srv.registrados('tok-ana', [700, 61800, 61801, 62000, 63000]);
+  ok(JSON.stringify(r) === JSON.stringify({ 700: 'TCK-1', 61800: 'TCK-20', 61801: 'TCK-20', 62000: 'TCK-21' }),
+    'sin copia en APP_HELPDESK: los folios de la columna TICKET (uno o varios, con texto alrededor) cuentan; 63000 falta');
+  ok(/No tienes acceso/.test(truena(() => srv.registrados('tok-luis', [700]))), 'quien no lee Tickets no puede preguntar');
+  ok(JSON.stringify(srv.registrados('tok-ana', [])) === '{}', 'sin folios: vacío');
+}
+{
+  const { e, srv } = entorno();
+  e.cargar('src/config/HelpdeskFormularios.gs');
+  e.contexto.Modulos = { etiqueta: (m) => m };
+  const deTickets = srv.catalogo('tok-luis').filter((f) => f.modulo === 'tickets').map((f) => f.id).sort((a, b) => a - b);
+  ok(JSON.stringify(deTickets) === JSON.stringify([149, 288, 290, 291, 292, 293, 317]),
+    'los formularios que se registran en Tickets: combustible y NIP, Holograma y Uber (' + deTickets.join(', ') + ')');
 }
 {
   const { e, api, srv, col, fila } = entorno();
@@ -139,7 +173,112 @@ console.log('\n2. Registrar en Tickets');
 }
 
 // ---------------------------------------------------------------------------------- 3
-console.log('\n3. Guardados');
+console.log('\n3. Contexto del solicitante (el panel del ticket)');
+{
+  const { e, api, srv, estado } = entorno();
+  const SIN_PERMISO = 'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.';
+  const veHolo = { 'tok-ana': true, 'tok-luis': false };   // Luis no ve vehículos ni cajas
+  Object.assign(e.contexto, {
+    CapitalHumano: {
+      nombreComparable: (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(),
+      listarColaboradores: () => [
+        { NOMBRE: 'Isamar Juárez Atonal', NO_EMPLEADO: 'HA00100', PUESTO: 'ANALISTA', DEPARTAMENTO: 'COMPRAS', JEFE_DIRECTO: 'X', CORREO: 'Isamar@ejemplo.com' },
+        { NOMBRE: 'ISAMAR JUAREZ ATONAL', NO_EMPLEADO: 'VALLE00200', PUESTO: 'ANALISTA', DEPARTAMENTO: 'COMPRAS', CORREO: 'isamar@ejemplo.com' },
+        { NOMBRE: 'Otra Persona', NO_EMPLEADO: 'HA00999', CORREO: 'otra@ejemplo.com' },
+      ],
+    },
+    VehiculosService: {
+      listarBasico: (t) => {
+        if (!veHolo[t]) throw new Error(SIN_PERMISO);
+        return [
+          { FOLIO: 'AUT0024', PLACA: 'UNU-794-H', VIN: '3N6AD33A0NK800001', NUCO: '00031', MARCA: 'NISSAN', LINEA_VEHICULO: 'NP300', RESPONSABLE_VEHICULO: 'OTRA PERSONA', NO_EMPLEADO: 'HA00999' },
+          { FOLIO: 'AUT0025', PLACA: 'GGY886F', VIN: '93Y1R5F52RJ649008', NUCO: '45000', MARCA: 'RENAULT', RESPONSABLE_VEHICULO: 'Alguien', NO_EMPLEADO: 'HA00555' },
+          { FOLIO: 'AUT0026', PLACA: 'XYZ1234', VIN: '', NUCO: '00077', MARCA: 'CHEVROLET', RESPONSABLE_VEHICULO: 'Isamar Juarez Atonal', NO_EMPLEADO: '' },
+          { FOLIO: 'AUT0027', PLACA: 'AAA1111', VIN: '', NUCO: '00078', MARCA: 'VW', RESPONSABLE_VEHICULO: 'Nombre distinto', NO_EMPLEADO: 'VALLE00200' },
+        ];
+      },
+    },
+    CajasChicasService: {
+      listarResumen: (t) => {
+        if (!veHolo[t]) throw new Error(SIN_PERMISO);
+        return [{ ID_CCH: 12, RESPONSABLE: 'ISAMAR JUAREZ ATONAL', ESTATUS: 'VIGENTE', MONTO_ACTUAL: 5000, 'CORREO ELECTRONICO DE RESPONSABLE': '' },
+          { ID_CCH: 13, RESPONSABLE: 'Otra', ESTATUS: 'VIGENTE', 'CORREO ELECTRONICO DE RESPONSABLE': 'otra@ejemplo.com' }];
+      },
+    },
+    TelefoniaService: { indice: () => { throw new Error(SIN_PERMISO); } },   // Líneas, en el caso de abajo
+  });
+  e.contexto.Permisos.esFaltaDePermiso = (err) => /No tienes acceso|Solo puedes consultar/.test(String(err && err.message));
+  // Sus otros tickets llegan a la copia al ver la lista
+  estado.lista = [ticket(901, { email: 'isamar@ejemplo.com' }), ticket(902, { email: 'isamar@ejemplo.com', idStatus: 4, nameStatus: 'Cerrado', dateClose: '2026-10-04T15:00:00.000Z' }), ticket(903)];
+  e.avanzar(2100);
+  api.listarTickets('tok-ana');
+
+  const consulta = {
+    id: 901, correo: 'ISAMAR@ejemplo.com', nombre: 'ISAMAR JUAREZ ATONAL',
+    textos: ['RIFTER unu 794 h | Alertas', 'El km es 45000 y el VIN 93Y1R5F52RJ649008. Folio aut0024 otra vez.'],
+    campos: [{ ETIQUETA: 'Placa. Nuco o VIN', VALOR: '00077' }, { ETIQUETA: 'Kilometraje', VALOR: '00078' }],
+  };
+  const c = srv.contexto('tok-ana', consulta);
+  ok(c.persona && c.persona.PUESTO === 'ANALISTA' && c.persona.NUMEROS.join() === 'HA00100,VALLE00200', 'quién es, por su correo (sin importar mayúsculas), con sus dos números');
+  const por = (lista) => lista.map((v) => v.FOLIO + ':' + v.POR).join(' ');
+  ok(por(c.vehiculos.mencionados) === 'AUT0024:placa AUT0025:VIN AUT0026:Nucco',
+    'mencionados: placa con espacios, VIN y folio en el texto; Nucco solo del campo que lo pide (' + por(c.vehiculos.mencionados) + ')');
+  ok(!c.vehiculos.mencionados.some((v) => v.FOLIO === 'AUT0027'), 'un número en un campo que no es de placa/Nucco (kilometraje) no cuenta');
+  ok(por(c.vehiculos.aCargo) === 'AUT0026:responsable AUT0027:responsable', 'a su cargo: por nombre del responsable o por cualquiera de sus números');
+  ok(c.cajas.length === 1 && c.cajas[0].ID_CCH === 12, 'sus cajas chicas (por nombre del responsable)');
+  ok(c.otrosTickets.total === 1 && c.otrosTickets.abiertos === 0 && c.otrosTickets.ultimos[0].ID === 902,
+    'sus otros tickets de la copia, sin el que está abierto (902, cerrado)');
+
+  const l = srv.contexto('tok-luis', consulta);
+  ok(l.persona && l.vehiculos === null && l.cajas === null && l.lineas === null && l.otrosTickets === null,
+    'sin permiso de Vehículos, Caja Chica, Líneas ni Tickets: esas partes salen null (no truena ni sale vacío)');
+}
+{
+  // Líneas: del índice (nunca de la vista con PIN) y solo campos permitidos
+  const { e, srv } = entorno();
+  Object.assign(e.contexto, {
+    CapitalHumano: {
+      nombreComparable: (s) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim(),
+      listarColaboradores: () => [{ NOMBRE: 'ISAMAR JUAREZ', NO_EMPLEADO: 'HA00100', CORREO: 'isamar@ejemplo.com' }],
+    },
+    VehiculosService: { listarBasico: () => [{ FOLIO: 'AUT0024', PLACA: 'XXX111', NUCO: '12345', MARCA: 'NISSAN', RESPONSABLE_VEHICULO: 'Otro' }] },
+    CajasChicasService: { listarResumen: () => [] },
+    TelefoniaService: {
+      indice: (t) => {
+        if (t !== 'tok-ana') throw new Error('No tienes acceso a este módulo. Pídeselo a quien administra los permisos.');
+        return {
+          // El índice real no trae secretos; aquí se le ponen para probar que no se copian
+          equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'numero', 'compania', 'PIN EQUIPO', 'CONTRASEÑA MODEM'],
+            filas: [['EQU-1', '12345', 'CELULAR', 'A15', '359999', 'ASIGNADO', 'Isamar Juarez', '55 1234 5678', 'TELCEL', '9911', 'clave'],
+              ['EQU-2', '20001', 'CELULAR', 'A05', '358888', 'ASIGNADO', 'Otra Persona', '3312345678', 'AT&T', '1234', ''],
+              ['EQU-3', '20002', 'MODEM', 'B310', '357777', 'DISPONIBLE', 'Nadie', '', '', '', '']] },
+          lineas: { columnas: ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'suelta'],
+            filas: [['LIN-9', '8187654321', '8952', 'TELCEL', 'ACTIVA', '', '', 'ISAMAR JUAREZ', true]] },
+          vista: { columnas: ['PIN WHATSAPP'], secretas: ['PIN WHATSAPP'], filas: [['LIN-9', '4455']] },
+        };
+      },
+    },
+  });
+  e.contexto.Permisos.esFaltaDePermiso = (err) => /No tienes acceso|Solo puedes consultar/.test(String(err && err.message));
+  const q = { id: 1, correo: 'isamar@ejemplo.com', nombre: 'ISAMAR JUAREZ', formulario: 286,
+    textos: ['Cambio de número de la línea +52 33 1234 5678 por favor'], campos: [{ ETIQUETA: 'NUCO del que se solicita el cambio de número', VALOR: '20002' }] };
+  const c = srv.contexto('tok-ana', q);
+  const ids = (lista) => lista.map((x) => x.ID + ':' + x.POR).join(' ');
+  ok(ids(c.lineas.mencionados) === 'EQU-2:número EQU-3:NUCO', 'citados: el número con lada y espacios, y el NUCO del campo de un formulario de Líneas (' + ids(c.lineas.mencionados) + ')');
+  ok(ids(c.lineas.aCargo) === 'EQU-1:responsable LIN-9:responsable', 'los suyos, por el nombre del responsable: su equipo y su línea suelta');
+  ok(!c.vehiculos.mencionados.length, 'el NUCO de un formulario de Líneas no se busca en Vehículos (AUT0024 tiene el mismo número de otro catálogo)');
+  const texto = JSON.stringify(c.lineas);
+  ok(!/9911|clave|4455|359999|8952|PIN|CONTRASE|imei|sim/i.test(texto), 'sin PIN, contraseñas, IMEI ni SIM en lo que sale');
+  const v = srv.contexto('tok-ana', Object.assign({}, q, { formulario: 317, campos: [{ ETIQUETA: 'Placa. Nuco o VIN', VALOR: '12345' }] }));
+  ok(v.vehiculos.mencionados.length === 1 && !v.lineas.mencionados.some((x) => x.POR === 'NUCO'), 'y al revés: en un formulario de combustible el Nucco es de Vehículos, no de Líneas');
+
+  const nada = srv.contexto('tok-ana', { id: 5, correo: 'nadie@ejemplo.com', textos: ['sin nada'] });
+  ok(nada.persona === null && nada.vehiculos.mencionados.length === 0 && nada.vehiculos.aCargo.length === 0 && nada.cajas.length === 0,
+    'alguien que no está en CH ni tiene nada: todo vacío');
+}
+
+// ---------------------------------------------------------------------------------- 4
+console.log('\n4. Guardados');
 {
   const { e, api, srv } = entorno();
   ok(Array.isArray(srv.listarGuardados('tok-ana')) && srv.listarGuardados('tok-ana').length === 0, 'sin hoja todavía: lista vacía, sin tronar');

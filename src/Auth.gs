@@ -53,6 +53,7 @@ const Auth = (function () {
       SUPER: Config.ROLES.ADMIN,
       USER: Config.ROLES.OPERADOR,
       VIEWER: Config.ROLES.LECTURA,
+      CLIENT: Config.ROLES.CLIENTE,
     };
     return roles[String(rolOriginal || '').trim().toUpperCase()] || Config.ROLES.LECTURA;
   }

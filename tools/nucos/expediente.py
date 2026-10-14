@@ -52,8 +52,15 @@ def drive():
     return build("drive", "v3", credentials=credenciales("lab"), cache_discovery=False)
 
 
+# Sin esto una consulta que Drive deja colgada espera indefinidamente (13-oct: la foto tardó 66 min y murió con
+# "The read operation timed out"); con él, a los 120 s truena y llamar() la reintenta.
+import socket
+socket.setdefaulttimeout(120)
+
+
 def llamar(peticion):
-    """execute() con reintentos cuando Drive pide bajar el ritmo."""
+    """execute() con reintentos cuando Drive pide bajar el ritmo o la conexión se corta (timeout, reset)."""
+    import ssl
     from googleapiclient.errors import HttpError
     for intento in range(8):
         try:
@@ -63,6 +70,9 @@ def llamar(peticion):
                 time.sleep(3 * (intento + 1))
                 continue
             raise
+        except (TimeoutError, socket.timeout, ConnectionError, ssl.SSLError, OSError) as e:
+            print("  (red: %s; reintento %d)" % (type(e).__name__, intento + 1), flush=True)
+            time.sleep(5 * (intento + 1))
     raise SystemExit("Drive no contestó después de 8 intentos")
 
 

@@ -37,6 +37,58 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
 4. **Respaldos de firmas de Responsiva y Adherente** (`RESPONSIVAS VEHICULARES_Images/`, no ligados en la hoja) →
    `5.-RESPONSIVA/FIRMAS/`. Las firmas TEMP de la firma a distancia se quedan (se borran solas al generar el PDF).
 
+## Avance del 13-oct-2026 (corrida 1: inspecciones de la app)
+
+- Fase 2 confirmada en prod: la inspección del 12-oct del NUCO 649 cayó en `649/4.-INSPECCIONES/2026/4TO TRIMESTRE`.
+- `inspecciones_app.py` (plan / aplicar / verificar / deshacer): mismas reglas que la app (periodo por fecha,
+  `INSPECCION-0088 aaaa-mm-dd.pdf`, firmas y diagramas en `FIRMAS Y DIAGRAMAS` junto a su PDF, `(2)` si el nombre existe).
+  Cada celda se busca por ID INSPECCION y debe seguir igual que en el plan; lo que cambió se salta. Nunca adivina: si la
+  copia del área dice otra fecha u otro periodo, va a Revisar.
+- Piloto aplicado y verificado en 10 NUCO: 22, 25, 60, 205, 258 (bitácora `20261013-141816` y, el 258,
+  `20261013-142100` tras probar el deshacer) y 72, 111, 201, 232, 339 (`20261013-142706`).
+- **Fechas de la homologación del 11-oct.** Tomó la fecha del nombre que el área le puso al PDF y a veces estaba mal.
+  `fechas_insp.py` leyó la fecha impresa de los 1,794 PDF (texto o OCR de Google): 934 coinciden, 27 en mes, 747 sin
+  fecha legible (casi todo escaneos con la fecha a mano), 86 distintas. Corregidas con `corregir_fecha_insp.py` (solo
+  renombra; la carpeta entera si es POR <MOTIVO> <fecha> o el periodo de una sola inspección): 5 confirmadas por la app
+  (217, 462, 301, 196, 320; bitácora `20261013-143529-fecha-insp`) y 21 "seguras" leídas del texto del PDF, 1 a 3 días,
+  mismo periodo (`20261013-145504-fecha-insp`).
+- **Decisión del usuario (13-oct):** las 60 restantes (OCR o una fecha dudosa) se quedan con el nombre del archivo: en
+  15 revisadas a mano, el nombre siempre era el bueno. Regla: **una fecha leída con OCR o de un campo dudoso nunca
+  corrige al nombre del archivo**.
+- **Corrida 1 completa (13-oct, 16:24–16:56):** foto `20261013b`, plan `20261013b/plan-app.json`, bitácora
+  `20261013-162447-insp-app.jsonl` (respaldada en Drive). 239 NUCO: 1,056 archivos movidos (98 PDF de REPORTES y 958
+  firmas y diagramas), 1,250 celdas con su liga, 289 carpetas creadas, 0 saltados. Verificación: todo en su lugar.
+  En la hoja quedan 307 de 309 PDF con liga (2 inspecciones sin PDF) y solo 4 celdas con ruta vieja, a propósito: 3
+  imágenes del NUCO 231 que no existen en Drive y la firma `data:,` del 471. Los originales de REPORTES de las
+  inspecciones que el área ya había copiado se quedaron donde estaban.
+- **Corrida 2, verificaciones (13-oct):** `verificaciones_app.py` (plan propio; aplicar/verificar/deshacer de
+  `inspecciones_app.py`). Solo se lleva al NUCO lo que el CERTIFICADO confirma: la serie (NIV) leída con OCR es la del
+  vehículo de ese NUCO, y la fecha del certificado es la capturada (o no se lee). Si el área ya tiene un comprobante de
+  ese día, se compara el FOLIO del certificado: mismo folio → la celda apunta al del área (sin duplicar); otro folio →
+  quedan los dos; sin folio legible → Revisar. Piloto 27, 48, 53, 79, 282 (`20261013-173134`, el 27 deshecho y vuelto a
+  aplicar en `20261013-173210`); resto `20261013-173629-verif-app.jsonl`: 98 movidos, 150 celdas, 154 carpetas, 0
+  pendientes. En total 155 registros quedaron con liga (100 movidos, 55 al archivo del área). **257 no se tocaron**
+  (pestaña Revisar de `.cache/verificaciones/20261013/plan-app.xlsx`): ~126 sin serie legible, ~84 cuya serie es de OTRO
+  vehículo (los mal ligados desde AppSheet), ~40 con otra fecha en el certificado, 5 sin folio para comparar y casos
+  sueltos. Para el área.
+- **Corrida 2 bis, verificaciones revisadas a mano (14-oct).** `verificaciones-completo.xlsx` (cada registro contra el
+  inventario y el certificado; la serie y la placa se buscan también con errores de OCR: `verificaciones.series_aprox` /
+  `placas_aprox`, probadas con 422 certificados conocidos sin un solo vehículo equivocado). El usuario llenó NUCO CORRECTO;
+  los de confianza MEDIA toman el NUCO sugerido; la fecha es la capturada salvo FECHA CORRECTA.
+  1. `religar_manual.py`: 148 registros re-ligados (ID VEHICULO, FOLIO VEHICULO, PLACA, NUCCO; 592 celdas),
+     bitácora `20261014-115626-religar-manual`.
+  2. `verificaciones_app.py plan … --decididos`: **nada se queda en VERIFICACIONES_Images** (usuario). Duplicados (mismo
+     md5 o mismo folio que otro comprobante del NUCO ese día) → `DUPLICADOS` junto al bueno, y la celda apunta al bueno;
+     también los 55 originales que la corrida 2 había dejado. Piloto 180, 95, 2, 37, 330 (`20261014-115727`); resto
+     `20261014-122128-verif-app`: 297 archivos, 297 celdas, 316 carpetas, 0 saltados.
+  3. `verif_sueltos.py`: los 50 que ningún registro citaba → `<NUCO>/3.-VERIFICACIONES/_POR REVISAR/SIN REGISTRO` (43, por
+     serie o placa), `DUPLICADOS` (2 versiones anteriores), `_POR REVISAR` del NUCO 98 (la duda con dos archivos del mismo
+     nombre) y `NUCOS VEHICULOS/_POR REVISAR/VERIFICACIONES SIN NUCO` (3). Bitácora `20261014-125116-verif-sueltos`.
+  Resultado: VERIFICACIONES_Images vacía; 411 de 430 registros con liga a su NUCO (18 sin comprobante, 1 "Unable to load
+  image data"); 144 duplicados, cada uno junto a su bueno. Dudas en `_POR REVISAR`: VER-000000365GE36X (NUCO 98) y
+  VER-0000003425V10P (NUCO 2). Unos 23 registros son el mismo certificado capturado dos veces en AppSheet (19 con el mismo folio): para el usuario.
+- Siguen: corrida 3 (responsivas de sensores) y 4 (firmas de Responsiva y Adherente).
+
 ## También en el radar (no se hacen sin preguntar)
 
 - Verificaciones: 106 archivos que no son verificación; certificados rescatables (NUCO 196, 267, 252); probables
