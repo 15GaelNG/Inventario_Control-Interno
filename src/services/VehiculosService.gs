@@ -505,6 +505,8 @@ const VehiculosService = (function () {
     buscarPorId, buscar, buscarPorFolio, previsualizarFolio, previsualizarNucco,
     /** ¿Este NUCO es de un vehículo que la persona puede ver? (sus documentos en Drive van por NUCO) */
     nuccoEnAlcance: (token, nucco) => !!buscarPor_(token, 'NUCCO', nucco),
+    /** Lo mismo por la serie (el expediente de Adquisición va por serie) */
+    serieEnAlcance: (token, serie) => !!buscarPor_(token, 'SERIE VEHICULO', serie),
     crear: (token, datos) => HojaServicio.crear(VEHICULOS, token, datos),
     /**
      * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.

@@ -94,6 +94,10 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   });
   assert.match(v, /function buscarPor_\(token, columna, valor\) \{[\s\S]*?Permisos\.dentroDeAlcance\(sesion\.alcance/);
   assert.match(leer('src/ClientApi.gs'), /function apiDocumentosVehiculo\(token, nucco\) \{[\s\S]*?nuccoEnAlcance/);
+  // La pestaña Adquisición de la ficha (13-oct): por serie, y por la liga de su carpeta
+  const adq = leer('src/services/AdquisicionVehicularService.gs');
+  assert.match(adq, /function buscar\(token, serie\) \{[\s\S]*?sesion\.alcance && !VehiculosService\.serieEnAlcance/);
+  assert.match(adq, /function archivos\(token, liga\) \{[\s\S]*?if \(sesion\.alcance\) \{[\s\S]*?serieEnAlcance/);
 });
 
 test('la firma del Inicio y la campanita separa a un CLIENT de quien ve los mismos módulos', () => {

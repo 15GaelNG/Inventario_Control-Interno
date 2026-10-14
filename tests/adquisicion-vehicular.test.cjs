@@ -74,7 +74,7 @@ function libroMock() {
 function crearContexto({ fuentes2024 = [], fuentes2025 = [], fuentes2026 = [], drive = {}, libro, archivosPorCarpeta = {} } = {}) {
   const libroVehiculos = libro || libroMock();
   const contexto = vm.createContext({
-    Permisos: { puedeLeer: () => {}, puedeEditar: () => {} },
+    Permisos: { puedeLeer: () => ({ alcance: null }), puedeEditar: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_VEH' } },
     CacheHojas: { recordar: (clave, hojas2, armar) => armar() },   // sin caché: cada llamada relee la hoja
     DriveUtils: { archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [] },
