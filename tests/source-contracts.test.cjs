@@ -2544,7 +2544,23 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
 test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
-  assert.match(repo, /Math\.round\(\(cobrado - cargoEquipo - renta\) \* 100\) \/ 100/);
   assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
   assert.match(read('src/html/js/lineas.html'), /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
+});
+
+test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra lo que la línea paga normalmente', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const cuerpo = repo.slice(repo.indexOf('  function cobroHabitual('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  const habitual = new Function(cuerpo + '\nreturn cobroHabitual;')();
+  const m = (cobrado, parcial) => ({ cobrado: cobrado, parcial: !!parcial });
+  assert.strictEqual(habitual([]), null, 'sin meses anteriores no hay habitual');
+  assert.strictEqual(habitual([m(269.78), m(269.78), m(299)]), 269.78, 'lo que más se repite');
+  assert.strictEqual(habitual([m(1049), m(1249), m(1049)]), 1049);
+  assert.strictEqual(habitual([m(300), m(280), m(260)]), 300, 'si nada se repite, el mes anterior');
+  assert.strictEqual(habitual([m(120, true), m(-45), m(269.78)]), 269.78, 'sin meses parciales ni notas de crédito');
+  assert.strictEqual(habitual([m(1), m(2), m(3), m(1)]), 1, 'solo los 3 meses anteriores');
+  assert.match(repo, /f\.habitual = cobroHabitual\(todas\.slice\(i \+ 1\)\);/);
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /resumen \|\| !conHabitual\(f\) \? null : \['Habitual', dinero\(f\.habitual, true\)\],/);
+  assert.doesNotMatch(cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable(')), /f\.renta/);
 });
