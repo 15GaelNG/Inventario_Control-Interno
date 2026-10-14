@@ -440,7 +440,8 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
   });
   // Cada entrada del menú tiene su propio permiso (14-oct): dos no comparten módulo, salvo las que
   // son parte de otro a propósito. Y `libre` (sin permiso) solo en Help Desk
-  const COMPARTEN = { 'cambios-monto-cch': 'caja-chica', 'helpdesk-registrados': 'tickets' };
+  // (Cambios de monto y Registrados del Help Desk eran las excepciones: hoy son secciones con su id)
+  const COMPARTEN = {};
   entradas.filter((e) => e.vista && e.requiere && !COMPARTEN[e.vista]).forEach((e, _, todas) => {
     const otras = todas.filter((x) => x !== e && x.requiere === e.requiere).map((x) => x.vista);
     if (otras.length) problemas.push(e.vista + ': comparte el permiso ' + e.requiere + ' con ' + otras.join(', '));
@@ -2508,8 +2509,9 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   const html = read('src/html/js/lineas.html');
   const css = read('src/html/lineas-estilos.html');
   // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
-  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
-  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  // Facturación, con su sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*\(veSeccion\('facturacion'\) \? tarjetaFacturacion\(l, r\.facturas, false\) : ''\)/);
+  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ \(veSeccion\('facturacion'\) \? tarjetaFacturacion\(l, r\.facturas, true\) : ''\) : ''\)/);
   assert.match(html, /function vidaPlan\(l\)/);
   assert.match(html, /'Vencido hace ' \+ n/);
   // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto

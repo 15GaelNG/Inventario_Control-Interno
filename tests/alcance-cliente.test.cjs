@@ -85,9 +85,12 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   // Y la pantalla no pinta las pestañas ni los botones que no va a poder abrir
   const lineas = leer('src/html/js/lineas.html');
   assert.match(lineas, /const sinPasado = \(\) => !!\(memoria\.permisos && memoria\.permisos\.conAlcance\);/);
-  assert.match(lineas, /function cargarEvidencias\(id\) \{\s+if \(sinPasado\(\)\) return;/);
-  assert.match(lineas, /function cargarHistorial\(id, nombre, vista\) \{\s+if \(sinPasado\(\)\) return;/);
-  assert.match(lineas, /function botonUltimoNucos\(tipo, id\) \{\s+if \(sinPasado\(\)\) return '';/);
+  // Documentos e Historial: su sección (permisos en árbol) y nunca para un CLIENT
+  assert.match(lineas, /const veDocumentos = \(\) => !sinPasado\(\) && veSeccion\('documentos'\);/);
+  assert.match(lineas, /const veHistorial = \(\) => !sinPasado\(\) && veSeccion\('historial'\);/);
+  assert.match(lineas, /function cargarEvidencias\(id\) \{\s+if \(!veDocumentos\(\)\) return;/);
+  assert.match(lineas, /function cargarHistorial\(id, nombre, vista\) \{\s+if \(!veHistorial\(\)\) return;/);
+  assert.match(lineas, /function botonUltimoNucos\(tipo, id\) \{\s+if \(!veDocumentos\(\)\) return '';/);
   assert.match(lineas, /pasado \? \['historial', 'Historial', 'history'\] : null/);
   assert.match(telefonia, /conAlcance: !!sesion\.alcance,/);
   // El directorio de CH que piden los formularios de Vehículos (solo pedía sesión)

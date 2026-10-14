@@ -147,7 +147,8 @@ function apiFotosInspeccion(token, nucco, carpetaId) {
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
 function apiDocumentosVehiculo(token, nucco) {
   // Un CLIENT solo abre el expediente de un vehículo de su departamento (Permisos.alcanceDe)
-  if (Permisos.puedeLeer(token, 'vehiculos').alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) {
+  // Su sección de la ficha (vehiculos.documentos)
+  if (Permisos.puedeLeer(token, 'vehiculos.documentos').alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) {
     throw new Error('No tienes acceso a este vehículo.');
   }
   const exp = ExpedienteNuco.listar(nucco);
@@ -376,7 +377,7 @@ function apiFichaCajaChica(token, idCch) {
   const parte = partesDeFicha_(token, 'de la caja ' + idCch);
   return JSON.stringify({
     completo: CajasChicasService.buscarPorId(token, idCch),
-    cambios: parte('caja-chica', () => CambiosMontoCCHService.listarPorIdCch(token, idCch)),
+    cambios: parte('caja-chica.cambios-monto', () => CambiosMontoCCHService.listarPorIdCch(token, idCch)),
     arqueos: parte('arqueos', () => ArqueosService.listarPorIdCch(token, idCch)),
   });
 }

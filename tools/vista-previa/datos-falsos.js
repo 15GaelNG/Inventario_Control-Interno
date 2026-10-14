@@ -22,6 +22,8 @@
     .map((g) => Object.assign({}, g, { modulos: g.modulos.map((m) => ({ id: m.id, etiqueta: m.etiqueta, icono: m.icono || '', referencia: m.referencia || '', editaEn: m.editaEn || [] })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
+  // Y sus secciones (vehiculos.documentos, …): el servidor manda el mapa ya resuelto
+  (window.__NODOS || []).forEach((n) => { if (n.padre && permisos[n.padre]) permisos[n.id] = permisos[n.padre]; });
 
   const hace = (dias) => new Date(Date.now() - dias * 864e5).toISOString();
   const VEHICULO = {
@@ -269,7 +271,7 @@
     apiBuscarVehiculoPorFolio: VEHICULO,
     apiFichaCajaChica: () => JSON.stringify({
       completo: FICHAS.apiBuscarCajaChicaPorId,
-      cambios: permisos['caja-chica'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
+      cambios: permisos['caja-chica.cambios-monto'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
       arqueos: permisos.arqueos ? JSON.parse(FICHAS.apiArqueosPorIdCch) : null,
     }),
     // Como el servidor: cada pestaña con el permiso de su módulo (null sin él; quitarPermisos lo quita)
