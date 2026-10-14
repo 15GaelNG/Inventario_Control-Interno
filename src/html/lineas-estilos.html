@@ -348,6 +348,14 @@
   .ln-upload > .ln-icon { width: 25px; height: 25px; color: var(--color-primary); }
   .ln-upload b, .ln-upload small { display: block; }
   .ln-upload small { margin-top: 3px; color: var(--color-text-muted); font-size: 11.5px; }
+  /* Proveedor (parte 7): subir, la lista de archivos y la revisión */
+  #ln-proveedor .lnp-soltar { margin-bottom: 14px; }
+  #ln-proveedor #lnp-lista, #ln-proveedor #lnp-kpis { margin-bottom: 14px; }
+  #ln-proveedor .lnp-fecha[aria-invalid] { border-color: var(--color-danger); }
+  #ln-proveedor .lnp-notas { margin: 0 0 12px; }
+  #ln-proveedor .lnp-seccion { margin-bottom: 10px; }
+  #ln-proveedor .lnp-seccion > summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  #ln-proveedor .lnp-seccion[open] > summary { margin-bottom: 10px; }
   .ln-upload input { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   /* Arrastrar y soltar (pendiente 2.42): con archivos encima de Líneas, cada lugar para soltar se marca y dice «Suelta
      aquí»; el que está bajo el cursor, más fuerte (usuario, 13-oct: «una transición de arrastra aquí») */

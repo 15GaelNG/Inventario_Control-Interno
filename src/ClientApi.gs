@@ -43,6 +43,10 @@ function apiResumenInicio(token) {
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
 }
+// Las fotos de perfil del directorio ({ correo: url }), para el componente Avatar
+function apiFotosPerfil(token) {
+  return FotosDirectorio.todas(token);
+}
 // Mi perfil (el usuario al pie del menú): lo de quien entró
 function apiMiPerfil(token) {
   return UsuariosService.miPerfil(token);
@@ -141,7 +145,10 @@ function apiFotosInspeccion(token, nucco, carpetaId) {
 }
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
 function apiDocumentosVehiculo(token, nucco) {
-  Permisos.puedeLeer(token, 'vehiculos');
+  // Un CLIENT solo abre el expediente de un vehículo de su departamento (Permisos.alcanceDe)
+  if (Permisos.puedeLeer(token, 'vehiculos').alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) {
+    throw new Error('No tienes acceso a este vehículo.');
+  }
   const exp = ExpedienteNuco.listar(nucco);
   exp.documentos = exp.documentos.filter((d) => DOCUMENTOS_FICHA.indexOf(d.clave) !== -1);
   return JSON.stringify(exp);
@@ -303,6 +310,18 @@ function apiHelpdeskDetalle(token, idTicket) {
   Config.exigirEncendido('helpdesk');
   return JSON.stringify(HelpdeskApi.detalle(token, idTicket));
 }
+function apiHelpdeskFormulario(token, idTicket, idForm) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.formulario(token, idTicket, idForm);
+}
+function apiHelpdeskCatalogo(token) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskService.catalogo(token);
+}
+function apiHelpdeskArchivo(token, idTicket, ruta) {
+  Config.exigirEncendido('helpdesk');
+  return HelpdeskApi.archivo(token, idTicket, ruta);
+}
 function apiHelpdeskRegistrados(token, idsTicket) {
   Config.exigirEncendido('helpdesk');
   return HelpdeskService.registrados(token, idsTicket);
@@ -310,6 +329,10 @@ function apiHelpdeskRegistrados(token, idsTicket) {
 function apiHelpdeskRegistrarEnTickets(token, idTicket, datos) {
   Config.exigirEncendido('helpdesk');
   return HelpdeskService.registrarEnTickets(token, idTicket, datos);
+}
+function apiHelpdeskContexto(token, consulta) {
+  Config.exigirEncendido('helpdesk');
+  return JSON.stringify(HelpdeskService.contexto(token, consulta));
 }
 function apiHelpdeskGuardados(token) {
   Config.exigirEncendido('helpdesk');
@@ -436,6 +459,9 @@ function apiListarSolicitudesCompra(token) {
 }
 function apiCrearSolicitudCompra(token, datos) {
   return SolicitudCompraService.crear(token, datos);
+}
+function apiActualizarSolicitudCompra(token, id, datos) {
+  return SolicitudCompraService.actualizar(token, id, datos);
 }
 function apiEliminarSolicitudCompra(token, id) {
   return SolicitudCompraService.eliminar(token, id);

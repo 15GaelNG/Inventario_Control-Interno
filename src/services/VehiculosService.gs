@@ -57,6 +57,9 @@ const VehiculosService = (function () {
     nombre: 'el vehículo',
     libro: ssId,
     hoja: SHEET_VEHICULOS,
+    // Un rol CLIENT solo ve los vehículos de sus departamentos (lo heredan BASICO, RESUMEN y SEGURO,
+    // y buscarPor_ lo revisa a mano)
+    alcance: 'DEPARTAMENTO',
     // El catálogo completo trae también los renglones sin ID (diagnosticoIds los cuenta)
     incluir: () => true,
     archivos: ETIQUETA_ARCHIVO,
@@ -127,11 +130,13 @@ const VehiculosService = (function () {
   const BASICO = Object.assign({}, VEHICULOS, {
     referencia: true,
     columnas: ['ID', 'FOLIO', 'DEPARTAMENTO', 'MARCA', 'LINEA VEHICULO', 'MODELO', 'ESTATUS',
-      'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO'],
+      'RESPONSABLE VEHICULO', 'NO EMPLEADO', 'SERIE VEHICULO', 'NUCCO', 'PLACA'],
     incluir: (r) => !!r['FOLIO'] && String(r['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR',
     fila: (r) => ({
       ID: r['ID'],
       FOLIO: r['FOLIO'],
+      // La etiqueta de Verificaciones la usa, y Help Desk busca la unidad por placa en el ticket
+      PLACA: r['PLACA'] || '',
       DEPARTAMENTO: r['DEPARTAMENTO'] || '',
       MARCA: r['MARCA'] || '',
       LINEA_VEHICULO: r['LINEA VEHICULO'] || '',
@@ -176,11 +181,12 @@ const VehiculosService = (function () {
 
   /** Lectura ligera para la campanita (vencimientosSeguro): 4 columnas, con caché como las demás */
   const SEGURO = Object.assign({}, VEHICULOS, {
-    columnas: ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO'],
+    columnas: ['FOLIO', 'NUCCO', 'ESTATUS', 'FECHA VENCIMIENTO SEGURO', 'DEPARTAMENTO'],
     incluir: (r) => !!r['FOLIO'],
     fila: (r) => ({
       FOLIO: r['FOLIO'], NUCCO: r['NUCCO'] || '', ESTATUS: r['ESTATUS'] || '',
       'FECHA VENCIMIENTO SEGURO': r['FECHA VENCIMIENTO SEGURO'] || '',
+      DEPARTAMENTO: r['DEPARTAMENTO'] || '',
     }),
   });
 
@@ -195,7 +201,8 @@ const VehiculosService = (function () {
    * a "ID ANTERIOR", así que ahora se revisa la columna nueva de verdad.
    */
   function diagnosticoIds(token) {
-    Permisos.puedeLeer(token, 'vehiculos');
+    // Recorre todos los vehículos: no es para quien solo ve los de su departamento
+    if (Permisos.puedeLeer(token, 'vehiculos').alcance) throw new Error('No tienes acceso a este diagnóstico.');
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
     const { filas, datos } = SheetUtils.leerColumnasDeHoja(sheet, [ID_COLUMN, 'FOLIO', 'NUCCO']);
     const vacios = [];
@@ -243,7 +250,7 @@ const VehiculosService = (function () {
    */
   function buscarPor_(token, columna, valor) {
     // Referencia: el detalle de una incidencia o una reasignación también necesita el vehículo
-    Permisos.puedeLeerFamilia(token, 'vehiculos');
+    const sesion = Permisos.puedeLeerFamilia(token, 'vehiculos');
     if (!valor) return null;
 
     const sheet = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
@@ -265,6 +272,8 @@ const VehiculosService = (function () {
     if (rowIndex === -1) return null;
 
     const fila = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
+    // Un CLIENT no abre un vehículo de otro departamento aunque sepa su ID (VEHICULOS.alcance)
+    if (!Permisos.dentroDeAlcance(sesion.alcance, fila[headers.indexOf(VEHICULOS.alcance)])) return null;
     const limpio = {};
     headers.forEach((h, i) => {
       const valor = fila[i];
@@ -494,6 +503,10 @@ const VehiculosService = (function () {
     /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(VEHICULOS, token),
     buscarPorId, buscar, buscarPorFolio, previsualizarFolio, previsualizarNucco,
+    /** ¿Este NUCO es de un vehículo que la persona puede ver? (sus documentos en Drive van por NUCO) */
+    nuccoEnAlcance: (token, nucco) => !!buscarPor_(token, 'NUCCO', nucco),
+    /** Lo mismo por la serie (el expediente de Adquisición va por serie) */
+    serieEnAlcance: (token, serie) => !!buscarPor_(token, 'SERIE VEHICULO', serie),
     crear: (token, datos) => HojaServicio.crear(VEHICULOS, token, datos),
     /**
      * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.

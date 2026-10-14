@@ -158,6 +158,55 @@ def nucos_por_serie(texto, nucos_de_serie):
     return out
 
 
+# Lo que el OCR confunde: cambiar uno por otro cuesta menos que un error cualquiera.
+PARECIDOS = {frozenset(p) for p in ("0O", "0D", "0Q", "OD", "OQ", "DQ", "1I", "1L", "IL", "1T", "17", "T7", "2Z", "5S",
+                                    "6G", "6B", "68", "8B", "38", "3B", "UV", "MN", "4A")}
+GRUPO = {c: g[0] for g in ("0ODQ", "1ILT7", "2Z", "5S", "6GB83", "UV", "MN", "4A") for c in g}
+
+
+def _costo(a, b):
+    return 0 if a == b else 0.4 if frozenset(a + b) in PARECIDOS else 1
+
+
+def _distancia_en(serie, texto):
+    """Lo menos que cuesta encontrar la serie completa dentro del texto (puede empezar y terminar donde sea)."""
+    ant = [0.0] * (len(texto) + 1)
+    for i, a in enumerate(serie, 1):
+        act = [float(i)] + [0.0] * len(texto)
+        for j, b in enumerate(texto, 1):
+            act[j] = min(ant[j - 1] + _costo(a, b), ant[j] + 1, act[j - 1] + 1)
+        ant = act
+    return min(ant)
+
+
+def series_aprox(texto, series, maximo=2.5, ventaja=1.5):
+    """{serie del inventario: costo} de las series que el OCR leyó con errores (letras parecidas, una de más o de menos).
+    Solo la mejor de cada trozo del texto, y solo si las demás quedan lejos (`ventaja`): dos NIV de la misma flota
+    pueden diferir en un solo dígito, y en ese caso no se escoge ninguno."""
+    canon = lambda s: "".join(GRUPO.get(c, c) for c in s)
+    tri = collections.defaultdict(set)
+    for s in series:
+        for i in range(len(s) - 2):
+            tri[canon(s[i:i + 3])].add(s)
+    out = {}
+    pal = re.findall(r"[A-Z0-9]+", N(texto or ""))
+    trozos = {p for p in pal if len(p) >= 10} | {a + b for a, b in zip(pal, pal[1:]) if 14 <= len(a + b) <= 20}
+    for trozo in trozos:
+        c = canon(trozo)
+        votos = collections.Counter(s for i in range(len(c) - 2) for s in tri.get(c[i:i + 3], ()))
+        cand = sorted((_distancia_en(s, trozo), s) for s, n in votos.items() if n >= 3)
+        if cand and cand[0][0] <= maximo and (len(cand) == 1 or cand[1][0] - cand[0][0] >= ventaja):
+            out[cand[0][1]] = min(out.get(cand[0][1], 99), cand[0][0])
+    return out
+
+
+def placas_aprox(texto, placas):
+    """Las placas del inventario que aparecen en el texto, leyendo igual las letras que el OCR confunde (0/O, 5/S…)."""
+    canon = lambda s: "".join(GRUPO.get(c, c) for c in s)
+    t = canon(re.sub(r"[^A-Z0-9]", "", N(texto or "")))
+    return {p for p in placas if len(p) >= 6 and re.search(r"[A-Z]", p) and re.search(r"\d", p) and canon(p) in t}
+
+
 def leer_vehiculos():
     """NUCO, serie, placa e ID de cada vehículo (hoja VEHICULOS de producción) → vehiculos.json. Sin el folio."""
     from autorizar import credenciales

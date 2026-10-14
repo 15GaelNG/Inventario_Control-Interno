@@ -221,6 +221,22 @@ ok(d.length === 2 && d[0].antes === 'EDICION' && d[0].despues === '' && d[1].des
 d = Permisos.diferencias_(base, [{ quien: 'CI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'CI', modulo: 'arqueos', permiso: 'NINGUNO' }]);
 ok(!d.length, 'lo que queda igual no se anota (ni Sin acceso a un área que ya no tenía nada)');
 
+console.log('7c. Rol CLIENT: solo consulta, y solo sus departamentos (alcance_)');
+p = resolver(usuario({ ROL: 'CLIENT', AREA: 'CONTROL VEHICULAR' }));
+ok(p.vehiculos === 'LECTURA' && p.verificaciones === 'LECTURA', 'CLIENT: lo de su área, topado en lectura como VIEWER');
+ok(Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'Post  Venta' }))[0] === 'POST VENTA',
+  'sin DPTOS PERMITIDOS ve su AREA, normalizada (mayúsculas, un solo espacio)');
+const varios = Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: 'POST VENTA', 'DPTOS PERMITIDOS': 'Construcción, OOAM TECNICO ,' }));
+ok(JSON.stringify(varios) === JSON.stringify(['CONSTRUCCION', 'OOAM TECNICO']),
+  'DPTOS PERMITIDOS gana sobre el AREA, separado por comas y sin acentos ' + JSON.stringify(varios));
+ok(JSON.stringify(Permisos.alcance_(usuario({ ROL: 'CLIENT', AREA: '' }))) === '[]', 'un CLIENT sin área ni DPTOS PERMITIDOS no ve nada ([])');
+ok(Permisos.alcance_(usuario({ ROL: 'USER', AREA: 'POST VENTA', 'DPTOS PERMITIDOS': 'CONSTRUCCION' })) === null &&
+  Permisos.alcance_(usuario({ ROL: 'ADMIN' })) === null && Permisos.alcance_(undefined) === null,
+  'quien no es CLIENT no tiene límite (null), aunque tenga DPTOS PERMITIDOS');
+ok(Permisos.dentroDeAlcance(['POST VENTA'], 'Post Venta') && !Permisos.dentroDeAlcance(['POST VENTA'], 'DISPONIBLE') &&
+  !Permisos.dentroDeAlcance([], 'POST VENTA') && Permisos.dentroDeAlcance(null, 'lo que sea'),
+  'dentroDeAlcance: compara normalizado; [] no deja ver nada; null deja ver todo');
+
 console.log('8. Catálogo de módulos');
 ok(Modulos.existe('instalacion-sensores') && Modulos.existe(' Vehiculos '),
   'el id tolera mayúsculas y espacios: escribir "Vehiculos" en la hoja sí funciona');

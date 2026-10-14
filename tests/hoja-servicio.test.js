@@ -41,9 +41,11 @@ function entorno() {
   const log = { permisos: [], relaciones: [], renombres: [] };
   Object.assign(e.contexto, {
     Permisos: {
-      puedeLeer: (t, m) => { log.permisos.push('leer:' + m); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA' }; },
+      // 'cliente': un rol CLIENT cuyo alcance son BETA y GAMA (Permisos.alcanceDe; aquí, en la columna NOMBRE)
+      puedeLeer: (t, m) => { log.permisos.push('leer:' + m); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA', alcance: t === 'cliente' ? ['BETA', 'GAMA'] : null }; },
       EDICION: 'EDICION',
-      puedeLeerFamilia: (t, m) => { log.permisos.push('familia:' + m); return { nombre: 'ANA' }; },
+      puedeLeerFamilia: (t, m) => { log.permisos.push('familia:' + m); return { nombre: 'ANA', alcance: t === 'cliente' ? ['BETA', 'GAMA'] : null }; },
+      dentroDeAlcance: (alcance, v) => !alcance || alcance.indexOf(String(v || '').toUpperCase()) !== -1,
       // 'con-sensores': además tiene EDICION en sensores (para deOtroModulo)
       puedeEditar: (t, m) => {
         log.permisos.push('editar:' + m);
@@ -236,6 +238,20 @@ console.log('referencia: un catálogo que lee toda la familia del módulo');
   ok(log.permisos[log.permisos.length - 1] === 'leer:cosas', 'exportar todo (completo) sigue pidiendo el del módulo');
   H.listar(COSAS, 'tok');
   ok(log.permisos[log.permisos.length - 1] === 'leer:cosas', 'una lista normal, el del módulo');
+}
+
+console.log('alcance: un rol CLIENT solo ve los renglones de sus departamentos');
+{
+  const { H } = entorno();
+  const def = Object.assign({}, COSAS, { alcance: 'NOMBRE', orden: { campo: 'NOMBRE' } });
+  ok(H.listar(def, 'cliente').map((c) => c.ID).join() === 'C-1,C-3', 'listar: solo los suyos (Beta y Gama, sin importar mayúsculas)');
+  ok(H.listar(def, 'tok').length === 3, 'y la lista guardada sigue completa para los demás (se filtra al regresar, no la caché)');
+  ok(H.listarPor(def, 'cliente', 'MONTO', 2).length === 0 && H.listarPor(def, 'tok', 'MONTO', 2).length === 1, 'listarPor: tampoco por ahí');
+  ok(H.buscarPorId(def, 'cliente', 'C-2') === null && H.buscarPorId(def, 'cliente', 'C-1').ID === 'C-1',
+    'buscarPorId: el de otro departamento no existe para él; el suyo sí');
+  ok(H.completo(def, 'cliente').map((c) => c.ID).join() === 'C-1,C-3', 'completo (exportar): solo los suyos');
+  ok(H.listar(Object.assign({}, COSAS), 'cliente').length === 3, 'una definición sin alcance no se filtra');
+  ok(H.listar(Object.assign({}, def, { referencia: true }), 'cliente').length === 2, 'tampoco cuando la lee la familia (referencia)');
 }
 
 console.log('deOtroModulo: columnas que solo cambia quien edita otro módulo');

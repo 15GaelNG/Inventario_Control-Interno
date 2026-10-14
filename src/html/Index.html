@@ -115,6 +115,7 @@
   <?!= include('html/views/lineas/lineas-bitacora'); ?>
   <?!= include('html/views/lineas/lineas-gestion-activos'); ?>
   <?!= include('html/views/lineas/lineas-accesorios'); ?>
+  <?!= include('html/views/lineas/lineas-proveedor'); ?>
 
   <?!= include('html/js/api'); ?>
   <!-- Pantalla: los cortes celular / tableta / táctil del sistema. Antes que todo lo que pregunta
@@ -139,8 +140,8 @@
   <!-- CamposHoja: el motor de los formularios declarados por columnas (Vehículos, Caja Chica,
        Arqueos). Antes de app.html porque slugCampo, que usan todos los módulos, vive ahí. -->
   <?!= include('html/js/componentes/campos-hoja'); ?>
-  <!-- Avatar: iniciales (sin las fotos del directorio en esta versión). Antes de app.html: su render()
-       pinta el avatar del menú en la primera pasada. -->
+  <!-- Avatar: foto de perfil (directorio de Google) o iniciales. Antes de app.html: su render()
+       pinta el avatar de la barra de arriba en la primera pasada. -->
   <?!= include('html/js/componentes/avatar'); ?>
   <!-- Mi perfil: antes de app.html, porque su render() pinta el puesto del usuario del menú en la primera pasada -->
   <?!= include('html/js/app-perfil'); ?>
@@ -193,6 +194,8 @@
   <?!= include('html/js/lineas'); ?>
   <!-- Módulo temporal de correcciones (se quita cuando Líneas termine) -->
   <?!= include('html/js/lineas-correcciones'); ?>
+  <!-- Proveedor: adendums y facturas del mes (parte 7) -->
+  <?!= include('html/js/lineas-proveedor'); ?>
   <!-- Medidor de tiempos de Líneas: apagado salvo con ?medir=1 en la dirección -->
   <?!= include('html/js/lineas-medidor'); ?>
 

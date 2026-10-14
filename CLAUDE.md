@@ -71,6 +71,10 @@ validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
 `Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar` y `Apariencia`. Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
+- **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
+  su perfil de Google, del directorio del dominio (`FotosDirectorio.gs`, People API, guardada en
+  caché y rehecha por el Calentador). No pintes iniciales a mano.
+
 - **Formularios declarados por columnas de una hoja → `CamposHoja`.** Vehículos
   (`CAMPOS_VEHICULO`), Caja Chica (`CAMPOS_CAJACHICA`), Arqueos (`CAMPOS_ARQUEO`),
   Uber, Tickets, Incidencias, Reasignaciones y Cambios de Monto son una lista de
@@ -157,8 +161,15 @@ El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
    folio (Sensores, Hologramas, Verificaciones… eligen la unidad) y la lista de cajas (Arqueos).
 4. **Campo** (`editaModulo` / `deOtroModulo`, abajo) y los campos secretos de Líneas (PIN,
    contraseñas: solo ADMIN y el área de Líneas, se ocultan en el servidor).
-5. **Registro** (qué renglones ve cada quien, p. ej. solo los de su departamento): no se usa
-   todavía. Si hace falta, va en el servidor, como un filtro en la definición de la hoja.
+5. **Registro** (qué renglones ve cada quien): el **rol CLIENT** (ROL en USUARIOS) solo consulta (como
+   VIEWER) y solo ve los renglones de sus departamentos: `DPTOS PERMITIDOS` (separado por comas) o, si
+   está vacía, su `AREA` (`Permisos.alcanceDe`, que llega como `sesion.alcance`; null = sin límite). Se
+   filtra en el servidor **lo que se regresa, nunca la caché** (que es de todos): en `HojaServicio` con
+   `alcance: 'COLUMNA'` en la definición (Vehículos: `DEPARTAMENTO`), y en Líneas con los ayudantes de
+   `TelefoniaService` (`filtrarIndice_`, `exigirRegistroEnAlcance_`, `sinAlcance_` para lo que mezcla
+   departamentos). `tests/alcance-cliente.test.cjs` falla si una lectura nueva de Líneas no pasa por
+   ellos. Un módulo nuevo para un CLIENT necesita su `alcance` antes de darle el permiso. Hoy: POST VENTA,
+   con LECTURA en `vehiculos` y `lineas-telefonicas`.
 
 Cuando una pantalla muestra o edita algo de **otro** módulo (la ficha de Vehículos trae
 Sensores, Verificaciones, Cambios…):
@@ -227,6 +238,11 @@ versión en cada subida a prod:
    `https://script.google.com/a/macros/ciudadmaderas.com/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec`
 
 Revisa con `npx clasp -P .clasp.prod.json list-deployments` que ambos digan `@N`.
+
+**Un permiso nuevo en `oauthScopes` (appsscript.json) tumba la app hasta que se autorice.** La app
+corre como quien la desplegó: si el manifiesto pide un permiso que esa cuenta no ha aceptado, NADIE
+puede entrar. Antes de mover los despliegues, quien desplegó corre en el editor de ESE proyecto una
+función que lo use y acepta (para `directory.readonly`, de las fotos: `revisarFotosDirectorio()`).
 
 `node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
 mueve los dos despliegues. **Solo corre en la GitHub Action** (botón "Run workflow" sobre `master`,

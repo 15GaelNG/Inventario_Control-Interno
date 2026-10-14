@@ -115,11 +115,68 @@ Reglas:
 - Después, lista de tickets con filtros por estatus y el detalle al dar clic.
 - Un enlace "Abrir en helpdesk" en cada ticket, para lo que no replicamos.
 
+### Tiempo sin respuesta
+
+La lista del helpdesk ya trae, por ticket, `nextAnswer` (minutos desde la última respuesta) y
+`diffLastResponse` (los que faltan para su meta; negativo = ya pasó). Su suma es la meta: **120 min
+en todas las prioridades** (medido en los HAR del 05 y 07/10/2026, comparando el mismo ticket en
+los dos). `normalizar_` los guarda como `MIN_SIN_RESPUESTA`, `META_RESPUESTA_MIN` y `MEDIDO_EN`
+(cuándo se midieron: la pantalla le suma lo que pasó, porque la lista y la ficha salen de la caché).
+**No cuesta llamadas.** La lista del inicio (Mi departamento, Los que levanté) no los trae.
+
+Solo cuenta en lo que espera respuesta nuestra (Abierto, Sin asignación, Reabierto; Pendiente
+espera al solicitante): ámbar al pasar la meta del helpdesk, rojo con más de un día (con la meta de
+2 h casi todo saldría en rojo). Sale junto a la fecha de cada ticket, en sus Propiedades y, en la
+cabecera de la lista, cuántos de los que se ven llevan más de un día.
+
+### "En Control Interno": el contexto de quien pide el ticket
+
+En el panel del ticket, lo que sabemos de esa persona en nuestros módulos
+(`HelpdeskService.contexto`, `apiHelpdeskContexto`). Es una llamada a nuestro servidor y
+**ninguna al helpdesk**: todo sale de listas que ya están en caché.
+
+- **Quién es:** puesto, número(s) de empleado y jefe directo, de la lista de Capital Humano,
+  buscado por su correo.
+- **Vehículos:** los que el ticket cita y los que tiene a cargo (por cualquiera de sus números o
+  por el nombre del responsable), con "Ver" a su ficha. Se busca la placa, el VIN o el folio en el
+  título, la conversación y las respuestas del formulario, también escritos con guiones o espacios
+  ("UNU-794-H"). El **Nucco solo se toma de un campo del formulario que lo pida** (Placa, Nuco o
+  VIN): en texto libre un número de 5 cifras puede ser un kilometraje o un monto. Al abrir las
+  respuestas del formulario (F) se vuelve a preguntar con ellas.
+- **Líneas y equipos:** los suyos (por el nombre del responsable, como Gestión de Activos) y los
+  que el ticket cita: un número de 10 dígitos en el texto o el formulario (con lada o espacios) o el
+  NUCO de un campo, este solo en formularios de Líneas (en los de combustible el "Nuco" es de
+  Vehículos). Sale del ÍNDICE de Líneas, nunca de su vista de tabla, y de cada renglón solo se
+  copian NUCO, número, compañía, modelo, tipo y estatus: **nada de PIN, contraseñas, patrón,
+  cuenta Google, IMEI ni SIM** (una prueba lo revisa). "Ver" abre la ficha (`Lineas.irARegistro`).
+- **Caja chica:** las suyas (por correo o nombre del responsable), con "Ver".
+- **Sus otros tickets:** de la copia `APP_HELPDESK`, por su correo; un clic los abre en la Bandeja.
+
+Cada parte sale solo si la persona puede ver ese módulo (Vehículos o su familia, Caja Chica o
+Arqueos, cualquiera de Líneas, Tickets). Sin permiso, el servidor da `null` y la pantalla no la
+pinta; "Ver" sale solo si además puede abrir la ficha.
+
 ## Relación con nuestra hoja `TICKETS`
 
-`TicketsService.gs` ya maneja una bitácora propia de atención (hoja `TICKETS`, con una
-columna `TICKET`). **Pendiente:** confirmar si esa columna guarda el folio del helpdesk.
-Si sí, se pueden ligar los dos: desde un ticket nuestro ver su estatus en el helpdesk.
+`TicketsService.gs` maneja una bitácora propia de atención (hoja `TICKETS`). **Su columna
+`TICKET` es el folio del helpdesk** (confirmado el 07/10/2026 en sus 2,109 registros: los números
+suben con el tiempo igual que los folios de allá).
+
+No todo lo del helpdesk va en Tickets: solo 7 formularios, los de combustible y NIP (290, 291, 292,
+293, 317), Holograma (149) y Uber (288). Salen de `MODULO_POR_FORMULARIO` en `HelpdeskService.gs`
+(los que dicen `'tickets'`). Con eso, en la Bandeja:
+
+- **Etiqueta en cada ticket** de esos formularios: "En Tickets" o "Falta registrar". La da
+  `HelpdeskService.registrados`, que cruza el folio contra la columna `TICKET` (de la lista de
+  Tickets ya guardada en caché; un registro con varios folios o con texto cuenta cada número) y
+  contra lo registrado desde aquí (`ID TICKET CI` de `APP_HELPDESK`). **No llama al helpdesk.**
+- **Bandeja "Por registrar"**, solo para quien ve Tickets: pide al helpdesk sus tickets de esos 7
+  formularios (respeta los demás filtros: fechas, agente…) y enseña los que faltan. Si en la
+  primera página quedan menos de 10, revisa hasta 2 páginas más solas; luego "Revisar 25 más".
+- Al registrar uno, sale de "Por registrar". `R` vuelve a preguntar (alguien más pudo registrar).
+
+Pendiente: el reporte de cobertura por mes (cuántos de esos formularios se registraron), con
+`tickets/downloadExcelTickets`, que trae un rango de fechas en una sola llamada.
 
 ## Riesgos que se aceptan con esta estrategia
 
@@ -151,12 +208,22 @@ Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR
       Cada ticket trae título, notas, estatus y prioridad (con color), solicitante, agente,
       formulario, áreas, `dateCreationDB` (yyyy-MM-dd), `dateClose` (ISO) y mensajes sin leer.
       Forma de ejemplo (inventada): `tests/helpdesk.test.js`.
-- [x] **La página siguiente:** no hay. Su página siempre pide 25 y se navega filtrando (estatus,
-      grupo, formulario, prioridad), con la forma `{ idStatus, idBranch, idForm, idPriority, … }`.
+- [x] **La página siguiente** (corregido el 07/10/2026; el 05/10 se creyó que no había): por
+      cursor, `pagination.nextPageLastIdTicket` = el `idTicket` del último de la página anterior
+      (también existe `prevPageFirstIdTicket`). Al filtrar, la forma es `{ idStatus, idBranch, idForm,
+      idPriority, idAgent, idDepartmentCustomer, dateCreation, dateCreationEnd (yyyy-MM-dd), … }`.
+- [x] **Las pestañas de su inicio:** `POST /tickets/getTicketsListHome { get: 'departmentTickets' |
+      'myTickets', applyFilters, pagination: { rowsPerPage } }` → `{ totalTickets, tickets }`, con
+      menos campos (`nameUserDepartment`, `areaName`, `date` "dd-MM-yyyy hh:mm AM", sin `dateClose`).
+      No se sabe cómo pagina: solo se usa la primera página.
 - [x] **El detalle:** `POST /tickets/getTicket { idTicket, isTramite: 0 }` y
       `POST /tickets/getConversationTickets { idTicket }` (los mensajes vienen en HTML: se vuelven
-      texto en el servidor). Hay también `getTicketTimeline` (cambios de estatus) y
-      `chat/getCloudFile { path }` (adjuntos), que todavía no se usan.
+      texto en el servidor). Las imágenes vienen dentro del HTML como
+      `<img src="tickets/<id>/conversation<n>/file1.png">`; su página las pide con
+      `chat/getCloudFile { path }` SIN la extensión, y la respuesta es el archivo en base64 como texto.
+      Quiénes están en el ticket: `chat/getAllUsers { idTicket }` → `usersInvolved` (trae también
+      `users`: TODOS los usuarios con correo; no se guardan). `chat/getTickets` trae la misma
+      conversación con menos campos. `getTicketTimeline` (cambios de estatus) todavía no se usa.
       **Ojo:** su página llama `POST /tickets/markMessageAsSeen` al abrir un ticket; ESCRIBE (lo
       marca como leído). Nuestra app no lo llama nunca.
 - [x] **Los catálogos:** `POST /tickets/getFilters { isTramite: 0 }` trae estatus (1 Abierto,
@@ -167,17 +234,51 @@ Todo se mide desde el navegador de un usuario, con F12 → Network → Fetch/XHR
       se lee con un script que tapa los tokens, no se sube (`*.har` en .gitignore) y se borra.
 - [x] **¿Qué ve cada usuario?** Lo que su token ve en el helpdesk (p. ej. "tickets de mi
       departamento" según sus permisos allá).
+- [x] **Las respuestas del formulario de un ticket:** `POST /homeT/getNewTicketCatalogs { isTramite: null,
+      idForm, idTicket, desarrollo: null, condominio: null }` → `fields.arrayForm.arrayForm.fields`
+      (los campos del formulario), `fields.datas.dataAnswer` (`{ idField, value }` de ESE ticket) y
+      `dataComponent4` (las opciones de los select). El catálogo de los formularios de nuestro grupo
+      está en `Catalogo_Maestro_HelpDesk_Control_Interno.xlsx`. Todavía no se usa.
+- [x] **Otras rutas vistas (07/10/2026), sin usar:** `dashboard/getStatusTikets` (KPIs: se dejó fuera a
+      propósito), `tickets/catalog`, `filters/getDashboardFilters`, `headquarters/getBranches`,
+      `reports/tickets/byForm/getReportsByForm`, `tickets/downloadExcelTickets`, `tickets/getTicketsReject`,
+      `survey`, `solutions/getSolutions`. Todas leen; ninguna escribe.
 - [ ] Si la columna `TICKET` de nuestra hoja `TICKETS` es el folio del helpdesk.
 
 ## Lo que ya está (src/services/HelpdeskApi.gs)
 
 `conectar` (valida formato, que el correo del token sea el de la sesión, que no haya vencido, y
 una llamada a autoLogin), `desconectar`, `estado` (sin llamar al helpdesk), `listarTickets`
-(los 25 del filtro, en nuestro formato), `filtros` (una vez por hora) y `detalle` (ticket +
-conversación en texto plano, sin marcarlo como leído). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
+(25 por página con "Cargar más"; filtros de estatus, grupo, formulario, prioridad, agente, departamento
+y fechas; o las vistas "Mi departamento" y "Los que yo levanté"), `filtros` (una vez por hora),
+`detalle` (ticket + conversación en texto plano + involucrados, sin marcarlo como leído; 3 llamadas) y
+`archivo` (una imagen o PDF de la conversación, solo de un ticket que la persona abrió y solo al darle clic). Límites para no saturarlo: la lista se reutiliza 60 s, 2 s
 mínimo entre llamadas de una persona, 10 por minuto por persona y 30 entre toda la app, una
 página por llamada, cero reintentos, y ante 429/5xx toda la app se detiene lo que pida
 `Retry-After` (o 2 min). 401/403 borra el token. Pruebas: `tests/helpdesk.test.js`.
+
+**La familia Help Desk (07/10/2026).** Bandeja, Formularios, Registrados y Conexión
+(`src/html/views/helpdesk.html`, `src/html/js/app-helpdesk.html`), con identidad propia (acento índigo,
+`.hd-tema`). La Bandeja sigue a Zendesk / Help Scout: bandejas a la izquierda (filtros guardados: Abiertos,
+Sin asignar, Pendientes, Resueltos, Mi departamento, Los que levanté), la lista al centro y el ticket a la
+derecha con la conversación como chat y un panel con quien lo pide, propiedades, formulario y
+participantes. Teclado: J/K, /, R, F, 1–7, Esc.
+
+**Lo que cuesta cada cosa en llamadas al helpdesk** (límite: 15 por minuto por persona, 1 s entre
+operaciones, 40 por minuto en toda la app):
+
+| Acción | Llamadas |
+|---|---|
+| Abrir una bandeja | 1 (se reutiliza 60 s) |
+| Abrir un ticket que vino en la lista | 1 (la ficha ya está, 15 min) |
+| Abrir un ticket por #folio | 2 |
+| Volver a abrir un ticket | 0 (memoria de la pantalla) |
+| Buscar por texto | 0 (filtra lo que ya llegó) |
+| Pasar con J/K por varios tickets | 1, del ticket donde se detiene |
+| Ver el formulario | 1, solo al pedirlo (30 min) |
+| Ver una imagen | 1, solo al pedirla |
+
+`chat/getAllUsers` ya no se usa: quiénes están en el ticket salen de la conversación.
 
 **El marcador "Token helpdesk"** (Chrome → nuevo marcador, en la URL):
 `javascript:(()=>{const t=localStorage.getItem('token');if(!t){alert('Primero inicia sesión en el helpdesk');return;}navigator.clipboard.writeText(t).then(()=>alert('Token copiado: pégalo en Control Interno'),()=>prompt('Copia tu token:',t));})()`

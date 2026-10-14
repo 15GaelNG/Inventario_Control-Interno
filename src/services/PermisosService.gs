@@ -23,6 +23,10 @@
  *   4. Las filas de su correo reemplazan a la base, módulo por módulo: sirven para dar y
  *      para quitar (NINGUNO).
  *   5. ROL VIEWER: todo se topa en LECTURA.
+ *   6. ROL CLIENT: como VIEWER, y además solo ve los renglones de sus departamentos (su
+ *      ALCANCE: DPTOS PERMITIDOS separado por comas o, si está vacío, su AREA). Lo aplican los
+ *      servicios que lo declaran (`alcance` en HojaServicio, TelefoniaService) sobre lo que
+ *      regresan, nunca sobre la caché compartida. Hoy: Vehículos y Líneas (POST VENTA, 14-oct).
  *
  * Sin la hoja PERMISOS se usa PERMISOS_SEMILLA (config/PermisosSemilla.gs): las mismas
  * reglas, traducidas de AppSheet. `permisosCrearHoja()` la crea con esa semilla.
@@ -52,6 +56,8 @@ const Permisos = (function () {
 
   /** Módulo de administración: solo ADMIN */
   const MODULO_USUARIOS = 'usuarios';
+  /** Ve solo lo de sus departamentos y nunca edita (punto 6 de arriba) */
+  const ROL_CLIENTE = 'CLIENT';
 
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
   const clave_ = (v) => limpiar_(v).toUpperCase();
@@ -131,7 +137,7 @@ const Permisos = (function () {
 
     const mapa = Object.assign(base, propias);
     Object.keys(mapa).forEach((modulo) => {
-      if (rol === 'VIEWER' && mapa[modulo] === EDICION) mapa[modulo] = LECTURA;
+      if ((rol === 'VIEWER' || rol === ROL_CLIENTE) && mapa[modulo] === EDICION) mapa[modulo] = LECTURA;
       // NINGUNO no se guarda: un módulo sin permiso simplemente no aparece
       if (mapa[modulo] === NINGUNO) delete mapa[modulo];
     });
@@ -143,7 +149,7 @@ const Permisos = (function () {
    * contraseña, hash ni sal (esto se guarda en CacheService). Guardadas mientras la hoja no
    * cambie; lo que se edite a mano en la hoja se ve a más tardar en 10 min.
    */
-  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE'];
+  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE', 'DPTOS PERMITIDOS'];
   function usuarios_() {
     return CacheHojas.recordar('permisos_usuarios_v1', [[ssId(), HOJA_USUARIOS]], () =>
       SheetUtils.getAll(ssId(), HOJA_USUARIOS).map((u) => {
@@ -166,9 +172,43 @@ const Permisos = (function () {
     return mapa;
   }
 
+  /**
+   * Los departamentos cuyos renglones puede ver alguien: null = sin límite (todo el que no es
+   * CLIENT); para un CLIENT, DPTOS PERMITIDOS (separado por comas) o, si está vacío, su AREA,
+   * normalizados como area_. Un CLIENT sin ninguno → [] (no ve nada). Función pura.
+   */
+  function alcance_(usuario) {
+    if (!usuario || clave_(usuario['ROL']) !== ROL_CLIENTE) return null;
+    const lista = limpiar_(usuario['DPTOS PERMITIDOS']).split(',').map(area_).filter(Boolean);
+    if (lista.length) return lista;
+    const area = area_(usuario['AREA']);
+    return area ? [area] : [];
+  }
+
+  /** ¿Un renglón de este departamento está dentro del alcance? (null = sin límite) */
+  function dentroDeAlcance(alcance, departamento) {
+    return !alcance || alcance.indexOf(area_(departamento)) !== -1;
+  }
+
+  /** El alcance de un correo (alcance_), con el mismo caché corto que deCorreo */
+  function alcanceDe(correo) {
+    const clave = 'alcance_' + clave_(correo);
+    const guardado = CacheService.getScriptCache().get(clave);
+    if (guardado) {
+      try { return JSON.parse(guardado).a; } catch (e) { /* recargar */ }
+    }
+    const alcance = alcance_(usuarios_().find((u) => clave_(u['CORREO']) === clave_(correo)));
+    try { CacheService.getScriptCache().put(clave, JSON.stringify({ a: alcance }), SEGUNDOS_CACHE); } catch (e) { /* no-op */ }
+    return alcance;
+  }
+
+  /** La sesión con lo que se revisó: sus permisos y su alcance (lo que se lee en el servidor) */
+  const conPermisos_ = (sesion, permisos) =>
+    Object.assign({}, sesion, { permisos: permisos, alcance: alcanceDe(sesion.correo) });
+
   /** Olvida lo cacheado de alguien (al cambiarle permisos, para que aplique de inmediato) */
   function olvidar(correo) {
-    CacheService.getScriptCache().remove('permisos_' + clave_(correo));
+    CacheService.getScriptCache().removeAll(['permisos_' + clave_(correo), 'alcance_' + clave_(correo)]);
   }
 
   /**
@@ -185,7 +225,7 @@ const Permisos = (function () {
         ? 'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.'
         : 'Solo puedes consultar este módulo, no modificarlo.');
     }
-    return Object.assign({}, sesion, { permisos: permisos });
+    return conPermisos_(sesion, permisos);
   }
 
   /**
@@ -194,7 +234,9 @@ const Permisos = (function () {
    * así que pueden compartir lo ya calculado (CacheHojas.calculo).
    */
   function firmaDeLectura(correo) {
-    const texto = Object.keys(deCorreo(correo)).sort().join(',');
+    // Con su alcance: un CLIENT no comparte el Inicio con quien ve los mismos módulos sin límite
+    const alcance = alcanceDe(correo);
+    const texto = Object.keys(deCorreo(correo)).sort().join(',') + (alcance ? '|' + alcance.slice().sort().join(',') : '');
     let h = 5381;
     for (let i = 0; i < texto.length; i++) h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
     return h.toString(36);
@@ -223,7 +265,7 @@ const Permisos = (function () {
     if (!modulos.some((m) => permisos[idModulo_(m)])) {
       throw new Error('No tienes acceso a este módulo. Pídeselo a quien administra los permisos.');
     }
-    return Object.assign({}, sesion, { permisos: permisos });
+    return conPermisos_(sesion, permisos);
   }
 
   /** Lo que la app necesita para armar el menú y decidir qué botones mostrar */
@@ -435,16 +477,17 @@ const Permisos = (function () {
       candado.releaseLock();
     }
     // Que el cambio aplique ya, no en 5 minutos
-    CacheService.getScriptCache().removeAll(usuarios.map((u) => 'permisos_' + clave_(u['CORREO'])));
+    CacheService.getScriptCache().removeAll([].concat.apply([], usuarios.map((u) =>
+      ['permisos_' + clave_(u['CORREO']), 'alcance_' + clave_(u['CORREO'])])));
     return panel(token);
   }
 
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS,
     deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
-    firmaDeLectura, esFaltaDePermiso,
+    firmaDeLectura, esFaltaDePermiso, alcanceDe, dentroDeAlcance, ROL_CLIENTE,
     panel, guardar,
-    resolver_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
+    resolver_, alcance_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
   };
 })();
 

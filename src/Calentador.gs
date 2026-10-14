@@ -33,6 +33,8 @@ function pasosCalentador_() {
     ['Uber', () => UberService.calentar()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
     ['Líneas (índice)', () => LineasRepo.indice(true)],
+    // Las fotos de perfil del directorio: se rehacen cada 3 h (casi nunca cambian)
+    ['Fotos del directorio', () => FotosDirectorio.calentar()],
     // Su caché dura 30 min y armarlo tarda ~15 s: se rehace una vuelta sí y otra no (cada 20
     // min, nunca llega vencido); en la otra solo se arma si no está
     ['Líneas (panorama)', () => LineasPanorama.panorama(Math.floor(Date.now() / 600000) % 2 === 0)],

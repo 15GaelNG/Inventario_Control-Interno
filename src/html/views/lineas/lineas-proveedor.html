@@ -1,0 +1,25 @@
+<!-- Proveedor (parte 7, 7-oct): adendums de Telcel y barridos de AT&T del mes. Ver html/js/lineas-proveedor.html y services/lineas/LineasProveedor.gs -->
+<template id="tpl-lineas-proveedor">
+  <section id="ln-proveedor" class="ln-modulo">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="file-spreadsheet" class="ico"></i> Proveedor</h2>
+        <p class="page-subtitle">Adendums de Telcel y barridos de AT&amp;T</p>
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="secondary" id="lnp-limpiar" hidden><i data-lucide="x" class="ico"></i> Quitar archivos</button>
+        <button type="button" id="lnp-cargar" disabled><i data-lucide="upload" class="ico"></i> Cargar</button>
+      </div>
+    </div>
+
+    <label class="ln-upload lnp-soltar" id="lnp-soltar">
+      <i data-lucide="file-up" class="ico"></i>
+      <span><b>Elegir archivos</b><small>O arrastrarlos aquí · .xlsx, .xls</small></span>
+      <input type="file" id="lnp-archivos" multiple accept=".xlsx,.xls" hidden>
+    </label>
+
+    <div class="card card-compacta" id="lnp-lista" hidden></div>
+    <div class="stat-row" id="lnp-kpis" hidden></div>
+    <div id="lnp-detalle"></div>
+  </section>
+</template>
