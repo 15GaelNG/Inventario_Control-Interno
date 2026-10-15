@@ -28,7 +28,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   y traía «Editar línea» al lado hasta el 13-oct; la línea sigue con «Editar línea», `aff5615`). Clic derecho de la línea: Detalles | Mandar a
   cancelación | Editar línea | Vincular a equipo, Cambiar de equipo o Desvincular del equipo | Ir al equipo, Historial. ⋮ de
   la ficha del equipo: Reasignar, Mandar a resguardo | Documentos (Ver última inspección, Ver última responsiva) | Ver
-  carpeta en Drive | Editar equipo | Vincular… | Historial. ⋮ de la ficha de la línea: Mandar a cancelación | Editar
+  carpeta en Drive | Editar equipo | Vincular… | Historial. ⋮ de la ficha de la línea: Mandar a cancelación | Ver
+  carpeta en Drive (solo la línea sin equipo que ya tiene carpeta en LINEAS, con la sección `lineas-telefonicas.carpetas`; `a5d2b85`, 15-oct) | Editar
   línea | Vincular… | Historial (el botón «Ver equipo» de la cabecera sigue). En Documentos la barra al seleccionar trae
   Ver inspección o Ver responsiva, Ver PDF, Generar PDF y Subir PDF firmado; Regenerar PDF y Ver carpeta en Drive solo
   en el ⋮ y el clic derecho (son `accionesSeleccion` de la tabla, no `accionesFila`).
@@ -142,6 +143,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   lo pide otra vez; cualquier otra llamada al servidor (guardar, PDF, formularios) lo borra (`llamar`, 9-oct).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
+- **La línea sin equipo solo tiene responsiva** (15-oct, `ec5bcd6`, `a5d2b85`; pendiente 2.45; en `emmanuel` y el DEV, sin publicar). Sin inspección: la ficha de la
+  línea no trae el botón y el servidor la rechaza (`exigirEquipoParaInspeccion_` en `LineasCaptura.contextoInspeccion` y `guardarInspeccion`, y en
+  `TelefoniaService.prepararEvidencia`). Sin número no abre ni guarda la responsiva («La línea no tiene número: captúralo con Editar línea.»,
+  `numeroParaResponsiva_`). El formulario (`formularioResponsiva_(…, sinEquipo)`) trae solo LÍNEA (ID, ID LINEA, número, SIM, compañía, razón social, fijos),
+  el responsable y las firmas, en 2 pasos (`PASOS_FORMULARIO.RESPONSIVA_LINEA`), sin EQUIPO ni ACCESORIOS Y ACCESOS. Al guardar (`SIN_EQUIPO`): NUCO vacío; MODELO,
+  IMEI, COLOR, ACCESORIOS, PIN WHATSAPP y PIN EQUIPO = «NO APLICA»; CONTRASEÑA vacía; no copia nada al inventario; APP_EVIDENCIAS, APP_IDENTIFICACIONES y
+  MOVIMIENTOS quedan sin NUCO. El PDF usa la misma plantilla (su texto fijo sigue diciendo «el equipo celular»): `registroPlantilla_` fija `NUCO: 'NO APLICA'` y
+  `LineasPdf.reemplazarEtiquetas_` lo imprime aunque la etiqueta sea la fórmula `RIGHT("000" & [NUCO], 4)`. Ya no se usa el NUCO ANTERIOR para guardar. Lo ya guardado en NUCOS o en `Files`
+  no se movió. **Drive:** ver §2. La responsiva de un equipo guarda en ID LINEA el ID del equipo, así que la ficha de la línea no ve las que firmó dentro de un equipo (pendiente 2.45).
 - **Qué pasa la responsiva al inventario** (13-oct): solo el color, el bloqueo del equipo (PIN EQUIPO y PATRON) y, si el
   registro tiene línea (la que ya tenía o la que pone Vincular o Cambiar línea), el PIN de WhatsApp (`guardarResponsivaEnCandado_`, pasa por
   `guardarCambiosRegistro`, que solo anota lo que cambió). Antes el PIN de WhatsApp se quedaba en la responsiva y su PDF y la
@@ -350,7 +360,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
 | FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae junio a septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15; `COMO SE HACE ESTE REPORTE.md` §11.8); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; las columnas nuevas y las correcciones están en el DEV y en producción (14-oct); 182 renglones de junio a agosto no tienen ID LINEA (el número no es de ninguna línea del sistema ni hay prueba del proveedor para ligarlo; pendiente 1.19) y no salen en ninguna ficha; después la llenará la carga mensual del proveedor (1.10) |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
-| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
+| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario), avisos, fotos y correcciones |
@@ -362,7 +372,14 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 de arriba (`LINEAS_LECTURA = ESTRUCTURA`, `LINEAS_HOJA_VIEJA_RETIRADA`).
 
 **Drive:** documentos y fotos en la carpeta de cada NUCO dentro de NUCOS (`LINEAS_DRIVE_NUCOS`); lo que no tiene NUCO, en
-la carpeta de la app (`LINEAS_DRIVE_APPSHEET`). **PDF:** copias «(SISTEMA)» de las plantillas de Google Docs del
+la carpeta de la app (`LINEAS_DRIVE_APPSHEET`), salvo la responsiva de una línea sin equipo (15-oct, pendiente 2.45), que va a la raíz
+**LINEAS** (`LINEAS_DRIVE_LINEAS` en `Entornos.gs`; junto a NUCOS): `LINEAS/<número>/CARTA RESPONSIVA/<año>/RESP DD MM/` con «RESP <número> DD MM.pdf» y las INE
+(`LineasArchivos.carpetaEvidenciaLinea`, `LineasIdentificaciones.escribir(…, destino)`). La carpeta de la línea se crea con su primera responsiva y se
+reconoce por la propiedad de Drive `idLinea`, no por el nombre (caché `carpetas_lineas_v1`, 6 h): un número reciclado da «<número> (2)» y, si el número cambió, se renombra al usarla.
+`descartarCarpeta` manda a la papelera la carpeta de la responsiva y, si quedó vacía, la de la línea (nunca LINEAS); `destinoPdf_` manda el PDF a la carpeta LINEAS ligada en
+APP_EVIDENCIAS; un documento se queda donde se firmó (vincular, cambiar o desvincular no mueve nada). Sin la clave, en producción la responsiva de una línea sin equipo
+no se guarda («Falta la carpeta LINEAS en Drive…»); en un DEV sin ella es «LINEAS» dentro de la carpeta de pruebas. `TelefoniaService.linea` manda `carpetaDriveId` de la línea sin equipo y
+`Diagnostico.gs` revisa `LINEAS_DRIVE_LINEAS` si está. **PDF:** copias «(SISTEMA)» de las plantillas de Google Docs del
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
 originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias se hicieron una vez, el 6-oct);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
