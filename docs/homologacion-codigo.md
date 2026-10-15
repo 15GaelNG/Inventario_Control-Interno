@@ -159,7 +159,26 @@ Cada paso es independiente y se puede pasar a `master` solo.
 | 5.5 ✅ | Avisos: `LineasNotificaciones` como fuente de `NotificacionesService` (hecho: `NotificacionesService.campana` con `FUENTES_` por módulo y la misma forma de aviso; una llamada, `apiNotificaciones`, en vez de dos; los avisos de Líneas ahora dan huella. La "leída" de Vehículos sigue en el navegador) | La campana ya junta; que sea un solo registro de tipos |
 | 5.6 ✅ (chica) | Formularios: lo que `htmlFormularioAppSheet` hace que `Formulario`/`CamposHoja` no. **Hecho (versión chica, usuario 15-oct):** la navegación por pasos es un componente, `Pasos` (`componentes/pasos.html`), que usan `Formulario` y las capturas de Líneas (`activarPasos`); los errores de campo, `Formulario.marcarError` en los dos. Quedan 5 copias más de la navegación (contrato con lista que solo se achica): `app.html` ×3, Arqueos e Inspecciones. **La migración completa de las capturas de Líneas se retoma al final, aislada** (ver "Pendiente al final") | Inventario primero (pasos, `mostrarSi`, subida de imagen, validaciones por tipo); lo que falte se agrega **una vez** al componente; después se migra captura por captura |
 | 5.7 ✅ | Expediente: NUCOS TELEFÓNICOS con la misma pieza que `ExpedienteNuco`. **Hecho:** la raíz con la misma regla (sin `LINEAS_DRIVE_NUCOS`, una "NUCOS TELEFONICOS" de pruebas en la raíz del proyecto; antes caía al ID de producción y `configurarLineasDev` se lo ponía a cada DEV, que desde el 2-oct escribía ahí sus PDF y fotos); `revisarEntorno` marca error si un DEV apunta a una carpeta de producción; `DriveUtils.subcarpeta` (reconoce espacios y acentos) reemplaza 6 copias (ExpedienteNuco, Líneas, PdfService, INE, Solicitud de compra). **No se hizo:** juntar las dos estructuras de carpetas (vehículos por documento y trimestre; líneas por cuatrimestre/mes, "INSP DD MM"): la de Líneas la llena el área a mano y cambiarla es decisión suya | Generalizar `ExpedienteNuco` (raíz y carpetas por tipo de activo), no copiarlo |
-| 5.8 | Datos: `LineasRepo` encima de `HojaServicio` | El último. Para entonces `HojaServicio` ya tiene la escritura de `LineasDatos` (fase 1) y lo que falte (lectura de filas sueltas con batchGet, zona horaria). `LineasRepo` se queda como traductor del modelo equipo/línea/asignación |
+| 5.8 ⏸ | Datos: `LineasRepo` encima de `HojaServicio`. **Inventariado, no movido (15-oct)**: ver "5.8: por qué espera" abajo | El último. Para entonces `HojaServicio` ya tiene la escritura de `LineasDatos` (fase 1) y lo que falte (lectura de filas sueltas con batchGet, zona horaria). `LineasRepo` se queda como traductor del modelo equipo/línea/asignación |
+
+### 5.8: por qué espera (inventario del 15-oct)
+
+Lo común ya está debajo de Líneas: `LineasDatos.conCandado` es `Candado.con` (fase 1), `recordar` y la caché son
+`CacheHojas`, y sus listas dan huella (5.2b, 5.5). Lo que `LineasDatos` hace y `HojaServicio`/`SheetUtils` no:
+
+- búsquedas por columna con TextFinder (35 mil filas de bitácora) y filas sueltas en una llamada (`batchGetByDataFilter`);
+- escrituras de una fila en una llamada a la API de Sheets y, dentro del candado, en lote (`vaciarLote_`);
+- caché comprimida en trozos, encabezados en blanco que el AppSheet conoce, columnas de IDs anteriores
+  (`ID ANTERIOR`, `ID APPSHEET`), corrección de la zona horaria de la hoja, candado contra el libro de producción;
+- **tablas virtuales de la reestructura** (`LineasLectura`: LINEAS TELEFONICAS armada con LINEAS / EQUIPOS /
+  ASIGNACIONES / ADENDUMS).
+
+Por qué no ahora: Líneas está a mitad de su reestructura (etapas 2–3). Montar `LineasRepo` sobre `HojaServicio` hoy
+sería hacerlo dos veces: primero sobre la hoja vieja virtual y luego sobre las nuevas. Orden cuando termine la
+reestructura (las hojas nuevas son hojas normales): (1) llevar a `SheetUtils` lo que sirva a todos (lectura de filas
+sueltas, escritura por la API en lote) con sus pruebas; (2) declarar LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS como
+definiciones de `HojaServicio` (con `alcance`, `campos`, `fechas`); (3) `LineasRepo` queda como traductor del modelo
+equipo/línea/asignación encima de esas definiciones.
 
 ### Pendiente al final: las capturas de Líneas sobre `Formulario` (aislado)
 
@@ -181,14 +200,24 @@ captura más simple (cancelación o vincular) → una por una, probando cada una
 
 ## Fase 6 — Estructura
 
-- [ ] Vehículos sale de `app.html` a `app-vehiculos.html` (como Arqueos y Caja Chica); Uber y Tickets también.
+**Los tres movimientos de archivos (6.1–6.3) se hacen justo antes de pasar a `master`, coordinados con el equipo**
+(15-oct): mover miles de líneas de `app.html`, `lineas.html` y `ClientApi.gs` en `common` choca con todo lo que
+Jorge, Emmanuel y Ayrton cambien en esos archivos mientras tanto (un conflicto por cada cambio suyo). Se hacen en un día
+acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin cambiar código) para que se revise fácil.
+
+- [ ] 6.1 Vehículos sale de `app.html` a `app-vehiculos.html` (como Arqueos y Caja Chica); Uber y Tickets también.
       `app.html` queda como la base: menú, sesión, inicio, ayudantes.
-- [ ] `lineas.html` en archivos por pantalla (telefónicas, gestión de activos, resguardos, cambios) sobre un
+- [ ] 6.2 `lineas.html` en archivos por pantalla (telefónicas, gestión de activos, resguardos, cambios) sobre un
       `lineas-base.html`.
-- [ ] `ClientApi.gs`: una forma de nombrar (`api<Módulo><Qué>`). **Sin renombrar de golpe**: los nombres viejos
+- [ ] 6.3 `ClientApi.gs`: una forma de nombrar (`api<Módulo><Qué>`). **Sin renombrar de golpe**: los nombres viejos
       quedan como alias hasta que nadie los llame; agrupar por módulo en el archivo.
-- [ ] `Migracion*.gs`, `SetupInicial.gs` y semillas fuera de lo que se sube a prod (que `construir.js` los
-      excluya en `prod`), o detrás de un candado de editor que ya existe.
+- [x] 6.4 Lo del editor, detrás del candado (15-oct): `candado-editor.test.js` ya no revisa una lista fija de 11
+      archivos sino **todo `src/`** (130 funciones). Faltaban 9: `_continuar` / `_estado` / `_detener` de los procesos
+      largos (índice de Adquisición, lectura e inventario de INE), que cualquiera podía arrancar o detener desde la
+      consola del navegador; el activador de tiempo pasa el candado (no hay usuario activo). `alEditarLibro` (activador
+      de edición: ahí el usuario activo es quien editó) lleva su guarda: llamado desde el navegador no hace nada.
+      No se sacaron `Migracion*` del build de prod: con el candado no hacen falta fuera, y quitarlos rompería
+      `revisarEntorno` y lo que los llama.
 
 ## Fase 7 — Pruebas que no estorben
 

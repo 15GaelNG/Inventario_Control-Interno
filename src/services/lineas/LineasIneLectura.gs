@@ -69,6 +69,7 @@ function lineasIneLectura_todo() {
 }
 
 function lineasIneLectura_continuar() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   ineLecBorrarActivadores_();
   ineNucosExigirDev_();
   const st = ineLecLeer_();
@@ -100,10 +101,12 @@ function lineasIneLectura_continuar() {
 }
 
 function lineasIneLectura_estado() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   return ineLecInforme_(ineLecLeer_());
 }
 
 function lineasIneLectura_detener() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   ineLecBorrarActivadores_();
   const st = ineLecLeer_();
   if (st && st.fase === 'LEER') { st.fase = 'DETENIDO'; ineLecGuardar_(st); }

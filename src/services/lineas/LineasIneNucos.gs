@@ -39,6 +39,7 @@ function lineasIneNucos_inventario() {
 
 /** Una tanda (lo llama el activador; también se puede correr a mano). */
 function lineasIneNucos_continuar() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   ineNucosBorrarActivadores_();
   ineNucosExigirDev_();
   const st = ineNucosLeer_();
@@ -60,10 +61,12 @@ function lineasIneNucos_continuar() {
 }
 
 function lineasIneNucos_estado() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   return ineNucosInforme_(ineNucosLeer_());
 }
 
 function lineasIneNucos_detener() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   ineNucosBorrarActivadores_();
   const st = ineNucosLeer_();
   if (st && st.fase !== 'LISTO') { st.fase = 'DETENIDO'; ineNucosGuardar_(st); }
