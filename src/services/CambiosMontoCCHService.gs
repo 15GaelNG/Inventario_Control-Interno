@@ -59,9 +59,7 @@ const CambiosMontoCCHService = (function () {
     const nueva = Number(datos['CANTIDAD ACTUALIZADA']);
     if (isNaN(nueva)) throw new Error('La cantidad actualizada debe ser un número.');
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const cajaActual = CajasChicasService.buscarPorId(token, idCch);
       if (!cajaActual) throw new Error('No se encontró la caja chica con ID CCH=' + idCch);
       const anterior = Number(cajaActual['MONTO ACTUAL']) || 0;
@@ -89,9 +87,7 @@ const CambiosMontoCCHService = (function () {
       SheetUtils.insert(HojaServicio.libro(INCREMENTOS), INCREMENTOS.hoja, fila);
       CajasChicasService.actualizar(token, idCch, { 'MONTO ACTUAL': nueva });
       return { ID: fila['ID'] };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   return {

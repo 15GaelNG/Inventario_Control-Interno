@@ -1,0 +1,113 @@
+<script>
+  /**
+   * Formato — cómo se escribe un dato en la pantalla. Una sola copia para toda la app.
+   *
+   *   Formato.esc(v)                      // texto seguro para innerHTML ('' si viene vacío)
+   *   Formato.fecha(v)                    // '05/10/2026' (como DataTable, el Excel y AppSheet)
+   *   Formato.fechaHora(v)                // '05/10/2026 14:30'
+   *   Formato.fechaHoraSiTiene(v)         // la hora solo si no es medianoche
+   *   Formato.dia(v)                      // '2026-10-05' en hora local (input date, filtros, comparar días)
+   *   Formato.hora(v)                     // '14:30'
+   *   Formato.fechaTexto(v)               // '05 oct 2026' (fichas y encabezados)
+   *   Formato.fechaTexto(v, { hora: true })   // '05 oct 2026, 14:30'
+   *   Formato.moneda(v)                   // '$1,234' o '$1,234.50' (centavos solo si los tiene)
+   *   Formato.moneda(v, { centavos: true })   // siempre con centavos; false: redondeado
+   *   Formato.miles(n)                    // '12,345' (vacío cuenta como 0)
+   *   Formato.porcentaje(v)               // 0.85 y 85 → '85%'
+   *   Formato.normal(v)                   // minúsculas y sin acentos, para comparar y buscar
+   *   Formato.normalAlineado(v)           // igual, pero letra por letra (mismo largo, para resaltar)
+   *
+   * Todos regresan '' si el dato viene vacío o no se entiende; quien quiera '—' lo pone: `fecha(v) || '—'`.
+   * Una fecha sin hora de un <input type="date"> ('2026-10-05') se lee en hora local, no el día anterior.
+   * En un módulo se puede dejar un alias corto: `const esc = Formato.esc;`. Prueba: tests/formato.test.js.
+   */
+  const Formato = (function () {
+    const ENTIDADES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const vacio = (v) => v === null || v === undefined || v === '';
+    const dos = (n) => String(n).padStart(2, '0');
+
+    function esc(v) {
+      return vacio(v) ? '' : String(v).replace(/[&<>"']/g, (c) => ENTIDADES[c]);
+    }
+
+    function aFecha(v) {
+      if (vacio(v)) return null;
+      if (v instanceof Date) return isNaN(v) ? null : v;
+      const dia = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+      const f = dia ? new Date(+dia[1], +dia[2] - 1, +dia[3]) : new Date(v);
+      return isNaN(f) ? null : f;
+    }
+
+    const soloDia = (f) => dos(f.getDate()) + '/' + dos(f.getMonth() + 1) + '/' + f.getFullYear();
+    const hora = (f) => dos(f.getHours()) + ':' + dos(f.getMinutes());
+
+    function dia(v) {
+      const f = aFecha(v);
+      return f ? f.getFullYear() + '-' + dos(f.getMonth() + 1) + '-' + dos(f.getDate()) : '';
+    }
+    function horaDe(v) {
+      const f = aFecha(v);
+      return f ? hora(f) : '';
+    }
+    function fecha(v) {
+      const f = aFecha(v);
+      return f ? soloDia(f) : '';
+    }
+    function fechaHora(v) {
+      const f = aFecha(v);
+      return f ? soloDia(f) + ' ' + hora(f) : '';
+    }
+    function fechaHoraSiTiene(v) {
+      const f = aFecha(v);
+      if (!f) return '';
+      return f.getHours() || f.getMinutes() ? soloDia(f) + ' ' + hora(f) : soloDia(f);
+    }
+    function fechaTexto(v, opciones) {
+      const f = aFecha(v);
+      if (!f) return '';
+      const texto = dos(f.getDate()) + ' ' + MESES[f.getMonth()] + ' ' + f.getFullYear();
+      return opciones && opciones.hora ? texto + ', ' + hora(f) : texto;
+    }
+
+    function aNumero(v) {
+      if (vacio(v)) return null;
+      if (typeof v === 'number') return isNaN(v) ? null : v;
+      const limpio = String(v).replace(/[$,\s]/g, '');
+      const n = Number(limpio);
+      return limpio === '' || isNaN(n) ? null : n;
+    }
+
+    function moneda(v, opciones) {
+      const n = aNumero(v);
+      if (n === null) return '';
+      const centavos = opciones && 'centavos' in opciones ? opciones.centavos : 'siTiene';
+      const conCentavos = centavos === true || (centavos === 'siTiene' && Math.round(n * 100) % 100 !== 0);
+      const digitos = conCentavos ? 2 : 0;
+      const texto = Math.abs(n).toLocaleString('es-MX', { minimumFractionDigits: digitos, maximumFractionDigits: digitos });
+      return (n < 0 ? '-$' : '$') + texto;
+    }
+
+    function miles(v, opciones) {
+      const n = aNumero(v) || 0;
+      const decimales = opciones && opciones.decimales != null ? opciones.decimales : 3;
+      return n.toLocaleString('es-MX', { maximumFractionDigits: decimales });
+    }
+
+    function porcentaje(v) {
+      const n = aNumero(v);
+      if (n === null) return '';
+      return Math.round(n > 1 ? n : n * 100) + '%';
+    }
+
+    const sinAcento = (c) => c.normalize('NFD').charAt(0).toLowerCase();
+    function normal(v) {
+      return String(v == null ? '' : v).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    }
+    function normalAlineado(v) {
+      return Array.from(String(v == null ? '' : v)).map(sinAcento).join('');
+    }
+
+    return { esc, aFecha, dia, hora: horaDe, fecha, fechaHora, fechaHoraSiTiene, fechaTexto, aNumero, moneda, miles, porcentaje, normal, normalAlineado };
+  })();
+</script>

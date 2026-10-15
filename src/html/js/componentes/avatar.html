@@ -22,7 +22,7 @@
     let pidiendo = null;
 
     const norm = (c) => String(c || '').trim().toLowerCase();
-    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+    const esc = Formato.esc;
     // Solo fotos de Google (el directorio solo da esas): nada de otra cosa en un src. Sin "//"
     // seguidas en la expresión (ver el bug de Apps Script en CLAUDE.md): de ahí el [/]
     const fotoValida = (u) => /^https:[/][/][a-z0-9.-]+\.googleusercontent\.com[/]/i.test(String(u || ''));

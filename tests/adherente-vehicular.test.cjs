@@ -108,7 +108,7 @@ function crearContexto() {
     },
   });
   vm.runInContext(
-    fs.readFileSync(path.join(__dirname, '../src/services/AdherenteVehicularService.gs'), 'utf8') +
+    fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') + fs.readFileSync(path.join(__dirname, '../src/services/AdherenteVehicularService.gs'), 'utf8') +
     '\nthis.Servicio = AdherenteVehicularService;',
     contexto
   );

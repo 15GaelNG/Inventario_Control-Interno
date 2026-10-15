@@ -24,13 +24,13 @@
       // Primero "Conexiones": las tarjetas donde se ve, se conecta y se pone al día (app-datos-conectados.html)
       lista.insertAdjacentHTML('beforeend',
         `<button type="button" class="tab-btn" data-tab="conexiones">${Iconos.svg('cable')} Conexiones</button>`);
-      tabsCont.insertAdjacentHTML('beforeend', '<div class="card card-compacta" data-panel="conexiones"><div id="dc-raiz"></div></div>');
+      tabsCont.insertAdjacentHTML('beforeend', '<div class="card card-compacta" data-tab-panel="conexiones"><div id="dc-raiz"></div></div>');
       DatosConectadosUI.iniciar(document.getElementById('dc-raiz'));
       familias.forEach((familia, i) => {
         const id = 'familia-' + i;
         lista.insertAdjacentHTML('beforeend',
           `<button type="button" class="tab-btn" data-tab="${id}">${Iconos.svg('network')} ${escaparHtml(familia)}</button>`);
-        tabsCont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-panel="${id}">
+        tabsCont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-tab-panel="${id}">
           <p class="rel-s-intro">Cada dato de ${escaparHtml(familia)} lo decide un solo módulo. Desde ahí se copia a los demás:
             unos lo mantienen al día y otros guardan cómo estaba el día que se registró.</p>
           <input type="search" class="rel-s-buscar" data-familia-buscar="${i}" placeholder="Buscar un dato (ej. departamento)" />

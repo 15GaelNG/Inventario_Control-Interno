@@ -255,8 +255,9 @@ const ResponsivaVehicularService = (function () {
   /** Lo que hay que agregar a un `cambios` de SheetUtils.update para que ninguna columna …TEMP
    *  DISTINTA a `columnaExcluir` (la que ya se está escribiendo aparte) se quede con el base64
    *  crudo de antes del 9-oct -- completarFirma/completarFirmaJefe/regenerarLiga lo usan antes
-   *  de cada escritura parcial, porque SheetUtils.update reescribe el renglón completo y
-   *  reenviar una columna vieja sin tocar puede tronar el límite de 50,000 por celda (14-oct). */
+   *  de cada escritura parcial. Nació porque SheetUtils.update reescribía el renglón completo y reenviar una
+   *  columna vieja podía tronar el límite de 50,000 por celda (14-oct); desde el 15-oct solo escribe lo que cambia,
+   *  así que ya no truena: se queda porque de paso migra la firma vieja. */
   function migrarOtrasFirmasTempSiHaceFalta_(fila, columnaExcluir) {
     const cambios = {};
     CAMPOS_FIRMA_.filter(([, columna]) => columna !== columnaExcluir).forEach(([campo, columna]) => {
@@ -436,9 +437,7 @@ const ResponsivaVehicularService = (function () {
       throw new Error('Falta la firma de quien entrega.');
     }
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const vehiculo = VehiculosService.buscar(token, folio);
       if (!vehiculo) throw new Error('No se encontró el vehículo ' + folio);
       const idVehiculo = vehiculo['ID'];
@@ -552,17 +551,16 @@ const ResponsivaVehicularService = (function () {
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
       // Enganche con reasignación: si el responsable que firma es distinto al actual del
-      // vehículo, se actualiza en la misma operación -- candadoTomado porque este hilo ya
-      // tiene el candado de arriba (waitLock no es reentrante). Corre siempre aquí (presencial
-      // o a distancia, definitiva o préstamo): es la única sesión con permiso que esta
-      // operación va a tener.
+      // vehículo, se actualiza en la misma operación. Corre siempre aquí (presencial o a
+      // distancia, definitiva o préstamo): es la única sesión con permiso que esta operación
+      // va a tener.
       const actual = String(vehiculo['RESPONSABLE VEHICULO'] || '').trim().toUpperCase();
       if (responsable.toUpperCase() !== actual) {
         VehiculosService.actualizar(token, idVehiculo, {
           'RESPONSABLE VEHICULO': responsable,
           'NO EMPLEADO': fila['NO EMPLEADO'],
           'DEPARTAMENTO': fila['DEPARTAMENTO'] || vehiculo['DEPARTAMENTO'],
-        }, { candadoTomado: true });
+        });
       }
 
       if (remoto || remotoJefe) {
@@ -580,9 +578,7 @@ const ResponsivaVehicularService = (function () {
         if (img && img.base64) imagenesPdf[campo] = Object.assign({}, img, FIRMA_PDF);
       });
       return generarPdfYGuardar_(id, fila, imagenesPdf, ahora, {});
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /** Lo mínimo para pintar la página de firma a distancia del RESPONSABLE (nunca el renglón
@@ -656,9 +652,7 @@ const ResponsivaVehicularService = (function () {
   function completarFirma(tokenFirma, imagen) {
     if (!imagen || !imagen.base64) throw new Error('Falta la firma.');
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const fila = buscarPorToken_(tokenFirma, 'TOKEN FIRMA');
       if (!fila) throw new Error('Esta liga no es válida.');
       if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE' || !fila['TOKEN FIRMA']) throw new Error('Esta liga ya se usó.');
@@ -673,7 +667,7 @@ const ResponsivaVehicularService = (function () {
       fila['FIRMADO POR'] = Session.getActiveUser().getEmail() || '';
 
       if (!listoParaFinalizar_(fila)) {
-        // SheetUtils.update reescribe el renglón completo; si FIRMA JEFE/CI TEMP se quedó con
+        // De paso: si FIRMA JEFE/CI TEMP se quedó con
         // base64 crudo de antes del 9-oct, se migra junto (mismo motivo que en regenerarLiga).
         SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], Object.assign({
           'FIRMA RESPONSABLE TEMP': fila['FIRMA RESPONSABLE TEMP'],
@@ -683,9 +677,7 @@ const ResponsivaVehicularService = (function () {
       }
 
       return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR': fila['FIRMADO POR'] });
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /**
@@ -695,9 +687,7 @@ const ResponsivaVehicularService = (function () {
   function completarFirmaJefe(tokenFirmaJefe, imagenJefe) {
     if (!imagenJefe || !imagenJefe.base64) throw new Error('Falta la firma.');
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const fila = buscarPorToken_(tokenFirmaJefe, 'TOKEN FIRMA JEFE');
       if (!fila) throw new Error('Esta liga no es válida.');
       if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE' || !fila['TOKEN FIRMA JEFE']) throw new Error('Esta liga ya se usó.');
@@ -712,7 +702,7 @@ const ResponsivaVehicularService = (function () {
       fila['FIRMADO POR JEFE'] = Session.getActiveUser().getEmail() || '';
 
       if (!listoParaFinalizar_(fila)) {
-        // SheetUtils.update reescribe el renglón completo; si FIRMA RESPONSABLE/CI TEMP se
+        // De paso: si FIRMA RESPONSABLE/CI TEMP se
         // quedó con base64 crudo de antes del 9-oct, se migra junto (mismo motivo que arriba).
         SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], Object.assign({
           'FIRMA JEFE TEMP': fila['FIRMA JEFE TEMP'],
@@ -722,9 +712,7 @@ const ResponsivaVehicularService = (function () {
       }
 
       return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR JEFE': fila['FIRMADO POR JEFE'] });
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /**
@@ -736,9 +724,7 @@ const ResponsivaVehicularService = (function () {
    */
   function devolverPrestamo(token, id) {
     Permisos.puedeEditar(token, MODULO);
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const encontrado = SheetUtils.findById(ssId(), SHEET, id, ID_COLUMN);
       if (!encontrado) throw new Error('No se encontró la responsiva ' + id);
       const fila = encontrado.data;
@@ -750,13 +736,11 @@ const ResponsivaVehicularService = (function () {
       }
       const idVehiculo = fila['ID VEHICULO'];
       if (idVehiculo) {
-        // candadoTomado: este hilo ya tiene el candado de arriba (waitLock no es reentrante) --
-        // mismo patrón que la reasignación de crear().
         VehiculosService.actualizar(token, idVehiculo, {
           'RESPONSABLE VEHICULO': fila['RESPONSABLE ANTERIOR'] || '',
           'NO EMPLEADO': fila['NO EMPLEADO ANTERIOR'] || '',
           'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
-        }, { candadoTomado: true });
+        });
       }
       // Este préstamo puede seguir PENDIENTE de firma cuando se devuelve (se entrega antes de
       // que se termine el papeleo): si alguna …TEMP se quedó con el base64 crudo de antes del
@@ -764,9 +748,7 @@ const ResponsivaVehicularService = (function () {
       SheetUtils.update(ssId(), hoja_().getName(), id,
         Object.assign({ 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, migrarOtrasFirmasTempSiHaceFalta_(fila, null)), ID_COLUMN);
       return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /** La hoja, para HojaServicio.eliminar (que además respeta Relaciones) */

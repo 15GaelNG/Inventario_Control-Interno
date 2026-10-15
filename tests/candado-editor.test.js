@@ -30,12 +30,16 @@ ok(conSesion('', 'dueno@ciudadmaderas.com'), 'desde un activador (sin usuario ac
 ok(!conSesion('otra.persona@ciudadmaderas.com', 'dueno@ciudadmaderas.com'), 'otra persona desde la web app: se detiene');
 ok(conSesion('DUENO@ciudadmaderas.com', 'dueno@ciudadmaderas.com'), 'sin importar mayúsculas en el correo');
 
-console.log('2. Toda función administrativa de nivel superior tiene candado');
+console.log('2. Toda función de nivel superior de src/ tiene candado (no solo las de administración)');
 // Las que SÍ se llaman desde la app: doGet/include (servir la página), las api* (revisan sesión
 // y permiso con su token) y las de compartir (con token piden ADMIN; sin token, soloEditor_)
 const PERMITIDAS = new Set(['doGet', 'include']);
-const ARCHIVOS = ['Diagnostico.gs', 'MigracionFamilia.gs', 'MigracionIds.gs', 'MigracionPipeline.gs', 'MigracionReplanche.gs',
-  'MigracionTodo.gs', 'SetupInicial.gs', 'Calentador.gs', 'services/lineas/LineasAdmin.gs', 'services/PermisosService.gs', 'Code.gs'];
+// Los activadores de edición no pueden llevar soloEditor_ (el usuario activo es quien editó): llevan su guarda
+const ACTIVADORES = { alEditarLibro: /if \(!e \|\| !e\.source \|\| typeof e\.source\.getId !== 'function'/ };
+// Todos los .gs de src/ (fase 6.4: antes era una lista fija y se quedaron fuera MigracionResponsivasHeredadas y los
+// procesos largos que siguen con un activador de tiempo: Adquisición, INE)
+const todos = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? todos(path.join(d, e.name)) : [path.join(d, e.name)]));
+const ARCHIVOS = todos(src('')).filter((f) => f.endsWith('.gs')).map((f) => path.relative(src(''), f));
 const sinCandado = [];
 let revisadas = 0;
 ARCHIVOS.forEach((archivo) => {
@@ -44,6 +48,10 @@ ARCHIVOS.forEach((archivo) => {
     const m = /^function ([A-Za-z0-9_]+)\s*\(/.exec(l);
     if (!m || m[1].endsWith('_') || /^api/.test(m[1]) || PERMITIDAS.has(m[1])) return;
     revisadas++;
+    if (ACTIVADORES[m[1]]) {
+      if (!ACTIVADORES[m[1]].test(lineas.slice(i + 1, i + 4).join('\n'))) sinCandado.push(archivo + ': ' + m[1] + ' (sin su guarda)');
+      return;
+    }
     // El cuerpo hasta la siguiente función de nivel superior (las de compartir lo llevan
     // en un if/else después de un comentario largo)
     let j = i + 1;

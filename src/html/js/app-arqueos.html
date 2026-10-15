@@ -274,7 +274,7 @@
         <h3 class="form-paso-titulo" tabindex="-1">${p.titulo}</h3>
         <div class="form-campos" style="--form-columnas:2">${renderCamposArqueo(prefijo, p.grupos)}</div>
       </section>`).join('');
-    return '<ol class="form-pasos" data-arq-pasos></ol>' + secciones +
+    return Pasos.htmlChips(PASOS_ARQUEO.map((p) => escaparHtml(p.titulo))) + secciones +
       '<div class="form-acciones form-acciones-pasos">' +
       '<button type="button" class="secondary" data-arq-atras hidden>' + Iconos.svg('anterior') + ' Atrás</button>' +
       '<button type="button" data-arq-siguiente>Siguiente ' + Iconos.svg('siguiente') + '</button>' +
@@ -287,36 +287,25 @@
    *  vez, después de insertar ese HTML en el DOM. `contenedor` = el elemento que recibió
    *  ese innerHTML directo (ahí adentro están los .form-paso, los chips y los botones). */
   function wirePasosArqueo(contenedor) {
-    let pasoActual = 0;
-    function actualizarChips() {
-      const lista = contenedor.querySelector('[data-arq-pasos]');
-      lista.innerHTML = PASOS_ARQUEO.map((p, i) => `
-        <li><button type="button" class="form-paso-chip ${i === pasoActual ? 'activo' : ''}" data-ir="${i}">
-          <span class="form-paso-num">${i + 1}</span>${escaparHtml(p.titulo)}</button></li>`).join('');
-      lista.querySelectorAll('[data-ir]').forEach((b) => b.addEventListener('click', () => mostrarPaso(Number(b.dataset.ir))));
-      const ultimo = pasoActual === PASOS_ARQUEO.length - 1;
-      contenedor.querySelector('[data-arq-atras]').hidden = pasoActual === 0;
-      contenedor.querySelector('[data-arq-siguiente]').hidden = ultimo;
-      contenedor.querySelectorAll('[data-arq-guardar]').forEach((b) => { b.hidden = !ultimo; });
-      contenedor.querySelector('[data-arq-cuenta]').textContent = `Paso ${pasoActual + 1} de ${PASOS_ARQUEO.length}`;
-    }
-    function mostrarPaso(i) {
-      pasoActual = i;
-      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-      actualizarChips();
-      refreshIcons();
-      const titulo = contenedor.querySelector(`.form-paso[data-paso="${i}"] .form-paso-titulo`);
-      if (titulo) titulo.focus({ preventScroll: true });
-      if (i > 0 && contenedor.scrollIntoView) contenedor.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }
-    contenedor.querySelector('[data-arq-siguiente]').addEventListener('click', () => {
-      if (pasoActual < PASOS_ARQUEO.length - 1) mostrarPaso(pasoActual + 1);
+    // La navegación es el componente Pasos (la de todo el sistema): libre, sin validar, Guardar en el último.
+    // Pasos maneja el Guardar principal; "Enviar liga(s)" (el otro data-arq-guardar) sale con él, en el último paso.
+    const guardar = contenedor.querySelector('[data-arq-guardar]:not([id$="-liga"])');
+    const nav = Pasos.navegar({
+      secciones: Array.from(contenedor.querySelectorAll('.form-paso')),
+      chips: Array.from(contenedor.querySelectorAll('.form-paso-chip')),
+      atras: contenedor.querySelector('[data-arq-atras]'), siguiente: contenedor.querySelector('[data-arq-siguiente]'),
+      guardar: guardar, cuenta: contenedor.querySelector('[data-arq-cuenta]'),
+      libre: true, guardarAlFinal: true,
+      alMostrar: (i) => {
+        contenedor.querySelectorAll('[data-arq-guardar]').forEach((b) => { if (b !== guardar) b.hidden = i !== PASOS_ARQUEO.length - 1; });
+        refreshIcons();
+        const titulo = contenedor.querySelector(`.form-paso[data-paso="${i}"] .form-paso-titulo`);
+        if (titulo) titulo.focus({ preventScroll: true });
+        if (i > 0 && contenedor.scrollIntoView) contenedor.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      },
     });
-    contenedor.querySelector('[data-arq-atras]').addEventListener('click', () => {
-      if (pasoActual > 0) mostrarPaso(pasoActual - 1);
-    });
-    mostrarPaso(0);
-    return { irAPaso: mostrarPaso };
+    nav.ir(0);
+    return { irAPaso: nav.ir };
   }
 
   /** Lee los campos de captura manual (deja fuera soloLectura, file y firma — esos se manejan aparte). */
@@ -709,7 +698,7 @@
     document.getElementById(idArq(prefijo, 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
     ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
       const el = document.getElementById(idArq(prefijo, clave));
-      if (el) el.value = new Date().toLocaleDateString('es-MX');
+      if (el) el.value = Formato.fecha(new Date());
     });
 
     auditItems.forEach((item) => {
@@ -807,7 +796,7 @@
   }
 
   async function initArqueos() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('arqueos');
     if (!puedeEditar) document.querySelector('#arq-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -837,7 +826,7 @@
     document.getElementById(idArq('arq', 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
     ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
       const el = document.getElementById(idArq('arq', clave));
-      if (el) el.value = new Date().toLocaleDateString('es-MX');
+      if (el) el.value = Formato.fecha(new Date());
     });
 
     try {
@@ -1199,7 +1188,7 @@
         document.getElementById(idArq('arq', 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
         ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
           const el = document.getElementById(idArq('arq', clave));
-          if (el) el.value = new Date().toLocaleDateString('es-MX');
+          if (el) el.value = Formato.fecha(new Date());
         });
         recalcularTotalesArqueo('arq', auditItems);
         await cargar();

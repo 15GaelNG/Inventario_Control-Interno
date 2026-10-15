@@ -69,6 +69,7 @@ function lineasIneLectura_todo() {
 }
 
 function lineasIneLectura_continuar() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   ineLecBorrarActivadores_();
   ineNucosExigirDev_();
   const st = ineLecLeer_();
@@ -100,10 +101,12 @@ function lineasIneLectura_continuar() {
 }
 
 function lineasIneLectura_estado() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   return ineLecInforme_(ineLecLeer_());
 }
 
 function lineasIneLectura_detener() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   ineLecBorrarActivadores_();
   const st = ineLecLeer_();
   if (st && st.fase === 'LEER') { st.fase = 'DETENIDO'; ineLecGuardar_(st); }
@@ -150,9 +153,7 @@ function ineLecCandidatas_() {
 function ineLecTemporal_() {
   const raiz = LineasArchivos.carpetaNucosId();
   if (raiz === LINEAS_DRIVE_NUCOS_ID) throw new Error('La carpeta de NUCOS de este proyecto es la de producción: la lectura solo corre en un DEV.');
-  const padre = DriveApp.getFolderById(raiz);
-  const it = padre.getFoldersByName(INE_LEC_TEMPORAL);
-  return (it.hasNext() ? it.next() : padre.createFolder(INE_LEC_TEMPORAL)).getId();
+  return DriveUtils.subcarpeta(DriveApp.getFolderById(raiz), INE_LEC_TEMPORAL).getId();
 }
 
 /** El texto de un archivo de NUCOS: copia como Documento con OCR en la carpeta temporal, se lee y se tira la copia. */

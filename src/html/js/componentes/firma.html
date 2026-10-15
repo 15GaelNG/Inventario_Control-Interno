@@ -3,7 +3,7 @@
   /* Fondo blanco también en tema oscuro: la tinta es negra y va a papel. */
   .firma-caja {
     /* Gris fijo: la caja es blanca en los dos temas y el borde del tema oscuro se veía pesado */
-    position: relative; border: 2px dashed #cfd6d9; border-radius: 10px;
+    position: relative; border: 2px dashed #cfd6d9; border-radius: var(--radio-l);
     background: #fff; overflow: hidden;
     touch-action: none;   /* sin esto, en celular el scroll se roba el trazo */
     transition: border-color .2s ease;
@@ -19,22 +19,22 @@
   }
   .firma-nombre {
     position: absolute; left: 9%; right: 9%; bottom: 20px; text-align: center;
-    font-size: 11.5px; font-weight: 600; letter-spacing: .2px; color: #3d4a51; pointer-events: none;
+    font-size: var(--texto-xs); font-weight: 600; letter-spacing: .2px; color: #3d4a51; pointer-events: none;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .firma-marca {
     position: absolute; left: 0; right: 0; top: 42%; text-align: center;
-    font-size: 12.5px; font-weight: 300; color: #8a959b; pointer-events: none; transition: opacity .2s ease;
+    font-size: var(--texto-s); font-weight: 300; color: #8a959b; pointer-events: none; transition: opacity .2s ease;
   }
   .firma-caja.con-trazo .firma-marca { opacity: 0; }
   /* Debajo: el estado a la izquierda y acciones discretas a la derecha (no compiten con
      "Guardar", que es la acción principal del formulario) */
   .firma-barra { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 6px; min-height: 28px; }
-  .firma-estado { font-size: 12px; font-weight: 500; color: var(--color-text-muted); }
+  .firma-estado { font-size: var(--texto-s); font-weight: 500; color: var(--color-text-muted); }
   .firma-caja.con-trazo + .firma-barra .firma-estado { color: var(--color-success); }
   .firma-botones { display: flex; gap: 2px; flex-wrap: wrap; justify-content: flex-end; }
   .firma-barra button {
-    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: 12px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: var(--texto-s); font-weight: 500;
     background: transparent; border: none; color: var(--color-text-muted); box-shadow: none;
   }
   .firma-barra button:hover { background: var(--color-bg); color: var(--color-text); }

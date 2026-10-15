@@ -40,6 +40,8 @@ function crearContexto(filas) {
       puedeEditar: (token, modulo) => { llamadas.puedeEditar = modulo; return { nombre: 'TESTER' }; },
     },
     LockService: { getScriptLock: () => ({ waitLock: () => {}, releaseLock: () => {} }) },
+    // Candado.con (reentrante, fase 1): aquí solo corre fn
+    Candado: { con: (fn) => fn(), tomado: () => true },
     ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/exec' }) },
     Session: {
       getActiveUser: () => ({ getEmail: () => 'firmante@ciudadmaderas.com' }),

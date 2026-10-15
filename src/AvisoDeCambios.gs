@@ -19,6 +19,8 @@ const AVISO_CAMBIOS_FUNCION = 'alEditarLibro';
  * conectados), se copia a las hojas que lo mantienen al día (Relaciones.alEditarAMano).
  */
 function alEditarLibro(e) {
+  // Solo lo llama el activador (con el libro y el rango de verdad); llamado desde el navegador no hace nada
+  if (!e || !e.source || typeof e.source.getId !== 'function' || !e.range || typeof e.range.getSheet !== 'function') return;
   try {
     CacheHojas.tocar(e.source.getId(), e.range.getSheet().getName());
   } catch (err) {

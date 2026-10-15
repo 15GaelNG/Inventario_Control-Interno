@@ -16,7 +16,7 @@ const dom = new JSDOM('<!doctype html><body><div id="f"></div></body>', { url: '
 const { window } = dom;
 window.CSS = { escape: (s) => String(s).replace(/["\\]/g, '\\$&') };
 window.URL.createObjectURL = () => 'blob:prueba';
-window.eval(['iconos.html', 'notificar.html', 'combobox.html', 'campo-auto.html', 'folio-nucco.html', 'formulario.html'].map(scriptDe).join('\n') +
+window.eval(['formato.html', 'iconos.html', 'notificar.html', 'combobox.html', 'campo-auto.html', 'folio-nucco.html', 'pasos.html', 'formulario.html'].map(scriptDe).join('\n') +
   '\nwindow.Formulario = Formulario; window.Notificar = Notificar; window.Combobox = Combobox;');
 
 const doc = window.document;

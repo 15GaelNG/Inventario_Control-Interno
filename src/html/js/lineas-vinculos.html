@@ -22,8 +22,8 @@
     'use strict';
 
     const may = (v) => String(v === null || v === undefined ? '' : v).trim().toUpperCase();
-    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+    const normal = Formato.normal;
+    const miles = (n) => Formato.miles(n);
 
     // Estatus del catálogo (LineasRepo.CATALOGO) y los de antes del 30-sep que siguen en la hoja (COLOR_ESTATUS de
     // lineas.html). En uso solo lo que está en uso; lo que no se reconoce cuenta como baja (FUERA DE INVENTARIO,

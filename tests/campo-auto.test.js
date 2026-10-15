@@ -25,7 +25,7 @@ const dom = new JSDOM(`<!doctype html><body>
   <div id="tarde"></div>
 </body>`, { url: 'https://prueba.local/', runScripts: 'outside-only', pretendToBeVisual: true });
 const { window } = dom;
-window.eval(['combobox.html', 'campo-auto.html', 'folio-nucco.html'].map(scriptDe).join('\n') +
+window.eval(['formato.html', 'combobox.html', 'campo-auto.html', 'folio-nucco.html'].map(scriptDe).join('\n') +
   '\nwindow.CampoAuto = CampoAuto; window.FolioNucco = FolioNucco;');
 
 const doc = window.document;

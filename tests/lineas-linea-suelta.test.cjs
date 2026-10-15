@@ -24,6 +24,7 @@ function driveFalso() {
     getId: () => c.id, getName: () => c.name, setName: (x) => { c.name = x; }, isTrashed: () => c.trashed,
     setTrashed: (v) => { c.trashed = v; },
     getFoldersByName: (x) => iter(hijos(c.id).filter((h) => h.name === x).map(envolver)),
+    getFolders: () => iter(hijos(c.id).map(envolver)),
     createFolder: (x) => envolver(carpetas[nueva(x, c.id)]),
     getParents: () => iter(c.padre ? [envolver(carpetas[c.padre])] : []),
     searchFiles: () => iter([]), searchFolders: () => iter(hijos(c.id)),
@@ -50,6 +51,7 @@ function archivos(drive) {
     leerConfig_: (k) => (k === 'LINEAS_DRIVE_LINEAS' ? 'LINEAS' : ''),
     Config: { ENTORNO: 'PROD' },
     DriveApp: drive.DriveApp, Drive: drive.Drive,
+    DriveUtils: require('./drive-utils-real')(),   // subcarpeta: la regla real (fase 5.7)
     Utilities: { formatDate: (f, z, formato) => (formato === 'yyyy' ? '2026' : '15 10') },
     LineasDatos: { cacheLeer: (k) => cache[k] || null, cacheGuardar: (k, v) => { cache[k] = v; }, cacheBorrar: (k) => { delete cache[k]; } },
     LineasUtil: { digitos: (v) => String(v || '').replace(/\D/g, '') },
