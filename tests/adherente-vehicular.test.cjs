@@ -329,7 +329,7 @@ test('la liga usa el despliegue público si está configurado (Config.urlFirmaPu
 
 // ---------------------------------------------------------------------------- regenerarLiga ("Generar nueva liga")
 
-test('regenerarLiga: token distinto al anterior, expira +5 días, y la liga coincide con ligaDeToken del token nuevo', () => {
+test('regenerarLiga: token distinto al anterior, expira +15 días, y la liga coincide con ligaDeToken del token nuevo', () => {
   const { contexto, llamadas } = crearContexto();
   contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
     { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
@@ -343,7 +343,7 @@ test('regenerarLiga: token distinto al anterior, expira +5 días, y la liga coin
   assert.notEqual(tokenNuevo, tokenViejo);
   assert.equal(liga, contexto.Servicio.ligaDeToken('tok', tokenNuevo, 'principal'));
   const expira = new Date(llamadas.insert[0]['TOKEN FIRMA EXPIRA']).getTime();
-  assert.ok(expira > ahora + 4 * 24 * 60 * 60 * 1000 && expira <= ahora + 5 * 24 * 60 * 60 * 1000 + 1000);
+  assert.ok(expira > ahora + 14 * 24 * 60 * 60 * 1000 && expira <= ahora + 15 * 24 * 60 * 60 * 1000 + 1000);
 });
 
 test('regenerarLiga: también funciona del lado del jefe, sin tocar el token del adherente', () => {

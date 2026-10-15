@@ -57,8 +57,9 @@ const ResponsivaVehicularService = (function () {
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
 
-  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva.
-  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
+  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva. Empezó en 5
+  // días; a 15 días a petición del usuario (15-oct-2026, mismo plazo que ya se le puso a Arqueos).
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 15;
 
   // [campo del PDF, columna …TEMP en la hoja] de las tres firmas -- una sola lista para
   // imagenesDesdeTemp_, regenerarLiga y completarFirma/completarFirmaJefe (migrarFirmaTempLegacySiHaceFalta_).
