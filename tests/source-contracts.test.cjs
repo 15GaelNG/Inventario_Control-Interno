@@ -1333,7 +1333,12 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.deepEqual(Ntf._pendientes([fila('4', 'LINEA', 'USO', d('2026-10-01'))], '2026-10-03', '2026-09-29').map((x) => x.dias), [-2]);
   assert.equal(Ntf.DIAS_AVISO, 7);
   // Enganches: API, alta que pide revisar, campana en el shell y vista
-  assert.match(read('src/ClientApi.gs'), /function apiLineasNotificaciones\(token, limite\)/);
+  // La campana pide todos los módulos en una llamada; Líneas es una fuente de NotificacionesService (fase 5.5)
+  assert.match(read('src/ClientApi.gs'), /function apiNotificaciones\(token, limite\) \{\s+return NotificacionesService\.campana\(token, limite\);/);
+  assert.match(read('src/services/NotificacionesService.gs'), /lineas: \(token, limite\) => TelefoniaService\.notificaciones\(token, limite\)/);
+  assert.doesNotMatch(read('src/html/notificaciones.html'), /apiLineasNotificaciones|apiNotificacionesPendientes/);
+  // Sus avisos dan huella (el vigía ve un aviso nuevo o uno marcado como leído)
+  assert.match(read('src/services/lineas/LineasNotificaciones.gs'), /CacheHojas\.versiones\(\[\[LineasDatos\.id\(\), TAB\]\]\)/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
   assert.match(read('src/html/js/app.html'), /vista: 'notificaciones'[^\n]*plantilla: 'tpl-notificaciones', init: \(\) => Notificaciones\.initVista\(\)/);

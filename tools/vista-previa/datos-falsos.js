@@ -458,6 +458,21 @@
         { id: 1646, etiqueta: 'Placa, Nuco o VIN', tipo: 'text', opciones: [] }] },
       { id: 63, nombre: 'Solicitud - Análisis de Datos', modulo: '', moduloEtiqueta: '', campos: [] }],
     apiHelpdeskGuardados: JSON.stringify([]),
+    // La campana (NotificacionesService.campana): los avisos de cada módulo con la misma forma
+    apiNotificaciones: (token, limite) => {
+      const lineas = [
+        { id: 'N1', modulo: 'lineas', tipo: 'ADENDUM', refId: 'LIN-1', titulo: 'Adendum por vencer · 5512345678', mensaje: 'El adendum de la línea 5512345678 vence el 20/10/2026. NUCO 0412 · TELCEL.', dias: 4, fecha: hace(0), leida: false },
+        { id: 'N2', modulo: 'lineas', tipo: 'SIN_RECIBIR', titulo: 'Equipos sin recibir · 2', mensaje: '2 equipo(s) se mandaron a resguardo hace 3 días o más y no se han recibido: NUCO 0412 y 0388.', dias: null, fecha: hace(1), leida: false },
+        { id: 'N3', modulo: 'lineas', tipo: 'RESGUARDO', titulo: 'Equipo mandado a resguardo', mensaje: 'NUCO 0388 · GALAXY A15.', dias: null, fecha: hace(9), leida: true },
+      ];
+      return {
+        lineas: { noLeidas: 2, total: 3, items: limite ? lineas.slice(0, limite) : lineas },
+        vehiculos: { items: [
+          { id: 'veh-seguro-AUT0024', modulo: 'vehiculos', tipo: 'VEH_SEGURO', folio: 'AUT0024', titulo: 'Seguro · Nucco 0024 (AUT0024)', mensaje: 'Seguro vence en 12 día(s)', dias: 12, severidad: 'porVencer', fecha: null },
+          { id: 'veh-verificacion-AUT0031', modulo: 'vehiculos', tipo: 'VEH_VERIFICACION', folio: 'AUT0031', titulo: 'Verificación · Nucco 0031 (AUT0031)', mensaje: 'Verificación vencida hace 40 día(s)', dias: -40, severidad: 'vencida', fecha: null },
+        ] },
+      };
+    },
     // El panel "En Control Interno" del ticket (HelpdeskService.contexto)
     apiHelpdeskContexto: (token, q) => JSON.stringify({
       persona: { NOMBRE: q.nombre, PUESTO: 'ANALISTA DE COMPRAS', NUMEROS: ['HA00100'], JEFE_DIRECTO: 'JEFA DE PRUEBA', DEPARTAMENTO: 'COMPRAS' },
@@ -657,6 +672,8 @@
     // El botón de menú solo se ve en pantalla angosta (shell-movil.html): capturar con --ancho=390 o --matriz
     'menu-abierto': async () => { await abrir('inspeccion-vehicular'); (await hasta('.shell-menu-btn')).click(); await esperar(400); },
     // ---- Módulos de la base (Inicio, Vehículos, Caja Chica, Uber, Administración) ----
+    'campana': async () => { await abrir('dashboard'); (await hasta('.ntf-campana')).click(); await hasta('.ntf-panel:not([hidden]) .ntf-item'); await esperar(400); },
+    'notificaciones': async () => { await abrir('notificaciones'); await hasta('#ntf-lista .ntf-item'); await esperar(400); },
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },

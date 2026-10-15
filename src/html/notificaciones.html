@@ -5,7 +5,8 @@
      NotificacionesService de jorge: verificaciones, seguro e inspecciones; se recalculan en vivo y se quitan
      solas al atenderse, pero también se pueden marcar como leídas a mano -- esas se guardan solo en el
      navegador, ver LeidasVehiculo más abajo, porque no hay un renglón de verdad que marcar en una hoja).
-     Un módulo nuevo necesita su entrada en MODULOS, sus tipos en TIPOS/GRUPOS y su fuente en FUENTES. */
+     Un módulo nuevo necesita su entrada en MODULOS, sus tipos en TIPOS/GRUPOS y su fuente en FUENTES_ del servidor
+     (NotificacionesService.campana). */
   :root {
     --ntf-pronto: #b54708; --ntf-pronto-bg: #fef0c7;
     --ntf-vencida: #b42318; --ntf-vencida-bg: #fee4e2;
@@ -151,8 +152,9 @@
 <script>
   /**
    * Notificaciones: campana de la barra superior (contador de no leídas y las más recientes) y la vista completa.
-   * Datos: apiLineasNotificaciones(token, limite)/apiLineasMarcarNotificaciones(token, ids|null) para Líneas,
-   * apiNotificacionesPendientes(token) para Vehículos (su "leída" vive en LeidasVehiculo, solo local).
+   * Datos: apiNotificaciones(token, limite) trae los avisos de todos los módulos en una llamada, ya con la misma forma
+   * (NotificacionesService.campana); apiLineasMarcarNotificaciones(token, ids|null) marca los de Líneas. Los de
+   * Vehículos se marcan solo en el navegador (LeidasVehiculo).
    * Cada tipo (TIPOS) dice su ícono y a dónde lleva: la ficha de la línea, la bandeja de resguardos o Líneas
    * Telefónicas filtrada. Abrir un aviso lo marca como leído.
    */
@@ -195,7 +197,7 @@
     /** grupo: para filtrar; color: pronto (ámbar) | vencida (rojo) | info (azul); destino: a dónde lleva. */
     const TIPOS = {
       // Vehículos (NotificacionesService.gs): el color sale de la severidad, no del tipo.
-      // "Leída" se resuelve contra LeidasVehiculo (ver arriba, solo local) en deVehiculo():
+      // "Leída" se resuelve contra LeidasVehiculo (ver arriba, solo local) en DE_MODULO.vehiculos:
       // mientras siga marcada ahí, sigue entrando como leída aunque NotificacionesService
       // la vuelva a traer con los días ya cambiados (el id es folio+tipo, no cambia).
       // Sin etiqueta de días: el mensaje de NotificacionesService ya dice cuántos
@@ -219,31 +221,18 @@
       { clave: 'seguro', modulo: VEHICULOS, etiqueta: 'Seguros', icono: 'shield' },
       { clave: 'inspeccion', modulo: VEHICULOS, etiqueta: 'Inspecciones atrasadas', icono: 'clipboard-list' },
     ];
-    const ETIQUETA_VEH = { verificacion: 'Verificación', seguro: 'Seguro', inspeccion: 'Inspección' };
-
-    /** Pendiente de Vehículos ({ tipo, folio, nucco, dias, severidad, texto }) con la forma de un aviso. */
-    function deVehiculo(v) {
-      const tipo = String(v.tipo || '').toLowerCase();
-      const id = 'veh-' + tipo + '-' + v.folio;
-      return {
-        id: id, modulo: VEHICULOS, tipo: 'VEH_' + tipo.toUpperCase(), folio: v.folio,
-        titulo: (ETIQUETA_VEH[tipo] || tipo) + ' · Nucco ' + (v.nucco || v.folio) + (v.nucco && v.folio ? ' (' + v.folio + ')' : ''),
-        mensaje: v.texto || '', dias: v.dias, severidad: v.severidad, fecha: null, leida: LeidasVehiculo.tiene(id),
-      };
-    }
 
     /**
-     * De dónde sale cada módulo. Cada uno regresa { items, noLeidas }; si uno falla (sin permiso, por ejemplo) los
-     * demás siguen. Los de Vehículos se siguen recalculando en vivo cada vez (si ya no aplican, se quitan solos),
-     * pero ahora también se pueden marcar como leídos a mano (ver LeidasVehiculo arriba).
+     * Lo que llega de cada módulo (apiNotificaciones: { lineas, vehiculos }, ya con la misma forma; null si ese módulo
+     * falló, y los demás siguen) → { items, noLeidas }. Los de Vehículos se recalculan en vivo cada vez (si ya no
+     * aplican, se quitan solos) y su "leída" es de este navegador (LeidasVehiculo): por eso se cuenta aquí.
      */
-    // Con la copia de la visita anterior al instante; si lo de ahora llega distinto, se repinta
-    // (el evento lista-actualizada, más abajo en vigilarSesion)
-    const FUENTES = {
-      lineas: (limite) => callServerListaCacheada('apiLineasNotificaciones', state.token, limite || 0)
-        .then((r) => ({ items: (r.items || []).map((n) => Object.assign(n, { modulo: 'lineas' })), noLeidas: r.noLeidas || 0 })),
-      vehiculos: () => callServerListaCacheada('apiNotificacionesPendientes', state.token)
-        .then((t) => { const items = JSON.parse(t || '[]').map(deVehiculo); return { items: items, noLeidas: items.filter((n) => !n.leida).length }; }),
+    const DE_MODULO = {
+      lineas: (x) => ({ items: x.items || [], noLeidas: x.noLeidas || 0 }),
+      vehiculos: (x) => {
+        const items = (x.items || []).map((n) => Object.assign(n, { leida: LeidasVehiculo.tiene(n.id) }));
+        return { items: items, noLeidas: items.filter((n) => !n.leida).length };
+      },
     };
     const OTRO = { grupo: 'otros', icono: 'bell', color: 'info' };
     /** Los avisos de "líneas para cancelar" anteriores al 30-sep se guardaron como RESGUARDO. */
@@ -342,19 +331,21 @@
       pintarIconos();
     }
 
-    /** Pide todos los módulos a la vez. noLeidas (el número de la campana) = no leídas de Líneas + pendientes de Vehículos. */
+    /** Pide todos los módulos en una llamada. noLeidas (el número de la campana) = no leídas de Líneas + pendientes de Vehículos. */
     async function actualizar(limite) {
       if (typeof state === 'undefined' || !state.token) return null;
       pedidoEn = Date.now();
-      const claves = Object.keys(FUENTES);
-      const res = await Promise.all(claves.map((k) => FUENTES[k](limite).catch((e) => {
-        console.warn('Notificaciones (' + k + '): ' + (e && e.message));
+      // Con la copia de la visita anterior al instante; si lo de ahora llega distinto, se repinta
+      // (el evento lista-actualizada, más abajo en vigilarSesion)
+      const res = await callServerListaCacheada('apiNotificaciones', state.token, limite || 0).catch((e) => {
+        console.warn('Notificaciones: ' + (e && e.message));
         return null;
-      })));
-      if (res.every((x) => !x)) return null;
+      });
+      const claves = Object.keys(DE_MODULO);
+      if (!res || claves.every((k) => !res[k])) return null;
       const r = { items: [], noLeidas: 0, porModulo: {} };
-      claves.forEach((k, i) => {
-        const x = res[i] || { items: [], noLeidas: 0 };
+      claves.forEach((k) => {
+        const x = res[k] ? DE_MODULO[k](res[k]) : { items: [], noLeidas: 0 };
         r.items = r.items.concat(x.items);
         r.porModulo[k] = x.noLeidas;
         r.noLeidas += x.noLeidas;
@@ -408,7 +399,7 @@
       const idsLineas = ids ? candidatos.filter((n) => !esVehiculo(n)).map((n) => n.id) : null;
       if (!ids || idsLineas.length) {
         await callServer('apiLineasMarcarNotificaciones', state.token, idsLineas);
-        invalidarListasDe('apiLineasNotificaciones');   // que la copia no las vuelva a enseñar sin leer
+        invalidarListasDe('apiNotificaciones');   // que la copia no las vuelva a enseñar sin leer
       }
       aplicarLeidas(ultima, ids || null);
       if (datosVista && datosVista !== ultima) aplicarLeidas(datosVista, ids || null);
@@ -496,7 +487,7 @@
       // Se pintó con la copia y lo fresco llegó distinto: se repinta (sin volver a pedir: ya está en memoria)
       window.addEventListener('lista-actualizada', (ev) => {
         const fn = ev.detail && ev.detail.fn;
-        if (!shell.hidden && (fn === 'apiLineasNotificaciones' || fn === 'apiNotificacionesPendientes')) actualizar(EN_CAMPANA);
+        if (!shell.hidden && fn === 'apiNotificaciones') actualizar(EN_CAMPANA);
       });
       alCambiar();
     }

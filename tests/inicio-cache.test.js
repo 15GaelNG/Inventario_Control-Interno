@@ -40,6 +40,14 @@ e.cargar('src/utils/CacheHojas.gs', {
     var VerificacionesService = { listar: () => lista_('verificaciones', 'VERIFICACIONES', () => []) };
     var InspeccionesService = { listar: () => lista_('inspecciones', 'INSPECCIONES', () => []) };
     var ArqueosService = { listarResumen: () => lista_('arqueos', 'ARQUEOS', () => []) };
+    var lineasRota = false;
+    var TelefoniaService = {
+      notificaciones: (token, limite) => {
+        if (lineasRota) throw new Error('Service invoked too many times');
+        const items = [{ id: 'N1', tipo: 'ADENDUM', titulo: 'Adendum', leida: false }, { id: 'N2', tipo: 'RESGUARDO', titulo: 'R', leida: true }];
+        return { noLeidas: 1, total: 2, items: limite ? items.slice(0, limite) : items };
+      },
+    };
   `,
 }, 'src/services/DashboardService.gs', 'src/services/NotificacionesService.gs');
 
@@ -87,6 +95,18 @@ ok(n2.length === n1.length && lecturas('VEHICULOS') === vehCamp, 'se comparte en
 g('CacheHojas').tocar('libro', 'VEHICULOS');
 g('NotificacionesService').listar(como('a@x'));
 ok(lecturas('VEHICULOS') > vehCamp, 'escribir en VEHICULOS la recalcula');
+
+console.log('5. La campana completa: una fuente por módulo, con la misma forma (fase 5.5)');
+const c1 = g('NotificacionesService').campana(como('a@x'), 1);
+ok(c1.lineas.items.length === 1 && c1.lineas.noLeidas === 1 && c1.lineas.items[0].modulo === 'lineas', 'Líneas: sus avisos (con el límite) y sus no leídas');
+const seg = c1.vehiculos.items.find((n) => n.tipo === 'VEH_SEGURO');
+ok(seg && seg.id === 'veh-seguro-A1' && seg.modulo === 'vehiculos' && seg.titulo === 'Seguro · Nucco 0001 (A1)' && seg.fecha === null,
+  'Vehículos: con la forma de un aviso (id, tipo, título) como lo armaba la pantalla');
+ok(!('leida' in seg), 'la "leída" de Vehículos no la decide el servidor (es del navegador)');
+e.contexto.lineasRota = true;
+const c2 = g('NotificacionesService').campana(como('a@x'), 8);
+ok(c2.lineas === null && c2.vehiculos.items.length === c1.vehiculos.items.length, 'si Líneas falla llega null y Vehículos sigue');
+e.contexto.lineasRota = false;
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
