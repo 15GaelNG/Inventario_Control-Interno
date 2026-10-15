@@ -108,6 +108,40 @@ const ENTORNOS = {
     LINEAS_LECTURA: 'ESTRUCTURA',
     LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
   },
+
+  // ---------------------------------------------------------------- DEV de la homologación (rama common)
+  // docs/homologacion-codigo.md. Todo encendido; lo que escribe va a la carpeta de pruebas "DEV COMMON".
+  '1WXvJaGJl1ACfisfibb__FCxzljexGfbpL5yjrUEjog82O0Uyq1YZ_7as': {
+    ENTORNO: 'DEV',
+
+    // Copia del libro de producción ("DEV COMMON - Copia de produccion 2026-10-15")
+    SS_ID_USUARIOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_VEHICULOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_TELEFONIA: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_ACCESORIOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_CAJACHICA: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+
+    // Lo que escribe: todo a "DEV COMMON" (sin NUCOS_VEHICULOS: usa una "NUCOS VEHICULOS" de pruebas en esta raíz)
+    DRIVE_FOLDER_ID_RAIZ: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_REPORTES: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_VERIFICACIONES: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_SENSORES: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    LINEAS_DRIVE_APPSHEET: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    LINEAS_DRIVE_NUCOS: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+
+    // Solo lectura: los archivos que cita la copia del libro viven en las carpetas de producción. Nunca se escribe ahí.
+    DRIVE_FOLDER_ID_MODELOS: '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm',
+    DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C',
+    DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: '1D3m1H3C_Is2Bol9IBPdnV6ugJiXizSCN',
+    LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
+
+    // Líneas lee las hojas nuevas, igual que producción (como el DEV de Emmanuel)
+    LINEAS_LECTURA: 'ESTRUCTURA',
+    LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+  },
 };
 
 /**
