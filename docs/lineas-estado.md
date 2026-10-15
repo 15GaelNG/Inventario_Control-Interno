@@ -151,7 +151,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   IMEI, COLOR, ACCESORIOS, PIN WHATSAPP y PIN EQUIPO = «NO APLICA»; CONTRASEÑA vacía; no copia nada al inventario; APP_EVIDENCIAS, APP_IDENTIFICACIONES y
   MOVIMIENTOS quedan sin NUCO. El PDF usa la misma plantilla (su texto fijo sigue diciendo «el equipo celular»): `registroPlantilla_` fija `NUCO: 'NO APLICA'` y
   `LineasPdf.reemplazarEtiquetas_` lo imprime aunque la etiqueta sea la fórmula `RIGHT("000" & [NUCO], 4)`. Ya no se usa el NUCO ANTERIOR para guardar. Lo ya guardado en NUCOS o en `Files`
-  no se movió. **Drive:** ver §2. La responsiva de un equipo guarda en ID LINEA el ID del equipo, así que la ficha de la línea no ve las que firmó dentro de un equipo (pendiente 2.45).
+  no se movió. **Drive:** ver §2.
+- **Documentos de la línea** (15-oct, `42d5fe4`, `1aa5c6e`; pendiente 2.45; en `emmanuel` y el DEV, sin publicar): toda ficha de línea tiene la pestaña Documentos (antes solo la línea sin equipo).
+  `apiLineasEvidencias(token, id, vista)` con vista `'linea'` (`TelefoniaService.evidencias`) trae las de la línea (`r.linea.idLinea`: las de cuando estuvo suelta) más
+  `LineasRepo.responsivasEntregadas`, las responsivas de otro registro (su equipo) que tienen el ID de la línea en la columna **ID LINEA ENTREGADA** de RESPONSIVAS LINEAS, marcadas
+  `enEquipo` y con la columna «Equipo» (NUCO) en la tabla; no trae las inspecciones ni los documentos del equipo ni su carpeta de NUCOS. ID LINEA sigue siendo el registro (el equipo o la línea sin equipo);
+  `guardarResponsivaEnCandado_` escribe ID LINEA ENTREGADA (`obj.linea.idLinea`) en toda responsiva, también en Reasignar, Vincular y Cambiar línea, y la columna se crea con la primera. Los encabezados
+  de cada hoja están en caché 1 h: si no encuentra la columna, `responsivasEntregadas` los relee una vez. Subir PDF firmado desde la ficha de la línea usa el registro del equipo
+  (o, con `vista`, el de la línea; `apiLineasSubirPdfFirmado` la recibe). Las responsivas de equipo anteriores al 15-oct solo tienen la columna si se pudo probar su línea (la asignación del
+  equipo en esa fecha y el número impreso dicen lo mismo): 411 en producción y 375 en el DEV, con `reporte_lineas/actualizacion_base/ligar_responsivas.js`; la v120 no la llena en las nuevas.
 - **Qué pasa la responsiva al inventario** (13-oct): solo el color, el bloqueo del equipo (PIN EQUIPO y PATRON) y, si el
   registro tiene línea (la que ya tenía o la que pone Vincular o Cambiar línea), el PIN de WhatsApp (`guardarResponsivaEnCandado_`, pasa por
   `guardarCambiosRegistro`, que solo anota lo que cambió). Antes el PIN de WhatsApp se quedaba en la responsiva y su PDF y la
@@ -360,7 +368,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
 | FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae junio a septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15; `COMO SE HACE ESTE REPORTE.md` §11.8); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; las columnas nuevas y las correcciones están en el DEV y en producción (14-oct); 182 renglones de junio a agosto no tienen ID LINEA (el número no es de ninguna línea del sistema ni hay prueba del proveedor para ligarlo; pendiente 1.19) y no salen en ninguna ficha; después la llenará la carga mensual del proveedor (1.10) |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
-| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct) |
+| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct). RESPONSIVAS LINEAS lleva ID LINEA (el registro: el equipo o la línea sin equipo) e **ID LINEA ENTREGADA** (la línea de ese día; columna AR en producción, creada el 15-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
 | APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario), avisos, fotos y correcciones |
