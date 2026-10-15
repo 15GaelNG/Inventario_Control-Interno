@@ -401,6 +401,26 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
 });
 
+test('el candado del script se pide solo con Candado.con (reentrante), y SheetUtils escribe solo lo que cambia', () => {
+  // waitLock() no es reentrante: un getScriptLock suelto no sabe que su hilo ya tiene el candado, y lo que llama
+  // adentro (SheetUtils.update, HojaServicio.actualizar…) se colgaba hasta el timeout (docs/homologacion-codigo.md, fase 1)
+  const sueltos = filesBelow(path.join(root, 'src'))
+    .filter((f) => f.endsWith('.gs') && !f.replace(/\\/g, '/').endsWith('utils/Candado.gs'))
+    .filter((f) => /LockService\.get(Script|Document|User)Lock\(/.test(fs.readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(sueltos, [], 'Usa Candado.con(() => { … }) (src/utils/Candado.gs)');
+  assert.match(read('package.json'), /node tests\/candado\.test\.js/);
+
+  // update: busca el renglón bajo el candado y escribe solo las columnas del cambio (no el renglón completo, que
+  // pisaba lo que otro cambió y convertía fórmulas en valores)
+  const su = read('src/utils/SheetUtils.gs');
+  const funcion = (nombre) => new RegExp('function ' + nombre + '\\([\\s\\S]*?\\r?\\n  }\\r?\\n').exec(su)[0];
+  assert.match(funcion('update'), /Candado\.con\(/);
+  assert.match(funcion('update'), /escribirColumnas_\(/);
+  assert.doesNotMatch(funcion('update'), /objectToRow_\(|setValues\(\[row\]\)/);
+  assert.match(funcion('remove'), /Candado\.con\(/);
+});
+
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
   const app = read('src/html/js/app.html');
   const index = read('src/html/Index.html');

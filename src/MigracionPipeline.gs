@@ -149,25 +149,27 @@ function pipeLog_(ssId, paso, modo, resultado, resumen) {
  */
 function pipeCorrer_(ssId, paso, escribir, fn) {
   const modo = escribir ? 'ESCRITURA' : 'ENSAYO';
-  let candado = null;
-  if (escribir) {
-    candado = LockService.getScriptLock();
-    if (!candado.tryLock(30000)) {
+  const correr = () => {
+    try {
+      const salida = fn();
+      pipeLog_(ssId, paso, modo, 'OK', salida);
+      return salida;
+    } catch (err) {
+      pipeLog_(ssId, paso, modo, 'FALLA', err.message);
+      throw err;
+    } finally {
+      if (escribir) SpreadsheetApp.flush();
+    }
+  };
+  if (!escribir) return correr();
+  return Candado.con(correr, {
+    espera: 30000,
+    siOcupado: () => {
       const msg = 'Alguien más está escribiendo en las hojas ahora mismo. Vuelve a intentar.';
       pipeLog_(ssId, paso, modo, 'FALLA', msg);
       throw new Error(msg);
-    }
-  }
-  try {
-    const salida = fn();
-    pipeLog_(ssId, paso, modo, 'OK', salida);
-    return salida;
-  } catch (err) {
-    pipeLog_(ssId, paso, modo, 'FALLA', err.message);
-    throw err;
-  } finally {
-    if (candado) { SpreadsheetApp.flush(); candado.releaseLock(); }
-  }
+    },
+  });
 }
 
 // ---------------------------------------------------------------- respaldo

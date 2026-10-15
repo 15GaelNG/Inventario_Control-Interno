@@ -182,6 +182,8 @@ function crearEntorno(opciones) {
   };
   Object.assign(globales, cfg.globales || {});
   const contexto = vm.createContext(globales);
+  // El candado reentrante lo usa todo lo que escribe (SheetUtils, HojaServicio, los servicios): va siempre
+  vm.runInContext(fs.readFileSync(path.join(RAIZ, 'src/utils/Candado.gs'), 'utf8'), contexto, { filename: 'src/utils/Candado.gs' });
 
   return {
     Date: FechaFija,

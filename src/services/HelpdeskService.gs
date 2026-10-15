@@ -83,9 +83,7 @@ const HelpdeskService = (function () {
   function sincronizar_(tickets, correo, parcial) {
     const lista = (tickets || []).filter((t) => t && t.ID);
     if (!lista.length) return { nuevos: 0, actualizados: 0 };
-    const lock = LockService.getScriptLock();
-    if (!lock.tryLock(5000)) return { saltado: true };
-    try {
+    return Candado.con(() => {
       const hoja = hoja_(true);
       const enc = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].map((h) => String(h).trim());
       const pos = SheetUtils.indiceDeColumnas(enc, ENCABEZADOS);
@@ -126,9 +124,7 @@ const HelpdeskService = (function () {
       if (nuevos.length) hoja.getRange(ultima + 1, 1, nuevos.length, enc.length).setValues(nuevos);
       if (nuevos.length || actualizados) CacheHojas.tocarHoja(hoja);
       return { nuevos: nuevos.length, actualizados: actualizados };
-    } finally {
-      lock.releaseLock();
-    }
+    }, { espera: 5000, siOcupado: () => ({ saltado: true }) });
   }
 
   /** La hoja, para HojaServicio: la copia la ve quien puede leer Tickets */
@@ -158,9 +154,7 @@ const HelpdeskService = (function () {
     Permisos.puedeEditar(token, 'tickets');
     const id = Number(idTicketHd);
     if (!Number.isInteger(id) || id <= 0) throw new Error('Ticket inválido.');
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       const hoja = hoja_(false);
       const enCopia = hoja ? SheetUtils.findById(libro_(), HOJA, String(id), COL_HD) : null;
       if (!enCopia) throw new Error('Abre el ticket en Help Desk primero, para tener sus datos.');
@@ -173,9 +167,7 @@ const HelpdeskService = (function () {
       const registro = TicketsService.crear(token, Object.assign({}, datos || {}, { TICKET: String(id) }));
       SheetUtils.update(libro_(), HOJA, enCopia.data['ID'], { [COL_CI]: registro.ID }, 'ID');
       return { ID: registro.ID, ID_TICKET_HD: id };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /**

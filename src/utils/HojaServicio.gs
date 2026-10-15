@@ -354,18 +354,16 @@ const HojaServicio = (function () {
     });
 
     const ctx = { token: token, sesion: sesion, datos: datos || {}, accion: 'crear' };
-    const lock = def.candadoAlCrear ? LockService.getScriptLock() : null;
-    if (lock) lock.waitLock(30000);
-    try {
+    const escribir = () => {
       ctx.hoja = hoja(def);
       aplicar_(def.alCrear, fila, ctx);
       // persona: true — el ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.conPersona)
       if (def.persona && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona(ctx.hoja.getName(), fila, fila);
       // El id lo pone SheetUtils.insert con el formato del sistema si el gancho no lo puso
       SheetUtils.insert(libro(def), ctx.hoja.getName(), fila);
-    } finally {
-      if (lock) lock.releaseLock();
-    }
+    };
+    if (def.candadoAlCrear) Candado.con(escribir, { espera: 30000 });
+    else escribir();
     const id = fila[columnaId(def)];
     renombrarArchivos_(def, archivos, id);
     if (def.despues) def.despues(fila, ctx);
@@ -380,22 +378,23 @@ const HojaServicio = (function () {
     quitarDeOtroModulo_(def, datos, sesion);
 
     const nombreReal = nombreHoja(def);
-    // El renglón de antes solo se lee si un gancho lo usa: SheetUtils.update ya lo busca y
-    // truena si no existe, y cada búsqueda es leer la hoja entera
-    let actual = null;
-    if (def.alActualizar || def.despues || def.persona) {
-      const encontrado = SheetUtils.findById(libro(def), nombreReal, id, columnaId(def));
-      if (!encontrado) throw new Error('No se encontró ' + nombre(def) + ' con ' + columnaId(def) + '=' + id);
-      actual = encontrado.data;
-    }
     const ctx = {
-      token: token, sesion: sesion, datos: cambios || {}, id: id, actual: actual,
+      token: token, sesion: sesion, datos: cambios || {}, id: id, actual: null,
       opciones: opciones || {}, accion: 'actualizar',
     };
-    aplicar_(def.alActualizar, datos, ctx);
-    if (def.persona && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona(nombreReal, datos, Object.assign({}, actual, datos));
-
-    const registro = SheetUtils.update(libro(def), nombreReal, id, datos, columnaId(def));
+    // Leer el renglón de antes, los ganchos y escribir van bajo un mismo candado: si no, lo que un gancho decide
+    // con `actual` puede ser de un renglón que otro ya cambió. El de antes solo se lee si un gancho lo usa
+    // (SheetUtils.update ya lo busca y truena si no existe).
+    const registro = Candado.con(() => {
+      if (def.alActualizar || def.despues || def.persona) {
+        const encontrado = SheetUtils.findById(libro(def), nombreReal, id, columnaId(def));
+        if (!encontrado) throw new Error('No se encontró ' + nombre(def) + ' con ' + columnaId(def) + '=' + id);
+        ctx.actual = encontrado.data;
+      }
+      aplicar_(def.alActualizar, datos, ctx);
+      if (def.persona && typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona(nombreReal, datos, Object.assign({}, ctx.actual, datos));
+      return SheetUtils.update(libro(def), nombreReal, id, datos, columnaId(def));
+    });
     renombrarArchivos_(def, archivos, id);
     if (def.despues) def.despues(registro, Object.assign(ctx, { cambios: datos }));
     // Los datos conectados (Administración > Datos conectados) se copian a las hojas que los mantienen al día. Si

@@ -94,7 +94,7 @@ function cargar(hojas, anotados) {
   vm.runInContext(lee('utils', 'Ids.gs'), ctx);
   // IDs predecibles para poder comparar
   vm.runInContext('Ids.nuevo = (p) => p + "-" + String(++globalThis.__n).padStart(4, "0");', Object.assign(ctx, { __n: 0 }));
-  vm.runInContext(lee('MigracionIds.gs') + '\n' + lee('services', 'CapitalHumano.gs') + '\nthis.CH = CapitalHumano;', ctx);
+  vm.runInContext(lee('utils', 'Candado.gs') + lee('MigracionIds.gs') + '\n' + lee('services', 'CapitalHumano.gs') + '\nthis.CH = CapitalHumano;', ctx);
   return ctx.CH;
 }
 

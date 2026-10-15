@@ -654,34 +654,38 @@ const LineasDatos = (function () {
     tiempo('escribir en lote ' + datos.length + ' celdas (' + Object.keys(l.hojas).join(', ') + ')', inicio);
   }
 
-  /** Ejecuta fn con el candado del script (las escrituras no se cruzan entre usuarios). */
+  /**
+   * Ejecuta fn con el candado del script (las escrituras no se cruzan entre usuarios). Es el común (Candado.gs):
+   * si quien llama ya lo tiene, no se vuelve a pedir. Lo propio de Líneas es el lote: lo escrito adentro se
+   * manda junto al final.
+   */
   function conCandado(fn) {
     const inicio = Date.now();
-    const candado = LockService.getScriptLock();
-    if (!candado.tryLock(30000)) throw new Error('El sistema está guardando otro cambio; intenta de nuevo en unos segundos.');
-    tiempo('candado (espera)', inicio);
-    const propio = !lote_;
-    if (propio) lote_ = { datos: {}, hojas: {}, respaldo: [] };
-    let fallo = null;
-    try {
-      return fn();
-    } catch (e) {
-      fallo = e;
-      throw e;
-    } finally {
+    const ocupado = () => { throw new Error('El sistema está guardando otro cambio; intenta de nuevo en unos segundos.'); };
+    return Candado.con(() => {
+      tiempo('candado (espera)', inicio);
+      const propio = !lote_;
+      if (propio) lote_ = { datos: {}, hojas: {}, respaldo: [] };
+      let fallo = null;
       try {
-        // También si fn falló: lo que alcanzó a cambiar se escribe, igual que cuando cada celda iba al momento
-        if (propio) vaciarLote_();
+        return fn();
       } catch (e) {
-        if (!fallo) throw e;
-        console.warn('conCandado: no se pudo escribir el lote después de un error: ' + e.message);
+        fallo = e;
+        throw e;
       } finally {
-        if (propio) lote_ = null;
-        SpreadsheetApp.flush();
-        candado.releaseLock();
-        tiempo('candado (todo lo de adentro)', inicio);
+        try {
+          // También si fn falló: lo que alcanzó a cambiar se escribe, igual que cuando cada celda iba al momento
+          if (propio) vaciarLote_();
+        } catch (e) {
+          if (!fallo) throw e;
+          console.warn('conCandado: no se pudo escribir el lote después de un error: ' + e.message);
+        } finally {
+          if (propio) lote_ = null;
+          SpreadsheetApp.flush();
+          tiempo('candado (todo lo de adentro)', inicio);
+        }
       }
-    }
+    }, { espera: 30000, siOcupado: ocupado });
   }
 
   /** ID nuevo para una pestaña, con su prefijo del catálogo (LIN-…, ILI-…, CLI-…). Ver src/utils/Ids.gs. */

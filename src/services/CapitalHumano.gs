@@ -222,13 +222,9 @@ const CapitalHumano = (function () {
   function identificar(opciones) {
     const cfg = Object.assign({ escribir: false }, opciones || {});
     if (!cfg.escribir) return identificarSinCandado_(cfg);
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       return identificarSinCandado_(cfg);
-    } finally {
-      lock.releaseLock();
-    }
+    }, { espera: 30000 });
   }
 
   function identificarSinCandado_(cfg) {
@@ -300,9 +296,8 @@ const CapitalHumano = (function () {
       return o;
     }).filter((f) => norm(f['No EMPLEADO']) && norm(f['NOMBRE COMPLETO']));
 
-    const lock = cfg.escribir ? LockService.getScriptLock() : null;
-    if (lock) lock.waitLock(30000);
-    try {
+    // El ensayo solo lee: el candado, solo al escribir
+    const trabajo = () => {
       const ss = libro_();
       let hoja = ss.getSheetByName(HOJA_CH);
       const actual = leer_(hoja);
@@ -358,9 +353,8 @@ const CapitalHumano = (function () {
       colaboradores_(true);
       anotarHistorial_(ss, sesion, resultado);
       return resultado;
-    } finally {
-      if (lock) lock.releaseLock();
-    }
+    };
+    return cfg.escribir ? Candado.con(trabajo, { espera: 30000 }) : trabajo();
   }
 
   /** Que quien la abra sepa que no se pega a mano (solo aviso: la app escribe con la cuenta que despliega) */

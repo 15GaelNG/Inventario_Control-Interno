@@ -610,13 +610,9 @@ const MAPA = {
    * @return {Object} { 'NOMBRE HOJA': filasActualizadas, ... } — solo las hojas que sí tenían algo que copiar
    */
   function propagar(origen, filaOrigen, cambios) {
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       return propagarSinCandado_(origen, filaOrigen, cambios);
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /**
@@ -748,13 +744,9 @@ const MAPA = {
    * @param {Object} filaOrigen  el registro como estaba ANTES (para encontrar su copia)
    */
   function soltar(origen, filaOrigen) {
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       return propagarSinCandado_(origen, filaOrigen, null, { soltar: true });
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /**
@@ -880,13 +872,9 @@ const MAPA = {
 
     // Al corregir se escribe sobre las mismas filas que propagar(): mismo candado, para
     // que un vehículo editado a la mitad del barrido no quede pisado con su valor viejo.
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle, soloFilas, quien);
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /** Cuántas entradas regresa revisar({detalle}) por hoja: lo que una tabla aguanta sin trabarse. */
@@ -1396,9 +1384,7 @@ const MAPA = {
 
     if (!confirmar) return { impacto: impacto, aplicado: false };
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    Candado.con(() => {
       SheetUtils.update(ssId, definicion.hoja, claveVieja, { [claveNombre]: claveNueva }, claveNombre);
 
       // Desde que la llave es la SERIE, el FOLIO quedó como atributo copiado en hojas que
@@ -1431,9 +1417,7 @@ const MAPA = {
           CacheHojas.tocarHoja(hoja);
         }
       });
-    } finally {
-      lock.releaseLock();
-    }
+    });
 
     return { impacto: impacto, aplicado: true };
   }
@@ -1602,9 +1586,7 @@ const MAPA = {
   function borrar(padre, ids) {
     const b = borrable_(padre);
     const ssId = b.libro();
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       const hoja = SpreadsheetApp.openById(ssId).getSheetByName(padre);
       if (!hoja) throw new Error('No existe la hoja "' + padre + '"');
       const padres = buscarPadres_(hoja, b.columnaId, ids);
@@ -1615,9 +1597,7 @@ const MAPA = {
       padres.map((p) => p.fila).sort((x, y) => y - x).forEach((fila) => hoja.deleteRow(fila));
       CacheHojas.tocarHoja(hoja);
       return { eliminadas: padres.length };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   return {

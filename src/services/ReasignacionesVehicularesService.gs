@@ -69,9 +69,7 @@ const ReasignacionesVehicularesService = (function () {
     const responsableEntrante = String(datos['Responsable Entrante'] || '').trim();
     if (!responsableEntrante) throw new Error('Captura el responsable entrante.');
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const vehiculo = VehiculosService.buscar(token, folio);
       if (!vehiculo) throw new Error('No se encontró el vehículo ' + folio);
 
@@ -113,9 +111,7 @@ const ReasignacionesVehicularesService = (function () {
       }, { candadoTomado: true });
 
       return { ID: fila['ID'] };
-    } finally {
-      lock.releaseLock();
-    }
+    }, { espera: 30000 });
   }
 
   return {

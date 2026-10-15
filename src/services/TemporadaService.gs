@@ -106,9 +106,7 @@ const TemporadaService = (function () {
     const sesion = Auth.validarSesion(token);
     if (actual() !== 'muertos') throw new Error('La ofrenda no está abierta.');
     const texto = String(memoria || '').replace(/\s+/g, ' ').trim().slice(0, MAX_MEMORIA);
-    const candado = LockService.getScriptLock();
-    candado.waitLock(15000);
-    try {
+    Candado.con(() => {
       const hoja = hojaOfrenda_();
       const mia = velas_().find((v) => v.correo === correo_(sesion.correo));
       const renglon = mia ? renglonDe_(hoja, mia.id) : 0;
@@ -118,9 +116,7 @@ const TemporadaService = (function () {
         hoja.appendRow([Utilities.getUuid().slice(0, 8), new Date(), anio_(), sesion.correo || '', sesion.nombre || '', texto]);
       }
       CacheHojas.tocarHoja(hoja);
-    } finally {
-      candado.releaseLock();
-    }
+    }, { espera: 15000 });
     return vista_(sesion);
   }
 
@@ -132,16 +128,12 @@ const TemporadaService = (function () {
     if (vela.correo !== correo_(sesion.correo) && sesion.rol !== Config.ROLES.ADMIN) {
       throw new Error('Solo quien encendió la vela (o un administrador) la puede quitar.');
     }
-    const candado = LockService.getScriptLock();
-    candado.waitLock(15000);
-    try {
+    Candado.con(() => {
       const hoja = hojaOfrenda_();
       const renglon = renglonDe_(hoja, id);
       if (renglon) hoja.deleteRow(renglon);
       CacheHojas.tocarHoja(hoja);
-    } finally {
-      candado.releaseLock();
-    }
+    }, { espera: 15000 });
     return vista_(sesion);
   }
 

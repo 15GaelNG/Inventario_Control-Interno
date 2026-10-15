@@ -71,15 +71,27 @@ las dos cosas y además, con ganchos, lee la hoja completa dos veces.
 
 **Cómo.** Tomar la forma de `LineasDatos` (candado siempre, una escritura por renglón):
 
-- [ ] `update`: candado → buscar el renglón **dentro** del candado → escribir **solo las columnas que cambian**
-      (rangos contiguos) → soltar.
-- [ ] `remove`: candado (igual que `removeMany`).
-- [ ] Buscar el ID con `TextFinder` sobre la columna ID en vez de leer la hoja entera (como `LineasDatos`).
-- [ ] `HojaServicio.actualizar`: un solo `findById` dentro del candado; el `actual` que ven los ganchos sale de
-      ahí.
-- [ ] Pruebas con `apps-script-simulado.js`: borrar un renglón arriba entre búsqueda y escritura; dos
-      actualizaciones de columnas distintas no se pisan; una columna con fórmula no se sobreescribe.
-- [ ] Contrato: `SheetUtils.update` no escribe `headers.length` columnas; ningún `deleteRow` fuera de candado.
+- [x] **Primero un candado común y reentrante: `src/utils/Candado.gs`** (no estaba en el plan). `waitLock()` no es
+      reentrante, y varios servicios toman el candado y desde ahí llaman a `update` (Cambios de Monto → Cajas;
+      Reasignaciones → Vehículos → Relaciones; `Relaciones.cambiarClave`). Ponerle candado a `update` sin esto los
+      colgaba. Los 29 `getScriptLock` sueltos (servicios, `LineasDatos.conCandado`, migraciones) pasaron a
+      `Candado.con`; los de `tryLock` conservan su salida con `siOcupado`.
+- [x] `update`: candado → buscar el renglón **dentro** del candado → escribir **solo las columnas que cambian**
+      (tramos contiguos, nada en los huecos) → soltar. Sigue regresando el registro completo mezclado.
+- [x] `remove`: candado (igual que `removeMany`).
+- [x] Buscar el ID leyendo **solo la columna del ID** (no `TextFinder`: es igual de barato aquí, no se equivoca con
+      números o formatos, y se puede probar en el simulador).
+- [x] `HojaServicio.actualizar`: leer el de antes, los ganchos y escribir bajo un mismo candado; `crear` con
+      `candadoAlCrear` también por `Candado`.
+- [x] Pruebas: `tests/candado.test.js` (reentrante, errores, ocupado) y la sección 9 de `tests/sheetutils.test.js`
+      (fórmula intacta, solo las celdas que cambian, no pisa otra columna, bajo candado, anidado sin colgarse).
+- [x] Contrato: ningún `LockService.get*Lock` fuera de `Candado.gs`; `update` y `remove` usan `Candado.con` y
+      `update` no arma el renglón completo.
+- [ ] Probado en el DEV de common: editar un vehículo, un cambio de monto (el caso anidado), una reasignación y
+      borrar un registro; ver que no tarde más que antes.
+- [ ] Después (limpieza): quitar los atajos que ya no hacen falta (`propagarSinCandado_`, `revisarSinCandado_`,
+      `identificarSinCandado_`, la opción `candadoTomado`) y `migrarOtrasFirmasTempSiHaceFalta_` cuando ya no queden
+      firmas viejas.
 
 **Hecho cuando** las pruebas de arriba pasan y se midió en DEV que una edición no tarda más que antes.
 
@@ -160,3 +172,5 @@ juntan por primera vez.
 | Fecha | Fase | Qué | Pasó a master |
 |---|---|---|---|
 | 15-oct | — | Rama `common` desde `master` (46b73b0) y este plan | — |
+| 15-oct | 0 | DEV propio (`Inventario DEV - common`, copia del libro de prod, carpeta DEV COMMON); la Action sube `common` | — |
+| 15-oct | 1 | `Candado` reentrante en todo el servidor; `SheetUtils.update`/`remove` bajo candado y escribiendo solo lo que cambia | pendiente: probar en DEV |
