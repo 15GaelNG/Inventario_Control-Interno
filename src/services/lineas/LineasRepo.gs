@@ -402,9 +402,25 @@ const LineasRepo = (function () {
     return { columnas: ['ID'].concat(COLS_VISTA_LINEAS), filas: filas };
   }
 
+  /**
+   * La huella del índice (apiListaConHuella, fase 5.2b): la versión de cada pestaña de la que sale, aunque se responda
+   * de la caché. Con ella el vigía de la pantalla (api.html) sabe si cambió sin volver a pedirlo. Solo CacheService.
+   * Las pestañas: la de líneas (o, leyendo la estructura nueva, las que la arman: LineasLectura.filas) y MOVIMIENTOS
+   * (los cambios de número). Las escrituras de LineasDatos las tocan (CacheHojas.tocar); lo editado a mano, AvisoDeCambios.
+   */
+  function huellaIndice_() {
+    try {
+      if (typeof CacheHojas === 'undefined') return;
+      const L = typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(TAB.LINEAS) ? LineasLectura : null;
+      const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS, L.HOJA_VIEJA] : [TAB.LINEAS];
+      CacheHojas.versiones(hojas.concat([TAB.MOV]).map((n) => [LineasDatos.id(), n]));
+    } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
+  }
+
   /** Índices de equipos y líneas + columnas de la vista de tabla del AppSheet (1 lectura de la pestaña; caché 30 min). */
   function indice(forzar) {
     const inicio = Date.now();
+    huellaIndice_();
     if (!forzar) {
       const enCache = LineasDatos.cacheLeer(CLAVE_INDICE);
       if (enCache) { LineasDatos.tiempo('índice (de la caché)', inicio); return enCache; }

@@ -516,6 +516,22 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
   assert.ok(index.indexOf("include('html/js/componentes/tabs')") < index.indexOf("include('html/js/componentes/ficha')"));
 });
 
+test('el índice de Líneas es una lista como las demás: copia sin PIN, huella y vigía (fase 5.2b)', () => {
+  const lineas = read('src/html/js/lineas.html');
+  // Por la caché común, nunca por su cuenta en localStorage
+  assert.match(lineas, /callServerListaCacheada\('apiLineasIndice', state\.token\)/);
+  assert.doesNotMatch(lineas, /localStorage\.(get|set)Item\(LLAVE_INDICE|llamar\('apiLineasIndice'/);
+  // La copia guardada va sin los PIN (tests/listas-cliente.test.js prueba que no quedan en el navegador)
+  assert.match(lineas, /guardarListaLimpia\('apiLineasIndice', sinSecretos_\);/);
+  assert.match(read('src/html/js/api.html'), /const guardable = limpiar \? limpiar\(valor\) : valor;/);
+  // La huella: el servidor la da aunque responda de su caché, y apiListaConHuella acepta el índice
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /function indice\(forzar\) \{\s+const inicio = Date\.now\(\);\s+huellaIndice_\(\);/);
+  assert.match(read('src/ClientApi.gs'), /LISTAS_CON_HUELLA_ = [^\n]*\|LineasIndice\)/);
+  // Lo que llega distinto se vuelve a armar antes de repintar
+  assert.match(lineas, /ev\.detail\.fn === 'apiLineasIndice' && memoria\.indice\) pedirIndice_\(\)/);
+});
+
 test('el filtro rápido por tipo / clase / estatus es el componente FiltroTipo', () => {
   // Estaba copiado 5 veces (Incidencias, Vehículos, Uber, Caja Chica y Líneas), cada una con su pintar y su marcar (fase 4c)
   const fuera = filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))

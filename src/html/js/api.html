@@ -290,6 +290,15 @@
     return pedir_('apiListaConHuella', [args[0], fnName, args.slice(1)], fnName).then((r) => ({ valor: r.v, huella: r.huella || {} }));
   }
 
+  /**
+   * Lo que una lista NO debe dejar en el navegador (los PIN del índice de Líneas, que el servidor solo le manda a un ADMIN):
+   * guardarListaLimpia(fn, limpiar) hace que la copia guardada (y la que se compara) sea limpiar(valor); el valor real
+   * solo vive en memoria. Si lo que se pintó salió de la copia y el real trae algo que la copia no, se avisa igual
+   * ("lista-actualizada") para que se vuelva a pintar con lo real.
+   */
+  const LIMPIAR_AL_GUARDAR = {};
+  function guardarListaLimpia(fnName, limpiar) { LIMPIAR_AL_GUARDAR[fnName] = limpiar; }
+
   function pedirLista_(fnName, args, llave) {
     const entrada = entradaLista_(llave);
     if (entrada.promesa) return entrada.promesa;
@@ -298,9 +307,11 @@
     entrada.promesa = entrada.carga.then(() => {
       const teniaCopia = entrada.texto !== null;
       return pedirConHuella_(fnName, args).then(({ valor, huella }) => {
-        const texto = JSON.stringify(valor === undefined ? null : valor);
-        const cambio = texto !== entrada.texto;
-        Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null, huella: huella });
+        const limpiar = LIMPIAR_AL_GUARDAR[fnName];
+        const guardable = limpiar ? limpiar(valor) : valor;
+        const texto = JSON.stringify(guardable === undefined ? null : guardable);
+        const cambio = texto !== entrada.texto || (guardable !== valor && !entrada.real);
+        Object.assign(entrada, { valor: valor, texto: texto, ts: Date.now(), promesa: null, huella: huella, real: true });
         Almacen.guardar(llaveGuardada_(llave), texto);
         if (cambio && teniaCopia) {
           window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: fnName } }));

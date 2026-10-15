@@ -18,7 +18,7 @@ function apiPing() {
 // (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
 // Solo las listas (apiListar…, apiFicha…, el Inicio y las campanitas), no cualquier api…: source-contracts revisa que
 // cada callServerListaCacheada de la pantalla entre aquí
-const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|NotificacionesPendientes|LineasNotificaciones)$/;
+const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|NotificacionesPendientes|LineasNotificaciones|LineasIndice)$/;
 function apiListaConHuella(token, fn, args) {
   if (!LISTAS_CON_HUELLA_.test(String(fn))) throw new Error('Lista desconocida: ' + fn);
   const f = globalThis[fn];
