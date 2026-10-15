@@ -14,6 +14,9 @@ const path = require('node:path');
 function filaBase(extra) {
   return Object.assign({
     'ID ARQUEO': 'ARQ-1', 'ID CCH': '1', RESPONSABLE: 'JUAN PEREZ', 'NOMBRE ASISTENTE': 'ANA LOPEZ',
+    // Con asistente por default: los casos sin asistente lo pisan explícito (CUENTA CON FIRMA
+    // ASISTENTE: 'NO' o '').
+    'CUENTA CON FIRMA ASISTENTE': 'SI',
     'FECHA INICIO': new Date('2026-10-01T12:00:00Z'), 'TOTAL GENERAL': 1000, DIFERENCIA: 0,
     'FIRMA RESPONSABLE': '', 'FIRMA ASISTENTE': '', 'FIRMA ESPECIALISTA': 'https://drive.google.com/file/d/CIFILE/view',
     'TOKEN FIRMA RESPONSABLE': '', 'TOKEN FIRMA RESPONSABLE EXPIRA': '', 'FIRMADO POR RESPONSABLE': '',
@@ -196,6 +199,23 @@ test('generarLigaArqueo: truena si ya se completaron las dos firmas', () => {
 test('generarLigaArqueo: truena si no existe el arqueo', () => {
   const { contexto } = crearContexto([]);
   assert.throws(() => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-X', 'responsable'), /No se encontró el arqueo/);
+});
+
+test('generarLigaArqueo: truena para el Asistente si el arqueo no tiene ("Cuenta con firma del asistente" != SI)', () => {
+  const { contexto, llamadas } = crearContexto([filaBase({ 'CUENTA CON FIRMA ASISTENTE': 'NO' })]);
+  assert.throws(
+    () => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'asistente'),
+    /no tiene asistente/
+  );
+  assert.deepEqual(llamadas.update, []);
+});
+
+test('generarLigaArqueo: truena para el Asistente si "Cuenta con firma del asistente" está en blanco', () => {
+  const { contexto } = crearContexto([filaBase({ 'CUENTA CON FIRMA ASISTENTE': '' })]);
+  assert.throws(
+    () => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'asistente'),
+    /no tiene asistente/
+  );
 });
 
 // ---------- copiarLigaArqueo ----------

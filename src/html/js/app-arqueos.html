@@ -163,7 +163,9 @@
    *  FIRMA_RESPONSABLE/FIRMA_ASISTENTE están vacías (ver ArqueosService.gs). */
   function badgeFirmaArqueo(a) {
     const faltaResponsable = !a.FIRMA_RESPONSABLE;
-    const faltaAsistente = !a.FIRMA_ASISTENTE;
+    // Si este arqueo no tiene Asistente ("Cuenta con firma del asistente" != SI), su firma nunca
+    // cuenta como "falta" -- no hay nadie que la vaya a poner (usuario, 15-oct-2026).
+    const faltaAsistente = a.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !a.FIRMA_ASISTENTE;
     if (!faltaResponsable && !faltaAsistente) {
       return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Firmado</span>';
     }
@@ -203,7 +205,11 @@
   async function enviarLigasArqueoTrasGuardar_(registro) {
     const faltan = [];
     if (!registro.FIRMA_RESPONSABLE) faltan.push({ quien: 'responsable', titulo: 'Responsable' });
-    if (!registro.FIRMA_ASISTENTE) faltan.push({ quien: 'asistente', titulo: 'Asistente' });
+    // El Asistente es opcional: solo hay a quién mandarle liga si "Cuenta con firma del
+    // asistente" = SI (usuario, 15-oct-2026).
+    if (registro.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !registro.FIRMA_ASISTENTE) {
+      faltan.push({ quien: 'asistente', titulo: 'Asistente' });
+    }
     if (!faltan.length) return null;
     const ligas = await Promise.all(faltan.map(async (f) => ({
       titulo: f.titulo,
@@ -986,7 +992,7 @@
         puedeEditar ? [
           { icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) },
           { icono: 'link', titulo: 'Generar liga de firma (Responsable)', visible: (a) => !a.FIRMA_RESPONSABLE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'responsable', 'el Responsable', refrescarTrasLiga_) },
-          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => !a.FIRMA_ASISTENTE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', refrescarTrasLiga_) },
+          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => a.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !a.FIRMA_ASISTENTE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', refrescarTrasLiga_) },
         ] : []
       ),
       alEliminar: puedeEditar ? async (filas) => {

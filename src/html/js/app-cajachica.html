@@ -356,7 +356,7 @@
       if (!a.FIRMA_RESPONSABLE) {
         html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="responsable" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Responsable)">' + Iconos.svg('link') + '</button>';
       }
-      if (!a.FIRMA_ASISTENTE) {
+      if (a.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !a.FIRMA_ASISTENTE) {
         html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="asistente" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Asistente)">' + Iconos.svg('link') + '</button>';
       }
       return html ? '<div class="ficha-acciones-fila">' + html + '</div>' : '';

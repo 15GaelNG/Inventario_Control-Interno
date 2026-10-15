@@ -330,7 +330,7 @@ const ArqueosService = (function () {
     columnas: [
       'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
       'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
-      'FIRMA RESPONSABLE', 'FIRMA ASISTENTE',
+      'FIRMA RESPONSABLE', 'FIRMA ASISTENTE', 'CUENTA CON FIRMA ASISTENTE',
       'TOKEN FIRMA RESPONSABLE', 'FIRMADO POR RESPONSABLE', 'TOKEN FIRMA ASISTENTE', 'FIRMADO POR ASISTENTE',
     ],
     fila: (r) => ({
@@ -347,6 +347,9 @@ const ArqueosService = (function () {
       EVIDENCIAS: r['EVIDENCIAS'] || '',
       FIRMA_RESPONSABLE: r['FIRMA RESPONSABLE'] || '',
       FIRMA_ASISTENTE: r['FIRMA ASISTENTE'] || '',
+      // Solo hay Asistente que firme (presencial o a distancia) si esto es 'SI' -- si no, no hay
+      // nadie a quien mandarle liga ni cuya firma se espere (usuario, 15-oct-2026).
+      CUENTA_CON_FIRMA_ASISTENTE: r['CUENTA CON FIRMA ASISTENTE'] || '',
       TOKEN_FIRMA_RESPONSABLE: r['TOKEN FIRMA RESPONSABLE'] || '',
       FIRMADO_POR_RESPONSABLE: r['FIRMADO POR RESPONSABLE'] || '',
       TOKEN_FIRMA_ASISTENTE: r['TOKEN FIRMA ASISTENTE'] || '',
@@ -502,6 +505,11 @@ const ArqueosService = (function () {
         throw new Error('Ya se completaron las dos firmas; no se puede generar una liga.');
       }
       const col = columnasFirmaArqueo_(quien);
+      // El Asistente es opcional (el canvas de su firma solo se muestra si "Cuenta con firma del
+      // asistente" = SI): sin eso, no hay a quién mandarle liga (usuario, 15-oct-2026).
+      if (quien === 'asistente' && fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI') {
+        throw new Error('Este arqueo no tiene asistente (revisa "Cuenta con firma del asistente"); no hay liga que generar.');
+      }
       // Si ya tiene firma pero nunca tuvo token ni "firmado por" es que firmó presencial -- no hay
       // liga que mandar ni regenerar (mismo guard que regenerarLiga en Responsiva/Adherente).
       if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor]) {
