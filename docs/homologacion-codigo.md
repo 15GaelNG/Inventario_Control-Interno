@@ -222,11 +222,19 @@ acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin
 
 ## Fase 7 — Pruebas que no estorben
 
-- [ ] Clasificar las 574 aserciones de `source-contracts`: **arquitectura** (se quedan: ids en el catálogo, nada
-      de copias, orden de includes) contra **comportamiento escrito como texto** (p. ej. exigir literal
-      `doc('file-plus', 'Generar PDF', …)`).
+- [x] Clasificar las aserciones de `source-contracts` (15-oct, `node tools/pruebas/clasificar-contratos.js
+      tests/source-contracts.test.cjs`, por patrones: aproximado). 975 aserciones en 107 pruebas: **127** vigilan copias
+      (`doesNotMatch`, listas que solo se achican), **52** catálogo / includes / permisos, **443** están en pruebas que ya
+      ejecutan el código (`new Function`, vm, `crearEntorno`) y **353** son comportamiento escrito como texto. Las de
+      texto se juntan en las pantallas de Líneas (selección estilo Drive 29, inspección y responsiva 15, navegación de la
+      ficha 14, tablas 14…): les toca cuando se retome la migración de las capturas de Líneas ("Pendiente al final").
+      Ejemplo de por qué importan: la del "Drive" de Líneas exigía como texto que un DEV sin configuración usara **NUCOS de
+      producción** (el error del 5.7 estaba escrito como regla).
 - [ ] Las de comportamiento pasan a pruebas que lo ejecutan (`apps-script-simulado.js`, jsdom) conforme cada
-      fase toque esa parte. No antes: reescribir pruebas de algo que no se está moviendo no paga.
+      fase toque esa parte. No antes: reescribir pruebas de algo que no se está moviendo no paga. Hechas en esta rama:
+      `tests/pasos.test.js` (los pasos de Líneas ya no se exigen como marcado), la campana en `inicio-cache.test.js`,
+      `DriveUtils.subcarpeta` en `driveutils.test.js` (y `tests/drive-utils-real.js` para que las pruebas con Drive
+      simulado usen la regla real, no una copia), "guardar limpio" del índice en `listas-cliente.test.js`.
 
 ## Transversal — medir uso
 
@@ -250,6 +258,7 @@ juntan por primera vez.
 | 15-oct | 2 | `Formato` (componentes/formato.html): una sola copia de esc, fechas, moneda, miles y normal; contrato | pendiente: probar en DEV |
 | 15-oct | 3 | Escala `--texto-*` (27→8), `--radio-*` (19→6) y `--tono-*` con modo oscuro; contrato | pendiente: probar en DEV |
 | 15-oct | 4 | 4a `Tabs` (3 implementaciones → 1), 4b `Ficha` (7 encabezados), 4c `FiltroTipo` (5 copias); contratos | pendiente: probar en DEV |
+| 15-oct | 5.8, 6, 7 | 5.8 inventariado (espera a la reestructura de Líneas); 6.4 candado en todo `src/`; 6.1–6.3 se hacen antes de pasar a master, coordinados; 7 clasificada; escenas de Líneas; `Pasos` en Vehículo, Responsiva, Adherente y Arqueos | pendiente: probar en DEV |
 | 15-oct | 5.7 | NUCOS de Líneas: sin respaldo a producción en un DEV (y `revisarEntorno` lo vigila); `DriveUtils.subcarpeta` en lugar de 6 copias | pendiente: probar en DEV; **revisar en el DEV de Jorge** si tenía `LINEAS_DRIVE_NUCOS` = producción |
 | 15-oct | 5.6 | `Pasos` (navegación por pasos) en Formulario y Líneas, `Formulario.marcarError`; la migración completa de las capturas de Líneas queda al final | pendiente: probar en DEV |
 | 15-oct | 5.5 | La campana en una llamada (`apiNotificaciones`): Líneas y Vehículos como fuentes de `NotificacionesService`; huella de `APP_NOTIFICACIONES`; escenas `campana` y `notificaciones` en la vista previa | pendiente: probar en DEV |
