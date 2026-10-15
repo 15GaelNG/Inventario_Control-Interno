@@ -362,7 +362,7 @@
           .map((d) => itemInfo(d[0], d[1] || '—')).join('') +
         '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:var(--texto-s)">Estos datos se cambian en la hoja USUARIOS.</p></div>';
 
-      return html + fichaEnPestanas([
+      return html + Tabs.html([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: conAcceso(p) },
         { id: 'datos', titulo: 'Datos', icono: 'id-card', contenido: datosHoja },
         pestanaHistorial(p.correo),
@@ -420,7 +420,7 @@
         ], gente.slice().sort((x, y) => (y.activo - x.activo) || String(x.nombre).localeCompare(String(y.nombre))))
         : '<p class="empty-state">Nadie tiene esta área.</p>') + '</div>';
 
-      return html + fichaEnPestanas([
+      return html + Tabs.html([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
         { id: 'personas', titulo: 'Personas', icono: 'users', contenido: personas, num: gente.length },
         pestanaHistorial(a.nombre),
@@ -464,7 +464,7 @@
         ], areas)
         : '<p class="empty-state">Ninguna área tiene este perfil todavía.</p>') + '</div>';
 
-      return html + fichaEnPestanas([
+      return html + Tabs.html([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
         { id: 'areas', titulo: 'Áreas', icono: 'users', contenido: listaAreas, num: areas.length },
         pestanaHistorial(quienPerfil(pf.nombre)),
@@ -487,7 +487,7 @@
       $('usr-listado').hidden = true;
       detalle.hidden = false;
       detalle.innerHTML = html;
-      if (fichaActual.pestana) mostrarPestanaFicha(detalle, fichaActual.pestana);
+      if (fichaActual.pestana) Tabs.mostrar(detalle, fichaActual.pestana);
       refreshIcons();
       document.getElementById('view-container').scrollTop = 0;
     }
@@ -1212,7 +1212,7 @@
     });
 
     const tablaActiva = () => {
-      const pestana = $('usr-tabs').querySelector('.tab-btn.active').dataset.tab;
+      const pestana = Tabs.actual($('usr-listado'));
       return pestana === 'areas' ? tablaAreas : pestana === 'perfiles' ? tablaPerfiles : pestana === 'historial' ? tablaHistorial : tablaPersonas;
     };
 
@@ -1260,13 +1260,14 @@
     }
 
     // ---------------------------------------------------------------- eventos
-    wireTabsSimple($('usr-listado'));
+    Tabs.iniciar($('usr-listado'));
     $('usr-tabs').querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => requestAnimationFrame(() => tablaActiva().ajustarAlto())));
 
     $('usr-detalle').addEventListener('click', (ev) => {
-      const el = ev.target.closest('button, [data-ficha-tab]');
+      const el = ev.target.closest('button');
       if (!el) return;
-      if (el.dataset.fichaTab) { fichaActual.pestana = el.dataset.fichaTab; mostrarPestanaFicha($('usr-detalle'), el.dataset.fichaTab); return; }
+      // la pestaña la cambia Tabs; aquí solo se recuerda para volver a ella al repintar
+      if (el.dataset.tab) { fichaActual.pestana = el.dataset.tab; return; }
       if (el.hasAttribute('data-usr-volver')) { volver(); return; }
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(fichaActual.tipo, fichaActual.id); return; }

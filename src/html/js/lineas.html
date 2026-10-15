@@ -2516,8 +2516,9 @@
       // Los de la línea que en Editar llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
       const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       let marcarKpi = null;
-      raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
-        tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
+      Tabs.iniciar($('#ln-listado', raiz), { inicial: memoria.modulo });
+      $('#ln-listado', raiz).addEventListener('tabs-cambio', (ev) => {
+        if (ev.target.id === 'ln-listado' && ev.detail.nombre !== memoria.modulo) mostrarModulo(ev.detail.nombre);
       });
       $('#ln-recargar', raiz).addEventListener('click', (ev) => {
         const b = ev.currentTarget;
@@ -2543,6 +2544,9 @@
         aplicarModoVista();
       }));
 
+      // La pestaña de la ficha la cambia Tabs; aquí lo que pasa al abrir cada una
+      $('#ln-detalle', raiz).addEventListener('tabs-cambio', (ev) => alAbrirPestanaFicha(ev.detail.nombre));
+
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
         if (ev.target.closest('a[target="_blank"]')) return;
@@ -2559,8 +2563,6 @@
         }
         const masFicha = ev.target.closest('[data-ln-ficha-mas]');
         if (masFicha) { ev.preventDefault(); abrirMenuFicha(masFicha); return; }
-        const pestana = ev.target.closest('[data-ficha-tab]');
-        if (pestana) { mostrarPestanaFicha(pestana.dataset.fichaTab); return; }
         const mas = ev.target.closest('[data-ln-mas-tarjetas]');
         if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
         const copiar = ev.target.closest('[data-ln-copiar-detalles]');
@@ -3005,8 +3007,7 @@
 
       function mostrarModulo(modulo, sinTabla) {
         memoria.modulo = modulo;
-        raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((t) => t.classList.toggle('active', t.dataset.tab === modulo));
-        raiz.querySelectorAll('#ln-listado .tab-panel').forEach((p) => { p.hidden = p.dataset.tabPanel !== modulo; });
+        if (Tabs.actual($('#ln-listado', raiz)) !== modulo) Tabs.mostrar($('#ln-listado', raiz), modulo);
         if (sinTabla) return;
         crearTabla(modulo).ajustarAlto();
         if (memoria.modoVista === 'tarjetas') pintarTarjetas(modulo);
@@ -3384,44 +3385,33 @@
        * Ficha en pestañas: General (datos), Detalles (texto para copiar), Documentos (inspecciones y
        * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
        */
-      function fichaEnPestanas(general, detalles, conDocumentos) {
+      function pestanasFicha(general, detalles, conDocumentos) {
         // Cada pestaña con su sección (y Documentos e Historial, nunca para un CLIENT: sinPasado)
         const conDetalles = veSeccion('detalles');
         const pasado = veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
-        const pestanas = [['general', 'General', 'layout-grid'], conDetalles ? ['detalles', 'Detalles', 'clipboard-list'] : null,
-          conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, pasado ? ['historial', 'Historial', 'history'] : null].filter(Boolean);
-        // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
-        const guardada = (pila[pila.length - 1] || {}).pestana;
-        const activa = pestanas.some((t) => t[0] === guardada) ? guardada : 'general';
         const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
-        return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t) =>
-          '<button type="button" class="tab-btn' + (t[0] === activa ? ' active' : '') + '" role="tab" aria-selected="' + (t[0] === activa) + '" data-ficha-tab="' + t[0] + '">' +
-          icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
-          '<div data-ficha-panel="general"' + (activa === 'general' ? '' : ' hidden') + '>' + general + '</div>' +
-          (conDetalles ? '<div data-ficha-panel="detalles"' + (activa === 'detalles' ? '' : ' hidden') + '>' + detalles + '</div>' : '') +
-          (conDocumentos ? '<div data-ficha-panel="documentos"' + (activa === 'documentos' ? '' : ' hidden') + '><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
-          (pasado ? '<div data-ficha-panel="historial"' + (activa === 'historial' ? '' : ' hidden') + '><div id="ln-historial">' + cargando + '</div></div>' : '');
+        // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
+        return Tabs.html([
+          { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
+          conDetalles && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          conDocumentos && { id: 'documentos', titulo: 'Documentos', icono: 'folder-check', contenido: '<div id="ln-evidencias">' + cargando + '</div>' },
+          pasado && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: '<div id="ln-historial">' + cargando + '</div>' },
+        ], { activa: (pila[pila.length - 1] || {}).pestana });
       }
 
       function mostrarPestanaFicha(nombre) {
+        Tabs.mostrar($('#ln-detalle', raiz), nombre);
+      }
+      function alAbrirPestanaFicha(nombre) {
         if (pila.length) pila[pila.length - 1].pestana = nombre;
         if (typeof HistorialApp !== 'undefined') HistorialApp.actualizar(pilaParaHistorial());
-        raiz.querySelectorAll('[data-ficha-tab]').forEach((b) => {
-          const activa = b.dataset.fichaTab === nombre;
-          b.classList.toggle('active', activa);
-          b.setAttribute('aria-selected', String(activa));
-        });
-        raiz.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
         if (nombre === 'historial' && tablaHistorial) tablaHistorial.ajustarAlto();
         if (nombre === 'historial' && tablaAsignaciones && !$('#ln-asignaciones', raiz).hidden) tablaAsignaciones.ajustarAlto();
         if (nombre === 'documentos' && tablaDocumentos) tablaDocumentos.ajustarAlto();
       }
 
-      function contarEnPestana(nombre, n) {
-        const el = raiz.querySelector('[data-ficha-num="' + nombre + '"]');
-        if (el) el.textContent = miles(n);
-      }
+      const contarEnPestana = (nombre, n) => Tabs.contar($('#ln-detalle', raiz), nombre, n);
 
       function pintarEquipo(detalle, id) {
         return llamar('apiLineasEquipo', id).then((r) => {
@@ -3440,7 +3430,7 @@
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
-            fichaEnPestanas(
+            pestanasFicha(
               (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas solo los ven administradores y el área de Líneas.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
@@ -3490,7 +3480,7 @@
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
                 ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]],
               anteriores ? 'Antes <span class="ln-mono">' + esc(anteriores) + '</span>' : '') +
-            fichaEnPestanas(
+            pestanasFicha(
             '<div class="ln-grid-2">' +
               // Usuario, 13-oct: Línea, Cuenta, Plan y Facturación (del proveedor), luego Equipo y Responsable. «Números de esta
               // línea» se quitó: los anteriores salen abajo del número y en el historial

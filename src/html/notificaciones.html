@@ -84,7 +84,7 @@
   .ntf-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
   .ntf-acciones button { padding: 6px 12px; font-size: var(--texto-s); }
   .ntf-controles { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-  .ntf-controles .tabs-simple { margin-bottom: 0; }
+  .ntf-controles .tabs-lista { margin-bottom: 0; }
   .ntf-filtro-tipo { font-size: var(--texto-s); color: var(--color-text-muted); }
   .ntf-filtro-tipo button { margin-left: 4px; }
   .ntf-modulos { margin-bottom: 12px; }
@@ -130,15 +130,15 @@
       </div>
     </div>
 
-    <div class="tabs-simple ntf-modulos" id="ntf-modulo" role="tablist" aria-label="Módulo"></div>
+    <div class="tabs-lista ntf-modulos" id="ntf-modulo" role="tablist" aria-label="Módulo"></div>
     <!-- Una tarjeta por tipo: clic = ver solo ese tipo -->
     <div class="stat-row" id="ntf-kpis">
       <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
     </div>
 
     <div class="ntf-controles">
-      <div class="tabs-simple" id="ntf-filtro" role="tablist" aria-label="Qué notificaciones ver">
-        <button type="button" class="tab-btn active" data-filtro="no-leidas" role="tab"><i data-lucide="bell-dot" class="ico"></i> Por atender <span id="ntf-num-no-leidas"></span></button>
+      <div class="tabs-lista" id="ntf-filtro" role="tablist" aria-label="Qué notificaciones ver">
+        <button type="button" class="tab-btn activa" data-filtro="no-leidas" role="tab"><i data-lucide="bell-dot" class="ico"></i> Por atender <span id="ntf-num-no-leidas"></span></button>
         <button type="button" class="tab-btn" data-filtro="todas" role="tab"><i data-lucide="inbox" class="ico"></i> Todas <span id="ntf-num-todas"></span></button>
       </div>
       <div class="ntf-filtro-tipo" id="ntf-filtro-tipo" hidden></div>
@@ -526,7 +526,7 @@
       /** Selector de módulo: Todos · Líneas · Vehículos, con cuántas hay en el filtro actual. */
       function pintarModulos(items) {
         const cuenta = (m) => items.filter((n) => (!m || n.modulo === m) && (filtro === 'todas' || !n.leida)).length;
-        const boton = (clave, ico, etiqueta) => '<button type="button" class="tab-btn' + ((modulo || '') === clave ? ' active' : '') +
+        const boton = (clave, ico, etiqueta) => '<button type="button" class="tab-btn' + ((modulo || '') === clave ? ' activa' : '') +
           '" role="tab" data-ntf-mod="' + clave + '">' + icono(ico) + ' ' + esc(etiqueta) + ' (' + cuenta(clave || null) + ')</button>';
         raiz.querySelector('#ntf-modulo').innerHTML = boton('', 'layers', 'Todos') + MODULOS.map((m) => boton(m.clave, m.icono, m.etiqueta)).join('');
       }
@@ -586,7 +586,7 @@
         raiz.querySelector('#ntf-num-todas').textContent = '(' + delGrupo.length + ')';
         raiz.querySelectorAll('#ntf-filtro .tab-btn').forEach((b) => {
           const activo = b.dataset.filtro === filtro;
-          b.classList.toggle('active', activo);
+          b.classList.toggle('activa', activo);
           b.setAttribute('aria-selected', String(activo));
         });
         const etiquetaGrupo = (GRUPOS.filter((g) => g.clave === grupo)[0] || {}).etiqueta;

@@ -91,7 +91,7 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   assert.match(lineas, /function cargarEvidencias\(id\) \{\s+if \(!veDocumentos\(\)\) return;/);
   assert.match(lineas, /function cargarHistorial\(id, nombre, vista\) \{\s+if \(!veHistorial\(\)\) return;/);
   assert.match(lineas, /function botonUltimoNucos\(tipo, id\) \{\s+if \(!veDocumentos\(\)\) return '';/);
-  assert.match(lineas, /pasado \? \['historial', 'Historial', 'history'\] : null/);
+  assert.match(lineas, /pasado && \{ id: 'historial', titulo: 'Historial', icono: 'history'/);
   assert.match(telefonia, /conAlcance: !!sesion\.alcance,/);
   // El directorio de CH que piden los formularios de Vehículos (solo pedía sesión)
   assert.match(leer('src/services/CapitalHumano.gs'),

@@ -127,7 +127,7 @@
 
   // ---------- Caja Chica ----------
   async function initCajaChica() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('caja-chica');
     if (!puedeEditar) document.querySelector('#cch-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -217,8 +217,7 @@
     escucharLista('apiFichaCajaChica', () => {
       const detalle = document.getElementById('cch-detalle');
       if (!fichaCajaAbierta || detalle.hidden) return;
-      const activa = detalle.querySelector('[data-ficha-tab].active');
-      abrirFichaCajaChica(fichaCajaAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+      abrirFichaCajaChica(fichaCajaAbierta, Tabs.actual(detalle) || undefined, true);
     }, document.getElementById('cch-detalle'));
 
     const ICONO_GRUPO_CAJACHICA = {
@@ -310,7 +309,7 @@
     }
 
     function mostrarPestanaFichaCajaChica(nombre) {
-      mostrarPestanaFicha(document.getElementById('cch-detalle'), nombre);
+      Tabs.mostrar(document.getElementById('cch-detalle'), nombre);
     }
 
     // ---------- Ver completo / Editar / Eliminar de un arqueo/cambio de monto, sin
@@ -415,7 +414,7 @@
         const detalles = seccionesFichaCajaChica(completo, CAMPOS_CAJACHICA.map((c) => c.grupo)
           .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL_CCH.indexOf(g) === -1));
 
-        html += fichaEnPestanas([
+        html += Tabs.html([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           puede('caja-chica.detalles') && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           arqueos && {
@@ -452,9 +451,6 @@
         if (pestanaInicial) mostrarPestanaFichaCajaChica(pestanaInicial);
         const btnEditar = document.getElementById('cch-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarCajaChica(cResumen));
-        detalle.querySelectorAll('[data-ficha-tab]').forEach((btn) => {
-          btn.addEventListener('click', () => mostrarPestanaFicha(detalle, btn.dataset.fichaTab));
-        });
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;
@@ -761,7 +757,7 @@
 
   // ---------- Cambios de Monto (Caja Chica) ----------
   async function initCambiosMontoCCH() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Su sección de Caja chica (caja-chica.cambios-monto, Modulos.gs)
     const puedeEditar = puedeEditarModulo('caja-chica.cambios-monto');
     if (!puedeEditar) document.querySelector('#cm-tabs .tab-btn[data-tab="registrar"]').remove();

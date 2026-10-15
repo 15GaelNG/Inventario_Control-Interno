@@ -14,13 +14,6 @@
   }
 
   /**
-   * Barra de pestañas simple (ej. "Catálogo" / "Registrar" arriba de cada
-   * módulo) — conecta los <button class="tab-btn" data-tab="clave"> con sus
-   * <div class="tab-panel" data-tab-panel="clave"> dentro de `contenedor`.
-   * Un panel visible a la vez. Se llama una vez por módulo, después de
-   * pintar su HTML (montarVista ya lo hace fresco cada vez que se navega).
-   */
-  /**
    * Convierte un stat-tile (KPI, ej. "Activos" en Vehículos) en un filtro
    * de la tabla con un solo clic: aplica `prueba` (la MISMA función que ya
    * se usa para contar ese KPI, así nunca se desincroniza el número del
@@ -59,18 +52,6 @@
       actualizado = await funcionApi(id, campo, cambios[campo]);
     }
     return actualizado;
-  }
-
-  function wireTabsSimple(contenedor) {
-    const botones = contenedor.querySelectorAll('.tab-btn');
-    botones.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        botones.forEach((b) => b.classList.toggle('active', b === btn));
-        contenedor.querySelectorAll('.tab-panel').forEach((panel) => {
-          panel.hidden = panel.dataset.tabPanel !== btn.dataset.tab;
-        });
-      });
-    });
   }
 
   /**
@@ -573,6 +554,8 @@
     container = container || document.getElementById('view-container');
     const tpl = document.getElementById(templateId);
     container.innerHTML = '';
+    // Las pestañas de la vista anterior (Tabs.iniciar sobre #view-container) no son de la nueva
+    container.removeAttribute('data-tabs');
     container.appendChild(tpl.content.cloneNode(true));
     refreshIcons();
     if (initFn) initFn();
@@ -1730,7 +1713,7 @@
   }
 
   async function initIncidencias() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('incidencias');
     if (!puedeEditar) document.querySelector('#inc-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -2135,25 +2118,8 @@
   // ---------- Ficha por pestañas (genérica: la usa cualquier módulo con una "ficha
   // única" — Vehículos, Caja Chica, ...) ----------
 
-  /** pestanas: [{id, titulo, icono, contenido, num?}], la primera queda activa.
-   *  num (si viene) se muestra como contador junto al título. */
-  function fichaEnPestanas(pestanas) {
-    return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
-      '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t.id + '">' +
-      '<i data-lucide="' + t.icono + '" class="ico"></i> ' + t.titulo +
-      (t.num === undefined ? '' : ' <span class="ln-tab-num">' + t.num + '</span>') + '</button>').join('') + '</div>' +
-      pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
-  }
-  function mostrarPestanaFicha(contenedor, nombre) {
-    // Una pestaña sin permiso no existe (deModulo): se queda en la que ya está
-    if (!contenedor.querySelector('[data-ficha-tab="' + nombre + '"]')) return;
-    contenedor.querySelectorAll('[data-ficha-tab]').forEach((b) => {
-      const activa = b.dataset.fichaTab === nombre;
-      b.classList.toggle('active', activa);
-      b.setAttribute('aria-selected', String(activa));
-    });
-    contenedor.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
-  }
+  // Las pestañas son de Tabs (componentes/tabs.html): Tabs.html([{ id, titulo, icono, contenido, num? }]) y
+  // Tabs.mostrar(contenedor, nombre); una pestaña sin permiso no existe y mostrar() se queda en la que está.
   /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas de una
    *  ficha que muestran lo que hay de este registro en otro módulo. */
   function tablaFicha(columnas, filas, opciones) {
@@ -2171,7 +2137,7 @@
 
   /** Ver completo/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
    *  (Vehículos: Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias; Caja Chica:
-   *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
+   *  Arqueos/Cambios de monto) -- de nivel de módulo, como pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
     const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null,
@@ -2321,7 +2287,7 @@
 
   // ---------- Vehículos ----------
   async function initVehiculos() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('vehiculos');
     if (!puedeEditar) document.querySelector('#veh-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -3265,8 +3231,11 @@
     }
 
     function mostrarPestanaFichaVehiculo(nombre) {
+      Tabs.mostrar(document.getElementById('veh-detalle'), nombre);
+    }
+    /** Lo que se lee al abrir una pestaña (con el clic o con mostrarPestanaFichaVehiculo) */
+    function alAbrirPestanaVehiculo(nombre) {
       const detalle = document.getElementById('veh-detalle');
-      mostrarPestanaFicha(detalle, nombre);
       if (nombre === 'documentos') DocumentosVehiculo.cargar(detalle.querySelector('[data-docs-vehiculo]'));
       if (nombre === 'inspecciones') InspeccionesFicha.cargar(detalle.querySelector('[data-insp-ficha]'));
       if (nombre === 'adquisicion') cargarArchivosAdquisicionFichaTab(detalle.querySelector('[data-adq-ficha-archivos]'));
@@ -3746,7 +3715,7 @@
               </div>
             `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>');
 
-        html += fichaEnPestanas([
+        html += Tabs.html([
           { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla.
@@ -4116,20 +4085,18 @@
       sensor: abrirResponsivaSensor, holograma: abrirSolicitudHolograma,
     };
     document.getElementById('veh-detalle').addEventListener('click', (ev) => {
-      const pestana = ev.target.closest('[data-ficha-tab]');
-      if (pestana) { mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab); return; }
       const ir = ev.target.closest('[data-ir-pestana]');
       if (ir) { ev.preventDefault(); mostrarPestanaFichaVehiculo(ir.dataset.irPestana); return; }
       const archivo = ev.target.closest('[data-archivo]');
       if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
+    document.getElementById('veh-detalle').addEventListener('tabs-cambio', (ev) => alAbrirPestanaVehiculo(ev.detail.nombre));
     // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
     // misma pestaña (sin "Cargando…" ni volver arriba)
     escucharLista('apiFichaVehiculo', () => {
       const detalle = document.getElementById('veh-detalle');
       if (!fichaVehiculoAbierta || detalle.hidden) return;
-      const activa = detalle.querySelector('[data-ficha-tab].active');
-      abrirFichaVehiculo(fichaVehiculoAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+      abrirFichaVehiculo(fichaVehiculoAbierta, Tabs.actual(detalle) || undefined, true);
     }, document.getElementById('veh-detalle'));
 
     // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
@@ -4486,12 +4453,12 @@
         texto: 'Nucco, estatus, departamento, responsable y placa de un vistazo. "Volver" (arriba) regresa a la lista; "Editar" corrige cualquier dato del vehículo.',
       },
       {
-        selector: '.ln-ficha-tabs',
+        selector: '.ficha-pestanas .tabs-lista',
         titulo: 'El desglose por pestañas',
         texto: 'Debajo, la ficha se reparte en pestañas: General, Detalles, Historial, Verificaciones, Inspecciones, Sensor, Hologramas, Incidencias, Responsiva… cada una con lo que le toca a ese vehículo.',
       },
       {
-        selector: '.ln-ficha-tabs',
+        selector: '.ficha-pestanas .tabs-lista',
         titulo: 'Si llegaste desde otro lado',
         texto: 'Al abrir la ficha desde una Incidencia, una Responsiva u otro módulo, arranca directo en esa pestaña en vez de en General -- no es un error, solo cambia por dónde empieza: las demás siguen aquí mismo, a un clic.',
       },
@@ -4585,7 +4552,7 @@
 
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('uber');
     if (!puedeEditar) document.querySelector('#uber-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -4980,7 +4947,7 @@
   ];
 
   async function initTickets() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('tickets');
     if (!puedeEditar) document.querySelector('#tickets-tabs .tab-btn[data-tab="registrar"]').remove();

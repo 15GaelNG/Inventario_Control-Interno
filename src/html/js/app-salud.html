@@ -163,7 +163,7 @@
       familias.forEach((familia, i) => {
         lista.insertAdjacentHTML('beforeend', `<button type="button" class="tab-btn" data-tab="familia-${i}">
           ${Iconos.svg('network')} ${escaparHtml(familia)} <span class="rel-s-badge" data-salud-badge="${i}" hidden></span></button>`);
-        cont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-panel="familia-${i}">
+        cont.insertAdjacentHTML('beforeend', `<div class="card card-compacta" data-tab-panel="familia-${i}">
           <div data-salud-avisos="${i}"></div>
         </div>`);
       });

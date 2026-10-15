@@ -494,6 +494,32 @@ test('letra, esquinas y colores de la pantalla salen de la escala de styles.html
   assert.deepEqual(fuera, []);
 });
 
+test('las pestañas son una sola implementación: Tabs (componentes/tabs.html)', () => {
+  // Había tres (wireTabsSimple de las vistas, Tabs con otra clase de activa y fichaEnPestanas en app.html y en Líneas),
+  // cada una con su marcado (docs/homologacion-codigo.md, fase 4). Ahora: grupo data-tabs, .tabs-lista, .tab-btn[data-tab]
+  // con .activa y paneles [data-tab-panel]; una ficha se arma con Tabs.html y se cambia con Tabs.mostrar.
+  const VIEJO = [
+    [/tabs-simple/, 'tabs-simple → tabs-lista'],
+    [/data-ficha-(tab|panel|num)\b/, 'data-ficha-tab/panel → data-tab/data-tab-panel (Tabs.html)'],
+    [/\sdata-panel="/, 'data-panel → data-tab-panel'],
+    [/wireTabsSimple|fichaEnPestanas/, 'Tabs.iniciar / Tabs.html'],
+    [/dataset\.tabPanel/, 'cambiar paneles a mano → Tabs.mostrar'],
+    [/tab-btn[^'"]*\bactive\b|\.tab-btn\.active/, 'la pestaña activa es .activa'],
+  ];
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/tabs.html'))
+    .forEach((f) => fs.readFileSync(f, 'utf8').split('\n').forEach((linea) => VIEJO.forEach(([re, porque]) => {
+      if (re.test(linea)) fuera.push(path.relative(root, f).replace(/\\/g, '/') + ': ' + linea.trim().slice(0, 80) + '  (' + porque + ')');
+    })));
+  assert.deepEqual(fuera, []);
+  assert.match(read('package.json'), /node tests\/tabs\.test\.js/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/componentes/formato')") < index.indexOf("include('html/js/componentes/tabs')"));
+  // montarVista suelta las pestañas de la vista anterior (Tabs.iniciar sobre #view-container)
+  assert.match(read('src/html/js/app.html'), /container\.removeAttribute\('data-tabs'\);/);
+});
+
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
   const app = read('src/html/js/app.html');
   const index = read('src/html/Index.html');
@@ -734,7 +760,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.doesNotMatch(perfil, /SALT|PASSWORD_HASH|\.\.\.usuario/);
   assert.match(perfil, /porNombre\.length === 1 \? porNombre\[0\] : null/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
-  assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
+  assert.match(lineas, /function pestanasFicha\(general, detalles, conDocumentos\) \{[\s\S]*?return Tabs\.html\(\[/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
   assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
@@ -1480,7 +1506,7 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
   assert.match(cliente, /Volver a ' \+ esc\(etiquetaMiga\(anterior\)\)/);
   // Pestaña recordada al regresar
   assert.match(cliente, /if \(pila\.length\) pila\[pila\.length - 1\]\.pestana = nombre;/);
-  assert.match(cliente, /const guardada = \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana;/);
+  assert.match(cliente, /\], \{ activa: \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana \}\);/);
   // Estilo Drive (30-sep): el clic selecciona; doble clic = ficha completa; con el dedo, tocar = vista rápida
   assert.match(cliente, /alAbrirFila: \(r\) => abrir\(cfg\.detalle, r\.id\),/);
   assert.match(cliente, /alTocarFila: \(r\) => vistaRapida\(cfg\.detalle, r\),/);

@@ -69,7 +69,7 @@
       const abrir = d.url && puede('vehiculos.carpetas') ? '<span class="docs-veh-carpeta">' + TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</span>' : '';
       return '<div class="card ln-card docs-veh-seccion">' +
         '<h3>' + Iconos.svg(ICONO[d.clave] || 'file') + ' ' + escaparHtml(d.titulo) +
-        ' <span class="ln-tab-num">' + total + '</span>' + abrir + '</h3>' +
+        ' <span class="tab-num">' + total + '</span>' + abrir + '</h3>' +
         (filas.length ? TablaFicha.html(COLUMNAS, filas, { minAncho: 520 })
           : d.relleno ? '<p class="docs-veh-relleno">' + chip(d.relleno === 'NO APLICA' ? 'No aplica' : 'Sin información', 'docs-veh-anterior') +
             ' El área marcó la carpeta así: no hay documento.</p>'

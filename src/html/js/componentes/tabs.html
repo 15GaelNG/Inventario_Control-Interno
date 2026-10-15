@@ -1,62 +1,121 @@
 <style>
+  /* Pestañas: las de una vista ("Catálogo" / "Registrar"), las de una ficha y las de filtro (campanita). Un panel
+     visible a la vez. Celular: las que no caben se deslizan de lado, sin barra a la vista (en varios renglones la
+     activa quedaba en medio y el subrayado ya no decía cuál era). */
   .tabs-lista {
-    display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px;
-    border-bottom: 1px solid var(--color-border);
+    display: flex; gap: 4px; border-bottom: 1px solid var(--color-border);
+    margin-bottom: 18px; overflow-x: auto; scrollbar-width: none;
   }
-  .tabs-lista .tab-btn {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: transparent; color: var(--color-text-muted); border: none; border-radius: var(--radio-l) var(--radio-l) 0 0;
-    padding: 8px 14px; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  .tabs-lista::-webkit-scrollbar { display: none; }
+  .tab-btn {
+    background: transparent; color: var(--color-text-muted); border: none;
+    border-bottom: 2px solid transparent; border-radius: 0;
+    padding: 10px 16px; font-weight: 600; font-size: var(--texto-m); white-space: nowrap; flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
   }
-  .tabs-lista .tab-btn:hover { background: var(--color-bg); color: var(--color-text); }
-  .tabs-lista .tab-btn.activa { color: var(--color-primary); border-bottom-color: var(--color-accent); }
-  :root[data-theme="dark"] .tabs-lista .tab-btn.activa { color: var(--color-text); }
-  /* Celular: en un renglón que se desliza de lado (en varios renglones la pestaña activa
-     quedaba en medio y el subrayado ya no decía cuál era) */
+  .tab-btn:hover { color: var(--color-text); background: var(--color-bg); }
+  .tab-btn.activa { color: var(--color-accent-hover); border-bottom-color: var(--color-accent); }
+  :root[data-theme="dark"] .tab-btn.activa { color: var(--color-text); }
+  .tab-num { font-weight: 500; opacity: .7; }
+  .tab-num:empty { display: none; }
+  [data-tab-panel][hidden] { display: none; }
   @media (max-width: 640px) {
-    .tabs-lista { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-    .tabs-lista::-webkit-scrollbar { display: none; }
-    .tabs-lista .tab-btn { flex-shrink: 0; white-space: nowrap; }
+    .tabs-lista { margin-bottom: 14px; }
   }
 </style>
 
 <script>
   /**
-   * Tabs — pestañas genéricas.
+   * Tabs — las pestañas de todo el sistema (vistas, fichas, paneles). Una sola implementación.
    *
-   * Marcado:
-   *   <div class="tabs-lista">
-   *     <button type="button" class="tab-btn" data-tab="registros">Registros</button>
-   *     <button type="button" class="tab-btn" data-tab="nuevo">Nuevo</button>
+   * Marcado: el grupo lleva data-tabs; sus botones .tab-btn[data-tab] y sus paneles [data-tab-panel].
+   *   <div data-tabs>
+   *     <div class="tabs-lista" role="tablist">
+   *       <button type="button" class="tab-btn activa" data-tab="lista">Catálogo</button>
+   *       <button type="button" class="tab-btn" data-tab="registrar">Registrar</button>
+   *     </div>
+   *     <div data-tab-panel="lista">…</div>
+   *     <div data-tab-panel="registrar" hidden>…</div>
    *   </div>
-   *   <div data-panel="registros">…</div>
-   *   <div data-panel="nuevo">…</div>
+   * Un grupo dentro de otro (la ficha dentro de la vista) es suyo: cada botón y panel es del data-tabs más cercano.
    *
-   * Uso:
-   *   const tabs = Tabs.iniciar(contenedor, { inicial: 'registros', alCambiar: (nombre) => {} });
-   *   tabs.mostrar('nuevo');
+   *   Tabs.iniciar(contenedor, { inicial, alCambiar })   // marca el contenedor como grupo; → { mostrar, actual }
+   *   Tabs.html([{ id, titulo, icono, num, contenido }], { activa })   // una ficha: el grupo listo como texto
+   *   Tabs.mostrar(contenedor, 'historial')              // false si esa pestaña no existe (sin permiso)
+   *   Tabs.actual(contenedor)  ·  Tabs.contar(contenedor, 'historial', 12)
+   *   contenedor.addEventListener('tabs-cambio', (ev) => ev.detail.nombre)   // también con el clic
+   *
+   * Los clics los atiende un solo listener (sirve para lo que se pinta después con innerHTML). Una pestaña sin
+   * permiso simplemente no se pinta. Prueba: tests/tabs.test.js.
    */
   const Tabs = (function () {
-    function iniciar(contenedor, opciones) {
-      opciones = opciones || {};
-      const botones = Array.from(contenedor.querySelectorAll('.tab-btn[data-tab]'));
-      const paneles = Array.from(contenedor.querySelectorAll('[data-panel]'));
-      let actual = null;
+    const alCambiar = new WeakMap();
 
-      function mostrar(nombre) {
-        if (nombre === actual) return;
-        actual = nombre;
-        botones.forEach((b) => b.classList.toggle('activa', b.dataset.tab === nombre));
-        paneles.forEach((p) => { p.hidden = p.dataset.panel !== nombre; });
-        if (opciones.alCambiar) opciones.alCambiar(nombre);
-      }
+    /** El grupo: el propio contenedor si es uno, o el primero que tenga adentro */
+    const grupoDe = (el) => (el && el.hasAttribute && el.hasAttribute('data-tabs') ? el : el && el.querySelector('[data-tabs]'));
+    const suyos = (grupo, selector) => Array.from(grupo.querySelectorAll(selector)).filter((x) => x.closest('[data-tabs]') === grupo);
 
-      botones.forEach((b) => b.addEventListener('click', () => mostrar(b.dataset.tab)));
-      mostrar(opciones.inicial || (botones[0] && botones[0].dataset.tab));
-
-      return { mostrar, actual: () => actual };
+    function mostrar(contenedor, nombre) {
+      const grupo = grupoDe(contenedor);
+      if (!grupo) return false;
+      const botones = suyos(grupo, '.tab-btn[data-tab]');
+      if (!botones.some((b) => b.dataset.tab === nombre)) return false;
+      botones.forEach((b) => {
+        const activa = b.dataset.tab === nombre;
+        b.classList.toggle('activa', activa);
+        b.setAttribute('aria-selected', String(activa));
+      });
+      suyos(grupo, '[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== nombre; });
+      const fn = alCambiar.get(grupo);
+      if (fn) fn(nombre);
+      grupo.dispatchEvent(new CustomEvent('tabs-cambio', { bubbles: true, detail: { nombre } }));
+      return true;
     }
 
-    return { iniciar };
+    function actual(contenedor) {
+      const grupo = grupoDe(contenedor);
+      const b = grupo && suyos(grupo, '.tab-btn.activa[data-tab]')[0];
+      return b ? b.dataset.tab : null;
+    }
+
+    function iniciar(contenedor, opciones) {
+      const o = opciones || {};
+      contenedor.setAttribute('data-tabs', '');
+      if (o.alCambiar) alCambiar.set(contenedor, o.alCambiar);
+      const primera = suyos(contenedor, '.tab-btn[data-tab]')[0];
+      const inicial = o.inicial || actual(contenedor) || (primera && primera.dataset.tab);
+      if (inicial) mostrar(contenedor, inicial);
+      return { mostrar: (nombre) => mostrar(contenedor, nombre), actual: () => actual(contenedor) };
+    }
+
+    function contar(contenedor, nombre, n) {
+      const grupo = grupoDe(contenedor);
+      const el = grupo && suyos(grupo, '[data-tab-num="' + nombre + '"]')[0];
+      if (el) el.textContent = Formato.miles(n);
+    }
+
+    /** pestanas: [{ id, titulo, icono, num?, contenido }] (las false se saltan); activa: la abierta (si no, la primera) */
+    function html(pestanas, opciones) {
+      const o = opciones || {};
+      const lista = pestanas.filter(Boolean);
+      const activa = lista.some((t) => t.id === o.activa) ? o.activa : (lista[0] && lista[0].id);
+      return '<div class="ficha-pestanas" data-tabs>' +
+        '<div class="tabs-lista" role="tablist" aria-label="' + Formato.esc(o.etiqueta || 'Secciones de la ficha') + '">' +
+        lista.map((t) => '<button type="button" class="tab-btn' + (t.id === activa ? ' activa' : '') + '" role="tab" aria-selected="' +
+          (t.id === activa) + '" data-tab="' + Formato.esc(t.id) + '">' + (t.icono ? Iconos.svg(t.icono) + ' ' : '') + Formato.esc(t.titulo) +
+          ' <span class="tab-num" data-tab-num="' + Formato.esc(t.id) + '">' + (t.num === undefined || t.num === null ? '' : Formato.miles(t.num)) +
+          '</span></button>').join('') +
+        '</div>' +
+        lista.map((t) => '<div data-tab-panel="' + Formato.esc(t.id) + '"' + (t.id === activa ? '' : ' hidden') + '>' + (t.contenido || '') + '</div>').join('') +
+        '</div>';
+    }
+
+    document.addEventListener('click', (ev) => {
+      const boton = ev.target.closest && ev.target.closest('.tab-btn[data-tab]');
+      const grupo = boton && boton.closest('[data-tabs]');
+      if (grupo) mostrar(grupo, boton.dataset.tab);
+    });
+
+    return { iniciar, mostrar, actual, contar, html };
   })();
 </script>

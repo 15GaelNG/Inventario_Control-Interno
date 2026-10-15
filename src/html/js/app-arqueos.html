@@ -736,7 +736,7 @@
   }
 
   async function initArqueos() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('arqueos');
     if (!puedeEditar) document.querySelector('#arq-tabs .tab-btn[data-tab="registrar"]').remove();

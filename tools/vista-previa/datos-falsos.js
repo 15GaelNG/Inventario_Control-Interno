@@ -662,37 +662,37 @@
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
     'vehiculos-inspecciones': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
-      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('.ficha-pestanas [data-tab="inspecciones"]')).click();
       await hasta('[data-insp-fotos]'); await esperar(300);
     },
     'vehiculos-inspeccion-fotos': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
-      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('.ficha-pestanas [data-tab="inspecciones"]')).click();
       (await hasta('[data-insp-fotos]')).click();
       await hasta('.galeria-mini'); await esperar(400);
     },
     'vehiculos-inspeccion-visor': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
-      (await hasta('[data-ficha-tab="inspecciones"]')).click();
+      (await hasta('.ficha-pestanas [data-tab="inspecciones"]')).click();
       (await hasta('[data-insp-fotos]')).click();
       (await hasta('.galeria-mini')).click();
       await hasta('.galeria-visor'); await esperar(300);
     },
     'vehiculos-documentos-relleno': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
-      (await hasta('[data-ficha-tab="documentos"]')).click();
+      (await hasta('.ficha-pestanas [data-tab="documentos"]')).click();
       (await hasta('.docs-veh-relleno')).scrollIntoView({ block: 'center' }); await esperar(300);
     },
     'vehiculos-documentos': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
-      (await hasta('[data-ficha-tab="documentos"]')).click();
+      (await hasta('.ficha-pestanas [data-tab="documentos"]')).click();
       await hasta('.docs-veh-seccion'); await esperar(300);
     },
     // Como un CLIENT (POST VENTA): sin vehiculos.carpetas, Documentos sin la cabecera ni los botones "Carpeta"
     'vehiculos-documentos-sin-carpetas': async () => {
       quitarPermisos('vehiculos.carpetas');
       await abrir('vehiculos'); await abrirPrimeraFila();
-      (await hasta('[data-ficha-tab="documentos"]')).click();
+      (await hasta('.ficha-pestanas [data-tab="documentos"]')).click();
       await hasta('.docs-veh-seccion'); await esperar(300);
     },
     // Alguien con Vehículos pero sin Instalación de Sensores ni Cambios de vehículos: esas

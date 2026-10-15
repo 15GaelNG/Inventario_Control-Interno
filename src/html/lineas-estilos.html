@@ -160,20 +160,20 @@
 
   /* Pestaña General de las fichas (usuario, 13-oct): cada tarjeta con su título en una franja separada de sus datos,
      las etiquetas en una columna fija y un renglón por dato; las de un mismo renglón miden lo mismo */
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > * { margin-left: 16px; margin-right: 16px; }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > h3 { margin: 0 0 4px; padding: 10px 16px; background: var(--color-bg);
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > * { margin-left: 16px; margin-right: 16px; }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > h3 { margin: 0 0 4px; padding: 10px 16px; background: var(--color-bg);
     border-bottom: 1px solid var(--color-border); font-size: var(--texto-m); }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos { grid-template-columns: 120px minmax(0, 1fr); gap: 0 12px; margin-bottom: 10px; }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dt,
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dd { padding: 7px 0; border-bottom: 1px solid var(--color-border); }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dt:last-of-type,
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dd:last-of-type { border-bottom: none; }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .empty-state { margin-top: 12px; margin-bottom: 16px; }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card-ancha { grid-column: 1 / -1; }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-campos { grid-template-columns: 120px minmax(0, 1fr); gap: 0 12px; margin-bottom: 10px; }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dt,
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dd { padding: 7px 0; border-bottom: 1px solid var(--color-border); }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dt:last-of-type,
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-campos > dd:last-of-type { border-bottom: none; }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .empty-state { margin-top: 12px; margin-bottom: 16px; }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha { grid-column: 1 / -1; }
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
   .ln-card-titulo-dato { margin-left: auto; font-size: var(--texto-s); font-weight: 500; color: var(--color-text-muted); }
-  [data-ficha-panel="general"] .ln-grid-2 > .ln-card > .ln-card-pie { margin: auto 0 0; padding: 8px 16px; border-top: 1px solid var(--color-border);
+  [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-card-pie { margin: auto 0 0; padding: 8px 16px; border-top: 1px solid var(--color-border);
     display: flex; align-items: center; gap: 6px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .ln-card-pie .ln-icon { width: 14px; height: 14px; }
   /* Vida del plan: verde vigente, ámbar a 3 meses o menos, rojo vencido */
@@ -201,7 +201,7 @@
   .ln-meses-fila { display: grid; grid-template-columns: 88px 82px minmax(0, 1fr); gap: 8px; padding: 6px 0; border-top: 1px solid var(--color-border); font-size: var(--texto-s); }
   .ln-meses-encabezado { color: var(--color-text-muted); font-size: var(--texto-xs); }
   @media (max-width: 640px) {
-    [data-ficha-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 110px minmax(0, 1fr); }
+    [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 110px minmax(0, 1fr); }
   }
 
   .ln-nota {
@@ -505,7 +505,6 @@
 
   /* ---- Diseño de la rama jorge: DataTable + KPIs (stat-tile) ---- */
   .ln-modulo .page-header h2 .ico, .ln-modulo .page-header h2 svg { vertical-align: -0.15em; }
-  .tab-btn .ln-tab-num { font-weight: 500; opacity: .7; }
   .ln-modulo .dt .ln-mono { font-variant-numeric: tabular-nums; }
   .ln-modulo .dt .ln-chip { white-space: nowrap; }
   .ln-conteo { font-size: var(--texto-s); color: var(--color-text-muted); margin: 8px 2px 0; }
@@ -575,7 +574,7 @@
 
   /* Selector Tabla / Tarjetas de Líneas Telefónicas */
   .ln-tabs-fila { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .ln-tabs-fila .tabs-simple { flex: 1 1 auto; }
+  .ln-tabs-fila .tabs-lista { flex: 1 1 auto; }
   .ln-segmentado { display: inline-flex; margin-bottom: 8px; }
   .ln-segmentado button { border-radius: 0; }
   .ln-segmentado button:first-child { border-radius: var(--radio-m) 0 0 var(--radio-m); }
@@ -652,8 +651,7 @@
   .ln-resumen-rapido > div { min-width: 0; }
   .ln-resumen-rapido dt { font-size: var(--texto-xs); font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .3px; }
   .ln-resumen-rapido dd { margin: 2px 0 0; font-size: var(--texto-m); font-weight: 600; overflow-wrap: anywhere; }
-  .ln-ficha-tabs { margin: 4px 0 14px; }
-  [data-ficha-panel][hidden] { display: none; }
+  .ficha-pestanas .tabs-lista { margin: 4px 0 14px; }
 
   /* Formularios por pasos (mismo indicador que el componente Formulario) */
   .ln-pasos-barra {
@@ -698,9 +696,9 @@
   @media (max-width: 700px) {
     /* KPIs en una franja que se desliza, en vez de ocupar media pantalla */
     .ln-modulo .stat-row { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 14px; padding-bottom: 4px; scroll-snap-type: x proximity; scrollbar-width: none; }
-    .ln-modulo .stat-row::-webkit-scrollbar, .ln-ficha-tabs::-webkit-scrollbar { display: none; }
-    .ln-ficha-tabs { scrollbar-width: none; }
-    .ln-ficha-tabs .tab-btn .ln-icon { display: none; }
+    .ln-modulo .stat-row::-webkit-scrollbar, .ficha-pestanas .tabs-lista::-webkit-scrollbar { display: none; }
+    .ficha-pestanas .tabs-lista { scrollbar-width: none; }
+    .ficha-pestanas .tabs-lista .tab-btn .ico { display: none; }
     /* Tarjetas del inventario más compactas: caben más por pantalla */
     #ln-telefonicas button.ln-cuadro { min-height: 0; padding: 12px 14px; gap: 4px; }
     #ln-telefonicas .ln-cuadro-principal { margin-top: 4px; font-size: var(--texto-l); }
@@ -727,7 +725,7 @@
     .ln-detalle-botones > button, .ln-detalle-botones > a.ln-boton { flex: 1 1 40%; white-space: normal; text-align: center; }
     .ln-detalle-botones > .ln-btn-mas { flex: 0 0 auto; }
     .ln-resumen-rapido { grid-template-columns: 1fr 1fr; gap: 10px 12px; }
-    .ln-ficha-tabs .tab-btn { padding: 10px 12px; font-size: var(--texto-s); }
+    .ficha-pestanas .tabs-lista .tab-btn { padding: 10px 12px; font-size: var(--texto-s); }
     .ln-copiar-cabecera button { width: 100%; }
 
     /* Formularios: pantalla completa, controles grandes para el dedo y pie fijo con lo necesario */
