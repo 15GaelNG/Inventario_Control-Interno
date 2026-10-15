@@ -143,7 +143,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   lo pide otra vez; cualquier otra llamada al servidor (guardar, PDF, formularios) lo borra (`llamar`, 9-oct).
 - **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
   jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
-- **La línea sin equipo solo tiene responsiva** (15-oct, `ec5bcd6`, `a5d2b85`; pendiente 2.45; en `emmanuel` y el DEV, sin publicar). Sin inspección: la ficha de la
+- **La línea sin equipo solo tiene responsiva** (15-oct, `ec5bcd6`, `a5d2b85`; pendiente 2.45; en `emmanuel`, `master` y el DEV, sin publicar). Sin inspección: la ficha de la
   línea no trae el botón y el servidor la rechaza (`exigirEquipoParaInspeccion_` en `LineasCaptura.contextoInspeccion` y `guardarInspeccion`, y en
   `TelefoniaService.prepararEvidencia`). Sin número no abre ni guarda la responsiva («La línea no tiene número: captúralo con Editar línea.»,
   `numeroParaResponsiva_`). El formulario (`formularioResponsiva_(…, sinEquipo)`) trae solo LÍNEA (ID, ID LINEA, número, SIM, compañía, razón social, fijos),
@@ -152,7 +152,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   MOVIMIENTOS quedan sin NUCO. El PDF usa la misma plantilla (su texto fijo sigue diciendo «el equipo celular»): `registroPlantilla_` fija `NUCO: 'NO APLICA'` y
   `LineasPdf.reemplazarEtiquetas_` lo imprime aunque la etiqueta sea la fórmula `RIGHT("000" & [NUCO], 4)`. Ya no se usa el NUCO ANTERIOR para guardar. Lo ya guardado en NUCOS o en `Files`
   no se movió. **Drive:** ver §2.
-- **Documentos de la línea** (15-oct, `42d5fe4`, `1aa5c6e`; pendiente 2.45; en `emmanuel` y el DEV, sin publicar): toda ficha de línea tiene la pestaña Documentos (antes solo la línea sin equipo).
+- **Documentos de la línea** (15-oct, `42d5fe4`, `1aa5c6e`; pendiente 2.45; en `emmanuel`, `master` y el DEV, sin publicar): toda ficha de línea tiene la pestaña Documentos (antes solo la línea sin equipo).
   `apiLineasEvidencias(token, id, vista)` con vista `'linea'` (`TelefoniaService.evidencias`) trae las de la línea (`r.linea.idLinea`: las de cuando estuvo suelta) más
   `LineasRepo.responsivasEntregadas`, las responsivas de otro registro (su equipo) que tienen el ID de la línea en la columna **ID LINEA ENTREGADA** de RESPONSIVAS LINEAS, marcadas
   `enEquipo` y con la columna «Equipo» (NUCO) en la tabla; no trae las inspecciones ni los documentos del equipo ni su carpeta de NUCOS. ID LINEA sigue siendo el registro (el equipo o la línea sin equipo);
@@ -387,7 +387,7 @@ la carpeta de la app (`LINEAS_DRIVE_APPSHEET`), salvo la responsiva de una líne
 (`LineasArchivos.carpetaEvidenciaLinea`, `LineasIdentificaciones.escribir(…, destino)`). La carpeta de la línea se crea con su primera responsiva y se
 reconoce por la propiedad de Drive `idLinea`, no por el nombre (caché `carpetas_lineas_v1`, 6 h): un número reciclado da «<número> (2)» y, si el número cambió, se renombra al usarla.
 `descartarCarpeta` manda a la papelera la carpeta de la responsiva y, si quedó vacía, la de la línea (nunca LINEAS); `destinoPdf_` manda el PDF a la carpeta LINEAS ligada en
-APP_EVIDENCIAS; un documento se queda donde se firmó (vincular, cambiar o desvincular no mueve nada). Sin la clave, en producción la responsiva de una línea sin equipo
+APP_EVIDENCIAS; un documento se queda donde se firmó (vincular, cambiar o desvincular no mueve nada). La clave de producción está en `Entornos.gs` desde `b12d37f` (15-oct). Sin la clave, en producción la responsiva de una línea sin equipo
 no se guarda («Falta la carpeta LINEAS en Drive…»); en un DEV sin ella es «LINEAS» dentro de la carpeta de pruebas. `TelefoniaService.linea` manda `carpetaDriveId` de la línea sin equipo y
 `Diagnostico.gs` revisa `LINEAS_DRIVE_LINEAS` si está. **PDF:** copias «(SISTEMA)» de las plantillas de Google Docs del
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
