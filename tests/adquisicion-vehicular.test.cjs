@@ -259,7 +259,7 @@ function crearContextoVehiculos({ hoja } = {}) {
   const llamadas = { update: [], tocar: [] };
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
-    Permisos: { puedeEditar: (token, modulo) => { llamadas.permisoPedido = modulo; } },
+    Permisos: { puedeEditar: (token, modulo) => { llamadas.permisoPedido = modulo; }, puedeLeer: (token, modulo) => { llamadas.permisoLeer = modulo; } },
     SheetUtils: {
       update: (ssId, hoja, id, cambios) => { llamadas.update.push({ ssId, hoja, id, cambios: Object.assign({}, cambios) }); return cambios; },
     },
@@ -282,6 +282,7 @@ test('guardarExpedienteAdquisicion escribe FOLIO ADQUISICION y LIGA EXPEDIENTE A
     'FOLIO ADQUISICION': '30371', 'LIGA EXPEDIENTE ADQUISICION': 'https://drive.example/x',
   });
   assert.equal(llamadas.permisoPedido, 'vehiculos');
+  assert.equal(llamadas.permisoLeer, 'adquisicion-vehicular', 'y el de Adquisición (la pestaña es suya)');
   assert.equal(llamadas.update.length, 1);
   assert.equal(llamadas.update[0].id, 'VEH-1');
   assert.deepEqual(llamadas.update[0].cambios, {

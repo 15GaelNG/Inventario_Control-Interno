@@ -93,7 +93,7 @@ Falta ajustar el dry run a eso y rehacerlo con la foto nueva (308 archivos).
 2. **Corregir la hoja de la app** antes de mover sus comprobantes: re-ligar los 152 al NUCO que dice la serie del
    certificado (`ID VEHICULO` y lo que se copia de él), con bitácora del valor anterior, y que el área decida rechazos, duplicados y fechas.
    Si se movieran antes, 152 comprobantes caerían en el NUCO equivocado.
-3. **Llevar los comprobantes de la app al NUCO** (los 331 que solo están en la app; los 99 que ya están, solo la liga).
+3. **Llevar los comprobantes de la app al NUCO** — hecho el 13 y 14-oct: `nucos-verificaciones-app.md`.
 4. **La app guarda en el NUCO** (`ExpedienteNuco`) y lee el certificado al subirlo: fecha, semestre, motivo y serie;
    avisa si la serie no es la del vehículo elegido. Eso evita que se repita lo de los 152.
 5. **La pasada de `_POR REVISAR`** con el área (incluye las 136 verificaciones de otras carpetas).

@@ -28,7 +28,8 @@
 const CambiosMontoCCHService = (function () {
   /** La hoja, para HojaServicio */
   const INCREMENTOS = {
-    modulo: 'caja-chica',
+    // Su sección de Caja chica (Modulos.gs; antes colgaba del módulo entero)
+    modulo: 'caja-chica.cambios-monto',
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     // Nombre real de la pestaña, a pesar del nombre del módulo
     hoja: 'INCREMENTOS',
@@ -52,7 +53,7 @@ const CambiosMontoCCHService = (function () {
    * hojas que tienen que cambiar juntas, bajo el mismo candado.
    */
   function crear(token, datos) {
-    const sesion = Permisos.puedeEditar(token, 'caja-chica');
+    const sesion = Permisos.puedeEditar(token, 'caja-chica.cambios-monto');
     const idCch = datos['ID CCH'];
     if (!idCch) throw new Error('Selecciona la caja chica.');
     const nueva = Number(datos['CANTIDAD ACTUALIZADA']);

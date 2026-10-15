@@ -45,6 +45,8 @@ function entorno() {
       puedeLeer: (t, m) => { log.permisos.push('leer:' + m); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA', alcance: t === 'cliente' ? ['BETA', 'GAMA'] : null }; },
       EDICION: 'EDICION',
       puedeLeerFamilia: (t, m) => { log.permisos.push('familia:' + m); return { nombre: 'ANA', alcance: t === 'cliente' ? ['BETA', 'GAMA'] : null }; },
+      // 'panorama': solo tiene el módulo 'panorama' (para leenTambien)
+      puedeLeerAlguno: (t, ms) => { log.permisos.push('alguno:' + ms.join('+')); if (t === 'sin-permiso') throw new Error('Sin permiso'); return { nombre: 'ANA', alcance: null }; },
       dentroDeAlcance: (alcance, v) => !alcance || alcance.indexOf(String(v || '').toUpperCase()) !== -1,
       // 'con-sensores': además tiene EDICION en sensores (para deOtroModulo)
       puedeEditar: (t, m) => {
@@ -252,6 +254,16 @@ console.log('alcance: un rol CLIENT solo ve los renglones de sus departamentos')
   ok(H.completo(def, 'cliente').map((c) => c.ID).join() === 'C-1,C-3', 'completo (exportar): solo los suyos');
   ok(H.listar(Object.assign({}, COSAS), 'cliente').length === 3, 'una definición sin alcance no se filtra');
   ok(H.listar(Object.assign({}, def, { referencia: true }), 'cliente').length === 2, 'tampoco cuando la lee la familia (referencia)');
+}
+
+console.log('leenTambien: otra pantalla que se arma con esta lista (el Panorama de Vehículos)');
+{
+  const { H, log } = entorno();
+  const def = Object.assign({}, COSAS, { leenTambien: ['panorama'] });
+  ok(H.listar(def, 'tok').length === 3 && log.permisos[0] === 'alguno:cosas+panorama', 'listar acepta el módulo o cualquiera de leenTambien');
+  log.permisos.length = 0;
+  H.completo(def, 'tok');
+  ok(log.permisos[0] === 'leer:cosas', 'exportar (completo) sigue pidiendo el del módulo');
 }
 
 console.log('deOtroModulo: columnas que solo cambia quien edita otro módulo');

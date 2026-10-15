@@ -316,26 +316,50 @@ const LineasRepo = (function () {
    * (SIM básico) no tiene renta ni diferencia; `parcial` marca el mes cobrado incompleto («Cargo del … al …»), para
    * no tomarlo como su renta (usuario, 14-oct: la renta del SIM básico sale de su factura). Sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no
    * se entendía y no suma; los conceptos siguen en FACTURAS. Lo cobrado trae la parcialidad del equipo (usuario, 14-oct:
-   * «Suma las parcialidades»); la diferencia contra la renta del plan es sin ella. MINUTOS son solo llamadas hechas.
+   * «Suma las parcialidades»). MINUTOS son solo llamadas hechas. La diferencia es contra el «cobro habitual» de la
+   * línea, no contra la renta del adendum (usuario, 14-oct, pendiente 1.17: en AT&T la renta es el precio de lista y se
+   * paga con el descuento corporativo): se lee toda su historia para calcularlo y se regresan los últimos `cuantas`.
    */
   function facturasDeLinea(linea, cuantas) {
     if (!linea || !LineasDatos.existeTabla('FACTURAS')) return [];
     const filas = LineasDatos.buscarFilas('FACTURAS', 'ID LINEA', linea.idLinea || linea._id);
     if (!filas.length) return [];
-    const sinContrato = String(linea.tipoLinea || '').toUpperCase() === 'SIM BASICO';
-    const renta = sinContrato ? null : linea.costoPlan;
-    return LineasDatos.leerFilas([{ tabla: 'FACTURAS', filas: filas }])[0].map((x) => {
+    const todas = LineasDatos.leerFilas([{ tabla: 'FACTURAS', filas: filas }])[0].map((x) => {
       const cobrado = LineasUtil.numero(x['TOTAL CON IVA']);
       const cargoEquipo = LineasUtil.numero(x['CARGO EQUIPO']) || 0;
       return {
-        corte: fecha(x['FECHA DE CORTE']), ciclo: txt(x['PERIODO']) || '', cobrado: cobrado, renta: renta,
-        diferencia: renta === null || renta === undefined || cobrado === null ? null : Math.round((cobrado - cargoEquipo - renta) * 100) / 100,
+        corte: fecha(x['FECHA DE CORTE']), ciclo: txt(x['PERIODO']) || '', cobrado: cobrado,
         equipo: cargoEquipo ? { nombre: txt(x['EQUIPO FACTURADO']) || '', parcialidad: txt(x['PARCIALIDAD']) || '', cargo: cargoEquipo } : null,
         parcial: /CARGO DEL .+ AL /.test(sinAcentos_(x['CONCEPTOS'])), numero: digitos(x['NUMERO EN FACTURA']),
         minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
         origen: txt(x['ARCHIVO']) || '',
       };
-    }).sort((a, b) => (b.corte || 0) - (a.corte || 0)).slice(0, cuantas || 3);
+    }).sort((a, b) => (b.corte || 0) - (a.corte || 0));
+    todas.forEach((f, i) => {
+      f.habitual = cobroHabitual(todas.slice(i + 1));
+      const d = f.habitual === null || f.cobrado === null ? null : Math.round((f.cobrado - f.habitual) * 100) / 100;
+      f.diferencia = d !== null && Math.abs(d) < 0.05 ? 0 : d; // el centavo del redondeo de Telcel no es diferencia
+    });
+    return todas.slice(0, cuantas || 3);
+  }
+
+  /**
+   * «Cobro habitual» (usuario, 14-oct; pendiente 1.17): lo que la línea pagó más veces en sus 3 meses anteriores
+   * completos (sin meses parciales ni notas de crédito); si ninguno se repite, el del mes anterior. Sin meses
+   * anteriores, null. `anteriores`: del más nuevo al más viejo.
+   */
+  function cobroHabitual(anteriores) {
+    const base = (anteriores || []).filter((f) => f.cobrado !== null && f.cobrado > 0 && !f.parcial).slice(0, 3);
+    if (!base.length) return null;
+    const veces = {};
+    base.forEach((f) => { const k = f.cobrado.toFixed(2); veces[k] = (veces[k] || 0) + 1; });
+    let habitual = base[0].cobrado;
+    let mas = 1;
+    base.forEach((f) => {
+      const n = veces[f.cobrado.toFixed(2)];
+      if (n > mas) { mas = n; habitual = f.cobrado; }
+    });
+    return habitual;
   }
 
   /** Día de corte de una cuenta padre (hoja CUENTAS), o null. */
@@ -1558,7 +1582,7 @@ const LineasRepo = (function () {
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
-    ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, diaDeCorte,
+    ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, cobroHabitual, diaDeCorte,
     catalogos, indiceColaboradores, borrarCaches,
   };
 })();

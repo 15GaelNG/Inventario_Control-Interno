@@ -156,6 +156,8 @@ const VehiculosService = (function () {
    * el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna 'ID'.
    */
   const RESUMEN = Object.assign({}, VEHICULOS, {
+    // El Panorama de Vehículos se arma con esta lista (su propio permiso desde el 14-oct)
+    leenTambien: ['panorama-vehiculos'],
     columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
       'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI'],
     incluir: (r) => !!r['FOLIO'],
@@ -444,6 +446,8 @@ const VehiculosService = (function () {
    */
   function guardarExpedienteAdquisicion(token, id, datos) {
     Permisos.puedeEditar(token, 'vehiculos');
+    // La pestaña Adquisición de la ficha es de su propio permiso (14-oct)
+    Permisos.puedeLeer(token, 'adquisicion-vehicular');
     return SheetUtils.update(ssId(), SHEET_VEHICULOS, id, {
       'FOLIO ADQUISICION': datos['FOLIO ADQUISICION'] || '',
       'LIGA EXPEDIENTE ADQUISICION': datos['LIGA EXPEDIENTE ADQUISICION'] || '',

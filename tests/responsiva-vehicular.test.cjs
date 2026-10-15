@@ -439,7 +439,7 @@ test('regenerarLiga: revisa permiso de edición antes de tocar nada', () => {
   let pedido = null;
   contexto.Permisos.puedeEditar = (token, modulo) => { pedido = modulo; return { nombre: 'TESTER', correo: 't@x.com' }; };
   contexto.Servicio.regenerarLiga('tok', id, 'principal');
-  assert.equal(pedido, 'responsiva-vehicular');
+  assert.equal(pedido, 'vehiculos.responsiva');
 });
 
 test('regenerarLiga: si esa parte ya firmó MAL y la otra sigue pendiente, se puede regenerar -- descarta la firma anterior', () => {

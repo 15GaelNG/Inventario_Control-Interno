@@ -25,15 +25,33 @@ const TelefoniaService = (function () {
   const MODULO_RESGUARDOS = 'resguardos-lineas';
 
   const leer_ = (token) => Permisos.puedeLeerAlguno(token, MODULOS_LINEAS);
+  /**
+   * Una sección de la ficha de Líneas (Modulos.gs: lineas-telefonicas.documentos, .historial…): el índice y la
+   * ficha los lee cualquiera de las pantallas de Líneas (leer_), pero lo de una pestaña pide su sección.
+   */
+  const SECCION = { documentos: 'lineas-telefonicas.documentos', historial: 'lineas-telefonicas.historial',
+    facturacion: 'lineas-telefonicas.facturacion', carpetas: 'lineas-telefonicas.carpetas' };
+  const leerSeccion_ = (token, seccion) => Permisos.puedeLeer(token, SECCION[seccion]);
+  /** Lo del proveedor en la ficha (día de corte y últimas facturas), solo con su sección */
+  const veFacturacion_ = (sesion) => !!(sesion.permisos || {})[SECCION.facturacion];
+  /** La carpeta de Drive del NUCO (el ⋮ de la ficha), solo con su sección: operación interna (un CLIENT no la tiene) */
+  const sinCarpeta_ = (doc, sesion) => {
+    if (doc && !(sesion.permisos || {})[SECCION.carpetas]) doc.carpetaDriveId = null;
+    return doc;
+  };
+  /** Qué sección pide exportar cada base (LineasExportar.baseCompleta) */
+  const EXPORTA = { INVENTARIO: 'lineas-telefonicas.exportar', CAMBIOS: 'cambios-lineas.exportar', ACCESORIOS: 'accesorios-lineas.exportar' };
   const operar_ = (token) => Permisos.puedeEditar(token, MODULO_OPERAR);
   const puedeOperar_ = (sesion) => sesion.permisos[MODULO_OPERAR] === Permisos.EDICION;
 
   /**
    * Rol CLIENT (Permisos.alcanceDe; POST VENTA, 14-oct): solo ve los equipos y líneas de sus departamentos, el
    * DEPARTAMENTO de su asignación actual (una en resguardo queda DISPONIBLE y deja de verse). La caché del índice es
-   * de todos: se filtra lo que se regresa (filtrarIndice_), como con los PIN. Lo que mezcla departamentos o no dice de
-   * quién es (Panorama, bitácora, rutas sueltas del AppSheet) se le niega con sinAlcance_. Toda función pública que
-   * llama leer_ pasa por exigirAlcance_, exigirRegistroEnAlcance_, filtrarIndice_ o sinAlcance_ (source-contracts).
+   * de todos: se filtra lo que se regresa (filtrarIndice_), como con los PIN. La ficha, solo como está hoy
+   * (exigirAlcance_). Lo que mezcla departamentos o no dice de quién es se le niega con sinAlcance_: Panorama,
+   * bitácora, rutas sueltas del AppSheet, el directorio de CH y el pasado del registro (historial, asignaciones,
+   * documentos: puede ser de cuando era de otro departamento; usuario, 14-oct). Toda función pública que llama leer_
+   * pasa por exigirAlcance_, filtrarIndice_ o sinAlcance_ (tests/alcance-cliente.test.cjs).
    */
   const deptoDeRegistro_ = (r) =>
     ((r && r.equipo && r.equipo.responsable) || (r && r.linea && r.linea.responsable) || {}).departamento || '';
@@ -43,13 +61,6 @@ const TelefoniaService = (function () {
       throw new Error('No tienes acceso a este registro.');
     }
     return r;
-  }
-
-  /** Como exigirAlcance_, por id del registro (solo lo lee si la sesión tiene alcance) */
-  function exigirRegistroEnAlcance_(sesion, id) {
-    if (!sesion.alcance) return;
-    const f = id ? LineasRepo.leerRegistroPorId(id) : null;
-    exigirAlcance_(sesion, f ? LineasRepo.convertirRegistro(f) : null);
   }
 
   function sinAlcance_(sesion) {
@@ -101,6 +112,8 @@ const TelefoniaService = (function () {
       puedeOperar: puedeOperar_(sesion),
       puedeVerSecretos: puedeVerSecretos_(sesion),
       esAdmin: sesion.rol === Config.ROLES.ADMIN,
+      // Rol CLIENT: la ficha sin su pasado (Historial, Documentos), que el servidor le niega con sinAlcance_
+      conAlcance: !!sesion.alcance,
       puedeAprobarResguardos: LineasResguardos.puedeAprobar(usuarioResguardo_(sesion)),
     };
   }
@@ -137,12 +150,12 @@ const TelefoniaService = (function () {
     if (!r || !r.equipo) throw new Error('No existe el equipo ' + id);
     exigirAlcance_(sesion, r);
     return LineasUtil.paraCliente({
-      equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+      equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       detalles: r.detalles,
-      // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros
-      corte: r.linea ? LineasRepo.diaDeCorte(r.linea.cuentaPadre) : null,
-      facturas: LineasRepo.facturasDeLinea(r.linea, 3),
+      // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros (con su sección)
+      corte: r.linea && veFacturacion_(sesion) ? LineasRepo.diaDeCorte(r.linea.cuentaPadre) : null,
+      facturas: veFacturacion_(sesion) ? LineasRepo.facturasDeLinea(r.linea, 3) : null,
     });
   }
 
@@ -154,12 +167,12 @@ const TelefoniaService = (function () {
     exigirAlcance_(sesion, r);
     return LineasUtil.paraCliente({
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
-      equipo: ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion),
+      equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
       detalles: r.detalles,
       // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros. «Números de esta línea» se quitó:
       // los anteriores se ven abajo del número («Antes …») y en el historial
-      corte: LineasRepo.diaDeCorte(r.linea.cuentaPadre),
-      facturas: LineasRepo.facturasDeLinea(r.linea, 3),
+      corte: veFacturacion_(sesion) ? LineasRepo.diaDeCorte(r.linea.cuentaPadre) : null,
+      facturas: veFacturacion_(sesion) ? LineasRepo.facturasDeLinea(r.linea, 3) : null,
     });
   }
 
@@ -201,9 +214,9 @@ const TelefoniaService = (function () {
    * PDF, la carpeta. Botones "Última inspección" / "Última responsiva" de la tabla y de la ficha.
    */
   function ultimoDocumentoNuco(token, id, tipo) {
-    const sesion = leer_(token);
+    const sesion = leerSeccion_(token, 'documentos');
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
-    exigirRegistroEnAlcance_(sesion, id);
+    sinAlcance_(sesion);
     const nombreTipo = tipo === 'INSPECCION' ? 'inspección' : 'responsiva';
     const r = carpetaNucoDe_(id, sesion, tipo);
     if (!r.nuco) throw new Error('Este registro no tiene NUCO: no tiene carpeta en NUCOS.');
@@ -291,8 +304,8 @@ const TelefoniaService = (function () {
    * NUCOS. Una de la hoja sin carpeta y del mismo día que una de NUCOS toma su PDF y su carpeta (no se repite).
    */
   function evidencias(token, id) {
-    const sesion = leer_(token);
-    exigirRegistroEnAlcance_(sesion, id);
+    // Rol CLIENT: sin el pasado del registro (usuario, 14-oct: puede ser de otro departamento)
+    const sesion = sinAlcance_(leerSeccion_(token, 'documentos'));
     const ev = LineasRepo.evidenciasDeRegistro(id);
     let nucos = [];
     try {
@@ -369,14 +382,13 @@ const TelefoniaService = (function () {
 
   /** Historial de un registro (bitácora, reasignaciones, desechos y operaciones del sistema). */
   function historial(token, id) {
-    const sesion = leer_(token);
-    exigirRegistroEnAlcance_(sesion, id);
+    const sesion = sinAlcance_(leerSeccion_(token, 'historial'));
     return LineasUtil.paraCliente(LineasRepo.historialDeRegistro(id, puedeVerSecretos_(sesion)));
   }
 
   /** Números que ha tenido el NUCO del registro (vista 'equipo') o NUCOs por los que pasó su número (vista 'linea'). */
   function asignaciones(token, id, vista) {
-    exigirRegistroEnAlcance_(leer_(token), id);
+    sinAlcance_(leerSeccion_(token, 'historial'));
     return LineasUtil.paraCliente(LineasRepo.asignacionesDeRegistro(id, vista));
   }
 
@@ -406,16 +418,13 @@ const TelefoniaService = (function () {
   }
 
   function documento_(token, id, tipo) {
-    const sesion = leer_(token);
+    const sesion = sinAlcance_(leerSeccion_(token, 'documentos'));
     const esInspeccion = tipo === 'INSPECCION';
     const t0 = Date.now();
     const doc = (esInspeccion ? LineasRepo.leerInspeccion(id) : LineasRepo.leerResponsiva(id)) ||
       (/^drive_/.test(id) ? documentoNucos_(id.slice(6), tipo) : null);
     LineasDatos.tiempo('documento: leído', t0);
     if (!doc) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
-    // Una de NUCOS sin registro ligado no dice de quién es: un CLIENT no la abre
-    if (sesion.alcance && !doc.registroId) throw new Error('No tienes acceso a este registro.');
-    exigirRegistroEnAlcance_(sesion, doc.registroId);
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
     if (esInspeccion && !puedeVerSecretos_(sesion)) {
       doc.pinEquipo = doc.pinEquipo ? '••••' : null;
@@ -560,14 +569,15 @@ const TelefoniaService = (function () {
 
   /** Catálogo de colaboradores para autocompletar. */
   function colaboradores(token) {
-    leer_(token);
+    // El directorio de Capital Humano es de todos los departamentos (solo sirve para los formularios)
+    sinAlcance_(leer_(token));
     return LineasRepo.indiceColaboradores();
   }
 
   /** Página de una bitácora de control: CAMBIOS | REASIGNACIONES | DESECHOS. */
   function bitacora(token, tipo, opciones) {
     // Mezcla los cambios de todos los departamentos (y sus renglones no dicen de cuál son)
-    const sesion = sinAlcance_(leer_(token));
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, 'cambios-lineas'));
     const o = opciones || {};
     return LineasUtil.paraCliente(LineasRepo.bitacora(tipo, o.q, o.pagina, o.porPagina, puedeVerSecretos_(sesion)));
   }
@@ -577,7 +587,10 @@ const TelefoniaService = (function () {
    * Viaja comprimida (gzip en base64) salvo que el navegador no pueda descomprimir.
    */
   function exportarBase(token, modulo, comprimir) {
-    const sesion = leer_(token);
+    // Cada base con la sección exportar de su pantalla (Modulos.gs)
+    const seccion = EXPORTA[String(modulo || '').toUpperCase()];
+    if (!seccion) throw new Error('Módulo desconocido para exportar: ' + modulo);
+    const sesion = Permisos.puedeLeer(token, seccion);
     // Con alcance: solo el inventario, filtrado (LineasExportar.baseCompleta niega las demás pestañas)
     const json = JSON.stringify(LineasExportar.baseCompleta(modulo, puedeVerSecretos_(sesion), sesion.alcance));
     if (!comprimir) return json;
@@ -627,6 +640,9 @@ const TelefoniaService = (function () {
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
     LineasRepo.borrarCaches();
+    // También las hojas que LineasLectura guarda 30 min: lo escrito por fuera de la app (la carga del proveedor del
+    // 14-oct) no las marca como cambiadas y la ficha seguía con la línea de antes
+    LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']);
     return { ok: true };
   }
 
@@ -795,7 +811,7 @@ const TelefoniaService = (function () {
   /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */
   function panorama(token, forzar) {
     // Los totales son de todos los departamentos
-    sinAlcance_(leer_(token));
+    sinAlcance_(Permisos.puedeLeer(token, 'panorama-lineas'));
     return LineasPanorama.panorama(!!forzar);
   }
 
@@ -879,8 +895,8 @@ const TelefoniaService = (function () {
 
   /** accion: RECIBIR | ENTREGAR | VENDIDO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA. */
   function accionBandejaResguardo(token, accion, ids, datos) {
-    // Cada paso además exige ser aprobador (LineasResguardos.exigirAprobador_)
-    const sesion = Permisos.puedeLeer(token, MODULO_RESGUARDOS);
+    // Cada paso además exige ser aprobador (LineasResguardos.exigirAprobador_); un CLIENT nunca
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
     const u = usuarioResguardo_(sesion);
     const d = datos || {};
     const R = LineasResguardos;

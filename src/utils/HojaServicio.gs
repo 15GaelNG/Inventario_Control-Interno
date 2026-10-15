@@ -46,6 +46,9 @@
  *   referencia   true: es un catálogo que toda la familia del módulo necesita para trabajar (el
  *                básico de vehículos, la lista de cajas): listar / listarPor / buscarPorId
  *                los lee quien tenga cualquier módulo de la familia, no solo este
+ *   leenTambien  ['modulo', …]: otros módulos cuya pantalla se arma con esta lista (el Panorama de
+ *                Vehículos con el resumen de Vehículos): listar / listarPor / buscarPorId también
+ *                los dejan leer. Exportar (completo) sigue pidiendo el del módulo
  *   orden        { campo, desc } (como texto; las fechas ya van en ISO), { campo, numero: true },
  *                o una función (a, b) => …
  *   ultimosPrimero  el orden de la hoja al revés (bitácoras que solo crecen)
@@ -209,7 +212,9 @@ const HojaServicio = (function () {
    * pide el del módulo.
    */
   function leer_(def, token) {
-    return def.referencia ? Permisos.puedeLeerFamilia(token, def.modulo) : Permisos.puedeLeer(token, def.modulo);
+    if (def.referencia) return Permisos.puedeLeerFamilia(token, def.modulo);
+    if (def.leenTambien) return Permisos.puedeLeerAlguno(token, [def.modulo].concat(def.leenTambien));
+    return Permisos.puedeLeer(token, def.modulo);
   }
 
   function listar(def, token) {

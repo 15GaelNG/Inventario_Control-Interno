@@ -16,10 +16,11 @@ function apiPing() {
 // --- Pantallas que se actualizan solas (api.html: pedirLista_ y el vigía) ---
 // Una lista de la app (apiListar…, apiFicha…, apiResumenInicio) con su huella: de qué versiones de hoja salió
 // (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
+// Solo las listas (apiListar…, apiFicha…, el Inicio y las campanitas), no cualquier api…: source-contracts revisa que
+// cada callServerListaCacheada de la pantalla entre aquí
+const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|NotificacionesPendientes|LineasNotificaciones)$/;
 function apiListaConHuella(token, fn, args) {
-  if (!/^api[A-Z][A-Za-z0-9]*$/.test(String(fn)) || /^api(ListaConHuella|HuellasVigentes)$/.test(fn)) {
-    throw new Error('Lista desconocida: ' + fn);
-  }
+  if (!LISTAS_CON_HUELLA_.test(String(fn))) throw new Error('Lista desconocida: ' + fn);
   const f = globalThis[fn];
   if (typeof f !== 'function') throw new Error('Lista desconocida: ' + fn);
   const r = CacheHojas.conHuella(() => f.apply(null, [token].concat(args || [])));
@@ -42,6 +43,10 @@ function apiResumenInicio(token) {
 // --- Auth ---
 function apiLogin(correo, password) {
   return Auth.login(correo, password);
+}
+// Las fotos de perfil del directorio ({ correo: url }), para el componente Avatar
+function apiFotosPerfil(token) {
+  return FotosDirectorio.todas(token);
 }
 // Mi perfil (el usuario al pie del menú): lo de quien entró
 function apiMiPerfil(token) {
@@ -117,8 +122,8 @@ function apiFichaVehiculo(token, idVehiculo) {
     // Hologramas queda fuera del cambio (se trata aparte): su FOLIO ya sale del catálogo por la serie
     hologramas: parte('hologramas', () => HologramasService.listarPorFolio(token, completo['FOLIO'])),
     incidencias: parte('incidencias', () => IncidenciasService.listarPorVehiculo(token, id)),
-    responsivas: parte('responsiva-vehicular', () => ResponsivaVehicularService.listarPorVehiculo(token, id)),
-    adherentes: parte('adherente-vehicular', () => AdherenteVehicularService.listarPorVehiculo(token, id)),
+    responsivas: parte('vehiculos.responsiva', () => ResponsivaVehicularService.listarPorVehiculo(token, id)),
+    adherentes: parte('vehiculos.adherente', () => AdherenteVehicularService.listarPorVehiculo(token, id)),
   });
 }
 /**
@@ -131,22 +136,36 @@ function apiFichaVehiculo(token, idVehiculo) {
  * por sección. Con permiso de Inspección vehicular (el mismo de la pestaña). Texto JSON.
  */
 function apiInspeccionesExpediente(token, nucco) {
-  Permisos.puedeLeer(token, 'inspeccion-vehicular');
-  return JSON.stringify(ExpedienteNuco.inspecciones(nucco));
+  const sesion = Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  exigirNuccoEnAlcance_(sesion, token, nucco);
+  const lista = ExpedienteNuco.inspecciones(nucco);
+  // La liga a la carpeta de cada inspección, solo con vehiculos.carpetas (los PDF y las fotos sí)
+  return JSON.stringify(veCarpetasNuco_(sesion) ? lista : lista.map((d) => Object.assign({}, d, { url: '' })));
 }
 /** Las fotos de UNA inspección del expediente (solo al abrirla), por sección y con miniatura. Texto JSON. */
 function apiFotosInspeccion(token, nucco, carpetaId) {
-  Permisos.puedeLeer(token, 'inspeccion-vehicular');
+  exigirNuccoEnAlcance_(Permisos.puedeLeer(token, 'inspeccion-vehicular'), token, nucco);
   return JSON.stringify(ExpedienteNuco.fotosInspeccion(nucco, carpetaId));
 }
+/** Las ligas a las carpetas de Drive del expediente de un NUCO: con su sección (Modulos.gs; un CLIENT no la tiene) */
+const veCarpetasNuco_ = (sesion) => !!(sesion.permisos || {})['vehiculos.carpetas'];
+/** Rol CLIENT (Permisos.alcanceDe): lo del expediente de un NUCO, solo de un vehículo de su departamento */
+function exigirNuccoEnAlcance_(sesion, token, nucco) {
+  if (sesion.alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) throw new Error('No tienes acceso a este vehículo.');
+}
 const DOCUMENTOS_FICHA = ['FACTURA', 'SEGURO', 'ALTA', 'TARJETA', 'TENENCIA'];
+// Con su sección de la ficha (vehiculos.documentos); un CLIENT, solo el expediente de un vehículo de su departamento
 function apiDocumentosVehiculo(token, nucco) {
-  // Un CLIENT solo abre el expediente de un vehículo de su departamento (Permisos.alcanceDe)
-  if (Permisos.puedeLeer(token, 'vehiculos').alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) {
-    throw new Error('No tienes acceso a este vehículo.');
-  }
-  const exp = ExpedienteNuco.listar(nucco);
+  const sesion = Permisos.puedeLeer(token, 'vehiculos.documentos');
+  exigirNuccoEnAlcance_(sesion, token, nucco);
+  const exp = Object.assign({}, ExpedienteNuco.listar(nucco));
   exp.documentos = exp.documentos.filter((d) => DOCUMENTOS_FICHA.indexOf(d.clave) !== -1);
+  // Sin vehiculos.carpetas: los archivos sí, las ligas a las carpetas no (la pantalla esconde la cabecera)
+  if (!veCarpetasNuco_(sesion)) {
+    exp.url = '';
+    exp.carpetas = [];
+    exp.documentos = exp.documentos.map((d) => Object.assign({}, d, { url: '' }));
+  }
   return JSON.stringify(exp);
 }
 
@@ -371,7 +390,7 @@ function apiFichaCajaChica(token, idCch) {
   const parte = partesDeFicha_(token, 'de la caja ' + idCch);
   return JSON.stringify({
     completo: CajasChicasService.buscarPorId(token, idCch),
-    cambios: parte('caja-chica', () => CambiosMontoCCHService.listarPorIdCch(token, idCch)),
+    cambios: parte('caja-chica.cambios-monto', () => CambiosMontoCCHService.listarPorIdCch(token, idCch)),
     arqueos: parte('arqueos', () => ArqueosService.listarPorIdCch(token, idCch)),
   });
 }
@@ -903,7 +922,8 @@ function apiMisPermisos(token) {
   return Permisos.mios(token);
 }
 function apiRevisarCatalogoPermisos(token) {
-  Permisos.puedeEditar(token, 'usuarios');
+  // Solo revisa (no escribe)
+  Permisos.puedeLeer(token, 'usuarios');
   return Permisos.revisarCatalogo();
 }
 // Administración > Usuarios y permisos (solo ADMIN): lo que pinta la pantalla, y guardar sus cambios

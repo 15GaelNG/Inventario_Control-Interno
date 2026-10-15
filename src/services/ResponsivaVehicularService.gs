@@ -40,7 +40,7 @@
 const ResponsivaVehicularService = (function () {
   const SHEET = 'RESPONSIVA VEHICULAR';
   const ID_COLUMN = 'ID';
-  const MODULO = 'responsiva-vehicular';
+  const MODULO = 'vehiculos.responsiva';
   const ZONA = 'America/Mexico_City';
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 

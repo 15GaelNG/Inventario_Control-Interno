@@ -53,8 +53,6 @@
   .usr-modal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--color-text-muted); }
   .usr-modal-leyenda:empty { display: none; }
   .usr-modal-leyenda .ico { width: 13px; height: 13px; vertical-align: -2px; }
-  .usr-leyenda-punto { display: inline-flex; align-items: center; gap: 6px; }
-  .usr-leyenda-punto::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--color-primary); }
 
   /* Título de cada grupo, con "Todo el grupo" a la derecha */
   .usr-editar-grupo {
@@ -67,16 +65,81 @@
   .usr-editar-grupo-todo { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 11.5px; }
   .usr-editar-grupo .usr-op { padding: 3px 9px; font-size: 11.5px; }
 
-  .usr-editar-lista { border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
-  .usr-editar-fila { display: flex; align-items: center; gap: 10px; padding: 7px 10px 7px 12px; margin: 0; }
-  .usr-editar-fila + .usr-editar-fila { border-top: 1px solid var(--color-border); }
-  .usr-editar-fila:hover { background: var(--color-bg); }
-  .usr-editar-fila > .ico { flex: none; width: 15px; height: 15px; color: var(--color-text-muted); }
-  .usr-editar-fila.excepcion { background: var(--color-accent-soft); }
-  .usr-editar-nombre { flex: 1; min-width: 0; font-size: 13.5px; display: flex; align-items: center; gap: 6px; }
-  .usr-editar-nombre::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: transparent; flex: none; }
-  .usr-editar-fila.cambiada .usr-editar-nombre::after { background: var(--color-accent); }
-  .usr-editar-fila.cambiada .usr-editar-nombre { font-weight: 600; }
+  /* Ventana "Editar permisos" (rediseño 14-oct): ancha, a dos columnas — grupos | módulos del grupo */
+  .modal-card.usr-modal-editor { max-width: 1040px; width: calc(100vw - 48px); }
+  .usr-modal-editor #usr-modal-cuerpo { height: min(66vh, 680px); max-height: none; overflow: hidden; display: flex; flex-direction: column; }
+  .usr-editor { display: grid; grid-template-columns: 230px 1fr; gap: 18px; min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
+  .usr-editor-grupos { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; padding-right: 2px; }
+  .usr-editor-grupo {
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border: 1px solid transparent; border-radius: 10px;
+    background: transparent; color: var(--color-text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+  }
+  .usr-editor-grupo .ico { width: 16px; height: 16px; color: var(--color-text-muted); flex: none; }
+  .usr-editor-grupo:hover { background: var(--color-bg); }
+  .usr-editor-grupo.activa { background: var(--color-primary-soft); border-color: var(--color-primary); font-weight: 600; }
+  .usr-editor-grupo.activa .ico { color: var(--color-primary); }
+  .usr-editor-grupo-nombre { flex: 1; min-width: 0; }
+  .usr-editor-grupo-cuenta { font-size: 11.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+  .usr-editor-grupo.cambiada .usr-editor-grupo-cuenta::after {
+    content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--color-accent); vertical-align: 1px;
+  }
+  .usr-editor-modulos { overflow-y: auto; min-width: 0; padding-right: 4px; }
+  .usr-editor-modulos .usr-editar-grupo { position: sticky; top: 0; z-index: 1; margin: 0 0 8px; padding: 2px 2px 8px; background: var(--color-surface); }
+
+  /* Un módulo: nombre y de dónde le viene; los tres niveles a la derecha; sus pestañas como chips debajo */
+  .usr-editar-lista { display: flex; flex-direction: column; gap: 8px; }
+  .usr-mod { border: 1px solid var(--color-border); border-radius: 12px; padding: 10px 12px; background: var(--color-surface); }
+  .usr-mod.excepcion { border-color: var(--color-accent); background: var(--color-accent-soft); }
+  .usr-mod.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  .usr-mod-cab { display: flex; align-items: center; gap: 10px; }
+  .usr-mod-ico { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
+  .usr-mod-ico .ico { width: 16px; height: 16px; }
+  .usr-mod.sin-acceso .usr-mod-ico { opacity: .55; }
+  .usr-mod-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-weight: 600; }
+  .usr-mod-origen { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 400; color: var(--color-text-muted); }
+  .usr-mod-origen.propia { color: var(--color-text); font-weight: 600; }
+  .usr-mod-origen .ico { width: 12px; height: 12px; }
+  /* Las pestañas en árbol, colgadas del módulo: como un módulo en chiquito */
+  .usr-mod-secs { margin: 8px 0 0 15px; padding-left: 26px; border-left: 2px solid var(--color-border); display: flex; flex-direction: column; }
+  .usr-sec { position: relative; display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+  .usr-sec::before { content: ''; position: absolute; left: -26px; top: 50%; width: 18px; border-top: 2px solid var(--color-border); }
+  .usr-sec-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 13px; font-weight: 500; }
+  .usr-sec .usr-mod-origen { font-size: 11px; }
+  .usr-sec.cambiada .usr-sec-nombre > span:first-child { font-weight: 700; }
+  .usr-sec .usr-segmento { border-radius: 7px; }
+  .usr-sec .usr-op { padding: 3px 9px; font-size: 11.5px; }
+  .usr-sec .usr-restablecer { width: 26px; height: 26px; }
+  .usr-op:disabled { opacity: .35; cursor: not-allowed; }
+  /* Exportar a Excel: un ícono junto a los niveles, verde si puede y rojo si se le quitó */
+  .usr-exp {
+    flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; padding: 0; cursor: pointer;
+    border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent); background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success);
+  }
+  .usr-exp .ico { width: 16px; height: 16px; }
+  .usr-exp.prohibido { border-color: color-mix(in srgb, #b42318 45%, transparent); background: color-mix(in srgb, #b42318 12%, transparent); color: #b42318; }
+  .usr-exp.apagado { border-color: var(--color-border); background: transparent; color: var(--color-text-muted); opacity: .45; cursor: default; }
+  .usr-exp.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  .usr-exp.mini { width: 20px; height: 20px; border-radius: 6px; vertical-align: middle; cursor: default; }
+  .usr-exp.mini .ico { width: 12px; height: 12px; vertical-align: 0; }
+  .usr-modal-leyenda > span { display: inline-flex; align-items: center; gap: 6px; }
+  .usr-perfil-cab { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 12px; }
+  .usr-perfil-cab .usr-perfil-nombre, .usr-perfil-cab .usr-perfil-alcance { margin: 0; }
+  @media (max-width: 640px) {
+    .modal-card.usr-modal-editor { width: auto; }
+    .usr-modal-editor #usr-modal-cuerpo { height: auto; overflow-y: auto; display: block; }
+    .usr-editor { grid-template-columns: 1fr; grid-template-rows: auto; }
+    .usr-editor-modulos { overflow: visible; }
+    .usr-editor-modulos .usr-editar-grupo { position: static; }
+    .usr-editor-grupos { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+    .usr-editor-grupo { width: auto; flex: none; }
+    .usr-mod-cab { flex-wrap: wrap; }
+    .usr-mod-secs { margin-left: 6px; padding-left: 14px; }
+    .usr-sec::before { left: -14px; width: 10px; }
+    .usr-sec { flex-wrap: wrap; }
+    .usr-sec .usr-segmento { flex: 1 1 100%; }
+    .usr-sec .usr-op { flex: 1; padding: 6px; }
+    .usr-perfil-cab { grid-template-columns: 1fr; }
+  }
 
   /* Los tres niveles con el color de la ficha: Sin acceso rojo, Ver azul, Editar verde. El que
      le da su área a la persona lleva un punto */
@@ -92,10 +155,6 @@
   .usr-op.activa.NINGUNO { background: #b42318; }
   .usr-op.activa.LECTURA { background: var(--color-primary); }
   .usr-op.activa.EDICION { background: var(--color-success); }
-  .usr-op.heredada::after {
-    content: ''; position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--color-primary);
-  }
-  .usr-op.heredada.activa::after { background: #fff; }
 
   .usr-restablecer {
     flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0;
@@ -163,6 +222,45 @@
   .usr-celda:hover { filter: brightness(.94); }
   .usr-celda:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
   .usr-celda.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
+  /* Secciones de un módulo (permisos en árbol): debajo de su módulo, más chicas; la que hereda, tenue */
+  .usr-celda.heredada { opacity: .45; }
+  /* Por omisión solo las secciones con alguna regla; "Ver todas las secciones" las enseña todas */
+  .usr-matriz.solo-con-regla .usr-matriz-seccion:not(.con-regla) { display: none; }
+  .usr-matriz-seccion .usr-matriz-mod { padding-left: 30px; font-weight: 400; font-size: 12px; color: var(--color-text-muted); }
+  .usr-permiso.usr-seccion { padding-left: 28px; }
+  .usr-permiso.usr-seccion .usr-permiso-ico { width: 26px; height: 26px; }
+  .usr-permiso.usr-seccion .usr-permiso-nombre { font-weight: 500; font-size: 12.5px; }
+  /* Perfiles (fase 2) */
+  .usr-perfiles-barra { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+  .usr-perfiles-barra p { flex: 1; margin: 0; font-size: 13px; color: var(--color-text-muted); }
+  .usr-perfil-nombre { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
+  .usr-perfil-nombre input { font-size: 14px; }
+  .usr-perfil-alcance { width: 100%; margin: 0 0 14px; border: 1px solid var(--color-border); border-radius: 10px; }
+  .usr-btn-chico { margin-left: auto; padding: 4px 10px; font-size: 12px; }
+  .ln-card h3 .usr-btn-chico { display: inline-flex; align-items: center; gap: 5px; }
+  .usr-chips-perfil { display: flex; flex-wrap: wrap; gap: 8px; }
+  .usr-chip-perfil {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: 12.5px;
+    border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer;
+  }
+  .usr-chip-perfil:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .usr-chip-perfil .ico, .usr-asignar .ico { width: 14px; height: 14px; }
+  .usr-asignar-lista { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
+  .usr-asignar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; font: inherit;
+    text-align: left; color: var(--color-text); cursor: pointer;
+  }
+  .usr-asignar + .usr-asignar { border-top: 1px solid var(--color-border); }
+  .usr-asignar:hover { background: var(--color-bg); }
+  .usr-asignar.activa .ico { color: var(--color-primary); }
+  .usr-asignar.cambiada .usr-asignar-nombre { font-weight: 600; }
+  .usr-asignar-nombre { flex: 1; font-size: 13.5px; }
+  .usr-asignar-detalle { font-size: 11.5px; color: var(--color-text-muted); }
+  .usr-matriz-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
+  .usr-matriz-modo button { border: 0; border-radius: 0; background: transparent; color: var(--color-text-muted); padding: 5px 11px; font-size: 12px; }
+  .usr-matriz-modo button + button { border-left: 1px solid var(--color-border); }
+  .usr-matriz-modo button.activa { background: var(--color-primary); color: #fff; }
+  @media (max-width: 640px) { .usr-perfiles-barra { flex-direction: column; align-items: stretch; } }
   .usr-celda.con-excepcion::after {
     content: ''; position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%;
     background: var(--color-accent); box-shadow: 0 0 0 1px var(--color-surface);
@@ -174,9 +272,9 @@
 
   /* Celular: el nombre arriba y los tres niveles a todo lo ancho, para el dedo */
   @media (max-width: 640px) {
-    .usr-editar-fila { flex-wrap: wrap; }
-    .usr-editar-fila .usr-segmento { flex: 1 1 100%; }
-    .usr-editar-fila .usr-op { flex: 1; padding: 8px 6px; }
+    .usr-mod-cab { flex-wrap: wrap; }
+    .usr-mod-cab .usr-segmento { flex: 1 1 100%; }
+    .usr-mod-cab .usr-op { flex: 1; padding: 8px 6px; }
     .usr-editar-grupo { flex-wrap: wrap; }
     .usr-editar-grupo .usr-segmento { flex: 1 1 100%; }
     .usr-editar-grupo .usr-op { flex: 1; }
@@ -222,7 +320,8 @@
     <div class="tabs-simple" id="usr-tabs">
       <button type="button" class="tab-btn active" data-tab="personas"><i data-lucide="user" class="ico"></i> Personas</button>
       <button type="button" class="tab-btn" data-tab="areas"><i data-lucide="users" class="ico"></i> Áreas</button>
-      <button type="button" class="tab-btn" data-tab="matriz"><i data-lucide="grid-3x3" class="ico"></i> Matriz por área</button>
+      <button type="button" class="tab-btn" data-tab="perfiles"><i data-lucide="layers" class="ico"></i> Perfiles</button>
+      <button type="button" class="tab-btn" data-tab="matriz"><i data-lucide="grid-3x3" class="ico"></i> Matriz</button>
       <button type="button" class="tab-btn" data-tab="historial"><i data-lucide="history" class="ico"></i> Historial</button>
     </div>
     <div class="tab-panel" data-tab-panel="personas">
@@ -231,14 +330,28 @@
     <div class="tab-panel" data-tab-panel="areas" hidden>
       <div class="card card-compacta"><div id="usr-tabla-areas"></div></div>
     </div>
+    <!-- Perfiles: paquetes de permisos con nombre que se asignan a áreas (fase 2) -->
+    <div class="tab-panel" data-tab-panel="perfiles" hidden>
+      <div class="usr-perfiles-barra">
+        <p>Un perfil es un paquete de permisos con nombre que se asigna a una o varias áreas. Sus personas reciben lo que da; lo propio del área y de cada persona manda sobre él.</p>
+        <button type="button" id="usr-nuevo-perfil"><i data-lucide="plus" class="ico"></i> Nuevo perfil</button>
+      </div>
+      <div class="card card-compacta"><div id="usr-tabla-perfiles"></div></div>
+    </div>
     <!-- Todas las áreas contra todos los módulos: clic en una celda la cambia; se guarda junto -->
     <div class="tab-panel" data-tab-panel="matriz" hidden>
       <div class="card card-compacta usr-matriz-card">
         <div class="usr-matriz-barra">
+          <div class="usr-matriz-modo" id="usr-matriz-modo" role="group" aria-label="Columnas de la matriz">
+            <button type="button" data-modo="areas" class="activa" aria-pressed="true">Por área</button>
+            <button type="button" data-modo="perfiles" aria-pressed="false">Por perfil</button>
+          </div>
           <span class="usr-matriz-leyenda"><span class="usr-celda EDICION" aria-hidden="true"></span> Editar</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda LECTURA" aria-hidden="true"></span> Ver</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO" aria-hidden="true"></span> Sin acceso</span>
           <span class="usr-matriz-leyenda"><span class="usr-celda NINGUNO con-excepcion" aria-hidden="true"></span> Alguien del área tiene excepción</span>
+          <span class="usr-matriz-leyenda"><span class="usr-celda EDICION heredada" aria-hidden="true"></span> Sección que hereda</span>
+          <button type="button" class="secondary" id="usr-matriz-secciones" aria-pressed="false"><i data-lucide="list-tree" class="ico"></i> Ver todas las secciones</button>
           <p id="usr-matriz-cuenta">Clic en una celda para cambiarla</p>
           <button type="button" class="secondary" id="usr-matriz-descartar" hidden>Descartar</button>
           <button type="button" id="usr-matriz-guardar" disabled><i data-lucide="save" class="ico"></i> <span>Guardar</span></button>

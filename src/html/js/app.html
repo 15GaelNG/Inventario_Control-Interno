@@ -327,14 +327,22 @@
   const state = {
     token: sessionStorage.getItem('token') || null,
     sesion: JSON.parse(sessionStorage.getItem('sesion') || 'null'),
-    // Permisos por módulo (PermisosService/Modulos.gs), se leen del servidor en cada carga
-    // (ver render). Deciden qué items del menú aparecen (NAV_GRUPOS, `requiere`), si se puede
-    // entrar a una vista (navegarA) y qué botones de edición enseña cada módulo.
+    // Permisos por nodo del catálogo (Modulos.gs: el módulo 'vehiculos' y sus secciones
+    // 'vehiculos.documentos', 'vehiculos.exportar'…), ya resueltos en el servidor con su herencia
+    // (Permisos.resolver_): aquí no se calcula nada, solo se pregunta. Se leen en cada carga (ver
+    // render) y deciden qué items del menú aparecen (NAV_GRUPOS, `requiere`), si se puede entrar a
+    // una vista (navegarA), qué pestañas pinta una ficha y qué botones enseña cada pantalla.
     permisos: {},
   };
 
-  /** ¿Qué puede hacer esta persona en un módulo? 'LECTURA' | 'EDICION' | undefined */
+  /** ¿Qué puede hacer esta persona en un módulo o una sección? 'LECTURA' | 'EDICION' | undefined */
   const permisoDe = (modulo) => (state.permisos || {})[modulo];
+  /**
+   * La forma de preguntar: puede('vehiculos.documentos') (ver) o puede('vehiculos', 'EDICION').
+   * Un nodo es un módulo o una sección (Modulos.gs); su herencia ya viene resuelta del servidor.
+   */
+  const NIVEL_PERMISO = { LECTURA: 1, EDICION: 2 };
+  const puede = (nodo, nivel) => (NIVEL_PERMISO[permisoDe(nodo)] || 0) >= NIVEL_PERMISO[nivel || 'LECTURA'];
   // Las vistas que este proyecto tiene apagadas (MODULOS_APAGADOS en Entornos.gs; las pone
   // Index.html): ni el menú las pinta ni navegarA las abre. El servidor también las rechaza.
   const VISTAS_APAGADAS = (() => {
@@ -342,7 +350,17 @@
   })();
   // Apagar 'helpdesk' apaga su familia (el grupo y sus vistas 'helpdesk-…')
   const estaApagada = (entrada) => [entrada.vista, entrada.id].some((v) => v && VISTAS_APAGADAS.some((a) => v === a || v.indexOf(a + '-') === 0));
-  const puedeEditarModulo = (modulo) => permisoDe(modulo) === 'EDICION';
+  const puedeEditarModulo = (modulo) => puede(modulo, 'EDICION');
+  /**
+   * ¿Se puede exportar en la vista abierta? La sección exportar de su módulo (vehiculos.exportar, Modulos.gs).
+   * DataTable lo pregunta al crear cada tabla. Lo que alguien ve lo puede copiar: es un control de la pantalla
+   * (y de los servicios que exportan, como Líneas), no una frontera de seguridad.
+   */
+  function puedeExportarAqui() {
+    const destino = vistaActual ? vistaDe(vistaActual) : null;
+    const modulo = destino && destino.requiere ? String(destino.requiere).split('.')[0] : '';
+    return !modulo || puede(modulo + '.exportar');
+  }
   /**
    * Lo de OTRO módulo dentro de una pantalla (una pestaña de la ficha): solo se pide si la
    * persona puede ver ese módulo; si no, da null y esa pestaña no se pinta. Si sí puede y
@@ -390,7 +408,7 @@
     verificaciones: ['apiListarVerificaciones'], 'inspeccion-vehicular': ['apiListarInspecciones'],
     'instalacion-sensores': ['apiListarSensores'], hologramas: ['apiListarHologramas'],
     uber: ['apiListarUberResumen'], tickets: ['apiListarTicketsResumen'],
-    'caja-chica': ['apiListarCajasChicasResumen', 'apiListarCambiosMontoCCH'], arqueos: ['apiListarArqueosResumen'],
+    'caja-chica': ['apiListarCajasChicasResumen'], 'caja-chica.cambios-monto': ['apiListarCambiosMontoCCH'], arqueos: ['apiListarArqueosResumen'],
   };
   function precargarListas() {
     const pendientes = Object.keys(LISTAS_POR_MODULO)
@@ -433,7 +451,8 @@
     }
   }
 
-  const llavePermisos_ = () => 'permisos_' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
+  // v2: los permisos traen secciones (permisos en árbol, 14-oct); una copia de antes no sirve
+  const llavePermisos_ = () => 'permisos_v2_' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
   function permisosGuardados_() {
     try { return JSON.parse(localStorage.getItem(llavePermisos_()) || 'null'); } catch (e) { return null; }
   }
@@ -454,6 +473,10 @@
     document.getElementById('user-avatar').innerHTML = Avatar.html(state.sesion.correo, state.sesion.nombre, { tam: 34 });
     pintarUsuarioMenu(null);
     pedirMiPerfil().then(pintarUsuarioMenu).catch(() => { /* se queda con el rol y el área */ });
+    // Las fotos de todos (una vez; con copia de la visita anterior salen al instante). Una copia
+    // vacía (de cuando el directorio todavía no respondía) no se usa: se piden frescas
+    Avatar.cargar(() => callServerCacheado('apiFotosPerfil', state.token).then((copia) =>
+      (copia && Object.keys(copia).length ? copia : callServer('apiFotosPerfil', state.token))));
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
     // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
@@ -696,10 +719,10 @@
    *   plantilla  el <template> de html/views que se monta
    *   init       lo que corre al montarla; va como función flecha porque casi todas viven en
    *              archivos que cargan después de este (app-verificaciones, modulos/*, lineas)
-   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item: los panoramas y
-   *              Cambios de Monto no son módulos propios, cuelgan de su padre. `libre: true` = no
-   *              pide permiso (Sistemas y Encuestas: solo enlaces a sistemas externos). Sin ninguno
-   *              de los dos, el item no se pinta.
+   *   requiere   el módulo (Modulos.gs) cuyo permiso hace falta para ver el item. Desde el 14-oct cada
+   *              entrada tiene el suyo (panoramas, Sistemas, Encuestas); solo Cambios de Monto cuelga
+   *              de Caja chica. `libre: true` = no pide permiso (hoy solo Help Desk, apagado en prod).
+   *              Sin ninguno de los dos, el item no se pinta.
    *   sinAsistente  en esa vista no sale el asistente flotante; en un grupo, vale para todos sus items
    * source-contracts revisa que cada plantilla, función y módulo exista.
    */
@@ -707,7 +730,7 @@
     {
       id: 'servicios-vehiculares', icono: 'car', etiqueta: 'Control vehicular',
       items: [
-        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
+        { vista: 'panorama-vehiculos', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-vehiculos', plantilla: 'tpl-panorama-vehiculos', init: () => initPanoramaVehiculos(), ayuda: () => AYUDA_PANORAMA_VEHICULOS },
         { vista: 'incidencias', etiqueta: 'Incidencias', icono: 'wrench', requiere: 'incidencias', plantilla: 'tpl-incidencias', init: () => initIncidencias(), ayuda: () => AYUDA_INCIDENCIAS },
         { vista: 'vehiculos', etiqueta: 'Vehículos', icono: 'car', requiere: 'vehiculos', plantilla: 'tpl-vehiculos', init: () => initVehiculos(), tour: () => iniciarTourVehiculosSegunPantalla(), ayuda: () => AYUDA_VEHICULOS },
         { vista: 'adquisicion-vehicular', etiqueta: 'Adquisición', icono: 'folder-open', requiere: 'adquisicion-vehicular', plantilla: 'tpl-adquisicion-vehicular', init: () => initAdquisicionVehicular(), ayuda: () => AYUDA_ADQUISICION_VEHICULAR },
@@ -718,7 +741,7 @@
         { vista: 'inspeccion-vehicular', etiqueta: 'Inspección vehicular', icono: 'clipboard-list', requiere: 'inspeccion-vehicular', plantilla: 'tpl-inspecciones', init: () => initInspecciones(), ayuda: () => AYUDA_INSPECCIONES },
         { vista: 'instalacion-sensores', etiqueta: 'Instalación de sensores', icono: 'radio', requiere: 'instalacion-sensores', plantilla: 'tpl-sensores', init: () => initSensores(), ayuda: () => AYUDA_SENSORES },
         { vista: 'hologramas', etiqueta: 'Hologramas', icono: 'sparkles', requiere: 'hologramas', plantilla: 'tpl-hologramas', init: () => initHologramas(), ayuda: () => AYUDA_HOLOGRAMAS },
-        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
+        { vista: 'sistemas-vehiculos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-vehiculos', plantilla: 'tpl-sistemas', init: () => initSistemas('servicios-vehiculares') },
       ],
     },
     {
@@ -732,22 +755,21 @@
         { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas', plantilla: 'tpl-lineas-resguardos', init: () => Lineas.initResguardos() },
         { vista: 'correcciones-lineas', etiqueta: 'Correcciones de líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas', plantilla: 'tpl-lineas-correcciones', init: () => LineasCorrecciones.init() }, // temporal (30-sep)
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de accesorios', icono: 'boxes', requiere: 'accesorios-lineas', plantilla: 'tpl-lineas-accesorios', init: () => Lineas.initAccesoriosLineas() },
-        { vista: 'proveedor-lineas', etiqueta: 'Proveedor', icono: 'file-spreadsheet', requiere: 'proveedor-lineas', plantilla: 'tpl-lineas-proveedor', init: () => LineasProveedor.init() },
         // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en VISTAS_FUERA_DEL_MENU: su pestaña es la
         // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
         // { vista: 'cambios-lineas', etiqueta: 'Control de cambios - Líneas', icono: 'eye' },
-        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
+        { vista: 'sistemas-lineas', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-lineas', plantilla: 'tpl-sistemas', init: () => initSistemas('lineas') },
       ],
     },
     {
       id: 'arqueos', icono: 'wallet', etiqueta: 'Arqueos',
       items: [
-        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'caja-chica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
+        { vista: 'panorama-cajachica', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-cajachica', plantilla: 'tpl-panorama-cajachica', init: () => initPanoramaCajaChica(), ayuda: () => AYUDA_PANORAMA_CAJACHICA },
         { vista: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet', requiere: 'arqueos', plantilla: 'tpl-arqueos', init: () => initArqueos(), ayuda: () => AYUDA_ARQUEOS },
         { vista: 'caja-chica', etiqueta: 'Caja chica', icono: 'piggy-bank', requiere: 'caja-chica', plantilla: 'tpl-cajachica', init: () => initCajaChica(), ayuda: () => AYUDA_CAJACHICA },
-        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de monto', icono: 'repeat', requiere: 'caja-chica', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
-        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
+        { vista: 'cambios-monto-cch', etiqueta: 'Cambios de monto', icono: 'repeat', requiere: 'caja-chica.cambios-monto', plantilla: 'tpl-cambios-monto-cch', init: () => initCambiosMontoCCH(), ayuda: () => AYUDA_CAMBIOS_MONTO_CCH },
+        { vista: 'sistemas-arqueos', etiqueta: 'Sistemas', icono: 'external-link', requiere: 'sistemas-arqueos', plantilla: 'tpl-sistemas', init: () => initSistemas('arqueos') },
       ],
     },
     {
@@ -761,7 +783,7 @@
     { id: 'gestion-activos', vista: 'gestion-activos', icono: 'contact', etiqueta: 'Gestión de activos', requiere: 'gestion-activos', plantilla: 'tpl-lineas-gestion-activos', init: () => Lineas.initGestionActivos(), sinAsistente: true },
     // Encuestas y solicitudes externas (2-oct) -- mismo patrón que "Sistemas" (tpl-sistemas/
     // initSistemas en app-sistemas.html), un solo destino sin submenú porque ya muestra las 3.
-    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', libre: true, plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
+    { id: 'encuestas-solicitudes', vista: 'encuestas-solicitudes', icono: 'clipboard-list', etiqueta: 'Encuestas/solicitudes', requiere: 'encuestas-solicitudes', plantilla: 'tpl-sistemas', init: () => initSistemas('encuestas-solicitudes') },
     // Los tickets del helpdesk de TI (05/10/2026; su propia familia el 07/10). Todos lo ven (cada
     // quien, lo que su cuenta ve allá): por eso el grupo es `libre` aunque casi todo sea libre.
     // Registrados es la copia en la hoja: solo quien lee Tickets.
@@ -770,7 +792,7 @@
       items: [
         { vista: 'helpdesk', etiqueta: 'Bandeja', icono: 'inbox', libre: true, plantilla: 'tpl-helpdesk', init: () => initHelpdesk(), ayuda: () => AYUDA_HELPDESK },
         { vista: 'helpdesk-formularios', etiqueta: 'Formularios', icono: 'list-checks', libre: true, plantilla: 'tpl-helpdesk-formularios', init: () => initHelpdeskFormularios() },
-        { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
+        { vista: 'helpdesk-registrados', etiqueta: 'Registrados', icono: 'archive', requiere: 'tickets.helpdesk', plantilla: 'tpl-helpdesk-registrados', init: () => initHelpdeskRegistrados() },
         { vista: 'helpdesk-conexion', etiqueta: 'Conexión', icono: 'plug', libre: true, plantilla: 'tpl-helpdesk-conexion', init: () => initHelpdeskConexion() },
       ],
     },
@@ -855,10 +877,9 @@
     const contenedor = document.getElementById('nav-groups');
     // Una entrada con `vista` y sin `items` es un acceso directo suelto
     // (sin desplegable), como Gestión de Activos (rama emmanuel).
-    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (accesos a
-    // sistemas externos, sin datos de la app) no piden permiso, pero no bastan para que se vea
-    // su grupo: un grupo sin ningún módulo con permiso no se pinta. Por eso esto se vuelve a
-    // llamar al llegar los permisos.
+    // Un item solo se pinta si hay permiso de su módulo (`requiere`). Los `libre` (Help Desk) no
+    // piden permiso, pero no bastan para que se vea su grupo: un grupo sin ningún módulo con
+    // permiso no se pinta. Por eso esto se vuelve a llamar al llegar los permisos.
     const visibles = NAV_GRUPOS
       .filter((g) => !estaApagada(g))
       .map((g) => (g.items ? Object.assign({}, g, { items: g.items.filter((it) => !estaApagada(it) && (it.libre || permisoDe(it.requiere))) }) : g))
@@ -3557,8 +3578,8 @@
 
     /** Contenido de la pestaña "Adquisición" de la ficha: folio y carpeta ya ligados (si los
      *  hay), o el botón para buscarlos (buscarExpedienteAdquisicionFicha, vía el dispatcher
-     *  genérico data-agregar) si todavía no se ha ligado ninguno. Visible a cualquiera que vea
-     *  la ficha -- el folio ya se ve igual en la pestaña Datos; solo "Buscar" necesita edición. */
+     *  genérico data-agregar) si todavía no se ha ligado ninguno. Solo con el permiso de
+     *  Adquisición (14-oct); "Buscar" además necesita edición de Vehículos (escribe en su renglón). */
     function contenidoAdquisicionFicha(completo, puedeEditar) {
       const folio = completo['FOLIO ADQUISICION'];
       const liga = completo['LIGA EXPEDIENTE ADQUISICION'];
@@ -3901,11 +3922,13 @@
         html += fichaEnPestanas([
           { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
-          // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla
-          { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+          // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla.
+          // Su sección (vehiculos.documentos)
+          puede('vehiculos.documentos') && { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
           // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
-          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab)
-          { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
+          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab).
+          // Con el permiso de Adquisición, no el de Vehículos (14-oct)
+          permisoDe('adquisicion-vehicular') && { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
           verificaciones && {
             id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
             contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
@@ -3978,16 +4001,16 @@
               { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
                 // Solo mientras sigue PENDIENTE de firma -- en cuanto se firma del todo (PDF
                 // generado) desaparece: el documento ya quedó impreso con esos datos.
-                editar: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE',
-                eliminar: puedeEditarModulo('responsiva-vehicular'),
+                editar: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE',
+                eliminar: puedeEditarModulo('vehiculos.responsiva'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
-                regenerarLiga: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
-                regenerarLigaJefe: puedeEditarModulo('responsiva-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
-                devolverPrestamo: puedeEditarModulo('responsiva-vehicular') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
+                regenerarLiga: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
+                devolverPrestamo: puedeEditarModulo('vehiculos.responsiva') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
               }) },
             ], responsivas, 'Sin responsivas registradas para este vehículo.',
-            puedeEditarModulo('responsiva-vehicular') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
+            puedeEditarModulo('vehiculos.responsiva') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
           },
           adherentes && {
             id: 'adherente', titulo: 'Adherentes', icono: 'users',
@@ -4000,16 +4023,19 @@
               { t: 'Firma', r: (r) => badgeEstadoFirma(r, 'adherente') },
               { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
               { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
-                estatus: r.ESTATUS || 'ACTIVO',
-                editar: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE',
-                eliminar: puedeEditarModulo('adherente-vehicular'),
+                // Dar de baja / reactivar escribe: solo con edición (antes se veía y el servidor lo negaba)
+                estatus: puedeEditarModulo('vehiculos.adherente') ? r.ESTATUS || 'ACTIVO' : null,
+                // Solo mientras sigue PENDIENTE de firma -- en cuanto se firma del todo (PDF
+                // generado) desaparece: el documento ya quedó impreso con esos datos.
+                editar: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE',
+                eliminar: puedeEditarModulo('vehiculos.adherente'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
-                regenerarLiga: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
-                regenerarLigaJefe: puedeEditarModulo('adherente-vehicular') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
+                regenerarLiga: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
               }) },
             ], adherentes, 'Sin adherentes registrados para este vehículo.',
-            puedeEditarModulo('adherente-vehicular') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
+            puedeEditarModulo('vehiculos.adherente') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
           },
         ].filter(Boolean));
 
@@ -4237,22 +4263,24 @@
       // baja" es la excepción, acepta varias a la vez. "Eliminar" NO se repite
       // aquí: ya la agrega cfg.alEliminar, con el chequeo de integridad
       // (apiQueImpideBorrar) que la vieja eliminarVehiculoRapido no tenía.
-      accionesSeleccion: puedeEditar ? [
-        {
+      // Cambiar el vehículo, con edición de Vehículos; capturar algo de otro módulo, con edición de ESE módulo
+      // (antes todo colgaba de Vehículos y el servidor negaba lo que no tocaba)
+      accionesSeleccion: [
+        puedeEditar && {
           icono: 'ban', texto: 'Dar de baja', enBarra: false, grupo: 'estado',
           visible: (filas) => filas.some((f) => String(f.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR'),
           alHacer: (filas) => darDeBajaVehiculo(filas),
         },
-        {
+        puedeEditar && {
           icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, enBarra: false, grupo: 'estado',
           alHacer: (filas) => cambiarEstatusRapidoVehiculo(filas[0]),
         },
-        { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
-        { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
-        { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
-        { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
-        { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
-      ] : [],
+        puedeEditarModulo('verificaciones') && { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
+        puedeEditarModulo('inspeccion-vehicular') && { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
+        puedeEditarModulo('instalacion-sensores') && { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
+        puedeEditarModulo('hologramas') && { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
+        puedeEditarModulo('incidencias') && { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
+      ].filter(Boolean),
       alEliminar: puedeEditar ? async (filas) => {
         // Primero se pregunta por todos: si alguno tiene historial, no se borra ninguno
         const imp = await callServer('apiQueImpideBorrar', state.token, 'VEHICULOS', filas.map((f) => f.ID_VEHICULO));
@@ -4543,6 +4571,8 @@
       }
     });
 
+    // El reporte de Looker Studio, con su sección (vehiculos.reporte): un CLIENT no la tiene
+    document.getElementById('btn-ver-reporte-vehiculos').hidden = !puede('vehiculos.reporte');
     document.getElementById('btn-ver-reporte-vehiculos').addEventListener('click', () => {
       // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que
       // encuentre después de "//" pensando que es un comentario — incluso

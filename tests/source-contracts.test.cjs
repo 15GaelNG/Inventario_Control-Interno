@@ -66,9 +66,8 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
   // Correcciones de Líneas: módulo temporal (30-sep), después de Resguardos; se quita cuando Líneas termine
-  // Proveedor (adendums y facturas del mes, 7-oct) después de Accesorios
   // sistemas-lineas: accesos a sistemas externos (jorge, 2-oct), al final del grupo
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'proveedor-lineas', 'sistemas-lineas'];
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'sistemas-lineas'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -415,7 +414,11 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
 
   const plantillas = [...index.matchAll(/include\('(html\/[^']+)'\)/g)].map((m) => read('src/' + m[1] + '.html')).join('\n');
   const js = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
-  const modulos = [...read('src/config/Modulos.gs').matchAll(/\{ id: '([^']+)', etiqueta/g)].map((m) => m[1]);
+  // El catálogo de verdad (Modulos.gs): todos los nodos (módulos y secciones) y los módulos solos
+  const catalogo = {};
+  require('vm').runInNewContext(read('src/config/Modulos.gs') + '\n;this.M = Modulos;', catalogo);
+  const modulos = catalogo.M.ids();
+  const raices = catalogo.M.todos().map((m) => m.id);
   const problemas = [];
   entradas.filter((e) => e.vista).forEach((e) => {
     const quien = e.vista + ': ';
@@ -429,13 +432,20 @@ test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo
     if (e.requiere && !modulos.includes(e.requiere)) problemas.push(quien + 'requiere ' + e.requiere + ', que no está en Modulos.gs');
     if (!fuera.includes(e) && !e.requiere && !e.libre) problemas.push(quien + 'en el menú sin requiere ni libre');
   });
-  // Y al revés: cada módulo de Modulos.gs tiene por dónde entrar: su vista, o la ficha de otro
-  // módulo (`enFicha`), que lo pide con deModulo para que sin permiso su pestaña no aparezca
-  const enFicha = Object.fromEntries([...read('src/config/Modulos.gs').matchAll(/{ id: '([^']+)', etiqueta.*enFicha: '([^']+)'/g)].map((m) => [m[1], m[2]]));
-  modulos.forEach((m) => {
-    if (enFicha[m]) { if (!js.includes(`deModulo('${m}'`) && !read('src/ClientApi.gs').includes(`parte('${m}'`)) problemas.push(m + ': vive en la ficha de ' + enFicha[m] + ' pero nadie lo pide con deModulo (ni con parte en el servidor)'); }
-    else if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
+  // Y al revés: cada MÓDULO de Modulos.gs tiene por dónde entrar (su vista). Las secciones viven
+  // dentro de la vista de su módulo (las pestañas de una ficha, Exportar…): no necesitan una propia
+  raices.forEach((m) => {
+    if (!entradas.some((e) => e.requiere === m)) problemas.push(m + ': módulo sin vista');
   });
+  // Cada entrada del menú tiene su propio permiso (14-oct): dos no comparten módulo, salvo las que
+  // son parte de otro a propósito. Y `libre` (sin permiso) solo en Help Desk
+  // (Cambios de monto y Registrados del Help Desk eran las excepciones: hoy son secciones con su id)
+  const COMPARTEN = {};
+  entradas.filter((e) => e.vista && e.requiere && !COMPARTEN[e.vista]).forEach((e, _, todas) => {
+    const otras = todas.filter((x) => x !== e && x.requiere === e.requiere).map((x) => x.vista);
+    if (otras.length) problemas.push(e.vista + ': comparte el permiso ' + e.requiere + ' con ' + otras.join(', '));
+  });
+  entradas.filter((e) => e.libre && !/^helpdesk/.test(e.vista || e.id || '')).forEach((e) => problemas.push((e.vista || e.id) + ': libre (sin permiso) fuera de Help Desk'));
   assert.deepEqual(problemas, []);
 
   // navegarA busca la entrada; no vuelve la cadena de if por vista
@@ -853,7 +863,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   // Documentos: indicadores que filtran por tipo y una tabla con acciones por fila
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
   assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',\s+filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
-  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => !!d\.pdfPendiente,/);
+  // Solo con edición (operar): antes se veía y el servidor lo negaba (permisos en árbol, 14-oct)
+  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => operar && !!d\.pdfPendiente,/);
   // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
   assert.match(lineas, /idTabla: 'lineas-documentos-v1',\s+exportar: false,/);
   assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
@@ -2197,7 +2208,7 @@ test('las fichas van en una llamada y piden lo de otro módulo solo si la person
     const i = api.indexOf('function ' + f.servidor + '(');
     assert.ok(i >= 0, f.servidor + ' existe');
     const cuerpo = api.slice(i, api.indexOf('\n}', i));
-    const sueltas = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPor\w+\(/.test(l) && !/parte\('[a-z-]+'/.test(l));
+    const sueltas = cuerpo.split(/\r?\n/).filter((l) => /Service\.listarPor\w+\(/.test(l) && !/parte\('[a-z.-]+'/.test(l));
     assert.deepEqual(sueltas, [], f.servidor + ': cada pestaña va con parte(modulo, …)');
     const texto = read(f.archivo);
     const desde = texto.indexOf('async function ' + f.funcion + '(');
@@ -2498,8 +2509,10 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   const html = read('src/html/js/lineas.html');
   const css = read('src/html/lineas-estilos.html');
   // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
-  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*tarjetaPlan\(l, false, r\.facturas\) \+\s*tarjetaFacturacion\(l, r\.facturas, false\)/);
-  assert.match(html, /\(l \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  // Facturación, con su sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
+  // Plan y Facturación, los dos con la sección (un CLIENT no la tiene, 14-oct)
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*\(veSeccion\('facturacion'\) \? tarjetaPlan\(l, false, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, false\) : ''\)/);
+  assert.match(html, /\(l && veSeccion\('facturacion'\) \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
   assert.match(html, /function vidaPlan\(l\)/);
   assert.match(html, /'Vencido hace ' \+ n/);
   // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
@@ -2509,8 +2522,9 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   assert.match(css, /\.ln-meses:hover \.ln-meses-cuerpo, \.ln-meses:focus-within \.ln-meses-cuerpo \{ display: block; \}/);
   // Servidor: facturas de la línea y el día de corte de su cuenta
   const servicio = read('src/services/TelefoniaService.gs');
-  assert.match(servicio, /facturas: LineasRepo\.facturasDeLinea\(r\.linea, 3\),/);
-  assert.match(servicio, /corte: LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\),/);
+  // Lo del proveedor, solo con la sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
+  assert.match(servicio, /facturas: veFacturacion_\(sesion\) \? LineasRepo\.facturasDeLinea\(r\.linea, 3\) : null,/);
+  assert.match(servicio, /corte: veFacturacion_\(sesion\) \? LineasRepo\.diaDeCorte\(r\.linea\.cuentaPadre\) : null,/);
 });
 
 test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los conceptos no se entendía', () => {
@@ -2534,10 +2548,92 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
   assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });
 
+test('Líneas: «Recargar datos» también vacía las hojas que la lectura guarda 30 min (carga del proveedor, 14-oct)', () => {
+  const svc = read('src/services/TelefoniaService.gs');
+  const cuerpo = svc.slice(svc.indexOf('  function recargarDatos(token) {'), svc.indexOf('  // ---------------- Captura: inspección y responsiva nuevas'));
+  assert.match(cuerpo, /LineasRepo\.borrarCaches\(\);/);
+  assert.match(cuerpo, /LineasDatos\.tocar\(\['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS'\]\);/);
+  const lectura = read('src/services/lineas/LineasLectura.gs');
+  assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS, HOJA_VIEJA\];/,
+    'si la lectura guarda otra hoja, «Recargar datos» también debe tocarla');
+});
+
+test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
+  const html = read('src/html/js/lineas.html');
+  const ini = html.indexOf('      function dinero(n, centavos) {');
+  const dinero = new Function(html.slice(ini, html.indexOf('\n      }', ini) + 8) + '\nreturn dinero;')();
+  assert.strictEqual(dinero(-7.74, true), '-$7.74');
+  assert.strictEqual(dinero(269.78, true), '$269.78');
+  assert.strictEqual(dinero(1049), '$1,049');
+  assert.strictEqual(dinero(''), null);
+});
+
 test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
-  assert.match(repo, /Math\.round\(\(cobrado - cargoEquipo - renta\) \* 100\) \/ 100/);
   assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
   assert.match(read('src/html/js/lineas.html'), /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
+});
+
+test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra lo que la línea paga normalmente', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const cuerpo = repo.slice(repo.indexOf('  function cobroHabitual('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  const habitual = new Function(cuerpo + '\nreturn cobroHabitual;')();
+  const m = (cobrado, parcial) => ({ cobrado: cobrado, parcial: !!parcial });
+  assert.strictEqual(habitual([]), null, 'sin meses anteriores no hay habitual');
+  assert.strictEqual(habitual([m(269.78), m(269.78), m(299)]), 269.78, 'lo que más se repite');
+  assert.strictEqual(habitual([m(1049), m(1249), m(1049)]), 1049);
+  assert.strictEqual(habitual([m(300), m(280), m(260)]), 300, 'si nada se repite, el mes anterior');
+  assert.strictEqual(habitual([m(120, true), m(-45), m(269.78)]), 269.78, 'sin meses parciales ni notas de crédito');
+  assert.strictEqual(habitual([m(1), m(2), m(3), m(1)]), 1, 'solo los 3 meses anteriores');
+  assert.match(repo, /f\.habitual = cobroHabitual\(todas\.slice\(i \+ 1\)\);/);
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /resumen \|\| !conHabitual\(f\) \? null : \['Habitual', dinero\(f\.habitual, true\)\],/);
+  assert.doesNotMatch(cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable(')), /f\.renta/);
+});
+
+test('apiListaConHuella solo despacha listas, y cada lista que la pantalla pide así está permitida', () => {
+  // Antes despachaba cualquier api… con el token (14-oct): ahora una lista blanca por nombre
+  const api = read('src/ClientApi.gs');
+  const m = /const LISTAS_CON_HUELLA_ = (\/.+\/);/.exec(api);
+  assert.ok(m, 'ClientApi.gs declara LISTAS_CON_HUELLA_');
+  const permitidas = new Function('return ' + m[1])();
+  const js = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  const pedidas = [...new Set([...js.matchAll(/callServerListaCacheada\('(api\w+)'/g)].map((x) => x[1]))];
+  assert.ok(pedidas.length >= 10, pedidas.length + ' listas');
+  assert.deepEqual(pedidas.filter((f) => !permitidas.test(f)), [], 'listas que la pantalla pide y el servidor no despacharía');
+  ['apiFirmaRemotaCompletar', 'apiPermisosGuardar', 'apiLogin', 'apiListaConHuella'].forEach((f) => assert.ok(!permitidas.test(f), f + ' no se despacha'));
+});
+
+test('cada permiso que se pide (pantalla y servidor) existe en el catálogo en árbol', () => {
+  // Un id mal escrito ('vehiculo.documentos') no truena: deja la pestaña escondida para todos o al servidor negando
+  // siempre. Aquí se junta cada id escrito tal cual en una pregunta de permiso y se busca en Modulos.gs
+  const catalogo = {};
+  require('vm').runInNewContext(read('src/config/Modulos.gs') + '\n;this.M = Modulos;', catalogo);
+  const ids = new Set(catalogo.M.ids());
+  const fuentes = filesBelow(path.join(root, 'src')).filter((f) => /\.(gs|html)$/.test(f)).map((f) => [path.relative(root, f), fs.readFileSync(f, 'utf8')]);
+  const pregunta = /\b(?:permisoDe|puede|puedeEditarModulo|deModulo|parte|veSeccion|Permisos\.(?:puedeLeer|puedeEditar|exigir|puedeLeerFamilia))\((?:token, )?'([a-z][a-z.-]*)'/g;
+  const faltan = [];
+  let n = 0;
+  fuentes.forEach(([archivo, texto]) => {
+    for (const m of texto.matchAll(pregunta)) {
+      if (m[1].endsWith('.')) continue;   // se completa al correr ('lineas-telefonicas.' + seccion)
+      n++;
+      // veSeccion (lineas.html) pregunta por una sección de Líneas Telefónicas
+      const id = /veSeccion\(/.test(m[0]) ? 'lineas-telefonicas.' + m[1] : m[1];
+      if (!ids.has(id)) faltan.push(archivo + ': ' + id);
+    }
+  });
+  assert.ok(n >= 80, n + ' preguntas de permiso');
+  assert.deepEqual([...new Set(faltan)], [], 'ids que no están en Modulos.gs');
+  // Y los nodos escritos como texto en los servicios de Líneas (SECCION, EXPORTA)
+  const tel = read('src/services/TelefoniaService.gs');
+  [...tel.matchAll(/'((?:lineas-telefonicas|cambios-lineas|accesorios-lineas)\.[a-z-]+)'/g)].forEach((m) => assert.ok(ids.has(m[1]), m[1]));
+});
+
+test('Exportar es la sección exportar del módulo de la pantalla', () => {
+  const dt = read('src/html/js/componentes/datatable.html');
+  assert.match(dt, /if \(cfg\.exportar && typeof puedeExportarAqui === 'function' && !puedeExportarAqui\(\)\) cfg\.exportar = false;/);
+  const app = read('src/html/js/app.html');
+  assert.match(app, /function puedeExportarAqui\(\) \{[\s\S]*?return !modulo \|\| puede\(modulo \+ '\.exportar'\);/);
 });

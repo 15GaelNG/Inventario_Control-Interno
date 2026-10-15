@@ -30,7 +30,7 @@
 const AdherenteVehicularService = (function () {
   const SHEET = 'ADHERENTE VEHICULAR';
   const ID_COLUMN = 'ID';
-  const MODULO = 'adherente-vehicular';
+  const MODULO = 'vehiculos.adherente';
   const ZONA = 'America/Mexico_City';
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 

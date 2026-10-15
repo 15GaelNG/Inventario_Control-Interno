@@ -140,7 +140,7 @@
       contenedor.innerHTML = '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Inspección ' + escaparHtml(d.nombre + ' ' + d.anio) + '</h2>' +
         '<div class="insp-fotos-botones">' +
         d.pdfs.map((p) => TablaFicha.boton({ texto: p.nombre, icono: 'file-text', href: p.url })).join('') +
-        TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</div>' +
+        (d.url && puede('vehiculos.carpetas') ? TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) : '') + '</div>' +
         '<div class="insp-fotos-datos">' + datos.map((x) => '<span>' + escaparHtml(x) + '</span>').join('') + '</div></div></div>' +
         '<div class="card ln-card" data-insp-galeria><p class="ln-tenue"><span class="spinner"></span> Cargando ' + d.fotos + ' fotos…</p></div>';
       const caja = contenedor.querySelector('[data-insp-galeria]');
