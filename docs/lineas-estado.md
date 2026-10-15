@@ -35,6 +35,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Sin textos de ayuda** (12-oct, `4d07afa`): ni el párrafo de Documentos, ni el de Reasignar varios, ni
   las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
   Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
+- **Recargar datos** (botón solo para administrador, junto a Agregar equipo y Agregar línea; `TelefoniaService.recargarDatos`): vacía las cachés de `LineasRepo` y, desde `4013989` (14-oct, en `emmanuel`, sin publicar),
+  también las hojas LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS que `LineasLectura` guarda 30 min (`LineasDatos.tocar`). Lo escrito en el libro por fuera de la app, como la carga del proveedor, no las renueva solo:
+  con la v117 de producción se ve a más tardar 30 min después.
 - **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
   modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
@@ -69,7 +72,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
   pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
   «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
-  del corte; Cobrado (con la parcialidad del equipo dentro), Habitual (el cobro habitual de la línea) y Diferencia (cobrado menos habitual: «Igual», «$200.00 de más» o «de menos»; menos de $0.05 cuenta como igual, el centavo de redondeo de Telcel; `fd25efd`, 14-oct, pendiente 1.17: ya no es contra la renta del adendum, que en AT&T es el precio de lista y no lo que se paga con el descuento corporativo; la renta sigue en la tarjeta Plan), Uso (un SIM básico también tiene Habitual y Diferencia; lleva su renta en la tarjeta Plan),
+  del corte; Cobrado (con la parcialidad del equipo dentro; un importe negativo se escribe «-$7.74», no «$-7.74»: `dinero` de `lineas.html`, `1b4943c`, 14-oct), Habitual (el cobro habitual de la línea) y Diferencia (cobrado menos habitual: «Igual», «$200.00 de más» o «de menos»; menos de $0.05 cuenta como igual, el centavo de redondeo de Telcel; `fd25efd`, 14-oct, pendiente 1.17: ya no es contra la renta del adendum, que en AT&T es el precio de lista y no lo que se paga con el descuento corporativo; la renta sigue en la tarjeta Plan), Uso (un SIM básico también tiene Habitual y Diferencia; lleva su renta en la tarjeta Plan),
   Equipo (solo si la línea paga un equipo a plazos: «Parcialidad 10 de 24 · MOTOROLA 4G XT2521-2 G15 256GB GRIS · $52.08»; `3cce1da`, 14-oct), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
   «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
