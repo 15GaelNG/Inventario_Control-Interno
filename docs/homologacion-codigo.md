@@ -155,7 +155,7 @@ Cada paso es independiente y se puede pasar a `master` solo.
 | 5.1 ✅ | Permisos de Líneas en la sesión; quitar `apiLineasPermisos` (hecho: `puedeOperar` = `puedeEditarModulo`, ADMIN de `state.sesion.rol`; secretos y aprobador no los usaba la pantalla, se quedan en el servidor) | Una llamada menos al abrir. Los permisos especiales (secretos, aprobador) como secciones en `Modulos.gs` |
 | 5.2 ✅ | `llamar()` + `memoria{}` → `callServerCacheado` / `callServerListaCacheada` / `escucharLista` (hecho: catálogos, CH y accesorios con `callServerCacheado`; el índice con `callServerListaCacheada`, huella `huellaIndice_` y copia sin PIN con `guardarListaLimpia`. **Las fichas NO**: traen PIN, patrones y contraseñas a quien los puede ver y la caché común las dejaría en el navegador; se quedan con su memoria de 2 min) | Que Líneas se actualice sola como lo demás; quitar la invalidación con regex |
 | 5.3 ✅ | `lineas-estilos.html`: cortes a 640/1024, `matchMedia` → `Pantalla`; sacar `PENDIENTES` de Líneas (hecho: ≤ 760 → 640, 900 → 1024, así el iPad vertical queda igual; dos bloques repetidos o vacíos fuera) | Líneas no tiene escenas en la vista previa: se revisa en el DEV |
-| 5.4 | PDF: un solo motor (`Plantilla`) | `LineasPdf` entiende `RIGHT("000" & [NUCO], 4)` y `&`; `Plantilla` no y **truena** con lo que no entiende (bien). Primero agregarle eso con pruebas, luego correr cada plantilla de Líneas en los dos motores y comparar el texto antes de cambiar |
+| 5.4 ❌ | PDF: un solo motor (`Plantilla`). **Fuera de la homologación (usuario, 15-oct): las plantillas y la generación de PDF de Líneas se quedan como están** | `LineasPdf` entiende `RIGHT("000" & [NUCO], 4)` y `&`; `Plantilla` no y **truena** con lo que no entiende (bien). Primero agregarle eso con pruebas, luego correr cada plantilla de Líneas en los dos motores y comparar el texto antes de cambiar |
 | 5.5 | Avisos: `LineasNotificaciones` como fuente de `NotificacionesService` | La campana ya junta; que sea un solo registro de tipos |
 | 5.6 | Formularios: lo que `htmlFormularioAppSheet` hace que `Formulario`/`CamposHoja` no | Inventario primero (pasos, `mostrarSi`, subida de imagen, validaciones por tipo); lo que falte se agrega **una vez** al componente; después se migra captura por captura |
 | 5.7 | Expediente: NUCOS TELEFÓNICOS con la misma pieza que `ExpedienteNuco` | Generalizar `ExpedienteNuco` (raíz y carpetas por tipo de activo), no copiarlo |
@@ -188,7 +188,7 @@ con datos y a saber qué pantalla nadie abre.
 
 ## Orden sugerido
 
-`0 → 1 → 2 → 3 → 4 → 5.1 → 5.2 → 5.3 → 6 → 5.4 … 5.8`, con la 7 conforme se avanza. La 1 es la única con
+`0 → 1 → 2 → 3 → 4 → 5.1 → 5.2 → 5.3 → 6 → 5.5 … 5.8` (5.4 fuera), con la 7 conforme se avanza. La 1 es la única con
 riesgo de datos; la 2 y la 3 son mecánicas y desbloquean todo lo visual; la 4 es donde Líneas y Vehículos se
 juntan por primera vez.
 
