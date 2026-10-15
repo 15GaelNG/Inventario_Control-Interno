@@ -1591,7 +1591,8 @@
     },
     { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'file' },
 
-    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text', ...DE_SENSORES },
+    // vacioEnFicha: en la ficha, vacío no se esconde: dice que no hay nada (usuario, 15-oct)
+    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text', vacioEnFicha: 'Sin accesorios registrados', ...DE_SENSORES },
     { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text', ...DE_SENSORES },
     // SENSOR y SERIE SENSOR los manda Instalación de Sensores (Relaciones.gs): se ven aquí
     // pero se cambian allá. El servidor tampoco las acepta desde este formulario.
@@ -2569,9 +2570,13 @@
         // Los archivos (factura, póliza, responsiva…) se ven en las pestañas Documentos y Responsiva, no aquí
         if (campo.tipo === 'file') return;
         const valor = completo[campo.clave];
-        if (valor === '' || valor === null || valor === undefined) return;
+        const vacio = valor === '' || valor === null || valor === undefined;
+        // Un campo vacío no se muestra, salvo el que pide decirlo (vacioEnFicha: "Sin accesorios registrados")
+        if (vacio && !campo.vacioEnFicha) return;
         if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
-        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, campo.moneda ? formatearMoneda(valor) : valor));
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, vacio
+          ? '<span class="info-vacio">' + escaparHtml(campo.vacioEnFicha) + '</span>'
+          : (campo.moneda ? formatearMoneda(valor) : valor)));
       });
       if (!soloGrupos || soloGrupos.indexOf('Otros datos') !== -1) {
         const otros = Object.keys(completo)
