@@ -17,7 +17,8 @@
    *     teclas: elemento  Enter en un campo de texto avanza de paso en vez de guardar a medias (opcional)
    *     aplica: (i) => bool      ¿el paso i aplica con lo capturado? (default: siempre)
    *     validar: (i) => bool     true = el paso i tiene errores (los marca y lleva al primero): no se avanza
-   *     libre: bool              edición: se puede ir a cualquier paso y guardar desde cualquiera
+   *     libre: bool              se puede ir a cualquier paso sin validar, y guardar desde cualquiera
+   *     guardarAlFinal: bool     con libre, Guardar sigue saliendo solo en el último paso (Arqueos, Vehículo, Responsiva)
    *     alMostrar: (i, sinFoco) => {}   después de mostrar el paso i (foco, scroll, resumen…)
    *   });
    *   nav.ir(i, sinFoco) · nav.avanzar() · nav.refrescar() (algo cambió: un paso pudo dejar de aplicar) ·
@@ -65,7 +66,7 @@
         const ultimo = pos === vis.length - 1;
         if (cfg.atras) cfg.atras.hidden = pos <= 0;
         if (cfg.siguiente) cfg.siguiente.hidden = ultimo;
-        if (cfg.guardar) cfg.guardar.hidden = !ultimo && !cfg.libre;
+        if (cfg.guardar) cfg.guardar.hidden = !ultimo && !(cfg.libre && !cfg.guardarAlFinal);
         if (cfg.cuenta) cfg.cuenta.textContent = 'Paso ' + (pos + 1) + ' de ' + vis.length;
       }
 

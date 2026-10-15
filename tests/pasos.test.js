@@ -93,6 +93,12 @@ ok(!f.chip(3).disabled && !f.q('.guardar').hidden, 'libre (edición): todos los 
 f.estado.errores[0] = true;
 f.chip(3).click();
 ok(f.visible() === 3, 'libre: salta aunque el paso tenga errores (se revisan al guardar)');
+f.caja.remove();
+
+f = armar({ libre: true, guardarAlFinal: true });
+ok(!f.chip(2).disabled && f.q('.guardar').hidden, 'libre con guardarAlFinal (Arqueos, Vehículo): se navega libre, pero sin Guardar al inicio');
+f.chip(3).click();
+ok(f.visible() === 3 && !f.q('.guardar').hidden && f.q('.sig').hidden, 'y Guardar sale en el último paso');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

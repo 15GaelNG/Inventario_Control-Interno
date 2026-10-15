@@ -1607,10 +1607,7 @@
    * "auto" (ver wireResponsableVehiculo). `columnas` es el ancho de la rejilla de cada
    * paso (3 en Registrar, 2 en el modal de Editar, que es más angosto). */
   function renderCamposVehiculo(prefijo, esEdicion, columnas) {
-    return '<ol class="form-pasos">' + VEH_GRUPOS_PASO.map((g, i) =>
-        '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
-          '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(g) + '</button></li>').join('') +
-      '</ol>' +
+    return Pasos.htmlChips(VEH_GRUPOS_PASO.map(escaparHtml)) +
       VEH_GRUPOS_PASO.map((g, i) =>
         '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
           '<div class="form-rejilla" data-columnas="' + (columnas || 3) + '">' +
@@ -1624,27 +1621,16 @@
    * cada uno con su propio contenedor y botones. Regresa { ir } para volver al paso 1
    * después de guardar o cerrar. */
   function wirePasosVehiculo(contenedor, ids) {
-    let pasoActual = 0;
-    function mostrar(i) {
-      pasoActual = i;
-      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-      contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
-        const idx = Number(chip.dataset.ir);
-        chip.classList.toggle('activo', idx === i);
-        chip.classList.toggle('completado', idx < i);
-      });
-      document.getElementById(ids.atras).hidden = i === 0;
-      document.getElementById(ids.siguiente).hidden = i === VEH_GRUPOS_PASO.length - 1;
-      document.getElementById(ids.guardar).hidden = i !== VEH_GRUPOS_PASO.length - 1;
-      document.getElementById(ids.cuenta).textContent = 'Paso ' + (i + 1) + ' de ' + VEH_GRUPOS_PASO.length;
-    }
-    document.getElementById(ids.siguiente).addEventListener('click', () => mostrar(Math.min(pasoActual + 1, VEH_GRUPOS_PASO.length - 1)));
-    document.getElementById(ids.atras).addEventListener('click', () => mostrar(Math.max(pasoActual - 1, 0)));
-    contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
-      chip.addEventListener('click', () => mostrar(Number(chip.dataset.ir)));
+    // La navegación es el componente Pasos: libre, sin validar, Guardar en el último
+    const nav = Pasos.navegar({
+      secciones: Array.from(contenedor.querySelectorAll('.form-paso')),
+      chips: Array.from(contenedor.querySelectorAll('.form-paso-chip')),
+      atras: document.getElementById(ids.atras), siguiente: document.getElementById(ids.siguiente),
+      guardar: document.getElementById(ids.guardar), cuenta: document.getElementById(ids.cuenta),
+      libre: true, guardarAlFinal: true,
     });
-    mostrar(0);
-    return { ir: mostrar };
+    nav.ir(0);
+    return { ir: nav.ir };
   }
 
   /** {columna real: valor}. Los "file" se suben aparte (subirArchivosVehiculo). */
@@ -2806,10 +2792,7 @@
 
       cuerpo.innerHTML =
         '<form id="resv-captura-form" novalidate>' +
-          '<ol class="form-pasos">' + RESV_PASOS.map((p, i) =>
-            '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
-              '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(p.titulo) + '</button></li>').join('') +
-          '</ol>' +
+          Pasos.htmlChips(RESV_PASOS.map((p) => escaparHtml(p.titulo))) +
           RESV_PASOS.map((p, i) =>
             '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
               '<h3 class="form-paso-titulo" tabindex="-1">' + escaparHtml(p.titulo) + '</h3>' +
@@ -2848,29 +2831,18 @@
 
       // Navegación de pasos: libre en los dos sentidos, sin validar (el usuario pidió
       // "un tema a la vez" nada más, no bloquear el avance si falta algo).
-      let resvPasoActual = 0;
-      function resvMostrarPaso(i) {
-        resvPasoActual = i;
-        cuerpo.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-        cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-          const idx = Number(chip.dataset.ir);
-          chip.classList.toggle('activo', idx === i);
-          chip.classList.toggle('completado', idx < i);
-        });
-        document.getElementById('resv-atras').hidden = i === 0;
-        document.getElementById('resv-siguiente').hidden = i === RESV_PASOS.length - 1;
-        document.getElementById('resv-captura-guardar').hidden = i !== RESV_PASOS.length - 1;
-        document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
-        document.getElementById('resv-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + RESV_PASOS.length;
-        const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
-        if (titulo) titulo.focus();
-      }
-      document.getElementById('resv-siguiente').addEventListener('click', () => resvMostrarPaso(Math.min(resvPasoActual + 1, RESV_PASOS.length - 1)));
-      document.getElementById('resv-atras').addEventListener('click', () => resvMostrarPaso(Math.max(resvPasoActual - 1, 0)));
-      cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-        chip.addEventListener('click', () => resvMostrarPaso(Number(chip.dataset.ir)));
-      });
-      resvMostrarPaso(0);
+      // (el componente Pasos; "Enviar liga(s)" sale junto con Guardar, en el último)
+      Pasos.navegar({
+        secciones: Array.from(cuerpo.querySelectorAll('.form-paso')), chips: Array.from(cuerpo.querySelectorAll('.form-paso-chip')),
+        atras: document.getElementById('resv-atras'), siguiente: document.getElementById('resv-siguiente'),
+        guardar: document.getElementById('resv-captura-guardar'), cuenta: document.getElementById('resv-cuenta'),
+        libre: true, guardarAlFinal: true,
+        alMostrar: (i) => {
+          document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
+          const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
+          if (titulo) titulo.focus();
+        },
+      }).ir(0);
 
       document.getElementById('resv-fecha').value = hoyISO();
       // "No. de inventario" es el Nucco del vehículo (así lo usa este formato) -- se autollena
@@ -3028,10 +3000,7 @@
 
       cuerpo.innerHTML =
         '<form id="adh-captura-form" novalidate>' +
-          '<ol class="form-pasos">' + ADH_PASOS.map((p, i) =>
-            '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
-              '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(p.titulo) + '</button></li>').join('') +
-          '</ol>' +
+          Pasos.htmlChips(ADH_PASOS.map((p) => escaparHtml(p.titulo))) +
           ADH_PASOS.map((p, i) =>
             '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
               '<h3 class="form-paso-titulo" tabindex="-1">' + escaparHtml(p.titulo) + '</h3>' +
@@ -3059,29 +3028,18 @@
       });
       refreshIcons();
 
-      let adhPasoActual = 0;
-      function adhMostrarPaso(i) {
-        adhPasoActual = i;
-        cuerpo.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-        cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-          const idx = Number(chip.dataset.ir);
-          chip.classList.toggle('activo', idx === i);
-          chip.classList.toggle('completado', idx < i);
-        });
-        document.getElementById('adh-atras').hidden = i === 0;
-        document.getElementById('adh-siguiente').hidden = i === ADH_PASOS.length - 1;
-        document.getElementById('adh-captura-guardar').hidden = i !== ADH_PASOS.length - 1;
-        document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
-        document.getElementById('adh-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + ADH_PASOS.length;
-        const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
-        if (titulo) titulo.focus();
-      }
-      document.getElementById('adh-siguiente').addEventListener('click', () => adhMostrarPaso(Math.min(adhPasoActual + 1, ADH_PASOS.length - 1)));
-      document.getElementById('adh-atras').addEventListener('click', () => adhMostrarPaso(Math.max(adhPasoActual - 1, 0)));
-      cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-        chip.addEventListener('click', () => adhMostrarPaso(Number(chip.dataset.ir)));
-      });
-      adhMostrarPaso(0);
+      // Navegación de pasos: el componente Pasos, libre y sin validar (igual que la Responsiva)
+      Pasos.navegar({
+        secciones: Array.from(cuerpo.querySelectorAll('.form-paso')), chips: Array.from(cuerpo.querySelectorAll('.form-paso-chip')),
+        atras: document.getElementById('adh-atras'), siguiente: document.getElementById('adh-siguiente'),
+        guardar: document.getElementById('adh-captura-guardar'), cuenta: document.getElementById('adh-cuenta'),
+        libre: true, guardarAlFinal: true,
+        alMostrar: (i) => {
+          document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
+          const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
+          if (titulo) titulo.focus();
+        },
+      }).ir(0);
 
       document.getElementById('adh-fecha').value = hoyISO();
       // "No. de inventario" es el Nucco del vehículo -- ver el comentario gemelo en

@@ -2194,9 +2194,9 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
 test('formularios por pasos: el indicador y la navegación son el componente Pasos (fase 5.6)', () => {
   // Cada formulario por pasos traía su copia de "Paso x de y / Atrás / Siguiente". Formulario y Líneas ya usan Pasos;
   // lo que falta migrar está aquí y esta lista SOLO SE ACHICA: al migrar una pantalla, baja su número (o quítala).
+  // Inspecciones se queda aparte por ahora: su "Siguiente" es asíncrono (busca el vehículo y carga el checklist), los
+  // pasos cambian al elegir la unidad y "completo" sale de las respuestas; Pasos todavía no hace nada de eso.
   const PENDIENTES = {
-    'src/html/js/app-arqueos.html': 1,
-    'src/html/js/app.html': 3,
     'src/html/js/modulos/inspecciones.html': 1,
   };
   const encontrado = {};
