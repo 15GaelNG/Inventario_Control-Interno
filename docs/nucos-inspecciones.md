@@ -328,5 +328,5 @@ De la bitácora más nueva a la más vieja. Lo deshecho queda en `<bitácora>.de
 8. **`2.- SERVICIOS`** y **`3.- VERIFICACIONES`**: inventario hecho para servicios (554 NUCO, 14 mil archivos; el
    evento de servicio con `FACTURA`/`COTIZACION`/`AUTORIZACION`/`GALERIA` es parejo, lo que cambia es dónde vive);
    propuesta `1.- LIBRETA DE SERVICIOS/<año>/<mes>/<evento>/`, sin aplicar.
-9. **Aplanar lo de documentación** con el mismo criterio (`ANTERIORES/ESTRUCTURA ANTERIOR`, `ANTERIORES/REPETIDOS`, las
+9. **Aplanar lo de documentación** con el mismo criterio (`ANTERIORES/ESTRUCTURA ANTERIOR`, `ANTERIORES/DUPLICADOS`, las
    subcarpetas con nombre de persona en `5.-RESPONSIVA`).

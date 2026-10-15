@@ -21,7 +21,7 @@ DOCUMENTACION = "1.-DOCUMENTACIÓN"
 ANTERIORES = "ANTERIORES"
 RESPONSIVAS_ANTERIORES = "RESPONSIVAS ANTERIORES"
 ADHERENTES = "ADHERENTES"
-REPETIDOS = "REPETIDOS"   # dentro de ANTERIORES: copias idénticas de algo que ya está en las 6
+REPETIDOS = "DUPLICADOS"  # dentro de ANTERIORES: copias idénticas de algo que ya está en las 6 (se llamaba REPETIDOS hasta el 15-oct-2026: una copia idéntica se llama DUPLICADOS en todo NUCOS)
 CARPETA = "application/vnd.google-apps.folder"
 
 # (clave, carpeta, prefijo del archivo)
@@ -229,7 +229,7 @@ def planear_nuco(nuco, documentacion, adjuntos, sin_seguro=None):
     repetidos = []
     for c, carpeta, prefijo in SEIS:
         # Repetidos (mismo contenido): se queda el que ya está en el NUCO (se mueve, no hace falta copiar nada) y,
-        # entre esos, el más reciente. Un repetido del NUCO también sale de su carpeta vieja: a ANTERIORES/REPETIDOS
+        # entre esos, el más reciente. Un repetido del NUCO también sale de su carpeta vieja: a ANTERIORES/DUPLICADOS
         elegido = {}
         for a in sorted(candidatos[c], key=lambda x: (x["fuente"] != "nuco", "".join(chr(255 - ord(ch)) for ch in (x.get("modifiedTime") or "")))):
             clave = a.get("md5Checksum") or a["id"]

@@ -147,7 +147,7 @@ def main(salida):
     res.append(["Cómo usarlo: cada pestaña trae su liga a Drive y dos columnas para el área (la decisión y un comentario)."])
     res.append(["Lo que el área decida se aplica después con bitácora; nadie mueve archivos a mano en NUCOS VEHICULOS."])
     res.append(["No incluye: los 84 certificados de verificación dudosos (en su lugar, Excel de verificaciones) ni lo apartado"])
-    res.append(["(ANTERIORES / REPETIDOS / DUPLICADOS) ni _PAPELERA: no es duda."])
+    res.append(["(ANTERIORES / DUPLICADOS) ni _PAPELERA: no es duda."])
 
     cabeza, decide = PatternFill("solid", fgColor="1F3A5F"), PatternFill("solid", fgColor="FFF4CC")
     anchos = {"A": 8, "B": 26, "C": 48, "D": 14, "E": 22, "F": 52, "G": 30, "H": 30}

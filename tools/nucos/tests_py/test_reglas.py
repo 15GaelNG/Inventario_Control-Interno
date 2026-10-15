@@ -147,7 +147,7 @@ def test_repetidos_gana_el_del_nuco_y_el_otro_repetido_del_nuco_sale_a_anteriore
     assert ("nuco", "5.-RESPONSIVA", "JUAN - 100.pdf") in porfuente                 # el del NUCO, no la copia de AppSheet
     assert not any(f == "hoja" for f, _, _ in porfuente)
     assert ("nuco", "1.-FACTURA", "350.- Factura.pdf") in porfuente
-    assert any(d.startswith("ANTERIORES/REPETIDOS") for f, d, n in porfuente if n == "350.- Factura.pdf")
+    assert any(d.startswith("ANTERIORES/DUPLICADOS") for f, d, n in porfuente if n == "350.- Factura.pdf")
     assert resumen["duplicados"] == 2 and resumen["repetidos"] == 1
 
 

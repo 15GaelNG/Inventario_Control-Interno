@@ -38,7 +38,7 @@ Es el mismo enfoque por NUCO que NUCOS TELEFÓNICOS, aunque por dentro varían.
    6.-TENENCIA                  ya no se carga; sirve para mostrar que no debe tenencia
       TENENCIAS ANTERIORES/     tenencias viejas de AppSheet
    ANTERIORES/                  lo que no es ninguno de los 6 (Oxxo Gas, verificaciones, permisos…), con su ruta de antes
-      REPETIDOS/                copias idénticas de algo que ya está en las 6
+      DUPLICADOS/               copias idénticas de algo que ya está en las 6 (se llamaba REPETIDOS hasta el 15-oct-2026)
       ESTRUCTURA ANTERIOR/      las carpetas viejas que quedaron vacías o solo con el relleno
 ```
 
@@ -251,3 +251,13 @@ renombres (incluidas las carpetas viejas apartadas), 1,320 copias y 6,377 carpet
 7. El respaldo quedó parcial. Si se quiere completo, ahora saldría con la estructura nueva.
 8. Conseguir lo que falta (sobre todo tarjetas de circulación y altas de placas): la pestaña Expediente del Excel dice
    qué le falta a cada unidad.
+
+## Un solo nombre para una copia idéntica (15-oct-2026)
+
+`ANTERIORES/REPETIDOS` → `ANTERIORES/DUPLICADOS` en las 152 carpetas de documentación (214 archivos), para que una copia
+idéntica se llame igual en todo NUCOS VEHICULOS (en verificaciones ya era `DUPLICADOS`). Solo se renombraron las carpetas:
+nada se movió y todo conserva su ID. `tools/nucos/repetidos_a_duplicados.py` (plan / aplicar / verificar), bitácoras
+`20261015-135944-duplicados.jsonl` y `20261015-140559-duplicados.jsonl` (el NUCO 615, deshacer probado). Verificado 152/152
+con su contenido intacto (md5). `reglas.py` ya crea `DUPLICADOS`. Las palabras para lo apartado quedan: `_POR REVISAR` (no se
+sabe qué es), `SIN FECHA` / `SIN PERIODO` (unidad real sin fecha; las inspecciones las muestra la ficha), `DUPLICADOS`
+(copia idéntica), `ANTERIORES` (historia) y `_PAPELERA` (descartado).
