@@ -167,6 +167,8 @@ test('la pantalla: la línea solo ofrece Nueva responsiva y su carpeta en Drive'
   const html = read('src/html/js/lineas.html');
   assert.match(html, /return \(!conCaptura \? '' : \(tipo === 'linea' \? '' :\s*'<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION"/);
   assert.match(html, /estatusLinea: l\.estatus \|\| '', carpetaDriveId: l\.carpetaDriveId \|\| null \};/);
+  // El ⋮ de la línea la ofrece (la prueba en /dev del 15-oct no la encontró: el menú de la línea no la llevaba)
+  assert.match(html, /abrirCancelacion\(\[r\]\) \} : null\]\s*\.concat\(drive, editar, vinculo, historial\);/);
   assert.match(html, /RESPONSIVA_LINEA: \[/);
   const tel = read('src/services/TelefoniaService.gs');
   assert.match(tel, /if \(!r\.equipo\) r\.linea\.carpetaDriveId = LineasArchivos\.carpetaLineaId\(r\.linea\._id\);/);

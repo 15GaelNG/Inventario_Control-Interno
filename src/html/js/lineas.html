@@ -3617,8 +3617,9 @@
             { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirReasignar(r) },
             { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
           ] : []).concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)
+          // La línea sin equipo: su carpeta en LINEAS, si ya tiene responsiva (pendiente 2.45)
           : [r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) } : null]
-            .concat(editar, vinculo, historial);
+            .concat(drive, editar, vinculo, historial);
         menuFlotante(boton, items.filter(Boolean));
       }
 
