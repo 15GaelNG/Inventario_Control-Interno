@@ -74,3 +74,20 @@ Fecha de los 1,914 eventos: factura de ingreso 1,327 · factura que paga el comp
 año/mes del área 185 · sin fecha 383. Los eventos que solo traen complemento de pago son 19, no 391: la medición del
 11-oct separaba la subcarpeta del pago de su factura. Una carpeta con años o meses adentro es un contenedor (copias de
 otras carpetas pegadas en el NUCO: `CI/Gerente Esteban Ruiz/2024/…`), nunca un evento.
+
+## Piloto (15-oct-2026): 5 NUCO aplicados en la real y verificados
+
+NUCO 221, 338, 28, 8 y 88 (libreta 2025 con relleno, contenedor GERENCIA, factura suelta, marcaje con año/mes, fecha por el
+pago, verificación a `_POR REVISAR`). Bitácora `20261015-083546-inspecciones.jsonl` (897 renglones en la hoja):
+359 archivos movidos, 7 rellenos y 251 carpetas viejas vacías a `_PAPELERA`.
+
+    inspecciones.py aplicar .cache/servicios/20261015/plan.json .cache/servicios/20261015/foto.json \
+        .cache/inspecciones/foto-doc.json --nucos 221,338,28,8,88 --raiz 2.-SERVICIOS
+
+Verificación independiente (`tools/nucos/verificar_servicios.py`, lee Drive en vivo con md5): los 5 con **0 problemas**
+(cada archivo en la ruta del plan con su md5, la papelera en `_PAPELERA`, sin archivos de más, sin carpetas vacías ni de
+la estructura vieja). Deshacer probado en el 338 (`expediente.py deshacer … --nucos 338`): volvió idéntico a la foto
+(`--contra-foto`: 47 de 47); se volvió a aplicar (bitácora `20261015-090152-inspecciones.jsonl`) y verificó con 0 problemas.
+
+Para deshacer un NUCO del piloto: el 338 con `20261015-090152`, los demás con `20261015-083546`.
+Siguiente: el resto (269 NUCO) con `--todos --hilos 6`, luego `verificar_servicios.py … --todos`.
