@@ -73,13 +73,14 @@ const LineasIdentificaciones = (function () {
 
   /**
    * Escribe los PDF (antes de guardar la responsiva). Con NUCO, en una carpeta nueva de la responsiva en NUCOS
-   * (RESP DD MM, la misma que después usa su PDF); sin NUCO, en la carpeta de la app donde va su PDF.
+   * (RESP DD MM, la misma que después usa su PDF); sin NUCO, en la carpeta de la app donde va su PDF. `destino` (la
+   * línea sin equipo, pendiente 2.45): la carpeta ya creada de su responsiva en LINEAS ({ carpetaId, ruta }).
    * Regresa { carpetaId, ruta, archivos: [{ orden, id, nombre, tipo, persona, idPersona }] } o null si no hay nada.
    */
-  function escribir(lista, nuco, fecha, carpetaSinNuco) {
+  function escribir(lista, nuco, fecha, carpetaSinNuco, destino) {
     if (!lista.length) return null;
-    const n4 = LineasUtil.nuco4(nuco);
-    const c = n4 ? LineasArchivos.carpetaEvidenciaNuco('RESPONSIVA', n4, fecha) : null;
+    const n4 = destino ? null : LineasUtil.nuco4(nuco);
+    const c = destino || (n4 ? LineasArchivos.carpetaEvidenciaNuco('RESPONSIVA', n4, fecha) : null);
     const carpeta = c ? DriveApp.getFolderById(c.carpetaId) : LineasArchivos.carpetaDeApp(carpetaSinNuco);
     const archivos = [];
     try {

@@ -133,7 +133,7 @@ test('un solo bloqueo: con PIN, contraseña o sin bloqueo el patrón se borra al
 
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /valores\['PATRON'\] = String\(datos\.patron\);\s*if \(LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['PATRON'\] = '';/, 'inspección');
-  assert.match(captura, /valores\['CONTRASEÑA'\] = String\(datos\.patron\);\s*if \(LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['CONTRASEÑA'\] = '';/, 'responsiva');
+  assert.match(captura, /valores\['CONTRASEÑA'\] = String\(datos\.patron\);\s*if \(!sinEquipo && LineasUtil\.bloqueoSinPatron\(datos\)\) valores\['CONTRASEÑA'\] = '';/, 'responsiva');
   assert.match(captura, /if \(LineasUtil\.bloqueoSinPatron\(datos\)\) \{ copia\['PATRON'\] = ''; copia\['PIN EQUIPO'\] = valores\['PIN EQUIPO'\] \|\| ''; \}/, 'responsiva → equipo');
   assert.match(captura, /const rutaPatron = LineasUtil\.patronVigente\(col\('PIN EQUIPO'\), col\(colPatron\)\);/, 'PDF');
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /if \(LineasUtil\.bloqueoSinPatron\(datos\) && 'PATRON' in valores\) valores\['PATRON'\] = '';/, 'Editar');
@@ -155,7 +155,9 @@ test('tarjetas del inventario: «DEPARTAMENTO · SEDE» y el filtro de tipo no s
 test('la responsiva pasa a la línea el PIN de WhatsApp', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const resp = captura.slice(captura.indexOf('  function guardarResponsivaEnCandado_('), captura.indexOf('  function exigirInspeccion('));
-  assert.match(resp, /if \(obj\.linea && 'PIN WHATSAPP' in valores\) copia\['PIN WHATSAPP'\] = valores\['PIN WHATSAPP'\];\s*const g = Object\.keys\(copia\)\.length \? LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia/);
+  assert.match(resp, /if \(obj\.linea && 'PIN WHATSAPP' in valores\) copia\['PIN WHATSAPP'\] = valores\['PIN WHATSAPP'\];\s*\}\s*const g = Object\.keys\(copia\)\.length \? LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia/);
+  // La línea sin equipo no le pasa nada al inventario (pendiente 2.45)
+  assert.match(resp, /const copia = \{\};\s*if \(!sinEquipo\) \{/);
   // Después de la acción (Vincular, Cambiar línea, Reasignar): obj es el registro como quedó, con la línea que se puso
   assert.ok(resp.indexOf("if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });") < resp.indexOf("copia['PIN WHATSAPP']"));
   // PIN WHATSAPP va a la hoja EQUIPOS (usuario, 13-oct; pendiente 2.25) y se borra cuando la línea deja al equipo

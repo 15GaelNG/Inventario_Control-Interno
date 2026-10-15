@@ -105,7 +105,10 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   const cap = read('src/services/lineas/LineasCaptura.gs');
   const reg = cap.slice(cap.indexOf('function registroPlantilla_('), cap.indexOf('function ligarPdf_('));
   // registroPlantilla_ usa ORDEN_ADICIONALES del archivo
-  const conOrden = new Function('LineasChecklist', "const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];\n" + reg + '\nreturn registroPlantilla_;')({ calificacionTexto: (v) => v });
+  // y responsivaSinEquipo_ (la línea sin equipo, pendiente 2.45)
+  const iSinEquipo = cap.indexOf('function responsivaSinEquipo_(');
+  const sinEquipo = cap.slice(iSinEquipo, cap.indexOf('\n  }\n', iSinEquipo) + 4);
+  const conOrden = new Function('LineasChecklist', "const ORDEN_ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];\n" + sinEquipo + reg + '\nreturn registroPlantilla_;')({ calificacionTexto: (v) => v });
   const r = conOrden({ _fila: 3, RESPONSABLE: 'ANA', 'No EMPLEADO': 'AC1', 'NOMBRE SEGUNDO RESPONSABLE': 'LUIS', 'NO EMPLEADO SEGUNDO RESPONSABLE': 'AC2',
     'NOMBRE TERCER RESPONSABLE': 'EVA', 'NO EMPLEADO TERCER RESPONSABLE': '' });
   assert.equal(r.RESPONSABLE, 'ANA / LUIS / EVA');

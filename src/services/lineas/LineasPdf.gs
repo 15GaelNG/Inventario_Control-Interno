@@ -408,6 +408,8 @@ const LineasPdf = (function () {
   function reemplazarEtiquetas_(seccion, registro, imagenes, avisos) {
     const clavesImagen = {};
     Object.keys(imagenes).forEach((k) => { clavesImagen[k.toUpperCase()] = imagenes[k]; });
+    const fijas = {};
+    Object.keys(registro._fijas || {}).forEach((k) => { fijas[k.toUpperCase()] = registro._fijas[k]; });
     const coincidencias = buscarTodas_(seccion, '<<[^<>]*>>');
     for (let i = coincidencias.length - 1; i >= 0; i--) {
       const m = coincidencias[i];
@@ -446,9 +448,13 @@ const LineasPdf = (function () {
         continue;
       }
       let valor = '';
+      const esColumnaSimple = /^[^\[\]"()&*+<>=]+$/.test(interior) && !/^[\d.]+$/.test(interior);
+      // `registro._fijas` { COLUMNA: texto }: la etiqueta que usa esa columna sale con ese texto aunque sea una fórmula
+      // (la responsiva de la línea sin equipo: «NO APLICA» en RIGHT("000" & [NUCO], 4), no «000»; pendiente 2.45)
+      const usadas = esColumnaSimple ? [interior] : (interior.match(/\[[^\]]+\]/g) || []).map((c) => c.slice(1, -1));
+      const fija = usadas.map((c) => c.trim().toUpperCase()).filter((c) => Object.prototype.hasOwnProperty.call(fijas, c))[0];
       try {
-        const esColumnaSimple = /^[^\[\]"()&*+<>=]+$/.test(interior) && !/^[\d.]+$/.test(interior);
-        valor = aTexto_(esColumnaSimple ? valorColumna_(registro, interior) : evaluarExpresion_(interior, registro));
+        valor = fija ? String(fijas[fija]) : aTexto_(esColumnaSimple ? valorColumna_(registro, interior) : evaluarExpresion_(interior, registro));
       } catch (e) {
         avisos.push(e.message);
       }

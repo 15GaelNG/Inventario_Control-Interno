@@ -165,6 +165,9 @@ const TelefoniaService = (function () {
     const r = registro_(id);
     if (!r || !r.linea) throw new Error('No existe la línea ' + id);
     exigirAlcance_(sesion, r);
+    // Sin equipo, la carpeta de la línea en LINEAS (pendiente 2.45), si ya tiene; con su sección, como la del NUCO
+    if (!r.equipo) r.linea.carpetaDriveId = LineasArchivos.carpetaLineaId(r.linea._id);
+    sinCarpeta_(r.linea, sesion);
     return LineasUtil.paraCliente({
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
@@ -669,6 +672,7 @@ const TelefoniaService = (function () {
     const sesion = operar_(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de evidencia inválido.');
     const obj = LineasCaptura.objetivo(ref); // valida que el equipo o la línea existan
+    if (tipo === 'INSPECCION' && !obj.equipo) throw new Error('La línea sin equipo no lleva inspección: solo responsiva.');
     return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, idRegistro, sesion.correo, obj.reg.nuco, new Date()));
   }
 
