@@ -646,7 +646,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
-  assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id\)/);
+  assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id, vista\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
   ['INSPECCION', 'RESPONSIVA', 'REGISTRO_EQUIPO', 'REGISTRO_LINEA', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));

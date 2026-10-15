@@ -175,3 +175,26 @@ test('la pantalla: la línea solo ofrece Nueva responsiva y su carpeta en Drive'
   assert.match(tel, /if \(tipo === 'INSPECCION' && !obj\.equipo\) throw new Error\('La línea sin equipo no lleva inspección: solo responsiva\.'\);/);
   assert.match(read('src/Diagnostico.gs'), /LINEAS_DRIVE_LINEAS: \{\},/);
 });
+
+test('la ficha de la línea ve las responsivas que firmó dentro de un equipo (ID LINEA ENTREGADA)', () => {
+  const cap = read('src/services/lineas/LineasCaptura.gs');
+  // Cada responsiva guarda la línea de ese día, sin cambiar ID LINEA (el registro)
+  assert.match(cap, /'ID': id, 'ID LINEA': obj\.reg\.id,/);
+  assert.match(cap, /\[LineasRepo\.COL_LINEA_ENTREGADA\]: obj\.linea \? obj\.linea\.idLinea \|\| obj\.reg\.id : '',/);
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /const COL_LINEA_ENTREGADA = 'ID LINEA ENTREGADA';/);
+  // Solo las de otro registro (las de la línea suelta ya salen por ID LINEA) y marcadas enEquipo
+  assert.match(repo, /\.filter\(\(f\) => ids\.indexOf\(idActual\(col\(f, 'ID LINEA'\)\)\) < 0\);/);
+  assert.match(repo, /Object\.assign\(responsivaDesdeFila\(f, evPorRegistro\[txt\(f\['ID'\]\)\]\), \{ enEquipo: true \}\)/);
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /function evidencias\(token, id, vista\) \{/);
+  assert.match(tel, /base = r\.linea\.idLinea \|\| id;/);
+  assert.match(tel, /LineasRepo\.responsivasEntregadas\(base\)\.forEach\(\(d\) => \{ if \(!vistas\[d\._id\]\) ev\.responsivas\.push\(d\); \}\);/);
+  assert.match(tel, /if \(!enEquipo\) nucos = evidenciasNucos_\(id, sesion\);/);
+  assert.match(tel, /enNuco: d\.enEquipo \? \(d\.nuco \|\| '—'\) : null, registroId: d\.enEquipo \? d\.registroId \|\| null : null,/);
+  const html = read('src/html/js/lineas.html');
+  // Toda línea tiene Documentos, y la columna Equipo dice en qué NUCO la firmó
+  assert.match(html, /tarjetaDetallesCopiar\(r\.detalles\), true\);\s*\/\/[^\n]*\n\s*cargarEvidencias\(id\);/);
+  assert.match(html, /const vista = arriba && arriba\.tipo === 'linea' && arriba\.id === id \? 'linea' : '';/);
+  assert.match(html, /vista === 'linea' \? \{ campo: 'enNuco', titulo: 'Equipo'/);
+});

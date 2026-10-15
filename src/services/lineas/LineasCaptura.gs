@@ -655,11 +655,15 @@ const LineasCaptura = (function () {
       const hecho = accion ? accion.aplicar(ahora, valores) : null;
       if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });
 
+      // ID LINEA es el registro (el equipo, o la línea sin equipo); ID LINEA ENTREGADA, la línea que se entregó ese día
+      // (pendiente 2.45): con ella la ficha de la línea encuentra las responsivas que firmó dentro de un equipo
       const fila = Object.assign({}, valores, {
         'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'TIPO CONTRASEÑA': '',
         'NOMBRE CI': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA CI': '',
+        [LineasRepo.COL_LINEA_ENTREGADA]: obj.linea ? obj.linea.idLinea || obj.reg.id : '',
       });
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, ADICIONALES);
+      if (fila[LineasRepo.COL_LINEA_ENTREGADA]) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, [LineasRepo.COL_LINEA_ENTREGADA]);
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
       // El color es del aparato (EQUIPOS): la responsiva lo actualiza, igual que la inspección (decisión del usuario, 3-oct).
       // La línea sin equipo no le pasa nada al inventario (pendiente 2.45)

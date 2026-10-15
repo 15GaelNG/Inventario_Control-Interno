@@ -869,6 +869,38 @@ const LineasRepo = (function () {
     };
   }
 
+  /** RESPONSIVAS LINEAS: la línea que se entregó ese día (ID LINEA es el registro: el equipo o la línea sin equipo). */
+  const COL_LINEA_ENTREGADA = 'ID LINEA ENTREGADA';
+
+  /**
+   * Responsivas que la línea firmó dentro de un equipo (pendiente 2.45, 15-oct): las de RESPONSIVAS LINEAS con su ID en
+   * ID LINEA ENTREGADA y otro registro en ID LINEA. Cada una con el registro de su equipo (registroId), su NUCO y
+   * enEquipo. Las anteriores al 15-oct solo si se pudo probar su línea (la asignación del equipo en esa fecha y el número
+   * de la responsiva dicen lo mismo; reporte_lineas/actualizacion_base/ligar_responsivas.js).
+   */
+  function responsivasEntregadas(idLinea) {
+    const ids = idsDeRegistro(idLinea);
+    if (!ids.length || !LineasDatos.existeTabla(TAB.RESP)) return [];
+    let filas;
+    try {
+      filas = LineasDatos.buscarFilasVarios(TAB.RESP, COL_LINEA_ENTREGADA, ids);
+    } catch (e) {
+      if (/no tiene la columna/.test(e.message)) return []; // aún no hay ninguna (la columna se crea con la primera)
+      throw e;
+    }
+    if (!filas.length) return [];
+    const resp = LineasDatos.leerFilas([{ tabla: TAB.RESP, filas: filas }])[0]
+      .filter((f) => ids.indexOf(idActual(col(f, 'ID LINEA'))) < 0);
+    if (!resp.length) return [];
+    const hayApp = LineasDatos.existeTabla(TAB.APP_EVID);
+    const filasEv = hayApp ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', resp.map((f) => txt(f['ID']))) : [];
+    const evidencias = filasEv.length ? LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv }])[0].map(evidenciaDesdeFila) : [];
+    revisarPdfsLigados(evidencias);
+    const evPorRegistro = {};
+    evidencias.forEach((e) => { if (e.idRegistro) evPorRegistro[e.idRegistro] = e; });
+    return resp.map((f) => Object.assign(responsivaDesdeFila(f, evPorRegistro[txt(f['ID'])]), { enEquipo: true }));
+  }
+
   /** Responsiva que solo existe como carpeta en Drive. */
   function responsivaDesdeEvidencia(ev) {
     return { _id: 'drive_' + ev.carpetaId, origen: 'DRIVE', registroId: idActual(ev.idLinea), nuco: ev.nuco, fecha: ev.fecha, drive: driveDeEvidencia_(ev) };
@@ -1581,7 +1613,7 @@ const LineasRepo = (function () {
     indice, vistaCompleta, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
+    evidenciasDeRegistro, responsivasEntregadas, COL_LINEA_ENTREGADA, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, cobroHabitual, diaDeCorte,
     catalogos, indiceColaboradores, borrarCaches,
   };
