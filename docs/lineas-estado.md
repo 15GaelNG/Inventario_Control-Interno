@@ -184,7 +184,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   papelera no cuenta) y, si tiene, muestra «INE registrada · NUCO ·
   fecha · Ver · ¿Es correcta? Sí / No». Sí: no se sube nada; al guardar se copia a la carpeta de la responsiva nueva con
   su nombre de siempre y queda un renglón con ORIGEN REUTILIZADA (el servidor revisa que el registro sea de esa misma
-  persona). No: se suben fotos o PDF como siempre. Sin contestar, Guardar no deja pasar y lleva a la pregunta. Sirve en la
+  persona: el mismo ID PERSONA, que se busca por nombre y número sin el CORREO de la responsiva, porque es la cuenta Google
+  del equipo y puede ser de otra persona; si falta el ID PERSONA de un lado, el mismo nombre y, si los dos lo tienen, el
+  mismo número; `esDeLaPersona_`, desde `29ba60e`). No: se suben fotos o PDF como siempre. Sin contestar, Guardar no deja pasar y lleva a la pregunta. Sirve en la
   responsiva sola, Reasignar y Vincular.
 - **Fotos de la inspección** (9-oct): se ven en miniatura desde que se eligen, con la espera encima mientras suben;
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
