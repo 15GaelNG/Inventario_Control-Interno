@@ -37,7 +37,9 @@ Es el mismo enfoque por NUCO que NUCOS TELEFÓNICOS, aunque por dentro varían.
       ADHERENTES/               corresponsabilidades (F-CI01-047), con sus variantes adentro
    6.-TENENCIA                  ya no se carga; sirve para mostrar que no debe tenencia
       TENENCIAS ANTERIORES/     tenencias viejas de AppSheet
-   ANTERIORES/                  lo que no es ninguno de los 6 (Oxxo Gas, verificaciones, permisos…), con su ruta de antes
+   7.-HOLOGRAMAS                la solicitud del holograma de OXXO Gas (usuario, 15-oct-2026); el módulo Hologramas la
+      HOLOGRAMAS ANTERIORES/    guarda aquí si el vehículo tiene NUCO. Antes de esa fecha lo de Oxxo Gas quedaba en ANTERIORES
+   ANTERIORES/                  lo que no es ninguno de los 7 (verificaciones, permisos…), con su ruta de antes
       DUPLICADOS/               copias idénticas de algo que ya está en las 6 (se llamaba REPETIDOS hasta el 15-oct-2026)
       ESTRUCTURA ANTERIOR/      las carpetas viejas que quedaron vacías o solo con el relleno
 ```

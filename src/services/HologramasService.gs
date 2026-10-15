@@ -323,8 +323,19 @@ const HologramasService = (function () {
 
     const id = Ids.nuevo(Entidades.prefijo('HOLOGRAMAS'));
     const guardado = guardarSolicitud_(id, archivo);
-    // "<ID>_SOLICITUD_<fecha>.ext": urlSolicitud() busca el archivo por ese nombre exacto
-    const rutaSolicitud = HojaServicio.renombrarRuta(guardado.fileId, id, 'SOLICITUD', guardado.ruta);
+    let rutaSolicitud;
+    const nucco = vehiculo ? vehiculo['NUCCO'] : '';
+    if (ExpedienteNuco.tieneNuco(nucco)) {
+      // En el expediente del NUCO (usuario, 15-oct-2026): 1.-DOCUMENTACIÓN/7.-HOLOGRAMAS/HOLOGRAMA-0088.pdf; la que
+      // estaba vigente pasa a HOLOGRAMAS ANTERIORES con su fecha. Se mueve (mismo ID) y la hoja guarda su liga.
+      const archivoNuco = DriveApp.getFileById(guardado.fileId);
+      ExpedienteNuco.archivar(archivoNuco, nucco, 'HOLOGRAMA');
+      rutaSolicitud = archivoNuco.getUrl();
+    } else {
+      // Sin NUCO (vehículos personales): la carpeta de AppSheet de siempre.
+      // "<ID>_SOLICITUD_<fecha>.ext": urlSolicitud() busca el archivo por ese nombre exacto
+      rutaSolicitud = HojaServicio.renombrarRuta(guardado.fileId, id, 'SOLICITUD', guardado.ruta);
+    }
     const ahora = new Date();
     try {
       SheetUtils.insert(ssId(), nombreHoja_(), Object.assign(fila, {

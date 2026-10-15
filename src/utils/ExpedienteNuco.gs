@@ -4,6 +4,7 @@
  *
  *   <NUCO>/1.-DOCUMENTACIÓN/
  *      1.-FACTURA  2.-SEGURO  3.-ALTA DE PLACAS  4.-TARJETA DE CIRCULACIÓN  5.-RESPONSIVA  6.-TENENCIA
+ *      7.-HOLOGRAMAS (usuario, 15-oct-2026: la solicitud del holograma de OXXO Gas; antes quedaba en ANTERIORES)
  *   <NUCO>/2.-SERVICIOS   3.-VERIFICACIONES   4.-INSPECCIONES
  *
  * Los nombres van sin espacio después del guion, como sus subcarpetas (11-oct-2026). Una carpeta se reconoce aunque
@@ -47,6 +48,7 @@ const ExpedienteNuco = (function () {
     TARJETA: { carpeta: '4.-TARJETA DE CIRCULACIÓN', prefijo: 'TARJETA DE CIRCULACION', anteriores: null },
     RESPONSIVA: { carpeta: '5.-RESPONSIVA', prefijo: 'RESPONSIVA', anteriores: 'RESPONSIVAS ANTERIORES' },
     TENENCIA: { carpeta: '6.-TENENCIA', prefijo: 'TENENCIA', anteriores: 'TENENCIAS ANTERIORES' },
+    HOLOGRAMA: { carpeta: '7.-HOLOGRAMAS', prefijo: 'HOLOGRAMA', anteriores: 'HOLOGRAMAS ANTERIORES' },
   };
   const ADHERENTES = 'ADHERENTES';
   const PRESTAMOS = 'PRESTAMOS';
@@ -219,7 +221,7 @@ const ExpedienteNuco = (function () {
   }
 
   const TITULOS = { FACTURA: 'Factura', SEGURO: 'Póliza de seguro', ALTA: 'Alta de placas', TARJETA: 'Tarjeta de circulación',
-    RESPONSIVA: 'Responsiva', TENENCIA: 'Tenencia' };
+    RESPONSIVA: 'Responsiva', TENENCIA: 'Tenencia', HOLOGRAMA: 'Hologramas' };
 
   /**
    * La imagen de relleno que el área pone cuando no hay documento ("SEGURO-0001 NO APLICA.jpg", "CARPETA SIN
@@ -322,7 +324,7 @@ const ExpedienteNuco = (function () {
       return { clave: k, titulo: TITULOS[k], url: c ? c.url : '', vigentes: vigentes, relleno: relleno,
         anteriores: c ? grupos_(t, c.id, [], []) : [] };
     });
-    // Lo demás de 1.-DOCUMENTACIÓN (ANTERIORES: Oxxo Gas, permisos… y archivos sueltos)
+    // Lo demás de 1.-DOCUMENTACIÓN (ANTERIORES: permisos… y archivos sueltos)
     const otros = [];
     if (doc) {
       const sueltos = masNuevos_(t.archivos[doc.id]).filter((a) => !relleno_(a.nombre));

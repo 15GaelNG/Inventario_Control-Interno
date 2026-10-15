@@ -149,10 +149,10 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   llamar desde la consola del navegador. `tests/candado-editor.test.js` revisa todo `src/`. Un activador de edición no
   puede llevarlo (ahí el usuario activo es quien editó): lleva su guarda, como `alEditarLibro`.
 - **Un documento de un vehículo va a su expediente: `ExpedienteNuco`** (`src/utils/ExpedienteNuco.gs`). La carpeta
-  NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA` (docs/nucos-expediente.md).
+  NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA, 7.-HOLOGRAMAS` (docs/nucos-expediente.md).
   `ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')` lo mueve ahí, le pone su nombre (`SEGURO-0088.pdf`) y pasa el
   vigente a `SEGUROS ANTERIORES`; `ExpedienteNuco.carpeta(nucco, 'RESPONSIVA')` para generar un PDF directo ahí. Ya lo
-  usan Vehículos (al guardar la ficha), Responsiva y Adherente. Lo que llega de los módulos (12-oct) va con
+  usan Vehículos (al guardar la ficha), Responsiva, Adherente y Hologramas (la solicitud, a 7.-HOLOGRAMAS; 15-oct). Lo que llega de los módulos (12-oct) va con
   `ExpedienteNuco.guardar(blob, carpeta, PREFIJO, nucco, fecha)` y la hoja guarda la **liga**: inspección →
   `carpetaInspeccion` (4.-INSPECCIONES/<año>/<N> TRIMESTRE, firmas y diagramas en `FIRMAS Y DIAGRAMAS`), verificación →
   `carpetaVerificacion` (<año>/<N> SEMESTRE), responsiva del sensor → `5.-RESPONSIVA/SENSORES`, respaldo de firmas →

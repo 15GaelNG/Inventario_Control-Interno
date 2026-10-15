@@ -80,7 +80,7 @@ test('un NUCO nuevo se crea con toda la estructura y el documento llega con su n
   const dentro = drive.hijos(n643).map((h) => h.nombre).sort();
   assert.deepEqual(dentro, ['1.-DOCUMENTACIÓN', '2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES']);
   const doc = drive.hijos(n643).find((h) => h.nombre === '1.-DOCUMENTACIÓN');
-  assert.equal(drive.hijos(doc).length, 6);
+  assert.equal(drive.hijos(doc).length, 7);   // 1.-FACTURA … 6.-TENENCIA y 7.-HOLOGRAMAS (15-oct)
 });
 
 test('la póliza nueva queda vigente y la anterior pasa a SEGUROS ANTERIORES con su fecha (mismo archivo, mismo ID)', () => {
@@ -97,6 +97,23 @@ test('la póliza nueva queda vigente y la anterior pasa a SEGUROS ANTERIORES con
   const otra = drive.nodo('p3.pdf', null, 'pdf');
   E.archivar(otra, 88, 'SEGURO');
   assert.match(drive.ruta(nueva), /SEGUROS ANTERIORES\/SEGURO-0088 2026-10-08\.pdf$/);   // ya había una: lleva fecha
+});
+
+test('la solicitud del holograma va a 7.-HOLOGRAMAS y la anterior a HOLOGRAMAS ANTERIORES (usuario, 15-oct)', () => {
+  const drive = driveFalso();
+  const { E } = cargar(drive);
+  const vieja = drive.nodo('solicitud vieja.pdf', null, 'pdf', new Date('2025-03-01T12:00:00Z'));
+  E.archivar(vieja, 88, 'HOLOGRAMA');
+  const nueva = drive.nodo('solicitud.jpg', null, 'jpg');
+  E.archivar(nueva, 88, 'HOLOGRAMA');
+  assert.equal(drive.ruta(nueva), 'NUCOS VEHICULOS/88/1.-DOCUMENTACIÓN/7.-HOLOGRAMAS/HOLOGRAMA-0088.jpg');
+  assert.equal(drive.ruta(vieja), 'NUCOS VEHICULOS/88/1.-DOCUMENTACIÓN/7.-HOLOGRAMAS/HOLOGRAMAS ANTERIORES/HOLOGRAMA-0088.pdf');
+  // La ficha (listar) la muestra como su propia sección, ya no en "otros"
+  const exp = E.listar(88);
+  const hol = exp.documentos.find((d) => d.clave === 'HOLOGRAMA');
+  assert.equal(hol.titulo, 'Hologramas');
+  assert.equal(hol.vigentes.map((a) => a.nombre).join(), 'HOLOGRAMA-0088.jpg');
+  assert.equal(exp.otros.length, 0);
 });
 
 test('un adherente va a ADHERENTES y no mueve la responsiva vigente', () => {
@@ -174,7 +191,7 @@ test('listar: por tipo de documento, el vigente y sus anteriores, sin crear nada
   const seguro = exp.documentos.find((d) => d.clave === 'SEGURO');
   assert.deepEqual([...seguro.vigentes.map((a) => a.nombre)], ['SEGURO-0088.pdf']);
   assert.deepEqual([...seguro.anteriores.map((g) => g.grupo)], ['SEGUROS ANTERIORES']);
-  assert.equal(exp.documentos.length, 6);
+  assert.equal(exp.documentos.length, 7)   // con 7.-HOLOGRAMAS; lo de OXXO GAS en ANTERIORES sigue en otros hasta que se mueva;
   assert.deepEqual([...exp.otros.map((g) => g.grupo)], ['ANTERIORES / OXXO GAS']);
   assert.equal(JSON.stringify(E.listar(999)), JSON.stringify({ existe: false, documentos: [], otros: [], carpetas: [] }));
   assert.equal(drive.hijos(nucos).length, 1);                        // no creó el 999
