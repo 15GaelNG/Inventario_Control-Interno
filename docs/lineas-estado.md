@@ -159,7 +159,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `guardarResponsivaEnCandado_` escribe ID LINEA ENTREGADA (`obj.linea.idLinea`) en toda responsiva, también en Reasignar, Vincular y Cambiar línea, y la columna se crea con la primera. Los encabezados
   de cada hoja están en caché 1 h: si no encuentra la columna, `responsivasEntregadas` los relee una vez. Subir PDF firmado desde la ficha de la línea usa el registro del equipo
   (o, con `vista`, el de la línea; `apiLineasSubirPdfFirmado` la recibe). Las responsivas de equipo anteriores al 15-oct solo tienen la columna si se pudo probar su línea (la asignación del
-  equipo en esa fecha y el número impreso dicen lo mismo): 411 en producción y 375 en el DEV, con `reporte_lineas/actualizacion_base/ligar_responsivas.js`; la v120 no la llena en las nuevas.
+  equipo en esa fecha y el número impreso dicen lo mismo, o sin asignación de esa fecha, el número, la SIM y que sea la única línea del equipo): 688 en producción y 655 en el DEV, con `reporte_lineas/actualizacion_base/ligar_responsivas.js`; la v120 no la llena en las nuevas.
 - **Qué pasa la responsiva al inventario** (13-oct): solo el color, el bloqueo del equipo (PIN EQUIPO y PATRON) y, si el
   registro tiene línea (la que ya tenía o la que pone Vincular o Cambiar línea), el PIN de WhatsApp (`guardarResponsivaEnCandado_`, pasa por
   `guardarCambiosRegistro`, que solo anota lo que cambió). Antes el PIN de WhatsApp se quedaba en la responsiva y su PDF y la
