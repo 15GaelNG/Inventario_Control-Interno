@@ -600,6 +600,36 @@ test('las dos ligas, cada una completada por su lado, terminan generando el PDF 
   assert.throws(() => contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
 });
 
+test('completarFirma: si la firma del jefe (ya completada) no se puede leer al cerrar el documento, NO se marca Firmado ni se pierde la firma del responsable que sí se acaba de completar (bug real, prod 14-oct-2026)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'jefe', mimeType: 'image/png' });
+  assert.ok(llamadas.insert[0]['FIRMA JEFE TEMP'], 'la firma del jefe quedó guardada');
+
+  // Simula que, al momento de cerrar el documento, el archivo de Drive de la firma del jefe ya
+  // no se puede leer (borrado, sin permiso...) -- DriveApp.getFileById truena solo para ESE
+  // archivo.
+  const archivoJefe = JSON.parse(llamadas.insert[0]['FIRMA JEFE TEMP']).archivoId;
+  const getFileByIdOriginal = contexto.DriveApp.getFileById;
+  contexto.DriveApp.getFileById = (id) => {
+    if (id === archivoJefe) throw new Error('No se encontró el archivo (o no tienes acceso).');
+    return getFileByIdOriginal(id);
+  };
+
+  const resultado = contexto.Servicio.completarFirma(token, { base64: 'firma-responsable', mimeType: 'image/png' });
+
+  assert.equal(resultado.PDF, null, 'no genera el PDF: faltaría la firma del jefe');
+  assert.ok(resultado.pendiente, 'el documento queda pendiente, no se da por completado');
+  assert.match(resultado.aviso, /no se pudo leer/i);
+  assert.equal(llamadas.pdfGenerados, 0, 'nunca llegó a generar el PDF');
+  assert.notEqual(llamadas.insert[0]['ESTADO FIRMA'], 'FIRMADO', 'el documento NO se cierra como Firmado sin la firma del jefe');
+  assert.ok(llamadas.insert[0]['FIRMA RESPONSABLE TEMP'], 'la firma del responsable que SÍ se pudo completar no se pierde');
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA'], '', 'su token ya se consumió, no se puede reusar la misma liga');
+  assert.equal(llamadas.insert[0]['FIRMADO POR'], 'firmante@ciudadmaderas.com');
+});
+
 
 test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí (responsiva)', () => {
   const { contexto, llamadas } = crearContexto();
@@ -676,4 +706,23 @@ test('devolverPrestamo truena si el préstamo ya se devolvió (de un solo uso)',
   const id = llamadas.insert[0].ID;
   contexto.Servicio.devolverPrestamo('tok', id);
   assert.throws(() => contexto.Servicio.devolverPrestamo('tok', id), /ya se devolvió/);
+});
+
+test('devolverPrestamo: si alguna firma …TEMP se quedó con el base64 crudo de antes del 9-oct, la migra a Drive al guardar -- puede devolverse con la firma todavía PENDIENTE', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok',
+    { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  assert.equal(llamadas.insert[0]['ESTATUS PRESTAMO'], 'EN PRESTAMO');
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE', 'se devuelve antes de que se termine de firmar');
+  // Simula un renglón viejo: la firma de CI quedó con el formato de antes del arreglo del 9-oct.
+  llamadas.insert[0]['FIRMA CI TEMP'] = JSON.stringify({ base64: 'w'.repeat(200000), mimeType: 'image/jpeg' });
+
+  const res = contexto.Servicio.devolverPrestamo('tok', id);
+
+  assert.equal(res.ESTATUS_PRESTAMO, 'DEVUELTO');
+  const migrada = JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']);
+  assert.ok(migrada.archivoId, 'la firma de CI quedó migrada a archivo de Drive');
+  assert.ok(!migrada.base64, 'el base64 crudo ya no vive en la celda');
 });

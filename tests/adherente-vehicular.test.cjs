@@ -187,14 +187,40 @@ test('un adherente nuevo nace con ESTATUS ACTIVO', () => {
   assert.equal(llamadas.insert[0].ESTATUS, 'ACTIVO');
 });
 
-test('cambiarEstatus solo acepta ACTIVO o BAJA, y no toca nada más del registro', () => {
+test('cambiarEstatus solo acepta ACTIVO o BAJA, y no toca nada más del registro (sin firmas viejas que migrar)', () => {
   const { contexto, llamadas } = crearContexto();
-  contexto.Servicio.cambiarEstatus('tok', 'ADH-1', 'baja');
-  assert.equal(llamadas.update.length, 1);
-  assert.equal(llamadas.update[0].id, 'ADH-1');
-  assert.equal(llamadas.update[0].cambios.ESTATUS, 'BAJA');
-  assert.equal(Object.keys(llamadas.update[0].cambios).length, 1);
-  assert.throws(() => contexto.Servicio.cambiarEstatus('tok', 'ADH-1', 'INACTIVO'), /Estatus inválido/);
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+
+  contexto.Servicio.cambiarEstatus('tok', id, 'baja');
+
+  const ultimoUpdate = llamadas.update[llamadas.update.length - 1];
+  assert.equal(ultimoUpdate.id, id);
+  assert.equal(ultimoUpdate.cambios.ESTATUS, 'BAJA');
+  assert.equal(Object.keys(ultimoUpdate.cambios).length, 1, 'nada que migrar -- no agrega ninguna otra columna');
+  assert.throws(() => contexto.Servicio.cambiarEstatus('tok', id, 'INACTIVO'), /Estatus inválido/);
+});
+
+test('cambiarEstatus truena si el registro no existe', () => {
+  const { contexto } = crearContexto();
+  assert.throws(() => contexto.Servicio.cambiarEstatus('tok', 'NO-EXISTE', 'BAJA'), /No se encontró/);
+});
+
+test('cambiarEstatus: si alguna firma …TEMP se quedó con el base64 crudo de antes del 9-oct, la migra a Drive al guardar -- se puede dar de baja con la firma todavía PENDIENTE', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'PENDIENTE', 'se da de baja antes de que termine de firmarse');
+  // Simula un renglón viejo: la firma de CI quedó con el formato de antes del arreglo del 9-oct.
+  llamadas.insert[0]['FIRMA CI TEMP'] = JSON.stringify({ base64: 'w'.repeat(200000), mimeType: 'image/jpeg' });
+
+  const res = contexto.Servicio.cambiarEstatus('tok', id, 'baja');
+
+  assert.equal(res.ESTATUS, 'BAJA');
+  const migrada = JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']);
+  assert.ok(migrada.archivoId, 'la firma de CI quedó migrada a archivo de Drive');
+  assert.ok(!migrada.base64, 'el base64 crudo ya no vive en la celda');
 });
 
 // ---------- Firma a distancia: liga del ADHERENTE (opciones.remoto) ----------
@@ -476,6 +502,36 @@ test('las dos ligas, cada una completada por su lado, terminan generando el PDF 
 
   assert.throws(() => contexto.Servicio.completarFirma(token, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
   assert.throws(() => contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'x', mimeType: 'image/png' }), /no es válida/);
+});
+
+test('completarFirmaJefe: si la firma del adherente (ya completada) no se puede leer al cerrar el documento, NO se marca Firmado ni se pierde la firma del jefe que sí se acaba de completar (bug real, prod 14-oct-2026)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const token = llamadas.insert[0]['TOKEN FIRMA'];
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  contexto.Servicio.completarFirma(token, { base64: 'adherente', mimeType: 'image/png' });
+  assert.ok(llamadas.insert[0]['FIRMA ADHERENTE TEMP'], 'la firma del adherente quedó guardada');
+
+  // Simula que, al momento de cerrar el documento, el archivo de Drive de la firma del
+  // adherente ya no se puede leer (borrado, sin permiso...) -- DriveApp.getFileById truena
+  // solo para ESE archivo.
+  const archivoAdherente = JSON.parse(llamadas.insert[0]['FIRMA ADHERENTE TEMP']).archivoId;
+  const getFileByIdOriginal = contexto.DriveApp.getFileById;
+  contexto.DriveApp.getFileById = (id) => {
+    if (id === archivoAdherente) throw new Error('No se encontró el archivo (o no tienes acceso).');
+    return getFileByIdOriginal(id);
+  };
+
+  const resultado = contexto.Servicio.completarFirmaJefe(tokenJefe, { base64: 'firma-jefe', mimeType: 'image/png' });
+
+  assert.equal(resultado.PDF, null, 'no genera el PDF: faltaría la firma del adherente');
+  assert.ok(resultado.pendiente, 'el documento queda pendiente, no se da por completado');
+  assert.match(resultado.aviso, /no se pudo leer/i);
+  assert.equal(llamadas.pdfGenerados, 0, 'nunca llegó a generar el PDF');
+  assert.notEqual(llamadas.insert[0]['ESTADO FIRMA'], 'FIRMADO', 'el documento NO se cierra como Firmado sin la firma del adherente');
+  assert.ok(llamadas.insert[0]['FIRMA JEFE TEMP'], 'la firma del jefe que SÍ se pudo completar no se pierde');
+  assert.equal(llamadas.insert[0]['TOKEN FIRMA JEFE'], '', 'su token ya se consumió, no se puede reusar la misma liga');
+  assert.equal(llamadas.insert[0]['FIRMADO POR JEFE'], 'firmante@ciudadmaderas.com');
 });
 
 

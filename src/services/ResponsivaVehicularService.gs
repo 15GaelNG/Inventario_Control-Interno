@@ -314,8 +314,32 @@ const ResponsivaVehicularService = (function () {
    * mismo sin importar si las firmas se capturaron en persona (crear) o llegaron por una o dos
    * ligas (completarFirma/completarFirmaJefe). Si algo de esto falla, el renglón ya estaba
    * guardado desde antes: se regresa el aviso en vez de perder la captura.
+   *
+   * Antes de cerrar el documento como FIRMADO, revisa que CADA …TEMP que sí tiene algo guardado
+   * haya llegado a `imagenesPdf` -- si a alguna no se le pudo leer la imagen (imagenesDesdeTemp_
+   * la salta en silencio si el archivo de Drive ya no existe o no se pudo leer), NO se cierra el
+   * documento: generaría un PDF incompleto marcado como Firmado, sin ningún aviso, y ya no se
+   * podría volver a mandar una liga (bug real, visto en producción 14-oct-2026 con una firma de
+   * adherente que nunca se guardó). Se persiste el estado actual de `fila` tal cual lo dejó quien
+   * llamó (su propia firma recién completada incluida -- nunca queda huérfana) y se avisa,
+   * dejando el documento PENDIENTE para poder reintentar.
    */
   function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra) {
+    const faltantes = CAMPOS_FIRMA_.filter(([campo, columna]) => fila[columna] && !imagenesPdf[campo]).map(([campo]) => campo);
+    if (faltantes.length) {
+      const cambiosParciales = {};
+      CAMPOS_FIRMA_.forEach(([, columna]) => { cambiosParciales[columna] = fila[columna]; });
+      ['TOKEN FIRMA', 'TOKEN FIRMA EXPIRA', 'TOKEN FIRMA JEFE', 'TOKEN FIRMA JEFE EXPIRA', 'FIRMADO POR', 'FIRMADO POR JEFE']
+        .forEach((columna) => { cambiosParciales[columna] = fila[columna]; });
+      try {
+        SheetUtils.update(ssId(), hoja_().getName(), id, cambiosParciales, ID_COLUMN);
+      } catch (e) { /* mejor esfuerzo: si ni esto se guarda, se avisa igual */ }
+      return {
+        ID: id, PDF: null, pendiente: true,
+        aviso: 'No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
+          '. Lo demás quedó guardado, pero el documento sigue pendiente -- avisa a soporte para recuperar esa firma.',
+      };
+    }
     const avisos = [];
     const esPrestamo = String(fila['TIPO RESPONSIVA'] || '').trim().toUpperCase() === TIPO_PRESTAMO;
     let pdf = null;
@@ -733,7 +757,11 @@ const ResponsivaVehicularService = (function () {
           'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
         }, { candadoTomado: true });
       }
-      SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, ID_COLUMN);
+      // Este préstamo puede seguir PENDIENTE de firma cuando se devuelve (se entrega antes de
+      // que se termine el papeleo): si alguna …TEMP se quedó con el base64 crudo de antes del
+      // 9-oct, se migra de paso (mismo motivo que en regenerarLiga).
+      SheetUtils.update(ssId(), hoja_().getName(), id,
+        Object.assign({ 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, migrarOtrasFirmasTempSiHaceFalta_(fila, null)), ID_COLUMN);
       return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
     } finally {
       lock.releaseLock();

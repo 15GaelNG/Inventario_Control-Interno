@@ -123,41 +123,28 @@
     { grupo: 'Auditoría', clave: 'CALIFICACION_AUDITORIA_FINAL', etiqueta: 'Calificación final auditoria', tipo: 'text', soloLectura: true, placeholder: '0%', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
     { grupo: 'Auditoría', clave: 'OBSERVACIONES FINALES', etiqueta: 'Observaciones finales', tipo: 'text', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
 
-    { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA RESPONSABLE', etiqueta: 'Cuenta con firma del responsable', tipo: 'select', opciones: ['SI', 'NO'] },
-    { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ESPECIALISTA', etiqueta: 'Cuenta con firma del especialista', tipo: 'select', opciones: ['SI', 'NO'] },
-    { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ASISTENTE', etiqueta: 'Cuenta con firma del asistente', tipo: 'select', opciones: ['SI', 'NO'] },
-    // tipo "firma": recuadro para firmar con mouse/dedo (no subir archivo) —
-    // solo se abre si la "Cuenta con firma de..." correspondiente es SI.
-    {
-      grupo: 'Firmas y evidencia', clave: 'FIRMA RESPONSABLE', etiqueta: 'Firma del responsable', tipo: 'firma',
-      mostrarSiCampo: 'CUENTA CON FIRMA RESPONSABLE', mostrarSiValor: 'SI',
-    },
-    {
-      grupo: 'Firmas y evidencia', clave: 'FIRMA ESPECIALISTA', etiqueta: 'Firma del especialista', tipo: 'firma',
-      mostrarSiCampo: 'CUENTA CON FIRMA ESPECIALISTA', mostrarSiValor: 'SI',
-    },
-    { grupo: 'Firmas y evidencia', clave: 'NOMBRE ASISTENTE', etiqueta: 'Nombre del asistente', tipo: 'text' },
-    {
-      grupo: 'Firmas y evidencia', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'firma',
-      mostrarSiCampo: 'CUENTA CON FIRMA ASISTENTE', mostrarSiValor: 'SI',
-    },
-    { grupo: 'Firmas y evidencia', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
     // multiple: deja elegir varias fotos a la vez -- subirArchivosArqueo las junta
     // en un solo PDF (una por página) antes de subirlas, porque en la hoja esta
     // columna sigue guardando un único archivo, como el resto de los 'file'.
-    { grupo: 'Firmas y evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file', multiple: true },
+    { grupo: 'Evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file', multiple: true },
+
+    // Firma del Responsable y del Especialista: fijas, siempre visibles (usuario, 14-oct-2026)
+    // -- ya no preguntan "¿cuenta con firma de...?" antes de abrir el recuadro; si no están
+    // presentes para firmar ahí mismo, se deja en blanco y se manda la liga después (ver
+    // generarLigaArqueoFicha_). La del Asistente sigue siendo la excepción, tal cual estaba.
+    { grupo: 'Firmas', clave: 'FIRMA RESPONSABLE', etiqueta: 'Firma del responsable', tipo: 'firma' },
+    { grupo: 'Firmas', clave: 'FIRMA ESPECIALISTA', etiqueta: 'Firma del especialista', tipo: 'firma' },
+    { grupo: 'Firmas', clave: 'CUENTA CON FIRMA ASISTENTE', etiqueta: 'Cuenta con firma del asistente', tipo: 'select', opciones: ['SI', 'NO'] },
+    { grupo: 'Firmas', clave: 'NOMBRE ASISTENTE', etiqueta: 'Nombre del asistente', tipo: 'text' },
+    {
+      grupo: 'Firmas', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'firma',
+      mostrarSiCampo: 'CUENTA CON FIRMA ASISTENTE', mostrarSiValor: 'SI',
+    },
+    { grupo: 'Firmas', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
     // El PDF ya no se sube a mano: se genera solo al Registrar/Editar (ver
     // ArqueosService.generarPdfArqueo_) a partir de la plantilla F-CI03-009.
-    { grupo: 'Firmas y evidencia', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
-    { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
-
-    // Apartado al final, aparte (usuario, 7-oct) -- columna agregada a mano en la hoja
-    // (ESTATUS ARQUEO). Sin valorPorDefecto/bloqueadoAlCrear a propósito: se puede cambiar
-    // libremente en cualquier momento, no solo al dar de alta.
-    {
-      grupo: 'Estatus', clave: 'ESTATUS ARQUEO', etiqueta: 'Estado del actual arqueo: ¿Cuenta con información pendiente?', tipo: 'select',
-      opciones: ['COMPLETO', 'PENDIENTE'],
-    },
+    { grupo: 'Firmas', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
+    { grupo: 'Firmas', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
   ];
 
   /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo.
@@ -170,17 +157,59 @@
     return CamposHoja.html(CAMPOS_ARQUEO, { prefijo, soloGrupos });
   }
 
-  // Top-level a propósito (no dentro de initArqueos): lo usa también la ficha de Caja Chica
-  // (app-cajachica.html, pestaña Arqueos), otro <script> que comparte este mismo scope global.
-  // En blanco (registros de antes de que existiera la columna) se ve como COMPLETO -- la
-  // mayoría de lo que ya estaba ya se había terminado, PENDIENTE es la excepción que alguien
-  // tiene que marcar a mano. Mismo patrón que badgeEstatusCaja (app-cajachica.html).
-  function badgeEstatusArqueo(estatus) {
-    const valor = String(estatus || '').toUpperCase();
-    if (valor === 'PENDIENTE') {
-      return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
+  /** Firma a distancia del Responsable/Asistente (14-oct-2026): "Firmado" si ya están las dos,
+   *  o qué falta -- mismo texto/clases que badgeEstadoFirma de Responsiva/Adherente Vehicular
+   *  (app.html), pero aquí no hay un ESTADO FIRMA guardado: se mira directo si
+   *  FIRMA_RESPONSABLE/FIRMA_ASISTENTE están vacías (ver ArqueosService.gs). */
+  function badgeFirmaArqueo(a) {
+    const faltaResponsable = !a.FIRMA_RESPONSABLE;
+    const faltaAsistente = !a.FIRMA_ASISTENTE;
+    if (!faltaResponsable && !faltaAsistente) {
+      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Firmado</span>';
     }
-    return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Completo</span>';
+    let texto = 'Pendiente: falta Responsable y Asistente';
+    if (!faltaResponsable) texto = 'Pendiente: falta Asistente';
+    else if (!faltaAsistente) texto = 'Pendiente: falta Responsable';
+    return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> ' + escaparHtml(texto) + '</span>';
+  }
+
+  /** "Generar liga"/"Generar nueva liga" de firma a distancia del Responsable o el Asistente --
+   *  mismo molde que regenerarLigaFicha_ de Responsiva/Adherente Vehicular (app.html), pero aquí
+   *  la misma llamada sirve igual para mandar la primera liga que para regenerar una que venció
+   *  o se firmó mal (ver generarLigaArqueo en ArqueosService.gs). */
+  async function generarLigaArqueoFicha_(id, quien, etiqueta, alTerminar) {
+    const ok = await Confirmar.pedir({
+      titulo: 'Generar liga de firma',
+      mensaje: 'Se manda un link para que ' + etiqueta + ' firme desde su celular. Si ya había una liga pendiente para esta parte, la anterior deja de funcionar.',
+      textoConfirmar: 'Generar liga',
+    });
+    if (!ok) return;
+    toastCargando('Generando liga…');
+    try {
+      mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', id, quien));
+      toastExito('Liga generada');
+      if (alTerminar) alTerminar();
+    } catch (err) {
+      toastError('No se pudo generar la liga: ' + err.message);
+    }
+  }
+
+  /** "Enviar liga(s) para firmar a distancia" desde el propio formulario de captura/edición --
+   *  mismo botón que Responsiva/Adherente Vehicular (app.html), pero sin un modo especial en
+   *  crear()/actualizar() (Arqueos ya deja guardar con Responsable/Asistente en blanco): se
+   *  guarda normal y, con la respuesta (ya trae FIRMA_RESPONSABLE/FIRMA_ASISTENTE), se manda la
+   *  liga de lo que haya quedado vacío. `registro` es lo que regresa apiCrearArqueo/
+   *  apiActualizarArqueo. Regresa el arreglo para mostrarLigaFirma_, o null si ya estaban las dos. */
+  async function enviarLigasArqueoTrasGuardar_(registro) {
+    const faltan = [];
+    if (!registro.FIRMA_RESPONSABLE) faltan.push({ quien: 'responsable', titulo: 'Responsable' });
+    if (!registro.FIRMA_ASISTENTE) faltan.push({ quien: 'asistente', titulo: 'Asistente' });
+    if (!faltan.length) return null;
+    const ligas = await Promise.all(faltan.map(async (f) => ({
+      titulo: f.titulo,
+      liga: await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', registro.ID, f.quien),
+    })));
+    return ligas;
   }
 
   /**
@@ -196,15 +225,19 @@
     return n <= 1 ? n * 100 : n;
   }
 
-  /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
-   *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
+  /** Agrupa los "grupo" de CAMPOS_ARQUEO en 6 pasos, mismo patrón visual que
+   *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). Evidencia y Firmas eran un
+   *  solo paso ("Firmas y evidencia") -- se separan (usuario, 14-oct-2026) porque Firmas va a
+   *  seguir creciendo. El paso "Estatus" (marcar a mano si el arqueo quedaba "pendiente") se
+   *  quitó (usuario, 15-oct-2026): con la liga para firmar a distancia, lo que faltaba ya se ve
+   *  solo en la columna "Firma" -- no hace falta otro estatus que alguien tenga que marcar. */
   const PASOS_ARQUEO = [
     { titulo: 'Identificación', grupos: ['Identificación', 'Cuenta bancaria', 'Fechas y método'] },
     { titulo: 'Efectivo', grupos: ['Efectivo — Monedas', 'Efectivo — Billetes', 'Cheques'] },
     { titulo: 'Gastos', grupos: ['Totales de gasto'] },
     { titulo: 'Auditoría', grupos: ['Auditoría'] },
-    { titulo: 'Firmas y evidencia', grupos: ['Firmas y evidencia'] },
-    { titulo: 'Estatus', grupos: ['Estatus'] },
+    { titulo: 'Evidencia', grupos: ['Evidencia'] },
+    { titulo: 'Firmas', grupos: ['Firmas'] },
   ];
 
   /**
@@ -216,7 +249,11 @@
    *
    * El botón final ES el submit real del <form> que envuelve al contenedor donde se
    * inserta esto (se le pone id y texto a la medida de quien llama, para no duplicar
-   * el wiring de "deshabilitar mientras guarda" que ya existe por fuera).
+   * el wiring de "deshabilitar mientras guarda" que ya existe por fuera). Junto a él va
+   * "Enviar liga(s) para firmar a distancia" (mismo botón que Responsiva/Adherente Vehicular,
+   * app.html) -- otro submit del mismo <form>; el handler distingue cuál se usó con
+   * ev.submitter para, además de guardar, mandar la liga de Responsable/Asistente si se
+   * dejaron en blanco (ver enviarLigasArqueoTrasGuardar_).
    */
   function renderPasosArqueo(prefijo, idBotonGuardar, textoBotonGuardar, iconoBotonGuardar) {
     const secciones = PASOS_ARQUEO.map((p, i) => `
@@ -228,6 +265,7 @@
       '<div class="form-acciones form-acciones-pasos">' +
       '<button type="button" class="secondary" data-arq-atras hidden>' + Iconos.svg('anterior') + ' Atrás</button>' +
       '<button type="button" data-arq-siguiente>Siguiente ' + Iconos.svg('siguiente') + '</button>' +
+      '<button type="submit" class="secondary" id="' + idBotonGuardar + '-liga" data-arq-guardar hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
       '<button type="submit" id="' + idBotonGuardar + '" data-arq-guardar hidden><i data-lucide="' + iconoBotonGuardar + '" class="ico"></i> ' + textoBotonGuardar + '</button>' +
       '<span class="form-cuenta" data-arq-cuenta></span></div>';
   }
@@ -246,7 +284,7 @@
       const ultimo = pasoActual === PASOS_ARQUEO.length - 1;
       contenedor.querySelector('[data-arq-atras]').hidden = pasoActual === 0;
       contenedor.querySelector('[data-arq-siguiente]').hidden = ultimo;
-      contenedor.querySelector('[data-arq-guardar]').hidden = !ultimo;
+      contenedor.querySelectorAll('[data-arq-guardar]').forEach((b) => { b.hidden = !ultimo; });
       contenedor.querySelector('[data-arq-cuenta]').textContent = `Paso ${pasoActual + 1} de ${PASOS_ARQUEO.length}`;
     }
     function mostrarPaso(i) {
@@ -690,23 +728,33 @@
       const errorBox = document.getElementById(prefijo + '-error');
       errorBox.hidden = true;
       const btn = document.getElementById(prefijo + '-btn-guardar');
+      const btnLiga = document.getElementById(prefijo + '-btn-guardar-liga');
+      const conLiga = ev.submitter === btnLiga;
       const textoOriginal = btn.innerHTML;
+      const textoOriginalLiga = btnLiga.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      btnLiga.disabled = true;
+      (conLiga ? btnLiga : btn).innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       toastCargando(idEditar ? 'Guardando cambios…' : 'Registrando…');
       try {
         const archivos = await subirArchivosArqueo(prefijo);
         const firmas = await subirFirmasArqueo(prefijo);
         const datos = Object.assign(recolectarDatosArqueo(prefijo), archivos, firmas);
+        let registro;
         if (idEditar) {
-          await callServer('apiActualizarArqueo', state.token, idEditar, datos);
+          registro = await callServer('apiActualizarArqueo', state.token, idEditar, datos);
         } else {
           datos['ID CCH'] = caja.ID_CCH || caja['ID CCH'];
-          await callServer('apiCrearArqueo', state.token, datos);
+          registro = await callServer('apiCrearArqueo', state.token, datos);
         }
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         toastExito(idEditar ? 'Actualizado exitosamente' : 'Registrado exitosamente');
+        if (conLiga) {
+          const ligas = await enviarLigasArqueoTrasGuardar_(registro);
+          if (ligas) mostrarLigaFirma_(ligas);
+          else Notificar.info('Ya se cuenta con la firma del Responsable y del Asistente -- no hace falta generar liga.');
+        }
         alGuardado();
       } catch (err) {
         errorBox.textContent = err.message;
@@ -715,6 +763,8 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+        btnLiga.disabled = false;
+        btnLiga.innerHTML = textoOriginalLiga;
       }
     });
   }
@@ -917,7 +967,6 @@
       alTocarFila: (a) => tabla.abrirDetalle(String(a.ID)),
       columnas: [
         { campo: 'ID', titulo: 'ID Arqueo', tipo: 'texto', fijada: true, enDetalle: false },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusArqueo(v), enDetalle: false },
         { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', enDetalle: false },
         { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto', enDetalle: false },
         { campo: 'TIPO_ARQUEO', titulo: 'Tipo', tipo: 'lista', enDetalle: false },
@@ -926,6 +975,7 @@
         { campo: 'DIFERENCIA', titulo: 'Diferencia', tipo: 'numero', render: (v) => badgeDiferencia(v), enDetalle: false },
         { campo: 'CALIFICACION', titulo: 'Calificación', tipo: 'numero', render: (v) => { const n = normalizarCalificacion_(v); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); }, enDetalle: false },
         { campo: 'ESTADO_PDF', titulo: 'Estado PDF', tipo: 'lista', enDetalle: false },
+        { campo: 'FIRMA_RESPONSABLE', titulo: 'Firma', tipo: 'lista', filtrable: false, render: (v, a) => badgeFirmaArqueo(a), enDetalle: false },
       ],
       accionesFila: [].concat(
         [
@@ -933,7 +983,11 @@
           { icono: 'documento', titulo: 'Ver PDF', visible: (a) => !!a.FORMATO_ARQUEO, alHacer: (a) => abrirArchivoArqueo_(a.FORMATO_ARQUEO) },
           { icono: 'imagen', titulo: 'Ver evidencia', visible: (a) => !!a.EVIDENCIAS, alHacer: (a) => abrirArchivoArqueo_(a.EVIDENCIAS) },
         ],
-        puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) }] : []
+        puedeEditar ? [
+          { icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) },
+          { icono: 'link', titulo: 'Generar liga de firma (Responsable)', visible: (a) => !a.FIRMA_RESPONSABLE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'responsable', 'el Responsable', refrescarTrasLiga_) },
+          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => !a.FIRMA_ASISTENTE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', refrescarTrasLiga_) },
+        ] : []
       ),
       alEliminar: puedeEditar ? async (filas) => {
         await Promise.all(filas.map((f) => callServer('apiEliminarArqueo', state.token, f.ID)));
@@ -944,28 +998,22 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // Total/Con diferencia/Pendientes son "categorías" clickeables — Calificación
-    // promedio es un promedio, no algo que se pueda filtrar como categoría.
+    // Total/Con diferencia son "categorías" clickeables — Calificación promedio es un
+    // promedio, no algo que se pueda filtrar como categoría. El KPI "Pendientes" (sobre
+    // ESTATUS ARQUEO, marcado a mano) se quitó junto con ese campo (usuario, 15-oct-2026):
+    // qué falta por firmar ya se ve solo en la columna "Firma".
     const tileTotalArq = document.getElementById('arq-stat-total').closest('.stat-tile');
     const tileDiferenciasArq = document.getElementById('arq-stat-diferencias').closest('.stat-tile');
-    const tilePendientesArq = document.getElementById('arq-stat-pendientes').closest('.stat-tile');
-    [tileTotalArq, tileDiferenciasArq, tilePendientesArq].forEach((t) => t.classList.add('stat-tile-clickable'));
-    // "Total" limpia los dos filtros de categoría, no solo el de diferencia.
-    tileTotalArq.addEventListener('click', () => { tabla.setFiltro('DIFERENCIA', null); tabla.setFiltro('ESTATUS', null); });
+    [tileTotalArq, tileDiferenciasArq].forEach((t) => t.classList.add('stat-tile-clickable'));
+    tileTotalArq.addEventListener('click', () => { tabla.setFiltro('DIFERENCIA', null); });
     tileDiferenciasArq.addEventListener('click', () => {
       const yaActivo = tileDiferenciasArq.classList.contains('stat-tile-activo');
       tabla.setFiltro('DIFERENCIA', yaActivo ? null : { op: '!=', v1: 0 });
     });
-    tilePendientesArq.addEventListener('click', () => {
-      const yaActivo = tilePendientesArq.classList.contains('stat-tile-activo');
-      tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['PENDIENTE'] });
-    });
     function marcarKpiActivo(filtros) {
       const f = filtros.DIFERENCIA;
-      const e = filtros.ESTATUS;
-      tileTotalArq.classList.toggle('stat-tile-activo', !f && !e);
+      tileTotalArq.classList.toggle('stat-tile-activo', !f);
       tileDiferenciasArq.classList.toggle('stat-tile-activo', !!(f && f.op === '!=' && f.v1 === 0));
-      tilePendientesArq.classList.toggle('stat-tile-activo', !!(e && e.valores && e.valores.indexOf('PENDIENTE') >= 0));
       actualizarKpis(tabla.getFiltradas());
     }
 
@@ -976,8 +1024,6 @@
       document.getElementById('arq-stat-calificacion').textContent = (Math.round(promedio * 100) / 100).toFixed(2) + '%';
       document.getElementById('arq-stat-diferencias').textContent =
         filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
-      document.getElementById('arq-stat-pendientes').textContent =
-        filas.filter((a) => String(a.ESTATUS || '').toUpperCase() === 'PENDIENTE').length;
     }
 
     async function cargar() {
@@ -997,6 +1043,12 @@
     }
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
     escucharLista('apiListarArqueosResumen', cargar, document.getElementById('view-container').firstElementChild);
+    // Después de generar una liga de firma (ver accionesFila, arriba): el token/estatus de firma
+    // cambiaron, hay que volver a pedir la lista en vez de esperar al vigía de 60 s.
+    function refrescarTrasLiga_() {
+      invalidarCacheLista('apiListarArqueosResumen', state.token);
+      cargar();
+    }
 
     async function abrirEditarArqueo(id) {
       const resumen = arqueosPorId[id];
@@ -1056,20 +1108,29 @@
       const errorBox = document.getElementById('editar-arqueo-error');
       errorBox.hidden = true;
       const btn = document.getElementById('btn-guardar-editar-arqueo');
+      const btnLiga = document.getElementById('btn-guardar-editar-arqueo-liga');
+      const conLiga = ev.submitter === btnLiga;
       const textoOriginal = btn.innerHTML;
+      const textoOriginalLiga = btnLiga.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      btnLiga.disabled = true;
+      (conLiga ? btnLiga : btn).innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       toastCargando('Guardando cambios…');
       try {
         const archivos = await subirArchivosArqueo('editar-arqueo');
         const firmas = await subirFirmasArqueo('editar-arqueo');
         const datos = Object.assign(recolectarDatosArqueo('editar-arqueo'), archivos, firmas);
-        await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
+        const registro = await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
         cerrarEditarArqueo();
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
+        if (conLiga) {
+          const ligas = await enviarLigasArqueoTrasGuardar_(registro);
+          if (ligas) mostrarLigaFirma_(ligas);
+          else Notificar.info('Ya se cuenta con la firma del Responsable y del Asistente -- no hace falta generar liga.');
+        }
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
@@ -1077,6 +1138,8 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+        btnLiga.disabled = false;
+        btnLiga.innerHTML = textoOriginalLiga;
       }
     });
 
@@ -1090,16 +1153,20 @@
         return;
       }
       const btn = document.getElementById('btn-guardar-arqueo');
+      const btnLiga = document.getElementById('btn-guardar-arqueo-liga');
+      const conLiga = ev.submitter === btnLiga;
       const textoOriginal = btn.innerHTML;
+      const textoOriginalLiga = btnLiga.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      btnLiga.disabled = true;
+      (conLiga ? btnLiga : btn).innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       toastCargando('Registrando…');
       try {
         const archivos = await subirArchivosArqueo('arq');
         const firmas = await subirFirmasArqueo('arq');
         const datos = Object.assign(recolectarDatosArqueo('arq'), archivos, firmas);
         datos['ID CCH'] = selectCajaArqueo.value;
-        await callServer('apiCrearArqueo', state.token, datos);
+        const registro = await callServer('apiCrearArqueo', state.token, datos);
         ev.target.reset();
         pasosArq.irAPaso(0);
         invalidarCacheLista('apiListarArqueosResumen', state.token);
@@ -1114,6 +1181,11 @@
         recalcularTotalesArqueo('arq', auditItems);
         await cargar();
         toastExito('Registrado exitosamente');
+        if (conLiga) {
+          const ligas = await enviarLigasArqueoTrasGuardar_(registro);
+          if (ligas) mostrarLigaFirma_(ligas);
+          else Notificar.info('Ya se cuenta con la firma del Responsable y del Asistente -- no hace falta generar liga.');
+        }
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
@@ -1121,6 +1193,8 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+        btnLiga.disabled = false;
+        btnLiga.innerHTML = textoOriginalLiga;
       }
     });
 
@@ -1139,8 +1213,8 @@
 
   const AYUDA_ARQUEOS = [
     { pregunta: '¿Qué es un arqueo?', respuesta: 'La auditoría y conteo de efectivo de una caja chica: cuánto debería haber contra cuánto hay realmente, más el checklist de 17 puntos de control interno.' },
-    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 6 pasos (Identificación, Efectivo, Gastos, Auditoría, Firmas y evidencia, Estatus). El ID Arqueo y los totales se calculan solos.' },
-    { pregunta: '¿Qué es el "Estatus del arqueo"?', respuesta: 'El último paso del formulario: marca si el arqueo quedó completo o si todavía falta información pendiente -- ayuda a dar seguimiento a los que quedaron a medias.' },
+    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 6 pasos (Identificación, Efectivo, Gastos, Auditoría, Evidencia, Firmas). El ID Arqueo y los totales se calculan solos.' },
+    { pregunta: '¿Qué hago si el Responsable o el Asistente no están presentes para firmar?', respuesta: 'En el paso "Firmas", "Enviar liga(s) para firmar a distancia" guarda el arqueo y manda un link por cada quien falte -- lo firman desde su celular, sin necesidad de entrar a la app. La columna "Firma" de la tabla muestra qué sigue pendiente.' },
     { pregunta: '¿De dónde sale la Calificación de auditoría?', respuesta: 'Se calcula sola con las respuestas de los 17 reactivos del paso "Auditoría" -- no se captura a mano.' },
     { pregunta: '¿El PDF se genera solo?', respuesta: 'Sí, al registrar o editar el arqueo -- "Estado del PDF" muestra si ya está listo. No hay que subirlo a mano.' },
   ];

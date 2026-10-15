@@ -103,10 +103,19 @@
 
   <script>
     (function () {
-      const tipo = document.body.dataset.tipo === 'adherente' ? 'adherente' : 'responsiva';
-      const quien = document.body.dataset.quien === 'jefe' ? 'jefe' : 'principal';
+      const tipo = ['adherente', 'arqueo'].indexOf(document.body.dataset.tipo) !== -1 ? document.body.dataset.tipo : 'responsiva';
+      // El "otro" firmante de cada tipo (el que no es quien se captura siempre presencial): el
+      // jefe directo en Vehicular, el asistente en Arqueos -- cualquier otro valor cae al
+      // principal (responsable/adherente) de ese tipo.
+      const QUIEN_OTRO = { responsiva: 'jefe', adherente: 'jefe', arqueo: 'asistente' };
+      const QUIEN_PRINCIPAL = { responsiva: 'principal', adherente: 'principal', arqueo: 'responsable' };
+      const quien = document.body.dataset.quien === QUIEN_OTRO[tipo] ? QUIEN_OTRO[tipo] : QUIEN_PRINCIPAL[tipo];
       const token = document.body.dataset.token || '';
-      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente' };
+      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente', arqueo: 'Responsable' };
+      const ETIQUETA_OTRO = { responsiva: 'jefe directo', adherente: 'jefe directo', arqueo: 'asistente' };
+      // Mismas llaves que ETIQUETA_OTRO, pero ya con mayúscula inicial para el resumen (que no
+      // va dentro de una oración, a diferencia del título/la etiqueta de arriba).
+      const ETIQUETA_OTRO_RESUMEN = { responsiva: 'Jefe directo de', adherente: 'Jefe directo de', arqueo: 'Asistente' };
 
       function llamar(fn) {
         return new Promise((resolver, rechazar) => {
@@ -126,9 +135,9 @@
         'vencido': 'Esta liga ya venció.',
       };
 
-      if (quien === 'jefe') {
-        document.getElementById('firex-titulo').textContent = 'Firmar como jefe directo';
-        document.getElementById('firex-firma-label').textContent = 'Tu firma (jefe directo)';
+      if (quien === QUIEN_OTRO[tipo]) {
+        document.getElementById('firex-titulo').textContent = 'Firmar como ' + ETIQUETA_OTRO[tipo];
+        document.getElementById('firex-firma-label').textContent = 'Tu firma (' + ETIQUETA_OTRO[tipo] + ')';
       }
 
       llamar('apiFirmaRemotaObtener').then((info) => {
@@ -138,11 +147,20 @@
           mostrar('firex-invalido');
           return;
         }
-        document.getElementById('firex-resumen').innerHTML =
-          '<div><b>Documento:</b> ' + info.documento + '</div>' +
-          '<div><b>Vehículo:</b> ' + [info.marca, info.modelo].filter(Boolean).join(' ') +
-            (info.placa ? ' · ' + info.placa : '') + '</div>' +
-          '<div><b>' + (quien === 'jefe' ? 'Jefe directo de' : NOMBRE_PRINCIPAL[tipo]) + ':</b> ' + info.nombre + '</div>';
+        let resumenHtml = '<div><b>Documento:</b> ' + info.documento + '</div>';
+        if (Array.isArray(info.detalles)) {
+          // Genérico (Arqueos): lo que regrese el servidor, lo que aplique a ese tipo.
+          info.detalles.forEach((d) => {
+            if (d && d.valor) resumenHtml += '<div><b>' + d.etiqueta + ':</b> ' + d.valor + '</div>';
+          });
+        } else {
+          // Vehicular: siempre trae marca/modelo/placa.
+          resumenHtml += '<div><b>Vehículo:</b> ' + [info.marca, info.modelo].filter(Boolean).join(' ') +
+            (info.placa ? ' · ' + info.placa : '') + '</div>';
+        }
+        resumenHtml += '<div><b>' + (quien === QUIEN_OTRO[tipo] ? ETIQUETA_OTRO_RESUMEN[tipo] : NOMBRE_PRINCIPAL[tipo]) + ':</b> ' + info.nombre + '</div>';
+        document.getElementById('firex-resumen').innerHTML = resumenHtml;
+        if (tipo === 'arqueo') document.getElementById('firex-vista-previa').classList.add('firex-oculto');
         const firma = Firma.crear(document.getElementById('firex-firma'), { marca: 'Firma aquí con el dedo o el mouse' });
         mostrar('firex-form');
 
