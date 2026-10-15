@@ -82,7 +82,7 @@
 
     // ----- Técnica: una tarjeta por hoja copia -----
     function cifra(etiqueta, valor, alerta) {
-      return `<span>${escaparHtml(etiqueta)}</span><strong class="${alerta && valor ? 'rel-alerta' : ''}">${Number(valor || 0).toLocaleString('es-MX')}</strong>`;
+      return `<span>${escaparHtml(etiqueta)}</span><strong class="${alerta && valor ? 'rel-alerta' : ''}">${Formato.miles(valor)}</strong>`;
     }
 
     function tarjeta(r) {
@@ -129,9 +129,9 @@
 
     function pintarKpis() {
       const suma = (campo, filtro) => reporte.filter(filtro || (() => true)).reduce((s, r) => s + (r[campo] || 0), 0);
-      document.getElementById('rel-stat-dif').textContent = suma('diferencias', (r) => r.tipo !== 'bitacora').toLocaleString('es-MX');
-      document.getElementById('rel-stat-hist').textContent = suma('diferenciasHistoricas').toLocaleString('es-MX');
-      document.getElementById('rel-stat-huer').textContent = suma('huerfanos').toLocaleString('es-MX');
+      document.getElementById('rel-stat-dif').textContent = Formato.miles(suma('diferencias', (r) => r.tipo !== 'bitacora'));
+      document.getElementById('rel-stat-hist').textContent = Formato.miles(suma('diferenciasHistoricas'));
+      document.getElementById('rel-stat-huer').textContent = Formato.miles(suma('huerfanos'));
     }
 
     function pintarTabla() {
@@ -230,7 +230,7 @@
       pintarEstado();
       pintarTabla();
       pintarSencilla();
-      const hora = new Date().toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+      const hora = Formato.hora(new Date());
       document.getElementById('rel-cuando').textContent = 'Revisado a las ' + hora;
       document.getElementById('salud-cuando').textContent = 'Revisado hoy a las ' + hora;
     }
@@ -272,9 +272,9 @@
       cambios.forEach((e) => { const k = RelSencilla.dato(e.columna); porDato[k] = (porDato[k] || 0) + 1; });
       const ok = await Confirmar.pedir({
         titulo: 'Actualizar ' + c.nombre,
-        mensaje: 'Se van a poner al día ' + registros.toLocaleString('es-MX') + ' ' + (registros === 1 ? c.uno : c.varios) +
+        mensaje: 'Se van a poner al día ' + Formato.miles(registros) + ' ' + (registros === 1 ? c.uno : c.varios) +
           (soloFilas ? (registros === 1 ? ' seleccionado' : ' seleccionados') : '') +
-          ' (' + cambios.length.toLocaleString('es-MX') + (cambios.length === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
+          ' (' + Formato.miles(cambios.length) + (cambios.length === 1 ? ' dato' : ' datos') + ') con lo que dice ' +
           rel.d.etiqueta.nombre + '. Cada cambio queda anotado, con lo que tenía antes.',
         detalle: Object.keys(porDato).sort().map((k) => k + ': ' + porDato[k] + (porDato[k] === 1 ? ' cambio' : ' cambios')),
         textoConfirmar: 'Actualizar',
@@ -288,7 +288,7 @@
         // La cifra sale de lo que se pidió: el reporte del servidor cuenta todo lo distinto,
         // también lo que no se seleccionó. La revisión de abajo dice cómo quedó de verdad.
         const n = cambios.length;
-        Notificar.exito(c.nombre + ': ' + n.toLocaleString('es-MX') + (n === 1 ? ' dato actualizado' : ' datos actualizados'));
+        Notificar.exito(c.nombre + ': ' + Formato.miles(n) + (n === 1 ? ' dato actualizado' : ' datos actualizados'));
       } catch (err) {
         Notificar.error(err.message);
       }

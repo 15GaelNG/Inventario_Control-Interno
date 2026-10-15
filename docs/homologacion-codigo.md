@@ -98,12 +98,20 @@ las dos cosas y además, con ganchos, lee la hoja completa dos veces.
 
 ## Fase 2 — Formato y utilidades de pantalla
 
-- [ ] `componentes/formato.html` → `Formato.esc`, `fecha`, `fechaHora`, `fechaCorta`, `moneda`, `normal`,
-      `miles`, `porcentaje`, e `icono` (uno solo, Lucide).
-- [ ] Sustituir las copias (componentes incluidos) y dejar alias cortos donde convenga (`const esc = Formato.esc`).
-- [ ] Prueba de `Formato` y contrato: ninguna función `esc`/`escapar`/`h`/`fechaHora`… definida fuera de
-      `formato.html`.
-- [ ] Va en `Index.html` antes que cualquier componente.
+- [x] `componentes/formato.html` → `Formato.esc`, `fecha` (05/10/2026), `fechaHora`, `fechaHoraSiTiene`, `fechaTexto`
+      (05 oct 2026, con `{ hora: true }`), `dia` (yyyy-MM-dd local), `hora`, `moneda` (`centavos: true/false`, por
+      omisión solo si los tiene; el signo antes del $), `miles`, `porcentaje`, `aNumero`, `normal`, `normalAlineado`.
+      Todo regresa '' si el dato viene vacío; el '—' lo pone quien llama. Un yyyy-MM-dd se lee en hora local.
+- [x] Íconos: no hizo falta otro; ya existía `Iconos.svg` y el `icono` de Líneas ahora es un alias suyo (con `ln-icon`).
+- [x] Copias sustituidas en 27 archivos (10 `esc`, 7 normalizar, fechas, moneda y miles a mano). Los nombres globales
+      de siempre (`escaparHtml`, `formatearFecha`, `formatearMoneda`, `hoyLocal`, `fechaParaInput`) quedan como envoltura
+      de una línea: tienen 275 llamadas en archivos que tocan los demás y renombrarlas solo daría conflictos.
+- [x] `tests/formato.test.js` y contrato en `source-contracts`: fuera de `formato.html` ningún `'&amp;'`,
+      `.normalize('NFD')`, `.toLocale…String(` ni `padStart(2, '0')` dentro de un `<script>`.
+- [x] Va en `Index.html` antes que todo (contrato). Las pruebas que cargan un archivo suelto usan `tests/formato-fuente.js`.
+- Cambios que se notan: fechas con cero (05/10/2026 en vez de 5/10/2026); Líneas y notificaciones dicen "05 oct 2026,
+  14:30"; un yyyy-MM-dd ya no cae al día anterior (`fechaTabla` de Líneas, `fechaParaInput`). Se corrigió de paso la
+  fecha de los campos de Help Desk (`/^d{4}…/` sin `\`: nunca se formateaba).
 
 ## Fase 3 — Escala de diseño
 
@@ -175,3 +183,4 @@ juntan por primera vez.
 | 15-oct | — | Rama `common` desde `master` (46b73b0) y este plan | — |
 | 15-oct | 0 | DEV propio (`Inventario DEV - common`, copia del libro de prod, carpeta DEV COMMON); la Action sube `common` | — |
 | 15-oct | 1 | `Candado` reentrante en todo el servidor; `SheetUtils.update`/`remove` bajo candado y escribiendo solo lo que cambia | pendiente: probar en DEV |
+| 15-oct | 2 | `Formato` (componentes/formato.html): una sola copia de esc, fechas, moneda, miles y normal; contrato | pendiente: probar en DEV |

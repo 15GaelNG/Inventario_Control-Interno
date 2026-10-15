@@ -10,7 +10,7 @@ const path = require('path');
 const vm = require('vm');
 
 const h = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'app-capital-humano.html'), 'utf8');
-const js = h.slice(h.indexOf('<script>') + 8, h.lastIndexOf('</script>'));
+const js = require('./formato-fuente') + h.slice(h.indexOf('<script>') + 8, h.lastIndexOf('</script>'));
 const ctx = vm.createContext({});
 vm.runInContext(js + '\nthis.V = CapitalHumanoVista;', ctx);
 const V = ctx.V;

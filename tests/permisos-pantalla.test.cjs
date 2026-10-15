@@ -27,7 +27,7 @@ function pantalla(panel) {
   const ini = js.indexOf('    // ---------------------------------------------------------------- reglas');
   const fin = js.indexOf('    // ---------------------------------------------------------------- piezas de HTML');
   assert.ok(ini > 0 && fin > ini, 'bloque de reglas en app-permisos.html');
-  const f = new Function('panel', 'PERM_ROLES_TOTALES', 'let datos = null; let originales = {};\n' + js.slice(ini, fin) +
+  const f = new Function('panel', 'PERM_ROLES_TOTALES', require('./formato-fuente') + 'let datos = null; let originales = {};\n' + js.slice(ini, fin) +
     '\ncargar(panel); return { efectivo, deArea };');
   return f(panel, ['ADMIN', 'SUPER']);
 }

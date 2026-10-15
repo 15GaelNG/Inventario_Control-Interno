@@ -258,7 +258,7 @@
     let contador = null;
     let boton = null;
 
-    const esc = (v) => (typeof escaparHtml === 'function' ? escaparHtml(v) : String(v == null ? '' : v));
+    const esc = Formato.esc;
     const icono = (nombre) => '<i data-lucide="' + nombre + '" class="ico"></i>';
     const pintarIconos = () => { if (typeof refreshIcons === 'function') refreshIcons(); };
 
@@ -271,13 +271,7 @@
       return 'Venció hace ' + (-dias) + ' días';
     }
 
-    function fechaCorta(v) {
-      if (!v) return '';
-      const d = new Date(v);
-      if (isNaN(d)) return '';
-      return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
-        d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    }
+    const fechaCorta = (v) => Formato.fechaTexto(v, { hora: true });
 
     /** Color del ícono: el adendum depende de si ya venció; los demás, de su tipo. */
     function colorDe(n) {

@@ -608,9 +608,7 @@
     /** ¿La persona pidió "reducir movimiento"? (lo decide el CSS: --dm-movimiento) */
     function quieto() { return getComputedStyle(document.documentElement).getPropertyValue('--dm-movimiento').trim() === '0'; }
     const azar = (min, max) => min + Math.random() * (max - min);
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    }
+    const esc = Formato.esc;
 
     // ---------- Dibujos ----------
 

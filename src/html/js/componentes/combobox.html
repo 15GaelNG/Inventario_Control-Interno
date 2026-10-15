@@ -60,18 +60,13 @@
    * Escribir completo un valor que sí está en la lista cuenta como elegirlo. Vaciar el campo sí se permite.
    */
   const Combobox = (function () {
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
-    /** Minúsculas y sin acentos, carácter por carácter (misma longitud, para poder resaltar) */
-    const normalizarCaracter = (c) => c.normalize('NFD').charAt(0).toLowerCase();
-    const normalizar = (texto) => Array.from(String(texto == null ? '' : texto)).map(normalizarCaracter).join('');
+    const esc = Formato.esc;
+    /** Minúsculas y sin acentos, letra por letra (mismo largo, para poder resaltar) */
+    const normalizar = Formato.normalAlineado;
 
     function resaltar(texto, consulta) {
       const caracteres = Array.from(String(texto || ''));
-      const base = caracteres.map(normalizarCaracter).join('');
+      const base = normalizar(caracteres.join(''));
       const i = consulta ? base.indexOf(consulta) : -1;
       if (i === -1) return esc(texto);
       const largo = Array.from(consulta).length;

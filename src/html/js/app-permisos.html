@@ -34,8 +34,7 @@
     let fichaActual = null;   // { tipo: 'persona' | 'area' | 'perfil', id, pestana }
 
     // ---------------------------------------------------------------- reglas
-    const normal = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .toUpperCase().trim().replace(/\s+/g, ' ');
+    const normal = (t) => Formato.normal(t).toUpperCase().trim().replace(/\s+/g, ' ');
     const llave = (quien, modulo) => normal(quien) + '|' + modulo;
     const modulos = () => datos.grupos.reduce((t, g) => t.concat(g.modulos), []);
     /** Las secciones de un módulo (o []), como las manda el panel: { id, etiqueta, icono, hereda } */
@@ -234,7 +233,7 @@
           : padreDe(modulo) ? '<span class="usr-origen area">' + ico('corner-down-right') + ' Hereda</span>' : nivel('NINGUNO'));
     const cambioHistorial = (h) => '<span class="usr-historial-cambio">' + chipHistorial(h.antes, esDePersona(h), h.modulo) + ico('arrow-right') +
       chipHistorial(h.despues, esDePersona(h), h.modulo) + '</span>';
-    const fechaHora = (iso) => (iso ? formatearFecha(iso) + ' ' + new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—');
+    const fechaHora = (iso) => Formato.fechaHora(iso) || '—';
     /** Lo de ese área, correo o perfil; de un perfil, también sus asignaciones (que se anotan con el área) */
     const historialDe = (quien) => datos.historial.filter((h) => normal(h.quien) === normal(quien) ||
       (/^perfil:/i.test(quien) && normal(h.modulo) === normal(quien)));
@@ -1146,7 +1145,7 @@
       const dePersona = esDePersona(h);
       const p = dePersona ? persona(h.quien) : null;
       return {
-        ID: i, FECHA: h.fecha, HORA: h.fecha ? new Date(h.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
+        ID: i, FECHA: h.fecha, HORA: Formato.hora(h.fecha),
         QUIEN: h.quien, A_QUIEN: p ? (p.nombre || p.correo) : esDePerfil(h) ? 'Perfil ' + h.quien.replace(/^perfil:/i, '') : h.quien,
         TIPO: dePersona ? 'Persona' : esDePerfil(h) ? 'Perfil' : 'Área',
         MODULO: etiquetaModulo(h.modulo), ANTES: textoHistorial(h.antes, dePersona, h.modulo), DESPUES: textoHistorial(h.despues, dePersona, h.modulo),

@@ -193,7 +193,7 @@
         );
       }
       if (vivo.disponible && info) {
-        const cuando = info.ultimaComunicacion ? new Date(info.ultimaComunicacion).toLocaleString('es-MX') : '—';
+        const cuando = Formato.fechaHora(info.ultimaComunicacion) || '—';
         partes.push(`
           <div class="dt-campo-titulo" style="margin:14px 0 6px">Estado en vivo (Geotab)</div>
           <div>${badgeEnVivo(estadoDe(sensor), sensor)}</div>

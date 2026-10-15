@@ -368,18 +368,11 @@
    */
   const deModulo = (modulo, fn, vacio) => (permisoDe(modulo) ? fn().catch(() => vacio) : Promise.resolve(null));
 
-  /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas) */
-  function escaparHtml(valor) {
-    return String(valor == null ? '' : valor).replace(/[&<>"']/g, (c) => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
-  }
+  /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas). Es Formato.esc. */
+  function escaparHtml(valor) { return Formato.esc(valor); }
 
   /** Fecha de hoy en horario LOCAL como "YYYY-MM-DD" (a diferencia de hoyISO(), que usa UTC) */
-  function hoyLocal() {
-    const f = new Date();
-    return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
-  }
+  function hoyLocal() { return Formato.dia(new Date()); }
 
   function guardarSesion(resultadoLogin) {
     state.token = resultadoLogin.token;
@@ -1124,25 +1117,12 @@
     return new Date().toISOString().slice(0, 10);
   }
   function fijarFechaRegistroHoy() {
-    document.getElementById('inc-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('inc-fecha-registro').value = Formato.fecha(new Date());
   }
-  function fechaParaInput(valor) {
-    if (!valor) return '';
-    const f = new Date(valor);
-    return isNaN(f) ? '' : f.toISOString().slice(0, 10);
-  }
-  function formatearFecha(valor) {
-    if (!valor) return '—';
-    const f = new Date(valor);
-    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-  }
-  /** Formatea un monto como pesos mexicanos ($1,234.56) — solo para mostrar
-   * en tablas/detalle; los campos de captura siguen siendo number normal. */
-  function formatearMoneda(valor) {
-    if (valor === '' || valor === null || valor === undefined) return '—';
-    const n = Number(valor);
-    return isNaN(n) ? '—' : n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
-  }
+  function fechaParaInput(valor) { return Formato.dia(valor); }
+  function formatearFecha(valor) { return Formato.fecha(valor) || '—'; }
+  /** Un monto como pesos ($1,234.56), solo para mostrar; los campos de captura siguen siendo number. */
+  function formatearMoneda(valor) { return Formato.moneda(valor, { centavos: true }) || '—'; }
 
   // ============================================================
   // Motor genérico de "tabla interactiva": buscador global, orden
@@ -1455,12 +1435,12 @@
    *  acentos/ñ correctos gracias al BOM). `columnas` = [{clave, etiqueta}],
    *  igual que las que ya usa crearTablaInteractiva. */
   function exportarCSV(nombreArchivo, columnas, filas) {
-    const escapar = (valor) => {
+    const celda = (valor) => {
       const texto = String(valor == null ? '' : valor);
       return /[",\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
     };
-    const encabezado = columnas.map((c) => escapar(c.etiqueta)).join(',');
-    const cuerpo = (filas || []).map((fila) => columnas.map((c) => escapar(fila[c.clave])).join(',')).join('\r\n');
+    const encabezado = columnas.map((c) => celda(c.etiqueta)).join(',');
+    const cuerpo = (filas || []).map((fila) => columnas.map((c) => celda(fila[c.clave])).join(',')).join('\r\n');
     const contenido = '﻿' + encabezado + '\r\n' + cuerpo;
     const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -4636,7 +4616,7 @@
     document.getElementById('campos-form-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'uber' });
     document.getElementById('campos-form-editar-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'editar-uber', esEdicion: true });
 
-    document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
 
     function badgeEstatusUber(estatus) {
       const valor = String(estatus || '').toUpperCase();
@@ -4945,7 +4925,7 @@
         const datos = Object.assign(CamposHoja.recolectar(CAMPOS_UBER, 'uber'), archivo);
         await callServer('apiCrearUber', state.token, datos);
         ev.target.reset();
-        document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
+        document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
         invalidarCacheLista('apiListarUberResumen', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
@@ -5010,7 +4990,7 @@
     document.getElementById('campos-form-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'ticket' });
     document.getElementById('campos-form-editar-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'editar-ticket', esEdicion: true });
 
-    document.getElementById('ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('ticket-fecha-de-registro').value = Formato.fecha(new Date());
     document.getElementById('ticket-fecha').value = hoyISO();
 
     // Departamentos (hoja "LISTAS VEHICULOS") y Solicitantes (sugerencias =
@@ -5147,7 +5127,7 @@
       try {
         await callServer('apiCrearTicket', state.token, CamposHoja.recolectar(CAMPOS_TICKET, 'ticket'));
         ev.target.reset();
-        document.getElementById('ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
+        document.getElementById('ticket-fecha-de-registro').value = Formato.fecha(new Date());
         document.getElementById('ticket-fecha').value = hoyISO();
         invalidarCacheLista('apiListarTicketsResumen', state.token);
         await cargar();

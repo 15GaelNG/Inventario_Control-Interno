@@ -527,7 +527,7 @@
    *     minimo: 2 → el botón aparece solo con 2 o más seleccionados (por omisión, con 1)
    *   Tipo de columna nuevo (disponible para todas las tablas):
    *     DataTable.registrarTipo('moneda', { hereda: 'numero',
-   *       formatear: (v) => (v == null || v === '' ? '' : '$' + Number(v).toLocaleString('es-MX')) });
+   *       formatear: (v) => Formato.moneda(v) });
    *     (lo que no se defina se toma del tipo del que hereda; ver TIPOS abajo)
    *
    * ─── ATAJOS ───────────────────────────────────────────────────────────────────────
@@ -564,39 +564,23 @@
     const TEXTO_ATAJOS = 'Shift+clic en casillas: seleccionar rango · Shift+clic en encabezado: ordenar por varias columnas · ' +
       'Ctrl+C: copiar seleccionados · Ctrl+Z: deshacer edición · Arrastra encabezados para reordenar y sus bordes para cambiar el ancho';
 
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
+    const esc = Formato.esc;
     function vacio(v) { return v === null || v === undefined || String(v).trim() === ''; }
 
-    /** Minúsculas y sin acentos, carácter por carácter (misma longitud, para poder resaltar) */
-    function normalizarCaracter(c) { return c.normalize('NFD').charAt(0).toLowerCase(); }
-    function normalizar(texto) { return Array.from(String(texto == null ? '' : texto)).map(normalizarCaracter).join(''); }
+    /** Minúsculas y sin acentos, letra por letra (mismo largo, para poder resaltar) */
+    const normalizar = Formato.normalAlineado;
 
     /** Fecha → "yyyy-MM-dd" en hora local (para comparar por día) */
     function claveFecha(v) {
       if (vacio(v)) return '';
       if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
       const f = v instanceof Date ? v : new Date(v);
-      return isNaN(f) ? '' : claveDeDate(f);
+      return isNaN(f) ? '' : Formato.dia(f);
     }
-    function claveDeDate(f) {
-      return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
-    }
-    function sumarDias(dias) { const f = new Date(); f.setDate(f.getDate() + dias); return claveDeDate(f); }
+    function sumarDias(dias) { const f = new Date(); f.setDate(f.getDate() + dias); return Formato.dia(f); }
     /** "yyyy-MM-dd" → "dd/mm/aaaa" (siempre con ceros, igual que el Excel exportado y AppSheet) */
-    function fechaLegible(clave) {
-      if (!clave) return '';
-      const [y, m, d] = clave.split('-');
-      return `${d}/${m}/${y}`;
-    }
-    function aNumero(v) {
-      if (vacio(v)) return null;
-      const n = Number(String(v).replace(/[$,\s]/g, ''));
-      return isNaN(n) ? null : n;
-    }
+    const fechaLegible = Formato.fecha;
+    const aNumero = Formato.aNumero;
     function plural(n, singular, pluralTexto) { return n === 1 ? singular : (pluralTexto || singular + 's'); }
     function escribiendo(el) {
       return !!(el && el.closest && el.closest('input:not([type="checkbox"]), textarea, select, [contenteditable="true"]'));
@@ -680,7 +664,7 @@
     });
 
     registrarTipo('numero', {
-      formatear: (v) => { const n = aNumero(v); return n === null ? '' : n.toLocaleString('es-MX'); },
+      formatear: (v) => (aNumero(v) === null ? '' : Formato.miles(v)),
       claveOrden: aNumero,
       operadores: [
         ['=', 'Igual a (=)', '='], ['!=', 'Distinto de (≠)', '≠'], ['>', 'Mayor que (>)', '>'], ['>=', 'Mayor o igual (≥)', '≥'],
@@ -997,12 +981,12 @@
       }
 
       function calcularAgregado(col, filas) {
-        if (col.agregado === 'conteo') return filas.filter((f) => !vacio(valorDe(col, f))).length.toLocaleString('es-MX');
+        if (col.agregado === 'conteo') return Formato.miles(filas.filter((f) => !vacio(valorDe(col, f))).length);
         const agregado = AGREGADOS[col.agregado];
         const nums = filas.map((f) => aNumero(valorDe(col, f))).filter((n) => n !== null);
         if (!agregado) return '';
         if (!nums.length) return '—';
-        return agregado.calcular(nums).toLocaleString('es-MX', { maximumFractionDigits: 2 });
+        return Formato.miles(agregado.calcular(nums), { decimales: 2 });
       }
       const etiquetaAgregado = (col) => (col.agregado === 'conteo' ? 'n' : (AGREGADOS[col.agregado] || {}).etiqueta || '');
 
@@ -1072,7 +1056,7 @@
       function resaltar(texto) {
         const q = normalizar(st.busqueda.trim());
         const caracteres = Array.from(texto);
-        const base = caracteres.map(normalizarCaracter).join('');
+        const base = normalizar(caracteres.join(''));
         let i = q ? base.indexOf(q) : -1;
         if (i === -1) return esc(texto);
         const largo = Array.from(q).length;

@@ -34,11 +34,7 @@
   const Confirmar = (function () {
     const MAX_DETALLE = 50;
 
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
+    const esc = Formato.esc;
 
     function pedir(opciones) {
       const o = Object.assign({ titulo: '¿Continuar?', mensaje: '', detalle: [], textoConfirmar: 'Confirmar', peligro: false }, opciones);

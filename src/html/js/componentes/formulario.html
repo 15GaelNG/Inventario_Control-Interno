@@ -308,11 +308,7 @@
   const Formulario = (function () {
     const TIPOS_INPUT = { texto: 'text', numero: 'number', fecha: 'date' };
 
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
+    const esc = Formato.esc;
     const vacio = (v) => v === null || v === undefined || String(v).trim() === '';
     /** Lleva el campo a la vista (no todos los entornos traen scrollIntoView) */
     const irA = (el) => { if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); };

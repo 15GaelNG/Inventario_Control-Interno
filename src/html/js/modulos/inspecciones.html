@@ -227,8 +227,7 @@
     document.getElementById('ins-kpi-mes').addEventListener('click', (ev) => {
       const yaActivo = ev.currentTarget.classList.contains('activo');
       const desde = new Date(Date.now() - 30 * DIA_MS);
-      const iso = [desde.getFullYear(), String(desde.getMonth() + 1).padStart(2, '0'),
-        String(desde.getDate()).padStart(2, '0')].join('-');
+      const iso = Formato.dia(desde);
       tabla.setFiltro('FECHA', yaActivo ? null : { op: 'despues', v1: iso });
     });
     document.getElementById('ins-kpi-total').addEventListener('click', () => tabla.limpiarFiltros());

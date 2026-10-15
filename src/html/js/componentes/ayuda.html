@@ -58,15 +58,8 @@
   const Ayuda = (function () {
     const UMBRAL_BUSCADOR = 6;
 
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
-
-    function normalizar(s) {
-      return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-    }
+    const esc = Formato.esc;
+    const normalizar = Formato.normal;
 
     function abrir(preguntas, opciones) {
       const o = opciones || {};

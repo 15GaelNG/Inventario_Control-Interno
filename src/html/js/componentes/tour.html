@@ -64,11 +64,7 @@
     // pensando que es un comentario -- incluso dentro de un string -- y rompería esta URL.
     const MASCOTA_URL = 'https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/mascota-asistente.png';
 
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
+    const esc = Formato.esc;
 
     function limpiarResaltado() {
       if (estado && estado.elementoActual) estado.elementoActual.classList.remove('tour-resaltado');

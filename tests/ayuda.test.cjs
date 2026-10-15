@@ -9,11 +9,12 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'componentes', 'ayuda.html'), 'utf8');
+const FORMATO = require('./formato-fuente');
 const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
 
 function montar() {
   const dom = new JSDOM('<!doctype html><body></body></html>', { url: 'https://prueba.local/', runScripts: 'outside-only' });
-  dom.window.eval(js + '\nwindow.Ayuda = Ayuda;');
+  dom.window.eval(FORMATO + js + '\nwindow.Ayuda = Ayuda;');
   return dom;
 }
 

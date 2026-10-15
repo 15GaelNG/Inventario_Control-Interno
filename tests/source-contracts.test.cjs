@@ -421,6 +421,37 @@ test('el candado del script se pide solo con Candado.con (reentrante), y SheetUt
   assert.match(funcion('remove'), /Candado\.con\(/);
 });
 
+test('la pantalla escribe fechas, montos y texto seguro con Formato (componentes/formato.html), sin otra copia', () => {
+  // Había ~20 copias de esc y una forma de fecha por módulo (docs/homologacion-codigo.md, fase 2). Un formato nuevo
+  // va en formato.html (con su prueba en tests/formato.test.js); en el módulo, a lo más un alias: const esc = Formato.esc
+  const COPIAS = [
+    [/['"]&amp;['"]/, 'escapar HTML a mano → Formato.esc'],
+    [/\.normalize\(['"]NFD['"]\)/, 'quitar acentos a mano → Formato.normal / normalAlineado'],
+    [/\.toLocale(Date|Time)?String\(/, 'fecha o número con toLocale… → Formato.fecha / fechaHora / hora / fechaTexto / moneda / miles'],
+    [/padStart\(2, ['"]0['"]\)/, 'armar una fecha a mano → Formato.dia / fecha / hora'],
+  ];
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/formato.html'))
+    .forEach((f) => {
+      const texto = fs.readFileSync(f, 'utf8');
+      for (const m of texto.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+        m[1].split('\n').forEach((linea, i) => COPIAS.forEach(([re, porque]) => {
+          if (re.test(linea)) fuera.push(path.relative(root, f).replace(/\\/g, '/') + ': ' + linea.trim().slice(0, 90) + '  (' + porque + ')');
+        }));
+      }
+    });
+  assert.deepEqual(fuera, []);
+
+  const index = read('src/html/Index.html');
+  const pos = (archivo) => index.indexOf("include('html/js/" + archivo + "')");
+  assert.ok(pos('componentes/formato') > 0, 'Index.html incluye componentes/formato');
+  ['api', 'componentes/pantalla', 'app', 'componentes/datatable'].forEach((a) =>
+    assert.ok(pos('componentes/formato') < pos(a), 'formato va antes que ' + a));
+  assert.ok(pos('componentes/formato') < index.indexOf("include('html/notificaciones')"), 'formato va antes que notificaciones');
+  assert.match(read('package.json'), /node tests\/formato\.test\.js/);
+});
+
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
   const app = read('src/html/js/app.html');
   const index = read('src/html/Index.html');
@@ -2580,12 +2611,13 @@ test('Líneas: «Recargar datos» también vacía las hojas que la lectura guard
 
 test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
   const html = read('src/html/js/lineas.html');
-  const ini = html.indexOf('      function dinero(n, centavos) {');
-  const dinero = new Function(html.slice(ini, html.indexOf('\n      }', ini) + 8) + '\nreturn dinero;')();
+  const linea = html.split('\n').find((l) => l.includes('const dinero = (n, centavos) =>'));
+  assert.ok(linea, 'el dinero de Facturación sale de Formato.moneda');
+  const dinero = new Function(require('./formato-fuente') + linea + '\nreturn dinero;')();
   assert.strictEqual(dinero(-7.74, true), '-$7.74');
   assert.strictEqual(dinero(269.78, true), '$269.78');
   assert.strictEqual(dinero(1049), '$1,049');
-  assert.strictEqual(dinero(''), null);
+  assert.strictEqual(dinero(''), '');
 });
 
 test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {

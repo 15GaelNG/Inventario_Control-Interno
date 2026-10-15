@@ -650,7 +650,7 @@
     document.getElementById(idArq(prefijo, 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
     ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
       const el = document.getElementById(idArq(prefijo, clave));
-      if (el) el.value = new Date().toLocaleDateString('es-MX');
+      if (el) el.value = Formato.fecha(new Date());
     });
 
     auditItems.forEach((item) => {
@@ -766,7 +766,7 @@
     document.getElementById(idArq('arq', 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
     ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
       const el = document.getElementById(idArq('arq', clave));
-      if (el) el.value = new Date().toLocaleDateString('es-MX');
+      if (el) el.value = Formato.fecha(new Date());
     });
 
     try {
@@ -1109,7 +1109,7 @@
         document.getElementById(idArq('arq', 'QUIEN REGISTRO')).value = (state.sesion && state.sesion.nombre) || '';
         ['FECHA DEL ULTIMO ARQUEO', 'FECHA INICIO', 'FECHA FIN'].forEach((clave) => {
           const el = document.getElementById(idArq('arq', clave));
-          if (el) el.value = new Date().toLocaleDateString('es-MX');
+          if (el) el.value = Formato.fecha(new Date());
         });
         recalcularTotalesArqueo('arq', auditItems);
         await cargar();

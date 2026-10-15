@@ -60,8 +60,7 @@
   const CamposHoja = (function () {
     /** 'TIPO DE COMBUSTIBLE' → 'tipo-de-combustible' (sin acentos ni símbolos) */
     function slug(clave) {
-      return clave.toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      return Formato.normal(clave)
         .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     }
     const idDe = (prefijo, clave) => prefijo + '-' + slug(clave);

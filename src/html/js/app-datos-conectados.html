@@ -17,7 +17,7 @@
     let filtroFamilia = '';
     const columnasCache = {};    // hoja → promesa de apiDatosConectadosColumnas
 
-    const esc = (v) => escaparHtml(String(v == null ? '' : v));
+    const esc = Formato.esc;
     const nombreDato = (c) => (typeof RelSencilla !== 'undefined' && RelSencilla.dato ? RelSencilla.dato(c) : c);
     const etiquetaHoja = (hoja) => {
       const h = (datos.hojas || []).find((x) => x.hoja === hoja);

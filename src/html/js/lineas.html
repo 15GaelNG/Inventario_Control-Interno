@@ -15,29 +15,14 @@
 
     // ---------------- Utilidades ----------------
     const $ = (sel, raiz) => (raiz || document).querySelector(sel);
-    const esc = (v) => {
-      if (v === null || v === undefined || v === '') return '';
-      return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    };
+    const esc = Formato.esc;
     const vacio = '<span class="ln-tenue">—</span>';
     const guion = (v) => (v === null || v === undefined || v === '' ? vacio : esc(v));
-    const fecha = (iso) => {
-      if (!iso) return null;
-      const d = new Date(iso);
-      return isNaN(d) ? null : d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: '2-digit' });
-    };
-    const fechaHora = (iso) => {
-      if (!iso) return '';
-      const d = new Date(iso);
-      return isNaN(d) ? '' : d.toLocaleString('es-MX', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    };
-    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const porcentaje = (v) => {
-      if (v === null || v === undefined || v === '') return null;
-      const n = Number(v);
-      return Math.round(n > 1 ? n : n * 100) + '%';
-    };
-    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+    const fecha = (v) => Formato.fechaTexto(v);
+    const fechaHora = (v) => Formato.fechaTexto(v, { hora: true });
+    const normal = Formato.normal;
+    const porcentaje = Formato.porcentaje;
+    const miles = (n) => Formato.miles(n);
 
     /** Activos de otro módulo para Gestión de Activos: si la persona no tiene permiso en ese
      *  módulo ni se pregunta (el servidor lo rechazaría y quedaría un error en los registros) —
@@ -46,16 +31,7 @@
       ? callServerCacheado(api, state.token).catch(() => [])
       : Promise.resolve(null));
     /** Ícono de Lucide (lucide.dev/icons) como SVG en línea: icono('smartphone'). */
-    function icono(nombre, clase) {
-      const nombrePascal = String(nombre).replace(/(^|-)([a-z0-9])/g, (m, sep, c) => c.toUpperCase());
-      const nodos = window.lucide && window.lucide.icons && window.lucide.icons[nombrePascal];
-      if (!nodos) return '';
-      const svg = window.lucide.createElement(nodos);
-      svg.setAttribute('class', 'ln-icon ' + (clase || ''));
-      svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('focusable', 'false');
-      return svg.outerHTML;
-    }
+    const icono = (nombre, clase) => Iconos.svg(nombre, 'ln-icon' + (clase ? ' ' + clase : ''));
     /** Rellena los <span data-ln-icon="nombre"> de las plantillas. */
     function pintarIconos(raiz) {
       raiz.querySelectorAll('[data-ln-icon]').forEach((el) => { el.innerHTML = icono(el.dataset.lnIcon); });
@@ -224,17 +200,10 @@
 
     // ---------------- Tablas y KPIs con los componentes del sistema (rama jorge) ----------------
     /** Ícono con la clase .ico del sistema, para HTML que se repinta (tablas, KPIs, títulos). */
-    const ico = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : icono(nombre));
+    const ico = (nombre) => Iconos.svg(nombre);
 
     /** Fecha como la muestra DataTable (dd/mm/aaaa) y con hora solo si la trae. */
-    function fechaTabla(v) {
-      if (v === null || v === undefined || v === '') return '';
-      const d = v instanceof Date ? v : new Date(v);
-      if (isNaN(d)) return String(v);
-      const dos = (x) => String(x).padStart(2, '0');
-      const dia = dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear();
-      return d.getHours() || d.getMinutes() ? dia + ' ' + dos(d.getHours()) + ':' + dos(d.getMinutes()) : dia;
-    }
+    const fechaTabla = (v) => Formato.fechaHoraSiTiene(v) || (v == null ? '' : String(v));
     const esFechaIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v);
     const esBooleano = (v) => v === true || v === false || /^(TRUE|FALSE)$/i.test(String(v));
     const booleano = (v) => (v === '' || v === null || v === undefined ? '' : (v === true || String(v).toUpperCase() === 'TRUE' ? 'Sí' : 'No'));
@@ -485,7 +454,7 @@
      * el panel de detalle y en el Excel). Detecta fechas y casillas por su contenido.
      */
     /** Encabezado comparable: mayúsculas, sin acentos y con un solo espacio. */
-    const normEncabezado = (h) => String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const normEncabezado = (h) => Formato.normal(h).toUpperCase().replace(/\s+/g, ' ').trim();
 
     /** "FECHA DE REGISTRO" → "Fecha de registro"; siglas cortas (NUCO, IMEI, SIM) se quedan igual. */
     const tituloLegible = (h) => {
@@ -579,16 +548,14 @@
     function diaClave(diasAtras) {
       const f = new Date();
       f.setDate(f.getDate() - (diasAtras || 0));
-      return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+      return Formato.dia(f);
     }
     function contarDesde(filas, campo, diasAtras) {
       const desde = diaClave(diasAtras);
       return filas.filter((f) => {
         if (!f[campo]) return false;
-        const d = new Date(f[campo]);
-        if (isNaN(d)) return false;
-        const clave = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
-        return clave >= desde;
+        const clave = Formato.dia(f[campo]);
+        return clave !== '' && clave >= desde;
       }).length;
     }
 
@@ -2454,7 +2421,7 @@
         if (clase === 'tipo') { c.tipo = 'lista'; c.render = (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v); }
         if (clase === 'chip') { c.tipo = 'lista'; c.render = (v) => chip(v); }
         if (clase === 'fecha') c.tipo = 'lnFechaHora';
-        if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => (v === null || v === undefined || v === '' ? vacio : '$' + Number(v).toLocaleString('es-MX')); }
+        if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => Formato.moneda(v) || vacio; }
         if (clase === 'ultimo') {
           const tipo = campo === 'RESPONSIVA' ? 'RESPONSIVA' : 'INSPECCION';
           c.visible = true;
@@ -2966,7 +2933,7 @@
           ]) +
           seccion('card-sim', 'Línea', [
             campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
-            campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', v('COSTO PLAN') !== '' ? '$' + Number(v('COSTO PLAN')).toLocaleString('es-MX') : ''),
+            campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', Formato.moneda(v('COSTO PLAN'))),
             campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
           ]) +
           (v('COMENTARIOS') ? seccion('message-square-text', 'Comentarios', ['<p class="ln-vr-comentario">' + esc(v('COMENTARIOS')) + '</p>']) : '');
@@ -3274,11 +3241,8 @@
         const m = MESES_LARGOS[d.getMonth()];
         return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear();
       }
-      function dinero(n, centavos) {
-        if (n === null || n === undefined || n === '' || isNaN(Number(n))) return null;
-        // El signo va antes del $: «-$7.74», no «$-7.74» (nota de crédito; prueba en /dev del 14-oct)
-        return (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
-      }
+      // El signo va antes del $: «-$7.74», no «$-7.74» (nota de crédito; prueba en /dev del 14-oct)
+      const dinero = (n, centavos) => Formato.moneda(n, { centavos: centavos ? true : 'siTiene' });
       /** «$29.22 de menos» / «$51.00 de más» / «Igual», con su color. */
       function diferenciaTexto(d) {
         if (d === null || d === undefined) return vacio;
@@ -3289,7 +3253,7 @@
       function usoTexto(f) {
         if (sinUso(f)) return '<span class="ln-chip ambar">Sin uso</span>';
         const gb = (Number(f.datosMb) || 0) / 1024;
-        return esc(miles(f.minutos) + ' min · ' + miles(f.mensajes) + ' mensajes · ' + gb.toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' GB');
+        return esc(miles(f.minutos) + ' min · ' + miles(f.mensajes) + ' mensajes · ' + Formato.miles(gb, { decimales: 1 }) + ' GB');
       }
       /** De dónde salió el plan, en palabras. Lo que vino del AppSheet o se capturó a mano también se dice. */
       function origenPlan(l) {
@@ -5710,9 +5674,9 @@
       { clave: 'TELCEL FRO', nombre: 'Telcel · FRO' }, { clave: 'TELCEL GPH', nombre: 'Telcel · GPH' }, { clave: 'AT&T', nombre: 'AT&T' },
       { clave: 'TELCEL', nombre: 'Telcel · sin razón social' }, { clave: '', nombre: 'Sin compañía' },
     ];
-    const dinero = (n) => '$' + Math.round(n || 0).toLocaleString('es-MX');
-    const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + (n / 1e6).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + ' M'
-      : Math.abs(n) >= 1e4 ? '$' + (n / 1e3).toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' mil' : dinero(n));
+    const dinero = (n) => Formato.moneda(n || 0, { centavos: false });
+    const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + Formato.miles(n / 1e6, { decimales: 2 }) + ' M'
+      : Math.abs(n) >= 1e4 ? '$' + Formato.miles(n / 1e3, { decimales: 1 }) + ' mil' : dinero(n));
 
     /**
      * El servidor manda los registros en columnas y el estatus de cada mes en corridas (LineasPanorama → registros):
@@ -5759,10 +5723,9 @@
       };
       let tabla = null;
 
-      const pct = (v, total) => (total ? (Math.round((v / total) * 1000) / 10).toLocaleString('es-MX') + '%' : '—');
+      const pct = (v, total) => (total ? Formato.miles(v / total * 100, { decimales: 1 }) + '%' : '—');
       const esHoy = () => est.k === est.datos.meses.length - 1;
-      const dosDigitos = (v) => String(v).padStart(2, '0');
-      const ymd = (d) => d.getFullYear() + '-' + dosDigitos(d.getMonth() + 1) + '-' + dosDigitos(d.getDate());
+      const ymd = Formato.dia;
       /** Fecha de corte del mes k ('yyyy-mm-dd'): hoy, o el último día del mes. */
       function corte(k) {
         if (k === est.datos.meses.length - 1) return ymd(new Date());
