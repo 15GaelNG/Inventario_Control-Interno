@@ -56,8 +56,9 @@ cada lado.
       Opción recomendada: un proyecto DEV para `common` (`setup-dev.ps1`) y anotarlo en `ramas` de
       `tools/subir/destinos.json` y en el `on.push.branches` de la Action.
 - [ ] **Línea base.** `npm test` verde, capturas de `capturar.js todas --matriz` guardadas como "antes".
-- [ ] **Escenas de Líneas en la vista previa** (hoy no hay ninguna): lista, ficha, captura, resguardos, en
-      390/768/1024. Sin esto no hay forma de saber si la homologación rompió Líneas en celular.
+- [~] **Escenas de Líneas en la vista previa**: hechas (15-oct) `lineas` (la lista), `lineas-agregar` (captura por pasos con
+      errores) y `lineas-agregar-paso2` (avanza con el paso completo), en 390/768/1024 sin desbordes. Faltan la ficha
+      (`apiLineasEquipo` y sus pestañas) y Resguardos.
 
 ## Fase 1 — Escritura segura en el núcleo (riesgo real de datos)
 

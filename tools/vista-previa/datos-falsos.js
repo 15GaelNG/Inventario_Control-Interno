@@ -6,7 +6,7 @@
   const tema = /tema=oscuro/.test(location.hash) ? 'dark' : 'light';
   try { localStorage.setItem('apariencia', JSON.stringify({ modo: tema })); } catch (e) { /* no-op */ }
 
-  // Los mismos grupos que src/config/Modulos.gs (sin Líneas: sus escenas llegan con la Fase 4 del plan responsivo)
+  // Los mismos grupos que src/config/Modulos.gs (Líneas desde la homologación, 15-oct: escena `lineas`)
   const MODULOS = [
     ['servicios-vehiculares', 'Servicios Vehiculares', 'car', [
       ['incidencias', 'Incidencias'], ['vehiculos', 'Vehículos'], ['cambios-vehiculos', 'Cambios Vehículos'],
@@ -14,6 +14,7 @@
       ['inspeccion-vehicular', 'Inspección Vehicular'], ['instalacion-sensores', 'Instalación de Sensores'], ['hologramas', 'Hologramas']]],
     ['arqueos', 'Arqueos', 'wallet', [['arqueos', 'Arqueos'], ['caja-chica', 'Caja Chica']]],
     ['uber', 'Uber', 'car-taxi-front', [['uber', 'Uber'], ['tickets', 'Tickets']]],
+    ['lineas', 'Líneas', 'smartphone', [['lineas-telefonicas', 'Líneas Telefónicas']]],
     ['administracion', 'Administración', 'settings', [['usuarios', 'Usuarios y permisos'], ['relaciones', 'Datos conectados'], ['salud', 'Salud'], ['capital-humano', 'Capital humano']]],
   ];
   // Los de Modulos.gs (construir.js los pone en window.__GRUPOS), solo de los grupos que tienen escenas
@@ -458,6 +459,60 @@
         { id: 1646, etiqueta: 'Placa, Nuco o VIN', tipo: 'text', opciones: [] }] },
       { id: 63, nombre: 'Solicitud - Análisis de Datos', modulo: '', moduloEtiqueta: '', campos: [] }],
     apiHelpdeskGuardados: JSON.stringify([]),
+    // ---------- Líneas Telefónicas (fase 0 de la homologación: Líneas no tenía escenas) ----------
+    // El índice (LineasRepo.indice): equipos y líneas en columnas + las columnas de la vista de tabla del AppSheet
+    apiLineasIndice: (() => {
+      const GENTE = [['JUAN MANUEL FULGENCIO HERNANDEZ', 'VENTAS', 'CANCUN'], ['ANA ISABEL CHI BUENFIL', 'COMPRAS', 'MERIDA'],
+        ['JORGE LUIS AVECILLA', 'CONTROL INTERNO', 'MERIDA'], ['MARIA FERNANDA LOPEZ', 'POST VENTA', 'QUERETARO'],
+        ['MOISES MALDONADO RUIZ', 'SISTEMAS', 'MERIDA'], ['', '', '']];
+      const MODELOS = ['GALAXY A15', 'GALAXY A25', 'MOTO G24', 'REDMI 13C', 'IPHONE 13', 'GALAXY A05'];
+      const ESTATUS = ['USO', 'USO', 'USO', 'USO', 'DISPONIBLE', 'RESGUARDO'];
+      const equipos = [];
+      const lineas = [];
+      const vista = [];
+      for (let i = 0; i < 18; i++) {
+        const [resp, depto, sede] = GENTE[i % GENTE.length];
+        const nuco = ('0000' + (400 + i * 7)).slice(-4);
+        const numero = '55' + String(12345678 + i * 1111).slice(0, 8);
+        const conLinea = i % 5 !== 4;
+        const estatus = resp ? ESTATUS[i % 4] : ESTATUS[4 + (i % 2)];
+        const tipo = conLinea ? 'EQUIPO + SIM' : 'EQUIPO';
+        equipos.push(['EQU-' + i, nuco, tipo, MODELOS[i % MODELOS.length], '35' + String(1234567890123 + i).slice(0, 13), estatus, resp, depto, sede,
+          conLinea ? 'LIN-' + i : '', conLinea ? numero : '', conLinea ? (i % 3 ? 'TELCEL' : 'AT&T') : '', conLinea ? 'USO' : '', tipo]);
+        if (conLinea) {
+          lineas.push(['LIN-' + i, numero, '8952' + String(100000 + i), i % 3 ? 'TELCEL' : 'AT&T', 'USO', 'EQU-' + i, nuco, resp, depto, false, 'LINEA', []]);
+        }
+        vista.push(['EQU-' + i, conLinea ? numero : '', nuco, tipo, estatus, resp, depto, sede, MODELOS[i % MODELOS.length]]);
+      }
+      return {
+        equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'], filas: equipos, generadoEn: hace(0) },
+        lineas: { columnas: ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja', 'numerosAnteriores'], filas: lineas },
+        vista: { columnas: ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'RESPONSABLE', 'DEPARTAMENTO', 'SEDE', 'EQUIPO'], secretas: [], filas: vista },
+      };
+    })(),
+    // Agregar equipo (LineasRegistros.formulario): los elementos en el orden del AppSheet, con sus condiciones como datos
+    apiLineasFormularioRegistro: (token, id, parte) => {
+      const t = (texto) => ({ tipo: 'titulo', texto });
+      const c = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna, etiqueta, control, requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', valor: '' }, extra || {});
+      return { nuevo: !id, parte: parte || 'EQUIPO', tipo: '', elementos: [
+        t('EQUIPO'),
+        c('NUCO', 'NUCO', 'texto', { requerido: 'SIEMPRE', valida: 'NUCO' }),
+        c('EQUIPO', 'MODELO', 'listaAbierta', { requerido: 'SIEMPRE', opciones: ['GALAXY A15', 'GALAXY A25', 'MOTO G24'] }),
+        c('IMEI', 'IMEI', 'texto', { requerido: 'SIEMPRE' }),
+        c('ESTATUS EQUIPO', 'ESTATUS DEL EQUIPO', 'lista', { requerido: 'SIEMPRE', opciones: ['USO', 'DISPONIBLE', 'RESGUARDO'], valor: 'USO' }),
+        c('RAZON SOCIAL', 'RAZÓN SOCIAL', 'lista', { opciones: ['CIUDAD MADERAS', 'MADERAS OCCIDENTE'] }),
+        t('RESPONSABLE'),
+        c('RESPONSABLE', 'RESPONSABLE', 'listaAbierta', { requerido: 'SIEMPRE', opciones: [] }),
+        c('PUESTO', 'PUESTO', 'listaAbierta', { opciones: [] }),
+        c('DEPARTAMENTO', 'DEPARTAMENTO', 'listaAbierta', { opciones: [] }),
+        c('SEDE', 'SEDE', 'lista', { opciones: ['MERIDA', 'CANCUN', 'QUERETARO'] }),
+        t('ACCESORIOS Y ACCESOS'),
+        c('ACCESORIOS', 'ACCESORIOS', 'multi', { opciones: ['CARGADOR', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'] }),
+        c('PIN WHATSAPP', 'PIN DE WHATSAPP', 'texto', { mostrar: 'NO_EQUIPO' }),
+        c('CUENTA GOOGLE', 'CUENTA DE GOOGLE', 'texto'),
+        c('COMENTARIOS', 'COMENTARIOS', 'area'),
+      ] };
+    },
     // La campana (NotificacionesService.campana): los avisos de cada módulo con la misma forma
     apiNotificaciones: (token, limite) => {
       const lineas = [
@@ -672,6 +727,22 @@
     // El botón de menú solo se ve en pantalla angosta (shell-movil.html): capturar con --ancho=390 o --matriz
     'menu-abierto': async () => { await abrir('inspeccion-vehicular'); (await hasta('.shell-menu-btn')).click(); await esperar(400); },
     // ---- Módulos de la base (Inicio, Vehículos, Caja Chica, Uber, Administración) ----
+    'lineas': async () => { await abrir('lineas-telefonicas'); await hasta('#ln-listado .ln-cuadro, #ln-listado tbody tr'); await esperar(500); },
+    // Agregar equipo: la captura por pasos de Líneas (Pasos, fase 5.6); con un paso avanzado y un error marcado
+    'lineas-agregar': async () => {
+      await abrir('lineas-telefonicas'); (await hasta('#ln-nuevo-equipo')).click();
+      await hasta('.form-paso-chip'); await esperar(500);
+      (await hasta('[data-paso-siguiente]')).click(); await esperar(400);
+    },
+    // El paso 1 lleno: avanza al 2, el 1 queda completado
+    'lineas-agregar-paso2': async () => {
+      await abrir('lineas-telefonicas'); (await hasta('#ln-nuevo-equipo')).click();
+      await hasta('.form-paso-chip'); await esperar(500);
+      [['NUCO', '0612'], ['EQUIPO', 'GALAXY A15'], ['IMEI', '351234567890999']].forEach(([col, v]) => {
+        const el = document.querySelector('[data-columna="' + col + '"]'); el.value = v; evento(el, 'input'); evento(el, 'change');
+      });
+      (await hasta('[data-paso-siguiente]')).click(); await esperar(500);
+    },
     'campana': async () => { await abrir('dashboard'); (await hasta('.ntf-campana')).click(); await hasta('.ntf-panel:not([hidden]) .ntf-item'); await esperar(400); },
     'notificaciones': async () => { await abrir('notificaciones'); await hasta('#ntf-lista .ntf-item'); await esperar(400); },
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
