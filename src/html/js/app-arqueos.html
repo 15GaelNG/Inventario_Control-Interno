@@ -145,14 +145,6 @@
     // ArqueosService.generarPdfArqueo_) a partir de la plantilla F-CI03-009.
     { grupo: 'Firmas', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
     { grupo: 'Firmas', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
-
-    // Apartado al final, aparte (usuario, 7-oct) -- columna agregada a mano en la hoja
-    // (ESTATUS ARQUEO). Sin valorPorDefecto/bloqueadoAlCrear a propósito: se puede cambiar
-    // libremente en cualquier momento, no solo al dar de alta.
-    {
-      grupo: 'Estatus', clave: 'ESTATUS ARQUEO', etiqueta: 'Estado del actual arqueo: ¿Cuenta con información pendiente?', tipo: 'select',
-      opciones: ['COMPLETO', 'PENDIENTE'],
-    },
   ];
 
   /** Genera los <div class="field"> agrupados por sección para un formulario de arqueo.
@@ -163,19 +155,6 @@
     // subirFirmasArqueo); Evidencias (multiple) se junta en un PDF al guardar
     // (subirArchivosArqueo); los totales soloLectura no llevan "$": ya salen formateados.
     return CamposHoja.html(CAMPOS_ARQUEO, { prefijo, soloGrupos });
-  }
-
-  // Top-level a propósito (no dentro de initArqueos): lo usa también la ficha de Caja Chica
-  // (app-cajachica.html, pestaña Arqueos), otro <script> que comparte este mismo scope global.
-  // En blanco (registros de antes de que existiera la columna) se ve como COMPLETO -- la
-  // mayoría de lo que ya estaba ya se había terminado, PENDIENTE es la excepción que alguien
-  // tiene que marcar a mano. Mismo patrón que badgeEstatusCaja (app-cajachica.html).
-  function badgeEstatusArqueo(estatus) {
-    const valor = String(estatus || '').toUpperCase();
-    if (valor === 'PENDIENTE') {
-      return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
-    }
-    return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Completo</span>';
   }
 
   /** Firma a distancia del Responsable/Asistente (14-oct-2026): "Firmado" si ya están las dos,
@@ -246,10 +225,12 @@
     return n <= 1 ? n * 100 : n;
   }
 
-  /** Agrupa los 10 "grupo" de CAMPOS_ARQUEO en 7 pasos, mismo patrón visual que
+  /** Agrupa los "grupo" de CAMPOS_ARQUEO en 6 pasos, mismo patrón visual que
    *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). Evidencia y Firmas eran un
    *  solo paso ("Firmas y evidencia") -- se separan (usuario, 14-oct-2026) porque Firmas va a
-   *  seguir creciendo. */
+   *  seguir creciendo. El paso "Estatus" (marcar a mano si el arqueo quedaba "pendiente") se
+   *  quitó (usuario, 15-oct-2026): con la liga para firmar a distancia, lo que faltaba ya se ve
+   *  solo en la columna "Firma" -- no hace falta otro estatus que alguien tenga que marcar. */
   const PASOS_ARQUEO = [
     { titulo: 'Identificación', grupos: ['Identificación', 'Cuenta bancaria', 'Fechas y método'] },
     { titulo: 'Efectivo', grupos: ['Efectivo — Monedas', 'Efectivo — Billetes', 'Cheques'] },
@@ -257,7 +238,6 @@
     { titulo: 'Auditoría', grupos: ['Auditoría'] },
     { titulo: 'Evidencia', grupos: ['Evidencia'] },
     { titulo: 'Firmas', grupos: ['Firmas'] },
-    { titulo: 'Estatus', grupos: ['Estatus'] },
   ];
 
   /**
@@ -987,7 +967,6 @@
       alTocarFila: (a) => tabla.abrirDetalle(String(a.ID)),
       columnas: [
         { campo: 'ID', titulo: 'ID Arqueo', tipo: 'texto', fijada: true, enDetalle: false },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusArqueo(v), enDetalle: false },
         { campo: 'ID_CCH', titulo: 'ID CCH', tipo: 'texto', enDetalle: false },
         { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto', enDetalle: false },
         { campo: 'TIPO_ARQUEO', titulo: 'Tipo', tipo: 'lista', enDetalle: false },
@@ -1019,28 +998,22 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // Total/Con diferencia/Pendientes son "categorías" clickeables — Calificación
-    // promedio es un promedio, no algo que se pueda filtrar como categoría.
+    // Total/Con diferencia son "categorías" clickeables — Calificación promedio es un
+    // promedio, no algo que se pueda filtrar como categoría. El KPI "Pendientes" (sobre
+    // ESTATUS ARQUEO, marcado a mano) se quitó junto con ese campo (usuario, 15-oct-2026):
+    // qué falta por firmar ya se ve solo en la columna "Firma".
     const tileTotalArq = document.getElementById('arq-stat-total').closest('.stat-tile');
     const tileDiferenciasArq = document.getElementById('arq-stat-diferencias').closest('.stat-tile');
-    const tilePendientesArq = document.getElementById('arq-stat-pendientes').closest('.stat-tile');
-    [tileTotalArq, tileDiferenciasArq, tilePendientesArq].forEach((t) => t.classList.add('stat-tile-clickable'));
-    // "Total" limpia los dos filtros de categoría, no solo el de diferencia.
-    tileTotalArq.addEventListener('click', () => { tabla.setFiltro('DIFERENCIA', null); tabla.setFiltro('ESTATUS', null); });
+    [tileTotalArq, tileDiferenciasArq].forEach((t) => t.classList.add('stat-tile-clickable'));
+    tileTotalArq.addEventListener('click', () => { tabla.setFiltro('DIFERENCIA', null); });
     tileDiferenciasArq.addEventListener('click', () => {
       const yaActivo = tileDiferenciasArq.classList.contains('stat-tile-activo');
       tabla.setFiltro('DIFERENCIA', yaActivo ? null : { op: '!=', v1: 0 });
     });
-    tilePendientesArq.addEventListener('click', () => {
-      const yaActivo = tilePendientesArq.classList.contains('stat-tile-activo');
-      tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['PENDIENTE'] });
-    });
     function marcarKpiActivo(filtros) {
       const f = filtros.DIFERENCIA;
-      const e = filtros.ESTATUS;
-      tileTotalArq.classList.toggle('stat-tile-activo', !f && !e);
+      tileTotalArq.classList.toggle('stat-tile-activo', !f);
       tileDiferenciasArq.classList.toggle('stat-tile-activo', !!(f && f.op === '!=' && f.v1 === 0));
-      tilePendientesArq.classList.toggle('stat-tile-activo', !!(e && e.valores && e.valores.indexOf('PENDIENTE') >= 0));
       actualizarKpis(tabla.getFiltradas());
     }
 
@@ -1051,8 +1024,6 @@
       document.getElementById('arq-stat-calificacion').textContent = (Math.round(promedio * 100) / 100).toFixed(2) + '%';
       document.getElementById('arq-stat-diferencias').textContent =
         filas.filter((a) => (Number(a.DIFERENCIA) || 0) !== 0).length;
-      document.getElementById('arq-stat-pendientes').textContent =
-        filas.filter((a) => String(a.ESTATUS || '').toUpperCase() === 'PENDIENTE').length;
     }
 
     async function cargar() {
@@ -1242,8 +1213,8 @@
 
   const AYUDA_ARQUEOS = [
     { pregunta: '¿Qué es un arqueo?', respuesta: 'La auditoría y conteo de efectivo de una caja chica: cuánto debería haber contra cuánto hay realmente, más el checklist de 17 puntos de control interno.' },
-    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 7 pasos (Identificación, Efectivo, Gastos, Auditoría, Evidencia, Firmas, Estatus). El ID Arqueo y los totales se calculan solos.' },
-    { pregunta: '¿Qué es el "Estatus del arqueo"?', respuesta: 'El último paso del formulario: marca si el arqueo quedó completo o si todavía falta información pendiente -- ayuda a dar seguimiento a los que quedaron a medias.' },
+    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 6 pasos (Identificación, Efectivo, Gastos, Auditoría, Evidencia, Firmas). El ID Arqueo y los totales se calculan solos.' },
+    { pregunta: '¿Qué hago si el Responsable o el Asistente no están presentes para firmar?', respuesta: 'En el paso "Firmas", "Enviar liga(s) para firmar a distancia" guarda el arqueo y manda un link por cada quien falte -- lo firman desde su celular, sin necesidad de entrar a la app. La columna "Firma" de la tabla muestra qué sigue pendiente.' },
     { pregunta: '¿De dónde sale la Calificación de auditoría?', respuesta: 'Se calcula sola con las respuestas de los 17 reactivos del paso "Auditoría" -- no se captura a mano.' },
     { pregunta: '¿El PDF se genera solo?', respuesta: 'Sí, al registrar o editar el arqueo -- "Estado del PDF" muestra si ya está listo. No hay que subirlo a mano.' },
   ];

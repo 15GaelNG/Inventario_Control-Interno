@@ -328,14 +328,13 @@ const ArqueosService = (function () {
     // (FIRMADO POR). La fecha de vencimiento del token no hace falta en el cliente: regenerar no
     // depende de si venció (igual que en Responsiva/Adherente Vehicular).
     columnas: [
-      'ID ARQUEO', 'ESTATUS ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
+      'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
       'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
       'FIRMA RESPONSABLE', 'FIRMA ASISTENTE',
       'TOKEN FIRMA RESPONSABLE', 'FIRMADO POR RESPONSABLE', 'TOKEN FIRMA ASISTENTE', 'FIRMADO POR ASISTENTE',
     ],
     fila: (r) => ({
       ID: r['ID ARQUEO'],
-      ESTATUS: r['ESTATUS ARQUEO'] || '',
       ID_CCH: r['ID CCH'] || '',
       RESPONSABLE: r['RESPONSABLE'] || '',
       TIPO_ARQUEO: r['TIPO DE ARQUEO'] || '',
