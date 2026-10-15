@@ -45,8 +45,10 @@ const ArqueosService = (function () {
   const ID_COLUMN = 'ID ARQUEO';
 
   // Firma a distancia (Responsable/Asistente, 14-oct-2026): cuánto dura cada liga antes de que
-  // haya que mandar una nueva -- mismo plazo que Responsiva/Adherente Vehicular.
-  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
+  // haya que mandar una nueva. Empezó en 5 días (mismo plazo que Responsiva/Adherente
+  // Vehicular); a 15 días a petición del usuario (15-oct-2026) -- solo Arqueos, no toca
+  // Responsiva/Adherente.
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 15;
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
