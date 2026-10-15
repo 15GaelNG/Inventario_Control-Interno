@@ -8,7 +8,7 @@ const vm = require('node:vm');
 const path = require('node:path');
 
 function crearContexto(filasUber, activosCH) {
-  const llamadas = { update: [] };
+  const llamadas = { update: [], updateMany: [] };
   const hoja = filasUber.map((f) => Object.assign({}, f));
   const contexto = vm.createContext({
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
@@ -24,6 +24,17 @@ function crearContexto(filasUber, activosCH) {
         llamadas.update.push({ id, cambios });
         const fila = hoja.find((f) => f['ID'] === id);
         if (fila) Object.assign(fila, cambios);
+      },
+      // Una sola llamada para todos los cambios, como el real -- así se nota si
+      // sincronizarBajas vuelve a llamar a update() renglón por renglón.
+      updateMany: (ssId, nombreHoja, updates) => {
+        llamadas.updateMany.push(updates);
+        let cambiadas = 0;
+        updates.forEach(({ id, changes }) => {
+          const fila = hoja.find((f) => f['ID'] === id);
+          if (fila) { Object.assign(fila, changes); cambiadas++; }
+        });
+        return cambiadas;
       },
     },
     HojaServicio: {},
@@ -45,7 +56,8 @@ test('sincronizarBajas: pone en BAJA a quien está ACTIVO en Uber pero ya no est
   const cambiados = contexto.Servicio.sincronizarBajas();
   assert.equal(cambiados, 1);
   assert.equal(hoja[0]['ESTAUS USUARIO'], 'BAJA');
-  assert.equal(llamadas.update.length, 1);
+  assert.equal(llamadas.update.length, 0, 'no debe llamar a update() renglón por renglón');
+  assert.equal(llamadas.updateMany.length, 1, 'todos los cambios van en una sola llamada');
 });
 
 test('sincronizarBajas: no toca a quien sigue activo en Capital Humano', () => {
@@ -91,7 +103,7 @@ test('sincronizarBajas: un renglón sin nombre no truena ni se toca', () => {
 });
 
 test('sincronizarBajas: varios renglones ACTIVOS que ya no están en Capital Humano se bajan todos, en una sola corrida', () => {
-  const { contexto, hoja } = crearContexto(
+  const { contexto, llamadas, hoja } = crearContexto(
     [
       { ID: 'U-1', 'NOMBRE COMPLETO': 'Persona Uno', 'ESTAUS USUARIO': 'ACTIVO' },
       { ID: 'U-2', 'NOMBRE COMPLETO': 'Persona Dos', 'ESTAUS USUARIO': 'ACTIVO' },
@@ -104,4 +116,6 @@ test('sincronizarBajas: varios renglones ACTIVOS que ya no están en Capital Hum
   assert.equal(hoja[0]['ESTAUS USUARIO'], 'BAJA');
   assert.equal(hoja[1]['ESTAUS USUARIO'], 'ACTIVO', 'Persona Dos sigue activa en CH');
   assert.equal(hoja[2]['ESTAUS USUARIO'], 'BAJA');
+  assert.equal(llamadas.updateMany.length, 1, 'los 2 cambios van juntos en una sola llamada a Sheets');
+  assert.equal(llamadas.updateMany[0].length, 2);
 });

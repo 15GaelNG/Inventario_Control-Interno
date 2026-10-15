@@ -63,20 +63,25 @@ const UberService = (function () {
    *
    * Sin sesión (lo corre el Calentador cada 10 min, pasosCalentador_() en Calentador.gs) --
    * mismo criterio que el resto de lo automático sin persona detrás (completarFirmaArqueo).
+   * Junta todos los cambios y los manda con SheetUtils.updateMany en una sola pasada (no uno
+   * por uno con SheetUtils.update): la primera vez que corrió este sincronizador encontró de
+   * jalón a todo el atraso de quien había dejado la empresa sin darse de baja en Uber, y un
+   * update() por renglón tardó casi un minuto -- updateMany lee y escribe la hoja una sola vez
+   * sin importar cuántos renglones cambien.
    * Regresa cuántos renglones cambió (para el registro del calentador).
    */
   function sincronizarBajas() {
     const activos = new Set(CapitalHumano.activos().map((c) => CapitalHumano.nombreComparable(c.NOMBRE)));
     const filas = SheetUtils.getAll(Config.SPREADSHEET_IDS.VEHICULOS(), 'UBER');
-    let cambiados = 0;
-    filas.forEach((f) => {
-      if (String(f['ESTAUS USUARIO'] || '').toUpperCase() !== 'ACTIVO') return;
-      const nombre = CapitalHumano.nombreComparable(f['NOMBRE COMPLETO'] || '');
-      if (!nombre || activos.has(nombre)) return;
-      SheetUtils.update(Config.SPREADSHEET_IDS.VEHICULOS(), 'UBER', f['ID'], { 'ESTAUS USUARIO': 'BAJA' }, 'ID');
-      cambiados++;
-    });
-    return cambiados;
+    const porBajar = filas
+      .filter((f) => String(f['ESTAUS USUARIO'] || '').toUpperCase() === 'ACTIVO')
+      .filter((f) => {
+        const nombre = CapitalHumano.nombreComparable(f['NOMBRE COMPLETO'] || '');
+        return nombre && !activos.has(nombre);
+      })
+      .map((f) => ({ id: f['ID'], changes: { 'ESTAUS USUARIO': 'BAJA' } }));
+    if (!porBajar.length) return 0;
+    return SheetUtils.updateMany(Config.SPREADSHEET_IDS.VEHICULOS(), 'UBER', porBajar, 'ID');
   }
 
   return {
