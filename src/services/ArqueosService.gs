@@ -614,7 +614,11 @@ const ArqueosService = (function () {
       cambios[col.firmadoPor] = Session.getActiveUser().getEmail() || '';
 
       const otroQuien = quien === 'asistente' ? 'Responsable' : 'Asistente';
-      if (!fila['FIRMA RESPONSABLE'] || !fila['FIRMA ASISTENTE']) {
+      // Si no hay asistente (CUENTA CON FIRMA ASISTENTE != 'SI'), su firma en blanco no cuenta
+      // como "falta" -- si no, nunca se cerraría el documento de un arqueo sin asistente
+      // (usuario, 15-oct-2026).
+      const faltaAsistente = fila['CUENTA CON FIRMA ASISTENTE'] === 'SI' && !fila['FIRMA ASISTENTE'];
+      if (!fila['FIRMA RESPONSABLE'] || faltaAsistente) {
         SheetUtils.update(ssId(), hoja_().getName(), fila['ID ARQUEO'], cambios, ID_COLUMN);
         return { PDF: null, aviso: 'Tu firma quedó registrada. Falta la del ' + otroQuien + ' para generar el documento final.' };
       }
@@ -671,12 +675,20 @@ const ArqueosService = (function () {
    * faltaba una firma, sin ningún aviso, y ya no se podía volver a mandar liga). Si no había
    * firma todavía (celda vacía) o la URL no es un link de Drive reconocible (dato migrado de
    * AppSheet en otro formato), se considera válido -- no es el mismo caso. */
-  function insertarFirma_(body, marcadorLiteral, urlArchivo) {
+  // textoSiVacio (opcional): cuando NO hay archivo, en vez de dejar el recuadro en blanco se
+  // escribe ese texto -- lo usa la firma del Asistente ("N/A" si el arqueo no tiene asistente,
+  // CUENTA CON FIRMA ASISTENTE != 'SI') para que en el PDF se note que no aplica, no que se les
+  // olvidó pedirla (usuario, 15-oct-2026). El Responsable/Especialista nunca lo usan: esos dos
+  // siempre existen, en blanco ahí sí significa "falta".
+  function insertarFirma_(body, marcadorLiteral, urlArchivo, textoSiVacio) {
     const encontrado = body.findText(escaparRegex_(marcadorLiteral));
     if (!encontrado) return true;
     const parrafo = encontrado.getElement().getParent().asParagraph();
     parrafo.clear();
-    if (!urlArchivo) return true;
+    if (!urlArchivo) {
+      if (textoSiVacio) parrafo.appendText(textoSiVacio);
+      return true;
+    }
     const fileId = extraerIdDrive_(urlArchivo);
     if (!fileId) return true;
     try {
@@ -806,15 +818,16 @@ const ArqueosService = (function () {
       reemplazarMarcador_(body, '<<[' + item.clave + ']>>', texto(fila[item.clave]));
     });
 
-    // Firmas — se insertan como imagen, no como texto. Si alguna YA tenía firma guardada pero su
-    // archivo de Drive ya no se pudo leer, no se sigue como si el documento estuviera completo
+    // Firmas — se insertan como imagen (la del Asistente, "N/A" si el arqueo no tiene uno). Si
+    // alguna YA tenía firma guardada pero su archivo de Drive ya no se pudo leer, no se sigue
+    // como si el documento estuviera completo
     // (ver el comentario largo de insertarFirma_) -- se trona ANTES de guardar/exportar el PDF,
     // para que ni actualizarPdfArqueo_ ni completarFirmaArqueo (los dos únicos que llaman esta
     // función) terminen marcando "Generado"/cerrando el arqueo con una firma faltante en silencio.
     const faltantes = [];
     if (!insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE'])) faltantes.push('Responsable');
     if (!insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA'])) faltantes.push('Especialista');
-    if (!insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'])) faltantes.push('Asistente');
+    if (!insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'], fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI' ? 'N/A' : undefined)) faltantes.push('Asistente');
     if (faltantes.length) {
       throw new Error('No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
         ' en Drive (archivo borrado o sin permiso) -- avisa a soporte para recuperar esa firma.');

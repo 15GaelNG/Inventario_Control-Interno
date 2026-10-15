@@ -80,7 +80,11 @@ function crearContexto(filas) {
       HorizontalAlignment: { CENTER: 'CENTER' },
       openById: () => {
         llamadas.docAbiertos++;
-        const parrafo = { clear: () => {}, appendInlineImage: () => ({ getWidth: () => 100, getHeight: () => 40, setWidth: () => {}, setHeight: () => {} }) };
+        const parrafo = {
+          clear: () => {},
+          appendInlineImage: () => ({ getWidth: () => 100, getHeight: () => 40, setWidth: () => {}, setHeight: () => {} }),
+          appendText: (texto) => { llamadas.textosInsertados = (llamadas.textosInsertados || []).concat(texto); },
+        };
         const marcaAgua = { setBold: () => marcaAgua, setAlignment: () => marcaAgua };
         return {
           getBody: () => ({
@@ -332,6 +336,19 @@ test('completarFirmaArqueo: si la firma del Responsable (ya guardada) no se pued
   assert.match(fila['ESTADO PDF'], /^Error al generar:/);
   assert.notEqual(fila['ESTADO PDF'], 'Generado');
   assert.equal(fila['FORMATO ARQUEO'], undefined);
+});
+
+test('completarFirmaArqueo: sin asistente (CUENTA CON FIRMA ASISTENTE != SI), cierra el PDF solo con la firma del Responsable y pone "N/A" en el recuadro del Asistente', () => {
+  const { contexto, llamadas, hoja } = crearContexto([filaBase({
+    'CUENTA CON FIRMA ASISTENTE': 'NO',
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  const r = contexto.Servicio.completarFirmaArqueo('tok-resp', 'responsable', FIRMA_IMG);
+  assert.ok(r.PDF, 'debe generar el PDF sin esperar a un asistente que no existe');
+  assert.equal(r.aviso, '');
+  const fila = hoja[0];
+  assert.equal(fila['ESTADO PDF'], 'Generado');
+  assert.ok(llamadas.textosInsertados && llamadas.textosInsertados.includes('N/A'));
 });
 
 test('completarFirmaArqueo: token inválido', () => {
