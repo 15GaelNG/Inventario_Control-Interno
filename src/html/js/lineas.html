@@ -1062,9 +1062,7 @@
     /** Indicador de pasos + un <section class="form-paso"> por paso. `extras`: { índice: html } al final del paso. */
     function htmlPasosAppSheet(elementos, pasos, extras, opciones) {
       const grupos = repartirEnPasos(elementos, pasos);
-      return '<div class="ln-pasos-barra"><ol class="form-pasos">' + pasos.map((p, i) =>
-        '<li><button type="button" class="form-paso-chip" data-ir-paso="' + i + '"' + (i ? ' disabled' : '') + '><span class="form-paso-num">' + (i + 1) + '</span>' + esc(p.titulo) + '</button></li>').join('') +
-        '</ol></div>' +
+      return '<div class="ln-pasos-barra">' + Pasos.htmlChips(pasos.map((p) => esc(p.titulo))) + '</div>' +
         pasos.map((p, i) => '<section class="form-paso ln-paso" data-paso="' + i + '"' + (p.siempre ? ' data-paso-siempre' : '') + (i ? ' hidden' : '') + '>' +
           '<h3 class="form-paso-titulo" tabindex="-1">' + (p.icono ? icono(p.icono) + ' ' : '') + esc(p.titulo) + '</h3>' +
           (p.descripcion ? '<p class="form-paso-desc">' + esc(p.descripcion) + '</p>' : '') +
@@ -1085,102 +1083,54 @@
      */
     function activarPasos(cont, cfg) {
       const secciones = Array.from(cont.querySelectorAll('.form-paso[data-paso]'));
-      const chips = Array.from(cont.querySelectorAll('.form-paso-chip[data-ir-paso]'));
-      const vistos = {};
-      let actual = 0;
-      const aplica = (s) => s.hasAttribute('data-paso-siempre') || !!s.querySelector('.ln-af-campo:not([hidden]):not(.ln-af-lectura), .ln-af-campo:not([hidden]) .ln-pastillas');
-      const visibles = () => secciones.map((s, i) => i).filter((i) => aplica(secciones[i]));
       const scroll = cont.closest('.modal-form-scroll') || cont;
-      function pintar() {
-        const vis = visibles();
-        const pos = vis.indexOf(actual);
-        chips.forEach((chip, i) => {
-          const si = vis.indexOf(i) >= 0;
-          chip.closest('li').hidden = !si;
-          chip.classList.toggle('activo', i === actual);
-          chip.classList.toggle('completado', si && vis.indexOf(i) < pos && !!vistos[i]);
-          chip.disabled = !cfg.libre && !vistos[i] && i > actual;
-          chip.querySelector('.form-paso-num').textContent = vis.indexOf(i) + 1;
-        });
-        const ultimo = pos === vis.length - 1;
-        cfg.atras.hidden = pos <= 0;
-        cfg.siguiente.hidden = ultimo;
-        cfg.guardar.hidden = !ultimo && !cfg.libre;
-        if (cfg.cuenta) cfg.cuenta.textContent = 'Paso ' + (pos + 1) + ' de ' + vis.length;
-      }
-      function ir(i, sinFoco) {
-        const vis = visibles();
-        if (vis.indexOf(i) < 0) {
-          const despues = vis.filter((x) => x > i)[0];
-          i = despues !== undefined ? despues : vis.filter((x) => x < i).pop();
-        }
-        if (i === undefined) return;
-        actual = i;
-        vistos[i] = true;
-        secciones.forEach((sec, k) => { sec.hidden = k !== i; });
-        pintar();
-        if (cfg.alMostrar) cfg.alMostrar(i);
-        if (!sinFoco) {
+      // Un paso aplica si tiene algo que capturar a la vista (Show_If según el TIPO) o se declaró siempre
+      const aplica = (i) => secciones[i].hasAttribute('data-paso-siempre') ||
+        !!secciones[i].querySelector('.ln-af-campo:not([hidden]):not(.ln-af-lectura), .ln-af-campo:not([hidden]) .ln-pastillas');
+      // La navegación es la del sistema (componente Pasos, la misma de Formulario)
+      const nav = Pasos.navegar({
+        secciones: secciones, chips: Array.from(cont.querySelectorAll('.form-paso-chip[data-ir-paso]')),
+        atras: cfg.atras, siguiente: cfg.siguiente, guardar: cfg.guardar, cuenta: cfg.cuenta, libre: cfg.libre, teclas: cont,
+        aplica: aplica,
+        validar: (i) => !!(cfg.validar && cfg.validar(secciones[i]).length),
+        alMostrar: (i, sinFoco) => {
+          if (cfg.alMostrar) cfg.alMostrar(i);
+          if (sinFoco) return;
           scroll.scrollTop = 0;
           const titulo = secciones[i].querySelector('.form-paso-titulo');
           if (titulo) titulo.focus({ preventScroll: true });
-        }
-      }
-      function avanzar() {
-        if (cfg.validar && cfg.validar(secciones[actual]).length) return;
-        const sig = visibles().filter((x) => x > actual)[0];
-        if (sig !== undefined) ir(sig);
-      }
-      cfg.siguiente.addEventListener('click', avanzar);
-      cfg.atras.addEventListener('click', () => { const ant = visibles().filter((x) => x < actual).pop(); if (ant !== undefined) ir(ant); });
-      chips.forEach((chip, i) => chip.addEventListener('click', () => {
-        if (i <= actual || cfg.libre || vistos[i]) ir(i);
-        else if (!cfg.validar || !cfg.validar(secciones[actual]).length) ir(i);
-      }));
-      // Enter avanza de paso en vez de guardar a medias (si la lista del Combobox no lo usó)
-      cont.addEventListener('keydown', (ev) => {
-        if (ev.key !== 'Enter' || ev.defaultPrevented || ev.target.tagName !== 'INPUT' || !cfg.siguiente || cfg.siguiente.hidden) return;
-        ev.preventDefault();
-        avanzar();
+        },
       });
       // Show_If puede ocultar o mostrar pasos completos al cambiar el TIPO
-      cont.addEventListener('change', () => setTimeout(pintar, 0));
-      ir(0, true);
+      cont.addEventListener('change', () => setTimeout(nav.refrescar, 0));
+      nav.ir(0, true);
       return {
-        ir: ir,
-        pintar: pintar,
+        ir: nav.ir,
+        pintar: nav.pintar,
         /** Lleva al paso donde está la columna (p. ej. el primer error al guardar). */
         irAlCampo: (columna) => {
           const k = secciones.findIndex((sec) => sec.querySelector('[data-af-columna="' + CSS.escape(columna) + '"]'));
-          if (k >= 0 && k !== actual) ir(k, true);
+          if (k >= 0 && k !== nav.actual()) nav.ir(k, true);
         },
       };
     }
 
     /**
-     * Marca los campos con error (borde y mensaje debajo, como el componente Formulario) y lleva al primero.
+     * Marca los campos con error (Formulario.marcarError: el mismo borde y mensaje que en todo el sistema) y lleva al primero.
      * errores: [{ columna, msg }]. Un campo deja de marcarse en cuanto se corrige.
      */
     function marcarErroresEn(cuerpo, errores) {
-      cuerpo.querySelectorAll('.ln-af-campo.form-campo-error').forEach((c) => {
-        c.classList.remove('form-campo-error');
-        const m = c.querySelector('.form-error-campo');
-        if (m) m.remove();
-      });
+      cuerpo.querySelectorAll('.ln-af-campo.form-campo-error').forEach((c) => Formulario.marcarError(c, null));
       errores.forEach((x) => {
         const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(x.columna) + '"]');
         if (!campo || campo.classList.contains('form-campo-error')) return;
-        campo.classList.add('form-campo-error');
-        campo.insertAdjacentHTML('beforeend', '<span class="form-error-campo">' + esc(x.msg) + '</span>');
+        Formulario.marcarError(campo, x.msg);
       });
       if (!cuerpo.dataset.limpiaErrores) {
         cuerpo.dataset.limpiaErrores = '1';
         const limpiar = (ev) => {
           const campo = ev.target.closest && ev.target.closest('.ln-af-campo.form-campo-error');
-          if (!campo) return;
-          campo.classList.remove('form-campo-error');
-          const m = campo.querySelector('.form-error-campo');
-          if (m) m.remove();
+          if (campo) Formulario.marcarError(campo, null);
         };
         ['input', 'change', 'click'].forEach((t) => cuerpo.addEventListener(t, limpiar));
       }

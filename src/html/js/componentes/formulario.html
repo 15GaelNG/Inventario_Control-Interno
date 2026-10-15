@@ -282,6 +282,8 @@
    * Métodos: getValores() · getArchivos() · setValor(id, v) · sugerir(id, v) · setOpciones(id, [..]) ·
    *          setSoloLectura(id, si, motivo) · setError(id, msg) · limpiar() · enfocar() ·
    *          elemento(id) · irAPaso(i)
+   * Fuera de un formulario: Formulario.marcarError(cajaDelCampo, mensaje) marca (o quita) el error con el mismo aspecto.
+   * Los pasos (indicador, Atrás / Siguiente) son el componente Pasos.
    *
    * ─── ¿POR PASOS O TODO DE UNA VEZ? ────────────────────────────────────────────────
    *   Todo de una vez (default): hasta ~10 campos. Se ve completo y se llena de corrido.
@@ -313,6 +315,20 @@
     /** Lleva el campo a la vista (no todos los entornos traen scrollIntoView) */
     const irA = (el) => { if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
     const ic = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : '');
+
+    /**
+     * El error de un campo, igual en todo el sistema: borde rojo (.form-campo-error) y el mensaje debajo
+     * (.form-error-campo, se crea si la caja no lo trae). mensaje vacío lo quita. También lo usan las capturas de Líneas.
+     */
+    function marcarError(caja, mensaje) {
+      let span = caja.querySelector(':scope > .form-error-campo');
+      if (!span && !mensaje) { caja.classList.remove('form-campo-error'); return; }
+      if (!span) span = caja.appendChild(document.createElement('span'));
+      span.className = 'form-error-campo';
+      caja.classList.toggle('form-campo-error', !!mensaje);
+      span.hidden = !mensaje;
+      span.textContent = mensaje || '';
+    }
 
     function crear(contenedor, cfg) {
       const campos = (cfg.campos || []).map((c) => Object.assign({ tipo: 'texto' }, c));
@@ -465,9 +481,7 @@
         </aside>` : '';
 
       const htmlPrincipal = `
-        ${pasos ? `<ol class="form-pasos">${pasos.map((p, i) =>
-          `<li><button type="button" class="form-paso-chip" data-ir="${i}" ${i === 0 ? 'disabled' : ''}>
-            <span class="form-paso-num">${i + 1}</span>${esc(p.titulo || 'Paso ' + (i + 1))}</button></li>`).join('')}</ol>` : ''}
+        ${pasos ? Pasos.htmlChips(pasos.map((p, i) => esc(p.titulo || 'Paso ' + (i + 1)))) : ''}
         ${campos.some((c) => c.requerido) || (buscar && buscar.requerido !== false) ? '<p class="form-nota">Campos obligatorios</p>' : ''}
         ${htmlCuerpo()}
         ${htmlAcciones}
@@ -564,11 +578,7 @@
       // ---------- errores ----------
       function setError(id, mensaje) {
         const caja = campoDe(id);
-        if (!caja) return;
-        const span = caja.querySelector('.form-error-campo');
-        caja.classList.toggle('form-campo-error', !!mensaje);
-        span.hidden = !mensaje;
-        span.textContent = mensaje || '';
+        if (caja) marcarError(caja, mensaje);
       }
       const limpiarErrores = () => {
         [].concat(buscar ? [buscar.campo] : [], campos.map((c) => c.id)).forEach((id) => setError(id, null));
@@ -634,10 +644,8 @@
           const ficha = contenedor.querySelector('.form-ficha');
           if (ficha && !seVe) ficha.hidden = true;
         }
-        if (!pasos) return;
-        // Si la respuesta cambió y el paso donde está parado ya no aplica, hay que moverlo
-        if (!visible(pasos[pasoActual])) mostrarPaso(pasoActual);
-        else actualizarPasos();
+        // Si la respuesta cambió y el paso donde está parado ya no aplica, Pasos lo mueve
+        if (nav) nav.refrescar();
       }
 
       /** El campo de búsqueda: obligatorio y confirmado, salvo que se haya declarado opcional */
@@ -822,9 +830,7 @@
         }
       }
 
-      // ---------- pasos ----------
-      let pasoActual = 0;
-      const vistos = { 0: true };
+      // ---------- pasos (la navegación es el componente Pasos) ----------
 
       /** Valida solo los campos de un paso; regresa el id del primero con error */
       function validarPaso(i) {
@@ -880,49 +886,14 @@
         if (cfg.panelExtra) contenedor.querySelector('.form-panel-extra').innerHTML = cfg.panelExtra(getValores(), datosFicha) || '';
       }
 
-      /** Índices de los pasos que aplican con lo respondido (los demás se saltan) */
-      const indicesVisibles = () => pasos.map((p, i) => i).filter((i) => visible(pasos[i]));
-      const siguienteVisible = (i) => indicesVisibles().find((x) => x > i);
-      const anteriorVisible = (i) => indicesVisibles().filter((x) => x < i).pop();
-      const esUltimoVisible = (i) => siguienteVisible(i) === undefined;
-
-      /** Redibuja el indicador y los botones según los pasos que apliquen ahora */
-      function actualizarPasos() {
-        const visibles = indicesVisibles();
-        const posicion = visibles.indexOf(pasoActual) + 1;
-        contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
-          const idx = Number(chip.dataset.ir);
-          const aplica = visibles.indexOf(idx) !== -1;
-          chip.closest('li').hidden = !aplica;
-          chip.classList.toggle('activo', idx === pasoActual);
-          chip.classList.toggle('completado', aplica && visibles.indexOf(idx) < posicion - 1);
-          chip.disabled = !vistos[idx] && idx > pasoActual;     // solo se salta a lo ya visitado
-          const numero = chip.querySelector('.form-paso-num');
-          if (numero) numero.textContent = visibles.indexOf(idx) + 1;
-        });
-        contenedor.querySelector('.form-atras').hidden = anteriorVisible(pasoActual) === undefined;
-        contenedor.querySelector('.form-siguiente').hidden = esUltimoVisible(pasoActual);
-        formulario.querySelector('button[type="submit"]').hidden = !esUltimoVisible(pasoActual);
-        contenedor.querySelector('.form-cuenta').textContent = `Paso ${posicion} de ${visibles.length}`;
-      }
-
-      function mostrarPaso(i) {
-        // Si el paso dejó de aplicar (cambió una respuesta), se pasa al siguiente que sí
-        if (!visible(pasos[i])) {
-          const destino = siguienteVisible(i) !== undefined ? siguienteVisible(i) : anteriorVisible(i);
-          if (destino === undefined) return;
-          i = destino;
-        }
-        pasoActual = i;
-        vistos[i] = true;
-        contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      /** Después de mostrar un paso (Pasos ya cambió la sección, el indicador y los botones) */
+      function alMostrarPaso(i) {
         // "* Campos obligatorios" solo donde hay alguno: en "Revisar" o en un paso de puros
         // opcionales la nota no explica nada
         const nota = contenedor.querySelector('.form-nota');
         if (nota) {
           nota.hidden = !contenedor.querySelector(`.form-paso[data-paso="${i}"] :is(input, select, textarea):required`);
         }
-        actualizarPasos();
         if (pasos[i].resumen) pintarResumen();
         actualizarPanel();
         const primerCampo = contenedor.querySelector(
@@ -932,36 +903,25 @@
         irA(formulario);
       }
 
-      function avanzar() {
-        const error = validarPaso(pasoActual);
-        if (error) {
-          const el = elemento(error);
+      const nav = pasos ? Pasos.navegar({
+        secciones: Array.from(contenedor.querySelectorAll('.form-paso')),
+        chips: Array.from(contenedor.querySelectorAll('.form-paso-chip')),
+        atras: contenedor.querySelector('.form-atras'),
+        siguiente: contenedor.querySelector('.form-siguiente'),
+        guardar: formulario.querySelector('button[type="submit"]'),
+        cuenta: contenedor.querySelector('.form-cuenta'),
+        teclas: formulario,
+        aplica: (i) => visible(pasos[i]),
+        // El paso tiene errores: se marcan y se lleva al primero
+        validar: (i) => {
+          const error = validarPaso(i);
+          const el = error && elemento(error);
           if (el) { el.focus(); irA(el); }
-          return;
-        }
-        const destino = siguienteVisible(pasoActual);
-        if (destino !== undefined) mostrarPaso(destino);
-      }
-
-      if (pasos) {
-        contenedor.querySelector('.form-siguiente').addEventListener('click', avanzar);
-        contenedor.querySelector('.form-atras').addEventListener('click', () => {
-          const destino = anteriorVisible(pasoActual);
-          if (destino !== undefined) mostrarPaso(destino);
-        });
-        contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => chip.addEventListener('click', () => {
-          const destino = Number(chip.dataset.ir);
-          if (destino <= pasoActual) mostrarPaso(destino);      // regresar siempre se puede
-          else if (!validarPaso(pasoActual)) mostrarPaso(destino);
-        }));
-        // Enter avanza de paso en vez de guardar a medias
-        formulario.addEventListener('keydown', (ev) => {
-          if (ev.key !== 'Enter' || ev.target.tagName === 'TEXTAREA' || esUltimoVisible(pasoActual)) return;
-          ev.preventDefault();
-          avanzar();
-        });
-        mostrarPaso(0);
-      }
+          return !!error;
+        },
+        alMostrar: alMostrarPaso,
+      }) : null;
+      if (nav) nav.ir(0);
 
       // Estado inicial de lo que depende de una respuesta (todavía sin responder)
       actualizarVisibilidad();
@@ -975,7 +935,7 @@
           // Con pasos, el error puede estar en otro paso: hay que llevar al usuario ahí
           if (pasos) {
             const destino = pasos.findIndex((p) => p.campos.indexOf(primerError) !== -1);
-            if (destino !== -1 && destino !== pasoActual) mostrarPaso(destino);
+            if (destino !== -1 && destino !== nav.actual()) nav.ir(destino);
           }
           const el = elemento(primerError);
           if (el) { el.focus(); irA(el); }
@@ -1008,10 +968,7 @@
         pintarFicha(null);
         limpiarErrores();
         campos.forEach((c) => { if (c.valor !== undefined) setValor(c.id, c.valor); });
-        if (pasos) {
-          Object.keys(vistos).forEach((k) => { if (k !== '0') delete vistos[k]; });
-          mostrarPaso(0);
-        }
+        if (nav) nav.reiniciar();
         actualizarPanel();
       }
 
@@ -1030,12 +987,12 @@
         limpiar,
         enfocar: () => { const el = elemento(buscar ? buscar.campo : campos[0].id); if (el) el.focus(); },
         elemento,
-        irAPaso: (i) => { if (pasos && pasos[i]) mostrarPaso(i); },
-        pasoActual: () => pasoActual,
+        irAPaso: (i) => { if (nav && pasos[i]) nav.ir(i); },
+        pasoActual: () => (nav ? nav.actual() : 0),
       };
       return api;
     }
 
-    return { crear };
+    return { crear, marcarError };
   })();
 </script>

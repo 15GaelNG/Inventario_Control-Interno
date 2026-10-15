@@ -1,0 +1,119 @@
+<script>
+  /**
+   * Pasos — la navegación de un formulario por pasos: el indicador (chips), "Paso x de y", Atrás / Siguiente / Guardar,
+   * validar antes de avanzar y saltarse los pasos que no aplican. Una sola implementación (fase 5.6 de la homologación):
+   * la usan el componente Formulario y las capturas de Líneas (activarPasos), que traían cada uno su copia.
+   *
+   * Solo navega: no sabe de campos. Quien lo usa pinta las secciones y dice qué paso aplica y si el actual está completo.
+   * El aspecto (.form-pasos, .form-paso-chip, .form-paso, .form-cuenta) vive en componentes/formulario.html.
+   *
+   * ─── USO ──────────────────────────────────────────────────────────────────────────
+   *   html: Pasos.htmlChips(['Datos', 'Fotos', 'Firmas'])   → <ol class="form-pasos">… (un chip por paso; HTML ya escapado)
+   *         + un <section class="form-paso" data-paso="i"> por paso (solo el primero visible).
+   *   const nav = Pasos.navegar({
+   *     secciones: [...]  los <section> de cada paso (en orden)
+   *     chips: [...]      los botones .form-paso-chip (mismo orden)
+   *     atras, siguiente, guardar, cuenta    los botones y el texto "Paso x de y" (guardar y cuenta, opcionales)
+   *     teclas: elemento  Enter en un campo de texto avanza de paso en vez de guardar a medias (opcional)
+   *     aplica: (i) => bool      ¿el paso i aplica con lo capturado? (default: siempre)
+   *     validar: (i) => bool     true = el paso i tiene errores (los marca y lleva al primero): no se avanza
+   *     libre: bool              edición: se puede ir a cualquier paso y guardar desde cualquiera
+   *     alMostrar: (i, sinFoco) => {}   después de mostrar el paso i (foco, scroll, resumen…)
+   *   });
+   *   nav.ir(i, sinFoco) · nav.avanzar() · nav.refrescar() (algo cambió: un paso pudo dejar de aplicar) ·
+   *   nav.reiniciar() (de vuelta al primero, como nuevo) · nav.actual()
+   *
+   * Reglas (las mismas en todo el sistema):
+   * - Un paso que no aplica desaparece del indicador y la cuenta se ajusta; si es el actual, se pasa al siguiente que sí.
+   * - Adelante solo con el paso actual completo; a un paso no visitado solo con Siguiente. Atrás siempre se puede.
+   * - Completado (palomita verde) = ya se visitó y quedó antes del actual.
+   * - Guardar sale en el último paso (en modo libre, siempre).
+   */
+  const Pasos = (function () {
+    /** El indicador: un chip por paso (títulos ya escapados: pueden traer su ícono). Solo el primero arranca habilitado. */
+    function htmlChips(titulos) {
+      return '<ol class="form-pasos">' + titulos.map((t, i) =>
+        '<li><button type="button" class="form-paso-chip" data-ir-paso="' + i + '"' + (i ? ' disabled' : '') + '>' +
+          '<span class="form-paso-num">' + (i + 1) + '</span>' + t + '</button></li>').join('') + '</ol>';
+    }
+
+    function navegar(cfg) {
+      const secciones = cfg.secciones;
+      const chips = cfg.chips || [];
+      const aplica = cfg.aplica || (() => true);
+      const validar = cfg.validar || (() => false);
+      let vistos = {};
+      let actual = 0;
+
+      const visibles = () => secciones.map((s, i) => i).filter((i) => aplica(i));
+      const siguiente = (i) => visibles().filter((x) => x > i)[0];
+      const anterior = (i) => visibles().filter((x) => x < i).pop();
+
+      function pintar() {
+        const vis = visibles();
+        const pos = vis.indexOf(actual);
+        chips.forEach((chip, i) => {
+          const si = vis.indexOf(i) >= 0;
+          const li = chip.closest('li');
+          if (li) li.hidden = !si;
+          chip.classList.toggle('activo', i === actual);
+          chip.classList.toggle('completado', si && vis.indexOf(i) < pos && !!vistos[i]);
+          chip.disabled = !cfg.libre && !vistos[i] && i > actual;
+          const num = chip.querySelector('.form-paso-num');
+          if (num) num.textContent = vis.indexOf(i) + 1;
+        });
+        const ultimo = pos === vis.length - 1;
+        if (cfg.atras) cfg.atras.hidden = pos <= 0;
+        if (cfg.siguiente) cfg.siguiente.hidden = ultimo;
+        if (cfg.guardar) cfg.guardar.hidden = !ultimo && !cfg.libre;
+        if (cfg.cuenta) cfg.cuenta.textContent = 'Paso ' + (pos + 1) + ' de ' + vis.length;
+      }
+
+      function ir(i, sinFoco) {
+        if (!aplica(i)) {
+          const otro = siguiente(i) !== undefined ? siguiente(i) : anterior(i);
+          if (otro === undefined) return;
+          i = otro;
+        }
+        actual = i;
+        vistos[i] = true;
+        secciones.forEach((s, k) => { s.hidden = k !== i; });
+        pintar();
+        if (cfg.alMostrar) cfg.alMostrar(i, !!sinFoco);
+      }
+
+      function avanzar() {
+        if (validar(actual)) return;
+        const sig = siguiente(actual);
+        if (sig !== undefined) ir(sig);
+      }
+
+      if (cfg.siguiente) cfg.siguiente.addEventListener('click', avanzar);
+      if (cfg.atras) cfg.atras.addEventListener('click', () => { const ant = anterior(actual); if (ant !== undefined) ir(ant); });
+      chips.forEach((chip, i) => chip.addEventListener('click', () => {
+        if (i <= actual || cfg.libre) ir(i);
+        else if (!validar(actual)) ir(i);
+      }));
+      // Enter avanza de paso en vez de guardar a medias (si una lista, como el Combobox, no lo usó ya)
+      if (cfg.teclas) {
+        cfg.teclas.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'Enter' || ev.defaultPrevented || ev.target.tagName !== 'INPUT' || siguiente(actual) === undefined) return;
+          ev.preventDefault();
+          avanzar();
+        });
+      }
+
+      return {
+        ir: ir,
+        avanzar: avanzar,
+        pintar: pintar,
+        /** Algo cambió (una respuesta): si el paso actual ya no aplica se pasa a otro; si no, se repinta el indicador. */
+        refrescar: () => { if (!aplica(actual)) ir(actual, true); else pintar(); },
+        reiniciar: () => { vistos = {}; ir(0); },
+        actual: () => actual,
+      };
+    }
+
+    return { htmlChips, navegar };
+  })();
+</script>

@@ -815,8 +815,10 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
   ['INSPECCION', 'RESPONSIVA', 'REGISTRO_EQUIPO', 'REGISTRO_LINEA', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));
-  assert.match(lineas, /class="form-pasos"/);
-  assert.match(lineas, /class="form-paso-chip"/);
+  // El indicador y la navegación son el componente Pasos, igual que en Formulario (fase 5.6)
+  assert.match(lineas, /Pasos\.htmlChips\(pasos\.map\(\(p\) => esc\(p\.titulo\)\)\)/);
+  assert.match(lineas, /const nav = Pasos\.navegar\(\{/);
+  assert.match(lineas, /Formulario\.marcarError\(campo, x\.msg\)/);
   assert.match(lineas, /function activarPasos\(cont, cfg\)/);
   assert.match(lineas, /function marcarErroresEn\(cuerpo, errores\)/);
   assert.match(lineas, /libre: !!id/);
@@ -2185,6 +2187,30 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
     assert.match(src, new RegExp('CamposHoja\\.recolectar\\(' + lista + '\\b'), modulo + ': lee ' + lista + ' con CamposHoja');
   });
   assert.doesNotMatch(read('src/html/js/app.html'), /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
+});
+
+test('formularios por pasos: el indicador y la navegación son el componente Pasos (fase 5.6)', () => {
+  // Cada formulario por pasos traía su copia de "Paso x de y / Atrás / Siguiente". Formulario y Líneas ya usan Pasos;
+  // lo que falta migrar está aquí y esta lista SOLO SE ACHICA: al migrar una pantalla, baja su número (o quítala).
+  const PENDIENTES = {
+    'src/html/js/app-arqueos.html': 1,
+    'src/html/js/app.html': 3,
+    'src/html/js/modulos/inspecciones.html': 1,
+  };
+  const encontrado = {};
+  filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.html')).forEach((file) => {
+    const rel = path.relative(root, file).replace(/\\/g, '/');
+    if (rel.endsWith('componentes/pasos.html')) return;
+    const n = (fs.readFileSync(file, 'utf8').match(/class="form-paso-chip/g) || []).length;
+    if (n) encontrado[rel] = n;
+  });
+  assert.deepEqual(encontrado, PENDIENTES, 'Un formulario por pasos usa Pasos.htmlChips y Pasos.navegar (componentes/pasos.html)');
+  const formulario = read('src/html/js/componentes/formulario.html');
+  assert.match(formulario, /Pasos\.htmlChips\(/);
+  assert.match(formulario, /const nav = pasos \? Pasos\.navegar\(\{/);
+  assert.match(formulario, /if \(caja\) marcarError\(caja, mensaje\);/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/componentes/pasos')") < index.indexOf("include('html/js/componentes/formulario')"), 'Pasos antes de Formulario');
 });
 
 test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en Pantalla', () => {

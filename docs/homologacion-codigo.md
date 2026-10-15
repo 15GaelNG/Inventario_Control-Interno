@@ -157,9 +157,27 @@ Cada paso es independiente y se puede pasar a `master` solo.
 | 5.3 ✅ | `lineas-estilos.html`: cortes a 640/1024, `matchMedia` → `Pantalla`; sacar `PENDIENTES` de Líneas (hecho: ≤ 760 → 640, 900 → 1024, así el iPad vertical queda igual; dos bloques repetidos o vacíos fuera) | Líneas no tiene escenas en la vista previa: se revisa en el DEV |
 | 5.4 ❌ | PDF: un solo motor (`Plantilla`). **Fuera de la homologación (usuario, 15-oct): las plantillas y la generación de PDF de Líneas se quedan como están** | `LineasPdf` entiende `RIGHT("000" & [NUCO], 4)` y `&`; `Plantilla` no y **truena** con lo que no entiende (bien). Primero agregarle eso con pruebas, luego correr cada plantilla de Líneas en los dos motores y comparar el texto antes de cambiar |
 | 5.5 ✅ | Avisos: `LineasNotificaciones` como fuente de `NotificacionesService` (hecho: `NotificacionesService.campana` con `FUENTES_` por módulo y la misma forma de aviso; una llamada, `apiNotificaciones`, en vez de dos; los avisos de Líneas ahora dan huella. La "leída" de Vehículos sigue en el navegador) | La campana ya junta; que sea un solo registro de tipos |
-| 5.6 | Formularios: lo que `htmlFormularioAppSheet` hace que `Formulario`/`CamposHoja` no | Inventario primero (pasos, `mostrarSi`, subida de imagen, validaciones por tipo); lo que falte se agrega **una vez** al componente; después se migra captura por captura |
+| 5.6 ✅ (chica) | Formularios: lo que `htmlFormularioAppSheet` hace que `Formulario`/`CamposHoja` no. **Hecho (versión chica, usuario 15-oct):** la navegación por pasos es un componente, `Pasos` (`componentes/pasos.html`), que usan `Formulario` y las capturas de Líneas (`activarPasos`); los errores de campo, `Formulario.marcarError` en los dos. Quedan 5 copias más de la navegación (contrato con lista que solo se achica): `app.html` ×3, Arqueos e Inspecciones. **La migración completa de las capturas de Líneas se retoma al final, aislada** (ver "Pendiente al final") | Inventario primero (pasos, `mostrarSi`, subida de imagen, validaciones por tipo); lo que falte se agrega **una vez** al componente; después se migra captura por captura |
 | 5.7 | Expediente: NUCOS TELEFÓNICOS con la misma pieza que `ExpedienteNuco` | Generalizar `ExpedienteNuco` (raíz y carpetas por tipo de activo), no copiarlo |
 | 5.8 | Datos: `LineasRepo` encima de `HojaServicio` | El último. Para entonces `HojaServicio` ya tiene la escritura de `LineasDatos` (fase 1) y lo que falte (lectura de filas sueltas con batchGet, zona horaria). `LineasRepo` se queda como traductor del modelo equipo/línea/asignación |
+
+### Pendiente al final: las capturas de Líneas sobre `Formulario` (aislado)
+
+Decisión del usuario (15-oct): vale la pena, pero es de alto riesgo; se hace **al final**, en su propio paso, y que toque
+**solo ese componente**. Por qué no se hizo en 5.6: los formularios de Líneas los define el servidor (`LineasCaptura.gs`,
+`LineasRegistros.gs`, `LineasChecklist.gs`) con condiciones como datos que el servidor vuelve a validar; `Formulario` se
+declara en la pantalla con funciones. Lo que le faltaría a `Formulario` (inventario del 15-oct):
+
+- condiciones como datos (`'NO_LINEA'`, `{campo, igual}`, `{cambio}`, `{cuantos}`…) para mostrar, **exigir** y **dejar editar**;
+- pasos que empiezan en un título, contenido extra en un paso (fotos), modo libre al editar (`Pasos` ya lo trae);
+- controles: escala (checklist), multi, referencia (etiqueta → ID), lista abierta con "Agregar 'x'" y autollenar de Capital
+  Humano, patrón, identificación (INE), firma guardada, responsables adicionales, calculados en vivo;
+- validaciones por código iguales a las del servidor (`MAYUS`, `NUCO`, `PIN_EQ`…), selector de bloqueo, acomodo de la
+  inspección y un bloque por equipo (Mandar a resguardo).
+
+Son 8 pantallas (inspección, responsiva, editar/agregar equipo y línea, solicitud, resguardo, cancelación, vincular, masivas).
+Orden sugerido cuando se retome: agregar a `Formulario` las condiciones como datos (con su prueba) → migrar primero la
+captura más simple (cancelación o vincular) → una por una, probando cada una en el DEV.
 
 ## Fase 6 — Estructura
 
@@ -202,5 +220,6 @@ juntan por primera vez.
 | 15-oct | 2 | `Formato` (componentes/formato.html): una sola copia de esc, fechas, moneda, miles y normal; contrato | pendiente: probar en DEV |
 | 15-oct | 3 | Escala `--texto-*` (27→8), `--radio-*` (19→6) y `--tono-*` con modo oscuro; contrato | pendiente: probar en DEV |
 | 15-oct | 4 | 4a `Tabs` (3 implementaciones → 1), 4b `Ficha` (7 encabezados), 4c `FiltroTipo` (5 copias); contratos | pendiente: probar en DEV |
+| 15-oct | 5.6 | `Pasos` (navegación por pasos) en Formulario y Líneas, `Formulario.marcarError`; la migración completa de las capturas de Líneas queda al final | pendiente: probar en DEV |
 | 15-oct | 5.5 | La campana en una llamada (`apiNotificaciones`): Líneas y Vehículos como fuentes de `NotificacionesService`; huella de `APP_NOTIFICACIONES`; escenas `campana` y `notificaciones` en la vista previa | pendiente: probar en DEV |
 | 15-oct | 5.1–5.3 | Líneas: permisos de la sesión (sin `apiLineasPermisos`), catálogos e índice por la caché común con huella (el índice nunca se guardaba: faltaba `MAX_GUARDAR`), cortes 640/1024 y `Pantalla` | pendiente: probar en DEV |
