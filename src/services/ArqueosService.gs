@@ -556,6 +556,22 @@ const ArqueosService = (function () {
     };
   }
 
+  /** "Generar vista previa del documento" en la liga de firma a distancia -- mismo botón que
+   *  Responsiva/Adherente Vehicular (FirmaExterna.html, sin distinción por tipo); valida la liga
+   *  igual que obtenerPendienteArqueoPorToken y arma el PDF con vistaPreviaArqueo_. Sin sesión,
+   *  igual que el resto de esta sección: el token es la credencial. */
+  function vistaPrevia(tokenFirma, quien) {
+    const col = columnasFirmaArqueo_(quien);
+    const fila = buscarPorTokenArqueo_(tokenFirma, col.token);
+    if (!fila) throw new Error('Esta liga no es válida.');
+    if (fila[col.firma]) throw new Error('Esta liga ya se usó.');
+    const expira = fila[col.expira] ? new Date(fila[col.expira]) : null;
+    if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+      throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
+    }
+    return vistaPreviaArqueo_(fila);
+  }
+
   /** Completa la firma del Responsable o el Asistente que llegó por su liga -- sin sesión (el
    *  token es la credencial, igual que completarFirma en Responsiva/Adherente Vehicular). Si
    *  todavía falta la otra firma, solo se guarda y se espera; si ya no falta ninguna, se genera el
@@ -674,11 +690,15 @@ const ArqueosService = (function () {
   }
 
   /**
-   * Genera el PDF del arqueo a partir de la plantilla F-CI03-009 y `fila`
-   * (el registro YA completo: datos capturados + los calculados por
-   * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
+   * Copia la plantilla F-CI03-009 y la llena con `fila` (el registro YA completo: datos
+   * capturados + los calculados por calcularCampos_ + lo copiado de la Caja Chica) -- todo lo
+   * que generarPdfArqueo_ y vistaPreviaArqueo_ tienen en común. Regresa { copia, carpeta }: el
+   * Doc ya lleno y guardado, listo para exportar a PDF (quien llama decide si lo guarda
+   * permanente en Drive o solo lo exporta a un blob y lo borra). `marcaAgua` (opcional): un
+   * párrafo que se agrega al principio del documento -- lo usa vistaPreviaArqueo_ para distinguir
+   * una vista previa de un PDF final, mismo criterio que PdfService.generarVistaPrevia.
    */
-  function generarPdfArqueo_(fila) {
+  function llenarPlantillaArqueo_(fila, marcaAgua) {
     // Mismo patrón defensivo que subirArchivo(): "Acceso denegado: DriveApp" a secas no
     // dice ni qué recurso ni con qué cuenta -- aquí sí, para poder arreglarlo sin adivinar
     // (compartir la plantilla/carpeta con la cuenta que despliega este proyecto).
@@ -699,13 +719,14 @@ const ArqueosService = (function () {
     }
     let copia;
     try {
-      copia = plantilla.makeCopy('Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
+      copia = plantilla.makeCopy((marcaAgua ? 'Vista previa Arqueo_' : 'Arqueo_') + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
     } catch (e) {
       throw new Error('Se pudo abrir la plantilla y la carpeta de Arqueos, pero no copiar el documento ahí. La ' +
         'cuenta ' + cuenta() + ' necesita permiso de editor (no solo lector) en la carpeta. Error original: ' + e.message);
     }
     const doc = DocumentApp.openById(copia.getId());
     const body = doc.getBody();
+    if (marcaAgua) body.insertParagraph(0, marcaAgua).setBold(true).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
     const moneda = (v) => num_(v).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
     const numero = (v) => num_(v).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -797,6 +818,17 @@ const ArqueosService = (function () {
       throw new Error('No se pudo guardar el documento ya llenado con los datos del arqueo. Error original: ' + e.message);
     }
 
+    return { copia, carpeta };
+  }
+
+  /**
+   * Genera el PDF del arqueo a partir de la plantilla F-CI03-009 y `fila`
+   * (el registro YA completo: datos capturados + los calculados por
+   * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
+   */
+  function generarPdfArqueo_(fila) {
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    const { copia, carpeta } = llenarPlantillaArqueo_(fila);
     let pdfBlob;
     try {
       pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
@@ -830,6 +862,27 @@ const ArqueosService = (function () {
     }
 
     return pdfFile.getUrl();
+  }
+
+  /**
+   * "Vista previa" de un arqueo que todavía no se firma del todo -- mismo molde que
+   * PdfService.generarVistaPrevia (Responsiva/Adherente Vehicular): llena la misma plantilla,
+   * exporta a PDF, regresa el blob (sin guardarlo nunca en Drive) y borra el Doc temporal.
+   * No pasa por generarPdfArqueo_ a propósito: esta NUNCA deja un archivo permanente ni toca
+   * FORMATO ARQUEO/ESTADO PDF -- es solo para que quien va a firmar vea cómo va a quedar.
+   */
+  function vistaPreviaArqueo_(fila) {
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    const { copia } = llenarPlantillaArqueo_(fila, 'VISTA PREVIA — AÚN SIN FIRMAR');
+    try {
+      const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+      return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
+    } catch (e) {
+      throw new Error('El documento se llenó bien, pero no se pudo exportar la vista previa a PDF. La cuenta ' + cuenta() +
+        ' necesita permiso de editor en la carpeta de Arqueos. Error original: ' + e.message);
+    } finally {
+      try { DriveApp.getFileById(copia.getId()).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ }
+    }
   }
 
   /** Genera el PDF y guarda su URL (+ "Generado") en la fila; si algo falla,
@@ -882,6 +935,7 @@ const ArqueosService = (function () {
     copiarLigaArqueo,
     generarLigaArqueo,
     obtenerPendienteArqueoPorToken,
+    vistaPrevia,
     completarFirmaArqueo,
   };
 })();

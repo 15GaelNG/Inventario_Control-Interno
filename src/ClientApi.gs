@@ -504,8 +504,6 @@ function apiFirmaRemotaObtener(tipo, quien, tokenFirma) {
   if (tipo === 'arqueo') return servicio.obtenerPendienteArqueoPorToken(tokenFirma, quien);
   return quien === 'jefe' ? servicio.obtenerPendienteJefePorToken(tokenFirma) : servicio.obtenerPendientePorToken(tokenFirma);
 }
-// Arqueos no tiene vista previa sin guardar (su PDF se genera con Google Docs, no PdfService) --
-// FirmaExterna.html oculta el botón para ese tipo, así que esta llamada no se hace.
 function apiFirmaRemotaVistaPrevia(tipo, quien, tokenFirma) {
   const servicio = servicioFirmaRemota_(tipo);
   return servicio.vistaPrevia(tokenFirma, quien);

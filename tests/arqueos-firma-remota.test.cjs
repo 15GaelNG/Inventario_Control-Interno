@@ -46,6 +46,7 @@ function crearContexto(filas) {
     Utilities: {
       getUuid: () => 'token-' + (++uuids),
       formatDate: () => '01/10/2026',
+      base64Encode: (bytes) => 'base64:' + bytes,
     },
     DriveApp: {
       // Un solo fake genérico: sirve para abrir la plantilla (makeCopy), para exportar/borrar la
@@ -55,7 +56,7 @@ function crearContexto(filas) {
       getFileById: (id) => ({
         getId: () => id,
         makeCopy: (nombre) => ({ getId: () => 'copia-' + id, getName: () => nombre }),
-        getAs: () => ({ bytes: 'pdf-bytes', mimeType: 'application/pdf' }),
+        getAs: () => ({ getBytes: () => 'pdf-bytes', mimeType: 'application/pdf' }),
         setTrashed: (v) => { llamadas.trasheados.push({ id, v }); },
         getBlob: () => ({ getBytes: () => 'bytes', getContentType: () => 'image/png' }),
       }),
@@ -73,9 +74,11 @@ function crearContexto(filas) {
       }),
     },
     DocumentApp: {
+      HorizontalAlignment: { CENTER: 'CENTER' },
       openById: () => {
         llamadas.docAbiertos++;
         const parrafo = { clear: () => {}, appendInlineImage: () => ({ getWidth: () => 100, getHeight: () => 40, setWidth: () => {}, setHeight: () => {} }) };
+        const marcaAgua = { setBold: () => marcaAgua, setAlignment: () => marcaAgua };
         return {
           getBody: () => ({
             // "Encuentra" cualquier marcador, para que insertarFirma_ sí intente leer el
@@ -83,6 +86,7 @@ function crearContexto(filas) {
             // probar (una firma que ya no se puede leer) solo se dispara si se llega ahí.
             findText: () => ({ getElement: () => ({ getParent: () => ({ asParagraph: () => parrafo }) }) }),
             replaceText: () => {},       // reemplazarMarcador_
+            insertParagraph: () => { llamadas.marcaAgua = (llamadas.marcaAgua || 0) + 1; return marcaAgua; },
           }),
           saveAndClose: () => {},
         };
@@ -335,4 +339,53 @@ test('completarFirmaArqueo: sin la imagen de la firma truena antes de tocar la h
   })]);
   assert.throws(() => contexto.Servicio.completarFirmaArqueo('tok-resp', 'responsable', null), /Falta la firma/);
   assert.deepEqual(llamadas.update, []);
+});
+
+// ---------- vistaPrevia ----------
+// "Generar vista previa del documento" en FirmaExterna.html: igual que Responsiva/Adherente
+// Vehicular, ya no se oculta para Arqueos (usuario, 15-oct-2026) -- arma el mismo PDF con
+// llenarPlantillaArqueo_ pero nunca lo guarda permanente en Drive (ni toca FORMATO ARQUEO/ESTADO
+// PDF), solo exporta el blob y borra el Doc temporal.
+
+test('vistaPrevia: token válido regresa el PDF en base64 sin dejar nada permanente en Drive', () => {
+  const { contexto, llamadas, hoja } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  const r = contexto.Servicio.vistaPrevia('tok-resp', 'responsable');
+  assert.equal(r.mimeType, 'application/pdf');
+  assert.equal(r.base64, 'base64:pdf-bytes');
+  assert.equal(llamadas.marcaAgua, 1, 'debe insertar el párrafo de "VISTA PREVIA"');
+  // Nunca se sube a la carpeta del año ni se toca la hoja -- es puro blob, se descarta.
+  assert.deepEqual(llamadas.carpetaCreateFile, []);
+  assert.deepEqual(llamadas.update, []);
+  assert.ok(llamadas.trasheados.length > 0 && llamadas.trasheados.every((t) => t.v === true), 'borra el Doc temporal');
+  // La firma todavía no se completó: el renglón sigue igual.
+  assert.equal(hoja[0]['FIRMA RESPONSABLE'], '');
+});
+
+test('vistaPrevia: del asistente usa su propia columna de token', () => {
+  const { contexto } = crearContexto([filaBase({
+    'TOKEN FIRMA ASISTENTE': 'tok-asis', 'TOKEN FIRMA ASISTENTE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  const r = contexto.Servicio.vistaPrevia('tok-asis', 'asistente');
+  assert.equal(r.mimeType, 'application/pdf');
+});
+
+test('vistaPrevia: token inválido', () => {
+  const { contexto } = crearContexto([filaBase()]);
+  assert.throws(() => contexto.Servicio.vistaPrevia('no-existe', 'responsable'), /liga no es válida/);
+});
+
+test('vistaPrevia: liga ya usada (la firma ya no está vacía)', () => {
+  const { contexto } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/X/view',
+  })]);
+  assert.throws(() => contexto.Servicio.vistaPrevia('tok-resp', 'responsable'), /liga ya se usó/);
+});
+
+test('vistaPrevia: liga vencida', () => {
+  const { contexto } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() - 1000),
+  })]);
+  assert.throws(() => contexto.Servicio.vistaPrevia('tok-resp', 'responsable'), /liga ya venció/);
 });
