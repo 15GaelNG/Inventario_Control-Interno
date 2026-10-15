@@ -287,11 +287,32 @@ const DriveUtils = (function () {
     return subcarpetaOAcceso_(raiz, nombre);
   }
 
+  /** Para comparar nombres de carpeta: sin espacios ni acentos, en mayúsculas ("2.- Servicios" = "2.-SERVICIOS") */
+  function claveCarpeta(nombre) {
+    return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toUpperCase();
+  }
+
+  /**
+   * La subcarpeta `nombre` de `padre`; si no está, la crea. La reconoce aunque su nombre traiga espacios o acentos de
+   * más o de menos (las carpetas que llena el área a mano: "2.- SERVICIOS", "1ER  CUATRIMESTRE"): nunca crea otra al
+   * lado de la que ya está. Una sola copia (fase 5.7): la usan ExpedienteNuco, Líneas (NUCOS y la carpeta de la app) y
+   * PdfService.
+   */
+  function subcarpeta(padre, nombre) {
+    const exacta = padre.getFoldersByName(nombre);
+    if (exacta.hasNext()) return exacta.next();
+    const buscada = claveCarpeta(nombre);
+    const todas = padre.getFolders();
+    while (todas.hasNext()) {
+      const c = todas.next();
+      if (claveCarpeta(c.getName()) === buscada) return c;
+    }
+    return padre.createFolder(nombre);
+  }
+
   /** La subcarpeta del año en curso dentro de `carpeta` (la crea si no existe todavía) */
   function carpetaDelAnio(carpeta) {
-    const anio = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy');
-    const existentes = carpeta.getFoldersByName(anio);
-    return existentes.hasNext() ? existentes.next() : carpeta.createFolder(anio);
+    return subcarpeta(carpeta, Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy'));
   }
 
   /** Los archivos de una carpeta de Drive, en el formato que ya espera el componente Galeria
@@ -326,6 +347,6 @@ const DriveUtils = (function () {
   return {
     blobRevisado, idDeLiga, guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
-    marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio, archivosDeCarpeta,
+    marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio, archivosDeCarpeta, subcarpeta, claveCarpeta,
   };
 })();

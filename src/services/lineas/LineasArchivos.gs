@@ -6,7 +6,9 @@
  *   LINEAS_DRIVE_APPSHEET   carpeta de la app AppSheet (en DEV: "PruebasCONTROLVEHICYTELEF-172665033", la de la hoja
  *                           VEHICULOS). Ahí están "<TABLA>_Files_", "<TABLA>_Images", "INSPECCIONES_Files_" y "Files".
  *                           Se lee y se ESCRIBE aquí, con las mismas rutas que usa el AppSheet.
- *   LINEAS_DRIVE_NUCOS      carpeta NUCOS de producción (una carpeta por NUCO). La ficha la muestra en "Documentos"
+ *   LINEAS_DRIVE_NUCOS      carpeta NUCOS de producción (una carpeta por NUCO; solo en el bloque de producción de
+ *                           Entornos.gs: un DEV sin la clave usa una "NUCOS TELEFONICOS" de pruebas en su raíz y nunca
+ *                           escribe en la real; revisarEntorno avisa si un DEV apunta a ella). La ficha la muestra en "Documentos"
  *                           y, desde el corte a producción (2-oct-2026), las inspecciones y responsivas nuevas
  *                           guardan ahí su PDF y sus fotos, con la misma estructura que llena el área a mano:
  *                             <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM/  (+ FOTOS)
@@ -19,7 +21,9 @@
 
 const LineasArchivos = (function () {
   const APPSHEET_POR_OMISION = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
-  const NUCOS_POR_OMISION = '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-';
+  // Sin LINEAS_DRIVE_NUCOS (un DEV): una "NUCOS TELEFONICOS" de pruebas en la raíz de ESE proyecto, como ExpedienteNuco.
+  // Antes caía al ID de NUCOS de producción y un DEV sin la clave escribía ahí sus inspecciones y responsivas (15-oct).
+  const NUCOS_PRUEBAS = 'NUCOS TELEFONICOS';
   const ZONA = 'America/Mexico_City';
   const SEG_CACHE = 21600;
   // Archivos con secretos (patrón, contraseña) y firmas: solo quien puede ver secretos
@@ -29,7 +33,7 @@ const LineasArchivos = (function () {
 
   const prop_ = (clave) => leerConfig_(clave);   // config/Entornos.gs o Script Properties
   function carpetaAppSheetId() { return prop_('LINEAS_DRIVE_APPSHEET') || APPSHEET_POR_OMISION; }
-  function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || NUCOS_POR_OMISION; }
+  function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || DriveUtils.carpetaEnRaiz(NUCOS_PRUEBAS).getId(); }
   /**
    * Dónde se buscan los archivos del AppSheet: la carpeta de la app y, si está configurada, otra solo para leer
    * (el DEV escribe en una carpeta de pruebas, pero su libro es copia de producción y sus rutas son de la app real).
@@ -50,10 +54,7 @@ const LineasArchivos = (function () {
   }
 
   /** Subcarpeta por nombre (la crea si no existe). */
-  function subcarpeta_(padre, nombre) {
-    const it = padre.getFoldersByName(nombre);
-    return it.hasNext() ? it.next() : padre.createFolder(nombre);
-  }
+  const subcarpeta_ = (padre, nombre) => DriveUtils.subcarpeta(padre, nombre);
 
   /** Carpeta de la app "<ruta>" ("INSPECCIONES_Files_", "Files", …); la crea si no existe. */
   function carpetaDeApp(ruta) {

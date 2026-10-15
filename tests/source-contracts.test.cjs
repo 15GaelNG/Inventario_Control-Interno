@@ -981,7 +981,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
     DriveApp: { getFolderById: () => raiz, searchFiles: () => ({ hasNext: () => false }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
-    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
+    // quién lo subió: aquí no importa; la carpeta por nombre en la raíz: su nombre hace de ID
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a, carpetaEnRaiz: (n) => ({ getId: () => 'RAIZ/' + n }) },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -993,9 +994,10 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.equal(LA.guardarComoAppSheet('BITACORA DE DESECHO_Files_', 'd9f2', 'EVIDENCIA', 'image/jpeg', 'AAA'), 'BITACORA DE DESECHO_Files_/d9f2.EVIDENCIA.101530.jpg');
   assert.deepEqual(creados[0], { carpeta: 'DES', nombre: 'd9f2.EVIDENCIA.101530.jpg', mime: 'image/jpeg' });
   assert.throws(() => LA.guardarComoAppSheet('X_Files_', 'k', 'C', 'text/html', 'AAA'), /no permitido/);
-  // Las dos carpetas: la de la app (pruebas "PruebasCONTROLVEHICYTELEF-172665033") y NUCOS de producción
+  // Sin configuración: la carpeta de la app de pruebas ("PruebasCONTROLVEHICYTELEF-172665033") y una NUCOS de pruebas en
+  // la raíz del proyecto. Hasta el 15-oct caía a NUCOS de producción (fase 5.7): un DEV escribía ahí
   assert.equal(LA.carpetaAppSheetId(), '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM');
-  assert.equal(LA.carpetaNucosId(), '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-');
+  assert.equal(LA.carpetaNucosId(), 'RAIZ/NUCOS TELEFONICOS');
   assert.equal(typeof LA.escribeEnProduccion, 'undefined');
 
   // Rutas del AppSheet al guardar: PDF (acciones GUARDAR de sus bots), desechos y archivos de LINEAS
@@ -2489,6 +2491,27 @@ test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.
     });
   });
   assert.deepEqual(sinAutor, []);
+});
+
+test('NUCOS de Líneas: un DEV nunca escribe en la de producción; una sola "subcarpeta" (fase 5.7)', () => {
+  const archivos = read('src/services/lineas/LineasArchivos.gs');
+  // Sin la clave de producción, una de pruebas en la raíz del proyecto (como ExpedienteNuco), nunca el ID de producción
+  assert.match(archivos, /function carpetaNucosId\(\) \{ return prop_\('LINEAS_DRIVE_NUCOS'\) \|\| DriveUtils\.carpetaEnRaiz\(NUCOS_PRUEBAS\)\.getId\(\); \}/);
+  assert.doesNotMatch(archivos, /12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-/);
+  // configurarLineasDev ya no le da a un DEV la de producción (ahí se escribe desde el 2-oct)
+  const admin = read('src/services/lineas/LineasAdmin.gs');
+  const configurar = admin.slice(admin.indexOf('function configurarLineasDev'), admin.indexOf('\n}\n', admin.indexOf('function configurarLineasDev')));
+  assert.doesNotMatch(configurar, /LINEAS_DRIVE_NUCOS: /);
+  assert.match(configurar, /props\.deleteProperty\('LINEAS_DRIVE_NUCOS'\);/);
+  // revisarEntorno avisa si un DEV apunta a una carpeta de producción
+  assert.match(read('src/Diagnostico.gs'), /!esProd && !regla\.soloLee && x\.id === carpetaDeProduccion_\(clave\)/);
+  // "La subcarpeta, o la crea" es una sola (DriveUtils.subcarpeta, reconoce espacios y acentos): nadie más la escribe
+  const copias = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs') && !f.endsWith('DriveUtils.gs'))
+    .filter((f) => /getFoldersByName\([^)]*\);\s*return [^;]*hasNext\(\) \? [^;]*createFolder\(/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.basename(f));
+  assert.deepEqual(copias, [], 'usa DriveUtils.subcarpeta');
+  ['src/utils/ExpedienteNuco.gs', 'src/services/PdfService.gs', 'src/services/lineas/LineasArchivos.gs'].forEach((f) =>
+    assert.match(read(f), /DriveUtils\.subcarpeta\(/, f));
 });
 
 test('las carpetas de los servicios se buscan por nombre en la raíz, no con un ID fijo', () => {
