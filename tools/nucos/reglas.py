@@ -8,6 +8,9 @@ La estructura que pide el área (junta, 8-oct-2026), dentro de 1.-DOCUMENTACIÓN
     4.-TARJETA DE CIRCULACIÓN
     5.-RESPONSIVA               la vigente directo ahí; las demás en RESPONSIVAS ANTERIORES
     6.-TENENCIA                 ya no se carga; sirve para mostrar que no debe tenencia
+    7.-HOLOGRAMAS               (15-oct-2026) lo de OXXO Gas; lo de antes lo movió hologramas.py desde ANTERIORES.
+                                Estas reglas (la reorganización del 8-oct) no lo conocen: si se vuelven a correr,
+                                agréguenlo a SEIS antes, o lo de 7.-HOLOGRAMAS regresaría a ANTERIORES.
 
 Hoy conviven tres generaciones de carpetas (la de 13 dentro de DOCUMENTOS, la de 10-11 y la
 de 6), así que a cada archivo se le reconoce el documento por el nombre de la carpeta más
