@@ -2144,24 +2144,13 @@
     }
 
     // ---------------- Estado del módulo ----------------
-    // Se conserva entre navegaciones para evitar volver a pedir los mismos catálogos.
+    // Se conserva entre navegaciones (los catálogos viven en callServerCacheado, api.html).
     const POR_PAGINA = 50;
     const VIGENCIA_INDICE_MS = 15 * 60 * 1000;
-    const VIGENCIA_CATALOGO_MS = 15 * 60 * 1000;
     const memoria = {
       indice: null,
       cargadoEn: 0,
       indicePendiente: null,
-      permisos: null,
-      colaboradores: null,
-      colaboradoresCargadosEn: 0,
-      colaboradoresPendientes: null,
-      accesorios: null,
-      accesoriosCargadosEn: 0,
-      accesoriosPendientes: null,
-      catalogos: null,
-      catalogosCargadosEn: 0,
-      catalogosPendientes: null,
       tablas: {}, // última respuesta de cada bitácora / trámite: se pinta al instante y luego se actualiza
       modulo: 'equipos',
       modoVista: null, // 'tabla' | 'tarjetas' (se recuerda en el navegador)
@@ -2321,42 +2310,19 @@
     const veDocumentos = () => veSeccion('documentos');
     const veHistorial = () => veSeccion('historial');
 
-    function cargarColaboradores(forzar) {
-      if (!forzar && memoria.colaboradores && Date.now() - memoria.colaboradoresCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.colaboradores);
-      if (!forzar && memoria.colaboradoresPendientes) return memoria.colaboradoresPendientes;
-      memoria.colaboradoresPendientes = llamar('apiLineasColaboradores').then((r) => {
-        memoria.colaboradores = r;
-        memoria.colaboradoresCargadosEn = Date.now();
-        return r;
-      });
-      memoria.colaboradoresPendientes.then(() => { memoria.colaboradoresPendientes = null; }, () => { memoria.colaboradoresPendientes = null; });
-      return memoria.colaboradoresPendientes;
+    /**
+     * Catálogos de los formularios, el directorio de Capital Humano y el índice de accesorios: como los catálogos de los
+     * demás módulos (callServerCacheado, api.html): una vez por carga de página, con la copia de la visita anterior al
+     * instante y lo fresco por detrás. forzar (o CATALOGOS_LINEAS.forEach(olvidar…)) pide lo nuevo.
+     */
+    const CATALOGOS_LINEAS = ['apiLineasCatalogos', 'apiLineasColaboradores', 'apiLineasAccesoriosIndice'];
+    function catalogoLineas_(fn, forzar) {
+      if (forzar) invalidarCacheCatalogo(fn, state.token);
+      return callServerCacheado(fn, state.token);
     }
-
-    function cargarAccesorios(forzar) {
-      if (!forzar && memoria.accesorios && Date.now() - memoria.accesoriosCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.accesorios);
-      if (!forzar && memoria.accesoriosPendientes) return memoria.accesoriosPendientes;
-      memoria.accesoriosPendientes = llamar('apiLineasAccesoriosIndice').then((r) => {
-        memoria.accesorios = r;
-        memoria.accesoriosCargadosEn = Date.now();
-        return r;
-      });
-      memoria.accesoriosPendientes.then(() => { memoria.accesoriosPendientes = null; }, () => { memoria.accesoriosPendientes = null; });
-      return memoria.accesoriosPendientes;
-    }
-
-    /** Catálogos de los formularios (se guardan en memoria; el servidor ya los tiene en caché). */
-    function cargarCatalogos(forzar) {
-      if (!forzar && memoria.catalogos && Date.now() - memoria.catalogosCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.catalogos);
-      if (!forzar && memoria.catalogosPendientes) return memoria.catalogosPendientes;
-      memoria.catalogosPendientes = llamar('apiLineasCatalogos').then((c) => {
-        memoria.catalogos = c;
-        memoria.catalogosCargadosEn = Date.now();
-        return c;
-      });
-      memoria.catalogosPendientes.then(() => { memoria.catalogosPendientes = null; }, () => { memoria.catalogosPendientes = null; });
-      return memoria.catalogosPendientes;
-    }
+    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar);
+    const cargarAccesorios = (forzar) => catalogoLineas_('apiLineasAccesoriosIndice', forzar);
+    const cargarCatalogos = (forzar) => catalogoLineas_('apiLineasCatalogos', forzar);
 
     /** Calienta en segundo plano lo que usan las vistas y los formularios (no bloquea nada). */
     function precargar() {
@@ -2522,7 +2488,7 @@
         const b = ev.currentTarget;
         b.disabled = true;
         llamar('apiLineasRecargarDatos')
-          .then(() => cargarIndice(true))
+          .then(() => { CATALOGOS_LINEAS.forEach((fn) => invalidarCacheCatalogo(fn, state.token)); return cargarIndice(true); })
           .then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } })
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });

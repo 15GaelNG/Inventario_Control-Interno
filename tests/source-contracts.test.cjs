@@ -845,7 +845,10 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(app, /\}, 180\);/);
   assert.doesNotMatch(app, /\}, 2500\);/);
   assert.match(lineas, /memoria\.tablas\[clave\] = texto;/);
-  assert.match(lineas, /function cargarCatalogos\(forzar\)/);
+  // Los catálogos de Líneas como los de todos (fase 5.2a): callServerCacheado, sin su propia memoria con vigencia
+  assert.match(lineas, /const cargarCatalogos = \(forzar\) => catalogoLineas_\('apiLineasCatalogos', forzar\);/);
+  assert.match(lineas, /return callServerCacheado\(fn, state\.token\);/);
+  assert.doesNotMatch(lineas, /VIGENCIA_CATALOGO_MS|catalogosPendientes|colaboradoresPendientes|accesoriosPendientes/);
   // PDF: la firma recortada cabe en 160 × 70
   // Una firma cabe en 160 × 70; las de varios responsables juntas (responsiva, 6-oct), hasta 300 de ancho
   assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
