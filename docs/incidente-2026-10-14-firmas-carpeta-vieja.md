@@ -1,6 +1,7 @@
 # Incidente 14-oct-2026: firmas de Responsiva y Adherente a la carpeta vieja
 
-**Estado:** se corrigió solo con el despliegue de la mañana; quedan 5 firmas por mover (corrida 4 de la Fase 3).
+**Estado:** cerrado. Se corrigió solo con el despliegue de la mañana; las 5 firmas se movieron a `FIRMAS` del NUCO 402
+y del 78 el 15-oct (corrida 4 de la Fase 3, `tools/nucos/firmas_app.py`).
 
 ## Qué pasó
 

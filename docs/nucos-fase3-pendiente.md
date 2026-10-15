@@ -39,6 +39,13 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
    `5.-RESPONSIVA/FIRMAS/`. Las firmas TEMP de la firma a distancia se quedan (se borran solas al generar el PDF).
    Incluye 5 firmas del 14-oct (NUCO 402 y 78) que la v116 guardó en la carpeta vieja:
    `incidente-2026-10-14-firmas-carpeta-vieja.md`.
+   **Hecho 15-oct** (`tools/nucos/firmas_app.py`, bitácora `20261015-125046-firmas-app.jsonl`): de 111 archivos, 13 firmas
+   reales a `FIRMAS` de su NUCO (205: 3, 308: 5, 402: 3, 78: 2) con el nombre de la app; 70 de prueba (6–9 oct, sin renglón
+   ni PDF de esa llamada: placas inventadas, folio por placa, `BAJA VEHICULAR`) a `NUCOS VEHICULOS/_POR REVISAR/FIRMAS DE
+   PRUEBA`; 28 TEMP se quedan. El 402 va por el PDF de la misma llamada (su renglón se reutilizó para otro adherente).
+   Verificado 83/83 con md5; deshacer probado dos veces (111/111 de vuelta). Lección: fechar por `createdTime`, no por
+   `modifiedTime` (cambia al mover: tras deshacer el plan salía distinto). Para el área: `ADHERENTE-0024 2026-10-05.pdf`
+   en el NUCO 24 parece una prueba de esas fechas dentro de un expediente real.
 
 ## Avance del 13-oct-2026 (corrida 1: inspecciones de la app)
 
