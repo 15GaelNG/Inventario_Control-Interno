@@ -1,6 +1,6 @@
 # Expediente por NUCO: `2.- SERVICIOS`
 
-**Estado al 11-oct-2026: medición hecha (solo lectura), nada aplicado.** Datos en `tools/nucos/.cache/servicios/`
+**Estado al 15-oct-2026: dry run hecho (solo lectura), nada aplicado.** Medición del 11-oct: Datos en `tools/nucos/.cache/servicios/`
 (`foto.json`, `xml.json` con las 1,920 facturas CFDI leídas, `medicion.json`).
 
 > Python: en esta máquina Windows (Control de aplicaciones) bloquea la 3.14 de uv; usar `uv run --python 3.12 …`.
@@ -36,8 +36,41 @@ eventos. La fecha exacta sale del XML de la factura (CFDI: fecha, emisor, total,
   no es el de la factura: la factura suele salir semanas después del servicio. Falta decidir qué fecha manda.
 - 41 eventos tienen facturas de meses distintos (servicio y refacciones facturados aparte).
 
-## Decisiones pendientes
+## Decisiones (15-oct-2026, con el usuario)
 
-1. ¿El mes lo pone la carpeta del área (fecha del servicio) o la factura (fecha de facturación)?
-2. Lo que no tenga fecha confiable: `SIN FECHA/` con su nombre de evento intacto (propuesta), no adivinar.
-3. ¿Qué son las 637 imágenes sueltas por mes de 2025 (¿foto de kilometraje mensual?)?
+1. **Manda la factura** (la fecha del CFDI que timbró el SAT). Solo la de **Ingreso**: un complemento de pago trae la
+   fecha del pago. Si el evento solo trae complementos, se busca la factura que pagan (por su folio fiscal) y, si no
+   aparece, la fecha del pago. Sin XML, el año y mes de la carpeta del área.
+2. Lo que no tiene fecha confiable va a `SIN FECHA/` con el nombre del evento intacto; no se adivina.
+3. Las "imágenes sueltas" eran **658 copias del relleno "¡CARPETA SIN INFORMACIÓN!"** (un solo md5) que el área dejó en
+   cada mes sin servicio. No son documentos: a `_PAPELERA`, y el mes sin servicio simplemente no existe.
+4. Estructura: la que el área ya usa en 453 NUCO, con los nombres parejos (abajo).
+
+## Dry run (15-oct-2026, foto nueva: sin cambios desde el 12-oct)
+
+Herramienta: `tools/nucos/servicios.py` (`xml` y `dry-run`; la cabecera tiene las reglas). Salida en
+`tools/nucos/.cache/servicios/20261015/` (`plan.json`, `dry-run.xlsx`). Se aplicaría con el ejecutor de inspecciones:
+`inspecciones.py aplicar … --raiz 2.-SERVICIOS`.
+
+```
+2.-SERVICIOS/
+   1.-LIBRETA DE SERVICIOS/<año>/<MM>.-<MES>/<evento>/1.-COTIZACIÓN 2.-AUTORIZACIÓN 3.-FACTURA 4.-GALERÍA 5.-ENCUESTA DE SATISFACCIÓN
+   1.-LIBRETA DE SERVICIOS/SIN FECHA/<evento>/…
+   2.-MARCAJE DE LLANTAS/[<año>/<MM>.-<MES>/]
+   BITACORA INGRESO A TALLER….xlsx
+   _POR REVISAR/
+```
+
+| Archivos | Destino |
+|---:|---|
+| 11,058 | Su evento, con fecha (año/mes) |
+| 1,903 | `SIN FECHA` (383 eventos; 180 con fecha sugerida por las fotos, en el Excel) |
+| 251 | Bitácoras de ingreso a taller, en la raíz |
+| 101 | Marcaje de llantas |
+| 27 | `_POR REVISAR` (sueltos que no son de un evento y 4 carpetas de verificación) |
+| 667 + 9 | `_PAPELERA`: el relleno y copias idénticas que llegan al mismo lugar |
+
+Fecha de los 1,914 eventos: factura de ingreso 1,327 · factura que paga el complemento 3 · fecha del pago 16 · carpeta
+año/mes del área 185 · sin fecha 383. Los eventos que solo traen complemento de pago son 19, no 391: la medición del
+11-oct separaba la subcarpeta del pago de su factura. Una carpeta con años o meses adentro es un contenedor (copias de
+otras carpetas pegadas en el NUCO: `CI/Gerente Esteban Ruiz/2024/…`), nunca un evento.
