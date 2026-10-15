@@ -695,11 +695,15 @@ const ArqueosService = (function () {
       const blob = DriveApp.getFileById(fileId).getBlob();
       if (String(blob.getContentType() || '').indexOf('image/') !== 0) return true;
       const imagen = parrafo.appendInlineImage(blob);
-      const ANCHO_MAX = 150;
-      if (imagen.getWidth() > ANCHO_MAX) {
-        const proporcion = ANCHO_MAX / imagen.getWidth();
+      // Ancho fijo para las 3 firmas (Responsable/Especialista/Asistente), no solo un tope --
+      // antes una firma chica (trazo corto) se quedaba chica y una grande se topaba en 150, así
+      // que no se veían parejas en el PDF. Siempre se escala a este ancho (para arriba o para
+      // abajo) y el alto se ajusta proporcional, para no deformar el trazo (usuario, 15-oct-2026).
+      const ANCHO_FIRMA = 150;
+      if (imagen.getWidth() !== ANCHO_FIRMA) {
+        const proporcion = ANCHO_FIRMA / imagen.getWidth();
         imagen.setHeight(Math.round(imagen.getHeight() * proporcion));
-        imagen.setWidth(ANCHO_MAX);
+        imagen.setWidth(ANCHO_FIRMA);
       }
       return true;
     } catch (err) {
