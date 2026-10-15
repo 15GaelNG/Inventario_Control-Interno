@@ -123,33 +123,28 @@
     { grupo: 'Auditoría', clave: 'CALIFICACION_AUDITORIA_FINAL', etiqueta: 'Calificación final auditoria', tipo: 'text', soloLectura: true, placeholder: '0%', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
     { grupo: 'Auditoría', clave: 'OBSERVACIONES FINALES', etiqueta: 'Observaciones finales', tipo: 'text', mostrarSiCampo: 'REALIZAR_AUDITORIA', mostrarSiValor: 'SI' },
 
-    { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA RESPONSABLE', etiqueta: 'Cuenta con firma del responsable', tipo: 'select', opciones: ['SI', 'NO'] },
-    { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ESPECIALISTA', etiqueta: 'Cuenta con firma del especialista', tipo: 'select', opciones: ['SI', 'NO'] },
-    { grupo: 'Firmas y evidencia', clave: 'CUENTA CON FIRMA ASISTENTE', etiqueta: 'Cuenta con firma del asistente', tipo: 'select', opciones: ['SI', 'NO'] },
-    // tipo "firma": recuadro para firmar con mouse/dedo (no subir archivo) —
-    // solo se abre si la "Cuenta con firma de..." correspondiente es SI.
-    {
-      grupo: 'Firmas y evidencia', clave: 'FIRMA RESPONSABLE', etiqueta: 'Firma del responsable', tipo: 'firma',
-      mostrarSiCampo: 'CUENTA CON FIRMA RESPONSABLE', mostrarSiValor: 'SI',
-    },
-    {
-      grupo: 'Firmas y evidencia', clave: 'FIRMA ESPECIALISTA', etiqueta: 'Firma del especialista', tipo: 'firma',
-      mostrarSiCampo: 'CUENTA CON FIRMA ESPECIALISTA', mostrarSiValor: 'SI',
-    },
-    { grupo: 'Firmas y evidencia', clave: 'NOMBRE ASISTENTE', etiqueta: 'Nombre del asistente', tipo: 'text' },
-    {
-      grupo: 'Firmas y evidencia', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'firma',
-      mostrarSiCampo: 'CUENTA CON FIRMA ASISTENTE', mostrarSiValor: 'SI',
-    },
-    { grupo: 'Firmas y evidencia', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
     // multiple: deja elegir varias fotos a la vez -- subirArchivosArqueo las junta
     // en un solo PDF (una por página) antes de subirlas, porque en la hoja esta
     // columna sigue guardando un único archivo, como el resto de los 'file'.
-    { grupo: 'Firmas y evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file', multiple: true },
+    { grupo: 'Evidencia', clave: 'EVIDENCIAS', etiqueta: 'Evidencias', tipo: 'file', multiple: true },
+
+    // Firma del Responsable y del Especialista: fijas, siempre visibles (usuario, 14-oct-2026)
+    // -- ya no preguntan "¿cuenta con firma de...?" antes de abrir el recuadro; si no están
+    // presentes para firmar ahí mismo, se deja en blanco y se manda la liga después (ver
+    // generarLigaArqueoFicha_). La del Asistente sigue siendo la excepción, tal cual estaba.
+    { grupo: 'Firmas', clave: 'FIRMA RESPONSABLE', etiqueta: 'Firma del responsable', tipo: 'firma' },
+    { grupo: 'Firmas', clave: 'FIRMA ESPECIALISTA', etiqueta: 'Firma del especialista', tipo: 'firma' },
+    { grupo: 'Firmas', clave: 'CUENTA CON FIRMA ASISTENTE', etiqueta: 'Cuenta con firma del asistente', tipo: 'select', opciones: ['SI', 'NO'] },
+    { grupo: 'Firmas', clave: 'NOMBRE ASISTENTE', etiqueta: 'Nombre del asistente', tipo: 'text' },
+    {
+      grupo: 'Firmas', clave: 'FIRMA ASISTENTE', etiqueta: 'Firma del asistente', tipo: 'firma',
+      mostrarSiCampo: 'CUENTA CON FIRMA ASISTENTE', mostrarSiValor: 'SI',
+    },
+    { grupo: 'Firmas', clave: 'FIRMA EXTERNA', etiqueta: 'Firma externa', tipo: 'file' },
     // El PDF ya no se sube a mano: se genera solo al Registrar/Editar (ver
     // ArqueosService.generarPdfArqueo_) a partir de la plantilla F-CI03-009.
-    { grupo: 'Firmas y evidencia', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
-    { grupo: 'Firmas y evidencia', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
+    { grupo: 'Firmas', clave: 'ESTADO PDF', etiqueta: 'Estado del PDF', tipo: 'text', soloLectura: true, placeholder: 'Se genera solo al guardar' },
+    { grupo: 'Firmas', clave: 'FORMATO ARQUEO', etiqueta: 'Formato de arqueo (PDF)', tipo: 'file', soloLectura: true },
 
     // Apartado al final, aparte (usuario, 7-oct) -- columna agregada a mano en la hoja
     // (ESTATUS ARQUEO). Sin valorPorDefecto/bloqueadoAlCrear a propósito: se puede cambiar
@@ -233,14 +228,17 @@
     return n <= 1 ? n * 100 : n;
   }
 
-  /** Agrupa los 9 "grupo" de CAMPOS_ARQUEO en 5 pasos, mismo patrón visual que
-   *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). */
+  /** Agrupa los 10 "grupo" de CAMPOS_ARQUEO en 7 pasos, mismo patrón visual que
+   *  el wizard de Inspección Vehicular (chips + Atrás/Siguiente). Evidencia y Firmas eran un
+   *  solo paso ("Firmas y evidencia") -- se separan (usuario, 14-oct-2026) porque Firmas va a
+   *  seguir creciendo. */
   const PASOS_ARQUEO = [
     { titulo: 'Identificación', grupos: ['Identificación', 'Cuenta bancaria', 'Fechas y método'] },
     { titulo: 'Efectivo', grupos: ['Efectivo — Monedas', 'Efectivo — Billetes', 'Cheques'] },
     { titulo: 'Gastos', grupos: ['Totales de gasto'] },
     { titulo: 'Auditoría', grupos: ['Auditoría'] },
-    { titulo: 'Firmas y evidencia', grupos: ['Firmas y evidencia'] },
+    { titulo: 'Evidencia', grupos: ['Evidencia'] },
+    { titulo: 'Firmas', grupos: ['Firmas'] },
     { titulo: 'Estatus', grupos: ['Estatus'] },
   ];
 
@@ -1187,7 +1185,7 @@
 
   const AYUDA_ARQUEOS = [
     { pregunta: '¿Qué es un arqueo?', respuesta: 'La auditoría y conteo de efectivo de una caja chica: cuánto debería haber contra cuánto hay realmente, más el checklist de 17 puntos de control interno.' },
-    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 6 pasos (Identificación, Efectivo, Gastos, Auditoría, Firmas y evidencia, Estatus). El ID Arqueo y los totales se calculan solos.' },
+    { pregunta: '¿Cómo registro un arqueo?', respuesta: 'Pestaña "Registrar": elige la caja chica y avanza por los 7 pasos (Identificación, Efectivo, Gastos, Auditoría, Evidencia, Firmas, Estatus). El ID Arqueo y los totales se calculan solos.' },
     { pregunta: '¿Qué es el "Estatus del arqueo"?', respuesta: 'El último paso del formulario: marca si el arqueo quedó completo o si todavía falta información pendiente -- ayuda a dar seguimiento a los que quedaron a medias.' },
     { pregunta: '¿De dónde sale la Calificación de auditoría?', respuesta: 'Se calcula sola con las respuestas de los 17 reactivos del paso "Auditoría" -- no se captura a mano.' },
     { pregunta: '¿El PDF se genera solo?', respuesta: 'Sí, al registrar o editar el arqueo -- "Estado del PDF" muestra si ya está listo. No hay que subirlo a mano.' },
