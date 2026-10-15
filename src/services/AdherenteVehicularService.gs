@@ -680,8 +680,38 @@ const AdherenteVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
+  /** Campos que SÍ se pueden corregir después de capturado: datos administrativos/de contacto.
+   *  Nunca el adherente, el vehículo, ni lo que ya se generó (PDF, firmas, tokens) -- mismo
+   *  criterio que ResponsivaVehicularService.actualizar (gemelo). ESTATUS tiene su propio
+   *  endpoint (cambiarEstatus) y no se toca aquí. */
+  const CAMPOS_EDITABLES = [
+    'NO EMPLEADO', 'DEPARTAMENTO', 'AREA', 'PUESTO', 'SEDE', 'OFICINA / DESARROLLO',
+    'LUGAR DE RESGUARDO', 'ESTADO DE ENTREGA', 'TARJETA DE CIRCULACION', 'LICENCIA',
+    'VIGENCIA LICENCIA', 'INE', 'NO DE INVENTARIO', 'POLIZA DE SEGURO', 'VIGENCIA POLIZA',
+    'NOMBRE JEFE', 'NOMBRE CI',
+  ];
+
+  /** Corrige datos de un adherente que TODAVÍA no se firmó del todo (ESTADO FIRMA=PENDIENTE) --
+   *  ver el comentario largo de ResponsivaVehicularService.actualizar (gemelo): no hace falta
+   *  regenerar nada aquí, el PDF sale con el dato corregido en cuanto se complete la última
+   *  firma. Una vez firmado, ya no se puede editar (usuario, 15-oct-2026). */
+  function actualizar(token, id, datos) {
+    Permisos.puedeEditar(token, MODULO);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    if (String(encontrado.data['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+      throw new Error('Este adherente ya quedó firmado; ya no se puede editar.');
+    }
+    const cambios = {};
+    CAMPOS_EDITABLES.forEach((clave) => {
+      if ((datos || {})[clave] !== undefined) cambios[clave] = datos[clave];
+    });
+    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+    return { ID: id };
+  }
+
   return {
-    listarPorFolio, listarPorVehiculo, buscarPorId, crear, cambiarEstatus, eliminar, ligaDeToken, regenerarLiga,
+    listarPorFolio, listarPorVehiculo, buscarPorId, crear, actualizar, cambiarEstatus, eliminar, ligaDeToken, regenerarLiga,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
     PLANTILLA,
   };

@@ -726,3 +726,85 @@ test('devolverPrestamo: si alguna firma …TEMP se quedó con el base64 crudo de
   assert.ok(migrada.archivoId, 'la firma de CI quedó migrada a archivo de Drive');
   assert.ok(!migrada.base64, 'el base64 crudo ya no vive en la celda');
 });
+
+// ---------------------------------------------------------------------------- actualizar ("Editar", 15-oct-2026)
+
+test('actualizar: mientras sigue PENDIENTE, corrige los datos editables', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+
+  const res = contexto.Servicio.actualizar('tok', id, {
+    DEPARTAMENTO: 'COBRANZA', PUESTO: 'GERENTE', 'LUGAR DE RESGUARDO': 'QRO BODEGA 2',
+    'GATO HIDRAULICO': 'SI', 'LLAVE CRUZ': 'NO',
+  });
+
+  assert.equal(res.ID, id);
+  const fila = llamadas.insert[0];
+  assert.equal(fila['DEPARTAMENTO'], 'COBRANZA');
+  assert.equal(fila['PUESTO'], 'GERENTE');
+  assert.equal(fila['LUGAR DE RESGUARDO'], 'QRO BODEGA 2');
+  assert.equal(fila['GATO HIDRAULICO'], 'SI');
+  assert.equal(fila['LLAVE CRUZ'], 'NO');
+});
+
+test('actualizar: un accesorio que no llega "SI" exacto se guarda como NO (mismo criterio que crear)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+  contexto.Servicio.actualizar('tok', id, { 'GATO HIDRAULICO': 'si' });
+  contexto.Servicio.actualizar('tok', id, { 'LLAVE CRUZ': 'tal vez' });
+  assert.equal(llamadas.insert[0]['GATO HIDRAULICO'], 'SI');
+  assert.equal(llamadas.insert[0]['LLAVE CRUZ'], 'NO');
+});
+
+test('actualizar: ignora campos que no son editables (RESPONSABLE, vehículo, PDF, ESTADO FIRMA, tokens), aunque se manden', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+
+  contexto.Servicio.actualizar('tok', id, {
+    RESPONSABLE: 'Otra Persona', 'FOLIO VEHICULO': 'AUT9999', PDF: 'https://drive/falso',
+    'ESTADO FIRMA': 'FIRMADO', 'TOKEN FIRMA': 'robado', 'TIPO RESPONSIVA': 'PRESTAMO',
+  });
+
+  const fila = llamadas.insert[0];
+  assert.equal(fila['RESPONSABLE'], 'Maria Lopez', 'el responsable no se toca aquí (dispara reasignación solo al crear)');
+  assert.equal(fila['FOLIO VEHICULO'], 'AUT0001');
+  assert.equal(fila['PDF'], '');
+  assert.equal(fila['ESTADO FIRMA'], 'PENDIENTE');
+  assert.ok(fila['TOKEN FIRMA'] && fila['TOKEN FIRMA'] !== 'robado');
+  assert.equal(fila['TIPO RESPONSIVA'], 'DEFINITIVA');
+});
+
+test('actualizar: truena si ya se firmó del todo (ESTADO FIRMA ya no PENDIENTE) -- el documento ya quedó impreso con esos datos', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA CI': FIRMA_CI });
+  const id = llamadas.insert[0].ID;
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'FIRMADO', 'presencial: queda firmada de una vez');
+  assert.throws(() => contexto.Servicio.actualizar('tok', id, { PUESTO: 'GERENTE' }), /ya quedó firmada; ya no se puede editar/);
+  assert.notEqual(llamadas.insert[0]['PUESTO'], 'GERENTE');
+});
+
+test('actualizar: truena si el registro no existe', () => {
+  const { contexto } = crearContexto();
+  assert.throws(() => contexto.Servicio.actualizar('tok', 'RSV-X', { PUESTO: 'GERENTE' }), /No se encontró el registro/);
+});
+
+test('actualizar: una corrección mientras PENDIENTE sí llega al PDF final (generarPdfYGuardar_ relee el renglón, no hace falta regenerar aparte)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' },
+    { 'FIRMA RESPONSABLE': FIRMA_RESPONSABLE, 'FIRMA CI': FIRMA_CI }, { remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  const tokenJefe = llamadas.insert[0]['TOKEN FIRMA JEFE'];
+  contexto.Servicio.actualizar('tok', id, { PUESTO: 'GERENTE CORREGIDO' });
+
+  contexto.Servicio.completarFirmaJefe(tokenJefe, FIRMA_JEFE);
+
+  assert.equal(llamadas.insert[0]['PUESTO'], 'GERENTE CORREGIDO');
+  assert.equal(llamadas.pdfGenerados, 1);
+});

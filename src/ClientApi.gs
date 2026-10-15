@@ -426,6 +426,11 @@ function apiBuscarResponsivaVehicularPorId(token, id) {
 function apiCrearResponsivaVehicular(token, datos, imagenes, opciones) {
   return ResponsivaVehicularService.crear(token, datos, imagenes, opciones);
 }
+// Mientras sigue PENDIENTE de firma (ver el comentario de ResponsivaVehicularService.actualizar);
+// una vez firmada, ya no se puede.
+function apiActualizarResponsivaVehicular(token, id, datos) {
+  return ResponsivaVehicularService.actualizar(token, id, datos);
+}
 function apiEliminarResponsivaVehicular(token, id) {
   return ResponsivaVehicularService.eliminar(token, id);
 }
@@ -481,6 +486,11 @@ function apiBuscarAdherenteVehicularPorId(token, id) {
 }
 function apiCrearAdherenteVehicular(token, datos, imagenes, opciones) {
   return AdherenteVehicularService.crear(token, datos, imagenes, opciones);
+}
+// Mientras sigue PENDIENTE de firma (ver el comentario de AdherenteVehicularService.actualizar);
+// una vez firmado, ya no se puede.
+function apiActualizarAdherenteVehicular(token, id, datos) {
+  return AdherenteVehicularService.actualizar(token, id, datos);
 }
 function apiCambiarEstatusAdherenteVehicular(token, id, estatus) {
   return AdherenteVehicularService.cambiarEstatus(token, id, estatus);

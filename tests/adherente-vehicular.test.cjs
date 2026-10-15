@@ -541,3 +541,54 @@ test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí
   assert.equal(llamadas.pdfEn, 'NUCO/00001/RESPONSIVA/ADHERENTES');
   assert.deepEqual(llamadas.expediente, [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: true }]);
 });
+
+// ---------------------------------------------------------------------------- actualizar ("Editar", 15-oct-2026)
+
+test('actualizar: mientras sigue PENDIENTE, corrige los datos editables', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+
+  const res = contexto.Servicio.actualizar('tok', id, { DEPARTAMENTO: 'COBRANZA', PUESTO: 'GERENTE', 'LUGAR DE RESGUARDO': 'QRO BODEGA 2' });
+
+  assert.equal(res.ID, id);
+  const fila = llamadas.insert[0];
+  assert.equal(fila['DEPARTAMENTO'], 'COBRANZA');
+  assert.equal(fila['PUESTO'], 'GERENTE');
+  assert.equal(fila['LUGAR DE RESGUARDO'], 'QRO BODEGA 2');
+});
+
+test('actualizar: ignora campos que no son editables (ADHERENTE, vehículo, PDF, ESTADO FIRMA, tokens, ESTATUS), aunque se manden', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  const id = llamadas.insert[0].ID;
+
+  contexto.Servicio.actualizar('tok', id, {
+    ADHERENTE: 'Otra Persona', 'FOLIO VEHICULO': 'AUT9999', PDF: 'https://drive/falso',
+    'ESTADO FIRMA': 'FIRMADO', 'TOKEN FIRMA': 'robado', ESTATUS: 'BAJA',
+  });
+
+  const fila = llamadas.insert[0];
+  assert.equal(fila['ADHERENTE'], 'Maria Lopez');
+  assert.equal(fila['FOLIO VEHICULO'], 'AUT0001');
+  assert.equal(fila['PDF'], '');
+  assert.equal(fila['ESTADO FIRMA'], 'PENDIENTE');
+  assert.ok(fila['TOKEN FIRMA'] && fila['TOKEN FIRMA'] !== 'robado');
+  assert.equal(fila['ESTATUS'], 'ACTIVO', 'ESTATUS tiene su propio endpoint (cambiarEstatus), no se toca aquí');
+});
+
+test('actualizar: truena si ya se firmó del todo (ESTADO FIRMA ya no PENDIENTE) -- el documento ya quedó impreso con esos datos', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' }, FIRMA_OK);
+  const id = llamadas.insert[0].ID;
+  assert.equal(llamadas.insert[0]['ESTADO FIRMA'], 'FIRMADO', 'presencial: queda firmado de una vez');
+  assert.throws(() => contexto.Servicio.actualizar('tok', id, { PUESTO: 'GERENTE' }), /ya quedó firmado; ya no se puede editar/);
+  assert.notEqual(llamadas.insert[0]['PUESTO'], 'GERENTE');
+});
+
+test('actualizar: truena si el registro no existe', () => {
+  const { contexto } = crearContexto();
+  assert.throws(() => contexto.Servicio.actualizar('tok', 'ADH-X', { PUESTO: 'GERENTE' }), /No se encontró el registro/);
+});

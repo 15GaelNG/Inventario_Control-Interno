@@ -776,8 +776,47 @@ const ResponsivaVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
+  /** Campos que SÍ se pueden corregir después de capturada: datos administrativos/de contacto
+   *  y los accesorios entregados. Nunca el responsable (dispara reasignación al crear, no aquí),
+   *  el vehículo, el tipo/préstamo, ni nada de lo que ya se generó (PDF, firmas, tokens) --
+   *  mismo criterio que noEditables en HojaServicio (lo "fotografiado" al capturar no se toca). */
+  const CAMPOS_EDITABLES = [
+    'NO EMPLEADO', 'DEPARTAMENTO', 'AREA', 'PUESTO', 'SEDE', 'OFICINA / DESARROLLO',
+    'LUGAR DE RESGUARDO', 'ESTADO DE ENTREGA', 'TARJETA DE CIRCULACION', 'LICENCIA',
+    'VIGENCIA LICENCIA', 'INE', 'NO DE INVENTARIO', 'POLIZA DE SEGURO', 'VIGENCIA POLIZA',
+    'OTROS', 'OBSERVACIONES', 'NOMBRE JEFE', 'NOMBRE CI',
+  ].concat(ACCESORIOS);
+
+  /**
+   * Corrige datos de una responsiva que TODAVÍA no se firmó del todo (ESTADO FIRMA=PENDIENTE --
+   * alguna liga sigue sin completarse). En cuanto se complete la última firma,
+   * generarPdfYGuardar_ usa lo que haya en ESE momento en la hoja (lee el renglón de nuevo, ver
+   * completarFirma/completarFirmaJefe) -- así que corregir aquí no necesita regenerar nada, el
+   * PDF va a salir ya con el dato corregido. Una vez firmada (PDF generado) ya no se puede
+   * editar: el documento ya quedó impreso con esos datos -- el comentario del archivo explica
+   * por qué una responsiva FIRMADA es de solo alta; ese riesgo de desincronizar el documento del
+   * historial real solo existe DESPUÉS de firmar, nunca antes (usuario, 15-oct-2026).
+   */
+  function actualizar(token, id, datos) {
+    Permisos.puedeEditar(token, MODULO);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    if (String(encontrado.data['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+      throw new Error('Esta responsiva ya quedó firmada; ya no se puede editar.');
+    }
+    const cambios = {};
+    CAMPOS_EDITABLES.forEach((clave) => {
+      if ((datos || {})[clave] === undefined) return;
+      cambios[clave] = ACCESORIOS.indexOf(clave) !== -1
+        ? (String(datos[clave] || '').trim().toUpperCase() === 'SI' ? 'SI' : 'NO')
+        : datos[clave];
+    });
+    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+    return { ID: id };
+  }
+
   return {
-    listarPorFolio, listarPorVehiculo, buscarPorId, crear, eliminar, ligaDeToken, regenerarLiga,
+    listarPorFolio, listarPorVehiculo, buscarPorId, crear, actualizar, eliminar, ligaDeToken, regenerarLiga,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
     devolverPrestamo,
     PLANTILLA,
