@@ -269,5 +269,25 @@ console.log('deOtroModulo: columnas que solo cambia quien edita otro módulo');
   ok(nueva && nueva[5] === '', 'al crear, igual');
 }
 
+console.log('subirArchivo: un base64 que decodifica a 0 bytes truena antes de crear el archivo en Drive');
+{
+  // Un archivo de 0 bytes (base64 no vacío, pero inválido/corrupto) se subía a Drive sin ningún
+  // aviso -- el problema solo salía después, al leerlo de vuelta (ej. "Datos de imagen no
+  // válidos" al generar un PDF de Arqueos con esa firma, usuario, 15-oct-2026).
+  const { H, e } = entorno();
+  e.contexto.DriveApp.getFolderById = () => ({
+    createFile: () => ({ getUrl: () => 'https://drive/archivo', getId: () => 'FID' }),
+  });
+  Object.assign(e.contexto, {
+    DriveUtils: { marcarAutor: (archivo) => archivo, compartirLoMasAmplioPosible: () => true },
+  });
+  ok(truena(() => H.subirArchivo('carpeta', 'de prueba', 'x.png', 'image/png', '')) === 'No se recibió ningún archivo.',
+    'base64 vacío truena antes de decodificar');
+  ok(truena(() => H.subirArchivo('carpeta', 'de prueba', 'x.png', 'image/png', '!!!')) === 'El archivo llegó vacío -- inténtalo de nuevo.',
+    'un base64 que decodifica a 0 bytes también truena, aunque el string no estuviera vacío');
+  const subido = H.subirArchivo('carpeta', 'de prueba', 'x.png', 'image/png', Buffer.from('contenido real').toString('base64'));
+  ok(subido.url === 'https://drive/archivo', 'con bytes de verdad, sube normal');
+}
+
 console.log(fallas ? '\n' + fallas + ' FALLA(S)' : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

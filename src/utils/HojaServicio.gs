@@ -471,6 +471,11 @@ const HojaServicio = (function () {
   function subirArchivo(carpetaId, deQue, nombreArchivo, mimeType, base64Data) {
     if (!base64Data) throw new Error('No se recibió ningún archivo.');
     const bytes = Utilities.base64Decode(base64Data);
+    // `base64Data` no vacío no garantiza que decodifique a algo -- un archivo de 0 bytes se
+    // subía sin ningún aviso (Drive lo acepta igual) y el problema solo salía hasta después,
+    // al intentar leerlo de vuelta (p. ej. "Datos de imagen no válidos" al generar un PDF con
+    // esa firma, usuario, 15-oct-2026). Mejor tronar aquí, al momento de subir.
+    if (!bytes.length) throw new Error('El archivo llegó vacío -- inténtalo de nuevo.');
     if (bytes.length > TAMANO_MAX_BYTES) throw new Error('El archivo pesa más de 10 MB — súbelo más ligero.');
 
     const blob = Utilities.newBlob(bytes, mimeType || 'application/octet-stream', nombreArchivo || 'archivo');
