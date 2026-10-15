@@ -397,7 +397,15 @@
         URL.revokeObjectURL(url);
         resolve({ dataUrl: canvas.toDataURL('image/jpeg', CALIDAD), ancho, alto });
       };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer una de las imágenes')); };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // HEIC/HEIF (las que toma un iPhone por default) pasan el filtro accept="image/*" del
+        // selector de archivos, pero el navegador no las puede abrir aquí -- sin decir cuál
+        // archivo fue, la persona no sabe qué foto quitar (usuario, 15-oct-2026).
+        const esHeic = /\.hei[cf]$/i.test(file.name || '');
+        reject(new Error('No se pudo leer "' + (file.name || 'una de las fotos') + '"' +
+          (esHeic ? ' -- es formato HEIC; cambia el ajuste de la cámara a "Más compatible" (JPG) o conviértela antes de subirla.' : '.')));
+      };
       img.src = url;
     });
   }
