@@ -845,6 +845,16 @@
     'uber-registrar': () => abrir('uber', 'registrar'),
     'caja-chica-registrar': () => abrir('caja-chica', 'registrar'),
     'arqueos-registrar': () => abrir('arqueos', 'registrar'),
+    // El último paso: Guardar y "Enviar liga(s)" juntos (Pasos maneja el principal; la liga sale con él)
+    'arqueos-registrar-final': async () => {
+      await abrir('arqueos', 'registrar');
+      for (let i = 0; i < 8; i++) {
+        const sig = [...document.querySelectorAll('[data-arq-siguiente]')].find((b) => b.offsetParent && !b.hidden);
+        if (!sig) break;
+        sig.click(); await esperar(250);
+      }
+      (await hasta('[data-arq-cuenta]')).scrollIntoView({ block: 'center' }); await esperar(300);
+    },
     // ---- Ventanas (styles.html, sección Modal): chica = hoja abajo en celular; ancha = pantalla completa ----
     'modal-confirmar': async () => {
       await abrir('vehiculos');
