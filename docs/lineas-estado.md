@@ -6,7 +6,7 @@ adicionales, sin «quien lo usa», firma guardada, PDF ligado fuera de su carpet
 `UrlFetchApp`), el PIN del equipo solo con números, sin la compatibilidad con OBSERVACIONES, Exportar a Excel del
 inventario como lo muestra el panel, la identificación de cada responsable en la responsiva y reutilizarla con «¿Es
 correcta?» (9-oct). Lo de adendums y facturas (la pantalla Proveedor) salió de `emmanuel` el 8-oct y se rehace; la primera versión volvió al código el 14-oct con una unión de `master`
-y se quitó otra vez el mismo día, sin publicar (§1, Menú de Líneas; antecedente en el historial de git y en `_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-14
+y se quitó otra vez el mismo día; el código sin ella está publicado en la v120 (15-oct) (§1, Menú de Líneas; antecedente en el historial de git y en `_archivo/emmanuel_respaldo_8oct.zip` de la carpeta del proyecto) · Última actualización: 2026-10-15
 
 Qué es hoy el módulo **Líneas** (equipos celulares y líneas telefónicas), dónde vive cada cosa y cómo se trabaja.
 La bitácora anterior de este archivo (§0a…§0ae, hasta el 1-oct) sigue en el historial de git. El diseño de las hojas
@@ -35,9 +35,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Sin textos de ayuda** (12-oct, `4d07afa`): ni el párrafo de Documentos, ni el de Reasignar varios, ni
   las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
   Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
-- **Recargar datos** (botón solo para administrador, junto a Agregar equipo y Agregar línea; `TelefoniaService.recargarDatos`): vacía las cachés de `LineasRepo` y, desde `4013989` (14-oct, en `emmanuel`, sin publicar),
+- **Recargar datos** (botón solo para administrador, junto a Agregar equipo y Agregar línea; `TelefoniaService.recargarDatos`): vacía las cachés de `LineasRepo` y, desde `4013989` (14-oct; publicado en la v120, 15-oct),
   también las hojas LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS que `LineasLectura` guarda 30 min (`LineasDatos.tocar`). Lo escrito en el libro por fuera de la app, como la carga del proveedor, no las renueva solo:
-  con la v117 de producción se ve a más tardar 30 min después.
+  después de escribir basta «Recargar datos»; sin él se ve a más tardar 30 min después.
 - **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
   modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
   lo sigue (USO si está en uso, DISPONIBLE si está guardado). No → responsable a mano y opcional; USO con responsable,
@@ -72,7 +72,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
   pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
   «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
-  del corte; Cobrado (con la parcialidad del equipo dentro; un importe negativo se escribe «-$7.74», no «$-7.74»: `dinero` de `lineas.html`, `1b4943c`, 14-oct), Habitual (el cobro habitual de la línea) y Diferencia (cobrado menos habitual: «Igual», «$200.00 de más» o «de menos»; menos de $0.05 cuenta como igual, el centavo de redondeo de Telcel; `fd25efd`, 14-oct, pendiente 1.17: ya no es contra la renta del adendum, que en AT&T es el precio de lista y no lo que se paga con el descuento corporativo; la renta sigue en la tarjeta Plan), Uso (un SIM básico también tiene Habitual y Diferencia; lleva su renta en la tarjeta Plan),
+  del corte; Cobrado (con la parcialidad del equipo dentro; un importe negativo se escribe «-$7.74», no «$-7.74»: `dinero` de `lineas.html`, `1b4943c`, 14-oct; publicado en la v120), Habitual (el cobro habitual de la línea) y Diferencia (cobrado menos habitual: «Igual», «$200.00 de más» o «de menos»; menos de $0.05 cuenta como igual, el centavo de redondeo de Telcel; `fd25efd`, 14-oct, publicado en la v120 (15-oct): ya no es contra la renta del adendum, que en AT&T es el precio de lista y no lo que se paga con el descuento corporativo; la renta sigue en la tarjeta Plan), Uso (un SIM básico también tiene Habitual y Diferencia; lleva su renta en la tarjeta Plan),
   Equipo (solo si la línea paga un equipo a plazos: «Parcialidad 10 de 24 · MOTOROLA 4G XT2521-2 G15 256GB GRIS · $52.08»; `3cce1da`, 14-oct), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
   «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
@@ -328,8 +328,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   accesorios. Correcciones de líneas (`correcciones-lineas`) y Sistemas (`sistemas-lineas`) están apagados con
   `MODULOS_APAGADOS` en producción y en el DEV de Emmanuel (Help Desk y Vínculos están apagados solo en producción).
   **Sin «Proveedor» en el menú** (14-oct, `a6243a2`; usuario, opción B): la primera versión del 7-oct (`proveedor-lineas`) volvió al código con la unión de Ayrton `ac4a560` (v116) y se apagó en producción
-  con la v117; ahora se quitó (entrada del menú, módulo de `Modulos.gs`, `include`, pruebas y `MODULOS_APAGADOS`). Sus tres archivos quedan vacíos (`35d0fb2`, ver la tabla de archivos). Está en `emmanuel`, sin
-  `master` ni publicar: mientras no se publique, producción sigue con la v117 (Proveedor apagado). Se rehace (pendiente 1.10). El menú lateral
+  con la v117; después se quitó (entrada del menú, módulo de `Modulos.gs`, `include`, pruebas y `MODULOS_APAGADOS`). Sus tres archivos quedan vacíos (`35d0fb2`, ver la tabla de archivos). Publicado en la
+  v120 (15-oct). Se rehace (pendiente 1.10). El menú lateral
   sale recogido (92 px) y se abre a 308 px al pasar el cursor (12-oct, `590fedc`: con 280 se cortaban «Resguardos y cancelaciones» y
   «Reasignaciones vehiculares»), encima del contenido, sin botón de colapsar (en celular y tableta, hasta 1024 px, sigue
   el cajón de `shell-movil.html`, también de 308 px); las etiquetas llevan solo la primera mayúscula.
