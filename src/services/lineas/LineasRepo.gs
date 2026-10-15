@@ -876,7 +876,8 @@ const LineasRepo = (function () {
    * Responsivas que la línea firmó dentro de un equipo (pendiente 2.45, 15-oct): las de RESPONSIVAS LINEAS con su ID en
    * ID LINEA ENTREGADA y otro registro en ID LINEA. Cada una con el registro de su equipo (registroId), su NUCO y
    * enEquipo. Las anteriores al 15-oct solo si se pudo probar su línea (la asignación del equipo en esa fecha y el número
-   * de la responsiva dicen lo mismo; reporte_lineas/actualizacion_base/ligar_responsivas.js).
+   * de la responsiva dicen lo mismo, o el número, su SIM y la única línea del equipo; reporte_lineas/actualizacion_base/
+   * ligar_responsivas.js).
    */
   function responsivasEntregadas(idLinea) {
     const ids = idsDeRegistro(idLinea);
