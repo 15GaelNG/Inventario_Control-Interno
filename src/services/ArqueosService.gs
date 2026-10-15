@@ -710,7 +710,7 @@ const ArqueosService = (function () {
       // antes una firma chica (trazo corto) se quedaba chica y una grande se topaba en 150, así
       // que no se veían parejas en el PDF. Siempre se escala a este ancho (para arriba o para
       // abajo) y el alto se ajusta proporcional, para no deformar el trazo (usuario, 15-oct-2026).
-      const ANCHO_FIRMA = 150;
+      const ANCHO_FIRMA = 100;
       if (imagen.getWidth() !== ANCHO_FIRMA) {
         const proporcion = ANCHO_FIRMA / imagen.getWidth();
         imagen.setHeight(Math.round(imagen.getHeight() * proporcion));
