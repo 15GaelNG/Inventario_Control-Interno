@@ -84,15 +84,19 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   });
   // Y la pantalla no pinta las pestañas ni los botones que no va a poder abrir
   const lineas = leer('src/html/js/lineas.html');
-  assert.match(lineas, /const sinPasado = \(\) => !!\(memoria\.permisos && memoria\.permisos\.conAlcance\);/);
-  // Documentos e Historial: su sección (permisos en árbol) y nunca para un CLIENT
-  assert.match(lineas, /const veDocumentos = \(\) => !sinPasado\(\) && veSeccion\('documentos'\);/);
-  assert.match(lineas, /const veHistorial = \(\) => !sinPasado\(\) && veSeccion\('historial'\);/);
+  // Documentos e Historial: su sección (permisos en árbol). Nunca para un CLIENT: no respetan el alcance, así que al
+  // limitado se le resuelven Sin acceso (lo revisa abajo «Modulos: Documentos e Historial sin alcance»)
+  assert.match(lineas, /const veDocumentos = \(\) => veSeccion\('documentos'\);/);
+  assert.match(lineas, /const veHistorial = \(\) => veSeccion\('historial'\);/);
+  const modulos = leer('src/config/Modulos.gs');
+  ['documentos', 'historial'].forEach((s) => assert.match(modulos, new RegExp("\\{ id: '" + s + "', etiqueta: '[^']+', icono: '[^']+' \\}"), s + ' sin alcance: true'));
+  assert.match(leer('src/services/PermisosService.gs'), /if \(limitado && !Modulos\.respetaAlcance\(m\)\) v = NINGUNO;/);
+  // Los permisos de Líneas salen de la sesión, sin otra llamada (fase 5.1)
+  assert.doesNotMatch(lineas, /apiLineasPermisos|memoria\.permisos/);
   assert.match(lineas, /function cargarEvidencias\(id\) \{\s+if \(!veDocumentos\(\)\) return;/);
   assert.match(lineas, /function cargarHistorial\(id, nombre, vista\) \{\s+if \(!veHistorial\(\)\) return;/);
   assert.match(lineas, /function botonUltimoNucos\(tipo, id\) \{\s+if \(!veDocumentos\(\)\) return '';/);
   assert.match(lineas, /pasado && \{ id: 'historial', titulo: 'Historial', icono: 'history'/);
-  assert.match(telefonia, /conAlcance: !!sesion\.alcance,/);
   // El directorio de CH que piden los formularios de Vehículos (solo pedía sesión)
   assert.match(leer('src/services/CapitalHumano.gs'),
     /function listarColaboradores\(token\) \{\s+const sesion = Auth\.validarSesion\(token\);[^\n]*\n[^\n]*\n\s+if \(Permisos\.alcanceDe\(sesion\.correo\)\) return \[\];/);

@@ -1919,7 +1919,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
   assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
   // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
-  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', puedeOperar, '', true\)/);
+  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', operarEquipo, '', true\)/);
   assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
   assert.match(lineas, /\.concat\(documentos, drive, operar \? editar\.concat\(vinculo\) : \[\], historial\)/);
   assert.doesNotMatch(lineas, /Abrir carpeta/);

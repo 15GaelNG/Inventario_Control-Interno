@@ -105,19 +105,6 @@ const TelefoniaService = (function () {
     return doc;
   }
 
-  /** Permisos del usuario dentro del módulo (la interfaz decide qué botones mostrar). */
-  function permisos(token) {
-    const sesion = leer_(token);
-    return {
-      puedeOperar: puedeOperar_(sesion),
-      puedeVerSecretos: puedeVerSecretos_(sesion),
-      esAdmin: sesion.rol === Config.ROLES.ADMIN,
-      // Rol CLIENT: la ficha sin su pasado (Historial, Documentos), que el servidor le niega con sinAlcance_
-      conAlcance: !!sesion.alcance,
-      puedeAprobarResguardos: LineasResguardos.puedeAprobar(usuarioResguardo_(sesion)),
-    };
-  }
-
   /** Índices de equipos y líneas para los listados, con las columnas de la vista del AppSheet (caché 30 min). */
   function indice(token) {
     const sesion = leer_(token);
@@ -918,7 +905,7 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
+    indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,

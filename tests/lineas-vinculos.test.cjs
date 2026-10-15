@@ -193,7 +193,7 @@ test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas
   assert.match(js, /mensaje: 'ELIGE UNA LÍNEA DISPONIBLE', valor: elegido\.linea \|\| '' \}/);
   assert.match(js, /mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido\.nuco \|\| '' \}/);
   // El permiso y el espacio existen antes de la carga inicial (aplicarModoVista los usa al entrar)
-  const permiso = js.indexOf('let puedeOperarTabla = false;');
+  const permiso = js.indexOf('const puedeOperar = () => puedeEditarModulo(');
   const espacio = js.indexOf('const espacioVinculos = ');
   const carga = js.indexOf('// ---- Carga inicial ----');
   assert.ok(permiso > 0 && permiso < espacio && espacio < carga);

@@ -2305,24 +2305,21 @@
     }
 
     /**
-     * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado (Historial, Documentos, la
-     * última inspección o responsiva), que puede ser de cuando el equipo era de otro departamento. El
-     * servidor se lo niega igual (TelefoniaService.sinAlcance_); esto solo no pinta lo que no va a abrir.
+     * Los permisos de Líneas salen de los de la sesión (state.permisos, ya resueltos por el servidor), sin otra
+     * llamada: operar = EDICION en Líneas Telefónicas (TelefoniaService.puedeOperar_ pregunta lo mismo).
      */
-    const sinPasado = () => !!(memoria.permisos && memoria.permisos.conAlcance);
+    const puedeOperar = () => puedeEditarModulo('lineas-telefonicas');
     /**
      * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.detalles,
      * .documentos, .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
      * servidor pide la misma sección (TelefoniaService.leerSeccion_); esto solo no pinta lo que no va a abrir.
+     * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado. Documentos e Historial no respetan el
+     * alcance (Modulos.gs), así que a quien está limitado el servidor ya se las resuelve Sin acceso (Permisos.resolver_)
+     * y además se las niega con TelefoniaService.sinAlcance_.
      */
     const veSeccion = (seccion) => puede('lineas-telefonicas.' + seccion);
-    const veDocumentos = () => !sinPasado() && veSeccion('documentos');
-    const veHistorial = () => !sinPasado() && veSeccion('historial');
-
-    function cargarPermisos() {
-      if (memoria.permisos) return Promise.resolve(memoria.permisos);
-      return llamar('apiLineasPermisos').then((p) => (memoria.permisos = p));
-    }
+    const veDocumentos = () => veSeccion('documentos');
+    const veHistorial = () => veSeccion('historial');
 
     function cargarColaboradores(forzar) {
       if (!forzar && memoria.colaboradores && Date.now() - memoria.colaboradoresCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.colaboradores);
@@ -2363,9 +2360,10 @@
 
     /** Calienta en segundo plano lo que usan las vistas y los formularios (no bloquea nada). */
     function precargar() {
-      Promise.all([cargarPermisos(), cargarIndice()])
-        // Un CLIENT no usa los formularios: el directorio de Capital Humano ni se pide (el servidor se lo niega)
-        .then(() => Promise.all([cargarCatalogos(), sinPasado() ? null : cargarColaboradores()]))
+      cargarIndice()
+        // El directorio de Capital Humano es para los formularios: solo se adelanta a quien captura (a un CLIENT el
+        // servidor se lo niega; Gestión de activos lo pide al abrirse)
+        .then(() => Promise.all([cargarCatalogos(), puedeOperar() ? cargarColaboradores() : null]))
         .catch(() => {});
     }
 
@@ -2635,7 +2633,6 @@
         if (ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
       });
 
-      let puedeOperarTabla = false; // con los permisos (abajo, «Selección estilo Google Drive»); Vínculos también lo usa
       // ---- Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción de siempre ----
       // Es una idea que se queda así: en producción está apagada (MODULOS_APAGADOS de Entornos.gs, como Help Desk) y no hay
       // botón ni espacio; en los DEV sí. No tiene llamadas propias al servidor: solo abre las ventanas de siempre
@@ -2648,7 +2645,7 @@
       }
       const espacioVinculos = vinculosApagado ? { pintar: () => {} } : LineasVinculos.montar($('#ln-vinculos', raiz), {
         indice: () => memoria.indice,
-        puedeOperar: () => puedeOperarTabla,
+        puedeOperar: puedeOperar,
         icono: icono,
         esc: esc,
         color: (estatus) => COLOR_ESTATUS[String(estatus || '').toUpperCase()] || '',
@@ -2679,9 +2676,9 @@
       const subInicial = typeof HistorialApp !== 'undefined' ? HistorialApp.registrar('lineas-telefonicas', (sub) => { if (vigente()) restaurarPaso(sub); }) : null;
       // Se pintó con el índice guardado en el navegador y llegó uno distinto: pintar de nuevo
       escucharLista('apiLineasIndice', () => { if (vigente()) { pintarIndicadores(); pintarListado(); } }, raiz);
-      Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
+      cargarIndice().then(() => {
         if (!vigente()) return;
-        $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
+        $('#ln-recargar', raiz).hidden = !(state.sesion && state.sesion.rol === 'ADMIN');
         pintarIndicadores();
         pintarListado();
         if (subInicial) restaurarPaso(subInicial);
@@ -2751,11 +2748,6 @@
       }
 
       // ---- Selección estilo Google Drive (30-sep): acciones de la barra, del ⋮ y del clic derecho ----
-      cargarPermisos().then((p) => {
-        puedeOperarTabla = !!(p && p.puedeOperar);
-        Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
-        if (memoria.modoVista === 'vinculos' && vigente()) espacioVinculos.pintar();
-      }).catch(() => { /* sin permisos: solo las acciones de consulta */ });
       const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
 
 
@@ -2777,7 +2769,7 @@
        */
       function accionesSeleccionDe(modulo) {
         const tipo = TABLAS_INVENTARIO[modulo].detalle;
-        const operar = () => puedeOperarTabla;
+        const operar = puedeOperar;
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
@@ -3366,7 +3358,7 @@
        * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
        */
       function pestanasFicha(general, detalles, conDocumentos) {
-        // Cada pestaña con su sección (y Documentos e Historial, nunca para un CLIENT: sinPasado)
+        // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion)
         const conDetalles = veSeccion('detalles');
         const pasado = veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
@@ -3398,7 +3390,7 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'equipo' || pila[pila.length - 1].id !== id) return;
           const e = r.equipo;
           const l = r.linea;
-          const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
+          const operarEquipo = puedeOperar();
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
           fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: null, carpetaDriveId: e.carpetaDriveId || null };
@@ -3406,7 +3398,7 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              botonesFicha('data-equipo-id', id, 'equipo', puedeOperar, '', true),
+              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo, '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
@@ -3445,7 +3437,7 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'linea' || pila[pila.length - 1].id !== id) return;
           const l = r.linea;
           const e = r.equipo;
-          const puedeOperarLinea = memoria.permisos && memoria.permisos.puedeOperar;
+          const puedeOperarLinea = puedeOperar();
           // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
@@ -3511,7 +3503,7 @@
         const id = boton.dataset.id;
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
-        const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
+        const operar = puedeOperar();
         // Editar línea y Editar equipo por separado (usuario, 8-oct; «Editar información» hasta el 13-oct). En el equipo ya no
         // van Editar línea ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
         const editar = [tipo === 'equipo'
@@ -3758,7 +3750,7 @@
         ], () => tablaDocumentos);
         if (!filas.length) return;
         soltarDocumentos();
-        const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
+        const operar = puedeOperar();
         // Una acción de un documento: con una fila seleccionada, en la barra (enBarra) o solo en el ⋮ y el clic derecho
         const doc = (ic, texto, grupo, enBarra, visible, alHacer) => ({ icono: ic, texto: texto, maximo: 1, grupo: grupo, enBarra: enBarra,
           visible: (f) => visible(f[0]), alHacer: (f) => alHacer(f[0]) });
@@ -3929,8 +3921,7 @@
        * Reasignar deja el equipo en USO; su línea solo cambia si estaba DISPONIBLE (pasa a USO con él).
        */
       async function abrirMasiva(accion, filas) {
-        const permisos = await cargarPermisos().catch(() => null);
-        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         const ids = filas.map((r) => r.id);
         // Entregar una línea suelta usa el mismo formulario: solo cambian los textos (línea en vez de equipo)
         const esLinea = accion.parte === 'linea';
@@ -4111,8 +4102,7 @@
        */
       async function abrirResguardo(filas, opciones) {
         const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
-        const permisos = await cargarPermisos().catch(() => null);
-        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('archive');
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
@@ -4393,8 +4383,7 @@
        * Con su motivo (usuario, 13-oct): LINEA VENCIDA o CANCELACION ANTICIPADA, obligatorio, además del comentario.
        */
       async function abrirCancelacion(filas) {
-        const permisos = await cargarPermisos().catch(() => null);
-        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
         const conNumero = filas.filter((r) => r.numero);
         if (!conNumero.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ninguno de los seleccionados tiene línea.', 6000); return; }
         // Textos técnicos y espera desde el clic (usuario, 4-oct)

@@ -152,7 +152,7 @@ Cada paso es independiente y se puede pasar a `master` solo.
 
 | # | Qué | Por qué primero / cuidado |
 |---|---|---|
-| 5.1 | Permisos de Líneas en la sesión; quitar `apiLineasPermisos` | Una llamada menos al abrir. Los permisos especiales (secretos, aprobador) como secciones en `Modulos.gs` |
+| 5.1 ✅ | Permisos de Líneas en la sesión; quitar `apiLineasPermisos` (hecho: `puedeOperar` = `puedeEditarModulo`, ADMIN de `state.sesion.rol`; secretos y aprobador no los usaba la pantalla, se quedan en el servidor) | Una llamada menos al abrir. Los permisos especiales (secretos, aprobador) como secciones en `Modulos.gs` |
 | 5.2 | `llamar()` + `memoria{}` → `callServerCacheado` / `callServerListaCacheada` / `escucharLista` | Que Líneas se actualice sola como lo demás; quitar la invalidación con regex |
 | 5.3 | `lineas-estilos.html`: cortes a 640/1024, `matchMedia` → `Pantalla`; sacar `PENDIENTES` de Líneas | Necesita las escenas de la fase 0 |
 | 5.4 | PDF: un solo motor (`Plantilla`) | `LineasPdf` entiende `RIGHT("000" & [NUCO], 4)` y `&`; `Plantilla` no y **truena** con lo que no entiende (bien). Primero agregarle eso con pruebas, luego correr cada plantilla de Líneas en los dos motores y comparar el texto antes de cambiar |

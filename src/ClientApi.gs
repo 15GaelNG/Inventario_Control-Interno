@@ -627,9 +627,6 @@ function apiListarOficinasCCH(token) {
 }
 
 // --- Líneas (equipos y líneas telefónicas) ---
-function apiLineasPermisos(token) {
-  return TelefoniaService.permisos(token);
-}
 function apiLineasIndice(token) {
   return TelefoniaService.indice(token);
 }
