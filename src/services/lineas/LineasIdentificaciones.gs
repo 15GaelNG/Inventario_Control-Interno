@@ -62,9 +62,16 @@ const LineasIdentificaciones = (function () {
     return [limpio(tipo) || 'INE', limpio(nombre), limpio(idPersona)].filter(Boolean).join(' - ') + '.pdf';
   }
 
+  /**
+   * Primero por nombre y número, sin el correo: el CORREO de la responsiva es la CUENTA GOOGLE del equipo, que pasa de
+   * una persona a otra, y desde el 13-oct Capital Humano no decide si el nombre es de una persona y el correo de otra
+   * (prod 14 y 15-oct: «La identificación registrada no es de…» con admon.oficinasjhda@, que en CH es de otra persona).
+   * El correo solo se prueba si sin él no se encuentra (dos personas con el mismo nombre y sin número que desempate).
+   */
   function idPersona_(persona) {
+    const buscar = (correo) => txt(CapitalHumano.idPara('ASIGNACIONES', { 'RESPONSABLE': persona.nombre, 'NO EMPLEADO': persona.noEmpleado, 'CUENTA GOOGLE': correo }));
     try {
-      return txt(CapitalHumano.idPara('ASIGNACIONES', { 'RESPONSABLE': persona.nombre, 'NO EMPLEADO': persona.noEmpleado, 'CUENTA GOOGLE': persona.correo }));
+      return buscar('') || (persona.correo ? buscar(persona.correo) : '');
     } catch (e) {
       console.warn('Identificación: no se pudo buscar a ' + persona.nombre + ' en Capital Humano: ' + e.message);
       return '';
@@ -91,7 +98,7 @@ const LineasIdentificaciones = (function () {
         if (x.reutilizar) {
           // Paso 3: se copia la registrada a la carpeta de esta responsiva, si de verdad es de esta persona
           const previa = registro_(x.reutilizar);
-          if (!previa || !idPersona || previa.idPersona !== idPersona) throw new Error('La identificación registrada no es de ' + x.persona.nombre + '.');
+          if (!esDeLaPersona_(previa, x.persona, idPersona)) throw new Error('La identificación registrada no es de ' + x.persona.nombre + '.');
           f = DriveUtils.marcarAutor(DriveApp.getFileById(previa.archivoId).makeCopy(nombre, carpeta));
         } else {
           // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (como el PDF firmado, 6-oct)
@@ -148,6 +155,18 @@ const LineasIdentificaciones = (function () {
     nuco: txt(f['NUCO']), fecha: f['FECHA'], nombre: txt(f['NOMBRE']), noEmpleado: txt(f['NO EMPLEADO']) });
   // Para comparar nombres sin acentos ni signos (las de NUCOS se registraron así, las de la responsiva como se escribieron)
   const comparable_ = (s) => txt(s).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+  /**
+   * ¿La registrada es de esta persona? Con ID PERSONA de los dos lados, que sea el mismo. Si falta de un lado (no está en
+   * Capital Humano, o se registró sin él: prod 15-oct, la de ALAN MARTINEZ GONZALEZ), como la encontró registradas():
+   * el mismo nombre y, si los dos lo tienen, el mismo número de empleado.
+   */
+  function esDeLaPersona_(previa, persona, idPersona) {
+    if (!previa) return false;
+    if (previa.idPersona && idPersona) return previa.idPersona === idPersona;
+    if (!comparable_(persona.nombre) || comparable_(previa.nombre) !== comparable_(persona.nombre)) return false;
+    return !previa.noEmpleado || !persona.noEmpleado || comparable_(previa.noEmpleado) === comparable_(persona.noEmpleado);
+  }
 
   /** Un renglón del registro por su ID, o null. */
   function registro_(id) {
