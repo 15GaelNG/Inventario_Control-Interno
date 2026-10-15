@@ -429,9 +429,9 @@ const ArqueosService = (function () {
    * AppSheet (antes del 7-oct-2026) guardan la ruta relativa de AppSheet ("ARQUEOS/2026/archivo.pdf")
    * -- abrirla tal cual en el navegador no lleva a ningún lado. Para esos se busca el archivo real,
    * primero en la raíz actual y luego en la carpeta histórica (Config.DRIVE_FOLDERS.ARQUEOS_HISTORICO).
+   * @return {string|null} la URL, o null si no es una URL y no se encontró en ninguna raíz.
    */
-  function resolverArchivo(token, ruta) {
-    Permisos.puedeLeer(token, 'arqueos');
+  function resolverRutaAUrl_(ruta) {
     if (!ruta) return null;
     if (/^https?:/i.test(ruta)) return ruta;
     const raices = [Config.DRIVE_FOLDERS.RAIZ(), Config.DRIVE_FOLDERS.ARQUEOS_HISTORICO()].filter(Boolean);
@@ -439,7 +439,50 @@ const ArqueosService = (function () {
       const url = DriveUtils.urlDeRutaProfunda(ruta, raizId);
       if (url) return url;
     }
-    throw new Error('No se encontró "' + ruta + '" en Drive.');
+    return null;
+  }
+
+  /** Para el cliente (apiUrlArchivoArqueo): igual que resolverRutaAUrl_, pero exige sesión y truena si no se encontró */
+  function resolverArchivo(token, ruta) {
+    Permisos.puedeLeer(token, 'arqueos');
+    if (!ruta) return null;
+    const url = resolverRutaAUrl_(ruta);
+    if (!url) throw new Error('No se encontró "' + ruta + '" en Drive.');
+    return url;
+  }
+
+  // Columnas de ARQUEOS que pueden traer una de estas rutas relativas viejas en vez de una URL.
+  const COLUMNAS_ARCHIVO_MIGRABLES = [
+    'FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE', 'FIRMA EXTERNA', 'EVIDENCIAS', 'FORMATO ARQUEO',
+  ];
+
+  /**
+   * Migración de una sola vez (migrarEvidenciasArqueos(), editor): reescribe en la hoja, para los
+   * arqueos migrados de AppSheet, la ruta relativa vieja por la URL real de Drive -- así se ven y
+   * se abren en la hoja misma igual que los arqueos capturados con esta app, sin depender de que
+   * resolverArchivo la resuelva al vuelo cada vez que alguien le da clic a "Ver evidencia"
+   * (usuario, 15-oct-2026). No toca lo que ya es una URL; usa updateMany (una sola lectura y una
+   * sola escritura) sin importar cuántos arqueos cambien.
+   * @return {{revisados: number, actualizados: number, noEncontrados: string[]}}
+   */
+  function migrarRutasAUrls() {
+    const filas = SheetUtils.getAll(ssId(), NOMBRE_HOJA);
+    const noEncontrados = [];
+    const porActualizar = filas
+      .map((f) => {
+        const cambios = {};
+        COLUMNAS_ARCHIVO_MIGRABLES.forEach((col) => {
+          const valor = f[col];
+          if (!valor || /^https?:/i.test(valor)) return;
+          const url = resolverRutaAUrl_(valor);
+          if (url) cambios[col] = url;
+          else noEncontrados.push(f[ID_COLUMN] + ' (' + col + '): ' + valor);
+        });
+        return Object.keys(cambios).length ? { id: f[ID_COLUMN], changes: cambios } : null;
+      })
+      .filter(Boolean);
+    const actualizados = porActualizar.length ? SheetUtils.updateMany(ssId(), NOMBRE_HOJA, porActualizar, ID_COLUMN) : 0;
+    return { revisados: filas.length, actualizados: actualizados, noEncontrados: noEncontrados };
   }
 
   // ---------- Firma a distancia (Responsable y Asistente, 14-oct-2026) ----------
@@ -978,6 +1021,8 @@ const ArqueosService = (function () {
     subirEvidencia: (token, nombre, tipo, base64) => subirEn_(token, () => DriveUtils.carpetaEnRaiz('ARQUEOS_Files_'), 'evidencias', nombre, tipo, base64),
     /** URL real de FORMATO ARQUEO/EVIDENCIAS, resolviendo la ruta vieja de AppSheet si no es una URL ya */
     resolverArchivo,
+    /** Migración de una sola vez (editor: migrarEvidenciasArqueos()) -- reescribe las rutas viejas por la URL real */
+    migrarRutasAUrls,
     // Firma a distancia del Responsable/Asistente (14-oct-2026)
     copiarLigaArqueo,
     generarLigaArqueo,
@@ -986,3 +1031,23 @@ const ArqueosService = (function () {
     completarFirmaArqueo,
   };
 })();
+
+/**
+ * Migración de una sola vez: reescribe en ARQUEOS las rutas relativas viejas de AppSheet
+ * ("ARQUEOS_Files_/archivo.pdf") por la URL real de Drive en FIRMA RESPONSABLE/ESPECIALISTA/
+ * ASISTENTE/EXTERNA, EVIDENCIAS y FORMATO ARQUEO -- para que se vean y se abran igual que los
+ * arqueos capturados con esta app (usuario, 15-oct-2026: en producción muchos arqueos migrados
+ * seguían con la ruta vieja en la hoja). Corre una vez por libro que tenga arqueos migrados
+ * (sobre todo producción); no truena si ya se corrió -- lo que ya es URL no se vuelve a tocar.
+ * Corre desde el editor del proyecto correspondiente (Ejecutar > migrarEvidenciasArqueos).
+ */
+function migrarEvidenciasArqueos() {
+  soloEditor_();
+  const r = ArqueosService.migrarRutasAUrls();
+  const msg = 'Revisados ' + r.revisados + ' arqueo(s), ' + r.actualizados + ' actualizado(s) con la URL real.' +
+    (r.noEncontrados.length
+      ? ' No se encontraron en Drive (' + r.noEncontrados.length + '): ' + r.noEncontrados.join(' | ')
+      : '');
+  console.log(msg);
+  return msg;
+}
