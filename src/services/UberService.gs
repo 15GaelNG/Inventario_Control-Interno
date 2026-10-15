@@ -50,11 +50,41 @@ const UberService = (function () {
     noEditables: ['FECHA DE ALTA'],
   };
 
+  /**
+   * Pone en BAJA automático a quien sigue ACTIVO en Uber pero ya no está activo en Capital
+   * Humano (CapitalHumano.activos(), lo mismo que ya usa el resto de la app para saber quién
+   * sigue aquí) -- así nadie tiene que acordarse de entrar a Uber y darlo de baja a mano cuando
+   * alguien deja la empresa. Compara por nombre con CapitalHumano.nombreComparable (el mismo
+   * criterio tolerante a acentos/títulos que usa el resto del sistema para identificar
+   * personas), no por ID -- Uber no tiene columna de persona ligada.
+   *
+   * A propósito NO toca BAJA (ya está) ni PENDIENTE (alguien lo dejó así aposta, a la espera de
+   * revisar su solicitud -- no es a este activador a quien le toca decidir eso). Solo ACTIVO.
+   *
+   * Sin sesión (lo corre el Calentador cada 10 min, pasosCalentador_() en Calentador.gs) --
+   * mismo criterio que el resto de lo automático sin persona detrás (completarFirmaArqueo).
+   * Regresa cuántos renglones cambió (para el registro del calentador).
+   */
+  function sincronizarBajas() {
+    const activos = new Set(CapitalHumano.activos().map((c) => CapitalHumano.nombreComparable(c.NOMBRE)));
+    const filas = SheetUtils.getAll(Config.SPREADSHEET_IDS.VEHICULOS(), 'UBER');
+    let cambiados = 0;
+    filas.forEach((f) => {
+      if (String(f['ESTAUS USUARIO'] || '').toUpperCase() !== 'ACTIVO') return;
+      const nombre = CapitalHumano.nombreComparable(f['NOMBRE COMPLETO'] || '');
+      if (!nombre || activos.has(nombre)) return;
+      SheetUtils.update(Config.SPREADSHEET_IDS.VEHICULOS(), 'UBER', f['ID'], { 'ESTAUS USUARIO': 'BAJA' }, 'ID');
+      cambiados++;
+    });
+    return cambiados;
+  }
+
   return {
     /** Catálogo con las 15 columnas reales (nombres tal cual la hoja) */
     listarResumen: (token) => HojaServicio.listar(UBER, token),
     /** Para el activador (Calentador.gs): la deja armada sin esperar a nadie */
     calentar: () => HojaServicio.calentar(UBER),
+    sincronizarBajas,
     /** Todas las columnas de TODOS los usuarios (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(UBER, token),
     buscarPorId: (token, id) => HojaServicio.buscarPorId(UBER, token, id),
