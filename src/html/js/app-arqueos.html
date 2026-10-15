@@ -215,6 +215,24 @@
     }
   }
 
+  /** "Enviar liga(s) para firmar a distancia" desde el propio formulario de captura/edición --
+   *  mismo botón que Responsiva/Adherente Vehicular (app.html), pero sin un modo especial en
+   *  crear()/actualizar() (Arqueos ya deja guardar con Responsable/Asistente en blanco): se
+   *  guarda normal y, con la respuesta (ya trae FIRMA_RESPONSABLE/FIRMA_ASISTENTE), se manda la
+   *  liga de lo que haya quedado vacío. `registro` es lo que regresa apiCrearArqueo/
+   *  apiActualizarArqueo. Regresa el arreglo para mostrarLigaFirma_, o null si ya estaban las dos. */
+  async function enviarLigasArqueoTrasGuardar_(registro) {
+    const faltan = [];
+    if (!registro.FIRMA_RESPONSABLE) faltan.push({ quien: 'responsable', titulo: 'Responsable' });
+    if (!registro.FIRMA_ASISTENTE) faltan.push({ quien: 'asistente', titulo: 'Asistente' });
+    if (!faltan.length) return null;
+    const ligas = await Promise.all(faltan.map(async (f) => ({
+      titulo: f.titulo,
+      liga: await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', registro.ID, f.quien),
+    })));
+    return ligas;
+  }
+
   /**
    * CALIFICACION_AUDITORIA_FINAL en base 100 (ej. 97.06), como la calcula calcularCampos_ --
    * pero los arqueos migrados de AppSheet la tienen guardada como fracción (ej. 0.9706, igual
@@ -251,7 +269,11 @@
    *
    * El botón final ES el submit real del <form> que envuelve al contenedor donde se
    * inserta esto (se le pone id y texto a la medida de quien llama, para no duplicar
-   * el wiring de "deshabilitar mientras guarda" que ya existe por fuera).
+   * el wiring de "deshabilitar mientras guarda" que ya existe por fuera). Junto a él va
+   * "Enviar liga(s) para firmar a distancia" (mismo botón que Responsiva/Adherente Vehicular,
+   * app.html) -- otro submit del mismo <form>; el handler distingue cuál se usó con
+   * ev.submitter para, además de guardar, mandar la liga de Responsable/Asistente si se
+   * dejaron en blanco (ver enviarLigasArqueoTrasGuardar_).
    */
   function renderPasosArqueo(prefijo, idBotonGuardar, textoBotonGuardar, iconoBotonGuardar) {
     const secciones = PASOS_ARQUEO.map((p, i) => `
@@ -263,6 +285,7 @@
       '<div class="form-acciones form-acciones-pasos">' +
       '<button type="button" class="secondary" data-arq-atras hidden>' + Iconos.svg('anterior') + ' Atrás</button>' +
       '<button type="button" data-arq-siguiente>Siguiente ' + Iconos.svg('siguiente') + '</button>' +
+      '<button type="submit" class="secondary" id="' + idBotonGuardar + '-liga" data-arq-guardar hidden><i data-lucide="link" class="ico"></i> Enviar liga(s) para firmar a distancia</button>' +
       '<button type="submit" id="' + idBotonGuardar + '" data-arq-guardar hidden><i data-lucide="' + iconoBotonGuardar + '" class="ico"></i> ' + textoBotonGuardar + '</button>' +
       '<span class="form-cuenta" data-arq-cuenta></span></div>';
   }
@@ -281,7 +304,7 @@
       const ultimo = pasoActual === PASOS_ARQUEO.length - 1;
       contenedor.querySelector('[data-arq-atras]').hidden = pasoActual === 0;
       contenedor.querySelector('[data-arq-siguiente]').hidden = ultimo;
-      contenedor.querySelector('[data-arq-guardar]').hidden = !ultimo;
+      contenedor.querySelectorAll('[data-arq-guardar]').forEach((b) => { b.hidden = !ultimo; });
       contenedor.querySelector('[data-arq-cuenta]').textContent = `Paso ${pasoActual + 1} de ${PASOS_ARQUEO.length}`;
     }
     function mostrarPaso(i) {
@@ -725,23 +748,33 @@
       const errorBox = document.getElementById(prefijo + '-error');
       errorBox.hidden = true;
       const btn = document.getElementById(prefijo + '-btn-guardar');
+      const btnLiga = document.getElementById(prefijo + '-btn-guardar-liga');
+      const conLiga = ev.submitter === btnLiga;
       const textoOriginal = btn.innerHTML;
+      const textoOriginalLiga = btnLiga.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      btnLiga.disabled = true;
+      (conLiga ? btnLiga : btn).innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       toastCargando(idEditar ? 'Guardando cambios…' : 'Registrando…');
       try {
         const archivos = await subirArchivosArqueo(prefijo);
         const firmas = await subirFirmasArqueo(prefijo);
         const datos = Object.assign(recolectarDatosArqueo(prefijo), archivos, firmas);
+        let registro;
         if (idEditar) {
-          await callServer('apiActualizarArqueo', state.token, idEditar, datos);
+          registro = await callServer('apiActualizarArqueo', state.token, idEditar, datos);
         } else {
           datos['ID CCH'] = caja.ID_CCH || caja['ID CCH'];
-          await callServer('apiCrearArqueo', state.token, datos);
+          registro = await callServer('apiCrearArqueo', state.token, datos);
         }
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         toastExito(idEditar ? 'Actualizado exitosamente' : 'Registrado exitosamente');
+        if (conLiga) {
+          const ligas = await enviarLigasArqueoTrasGuardar_(registro);
+          if (ligas) mostrarLigaFirma_(ligas);
+          else Notificar.info('Ya se cuenta con la firma del Responsable y del Asistente -- no hace falta generar liga.');
+        }
         alGuardado();
       } catch (err) {
         errorBox.textContent = err.message;
@@ -750,6 +783,8 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+        btnLiga.disabled = false;
+        btnLiga.innerHTML = textoOriginalLiga;
       }
     });
   }
@@ -1102,20 +1137,29 @@
       const errorBox = document.getElementById('editar-arqueo-error');
       errorBox.hidden = true;
       const btn = document.getElementById('btn-guardar-editar-arqueo');
+      const btnLiga = document.getElementById('btn-guardar-editar-arqueo-liga');
+      const conLiga = ev.submitter === btnLiga;
       const textoOriginal = btn.innerHTML;
+      const textoOriginalLiga = btnLiga.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      btnLiga.disabled = true;
+      (conLiga ? btnLiga : btn).innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       toastCargando('Guardando cambios…');
       try {
         const archivos = await subirArchivosArqueo('editar-arqueo');
         const firmas = await subirFirmasArqueo('editar-arqueo');
         const datos = Object.assign(recolectarDatosArqueo('editar-arqueo'), archivos, firmas);
-        await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
+        const registro = await callServer('apiActualizarArqueo', state.token, document.getElementById('editar-arqueo-id').value, datos);
         cerrarEditarArqueo();
         invalidarCacheLista('apiListarArqueosResumen', state.token);
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
         toastExito('Actualizado exitosamente');
+        if (conLiga) {
+          const ligas = await enviarLigasArqueoTrasGuardar_(registro);
+          if (ligas) mostrarLigaFirma_(ligas);
+          else Notificar.info('Ya se cuenta con la firma del Responsable y del Asistente -- no hace falta generar liga.');
+        }
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
@@ -1123,6 +1167,8 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+        btnLiga.disabled = false;
+        btnLiga.innerHTML = textoOriginalLiga;
       }
     });
 
@@ -1136,16 +1182,20 @@
         return;
       }
       const btn = document.getElementById('btn-guardar-arqueo');
+      const btnLiga = document.getElementById('btn-guardar-arqueo-liga');
+      const conLiga = ev.submitter === btnLiga;
       const textoOriginal = btn.innerHTML;
+      const textoOriginalLiga = btnLiga.innerHTML;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      btnLiga.disabled = true;
+      (conLiga ? btnLiga : btn).innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
       toastCargando('Registrando…');
       try {
         const archivos = await subirArchivosArqueo('arq');
         const firmas = await subirFirmasArqueo('arq');
         const datos = Object.assign(recolectarDatosArqueo('arq'), archivos, firmas);
         datos['ID CCH'] = selectCajaArqueo.value;
-        await callServer('apiCrearArqueo', state.token, datos);
+        const registro = await callServer('apiCrearArqueo', state.token, datos);
         ev.target.reset();
         pasosArq.irAPaso(0);
         invalidarCacheLista('apiListarArqueosResumen', state.token);
@@ -1160,6 +1210,11 @@
         recalcularTotalesArqueo('arq', auditItems);
         await cargar();
         toastExito('Registrado exitosamente');
+        if (conLiga) {
+          const ligas = await enviarLigasArqueoTrasGuardar_(registro);
+          if (ligas) mostrarLigaFirma_(ligas);
+          else Notificar.info('Ya se cuenta con la firma del Responsable y del Asistente -- no hace falta generar liga.');
+        }
       } catch (err) {
         errorBox.textContent = err.message;
         errorBox.hidden = false;
@@ -1167,6 +1222,8 @@
       } finally {
         btn.disabled = false;
         btn.innerHTML = textoOriginal;
+        btnLiga.disabled = false;
+        btnLiga.innerHTML = textoOriginalLiga;
       }
     });
 
