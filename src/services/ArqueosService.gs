@@ -495,7 +495,7 @@ const ArqueosService = (function () {
    *  este, la segunda llamada podía leer el renglón ANTES de que la primera acabara de escribir y,
    *  al guardar, borraba el token que la primera acababa de poner -- esa liga salía "no válida"
    *  aunque se acabara de generar (usuario, 15-oct-2026). */
-  function generarLigaArqueo(token, id, quien) {
+  function generarLigaArqueo(token, id, quien, forzar) {
     Permisos.puedeEditar(token, 'arqueos');
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
@@ -503,18 +503,24 @@ const ArqueosService = (function () {
       const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
       if (!encontrado) throw new Error('No se encontró el arqueo.');
       const fila = encontrado.data;
-      if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE']) {
+      // `forzar` (botón "Generar liga de todas formas" en la pantalla, con su propia
+      // confirmación): salta estos dos candados a propósito -- sin esto, una firma que quedó
+      // guardada pero rota (archivo corrupto en Drive, por ejemplo) no se podía recuperar sin
+      // editar la hoja a mano, porque el sistema ya la veía como "completa" o "presencial"
+      // (usuario, 15-oct-2026).
+      if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE'] && !forzar) {
         throw new Error('Ya se completaron las dos firmas; no se puede generar una liga.');
       }
       const col = columnasFirmaArqueo_(quien);
       // El Asistente es opcional (el canvas de su firma solo se muestra si "Cuenta con firma del
-      // asistente" = SI): sin eso, no hay a quién mandarle liga (usuario, 15-oct-2026).
+      // asistente" = SI): sin eso, no hay a quién mandarle liga (usuario, 15-oct-2026). Esto NO
+      // se salta con forzar -- no hay a quién mandarle nada si no existe el asistente.
       if (quien === 'asistente' && fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI') {
         throw new Error('Este arqueo no tiene asistente (revisa "Cuenta con firma del asistente"); no hay liga que generar.');
       }
       // Si ya tiene firma pero nunca tuvo token ni "firmado por" es que firmó presencial -- no hay
       // liga que mandar ni regenerar (mismo guard que regenerarLiga en Responsiva/Adherente).
-      if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor]) {
+      if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor] && !forzar) {
         throw new Error('El ' + col.etiqueta + ' firmó presencial, no a distancia; no hay liga que generar.');
       }
       // Si ya había una firma por liga (completa o pendiente) para este lado, se descarta.

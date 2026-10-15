@@ -533,9 +533,12 @@ function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
 // "Generar liga"/"Generar nueva liga" (botón manual en la tabla/ficha): token nuevo sobre el
 // MISMO registro, sin crear otro -- en Arqueos también sirve para mandar la primera liga de un
 // arqueo que ya existe (ver el comentario de generarLigaArqueo en ArqueosService.gs).
-function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien) {
+// forzar: solo lo usa Arqueos (botón "Generar liga de todas formas" cuando las dos firmas ya
+// están o esa parte firmó presencial -- ver el comentario de generarLigaArqueo). Responsiva/
+// Adherente ignoran el argumento de más.
+function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien, forzar) {
   const servicio = servicioFirmaRemota_(tipo);
-  return tipo === 'arqueo' ? servicio.generarLigaArqueo(token, id, quien) : servicio.regenerarLiga(token, id, quien);
+  return tipo === 'arqueo' ? servicio.generarLigaArqueo(token, id, quien, forzar) : servicio.regenerarLiga(token, id, quien);
 }
 
 // --- Arqueos ---

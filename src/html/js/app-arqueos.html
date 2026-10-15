@@ -178,17 +178,24 @@
   /** "Generar liga"/"Generar nueva liga" de firma a distancia del Responsable o el Asistente --
    *  mismo molde que regenerarLigaFicha_ de Responsiva/Adherente Vehicular (app.html), pero aquí
    *  la misma llamada sirve igual para mandar la primera liga que para regenerar una que venció
-   *  o se firmó mal (ver generarLigaArqueo en ArqueosService.gs). */
-  async function generarLigaArqueoFicha_(id, quien, etiqueta, alTerminar) {
+   *  o se firmó mal (ver generarLigaArqueo en ArqueosService.gs). El botón ya no se esconde
+   *  cuando esa firma existe (yaFirmado=true): antes, si quedaba guardada pero rota (archivo
+   *  corrupto en Drive), no había forma de recuperarla desde la pantalla -- había que editar la
+   *  hoja a mano. `forzar` se manda al servidor solo si la persona confirma el aviso más fuerte
+   *  (usuario, 15-oct-2026). */
+  async function generarLigaArqueoFicha_(id, quien, etiqueta, yaFirmado, alTerminar) {
     const ok = await Confirmar.pedir({
-      titulo: 'Generar liga de firma',
-      mensaje: 'Se manda un link para que ' + etiqueta + ' firme desde su celular. Si ya había una liga pendiente para esta parte, la anterior deja de funcionar.',
-      textoConfirmar: 'Generar liga',
+      titulo: yaFirmado ? 'Generar liga nueva (ya hay firma)' : 'Generar liga de firma',
+      mensaje: yaFirmado
+        ? 'Ya hay una firma guardada de ' + etiqueta + '. Esto la descarta y manda un link nuevo para que firme otra vez desde su celular -- úsalo solo si esa firma quedó dañada o se guardó por error.'
+        : 'Se manda un link para que ' + etiqueta + ' firme desde su celular. Si ya había una liga pendiente para esta parte, la anterior deja de funcionar.',
+      textoConfirmar: yaFirmado ? 'Generar liga de todas formas' : 'Generar liga',
+      peligro: !!yaFirmado,
     });
     if (!ok) return;
     toastCargando('Generando liga…');
     try {
-      mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', id, quien));
+      mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', id, quien, !!yaFirmado));
       toastExito('Liga generada');
       if (alTerminar) alTerminar();
     } catch (err) {
@@ -999,8 +1006,10 @@
         ],
         puedeEditar ? [
           { icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) },
-          { icono: 'link', titulo: 'Generar liga de firma (Responsable)', visible: (a) => !a.FIRMA_RESPONSABLE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'responsable', 'el Responsable', refrescarTrasLiga_) },
-          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => a.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !a.FIRMA_ASISTENTE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', refrescarTrasLiga_) },
+          // Ya no se esconde cuando esa firma existe -- ver el comentario largo de
+          // generarLigaArqueoFicha_ (recuperar una firma guardada pero rota/dañada).
+          { icono: 'link', titulo: 'Generar liga de firma (Responsable)', alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'responsable', 'el Responsable', !!a.FIRMA_RESPONSABLE, refrescarTrasLiga_) },
+          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => a.CUENTA_CON_FIRMA_ASISTENTE === 'SI', alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', !!a.FIRMA_ASISTENTE, refrescarTrasLiga_) },
         ] : []
       ),
       alEliminar: puedeEditar ? async (filas) => {

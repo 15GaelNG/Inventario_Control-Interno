@@ -222,6 +222,41 @@ test('generarLigaArqueo: truena para el Asistente si "Cuenta con firma del asist
   );
 });
 
+// ---------- generarLigaArqueo: forzar (recuperar una firma guardada pero rota, 15-oct-2026) ----------
+
+test('generarLigaArqueo: con forzar=true, SÍ genera una liga aunque ya se completaron las dos firmas -- y descarta la del lado que se está regenerando', () => {
+  const { contexto, llamadas, hoja } = crearContexto([filaBase({
+    'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/R1/view',
+    'TOKEN FIRMA RESPONSABLE': '', 'FIRMADO POR RESPONSABLE': 'responsable@ciudadmaderas.com',
+    'FIRMA ASISTENTE': 'https://drive.google.com/file/d/A1/view',
+    'TOKEN FIRMA ASISTENTE': '', 'FIRMADO POR ASISTENTE': 'asistente@ciudadmaderas.com',
+  })]);
+  const liga = contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'responsable', true);
+  assert.match(liga, /tipo=arqueo/);
+  assert.deepEqual(llamadas.trasheados, [{ id: 'R1', v: true }]);
+  assert.equal(hoja[0]['FIRMA RESPONSABLE'], '');
+  assert.equal(hoja[0]['FIRMADO POR RESPONSABLE'], '');
+  // El lado que NO se está regenerando (Asistente) no se toca.
+  assert.equal(hoja[0]['FIRMA ASISTENTE'], 'https://drive.google.com/file/d/A1/view');
+});
+
+test('generarLigaArqueo: con forzar=true, SÍ genera una liga aunque esa parte firmó presencial', () => {
+  const { contexto, hoja } = crearContexto([filaBase({
+    'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/PRESENCIAL/view',
+  })]);
+  const liga = contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'responsable', true);
+  assert.match(liga, /tipo=arqueo/);
+  assert.equal(hoja[0]['FIRMA RESPONSABLE'], '');
+});
+
+test('generarLigaArqueo: forzar no sirve de nada para el Asistente si el arqueo no tiene asistente -- sigue tronando', () => {
+  const { contexto } = crearContexto([filaBase({ 'CUENTA CON FIRMA ASISTENTE': 'NO' })]);
+  assert.throws(
+    () => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'asistente', true),
+    /no tiene asistente/
+  );
+});
+
 // ---------- copiarLigaArqueo ----------
 
 test('copiarLigaArqueo: arma la misma liga sin tocar la hoja', () => {
