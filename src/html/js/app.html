@@ -1952,49 +1952,19 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // ---- Filtro rápido por Estado: misma franja de íconos de Líneas/Vehículos/Caja Chica --
-    // el CSS es genérico (.filtro-tipo*, styles.html). Mismos colores que badgeEstadoIncidencia.
+    // ---- Filtro rápido por Estado (FiltroTipo). Mismos colores que badgeEstadoIncidencia.
     const ORDEN_ESTADO_INC = ['ABIERTA', 'CERRADA'];
     const ESTILO_ESTADO_INC = {
       'ABIERTA': { icono: 'lock-open', color: 'var(--color-danger)' },
       'CERRADA': { icono: 'circle-check', color: 'var(--color-success)' },
     };
     let filtrosActualesInc = {};
-    function marcarEstadoInc() {
-      const cont = document.getElementById('inc-filtro-estado');
-      if (!cont) return;
-      const f = filtrosActualesInc.ESTADO;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.estado === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estado) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarEstadoInc(filas) {
-      const cont = document.getElementById('inc-filtro-estado');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((i) => { const e = String(i.ESTADO || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
-      const estados = ORDEN_ESTADO_INC.concat(Object.keys(conteo).filter((e) => ORDEN_ESTADO_INC.indexOf(e) < 0 && e));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estado="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estado</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
-        estados.map((e) => {
-          const estilo = ESTILO_ESTADO_INC[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
-        }).join('') + '</div>';
-      marcarEstadoInc();
-    }
-    document.getElementById('inc-filtro-estado').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const e = b.dataset.estado;
-      tabla.setFiltro('ESTADO', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    const panelEstadoInc = FiltroTipo.crear(document.getElementById('inc-filtro-estado'), {
+      titulo: 'Estado', todos: 'Todas', campo: 'ESTADO', orden: ORDEN_ESTADO_INC, estilos: ESTILO_ESTADO_INC,
+      alElegir: (valor) => tabla.setFiltro('ESTADO', valor ? { valores: [valor] } : null),
     });
+    function marcarEstadoInc() { panelEstadoInc.marcar(filtrosActualesInc.ESTADO); }
+    function pintarEstadoInc(filas) { panelEstadoInc.pintar(filas); }
 
     const tilesKpiIncidencias = { 'stat-total': null, 'stat-abiertas': 'ABIERTA', 'stat-cerradas': 'CERRADA' };
     Object.keys(tilesKpiIncidencias).forEach((id) => {
@@ -4105,46 +4075,15 @@
     document.getElementById('veh-ver-registro-cerrar').addEventListener('click', cerrarVerRegistroFicha);
     modalVerRegistro.addEventListener('click', (ev) => { if (ev.target === modalVerRegistro) cerrarVerRegistroFicha(); });
 
-    // ---- Filtro rápido por Clase: misma franja de íconos de Líneas Telefónicas (filtro por
-    // TIPO), aquí por CLASE -- el CSS ya es genérico (.filtro-tipo*, movido a styles.html) y
-    // CLASE_ESTILO/etiquetaClase ya traían el ícono y color de cada clase, así que solo hace
-    // falta pintar el panel y cablearlo (usuario, 6-oct: "los filtros... pero por la clase"). ----
+    // ---- Filtro rápido por Clase (FiltroTipo), con el ícono y color de CLASE_ESTILO (usuario, 6-oct). ----
     let filtrosActualesVeh = {};
-    function marcarClasesVeh() {
-      const cont = document.getElementById('veh-clases');
-      if (!cont) return;
-      const f = filtrosActualesVeh.CLASE;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.clase === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.clase) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarClasesVeh(filas) {
-      const cont = document.getElementById('veh-clases');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((v) => { const c = String(v.CLASE || '').toUpperCase(); conteo[c] = (conteo[c] || 0) + 1; });
-      const clases = ORDEN_CLASES_VEH.concat(Object.keys(conteo).filter((c) => ORDEN_CLASES_VEH.indexOf(c) < 0 && c));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-clase="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Clase</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
-        clases.map((c) => {
-          const e = CLASE_ESTILO[c] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(c, e.icono, e.color, NOMBRE_CLASE_VEH[c] || c, conteo[c] || 0);
-        }).join('') + '</div>';
-      marcarClasesVeh();
-    }
-    document.getElementById('veh-clases').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const c = b.dataset.clase;
-      tabla.setFiltro('CLASE', (c === '*' || b.classList.contains('activo')) ? null : { valores: [c] });
+    const panelClasesVeh = FiltroTipo.crear(document.getElementById('veh-clases'), {
+      titulo: 'Clase', todos: 'Todas', campo: 'CLASE', orden: ORDEN_CLASES_VEH, estilos: CLASE_ESTILO,
+      nombre: (c) => NOMBRE_CLASE_VEH[c] || c,
+      alElegir: (valor) => tabla.setFiltro('CLASE', valor ? { valores: [valor] } : null),
     });
+    function marcarClasesVeh() { panelClasesVeh.marcar(filtrosActualesVeh.CLASE); }
+    function pintarClasesVeh(filas) { panelClasesVeh.pintar(filas); }
 
     // Binario de antes (Activos = no es baja / Inactivos = es baja), más un KPI clickeable
     // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO). "Baja de placa"
@@ -4714,9 +4653,7 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // ---- Filtro rápido por Estatus: misma franja de íconos de Líneas/Vehículos/Caja
-    // Chica/Incidencias -- el CSS es genérico (.filtro-tipo*, styles.html). Mismos colores
-    // que badgeEstatusUber.
+    // ---- Filtro rápido por Estatus (FiltroTipo). Mismos colores que badgeEstatusUber.
     const ORDEN_ESTATUS_UBER = ['ACTIVO', 'PENDIENTE', 'BAJA'];
     const ESTILO_ESTATUS_UBER = {
       'ACTIVO': { icono: 'circle-check', color: 'var(--color-success)' },
@@ -4724,41 +4661,12 @@
       'BAJA': { icono: 'ban', color: 'var(--color-danger)' },
     };
     let filtrosActualesUber = {};
-    function marcarEstatusUberFiltro() {
-      const cont = document.getElementById('uber-filtro-estatus');
-      if (!cont) return;
-      const f = filtrosActualesUber.ESTATUS;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.estatus === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estatus) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarEstatusUber(filas) {
-      const cont = document.getElementById('uber-filtro-estatus');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((u) => { const e = String(u.ESTATUS || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
-      const estatus = ORDEN_ESTATUS_UBER.concat(Object.keys(conteo).filter((e) => ORDEN_ESTATUS_UBER.indexOf(e) < 0 && e));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estatus="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estatus</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todos', filas.length) +
-        estatus.map((e) => {
-          const estilo = ESTILO_ESTATUS_UBER[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
-        }).join('') + '</div>';
-      marcarEstatusUberFiltro();
-    }
-    document.getElementById('uber-filtro-estatus').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const e = b.dataset.estatus;
-      tabla.setFiltro('ESTATUS', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    const panelEstatusUber = FiltroTipo.crear(document.getElementById('uber-filtro-estatus'), {
+      titulo: 'Estatus', todos: 'Todos', campo: 'ESTATUS', orden: ORDEN_ESTATUS_UBER, estilos: ESTILO_ESTATUS_UBER,
+      alElegir: (valor) => tabla.setFiltro('ESTATUS', valor ? { valores: [valor] } : null),
     });
+    function marcarEstatusUberFiltro() { panelEstatusUber.marcar(filtrosActualesUber.ESTATUS); }
+    function pintarEstatusUber(filas) { panelEstatusUber.pintar(filas); }
 
     // KPI clickeables: los valores de ESTATUS son exactos (ACTIVO/PENDIENTE/BAJA,
     // las mismas 3 opciones del <select> de Registrar), así que un filtro de

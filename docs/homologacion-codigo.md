@@ -133,12 +133,18 @@ las dos cosas y además, con ganchos, lee la hoja completa dos veces.
 
 ## Fase 4 — Componente `Ficha` (el primer punto de unión real)
 
-- [ ] `componentes/ficha.html`: encabezado (ícono, título, migas, botones, menú "más"), resumen rápido, pestañas
-      por sección (pide permiso con `puede('modulo.seccion')`), contador por pestaña.
-- [ ] Una sola implementación de pestañas: `Tabs` con una sola clase de activa; `fichaEnPestanas` de `app.html` y
-      la de `lineas.html` desaparecen.
-- [ ] El CSS de ficha sale de `lineas-estilos.html` sin prefijo `ln-` (`ficha-card`, `ficha-encabezado`…).
-- [ ] Migrar: Vehículos → Caja Chica → Líneas. El contrato `FICHAS` (deModulo) se queda y se amplía.
+- [x] **4a** Una sola implementación de pestañas (`componentes/tabs.html`): grupo `data-tabs`, `.tabs-lista`,
+      `.tab-btn[data-tab]` con `.activa`, paneles `[data-tab-panel]`; un solo listener; `Tabs.html` para una ficha,
+      `Tabs.mostrar/actual/contar` y el evento `tabs-cambio`. Fuera `wireTabsSimple` y los dos `fichaEnPestanas`.
+- [x] **4b** `componentes/ficha.html`: `Ficha.migas` y `Ficha.encabezado` (ícono o foto, título, chips, botones,
+      resumen rápido). Las pestañas por sección siguen siendo `Tabs.html` con `puede('modulo.seccion') && {…}`. El CSS
+      salió de `lineas-estilos.html` sin `ln-` (`ficha-migas`, `ficha-encabezado`, `ficha-resumen`…), con el corte 640.
+      7 encabezados migrados: Vehículos (y su página de fotos), Caja Chica, Líneas y Usuarios (persona, área, perfil).
+      El menú «más» se queda en Líneas (`ln-btn-mas`): es el único que lo tiene; entra a Ficha con el segundo.
+- [x] **4c** `componentes/filtro-tipo.html` (`FiltroTipo.crear`): el filtro rápido por tipo/clase/estatus estaba
+      copiado 5 veces (Incidencias, Vehículos, Uber, Caja Chica, Líneas); su CSS salió de `styles.html`.
+- Contratos: marcado viejo de pestañas, encabezados a mano (`ln-detalle-header`, `ln-migas`…) y copias del filtro.
+  El contrato `FICHAS` (deModulo) sigue igual.
 
 ## Fase 5 — Líneas hacia lo común (de lo barato a lo caro)
 
@@ -194,3 +200,5 @@ juntan por primera vez.
 | 15-oct | 0 | DEV propio (`Inventario DEV - common`, copia del libro de prod, carpeta DEV COMMON); la Action sube `common` | — |
 | 15-oct | 1 | `Candado` reentrante en todo el servidor; `SheetUtils.update`/`remove` bajo candado y escribiendo solo lo que cambia | pendiente: probar en DEV |
 | 15-oct | 2 | `Formato` (componentes/formato.html): una sola copia de esc, fechas, moneda, miles y normal; contrato | pendiente: probar en DEV |
+| 15-oct | 3 | Escala `--texto-*` (27→8), `--radio-*` (19→6) y `--tono-*` con modo oscuro; contrato | pendiente: probar en DEV |
+| 15-oct | 4 | 4a `Tabs` (3 implementaciones → 1), 4b `Ficha` (7 encabezados), 4c `FiltroTipo` (5 copias); contratos | pendiente: probar en DEV |

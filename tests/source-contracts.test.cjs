@@ -516,6 +516,17 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
   assert.ok(index.indexOf("include('html/js/componentes/tabs')") < index.indexOf("include('html/js/componentes/ficha')"));
 });
 
+test('el filtro rápido por tipo / clase / estatus es el componente FiltroTipo', () => {
+  // Estaba copiado 5 veces (Incidencias, Vehículos, Uber, Caja Chica y Líneas), cada una con su pintar y su marcar (fase 4c)
+  const fuera = filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/filtro-tipo.html'))
+    .filter((f) => /class="filtro-tipo-(item|panel)|\.filtro-tipo-item'|\.filtro-tipo[\w-]*\s*\{/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(fuera.filter((f) => !f.endsWith('lineas-estilos.html')), [], 'Usa FiltroTipo.crear (componentes/filtro-tipo.html)');
+  ['src/html/js/app.html', 'src/html/js/app-cajachica.html', 'src/html/js/lineas.html'].forEach((a) => assert.match(read(a), /FiltroTipo\.crear\(/, a));
+  assert.match(read('package.json'), /node tests\/filtro-tipo\.test\.js/);
+});
+
 test('las pestañas son una sola implementación: Tabs (componentes/tabs.html)', () => {
   // Había tres (wireTabsSimple de las vistas, Tabs con otra clase de activa y fichaEnPestanas en app.html y en Líneas),
   // cada una con su marcado (docs/homologacion-codigo.md, fase 4). Ahora: grupo data-tabs, .tabs-lista, .tab-btn[data-tab]
