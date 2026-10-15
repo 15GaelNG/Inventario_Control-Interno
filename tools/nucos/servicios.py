@@ -65,6 +65,11 @@ def sub_de(nombre):
 
 def clase(nombre):
     n = N(nombre)
+    # Lo ya homologado (para que repetir el plan salga IGUAL): SIN FECHA agrupa eventos; _POR REVISAR ya se revisa así
+    if n == SIN_FECHA:
+        return "CONTENEDOR"
+    if n == POR_REVISAR:
+        return "REVISAR"
     if RE_ANIO.match(n):
         return "ANIO"
     if RE_MES.match(n):
@@ -198,6 +203,9 @@ def dry_run(dir_):
             elif k == "MARCAJE":
                 tipo, resto = "MARCAJE", [x[1] for x in cad[i + 1:]]
                 break
+            elif k == "REVISAR":
+                tipo = "YA EN POR REVISAR"
+                break
             elif k in ("EVENTO", "SUB"):
                 if k == "SUB" and i == 0:
                     # Una subcarpeta (FACTURA…) directo en la raíz: sin evento que la contenga
@@ -293,6 +301,9 @@ def dry_run(dir_):
             plan.append(dict(base, accion="MOVER", despues="/".join([a["nuco"], RAIZ] + carpeta_evento(ev) + dentro + [a["name"]]),
                              destino_tipo="EVENTO" if ev["fecha"] else "SIN FECHA", evento=ev["nombre"], fecha=ev["fecha"],
                              fuente=ev["fuente"]))
+            continue
+        if tipo == "YA EN POR REVISAR":
+            plan.append(dict(base, accion="MOVER", despues=antes, destino_tipo="POR REVISAR"))
             continue
         # Suelto (directo en la raíz, un contenedor, un año o un mes)
         if RE_BITACORA.search(N(a["name"])):

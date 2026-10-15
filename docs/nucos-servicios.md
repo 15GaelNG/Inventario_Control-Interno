@@ -1,6 +1,6 @@
 # Expediente por NUCO: `2.- SERVICIOS`
 
-**Estado al 15-oct-2026: dry run hecho (solo lectura), nada aplicado.** Medición del 11-oct: Datos en `tools/nucos/.cache/servicios/`
+**Estado al 15-oct-2026: HOMOLOGADO en los 274 NUCO con archivos y verificado (0 problemas).** Medición del 11-oct: Datos en `tools/nucos/.cache/servicios/`
 (`foto.json`, `xml.json` con las 1,920 facturas CFDI leídas, `medicion.json`).
 
 > Python: en esta máquina Windows (Control de aplicaciones) bloquea la 3.14 de uv; usar `uv run --python 3.12 …`.
@@ -91,3 +91,28 @@ la estructura vieja). Deshacer probado en el 338 (`expediente.py deshacer … --
 
 Para deshacer un NUCO del piloto: el 338 con `20261015-090152`, los demás con `20261015-083546`.
 Siguiente: el resto (269 NUCO) con `--todos --hilos 6`, luego `verificar_servicios.py … --todos`.
+
+## Corrida grande (15-oct-2026)
+
+1. `--todos --hilos 6` con el plan de `20261015/` (bitácora `20261015-090737-inspecciones.jsonl`, 26,506 pasos). A las
+   ~10:50 **se desconectó el disco D** (donde se escriben log y bitácora): se cortó con 197 de 274 NUCO resueltos y 7 a
+   medias (124, 217, 252, 255, 267, 270, 274). La bitácora quedó con sus 26,506 líneas válidas y 264 bytes vacíos al
+   final (se limpiaron; la original está en `….jsonl.original-con-cola-dañada`). Puede faltarle a lo más un paso por hilo
+   (el que se hizo en Drive justo al perder el disco).
+2. Los NUCO 43, 66, 89 y 357 no se tocaban: **no eran archivos nuevos**, la foto (`foto.py`) solo leía 9 niveles y tenían
+   carpetas más hondas (`…/CI - SERVICIO VEHICULAR/2025/POSTVENTA/MARZO 2025/<servicio>/Factura/…`); el ejecutor los vio
+   en vivo y no los tocó. `foto.py` ya no tiene ese tope.
+3. Foto nueva completa (`20261015c/`) y dry run: **los 194 NUCO ya hechos salen 100% IGUAL** (11,117 archivos: el plan
+   se puede repetir y lo hecho quedó como dice la regla; para eso `SIN FECHA` cuenta como contenedor y lo que ya está en
+   `_POR REVISAR` se queda). Segunda corrida con los 80 pendientes (incluye los 4 que solo debían limpiar carpetas
+   vacías): bitácora `20261015-110044-inspecciones.jsonl`, 80 hechos, 0 fallados.
+4. Verificación independiente de los 274 (`verificar_servicios.py`): **13,356 archivos en su lugar + 299 en la papelera
+   = los 13,655 de la foto**; los 676 de la papelera del plan original están en `_PAPELERA`. Único detalle: el NUCO 24
+   tenía una `1.-LIBRETA DE SERVICIOS` repetida y vacía (un reintento por tiempo de espera creó la carpeta dos veces): a la
+   papelera (bitácora `20261015-121826-servicios-duplicada.jsonl`) y re-verificado con 0 problemas.
+
+Resultado: 1,935 servicios (factura de ingreso 1,335 · factura que paga el complemento 13 · fecha del pago 16 · carpeta
+año/mes del área 188 · sin fecha 383). Quedan para el área: 1,904 archivos en `SIN FECHA` (el Excel `dry-run.xlsx` de
+`20261015c/` trae la fecha sugerida por las fotos de 181 servicios) y 27 en `_POR REVISAR`.
+
+Para deshacer un NUCO: la bitácora más nueva primero (`121826` solo el 24 → `110044` → `090737` → las del piloto).

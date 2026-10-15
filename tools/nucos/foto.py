@@ -16,7 +16,9 @@ for f in nucos:
         if h["mimeType"] == CARP and es_insp(h["name"]):
             raices.append(dict(nuco=f["name"], nuco_id=f["id"], id=h["id"], name=h["name"]))
             nivel.append((h["id"], f["name"], [h["name"]]))
-for prof in range(8):
+# Sin tope práctico (15-oct-2026: 2.-SERVICIOS tenía carpetas a 9 niveles; con range(8) su contenido no entraba a la foto
+# y el ejecutor saltaba esos NUCO por "archivos nuevos"). El ciclo termina solo cuando ya no hay carpetas.
+for prof in range(20):
     if not nivel:
         break
     h = e.hijos_de(d, [i for i, _, _ in nivel])
