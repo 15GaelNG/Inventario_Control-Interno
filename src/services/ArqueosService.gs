@@ -668,13 +668,17 @@ const ArqueosService = (function () {
    * archivo o no es una imagen, solo borra el texto del marcador. Achica la
    * imagen si viene más ancha de 150pt, para que no se salga de la celda.
    *
-   * Regresa false SOLO cuando `urlArchivo` sí traía una firma (la celda no estaba vacía) pero el
-   * archivo de Drive ya no se pudo leer (borrado, sin permiso…) -- generarPdfArqueo_ usa esto
-   * para NO cerrar el documento como si estuviera completo (bug real, visto en producción
-   * 14-oct-2026 en Responsiva/Adherente Vehicular: un PDF "completo" al que en realidad le
-   * faltaba una firma, sin ningún aviso, y ya no se podía volver a mandar liga). Si no había
-   * firma todavía (celda vacía) o la URL no es un link de Drive reconocible (dato migrado de
-   * AppSheet en otro formato), se considera válido -- no es el mismo caso. */
+   * Regresa null si está bien, o el motivo (el mensaje real que dio Drive -- "File not found",
+   * "sin permiso"...) SOLO cuando `urlArchivo` sí traía una firma (la celda no estaba vacía) pero
+   * el archivo de Drive ya no se pudo leer -- generarPdfArqueo_ usa esto para NO cerrar el
+   * documento como si estuviera completo (bug real, visto en producción 14-oct-2026 en
+   * Responsiva/Adherente Vehicular: un PDF "completo" al que en realidad le faltaba una firma,
+   * sin ningún aviso, y ya no se podía volver a mandar liga). Si no había firma todavía (celda
+   * vacía) o la URL no es un link de Drive reconocible (dato migrado de AppSheet en otro
+   * formato), se considera válido -- no es el mismo caso. Antes se descartaba el motivo real y
+   * el aviso siempre decía "archivo borrado o sin permiso" sin saber cuál de las dos era -- ni
+   * para quien soporta ni para quien revisa el caso alcanzaba para saber qué pasó en realidad
+   * (usuario, 15-oct-2026). */
   // textoSiVacio (opcional): cuando NO hay archivo, en vez de dejar el recuadro en blanco se
   // escribe ese texto -- lo usa la firma del Asistente ("N/A" si el arqueo no tiene asistente,
   // CUENTA CON FIRMA ASISTENTE != 'SI') para que en el PDF se note que no aplica, no que se les
@@ -682,18 +686,18 @@ const ArqueosService = (function () {
   // siempre existen, en blanco ahí sí significa "falta".
   function insertarFirma_(body, marcadorLiteral, urlArchivo, textoSiVacio) {
     const encontrado = body.findText(escaparRegex_(marcadorLiteral));
-    if (!encontrado) return true;
+    if (!encontrado) return null;
     const parrafo = encontrado.getElement().getParent().asParagraph();
     parrafo.clear();
     if (!urlArchivo) {
       if (textoSiVacio) parrafo.appendText(textoSiVacio);
-      return true;
+      return null;
     }
     const fileId = extraerIdDrive_(urlArchivo);
-    if (!fileId) return true;
+    if (!fileId) return null;
     try {
       const blob = DriveApp.getFileById(fileId).getBlob();
-      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return true;
+      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return null;
       const imagen = parrafo.appendInlineImage(blob);
       // Ancho fijo para las 3 firmas (Responsable/Especialista/Asistente), no solo un tope --
       // antes una firma chica (trazo corto) se quedaba chica y una grande se topaba en 150, así
@@ -705,11 +709,11 @@ const ArqueosService = (function () {
         imagen.setHeight(Math.round(imagen.getHeight() * proporcion));
         imagen.setWidth(ANCHO_FIRMA);
       }
-      return true;
+      return null;
     } catch (err) {
-      // No se pudo leer/insertar la imagen (archivo borrado, sin permiso, etc.) -- el marcador
-      // ya quedó vacío (parrafo.clear() arriba); generarPdfArqueo_ decide si eso trona o no.
-      return false;
+      // El marcador ya quedó vacío (parrafo.clear() arriba); generarPdfArqueo_ decide si el
+      // motivo real (err.message) trona el documento o no.
+      return err.message;
     }
   }
 
@@ -829,12 +833,15 @@ const ArqueosService = (function () {
     // para que ni actualizarPdfArqueo_ ni completarFirmaArqueo (los dos únicos que llaman esta
     // función) terminen marcando "Generado"/cerrando el arqueo con una firma faltante en silencio.
     const faltantes = [];
-    if (!insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE'])) faltantes.push('Responsable');
-    if (!insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA'])) faltantes.push('Especialista');
-    if (!insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'], fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI' ? 'N/A' : undefined)) faltantes.push('Asistente');
+    const motivoResponsable = insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE']);
+    if (motivoResponsable) faltantes.push('Responsable (' + motivoResponsable + ')');
+    const motivoEspecialista = insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA']);
+    if (motivoEspecialista) faltantes.push('Especialista (' + motivoEspecialista + ')');
+    const motivoAsistente = insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'], fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI' ? 'N/A' : undefined);
+    if (motivoAsistente) faltantes.push('Asistente (' + motivoAsistente + ')');
     if (faltantes.length) {
       throw new Error('No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
-        ' en Drive (archivo borrado o sin permiso) -- avisa a soporte para recuperar esa firma.');
+        ' en Drive -- avisa a soporte para recuperar esa firma.');
     }
 
     try {
