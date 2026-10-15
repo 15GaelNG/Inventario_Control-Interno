@@ -482,34 +482,47 @@ const ArqueosService = (function () {
    *  distancia del Responsable o el Asistente de un arqueo que ya existe, o genera una nueva si
    *  la anterior venció o se firmó mal -- sin tocar candadoAlCrear/alActualizar/despues (no hace
    *  falta recalcular totales ni regenerar el PDF solo por mandar una liga). El link viejo deja
-   *  de servir solo: buscarPorTokenArqueo_ ya no lo encuentra en cuanto se sobrescribe. */
+   *  de servir solo: buscarPorTokenArqueo_ ya no lo encuentra en cuanto se sobrescribe.
+   *
+   *  Candado: "Enviar liga(s) para firmar a distancia" (app-arqueos.html) manda la liga del
+   *  Responsable y la del Asistente DE UN JALÓN, en paralelo -- dos llamadas al servidor que caen
+   *  sobre el mismo renglón. SheetUtils.update es leer-mezclar-escribir sin candado propio: sin
+   *  este, la segunda llamada podía leer el renglón ANTES de que la primera acabara de escribir y,
+   *  al guardar, borraba el token que la primera acababa de poner -- esa liga salía "no válida"
+   *  aunque se acabara de generar (usuario, 15-oct-2026). */
   function generarLigaArqueo(token, id, quien) {
     Permisos.puedeEditar(token, 'arqueos');
-    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
-    if (!encontrado) throw new Error('No se encontró el arqueo.');
-    const fila = encontrado.data;
-    if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE']) {
-      throw new Error('Ya se completaron las dos firmas; no se puede generar una liga.');
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+      if (!encontrado) throw new Error('No se encontró el arqueo.');
+      const fila = encontrado.data;
+      if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE']) {
+        throw new Error('Ya se completaron las dos firmas; no se puede generar una liga.');
+      }
+      const col = columnasFirmaArqueo_(quien);
+      // Si ya tiene firma pero nunca tuvo token ni "firmado por" es que firmó presencial -- no hay
+      // liga que mandar ni regenerar (mismo guard que regenerarLiga en Responsiva/Adherente).
+      if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor]) {
+        throw new Error('El ' + col.etiqueta + ' firmó presencial, no a distancia; no hay liga que generar.');
+      }
+      // Si ya había una firma por liga (completa o pendiente) para este lado, se descarta.
+      if (fila[col.firma]) {
+        const fileId = extraerIdDrive_(fila[col.firma]);
+        if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ } }
+      }
+      const tokenNuevo = Utilities.getUuid();
+      const cambios = {};
+      cambios[col.token] = tokenNuevo;
+      cambios[col.expira] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
+      cambios[col.firma] = '';
+      cambios[col.firmadoPor] = '';
+      SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+      return construirLigaArqueo_(tokenNuevo, quien);
+    } finally {
+      lock.releaseLock();
     }
-    const col = columnasFirmaArqueo_(quien);
-    // Si ya tiene firma pero nunca tuvo token ni "firmado por" es que firmó presencial -- no hay
-    // liga que mandar ni regenerar (mismo guard que regenerarLiga en Responsiva/Adherente).
-    if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor]) {
-      throw new Error('El ' + col.etiqueta + ' firmó presencial, no a distancia; no hay liga que generar.');
-    }
-    // Si ya había una firma por liga (completa o pendiente) para este lado, se descarta.
-    if (fila[col.firma]) {
-      const fileId = extraerIdDrive_(fila[col.firma]);
-      if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ } }
-    }
-    const tokenNuevo = Utilities.getUuid();
-    const cambios = {};
-    cambios[col.token] = tokenNuevo;
-    cambios[col.expira] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
-    cambios[col.firma] = '';
-    cambios[col.firmadoPor] = '';
-    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
-    return construirLigaArqueo_(tokenNuevo, quien);
   }
 
   /** El renglón completo por el token vigente de la columna dada; null si no hay match. */
