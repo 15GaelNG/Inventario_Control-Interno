@@ -881,12 +881,17 @@ const LineasRepo = (function () {
   function responsivasEntregadas(idLinea) {
     const ids = idsDeRegistro(idLinea);
     if (!ids.length || !LineasDatos.existeTabla(TAB.RESP)) return [];
+    // Los encabezados se leen de caché (1 h): la columna pudo agregarse después (la primera responsiva o el llenado de
+    // ligar_responsivas.js, 15-oct: la ficha no la veía). Si no está, se releen una vez; sin ella aún no hay ninguna
+    const buscar = () => LineasDatos.buscarFilasVarios(TAB.RESP, COL_LINEA_ENTREGADA, ids);
+    const sinColumna = (e) => /no tiene la columna/.test(e.message);
     let filas;
     try {
-      filas = LineasDatos.buscarFilasVarios(TAB.RESP, COL_LINEA_ENTREGADA, ids);
+      filas = buscar();
     } catch (e) {
-      if (/no tiene la columna/.test(e.message)) return []; // aún no hay ninguna (la columna se crea con la primera)
-      throw e;
+      if (!sinColumna(e)) throw e;
+      LineasDatos.tablaFresca(TAB.RESP);
+      try { filas = buscar(); } catch (e2) { if (sinColumna(e2)) return []; throw e2; }
     }
     if (!filas.length) return [];
     const resp = LineasDatos.leerFilas([{ tabla: TAB.RESP, filas: filas }])[0]
