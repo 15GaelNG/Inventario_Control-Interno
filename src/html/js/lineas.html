@@ -2344,6 +2344,14 @@
      * servidor se lo niega igual (TelefoniaService.sinAlcance_); esto solo no pinta lo que no va a abrir.
      */
     const sinPasado = () => !!(memoria.permisos && memoria.permisos.conAlcance);
+    /**
+     * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.detalles,
+     * .documentos, .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
+     * servidor pide la misma sección (TelefoniaService.leerSeccion_); esto solo no pinta lo que no va a abrir.
+     */
+    const veSeccion = (seccion) => puede('lineas-telefonicas.' + seccion);
+    const veDocumentos = () => !sinPasado() && veSeccion('documentos');
+    const veHistorial = () => !sinPasado() && veSeccion('historial');
 
     function cargarPermisos() {
       if (memoria.permisos) return Promise.resolve(memoria.permisos);
@@ -2428,7 +2436,7 @@
     ];
     /** "Ver": abre la última inspección o responsiva de la carpeta del NUCO en NUCOS (se busca al hacer clic). */
     function botonUltimoNucos(tipo, id) {
-      if (sinPasado()) return '';
+      if (!veDocumentos()) return '';
       const titulo = (tipo === 'INSPECCION' ? 'Última inspección' : 'Última responsiva') + ' en la carpeta NUCOS';
       return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-ultimo="' + tipo + '" data-id="' + esc(id) + '" title="' + titulo + '">' +
         icono('file-text') + ' Ver</button>';
@@ -2554,9 +2562,15 @@
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });
       });
-      // Agregar equipo o línea (usuario, 4-oct): el TIPO ya no se elige, se asigna solo
-      $('#ln-nuevo-equipo', raiz).addEventListener('click', () => abrirEditor(null, 'EQUIPO'));
-      $('#ln-nueva-linea', raiz).addEventListener('click', () => abrirEditor(null, 'LINEA'));
+      // Agregar equipo o línea (usuario, 4-oct): el TIPO ya no se elige, se asigna solo. Solo con edición (antes se
+      // veían y el servidor lo negaba al guardar)
+      if (puedeEditarModulo('lineas-telefonicas')) {
+        $('#ln-nuevo-equipo', raiz).addEventListener('click', () => abrirEditor(null, 'EQUIPO'));
+        $('#ln-nueva-linea', raiz).addEventListener('click', () => abrirEditor(null, 'LINEA'));
+      } else {
+        $('#ln-nuevo-equipo', raiz).remove();
+        $('#ln-nueva-linea', raiz).remove();
+      }
       raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => b.addEventListener('click', () => {
         memoria.modoVista = b.dataset.modo;
         try { localStorage.setItem('lineas.modoVista', memoria.modoVista); } catch (e) { /* solo no se recuerda */ }
@@ -2801,7 +2815,7 @@
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
         const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar equipo', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
           alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
-        const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
+        const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', visible: veHistorial, alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
         const vinculo = (ic, texto, modo, cuando) => ({ icono: ic, texto: texto, maximo: 1, enBarra: false, grupo: 'vinculo',
           visible: (f) => operar() && cuando(f[0]), alHacer: (f) => abrirVinculo(modo, f[0]) });
@@ -3408,9 +3422,11 @@
        * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
        */
       function fichaEnPestanas(general, detalles, conDocumentos) {
-        const pasado = !sinPasado();
-        conDocumentos = conDocumentos && pasado;
-        const pestanas = [['general', 'General', 'layout-grid'], ['detalles', 'Detalles', 'clipboard-list'],
+        // Cada pestaña con su sección (y Documentos e Historial, nunca para un CLIENT: sinPasado)
+        const conDetalles = veSeccion('detalles');
+        const pasado = veHistorial();
+        conDocumentos = conDocumentos && veDocumentos();
+        const pestanas = [['general', 'General', 'layout-grid'], conDetalles ? ['detalles', 'Detalles', 'clipboard-list'] : null,
           conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, pasado ? ['historial', 'Historial', 'history'] : null].filter(Boolean);
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
         const guardada = (pila[pila.length - 1] || {}).pestana;
@@ -3420,7 +3436,7 @@
           '<button type="button" class="tab-btn' + (t[0] === activa ? ' active' : '') + '" role="tab" aria-selected="' + (t[0] === activa) + '" data-ficha-tab="' + t[0] + '">' +
           icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
           '<div data-ficha-panel="general"' + (activa === 'general' ? '' : ' hidden') + '>' + general + '</div>' +
-          '<div data-ficha-panel="detalles"' + (activa === 'detalles' ? '' : ' hidden') + '>' + detalles + '</div>' +
+          (conDetalles ? '<div data-ficha-panel="detalles"' + (activa === 'detalles' ? '' : ' hidden') + '>' + detalles + '</div>' : '') +
           (conDocumentos ? '<div data-ficha-panel="documentos"' + (activa === 'documentos' ? '' : ' hidden') + '><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
           (pasado ? '<div data-ficha-panel="historial"' + (activa === 'historial' ? '' : ' hidden') + '><div id="ln-historial">' + cargando + '</div></div>' : '');
       }
@@ -3482,7 +3498,7 @@
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['Razón social', l.razonSocial],
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
-              (l ? tarjetaPlan(l, true, r.facturas) + tarjetaFacturacion(l, r.facturas, true) : '') +
+              (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) + tarjetaFacturacion(l, r.facturas, true) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           cargarPatronesAppSheet(detalle);
@@ -3522,8 +3538,7 @@
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
               tarjetaCuenta(l, r.corte) +
-              tarjetaPlan(l, false, r.facturas) +
-              tarjetaFacturacion(l, r.facturas, false) +
+              (veSeccion('facturacion') ? tarjetaPlan(l, false, r.facturas) + tarjetaFacturacion(l, r.facturas, false) : '') +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
@@ -3570,12 +3585,13 @@
           ? { icono: 'pencil', texto: 'Editar equipo', separador: true, alHacer: () => abrirEditor(id) }
           : { icono: 'pencil', texto: 'Editar línea', separador: true, alHacer: () => abrirEditor(id, 'LINEA') }];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
-        const carpeta = fichaActual && fichaActual.id === id ? fichaActual.carpetaDriveId : null;
+        // Con su sección (lineas-telefonicas.carpetas): operación interna, un CLIENT no la tiene (el servidor ni la manda)
+        const carpeta = fichaActual && fichaActual.id === id && puede('lineas-telefonicas.carpetas') ? fichaActual.carpetaDriveId : null;
         const drive = carpeta ? [{ icono: 'folder-open', texto: 'Ver carpeta en Drive', separador: true,
           alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') }] : [];
         const documentos = [
-          tieneNuco(r) && !sinPasado() ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
-          tieneNuco(r) && !sinPasado() ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
+          tieneNuco(r) && veDocumentos() ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          tieneNuco(r) && veDocumentos() ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
         ].filter(Boolean);
         if (documentos.length) documentos[0].titulo = 'Documentos';
         // Vincular, cambiar y desvincular (etapa 3, usuario 8-oct)
@@ -3589,7 +3605,7 @@
               ? [{ icono: 'link', texto: 'Vincular a equipo', separador: true, alHacer: () => abrirVinculo('VINCULAR_EQUIPO', r) }] : [])));
         // Mismo orden que el clic derecho de la lista (usuario, 12-oct; pendiente 2.34): mover · documentos · editar ·
         // vincular · historial. Nueva inspección y Nueva responsiva están en los botones de la ficha
-        const historial = [{ icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') }];
+        const historial = veHistorial() ? [{ icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') }] : [];
         const items = tipo === 'equipo'
           ? (operar ? [
             { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirReasignar(r) },
@@ -3661,7 +3677,7 @@
       }
 
       function cargarEvidencias(id) {
-        if (sinPasado()) return;
+        if (!veDocumentos()) return;
         const pila0 = pila.length;
         llamar('apiLineasEvidencias', id).then((ev) => {
           const cont = $('#ln-evidencias', raiz);
@@ -3835,7 +3851,7 @@
             doc('eye', 'Ver responsiva', 'ver', true, (d) => d.documento === 'Responsiva', (d) => abrir('responsiva', d.id)),
             doc('file-text', 'Ver PDF', 'ver', true, (d) => !!d.pdfId,
               (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
-            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
+            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
             doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'), (d) => subirPdfFirmado(id, d)),
             doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
@@ -5275,7 +5291,7 @@
       }
 
       function cargarHistorial(id, nombre, vista) {
-        if (sinPasado()) return;
+        if (!veHistorial()) return;
         if (nombre) nombreHistorial = nombre; else nombre = nombreHistorial;
         if (vista) vistaHistorial = vista; else vista = vistaHistorial;
         const abierta = pila[pila.length - 1];
@@ -6591,7 +6607,9 @@
 
       $('#lnga-filtro-activos', raiz).addEventListener('change', aplicarFiltros);
       $('#lnga-mas', raiz).addEventListener('click', () => { visibles += paso; pintarCuadros(); });
-      $('#lnga-exportar', raiz).addEventListener('click', (ev) => exportarActivos(ev.currentTarget));
+      // Exportar con su permiso (gestion-activos.exportar, Modulos.gs), como las tablas (puedeExportarAqui)
+      if (puede('gestion-activos.exportar')) $('#lnga-exportar', raiz).addEventListener('click', (ev) => exportarActivos(ev.currentTarget));
+      else $('#lnga-exportar', raiz).remove();
       raiz.addEventListener('click', (ev) => {
         const sug = ev.target.closest('[data-colaborador-i]');
         if (sug) {

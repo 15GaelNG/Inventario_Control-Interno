@@ -32,7 +32,7 @@ function entorno() {
   };
   const permiso = (nivel) => (t, m) => {
     if (!sesiones[t]) throw new Error('Sesión expirada');
-    if (m === 'tickets' && t !== 'tok-ana') throw new Error(nivel === 'leer' ? 'No tienes acceso a este módulo.' : 'Solo puedes consultar este módulo, no modificarlo.');
+    if ((m === 'tickets' || m === 'tickets.helpdesk') && t !== 'tok-ana') throw new Error(nivel === 'leer' ? 'No tienes acceso a este módulo.' : 'Solo puedes consultar este módulo, no modificarlo.');
     return sesiones[t];
   };
   Object.assign(e.contexto, {

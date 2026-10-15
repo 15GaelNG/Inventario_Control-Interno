@@ -60,6 +60,9 @@ const ReasignacionesVehicularesService = (function () {
    */
   function crear(token, datos) {
     const sesion = Permisos.puedeEditar(token, 'reasignaciones-vehiculares');
+    // También cambia al vehículo (VehiculosService.actualizar, abajo): se revisa ANTES de escribir la
+    // reasignación, para no dejarla escrita sin su cambio en Vehículos
+    Permisos.puedeEditar(token, 'vehiculos');
     // El vehículo es su ID ('ID VEHICULO'); el folio solo llega de una página abierta antes del cambio
     const folio = datos['ID VEHICULO'] || datos['Folio Vehiculo'];
     if (!folio) throw new Error('Selecciona el vehículo (Nucco o Folio).');

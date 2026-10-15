@@ -34,8 +34,11 @@ VEHICULARES/BITACORAS) + hoja "BITACORA EXPEDIENTES NUCO"; deshacer con `expedie
    Fase 0. Destino `3.-VERIFICACIONES/<año>/<N> SEMESTRE/VERIFICACION-<NUCO> <fecha>.ext`; dedupe por md5 contra lo ya
    homologado (196 certificados ya están en su semestre). **Los 84 dudosos no se tocan** (siguen marcados para el área).
 3. **Responsivas de sensores (INSTALACION DE SENSORES, ~207)** → `1.-DOCUMENTACIÓN/5.-RESPONSIVA/SENSORES/`.
+   **Hecho 14-oct:** 205 en su NUCO, 158 anteriores, 3 en `_POR REVISAR` (`nucos-sensores-app.md`).
 4. **Respaldos de firmas de Responsiva y Adherente** (`RESPONSIVAS VEHICULARES_Images/`, no ligados en la hoja) →
    `5.-RESPONSIVA/FIRMAS/`. Las firmas TEMP de la firma a distancia se quedan (se borran solas al generar el PDF).
+   Incluye 5 firmas del 14-oct (NUCO 402 y 78) que la v116 guardó en la carpeta vieja:
+   `incidente-2026-10-14-firmas-carpeta-vieja.md`.
 
 ## Avance del 13-oct-2026 (corrida 1: inspecciones de la app)
 

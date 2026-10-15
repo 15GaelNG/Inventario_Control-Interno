@@ -393,7 +393,8 @@
         // su copia guardada y se repinta sola si llegó algo distinto.
         const ficha = JSON.parse((await callServerListaCacheada('apiFichaCajaChica', state.token, id)) || '{}');
         const { completo, arqueos } = ficha;
-        const cambios = ficha.cambios || [];
+        // Sin la sección caja-chica.cambios-monto llegan en null y su pestaña no aparece
+        const cambios = ficha.cambios;
         if (detalle.hidden || !document.body.contains(detalle) || fichaCajaAbierta !== cResumen) return;
         if (!completo) {
           detalle.innerHTML = migasCajaChica() + '<p class="empty-state">No se encontró el registro completo.</p>';
@@ -416,7 +417,7 @@
 
         html += fichaEnPestanas([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
-          { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          puede('caja-chica.detalles') && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           arqueos && {
             id: 'arqueos', titulo: 'Arqueos', icono: 'clipboard-check', num: arqueos.length,
             contenido: pestanaFicha('clipboard-check', 'Arqueos', [
@@ -432,7 +433,7 @@
             ], arqueos, 'Sin arqueos registrados para esta caja chica.',
             puedeEditarModulo('arqueos') ? { tipo: 'arqueo', texto: 'Agregar' } : null),
           },
-          {
+          cambios && {
             id: 'cambios-monto', titulo: 'Cambios de monto', icono: 'trending-up', num: cambios.length,
             contenido: pestanaFicha('trending-up', 'Cambios de monto', [
               { t: 'Fecha', r: (c) => formatearFecha(c.FECHA) },
@@ -440,9 +441,9 @@
               { t: 'Anterior', r: (c) => (c.CANTIDAD_ANTERIOR === '' || c.CANTIDAD_ANTERIOR === null || c.CANTIDAD_ANTERIOR === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ANTERIOR) },
               { t: 'Actualizada', r: (c) => (c.CANTIDAD_ACTUALIZADA === '' || c.CANTIDAD_ACTUALIZADA === null || c.CANTIDAD_ACTUALIZADA === undefined) ? '—' : formatearMoneda(c.CANTIDAD_ACTUALIZADA) },
               { t: 'Quién realizó', r: (c) => escaparHtml(c.QUIEN_REALIZO || '—') },
-              { t: '', r: (c) => accionesFichaRegistro('cambio-monto', c.ID, { eliminar: puedeEditar }) },
+              { t: '', r: (c) => accionesFichaRegistro('cambio-monto', c.ID, { eliminar: puedeEditarModulo('caja-chica.cambios-monto') }) },
             ], cambios, 'Sin cambios de monto registrados para esta caja chica.',
-            puedeEditar ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
+            puedeEditarModulo('caja-chica.cambios-monto') ? { tipo: 'cambio-monto', texto: 'Agregar' } : null),
           },
         ].filter(Boolean));
 
@@ -542,10 +543,11 @@
       // ahora el ⋮/clic derecho sale solo de accionesFila + accionesSeleccion.
       // "Eliminar" NO se repite aquí: ya la agrega cfg.alEliminar, con el chequeo
       // de integridad (apiQueImpideBorrar) que la vieja eliminarCajaChicaRapida no tenía.
-      accionesSeleccion: puedeEditar ? [
-        { icono: 'clipboard-check', texto: 'Nuevo arqueo', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirAgregarArqueo(filas[0]) },
-        { icono: 'trending-up', texto: 'Nuevo incremento', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirAgregarCambioMonto(filas[0]) },
-      ] : [],
+      // Capturar desde la lista: cada acción con el permiso de lo que captura, no el de Caja chica
+      accionesSeleccion: [
+        puedeEditarModulo('arqueos') && { icono: 'clipboard-check', texto: 'Nuevo arqueo', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirAgregarArqueo(filas[0]) },
+        puedeEditarModulo('caja-chica.cambios-monto') && { icono: 'trending-up', texto: 'Nuevo incremento', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirAgregarCambioMonto(filas[0]) },
+      ].filter(Boolean),
       alEliminar: puedeEditar ? async (filas) => {
         // Primero se pregunta por todas: si alguna tiene arqueos o cambios, no se borra ninguna
         const imp = await callServer('apiQueImpideBorrar', state.token, 'CAJAS CHICAS', filas.map((f) => f['ID CCH']));
@@ -760,8 +762,8 @@
   // ---------- Cambios de Monto (Caja Chica) ----------
   async function initCambiosMontoCCH() {
     wireTabsSimple(document.getElementById('view-container'));
-    // Mismo módulo de permisos que Caja Chica (no tiene id propio en Modulos.gs)
-    const puedeEditar = puedeEditarModulo('caja-chica');
+    // Su sección de Caja chica (caja-chica.cambios-monto, Modulos.gs)
+    const puedeEditar = puedeEditarModulo('caja-chica.cambios-monto');
     if (!puedeEditar) document.querySelector('#cm-tabs .tab-btn[data-tab="registrar"]').remove();
     let cajasPorId = {};
     let todosLosCambios = [];
