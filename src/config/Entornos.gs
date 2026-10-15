@@ -110,9 +110,12 @@ const ENTORNOS = {
   },
 
   // ---------------------------------------------------------------- DEV de la homologación (rama common)
-  // docs/homologacion-codigo.md. Todo encendido; lo que escribe va a la carpeta de pruebas "DEV COMMON".
+  // docs/homologacion-codigo.md. Lo que escribe va a la carpeta de pruebas "DEV COMMON".
   '1WXvJaGJl1ACfisfibb__FCxzljexGfbpL5yjrUEjog82O0Uyq1YZ_7as': {
     ENTORNO: 'DEV',
+
+    // Como producción: la copia del libro no trae APP_HELPDESK
+    MODULOS_APAGADOS: 'helpdesk',
 
     // Copia del libro de producción ("DEV COMMON - Copia de produccion 2026-10-15")
     SS_ID_USUARIOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
