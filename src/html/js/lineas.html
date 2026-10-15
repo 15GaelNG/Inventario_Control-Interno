@@ -3262,7 +3262,8 @@
       }
       function dinero(n, centavos) {
         if (n === null || n === undefined || n === '' || isNaN(Number(n))) return null;
-        return '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
+        // El signo va antes del $: «-$7.74», no «$-7.74» (nota de crédito; prueba en /dev del 14-oct)
+        return (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
       }
       /** «$29.22 de menos» / «$51.00 de más» / «Igual», con su color. */
       function diferenciaTexto(d) {

@@ -2541,6 +2541,16 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
   assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });
 
+test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
+  const html = read('src/html/js/lineas.html');
+  const ini = html.indexOf('      function dinero(n, centavos) {');
+  const dinero = new Function(html.slice(ini, html.indexOf('\n      }', ini) + 8) + '\nreturn dinero;')();
+  assert.strictEqual(dinero(-7.74, true), '-$7.74');
+  assert.strictEqual(dinero(269.78, true), '$269.78');
+  assert.strictEqual(dinero(1049), '$1,049');
+  assert.strictEqual(dinero(''), null);
+});
+
 test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
