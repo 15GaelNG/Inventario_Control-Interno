@@ -445,6 +445,11 @@ function apiBuscarResponsivaVehicularPorId(token, id) {
 function apiCrearResponsivaVehicular(token, datos, imagenes, opciones) {
   return ResponsivaVehicularService.crear(token, datos, imagenes, opciones);
 }
+// Mientras sigue PENDIENTE de firma (ver el comentario de ResponsivaVehicularService.actualizar);
+// una vez firmada, ya no se puede.
+function apiActualizarResponsivaVehicular(token, id, datos) {
+  return ResponsivaVehicularService.actualizar(token, id, datos);
+}
 function apiEliminarResponsivaVehicular(token, id) {
   return ResponsivaVehicularService.eliminar(token, id);
 }
@@ -501,6 +506,11 @@ function apiBuscarAdherenteVehicularPorId(token, id) {
 function apiCrearAdherenteVehicular(token, datos, imagenes, opciones) {
   return AdherenteVehicularService.crear(token, datos, imagenes, opciones);
 }
+// Mientras sigue PENDIENTE de firma (ver el comentario de AdherenteVehicularService.actualizar);
+// una vez firmado, ya no se puede.
+function apiActualizarAdherenteVehicular(token, id, datos) {
+  return AdherenteVehicularService.actualizar(token, id, datos);
+}
 function apiCambiarEstatusAdherenteVehicular(token, id, estatus) {
   return AdherenteVehicularService.cambiarEstatus(token, id, estatus);
 }
@@ -523,8 +533,6 @@ function apiFirmaRemotaObtener(tipo, quien, tokenFirma) {
   if (tipo === 'arqueo') return servicio.obtenerPendienteArqueoPorToken(tokenFirma, quien);
   return quien === 'jefe' ? servicio.obtenerPendienteJefePorToken(tokenFirma) : servicio.obtenerPendientePorToken(tokenFirma);
 }
-// Arqueos no tiene vista previa sin guardar (su PDF se genera con Google Docs, no PdfService) --
-// FirmaExterna.html oculta el botón para ese tipo, así que esta llamada no se hace.
 function apiFirmaRemotaVistaPrevia(tipo, quien, tokenFirma) {
   const servicio = servicioFirmaRemota_(tipo);
   return servicio.vistaPrevia(tokenFirma, quien);
@@ -544,9 +552,12 @@ function apiFirmaRemotaLiga(token, tipo, quien, tokenFirma) {
 // "Generar liga"/"Generar nueva liga" (botón manual en la tabla/ficha): token nuevo sobre el
 // MISMO registro, sin crear otro -- en Arqueos también sirve para mandar la primera liga de un
 // arqueo que ya existe (ver el comentario de generarLigaArqueo en ArqueosService.gs).
-function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien) {
+// forzar: solo lo usa Arqueos (botón "Generar liga de todas formas" cuando las dos firmas ya
+// están o esa parte firmó presencial -- ver el comentario de generarLigaArqueo). Responsiva/
+// Adherente ignoran el argumento de más.
+function apiFirmaRemotaRegenerarLiga(token, tipo, id, quien, forzar) {
   const servicio = servicioFirmaRemota_(tipo);
-  return tipo === 'arqueo' ? servicio.generarLigaArqueo(token, id, quien) : servicio.regenerarLiga(token, id, quien);
+  return tipo === 'arqueo' ? servicio.generarLigaArqueo(token, id, quien, forzar) : servicio.regenerarLiga(token, id, quien);
 }
 
 // --- Arqueos ---

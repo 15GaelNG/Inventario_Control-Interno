@@ -45,8 +45,10 @@ const ArqueosService = (function () {
   const ID_COLUMN = 'ID ARQUEO';
 
   // Firma a distancia (Responsable/Asistente, 14-oct-2026): cuánto dura cada liga antes de que
-  // haya que mandar una nueva -- mismo plazo que Responsiva/Adherente Vehicular.
-  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
+  // haya que mandar una nueva. Empezó en 5 días (mismo plazo que Responsiva/Adherente
+  // Vehicular); a 15 días a petición del usuario (15-oct-2026) -- solo Arqueos, no toca
+  // Responsiva/Adherente.
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 15;
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
@@ -330,7 +332,7 @@ const ArqueosService = (function () {
     columnas: [
       'ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'TIPO DE ARQUEO', 'FECHA INICIO',
       'TOTAL GENERAL', 'DIFERENCIA', 'CALIFICACION_AUDITORIA_FINAL', 'ESTADO PDF', 'FORMATO ARQUEO', 'EVIDENCIAS',
-      'FIRMA RESPONSABLE', 'FIRMA ASISTENTE',
+      'FIRMA RESPONSABLE', 'FIRMA ASISTENTE', 'CUENTA CON FIRMA ASISTENTE',
       'TOKEN FIRMA RESPONSABLE', 'FIRMADO POR RESPONSABLE', 'TOKEN FIRMA ASISTENTE', 'FIRMADO POR ASISTENTE',
     ],
     fila: (r) => ({
@@ -347,6 +349,9 @@ const ArqueosService = (function () {
       EVIDENCIAS: r['EVIDENCIAS'] || '',
       FIRMA_RESPONSABLE: r['FIRMA RESPONSABLE'] || '',
       FIRMA_ASISTENTE: r['FIRMA ASISTENTE'] || '',
+      // Solo hay Asistente que firme (presencial o a distancia) si esto es 'SI' -- si no, no hay
+      // nadie a quien mandarle liga ni cuya firma se espere (usuario, 15-oct-2026).
+      CUENTA_CON_FIRMA_ASISTENTE: r['CUENTA CON FIRMA ASISTENTE'] || '',
       TOKEN_FIRMA_RESPONSABLE: r['TOKEN FIRMA RESPONSABLE'] || '',
       FIRMADO_POR_RESPONSABLE: r['FIRMADO POR RESPONSABLE'] || '',
       TOKEN_FIRMA_ASISTENTE: r['TOKEN FIRMA ASISTENTE'] || '',
@@ -490,7 +495,7 @@ const ArqueosService = (function () {
    *  este, la segunda llamada podía leer el renglón ANTES de que la primera acabara de escribir y,
    *  al guardar, borraba el token que la primera acababa de poner -- esa liga salía "no válida"
    *  aunque se acabara de generar (usuario, 15-oct-2026). */
-  function generarLigaArqueo(token, id, quien) {
+  function generarLigaArqueo(token, id, quien, forzar) {
     Permisos.puedeEditar(token, 'arqueos');
     const lock = LockService.getScriptLock();
     lock.waitLock(30000);
@@ -498,13 +503,24 @@ const ArqueosService = (function () {
       const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
       if (!encontrado) throw new Error('No se encontró el arqueo.');
       const fila = encontrado.data;
-      if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE']) {
+      // `forzar` (botón "Generar liga de todas formas" en la pantalla, con su propia
+      // confirmación): salta estos dos candados a propósito -- sin esto, una firma que quedó
+      // guardada pero rota (archivo corrupto en Drive, por ejemplo) no se podía recuperar sin
+      // editar la hoja a mano, porque el sistema ya la veía como "completa" o "presencial"
+      // (usuario, 15-oct-2026).
+      if (fila['FIRMA RESPONSABLE'] && fila['FIRMA ASISTENTE'] && !forzar) {
         throw new Error('Ya se completaron las dos firmas; no se puede generar una liga.');
       }
       const col = columnasFirmaArqueo_(quien);
+      // El Asistente es opcional (el canvas de su firma solo se muestra si "Cuenta con firma del
+      // asistente" = SI): sin eso, no hay a quién mandarle liga (usuario, 15-oct-2026). Esto NO
+      // se salta con forzar -- no hay a quién mandarle nada si no existe el asistente.
+      if (quien === 'asistente' && fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI') {
+        throw new Error('Este arqueo no tiene asistente (revisa "Cuenta con firma del asistente"); no hay liga que generar.');
+      }
       // Si ya tiene firma pero nunca tuvo token ni "firmado por" es que firmó presencial -- no hay
       // liga que mandar ni regenerar (mismo guard que regenerarLiga en Responsiva/Adherente).
-      if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor]) {
+      if (fila[col.firma] && !fila[col.token] && !fila[col.firmadoPor] && !forzar) {
         throw new Error('El ' + col.etiqueta + ' firmó presencial, no a distancia; no hay liga que generar.');
       }
       // Si ya había una firma por liga (completa o pendiente) para este lado, se descarta.
@@ -556,6 +572,22 @@ const ArqueosService = (function () {
     };
   }
 
+  /** "Generar vista previa del documento" en la liga de firma a distancia -- mismo botón que
+   *  Responsiva/Adherente Vehicular (FirmaExterna.html, sin distinción por tipo); valida la liga
+   *  igual que obtenerPendienteArqueoPorToken y arma el PDF con vistaPreviaArqueo_. Sin sesión,
+   *  igual que el resto de esta sección: el token es la credencial. */
+  function vistaPrevia(tokenFirma, quien) {
+    const col = columnasFirmaArqueo_(quien);
+    const fila = buscarPorTokenArqueo_(tokenFirma, col.token);
+    if (!fila) throw new Error('Esta liga no es válida.');
+    if (fila[col.firma]) throw new Error('Esta liga ya se usó.');
+    const expira = fila[col.expira] ? new Date(fila[col.expira]) : null;
+    if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
+      throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
+    }
+    return vistaPreviaArqueo_(fila);
+  }
+
   /** Completa la firma del Responsable o el Asistente que llegó por su liga -- sin sesión (el
    *  token es la credencial, igual que completarFirma en Responsiva/Adherente Vehicular). Si
    *  todavía falta la otra firma, solo se guarda y se espera; si ya no falta ninguna, se genera el
@@ -587,10 +619,21 @@ const ArqueosService = (function () {
       cambios[col.firma] = subida.url;
       cambios[col.token] = '';
       cambios[col.expira] = '';
-      cambios[col.firmadoPor] = Session.getActiveUser().getEmail() || '';
+      // Quien firma por liga, sin sesión, casi siempre no tiene cuenta del dominio --
+      // Session.getActiveUser().getEmail() regresa vacío para esa persona (normal, no es un
+      // error). Pero un FIRMADO POR vacío es EXACTAMENTE lo mismo que se ve cuando alguien firmó
+      // presencial (nunca hubo liga) -- generarLigaArqueo usa esa columna para no dejar
+      // regenerar la liga de quien ya firmó en persona, y con las dos en blanco no podía
+      // distinguir los casos: una firma rota de alguien que SÍ firmó a distancia (anónimo) se
+      // quedaba sin forma de volver a mandarle liga (usuario, 15-oct-2026).
+      cambios[col.firmadoPor] = Session.getActiveUser().getEmail() || 'Firmado por liga externa (sin cuenta del dominio)';
 
       const otroQuien = quien === 'asistente' ? 'Responsable' : 'Asistente';
-      if (!fila['FIRMA RESPONSABLE'] || !fila['FIRMA ASISTENTE']) {
+      // Si no hay asistente (CUENTA CON FIRMA ASISTENTE != 'SI'), su firma en blanco no cuenta
+      // como "falta" -- si no, nunca se cerraría el documento de un arqueo sin asistente
+      // (usuario, 15-oct-2026).
+      const faltaAsistente = fila['CUENTA CON FIRMA ASISTENTE'] === 'SI' && !fila['FIRMA ASISTENTE'];
+      if (!fila['FIRMA RESPONSABLE'] || faltaAsistente) {
         SheetUtils.update(ssId(), hoja_().getName(), fila['ID ARQUEO'], cambios, ID_COLUMN);
         return { PDF: null, aviso: 'Tu firma quedó registrada. Falta la del ' + otroQuien + ' para generar el documento final.' };
       }
@@ -640,45 +683,65 @@ const ArqueosService = (function () {
    * archivo o no es una imagen, solo borra el texto del marcador. Achica la
    * imagen si viene más ancha de 150pt, para que no se salga de la celda.
    *
-   * Regresa false SOLO cuando `urlArchivo` sí traía una firma (la celda no estaba vacía) pero el
-   * archivo de Drive ya no se pudo leer (borrado, sin permiso…) -- generarPdfArqueo_ usa esto
-   * para NO cerrar el documento como si estuviera completo (bug real, visto en producción
-   * 14-oct-2026 en Responsiva/Adherente Vehicular: un PDF "completo" al que en realidad le
-   * faltaba una firma, sin ningún aviso, y ya no se podía volver a mandar liga). Si no había
-   * firma todavía (celda vacía) o la URL no es un link de Drive reconocible (dato migrado de
-   * AppSheet en otro formato), se considera válido -- no es el mismo caso. */
-  function insertarFirma_(body, marcadorLiteral, urlArchivo) {
+   * Regresa null si está bien, o el motivo (el mensaje real que dio Drive -- "File not found",
+   * "sin permiso"...) SOLO cuando `urlArchivo` sí traía una firma (la celda no estaba vacía) pero
+   * el archivo de Drive ya no se pudo leer -- generarPdfArqueo_ usa esto para NO cerrar el
+   * documento como si estuviera completo (bug real, visto en producción 14-oct-2026 en
+   * Responsiva/Adherente Vehicular: un PDF "completo" al que en realidad le faltaba una firma,
+   * sin ningún aviso, y ya no se podía volver a mandar liga). Si no había firma todavía (celda
+   * vacía) o la URL no es un link de Drive reconocible (dato migrado de AppSheet en otro
+   * formato), se considera válido -- no es el mismo caso. Antes se descartaba el motivo real y
+   * el aviso siempre decía "archivo borrado o sin permiso" sin saber cuál de las dos era -- ni
+   * para quien soporta ni para quien revisa el caso alcanzaba para saber qué pasó en realidad
+   * (usuario, 15-oct-2026). */
+  // textoSiVacio (opcional): cuando NO hay archivo, en vez de dejar el recuadro en blanco se
+  // escribe ese texto -- lo usa la firma del Asistente ("N/A" si el arqueo no tiene asistente,
+  // CUENTA CON FIRMA ASISTENTE != 'SI') para que en el PDF se note que no aplica, no que se les
+  // olvidó pedirla (usuario, 15-oct-2026). El Responsable/Especialista nunca lo usan: esos dos
+  // siempre existen, en blanco ahí sí significa "falta".
+  function insertarFirma_(body, marcadorLiteral, urlArchivo, textoSiVacio) {
     const encontrado = body.findText(escaparRegex_(marcadorLiteral));
-    if (!encontrado) return true;
+    if (!encontrado) return null;
     const parrafo = encontrado.getElement().getParent().asParagraph();
     parrafo.clear();
-    if (!urlArchivo) return true;
+    if (!urlArchivo) {
+      if (textoSiVacio) parrafo.appendText(textoSiVacio);
+      return null;
+    }
     const fileId = extraerIdDrive_(urlArchivo);
-    if (!fileId) return true;
+    if (!fileId) return null;
     try {
       const blob = DriveApp.getFileById(fileId).getBlob();
-      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return true;
+      if (String(blob.getContentType() || '').indexOf('image/') !== 0) return null;
       const imagen = parrafo.appendInlineImage(blob);
-      const ANCHO_MAX = 150;
-      if (imagen.getWidth() > ANCHO_MAX) {
-        const proporcion = ANCHO_MAX / imagen.getWidth();
+      // Ancho fijo para las 3 firmas (Responsable/Especialista/Asistente), no solo un tope --
+      // antes una firma chica (trazo corto) se quedaba chica y una grande se topaba en 150, así
+      // que no se veían parejas en el PDF. Siempre se escala a este ancho (para arriba o para
+      // abajo) y el alto se ajusta proporcional, para no deformar el trazo (usuario, 15-oct-2026).
+      const ANCHO_FIRMA = 100;
+      if (imagen.getWidth() !== ANCHO_FIRMA) {
+        const proporcion = ANCHO_FIRMA / imagen.getWidth();
         imagen.setHeight(Math.round(imagen.getHeight() * proporcion));
-        imagen.setWidth(ANCHO_MAX);
+        imagen.setWidth(ANCHO_FIRMA);
       }
-      return true;
+      return null;
     } catch (err) {
-      // No se pudo leer/insertar la imagen (archivo borrado, sin permiso, etc.) -- el marcador
-      // ya quedó vacío (parrafo.clear() arriba); generarPdfArqueo_ decide si eso trona o no.
-      return false;
+      // El marcador ya quedó vacío (parrafo.clear() arriba); generarPdfArqueo_ decide si el
+      // motivo real (err.message) trona el documento o no.
+      return err.message;
     }
   }
 
   /**
-   * Genera el PDF del arqueo a partir de la plantilla F-CI03-009 y `fila`
-   * (el registro YA completo: datos capturados + los calculados por
-   * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
+   * Copia la plantilla F-CI03-009 y la llena con `fila` (el registro YA completo: datos
+   * capturados + los calculados por calcularCampos_ + lo copiado de la Caja Chica) -- todo lo
+   * que generarPdfArqueo_ y vistaPreviaArqueo_ tienen en común. Regresa { copia, carpeta }: el
+   * Doc ya lleno y guardado, listo para exportar a PDF (quien llama decide si lo guarda
+   * permanente en Drive o solo lo exporta a un blob y lo borra). `marcaAgua` (opcional): un
+   * párrafo que se agrega al principio del documento -- lo usa vistaPreviaArqueo_ para distinguir
+   * una vista previa de un PDF final, mismo criterio que PdfService.generarVistaPrevia.
    */
-  function generarPdfArqueo_(fila) {
+  function llenarPlantillaArqueo_(fila, marcaAgua) {
     // Mismo patrón defensivo que subirArchivo(): "Acceso denegado: DriveApp" a secas no
     // dice ni qué recurso ni con qué cuenta -- aquí sí, para poder arreglarlo sin adivinar
     // (compartir la plantilla/carpeta con la cuenta que despliega este proyecto).
@@ -699,13 +762,14 @@ const ArqueosService = (function () {
     }
     let copia;
     try {
-      copia = plantilla.makeCopy('Arqueo_' + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
+      copia = plantilla.makeCopy((marcaAgua ? 'Vista previa Arqueo_' : 'Arqueo_') + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
     } catch (e) {
       throw new Error('Se pudo abrir la plantilla y la carpeta de Arqueos, pero no copiar el documento ahí. La ' +
         'cuenta ' + cuenta() + ' necesita permiso de editor (no solo lector) en la carpeta. Error original: ' + e.message);
     }
     const doc = DocumentApp.openById(copia.getId());
     const body = doc.getBody();
+    if (marcaAgua) body.insertParagraph(0, marcaAgua).setBold(true).setAlignment(DocumentApp.HorizontalAlignment.CENTER);
 
     const moneda = (v) => num_(v).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
     const numero = (v) => num_(v).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -777,18 +841,22 @@ const ArqueosService = (function () {
       reemplazarMarcador_(body, '<<[' + item.clave + ']>>', texto(fila[item.clave]));
     });
 
-    // Firmas — se insertan como imagen, no como texto. Si alguna YA tenía firma guardada pero su
-    // archivo de Drive ya no se pudo leer, no se sigue como si el documento estuviera completo
+    // Firmas — se insertan como imagen (la del Asistente, "N/A" si el arqueo no tiene uno). Si
+    // alguna YA tenía firma guardada pero su archivo de Drive ya no se pudo leer, no se sigue
+    // como si el documento estuviera completo
     // (ver el comentario largo de insertarFirma_) -- se trona ANTES de guardar/exportar el PDF,
     // para que ni actualizarPdfArqueo_ ni completarFirmaArqueo (los dos únicos que llaman esta
     // función) terminen marcando "Generado"/cerrando el arqueo con una firma faltante en silencio.
     const faltantes = [];
-    if (!insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE'])) faltantes.push('Responsable');
-    if (!insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA'])) faltantes.push('Especialista');
-    if (!insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'])) faltantes.push('Asistente');
+    const motivoResponsable = insertarFirma_(body, '<<[FIRMA RESPONSABLE]>>', fila['FIRMA RESPONSABLE']);
+    if (motivoResponsable) faltantes.push('Responsable (' + motivoResponsable + ')');
+    const motivoEspecialista = insertarFirma_(body, '<<[FIRMA ESPECIALISTA]>>', fila['FIRMA ESPECIALISTA']);
+    if (motivoEspecialista) faltantes.push('Especialista (' + motivoEspecialista + ')');
+    const motivoAsistente = insertarFirma_(body, '<<[FIRMA ASISTENTE]>>', fila['FIRMA ASISTENTE'], fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI' ? 'N/A' : undefined);
+    if (motivoAsistente) faltantes.push('Asistente (' + motivoAsistente + ')');
     if (faltantes.length) {
       throw new Error('No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
-        ' en Drive (archivo borrado o sin permiso) -- avisa a soporte para recuperar esa firma.');
+        ' en Drive -- avisa a soporte para recuperar esa firma.');
     }
 
     try {
@@ -797,6 +865,17 @@ const ArqueosService = (function () {
       throw new Error('No se pudo guardar el documento ya llenado con los datos del arqueo. Error original: ' + e.message);
     }
 
+    return { copia, carpeta };
+  }
+
+  /**
+   * Genera el PDF del arqueo a partir de la plantilla F-CI03-009 y `fila`
+   * (el registro YA completo: datos capturados + los calculados por
+   * calcularCampos_ + lo copiado de la Caja Chica). Regresa la URL del PDF.
+   */
+  function generarPdfArqueo_(fila) {
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    const { copia, carpeta } = llenarPlantillaArqueo_(fila);
     let pdfBlob;
     try {
       pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
@@ -830,6 +909,27 @@ const ArqueosService = (function () {
     }
 
     return pdfFile.getUrl();
+  }
+
+  /**
+   * "Vista previa" de un arqueo que todavía no se firma del todo -- mismo molde que
+   * PdfService.generarVistaPrevia (Responsiva/Adherente Vehicular): llena la misma plantilla,
+   * exporta a PDF, regresa el blob (sin guardarlo nunca en Drive) y borra el Doc temporal.
+   * No pasa por generarPdfArqueo_ a propósito: esta NUNCA deja un archivo permanente ni toca
+   * FORMATO ARQUEO/ESTADO PDF -- es solo para que quien va a firmar vea cómo va a quedar.
+   */
+  function vistaPreviaArqueo_(fila) {
+    const cuenta = () => Session.getEffectiveUser().getEmail();
+    const { copia } = llenarPlantillaArqueo_(fila, 'VISTA PREVIA — AÚN SIN FIRMAR');
+    try {
+      const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+      return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
+    } catch (e) {
+      throw new Error('El documento se llenó bien, pero no se pudo exportar la vista previa a PDF. La cuenta ' + cuenta() +
+        ' necesita permiso de editor en la carpeta de Arqueos. Error original: ' + e.message);
+    } finally {
+      try { DriveApp.getFileById(copia.getId()).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ }
+    }
   }
 
   /** Genera el PDF y guarda su URL (+ "Generado") en la fila; si algo falla,
@@ -882,6 +982,7 @@ const ArqueosService = (function () {
     copiarLigaArqueo,
     generarLigaArqueo,
     obtenerPendienteArqueoPorToken,
+    vistaPrevia,
     completarFirmaArqueo,
   };
 })();

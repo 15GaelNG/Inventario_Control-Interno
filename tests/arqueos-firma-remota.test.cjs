@@ -14,6 +14,9 @@ const path = require('node:path');
 function filaBase(extra) {
   return Object.assign({
     'ID ARQUEO': 'ARQ-1', 'ID CCH': '1', RESPONSABLE: 'JUAN PEREZ', 'NOMBRE ASISTENTE': 'ANA LOPEZ',
+    // Con asistente por default: los casos sin asistente lo pisan explícito (CUENTA CON FIRMA
+    // ASISTENTE: 'NO' o '').
+    'CUENTA CON FIRMA ASISTENTE': 'SI',
     'FECHA INICIO': new Date('2026-10-01T12:00:00Z'), 'TOTAL GENERAL': 1000, DIFERENCIA: 0,
     'FIRMA RESPONSABLE': '', 'FIRMA ASISTENTE': '', 'FIRMA ESPECIALISTA': 'https://drive.google.com/file/d/CIFILE/view',
     'TOKEN FIRMA RESPONSABLE': '', 'TOKEN FIRMA RESPONSABLE EXPIRA': '', 'FIRMADO POR RESPONSABLE': '',
@@ -46,6 +49,7 @@ function crearContexto(filas) {
     Utilities: {
       getUuid: () => 'token-' + (++uuids),
       formatDate: () => '01/10/2026',
+      base64Encode: (bytes) => 'base64:' + bytes,
     },
     DriveApp: {
       // Un solo fake genérico: sirve para abrir la plantilla (makeCopy), para exportar/borrar la
@@ -55,7 +59,7 @@ function crearContexto(filas) {
       getFileById: (id) => ({
         getId: () => id,
         makeCopy: (nombre) => ({ getId: () => 'copia-' + id, getName: () => nombre }),
-        getAs: () => ({ bytes: 'pdf-bytes', mimeType: 'application/pdf' }),
+        getAs: () => ({ getBytes: () => 'pdf-bytes', mimeType: 'application/pdf' }),
         setTrashed: (v) => { llamadas.trasheados.push({ id, v }); },
         getBlob: () => ({ getBytes: () => 'bytes', getContentType: () => 'image/png' }),
       }),
@@ -73,9 +77,15 @@ function crearContexto(filas) {
       }),
     },
     DocumentApp: {
+      HorizontalAlignment: { CENTER: 'CENTER' },
       openById: () => {
         llamadas.docAbiertos++;
-        const parrafo = { clear: () => {}, appendInlineImage: () => ({ getWidth: () => 100, getHeight: () => 40, setWidth: () => {}, setHeight: () => {} }) };
+        const parrafo = {
+          clear: () => {},
+          appendInlineImage: () => ({ getWidth: () => 100, getHeight: () => 40, setWidth: () => {}, setHeight: () => {} }),
+          appendText: (texto) => { llamadas.textosInsertados = (llamadas.textosInsertados || []).concat(texto); },
+        };
+        const marcaAgua = { setBold: () => marcaAgua, setAlignment: () => marcaAgua };
         return {
           getBody: () => ({
             // "Encuentra" cualquier marcador, para que insertarFirma_ sí intente leer el
@@ -83,6 +93,7 @@ function crearContexto(filas) {
             // probar (una firma que ya no se puede leer) solo se dispara si se llega ahí.
             findText: () => ({ getElement: () => ({ getParent: () => ({ asParagraph: () => parrafo }) }) }),
             replaceText: () => {},       // reemplazarMarcador_
+            insertParagraph: () => { llamadas.marcaAgua = (llamadas.marcaAgua || 0) + 1; return marcaAgua; },
           }),
           saveAndClose: () => {},
         };
@@ -194,6 +205,58 @@ test('generarLigaArqueo: truena si no existe el arqueo', () => {
   assert.throws(() => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-X', 'responsable'), /No se encontró el arqueo/);
 });
 
+test('generarLigaArqueo: truena para el Asistente si el arqueo no tiene ("Cuenta con firma del asistente" != SI)', () => {
+  const { contexto, llamadas } = crearContexto([filaBase({ 'CUENTA CON FIRMA ASISTENTE': 'NO' })]);
+  assert.throws(
+    () => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'asistente'),
+    /no tiene asistente/
+  );
+  assert.deepEqual(llamadas.update, []);
+});
+
+test('generarLigaArqueo: truena para el Asistente si "Cuenta con firma del asistente" está en blanco', () => {
+  const { contexto } = crearContexto([filaBase({ 'CUENTA CON FIRMA ASISTENTE': '' })]);
+  assert.throws(
+    () => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'asistente'),
+    /no tiene asistente/
+  );
+});
+
+// ---------- generarLigaArqueo: forzar (recuperar una firma guardada pero rota, 15-oct-2026) ----------
+
+test('generarLigaArqueo: con forzar=true, SÍ genera una liga aunque ya se completaron las dos firmas -- y descarta la del lado que se está regenerando', () => {
+  const { contexto, llamadas, hoja } = crearContexto([filaBase({
+    'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/R1/view',
+    'TOKEN FIRMA RESPONSABLE': '', 'FIRMADO POR RESPONSABLE': 'responsable@ciudadmaderas.com',
+    'FIRMA ASISTENTE': 'https://drive.google.com/file/d/A1/view',
+    'TOKEN FIRMA ASISTENTE': '', 'FIRMADO POR ASISTENTE': 'asistente@ciudadmaderas.com',
+  })]);
+  const liga = contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'responsable', true);
+  assert.match(liga, /tipo=arqueo/);
+  assert.deepEqual(llamadas.trasheados, [{ id: 'R1', v: true }]);
+  assert.equal(hoja[0]['FIRMA RESPONSABLE'], '');
+  assert.equal(hoja[0]['FIRMADO POR RESPONSABLE'], '');
+  // El lado que NO se está regenerando (Asistente) no se toca.
+  assert.equal(hoja[0]['FIRMA ASISTENTE'], 'https://drive.google.com/file/d/A1/view');
+});
+
+test('generarLigaArqueo: con forzar=true, SÍ genera una liga aunque esa parte firmó presencial', () => {
+  const { contexto, hoja } = crearContexto([filaBase({
+    'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/PRESENCIAL/view',
+  })]);
+  const liga = contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'responsable', true);
+  assert.match(liga, /tipo=arqueo/);
+  assert.equal(hoja[0]['FIRMA RESPONSABLE'], '');
+});
+
+test('generarLigaArqueo: forzar no sirve de nada para el Asistente si el arqueo no tiene asistente -- sigue tronando', () => {
+  const { contexto } = crearContexto([filaBase({ 'CUENTA CON FIRMA ASISTENTE': 'NO' })]);
+  assert.throws(
+    () => contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'asistente', true),
+    /no tiene asistente/
+  );
+});
+
 // ---------- copiarLigaArqueo ----------
 
 test('copiarLigaArqueo: arma la misma liga sin tocar la hoja', () => {
@@ -270,6 +333,21 @@ test('completarFirmaArqueo: guarda la firma y espera si falta la otra (sin gener
   assert.equal(fila['ESTADO PDF'], undefined);
 });
 
+test('completarFirmaArqueo: quien firma sin cuenta del dominio (liga anónima) no deja FIRMADO POR en blanco -- si no, se confunde con "firmó presencial" y ya no se puede regenerar su liga', () => {
+  const { contexto, hoja } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  contexto.Session.getActiveUser = () => ({ getEmail: () => '' });
+  contexto.Servicio.completarFirmaArqueo('tok-resp', 'responsable', FIRMA_IMG);
+  const fila = hoja[0];
+  assert.notEqual(fila['FIRMADO POR RESPONSABLE'], '');
+  assert.match(fila['FIRMADO POR RESPONSABLE'], /liga externa/);
+  // Con eso sí se puede volver a mandar su liga (ej. si el archivo de la firma quedó corrupto) --
+  // no se confunde con alguien que firmó presencial (nunca tuvo token ni firmado por).
+  const liga = contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'responsable');
+  assert.match(liga, /tipo=arqueo&token=token-\d+/);
+});
+
 test('completarFirmaArqueo: cierra y genera el PDF cuando ya no falta ninguna firma', () => {
   const { contexto, hoja } = crearContexto([filaBase({
     'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/R1/view', 'FIRMADO POR RESPONSABLE': 'responsable@ciudadmaderas.com',
@@ -310,6 +388,19 @@ test('completarFirmaArqueo: si la firma del Responsable (ya guardada) no se pued
   assert.equal(fila['FORMATO ARQUEO'], undefined);
 });
 
+test('completarFirmaArqueo: sin asistente (CUENTA CON FIRMA ASISTENTE != SI), cierra el PDF solo con la firma del Responsable y pone "N/A" en el recuadro del Asistente', () => {
+  const { contexto, llamadas, hoja } = crearContexto([filaBase({
+    'CUENTA CON FIRMA ASISTENTE': 'NO',
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  const r = contexto.Servicio.completarFirmaArqueo('tok-resp', 'responsable', FIRMA_IMG);
+  assert.ok(r.PDF, 'debe generar el PDF sin esperar a un asistente que no existe');
+  assert.equal(r.aviso, '');
+  const fila = hoja[0];
+  assert.equal(fila['ESTADO PDF'], 'Generado');
+  assert.ok(llamadas.textosInsertados && llamadas.textosInsertados.includes('N/A'));
+});
+
 test('completarFirmaArqueo: token inválido', () => {
   const { contexto } = crearContexto([filaBase()]);
   assert.throws(() => contexto.Servicio.completarFirmaArqueo('no-existe', 'responsable', FIRMA_IMG), /liga no es válida/);
@@ -335,4 +426,53 @@ test('completarFirmaArqueo: sin la imagen de la firma truena antes de tocar la h
   })]);
   assert.throws(() => contexto.Servicio.completarFirmaArqueo('tok-resp', 'responsable', null), /Falta la firma/);
   assert.deepEqual(llamadas.update, []);
+});
+
+// ---------- vistaPrevia ----------
+// "Generar vista previa del documento" en FirmaExterna.html: igual que Responsiva/Adherente
+// Vehicular, ya no se oculta para Arqueos (usuario, 15-oct-2026) -- arma el mismo PDF con
+// llenarPlantillaArqueo_ pero nunca lo guarda permanente en Drive (ni toca FORMATO ARQUEO/ESTADO
+// PDF), solo exporta el blob y borra el Doc temporal.
+
+test('vistaPrevia: token válido regresa el PDF en base64 sin dejar nada permanente en Drive', () => {
+  const { contexto, llamadas, hoja } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  const r = contexto.Servicio.vistaPrevia('tok-resp', 'responsable');
+  assert.equal(r.mimeType, 'application/pdf');
+  assert.equal(r.base64, 'base64:pdf-bytes');
+  assert.equal(llamadas.marcaAgua, 1, 'debe insertar el párrafo de "VISTA PREVIA"');
+  // Nunca se sube a la carpeta del año ni se toca la hoja -- es puro blob, se descarta.
+  assert.deepEqual(llamadas.carpetaCreateFile, []);
+  assert.deepEqual(llamadas.update, []);
+  assert.ok(llamadas.trasheados.length > 0 && llamadas.trasheados.every((t) => t.v === true), 'borra el Doc temporal');
+  // La firma todavía no se completó: el renglón sigue igual.
+  assert.equal(hoja[0]['FIRMA RESPONSABLE'], '');
+});
+
+test('vistaPrevia: del asistente usa su propia columna de token', () => {
+  const { contexto } = crearContexto([filaBase({
+    'TOKEN FIRMA ASISTENTE': 'tok-asis', 'TOKEN FIRMA ASISTENTE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  const r = contexto.Servicio.vistaPrevia('tok-asis', 'asistente');
+  assert.equal(r.mimeType, 'application/pdf');
+});
+
+test('vistaPrevia: token inválido', () => {
+  const { contexto } = crearContexto([filaBase()]);
+  assert.throws(() => contexto.Servicio.vistaPrevia('no-existe', 'responsable'), /liga no es válida/);
+});
+
+test('vistaPrevia: liga ya usada (la firma ya no está vacía)', () => {
+  const { contexto } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/X/view',
+  })]);
+  assert.throws(() => contexto.Servicio.vistaPrevia('tok-resp', 'responsable'), /liga ya se usó/);
+});
+
+test('vistaPrevia: liga vencida', () => {
+  const { contexto } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() - 1000),
+  })]);
+  assert.throws(() => contexto.Servicio.vistaPrevia('tok-resp', 'responsable'), /liga ya venció/);
 });

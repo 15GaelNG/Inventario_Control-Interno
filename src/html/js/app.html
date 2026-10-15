@@ -3284,6 +3284,159 @@
       });
     }
 
+    /**
+     * "Editar" de una Responsiva/Adherente que TODAVÍA no se firmó del todo (botón visible solo
+     * mientras ESTADO_FIRMA === 'PENDIENTE' -- ver accionesFichaRegistro más arriba). Deja
+     * corregir los datos administrativos/de contacto y los accesorios, nunca quién firma, el
+     * vehículo ni nada ya generado -- ver el comentario de
+     * ResponsivaVehicularService.actualizar/AdherenteVehicularService.actualizar (gemelos). Un
+     * solo formulario, sin pasos (son muchos menos campos que capturar de cero): reusa los
+     * mismos helpers de campos que ya usa el formulario de alta (resvCamposDocumentacion_,
+     * resvCamposAccesorios_, adhCamposDocumentacion_, RESV_ACCESORIOS), para no listar los
+     * mismos campos dos veces.
+     */
+    const CAMPOS_EDITAR_RESPONSIVA = [
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+      { clave: 'AREA', etiqueta: 'Área', tipo: 'text' },
+      { clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text' },
+      { clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+      { clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+      { clave: 'OFICINA / DESARROLLO', etiqueta: 'Oficina / Desarrollo', tipo: 'select', catalogo: true },
+      { clave: 'LUGAR DE RESGUARDO', etiqueta: 'Lugar de resguardo', tipo: 'text' },
+      { clave: 'ESTADO DE ENTREGA', etiqueta: 'Estado en que se entrega', tipo: 'text', placeholder: 'Bien, mal, más o menos…' },
+      ...resvCamposDocumentacion_(),
+      ...resvCamposAccesorios_(),
+      { clave: 'OBSERVACIONES', etiqueta: 'Observaciones', tipo: 'text', renglonCompleto: true },
+      { clave: 'NOMBRE JEFE', etiqueta: 'Nombre del jefe directo', tipo: 'text' },
+      { clave: 'NOMBRE CI', etiqueta: 'Nombre de quien entrega', tipo: 'text' },
+    ];
+    async function abrirEditarResponsivaVehicularFicha(id, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('file-signature', 'RESPONSIVA', 'Editar responsiva', 'Folio ' + vResumen.FOLIO);
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let completo;
+      try {
+        completo = JSON.parse(await callServer('apiBuscarResponsivaVehicularPorId', state.token, id));
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return; // se cerró mientras cargaba
+      if (!completo) { cuerpo.innerHTML = '<p class="error-msg">No se encontró el registro.</p>'; return; }
+      // El servidor también lo revisa (lo que esconde la pantalla es solo comodidad) -- esto
+      // evita abrir un formulario que de todos modos va a tronar al guardar.
+      if (String(completo['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+        cuerpo.innerHTML = '<p class="error-msg">Esta responsiva ya quedó firmada; ya no se puede editar.</p>';
+        return;
+      }
+      cuerpo.innerHTML =
+        '<form id="resved-form" novalidate>' +
+          '<div class="form-rejilla" data-columnas="3" id="resved-campos"></div>' +
+          '<div class="error-msg" id="resved-error" role="alert" hidden></div>' +
+          '<div class="form-acciones">' +
+            '<button type="submit" id="resved-guardar"><i data-lucide="save" class="ico"></i> Guardar cambios</button>' +
+          '</div>' +
+        '</form>';
+      document.getElementById('resved-campos').innerHTML = CamposHoja.html(CAMPOS_EDITAR_RESPONSIVA, { prefijo: 'resved' });
+      refreshIcons();
+      CamposHoja.poblar(CAMPOS_EDITAR_RESPONSIVA, 'resved', completo);
+      callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
+        CamposHoja.llenarOpciones('resved-departamento', departamentos);
+      }).catch((err) => console.error('No se pudo cargar el catálogo de departamentos:', err));
+
+      document.getElementById('resved-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const errorBox = document.getElementById('resved-error');
+        errorBox.hidden = true;
+        const btn = document.getElementById('resved-guardar');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Guardando…';
+        try {
+          await callServer('apiActualizarResponsivaVehicular', state.token, id, CamposHoja.recolectar(CAMPOS_EDITAR_RESPONSIVA, 'resved'));
+          invalidarCacheLista('apiListarResponsivasVehicularesPorFolio', state.token);
+          toastExito('Responsiva actualizada exitosamente');
+          cerrarCapturaVehiculo();
+          abrirFichaVehiculo(vResumen, 'responsiva');
+        } catch (err) {
+          errorBox.textContent = err.message;
+          errorBox.hidden = false;
+          toastError('No se pudo guardar: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = textoOriginal;
+        }
+      });
+    }
+
+    const CAMPOS_EDITAR_ADHERENTE = [
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+      { clave: 'AREA', etiqueta: 'Área', tipo: 'text' },
+      { clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text' },
+      { clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text' },
+      { clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+      { clave: 'OFICINA / DESARROLLO', etiqueta: 'Oficina / Desarrollo', tipo: 'select', catalogo: true },
+      { clave: 'LUGAR DE RESGUARDO', etiqueta: 'Lugar de resguardo', tipo: 'text' },
+      { clave: 'ESTADO DE ENTREGA', etiqueta: 'Estado en que se entrega', tipo: 'text', placeholder: 'Bien, mal, más o menos…' },
+      ...adhCamposDocumentacion_(),
+      { clave: 'NOMBRE JEFE', etiqueta: 'Nombre del jefe directo', tipo: 'text' },
+      { clave: 'NOMBRE CI', etiqueta: 'Nombre de quien entrega', tipo: 'text' },
+    ];
+    async function abrirEditarAdherenteVehicularFicha(id, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('users', 'ADHERENTE', 'Editar adherente', 'Folio ' + vResumen.FOLIO);
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      let completo;
+      try {
+        completo = JSON.parse(await callServer('apiBuscarAdherenteVehicularPorId', state.token, id));
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        return;
+      }
+      if (document.getElementById('veh-modal-captura').hidden) return;
+      if (!completo) { cuerpo.innerHTML = '<p class="error-msg">No se encontró el registro.</p>'; return; }
+      if (String(completo['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+        cuerpo.innerHTML = '<p class="error-msg">Este adherente ya quedó firmado; ya no se puede editar.</p>';
+        return;
+      }
+      cuerpo.innerHTML =
+        '<form id="adhed-form" novalidate>' +
+          '<div class="form-rejilla" data-columnas="3" id="adhed-campos"></div>' +
+          '<div class="error-msg" id="adhed-error" role="alert" hidden></div>' +
+          '<div class="form-acciones">' +
+            '<button type="submit" id="adhed-guardar"><i data-lucide="save" class="ico"></i> Guardar cambios</button>' +
+          '</div>' +
+        '</form>';
+      document.getElementById('adhed-campos').innerHTML = CamposHoja.html(CAMPOS_EDITAR_ADHERENTE, { prefijo: 'adhed' });
+      refreshIcons();
+      CamposHoja.poblar(CAMPOS_EDITAR_ADHERENTE, 'adhed', completo);
+      callServerCacheado('apiListarDepartamentos', state.token).then((departamentos) => {
+        CamposHoja.llenarOpciones('adhed-departamento', departamentos);
+      }).catch((err) => console.error('No se pudo cargar el catálogo de departamentos:', err));
+
+      document.getElementById('adhed-form').addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const errorBox = document.getElementById('adhed-error');
+        errorBox.hidden = true;
+        const btn = document.getElementById('adhed-guardar');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Guardando…';
+        try {
+          await callServer('apiActualizarAdherenteVehicular', state.token, id, CamposHoja.recolectar(CAMPOS_EDITAR_ADHERENTE, 'adhed'));
+          invalidarCacheLista('apiListarAdherentesVehicularesPorFolio', state.token);
+          toastExito('Adherente actualizado exitosamente');
+          cerrarCapturaVehiculo();
+          abrirFichaVehiculo(vResumen, 'adherente');
+        } catch (err) {
+          errorBox.textContent = err.message;
+          errorBox.hidden = false;
+          toastError('No se pudo guardar: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = textoOriginal;
+        }
+      });
+    }
+
     function mostrarPestanaFichaVehiculo(nombre) {
       const detalle = document.getElementById('veh-detalle');
       mostrarPestanaFicha(detalle, nombre);
@@ -3846,6 +3999,9 @@
               { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
               { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
               { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
+                // Solo mientras sigue PENDIENTE de firma -- en cuanto se firma del todo (PDF
+                // generado) desaparece: el documento ya quedó impreso con esos datos.
+                editar: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE',
                 eliminar: puedeEditarModulo('vehiculos.responsiva'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
@@ -3869,6 +4025,9 @@
               { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
                 // Dar de baja / reactivar escribe: solo con edición (antes se veía y el servidor lo negaba)
                 estatus: puedeEditarModulo('vehiculos.adherente') ? r.ESTATUS || 'ACTIVO' : null,
+                // Solo mientras sigue PENDIENTE de firma -- en cuanto se firma del todo (PDF
+                // generado) desaparece: el documento ya quedó impreso con esos datos.
+                editar: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE',
                 eliminar: puedeEditarModulo('vehiculos.adherente'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
@@ -3919,6 +4078,10 @@
         detalle.querySelectorAll('[data-ficha-editar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.fichaEditar;
+            // Responsiva/Adherente piden el registro COMPLETO (la lista de la ficha solo trae
+            // el resumen, sin Área/Puesto/Sede/documentación) -- lo cargan ellas mismas.
+            if (tipo === 'responsiva') { abrirEditarResponsivaVehicularFicha(btn.dataset.id, vResumen); return; }
+            if (tipo === 'adherente') { abrirEditarAdherenteVehicularFicha(btn.dataset.id, vResumen); return; }
             const registro = porIdFicha[tipo] && porIdFicha[tipo][btn.dataset.id];
             if (!registro) return;
             if (tipo === 'verificacion') abrirEditarVerificacionFicha(registro, vResumen);

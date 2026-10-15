@@ -163,7 +163,9 @@
    *  FIRMA_RESPONSABLE/FIRMA_ASISTENTE están vacías (ver ArqueosService.gs). */
   function badgeFirmaArqueo(a) {
     const faltaResponsable = !a.FIRMA_RESPONSABLE;
-    const faltaAsistente = !a.FIRMA_ASISTENTE;
+    // Si este arqueo no tiene Asistente ("Cuenta con firma del asistente" != SI), su firma nunca
+    // cuenta como "falta" -- no hay nadie que la vaya a poner (usuario, 15-oct-2026).
+    const faltaAsistente = a.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !a.FIRMA_ASISTENTE;
     if (!faltaResponsable && !faltaAsistente) {
       return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Firmado</span>';
     }
@@ -176,17 +178,24 @@
   /** "Generar liga"/"Generar nueva liga" de firma a distancia del Responsable o el Asistente --
    *  mismo molde que regenerarLigaFicha_ de Responsiva/Adherente Vehicular (app.html), pero aquí
    *  la misma llamada sirve igual para mandar la primera liga que para regenerar una que venció
-   *  o se firmó mal (ver generarLigaArqueo en ArqueosService.gs). */
-  async function generarLigaArqueoFicha_(id, quien, etiqueta, alTerminar) {
+   *  o se firmó mal (ver generarLigaArqueo en ArqueosService.gs). El botón ya no se esconde
+   *  cuando esa firma existe (yaFirmado=true): antes, si quedaba guardada pero rota (archivo
+   *  corrupto en Drive), no había forma de recuperarla desde la pantalla -- había que editar la
+   *  hoja a mano. `forzar` se manda al servidor solo si la persona confirma el aviso más fuerte
+   *  (usuario, 15-oct-2026). */
+  async function generarLigaArqueoFicha_(id, quien, etiqueta, yaFirmado, alTerminar) {
     const ok = await Confirmar.pedir({
-      titulo: 'Generar liga de firma',
-      mensaje: 'Se manda un link para que ' + etiqueta + ' firme desde su celular. Si ya había una liga pendiente para esta parte, la anterior deja de funcionar.',
-      textoConfirmar: 'Generar liga',
+      titulo: yaFirmado ? 'Generar liga nueva (ya hay firma)' : 'Generar liga de firma',
+      mensaje: yaFirmado
+        ? 'Ya hay una firma guardada de ' + etiqueta + '. Esto la descarta y manda un link nuevo para que firme otra vez desde su celular -- úsalo solo si esa firma quedó dañada o se guardó por error.'
+        : 'Se manda un link para que ' + etiqueta + ' firme desde su celular. Si ya había una liga pendiente para esta parte, la anterior deja de funcionar.',
+      textoConfirmar: yaFirmado ? 'Generar liga de todas formas' : 'Generar liga',
+      peligro: !!yaFirmado,
     });
     if (!ok) return;
     toastCargando('Generando liga…');
     try {
-      mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', id, quien));
+      mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, 'arqueo', id, quien, !!yaFirmado));
       toastExito('Liga generada');
       if (alTerminar) alTerminar();
     } catch (err) {
@@ -203,7 +212,11 @@
   async function enviarLigasArqueoTrasGuardar_(registro) {
     const faltan = [];
     if (!registro.FIRMA_RESPONSABLE) faltan.push({ quien: 'responsable', titulo: 'Responsable' });
-    if (!registro.FIRMA_ASISTENTE) faltan.push({ quien: 'asistente', titulo: 'Asistente' });
+    // El Asistente es opcional: solo hay a quién mandarle liga si "Cuenta con firma del
+    // asistente" = SI (usuario, 15-oct-2026).
+    if (registro.CUENTA_CON_FIRMA_ASISTENTE === 'SI' && !registro.FIRMA_ASISTENTE) {
+      faltan.push({ quien: 'asistente', titulo: 'Asistente' });
+    }
     if (!faltan.length) return null;
     const ligas = await Promise.all(faltan.map(async (f) => ({
       titulo: f.titulo,
@@ -391,7 +404,15 @@
         URL.revokeObjectURL(url);
         resolve({ dataUrl: canvas.toDataURL('image/jpeg', CALIDAD), ancho, alto });
       };
-      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('No se pudo leer una de las imágenes')); };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        // HEIC/HEIF (las que toma un iPhone por default) pasan el filtro accept="image/*" del
+        // selector de archivos, pero el navegador no las puede abrir aquí -- sin decir cuál
+        // archivo fue, la persona no sabe qué foto quitar (usuario, 15-oct-2026).
+        const esHeic = /\.hei[cf]$/i.test(file.name || '');
+        reject(new Error('No se pudo leer "' + (file.name || 'una de las fotos') + '"' +
+          (esHeic ? ' -- es formato HEIC; cambia el ajuste de la cámara a "Más compatible" (JPG) o conviértela antes de subirla.' : '.')));
+      };
       img.src = url;
     });
   }
@@ -985,8 +1006,10 @@
         ],
         puedeEditar ? [
           { icono: 'pencil', titulo: 'Editar', alHacer: (a) => abrirEditarArqueo(a.ID) },
-          { icono: 'link', titulo: 'Generar liga de firma (Responsable)', visible: (a) => !a.FIRMA_RESPONSABLE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'responsable', 'el Responsable', refrescarTrasLiga_) },
-          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => !a.FIRMA_ASISTENTE, alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', refrescarTrasLiga_) },
+          // Ya no se esconde cuando esa firma existe -- ver el comentario largo de
+          // generarLigaArqueoFicha_ (recuperar una firma guardada pero rota/dañada).
+          { icono: 'link', titulo: 'Generar liga de firma (Responsable)', alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'responsable', 'el Responsable', !!a.FIRMA_RESPONSABLE, refrescarTrasLiga_) },
+          { icono: 'link', titulo: 'Generar liga de firma (Asistente)', visible: (a) => a.CUENTA_CON_FIRMA_ASISTENTE === 'SI', alHacer: (a) => generarLigaArqueoFicha_(a.ID, 'asistente', 'el Asistente', !!a.FIRMA_ASISTENTE, refrescarTrasLiga_) },
         ] : []
       ),
       alEliminar: puedeEditar ? async (filas) => {

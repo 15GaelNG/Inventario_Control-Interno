@@ -160,7 +160,6 @@
         }
         resumenHtml += '<div><b>' + (quien === QUIEN_OTRO[tipo] ? ETIQUETA_OTRO_RESUMEN[tipo] : NOMBRE_PRINCIPAL[tipo]) + ':</b> ' + info.nombre + '</div>';
         document.getElementById('firex-resumen').innerHTML = resumenHtml;
-        if (tipo === 'arqueo') document.getElementById('firex-vista-previa').classList.add('firex-oculto');
         const firma = Firma.crear(document.getElementById('firex-firma'), { marca: 'Firma aquí con el dedo o el mouse' });
         mostrar('firex-form');
 

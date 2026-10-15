@@ -30,6 +30,10 @@ function pasosCalentador_() {
     ['Reasignaciones', () => ReasignacionesVehicularesService.calentar()],
     ['Sensores', () => SensoresService.calentar()],
     ['Hologramas', () => HologramasService.calentar()],
+    // Antes de calentar la lista de Uber, no después: sincronizarBajas escribe en la hoja, y
+    // eso invalida (CacheHojas.tocar) lo que "Uber" acabara de calentar si corriera después --
+    // así la caché que se arma ya trae las bajas del día, sin un segundo round-trip.
+    ['Uber (bajas automáticas)', () => UberService.sincronizarBajas()],
     ['Uber', () => UberService.calentar()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
     ['Líneas (índice)', () => LineasRepo.indice(true)],

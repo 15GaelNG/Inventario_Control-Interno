@@ -352,14 +352,16 @@
      *  usa responsable/asistente, así que se arma aparte, reusando generarLigaArqueoFicha_
      *  (app-arqueos.html) -- la misma llamada que ya usa la tabla principal de Arqueos. */
     function botonesLigaArqueoFicha_(a) {
-      let html = '';
-      if (!a.FIRMA_RESPONSABLE) {
-        html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="responsable" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Responsable)">' + Iconos.svg('link') + '</button>';
+      // Ya no se esconde cuando esa firma existe -- ver el comentario largo de
+      // generarLigaArqueoFicha_ en app-arqueos.html (recuperar una firma guardada pero
+      // rota/dañada). data-ya-firmado viaja para que el clic sepa qué aviso mostrar.
+      let html = '<button type="button" class="ficha-btn-fila" data-arqueo-liga="responsable" data-ya-firmado="' +
+        (a.FIRMA_RESPONSABLE ? '1' : '') + '" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Responsable)">' + Iconos.svg('link') + '</button>';
+      if (a.CUENTA_CON_FIRMA_ASISTENTE === 'SI') {
+        html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="asistente" data-ya-firmado="' +
+          (a.FIRMA_ASISTENTE ? '1' : '') + '" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Asistente)">' + Iconos.svg('link') + '</button>';
       }
-      if (!a.FIRMA_ASISTENTE) {
-        html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="asistente" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Asistente)">' + Iconos.svg('link') + '</button>';
-      }
-      return html ? '<div class="ficha-acciones-fila">' + html + '</div>' : '';
+      return '<div class="ficha-acciones-fila">' + html + '</div>';
     }
 
     const TAB_FICHA_CAJACHICA_POR_TIPO = { arqueo: 'arqueos', 'cambio-monto': 'cambios-monto' };
@@ -499,7 +501,7 @@
         detalle.querySelectorAll('[data-arqueo-liga]').forEach((btn) => {
           const quien = btn.dataset.arqueoLiga;
           const etiqueta = quien === 'asistente' ? 'el Asistente' : 'el Responsable';
-          btn.addEventListener('click', () => generarLigaArqueoFicha_(btn.dataset.id, quien, etiqueta, () => {
+          btn.addEventListener('click', () => generarLigaArqueoFicha_(btn.dataset.id, quien, etiqueta, !!btn.dataset.yaFirmado, () => {
             invalidarCacheLista('apiFichaCajaChica', state.token);
             abrirFichaCajaChica(cResumen, 'arqueos', true);
           }));
