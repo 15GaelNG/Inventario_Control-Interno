@@ -164,7 +164,7 @@ const HelpdeskApi = (function () {
       if (mias + cuantas > MAX_POR_MINUTO) throw new Error('Ya consultaste el helpdesk ' + mias + ' veces en este minuto. Espera un momento.');
       if (todas + cuantas > MAX_POR_MINUTO_TODOS) throw new Error('El helpdesk está recibiendo muchas consultas de la app. Intenta en un minuto.');
       c.putAll({ [llaveMia]: String(mias + cuantas), [llaveTodos]: String(todas + cuantas), ['hd_ultima_' + correo]: String(ahora_()) }, 120);
-    }, { espera: 3000, siOcupado: ocupado });
+    }, { siOcupado: ocupado });
   }
 
   /** Respuesta 429/5xx: toda la app deja de llamar el tiempo que pida */

@@ -89,9 +89,10 @@ las dos cosas y además, con ganchos, lee la hoja completa dos veces.
       `update` no arma el renglón completo.
 - [ ] Probado en el DEV de common: editar un vehículo, un cambio de monto (el caso anidado), una reasignación y
       borrar un registro; ver que no tarde más que antes.
-- [ ] Después (limpieza): quitar los atajos que ya no hacen falta (`propagarSinCandado_`, `revisarSinCandado_`,
-      `identificarSinCandado_`, la opción `candadoTomado`) y `migrarOtrasFirmasTempSiHaceFalta_` cuando ya no queden
-      firmas viejas.
+- [x] Limpieza: fuera los atajos que ya no hacían falta (`propagarSinCandado` exportado, `revisarSinCandado_`,
+      `identificarSinCandado_`, la opción `candadoTomado` en Vehículos, Reasignaciones, Responsiva y Relaciones) y
+      solo dos esperas en `Candado` (30 s normal; 5 s con `siOcupado`), sin opción de espera suelta.
+- [ ] Después: `migrarOtrasFirmasTempSiHaceFalta_` (Adherente/Responsiva) cuando ya no queden firmas viejas.
 
 **Hecho cuando** las pruebas de arriba pasan y se midió en DEV que una edición no tarda más que antes.
 

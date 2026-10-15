@@ -102,16 +102,14 @@ const ReasignacionesVehicularesService = (function () {
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('REASIGNACIONES_VEHICULOS', fila, fila);
       SheetUtils.insert(HojaServicio.libro(REASIGNACIONES), REASIGNACIONES.hoja, fila);
 
-      // candadoTomado: este hilo ya tiene el candado del script (arriba), y waitLock no es
-      // reentrante — sin avisarlo, la propagación esperaba 20 s y moría en silencio.
       VehiculosService.actualizar(token, idVehiculo, {
         'RESPONSABLE VEHICULO': fila['Responsable Entrante'],
         'NO EMPLEADO': fila['No Empleado Entrante'],
         'DEPARTAMENTO': fila['Departamento Entrante'] || vehiculo['DEPARTAMENTO'],
-      }, { candadoTomado: true });
+      });
 
       return { ID: fila['ID'] };
-    }, { espera: 30000 });
+    });
   }
 
   return {

@@ -87,7 +87,7 @@ const CambiosMontoCCHService = (function () {
       SheetUtils.insert(HojaServicio.libro(INCREMENTOS), INCREMENTOS.hoja, fila);
       CajasChicasService.actualizar(token, idCch, { 'MONTO ACTUAL': nueva });
       return { ID: fila['ID'] };
-    }, { espera: 30000 });
+    });
   }
 
   return {

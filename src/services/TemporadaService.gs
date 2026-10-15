@@ -116,7 +116,7 @@ const TemporadaService = (function () {
         hoja.appendRow([Utilities.getUuid().slice(0, 8), new Date(), anio_(), sesion.correo || '', sesion.nombre || '', texto]);
       }
       CacheHojas.tocarHoja(hoja);
-    }, { espera: 15000 });
+    });
     return vista_(sesion);
   }
 
@@ -133,7 +133,7 @@ const TemporadaService = (function () {
       const renglon = renglonDe_(hoja, id);
       if (renglon) hoja.deleteRow(renglon);
       CacheHojas.tocarHoja(hoja);
-    }, { espera: 15000 });
+    });
     return vista_(sesion);
   }
 

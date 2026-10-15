@@ -526,17 +526,16 @@ const ResponsivaVehicularService = (function () {
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
 
       // Enganche con reasignación: si el responsable que firma es distinto al actual del
-      // vehículo, se actualiza en la misma operación -- candadoTomado porque este hilo ya
-      // tiene el candado de arriba (waitLock no es reentrante). Corre siempre aquí (presencial
-      // o a distancia, definitiva o préstamo): es la única sesión con permiso que esta
-      // operación va a tener.
+      // vehículo, se actualiza en la misma operación. Corre siempre aquí (presencial o a
+      // distancia, definitiva o préstamo): es la única sesión con permiso que esta operación
+      // va a tener.
       const actual = String(vehiculo['RESPONSABLE VEHICULO'] || '').trim().toUpperCase();
       if (responsable.toUpperCase() !== actual) {
         VehiculosService.actualizar(token, idVehiculo, {
           'RESPONSABLE VEHICULO': responsable,
           'NO EMPLEADO': fila['NO EMPLEADO'],
           'DEPARTAMENTO': fila['DEPARTAMENTO'] || vehiculo['DEPARTAMENTO'],
-        }, { candadoTomado: true });
+        });
       }
 
       if (remoto || remotoJefe) {
@@ -554,7 +553,7 @@ const ResponsivaVehicularService = (function () {
         if (img && img.base64) imagenesPdf[campo] = Object.assign({}, img, FIRMA_PDF);
       });
       return generarPdfYGuardar_(id, fila, imagenesPdf, ahora, {});
-    }, { espera: 30000 });
+    });
   }
 
   /** Lo mínimo para pintar la página de firma a distancia del RESPONSABLE (nunca el renglón
@@ -653,7 +652,7 @@ const ResponsivaVehicularService = (function () {
       }
 
       return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR': fila['FIRMADO POR'] });
-    }, { espera: 30000 });
+    });
   }
 
   /**
@@ -688,7 +687,7 @@ const ResponsivaVehicularService = (function () {
       }
 
       return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR JEFE': fila['FIRMADO POR JEFE'] });
-    }, { espera: 30000 });
+    });
   }
 
   /**
@@ -712,17 +711,15 @@ const ResponsivaVehicularService = (function () {
       }
       const idVehiculo = fila['ID VEHICULO'];
       if (idVehiculo) {
-        // candadoTomado: este hilo ya tiene el candado de arriba (waitLock no es reentrante) --
-        // mismo patrón que la reasignación de crear().
         VehiculosService.actualizar(token, idVehiculo, {
           'RESPONSABLE VEHICULO': fila['RESPONSABLE ANTERIOR'] || '',
           'NO EMPLEADO': fila['NO EMPLEADO ANTERIOR'] || '',
           'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
-        }, { candadoTomado: true });
+        });
       }
       SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, ID_COLUMN);
       return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
-    }, { espera: 30000 });
+    });
   }
 
   /** La hoja, para HojaServicio.eliminar (que además respeta Relaciones) */

@@ -482,7 +482,7 @@ const AdherenteVehicularService = (function () {
         if (img && img.base64) imagenesPdf[campo] = Object.assign({}, img, FIRMA_PDF);
       });
       return generarPdfYGuardar_(id, fila, imagenesPdf, ahora, {});
-    }, { espera: 30000 });
+    });
   }
 
   /** Lo mínimo para pintar la página de firma a distancia del ADHERENTE (nunca el renglón
@@ -581,7 +581,7 @@ const AdherenteVehicularService = (function () {
       }
 
       return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR': fila['FIRMADO POR'] });
-    }, { espera: 30000 });
+    });
   }
 
   /**
@@ -616,7 +616,7 @@ const AdherenteVehicularService = (function () {
       }
 
       return generarPdfYGuardar_(fila['ID'], fila, imagenesDesdeTemp_(fila), new Date(), { 'FIRMADO POR JEFE': fila['FIRMADO POR JEFE'] });
-    }, { espera: 30000 });
+    });
   }
 
   /** ACTIVO/BAJA: para saber qué adherentes siguen usando el vehículo sin perder el historial

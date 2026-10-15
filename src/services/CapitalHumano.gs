@@ -221,13 +221,10 @@ const CapitalHumano = (function () {
    */
   function identificar(opciones) {
     const cfg = Object.assign({ escribir: false }, opciones || {});
-    if (!cfg.escribir) return identificarSinCandado_(cfg);
-    return Candado.con(() => {
-      return identificarSinCandado_(cfg);
-    }, { espera: 30000 });
+    return cfg.escribir ? Candado.con(() => identificar_(cfg)) : identificar_(cfg);
   }
 
-  function identificarSinCandado_(cfg) {
+  function identificar_(cfg) {
     const ssId = migracionSs_(cfg);
     const ss = SpreadsheetApp.openById(ssId);
     const lineas = [(cfg.escribir ? 'IDENTIFICANDO PERSONAS' : 'ENSAYO (no escribe nada)') + ' — ' + ssId, ''];
@@ -354,7 +351,7 @@ const CapitalHumano = (function () {
       anotarHistorial_(ss, sesion, resultado);
       return resultado;
     };
-    return cfg.escribir ? Candado.con(trabajo, { espera: 30000 }) : trabajo();
+    return cfg.escribir ? Candado.con(trabajo) : trabajo();
   }
 
   /** Que quien la abra sepa que no se pega a mano (solo aviso: la app escribe con la cuenta que despliega) */

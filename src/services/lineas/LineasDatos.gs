@@ -661,7 +661,6 @@ const LineasDatos = (function () {
    */
   function conCandado(fn) {
     const inicio = Date.now();
-    const ocupado = () => { throw new Error('El sistema está guardando otro cambio; intenta de nuevo en unos segundos.'); };
     return Candado.con(() => {
       tiempo('candado (espera)', inicio);
       const propio = !lote_;
@@ -685,7 +684,7 @@ const LineasDatos = (function () {
           tiempo('candado (todo lo de adentro)', inicio);
         }
       }
-    }, { espera: 30000, siOcupado: ocupado });
+    });
   }
 
   /** ID nuevo para una pestaña, con su prefijo del catálogo (LIN-…, ILI-…, CLI-…). Ver src/utils/Ids.gs. */

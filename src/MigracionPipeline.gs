@@ -163,7 +163,6 @@ function pipeCorrer_(ssId, paso, escribir, fn) {
   };
   if (!escribir) return correr();
   return Candado.con(correr, {
-    espera: 30000,
     siOcupado: () => {
       const msg = 'Alguien más está escribiendo en las hojas ahora mismo. Vuelve a intentar.';
       pipeLog_(ssId, paso, modo, 'FALLA', msg);

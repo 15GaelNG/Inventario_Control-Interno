@@ -362,7 +362,7 @@ const HojaServicio = (function () {
       // El id lo pone SheetUtils.insert con el formato del sistema si el gancho no lo puso
       SheetUtils.insert(libro(def), ctx.hoja.getName(), fila);
     };
-    if (def.candadoAlCrear) Candado.con(escribir, { espera: 30000 });
+    if (def.candadoAlCrear) Candado.con(escribir);
     else escribir();
     const id = fila[columnaId(def)];
     renombrarArchivos_(def, archivos, id);
@@ -401,7 +401,7 @@ const HojaServicio = (function () {
     // falla, lo guardado se queda: Salud lo pone al día después.
     if (typeof Relaciones !== 'undefined') {
       try {
-        Relaciones.alGuardar(nombreReal, registro, datos, ctx.opciones);
+        Relaciones.alGuardar(nombreReal, registro, datos);
       } catch (err) {
         console.error('Datos conectados: no se pudo copiar ' + nombre(def) + ' ' + id + ': ' + err.message);
       }

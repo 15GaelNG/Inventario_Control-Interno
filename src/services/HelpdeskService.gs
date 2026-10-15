@@ -124,7 +124,7 @@ const HelpdeskService = (function () {
       if (nuevos.length) hoja.getRange(ultima + 1, 1, nuevos.length, enc.length).setValues(nuevos);
       if (nuevos.length || actualizados) CacheHojas.tocarHoja(hoja);
       return { nuevos: nuevos.length, actualizados: actualizados };
-    }, { espera: 5000, siOcupado: () => ({ saltado: true }) });
+    }, { siOcupado: () => ({ saltado: true }) });
   }
 
   /** La hoja, para HojaServicio: la copia la ve quien puede leer Tickets */
