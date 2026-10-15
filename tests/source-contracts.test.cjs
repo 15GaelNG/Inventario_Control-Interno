@@ -829,7 +829,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   // En celular el modal ocupa la pantalla y el formulario desplaza con el pie a la vista
   assert.match(estilos, /height: 100dvh/);
   assert.match(estilos, /\.ln-captura-modal \.modal-form-scroll, #ln-op-modal \.modal-form-scroll \{ max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; \}/);
-  assert.match(lineas, /matchMedia\('\(max-width: 700px\)'\)\.matches \? 'tarjetas' : 'tabla'/);
+  assert.match(lineas, /Pantalla\.esCelular\(\) \? 'tarjetas' : 'tabla'/);
 });
 
 test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, fotos y estatus', () => {
@@ -2190,8 +2190,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
   // Lo que falta migrar (plan de diseño responsivo, oct-2026). Esta lista SOLO SE ACHICA: un
   // archivo nuevo no puede entrar, y al migrar uno hay que bajar su número aquí (si no, falla).
   const PENDIENTES = {
-    'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
-    'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
   };
   const encontrado = {};

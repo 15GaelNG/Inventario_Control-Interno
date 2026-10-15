@@ -2502,7 +2502,7 @@
           // Tarjetas del listado, como en Drive: con el mouse el clic selecciona (doble clic abre); con el dedo o el
           // teclado (Enter) se abre la ficha
           const tabla = ir.classList.contains('ln-cuadro') && ir.closest('#ln-listado') ? tablas[memoria.modulo] : null;
-          const conMouse = ev.detail > 0 && (ev.pointerType ? ev.pointerType === 'mouse' : !(window.matchMedia && window.matchMedia('(hover: none)').matches));
+          const conMouse = ev.detail > 0 && (ev.pointerType ? ev.pointerType === 'mouse' : !Pantalla.esTactil());
           if (tabla && conMouse) { tabla.clicSeleccion(ir.dataset.id, ev); return; }
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
@@ -2611,7 +2611,7 @@
       // ---- Carga inicial ----
       if (!memoria.modoVista) {
         // Sin preferencia guardada: tarjetas en celular (una tabla de 10 columnas no cabe) y tabla en lo demás
-        const porDefecto = window.matchMedia && window.matchMedia('(max-width: 700px)').matches ? 'tarjetas' : 'tabla';
+        const porDefecto = Pantalla.esCelular() ? 'tarjetas' : 'tabla';
         let guardado = null;
         try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
         memoria.modoVista = ['tabla', 'tarjetas', 'vinculos'].indexOf(guardado) >= 0 ? guardado : porDefecto;

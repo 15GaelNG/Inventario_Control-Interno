@@ -153,8 +153,8 @@ Cada paso es independiente y se puede pasar a `master` solo.
 | # | Qué | Por qué primero / cuidado |
 |---|---|---|
 | 5.1 ✅ | Permisos de Líneas en la sesión; quitar `apiLineasPermisos` (hecho: `puedeOperar` = `puedeEditarModulo`, ADMIN de `state.sesion.rol`; secretos y aprobador no los usaba la pantalla, se quedan en el servidor) | Una llamada menos al abrir. Los permisos especiales (secretos, aprobador) como secciones en `Modulos.gs` |
-| 5.2 | `llamar()` + `memoria{}` → `callServerCacheado` / `callServerListaCacheada` / `escucharLista` | Que Líneas se actualice sola como lo demás; quitar la invalidación con regex |
-| 5.3 | `lineas-estilos.html`: cortes a 640/1024, `matchMedia` → `Pantalla`; sacar `PENDIENTES` de Líneas | Necesita las escenas de la fase 0 |
+| 5.2 ✅ | `llamar()` + `memoria{}` → `callServerCacheado` / `callServerListaCacheada` / `escucharLista` (hecho: catálogos, CH y accesorios con `callServerCacheado`; el índice con `callServerListaCacheada`, huella `huellaIndice_` y copia sin PIN con `guardarListaLimpia`. **Las fichas NO**: traen PIN, patrones y contraseñas a quien los puede ver y la caché común las dejaría en el navegador; se quedan con su memoria de 2 min) | Que Líneas se actualice sola como lo demás; quitar la invalidación con regex |
+| 5.3 ✅ | `lineas-estilos.html`: cortes a 640/1024, `matchMedia` → `Pantalla`; sacar `PENDIENTES` de Líneas (hecho: ≤ 760 → 640, 900 → 1024, así el iPad vertical queda igual; dos bloques repetidos o vacíos fuera) | Líneas no tiene escenas en la vista previa: se revisa en el DEV |
 | 5.4 | PDF: un solo motor (`Plantilla`) | `LineasPdf` entiende `RIGHT("000" & [NUCO], 4)` y `&`; `Plantilla` no y **truena** con lo que no entiende (bien). Primero agregarle eso con pruebas, luego correr cada plantilla de Líneas en los dos motores y comparar el texto antes de cambiar |
 | 5.5 | Avisos: `LineasNotificaciones` como fuente de `NotificacionesService` | La campana ya junta; que sea un solo registro de tipos |
 | 5.6 | Formularios: lo que `htmlFormularioAppSheet` hace que `Formulario`/`CamposHoja` no | Inventario primero (pasos, `mostrarSi`, subida de imagen, validaciones por tipo); lo que falte se agrega **una vez** al componente; después se migra captura por captura |
@@ -202,3 +202,4 @@ juntan por primera vez.
 | 15-oct | 2 | `Formato` (componentes/formato.html): una sola copia de esc, fechas, moneda, miles y normal; contrato | pendiente: probar en DEV |
 | 15-oct | 3 | Escala `--texto-*` (27→8), `--radio-*` (19→6) y `--tono-*` con modo oscuro; contrato | pendiente: probar en DEV |
 | 15-oct | 4 | 4a `Tabs` (3 implementaciones → 1), 4b `Ficha` (7 encabezados), 4c `FiltroTipo` (5 copias); contratos | pendiente: probar en DEV |
+| 15-oct | 5.1–5.3 | Líneas: permisos de la sesión (sin `apiLineasPermisos`), catálogos e índice por la caché común con huella (el índice nunca se guardaba: faltaba `MAX_GUARDAR`), cortes 640/1024 y `Pantalla` | pendiente: probar en DEV |
