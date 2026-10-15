@@ -2541,6 +2541,16 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
   assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });
 
+test('Líneas: «Recargar datos» también vacía las hojas que la lectura guarda 30 min (carga del proveedor, 14-oct)', () => {
+  const svc = read('src/services/TelefoniaService.gs');
+  const cuerpo = svc.slice(svc.indexOf('  function recargarDatos(token) {'), svc.indexOf('  // ---------------- Captura: inspección y responsiva nuevas'));
+  assert.match(cuerpo, /LineasRepo\.borrarCaches\(\);/);
+  assert.match(cuerpo, /LineasDatos\.tocar\(\['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS'\]\);/);
+  const lectura = read('src/services/lineas/LineasLectura.gs');
+  assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS, HOJA_VIEJA\];/,
+    'si la lectura guarda otra hoja, «Recargar datos» también debe tocarla');
+});
+
 test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
   const html = read('src/html/js/lineas.html');
   const ini = html.indexOf('      function dinero(n, centavos) {');
