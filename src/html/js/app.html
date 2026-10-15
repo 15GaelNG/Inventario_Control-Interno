@@ -473,10 +473,6 @@
     document.getElementById('user-avatar').innerHTML = Avatar.html(state.sesion.correo, state.sesion.nombre, { tam: 34 });
     pintarUsuarioMenu(null);
     pedirMiPerfil().then(pintarUsuarioMenu).catch(() => { /* se queda con el rol y el área */ });
-    // Las fotos de todos (una vez; con copia de la visita anterior salen al instante). Una copia
-    // vacía (de cuando el directorio todavía no respondía) no se usa: se piden frescas
-    Avatar.cargar(() => callServerCacheado('apiFotosPerfil', state.token).then((copia) =>
-      (copia && Object.keys(copia).length ? copia : callServer('apiFotosPerfil', state.token))));
     marcarTemaActual(); // entrar con la sesión guardada no pasa por el login, que era quien marcaba el botón
     // El menú se pinta de una vez con los permisos de la visita anterior (guardados en este
     // navegador) y se corrige cuando llegan los de verdad. Solo deciden qué se ENSEÑA: el
@@ -755,7 +751,6 @@
         { vista: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones', icono: 'package-check', requiere: 'resguardos-lineas', plantilla: 'tpl-lineas-resguardos', init: () => Lineas.initResguardos() },
         { vista: 'correcciones-lineas', etiqueta: 'Correcciones de líneas', icono: 'clipboard-check', requiere: 'correcciones-lineas', plantilla: 'tpl-lineas-correcciones', init: () => LineasCorrecciones.init() }, // temporal (30-sep)
         { vista: 'accesorios-lineas', etiqueta: 'Inventario de accesorios', icono: 'boxes', requiere: 'accesorios-lineas', plantilla: 'tpl-lineas-accesorios', init: () => Lineas.initAccesoriosLineas() },
-        { vista: 'proveedor-lineas', etiqueta: 'Proveedor', icono: 'file-spreadsheet', requiere: 'proveedor-lineas', plantilla: 'tpl-lineas-proveedor', init: () => LineasProveedor.init() },
         // Control de Cambios queda fuera del menú (30-sep) pero su vista sigue en VISTAS_FUERA_DEL_MENU: su pestaña es la
         // bitácora del Historial y del Panorama. Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus
         // pestañas (30-sep); sus renglones están en APP_MOVIMIENTOS y se ven en el Historial de la ficha.
@@ -820,17 +815,56 @@
   ];
 
   /**
+   * Todas las entradas de vista (NAV_GRUPOS + VISTAS_FUERA_DEL_MENU) en una sola lista plana, cada
+   * una con `sinAsistente` ya resuelto (el del item si dice algo, si no el de su grupo) -- la usan
+   * vistaDe (abajo) y el buscador general del asistente flotante (todaLaAyuda_, más abajo).
+   */
+  function todasLasVistas_() {
+    const planas = [];
+    NAV_GRUPOS.forEach((g) => {
+      if (g.vista) planas.push(Object.assign({ iconoArea: g.icono }, g));
+      (g.items || []).forEach((it) => planas.push(Object.assign({ iconoArea: g.icono, sinAsistente: g.sinAsistente }, it)));
+    });
+    VISTAS_FUERA_DEL_MENU.forEach((v) => planas.push(Object.assign({ iconoArea: v.icono }, v)));
+    return planas;
+  }
+
+  /**
    * La entrada de una vista (de NAV_GRUPOS o de VISTAS_FUERA_DEL_MENU), con `iconoArea`: el ícono
    * de su grupo del menú. null si no existe.
    */
   function vistaDe(vista) {
-    for (const g of NAV_GRUPOS) {
-      if (g.vista === vista) return Object.assign({ iconoArea: g.icono }, g);
-      const item = (g.items || []).find((it) => it.vista === vista);
-      if (item) return Object.assign({ iconoArea: g.icono, sinAsistente: g.sinAsistente }, item);
-    }
-    const suelta = VISTAS_FUERA_DEL_MENU.find((v) => v.vista === vista);
-    return suelta ? Object.assign({ iconoArea: suelta.icono }, suelta) : null;
+    return todasLasVistas_().find((v) => v.vista === vista) || null;
+  }
+
+  /**
+   * Todas las preguntas de ayuda de la app en una sola lista, cada una con de qué pantalla es --
+   * la usa el buscador general del asistente flotante (Ayuda.abrir -> buscarEnTodas, 14-oct-2026)
+   * cuando lo que buscas no está en la pantalla en la que estás. Salta las `sinAsistente` y las
+   * que no declaran `ayuda`; se arma al vuelo, no se guarda.
+   *
+   * AYUDA_SUELTA: módulos sin pantalla propia (viven como pestaña en la ficha de otro, `enFicha`
+   * en Modulos.gs -- hoy Responsiva y Adherente Vehicular, en la ficha de Vehículos). No hay una
+   * `vista` que los traiga solos, así que sus preguntas se agregan aquí a mano para que el
+   * buscador general igual las encuentre.
+   */
+  // Nota: `ayuda` siempre como función (`() => AYUDA_X`), nunca el arreglo directo -- AYUDA_X se
+  // declara mucho más abajo en este mismo script (junto a su módulo) y a esta altura todavía no
+  // existe (mismo motivo por el que NAV_GRUPOS ya usa `ayuda: () => AYUDA_VEHICULOS`).
+  const AYUDA_SUELTA = [
+    { pantalla: 'Responsiva Vehicular', ayuda: () => AYUDA_RESPONSIVA_VEHICULAR },
+    { pantalla: 'Adherente Vehicular', ayuda: () => AYUDA_ADHERENTE_VEHICULAR },
+  ];
+  function todaLaAyuda_() {
+    const resultado = [];
+    todasLasVistas_().forEach((v) => {
+      if (v.sinAsistente || !v.ayuda) return;
+      (v.ayuda() || []).forEach((p) => resultado.push({ pantalla: v.etiqueta, pregunta: p.pregunta, respuesta: p.respuesta }));
+    });
+    AYUDA_SUELTA.forEach((grupo) => {
+      grupo.ayuda().forEach((p) => resultado.push({ pantalla: grupo.pantalla, pregunta: p.pregunta, respuesta: p.respuesta }));
+    });
+    return resultado;
   }
 
   // Los grupos ya no son acordeón (se abren/cierran) — se quedan siempre
@@ -4519,6 +4553,52 @@
     },
   ];
 
+  // Responsiva y Adherente Vehicular no tienen pantalla propia en el menú (viven como pestaña
+  // en la ficha de Vehículos, enFicha en Modulos.gs) -- por eso su ayuda no está en NAV_GRUPOS
+  // como la de un módulo normal, sino en AYUDA_SUELTA (ver todaLaAyuda_, 14-oct-2026) para que el
+  // buscador general del asistente flotante igual las encuentre.
+  const AYUDA_RESPONSIVA_VEHICULAR = [
+    {
+      pregunta: '¿Dónde registro o veo la responsiva de un vehículo?',
+      respuesta: 'No tiene pantalla propia: es la pestaña "Responsiva" dentro de la ficha del vehículo (Vehículos → abre la ficha de la unidad).',
+    },
+    {
+      pregunta: '¿Qué diferencia hay entre una responsiva Definitiva y un Préstamo?',
+      respuesta: 'Al generarla, el Tipo puede quedar en Definitiva (como siempre) o Préstamo, con su fecha de fin. Mientras está en préstamo, el badge avisa si va en curso, si ya venció o si ya se devolvió -- "Devolver préstamo" lo cierra.',
+    },
+    {
+      pregunta: '¿Cómo se firma a distancia, sin que la persona esté presente?',
+      respuesta: 'Al registrar la responsiva, si el responsable o el jefe directo no están ahí para firmar en el momento, "Enviar liga(s) para firmar a distancia" genera un link por cada quien falte -- lo firman desde su celular, sin necesidad de entrar a la app.',
+    },
+    {
+      pregunta: 'Mandé la liga de firma pero se perdió o ya venció. ¿Ahora qué?',
+      respuesta: '"Generar nueva liga" (junto a "Copiar liga", en la fila de la responsiva) crea un token nuevo sobre el mismo registro y la liga anterior deja de servir sola -- no hace falta dar de baja ni volver a capturar nada. Las ligas duran 5 días.',
+    },
+    {
+      pregunta: '¿Puedo volver a mandar una liga que ya envié, sin generar una nueva?',
+      respuesta: 'Sí: "Copiar liga" / "Copiar liga jefe" la vuelve a mostrar tal cual, útil si se perdió el mensaje. Si ya venció, en vez de eso usa "Generar nueva liga".',
+    },
+  ];
+
+  const AYUDA_ADHERENTE_VEHICULAR = [
+    {
+      pregunta: '¿Qué es un Adherente Vehicular?',
+      respuesta: 'Quien usa el vehículo además del responsable (p. ej. un familiar o compañero autorizado). Se registra en la pestaña "Adherentes" de la ficha del vehículo -- tampoco tiene pantalla propia en el menú.',
+    },
+    {
+      pregunta: '¿El adherente también firma?',
+      respuesta: 'Sí, igual que en Responsiva: si no está presente al capturarlo, se le puede mandar una liga para firmar a distancia desde su celular ("Enviar liga(s) para firmar a distancia").',
+    },
+    {
+      pregunta: 'Se venció o se perdió la liga de firma del adherente, ¿cómo mando una nueva?',
+      respuesta: '"Generar nueva liga" crea un token nuevo sobre el mismo registro -- la liga anterior deja de funcionar sola. "Copiar liga" nomás repite la que ya existe, sin generar una nueva.',
+    },
+    {
+      pregunta: '¿Cómo doy de baja a un adherente sin borrar su historial?',
+      respuesta: 'El botón de estatus lo manda a "Baja" (y se puede "Reactivar" después) -- es distinto de "Eliminar", que sí quita el registro.',
+    },
+  ];
+
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
     wireTabsSimple(document.getElementById('view-container'));
@@ -5093,15 +5173,15 @@
     el.addEventListener('click', () => navegarA(el.dataset.view));
   });
 
-  // Asistente flotante (usuario, 7-oct): abre las preguntas frecuentes de la pantalla en la
-  // que estés (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `ayuda`) -- el panel, a su vez, ofrece el
-  // recorrido guiado (`tour`) si esa vista también tiene uno. Sin ninguno de los dos, lo avisa
-  // en vez de no hacer nada.
+  // Asistente flotante (usuario, 7-oct): abre las preguntas frecuentes de la pantalla en la que
+  // estés (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU → `ayuda`) -- el panel, a su vez, ofrece el
+  // recorrido guiado (`tour`) si esa vista también tiene uno. Buscador general (14-oct-2026,
+  // todaLaAyuda_): aunque esta pantalla no tenga preguntas propias (Capital humano, Mi perfil,
+  // Sistemas…), siempre se puede buscar en las de toda la app -- ya no hace falta el aviso de
+  // "todavía no hay ayuda aquí".
   document.getElementById('asistente-flotante').addEventListener('click', () => {
-    const destino = vistaDe(vistaActual);
-    if (destino && destino.ayuda) { Ayuda.abrir(destino.ayuda(), { onTour: destino.tour }); return; }
-    if (destino && destino.tour) { destino.tour(); return; }
-    Notificar.info('Todavía no hay ayuda para esta pantalla -- por ahora pícame en Vehículos.');
+    const destino = vistaDe(vistaActual) || {};
+    Ayuda.abrir(destino.ayuda ? destino.ayuda() : [], { onTour: destino.tour, buscarEnTodas: todaLaAyuda_ });
   });
   // Quita la clase de "caminando" (caminarAsistente) en cuanto termina -- si no se quitara,
   // la respiración (animación por default) ya no volvería a correr.

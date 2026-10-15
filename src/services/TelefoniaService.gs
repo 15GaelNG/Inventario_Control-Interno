@@ -640,6 +640,9 @@ const TelefoniaService = (function () {
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
     LineasRepo.borrarCaches();
+    // También las hojas que LineasLectura guarda 30 min: lo escrito por fuera de la app (la carga del proveedor del
+    // 14-oct) no las marca como cambiadas y la ficha seguía con la línea de antes
+    LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']);
     return { ok: true };
   }
 

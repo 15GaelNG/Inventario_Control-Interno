@@ -384,6 +384,43 @@ test('regenerarLiga: truena si esa parte firmó presencial (nunca tuvo liga) -- 
   assert.ok(llamadas.insert[0]['FIRMA JEFE TEMP'], 'su firma presencial sigue intacta -- no se tocó');
 });
 
+test('regenerarLiga: si OTRA columna …TEMP se quedó con el base64 crudo de antes del arreglo del 9-oct, la migra a Drive al guardar (si no, reescribir el renglón para cambiar solo el token puede tronar el límite de 50000 por celda -- bug real, 14-oct-2026)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  // Simula un renglón viejo: el adherente ya firmó, pero con el formato de ANTES del arreglo
+  // del 9-oct (el base64 crudo directo en la celda, no el JSON con archivoId de guardarFirmaTemp_).
+  llamadas.insert[0]['TOKEN FIRMA'] = '';
+  llamadas.insert[0]['FIRMADO POR'] = 'adherente@ciudadmaderas.com';
+  llamadas.insert[0]['FIRMA ADHERENTE TEMP'] = JSON.stringify({ base64: 'x'.repeat(200000), mimeType: 'image/jpeg' });
+
+  const liga = contexto.Servicio.regenerarLiga('tok', id, 'jefe');
+
+  assert.ok(liga, 'no truena generando la liga del jefe, aunque la del adherente siga en el formato viejo');
+  const migrada = JSON.parse(llamadas.insert[0]['FIRMA ADHERENTE TEMP']);
+  assert.ok(migrada.archivoId, 'se migró a archivo de Drive -- ya no es base64 crudo en la celda');
+  assert.ok(!migrada.base64, 'el base64 crudo ya no vive en la celda');
+});
+
+test('completarFirma: si la firma de CI (capturada en persona al crear) sigue con el base64 crudo de antes del 9-oct, se migra al guardar el "falta la firma del jefe", sin tronar', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', ADHERENTE: 'Maria Lopez' },
+    { 'FIRMA CI': FIRMA_CI }, { remoto: true, remotoJefe: true });
+  const id = llamadas.insert[0].ID;
+  const tokenAdherente = llamadas.insert[0]['TOKEN FIRMA'];
+  // Simula que este renglón es viejo: la firma de CI, capturada en persona al crear, quedó
+  // guardada con el formato de ANTES del arreglo del 9-oct (base64 crudo en la celda).
+  llamadas.insert[0]['FIRMA CI TEMP'] = JSON.stringify({ base64: 'z'.repeat(200000), mimeType: 'image/jpeg' });
+
+  const resultado = contexto.Servicio.completarFirma(tokenAdherente, { base64: 'firma-adherente', mimeType: 'image/png' });
+
+  assert.equal(resultado.pendiente, true, 'el jefe sigue sin firmar -- no debe tronar aunque CI siga en el formato viejo');
+  const migrada = JSON.parse(llamadas.insert[0]['FIRMA CI TEMP']);
+  assert.ok(migrada.archivoId, 'la firma de CI también quedó migrada a archivo de Drive');
+  assert.ok(!migrada.base64, 'el base64 crudo ya no vive en la celda');
+});
+
 // ---------- Firma a distancia: liga del JEFE (opciones.remotoJefe) ----------
 
 test('remotoJefe: exige la firma del adherente AHORA, nunca toca VEHICULOS, y genera una liga aparte para el jefe', () => {

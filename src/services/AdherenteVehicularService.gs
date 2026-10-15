@@ -51,6 +51,10 @@ const AdherenteVehicularService = (function () {
   // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva.
   const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
 
+  // [campo del PDF, columna …TEMP en la hoja] de las tres firmas -- una sola lista para
+  // imagenesDesdeTemp_, regenerarLiga y completarFirma/completarFirmaJefe (migrarFirmaTempLegacySiHaceFalta_).
+  const CAMPOS_FIRMA_ = [['FIRMA ADHERENTE', 'FIRMA ADHERENTE TEMP'], ['FIRMA JEFE', 'FIRMA JEFE TEMP'], ['FIRMA CI', 'FIRMA CI TEMP']];
+
   const ESTATUS_VALIDOS = ['ACTIVO', 'BAJA'];
 
   const COLUMNAS_RESUMEN = [
@@ -169,6 +173,11 @@ const AdherenteVehicularService = (function () {
     cambios[columnaExpira] = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
     cambios[columnaTemp] = '';
     cambios[columnaFirmadoPor] = '';
+    // SheetUtils.update reescribe el RENGLÓN COMPLETO, no solo las columnas de `cambios`: si
+    // otra …TEMP se quedó con el base64 crudo de antes del arreglo del 9-oct, reescribir el
+    // renglón para cambiar nomás el token puede tronar "excede el máximo de 50000 caracteres"
+    // por un campo que ni se estaba tocando (bug real, 14-oct-2026).
+    Object.assign(cambios, migrarOtrasFirmasTempSiHaceFalta_(fila, columnaTemp));
     SheetUtils.update(ssId(), SHEET, id, cambios, ID_COLUMN);
     return construirLiga_(tokenNuevo, quien);
   }
@@ -201,6 +210,34 @@ const AdherenteVehicularService = (function () {
     const blob = Utilities.newBlob(Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', nombreImagen);
     const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
     return JSON.stringify({ archivoId: archivo.getId(), mimeType: imagen.mimeType || 'image/png' });
+  }
+
+  /** Si una columna …TEMP todavía tiene el base64 crudo de una liga de antes del arreglo del
+   *  9-oct (leerFirmaTemp_ la sigue sabiendo leer así), la pasa a archivo de Drive como si fuera
+   *  una captura nueva (guardarFirmaTemp_) y regresa el JSON chico que hay que guardar en su
+   *  lugar. null si no había nada que migrar (vacía, o ya es la forma nueva con archivoId) --
+   *  regenerarLiga lo usa para que el renglón no vuelva a cargar con un valor que puede exceder
+   *  el límite de la celda la próxima vez que algo tenga que reescribir el renglón completo. */
+  function migrarFirmaTempLegacySiHaceFalta_(valor, campo) {
+    if (!valor) return null;
+    let datos;
+    try { datos = JSON.parse(valor); } catch (e) { return null; }
+    if (!datos || !datos.base64 || datos.archivoId) return null;
+    return guardarFirmaTemp_(campo, datos);
+  }
+
+  /** Lo que hay que agregar a un `cambios` de SheetUtils.update para que ninguna columna …TEMP
+   *  DISTINTA a `columnaExcluir` (la que ya se está escribiendo aparte) se quede con el base64
+   *  crudo de antes del 9-oct -- completarFirma/completarFirmaJefe/regenerarLiga lo usan antes
+   *  de cada escritura parcial, porque SheetUtils.update reescribe el renglón completo y
+   *  reenviar una columna vieja sin tocar puede tronar el límite de 50,000 por celda (14-oct). */
+  function migrarOtrasFirmasTempSiHaceFalta_(fila, columnaExcluir) {
+    const cambios = {};
+    CAMPOS_FIRMA_.filter(([, columna]) => columna !== columnaExcluir).forEach(([campo, columna]) => {
+      const migrado = migrarFirmaTempLegacySiHaceFalta_(fila[columna], campo);
+      if (migrado !== null) cambios[columna] = migrado;
+    });
+    return cambios;
   }
 
   /**
@@ -236,7 +273,7 @@ const AdherenteVehicularService = (function () {
   /** Las firmas que ya se tienen guardadas en las columnas TEMP, listas para el PDF. */
   function imagenesDesdeTemp_(fila) {
     const imagenesPdf = {};
-    [['FIRMA ADHERENTE', 'FIRMA ADHERENTE TEMP'], ['FIRMA JEFE', 'FIRMA JEFE TEMP'], ['FIRMA CI', 'FIRMA CI TEMP']].forEach(([campo, columna]) => {
+    CAMPOS_FIRMA_.forEach(([campo, columna]) => {
       const guardada = fila[columna];
       if (!guardada) return;
       try {
@@ -539,10 +576,12 @@ const AdherenteVehicularService = (function () {
       fila['FIRMADO POR'] = Session.getActiveUser().getEmail() || '';
 
       if (!listoParaFinalizar_(fila)) {
-        SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], {
+        // SheetUtils.update reescribe el renglón completo; si FIRMA JEFE/CI TEMP se quedó con
+        // base64 crudo de antes del 9-oct, se migra junto (mismo motivo que en regenerarLiga).
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], Object.assign({
           'FIRMA ADHERENTE TEMP': fila['FIRMA ADHERENTE TEMP'],
           'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'FIRMADO POR': fila['FIRMADO POR'],
-        }, ID_COLUMN);
+        }, migrarOtrasFirmasTempSiHaceFalta_(fila, 'FIRMA ADHERENTE TEMP')), ID_COLUMN);
         return { ID: fila['ID'], PDF: null, pendiente: true, aviso: 'Tu firma quedó registrada. Falta la firma del jefe directo para generar el documento.' };
       }
 
@@ -576,10 +615,12 @@ const AdherenteVehicularService = (function () {
       fila['FIRMADO POR JEFE'] = Session.getActiveUser().getEmail() || '';
 
       if (!listoParaFinalizar_(fila)) {
-        SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], {
+        // SheetUtils.update reescribe el renglón completo; si FIRMA ADHERENTE/CI TEMP se quedó
+        // con base64 crudo de antes del 9-oct, se migra junto (mismo motivo que arriba).
+        SheetUtils.update(ssId(), hoja_().getName(), fila['ID'], Object.assign({
           'FIRMA JEFE TEMP': fila['FIRMA JEFE TEMP'],
           'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '', 'FIRMADO POR JEFE': fila['FIRMADO POR JEFE'],
-        }, ID_COLUMN);
+        }, migrarOtrasFirmasTempSiHaceFalta_(fila, 'FIRMA JEFE TEMP')), ID_COLUMN);
         return { ID: fila['ID'], PDF: null, pendiente: true, aviso: 'Tu firma quedó registrada. Falta la firma del adherente para generar el documento.' };
       }
 

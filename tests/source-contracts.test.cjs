@@ -66,9 +66,8 @@ test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera
   // Panorama primero (29-sep). Fuera del menú (líneas comentadas) pero sus vistas se siguen montando: Reactivación
   // (29-sep) y Reasignaciones, Solicitud, Control de Cambios y Bitácora de Desechos (reunión con Líneas, 30-sep)
   // Correcciones de Líneas: módulo temporal (30-sep), después de Resguardos; se quita cuando Líneas termine
-  // Proveedor (adendums y facturas del mes, 7-oct) después de Accesorios
   // sistemas-lineas: accesos a sistemas externos (jorge, 2-oct), al final del grupo
-  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'proveedor-lineas', 'sistemas-lineas'];
+  const orden = ['panorama-lineas', 'lineas-telefonicas', 'resguardos-lineas', 'correcciones-lineas', 'accesorios-lineas', 'sistemas-lineas'];
   const ocultos = ['cambios-lineas'];
   const retirados = ['reactivacion-lineas', 'reasignaciones-lineas', 'solicitud-lineas', 'bitacora-desechos'];
   const sinComentarios = lineas.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
@@ -2549,12 +2548,48 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
   assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });
 
+test('Líneas: «Recargar datos» también vacía las hojas que la lectura guarda 30 min (carga del proveedor, 14-oct)', () => {
+  const svc = read('src/services/TelefoniaService.gs');
+  const cuerpo = svc.slice(svc.indexOf('  function recargarDatos(token) {'), svc.indexOf('  // ---------------- Captura: inspección y responsiva nuevas'));
+  assert.match(cuerpo, /LineasRepo\.borrarCaches\(\);/);
+  assert.match(cuerpo, /LineasDatos\.tocar\(\['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS'\]\);/);
+  const lectura = read('src/services/lineas/LineasLectura.gs');
+  assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS, HOJA_VIEJA\];/,
+    'si la lectura guarda otra hoja, «Recargar datos» también debe tocarla');
+});
+
+test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
+  const html = read('src/html/js/lineas.html');
+  const ini = html.indexOf('      function dinero(n, centavos) {');
+  const dinero = new Function(html.slice(ini, html.indexOf('\n      }', ini) + 8) + '\nreturn dinero;')();
+  assert.strictEqual(dinero(-7.74, true), '-$7.74');
+  assert.strictEqual(dinero(269.78, true), '$269.78');
+  assert.strictEqual(dinero(1049), '$1,049');
+  assert.strictEqual(dinero(''), null);
+});
+
 test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
-  assert.match(repo, /Math\.round\(\(cobrado - cargoEquipo - renta\) \* 100\) \/ 100/);
   assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
   assert.match(read('src/html/js/lineas.html'), /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
+});
+
+test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra lo que la línea paga normalmente', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  const cuerpo = repo.slice(repo.indexOf('  function cobroHabitual('), repo.indexOf('  /** Día de corte de una cuenta padre'));
+  const habitual = new Function(cuerpo + '\nreturn cobroHabitual;')();
+  const m = (cobrado, parcial) => ({ cobrado: cobrado, parcial: !!parcial });
+  assert.strictEqual(habitual([]), null, 'sin meses anteriores no hay habitual');
+  assert.strictEqual(habitual([m(269.78), m(269.78), m(299)]), 269.78, 'lo que más se repite');
+  assert.strictEqual(habitual([m(1049), m(1249), m(1049)]), 1049);
+  assert.strictEqual(habitual([m(300), m(280), m(260)]), 300, 'si nada se repite, el mes anterior');
+  assert.strictEqual(habitual([m(120, true), m(-45), m(269.78)]), 269.78, 'sin meses parciales ni notas de crédito');
+  assert.strictEqual(habitual([m(1), m(2), m(3), m(1)]), 1, 'solo los 3 meses anteriores');
+  assert.match(repo, /f\.habitual = cobroHabitual\(todas\.slice\(i \+ 1\)\);/);
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /resumen \|\| !conHabitual\(f\) \? null : \['Habitual', dinero\(f\.habitual, true\)\],/);
+  assert.doesNotMatch(cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable(')), /f\.renta/);
 });
 
 test('apiListaConHuella solo despacha listas, y cada lista que la pantalla pide así está permitida', () => {

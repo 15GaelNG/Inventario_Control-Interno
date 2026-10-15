@@ -3276,7 +3276,8 @@
       }
       function dinero(n, centavos) {
         if (n === null || n === undefined || n === '' || isNaN(Number(n))) return null;
-        return '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
+        // El signo va antes del $: «-$7.74», no «$-7.74» (nota de crédito; prueba en /dev del 14-oct)
+        return (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
       }
       /** «$29.22 de menos» / «$51.00 de más» / «Igual», con su color. */
       function diferenciaTexto(d) {
@@ -3356,21 +3357,23 @@
         const titulo = icono('receipt') + (resumen ? ' Facturación de la línea' : ' Facturación') +
           (f ? '<span class="ln-card-titulo-dato">' + esc(mesDe(f.corte)) + '</span>' : '');
         if (!f) return tarjeta(titulo, '<p class="empty-state">Sin facturas cargadas.</p>');
-        const sinRenta = f.renta === null || f.renta === undefined;
+        // La diferencia es contra el cobro habitual de la línea (usuario, 14-oct; pendiente 1.17); la renta del adendum
+        // va en la tarjeta Plan. Sin meses anteriores no hay contra qué comparar
+        const conHabitual = (x) => x.habitual !== null && x.habitual !== undefined;
         const meses = lista.map((x) => '<div class="ln-meses-fila"><span>' + esc(mesDe(x.corte).replace(/ \d{4}$/, '')) + '</span><span>' +
-          esc(dinero(x.cobrado, true) || '—') + '</span><span>' + (sinRenta ? '' : diferenciaTexto(x.diferencia)) +
+          esc(dinero(x.cobrado, true) || '—') + '</span><span>' + (conHabitual(x) ? diferenciaTexto(x.diferencia) : '') +
           (sinUso(x) ? ' <span class="ln-chip ambar">Sin uso</span>' : '') + '</span></div>').join('');
         return tarjeta(titulo, campos([
-          resumen || sinRenta ? null : ['Renta', dinero(f.renta, true)],
           ['Cobrado', dinero(f.cobrado, true)],
-          sinRenta ? null : ['Diferencia', diferenciaTexto(f.diferencia), true],
+          resumen || !conHabitual(f) ? null : ['Habitual', dinero(f.habitual, true)],
+          conHabitual(f) ? ['Diferencia', diferenciaTexto(f.diferencia), true] : null,
           resumen ? null : ['Uso', usoTexto(f), true],
           // Parcialidad del equipo que viene en la factura (usuario, 14-oct): ya está dentro de lo cobrado
           f.equipo ? ['Equipo', esc('Parcialidad ' + f.equipo.parcialidad + ' · ' + f.equipo.nombre + ' · ' + dinero(f.equipo.cargo, true)), true] : null,
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
         ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
           icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
-          (sinRenta ? 'Uso' : 'Diferencia') + '</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
+          'Diferencia</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
       }
 
       function tarjetaResponsable(r, titulo, clase) {
