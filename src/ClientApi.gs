@@ -660,8 +660,8 @@ function apiLineasEquipo(token, id) {
 function apiLineasLinea(token, id) {
   return TelefoniaService.linea(token, id);
 }
-function apiLineasEvidencias(token, id) {
-  return TelefoniaService.evidencias(token, id);
+function apiLineasEvidencias(token, id, vista) {
+  return TelefoniaService.evidencias(token, id, vista);
 }
 function apiLineasHistorial(token, id) {
   return TelefoniaService.historial(token, id);
@@ -740,8 +740,8 @@ function apiLineasPasosServidor(token, nombre) {
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
-function apiLineasSubirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
-  return TelefoniaService.subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64);
+function apiLineasSubirPdfFirmado(token, registroId, tipo, docId, pdfId, base64, vista) {
+  return TelefoniaService.subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64, vista);
 }
 function apiLineasFormularioRegistro(token, id, parte) {
   return TelefoniaService.formularioRegistro(token, id, parte);

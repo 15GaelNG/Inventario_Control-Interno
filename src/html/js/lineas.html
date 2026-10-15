@@ -1057,6 +1057,11 @@
         { titulo: 'Accesorios y accesos', icono: 'key-round', desde: 'titulo:ACCESORIOS Y ACCESOS' },
         { titulo: 'Firmas', icono: 'signature', desde: 'titulo:DATOS DE LA RESPONSIVA' },
       ],
+      // La línea sin equipo (pendiente 2.45): sin equipo ni accesorios y accesos
+      RESPONSIVA_LINEA: [
+        { titulo: 'Datos', icono: 'id-card', desde: 'titulo:LÍNEA' },
+        { titulo: 'Firmas', icono: 'signature', desde: 'titulo:DATOS DE LA RESPONSIVA' },
+      ],
       // Editar y Agregar (usuario, 4-oct): una pestaña por parte de lo guardado
       REGISTRO_EQUIPO: [
         { titulo: 'Equipo', icono: 'smartphone', desde: 'titulo:EQUIPO' },
@@ -3516,7 +3521,7 @@
           // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
-          fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '' };
+          fichaActual = { id: id, titulo: 'Línea ' + (l.numero || '—'), estatusEquipo: null, estatusLinea: l.estatus || '', carpetaDriveId: l.carpetaDriveId || null };
           // Los números que tuvo por un cambio de número, abajo del actual (usuario, 12-oct; antes iban en la tabla)
           const anteriores = (((memoria.indice || {}).lineas || []).filter((x) => x.id === id)[0] || {}).numerosAnteriores;
           detalle.innerHTML = migas() +
@@ -3545,8 +3550,9 @@
                 ['PIN WhatsApp', e.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
-            '</div>', tarjetaDetallesCopiar(r.detalles), !e);
-          if (!e) cargarEvidencias(id);
+            '</div>', tarjetaDetallesCopiar(r.detalles), true);
+          // Toda línea tiene Documentos: las de cuando estuvo suelta y las que firmó dentro de un equipo (pendiente 2.45)
+          cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id), 'linea');
         });
       }
@@ -3561,13 +3567,14 @@
 
       /**
        * Acciones de la ficha (estilo Drive, usuario 30-sep): a la vista solo Nueva inspección y Nueva responsiva
-       * (`conCaptura`; una línea en un equipo no captura, lo hace su equipo), luego `extra` (Drive o Ver equipo) y
-       * al final ⋮ con todo lo demás (abrirMenuFicha). Sin permiso de operar solo queda `extra`.
+       * (`conCaptura`; una línea en un equipo no captura, lo hace su equipo, y la línea sin equipo solo tiene responsiva:
+       * pendiente 2.45), luego `extra` (Drive o Ver equipo) y al final ⋮ con todo lo demás (abrirMenuFicha). Sin permiso
+       * de operar solo queda `extra`.
        */
       function botonesFicha(atributoRef, id, tipo, conCaptura, extra, conMas) {
         const mas = conMas === undefined ? conCaptura : conMas;
-        return (!conCaptura ? '' :
-          '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>' +
+        return (!conCaptura ? '' : (tipo === 'linea' ? '' :
+          '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>') +
           '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Nueva responsiva</button>') +
           (extra || '') + (!mas ? '' : '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-ficha-mas="' + esc(tipo) + '" data-id="' + esc(id) + '" title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>');
       }
@@ -3611,8 +3618,9 @@
             { icono: 'user-round-pen', texto: 'Reasignar', alHacer: () => abrirReasignar(r) },
             { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
           ] : []).concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)
+          // La línea sin equipo: su carpeta en LINEAS, si ya tiene responsiva (pendiente 2.45)
           : [r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) } : null]
-            .concat(editar, vinculo, historial);
+            .concat(drive, editar, vinculo, historial);
         menuFlotante(boton, items.filter(Boolean));
       }
 
@@ -3679,10 +3687,13 @@
       function cargarEvidencias(id) {
         if (!veDocumentos()) return;
         const pila0 = pila.length;
-        llamar('apiLineasEvidencias', id).then((ev) => {
+        // La ficha de la línea pide las suyas, sin las de su equipo y con las que firmó dentro de un equipo (pendiente 2.45)
+        const arriba = pila[pila.length - 1];
+        const vista = arriba && arriba.tipo === 'linea' && arriba.id === id ? 'linea' : '';
+        llamar('apiLineasEvidencias', id, vista).then((ev) => {
           const cont = $('#ln-evidencias', raiz);
           if (!vigente() || !cont || pila.length !== pila0) return;
-          pintarDocumentos(cont, ev.inspecciones || [], ev.responsivas || [], id);
+          pintarDocumentos(cont, ev.inspecciones || [], ev.responsivas || [], id, vista);
         }).catch((e) => {
           const cont = $('#ln-evidencias', raiz);
           if (cont) cont.innerHTML = tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="error-msg">' + mensajeError(e) + '</p>');
@@ -3743,7 +3754,7 @@
        * PDF firmado (usuario, 5-oct): la inspección o la responsiva se guardó sin la firma del responsable; ya firmada se
        * sube aquí y reemplaza su PDF (el mismo archivo de Drive, LineasCaptura.subirPdfFirmado). Solo PDF.
        */
-      function subirPdfFirmado(registroId, d) {
+      function subirPdfFirmado(registroId, d, vista) {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'application/pdf,.pdf';
@@ -3766,12 +3777,15 @@
             r.onload = () => resolve(String(r.result).split(',')[1]);
             r.onerror = () => reject(new Error('No se pudo leer ' + f.name));
             r.readAsDataURL(f);
-          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId || '', base64)).then((pdf) => {
+          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId || '', base64, vista || '')).then((pdf) => {
             if (!vigente() || captura !== sesion) return;
             mostrarEspera('PDF firmado guardado', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
-            cargarEvidencias(registroId);
-            cargarHistorial(registroId);
+            // La ficha abierta (la de la línea, si se subió desde ella una responsiva de su equipo)
+            const enFicha = pila[pila.length - 1];
+            const ficha = enFicha && (enFicha.tipo === 'linea' || enFicha.tipo === 'equipo') ? enFicha.id : registroId;
+            cargarEvidencias(ficha);
+            cargarHistorial(ficha);
             // Desde la página de la inspección o la responsiva: se pinta de nuevo con su PDF
             const arriba = pila[pila.length - 1];
             if (arriba && arriba.id === d.id && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true);
@@ -3801,7 +3815,7 @@
        * sola tabla de inspecciones y responsivas, de la hoja (AppSheet o sistema nuevo) y de la carpeta NUCOS.
        * Cada fila tiene sus acciones: ver la inspección, abrir el PDF o la carpeta.
        */
-      function pintarDocumentos(cont, inspecciones, responsivas, id) {
+      function pintarDocumentos(cont, inspecciones, responsivas, id, vista) {
         const filas = inspecciones.map((d) => Object.assign({}, d, { documento: 'Inspección', tipoPdf: 'INSPECCION' }))
           .concat(responsivas.map((d) => Object.assign({}, d, { documento: 'Responsiva', tipoPdf: 'RESPONSIVA' })))
           .map((d, n) => Object.assign(d, { _clave: 'doc' + n, origenTexto: ORIGEN_DOCUMENTO[d.origen] || d.origen || '' }));
@@ -3853,7 +3867,9 @@
               (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
             doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
-            doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'), (d) => subirPdfFirmado(id, d)),
+            // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
+            doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),
+              (d) => (d.registroId ? subirPdfFirmado(d.registroId, d) : subirPdfFirmado(id, d, vista))),
             doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
               (d) => regenerarPdf(d)),
             doc('folder-open', 'Ver carpeta en Drive', 'drive', false, (d) => !!d.carpetaId,
@@ -3866,9 +3882,11 @@
             { campo: 'origenTexto', titulo: 'Origen', tipo: 'lista', ancho: 150, render: (v) => chip(v, COLOR_ORIGEN_DOCUMENTO[v] || 'neutro') },
             { campo: 'responsable', titulo: 'Responsable', tipo: 'texto', ancho: 230 },
             { campo: 'inspector', titulo: 'Realizó', tipo: 'texto', ancho: 210 },
+            // En la ficha de la línea: el equipo en que la firmó (pendiente 2.45)
+            vista === 'linea' ? { campo: 'enNuco', titulo: 'Equipo', tipo: 'texto', ancho: 120, render: (v) => (v ? esc('NUCO ' + v) : vacio) } : null,
             { campo: 'calificacion', titulo: 'Calificación', tipo: 'numero', ancho: 120, render: (v) => (v === null || v === undefined ? vacio : esc(porcentaje(v))) },
             { campo: 'fotos', titulo: 'Fotos', tipo: 'numero', ancho: 90, render: (v) => (v ? miles(v) : vacio) },
-          ],
+          ].filter(Boolean),
         });
         tabla.setDatos(filas);
         // Doble clic en la fila: la página de la inspección o de la responsiva (usuario, 6-oct)
@@ -5116,7 +5134,8 @@
       // -- Responsiva (RESPONSIVAS LINEAS_Form) --
 
       function formularioResponsiva(ctx) {
-        return htmlPasosAppSheet(ctx.formulario, PASOS_FORMULARIO.RESPONSIVA, null, { acomodar: true }) +
+        const sinEquipo = !(ctx.formulario || []).some((e) => e.tipo === 'titulo' && e.texto === 'EQUIPO');
+        return htmlPasosAppSheet(ctx.formulario, sinEquipo ? PASOS_FORMULARIO.RESPONSIVA_LINEA : PASOS_FORMULARIO.RESPONSIVA, null, { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
 
@@ -5210,8 +5229,10 @@
           ctx.formulario = conSelectorBloqueo(ctx.formulario || []);
           captura.contexto = ctx;
           const valorDe = (c) => ((ctx.formulario || []).filter((e) => e.columna === c)[0] || {}).valor || '';
+          // La línea sin equipo no tiene NUCO: su número (pendiente 2.45)
+          const deQuien = !valorDe('NUCO') && valorDe('No TELEFONO') ? 'Línea ' + valorDe('No TELEFONO') : 'NUCO ' + (valorDe('NUCO') || '—');
           $('#ln-captura-subtitulo', raiz).textContent = flujo && flujo.subtitulo ? flujo.subtitulo
-            : ['NUCO ' + (valorDe('NUCO') || '—'), valorDe('MODELO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ');
+            : [deQuien, valorDe('MODELO'), valorDe('RESPONSABLE')].filter(Boolean).join(' · ');
           if (flujo && flujo.titulo) $('#ln-captura-titulo', raiz).textContent = flujo.titulo;
           if (tipo === 'INSPECCION') {
             $('#ln-captura-cuerpo', raiz).innerHTML = formularioInspeccion(ctx);

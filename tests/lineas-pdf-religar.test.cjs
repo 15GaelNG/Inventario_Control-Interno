@@ -122,5 +122,5 @@ test('se revisa en Documentos, en la página del documento, en el Historial y an
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura.slice(captura.indexOf('function evidenciaSistema_('), captura.indexOf('function registroPlantilla_(')), /LineasRepo\.revisarPdfsLigados\(\[ev\]\);/);
   // Subir PDF firmado toma el PDF de Documentos (evidencias → evidenciasDeRegistro)
-  assert.match(read('src/services/TelefoniaService.gs'), /const docs = evidencias\(token, registroId\);/);
+  assert.match(read('src/services/TelefoniaService.gs'), /const docs = evidencias\(token, registroId, vista === 'linea' \? 'linea' : ''\);/);
 });

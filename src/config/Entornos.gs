@@ -56,6 +56,8 @@ const ENTORNOS = {
     // Líneas (opcionales: sin esto usan las carpetas de AppSheet que trae el código)
     LINEAS_DRIVE_APPSHEET: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
     LINEAS_DRIVE_NUCOS: '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-',
+    // LINEAS_DRIVE_LINEAS: la carpeta LINEAS junto a NUCOS, para la responsiva de la línea sin equipo (pendiente 2.45).
+    // Falta: la crea el área con los permisos de NUCOS; sin ella esa responsiva no se guarda en producción
 
     // Geotab (opcional): usuario, base y servidor aquí; GEOTAB_PASSWORD solo en Script Properties
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',

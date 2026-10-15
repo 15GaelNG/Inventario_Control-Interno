@@ -145,7 +145,7 @@ test('la responsiva: la identificación se escribe antes y se descarta si la res
   assert.match(fn, /\} catch \(e\) \{\n\s+LineasIdentificaciones\.descartar\(escritos\);\n\s+throw e;/);
   // La carpeta de la responsiva es la de su identificación: su PDF va ahí (destinoPdf_ usa CARPETA_ID)
   assert.match(fn, /'CARPETA_ID': escritos \? escritos\.carpetaId : '', 'RUTA': escritos \? escritos\.ruta : ''/);
-  assert.match(fn, /LineasIdentificaciones\.registrar\(escritos, id, obj\.reg, usuario, ahora\);/);
+  assert.match(fn, /LineasIdentificaciones\.registrar\(escritos, id, sinEquipo \? Object\.assign\(\{\}, obj\.reg, \{ nuco: '' \}\) : obj\.reg, usuario, ahora\);/);
   // El formulario: una para el principal y una debajo del nombre de cada responsable adicional
   assert.match(captura, /campo_\('IDENTIFICACION', 'Identificación', 'listaAbierta'[^\n]*\n\s+archivoIdentificacion_\(0\),/);
   assert.match(captura, /conIdentificacionAdicional_\(LineasRegistros\.camposAdicionales\(/);

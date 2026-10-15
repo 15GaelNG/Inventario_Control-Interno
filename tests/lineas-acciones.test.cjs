@@ -211,7 +211,8 @@ test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y �
     "'Desvincular del equipo'", "'Ir al equipo'", 'historial];']);
   const ficha = cliente.slice(cliente.indexOf('function abrirMenuFicha'), cliente.indexOf('menuFlotante(boton, items.filter(Boolean));'));
   enOrden(ficha, ["texto: 'Reasignar'", "texto: 'Mandar a resguardo'", '.concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)']);
-  assert.match(ficha, /\.concat\(editar, vinculo, historial\);/);
+  // La línea: mover · su carpeta en LINEAS (sin equipo, pendiente 2.45) · editar · vincular · historial
+  assert.match(ficha, /\.concat\(drive, editar, vinculo, historial\);/);
   // En el ⋮ del equipo ya no está Editar línea
   assert.doesNotMatch(ficha, /abrirEditor\(r\.lineaId, 'LINEA'\)/);
 });

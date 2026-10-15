@@ -224,6 +224,8 @@ const REVISION_CARPETAS = {
   // El expediente por NUCO: no vive en la raíz de la app (en un DEV sin la clave, sí: ExpedienteNuco)
   DRIVE_FOLDER_ID_NUCOS_VEHICULOS: { nombre: 'NUCOS VEHICULOS', sinRaiz: true },
   LINEAS_DRIVE_NUCOS: {},
+  // La carpeta LINEAS, junto a NUCOS (pendiente 2.45): la responsiva de la línea sin equipo
+  LINEAS_DRIVE_LINEAS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: { soloLee: true },
 };
 /**

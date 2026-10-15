@@ -283,10 +283,15 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
     'JEFE DIRECTO', 'CORREO']);
   assert.match(captura, /campo_\('FECHA DE REGISTRO', 'Fecha de la inspección'/);
   // Responsiva (usuario, 4-oct): ordenada como la inspección; una sola fecha (DIA, MES y AÑO salen de ella al guardar)
-  assert.deepEqual(orden('function formularioResponsiva_', 'function ocultarSecretos_').filter((c) => c !== 'columna'), ['ID', 'ID LINEA', 'NUCO',
-    'MODELO', 'IMEI', 'COLOR', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'No EMPLEADO', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO',
-    'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
+  // La línea sin equipo (pendiente 2.45) empieza con su línea, fija; el resto es el de siempre
+  assert.deepEqual(orden('function formularioResponsiva_', 'function ocultarSecretos_').filter((c) => c !== 'columna'), [
+    'ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL',
+    'ID', 'ID LINEA', 'NUCO',
+    // Accesorios y accesos se declaran antes del responsable (la línea sin equipo no los lleva) y se pintan después de él
+    'MODELO', 'IMEI', 'COLOR', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
+    'No EMPLEADO', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO',
     'FECHA RESPONSIVA', 'TICKET', 'COMENTARIO', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
+  assert.match(captura, /conIdentificacionAdicional_\(LineasRegistros\.camposAdicionales\([^\n]*\), accesos, \[/);
   assert.match(captura, /valores\['MES'\] = MESES\[/);
   assert.match(captura, /'Septiembre'/);
   // Parte 6 (usuario, 6-oct): la responsiva lleva al director (como el AppSheet) y el comentario va en COMENTARIO
@@ -641,7 +646,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
   assert.match(lineas, /class="ln-resumen-rapido"/);
-  assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id\)/);
+  assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id, vista\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
   ['INSPECCION', 'RESPONSIVA', 'REGISTRO_EQUIPO', 'REGISTRO_LINEA', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));
@@ -836,7 +841,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(arch, /ramas = \['CARTA RESPONSIVA', anio\];/);
   assert.match(arch, /nombrePdf: \(tipo === 'INSPECCION' \? 'INSP ' : 'RESP '\) \+ n4 \+ ' ' \+ ddmm \+ '\.pdf'/);
   // Solo se escribe en la carpeta de la app o en NUCOS
-  assert.match(arch, /if \(!carpetaId \|\| !\(estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\) \|\| enNucos\(carpetaId\)\)\)/);
+  assert.match(arch, /if \(!carpetaId \|\| !\(estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\) \|\| enNucos\(carpetaId\) \|\| enLineas\(carpetaId\)\)\)/);
   // Fotos de inspección: en NUCOS si hay NUCO, si no en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
   const ev = read('src/services/lineas/LineasEvidencias.gs');
   assert.match(ev, /const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';/);
@@ -1361,9 +1366,10 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
 test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo de la inspección', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const resp = captura.slice(captura.indexOf('function formularioResponsiva_'), captura.indexOf('function ocultarSecretos_'));
-  // Fijos: ID, ID LINEA, NUCO, el equipo (modelo e IMEI) y NOMBRE CI (usuario, 4-oct); el responsable se puede corregir
+  // Fijos: ID, ID LINEA, NUCO, el equipo (modelo e IMEI) y NOMBRE CI (usuario, 4-oct); el responsable se puede corregir.
+  // La línea sin equipo (pendiente 2.45, 15-oct): ID, ID LINEA y su línea, fija, sin equipo
   const fijos = [...resp.matchAll(/ro\('([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'NUCO', 'MODELO', 'IMEI', 'NOMBRE CI']);
+  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ID', 'ID LINEA', 'NUCO', 'MODELO', 'IMEI', 'NOMBRE CI']);
   assert.match(resp, /ed\('RESPONSABLE', 'Nombre', 'listaAbierta', persona\('RESPONSABLE'\), \{ requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true \}\)/);
   assert.match(resp, /ed\('ACCESORIOS', 'Accesorios entregados', 'multi'/);
   const cliente = read('src/html/js/lineas.html');
