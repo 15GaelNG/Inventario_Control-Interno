@@ -288,8 +288,7 @@
     function migas() {
       const anterior = pila.length ? pila[pila.length - 1] : null;
       const texto = anterior ? (anterior.tipo === 'persona' ? ((persona(anterior.id) || {}).nombre || anterior.id) : anterior.id) : 'Usuarios y permisos';
-      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-usr-volver>' + ico('chevron-left') + ' Volver</button>' +
-        '<span>' + escaparHtml(texto) + '</span></div>';
+      return Ficha.migas({ volver: { atributos: 'data-usr-volver' }, ruta: [{ texto: texto, atributos: 'data-usr-volver' }] });
     }
 
     // ---------------------------------------------------------------- ficha de persona
@@ -313,14 +312,13 @@
 
       const resumen = [['Correo', p.correo], ['Área', p.area], ['Coordinación', p.coordinacion], ['Sede', [p.oficina, p.sede].filter(Boolean).join(' · ')]]
         .filter((d) => d[1]);
-      let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono">' + Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }) + '</div>' +
-        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(p.nombre || p.correo) + '</h2><div class="ln-chips">' +
-        badgeRol(p.rol) + badgeActivo(p.activo) +
-        (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : '') +
-        '</div></div>' +
-        '<div class="ln-detalle-botones">' + (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') + '</div>' +
-        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(d[1]) + '</dd></div>').join('') + '</dl></div>';
+      let html = migas() + Ficha.encabezado({
+        iconoHtml: Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }), titulo: p.nombre || p.correo,
+        chips: badgeRol(p.rol) + badgeActivo(p.activo) +
+          (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
+        botones: total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        resumen: resumen,
+      });
 
       // En una línea: cuánto le viene de su área (y sus perfiles) y cuánto es solo suyo
       const porSuArea = modulos().filter((m) => regla(p.correo, m.id) === undefined && deArea(p.area, m.id) !== 'NINGUNO').length;
@@ -376,12 +374,12 @@
       const cuenta = (v) => modulos().filter((m) => deArea(a.nombre, m.id) === v).length;
       const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
         ['Con excepciones', plural(activas.filter((p) => excepcionesDe(p).length).length, 'persona', 'personas')]];
-      let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono"><i data-lucide="users" class="ico ln-icon"></i></div>' +
-        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(a.nombre) + '</h2><div class="ln-chips">' +
-        '<span class="badge-estado pendiente">Área</span><span class="badge-estado activo">' + plural(activas.length, 'persona activa', 'personas activas') + '</span></div></div>' +
-        '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button></div>' +
-        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
+      let html = migas() + Ficha.encabezado({
+        icono: 'users', titulo: a.nombre,
+        chips: '<span class="badge-estado pendiente">Área</span><span class="badge-estado activo">' + plural(activas.length, 'persona activa', 'personas activas') + '</span>',
+        botones: '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        resumen: resumen,
+      });
 
       const susPerfiles = perfilesDe(a.nombre).map((k) => perfilesPorClave[k].nombre);
       const tarjetaPerfiles = '<div class="card ln-card usr-perfiles-area"><h3>' + ico('layers') + ' Perfiles' +
@@ -435,15 +433,15 @@
       const cuenta = (v) => modulos().filter((m) => dePerfil(k, m.id) === v).length;
       const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
         ['Lo reciben', plural(gente.length, 'persona activa', 'personas activas')]];
-      let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono"><i data-lucide="layers" class="ico ln-icon"></i></div>' +
-        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(pf.nombre) + '</h2><div class="ln-chips">' +
-        '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span>' +
-        (pf.alcance === 'AREA' ? '<span class="badge-estado pendiente">' + ico('map-pin') + ' Solo lo de su área</span>' : '') + '</div></div>' +
-        '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
-        '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
-        '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button></div>' +
-        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
+      let html = migas() + Ficha.encabezado({
+        icono: 'layers', titulo: pf.nombre,
+        chips: '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span>' +
+          (pf.alcance === 'AREA' ? '<span class="badge-estado pendiente">' + ico('map-pin') + ' Solo lo de su área</span>' : ''),
+        botones: '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
+          '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
+          '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button>',
+        resumen: resumen,
+      });
 
       const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo reciben todas las áreas que tienen este perfil (y sus personas). Si un área tiene varios perfiles, gana el más alto; lo que el área o la persona tengan como regla propia manda sobre el perfil.</div></div>' +
         (pf.alcance === 'AREA' ? '<div class="usr-aviso">' + ico('map-pin') + '<div><b>Solo lo de su área.</b> Quien tenga este perfil (aunque sea USER) solo ve los renglones de su área (DPTOS PERMITIDOS o su AREA), y solo en lo que respeta ese límite (Vehículos y Líneas Telefónicas, sin el pasado de la ficha); lo demás se le cierra.</div></div>' : '') +

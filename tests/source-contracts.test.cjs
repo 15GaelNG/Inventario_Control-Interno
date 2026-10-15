@@ -494,6 +494,28 @@ test('letra, esquinas y colores de la pantalla salen de la escala de styles.html
   assert.deepEqual(fuera, []);
 });
 
+test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, en todos los módulos', () => {
+  // Vehículos, Caja Chica, Usuarios y permisos y Líneas armaban cada uno su encabezado con las clases de Líneas
+  // (ln-detalle-header, ln-migas, ln-resumen-rapido) y su CSS vivía en lineas-estilos.html (fase 4b)
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/ficha.html'))
+    .forEach((f) => fs.readFileSync(f, 'utf8').split('\n').forEach((linea) => {
+      if (/ln-detalle-(header|icono|titulo|botones|sub)\b|ln-migas|ln-miga-|ln-resumen-rapido|ficha-encabezado"|class="ficha-migas/.test(linea)) {
+        fuera.push(path.relative(root, f).replace(/\\/g, '/') + ': ' + linea.trim().slice(0, 80));
+      }
+    }));
+  assert.deepEqual(fuera, [], 'Usa Ficha.migas / Ficha.encabezado (componentes/ficha.html)');
+  const usa = (archivo, n) => assert.ok((read(archivo).match(/Ficha\.encabezado\(/g) || []).length >= n, archivo + ' usa Ficha.encabezado');
+  usa('src/html/js/app.html', 1);
+  usa('src/html/js/app-cajachica.html', 1);
+  usa('src/html/js/app-permisos.html', 3);
+  usa('src/html/js/lineas.html', 1);
+  assert.match(read('package.json'), /node tests\/ficha\.test\.js/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/componentes/tabs')") < index.indexOf("include('html/js/componentes/ficha')"));
+});
+
 test('las pestañas son una sola implementación: Tabs (componentes/tabs.html)', () => {
   // Había tres (wireTabsSimple de las vistas, Tabs con otra clase de activa y fichaEnPestanas en app.html y en Líneas),
   // cada una con su marcado (docs/homologacion-codigo.md, fase 4). Ahora: grupo data-tabs, .tabs-lista, .tab-btn[data-tab]
@@ -761,7 +783,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.match(perfil, /porNombre\.length === 1 \? porNombre\[0\] : null/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
   assert.match(lineas, /function pestanasFicha\(general, detalles, conDocumentos\) \{[\s\S]*?return Tabs\.html\(\[/);
-  assert.match(lineas, /class="ln-resumen-rapido"/);
+  assert.match(lineas, /return Ficha\.encabezado\(\{ icono: ico, tituloHtml: titulo/);
   assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
@@ -1502,8 +1524,9 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
   assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Línea ' \+ \(l\.numero \|\| '—'\);/);
   assert.doesNotMatch(cliente, /etiqueta = e \? 'NUCO ' \+ \(e\.nuco \|\| '—'\) : 'Línea '/);
   assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Inspección' \+ \(fecha\(i\.fecha\)/);
-  assert.match(cliente, /'<span class="ln-miga-actual" aria-current="page">'/);
-  assert.match(cliente, /Volver a ' \+ esc\(etiquetaMiga\(anterior\)\)/);
+  assert.match(cliente, /actual: pila\.length \? etiquetaMiga\(pila\[pila\.length - 1\]\) : '',/);
+  assert.match(cliente, /volver: \{ texto: 'Volver a ' \+ etiquetaMiga\(anterior\)/);
+  assert.match(read('src/html/js/componentes/ficha.html'), /'<span class="ficha-miga-actual" aria-current="page">'/);
   // Pestaña recordada al regresar
   assert.match(cliente, /if \(pila\.length\) pila\[pila\.length - 1\]\.pestana = nombre;/);
   assert.match(cliente, /\], \{ activa: \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana \}\);/);

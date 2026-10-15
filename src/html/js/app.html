@@ -2461,9 +2461,7 @@
      * y el registro completo (41 columnas) + los dos historiales enlazados.
      */
     function migasVehiculo() {
-      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver">' +
-        '<i data-lucide="chevron-left" class="ico"></i> Volver</button>' +
-        '<span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a></span></div>';
+      return Ficha.migas({ volver: { atributos: 'id="veh-btn-volver"' }, ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }] });
     }
 
     function wireMigasVehiculo() {
@@ -2476,10 +2474,11 @@
     /** Las fotos de una inspección (de la app o solo del expediente): Vehículos › NUCO › Inspección */
     function abrirFotosInspeccionVehiculo(vResumen, d, app) {
       const detalle = document.getElementById('veh-detalle');
-      detalle.innerHTML = '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver-ficha">' +
-        Iconos.svg('chevron-left') + ' Volver</button><span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a> › ' +
-        '<a href="#" class="ln-enlace" id="veh-enlace-ficha">Nucco ' + escaparHtml(vResumen.NUCCO || '') + '</a> › Inspección ' +
-        escaparHtml(d.nombre + ' ' + d.anio) + '</span></div><div id="veh-insp-fotos"></div>';
+      detalle.innerHTML = Ficha.migas({
+        volver: { atributos: 'id="veh-btn-volver-ficha"' },
+        ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }, { texto: 'Nucco ' + (vResumen.NUCCO || ''), atributos: 'id="veh-enlace-ficha"' }],
+        actual: 'Inspección ' + d.nombre + ' ' + d.anio,
+      }) + '<div id="veh-insp-fotos"></div>';
       const aLaFicha = (ev) => { if (ev) ev.preventDefault(); abrirFichaVehiculo(vResumen, 'inspecciones'); };
       document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
       document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
@@ -3390,7 +3389,7 @@
       return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
         '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' +
         (liga ? '<span style="margin-left:auto">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</span>' : boton) + '</h3>' +
-        '<dl class="ln-resumen-rapido"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
+        '<dl class="ficha-resumen"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
         (liga ? '<div data-adq-ficha-archivos data-liga="' + escaparHtml(liga) + '" style="margin-top:12px">' +
           '<p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>'
           : '<p class="empty-state" style="margin-top:12px">No se encontró la carpeta en Drive.</p>') +
@@ -3663,16 +3662,12 @@
         ].filter((d) => d[1]);
 
         let html = migasVehiculo();
-        html += '<div class="ln-detalle-header card">' +
-          '<div class="ln-detalle-icono" style="background:none; color:' + estilo.color + '"><i data-lucide="' + estilo.icono + '" class="ico ln-icon"></i></div>' +
-          '<div class="ln-detalle-titulo"><h2>Nucco: ' + escaparHtml(vResumen.NUCCO || '') + '</h2>' +
-          '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + chipAdherentes + '</div></div>' +
-          '<div class="ln-detalle-botones">' +
-          (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
-          '</div>' +
-          (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
-            '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
-          '</div>';
+        html += Ficha.encabezado({
+          icono: estilo.icono, color: estilo.color, titulo: 'Nucco: ' + (vResumen.NUCCO || ''),
+          chips: badgeEstatus(completo['ESTATUS']) + chipAdherentes,
+          botones: puedeEditar ? '<button type="button" id="veh-btn-editar-ficha">' + Iconos.svg('editar') + ' Editar</button>' : '',
+          resumen: resumenRapido,
+        });
 
         // Una sola pestaña Datos (12-oct-2026; antes General + Detalles): todo el vehículo, por secciones
         const datos = seccionesFichaVehiculo(completo, null);
@@ -4448,7 +4443,7 @@
   function iniciarTourFichaVehiculo() {
     Tour.iniciar([
       {
-        selector: '.ln-detalle-header',
+        selector: '.ficha-encabezado',
         titulo: 'La ficha de un vehículo',
         texto: 'Nucco, estatus, departamento, responsable y placa de un vistazo. "Volver" (arriba) regresa a la lista; "Editar" corrige cualquier dato del vehículo.',
       },

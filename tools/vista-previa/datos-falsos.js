@@ -741,7 +741,7 @@
     'usuarios-perfil-ficha': async () => {
       await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]');
       (await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]')).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-      await hasta('#usr-detalle:not([hidden]) .ln-detalle-header'); await esperar(300);
+      await hasta('#usr-detalle:not([hidden]) .ficha-encabezado'); await esperar(300);
     },
     'usuarios-editar-permisos': async () => {
       await abrir('usuarios'); await abrirPrimeraFila();

@@ -3215,12 +3215,12 @@
       const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas telefónicas');
       function migas() {
         const anterior = pila.length > 1 ? pila[pila.length - 2] : null;
-        return '<nav class="ln-migas" aria-label="Ruta"><button type="button" class="secondary ln-btn-icono" data-ln-volver title="Volver a ' +
-          esc(etiquetaMiga(anterior)) + '">' + icono('chevron-left') + ' <span class="ln-migas-volver">Volver a ' + esc(etiquetaMiga(anterior)) + '</span></button>' +
-          '<ol class="ln-migas-ruta"><li><a href="#" class="ln-miga-enlace" data-ln-lista>Líneas telefónicas</a></li>' +
-          pila.map((p, i) => '<li>' + icono('chevron-right', 'ln-icon-sm') +
-            (i < pila.length - 1 ? '<button type="button" class="ln-miga-enlace" data-ln-miga="' + i + '">' + esc(etiquetaMiga(p)) + '</button>' :
-              '<span class="ln-miga-actual" aria-current="page">' + esc(etiquetaMiga(p)) + '</span>') + '</li>').join('') + '</ol></nav>';
+        return Ficha.migas({
+          volver: { texto: 'Volver a ' + etiquetaMiga(anterior), titulo: 'Volver a ' + etiquetaMiga(anterior), atributos: 'data-ln-volver' },
+          ruta: [{ texto: 'Líneas telefónicas', atributos: 'data-ln-lista' }]
+            .concat(pila.slice(0, -1).map((p, i) => ({ texto: etiquetaMiga(p), atributos: 'data-ln-miga="' + i + '"' }))),
+          actual: pila.length ? etiquetaMiga(pila[pila.length - 1]) : '',
+        });
       }
 
       function campos(pares) {
@@ -3371,14 +3371,7 @@
        * consulta (para revisar un equipo o línea sin bajar por la página).
        */
       function encabezado(ico, titulo, chips, botones, resumen, subtitulo) {
-        const datos = (resumen || []).filter(Boolean);
-        return '<div class="ln-detalle-header card">' +
-          '<div class="ln-detalle-icono">' + icono(ico) + '</div>' +
-          '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2>' + (subtitulo ? '<div class="ln-tenue ln-detalle-sub">' + subtitulo + '</div>' : '') +
-          '<div class="ln-chips">' + chips + '</div></div>' +
-          '<div class="ln-detalle-botones">' + (botones || '') + '</div>' +
-          (datos.length ? '<dl class="ln-resumen-rapido">' + datos.map((d) => '<div><dt>' + esc(d[0]) + '</dt><dd>' + (d[2] ? (d[1] || vacio) : guion(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
-          '</div>';
+        return Ficha.encabezado({ icono: ico, tituloHtml: titulo, chips: chips, botones: botones, resumen: resumen, subtitulo: subtitulo });
       }
 
       /**

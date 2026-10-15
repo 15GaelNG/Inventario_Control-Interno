@@ -126,28 +126,7 @@
   .ln-conteo { font-size: var(--texto-s); color: var(--color-text-muted); }
 
   /* Detalle */
-  /* Migas: la página actual en negritas; los niveles anteriores, enlaces discretos (antes el anterior resaltaba más) */
-  .ln-migas { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: var(--texto-s); color: var(--color-text-muted); }
-  .ln-migas-ruta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; min-width: 0; }
-  .ln-migas-ruta li { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
-  .ln-migas .ln-miga-enlace {
-    padding: 2px 4px; margin: 0 -2px; min-height: auto; border: 0; border-radius: var(--radio-s); background: none; color: var(--color-text-muted);
-    font: inherit; font-weight: 500; cursor: pointer; text-decoration: none;
-  }
-  .ln-migas .ln-miga-enlace:hover, .ln-migas .ln-miga-enlace:focus-visible { color: var(--color-text); background: var(--color-bg); text-decoration: underline; text-underline-offset: 2px; }
-  .ln-miga-actual { color: var(--color-text); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ln-migas-volver { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ln-detalle-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-  .ln-detalle-icono {
-    width: 48px; height: 48px; border-radius: var(--radio-2xl); background: var(--color-primary-soft);
-    display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-primary);
-  }
-  .ln-detalle-icono .ln-icon { width: 24px; height: 24px; }
-  :root[data-theme="dark"] .ln-detalle-icono { color: var(--color-text); }
-  .ln-detalle-titulo { flex: 1; min-width: 200px; }
-  .ln-detalle-titulo h2 { margin: 0 0 6px; font-size: var(--texto-xl); }
-  .ln-detalle-sub { margin: -4px 0 6px; font-size: var(--texto-s); }
-  .ln-detalle-botones { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  /* Migas, encabezado y resumen rápido de la ficha: componentes/ficha.html */
 
   .ln-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
   .ln-card { margin-bottom: 14px; }
@@ -470,9 +449,6 @@
   .ln-modulo button:disabled, #ln-op-modal button:disabled { opacity: .55; cursor: wait; }
   .ln-modulo .ln-tabla td { vertical-align: middle; line-height: 1.5; }
   .ln-modulo .ln-tabla th { padding-top: 13px; padding-bottom: 13px; }
-  .ln-detalle-header { background: linear-gradient(135deg, var(--color-surface), var(--color-bg)); border-radius: var(--radio-2xl); padding: 22px; }
-  .ln-detalle-titulo h2 { line-height: 1.4; }
-  .ln-migas { flex-wrap: wrap; }
   .ln-chip { white-space: normal; }
   .ln-campos { row-gap: 12px; line-height: 1.5; }
   .ln-campos dd { white-space: pre-wrap; }
@@ -491,10 +467,6 @@
   #ln-op-modal .modal-card { max-width: 960px; }
   .ln-modulo .ln-upload:focus-within { outline: 3px solid var(--color-accent); outline-offset: 3px; }
   @media (max-width: 760px) {
-    .ln-detalle-header { padding: 16px; }
-    .ln-detalle-botones { width: 100%; }
-    .ln-detalle-botones > * { flex: 1 1 auto; }
-    .ln-detalle-botones > .ln-btn-mas { flex: 0 0 auto; }
     .ln-campos { grid-template-columns: minmax(90px, 36%) 1fr; }
     .ln-form-seccion { padding: 14px; }
     .ln-galeria { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
@@ -555,7 +527,7 @@
        .externo / a.externo azul de marca con ícono de salida: abre Drive o un PDF (convención del sistema)
        .btn-excel           verde: Exportar a Excel (lo pone el DataTable)
      Dentro de tablas (.ln-tabla) los botones son compactos, pero con los mismos colores. */
-  .ln-modulo .page-header-actions button, .ln-detalle-botones > button, .ln-migas > button, .ln-captura-acciones button,
+  .ln-modulo .page-header-actions button, .ln-captura-acciones button,
   .ln-pdf-acciones > button, .ln-cuadros-mas button, .ln-copiar-cabecera button, .ln-segmentado button,
   .ln-historial-completo button, .ln-modulo .modal-card .modal-acciones button, a.ln-boton {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -566,7 +538,7 @@
   :root:not([data-theme="dark"]) .ln-modulo .page-header-actions button.secondary { border-color: #b9c1c6; }
   a.ln-boton { text-decoration: none; box-sizing: border-box; cursor: pointer; }
   a.ln-boton:hover { text-decoration: none; }
-  a.ln-boton .ln-icon, .ln-detalle-botones > button .ln-icon { width: 15px; height: 15px; }
+  a.ln-boton .ln-icon { width: 15px; height: 15px; }
   .ln-tabla button, .ln-tabla a.ln-boton, .ln-btn-chico {
     display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 10px; font-size: var(--texto-s); font-weight: 600; border-radius: var(--radio-m); white-space: nowrap;
   }
@@ -643,15 +615,6 @@
   .ln-historial .dt-scroll { max-height: min(70vh, 640px) !important; }
   /* ================= Experiencia de uso (24-sep): ficha en pestañas, formularios por pasos y celular ================= */
 
-  /* Ficha: resumen rápido dentro del encabezado (lo que más se consulta, sin bajar) */
-  .ln-resumen-rapido {
-    flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px;
-    margin: 4px 0 0; padding-top: 14px; border-top: 1px solid var(--color-border);
-  }
-  .ln-resumen-rapido > div { min-width: 0; }
-  .ln-resumen-rapido dt { font-size: var(--texto-xs); font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .3px; }
-  .ln-resumen-rapido dd { margin: 2px 0 0; font-size: var(--texto-m); font-weight: 600; overflow-wrap: anywhere; }
-  .ficha-pestanas .tabs-lista { margin: 4px 0 14px; }
 
   /* Formularios por pasos (mismo indicador que el componente Formulario) */
   .ln-pasos-barra {
@@ -696,9 +659,7 @@
   @media (max-width: 700px) {
     /* KPIs en una franja que se desliza, en vez de ocupar media pantalla */
     .ln-modulo .stat-row { display: flex; overflow-x: auto; gap: 10px; margin-bottom: 14px; padding-bottom: 4px; scroll-snap-type: x proximity; scrollbar-width: none; }
-    .ln-modulo .stat-row::-webkit-scrollbar, .ficha-pestanas .tabs-lista::-webkit-scrollbar { display: none; }
-    .ficha-pestanas .tabs-lista { scrollbar-width: none; }
-    .ficha-pestanas .tabs-lista .tab-btn .ico { display: none; }
+    .ln-modulo .stat-row::-webkit-scrollbar { display: none; }
     /* Tarjetas del inventario más compactas: caben más por pantalla */
     #ln-telefonicas button.ln-cuadro { min-height: 0; padding: 12px 14px; gap: 4px; }
     #ln-telefonicas .ln-cuadro-principal { margin-top: 4px; font-size: var(--texto-l); }
@@ -712,20 +673,6 @@
     .ln-modulo .dt-ayuda, .ln-modulo .dt-atajos { display: none; }
     .ln-modulo .dt-toolbar .dt-buscar { max-width: none; flex: 1 1 100%; }
 
-    /* Ficha */
-    .ln-migas { margin-bottom: 10px; }
-    /* En celular: Volver y la página actual (sin los niveles intermedios) */
-    .ln-migas-ruta li:not(:last-child) { display: none; }
-    .ln-migas-ruta li:last-child > .ln-icon { display: none; }
-    .ln-migas-volver { max-width: 130px; }
-    .ln-detalle-header { padding: 14px; gap: 10px; }
-    .ln-detalle-icono { width: 40px; height: 40px; border-radius: var(--radio-xl); }
-    .ln-detalle-titulo h2 { font-size: var(--texto-xl); }
-    .ln-detalle-botones { display: flex; flex-wrap: wrap; width: 100%; gap: 8px; }
-    .ln-detalle-botones > button, .ln-detalle-botones > a.ln-boton { flex: 1 1 40%; white-space: normal; text-align: center; }
-    .ln-detalle-botones > .ln-btn-mas { flex: 0 0 auto; }
-    .ln-resumen-rapido { grid-template-columns: 1fr 1fr; gap: 10px 12px; }
-    .ficha-pestanas .tabs-lista .tab-btn { padding: 10px 12px; font-size: var(--texto-s); }
     .ln-copiar-cabecera button { width: 100%; }
 
     /* Formularios: pantalla completa, controles grandes para el dedo y pie fijo con lo necesario */
