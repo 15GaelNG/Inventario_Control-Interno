@@ -298,6 +298,21 @@ test('completarFirmaArqueo: guarda la firma y espera si falta la otra (sin gener
   assert.equal(fila['ESTADO PDF'], undefined);
 });
 
+test('completarFirmaArqueo: quien firma sin cuenta del dominio (liga anónima) no deja FIRMADO POR en blanco -- si no, se confunde con "firmó presencial" y ya no se puede regenerar su liga', () => {
+  const { contexto, hoja } = crearContexto([filaBase({
+    'TOKEN FIRMA RESPONSABLE': 'tok-resp', 'TOKEN FIRMA RESPONSABLE EXPIRA': new Date(Date.now() + 86400000),
+  })]);
+  contexto.Session.getActiveUser = () => ({ getEmail: () => '' });
+  contexto.Servicio.completarFirmaArqueo('tok-resp', 'responsable', FIRMA_IMG);
+  const fila = hoja[0];
+  assert.notEqual(fila['FIRMADO POR RESPONSABLE'], '');
+  assert.match(fila['FIRMADO POR RESPONSABLE'], /liga externa/);
+  // Con eso sí se puede volver a mandar su liga (ej. si el archivo de la firma quedó corrupto) --
+  // no se confunde con alguien que firmó presencial (nunca tuvo token ni firmado por).
+  const liga = contexto.Servicio.generarLigaArqueo('tok', 'ARQ-1', 'responsable');
+  assert.match(liga, /tipo=arqueo&token=token-\d+/);
+});
+
 test('completarFirmaArqueo: cierra y genera el PDF cuando ya no falta ninguna firma', () => {
   const { contexto, hoja } = crearContexto([filaBase({
     'FIRMA RESPONSABLE': 'https://drive.google.com/file/d/R1/view', 'FIRMADO POR RESPONSABLE': 'responsable@ciudadmaderas.com',

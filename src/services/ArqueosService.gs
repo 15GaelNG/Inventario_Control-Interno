@@ -611,7 +611,14 @@ const ArqueosService = (function () {
       cambios[col.firma] = subida.url;
       cambios[col.token] = '';
       cambios[col.expira] = '';
-      cambios[col.firmadoPor] = Session.getActiveUser().getEmail() || '';
+      // Quien firma por liga, sin sesión, casi siempre no tiene cuenta del dominio --
+      // Session.getActiveUser().getEmail() regresa vacío para esa persona (normal, no es un
+      // error). Pero un FIRMADO POR vacío es EXACTAMENTE lo mismo que se ve cuando alguien firmó
+      // presencial (nunca hubo liga) -- generarLigaArqueo usa esa columna para no dejar
+      // regenerar la liga de quien ya firmó en persona, y con las dos en blanco no podía
+      // distinguir los casos: una firma rota de alguien que SÍ firmó a distancia (anónimo) se
+      // quedaba sin forma de volver a mandarle liga (usuario, 15-oct-2026).
+      cambios[col.firmadoPor] = Session.getActiveUser().getEmail() || 'Firmado por liga externa (sin cuenta del dominio)';
 
       const otroQuien = quien === 'asistente' ? 'Responsable' : 'Asistente';
       // Si no hay asistente (CUENTA CON FIRMA ASISTENTE != 'SI'), su firma en blanco no cuenta
