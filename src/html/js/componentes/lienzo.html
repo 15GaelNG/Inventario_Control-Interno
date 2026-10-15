@@ -3,7 +3,7 @@
   /* Fondo blanco SIEMPRE, también en tema oscuro: los diagramas son líneas negras sobre
      transparente; en fondo oscuro no se verían. */
   .lienzo {
-    position: relative; background: #fff; border: 1px solid var(--color-border); border-radius: 10px;
+    position: relative; background: #fff; border: 1px solid var(--color-border); border-radius: var(--radio-l);
     overflow: hidden; line-height: 0;
   }
   .lienzo canvas {
@@ -13,14 +13,14 @@
   }
   .lienzo-guia {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-    font-size: 12.5px; line-height: 1.3; color: #8a959b; pointer-events: none; text-align: center;
+    font-size: var(--texto-s); line-height: 1.3; color: #8a959b; pointer-events: none; text-align: center;
   }
   .lienzo.con-trazos .lienzo-guia { display: none; }
   .lienzo-herramientas { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   /* Acciones discretas, las mismas que las de Firma: no compiten con "Siguiente" y, sin
      marcas, se ven apagadas (antes parecían activas aunque no hubiera nada que deshacer) */
   .lienzo-herramientas button {
-    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: 12px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font-size: var(--texto-s); font-weight: 500;
     background: transparent; border: none; color: var(--color-text-muted); box-shadow: none;
   }
   .lienzo-herramientas button:hover { background: var(--color-bg); color: var(--color-text); }

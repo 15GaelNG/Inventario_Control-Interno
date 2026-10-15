@@ -685,9 +685,9 @@
   function mostrarSinAcceso(nombreModulo) {
     document.getElementById('view-container').innerHTML =
       '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
-      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="lock" class="ico"></i></div>' +
+      '<div style="font-size:var(--texto-3xl); margin-bottom:10px;"><i data-lucide="lock" class="ico"></i></div>' +
       '<h2 style="margin-bottom:6px;">' + escaparHtml(nombreModulo) + '</h2>' +
-      '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
+      '<p style="color:var(--color-text-muted); font-size:var(--texto-s); margin:0;">' +
       'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.</p>' +
       '</div>';
     refreshIcons();
@@ -697,9 +697,9 @@
   function mostrarProximamente(nombreModulo) {
     document.getElementById('view-container').innerHTML =
       '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
-      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="construction" class="ico"></i></div>' +
+      '<div style="font-size:var(--texto-3xl); margin-bottom:10px;"><i data-lucide="construction" class="ico"></i></div>' +
       '<h2 style="margin-bottom:6px;">' + nombreModulo + '</h2>' +
-      '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
+      '<p style="color:var(--color-text-muted); font-size:var(--texto-s); margin:0;">' +
       'Este módulo todavía no está construido — muy pronto.</p>' +
       '</div>';
     refreshIcons();
@@ -2284,14 +2284,14 @@
       (item.titulo ? '<label style="margin-top:' + (i ? '12px' : '0') + '">' + escaparHtml(item.titulo) + '</label>' : '') +
       '<div style="display:flex;gap:8px;margin-top:' + (item.titulo ? '6px' : (i ? '12px' : '0')) + '">' +
         '<input type="text" readonly value="' + escaparHtml(item.liga) + '" id="liga-firma-' + i + '" ' +
-          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-bg);color:var(--color-text);font-size:13px">' +
+          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:var(--radio-m);background:var(--color-bg);color:var(--color-text);font-size:var(--texto-s)">' +
         '<button type="button" class="secondary" data-copiar="liga-firma-' + i + '" title="Copiar liga"><i data-lucide="copy" class="ico"></i></button>' +
       '</div>'
     ).join('');
     fondo.innerHTML =
       '<div class="modal-card">' +
         '<h3><i data-lucide="link" class="ico"></i> Liga' + (lista.length > 1 ? 's' : '') + ' para firmar a distancia</h3>' +
-        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:13px">' +
+        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:var(--texto-s)">' +
           'Mánda' + (lista.length > 1 ? 'selas' : 'sela') + ' a la persona (WhatsApp, correo…) para que la abra y firme desde su celular.</p>' +
         campos +
         '<div class="form-acciones" style="margin-top:14px">' +
@@ -2460,17 +2460,17 @@
 
     // Color + ícono por clase, tal cual se veían en AppSheet.
     const CLASE_ESTILO = {
-      'AUTOMOVIL': { icono: 'car', color: '#2979ff' },
+      'AUTOMOVIL': { icono: 'car', color: 'var(--tono-azul)' },
       // var(--color-neutro-fuerte) en vez de un negro fijo: se pierde contra
       // el fondo del modo oscuro si no se adapta con el tema.
       'CAMION': { icono: 'truck', color: 'var(--color-neutro-fuerte)' },
-      'CAMIONETA': { icono: 'car-front', color: '#ff9800' },
-      'CUATRIMOTO': { icono: 'tractor', color: '#d4b106' },
-      'MOTOCARRO': { icono: 'bike', color: '#9c27b0' },
+      'CAMIONETA': { icono: 'car-front', color: 'var(--tono-naranja)' },
+      'CUATRIMOTO': { icono: 'tractor', color: 'var(--tono-amarillo)' },
+      'MOTOCARRO': { icono: 'bike', color: 'var(--tono-morado)' },
       'MOTOCICLETA': { icono: 'bike', color: 'var(--color-neutro-fuerte)' },
-      'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: '#d32f2f' },
-      'REMOLQUE': { icono: 'container', color: '#43a047' },
-      'MAQUINARIA MENOR': { icono: 'wrench', color: '#607d8b' },
+      'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: 'var(--tono-rojo)' },
+      'REMOLQUE': { icono: 'container', color: 'var(--tono-verde)' },
+      'MAQUINARIA MENOR': { icono: 'wrench', color: 'var(--tono-pizarra)' },
     };
     function etiquetaClase(clase) {
       if (!clase) return '—';

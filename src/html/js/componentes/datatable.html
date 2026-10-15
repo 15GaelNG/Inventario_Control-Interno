@@ -7,37 +7,37 @@
   .dt-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
   .dt-toolbar .dt-buscar { max-width: 260px; }
   .dt-toolbar .dt-buscar-col { max-width: 180px; }
-  .dt-toolbar button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: 13px; white-space: nowrap; }
+  .dt-toolbar button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; font-size: var(--texto-s); white-space: nowrap; }
   .dt-toolbar .dt-espacio { flex: 1; }
-  .dt-seleccion-info { font-size: 12.5px; color: var(--color-text-muted); }
-  .dt-ayuda { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--color-text-muted); cursor: help; padding: 4px 6px; }
+  .dt-seleccion-info { font-size: var(--texto-s); color: var(--color-text-muted); }
+  .dt-ayuda { display: inline-flex; align-items: center; gap: 4px; font-size: var(--texto-s); color: var(--color-text-muted); cursor: help; padding: 4px 6px; }
 
   /* ---- Filtros activos (chips) ---- */
-  .dt-filtros-activos { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: 12px; }
+  .dt-filtros-activos { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; font-size: var(--texto-s); }
   .dt-filtros-activos .dt-filtros-titulo { color: var(--color-text-muted); }
   .dt-chip {
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px;
     background: var(--color-accent-soft); color: var(--color-text); border: 1px solid var(--color-accent);
   }
   .dt-chip button {
-    display: inline-flex; background: transparent; color: var(--color-text-muted); border: none; padding: 3px 5px; font-size: 11px; border-radius: 999px;
+    display: inline-flex; background: transparent; color: var(--color-text-muted); border: none; padding: 3px 5px; font-size: var(--texto-xs); border-radius: 999px;
   }
   .dt-chip button:hover { background: var(--color-surface); color: var(--color-danger); }
-  .dt-link { background: transparent; border: none; color: var(--color-primary); padding: 2px 4px; font-size: 12px; text-decoration: underline; }
+  .dt-link { background: transparent; border: none; color: var(--color-primary); padding: 2px 4px; font-size: var(--texto-s); text-decoration: underline; }
   :root[data-theme="dark"] .dt-link { color: var(--color-accent); }
   .dt-link:hover { background: transparent; }
 
   /* ---- Aviso de selección (patrón Gmail) ---- */
   .dt-banner {
     display: flex; gap: 6px; align-items: center; justify-content: center; flex-wrap: wrap;
-    padding: 7px 10px; margin-bottom: 8px; border-radius: 8px; font-size: 12.5px;
+    padding: 7px 10px; margin-bottom: 8px; border-radius: var(--radio-m); font-size: var(--texto-s);
     background: var(--color-primary-soft); color: var(--color-text);
   }
 
   /* ---- Tabla ---- */
   /* Ocupa el alto disponible de la ventana (se ajusta en JS según dónde quedó la tabla) */
-  .dt-scroll { position: relative; overflow: auto; max-height: 64vh; min-height: 240px; border: 1px solid var(--color-border); border-radius: 10px; }
-  .dt table { font-size: 12.5px; }
+  .dt-scroll { position: relative; overflow: auto; max-height: 64vh; min-height: 240px; border: 1px solid var(--color-border); border-radius: var(--radio-l); }
+  .dt table { font-size: var(--texto-s); }
   .dt thead th {
     position: sticky; top: 0; z-index: 3; background: var(--color-surface);
     white-space: nowrap; user-select: none; padding: 0; border-bottom: 1px solid var(--color-border);
@@ -46,11 +46,11 @@
   .dt-th-titulo { flex: 1; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; }
   .dt-th-titulo:hover { color: var(--color-text); }
   .dt-th-titulo .dt-pin { color: var(--color-accent); }
-  .dt-orden { display: inline-flex; align-items: center; font-size: 11px; color: var(--color-accent); }
-  .dt-orden sub { font-size: 9px; }
+  .dt-orden { display: inline-flex; align-items: center; font-size: var(--texto-xs); color: var(--color-accent); }
+  .dt-orden sub { font-size: var(--texto-2xs); }
   .dt-btn-filtro {
     display: inline-flex; background: transparent; border: none; color: var(--color-text-muted); padding: 3px 4px;
-    border-radius: 6px; font-size: 12px; line-height: 1;
+    border-radius: var(--radio-s); font-size: var(--texto-s); line-height: 1;
   }
   .dt-btn-filtro:hover { background: var(--color-bg); color: var(--color-text); }
   .dt-btn-filtro.activo { background: var(--color-accent); color: #fff; }
@@ -81,7 +81,7 @@
   .dt .dt-btn-modo-seleccion.activo { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
   /* Cuadro de selección con el mouse (como en el Finder): arrastrar sobre las filas marca las que toca */
   .dt-marco { position: absolute; z-index: 6; pointer-events: none; border: 1px solid var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 14%, transparent); border-radius: 3px; }
+    background: color-mix(in srgb, var(--color-primary) 14%, transparent); border-radius: var(--radio-xs); }
   .dt.dt-marcando, .dt.dt-marcando * { user-select: none !important; cursor: default !important; }
   /* Selección como en Google Drive (cfg.seleccionDrive, rama emmanuel): clic = seleccionar, barra con lo más usado
      y ⋮ con el resto; el cuadro se arrastra desde fuera de las filas (por eso queda espacio vacío abajo) */
@@ -90,7 +90,7 @@
   /* La barra se pone ENCIMA de la barra de herramientas (como en Drive): la tabla no se mueve al seleccionar, así el
      segundo clic de un doble clic cae en la misma fila. Si no cabe, se desplaza de lado en vez de crecer. */
   .dt-barra-sel { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 6px;
-    flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; border-radius: 10px; background: var(--color-primary-soft);
+    flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; border-radius: var(--radio-l); background: var(--color-primary-soft);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent); }
   .dt-barra-sel > * { flex-shrink: 0; }
   .dt-barra-sel { scrollbar-width: none; }
@@ -101,8 +101,8 @@
   .dt-barra-sel:not([hidden]) { animation: dt-barra-entra 90ms ease-out 100ms both; }
   @keyframes dt-barra-entra { from { opacity: 0; visibility: hidden; } to { opacity: 1; visibility: visible; } }
   @media (prefers-reduced-motion: reduce) { .dt-barra-sel:not([hidden]) { animation-duration: 1ms; } }
-  .dt-barra-sel .dt-sel-cuenta { font-weight: 600; font-size: 13px; margin: 0 6px 0 2px; white-space: nowrap; }
-  .dt-barra-sel button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: 12.5px; white-space: nowrap; }
+  .dt-barra-sel .dt-sel-cuenta { font-weight: 600; font-size: var(--texto-s); margin: 0 6px 0 2px; white-space: nowrap; }
+  .dt-barra-sel button { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; font-size: var(--texto-s); white-space: nowrap; }
   .dt-barra-sel .dt-sel-icono { padding: 6px 8px; }
   .dt-barra-sel button.activo { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
   .dt .dt-col-mas { position: sticky; right: 0; z-index: 1; width: 36px; min-width: 36px; max-width: 36px; padding: 0 4px;
@@ -111,7 +111,7 @@
   .dt tbody tr:hover td.dt-col-mas { background: var(--color-bg); }
   .dt tbody tr.dt-fila-seleccionada td.dt-col-mas { background: var(--color-primary-soft); }
   .dt .dt-btn-mas { display: inline-flex; align-items: center; background: transparent; border: none; padding: 5px;
-    border-radius: 6px; color: var(--color-text-muted); opacity: 0; }
+    border-radius: var(--radio-s); color: var(--color-text-muted); opacity: 0; }
   .dt tbody tr:hover .dt-btn-mas, .dt tbody tr.dt-fila-seleccionada .dt-btn-mas, .dt .dt-btn-mas:focus-visible { opacity: 1; }
   .dt .dt-btn-mas:hover { background: var(--color-primary-soft); color: var(--color-text); }
   @media (hover: none) { .dt .dt-btn-mas { opacity: .7; } }
@@ -125,11 +125,11 @@
   @keyframes dt-menu-aparece { from { opacity: 0; } to { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .dt-popover.dt-menu, .dt-popover.dt-menu > * { animation: none; } }
   .dt-popover.dt-menu button { display: flex; width: 100%; justify-content: flex-start; gap: 10px; background: transparent;
-    border: none; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--color-text); text-align: left; }
+    border: none; padding: 8px 10px; border-radius: var(--radio-m); font-size: var(--texto-s); color: var(--color-text); text-align: left; }
   .dt-popover.dt-menu button:hover, .dt-popover.dt-menu button:focus-visible { background: var(--color-bg); }
   .dt-popover.dt-menu button.dt-peligro { color: var(--color-danger); }
   .dt-popover.dt-menu hr { border: 0; border-top: 1px solid var(--color-border); margin: 4px 0; }
-  .dt-popover.dt-menu .dt-menu-titulo { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  .dt-popover.dt-menu .dt-menu-titulo { padding: 6px 10px 2px; font-size: var(--texto-xs); font-weight: 600; letter-spacing: .04em;
     text-transform: uppercase; color: var(--color-text-muted); }
 
   /* Columna de acciones por fila: fija a la DERECHA, siempre a la vista aunque haya scroll */
@@ -142,7 +142,7 @@
   .dt-acciones-fila { display: inline-flex; gap: 2px; }
   .dt .dt-btn-fila {
     display: inline-flex; align-items: center; background: transparent; border: none;
-    padding: 5px 6px; border-radius: 6px; font-size: 13px; color: var(--color-text-muted);
+    padding: 5px 6px; border-radius: var(--radio-s); font-size: var(--texto-s); color: var(--color-text-muted);
   }
   .dt .dt-btn-fila:hover, .dt .dt-btn-fila:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
   .dt .dt-btn-fila.dt-peligro:hover, .dt .dt-btn-fila.dt-peligro:focus-visible { background: #F3ECD6; color: var(--color-danger); }
@@ -164,15 +164,15 @@
     border-top: 2px solid var(--color-border); border-bottom: none; white-space: nowrap;
   }
   .dt tfoot td.dt-fija { z-index: 3; }
-  .dt-agregado-etiqueta { font-weight: 400; color: var(--color-text-muted); font-size: 11px; margin-right: 4px; }
+  .dt-agregado-etiqueta { font-weight: 400; color: var(--color-text-muted); font-size: var(--texto-xs); margin-right: 4px; }
 
   /* ---- Edición en celda: botón de lápiz real (clic, Tab + Enter), visible al pasar el mouse o con foco ---- */
   .dt td.dt-editable { position: relative; padding-right: 30px; }
   .dt td.dt-editable:hover { box-shadow: inset 0 0 0 1px var(--color-accent); }
   .dt .dt-btn-editar-celda {
     position: absolute; right: 3px; top: 50%; transform: translateY(-50%);
-    display: inline-flex; background: transparent; border: none; padding: 3px 5px; border-radius: 6px;
-    font-size: 12px; line-height: 1; color: var(--color-text-muted); opacity: 0;
+    display: inline-flex; background: transparent; border: none; padding: 3px 5px; border-radius: var(--radio-s);
+    font-size: var(--texto-s); line-height: 1; color: var(--color-text-muted); opacity: 0;
   }
   .dt td.dt-editable:hover .dt-btn-editar-celda, .dt .dt-btn-editar-celda:focus-visible { opacity: 1; }
   .dt .dt-btn-editar-celda:hover, .dt .dt-btn-editar-celda:focus-visible { background: var(--color-accent-soft); color: var(--color-text); }
@@ -185,8 +185,8 @@
 
   .dt td.dt-editando { padding: 2px 4px; overflow: visible; box-shadow: inset 0 0 0 2px var(--color-accent); }
   .dt-editor { display: flex; align-items: center; gap: 4px; }
-  .dt-editor input, .dt-editor select { padding: 5px 8px; font-size: 12.5px; min-width: 130px; }
-  .dt-editor button { display: inline-flex; padding: 5px 8px; font-size: 13px; line-height: 1; flex-shrink: 0; }
+  .dt-editor input, .dt-editor select { padding: 5px 8px; font-size: var(--texto-s); min-width: 130px; }
+  .dt-editor button { display: inline-flex; padding: 5px 8px; font-size: var(--texto-s); line-height: 1; flex-shrink: 0; }
   .dt td.dt-guardando { opacity: .5; }
   .dt td.dt-error-celda { box-shadow: inset 0 0 0 2px var(--color-danger); }
   .dt-vacio { text-align: center; color: var(--color-text-muted); padding: 28px 0 !important; white-space: normal !important; }
@@ -194,7 +194,7 @@
 
   /* ---- Carga: skeleton (sin datos) y barra superior (refrescando con datos a la vista) ---- */
   .dt-skel {
-    display: block; height: 10px; border-radius: 6px; width: 70%;
+    display: block; height: 10px; border-radius: var(--radio-s); width: 70%;
     background: linear-gradient(90deg, var(--color-border) 25%, var(--color-bg) 50%, var(--color-border) 75%);
     background-size: 200% 100%; animation: dt-brillo 1.2s ease-in-out infinite;
   }
@@ -207,31 +207,31 @@
   @keyframes dt-barra { from { left: -35%; } to { left: 100%; } }
 
   /* ---- Pie y paginación ---- */
-  .dt-pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 10px; font-size: 12.5px; color: var(--color-text-muted); }
+  .dt-pie { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 10px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .dt-paginacion { display: flex; gap: 6px; align-items: center; }
   .dt-paginacion button { display: inline-flex; padding: 6px 8px; }
   .dt-paginacion select { width: auto; padding: 6px 8px; }
-  .dt-atajos { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; cursor: help; }
+  .dt-atajos { display: inline-flex; align-items: center; gap: 4px; font-size: var(--texto-xs); cursor: help; }
 
   /* ---- Menús flotantes (filtro de columna y Vista) ---- */
   .dt-popover {
     position: fixed; z-index: 600; width: 280px; max-height: calc(100vh - 16px); overflow-y: auto; background: var(--color-surface);
-    border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-lg); padding: 12px;
-    font-size: 12.5px;
+    border: 1px solid var(--color-border); border-radius: var(--radio-xl); box-shadow: var(--shadow-lg); padding: 12px;
+    font-size: var(--texto-s);
   }
-  .dt-popover h4 { margin: 0 0 8px; font-size: 13px; }
+  .dt-popover h4 { margin: 0 0 8px; font-size: var(--texto-s); }
   .dt-popover button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
   .dt-popover .dt-pop-fila { display: flex; gap: 6px; margin-bottom: 8px; }
   .dt-popover .dt-pop-fila button { flex: 1; }
-  .dt-popover input, .dt-popover select { padding: 7px 9px; font-size: 12.5px; }
+  .dt-popover input, .dt-popover select { padding: 7px 9px; font-size: var(--texto-s); }
   .dt-popover .dt-pop-acciones { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
-  .dt-popover .dt-pop-acciones button, .dt-popover .dt-pop-orden button, .dt-popover .dt-pop-col button { padding: 6px 10px; font-size: 12px; }
+  .dt-popover .dt-pop-acciones button, .dt-popover .dt-pop-orden button, .dt-popover .dt-pop-col button { padding: 6px 10px; font-size: var(--texto-s); }
   .dt-popover .dt-pop-orden { display: flex; gap: 6px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--color-border); }
   .dt-popover .dt-pop-orden button { flex: 1; }
   .dt-popover .dt-pop-col { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--color-border); }
   .dt-popover .dt-pop-col button { flex: 1; }
   .dt-pop-presets { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
-  .dt-pop-presets button { padding: 3px 8px; font-size: 11.5px; border-radius: 999px; }
+  .dt-pop-presets button { padding: 3px 8px; font-size: var(--texto-xs); border-radius: 999px; }
 
   /* ---- Menú contextual (clic derecho en una fila) ----
      Mismo overlay que .dt-popover (position:fixed, se cierra con clic fuera o Escape
@@ -239,7 +239,7 @@
      acciones en vez de controles de filtro/orden. Ver cfg.menuContextual. */
   .dt-menu-contextual { width: 230px; padding: 6px; }
   .dt-menu-grupo-titulo {
-    font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    font-size: var(--texto-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--color-text-muted); padding: 10px 10px 4px;
   }
   .dt-menu-contextual > .dt-menu-grupo-titulo:first-child { padding-top: 4px; }
@@ -248,32 +248,32 @@
      calificando también con .dt-popover, para que el ícono+texto quede a la izquierda. */
   .dt-popover.dt-menu-contextual .dt-menu-item {
     display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; text-align: left;
-    padding: 8px 10px; border-radius: 7px; border: none; background: none;
-    font-size: 13px; color: var(--color-text); cursor: pointer;
+    padding: 8px 10px; border-radius: var(--radio-s); border: none; background: none;
+    font-size: var(--texto-s); color: var(--color-text); cursor: pointer;
   }
   .dt-menu-item:hover, .dt-menu-item:focus-visible { background: var(--color-primary-soft); }
   .dt-menu-item.dt-peligro { color: var(--color-danger); }
   .dt-menu-item.dt-peligro:hover { background: #F3ECD6; }
   :root[data-theme="dark"] .dt-menu-item.dt-peligro:hover { background: rgba(255,138,128,.15); color: #ff8a80; }
-  .dt-lista-valores { max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 8px; padding: 4px; }
+  .dt-lista-valores { max-height: 200px; overflow-y: auto; border: 1px solid var(--color-border); border-radius: var(--radio-m); padding: 4px; }
   .dt-lista-valores label {
-    display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 6px; border-radius: 6px;
-    font-size: 12.5px; color: var(--color-text); font-weight: 400; cursor: pointer;
+    display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 6px; border-radius: var(--radio-s);
+    font-size: var(--texto-s); color: var(--color-text); font-weight: 400; cursor: pointer;
   }
   .dt-lista-valores label:hover { background: var(--color-bg); }
   .dt-lista-valores input { width: auto; }
-  .dt-lista-valores .dt-conteo { margin-left: auto; color: var(--color-text-muted); font-size: 11px; }
-  .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: 11px; text-decoration: underline; }
+  .dt-lista-valores .dt-conteo { margin-left: auto; color: var(--color-text-muted); font-size: var(--texto-xs); }
+  .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: var(--texto-xs); text-decoration: underline; }
   .dt-lista-valores label:hover .dt-solo, .dt-lista-valores .dt-solo:focus-visible { visibility: visible; }
 
   .dt-columnas { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
   .dt-columnas-acciones { display: flex; gap: 6px; margin-bottom: 6px; }
-  .dt-columnas-acciones button { flex: 1; padding: 5px 8px; font-size: 12px; }
-  .dt-columna-item { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: 6px; }
+  .dt-columnas-acciones button { flex: 1; padding: 5px 8px; font-size: var(--texto-s); }
+  .dt-columna-item { display: flex; align-items: center; gap: 4px; padding: 2px; border-radius: var(--radio-s); }
   .dt-columna-item:hover { background: var(--color-bg); }
-  .dt-columna-item label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text); font-weight: 400; cursor: pointer; font-size: 12.5px; }
+  .dt-columna-item label { flex: 1; display: flex; align-items: center; gap: 8px; margin: 0; color: var(--color-text); font-weight: 400; cursor: pointer; font-size: var(--texto-s); }
   .dt-columna-item input { width: auto; }
-  .dt-columna-item button { background: transparent; border: none; color: var(--color-text-muted); padding: 4px 5px; font-size: 12px; border-radius: 6px; }
+  .dt-columna-item button { background: transparent; border: none; color: var(--color-text-muted); padding: 4px 5px; font-size: var(--texto-s); border-radius: var(--radio-s); }
   .dt-columna-item button:hover:not(:disabled) { background: var(--color-surface); color: var(--color-text); }
   .dt-columna-item button:disabled { opacity: .3; cursor: default; }
   .dt-columna-item button.activo { color: var(--color-accent); }
@@ -291,28 +291,28 @@
     display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
     padding: 16px 18px; border-bottom: 1px solid var(--color-border);
   }
-  .dt-panel-header h3 { margin: 0; font-size: 16px; }
-  .dt-panel-header p { margin: 2px 0 0; font-size: 12px; color: var(--color-text-muted); }
+  .dt-panel-header h3 { margin: 0; font-size: var(--texto-l); }
+  .dt-panel-header p { margin: 2px 0 0; font-size: var(--texto-s); color: var(--color-text-muted); }
   .dt-panel-cuerpo { flex: 1; overflow-y: auto; padding: 8px 18px 18px; }
   .dt-panel-pie { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--color-border); }
   .dt-panel-pie:empty { display: none; }
   .dt-panel button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-  .dt-campo { display: grid; grid-template-columns: 40% 1fr; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-border); font-size: 13px; }
-  .dt-campo-titulo { color: var(--color-text-muted); font-size: 12px; font-weight: 500; }
+  .dt-campo { display: grid; grid-template-columns: 40% 1fr; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--color-border); font-size: var(--texto-s); }
+  .dt-campo-titulo { color: var(--color-text-muted); font-size: var(--texto-s); font-weight: 500; }
   .dt-campo-valor { display: flex; align-items: center; gap: 6px; min-width: 0; word-break: break-word; }
   .dt-campo-valor .dt-campo-texto { flex: 1; }
-  .dt-campo-valor button { padding: 4px 8px; font-size: 12px; flex-shrink: 0; }
+  .dt-campo-valor button { padding: 4px 8px; font-size: var(--texto-s); flex-shrink: 0; }
   /* "Editar" discreto: con ocho campos editables eran ocho botones con borde compitiendo
      con el dato; se nota al pasar el mouse por el renglón */
   .dt-campo-valor .dt-btn-editar-campo { background: transparent; border-color: transparent; color: var(--color-text-muted); box-shadow: none; }
   .dt-campo:hover .dt-btn-editar-campo, .dt-btn-editar-campo:focus-visible { border-color: var(--color-border); color: var(--color-text); }
   /* Los campos sin dato (y que no se pueden llenar aquí) van juntos y plegados: son ruido
      cuando se abre el detalle para ver lo importante */
-  .dt-campos-vacios { margin-top: 10px; font-size: 12.5px; color: var(--color-text-muted); }
+  .dt-campos-vacios { margin-top: 10px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .dt-campos-vacios summary { cursor: pointer; padding: 6px 0; font-weight: 500; }
   .dt-campos-vacios summary:hover { color: var(--color-text); }
   .dt-panel-extra.dt-extra-primero { margin: 6px 0 14px; padding-bottom: 14px; border-bottom: 1px solid var(--color-border); }
-  .dt-campo-valor input, .dt-campo-valor select { padding: 6px 8px; font-size: 13px; }
+  .dt-campo-valor input, .dt-campo-valor select { padding: 6px 8px; font-size: var(--texto-s); }
   .dt-panel-extra:empty { display: none; }
   .dt-panel-extra { margin-top: 14px; }
 
@@ -321,9 +321,9 @@
      pida cfg.tarjetasAncho (raíz .dt-tarjetas-ancho), ahí se ve en cualquier ancho. */
   .dt-modo { display: none; }
   @media (max-width: 1024px) {
-    .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+    .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radio-m); overflow: hidden; flex-shrink: 0; }
   }
-  .dt-tarjetas-ancho .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+  .dt-tarjetas-ancho .dt-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radio-m); overflow: hidden; flex-shrink: 0; }
   .dt-toolbar .dt-modo button { background: transparent; border: 0; border-radius: 0; color: var(--color-text-muted); padding: 8px 11px; }
   .dt-toolbar .dt-modo button + button { border-left: 1px solid var(--color-border); }
   .dt-toolbar .dt-modo button[aria-pressed="true"] { background: var(--color-primary); color: #fff; }
@@ -336,7 +336,7 @@
   .dt.dt-drive.dt-tarjetas .dt-scroll table { margin-bottom: 0; }
   .dt.dt-tarjetas tbody tr {
     display: block; position: relative; margin-bottom: 8px; padding: 12px 46px 12px 14px;
-    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px;
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radio-xl);
   }
   .dt.dt-tarjetas tbody tr[data-id] { cursor: pointer; }
   .dt.dt-tarjetas tbody tr:hover td, .dt.dt-tarjetas tbody tr.dt-fila-seleccionada td { background: transparent; }
@@ -350,9 +350,9 @@
   }
   .dt.dt-tarjetas tbody td[data-titulo]::before {
     content: attr(data-titulo); flex-shrink: 0; max-width: 45%; text-align: left;
-    color: var(--color-text-muted); font-size: 12px; font-weight: 500;
+    color: var(--color-text-muted); font-size: var(--texto-s); font-weight: 500;
   }
-  .dt.dt-tarjetas tbody td.dt-tarjeta-titulo { justify-content: flex-start; text-align: left; font-size: 14px; font-weight: 700; padding-bottom: 6px; }
+  .dt.dt-tarjetas tbody td.dt-tarjeta-titulo { justify-content: flex-start; text-align: left; font-size: var(--texto-m); font-weight: 700; padding-bottom: 6px; }
   .dt.dt-tarjetas tbody td.dt-tarjeta-titulo::before { content: none; }
   /* Casilla arriba a la izquierda (cuando se ve) y ⋮ arriba a la derecha, siempre visible (sin hover en el dedo) */
   .dt.dt-tarjetas tbody td.dt-col-check { position: absolute !important; top: 11px; left: 10px !important; padding: 0; }
@@ -1765,8 +1765,8 @@
                 </select>
               </label>
               <button type="button" class="secondary dt-restablecer">${ic('restablecer')} Restablecer vista</button>
-              ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:11px">Tu vista se guarda en este navegador.</span>' : ''}
-              ${st.columnasExtra.cargando ? '<span class="page-subtitle" style="font-size:11px">Cargando todas las columnas de la base de datos…</span>' : ''}
+              ${cfg.idTabla ? '<span class="page-subtitle" style="font-size:var(--texto-xs)">Tu vista se guarda en este navegador.</span>' : ''}
+              ${st.columnasExtra.cargando ? '<span class="page-subtitle" style="font-size:var(--texto-xs)">Cargando todas las columnas de la base de datos…</span>' : ''}
             </div>`;
 
           // Cada cambio repinta la tabla y también este menú (queda abierto)

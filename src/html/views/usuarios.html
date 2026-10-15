@@ -8,20 +8,20 @@
 <style>
   .usr-avatar {
     display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%;
-    background: var(--color-accent-soft); color: var(--color-text); font-weight: 700; font-size: 15px;
+    background: var(--color-accent-soft); color: var(--color-text); font-weight: 700; font-size: var(--texto-l);
   }
   .usr-nombre { display: inline-flex; align-items: center; gap: 8px; }
 
   /* Un renglón de permiso: ícono · módulo (y de dónde viene) · nivel */
   .usr-permiso { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
   .usr-permiso + .usr-permiso { border-top: 1px solid var(--color-border); }
-  .usr-permiso-ico { flex: none; width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
+  .usr-permiso-ico { flex: none; width: 32px; height: 32px; border-radius: var(--radio-m); display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
   .usr-permiso-ico .ico { width: 16px; height: 16px; }
-  .usr-permiso-nombre { flex: 1; min-width: 0; font-weight: 600; font-size: 13.5px; }
-  .usr-permiso-origen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; font-weight: 400; font-size: 11.5px; color: var(--color-text-muted); }
+  .usr-permiso-nombre { flex: 1; min-width: 0; font-weight: 600; font-size: var(--texto-m); }
+  .usr-permiso-origen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; font-weight: 400; font-size: var(--texto-xs); color: var(--color-text-muted); }
   .usr-permiso.excepcion .usr-permiso-ico { background: var(--color-accent); color: var(--color-primary); }
 
-  .usr-nivel { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+  .usr-nivel { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: var(--texto-s); font-weight: 700; }
   .usr-nivel .ico { width: 13px; height: 13px; }
   /* Nivel: Editar verde, Ver azul de la empresa, Sin acceso rojo (el sistema no tiene un rojo
      propio: --color-danger es bronce, por eso va aquí) */
@@ -30,16 +30,16 @@
   .usr-nivel.NINGUNO { background: #b42318; color: #fff; }
 
   /* De dónde viene el permiso: por su área (azul de la empresa) o excepción (dorado) */
-  .usr-origen { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .usr-origen { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 600; white-space: nowrap; }
   .usr-origen .ico { width: 12px; height: 12px; }
   .usr-origen.area { background: var(--color-primary-soft); color: var(--color-primary); }
   .usr-origen.excepcion { background: var(--color-accent); color: var(--color-primary); }
   .usr-origen.rol { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
 
-  .usr-aviso { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; margin-bottom: 14px; border-radius: 10px; background: var(--color-note-bg); font-size: 13px; }
+  .usr-aviso { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; margin-bottom: 14px; border-radius: var(--radio-l); background: var(--color-note-bg); font-size: var(--texto-s); }
   .usr-aviso .ico { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--color-primary); }
 
-  .usr-plegado summary { cursor: pointer; color: var(--color-text-muted); font-size: 13px; font-weight: 600; padding: 2px 0; }
+  .usr-plegado summary { cursor: pointer; color: var(--color-text-muted); font-size: var(--texto-s); font-weight: 600; padding: 2px 0; }
   .usr-plegado summary:hover { color: var(--color-text); }
   .usr-plegado[open] summary { margin-bottom: 6px; }
 
@@ -49,21 +49,21 @@
   .usr-chip-enlace:hover { text-decoration: underline; }
 
   /* Ventana "Editar permisos": un renglón por módulo con sus tres niveles a la vista */
-  .usr-modal-regla { margin: -8px 0 10px; font-size: 12.5px; color: var(--color-text-muted); line-height: 1.45; }
-  .usr-modal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: 12px; color: var(--color-text-muted); }
+  .usr-modal-regla { margin: -8px 0 10px; font-size: var(--texto-s); color: var(--color-text-muted); line-height: 1.45; }
+  .usr-modal-leyenda { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .usr-modal-leyenda:empty { display: none; }
   .usr-modal-leyenda .ico { width: 13px; height: 13px; vertical-align: -2px; }
 
   /* Título de cada grupo, con "Todo el grupo" a la derecha */
   .usr-editar-grupo {
     display: flex; align-items: center; gap: 6px; margin: 18px 0 6px; padding: 0 2px;
-    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted);
+    font-size: var(--texto-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted);
   }
   .usr-editar-grupo:first-child { margin-top: 0; }
   .usr-editar-grupo .ico { width: 13px; height: 13px; }
   .usr-editar-grupo-nombre { flex: 1; min-width: 0; }
-  .usr-editar-grupo-todo { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: 11.5px; }
-  .usr-editar-grupo .usr-op { padding: 3px 9px; font-size: 11.5px; }
+  .usr-editar-grupo-todo { text-transform: none; letter-spacing: 0; font-weight: 600; font-size: var(--texto-xs); }
+  .usr-editar-grupo .usr-op { padding: 3px 9px; font-size: var(--texto-xs); }
 
   /* Ventana "Editar permisos" (rediseño 14-oct): ancha, a dos columnas — grupos | módulos del grupo */
   .modal-card.usr-modal-editor { max-width: 1040px; width: calc(100vw - 48px); }
@@ -71,15 +71,15 @@
   .usr-editor { display: grid; grid-template-columns: 230px 1fr; gap: 18px; min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); }
   .usr-editor-grupos { display: flex; flex-direction: column; gap: 4px; overflow-y: auto; padding-right: 2px; }
   .usr-editor-grupo {
-    display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border: 1px solid transparent; border-radius: 10px;
-    background: transparent; color: var(--color-text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+    display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border: 1px solid transparent; border-radius: var(--radio-l);
+    background: transparent; color: var(--color-text); font: inherit; font-size: var(--texto-m); text-align: left; cursor: pointer;
   }
   .usr-editor-grupo .ico { width: 16px; height: 16px; color: var(--color-text-muted); flex: none; }
   .usr-editor-grupo:hover { background: var(--color-bg); }
   .usr-editor-grupo.activa { background: var(--color-primary-soft); border-color: var(--color-primary); font-weight: 600; }
   .usr-editor-grupo.activa .ico { color: var(--color-primary); }
   .usr-editor-grupo-nombre { flex: 1; min-width: 0; }
-  .usr-editor-grupo-cuenta { font-size: 11.5px; color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+  .usr-editor-grupo-cuenta { font-size: var(--texto-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
   .usr-editor-grupo.cambiada .usr-editor-grupo-cuenta::after {
     content: ''; display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--color-accent); vertical-align: 1px;
   }
@@ -88,38 +88,38 @@
 
   /* Un módulo: nombre y de dónde le viene; los tres niveles a la derecha; sus pestañas como chips debajo */
   .usr-editar-lista { display: flex; flex-direction: column; gap: 8px; }
-  .usr-mod { border: 1px solid var(--color-border); border-radius: 12px; padding: 10px 12px; background: var(--color-surface); }
+  .usr-mod { border: 1px solid var(--color-border); border-radius: var(--radio-xl); padding: 10px 12px; background: var(--color-surface); }
   .usr-mod.excepcion { border-color: var(--color-accent); background: var(--color-accent-soft); }
   .usr-mod.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
   .usr-mod-cab { display: flex; align-items: center; gap: 10px; }
-  .usr-mod-ico { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
+  .usr-mod-ico { flex: none; width: 32px; height: 32px; border-radius: var(--radio-m); display: grid; place-items: center; background: var(--color-bg); color: var(--color-text-muted); }
   .usr-mod-ico .ico { width: 16px; height: 16px; }
   .usr-mod.sin-acceso .usr-mod-ico { opacity: .55; }
-  .usr-mod-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 14px; font-weight: 600; }
-  .usr-mod-origen { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 400; color: var(--color-text-muted); }
+  .usr-mod-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--texto-m); font-weight: 600; }
+  .usr-mod-origen { display: inline-flex; align-items: center; gap: 4px; font-size: var(--texto-xs); font-weight: 400; color: var(--color-text-muted); }
   .usr-mod-origen.propia { color: var(--color-text); font-weight: 600; }
   .usr-mod-origen .ico { width: 12px; height: 12px; }
   /* Las pestañas en árbol, colgadas del módulo: como un módulo en chiquito */
   .usr-mod-secs { margin: 8px 0 0 15px; padding-left: 26px; border-left: 2px solid var(--color-border); display: flex; flex-direction: column; }
   .usr-sec { position: relative; display: flex; align-items: center; gap: 10px; padding: 5px 0; }
   .usr-sec::before { content: ''; position: absolute; left: -26px; top: 50%; width: 18px; border-top: 2px solid var(--color-border); }
-  .usr-sec-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 13px; font-weight: 500; }
-  .usr-sec .usr-mod-origen { font-size: 11px; }
+  .usr-sec-nombre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: var(--texto-s); font-weight: 500; }
+  .usr-sec .usr-mod-origen { font-size: var(--texto-xs); }
   .usr-sec.cambiada .usr-sec-nombre > span:first-child { font-weight: 700; }
-  .usr-sec .usr-segmento { border-radius: 7px; }
-  .usr-sec .usr-op { padding: 3px 9px; font-size: 11.5px; }
+  .usr-sec .usr-segmento { border-radius: var(--radio-s); }
+  .usr-sec .usr-op { padding: 3px 9px; font-size: var(--texto-xs); }
   .usr-sec .usr-restablecer { width: 26px; height: 26px; }
   .usr-op:disabled { opacity: .35; cursor: not-allowed; }
   /* Exportar a Excel: un ícono junto a los niveles, verde si puede y rojo si se le quitó */
   .usr-exp {
-    flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; padding: 0; cursor: pointer;
+    flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radio-m); padding: 0; cursor: pointer;
     border: 1px solid color-mix(in srgb, var(--color-success) 45%, transparent); background: color-mix(in srgb, var(--color-success) 12%, transparent); color: var(--color-success);
   }
   .usr-exp .ico { width: 16px; height: 16px; }
   .usr-exp.prohibido { border-color: color-mix(in srgb, #b42318 45%, transparent); background: color-mix(in srgb, #b42318 12%, transparent); color: #b42318; }
   .usr-exp.apagado { border-color: var(--color-border); background: transparent; color: var(--color-text-muted); opacity: .45; cursor: default; }
   .usr-exp.cambiada { box-shadow: 0 0 0 2px var(--color-accent); }
-  .usr-exp.mini { width: 20px; height: 20px; border-radius: 6px; vertical-align: middle; cursor: default; }
+  .usr-exp.mini { width: 20px; height: 20px; border-radius: var(--radio-s); vertical-align: middle; cursor: default; }
   .usr-exp.mini .ico { width: 12px; height: 12px; vertical-align: 0; }
   .usr-modal-leyenda > span { display: inline-flex; align-items: center; gap: 6px; }
   .usr-perfil-cab { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; margin-bottom: 12px; }
@@ -143,10 +143,10 @@
 
   /* Los tres niveles con el color de la ficha: Sin acceso rojo, Ver azul, Editar verde. El que
      le da su área a la persona lleva un punto */
-  .usr-segmento { flex: none; display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; background: var(--color-surface); }
+  .usr-segmento { flex: none; display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radio-m); overflow: hidden; background: var(--color-surface); }
   .usr-op {
     position: relative; margin: 0; padding: 5px 11px; border: 0; border-radius: 0; background: transparent;
-    color: var(--color-text-muted); font-size: 12.5px; font-weight: 600; cursor: pointer; box-shadow: none;
+    color: var(--color-text-muted); font-size: var(--texto-s); font-weight: 600; cursor: pointer; box-shadow: none;
   }
   .usr-op + .usr-op { border-left: 1px solid var(--color-border); }
   .usr-op:hover { background: var(--color-bg); color: var(--color-text); }
@@ -158,23 +158,23 @@
 
   .usr-restablecer {
     flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0;
-    border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); color: var(--color-text-muted); cursor: pointer;
+    border: 1px solid var(--color-border); border-radius: var(--radio-m); background: var(--color-surface); color: var(--color-text-muted); cursor: pointer;
   }
   .usr-restablecer:hover { color: var(--color-text); background: var(--color-bg); }
   .usr-restablecer .ico { width: 14px; height: 14px; }
 
   .usr-modal-pie { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
-  .usr-modal-pie p { margin: 0 auto 0 0; font-size: 12.5px; color: var(--color-text-muted); }
+  .usr-modal-pie p { margin: 0 auto 0 0; font-size: var(--texto-s); color: var(--color-text-muted); }
   .usr-modal-pie button:disabled { opacity: .5; cursor: not-allowed; }
 
   /* "Su área le da N módulos · más M excepciones propias" (ficha de la persona) */
-  .usr-herencia { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: 13px; color: var(--color-text-muted); }
+  .usr-herencia { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .usr-herencia .ico { width: 15px; height: 15px; flex: none; }
   .usr-herencia b { color: var(--color-text); }
 
   /* Lo que implican los permisos fuera de sus pantallas (ficha y ventana) */
   .usr-implica ul { list-style: none; margin: 0; padding: 0; }
-  .usr-implica li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: 13px; line-height: 1.45; }
+  .usr-implica li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: var(--texto-s); line-height: 1.45; }
   .usr-implica li + li { border-top: 1px solid var(--color-border); }
   .usr-implica li .ico { flex: none; width: 15px; height: 15px; margin-top: 2px; color: var(--color-primary); }
   #usr-modal-cuerpo .usr-implica { margin-top: 16px; }
@@ -182,36 +182,36 @@
   /* Matriz por área: módulos (renglones, por grupo) contra áreas (columnas, el nombre de lado).
      Editar resalta (verde lleno), Ver en azul suave y Sin acceso apenas en rojo, para que se
      lea de un vistazo qué edita cada área. El encabezado y la columna de módulos se quedan fijos. */
-  .usr-matriz-barra { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--color-border); font-size: 12px; color: var(--color-text-muted); }
+  .usr-matriz-barra { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid var(--color-border); font-size: var(--texto-s); color: var(--color-text-muted); }
   .usr-matriz-leyenda { display: inline-flex; align-items: center; gap: 6px; }
   .usr-matriz-leyenda .usr-celda { width: 18px; height: 16px; cursor: default; }
-  .usr-matriz-barra p { margin: 0 0 0 auto; font-size: 12.5px; }
+  .usr-matriz-barra p { margin: 0 0 0 auto; font-size: var(--texto-s); }
   .usr-matriz-barra p.con-cambios { color: var(--color-text); font-weight: 600; }
   .usr-matriz-barra button:disabled { opacity: .5; cursor: not-allowed; }
   .usr-matriz-scroll { overflow: auto; max-height: calc(100vh - 300px); min-height: 240px; }
-  .usr-matriz { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  .usr-matriz { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--texto-s); }
   .usr-matriz th, .usr-matriz td { background: var(--color-surface); }
   .usr-matriz thead th { position: sticky; top: 0; z-index: 2; vertical-align: bottom; padding: 10px 3px 8px; border-bottom: 1px solid var(--color-border); }
   .usr-matriz .usr-matriz-mod {
     position: sticky; left: 0; z-index: 1; text-align: left; white-space: nowrap; font-weight: 500;
     width: 1%; padding: 3px 14px 3px 12px; border-right: 1px solid var(--color-border);
   }
-  .usr-matriz thead .usr-matriz-mod { z-index: 3; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+  .usr-matriz thead .usr-matriz-mod { z-index: 3; font-size: var(--texto-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
   .usr-matriz-mod .ico { width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px; color: var(--color-text-muted); }
   .usr-matriz-area {
     writing-mode: vertical-rl; transform: rotate(180deg); max-height: 150px; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; margin: 0 auto; padding: 0; border: 0; background: none; box-shadow: none;
-    color: var(--color-text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    color: var(--color-text); font: inherit; font-size: var(--texto-s); font-weight: 600; cursor: pointer;
   }
   .usr-matriz-area:hover { color: var(--color-primary); text-decoration: underline; }
-  .usr-matriz-grupo th { padding: 14px 12px 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
+  .usr-matriz-grupo th { padding: 14px 12px 4px; font-size: var(--texto-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
   .usr-matriz-grupo td { border-bottom: 0; }
   .usr-matriz tbody td { padding: 2px 3px; text-align: center; }
   .usr-matriz tbody tr:not(.usr-matriz-grupo):hover > * { background: var(--color-bg); }
 
   .usr-celda {
     position: relative; display: inline-grid; place-items: center; width: 32px; height: 26px; margin: 0; padding: 0;
-    border: 0; border-radius: 6px; box-shadow: none; cursor: pointer; vertical-align: middle;
+    border: 0; border-radius: var(--radio-s); box-shadow: none; cursor: pointer; vertical-align: middle;
   }
   .usr-celda svg, .usr-celda .ico { width: 14px; height: 14px; }
   .usr-celda.EDICION { background: var(--color-success); color: #fff; }
@@ -226,26 +226,26 @@
   .usr-celda.heredada { opacity: .45; }
   /* Por omisión solo las secciones con alguna regla; "Ver todas las secciones" las enseña todas */
   .usr-matriz.solo-con-regla .usr-matriz-seccion:not(.con-regla) { display: none; }
-  .usr-matriz-seccion .usr-matriz-mod { padding-left: 30px; font-weight: 400; font-size: 12px; color: var(--color-text-muted); }
+  .usr-matriz-seccion .usr-matriz-mod { padding-left: 30px; font-weight: 400; font-size: var(--texto-s); color: var(--color-text-muted); }
   .usr-permiso.usr-seccion { padding-left: 28px; }
   .usr-permiso.usr-seccion .usr-permiso-ico { width: 26px; height: 26px; }
-  .usr-permiso.usr-seccion .usr-permiso-nombre { font-weight: 500; font-size: 12.5px; }
+  .usr-permiso.usr-seccion .usr-permiso-nombre { font-weight: 500; font-size: var(--texto-s); }
   /* Perfiles (fase 2) */
   .usr-perfiles-barra { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
-  .usr-perfiles-barra p { flex: 1; margin: 0; font-size: 13px; color: var(--color-text-muted); }
-  .usr-perfil-nombre { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; font-size: 12.5px; font-weight: 600; color: var(--color-text-muted); }
-  .usr-perfil-nombre input { font-size: 14px; }
-  .usr-perfil-alcance { width: 100%; margin: 0 0 14px; border: 1px solid var(--color-border); border-radius: 10px; }
-  .usr-btn-chico { margin-left: auto; padding: 4px 10px; font-size: 12px; }
+  .usr-perfiles-barra p { flex: 1; margin: 0; font-size: var(--texto-s); color: var(--color-text-muted); }
+  .usr-perfil-nombre { display: flex; flex-direction: column; gap: 6px; margin: 0 0 14px; font-size: var(--texto-s); font-weight: 600; color: var(--color-text-muted); }
+  .usr-perfil-nombre input { font-size: var(--texto-m); }
+  .usr-perfil-alcance { width: 100%; margin: 0 0 14px; border: 1px solid var(--color-border); border-radius: var(--radio-l); }
+  .usr-btn-chico { margin-left: auto; padding: 4px 10px; font-size: var(--texto-s); }
   .ln-card h3 .usr-btn-chico { display: inline-flex; align-items: center; gap: 5px; }
   .usr-chips-perfil { display: flex; flex-wrap: wrap; gap: 8px; }
   .usr-chip-perfil {
-    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: 12.5px;
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: var(--texto-s);
     border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer;
   }
   .usr-chip-perfil:hover { border-color: var(--color-primary); color: var(--color-primary); }
   .usr-chip-perfil .ico, .usr-asignar .ico { width: 14px; height: 14px; }
-  .usr-asignar-lista { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: 10px; overflow: hidden; }
+  .usr-asignar-lista { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--radio-l); overflow: hidden; }
   .usr-asignar {
     display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; background: transparent; font: inherit;
     text-align: left; color: var(--color-text); cursor: pointer;
@@ -254,10 +254,10 @@
   .usr-asignar:hover { background: var(--color-bg); }
   .usr-asignar.activa .ico { color: var(--color-primary); }
   .usr-asignar.cambiada .usr-asignar-nombre { font-weight: 600; }
-  .usr-asignar-nombre { flex: 1; font-size: 13.5px; }
-  .usr-asignar-detalle { font-size: 11.5px; color: var(--color-text-muted); }
-  .usr-matriz-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden; }
-  .usr-matriz-modo button { border: 0; border-radius: 0; background: transparent; color: var(--color-text-muted); padding: 5px 11px; font-size: 12px; }
+  .usr-asignar-nombre { flex: 1; font-size: var(--texto-m); }
+  .usr-asignar-detalle { font-size: var(--texto-xs); color: var(--color-text-muted); }
+  .usr-matriz-modo { display: inline-flex; border: 1px solid var(--color-border); border-radius: var(--radio-m); overflow: hidden; }
+  .usr-matriz-modo button { border: 0; border-radius: 0; background: transparent; color: var(--color-text-muted); padding: 5px 11px; font-size: var(--texto-s); }
   .usr-matriz-modo button + button { border-left: 1px solid var(--color-border); }
   .usr-matriz-modo button.activa { background: var(--color-primary); color: #fff; }
   @media (max-width: 640px) { .usr-perfiles-barra { flex-direction: column; align-items: stretch; } }

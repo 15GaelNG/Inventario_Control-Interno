@@ -175,21 +175,21 @@
     function badgeEstatusCaja(estatus) {
       const valor = String(estatus || '').toUpperCase();
       if (valor === 'CERRADA') {
-        return '<span class="estatus-appsheet" style="color:#e02020"><i data-lucide="circle-x" class="ico"></i> CERRADA</span>';
+        return '<span class="estatus-appsheet" style="color:var(--tono-rojo)"><i data-lucide="circle-x" class="ico"></i> CERRADA</span>';
       }
       if (valor === 'EN PROCESO DE CIERRE') {
-        return '<span class="estatus-appsheet" style="color:#e0a020"><i data-lucide="clock" class="ico"></i> EN PROCESO DE CIERRE</span>';
+        return '<span class="estatus-appsheet" style="color:var(--tono-ambar)"><i data-lucide="clock" class="ico"></i> EN PROCESO DE CIERRE</span>';
       }
-      return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
+      return '<span class="estatus-appsheet" style="color:var(--tono-verde)"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
     // Mismos colores/íconos que badgeEstatusCaja, para el filtro rápido por Estatus
     // (pintarEstatusCch) -- orden: vigente primero, luego en proceso, luego cerrada.
     const ORDEN_ESTATUS_CCH = ['VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'];
     const ESTILO_ESTATUS_CCH = {
-      'VIGENTE': { icono: 'circle-check', color: '#2ba02b' },
-      'EN PROCESO DE CIERRE': { icono: 'clock', color: '#e0a020' },
-      'CERRADA': { icono: 'circle-x', color: '#e02020' },
+      'VIGENTE': { icono: 'circle-check', color: 'var(--tono-verde)' },
+      'EN PROCESO DE CIERRE': { icono: 'clock', color: 'var(--tono-ambar)' },
+      'CERRADA': { icono: 'circle-x', color: 'var(--tono-rojo)' },
     };
 
     // ---------- Ficha de una caja chica: pantalla propia dentro del módulo (oculta la

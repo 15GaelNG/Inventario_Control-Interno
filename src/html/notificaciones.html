@@ -26,7 +26,7 @@
   .ntf-campana:hover, .ntf-campana[aria-expanded="true"] { background: var(--color-bg); color: var(--color-text); }
   .ntf-contador {
     position: absolute; top: -5px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
-    background: var(--ntf-vencida); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center;
+    background: var(--ntf-vencida); color: #fff; font-size: var(--texto-2xs); font-weight: 700; line-height: 18px; text-align: center;
     border: 2px solid var(--color-surface);
   }
   .ntf-contador[hidden] { display: none; }
@@ -34,7 +34,7 @@
   /* Fijo y acomodado por JS debajo de la campana (colocarPanel): con position absolute quedaba bajo el menú lateral */
   .ntf-panel {
     position: fixed; top: 60px; left: 12px; z-index: 950; width: 390px; max-width: calc(100vw - 24px);
-    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radio-xl);
     box-shadow: 0 12px 32px rgba(6, 20, 30, .18); overflow: hidden;
   }
   .ntf-panel[hidden] { display: none; }
@@ -42,10 +42,10 @@
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 12px 14px; border-bottom: 1px solid var(--color-border);
   }
-  .ntf-panel-cabeza strong { font-size: 14px; color: var(--color-text); }
+  .ntf-panel-cabeza strong { font-size: var(--texto-m); color: var(--color-text); }
   .ntf-enlace {
-    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: 12.5px; font-weight: 600;
-    cursor: pointer; border-radius: 6px;
+    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: var(--texto-s); font-weight: 600;
+    cursor: pointer; border-radius: var(--radio-s);
   }
   :root[data-theme="dark"] .ntf-enlace { color: var(--color-accent); }
   .ntf-enlace:hover { background: var(--color-bg); }
@@ -62,49 +62,49 @@
   .ntf-item.no-leida { border-left-color: var(--color-accent); background: var(--color-primary-soft); }
   .ntf-item.no-leida:hover { filter: brightness(.98); }
   .ntf-item-icono {
-    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: var(--radio-l); display: flex; align-items: center; justify-content: center;
     background: var(--ntf-pronto-bg); color: var(--ntf-pronto);
   }
   .ntf-item-icono.vencida { background: var(--ntf-vencida-bg); color: var(--ntf-vencida); }
   .ntf-item-icono.info { background: var(--ntf-info-bg); color: var(--ntf-info); }
   .ntf-item-cuerpo { min-width: 0; flex: 1; }
-  .ntf-item-titulo { font-size: 13.5px; font-weight: 600; color: var(--color-text); margin: 0 0 2px; }
-  .ntf-item-mensaje { font-size: 12.5px; color: var(--color-text-muted); margin: 0 0 6px; line-height: 1.4; }
-  .ntf-item-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11.5px; color: var(--color-text-muted); }
-  .ntf-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  .ntf-item-titulo { font-size: var(--texto-m); font-weight: 600; color: var(--color-text); margin: 0 0 2px; }
+  .ntf-item-mensaje { font-size: var(--texto-s); color: var(--color-text-muted); margin: 0 0 6px; line-height: 1.4; }
+  .ntf-item-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--texto-xs); color: var(--color-text-muted); }
+  .ntf-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 700;
     background: var(--ntf-pronto-bg); color: var(--ntf-pronto); }
   .ntf-chip.vencida { background: var(--ntf-vencida-bg); color: var(--ntf-vencida); }
   .ntf-chip.info { background: var(--ntf-info-bg); color: var(--ntf-info); }
-  .ntf-vacio { padding: 28px 16px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+  .ntf-vacio { padding: 28px 16px; text-align: center; color: var(--color-text-muted); font-size: var(--texto-s); }
   .ntf-vacio .ico { width: 28px; height: 28px; margin-bottom: 6px; opacity: .7; }
 
   /* Vista completa */
   .ntf-vista .ntf-lista { padding: 0; overflow: hidden; }
   .ntf-vista .ntf-item { padding: 14px 18px; cursor: default; }
   .ntf-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .ntf-acciones button { padding: 6px 12px; font-size: 12.5px; }
+  .ntf-acciones button { padding: 6px 12px; font-size: var(--texto-s); }
   .ntf-controles { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
   .ntf-controles .tabs-simple { margin-bottom: 0; }
-  .ntf-filtro-tipo { font-size: 12.5px; color: var(--color-text-muted); }
+  .ntf-filtro-tipo { font-size: var(--texto-s); color: var(--color-text-muted); }
   .ntf-filtro-tipo button { margin-left: 4px; }
   .ntf-modulos { margin-bottom: 12px; }
   .ntf-modulo-titulo {
     display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; padding: 10px 14px; border: none; border-radius: 0; text-align: left;
     background: var(--color-bg); border-bottom: 1px solid var(--color-border); color: var(--color-text);
-    font-size: 12.5px; font-weight: 700; cursor: pointer;
+    font-size: var(--texto-s); font-weight: 700; cursor: pointer;
   }
   .ntf-modulo-titulo span { font-weight: 500; color: var(--color-text-muted); }
   /* button:hover global pinta de azul oscuro: aquí el hover es suave, como el de los avisos */
   .ntf-modulo-titulo:hover, .ntf-modulo-titulo:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
   .ntf-modulo-titulo:hover span { color: var(--color-text-muted); }
-  .ntf-vista .ntf-modulo-titulo { font-size: 13.5px; padding: 12px 18px; cursor: default; }
+  .ntf-vista .ntf-modulo-titulo { font-size: var(--texto-m); padding: 12px 18px; cursor: default; }
   .ntf-vista .ntf-modulo-titulo:hover { background: var(--color-bg); }
   .ntf-seccion {
-    padding: 10px 18px 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 10px 18px 8px; font-size: var(--texto-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--color-text-muted); background: var(--color-bg); border-bottom: 1px solid var(--color-border);
   }
   .ntf-mas {
-    display: block; width: 100%; padding: 9px 18px; text-align: left; font-size: 12.5px; font-weight: 600;
+    display: block; width: 100%; padding: 9px 18px; text-align: left; font-size: var(--texto-s); font-weight: 600;
     background: transparent; border: none; border-bottom: 1px solid var(--color-border); color: var(--color-primary); cursor: pointer;
   }
   :root[data-theme="dark"] .ntf-mas { color: var(--color-accent); }

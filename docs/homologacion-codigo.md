@@ -115,10 +115,20 @@ las dos cosas y además, con ganchos, lee la hoja completa dos veces.
 
 ## Fase 3 — Escala de diseño
 
-- [ ] Variables en `styles.html`: `--texto-xs … --texto-xl` (5–6 tamaños), `--radio-s/m/l`, `--espacio-1…6`.
-- [ ] Mapear los 24 tamaños y 19 radios a la escala (12/12.5/13 → uno; 11/11.5 → uno…) y revisar capturas.
-- [ ] Los 41 colores escritos en el JS de Líneas → variables (respetan modo oscuro y el color de Apariencia).
-- [ ] Contrato: `font-size` y `border-radius` con px sueltos solo en una lista de excepciones que se achica.
+- [x] Variables en `styles.html`: `--texto-2xs … --texto-3xl` (10, 11.5, 12.5, 14, 16, 20, 24, 32) y `--radio-xs … --radio-2xl`
+      (4, 6, 8, 10, 12, 16); `--radius` desapareció (era `--radio-xl`). `--espacio-*` no se hizo: nadie lo iba a usar
+      todavía y una variable sin uso es ruido; entra cuando la fase 4 arme `Ficha`.
+- [x] 27 tamaños → 8 y 19 radios → 6 en 34 archivos (script, no a mano). Capturas antes/después de las 94 escenas: se
+      mueve medio pixel donde había 12/13px; nada se rompe.
+- [x] Colores de estado → `--tono-*` (18, cada uno con su versión de modo oscuro): las reglas del AppSheet de Líneas, la
+      clase de vehículo, el estatus de Caja Chica, Sensores y Reasignaciones (40 colores). Se quedan fijos, a propósito,
+      lo que pinta un lienzo o un PDF, las gráficas (Chart.js no lee variables), la tinta de firma y daños, y la
+      temporada (dibujos).
+- [x] Contrato: `font-size` en px solo de 36px para arriba (números de portada), `border-radius` en px solo ≤2px o
+      999px/50%, y ningún color escrito en el JS de la pantalla salvo la lista corta de color fijo. `FirmaExterna.html`
+      queda fuera: es página aparte y no incluye `styles.html`.
+- Visto de paso para la fase 4: el panel de filtro por tipo/estado (`const fila = (valor, icono, color, nombre, n)`)
+  está copiado 4 veces (Vehículos ×2, Uber, Caja Chica).
 - [ ] (Opcional) Apariencia: tamaño de letra, ahora que todo cuelga de variables.
 
 ## Fase 4 — Componente `Ficha` (el primer punto de unión real)

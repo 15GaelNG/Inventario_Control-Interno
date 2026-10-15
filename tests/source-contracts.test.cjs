@@ -452,6 +452,48 @@ test('la pantalla escribe fechas, montos y texto seguro con Formato (componentes
   assert.match(read('package.json'), /node tests\/formato\.test\.js/);
 });
 
+test('letra, esquinas y colores de la pantalla salen de la escala de styles.html (--texto-*, --radio-*, --tono-*)', () => {
+  // Había 27 tamaños de letra y 19 radios distintos, y los colores de estatus escritos en el JS no se aclaraban en
+  // modo oscuro (docs/homologacion-codigo.md, fase 3). Lo decorativo sí puede ir en px: letra de 36px o más
+  // (números de portada) y esquinas de 2px o menos (y 999px / 50%, píldoras y círculos).
+  const css = read('src/html/styles.html');
+  ['2xs', 'xs', 's', 'm', 'l', 'xl', '2xl', '3xl'].forEach((p) => assert.match(css, new RegExp('--texto-' + p + ': ')));
+  ['xs', 's', 'm', 'l', 'xl', '2xl'].forEach((p) => assert.match(css, new RegExp('--radio-' + p + ': ')));
+  const tonos = [...css.matchAll(/--tono-([a-z-]+): #/g)].map((m) => m[1]);
+  const claro = tonos.slice(0, tonos.length / 2);
+  assert.deepEqual(tonos.slice(tonos.length / 2), claro, 'cada --tono- tiene su color para modo oscuro');
+
+  const PAGINA_APARTE = ['FirmaExterna.html'];   // no incluye styles.html
+  // Colores que no son de la pantalla: gráficas (Chart.js no lee variables), tinta de los lienzos, la firma sobre
+  // blanco, la herramienta de medir y la ventana nueva que abre Líneas mientras busca un documento
+  const COLOR_FIJO = ['app-panorama-cajachica.html', 'app-panorama-vehiculos.html', 'componentes/lienzo.html',
+    'modulos/inspecciones.html', 'componentes/campos-hoja.html', 'lineas-medidor.html'];
+  const COLOR = /(?:^|[\s;"'{])(color|background(?:-color)?|border(?:-color)?)\s*:\s*['"]?#[0-9a-f]{3,8}\b/i;
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !PAGINA_APARTE.includes(path.basename(f)))
+    .forEach((f) => {
+      const rel = path.relative(path.join(root, 'src', 'html'), f).replace(/\\/g, '/');
+      const texto = fs.readFileSync(f, 'utf8');
+      for (const m of texto.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) {
+        if (Number(m[1]) < 36) fuera.push(rel + ': font-size ' + m[1] + 'px → var(--texto-…)');
+      }
+      for (const m of texto.matchAll(/border(?:-(?:top|bottom)-(?:left|right))?-radius:\s*([^;"'`}\n]+)/g)) {
+        if (/calc\(/.test(m[1])) continue;
+        for (const px of m[1].matchAll(/(\d+(?:\.\d+)?)px/g)) {
+          if (Number(px[1]) > 2 && Number(px[1]) < 999) fuera.push(rel + ': border-radius ' + px[1] + 'px → var(--radio-…)');
+        }
+      }
+      if (COLOR_FIJO.some((c) => rel.endsWith(c))) return;
+      for (const s of texto.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+        s[1].split('\n').forEach((linea) => {
+          if (COLOR.test(linea) && !/ventana\.document/.test(linea)) fuera.push(rel + ': ' + linea.trim().slice(0, 80) + ' → var(--tono-…)');
+        });
+      }
+    });
+  assert.deepEqual(fuera, []);
+});
+
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
   const app = read('src/html/js/app.html');
   const index = read('src/html/Index.html');
@@ -553,13 +595,15 @@ test('las reglas de formato y los íconos son los del AppSheet (flechas, colores
   assert.match(reglas, /'Responsable Entrante': \{ '\*': \{ color: 'green', icono: 'chevrons-up', fondo: true \} \}/);
   assert.match(reglas, /'Responsable Saliente': \{ '\*': \{ color: 'red', icono: 'chevrons-down', fondo: true \} \}/);
   // CAMBIOS: ANTES / DESPUES con fa-caret-circle-down / up y negritas
-  assert.match(reglas, /'ANTES': \{ '\*': \{ color: '#b78360', icono: 'circle-chevron-down', bold: true, fondo: true \} \}/);
+  assert.match(reglas, /'ANTES': \{ '\*': \{ color: 'var\(--tono-cobre\)', icono: 'circle-chevron-down', bold: true, fondo: true \} \}/);
+  // en modo claro, el mismo color del AppSheet (styles.html)
+  assert.match(read('src/html/styles.html'), /--tono-azul-petroleo: #006699;[\s\S]*--tono-cobre: #b78360;/);
   assert.match(reglas, /'DESPUES': \{ '\*': \{ color: 'themeMainColor', icono: 'circle-chevron-up', bold: true, fondo: true \} \}/);
   // RETRO DE SOLICITUD y SOLICITUD van en cursiva (no negrita); TIPO en negrita y cursiva
   assert.match(reglas, /'SUSPENSION DE LINEA': \{ color: 'orange', tam: 0\.9, italic: true, fondo: true \}/);
   assert.match(reglas, /'FINALIZADO': \{ color: 'green', tam: 0\.9, italic: true, fondo: true \}/);
   assert.match(reglas, /'MODEM': \{ color: 'themeMainColor', icono: 'hard-drive', bold: true, italic: true, fondo: true \}/);
-  assert.match(reglas, /'Cargadores': \{ color: '#006699', bold: true, italic: true \}/);
+  assert.match(reglas, /'Cargadores': \{ color: 'var\(--tono-azul-petroleo\)', bold: true, italic: true \}/);
   // ESTATUS TEMPORAL (13 días) y View Ref (fa-chevron-circle-right)
   assert.match(lineas, /function usoTemporalVencido\(l\)/);
   assert.match(lineas, /13 \* 24/);
@@ -2425,7 +2469,7 @@ test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de
   assert.match(css, /#sidebar\.collapsed \{ width: 92px; margin-right: 0; box-shadow: none; \}/);
   // El subitem se desliza sin que su contenedor le corte la esquina; los módulos sueltos llevan la placa del ícono
   assert.match(css, /padding: 2px 4px 2px 16px; margin-left: 24px;/);
-  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: 9px;/);
+  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: var\(--radio-m\);/);
   // Solo la primera letra en mayúscula
   const etiquetas = [...app.slice(app.indexOf('const NAV_GRUPOS'), app.indexOf('function vistaDe')).matchAll(/etiqueta: '([^']+)'/g)].map((m) => m[1]);
   assert.ok(etiquetas.includes('Líneas telefónicas') && etiquetas.includes('Gestión de activos') && etiquetas.includes('Help desk'));

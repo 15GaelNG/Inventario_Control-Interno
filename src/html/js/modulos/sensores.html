@@ -73,10 +73,10 @@
     function badgeEstatusSensor(valor) {
       const v = String(valor || '').toUpperCase();
       if (v === 'BAJA') {
-        return `<span style="display:inline-flex; align-items:center; gap:5px; color:#e02020; font-weight:700; text-transform:uppercase">${Iconos.svg('ban')} BAJA</span>`;
+        return `<span style="display:inline-flex; align-items:center; gap:5px; color:var(--tono-rojo); font-weight:700; text-transform:uppercase">${Iconos.svg('ban')} BAJA</span>`;
       }
       if (v === 'ACTIVO') {
-        return `<span style="display:inline-flex; align-items:center; gap:5px; color:#2ba02b; font-weight:700; text-transform:uppercase">${Iconos.svg('refresh-cw')} ACTIVO</span>`;
+        return `<span style="display:inline-flex; align-items:center; gap:5px; color:var(--tono-verde); font-weight:700; text-transform:uppercase">${Iconos.svg('refresh-cw')} ACTIVO</span>`;
       }
       return escaparHtml(valor || '—');
     }
@@ -212,7 +212,7 @@
       if (btn) {
         btn.addEventListener('click', async () => {
           const caja = contenedor.querySelector('#sen-actividad');
-          caja.innerHTML = '<span class="dt-skel" style="height:60px; width:100%; border-radius:8px"></span>';
+          caja.innerHTML = '<span class="dt-skel" style="height:60px; width:100%; border-radius:var(--radio-m)"></span>';
           try {
             const r = await callServer('apiResumenGeotabSensor', state.token, sensor.ID, DIAS_ACTIVIDAD);
             caja.innerHTML =

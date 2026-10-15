@@ -1,23 +1,23 @@
 <style>
   /* Rejilla de miniaturas (en la página) y visor a pantalla completa (encima de todo) */
   .galeria-seccion { margin-bottom: 18px; }
-  .galeria-seccion h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: .4px; text-transform: uppercase; color: var(--color-text-muted); }
+  .galeria-seccion h4 { margin: 0 0 8px; font-size: var(--texto-s); letter-spacing: .4px; text-transform: uppercase; color: var(--color-text-muted); }
   .galeria-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
   .galeria-mini {
-    position: relative; aspect-ratio: 1 / 1; border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden;
+    position: relative; aspect-ratio: 1 / 1; border: 1px solid var(--color-border); border-radius: var(--radio-m); overflow: hidden;
     background: var(--color-bg); padding: 0; cursor: zoom-in; display: flex; align-items: center; justify-content: center;
     color: var(--color-text-muted);
   }
   .galeria-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .galeria-mini:hover { border-color: var(--color-primary); }
-  .galeria-mini .galeria-video { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff; border-radius: 6px; padding: 2px 6px; font-size: 11px; }
+  .galeria-mini .galeria-video { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff; border-radius: var(--radio-s); padding: 2px 6px; font-size: var(--texto-xs); }
   .galeria-visor { position: fixed; inset: 0; z-index: 3000; background: rgba(10,16,20,.97); display: flex; flex-direction: column; color: #fff; }
-  .galeria-visor-barra { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: 13px; }
+  .galeria-visor-barra { display: flex; align-items: center; gap: 10px; padding: 10px 14px; font-size: var(--texto-s); }
   .galeria-visor-barra .galeria-titulo { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .galeria-visor button, .galeria-visor a { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; text-decoration: none; cursor: pointer; }
+  .galeria-visor button, .galeria-visor a { background: rgba(255,255,255,.12); color: #fff; border: 0; border-radius: var(--radio-m); padding: 8px 12px; text-decoration: none; cursor: pointer; }
   .galeria-visor-cuerpo { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; position: relative; padding: 0 56px 16px; }
   .galeria-visor-cuerpo img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  .galeria-visor-cuerpo .galeria-prev, .galeria-visor-cuerpo .galeria-sig { position: absolute; top: 50%; transform: translateY(-50%); font-size: 22px; padding: 10px 14px; }
+  .galeria-visor-cuerpo .galeria-prev, .galeria-visor-cuerpo .galeria-sig { position: absolute; top: 50%; transform: translateY(-50%); font-size: var(--texto-xl); padding: 10px 14px; }
   .galeria-visor-cuerpo .galeria-prev { left: 8px; }
   .galeria-visor-cuerpo .galeria-sig { right: 8px; }
   @media (max-width: 640px) {

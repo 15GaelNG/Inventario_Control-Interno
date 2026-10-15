@@ -3,14 +3,14 @@
      el oscurecido de toda la pantalla sin necesitar un overlay aparte -- el truco de
      Intro.js/Shepherd/Driver.js. z-index alto lo saca por encima de todo lo demás. */
   .tour-resaltado {
-    position: relative !important; z-index: 9998 !important; border-radius: 10px;
+    position: relative !important; z-index: 9998 !important; border-radius: var(--radio-l);
     box-shadow: 0 0 0 4px var(--color-accent), 0 0 0 9999px rgba(6, 38, 58, .68) !important;
     transition: box-shadow .15s ease;
   }
   .tour-tooltip {
     position: fixed; z-index: 9999; width: 320px; max-width: calc(100vw - 24px);
-    background: var(--color-surface); border-radius: 14px; box-shadow: var(--shadow-lg);
-    padding: 54px 18px 16px; font-size: 13.5px; color: var(--color-text);
+    background: var(--color-surface); border-radius: var(--radio-2xl); box-shadow: var(--shadow-lg);
+    padding: 54px 18px 16px; font-size: var(--texto-m); color: var(--color-text);
   }
   /* El muñeco de Control Interno, asomado arriba de la tarjeta -- como si fuera quien guía el
      tour (usuario, 7-oct). pointer-events:none: es decoración, no debe robar clics. */
@@ -19,14 +19,14 @@
     filter: drop-shadow(0 6px 12px rgba(0, 0, 0, .28)); pointer-events: none;
   }
   .tour-paso {
-    font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    font-size: var(--texto-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--color-accent); margin-bottom: 4px;
   }
-  .tour-titulo { margin: 0 0 6px; font-size: 15px; }
+  .tour-titulo { margin: 0 0 6px; font-size: var(--texto-l); }
   .tour-texto { margin: 0 0 14px; color: var(--color-text-muted); line-height: 1.5; }
   .tour-acciones { display: flex; align-items: center; gap: 8px; }
   .tour-acciones .tour-espacio { flex: 1; }
-  .tour-acciones button { padding: 7px 12px; font-size: 12.5px; }
+  .tour-acciones button { padding: 7px 12px; font-size: var(--texto-s); }
   @media (max-width: 640px) {
     .tour-tooltip { width: auto; }
     .tour-acciones button { min-height: 40px; }

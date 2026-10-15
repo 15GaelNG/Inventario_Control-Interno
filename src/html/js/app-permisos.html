@@ -360,7 +360,7 @@
         [['Nombre', p.nombre], ['Correo', p.correo], ['No. de empleado', p.noEmpleado], ['Rol', p.rol], ['Estatus', p.activo ? 'Activo' : 'Inactivo'],
           ['Área', p.area], ['Coordinación', p.coordinacion], ['Oficina', p.oficina], ['Sede', p.sede], ['Departamentos permitidos', p.dptosPermitidos]]
           .map((d) => itemInfo(d[0], d[1] || '—')).join('') +
-        '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:12px">Estos datos se cambian en la hoja USUARIOS.</p></div>';
+        '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:var(--texto-s)">Estos datos se cambian en la hoja USUARIOS.</p></div>';
 
       return html + fichaEnPestanas([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: conAcceso(p) },

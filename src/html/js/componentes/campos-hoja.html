@@ -190,7 +190,7 @@
           const info = document.getElementById(id + '-actual');
           if (info) {
             info.innerHTML = campo.tipo === 'firma'
-              ? (valor ? `<img src="${valor}" alt="Firma guardada" style="max-width:220px;border:1px solid var(--color-border);border-radius:8px;background:#fff" />`
+              ? (valor ? `<img src="${valor}" alt="Firma guardada" style="max-width:220px;border:1px solid var(--color-border);border-radius:var(--radio-m);background:#fff" />`
                 : '<span class="empty-state" style="margin:0">Sin firma</span>')
               : (valor ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
                 : '<span class="empty-state" style="margin:0">Sin archivo</span>');

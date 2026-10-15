@@ -1,10 +1,10 @@
 <style>
   /* TablaFicha: tablas cortas dentro de una ficha (no son DataTable: sin filtros, orden ni paginación) */
-  .tf-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-surface); }
-  .tf-wrap table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+  .tf-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--radio-xl); background: var(--color-surface); }
+  .tf-wrap table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: var(--texto-s); }
   .tf-wrap.tf-fija table { table-layout: fixed; }
   .tf-wrap th {
-    background: var(--color-bg); color: var(--color-text-muted); font-weight: 600; font-size: 11px;
+    background: var(--color-bg); color: var(--color-text-muted); font-weight: 600; font-size: var(--texto-xs);
     text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; text-align: left;
     padding: 10px 14px; border-bottom: 1px solid var(--color-border);
   }
@@ -17,18 +17,18 @@
   .tf-wrap .tf-centro { text-align: center; }
   .tf-wrap .tf-num { font-variant-numeric: tabular-nums; }
   .tf-wrap .tf-parte { overflow-wrap: anywhere; }
-  .tf-sub { display: block; font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+  .tf-sub { display: block; font-size: var(--texto-xs); color: var(--color-text-muted); margin-top: 2px; }
   .tf-wrap tr.tf-grupo td {
-    background: var(--color-bg); color: var(--color-text-muted); font-weight: 700; font-size: 12px; letter-spacing: .3px;
+    background: var(--color-bg); color: var(--color-text-muted); font-weight: 700; font-size: var(--texto-s); letter-spacing: .3px;
     padding-top: 8px; padding-bottom: 8px;
   }
-  .tf-vacio { margin: 0; padding: 18px; text-align: center; color: var(--color-text-muted); font-size: 13px;
-    border: 1px dashed var(--color-border); border-radius: 12px; }
+  .tf-vacio { margin: 0; padding: 18px; text-align: center; color: var(--color-text-muted); font-size: var(--texto-s);
+    border: 1px dashed var(--color-border); border-radius: var(--radio-xl); }
   /* El botón de acción de una celda (Ver, PDF, Fotos, Carpeta): uno solo para toda la app */
   .tf-btn {
-    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px;
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--radio-m);
     border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
-    font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; cursor: pointer; line-height: 1;
+    font-size: var(--texto-s); font-weight: 600; text-decoration: none; white-space: nowrap; cursor: pointer; line-height: 1;
   }
   .tf-btn:hover, .tf-btn:focus-visible { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-soft); }
   .tf-btn .ico, .tf-btn svg { width: 14px; height: 14px; }

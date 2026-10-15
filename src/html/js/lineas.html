@@ -213,21 +213,20 @@
     // Los colores con nombre del AppSheet se traducen a un tono legible sobre fondo claro u oscuro;
     // los íconos Font Awesome se sustituyen por su equivalente de Lucide.
     const COLOR_APPSHEET = {
-      green: '#1e8a3a', orange: '#e67e00', yellow: '#b59a00', red: '#d62020', pink: '#d4508a',
+      green: 'var(--tono-verde)', orange: 'var(--tono-naranja)', yellow: 'var(--tono-amarillo)', red: 'var(--tono-rojo)', pink: 'var(--tono-rosa)',
       themeMainColor: 'var(--color-primary)', minorText: 'var(--color-text-muted)',
     };
     const colorAppSheet = (c) => COLOR_APPSHEET[c] || COLOR_APPSHEET[String(c).toLowerCase()] || c;
-    // `fondo`: la regla trae Highlight color (se pinta como etiqueta con fondo tenue del mismo color).
     // `fondo`: la regla trae Highlight color (se pinta como etiqueta con fondo tenue del mismo color).
     const REGLAS_FORMATO = {
       REACTIVACION: {
         'ESTATUS': {
           'EN USO': { color: 'green', tam: 1.1, bold: true, italic: true, fondo: true },
-          'DISPONIBLE': { color: '#006400', tam: 1.1, bold: true, italic: true, fondo: true },
+          'DISPONIBLE': { color: 'var(--tono-verde-oscuro)', tam: 1.1, bold: true, italic: true, fondo: true },
           'EN PROCESO DE ASIGNACION': { color: 'themeMainColor', tam: 1.1, bold: true, italic: true, fondo: true },
           'CANCELADA': { color: 'red', bold: true, italic: true, fondo: true },
           'PROCESO DE CANCELACION': { color: 'orange', bold: true, italic: true, fondo: true },
-          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: '#305496', bold: true, italic: true, fondo: true },
+          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: 'var(--tono-azul-marino)', bold: true, italic: true, fondo: true },
         },
         'RETRO DE SOLICITUD': {
           'SUSPENSION DE LINEA': { color: 'orange', tam: 0.9, italic: true, fondo: true },
@@ -235,7 +234,7 @@
           'CAMBIO DE NUMERO': { color: 'themeMainColor', tam: 0.9, italic: true, fondo: true },
           'TRAMITE CONCLUIDO': { color: 'green', tam: 0.9, italic: true, fondo: true },
           'PENDIENTE DE ENTREGA': { color: 'red', tam: 0.9, italic: true, fondo: true },
-          'CANCELACION': { color: '#8B0000', italic: true, fondo: true },
+          'CANCELACION': { color: 'var(--tono-rojo-oscuro)', italic: true, fondo: true },
         },
       },
       SOLICITUD: {
@@ -252,14 +251,14 @@
           'EQUIPO + SIM': { color: 'green', icono: 'smartphone', bold: true, italic: true, fondo: true },
           'BANDA ANCHA': { color: 'pink', icono: 'radio-tower', bold: true, italic: true, fondo: true },
           'EQUIPO': { color: 'minorText', icono: 'smartphone', bold: true, italic: true, fondo: true },
-          'EQUIPO + SIM BASICO': { color: '#54AE98', icono: 'card-sim', bold: true, italic: true, fondo: true },
-          'CAMARA': { color: '#004734', icono: 'camera', bold: true, italic: true, fondo: true },
-          'SIM BASICO': { color: '#B3A184', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'EQUIPO + SIM BASICO': { color: 'var(--tono-turquesa)', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'CAMARA': { color: 'var(--tono-bosque)', icono: 'camera', bold: true, italic: true, fondo: true },
+          'SIM BASICO': { color: 'var(--tono-arena)', icono: 'card-sim', bold: true, italic: true, fondo: true },
         },
       },
       // Bitácora: ANTES con flecha hacia abajo y DESPUES hacia arriba (fa-caret-circle-down / up)
       CAMBIOS: {
-        'ANTES': { '*': { color: '#b78360', icono: 'circle-chevron-down', bold: true, fondo: true } },
+        'ANTES': { '*': { color: 'var(--tono-cobre)', icono: 'circle-chevron-down', bold: true, fondo: true } },
         'DESPUES': { '*': { color: 'themeMainColor', icono: 'circle-chevron-up', bold: true, fondo: true } },
       },
       // Control de reasignaciones: quién entra (flechas arriba, verde) y quién sale (flechas abajo, rojo)
@@ -269,9 +268,9 @@
       },
       ACCESORIOS: {
         'Categoria': {
-          'Cargadores': { color: '#006699', bold: true, italic: true },
+          'Cargadores': { color: 'var(--tono-azul-petroleo)', bold: true, italic: true },
           'Fundas': { color: 'pink', bold: true, italic: true },
-          'Micas': { color: '#998459', bold: true, italic: true },
+          'Micas': { color: 'var(--tono-bronce)', bold: true, italic: true },
         },
       },
     };
@@ -3519,7 +3518,7 @@
       function usoTemporalVencido(l) {
         const desde = l && l.usoTemporal && l.usoTemporal.desde ? new Date(l.usoTemporal.desde) : null;
         if (!desde || isNaN(desde) || (Date.now() - desde.getTime()) / 3600000 < 13 * 24) return '';
-        return '<span class="ln-regla ln-regla-chip" style="color:#F80000;font-weight:700;background:color-mix(in srgb, #F80000 12%, transparent);border:1px solid color-mix(in srgb, #F80000 45%, transparent)">' +
+        return '<span class="ln-regla ln-regla-chip" style="color:var(--tono-rojo);font-weight:700;background:color-mix(in srgb, var(--tono-rojo) 12%, transparent);border:1px solid color-mix(in srgb, var(--tono-rojo) 45%, transparent)">' +
           ico('triangle-alert') + ' Uso temporal de ' + Math.floor((Date.now() - desde.getTime()) / 86400000) + ' días</span>';
       }
 
@@ -6684,16 +6683,16 @@
           columnas: [
             // Orden de la vista INVENTARIO DE ACCESORIOS del AppSheet (agrupada por Categoria)
             { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
-              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:#d62020;font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
+              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:var(--tono-rojo);font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
 
             { campo: 'categoria', titulo: 'Categoria', tipo: 'lista', render: (v) => formatoAppSheet('ACCESORIOS', 'Categoria', v) || esc(v) },
             { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: false },
             { campo: 'marca', titulo: 'Marca', tipo: 'texto' },
             { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
-              // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (#2f7d23), solo para las 3 categorías
+              // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (var(--tono-verde)), solo para las 3 categorías
               render: (v, a) => (a.reabasto
-                ? '<span class="ln-regla ln-regla-chip" style="color:#d62020;background:#fff3b0;border:1px solid #e6c700;font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
-                : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:#2f7d23;font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
+                ? '<span class="ln-regla ln-regla-chip" style="color:var(--tono-rojo);background:var(--tono-alerta-fondo);border:1px solid var(--tono-amarillo);font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
+                : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:var(--tono-verde);font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
           ],
         });
       }

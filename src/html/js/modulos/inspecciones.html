@@ -127,7 +127,7 @@
 
     // ----- Panel de detalle: la inspección completa se pide solo al abrirla -----
     async function pintarDetalle(inspeccion, contenedor) {
-      contenedor.innerHTML = '<span class="dt-skel" style="height:120px; width:100%; border-radius:10px"></span>';
+      contenedor.innerHTML = '<span class="dt-skel" style="height:120px; width:100%; border-radius:var(--radio-l)"></span>';
       let d;
       try {
         d = await callServer('apiDetalleInspeccion', state.token, inspeccion.ID);
@@ -162,7 +162,7 @@
           d.imagenes.map((img) =>
             `<button type="button" class="secondary btn-ver-imagen" data-ruta="${escaparHtml(img.valor)}"
               style="display:flex; flex-direction:column; gap:4px; padding:8px; height:auto">
-              ${Iconos.svg('imagen')} <span style="font-size:11.5px">${escaparHtml(img.etiqueta)}</span>
+              ${Iconos.svg('imagen')} <span style="font-size:var(--texto-xs)">${escaparHtml(img.etiqueta)}</span>
             </button>`).join('') + '</div>') +
         (d.OBSERVACIONES ? seccion('Observaciones', `<p style="margin:0">${escaparHtml(d.OBSERVACIONES)}</p>`) : '');
 
@@ -181,12 +181,12 @@
         vista.style.marginTop = '10px';
         caja.appendChild(vista);
       }
-      vista.innerHTML = '<span class="dt-skel" style="height:160px; width:100%; border-radius:10px"></span>';
+      vista.innerHTML = '<span class="dt-skel" style="height:160px; width:100%; border-radius:var(--radio-l)"></span>';
       try {
         const imagen = await callServer('apiPrevisualizarImagenInspeccion', state.token, ruta);
         vista.innerHTML = (imagen.base64
           ? `<img src="data:${escaparHtml(imagen.mimeType)};base64,${imagen.base64}" alt="Diagrama de la inspección"
-              style="width:100%; border-radius:10px; border:1px solid var(--color-border)" />`
+              style="width:100%; border-radius:var(--radio-l); border:1px solid var(--color-border)" />`
           : '<p class="page-subtitle">La imagen es muy grande para mostrarla aquí.</p>') +
           `<p style="margin:8px 0 0"><a href="${escaparHtml(imagen.url)}" target="_blank" rel="noopener">Abrir en Drive ↗</a></p>`;
       } catch (err) {
@@ -729,7 +729,7 @@
             <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; padding:12px">
               <img src="https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/semaforo-desgaste-llantas.png"
                 alt="Semáforo de desgaste vertical: seguro arriba de 4 mm, precaución entre 1.6 y 4 mm, peligro debajo de 1.6 mm"
-                style="width:130px; flex-shrink:0; border-radius:8px; border:1px solid var(--color-border)" />
+                style="width:130px; flex-shrink:0; border-radius:var(--radio-m); border:1px solid var(--color-border)" />
               <div class="form-campos" style="--form-columnas:2; flex:1; min-width:220px">
                 ${estructura.llantas.map((l) => `
                   <div class="field">
@@ -744,7 +744,7 @@
           <div style="padding:0 12px">
             <img src="https:\/\/raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/semaforo-voltaje-bateria.png"
               alt="Semáforo de voltaje de batería: peligro menos de 11.6V, revisión entre 11.6V y 12.8V, estado óptimo más de 12.8V"
-              style="max-width:420px; width:100%; display:block; border-radius:8px; border:1px solid var(--color-border); margin-bottom:12px" />
+              style="max-width:420px; width:100%; display:block; border-radius:var(--radio-m); border:1px solid var(--color-border); margin-bottom:12px" />
           </div>
           <div class="form-campos" style="--form-columnas:2">
             <div class="field"><label for="ins-voltaje">Voltaje de la batería</label>
@@ -779,7 +779,7 @@
                 <button type="button" class="secondary" data-borrar disabled>${Iconos.svg('cancelar')} Borrar</button>
               </span>
             </div>
-            <div class="ins-diagrama-lienzo"><span class="dt-skel" style="height:220px; width:100%; border-radius:10px"></span></div>
+            <div class="ins-diagrama-lienzo"><span class="dt-skel" style="height:220px; width:100%; border-radius:var(--radio-l)"></span></div>
           </div>`).join('')}</div>`;
       }
       // Revisión (se llena al llegar al paso) y, debajo, las firmas: se firma viendo el

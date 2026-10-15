@@ -41,17 +41,17 @@
   .form-panel .form-ficha-datos { align-content: start; }
   .form-ficha-pie {
     margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--color-border);
-    font-size: 11.5px; color: var(--color-text-muted);
+    font-size: var(--texto-xs); color: var(--color-text-muted);
   }
   .form-panel-titulo {
-    font-size: 11.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+    font-size: var(--texto-xs); font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
     color: var(--color-text-muted); margin: 0 0 8px;
   }
   .form-panel .form-ficha { margin-bottom: 14px; }
   /* En 320px de ancho, dos columnas de datos aprietan: en el panel va uno por renglón */
   .form-panel .form-ficha-datos { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 14px; }
   .form-panel-seccion { margin-bottom: 14px; }
-  .form-panel-vacio { font-size: 12.5px; color: var(--color-text-muted); }
+  .form-panel-vacio { font-size: var(--texto-s); color: var(--color-text-muted); }
   .form-resumen-panel { display: grid; gap: 8px; }
   @media (max-width: 1024px) {
     .form-doble { grid-template-columns: 1fr; }
@@ -71,41 +71,41 @@
   .form-seccion {
     grid-column: 1 / -1; margin: 6px 0 10px; padding-top: 12px;
     border-top: 1px solid var(--color-border);
-    font-size: 12px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+    font-size: var(--texto-s); font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
     color: var(--color-text-muted);
   }
   .form-campos > .form-seccion:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
   /* La ayuda va DEBAJO del campo y se queda a la vista mientras se escribe
      (un placeholder desaparece justo cuando hace falta). */
-  .form-ayuda { display: block; margin-top: 4px; font-size: 11.5px; color: var(--color-text-muted); }
-  .form-error-campo { display: block; margin-top: 4px; font-size: 12px; color: var(--color-danger); font-weight: 500; }
+  .form-ayuda { display: block; margin-top: 4px; font-size: var(--texto-xs); color: var(--color-text-muted); }
+  .form-error-campo { display: block; margin-top: 4px; font-size: var(--texto-s); color: var(--color-danger); font-weight: 500; }
   .form-campo-error input, .form-campo-error select, .form-campo-error textarea { border-color: var(--color-danger); }
 
   /* Ficha: lo que el sistema ya sabe, para confirmar de un vistazo (no son campos:
      campos deshabilitados no los leen los lectores de pantalla — Carbon Design System). */
   .form-ficha {
-    border: 1px solid var(--color-border); border-radius: 10px; padding: 12px 14px;
+    border: 1px solid var(--color-border); border-radius: var(--radio-l); padding: 12px 14px;
     background: var(--color-bg); margin: 0 0 16px;
   }
-  .form-ficha-titulo { font-size: 15px; font-weight: 700; color: var(--color-text); }
-  .form-ficha-subtitulo { font-size: 12.5px; color: var(--color-text-muted); margin-top: 2px; }
+  .form-ficha-titulo { font-size: var(--texto-l); font-weight: 700; color: var(--color-text); }
+  .form-ficha-subtitulo { font-size: var(--texto-s); color: var(--color-text-muted); margin-top: 2px; }
   .form-ficha-datos {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px 14px; margin-top: 12px;
   }
-  .form-ficha-dato .form-ficha-etiqueta { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
-  .form-ficha-dato .form-ficha-valor { font-size: 13px; color: var(--color-text); word-break: break-word; }
+  .form-ficha-dato .form-ficha-etiqueta { font-size: var(--texto-xs); color: var(--color-text-muted); font-weight: 500; }
+  .form-ficha-dato .form-ficha-valor { font-size: var(--texto-s); color: var(--color-text); word-break: break-word; }
   .form-ficha-extra { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
   .form-ficha-mas {
     background: transparent; border: none; color: var(--color-primary); padding: 8px 0 0;
-    font-size: 12px; text-decoration: underline;
+    font-size: var(--texto-s); text-decoration: underline;
   }
   :root[data-theme="dark"] .form-ficha-mas { color: var(--color-accent); }
   .form-ficha-mas:hover { background: transparent; }
   .form-aviso {
     display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px;
-    border-radius: 8px; font-size: 12.5px; background: var(--color-primary-soft); color: var(--color-text);
+    border-radius: var(--radio-m); font-size: var(--texto-s); background: var(--color-primary-soft); color: var(--color-text);
   }
   .form-aviso.form-aviso-alerta { background: #F3ECD6; color: var(--color-danger); }
   :root[data-theme="dark"] .form-aviso.form-aviso-alerta { background: rgba(255,138,128,.15); color: #ff8a80; }
@@ -116,12 +116,12 @@
     /* Menos relleno del lado del número: así caben 8 pasos en un renglón (inspección) */
     display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px 6px 6px; border-radius: 999px;
     background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
-    font-size: 12.5px; font-weight: 600;
+    font-size: var(--texto-s); font-weight: 600;
   }
   .form-paso-chip:disabled { cursor: default; opacity: 1; }
   .form-paso-chip .form-paso-num {
     display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
-    border-radius: 50%; background: var(--color-border); color: var(--color-text); font-size: 11px;
+    border-radius: 50%; background: var(--color-border); color: var(--color-text); font-size: var(--texto-xs);
   }
   .form-paso-chip.completado { border-color: var(--color-success); color: var(--color-success); }
   .form-paso-chip.completado .form-paso-num { background: var(--color-success); color: #fff; }
@@ -136,21 +136,21 @@
     .form-pasos::-webkit-scrollbar { display: none; }
     .form-pasos > * { flex-shrink: 0; }
     .form-paso-chip:not(.activo) { font-size: 0; gap: 0; padding: 4px; }
-    .form-paso-chip .form-paso-num { font-size: 11px; flex-shrink: 0; }
+    .form-paso-chip .form-paso-num { font-size: var(--texto-xs); flex-shrink: 0; }
     .form-paso-chip.activo { white-space: nowrap; }
   }
-  .form-paso-titulo { margin: 0 0 2px; font-size: 15px; }
+  .form-paso-titulo { margin: 0 0 2px; font-size: var(--texto-l); }
   /* El foco se pone ahí al cambiar de paso (para lectores de pantalla), no por teclado:
      el contorno negro solo estorba */
   .form-paso-titulo:focus { outline: none; }
-  .form-paso-desc { margin: 0 0 14px; font-size: 12.5px; color: var(--color-text-muted); }
+  .form-paso-desc { margin: 0 0 14px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .form-acciones-pasos { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  .form-acciones-pasos .form-cuenta { margin-left: auto; font-size: 12px; color: var(--color-text-muted); }
+  .form-acciones-pasos .form-cuenta { margin-left: auto; font-size: var(--texto-s); color: var(--color-text-muted); }
 
   /* Resumen final antes de guardar */
   .form-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 18px; }
-  .form-resumen-dato .form-resumen-etiqueta { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
-  .form-resumen-dato .form-resumen-valor { font-size: 13.5px; color: var(--color-text); word-break: break-word; }
+  .form-resumen-dato .form-resumen-etiqueta { font-size: var(--texto-xs); color: var(--color-text-muted); font-weight: 500; }
+  .form-resumen-dato .form-resumen-valor { font-size: var(--texto-m); color: var(--color-text); word-break: break-word; }
   .form-resumen-vacio { color: var(--color-text-muted); }
 
   /* ---- Campo de opciones (radio): una pregunta que decide el resto del formulario ---- */
@@ -159,20 +159,20 @@
      y el círculo quedaba en su propio renglón, arriba del título */
   .form-opciones .form-opcion {
     display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 13px; cursor: pointer;
-    border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
+    border: 1px solid var(--color-border); border-radius: var(--radio-l); background: var(--color-surface);
     color: var(--color-text); font-weight: 400;
   }
   .form-opcion:hover { border-color: var(--color-accent); }
   .form-opciones .form-opcion input { width: 18px; height: 18px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--color-primary); }
   .form-opcion:has(input:checked) { border-color: var(--color-accent); background: var(--color-primary-soft); }
-  .form-opcion strong { display: block; font-size: 13.5px; }
-  .form-opcion small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--color-text-muted); }
+  .form-opcion strong { display: block; font-size: var(--texto-m); }
+  .form-opcion small { display: block; margin-top: 2px; font-size: var(--texto-xs); color: var(--color-text-muted); }
 
-  .form-archivo-info { margin-top: 6px; font-size: 12px; color: var(--color-text-muted); }
-  .form-archivo-preview { margin-top: 8px; max-height: 180px; border-radius: 8px; border: 1px solid var(--color-border); }
+  .form-archivo-info { margin-top: 6px; font-size: var(--texto-s); color: var(--color-text-muted); }
+  .form-archivo-preview { margin-top: 8px; max-height: 180px; border-radius: var(--radio-m); border: 1px solid var(--color-border); }
   .form-acciones { margin-top: 4px; }
   .form-acciones button { display: inline-flex; align-items: center; gap: 7px; }
-  .form-nota { font-size: 11.5px; color: var(--color-text-muted); margin: 0 0 14px; }
+  .form-nota { font-size: var(--texto-xs); color: var(--color-text-muted); margin: 0 0 14px; }
   .form-nota::before { content: "*"; color: var(--color-danger); font-weight: 700; margin-right: 3px; }
 
   /* Celular: los botones (Anterior / Siguiente / Guardar) se quedan pegados abajo de la pantalla
