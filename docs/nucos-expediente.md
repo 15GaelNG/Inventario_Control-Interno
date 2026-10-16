@@ -263,3 +263,15 @@ nada se movió y todo conserva su ID. `tools/nucos/repetidos_a_duplicados.py` (p
 con su contenido intacto (md5). `reglas.py` ya crea `DUPLICADOS`. Las palabras para lo apartado quedan: `_POR REVISAR` (no se
 sabe qué es), `SIN FECHA` / `SIN PERIODO` (unidad real sin fecha; las inspecciones las muestra la ficha), `DUPLICADOS`
 (copia idéntica), `ANTERIORES` (historia) y `_PAPELERA` (descartado).
+
+## 7.-HOLOGRAMAS: lo de OXXO Gas fuera de ANTERIORES (16-oct-2026)
+
+Desde el 15-oct el holograma es el 7.° documento (`1.-DOCUMENTACIÓN/7.-HOLOGRAMAS`, `HOLOGRAMAS ANTERIORES`): el módulo
+Hologramas guarda ahí la solicitud nueva si la unidad tiene NUCO. Lo de antes estaba en `ANTERIORES/<ruta de antes>`
+(`DOCUMENTOS/9.-OXXO GAS`, `6.-OXXO GAS`…). `tools/nucos/hologramas.py` movió **45 carpetas de 44 NUCO (100 archivos)**
+completas, con su nombre, a `7.-HOLOGRAMAS/HOLOGRAMAS ANTERIORES/`: sin renombrar ni escoger vigente, todo con su ID. Traen
+el trámite completo del programa de combustible (solicitud del holograma, incrementos de litros, autorizaciones, la tarjeta),
+por eso se movieron enteras. El holograma de la **verificación** (engomado de emisiones) no se tocó. Bitácora
+`20261016-090813-hologramas.jsonl` (respaldada en Drive; `expediente.py deshacer` la regresa). Verificado 45/45 con su
+contenido intacto; volver a planear ya no encuentra nada en ANTERIORES. `reglas.py` (la reorganización del 8-oct) no conoce
+`7.-HOLOGRAMAS`: si se vuelve a correr, agregarlo a `SEIS` antes.
