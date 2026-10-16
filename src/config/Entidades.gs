@@ -82,6 +82,10 @@ const Entidades = (function () {
     'INSPECCION VEHICULAR': { prefijo: 'INS', llaveAnterior: 'ID INSPECCION', llaveEsDato: true, familia: 'vehiculos' },
     'INSTALACION DE SENSORES': { prefijo: 'SEN', llaveAnterior: 'ID_SENSOR', familia: 'vehiculos' },
     'HOLOGRAMAS': { prefijo: 'HOL', llaveAnterior: 'ID_HOLOGRAMA', familia: 'vehiculos' },
+    // Accesorios de cada unidad (16-oct-2026, AccesoriosVehiculoService): el catálogo (las piezas de la Responsiva
+    // Vehicular) y su historia. Nacen en el sistema. OJO: ACC y MAC son los accesorios de celulares de Líneas.
+    'CATALOGO ACCESORIOS VEHICULOS': { prefijo: 'CAV', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'vehiculos' },
+    'MOVIMIENTOS ACCESORIOS VEHICULOS': { prefijo: 'MAV', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'vehiculos' },
     'INCIDENCIAS': { prefijo: 'INC', llaveAnterior: 'ID_INCIDENCIA', familia: 'vehiculos' },
     // Retirada en la reestructura de Líneas (paso 4, 4-oct): queda oculta, ya no recibe altas y sus IDs LIN-… se quedan
     // como están (las hojas nuevas los guardan en ID ANTERIOR). El prefijo LIN pasó a la hoja LINEAS.
@@ -188,6 +192,8 @@ const Entidades = (function () {
     { hoja: 'INSPECCION VEHICULAR', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
     { hoja: 'HOLOGRAMAS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'SERIE VEHICULO', enPadre: 'SERIE VEHICULO' } },
     { hoja: 'CAMBIOS VEHICULOS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
+    // Sin llave de respaldo: nace con el ID VEHICULO (nunca por folio)
+    { hoja: 'MOVIMIENTOS ACCESORIOS VEHICULOS', columna: 'ID VEHICULO', padre: 'VEHICULOS' },
     { hoja: 'INCIDENCIAS', columna: 'ID VEHICULO', padre: 'VEHICULOS', llave: { columna: 'FOLIO', enPadre: 'FOLIO' } },
     { hoja: 'INSPECCIONES LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS' },
     { hoja: 'RESPONSIVAS LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS' },

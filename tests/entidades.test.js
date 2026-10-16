@@ -30,7 +30,8 @@ ok(revision.problemas.length === 0, 'sin problemas: ' + (revision.problemas.join
 // 22 + las dos de Capital Humano (01/10/2026) + las 3 APP_ nuevas de Líneas
 // + APP_HELPDESK, la copia de los tickets del helpdesk (05/10/2026) + RESPONSIVA VEHICULAR + ADHERENTE VEHICULAR
 // + SOLICITUD COMPRA (13-oct-2026, puente hacia Adquisición Vehicular)
-ok(revision.hojas === 38, 'tiene las 38 hojas de registros (27 + las 6 de la reestructura de Líneas + APP_HELPDESK + Responsiva y Adherente Vehicular + APP_IDENTIFICACIONES + SOLICITUD COMPRA), no ' + revision.hojas);
+// + CATALOGO y MOVIMIENTOS ACCESORIOS VEHICULOS (16-oct-2026, accesorios de cada unidad)
+ok(revision.hojas === 40, 'tiene las 40 hojas de registros (27 + las 6 de la reestructura de Líneas + APP_HELPDESK + Responsiva y Adherente Vehicular + APP_IDENTIFICACIONES + SOLICITUD COMPRA + las 2 de accesorios de vehículos), no ' + revision.hojas);
 ok(Entidades.migrables().length === 20,
    'de ellas 20 vienen de AppSheet y sí se migran, no ' + Entidades.migrables().length);
 
@@ -68,8 +69,8 @@ ok(pisan.indexOf('VEHICULOS') === -1,
 
 console.log('\n6b. Las pestañas del sistema nuevo no pasan por la migración');
 const nuevas = todas.filter((e) => e.delSistemaNuevo).map((e) => e.hoja).sort();
-ok(nuevas.join(',') === 'ADENDUMS,ADHERENTE VEHICULAR,APP_CORRECCIONES,APP_EVIDENCIAS,APP_HELPDESK,APP_IDENTIFICACIONES,APP_MOVIMIENTOS,APP_NOTIFICACIONES,APP_RESGUARDOS,ASIGNACIONES,EQUIPOS,FACTURAS,LINEAS,MOVIMIENTOS,PERSONAS,RESPONSIVA VEHICULAR,SOLICITUD COMPRA',
-   'son las seis APP_ de Líneas, APP_HELPDESK, las hojas de la reestructura, PERSONAS, RESPONSIVA VEHICULAR, ADHERENTE VEHICULAR y SOLICITUD COMPRA: ' + nuevas.join(', '));
+ok(nuevas.join(',') === 'ADENDUMS,ADHERENTE VEHICULAR,APP_CORRECCIONES,APP_EVIDENCIAS,APP_HELPDESK,APP_IDENTIFICACIONES,APP_MOVIMIENTOS,APP_NOTIFICACIONES,APP_RESGUARDOS,ASIGNACIONES,CATALOGO ACCESORIOS VEHICULOS,EQUIPOS,FACTURAS,LINEAS,MOVIMIENTOS,MOVIMIENTOS ACCESORIOS VEHICULOS,PERSONAS,RESPONSIVA VEHICULAR,SOLICITUD COMPRA',
+   'son las seis APP_ de Líneas, APP_HELPDESK, las hojas de la reestructura, PERSONAS, RESPONSIVA VEHICULAR, ADHERENTE VEHICULAR, SOLICITUD COMPRA y las 2 de accesorios de vehículos: ' + nuevas.join(', '));
 
 console.log('\n6c. Una hoja externa (se pega desde otro sistema) nunca pasa por la migración');
 const externas = todas.filter((e) => e.externa).map((e) => e.hoja);

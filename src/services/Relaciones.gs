@@ -1154,6 +1154,7 @@ const MAPA = {
     'RESPONSIVA VEHICULAR': { modulo: 'Responsiva Vehicular', uno: 'responsiva', varios: 'responsivas', familia: 'Vehículos' },
     'ADHERENTE VEHICULAR': { modulo: 'Adherente Vehicular', uno: 'adherente', varios: 'adherentes', familia: 'Vehículos' },
     'CAMBIOS VEHICULOS': { modulo: 'Cambios de Vehículos', uno: 'cambio', varios: 'cambios', familia: 'Vehículos' },
+    'MOVIMIENTOS ACCESORIOS VEHICULOS': { modulo: 'Accesorios de la unidad', uno: 'movimiento de accesorio', varios: 'movimientos de accesorios', familia: 'Vehículos' },
     'APP_EVIDENCIAS': { modulo: 'Evidencias de Líneas', uno: 'evidencia', varios: 'evidencias', familia: 'Líneas' },
   };
   // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las

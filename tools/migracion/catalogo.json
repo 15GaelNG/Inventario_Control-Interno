@@ -124,6 +124,32 @@
       "migrable": true
     },
     {
+      "hoja": "CATALOGO ACCESORIOS VEHICULOS",
+      "prefijo": "CAV",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "modulo": "",
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
+      "hoja": "MOVIMIENTOS ACCESORIOS VEHICULOS",
+      "prefijo": "MAV",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "modulo": "",
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
       "hoja": "INCIDENCIAS",
       "prefijo": "INC",
       "llaveAnterior": "ID_INCIDENCIA",
@@ -580,6 +606,11 @@
         "columna": "FOLIO",
         "enPadre": "FOLIO"
       }
+    },
+    {
+      "hoja": "MOVIMIENTOS ACCESORIOS VEHICULOS",
+      "columna": "ID VEHICULO",
+      "padre": "VEHICULOS"
     },
     {
       "hoja": "INCIDENCIAS",

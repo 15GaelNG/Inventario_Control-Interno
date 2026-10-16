@@ -56,6 +56,8 @@ const Modulos = (function () {
             { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-open', alcance: true },
             { id: 'responsiva', etiqueta: 'Responsiva', icono: 'file-signature', antes: 'responsiva-vehicular' },
             { id: 'adherente', etiqueta: 'Adherentes', icono: 'users', antes: 'adherente-vehicular' },
+            // Los accesorios de la unidad y su historia (altas y bajas; AccesoriosVehiculoService, 16-oct-2026)
+            { id: 'accesorios', etiqueta: 'Accesorios', icono: 'wrench' },
             // Las ligas a las carpetas de Drive del expediente (la cabecera de Documentos con NUCO / 1.-DOCUMENTACIÓN…,
             // "Carpeta" de cada documento y de cada inspección): operación interna. Sin alcance: un CLIENT no las ve
             // (usuario, 14-oct); los archivos sí, desde su pestaña

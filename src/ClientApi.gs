@@ -434,6 +434,14 @@ function apiEliminarReasignacionVehicular(token, id) {
   return ReasignacionesVehicularesService.eliminar(token, id);
 }
 
+// --- Accesorios de la unidad (AccesoriosVehiculoService) ---
+function apiAccesoriosVehiculo(token, idVehiculo) {
+  return AccesoriosVehiculoService.deVehiculo(token, idVehiculo);
+}
+function apiRegistrarAccesorioVehiculo(token, datos) {
+  return AccesoriosVehiculoService.registrar(token, datos);
+}
+
 // --- Responsiva Vehicular ---
 function apiListarResponsivasVehicularesPorFolio(token, folio) {
   return JSON.stringify(ResponsivaVehicularService.listarPorFolio(token, folio));
