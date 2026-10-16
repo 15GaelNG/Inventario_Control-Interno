@@ -1671,6 +1671,10 @@
           '<div class="form-rejilla" data-columnas="' + (columnas || 3) + '">' +
             CamposHoja.html(CAMPOS_VEHICULO, { prefijo, esEdicion, soloGrupos: [g] }) +
           '</div>' +
+          // Cuando no hay nada que precargar (ni propio ni de la Responsiva): referencia directa
+          // a la responsiva ESCANEADA de este vehículo (pestaña Documentación y seguro, campo
+          // RESPONSIVA) para capturar a mano sin tener que ir a buscarla aparte (usuario, 16-oct).
+          (g === 'Accesorios del vehículo' ? '<p class="form-ayuda" id="' + prefijo + '-accesorios-vehiculo-ayuda" hidden></p>' : '') +
         '</section>').join('');
   }
 
@@ -1732,6 +1736,30 @@
     CamposHoja.poblar(CAMPOS_VEHICULO, prefijo, datos, {
       antes: { 'OFICINA / DESARROLLO': llenarUbicacionesSegunSede },
     });
+    actualizarAyudaAccesoriosVehiculo_(prefijo, datos);
+  }
+
+  /** Si "Accesorios del vehículo" llegó vacío (ni propio ni precargado de la Responsiva), ofrece
+   *  la responsiva escaneada de este vehículo (campo RESPONSIVA, pestaña Documentación y seguro)
+   *  como referencia para capturarlo a mano -- ver poblarFormularioVehiculo. */
+  function actualizarAyudaAccesoriosVehiculo_(prefijo, datos) {
+    const ayuda = document.getElementById(prefijo + '-accesorios-vehiculo-ayuda');
+    if (!ayuda) return;
+    const clavesAccesorios = CAMPOS_VEHICULO.filter((c) => c.grupo === 'Accesorios del vehículo').map((c) => c.clave);
+    const yaHayAlgo = clavesAccesorios.some((c) => datos[c]);
+    if (yaHayAlgo || !datos['RESPONSIVA']) {
+      ayuda.hidden = true;
+      ayuda.innerHTML = '';
+      return;
+    }
+    ayuda.hidden = false;
+    const link = document.createElement('a');
+    link.href = datos['RESPONSIVA'];
+    link.target = '_blank';
+    link.rel = 'noopener';
+    link.textContent = 'ver documento';
+    ayuda.textContent = 'No hay accesorios precargados. Puedes revisar la responsiva escaneada de este vehículo para capturarlos a mano: ';
+    ayuda.appendChild(link);
   }
 
   /** Convierte un File del navegador a base64 puro (sin el prefijo data:...;base64,). */
