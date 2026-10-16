@@ -654,10 +654,10 @@ const TelefoniaService = (function () {
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
-    LineasRepo.borrarCaches();
-    // También las hojas que LineasLectura guarda 30 min: lo escrito por fuera de la app (la carga del proveedor del
-    // 14-oct) no las marca como cambiadas y la ficha seguía con la línea de antes
-    LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']);
+    // Las cachés de Líneas y las hojas que LineasLectura guarda 30 min (lo escrito por fuera de la app, como la carga del
+    // proveedor del 14-oct, no las marca como cambiadas), más los encabezados de las hojas nuevas (1 h): al quitar una
+    // columna del libro (FECHA DE ALTA, pendiente 2.51) se leía cada dato de la derecha en la columna equivocada
+    LineasLectura.limpiarCaches();
     return { ok: true };
   }
 

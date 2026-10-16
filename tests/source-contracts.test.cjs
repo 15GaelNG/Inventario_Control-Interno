@@ -2567,9 +2567,13 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
 test('Líneas: «Recargar datos» también vacía las hojas que la lectura guarda 30 min (carga del proveedor, 14-oct)', () => {
   const svc = read('src/services/TelefoniaService.gs');
   const cuerpo = svc.slice(svc.indexOf('  function recargarDatos(token) {'), svc.indexOf('  // ---------------- Captura: inspección y responsiva nuevas'));
-  assert.match(cuerpo, /LineasRepo\.borrarCaches\(\);/);
-  assert.match(cuerpo, /LineasDatos\.tocar\(\['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS'\]\);/);
+  // limpiarCaches: las de LineasRepo, toca las hojas y también vacía los encabezados guardados 1 h (pendiente 2.51)
+  assert.match(cuerpo, /LineasLectura\.limpiarCaches\(\);/);
   const lectura = read('src/services/lineas/LineasLectura.gs');
+  const limpiar = lectura.slice(lectura.indexOf('  function limpiarCaches() {'), lectura.indexOf('  return {', lectura.indexOf('  function limpiarCaches() {')));
+  assert.match(limpiar, /LineasRepo\.borrarCaches\(\);/);
+  assert.match(limpiar, /nuevas\.map\(\(n\) => 'enc_' \+ n\)/);
+  assert.match(limpiar, /LineasDatos\.tocar\(\[HOJA_VIEJA, HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS\]\);/);
   assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS, HOJA_VIEJA\];/,
     'si la lectura guarda otra hoja, «Recargar datos» también debe tocarla');
 });
