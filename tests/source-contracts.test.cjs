@@ -2356,6 +2356,18 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
 });
 
+test('cada grupo de CAMPOS_VEHICULO está en VEH_GRUPOS_PASO (si no, ese campo nunca se ve en Registrar/Editar)', () => {
+  // 15-oct-2026: "Accesorios del vehículo" se agregó a CAMPOS_VEHICULO pero no a VEH_GRUPOS_PASO
+  // (renderCamposVehiculo solo pinta los pasos de esa lista) -- la sección quedó invisible en el
+  // formulario aunque sí existiera en seccionesFichaVehiculo (esa sí deriva los grupos solita).
+  const app = read('src/html/js/app.html');
+  const bloqueCampos = /const CAMPOS_VEHICULO = \[([\s\S]*?)\n  \];/.exec(app)[1];
+  const gruposUsados = [...new Set([...bloqueCampos.matchAll(/grupo: '([^']+)'/g)].map((m) => m[1]))];
+  const pasos = /const VEH_GRUPOS_PASO = \[([^\]]*)\];/.exec(app)[1].match(/'[^']+'/g).map((x) => x.slice(1, -1));
+  assert.deepEqual(gruposUsados.filter((g) => !pasos.includes(g)), [], 'grupo en CAMPOS_VEHICULO sin su paso en VEH_GRUPOS_PASO');
+  assert.deepEqual(pasos.filter((g) => !gruposUsados.includes(g)), [], 'paso en VEH_GRUPOS_PASO sin ningún campo que lo use');
+});
+
 test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {
   const index = read('src/html/Index.html');
   const app = read('src/html/js/app.html');
