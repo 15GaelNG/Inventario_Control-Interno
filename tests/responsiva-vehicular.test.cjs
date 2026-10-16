@@ -103,6 +103,10 @@ function crearContexto() {
       PRESTAMOS: 'PRESTAMOS',
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push(Object.assign({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }, op && op.prestamo ? { prestamo: true } : {})); },
     },
+    // Lo que dice la responsiva firmada pasa a los accesorios de la unidad (16-oct-2026)
+    AccesoriosVehiculoService: {
+      desdeResponsiva: (fila, liga) => { (llamadas.accesorios = llamadas.accesorios || []).push({ fila, liga }); return { movimientos: 1, aviso: '' }; },
+    },
     PdfService: {
       generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },
@@ -638,7 +642,38 @@ test('el PDF se genera en el expediente del NUCO del vehículo y se archiva ahí
   assert.deepEqual(llamadas.expediente, [{ archivar: 'pdf1', nucco: '00001', doc: 'RESPONSIVA', adherente: false }]);
 });
 
+test('al quedar firmada, lo que dice la responsiva pasa a los accesorios de la unidad (con la liga del PDF)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez', 'GATO HIDRAULICO': 'SI' }, FIRMA_OK);
+  assert.equal((llamadas.accesorios || []).length, 1);
+  assert.equal(llamadas.accesorios[0].liga, 'https://drive/r.pdf');
+  assert.equal(llamadas.accesorios[0].fila['ID VEHICULO'], 'VEH-1');
+  assert.equal(llamadas.accesorios[0].fila['GATO HIDRAULICO'], 'SI');
+  assert.ok(llamadas.accesorios[0].fila.ID);
+});
+
+test('pendiente de firma (liga a distancia): todavía no toca los accesorios', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, { 'FIRMA CI': FIRMA_CI }, { remoto: true });
+  assert.equal((llamadas.accesorios || []).length, 0);
+});
+
+test('si los accesorios fallan, la responsiva queda firmada igual y solo se avisa', () => {
+  const { contexto } = crearContexto();
+  contexto.AccesoriosVehiculoService.desdeResponsiva = () => { throw new Error('hoja ocupada'); };
+  const r = contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Juan Perez' }, FIRMA_OK);
+  assert.equal(r.PDF, 'https://drive/r.pdf');
+  assert.match(r.aviso, /accesorios de la unidad: hoja ocupada/);
+});
+
 // ---------- Préstamo Vehicular (TIPO RESPONSIVA / devolverPrestamo) ----------
+
+test('préstamo: no cambia los accesorios de la unidad (no es la responsiva del dueño)', () => {
+  const { contexto, llamadas } = crearContexto();
+  contexto.Servicio.crear('tok', { 'FOLIO VEHICULO': 'AUT0001', RESPONSABLE: 'Maria Lopez', 'TIPO RESPONSIVA': 'PRESTAMO' }, FIRMA_OK);
+  assert.equal(llamadas.pdfGenerados, 1);
+  assert.equal((llamadas.accesorios || []).length, 0);
+});
 
 test('préstamo: su PDF va a 5.-RESPONSIVA/PRESTAMOS y no desplaza a la responsiva vigente del dueño', () => {
   const { contexto, llamadas } = crearContexto();

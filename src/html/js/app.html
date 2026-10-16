@@ -2547,13 +2547,14 @@
     }
 
     // ---------- Accesorios de la unidad (AccesoriosVehiculoService, 16-oct-2026) ----------
-    // El estado de cada pieza sale de su último movimiento (CARGA INICIAL de la responsiva, ALTA o BAJA); sin
-    // movimientos es "sin dato", no "no tiene". Desde aquí solo se registran altas y bajas.
+    // El estado de cada pieza sale de su último movimiento (CARGA INICIAL de la última responsiva de antes del sistema,
+    // RESPONSIVA al firmarse una en el sistema, ALTA o BAJA); sin movimientos es "sin dato", no "no tiene". Desde
+    // aquí solo se registran altas y bajas.
     // Como todo lo que se registra sobre la unidad, vive en SU pestaña (con los botones en la cabecera); Datos solo
     // dice cuántas tiene y lleva a ella (usuario, 16-oct: un solo lugar predecible para cada cosa).
     const ACC_ESTADO = { SI: { clase: 'acc-si', icono: 'check', texto: 'Tiene' }, NO: { clase: 'acc-no', icono: 'x', texto: 'No tiene' },
       '': { clase: 'acc-sin', icono: 'minus', texto: 'Sin dato' } };
-    const ACC_MOVIMIENTO = { 'CARGA INICIAL': 'Carga inicial', ALTA: 'Alta', BAJA: 'Baja' };
+    const ACC_MOVIMIENTO = { 'CARGA INICIAL': 'Carga inicial', RESPONSIVA: 'Según responsiva', ALTA: 'Alta', BAJA: 'Baja' };
 
     /** En Datos (solo lectura): cuántas piezas tiene y la liga a la pestaña Accesorios */
     function resumenAccesorios(acc) {
@@ -2619,7 +2620,8 @@
         alValidar: (v) => (v.FECHA && v.FECHA > hoyLocal() ? { FECHA: 'No puede ser una fecha futura' } : null),
         textoGuardar: alta ? 'Registrar alta' : 'Registrar baja', iconoGuardar: 'save',
         alGuardar: async (valores) => {
-          await callServer('apiRegistrarAccesorioVehiculo', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, MOVIMIENTO: movimiento }, valores));
+          const r = await callServer('apiRegistrarAccesorioVehiculo', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, MOVIMIENTO: movimiento }, valores));
+          if (r && r.aviso) Notificar.info(r.aviso);
         },
         textoExito: () => (alta ? 'Alta registrada' : 'Baja registrada'),
         alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'accesorios'); },

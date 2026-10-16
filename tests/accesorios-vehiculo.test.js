@@ -80,10 +80,54 @@ ok(truena(() => S.registrar('ana@x.com', { ID_VEHICULO: 'VEH-9', ACCESORIO: 'PAR
   'una unidad que no existe');
 ok(truena(() => S.registrar('ana@x.com', { ID_VEHICULO: 'VEH-1', ACCESORIO: 'PARASOL', MOVIMIENTO: 'ALTA', FECHA: '2027-01-01' }), /futura/),
   'una fecha futura');
+console.log('4. La hoja de estado: un renglón por unidad, lo escribe el servicio');
+const estado = () => e.libros.veh.getSheetByName('ESTADO ACCESORIOS VEHICULOS');
+const renglon = (id) => {
+  const h = estado();
+  const v = h.getRange(1, 1, h.getLastRow(), h.getLastColumn()).getValues();
+  const i = v.findIndex((x) => x[0] === id);
+  return i < 1 ? null : Object.fromEntries(v[0].map((c, j) => [c, v[i][j]]));
+};
+ok(!!estado(), 'se creó sola con el primer movimiento');
+const enc = estado().getRange(1, 1, 1, estado().getLastColumn()).getValues()[0];
+ok(enc.join() === 'ID VEHICULO,NUCCO,FOLIO,GATO HIDRAULICO,LLANTA REFACCION,PARASOL,CUBIERTA BATEA,ULTIMO MOVIMIENTO,FECHA ULTIMO MOVIMIENTO',
+  'columnas: la unidad, una por pieza del catálogo (en su orden) y el último movimiento');
+let u = renglon('VEH-1');
+ok(u && u['GATO HIDRAULICO'] === 'NO' && u['LLANTA REFACCION'] === 'SI' && u['PARASOL'] === '' && u.FOLIO === 'AUT0088',
+  'VEH-1: sin gato (baja), con llanta (alta), parasol sin dato');
+ok(u['ULTIMO MOVIMIENTO'] === 'BAJA GATO HIDRAULICO' && u['FECHA ULTIMO MOVIMIENTO'] === '2026-10-02', 'y su último movimiento');
+ok(estado().getLastRow() === 2, 'un solo renglón por unidad aunque haya dos movimientos');
+
+console.log('5. La responsiva firmada manda: solo lo que cambia');
+let rr = S.desdeResponsiva({ 'ID': 'RSV-9', 'ID VEHICULO': 'VEH-1', 'NUCCO': '88', 'GATO HIDRAULICO': 'SI', 'LLANTA REFACCION': 'SI',
+  'PARASOL': '', 'REGISTRADO POR': 'Luis' }, 'https://drive/r9.pdf', f('2026-10-10'));
+ok(rr.movimientos === 1, 'la llanta ya la tenía y el parasol viene vacío: solo el gato cambia');
+r = S.deVehiculo('ana@x.com', 'VEH-1');
+ok(pieza(r, 'GATO HIDRAULICO').TIENE === 'SI' && r.historial[0].MOVIMIENTO === 'RESPONSIVA' && r.historial[0].ORIGEN === 'https://drive/r9.pdf'
+  && r.historial[0].MOTIVO === 'Responsiva RSV-9', 'movimiento RESPONSIVA con la liga del PDF y de qué responsiva');
+ok(renglon('VEH-1')['GATO HIDRAULICO'] === 'SI', 'y el renglón de estado ya lo dice');
+rr = S.desdeResponsiva({ 'ID': 'RSV-10', 'ID VEHICULO': 'VEH-2', 'NUCCO': '90', 'PARASOL': 'NO', 'GATO HIDRAULICO': 'SI' }, 'liga', f('2026-10-11'));
+ok(rr.movimientos === 2 && renglon('VEH-2') && renglon('VEH-2')['PARASOL'] === 'NO', 'una unidad sin datos: entra lo que diga (NO también es dato)');
+ok(S.desdeResponsiva({ 'ID': 'RSV-11', 'ID VEHICULO': 'VEH-2', 'PARASOL': 'NO' }, 'liga').movimientos === 0, 'una responsiva igual no escribe nada');
+ok(S.desdeResponsiva({ 'ID': 'RSV-12', 'GATO HIDRAULICO': 'SI' }, 'liga').movimientos === 0, 'sin unidad no hace nada');
+ok(S.siNo('Sí') === 'SI' && S.siNo('N/A') === '' && S.siNo('(vacío)') === '' && S.siNo(false) === 'NO', 'SI / NO / sin dato');
+
+console.log('6. Rehacer y revisar');
+const antesDeRehacer = JSON.stringify([renglon('VEH-1'), renglon('VEH-2')]);
+ok(S.revisarEstado().mal.length === 0, 'revisar: todo cuadra');
+estado().getRange(2, 4).setValue('NO');
+ok(S.revisarEstado().mal.join() === 'VEH-1', 'revisar encuentra el renglón que alguien cambió a mano');
+ok(S.rehacerEstado().unidades === 2 && JSON.stringify([renglon('VEH-1'), renglon('VEH-2')]) === antesDeRehacer && S.revisarEstado().mal.length === 0,
+  'rehacer lo deja igual que lo calculado');
+e.libros.veh.getSheetByName('CATALOGO ACCESORIOS VEHICULOS').appendRow(['CAV-5', 'TAPETES RUDO', 'Tapetes uso rudo', 5, 'SI']);
+S.registrar('ana@x.com', { ID_VEHICULO: 'VEH-2', ACCESORIO: 'TAPETES RUDO', MOVIMIENTO: 'ALTA', FECHA: '2026-10-02' });
+ok(renglon('VEH-2')['TAPETES RUDO'] === 'SI', 'una pieza nueva del catálogo agrega su columna sola');
+
 e.contexto.puede.editar = false;
 ok(truena(() => S.registrar('ana@x.com', { ID_VEHICULO: 'VEH-1', ACCESORIO: 'PARASOL', MOVIMIENTO: 'ALTA' }), /No tienes acceso/),
   'sin permiso de edición no escribe');
-ok(e.libros.veh.getSheetByName('MOVIMIENTOS ACCESORIOS VEHICULOS').getLastRow() === 5, 'solo quedaron los 2 de la carga y los 2 válidos');
+ok(e.libros.veh.getSheetByName('MOVIMIENTOS ACCESORIOS VEHICULOS').getLastRow() === 9,
+  'solo quedaron los 2 de la carga, los 2 de la ficha, los 3 de responsivas y el alta de tapetes');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

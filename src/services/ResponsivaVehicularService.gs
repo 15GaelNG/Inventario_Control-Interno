@@ -392,6 +392,16 @@ const ResponsivaVehicularService = (function () {
         'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '',
         'FIRMA RESPONSABLE TEMP': '', 'FIRMA JEFE TEMP': '', 'FIRMA CI TEMP': '',
       }, camposExtra || {}), ID_COLUMN);
+      // Lo que dice la responsiva firmada es lo que tiene la unidad (usuario, 16-oct-2026): solo lo que cambia queda en
+      // MOVIMIENTOS ACCESORIOS VEHICULOS. Un préstamo no es la responsiva del dueño. Si falla, la responsiva ya quedó.
+      if (!esPrestamo) {
+        try {
+          const acc = AccesoriosVehiculoService.desdeResponsiva(Object.assign({ 'ID': id }, fila), pdf.url, ahora);
+          if (acc.aviso) avisos.push(acc.aviso);
+        } catch (e) {
+          avisos.push('La responsiva quedó firmada, pero no se pudieron poner al día los accesorios de la unidad: ' + e.message);
+        }
+      }
       // Los archivos temporales de Drive (guardarFirmaTemp_) ya sirvieron: el PDF ya quedó con
       // su propia firma respaldada arriba. Si alguno no se pudo borrar, queda un archivo suelto
       // en Drive -- no afecta nada más.

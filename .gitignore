@@ -48,3 +48,6 @@ tools/migracion/corridas/
 
 # Expediente por NUCO: lo leído de Drive y la hoja (datos de unidades)
 tools/nucos/.cache/
+
+# Planes y bitácoras de la carga de accesorios (traen datos de unidades)
+tools/accesorios/.cache/
