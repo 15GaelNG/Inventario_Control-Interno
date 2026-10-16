@@ -750,3 +750,64 @@ function revisarRelacionesYCorregir() {
   Logger.log(mensaje);
   return mensaje;
 }
+
+/**
+ * ¿Para cuántos vehículos "Accesorios del vehículo" se va a precargar solo, y a cuántos les
+ * va a tocar capturarlo a mano? (usuario, 15-oct-2026: "antes se hacían las responsivas pero
+ * por fuera" -- muchas no están en RESPONSIVA VEHICULAR, así que no hay de dónde precargar).
+ *
+ * Por cada vehículo activo (no BAJA VEHICULAR):
+ *   - "con datos"      ya tiene una Responsiva en el sistema con al menos uno de los 13
+ *                       accesorios capturado -- se va a precargar solo, no hace falta nada.
+ *   - "responsiva sin accesorios" tiene Responsiva(s) en el sistema pero ninguna trae
+ *                       ninguno de los 13 capturado (ESTADO FIRMA pendiente, formato viejo…).
+ *   - "sin responsiva"  no tiene ninguna Responsiva en el sistema (la hizo "por fuera") --
+ *                       aquí es donde hace falta capturarlo a mano, uno por uno.
+ * No escribe nada, solo cuenta y lista folios de ejemplo (hasta 40 por categoría).
+ */
+function diagnosticoCoberturaAccesoriosVehiculo() {
+  soloEditor_();
+  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+  const ACCESORIOS = [
+    'GATO HIDRAULICO', 'GATO MECANICO', 'LLAVE CRUZ', 'MANERAL', 'LLANTA REFACCION',
+    'KIT SEGURIDAD', 'PARASOL', 'TAPETES RUDO', 'TAPETES ALFOMBRA', 'CUBRE VOLANTE',
+    'CUBRE ASIENTOS', 'BED LINER', 'CUBIERTA BATEA',
+  ];
+
+  const vehiculos = SheetUtils.getAll(ssId, 'VEHICULOS')
+    .filter((v) => v['ID'] && String(v['ESTATUS'] || '').toUpperCase() !== 'BAJA VEHICULAR');
+
+  // Por ID VEHICULO: ¿tiene alguna Responsiva?, y de esas, ¿alguna trae algún accesorio?
+  const tieneResponsiva = new Set();
+  const tieneAccesorios = new Set();
+  SheetUtils.getAll(ssId, 'RESPONSIVA VEHICULAR').forEach((r) => {
+    const id = r['ID VEHICULO'];
+    if (!id) return;
+    tieneResponsiva.add(id);
+    if (ACCESORIOS.some((c) => r[c])) tieneAccesorios.add(id);
+  });
+
+  const conDatos = [];
+  const responsivaSinAccesorios = [];
+  const sinResponsiva = [];
+  vehiculos.forEach((v) => {
+    const folio = v['FOLIO'] || v['ID'];
+    if (tieneAccesorios.has(v['ID'])) conDatos.push(folio);
+    else if (tieneResponsiva.has(v['ID'])) responsivaSinAccesorios.push(folio);
+    else sinResponsiva.push(folio);
+  });
+
+  const resumen = (nombre, lista) => {
+    const EJEMPLOS = 40;
+    return nombre + ': ' + lista.length + ' de ' + vehiculos.length +
+      (lista.length ? ' — ' + lista.slice(0, EJEMPLOS).join(', ') + (lista.length > EJEMPLOS ? ' … y ' + (lista.length - EJEMPLOS) + ' más' : '') : '');
+  };
+  const mensaje = [
+    'Vehículos activos: ' + vehiculos.length,
+    resumen('Se precarga solo (ya tiene Responsiva con accesorios)', conDatos),
+    resumen('Tiene Responsiva pero sin ningún accesorio capturado', responsivaSinAccesorios),
+    resumen('Sin Responsiva en el sistema (se hizo "por fuera"): hay que capturarlo a mano', sinResponsiva),
+  ].join('\n\n');
+  Logger.log(mensaje);
+  return mensaje;
+}
