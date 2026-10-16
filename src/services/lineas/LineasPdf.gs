@@ -235,9 +235,8 @@ const LineasPdf = (function () {
       // una hoja en blanco
       if (ajuste && ajuste.hojas && paginas_(blob) > ajuste.hojas && quitarSalto_(copia.getId())) blob = copia.getAs('application/pdf');
       const pdf = DriveUtils.marcarAutor(carpeta.createFile(blob.setName(nombrePdf)));
-      // Sin esto, el PDF solo lo puede ver la cuenta que despliega la app
-      // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-      if (!sinCompartir) pdf.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+      // Fuera de NUCOS y LINEAS se abre al dominio; si Drive no lo deja, se queda con los permisos de su carpeta
+      if (!sinCompartir) LineasArchivos.compartirEnDominio(pdf);
       return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos };
     } finally {
       copia.setTrashed(true); // la copia temporal es nuestra; la plantilla original no se toca

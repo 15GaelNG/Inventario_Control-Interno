@@ -76,6 +76,7 @@ function generar(plantillaId, elemento, cuerpoArmado, registro, hojas) {
   const contexto = vm.createContext({
     DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
     DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
+    LineasArchivos: { compartirEnDominio: () => true },
     DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8') + '\nthis.pdf = LineasPdf;', contexto);
@@ -172,4 +173,30 @@ test('el valor conserva el fondo azul de la etiqueta aunque el texto de al lado 
   assert.equal(t.valor, 'TEL: 4421234567');
   assert.ok(t.formatos.slice(5).every((f) => f.BACKGROUND_COLOR === '#cfe2f3'));
   assert.equal(t.formatos[4].BACKGROUND_COLOR, null);
+});
+
+// 16-oct: «Regenerar PDF» de la responsiva de la línea 4461456715 (sin NUCO, en `Files`) daba «Acceso denegado: DriveApp»: el PDF
+// ya estaba creado, pero Drive no dejó compartirlo con el dominio. Cada intento dejaba un PDF suelto y la responsiva sin PDF.
+test('si Drive no deja compartir el PDF con el dominio, el PDF se entrega igual y la copia temporal va a la papelera', () => {
+  const avisos = [];
+  const copia = { getId: () => 'tmp', papelera: false, setTrashed(v) { copia.papelera = v; }, getAs: () => ({ setName: () => ({}), getDataAsString: () => '<</Type /Page>>' }) };
+  const contexto = vm.createContext({
+    console: { warn: (m) => avisos.push(m), log: () => {}, error: () => {} },
+    DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
+    DriveUtils: { marcarAutor: (a) => a },
+    DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => contenedor('BODY_SECTION', []), getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
+  });
+  const fuente = (r) => fs.readFileSync(path.join(__dirname, '../src/services/lineas/' + r), 'utf8');
+  vm.runInContext(fuente('LineasArchivos.gs') + '\n' + fuente('LineasPdf.gs') + '\nthis.pdf = LineasPdf; this.archivos = LineasArchivos;', contexto);
+  const pdf = { getId: () => 'pdf', getName: () => 'RESPONSIVARLI-1.pdf', getUrl: () => 'url', setSharing: () => { throw new Error('Acceso denegado: DriveApp'); } };
+  const carpeta = { createFile: () => pdf };
+  const r = contexto.pdf.generarPdfDesdePlantilla(contexto.pdf.PLANTILLAS.RESPONSIVA_CELULAR, { 'No TELEFONO': '4461456715' }, {}, carpeta, 'RESPONSIVARLI-1.pdf');
+  assert.equal(r.id, 'pdf');
+  assert.equal(copia.papelera, true);
+  assert.equal(avisos.length, 1);
+  assert.match(avisos[0], /Acceso denegado/);
+  // Si sí deja, lo comparte (solo ver, con el dominio)
+  const compartido = [];
+  assert.equal(contexto.archivos.compartirEnDominio({ getId: () => 'x', setSharing: (a, p) => compartido.push(a + ' ' + p) }), true);
+  assert.deepEqual(compartido, ['DOMAIN VIEW']);
 });
