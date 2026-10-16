@@ -19,7 +19,7 @@ const dom = new JSDOM('<!doctype html><body><div id="t"></div></body>', { url: '
 const { window } = dom;
 window.CSS = { escape: (s) => String(s).replace(/["\\]/g, '\\$&') };
 if (process.env.LUCIDE) window.eval(fs.readFileSync(process.env.LUCIDE, 'utf8'));
-window.eval(['iconos.html', 'notificar.html', 'confirmar.html', 'datatable.html'].map(scriptDe).join('\n') +
+window.eval(['formato.html', 'iconos.html', 'notificar.html', 'confirmar.html', 'datatable.html'].map(scriptDe).join('\n') +
   '\nwindow.DataTable = DataTable; window.Confirmar = Confirmar; window.Notificar = Notificar; window.Iconos = Iconos;');
 let exportado = null;
 window.ExportarExcel = { descargar: async (opciones) => { exportado = opciones; } };

@@ -15,29 +15,14 @@
 
     // ---------------- Utilidades ----------------
     const $ = (sel, raiz) => (raiz || document).querySelector(sel);
-    const esc = (v) => {
-      if (v === null || v === undefined || v === '') return '';
-      return String(v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    };
+    const esc = Formato.esc;
     const vacio = '<span class="ln-tenue">—</span>';
     const guion = (v) => (v === null || v === undefined || v === '' ? vacio : esc(v));
-    const fecha = (iso) => {
-      if (!iso) return null;
-      const d = new Date(iso);
-      return isNaN(d) ? null : d.toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: '2-digit' });
-    };
-    const fechaHora = (iso) => {
-      if (!iso) return '';
-      const d = new Date(iso);
-      return isNaN(d) ? '' : d.toLocaleString('es-MX', { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-    };
-    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const porcentaje = (v) => {
-      if (v === null || v === undefined || v === '') return null;
-      const n = Number(v);
-      return Math.round(n > 1 ? n : n * 100) + '%';
-    };
-    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+    const fecha = (v) => Formato.fechaTexto(v);
+    const fechaHora = (v) => Formato.fechaTexto(v, { hora: true });
+    const normal = Formato.normal;
+    const porcentaje = Formato.porcentaje;
+    const miles = (n) => Formato.miles(n);
 
     /** Activos de otro módulo para Gestión de Activos: si la persona no tiene permiso en ese
      *  módulo ni se pregunta (el servidor lo rechazaría y quedaría un error en los registros) —
@@ -46,16 +31,7 @@
       ? callServerCacheado(api, state.token).catch(() => [])
       : Promise.resolve(null));
     /** Ícono de Lucide (lucide.dev/icons) como SVG en línea: icono('smartphone'). */
-    function icono(nombre, clase) {
-      const nombrePascal = String(nombre).replace(/(^|-)([a-z0-9])/g, (m, sep, c) => c.toUpperCase());
-      const nodos = window.lucide && window.lucide.icons && window.lucide.icons[nombrePascal];
-      if (!nodos) return '';
-      const svg = window.lucide.createElement(nodos);
-      svg.setAttribute('class', 'ln-icon ' + (clase || ''));
-      svg.setAttribute('aria-hidden', 'true');
-      svg.setAttribute('focusable', 'false');
-      return svg.outerHTML;
-    }
+    const icono = (nombre, clase) => Iconos.svg(nombre, 'ln-icon' + (clase ? ' ' + clase : ''));
     /** Rellena los <span data-ln-icon="nombre"> de las plantillas. */
     function pintarIconos(raiz) {
       raiz.querySelectorAll('[data-ln-icon]').forEach((el) => { el.innerHTML = icono(el.dataset.lnIcon); });
@@ -224,17 +200,10 @@
 
     // ---------------- Tablas y KPIs con los componentes del sistema (rama jorge) ----------------
     /** Ícono con la clase .ico del sistema, para HTML que se repinta (tablas, KPIs, títulos). */
-    const ico = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : icono(nombre));
+    const ico = (nombre) => Iconos.svg(nombre);
 
     /** Fecha como la muestra DataTable (dd/mm/aaaa) y con hora solo si la trae. */
-    function fechaTabla(v) {
-      if (v === null || v === undefined || v === '') return '';
-      const d = v instanceof Date ? v : new Date(v);
-      if (isNaN(d)) return String(v);
-      const dos = (x) => String(x).padStart(2, '0');
-      const dia = dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + '/' + d.getFullYear();
-      return d.getHours() || d.getMinutes() ? dia + ' ' + dos(d.getHours()) + ':' + dos(d.getMinutes()) : dia;
-    }
+    const fechaTabla = (v) => Formato.fechaHoraSiTiene(v) || (v == null ? '' : String(v));
     const esFechaIso = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v);
     const esBooleano = (v) => v === true || v === false || /^(TRUE|FALSE)$/i.test(String(v));
     const booleano = (v) => (v === '' || v === null || v === undefined ? '' : (v === true || String(v).toUpperCase() === 'TRUE' ? 'Sí' : 'No'));
@@ -244,21 +213,20 @@
     // Los colores con nombre del AppSheet se traducen a un tono legible sobre fondo claro u oscuro;
     // los íconos Font Awesome se sustituyen por su equivalente de Lucide.
     const COLOR_APPSHEET = {
-      green: '#1e8a3a', orange: '#e67e00', yellow: '#b59a00', red: '#d62020', pink: '#d4508a',
+      green: 'var(--tono-verde)', orange: 'var(--tono-naranja)', yellow: 'var(--tono-amarillo)', red: 'var(--tono-rojo)', pink: 'var(--tono-rosa)',
       themeMainColor: 'var(--color-primary)', minorText: 'var(--color-text-muted)',
     };
     const colorAppSheet = (c) => COLOR_APPSHEET[c] || COLOR_APPSHEET[String(c).toLowerCase()] || c;
-    // `fondo`: la regla trae Highlight color (se pinta como etiqueta con fondo tenue del mismo color).
     // `fondo`: la regla trae Highlight color (se pinta como etiqueta con fondo tenue del mismo color).
     const REGLAS_FORMATO = {
       REACTIVACION: {
         'ESTATUS': {
           'EN USO': { color: 'green', tam: 1.1, bold: true, italic: true, fondo: true },
-          'DISPONIBLE': { color: '#006400', tam: 1.1, bold: true, italic: true, fondo: true },
+          'DISPONIBLE': { color: 'var(--tono-verde-oscuro)', tam: 1.1, bold: true, italic: true, fondo: true },
           'EN PROCESO DE ASIGNACION': { color: 'themeMainColor', tam: 1.1, bold: true, italic: true, fondo: true },
           'CANCELADA': { color: 'red', bold: true, italic: true, fondo: true },
           'PROCESO DE CANCELACION': { color: 'orange', bold: true, italic: true, fondo: true },
-          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: '#305496', bold: true, italic: true, fondo: true },
+          'ACTUALIZACIÓN DE LINEA TELEFONICA': { color: 'var(--tono-azul-marino)', bold: true, italic: true, fondo: true },
         },
         'RETRO DE SOLICITUD': {
           'SUSPENSION DE LINEA': { color: 'orange', tam: 0.9, italic: true, fondo: true },
@@ -266,7 +234,7 @@
           'CAMBIO DE NUMERO': { color: 'themeMainColor', tam: 0.9, italic: true, fondo: true },
           'TRAMITE CONCLUIDO': { color: 'green', tam: 0.9, italic: true, fondo: true },
           'PENDIENTE DE ENTREGA': { color: 'red', tam: 0.9, italic: true, fondo: true },
-          'CANCELACION': { color: '#8B0000', italic: true, fondo: true },
+          'CANCELACION': { color: 'var(--tono-rojo-oscuro)', italic: true, fondo: true },
         },
       },
       SOLICITUD: {
@@ -283,14 +251,14 @@
           'EQUIPO + SIM': { color: 'green', icono: 'smartphone', bold: true, italic: true, fondo: true },
           'BANDA ANCHA': { color: 'pink', icono: 'radio-tower', bold: true, italic: true, fondo: true },
           'EQUIPO': { color: 'minorText', icono: 'smartphone', bold: true, italic: true, fondo: true },
-          'EQUIPO + SIM BASICO': { color: '#54AE98', icono: 'card-sim', bold: true, italic: true, fondo: true },
-          'CAMARA': { color: '#004734', icono: 'camera', bold: true, italic: true, fondo: true },
-          'SIM BASICO': { color: '#B3A184', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'EQUIPO + SIM BASICO': { color: 'var(--tono-turquesa)', icono: 'card-sim', bold: true, italic: true, fondo: true },
+          'CAMARA': { color: 'var(--tono-bosque)', icono: 'camera', bold: true, italic: true, fondo: true },
+          'SIM BASICO': { color: 'var(--tono-arena)', icono: 'card-sim', bold: true, italic: true, fondo: true },
         },
       },
       // Bitácora: ANTES con flecha hacia abajo y DESPUES hacia arriba (fa-caret-circle-down / up)
       CAMBIOS: {
-        'ANTES': { '*': { color: '#b78360', icono: 'circle-chevron-down', bold: true, fondo: true } },
+        'ANTES': { '*': { color: 'var(--tono-cobre)', icono: 'circle-chevron-down', bold: true, fondo: true } },
         'DESPUES': { '*': { color: 'themeMainColor', icono: 'circle-chevron-up', bold: true, fondo: true } },
       },
       // Control de reasignaciones: quién entra (flechas arriba, verde) y quién sale (flechas abajo, rojo)
@@ -300,9 +268,9 @@
       },
       ACCESORIOS: {
         'Categoria': {
-          'Cargadores': { color: '#006699', bold: true, italic: true },
+          'Cargadores': { color: 'var(--tono-azul-petroleo)', bold: true, italic: true },
           'Fundas': { color: 'pink', bold: true, italic: true },
-          'Micas': { color: '#998459', bold: true, italic: true },
+          'Micas': { color: 'var(--tono-bronce)', bold: true, italic: true },
         },
       },
     };
@@ -485,7 +453,7 @@
      * el panel de detalle y en el Excel). Detecta fechas y casillas por su contenido.
      */
     /** Encabezado comparable: mayúsculas, sin acentos y con un solo espacio. */
-    const normEncabezado = (h) => String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const normEncabezado = (h) => Formato.normal(h).toUpperCase().replace(/\s+/g, ' ').trim();
 
     /** "FECHA DE REGISTRO" → "Fecha de registro"; siglas cortas (NUCO, IMEI, SIM) se quedan igual. */
     const tituloLegible = (h) => {
@@ -579,16 +547,14 @@
     function diaClave(diasAtras) {
       const f = new Date();
       f.setDate(f.getDate() - (diasAtras || 0));
-      return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+      return Formato.dia(f);
     }
     function contarDesde(filas, campo, diasAtras) {
       const desde = diaClave(diasAtras);
       return filas.filter((f) => {
         if (!f[campo]) return false;
-        const d = new Date(f[campo]);
-        if (isNaN(d)) return false;
-        const clave = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, '0'), String(d.getDate()).padStart(2, '0')].join('-');
-        return clave >= desde;
+        const clave = Formato.dia(f[campo]);
+        return clave !== '' && clave >= desde;
       }).length;
     }
 
@@ -1101,9 +1067,7 @@
     /** Indicador de pasos + un <section class="form-paso"> por paso. `extras`: { índice: html } al final del paso. */
     function htmlPasosAppSheet(elementos, pasos, extras, opciones) {
       const grupos = repartirEnPasos(elementos, pasos);
-      return '<div class="ln-pasos-barra"><ol class="form-pasos">' + pasos.map((p, i) =>
-        '<li><button type="button" class="form-paso-chip" data-ir-paso="' + i + '"' + (i ? ' disabled' : '') + '><span class="form-paso-num">' + (i + 1) + '</span>' + esc(p.titulo) + '</button></li>').join('') +
-        '</ol></div>' +
+      return '<div class="ln-pasos-barra">' + Pasos.htmlChips(pasos.map((p) => esc(p.titulo))) + '</div>' +
         pasos.map((p, i) => '<section class="form-paso ln-paso" data-paso="' + i + '"' + (p.siempre ? ' data-paso-siempre' : '') + (i ? ' hidden' : '') + '>' +
           '<h3 class="form-paso-titulo" tabindex="-1">' + (p.icono ? icono(p.icono) + ' ' : '') + esc(p.titulo) + '</h3>' +
           (p.descripcion ? '<p class="form-paso-desc">' + esc(p.descripcion) + '</p>' : '') +
@@ -1124,102 +1088,54 @@
      */
     function activarPasos(cont, cfg) {
       const secciones = Array.from(cont.querySelectorAll('.form-paso[data-paso]'));
-      const chips = Array.from(cont.querySelectorAll('.form-paso-chip[data-ir-paso]'));
-      const vistos = {};
-      let actual = 0;
-      const aplica = (s) => s.hasAttribute('data-paso-siempre') || !!s.querySelector('.ln-af-campo:not([hidden]):not(.ln-af-lectura), .ln-af-campo:not([hidden]) .ln-pastillas');
-      const visibles = () => secciones.map((s, i) => i).filter((i) => aplica(secciones[i]));
       const scroll = cont.closest('.modal-form-scroll') || cont;
-      function pintar() {
-        const vis = visibles();
-        const pos = vis.indexOf(actual);
-        chips.forEach((chip, i) => {
-          const si = vis.indexOf(i) >= 0;
-          chip.closest('li').hidden = !si;
-          chip.classList.toggle('activo', i === actual);
-          chip.classList.toggle('completado', si && vis.indexOf(i) < pos && !!vistos[i]);
-          chip.disabled = !cfg.libre && !vistos[i] && i > actual;
-          chip.querySelector('.form-paso-num').textContent = vis.indexOf(i) + 1;
-        });
-        const ultimo = pos === vis.length - 1;
-        cfg.atras.hidden = pos <= 0;
-        cfg.siguiente.hidden = ultimo;
-        cfg.guardar.hidden = !ultimo && !cfg.libre;
-        if (cfg.cuenta) cfg.cuenta.textContent = 'Paso ' + (pos + 1) + ' de ' + vis.length;
-      }
-      function ir(i, sinFoco) {
-        const vis = visibles();
-        if (vis.indexOf(i) < 0) {
-          const despues = vis.filter((x) => x > i)[0];
-          i = despues !== undefined ? despues : vis.filter((x) => x < i).pop();
-        }
-        if (i === undefined) return;
-        actual = i;
-        vistos[i] = true;
-        secciones.forEach((sec, k) => { sec.hidden = k !== i; });
-        pintar();
-        if (cfg.alMostrar) cfg.alMostrar(i);
-        if (!sinFoco) {
+      // Un paso aplica si tiene algo que capturar a la vista (Show_If según el TIPO) o se declaró siempre
+      const aplica = (i) => secciones[i].hasAttribute('data-paso-siempre') ||
+        !!secciones[i].querySelector('.ln-af-campo:not([hidden]):not(.ln-af-lectura), .ln-af-campo:not([hidden]) .ln-pastillas');
+      // La navegación es la del sistema (componente Pasos, la misma de Formulario)
+      const nav = Pasos.navegar({
+        secciones: secciones, chips: Array.from(cont.querySelectorAll('.form-paso-chip[data-ir-paso]')),
+        atras: cfg.atras, siguiente: cfg.siguiente, guardar: cfg.guardar, cuenta: cfg.cuenta, libre: cfg.libre, teclas: cont,
+        aplica: aplica,
+        validar: (i) => !!(cfg.validar && cfg.validar(secciones[i]).length),
+        alMostrar: (i, sinFoco) => {
+          if (cfg.alMostrar) cfg.alMostrar(i);
+          if (sinFoco) return;
           scroll.scrollTop = 0;
           const titulo = secciones[i].querySelector('.form-paso-titulo');
           if (titulo) titulo.focus({ preventScroll: true });
-        }
-      }
-      function avanzar() {
-        if (cfg.validar && cfg.validar(secciones[actual]).length) return;
-        const sig = visibles().filter((x) => x > actual)[0];
-        if (sig !== undefined) ir(sig);
-      }
-      cfg.siguiente.addEventListener('click', avanzar);
-      cfg.atras.addEventListener('click', () => { const ant = visibles().filter((x) => x < actual).pop(); if (ant !== undefined) ir(ant); });
-      chips.forEach((chip, i) => chip.addEventListener('click', () => {
-        if (i <= actual || cfg.libre || vistos[i]) ir(i);
-        else if (!cfg.validar || !cfg.validar(secciones[actual]).length) ir(i);
-      }));
-      // Enter avanza de paso en vez de guardar a medias (si la lista del Combobox no lo usó)
-      cont.addEventListener('keydown', (ev) => {
-        if (ev.key !== 'Enter' || ev.defaultPrevented || ev.target.tagName !== 'INPUT' || !cfg.siguiente || cfg.siguiente.hidden) return;
-        ev.preventDefault();
-        avanzar();
+        },
       });
       // Show_If puede ocultar o mostrar pasos completos al cambiar el TIPO
-      cont.addEventListener('change', () => setTimeout(pintar, 0));
-      ir(0, true);
+      cont.addEventListener('change', () => setTimeout(nav.refrescar, 0));
+      nav.ir(0, true);
       return {
-        ir: ir,
-        pintar: pintar,
+        ir: nav.ir,
+        pintar: nav.pintar,
         /** Lleva al paso donde está la columna (p. ej. el primer error al guardar). */
         irAlCampo: (columna) => {
           const k = secciones.findIndex((sec) => sec.querySelector('[data-af-columna="' + CSS.escape(columna) + '"]'));
-          if (k >= 0 && k !== actual) ir(k, true);
+          if (k >= 0 && k !== nav.actual()) nav.ir(k, true);
         },
       };
     }
 
     /**
-     * Marca los campos con error (borde y mensaje debajo, como el componente Formulario) y lleva al primero.
+     * Marca los campos con error (Formulario.marcarError: el mismo borde y mensaje que en todo el sistema) y lleva al primero.
      * errores: [{ columna, msg }]. Un campo deja de marcarse en cuanto se corrige.
      */
     function marcarErroresEn(cuerpo, errores) {
-      cuerpo.querySelectorAll('.ln-af-campo.form-campo-error').forEach((c) => {
-        c.classList.remove('form-campo-error');
-        const m = c.querySelector('.form-error-campo');
-        if (m) m.remove();
-      });
+      cuerpo.querySelectorAll('.ln-af-campo.form-campo-error').forEach((c) => Formulario.marcarError(c, null));
       errores.forEach((x) => {
         const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(x.columna) + '"]');
         if (!campo || campo.classList.contains('form-campo-error')) return;
-        campo.classList.add('form-campo-error');
-        campo.insertAdjacentHTML('beforeend', '<span class="form-error-campo">' + esc(x.msg) + '</span>');
+        Formulario.marcarError(campo, x.msg);
       });
       if (!cuerpo.dataset.limpiaErrores) {
         cuerpo.dataset.limpiaErrores = '1';
         const limpiar = (ev) => {
           const campo = ev.target.closest && ev.target.closest('.ln-af-campo.form-campo-error');
-          if (!campo) return;
-          campo.classList.remove('form-campo-error');
-          const m = campo.querySelector('.form-error-campo');
-          if (m) m.remove();
+          if (campo) Formulario.marcarError(campo, null);
         };
         ['input', 'change', 'click'].forEach((t) => cuerpo.addEventListener(t, limpiar));
       }
@@ -2183,24 +2099,13 @@
     }
 
     // ---------------- Estado del módulo ----------------
-    // Se conserva entre navegaciones para evitar volver a pedir los mismos catálogos.
+    // Se conserva entre navegaciones (los catálogos viven en callServerCacheado, api.html).
     const POR_PAGINA = 50;
     const VIGENCIA_INDICE_MS = 15 * 60 * 1000;
-    const VIGENCIA_CATALOGO_MS = 15 * 60 * 1000;
     const memoria = {
       indice: null,
       cargadoEn: 0,
       indicePendiente: null,
-      permisos: null,
-      colaboradores: null,
-      colaboradoresCargadosEn: 0,
-      colaboradoresPendientes: null,
-      accesorios: null,
-      accesoriosCargadosEn: 0,
-      accesoriosPendientes: null,
-      catalogos: null,
-      catalogosCargadosEn: 0,
-      catalogosPendientes: null,
       tablas: {}, // última respuesta de cada bitácora / trámite: se pinta al instante y luego se actualiza
       modulo: 'equipos',
       modoVista: null, // 'tabla' | 'tarjetas' (se recuerda en el navegador)
@@ -2218,50 +2123,32 @@
     }
 
     /**
-     * El índice también se guarda en el navegador (como las listas de api.html, se borra al
-     * cerrar sesión): al recargar la página se pinta con esa copia AL INSTANTE y por detrás se
-     * pide el fresco; si llegó distinto, "lista-actualizada" hace que Líneas Telefónicas se
-     * vuelva a pintar. Las recargas forzadas (después de una operación) esperan lo fresco.
+     * El índice es una lista como las de los demás módulos (callServerListaCacheada, api.html; fase 5.2b): con la copia
+     * del navegador se pinta AL INSTANTE y por detrás se pide lo fresco; el vigía pregunta cada minuto si cambió (huella:
+     * LineasRepo.huellaIndice_). Cuando llega distinto ("lista-actualizada") se vuelve a armar memoria.indice, que es lo
+     * que se pinta (y lo que aplicarCambiosIndice parcha después de una acción). La copia guardada va SIN los PIN
+     * (guardarListaLimpia): a un ADMIN el servidor se los manda, pero en una computadora compartida no deben quedar.
      */
-    const LLAVE_INDICE = () => llaveGuardada_('apiLineasIndice[]');
+    guardarListaLimpia('apiLineasIndice', sinSecretos_);
     function cargarIndice(forzar) {
-      if (!forzar && memoria.indice && Date.now() - memoria.cargadoEn < VIGENCIA_INDICE_MS) return Promise.resolve(memoria.indice);
       if (!forzar && memoria.indicePendiente) return memoria.indicePendiente;
-      if (!forzar && !memoria.indice) {
-        let texto = null;
-        try { texto = localStorage.getItem(LLAVE_INDICE()); } catch (e) { texto = null; }
-        if (texto) {
-          try {
-            procesarIndice_(JSON.parse(texto));
-            memoria.indiceTexto = texto;
-            pedirIndice_(true).catch(() => { /* se queda la copia */ });
-            return Promise.resolve(memoria.indice);
-          } catch (e) { /* copia dañada: se pide normal */ }
-        }
-      }
-      return pedirIndice_(false);
+      if (!forzar && memoria.indice && Date.now() - memoria.cargadoEn < VIGENCIA_INDICE_MS) return Promise.resolve(memoria.indice);
+      if (forzar) invalidarCacheLista('apiLineasIndice', state.token);
+      return pedirIndice_();
     }
 
-    function pedirIndice_(avisarSiCambia) {
-      memoria.indicePendiente = llamar('apiLineasIndice').then((r) => {
-        // Lo que se guarda en el navegador va SIN los PIN (a un ADMIN el servidor se los manda):
-        // en una computadora compartida no deben quedar escritos. Los reales solo viven en memoria.
-        const guardable = sinSecretos_(r);
-        const texto = JSON.stringify(guardable);
-        // Si trae PIN reales (ADMIN), también hay que repintar: lo pintado desde la copia los tenía ocultos
-        const cambio = texto !== memoria.indiceTexto || guardable !== r;
-        memoria.indiceTexto = texto;
-        try {
-          if (texto.length <= MAX_GUARDAR) localStorage.setItem(LLAVE_INDICE(), texto);
-          else localStorage.removeItem(LLAVE_INDICE());
-        } catch (e) { /* no cupo: solo memoria */ }
-        procesarIndice_(r);
-        if (cambio && avisarSiCambia) window.dispatchEvent(new CustomEvent('lista-actualizada', { detail: { fn: 'apiLineasIndice' } }));
-        return memoria.indice;
-      });
-      memoria.indicePendiente.then(() => { memoria.indicePendiente = null; }, () => { memoria.indicePendiente = null; });
-      return memoria.indicePendiente;
+    function pedirIndice_() {
+      const p = callServerListaCacheada('apiLineasIndice', state.token).then(procesarIndice_);
+      memoria.indicePendiente = p;
+      const soltar = () => { if (memoria.indicePendiente === p) memoria.indicePendiente = null; };
+      p.then(soltar, soltar);
+      return p;
     }
+    // Llegó un índice distinto (de otra persona, de la hoja o el real de un ADMIN): se vuelve a armar antes de que la
+    // pantalla repinte (escucharLista de Líneas Telefónicas pide cargarIndice(), que espera a este)
+    window.addEventListener('lista-actualizada', (ev) => {
+      if (ev.detail && ev.detail.fn === 'apiLineasIndice' && memoria.indice) pedirIndice_().catch(() => { /* se queda el que hay */ });
+    });
 
     /** Copia del índice con las columnas secretas (PIN WHATSAPP, PIN EQUIPO) en "••••", como las ve quien no es ADMIN */
     function sinSecretos_(r) {
@@ -2344,67 +2231,42 @@
     }
 
     /**
-     * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado (Historial, Documentos, la
-     * última inspección o responsiva), que puede ser de cuando el equipo era de otro departamento. El
-     * servidor se lo niega igual (TelefoniaService.sinAlcance_); esto solo no pinta lo que no va a abrir.
+     * Los permisos de Líneas salen de los de la sesión (state.permisos, ya resueltos por el servidor), sin otra
+     * llamada: operar = EDICION en Líneas Telefónicas (TelefoniaService.puedeOperar_ pregunta lo mismo).
      */
-    const sinPasado = () => !!(memoria.permisos && memoria.permisos.conAlcance);
+    const puedeOperar = () => puedeEditarModulo('lineas-telefonicas');
     /**
      * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.detalles,
      * .documentos, .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
      * servidor pide la misma sección (TelefoniaService.leerSeccion_); esto solo no pinta lo que no va a abrir.
+     * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado. Documentos e Historial no respetan el
+     * alcance (Modulos.gs), así que a quien está limitado el servidor ya se las resuelve Sin acceso (Permisos.resolver_)
+     * y además se las niega con TelefoniaService.sinAlcance_.
      */
     const veSeccion = (seccion) => puede('lineas-telefonicas.' + seccion);
-    const veDocumentos = () => !sinPasado() && veSeccion('documentos');
-    const veHistorial = () => !sinPasado() && veSeccion('historial');
+    const veDocumentos = () => veSeccion('documentos');
+    const veHistorial = () => veSeccion('historial');
 
-    function cargarPermisos() {
-      if (memoria.permisos) return Promise.resolve(memoria.permisos);
-      return llamar('apiLineasPermisos').then((p) => (memoria.permisos = p));
+    /**
+     * Catálogos de los formularios, el directorio de Capital Humano y el índice de accesorios: como los catálogos de los
+     * demás módulos (callServerCacheado, api.html): una vez por carga de página, con la copia de la visita anterior al
+     * instante y lo fresco por detrás. forzar (o CATALOGOS_LINEAS.forEach(olvidar…)) pide lo nuevo.
+     */
+    const CATALOGOS_LINEAS = ['apiLineasCatalogos', 'apiLineasColaboradores', 'apiLineasAccesoriosIndice'];
+    function catalogoLineas_(fn, forzar) {
+      if (forzar) invalidarCacheCatalogo(fn, state.token);
+      return callServerCacheado(fn, state.token);
     }
-
-    function cargarColaboradores(forzar) {
-      if (!forzar && memoria.colaboradores && Date.now() - memoria.colaboradoresCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.colaboradores);
-      if (!forzar && memoria.colaboradoresPendientes) return memoria.colaboradoresPendientes;
-      memoria.colaboradoresPendientes = llamar('apiLineasColaboradores').then((r) => {
-        memoria.colaboradores = r;
-        memoria.colaboradoresCargadosEn = Date.now();
-        return r;
-      });
-      memoria.colaboradoresPendientes.then(() => { memoria.colaboradoresPendientes = null; }, () => { memoria.colaboradoresPendientes = null; });
-      return memoria.colaboradoresPendientes;
-    }
-
-    function cargarAccesorios(forzar) {
-      if (!forzar && memoria.accesorios && Date.now() - memoria.accesoriosCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.accesorios);
-      if (!forzar && memoria.accesoriosPendientes) return memoria.accesoriosPendientes;
-      memoria.accesoriosPendientes = llamar('apiLineasAccesoriosIndice').then((r) => {
-        memoria.accesorios = r;
-        memoria.accesoriosCargadosEn = Date.now();
-        return r;
-      });
-      memoria.accesoriosPendientes.then(() => { memoria.accesoriosPendientes = null; }, () => { memoria.accesoriosPendientes = null; });
-      return memoria.accesoriosPendientes;
-    }
-
-    /** Catálogos de los formularios (se guardan en memoria; el servidor ya los tiene en caché). */
-    function cargarCatalogos(forzar) {
-      if (!forzar && memoria.catalogos && Date.now() - memoria.catalogosCargadosEn < VIGENCIA_CATALOGO_MS) return Promise.resolve(memoria.catalogos);
-      if (!forzar && memoria.catalogosPendientes) return memoria.catalogosPendientes;
-      memoria.catalogosPendientes = llamar('apiLineasCatalogos').then((c) => {
-        memoria.catalogos = c;
-        memoria.catalogosCargadosEn = Date.now();
-        return c;
-      });
-      memoria.catalogosPendientes.then(() => { memoria.catalogosPendientes = null; }, () => { memoria.catalogosPendientes = null; });
-      return memoria.catalogosPendientes;
-    }
+    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar);
+    const cargarAccesorios = (forzar) => catalogoLineas_('apiLineasAccesoriosIndice', forzar);
+    const cargarCatalogos = (forzar) => catalogoLineas_('apiLineasCatalogos', forzar);
 
     /** Calienta en segundo plano lo que usan las vistas y los formularios (no bloquea nada). */
     function precargar() {
-      Promise.all([cargarPermisos(), cargarIndice()])
-        // Un CLIENT no usa los formularios: el directorio de Capital Humano ni se pide (el servidor se lo niega)
-        .then(() => Promise.all([cargarCatalogos(), sinPasado() ? null : cargarColaboradores()]))
+      cargarIndice()
+        // El directorio de Capital Humano es para los formularios: solo se adelanta a quien captura (a un CLIENT el
+        // servidor se lo niega; Gestión de activos lo pide al abrirse)
+        .then(() => Promise.all([cargarCatalogos(), puedeOperar() ? cargarColaboradores() : null]))
         .catch(() => {});
     }
 
@@ -2459,7 +2321,7 @@
         if (clase === 'tipo') { c.tipo = 'lista'; c.render = (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v); }
         if (clase === 'chip') { c.tipo = 'lista'; c.render = (v) => chip(v); }
         if (clase === 'fecha') c.tipo = 'lnFechaHora';
-        if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => (v === null || v === undefined || v === '' ? vacio : '$' + Number(v).toLocaleString('es-MX')); }
+        if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => Formato.moneda(v) || vacio; }
         if (clase === 'ultimo') {
           const tipo = campo === 'RESPONSIVA' ? 'RESPONSIVA' : 'INSPECCION';
           c.visible = true;
@@ -2555,14 +2417,15 @@
       // Los de la línea que en Editar llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
       const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       let marcarKpi = null;
-      raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
-        tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
+      Tabs.iniciar($('#ln-listado', raiz), { inicial: memoria.modulo });
+      $('#ln-listado', raiz).addEventListener('tabs-cambio', (ev) => {
+        if (ev.target.id === 'ln-listado' && ev.detail.nombre !== memoria.modulo) mostrarModulo(ev.detail.nombre);
       });
       $('#ln-recargar', raiz).addEventListener('click', (ev) => {
         const b = ev.currentTarget;
         b.disabled = true;
         llamar('apiLineasRecargarDatos')
-          .then(() => cargarIndice(true))
+          .then(() => { CATALOGOS_LINEAS.forEach((fn) => invalidarCacheCatalogo(fn, state.token)); return cargarIndice(true); })
           .then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } })
           .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
           .then(() => { b.disabled = false; });
@@ -2582,6 +2445,9 @@
         aplicarModoVista();
       }));
 
+      // La pestaña de la ficha la cambia Tabs; aquí lo que pasa al abrir cada una
+      $('#ln-detalle', raiz).addEventListener('tabs-cambio', (ev) => alAbrirPestanaFicha(ev.detail.nombre));
+
       // Clic en filas, enlaces internos y botones del detalle (delegación).
       raiz.addEventListener('click', (ev) => {
         if (ev.target.closest('a[target="_blank"]')) return;
@@ -2591,15 +2457,13 @@
           // Tarjetas del listado, como en Drive: con el mouse el clic selecciona (doble clic abre); con el dedo o el
           // teclado (Enter) se abre la ficha
           const tabla = ir.classList.contains('ln-cuadro') && ir.closest('#ln-listado') ? tablas[memoria.modulo] : null;
-          const conMouse = ev.detail > 0 && (ev.pointerType ? ev.pointerType === 'mouse' : !(window.matchMedia && window.matchMedia('(hover: none)').matches));
+          const conMouse = ev.detail > 0 && (ev.pointerType ? ev.pointerType === 'mouse' : !Pantalla.esTactil());
           if (tabla && conMouse) { tabla.clicSeleccion(ir.dataset.id, ev); return; }
           abrir(ir.dataset.lnIr, ir.dataset.id);
           return;
         }
         const masFicha = ev.target.closest('[data-ln-ficha-mas]');
         if (masFicha) { ev.preventDefault(); abrirMenuFicha(masFicha); return; }
-        const pestana = ev.target.closest('[data-ficha-tab]');
-        if (pestana) { mostrarPestanaFicha(pestana.dataset.fichaTab); return; }
         const mas = ev.target.closest('[data-ln-mas-tarjetas]');
         if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
         const copiar = ev.target.closest('[data-ln-copiar-detalles]');
@@ -2672,7 +2536,6 @@
         if (ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
       });
 
-      let puedeOperarTabla = false; // con los permisos (abajo, «Selección estilo Google Drive»); Vínculos también lo usa
       // ---- Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción de siempre ----
       // Es una idea que se queda así: en producción está apagada (MODULOS_APAGADOS de Entornos.gs, como Help Desk) y no hay
       // botón ni espacio; en los DEV sí. No tiene llamadas propias al servidor: solo abre las ventanas de siempre
@@ -2685,7 +2548,7 @@
       }
       const espacioVinculos = vinculosApagado ? { pintar: () => {} } : LineasVinculos.montar($('#ln-vinculos', raiz), {
         indice: () => memoria.indice,
-        puedeOperar: () => puedeOperarTabla,
+        puedeOperar: puedeOperar,
         icono: icono,
         esc: esc,
         color: (estatus) => COLOR_ESTATUS[String(estatus || '').toUpperCase()] || '',
@@ -2703,7 +2566,7 @@
       // ---- Carga inicial ----
       if (!memoria.modoVista) {
         // Sin preferencia guardada: tarjetas en celular (una tabla de 10 columnas no cabe) y tabla en lo demás
-        const porDefecto = window.matchMedia && window.matchMedia('(max-width: 700px)').matches ? 'tarjetas' : 'tabla';
+        const porDefecto = Pantalla.esCelular() ? 'tarjetas' : 'tabla';
         let guardado = null;
         try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
         memoria.modoVista = ['tabla', 'tarjetas', 'vinculos'].indexOf(guardado) >= 0 ? guardado : porDefecto;
@@ -2715,10 +2578,10 @@
       // Atrás / Adelante del navegador (gesto de dos dedos): la ficha que se veía en ese paso
       const subInicial = typeof HistorialApp !== 'undefined' ? HistorialApp.registrar('lineas-telefonicas', (sub) => { if (vigente()) restaurarPaso(sub); }) : null;
       // Se pintó con el índice guardado en el navegador y llegó uno distinto: pintar de nuevo
-      escucharLista('apiLineasIndice', () => { if (vigente()) { pintarIndicadores(); pintarListado(); } }, raiz);
-      Promise.all([cargarPermisos(), cargarIndice()]).then(([permisos]) => {
+      escucharLista('apiLineasIndice', () => cargarIndice().then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } }), raiz);
+      cargarIndice().then(() => {
         if (!vigente()) return;
-        $('#ln-recargar', raiz).hidden = !permisos.esAdmin;
+        $('#ln-recargar', raiz).hidden = !(state.sesion && state.sesion.rol === 'ADMIN');
         pintarIndicadores();
         pintarListado();
         if (subInicial) restaurarPaso(subInicial);
@@ -2788,11 +2651,6 @@
       }
 
       // ---- Selección estilo Google Drive (30-sep): acciones de la barra, del ⋮ y del clic derecho ----
-      cargarPermisos().then((p) => {
-        puedeOperarTabla = !!(p && p.puedeOperar);
-        Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
-        if (memoria.modoVista === 'vinculos' && vigente()) espacioVinculos.pintar();
-      }).catch(() => { /* sin permisos: solo las acciones de consulta */ });
       const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
 
 
@@ -2814,7 +2672,7 @@
        */
       function accionesSeleccionDe(modulo) {
         const tipo = TABLAS_INVENTARIO[modulo].detalle;
-        const operar = () => puedeOperarTabla;
+        const operar = puedeOperar;
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
@@ -2971,7 +2829,7 @@
           ]) +
           seccion('card-sim', 'Línea', [
             campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
-            campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', v('COSTO PLAN') !== '' ? '$' + Number(v('COSTO PLAN')).toLocaleString('es-MX') : ''),
+            campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', Formato.moneda(v('COSTO PLAN'))),
             campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
           ]) +
           (v('COMENTARIOS') ? seccion('message-square-text', 'Comentarios', ['<p class="ln-vr-comentario">' + esc(v('COMENTARIOS')) + '</p>']) : '');
@@ -3044,8 +2902,7 @@
 
       function mostrarModulo(modulo, sinTabla) {
         memoria.modulo = modulo;
-        raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((t) => t.classList.toggle('active', t.dataset.tab === modulo));
-        raiz.querySelectorAll('#ln-listado .tab-panel').forEach((p) => { p.hidden = p.dataset.tabPanel !== modulo; });
+        if (Tabs.actual($('#ln-listado', raiz)) !== modulo) Tabs.mostrar($('#ln-listado', raiz), modulo);
         if (sinTabla) return;
         crearTabla(modulo).ajustarAlto();
         if (memoria.modoVista === 'tarjetas') pintarTarjetas(modulo);
@@ -3080,9 +2937,29 @@
         if (x) return x.equipos ? 'equipos' : 'lineas';
         return PESTANA_TIPO[t] || 'equipos';
       }
-      function pintarTipos(modulo) {
+      /** El filtro de tipo de cada pestaña (FiltroTipo); se crea la primera vez que se pide */
+      function filtroTipos(modulo) {
         const cont = $('#ln-tipos-' + modulo, raiz);
-        if (!cont || !memoria.indice) return;
+        if (!cont.filtroTipo) {
+          const regla = (t) => ((REGLAS_FORMATO.LINEAS || {}).TIPO || {})[t] || null;
+          cont.filtroTipo = FiltroTipo.crear(cont, {
+            titulo: 'Tipo', todos: 'TODOS',
+            estilo: (t) => { const r = regla(t); return r ? { icono: r.icono || 'circle', color: colorAppSheet(r.color) } : null; },
+            nombre: (t) => t || 'SIN TIPO',
+            alElegir: (t) => {
+              if (t === null) { crearTabla(modulo).setFiltro('tipoHoja', null); marcarTipos(modulo); return; }
+              // Un tipo que vive en la otra pestaña (LINEA estando en Equipos): se va allá con el filtro
+              const destino = pestanaDeTipo(t, modulo);
+              if (destino !== modulo) mostrarModulo(destino);
+              crearTabla(destino).setFiltro('tipoHoja', { valores: [t] });
+              marcarTipos(destino);
+            },
+          });
+        }
+        return cont.filtroTipo;
+      }
+      function pintarTipos(modulo) {
+        if (!memoria.indice) return;
         const conteo = conteoTipos();
         const tipos = TIPOS_APPSHEET.concat(Object.keys(conteo).filter((t) => TIPOS_APPSHEET.indexOf(t) < 0)).sort((a, b) => {
           const ia = ORDEN_TIPOS.indexOf(a);
@@ -3090,47 +2967,14 @@
           return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
         });
         const total = Object.keys(conteo).reduce((s, t) => s + conteo[t].total, 0);
-        const regla = (t) => ((REGLAS_FORMATO.LINEAS || {}).TIPO || {})[t] || null;
-        const fila = (valor, icono, color, nombre, n) =>
-          '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-tipo="' + esc(valor) + '" aria-pressed="false" title="' + esc(nombre + ' · ' + miles(n)) + '">' +
-            '<span class="filtro-tipo-ico"' + (color ? ' style="color:' + esc(color) + '"' : '') + '>' + ico(icono) + '</span>' +
-            '<span class="filtro-tipo-nombre">' + esc(nombre) + '</span><span class="filtro-tipo-num">' + miles(n) + '</span></button>';
-        cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Tipo</div>' +
-          fila('*', 'layers', '', 'TODOS', total) +
-          tipos.map((t) => {
-            const r = regla(t);
-            return fila(t, (r && r.icono) || 'circle', r ? colorAppSheet(r.color) : '', t || 'SIN TIPO', conteo[t] ? conteo[t].total : 0);
-          }).join('') + '</div>';
+        const porTipo = {};
+        tipos.forEach((t) => { porTipo[t] = conteo[t] ? conteo[t].total : 0; });
+        filtroTipos(modulo).pintar({ conteo: porTipo, total: total, valores: tipos });
         marcarTipos(modulo);
       }
       function marcarTipos(modulo) {
-        const cont = $('#ln-tipos-' + modulo, raiz);
-        if (!cont) return;
-        const f = (filtrosActuales[modulo] || {}).tipoHoja;
-        const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-        cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-          const activo = b.dataset.tipo === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.tipo) >= 0);
-          b.classList.toggle('activo', activo);
-          b.setAttribute('aria-pressed', String(activo));
-        });
+        filtroTipos(modulo).marcar((filtrosActuales[modulo] || {}).tipoHoja);
       }
-      ['equipos', 'lineas'].forEach((modulo) => {
-        $('#ln-tipos-' + modulo, raiz).addEventListener('click', (ev) => {
-          const b = ev.target.closest('.filtro-tipo-item');
-          if (!b) return;
-          const t = b.dataset.tipo;
-          if (t === '*' || b.classList.contains('activo')) {
-            crearTabla(modulo).setFiltro('tipoHoja', null);
-            marcarTipos(modulo);
-            return;
-          }
-          // Un tipo que vive en la otra pestaña (LINEA estando en Equipos): se va allá con el filtro
-          const destino = pestanaDeTipo(t, modulo);
-          if (destino !== modulo) mostrarModulo(destino);
-          crearTabla(destino).setFiltro('tipoHoja', { valores: [t] });
-          marcarTipos(destino);
-        });
-      });
 
       function pintarListado() {
         if (!memoria.indice) return;
@@ -3253,12 +3097,12 @@
       const etiquetaMiga = (p) => (p ? p.etiqueta || ETIQUETA_MIGA[p.tipo] : 'Líneas telefónicas');
       function migas() {
         const anterior = pila.length > 1 ? pila[pila.length - 2] : null;
-        return '<nav class="ln-migas" aria-label="Ruta"><button type="button" class="secondary ln-btn-icono" data-ln-volver title="Volver a ' +
-          esc(etiquetaMiga(anterior)) + '">' + icono('chevron-left') + ' <span class="ln-migas-volver">Volver a ' + esc(etiquetaMiga(anterior)) + '</span></button>' +
-          '<ol class="ln-migas-ruta"><li><a href="#" class="ln-miga-enlace" data-ln-lista>Líneas telefónicas</a></li>' +
-          pila.map((p, i) => '<li>' + icono('chevron-right', 'ln-icon-sm') +
-            (i < pila.length - 1 ? '<button type="button" class="ln-miga-enlace" data-ln-miga="' + i + '">' + esc(etiquetaMiga(p)) + '</button>' :
-              '<span class="ln-miga-actual" aria-current="page">' + esc(etiquetaMiga(p)) + '</span>') + '</li>').join('') + '</ol></nav>';
+        return Ficha.migas({
+          volver: { texto: 'Volver a ' + etiquetaMiga(anterior), titulo: 'Volver a ' + etiquetaMiga(anterior), atributos: 'data-ln-volver' },
+          ruta: [{ texto: 'Líneas telefónicas', atributos: 'data-ln-lista' }]
+            .concat(pila.slice(0, -1).map((p, i) => ({ texto: etiquetaMiga(p), atributos: 'data-ln-miga="' + i + '"' }))),
+          actual: pila.length ? etiquetaMiga(pila[pila.length - 1]) : '',
+        });
       }
 
       function campos(pares) {
@@ -3279,11 +3123,8 @@
         const m = MESES_LARGOS[d.getMonth()];
         return m.charAt(0).toUpperCase() + m.slice(1) + ' ' + d.getFullYear();
       }
-      function dinero(n, centavos) {
-        if (n === null || n === undefined || n === '' || isNaN(Number(n))) return null;
-        // El signo va antes del $: «-$7.74», no «$-7.74» (nota de crédito; prueba en /dev del 14-oct)
-        return (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n)).toLocaleString('es-MX', { minimumFractionDigits: centavos ? 2 : 0, maximumFractionDigits: 2 });
-      }
+      // El signo va antes del $: «-$7.74», no «$-7.74» (nota de crédito; prueba en /dev del 14-oct)
+      const dinero = (n, centavos) => Formato.moneda(n, { centavos: centavos ? true : 'siTiene' });
       /** «$29.22 de menos» / «$51.00 de más» / «Igual», con su color. */
       function diferenciaTexto(d) {
         if (d === null || d === undefined) return vacio;
@@ -3294,7 +3135,7 @@
       function usoTexto(f) {
         if (sinUso(f)) return '<span class="ln-chip ambar">Sin uso</span>';
         const gb = (Number(f.datosMb) || 0) / 1024;
-        return esc(miles(f.minutos) + ' min · ' + miles(f.mensajes) + ' mensajes · ' + gb.toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' GB');
+        return esc(miles(f.minutos) + ' min · ' + miles(f.mensajes) + ' mensajes · ' + Formato.miles(gb, { decimales: 1 }) + ' GB');
       }
       /** De dónde salió el plan, en palabras. Lo que vino del AppSheet o se capturó a mano también se dice. */
       function origenPlan(l) {
@@ -3412,65 +3253,47 @@
        * consulta (para revisar un equipo o línea sin bajar por la página).
        */
       function encabezado(ico, titulo, chips, botones, resumen, subtitulo) {
-        const datos = (resumen || []).filter(Boolean);
-        return '<div class="ln-detalle-header card">' +
-          '<div class="ln-detalle-icono">' + icono(ico) + '</div>' +
-          '<div class="ln-detalle-titulo"><h2>' + titulo + '</h2>' + (subtitulo ? '<div class="ln-tenue ln-detalle-sub">' + subtitulo + '</div>' : '') +
-          '<div class="ln-chips">' + chips + '</div></div>' +
-          '<div class="ln-detalle-botones">' + (botones || '') + '</div>' +
-          (datos.length ? '<dl class="ln-resumen-rapido">' + datos.map((d) => '<div><dt>' + esc(d[0]) + '</dt><dd>' + (d[2] ? (d[1] || vacio) : guion(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
-          '</div>';
+        return Ficha.encabezado({ icono: ico, tituloHtml: titulo, chips: chips, botones: botones, resumen: resumen, subtitulo: subtitulo });
       }
 
       /**
        * Ficha en pestañas: General (datos), Detalles (texto para copiar), Documentos (inspecciones y
        * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
        */
-      function fichaEnPestanas(general, detalles, conDocumentos) {
-        // Cada pestaña con su sección (y Documentos e Historial, nunca para un CLIENT: sinPasado)
+      function pestanasFicha(general, detalles, conDocumentos) {
+        // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion)
         const conDetalles = veSeccion('detalles');
         const pasado = veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
-        const pestanas = [['general', 'General', 'layout-grid'], conDetalles ? ['detalles', 'Detalles', 'clipboard-list'] : null,
-          conDocumentos ? ['documentos', 'Documentos', 'folder-check'] : null, pasado ? ['historial', 'Historial', 'history'] : null].filter(Boolean);
-        // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
-        const guardada = (pila[pila.length - 1] || {}).pestana;
-        const activa = pestanas.some((t) => t[0] === guardada) ? guardada : 'general';
         const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
-        return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t) =>
-          '<button type="button" class="tab-btn' + (t[0] === activa ? ' active' : '') + '" role="tab" aria-selected="' + (t[0] === activa) + '" data-ficha-tab="' + t[0] + '">' +
-          icono(t[2]) + ' ' + t[1] + ' <span class="ln-tab-num" data-ficha-num="' + t[0] + '"></span></button>').join('') + '</div>' +
-          '<div data-ficha-panel="general"' + (activa === 'general' ? '' : ' hidden') + '>' + general + '</div>' +
-          (conDetalles ? '<div data-ficha-panel="detalles"' + (activa === 'detalles' ? '' : ' hidden') + '>' + detalles + '</div>' : '') +
-          (conDocumentos ? '<div data-ficha-panel="documentos"' + (activa === 'documentos' ? '' : ' hidden') + '><div id="ln-evidencias">' + cargando + '</div></div>' : '') +
-          (pasado ? '<div data-ficha-panel="historial"' + (activa === 'historial' ? '' : ' hidden') + '><div id="ln-historial">' + cargando + '</div></div>' : '');
+        // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
+        return Tabs.html([
+          { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
+          conDetalles && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
+          conDocumentos && { id: 'documentos', titulo: 'Documentos', icono: 'folder-check', contenido: '<div id="ln-evidencias">' + cargando + '</div>' },
+          pasado && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: '<div id="ln-historial">' + cargando + '</div>' },
+        ], { activa: (pila[pila.length - 1] || {}).pestana });
       }
 
       function mostrarPestanaFicha(nombre) {
+        Tabs.mostrar($('#ln-detalle', raiz), nombre);
+      }
+      function alAbrirPestanaFicha(nombre) {
         if (pila.length) pila[pila.length - 1].pestana = nombre;
         if (typeof HistorialApp !== 'undefined') HistorialApp.actualizar(pilaParaHistorial());
-        raiz.querySelectorAll('[data-ficha-tab]').forEach((b) => {
-          const activa = b.dataset.fichaTab === nombre;
-          b.classList.toggle('active', activa);
-          b.setAttribute('aria-selected', String(activa));
-        });
-        raiz.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
         if (nombre === 'historial' && tablaHistorial) tablaHistorial.ajustarAlto();
         if (nombre === 'historial' && tablaAsignaciones && !$('#ln-asignaciones', raiz).hidden) tablaAsignaciones.ajustarAlto();
         if (nombre === 'documentos' && tablaDocumentos) tablaDocumentos.ajustarAlto();
       }
 
-      function contarEnPestana(nombre, n) {
-        const el = raiz.querySelector('[data-ficha-num="' + nombre + '"]');
-        if (el) el.textContent = miles(n);
-      }
+      const contarEnPestana = (nombre, n) => Tabs.contar($('#ln-detalle', raiz), nombre, n);
 
       function pintarEquipo(detalle, id) {
         return llamar('apiLineasEquipo', id).then((r) => {
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'equipo' || pila[pila.length - 1].id !== id) return;
           const e = r.equipo;
           const l = r.linea;
-          const puedeOperar = memoria.permisos && memoria.permisos.puedeOperar;
+          const operarEquipo = puedeOperar();
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
           fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: null, carpetaDriveId: e.carpetaDriveId || null };
@@ -3478,11 +3301,11 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              botonesFicha('data-equipo-id', id, 'equipo', puedeOperar, '', true),
+              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo, '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
-            fichaEnPestanas(
+            pestanasFicha(
               (e._secretosVisibles ? '' : '<div class="ln-nota">' + icono('lock') + ' Los PIN, patrones y contraseñas solo los ven administradores y el área de Líneas.</div>') +
             '<div class="ln-grid-2">' +
               tarjeta(icono('smartphone') + ' Equipo', campos([
@@ -3517,7 +3340,7 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'linea' || pila[pila.length - 1].id !== id) return;
           const l = r.linea;
           const e = r.equipo;
-          const puedeOperarLinea = memoria.permisos && memoria.permisos.puedeOperar;
+          const puedeOperarLinea = puedeOperar();
           // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
@@ -3532,7 +3355,7 @@
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
                 ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]],
               anteriores ? 'Antes <span class="ln-mono">' + esc(anteriores) + '</span>' : '') +
-            fichaEnPestanas(
+            pestanasFicha(
             '<div class="ln-grid-2">' +
               // Usuario, 13-oct: Línea, Cuenta, Plan y Facturación (del proveedor), luego Equipo y Responsable. «Números de esta
               // línea» se quitó: los anteriores salen abajo del número y en el historial
@@ -3561,7 +3384,7 @@
       function usoTemporalVencido(l) {
         const desde = l && l.usoTemporal && l.usoTemporal.desde ? new Date(l.usoTemporal.desde) : null;
         if (!desde || isNaN(desde) || (Date.now() - desde.getTime()) / 3600000 < 13 * 24) return '';
-        return '<span class="ln-regla ln-regla-chip" style="color:#F80000;font-weight:700;background:color-mix(in srgb, #F80000 12%, transparent);border:1px solid color-mix(in srgb, #F80000 45%, transparent)">' +
+        return '<span class="ln-regla ln-regla-chip" style="color:var(--tono-rojo);font-weight:700;background:color-mix(in srgb, var(--tono-rojo) 12%, transparent);border:1px solid color-mix(in srgb, var(--tono-rojo) 45%, transparent)">' +
           ico('triangle-alert') + ' Uso temporal de ' + Math.floor((Date.now() - desde.getTime()) / 86400000) + ' días</span>';
       }
 
@@ -3585,7 +3408,7 @@
         const id = boton.dataset.id;
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
-        const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
+        const operar = puedeOperar();
         // Editar línea y Editar equipo por separado (usuario, 8-oct; «Editar información» hasta el 13-oct). En el equipo ya no
         // van Editar línea ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
         const editar = [tipo === 'equipo'
@@ -3839,7 +3662,7 @@
         ], () => tablaDocumentos);
         if (!filas.length) return;
         soltarDocumentos();
-        const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
+        const operar = puedeOperar();
         // Una acción de un documento: con una fila seleccionada, en la barra (enBarra) o solo en el ⋮ y el clic derecho
         const doc = (ic, texto, grupo, enBarra, visible, alHacer) => ({ icono: ic, texto: texto, maximo: 1, grupo: grupo, enBarra: enBarra,
           visible: (f) => visible(f[0]), alHacer: (f) => alHacer(f[0]) });
@@ -4014,8 +3837,7 @@
        * Reasignar deja el equipo en USO; su línea solo cambia si estaba DISPONIBLE (pasa a USO con él).
        */
       async function abrirMasiva(accion, filas) {
-        const permisos = await cargarPermisos().catch(() => null);
-        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         const ids = filas.map((r) => r.id);
         // Entregar una línea suelta usa el mismo formulario: solo cambian los textos (línea en vez de equipo)
         const esLinea = accion.parte === 'linea';
@@ -4196,8 +4018,7 @@
        */
       async function abrirResguardo(filas, opciones) {
         const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
-        const permisos = await cargarPermisos().catch(() => null);
-        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('archive');
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
@@ -4478,8 +4299,7 @@
        * Con su motivo (usuario, 13-oct): LINEA VENCIDA o CANCELACION ANTICIPADA, obligatorio, además del comentario.
        */
       async function abrirCancelacion(filas) {
-        const permisos = await cargarPermisos().catch(() => null);
-        if (!permisos || !permisos.puedeOperar) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
         const conNumero = filas.filter((r) => r.numero);
         if (!conNumero.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ninguno de los seleccionados tiene línea.', 6000); return; }
         // Textos técnicos y espera desde el clic (usuario, 4-oct)
@@ -5731,9 +5551,9 @@
       { clave: 'TELCEL FRO', nombre: 'Telcel · FRO' }, { clave: 'TELCEL GPH', nombre: 'Telcel · GPH' }, { clave: 'AT&T', nombre: 'AT&T' },
       { clave: 'TELCEL', nombre: 'Telcel · sin razón social' }, { clave: '', nombre: 'Sin compañía' },
     ];
-    const dinero = (n) => '$' + Math.round(n || 0).toLocaleString('es-MX');
-    const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + (n / 1e6).toLocaleString('es-MX', { maximumFractionDigits: 2 }) + ' M'
-      : Math.abs(n) >= 1e4 ? '$' + (n / 1e3).toLocaleString('es-MX', { maximumFractionDigits: 1 }) + ' mil' : dinero(n));
+    const dinero = (n) => Formato.moneda(n || 0, { centavos: false });
+    const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + Formato.miles(n / 1e6, { decimales: 2 }) + ' M'
+      : Math.abs(n) >= 1e4 ? '$' + Formato.miles(n / 1e3, { decimales: 1 }) + ' mil' : dinero(n));
 
     /**
      * El servidor manda los registros en columnas y el estatus de cada mes en corridas (LineasPanorama → registros):
@@ -5780,10 +5600,9 @@
       };
       let tabla = null;
 
-      const pct = (v, total) => (total ? (Math.round((v / total) * 1000) / 10).toLocaleString('es-MX') + '%' : '—');
+      const pct = (v, total) => (total ? Formato.miles(v / total * 100, { decimales: 1 }) + '%' : '—');
       const esHoy = () => est.k === est.datos.meses.length - 1;
-      const dosDigitos = (v) => String(v).padStart(2, '0');
-      const ymd = (d) => d.getFullYear() + '-' + dosDigitos(d.getMonth() + 1) + '-' + dosDigitos(d.getDate());
+      const ymd = Formato.dia;
       /** Fecha de corte del mes k ('yyyy-mm-dd'): hoy, o el último día del mes. */
       function corte(k) {
         if (k === est.datos.meses.length - 1) return ymd(new Date());
@@ -6742,16 +6561,16 @@
           columnas: [
             // Orden de la vista INVENTARIO DE ACCESORIOS del AppSheet (agrupada por Categoria)
             { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
-              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:#d62020;font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
+              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:var(--tono-rojo);font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
 
             { campo: 'categoria', titulo: 'Categoria', tipo: 'lista', render: (v) => formatoAppSheet('ACCESORIOS', 'Categoria', v) || esc(v) },
             { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: false },
             { campo: 'marca', titulo: 'Marca', tipo: 'texto' },
             { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
-              // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (#2f7d23), solo para las 3 categorías
+              // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (var(--tono-verde)), solo para las 3 categorías
               render: (v, a) => (a.reabasto
-                ? '<span class="ln-regla ln-regla-chip" style="color:#d62020;background:#fff3b0;border:1px solid #e6c700;font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
-                : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:#2f7d23;font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
+                ? '<span class="ln-regla ln-regla-chip" style="color:var(--tono-rojo);background:var(--tono-alerta-fondo);border:1px solid var(--tono-amarillo);font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
+                : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:var(--tono-verde);font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
           ],
         });
       }

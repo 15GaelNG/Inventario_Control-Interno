@@ -127,7 +127,7 @@
 
   // ---------- Caja Chica ----------
   async function initCajaChica() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('caja-chica');
     if (!puedeEditar) document.querySelector('#cch-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -175,30 +175,28 @@
     function badgeEstatusCaja(estatus) {
       const valor = String(estatus || '').toUpperCase();
       if (valor === 'CERRADA') {
-        return '<span class="estatus-appsheet" style="color:#e02020"><i data-lucide="circle-x" class="ico"></i> CERRADA</span>';
+        return '<span class="estatus-appsheet" style="color:var(--tono-rojo)"><i data-lucide="circle-x" class="ico"></i> CERRADA</span>';
       }
       if (valor === 'EN PROCESO DE CIERRE') {
-        return '<span class="estatus-appsheet" style="color:#e0a020"><i data-lucide="clock" class="ico"></i> EN PROCESO DE CIERRE</span>';
+        return '<span class="estatus-appsheet" style="color:var(--tono-ambar)"><i data-lucide="clock" class="ico"></i> EN PROCESO DE CIERRE</span>';
       }
-      return '<span class="estatus-appsheet" style="color:#2ba02b"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
+      return '<span class="estatus-appsheet" style="color:var(--tono-verde)"><i data-lucide="circle-check" class="ico"></i> VIGENTE</span>';
     }
 
     // Mismos colores/íconos que badgeEstatusCaja, para el filtro rápido por Estatus
     // (pintarEstatusCch) -- orden: vigente primero, luego en proceso, luego cerrada.
     const ORDEN_ESTATUS_CCH = ['VIGENTE', 'EN PROCESO DE CIERRE', 'CERRADA'];
     const ESTILO_ESTATUS_CCH = {
-      'VIGENTE': { icono: 'circle-check', color: '#2ba02b' },
-      'EN PROCESO DE CIERRE': { icono: 'clock', color: '#e0a020' },
-      'CERRADA': { icono: 'circle-x', color: '#e02020' },
+      'VIGENTE': { icono: 'circle-check', color: 'var(--tono-verde)' },
+      'EN PROCESO DE CIERRE': { icono: 'clock', color: 'var(--tono-ambar)' },
+      'CERRADA': { icono: 'circle-x', color: 'var(--tono-rojo)' },
     };
 
     // ---------- Ficha de una caja chica: pantalla propia dentro del módulo (oculta la
     // lista, muestra esto), mismo patrón que Vehículos — migas para volver, encabezado
     // con ícono/estatus, y pestañas con lo relacionado (Arqueos, Cambios de Monto). ----------
     function migasCajaChica() {
-      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="cch-btn-volver">' +
-        '<i data-lucide="chevron-left" class="ico"></i> Volver</button>' +
-        '<span><a href="#" class="ln-enlace" id="cch-enlace-lista">Caja Chica</a></span></div>';
+      return Ficha.migas({ volver: { atributos: 'id="cch-btn-volver"' }, ruta: [{ texto: 'Caja Chica', atributos: 'id="cch-enlace-lista"' }] });
     }
     function wireMigasCajaChica() {
       const volver = document.getElementById('cch-btn-volver');
@@ -217,8 +215,7 @@
     escucharLista('apiFichaCajaChica', () => {
       const detalle = document.getElementById('cch-detalle');
       if (!fichaCajaAbierta || detalle.hidden) return;
-      const activa = detalle.querySelector('[data-ficha-tab].active');
-      abrirFichaCajaChica(fichaCajaAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+      abrirFichaCajaChica(fichaCajaAbierta, Tabs.actual(detalle) || undefined, true);
     }, document.getElementById('cch-detalle'));
 
     const ICONO_GRUPO_CAJACHICA = {
@@ -310,7 +307,7 @@
     }
 
     function mostrarPestanaFichaCajaChica(nombre) {
-      mostrarPestanaFicha(document.getElementById('cch-detalle'), nombre);
+      Tabs.mostrar(document.getElementById('cch-detalle'), nombre);
     }
 
     // ---------- Ver completo / Editar / Eliminar de un arqueo/cambio de monto, sin
@@ -403,19 +400,16 @@
         }
 
         let html = migasCajaChica();
-        html += '<div class="ln-detalle-header card">' +
-          '<div class="ln-detalle-icono"><i data-lucide="wallet" class="ico ln-icon"></i></div>' +
-          '<div class="ln-detalle-titulo"><h2>ID CCH: ' + escaparHtml(String(id || '')) + '</h2>' +
-          '<div class="ln-chips">' + badgeEstatusCaja(completo['ESTATUS']) + '</div></div>' +
-          '<div class="ln-detalle-botones">' +
-          (puedeEditar ? '<button type="button" id="cch-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
-          '</div></div>';
+        html += Ficha.encabezado({
+          icono: 'wallet', titulo: 'ID CCH: ' + (id || ''), chips: badgeEstatusCaja(completo['ESTATUS']),
+          botones: puedeEditar ? '<button type="button" id="cch-btn-editar-ficha">' + Iconos.svg('editar') + ' Editar</button>' : '',
+        });
 
         const general = seccionesFichaCajaChica(completo, GRUPOS_FICHA_GENERAL_CCH);
         const detalles = seccionesFichaCajaChica(completo, CAMPOS_CAJACHICA.map((c) => c.grupo)
           .filter((g, i, arr) => arr.indexOf(g) === i && GRUPOS_FICHA_GENERAL_CCH.indexOf(g) === -1));
 
-        html += fichaEnPestanas([
+        html += Tabs.html([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
           puede('caja-chica.detalles') && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           arqueos && {
@@ -452,9 +446,6 @@
         if (pestanaInicial) mostrarPestanaFichaCajaChica(pestanaInicial);
         const btnEditar = document.getElementById('cch-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarCajaChica(cResumen));
-        detalle.querySelectorAll('[data-ficha-tab]').forEach((btn) => {
-          btn.addEventListener('click', () => mostrarPestanaFicha(detalle, btn.dataset.fichaTab));
-        });
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;
@@ -558,44 +549,14 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // ---- Filtro rápido por Estatus: misma franja de íconos que ya usan Líneas Telefónicas
-    // (por Tipo) y Vehículos (por Clase) -- el CSS es genérico (.filtro-tipo*, styles.html).
+    // ---- Filtro rápido por Estatus (FiltroTipo)
     let filtrosActualesCch = {};
-    function marcarEstatusCch() {
-      const cont = document.getElementById('cch-filtro-estatus');
-      if (!cont) return;
-      const f = filtrosActualesCch.ESTATUS;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.estatus === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estatus) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarEstatusCch(filas) {
-      const cont = document.getElementById('cch-filtro-estatus');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((c) => { const e = String(c.ESTATUS || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
-      const estatus = ORDEN_ESTATUS_CCH.concat(Object.keys(conteo).filter((e) => ORDEN_ESTATUS_CCH.indexOf(e) < 0 && e));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estatus="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estatus</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
-        estatus.map((e) => {
-          const estilo = ESTILO_ESTATUS_CCH[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
-        }).join('') + '</div>';
-      marcarEstatusCch();
-    }
-    document.getElementById('cch-filtro-estatus').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const e = b.dataset.estatus;
-      tabla.setFiltro('ESTATUS', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    const panelEstatusCch = FiltroTipo.crear(document.getElementById('cch-filtro-estatus'), {
+      titulo: 'Estatus', todos: 'Todas', campo: 'ESTATUS', orden: ORDEN_ESTATUS_CCH, estilos: ESTILO_ESTATUS_CCH,
+      alElegir: (valor) => tabla.setFiltro('ESTATUS', valor ? { valores: [valor] } : null),
     });
+    function marcarEstatusCch() { panelEstatusCch.marcar(filtrosActualesCch.ESTATUS); }
+    function pintarEstatusCch(filas) { panelEstatusCch.pintar(filas); }
 
     const KPI_FILTRO_CCH = { 'cch-stat-vigentes': 'VIGENTE', 'cch-stat-proceso-cierre': 'EN PROCESO DE CIERRE', 'cch-stat-cerradas': 'CERRADA' };
     const tileTotalCch = document.getElementById('cch-stat-total').closest('.stat-tile');
@@ -761,7 +722,7 @@
 
   // ---------- Cambios de Monto (Caja Chica) ----------
   async function initCambiosMontoCCH() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Su sección de Caja chica (caja-chica.cambios-monto, Modulos.gs)
     const puedeEditar = puedeEditarModulo('caja-chica.cambios-monto');
     if (!puedeEditar) document.querySelector('#cm-tabs .tab-btn[data-tab="registrar"]').remove();

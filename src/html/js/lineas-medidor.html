@@ -141,7 +141,7 @@
         .observe(document.body, { childList: true, subtree: true, characterData: true });
       marca = document.createElement('div');
       marca.textContent = 'Midiendo';
-      marca.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;padding:3px 8px;border-radius:6px;font:600 11px system-ui;' +
+      marca.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;padding:3px 8px;border-radius:var(--radio-s);font:600 11px system-ui;' +
         'background:#b3261e;color:#fff;pointer-events:none;opacity:.85';
       document.body.appendChild(marca);
       console.info('[MEDIR] activo');

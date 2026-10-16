@@ -2,11 +2,11 @@
   .docs-veh-seccion h3 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .docs-veh-carpeta { margin-left: auto; }
   .docs-veh-carpetas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .docs-veh-carpetas a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: 12px;
-    padding: 5px 10px; border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text); }
+  .docs-veh-carpetas a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; font-size: var(--texto-s);
+    padding: 5px 10px; border: 1px solid var(--color-border); border-radius: var(--radio-m); color: var(--color-text); }
   .docs-veh-carpetas a:hover { border-color: var(--color-primary); color: var(--color-primary); }
   .badge-estado.docs-veh-anterior { background: transparent; color: var(--color-text-muted); border: 1px solid var(--color-border); }
-  .docs-veh-relleno { margin: 4px 0 0; font-size: 13px; color: var(--color-text-muted); display: flex; align-items: center; gap: 8px; }
+  .docs-veh-relleno { margin: 4px 0 0; font-size: var(--texto-s); color: var(--color-text-muted); display: flex; align-items: center; gap: 8px; }
   .docs-veh-archivo { display: inline-flex; align-items: center; gap: 6px; word-break: break-word; }
 </style>
 <script>
@@ -69,7 +69,7 @@
       const abrir = d.url && puede('vehiculos.carpetas') ? '<span class="docs-veh-carpeta">' + TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) + '</span>' : '';
       return '<div class="card ln-card docs-veh-seccion">' +
         '<h3>' + Iconos.svg(ICONO[d.clave] || 'file') + ' ' + escaparHtml(d.titulo) +
-        ' <span class="ln-tab-num">' + total + '</span>' + abrir + '</h3>' +
+        ' <span class="tab-num">' + total + '</span>' + abrir + '</h3>' +
         (filas.length ? TablaFicha.html(COLUMNAS, filas, { minAncho: 520 })
           : d.relleno ? '<p class="docs-veh-relleno">' + chip(d.relleno === 'NO APLICA' ? 'No aplica' : 'Sin información', 'docs-veh-anterior') +
             ' El área marcó la carpeta así: no hay documento.</p>'

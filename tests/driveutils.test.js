@@ -89,5 +89,16 @@ ok(buscar('https:' + '/' + '/drive.google.com/file/d/1NoExisteNoExisteNoExiste/v
   'una liga a un archivo que ya no se puede abrir da null (no busca por la ruta)');
 ok(buscar('MODELOS INSPECCION/PIPA/FRONTAL.png', raizProd) === frontalPipa, 'y las rutas de antes siguen igual');
 
+console.log('6. subcarpeta: la reconoce aunque el nombre traiga espacios o acentos de más (fase 5.7, una sola copia)');
+const nuco = carpeta('0412', [carpeta('2.- SERVICIOS'), carpeta('1ER  CUATRIMESTRE'), carpeta('INSPECCIÓN')]);
+nuco.getFolders = () => iterador(nuco.hijos.filter((h) => h.tipo === CARPETA));
+nuco.createFolder = (n) => { const c = carpeta(n); nuco.hijos.push(c); return c; };
+const sub = (n) => contexto.DriveUtils.subcarpeta(nuco, n);
+ok(sub('2.-SERVICIOS') === nuco.hijos[0] && sub('1ER CUATRIMESTRE') === nuco.hijos[1] && sub('INSPECCION') === nuco.hijos[2],
+  'encuentra la que ya está ("2.- SERVICIOS" = "2.-SERVICIOS", dobles espacios, acentos)');
+ok(nuco.hijos.length === 3, 'y no crea otra al lado');
+const nueva = sub('CARTA RESPONSIVA');
+ok(nueva.nombre === 'CARTA RESPONSIVA' && nuco.hijos.length === 4 && sub('CARTA RESPONSIVA') === nueva, 'la que no está, la crea una vez');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

@@ -4,7 +4,7 @@
    * archivo/<script> por el mismo motivo que Arqueos/Caja Chica (ver
    * comentario en app-arqueos.html): mantener cada <script> con margen
    * frente al límite de tamaño de Apps Script. Comparte el mismo scope
-   * global del navegador que app.html (state, callServer, wireTabsSimple,
+   * global del navegador que app.html (state, callServer, Tabs,
    * toastCargando, toastExito, toastError, hoyISO, puedeEditarModulo, etc.)
    * y el componente DataTable (rama `ayrton`) para la tabla.
    */
@@ -19,7 +19,7 @@
 
   // ---------- Reasignaciones Vehiculares ----------
   async function initReasignacionesVehiculares() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('reasignaciones-vehiculares');
     if (!puedeEditar) document.querySelector('#rv-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -130,10 +130,10 @@
         { campo: 'FOLIO_VEHICULO', titulo: 'Folio', tipo: 'texto', fijada: true },
         { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
         { campo: 'RESPONSABLE_SALIENTE', titulo: 'Responsable saliente', tipo: 'texto',
-          render: (v) => flechaResponsable_('arrow-down', '#e02020', v) },
+          render: (v) => flechaResponsable_('arrow-down', 'var(--tono-rojo)', v) },
         { campo: 'DEPARTAMENTO_SALIENTE', titulo: 'Departamento saliente', tipo: 'lista' },
         { campo: 'RESPONSABLE_ENTRANTE', titulo: 'Responsable entrante', tipo: 'texto',
-          render: (v) => flechaResponsable_('arrow-up', '#2ba02b', v) },
+          render: (v) => flechaResponsable_('arrow-up', 'var(--tono-verde)', v) },
         { campo: 'DEPARTAMENTO_ENTRANTE', titulo: 'Departamento entrante', tipo: 'lista' },
         { campo: 'QUIEN_REGISTRO', titulo: 'Quién registró', tipo: 'lista' },
         { campo: 'VIN', titulo: 'VIN', tipo: 'texto', visible: false },

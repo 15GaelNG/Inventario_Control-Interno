@@ -145,13 +145,13 @@
         return;
       }
       contenedor.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Comprobante</div>' +
-        '<span class="dt-skel" style="height:180px; width:100%; border-radius:10px"></span>';
+        '<span class="dt-skel" style="height:180px; width:100%; border-radius:var(--radio-l)"></span>';
       try {
         const vista = await callServer('apiPrevisualizarComprobanteVerificacion', state.token, v.COMPROBANTE);
         if (!document.body.contains(contenedor)) return;   // el panel se cerró mientras cargaba
         contenedor.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Comprobante</div>' +
           (vista.base64
-            ? `<img src="data:${escaparHtml(vista.mimeType)};base64,${vista.base64}" alt="Comprobante de verificación del folio ${escaparHtml(v.FOLIO)}" style="width:100%; border-radius:10px; border:1px solid var(--color-border)" />`
+            ? `<img src="data:${escaparHtml(vista.mimeType)};base64,${vista.base64}" alt="Comprobante de verificación del folio ${escaparHtml(v.FOLIO)}" style="width:100%; border-radius:var(--radio-l); border:1px solid var(--color-border)" />`
             : '<p class="page-subtitle">La imagen es muy grande para mostrarla aquí.</p>') +
           `<p style="margin:8px 0 0"><a href="${escaparHtml(vista.url)}" target="_blank" rel="noopener">Abrir en Drive ↗</a></p>`;
       } catch (err) {

@@ -117,7 +117,7 @@
   /* ---------- Sus opciones, dentro del panel de Apariencia (el engrane de la barra,
      componentes/apariencia.html): las ve todo el mundo mientras la temporada está abierta (verla o
      no, cuántos pétalos, qué tan rápido). El ADMIN, además, la abre o la cierra para todos. ---------- */
-  .dm-panel { font-size: 13px; }
+  .dm-panel { font-size: var(--texto-s); }
   .dm-panel-titulo { display: flex; align-items: center; gap: 8px; }
   .dm-panel-fila {
     display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; cursor: pointer;
@@ -134,15 +134,15 @@
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--color-border);
   }
-  .dm-panel-nota { color: var(--color-text-muted); font-size: 12px; margin: 0; }
+  .dm-panel-nota { color: var(--color-text-muted); font-size: var(--texto-s); margin: 0; }
   .dm-panel-enlace {
-    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: 12.5px; font-weight: 600;
-    cursor: pointer; border-radius: 6px; flex-shrink: 0;
+    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: var(--texto-s); font-weight: 600;
+    cursor: pointer; border-radius: var(--radio-s); flex-shrink: 0;
   }
   :root[data-theme="dark"] .dm-panel-enlace { color: var(--color-accent); }
   .dm-panel-enlace:hover { background: var(--color-bg); }
   .dm-panel-admin { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--color-border); }
-  .dm-panel-admin p { margin: 0 0 8px; color: var(--color-text-muted); font-size: 12px; }
+  .dm-panel-admin p { margin: 0 0 8px; color: var(--color-text-muted); font-size: var(--texto-s); }
   .dm-panel-admin button { width: 100%; }
   /* Sin mariposas (lo eligió la persona en su panel) */
   :root[data-dm-mariposas="no"] .dm-mariposa { display: none; }
@@ -220,7 +220,7 @@
     padding: 6px 14px 6px 8px; border-radius: 999px;
     background: rgba(42, 23, 69, .45); backdrop-filter: blur(6px);
     border: 1px solid rgba(205, 180, 106, .45);
-    color: #f3e6bf; font-size: 12px; font-weight: 600; letter-spacing: .4px;
+    color: #f3e6bf; font-size: var(--texto-s); font-weight: 600; letter-spacing: .4px;
   }
   .dm-flor-mini { width: 20px; height: 20px; flex-shrink: 0; background: var(--dm-flor) center / contain no-repeat; }
 
@@ -265,7 +265,7 @@
   /* ---------- Velas ---------- */
   .dm-velas { display: flex; align-items: flex-end; gap: 12px; }
   .dm-vela {
-    position: relative; width: 15px; height: var(--alto); border-radius: 4px 4px 3px 3px;
+    position: relative; width: 15px; height: var(--alto); border-radius: var(--radio-xs) var(--radio-xs) var(--radio-xs) var(--radio-xs);
     background: linear-gradient(90deg, #d9c69d 0%, #fff6e0 42%, #f1e3c2 60%, #c9b385 100%);
     box-shadow: inset 0 -8px 10px rgba(80, 50, 20, .18), 0 6px 14px rgba(0, 0, 0, .25);
   }
@@ -274,7 +274,7 @@
     background: #3b2a1a; border-radius: 1px;
   }
   .dm-vela::after {    /* escurrido de cera */
-    content: ''; position: absolute; left: 3px; top: 0; width: 4px; height: 9px; border-radius: 0 0 3px 3px;
+    content: ''; position: absolute; left: 3px; top: 0; width: 4px; height: 9px; border-radius: 0 0 var(--radio-xs) var(--radio-xs);
     background: #fff6e0; opacity: .9;
   }
   .dm-llama {
@@ -317,7 +317,7 @@
   /* ---------- Inicio: una franja delgada de noche ---------- */
   .dm-banner {
     position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px;
-    margin: 0 0 18px; padding: 12px 14px 12px 16px; border-radius: var(--radius);
+    margin: 0 0 18px; padding: 12px 14px 12px 16px; border-radius: var(--radio-xl);
     background: linear-gradient(105deg, var(--dm-noche) 0%, #1b2148 38%, #06263A 78%);
     border: 1px solid rgba(205, 180, 106, .35); box-shadow: var(--shadow); color: #fff;
   }
@@ -328,10 +328,10 @@
   }
   .dm-banner-texto { position: relative; z-index: 1; min-width: 0; margin-right: auto; }
   .dm-banner-texto strong {
-    display: block; color: #ecd9a2; font-family: var(--dm-letra); font-size: 17px; font-weight: 600; letter-spacing: .1px;
+    display: block; color: #ecd9a2; font-family: var(--dm-letra); font-size: var(--texto-l); font-weight: 600; letter-spacing: .1px;
     font-variation-settings: 'opsz' 48, 'SOFT' 50;
   }
-  .dm-banner-texto span { display: block; color: rgba(255, 255, 255, .78); font-size: 12.5px; margin-top: 2px; }
+  .dm-banner-texto span { display: block; color: rgba(255, 255, 255, .78); font-size: var(--texto-s); margin-top: 2px; }
   .dm-banner-picado {
     position: absolute; right: 40px; top: 0; width: 42%; height: 26px; pointer-events: none;
     background: var(--dm-picado-claro) 0 0 / auto 26px repeat-x;
@@ -343,7 +343,7 @@
     padding: 7px 14px 7px 10px; border-radius: 999px; cursor: pointer;
     background: linear-gradient(180deg, #3b2442, #281a3c); border: 1px solid rgba(242, 154, 46, .6); color: #ffe2b0;
     box-shadow: 0 0 0 4px rgba(27, 22, 56, .85), 0 4px 14px rgba(0, 0, 0, .3);
-    font-size: 12.5px; font-weight: 600; white-space: nowrap;
+    font-size: var(--texto-s); font-weight: 600; white-space: nowrap;
     transition: background .2s ease, transform .2s ease;
   }
   .dm-banner-ofrenda:hover { background: linear-gradient(180deg, #4a2b48, #33203f); transform: translateY(-1px); }
@@ -357,7 +357,7 @@
   }
   .dm-banner-cerrar {
     position: relative; z-index: 1; flex-shrink: 0; width: 28px; height: 28px; padding: 0; border-radius: 999px;
-    background: transparent; border: 0; color: rgba(255, 255, 255, .6); font-size: 18px; line-height: 1; cursor: pointer;
+    background: transparent; border: 0; color: rgba(255, 255, 255, .6); font-size: var(--texto-xl); line-height: 1; cursor: pointer;
   }
   .dm-banner-cerrar:hover { background: rgba(255, 255, 255, .1); color: #fff; }
   .dm-banner .dm-mariposa-cruza { top: 0; left: 0; z-index: 1; }
@@ -374,14 +374,14 @@
   .dm-ofrenda-picado { position: absolute; left: 0; right: 0; top: 0; height: 34px; background: var(--dm-picado-claro) 0 0 / auto 34px repeat-x; }
   .dm-ofrenda-cerrar {
     position: absolute; right: 10px; top: 38px; z-index: 2; width: 30px; height: 30px; padding: 0; border-radius: 999px;
-    border: 0; background: transparent; color: rgba(255, 255, 255, .7); font-size: 20px; line-height: 1; cursor: pointer;
+    border: 0; background: transparent; color: rgba(255, 255, 255, .7); font-size: var(--texto-xl); line-height: 1; cursor: pointer;
   }
   .dm-ofrenda-cerrar:hover { background: rgba(255, 255, 255, .1); color: #fff; }
   .dm-ofrenda h3 {
     position: relative; margin: 0; text-align: center; color: #ecd9a2;
-    font-family: var(--dm-letra); font-size: 28px; font-weight: 600; font-variation-settings: 'opsz' 96, 'SOFT' 50;
+    font-family: var(--dm-letra); font-size: var(--texto-2xl); font-weight: 600; font-variation-settings: 'opsz' 96, 'SOFT' 50;
   }
-  .dm-ofrenda-sub { position: relative; margin: 6px auto 0; max-width: 400px; text-align: center; font-size: 12.5px; line-height: 1.5; color: rgba(244, 236, 216, .75); }
+  .dm-ofrenda-sub { position: relative; margin: 6px auto 0; max-width: 400px; text-align: center; font-size: var(--texto-s); line-height: 1.5; color: rgba(244, 236, 216, .75); }
   /* El marco: guirnalda de cempasúchil con su fleco de papel picado, arriba del altar */
   .dm-altar-marco {
     position: relative; height: 30px; margin: 4px auto 0; max-width: 420px;
@@ -431,34 +431,34 @@
   .dm-escalon .dm-llama::after { width: 46px; height: 46px; }
   .dm-escalon .dm-vela.dm-nueva { animation: dmAparecer .6s cubic-bezier(.3, 1.6, .5, 1); }
   @keyframes dmAparecer { from { transform: scale(.2) translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .dm-altar-vacio { padding: 20px 0 8px; text-align: center; font-size: 12.5px; font-style: italic; color: rgba(244, 236, 216, .6); }
-  .dm-ofrenda-total { position: relative; margin: 22px 0 14px; text-align: center; font-size: 13px; color: rgba(244, 236, 216, .8); }
-  .dm-ofrenda-total b { font-family: var(--dm-letra); font-size: 22px; color: #ffd38a; margin-right: 4px; }
+  .dm-altar-vacio { padding: 20px 0 8px; text-align: center; font-size: var(--texto-s); font-style: italic; color: rgba(244, 236, 216, .6); }
+  .dm-ofrenda-total { position: relative; margin: 22px 0 14px; text-align: center; font-size: var(--texto-s); color: rgba(244, 236, 216, .8); }
+  .dm-ofrenda-total b { font-family: var(--dm-letra); font-size: var(--texto-xl); color: #ffd38a; margin-right: 4px; }
   .dm-ofrenda-form { position: relative; display: flex; gap: 8px; }
   .dm-ofrenda-form input {
-    flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; font-size: 13.5px;
+    flex: 1; min-width: 0; padding: 10px 14px; border-radius: var(--radio-l); font-size: var(--texto-m);
     background: rgba(255, 255, 255, .08); border: 1px solid rgba(205, 180, 106, .4); color: #fff;
   }
   .dm-ofrenda-form input::placeholder { color: rgba(244, 236, 216, .5); }
   .dm-ofrenda-form input:focus { outline: none; border-color: var(--dm-cempa); box-shadow: 0 0 0 3px rgba(242, 154, 46, .25); }
   .dm-ofrenda-encender {
-    flex-shrink: 0; padding: 10px 16px; border-radius: 10px; border: 0; cursor: pointer; font-weight: 700; font-size: 13px;
+    flex-shrink: 0; padding: 10px 16px; border-radius: var(--radio-l); border: 0; cursor: pointer; font-weight: 700; font-size: var(--texto-s);
     background: linear-gradient(135deg, #f7b23b, #e2610b); color: #2a1406; box-shadow: 0 6px 18px rgba(226, 97, 11, .35);
   }
   .dm-ofrenda-encender:disabled { opacity: .6; cursor: default; }
-  .dm-ofrenda-nota { position: relative; margin: 8px 0 0; font-size: 11.5px; color: rgba(244, 236, 216, .55); text-align: center; }
-  .dm-ofrenda-quitar { background: none; border: 0; padding: 0; color: #ffd38a; font-size: 11.5px; text-decoration: underline; cursor: pointer; }
+  .dm-ofrenda-nota { position: relative; margin: 8px 0 0; font-size: var(--texto-xs); color: rgba(244, 236, 216, .55); text-align: center; }
+  .dm-ofrenda-quitar { background: none; border: 0; padding: 0; color: #ffd38a; font-size: var(--texto-xs); text-decoration: underline; cursor: pointer; }
   .dm-ofrenda-lista {
     position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 16px;
     max-height: 150px; overflow-y: auto; padding: 2px;
   }
   .dm-memoria {
-    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px; font-size: var(--texto-s);
     background: rgba(255, 255, 255, .07); border: 1px solid rgba(255, 255, 255, .12); color: #f4ecd8;
   }
   .dm-memoria.dm-mia { border-color: rgba(242, 154, 46, .6); background: rgba(242, 154, 46, .12); }
   .dm-memoria .dm-mini-vela { margin: 4px 1px 0; transform: scale(.8); }
-  .dm-memoria button { background: none; border: 0; padding: 0 0 0 2px; color: rgba(255, 255, 255, .5); cursor: pointer; font-size: 14px; line-height: 1; }
+  .dm-memoria button { background: none; border: 0; padding: 0 0 0 2px; color: rgba(255, 255, 255, .5); cursor: pointer; font-size: var(--texto-m); line-height: 1; }
   .dm-memoria button:hover { color: #fff; }
 
   /* ---------- Tablas vacías ---------- */
@@ -470,14 +470,14 @@
   }
   body[data-temporada="muertos"] .dt-vacio:not(.dt-error)::after {
     content: 'Por aquí no asoman ni las ánimas'; display: block; margin-top: 4px;
-    font-size: 12px; font-style: italic; opacity: .75;
+    font-size: var(--texto-s); font-style: italic; opacity: .75;
   }
 
   /* ---------- Tableta y celular ---------- */
   @media (max-width: 1024px) {
     .dm-login-calavera { display: none; }
     .dm-banner-picado { width: 30%; }
-    body[data-temporada="muertos"] .login-hero-title { font-size: 32px; }
+    body[data-temporada="muertos"] .login-hero-title { font-size: var(--texto-3xl); }
   }
   @media (max-width: 640px) {
     body[data-temporada="muertos"] #view-container { padding-top: 26px; }
@@ -486,14 +486,14 @@
     .dm-login-picado { height: 34px; }
     .dm-login-picado-atras { top: 16px; height: 24px; background-size: auto 24px; background-position: 54px 0; }
     body[data-temporada="muertos"] .login-hero-content { padding-top: 58px; }
-    body[data-temporada="muertos"] .login-hero-title { font-size: 28px; }
+    body[data-temporada="muertos"] .login-hero-title { font-size: var(--texto-2xl); }
     .dm-banner-picado { display: none; }
     .dm-banner { flex-wrap: wrap; gap: 10px; padding: 10px 10px 12px 12px; }
     .dm-banner-flor { width: 30px; height: 30px; }
     .dm-banner-texto { flex: 1 1 calc(100% - 100px); }   /* flor + texto + cerrar en un renglón; el botón abajo */
     .dm-banner-ofrenda { order: 3; margin: 0 0 0 40px; }
     .dm-ofrenda.modal-card { padding: 46px 16px 18px; }
-    .dm-ofrenda h3 { font-size: 24px; }
+    .dm-ofrenda h3 { font-size: var(--texto-2xl); }
     .dm-ofrenda-form { flex-direction: column; }
   }
 
@@ -608,9 +608,7 @@
     /** ¿La persona pidió "reducir movimiento"? (lo decide el CSS: --dm-movimiento) */
     function quieto() { return getComputedStyle(document.documentElement).getPropertyValue('--dm-movimiento').trim() === '0'; }
     const azar = (min, max) => min + Math.random() * (max - min);
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    }
+    const esc = Formato.esc;
 
     // ---------- Dibujos ----------
 

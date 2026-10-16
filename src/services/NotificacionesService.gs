@@ -6,6 +6,11 @@
  * mismo criterio de vencimiento que ya usa el panel de Inicio (DashboardService)
  * para Verificaciones/Inspecciones, y agrega Seguro (FECHA VENCIMIENTO SEGURO),
  * que hoy nadie vigilaba.
+ *
+ * campana(token, limite) es lo que pide la barra (apiNotificaciones, fase 5.5): una fuente por módulo (FUENTES_),
+ * todas con la misma forma de aviso { id, modulo, tipo, titulo, mensaje, dias, fecha, leida… }. Líneas guarda sus
+ * avisos en APP_NOTIFICACIONES (LineasNotificaciones, con leído por persona); los de Vehículos se calculan aquí.
+ * Un módulo que falla llega null y los demás siguen.
  */
 
 const NotificacionesService = (function () {
@@ -153,5 +158,41 @@ const NotificacionesService = (function () {
     return items;
   }
 
-  return { listar: listar, ultimosFallos: () => fallos_.slice() };
+  // ---------------- La campana: una fuente por módulo ----------------
+
+  const ETIQUETA_VEH_ = { verificacion: 'Verificación', seguro: 'Seguro', inspeccion: 'Inspección' };
+
+  /** Pendiente de Vehículos con la forma de un aviso. Su "leída" la pone la pantalla: es solo de ese navegador. */
+  function avisoVehiculo_(v) {
+    const tipo = String(v.tipo || '').toLowerCase();
+    return {
+      id: 'veh-' + tipo + '-' + v.folio, tipo: 'VEH_' + tipo.toUpperCase(), folio: v.folio,
+      titulo: (ETIQUETA_VEH_[tipo] || tipo) + ' · Nucco ' + (v.nucco || v.folio) + (v.nucco && v.folio ? ' (' + v.folio + ')' : ''),
+      mensaje: v.texto || '', dias: v.dias, severidad: v.severidad, fecha: null,
+    };
+  }
+
+  /** Cada módulo: { items, noLeidas? }. limite recorta los que se guardan con fecha (la campana pide pocos). */
+  const FUENTES_ = {
+    lineas: (token, limite) => TelefoniaService.notificaciones(token, limite),
+    vehiculos: (token) => ({ items: listar(token).map(avisoVehiculo_) }),
+  };
+
+  function campana(token, limite) {
+    Auth.validarSesion(token);
+    const r = {};
+    Object.keys(FUENTES_).forEach((modulo) => {
+      try {
+        const x = FUENTES_[modulo](token, Number(limite) || 0);
+        (x.items || []).forEach((n) => { n.modulo = modulo; });
+        r[modulo] = x;
+      } catch (e) {
+        console.warn('[Campanita] ' + modulo + ': ' + e.message);
+        r[modulo] = null;
+      }
+    });
+    return r;
+  }
+
+  return { listar: listar, campana: campana, ultimosFallos: () => fallos_.slice() };
 })();

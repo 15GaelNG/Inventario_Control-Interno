@@ -406,6 +406,174 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
 });
 
+test('el candado del script se pide solo con Candado.con (reentrante), y SheetUtils escribe solo lo que cambia', () => {
+  // waitLock() no es reentrante: un getScriptLock suelto no sabe que su hilo ya tiene el candado, y lo que llama
+  // adentro (SheetUtils.update, HojaServicio.actualizar…) se colgaba hasta el timeout (docs/homologacion-codigo.md, fase 1)
+  const sueltos = filesBelow(path.join(root, 'src'))
+    .filter((f) => f.endsWith('.gs') && !f.replace(/\\/g, '/').endsWith('utils/Candado.gs'))
+    .filter((f) => /LockService\.get(Script|Document|User)Lock\(/.test(fs.readFileSync(f, 'utf8').replace(/\/\/.*$|\/\*[\s\S]*?\*\//gm, '')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(sueltos, [], 'Usa Candado.con(() => { … }) (src/utils/Candado.gs)');
+  assert.match(read('package.json'), /node tests\/candado\.test\.js/);
+
+  // update: busca el renglón bajo el candado y escribe solo las columnas del cambio (no el renglón completo, que
+  // pisaba lo que otro cambió y convertía fórmulas en valores)
+  const su = read('src/utils/SheetUtils.gs');
+  const funcion = (nombre) => new RegExp('function ' + nombre + '\\([\\s\\S]*?\\r?\\n  }\\r?\\n').exec(su)[0];
+  assert.match(funcion('update'), /Candado\.con\(/);
+  assert.match(funcion('update'), /escribirColumnas_\(/);
+  assert.doesNotMatch(funcion('update'), /objectToRow_\(|setValues\(\[row\]\)/);
+  assert.match(funcion('remove'), /Candado\.con\(/);
+});
+
+test('la pantalla escribe fechas, montos y texto seguro con Formato (componentes/formato.html), sin otra copia', () => {
+  // Había ~20 copias de esc y una forma de fecha por módulo (docs/homologacion-codigo.md, fase 2). Un formato nuevo
+  // va en formato.html (con su prueba en tests/formato.test.js); en el módulo, a lo más un alias: const esc = Formato.esc
+  const COPIAS = [
+    [/['"]&amp;['"]/, 'escapar HTML a mano → Formato.esc'],
+    [/\.normalize\(['"]NFD['"]\)/, 'quitar acentos a mano → Formato.normal / normalAlineado'],
+    [/\.toLocale(Date|Time)?String\(/, 'fecha o número con toLocale… → Formato.fecha / fechaHora / hora / fechaTexto / moneda / miles'],
+    [/padStart\(2, ['"]0['"]\)/, 'armar una fecha a mano → Formato.dia / fecha / hora'],
+  ];
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/formato.html'))
+    .forEach((f) => {
+      const texto = fs.readFileSync(f, 'utf8');
+      for (const m of texto.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+        m[1].split('\n').forEach((linea, i) => COPIAS.forEach(([re, porque]) => {
+          if (re.test(linea)) fuera.push(path.relative(root, f).replace(/\\/g, '/') + ': ' + linea.trim().slice(0, 90) + '  (' + porque + ')');
+        }));
+      }
+    });
+  assert.deepEqual(fuera, []);
+
+  const index = read('src/html/Index.html');
+  const pos = (archivo) => index.indexOf("include('html/js/" + archivo + "')");
+  assert.ok(pos('componentes/formato') > 0, 'Index.html incluye componentes/formato');
+  ['api', 'componentes/pantalla', 'app', 'componentes/datatable'].forEach((a) =>
+    assert.ok(pos('componentes/formato') < pos(a), 'formato va antes que ' + a));
+  assert.ok(pos('componentes/formato') < index.indexOf("include('html/notificaciones')"), 'formato va antes que notificaciones');
+  assert.match(read('package.json'), /node tests\/formato\.test\.js/);
+});
+
+test('letra, esquinas y colores de la pantalla salen de la escala de styles.html (--texto-*, --radio-*, --tono-*)', () => {
+  // Había 27 tamaños de letra y 19 radios distintos, y los colores de estatus escritos en el JS no se aclaraban en
+  // modo oscuro (docs/homologacion-codigo.md, fase 3). Lo decorativo sí puede ir en px: letra de 36px o más
+  // (números de portada) y esquinas de 2px o menos (y 999px / 50%, píldoras y círculos).
+  const css = read('src/html/styles.html');
+  ['2xs', 'xs', 's', 'm', 'l', 'xl', '2xl', '3xl'].forEach((p) => assert.match(css, new RegExp('--texto-' + p + ': ')));
+  ['xs', 's', 'm', 'l', 'xl', '2xl'].forEach((p) => assert.match(css, new RegExp('--radio-' + p + ': ')));
+  const tonos = [...css.matchAll(/--tono-([a-z-]+): #/g)].map((m) => m[1]);
+  const claro = tonos.slice(0, tonos.length / 2);
+  assert.deepEqual(tonos.slice(tonos.length / 2), claro, 'cada --tono- tiene su color para modo oscuro');
+
+  const PAGINA_APARTE = ['FirmaExterna.html'];   // no incluye styles.html
+  // Colores que no son de la pantalla: gráficas (Chart.js no lee variables), tinta de los lienzos, la firma sobre
+  // blanco, la herramienta de medir y la ventana nueva que abre Líneas mientras busca un documento
+  const COLOR_FIJO = ['app-panorama-cajachica.html', 'app-panorama-vehiculos.html', 'componentes/lienzo.html',
+    'modulos/inspecciones.html', 'componentes/campos-hoja.html', 'lineas-medidor.html'];
+  const COLOR = /(?:^|[\s;"'{])(color|background(?:-color)?|border(?:-color)?)\s*:\s*['"]?#[0-9a-f]{3,8}\b/i;
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !PAGINA_APARTE.includes(path.basename(f)))
+    .forEach((f) => {
+      const rel = path.relative(path.join(root, 'src', 'html'), f).replace(/\\/g, '/');
+      const texto = fs.readFileSync(f, 'utf8');
+      for (const m of texto.matchAll(/font-size:\s*(\d+(?:\.\d+)?)px/g)) {
+        if (Number(m[1]) < 36) fuera.push(rel + ': font-size ' + m[1] + 'px → var(--texto-…)');
+      }
+      for (const m of texto.matchAll(/border(?:-(?:top|bottom)-(?:left|right))?-radius:\s*([^;"'`}\n]+)/g)) {
+        if (/calc\(/.test(m[1])) continue;
+        for (const px of m[1].matchAll(/(\d+(?:\.\d+)?)px/g)) {
+          if (Number(px[1]) > 2 && Number(px[1]) < 999) fuera.push(rel + ': border-radius ' + px[1] + 'px → var(--radio-…)');
+        }
+      }
+      if (COLOR_FIJO.some((c) => rel.endsWith(c))) return;
+      for (const s of texto.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)) {
+        s[1].split('\n').forEach((linea) => {
+          if (COLOR.test(linea) && !/ventana\.document/.test(linea)) fuera.push(rel + ': ' + linea.trim().slice(0, 80) + ' → var(--tono-…)');
+        });
+      }
+    });
+  assert.deepEqual(fuera, []);
+});
+
+test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, en todos los módulos', () => {
+  // Vehículos, Caja Chica, Usuarios y permisos y Líneas armaban cada uno su encabezado con las clases de Líneas
+  // (ln-detalle-header, ln-migas, ln-resumen-rapido) y su CSS vivía en lineas-estilos.html (fase 4b)
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/ficha.html'))
+    .forEach((f) => fs.readFileSync(f, 'utf8').split('\n').forEach((linea) => {
+      if (/ln-detalle-(header|icono|titulo|botones|sub)\b|ln-migas|ln-miga-|ln-resumen-rapido|ficha-encabezado"|class="ficha-migas/.test(linea)) {
+        fuera.push(path.relative(root, f).replace(/\\/g, '/') + ': ' + linea.trim().slice(0, 80));
+      }
+    }));
+  assert.deepEqual(fuera, [], 'Usa Ficha.migas / Ficha.encabezado (componentes/ficha.html)');
+  const usa = (archivo, n) => assert.ok((read(archivo).match(/Ficha\.encabezado\(/g) || []).length >= n, archivo + ' usa Ficha.encabezado');
+  usa('src/html/js/app.html', 1);
+  usa('src/html/js/app-cajachica.html', 1);
+  usa('src/html/js/app-permisos.html', 3);
+  usa('src/html/js/lineas.html', 1);
+  assert.match(read('package.json'), /node tests\/ficha\.test\.js/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/componentes/tabs')") < index.indexOf("include('html/js/componentes/ficha')"));
+});
+
+test('el índice de Líneas es una lista como las demás: copia sin PIN, huella y vigía (fase 5.2b)', () => {
+  const lineas = read('src/html/js/lineas.html');
+  // Por la caché común, nunca por su cuenta en localStorage
+  assert.match(lineas, /callServerListaCacheada\('apiLineasIndice', state\.token\)/);
+  assert.doesNotMatch(lineas, /localStorage\.(get|set)Item\(LLAVE_INDICE|llamar\('apiLineasIndice'/);
+  // La copia guardada va sin los PIN (tests/listas-cliente.test.js prueba que no quedan en el navegador)
+  assert.match(lineas, /guardarListaLimpia\('apiLineasIndice', sinSecretos_\);/);
+  assert.match(read('src/html/js/api.html'), /const guardable = limpiar \? limpiar\(valor\) : valor;/);
+  // La huella: el servidor la da aunque responda de su caché, y apiListaConHuella acepta el índice
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /function indice\(forzar\) \{\s+const inicio = Date\.now\(\);\s+huellaIndice_\(\);/);
+  assert.match(read('src/ClientApi.gs'), /LISTAS_CON_HUELLA_ = [^\n]*\|LineasIndice\)/);
+  // Lo que llega distinto se vuelve a armar antes de repintar
+  assert.match(lineas, /ev\.detail\.fn === 'apiLineasIndice' && memoria\.indice\) pedirIndice_\(\)/);
+});
+
+test('el filtro rápido por tipo / clase / estatus es el componente FiltroTipo', () => {
+  // Estaba copiado 5 veces (Incidencias, Vehículos, Uber, Caja Chica y Líneas), cada una con su pintar y su marcar (fase 4c)
+  const fuera = filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/filtro-tipo.html'))
+    .filter((f) => /class="filtro-tipo-(item|panel)|\.filtro-tipo-item'|\.filtro-tipo[\w-]*\s*\{/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(fuera.filter((f) => !f.endsWith('lineas-estilos.html')), [], 'Usa FiltroTipo.crear (componentes/filtro-tipo.html)');
+  ['src/html/js/app.html', 'src/html/js/app-cajachica.html', 'src/html/js/lineas.html'].forEach((a) => assert.match(read(a), /FiltroTipo\.crear\(/, a));
+  assert.match(read('package.json'), /node tests\/filtro-tipo\.test\.js/);
+});
+
+test('las pestañas son una sola implementación: Tabs (componentes/tabs.html)', () => {
+  // Había tres (wireTabsSimple de las vistas, Tabs con otra clase de activa y fichaEnPestanas en app.html y en Líneas),
+  // cada una con su marcado (docs/homologacion-codigo.md, fase 4). Ahora: grupo data-tabs, .tabs-lista, .tab-btn[data-tab]
+  // con .activa y paneles [data-tab-panel]; una ficha se arma con Tabs.html y se cambia con Tabs.mostrar.
+  const VIEJO = [
+    [/tabs-simple/, 'tabs-simple → tabs-lista'],
+    [/data-ficha-(tab|panel|num)\b/, 'data-ficha-tab/panel → data-tab/data-tab-panel (Tabs.html)'],
+    [/\sdata-panel="/, 'data-panel → data-tab-panel'],
+    [/wireTabsSimple|fichaEnPestanas/, 'Tabs.iniciar / Tabs.html'],
+    [/dataset\.tabPanel/, 'cambiar paneles a mano → Tabs.mostrar'],
+    [/tab-btn[^'"]*\bactive\b|\.tab-btn\.active/, 'la pestaña activa es .activa'],
+  ];
+  const fuera = [];
+  filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html'))
+    .filter((f) => !f.replace(/\\/g, '/').endsWith('componentes/tabs.html'))
+    .forEach((f) => fs.readFileSync(f, 'utf8').split('\n').forEach((linea) => VIEJO.forEach(([re, porque]) => {
+      if (re.test(linea)) fuera.push(path.relative(root, f).replace(/\\/g, '/') + ': ' + linea.trim().slice(0, 80) + '  (' + porque + ')');
+    })));
+  assert.deepEqual(fuera, []);
+  assert.match(read('package.json'), /node tests\/tabs\.test\.js/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/componentes/formato')") < index.indexOf("include('html/js/componentes/tabs')"));
+  // montarVista suelta las pestañas de la vista anterior (Tabs.iniciar sobre #view-container)
+  assert.match(read('src/html/js/app.html'), /container\.removeAttribute\('data-tabs'\);/);
+});
+
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
   const app = read('src/html/js/app.html');
   const index = read('src/html/Index.html');
@@ -507,13 +675,15 @@ test('las reglas de formato y los íconos son los del AppSheet (flechas, colores
   assert.match(reglas, /'Responsable Entrante': \{ '\*': \{ color: 'green', icono: 'chevrons-up', fondo: true \} \}/);
   assert.match(reglas, /'Responsable Saliente': \{ '\*': \{ color: 'red', icono: 'chevrons-down', fondo: true \} \}/);
   // CAMBIOS: ANTES / DESPUES con fa-caret-circle-down / up y negritas
-  assert.match(reglas, /'ANTES': \{ '\*': \{ color: '#b78360', icono: 'circle-chevron-down', bold: true, fondo: true \} \}/);
+  assert.match(reglas, /'ANTES': \{ '\*': \{ color: 'var\(--tono-cobre\)', icono: 'circle-chevron-down', bold: true, fondo: true \} \}/);
+  // en modo claro, el mismo color del AppSheet (styles.html)
+  assert.match(read('src/html/styles.html'), /--tono-azul-petroleo: #006699;[\s\S]*--tono-cobre: #b78360;/);
   assert.match(reglas, /'DESPUES': \{ '\*': \{ color: 'themeMainColor', icono: 'circle-chevron-up', bold: true, fondo: true \} \}/);
   // RETRO DE SOLICITUD y SOLICITUD van en cursiva (no negrita); TIPO en negrita y cursiva
   assert.match(reglas, /'SUSPENSION DE LINEA': \{ color: 'orange', tam: 0\.9, italic: true, fondo: true \}/);
   assert.match(reglas, /'FINALIZADO': \{ color: 'green', tam: 0\.9, italic: true, fondo: true \}/);
   assert.match(reglas, /'MODEM': \{ color: 'themeMainColor', icono: 'hard-drive', bold: true, italic: true, fondo: true \}/);
-  assert.match(reglas, /'Cargadores': \{ color: '#006699', bold: true, italic: true \}/);
+  assert.match(reglas, /'Cargadores': \{ color: 'var\(--tono-azul-petroleo\)', bold: true, italic: true \}/);
   // ESTATUS TEMPORAL (13 días) y View Ref (fa-chevron-circle-right)
   assert.match(lineas, /function usoTemporalVencido\(l\)/);
   assert.match(lineas, /13 \* 24/);
@@ -644,14 +814,16 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.doesNotMatch(perfil, /SALT|PASSWORD_HASH|\.\.\.usuario/);
   assert.match(perfil, /porNombre\.length === 1 \? porNombre\[0\] : null/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
-  assert.match(lineas, /function fichaEnPestanas\(general, detalles, conDocumentos\)/);
-  assert.match(lineas, /class="ln-resumen-rapido"/);
+  assert.match(lineas, /function pestanasFicha\(general, detalles, conDocumentos\) \{[\s\S]*?return Tabs\.html\(\[/);
+  assert.match(lineas, /return Ficha\.encabezado\(\{ icono: ico, tituloHtml: titulo/);
   assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id, vista\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
   const pasos = lineas.slice(lineas.indexOf('const PASOS_FORMULARIO'), lineas.indexOf('function repartirEnPasos'));
   ['INSPECCION', 'RESPONSIVA', 'REGISTRO_EQUIPO', 'REGISTRO_LINEA', 'SOLICITUD'].forEach((k) => assert.ok(pasos.includes(k + ': ['), k));
-  assert.match(lineas, /class="form-pasos"/);
-  assert.match(lineas, /class="form-paso-chip"/);
+  // El indicador y la navegación son el componente Pasos, igual que en Formulario (fase 5.6)
+  assert.match(lineas, /Pasos\.htmlChips\(pasos\.map\(\(p\) => esc\(p\.titulo\)\)\)/);
+  assert.match(lineas, /const nav = Pasos\.navegar\(\{/);
+  assert.match(lineas, /Formulario\.marcarError\(campo, x\.msg\)/);
   assert.match(lineas, /function activarPasos\(cont, cfg\)/);
   assert.match(lineas, /function marcarErroresEn\(cuerpo, errores\)/);
   assert.match(lineas, /libre: !!id/);
@@ -664,7 +836,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   // En celular el modal ocupa la pantalla y el formulario desplaza con el pie a la vista
   assert.match(estilos, /height: 100dvh/);
   assert.match(estilos, /\.ln-captura-modal \.modal-form-scroll, #ln-op-modal \.modal-form-scroll \{ max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; \}/);
-  assert.match(lineas, /matchMedia\('\(max-width: 700px\)'\)\.matches \? 'tarjetas' : 'tabla'/);
+  assert.match(lineas, /Pantalla\.esCelular\(\) \? 'tarjetas' : 'tabla'/);
 });
 
 test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, fotos y estatus', () => {
@@ -696,7 +868,10 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(app, /\}, 180\);/);
   assert.doesNotMatch(app, /\}, 2500\);/);
   assert.match(lineas, /memoria\.tablas\[clave\] = texto;/);
-  assert.match(lineas, /function cargarCatalogos\(forzar\)/);
+  // Los catálogos de Líneas como los de todos (fase 5.2a): callServerCacheado, sin su propia memoria con vigencia
+  assert.match(lineas, /const cargarCatalogos = \(forzar\) => catalogoLineas_\('apiLineasCatalogos', forzar\);/);
+  assert.match(lineas, /return callServerCacheado\(fn, state\.token\);/);
+  assert.doesNotMatch(lineas, /VIGENCIA_CATALOGO_MS|catalogosPendientes|colaboradoresPendientes|accesoriosPendientes/);
   // PDF: la firma recortada cabe en 160 × 70
   // Una firma cabe en 160 × 70; las de varios responsables juntas (responsiva, 6-oct), hasta 300 de ancho
   assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
@@ -811,7 +986,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
       base64Decode: () => [1, 2, 3], newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '101530',
     },
     DriveApp: { getFolderById: () => raiz, searchFiles: () => ({ hasNext: () => false }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
-    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
+    // quién lo subió: aquí no importa; la carpeta por nombre en la raíz: su nombre hace de ID
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a, carpetaEnRaiz: (n) => ({ getId: () => 'RAIZ/' + n }) },
   };
   const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -823,9 +999,10 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.equal(LA.guardarComoAppSheet('BITACORA DE DESECHO_Files_', 'd9f2', 'EVIDENCIA', 'image/jpeg', 'AAA'), 'BITACORA DE DESECHO_Files_/d9f2.EVIDENCIA.101530.jpg');
   assert.deepEqual(creados[0], { carpeta: 'DES', nombre: 'd9f2.EVIDENCIA.101530.jpg', mime: 'image/jpeg' });
   assert.throws(() => LA.guardarComoAppSheet('X_Files_', 'k', 'C', 'text/html', 'AAA'), /no permitido/);
-  // Las dos carpetas: la de la app (pruebas "PruebasCONTROLVEHICYTELEF-172665033") y NUCOS de producción
+  // Sin configuración: la carpeta de la app de pruebas ("PruebasCONTROLVEHICYTELEF-172665033") y una NUCOS de pruebas en
+  // la raíz del proyecto. Hasta el 15-oct caía a NUCOS de producción (fase 5.7): un DEV escribía ahí
   assert.equal(LA.carpetaAppSheetId(), '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM');
-  assert.equal(LA.carpetaNucosId(), '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-');
+  assert.equal(LA.carpetaNucosId(), 'RAIZ/NUCOS TELEFONICOS');
   assert.equal(typeof LA.escribeEnProduccion, 'undefined');
 
   // Rutas del AppSheet al guardar: PDF (acciones GUARDAR de sus bots), desechos y archivos de LINEAS
@@ -1165,7 +1342,12 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.deepEqual(Ntf._pendientes([fila('4', 'LINEA', 'USO', d('2026-10-01'))], '2026-10-03', '2026-09-29').map((x) => x.dias), [-2]);
   assert.equal(Ntf.DIAS_AVISO, 7);
   // Enganches: API, alta que pide revisar, campana en el shell y vista
-  assert.match(read('src/ClientApi.gs'), /function apiLineasNotificaciones\(token, limite\)/);
+  // La campana pide todos los módulos en una llamada; Líneas es una fuente de NotificacionesService (fase 5.5)
+  assert.match(read('src/ClientApi.gs'), /function apiNotificaciones\(token, limite\) \{\s+return NotificacionesService\.campana\(token, limite\);/);
+  assert.match(read('src/services/NotificacionesService.gs'), /lineas: \(token, limite\) => TelefoniaService\.notificaciones\(token, limite\)/);
+  assert.doesNotMatch(read('src/html/notificaciones.html'), /apiLineasNotificaciones|apiNotificacionesPendientes/);
+  // Sus avisos dan huella (el vigía ve un aviso nuevo o uno marcado como leído)
+  assert.match(read('src/services/lineas/LineasNotificaciones.gs'), /CacheHojas\.versiones\(\[\[LineasDatos\.id\(\), TAB\]\]\)/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
   assert.match(read('src/html/js/app.html'), /vista: 'notificaciones'[^\n]*plantilla: 'tpl-notificaciones', init: \(\) => Notificaciones\.initVista\(\)/);
@@ -1387,11 +1569,12 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
   assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Línea ' \+ \(l\.numero \|\| '—'\);/);
   assert.doesNotMatch(cliente, /etiqueta = e \? 'NUCO ' \+ \(e\.nuco \|\| '—'\) : 'Línea '/);
   assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Inspección' \+ \(fecha\(i\.fecha\)/);
-  assert.match(cliente, /'<span class="ln-miga-actual" aria-current="page">'/);
-  assert.match(cliente, /Volver a ' \+ esc\(etiquetaMiga\(anterior\)\)/);
+  assert.match(cliente, /actual: pila\.length \? etiquetaMiga\(pila\[pila\.length - 1\]\) : '',/);
+  assert.match(cliente, /volver: \{ texto: 'Volver a ' \+ etiquetaMiga\(anterior\)/);
+  assert.match(read('src/html/js/componentes/ficha.html'), /'<span class="ficha-miga-actual" aria-current="page">'/);
   // Pestaña recordada al regresar
   assert.match(cliente, /if \(pila\.length\) pila\[pila\.length - 1\]\.pestana = nombre;/);
-  assert.match(cliente, /const guardada = \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana;/);
+  assert.match(cliente, /\], \{ activa: \(pila\[pila\.length - 1\] \|\| \{\}\)\.pestana \}\);/);
   // Estilo Drive (30-sep): el clic selecciona; doble clic = ficha completa; con el dedo, tocar = vista rápida
   assert.match(cliente, /alAbrirFila: \(r\) => abrir\(cfg\.detalle, r\.id\),/);
   assert.match(cliente, /alTocarFila: \(r\) => vistaRapida\(cfg\.detalle, r\),/);
@@ -1770,7 +1953,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
   assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
   // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
-  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', puedeOperar, '', true\)/);
+  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', operarEquipo, '', true\)/);
   assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
   assert.match(lineas, /\.concat\(documentos, drive, operar \? editar\.concat\(vinculo\) : \[\], historial\)/);
   assert.doesNotMatch(lineas, /Abrir carpeta/);
@@ -2014,6 +2197,30 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
   assert.doesNotMatch(read('src/html/js/app.html'), /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
 });
 
+test('formularios por pasos: el indicador y la navegación son el componente Pasos (fase 5.6)', () => {
+  // Cada formulario por pasos traía su copia de "Paso x de y / Atrás / Siguiente". Formulario y Líneas ya usan Pasos;
+  // lo que falta migrar está aquí y esta lista SOLO SE ACHICA: al migrar una pantalla, baja su número (o quítala).
+  // Inspecciones se queda aparte por ahora: su "Siguiente" es asíncrono (busca el vehículo y carga el checklist), los
+  // pasos cambian al elegir la unidad y "completo" sale de las respuestas; Pasos todavía no hace nada de eso.
+  const PENDIENTES = {
+    'src/html/js/modulos/inspecciones.html': 1,
+  };
+  const encontrado = {};
+  filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.html')).forEach((file) => {
+    const rel = path.relative(root, file).replace(/\\/g, '/');
+    if (rel.endsWith('componentes/pasos.html')) return;
+    const n = (fs.readFileSync(file, 'utf8').match(/class="form-paso-chip/g) || []).length;
+    if (n) encontrado[rel] = n;
+  });
+  assert.deepEqual(encontrado, PENDIENTES, 'Un formulario por pasos usa Pasos.htmlChips y Pasos.navegar (componentes/pasos.html)');
+  const formulario = read('src/html/js/componentes/formulario.html');
+  assert.match(formulario, /Pasos\.htmlChips\(/);
+  assert.match(formulario, /const nav = pasos \? Pasos\.navegar\(\{/);
+  assert.match(formulario, /if \(caja\) marcarError\(caja, mensaje\);/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/componentes/pasos')") < index.indexOf("include('html/js/componentes/formulario')"), 'Pasos antes de Formulario');
+});
+
 test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en Pantalla', () => {
   // Los dos cortes viven en componentes/pantalla.html (ver su encabezado). Cada archivo usaba
   // el suyo (520, 600, 700, 760, 900…) y la misma pantalla era celular para un módulo y
@@ -2022,8 +2229,6 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
   // Lo que falta migrar (plan de diseño responsivo, oct-2026). Esta lista SOLO SE ACHICA: un
   // archivo nuevo no puede entrar, y al migrar uno hay que bajar su número aquí (si no, falla).
   const PENDIENTES = {
-    'src/html/js/lineas.html': { cortes: 0, matchMedia: 2 },
-    'src/html/lineas-estilos.html': { cortes: 17, matchMedia: 0 },
     'src/html/views/relaciones.html': { cortes: 1, matchMedia: 0 },
   };
   const encontrado = {};
@@ -2294,6 +2499,27 @@ test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.
   assert.deepEqual(sinAutor, []);
 });
 
+test('NUCOS de Líneas: un DEV nunca escribe en la de producción; una sola "subcarpeta" (fase 5.7)', () => {
+  const archivos = read('src/services/lineas/LineasArchivos.gs');
+  // Sin la clave de producción, una de pruebas en la raíz del proyecto (como ExpedienteNuco), nunca el ID de producción
+  assert.match(archivos, /function carpetaNucosId\(\) \{ return prop_\('LINEAS_DRIVE_NUCOS'\) \|\| DriveUtils\.carpetaEnRaiz\(NUCOS_PRUEBAS\)\.getId\(\); \}/);
+  assert.doesNotMatch(archivos, /12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-/);
+  // configurarLineasDev ya no le da a un DEV la de producción (ahí se escribe desde el 2-oct)
+  const admin = read('src/services/lineas/LineasAdmin.gs');
+  const configurar = admin.slice(admin.indexOf('function configurarLineasDev'), admin.indexOf('\n}\n', admin.indexOf('function configurarLineasDev')));
+  assert.doesNotMatch(configurar, /LINEAS_DRIVE_NUCOS: /);
+  assert.match(configurar, /props\.deleteProperty\('LINEAS_DRIVE_NUCOS'\);/);
+  // revisarEntorno avisa si un DEV apunta a una carpeta de producción
+  assert.match(read('src/Diagnostico.gs'), /!esProd && !regla\.soloLee && x\.id === carpetaDeProduccion_\(clave\)/);
+  // "La subcarpeta, o la crea" es una sola (DriveUtils.subcarpeta, reconoce espacios y acentos): nadie más la escribe
+  const copias = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs') && !f.endsWith('DriveUtils.gs'))
+    .filter((f) => /getFoldersByName\([^)]*\);\s*return [^;]*hasNext\(\) \? [^;]*createFolder\(/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.basename(f));
+  assert.deepEqual(copias, [], 'usa DriveUtils.subcarpeta');
+  ['src/utils/ExpedienteNuco.gs', 'src/services/PdfService.gs', 'src/services/lineas/LineasArchivos.gs'].forEach((f) =>
+    assert.match(read(f), /DriveUtils\.subcarpeta\(/, f));
+});
+
 test('las carpetas de los servicios se buscan por nombre en la raíz, no con un ID fijo', () => {
   // Un ID fijo no cambia por proyecto: los DEV escribían en producción, y uno que apuntaba a la
   // copia de pruebas hacía que producción escribiera en pruebas (FIRMA EXTERNA de Arqueos, 6-oct).
@@ -2380,7 +2606,7 @@ test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de
   assert.match(css, /#sidebar\.collapsed \{ width: 92px; margin-right: 0; box-shadow: none; \}/);
   // El subitem se desliza sin que su contenedor le corte la esquina; los módulos sueltos llevan la placa del ícono
   assert.match(css, /padding: 2px 4px 2px 16px; margin-left: 24px;/);
-  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: 9px;/);
+  assert.match(css, /\.nav-item \.nav-icon \{\s*width: 30px; height: 30px; border-radius: var\(--radio-m\);/);
   // Solo la primera letra en mayúscula
   const etiquetas = [...app.slice(app.indexOf('const NAV_GRUPOS'), app.indexOf('function vistaDe')).matchAll(/etiqueta: '([^']+)'/g)].map((m) => m[1]);
   assert.ok(etiquetas.includes('Líneas telefónicas') && etiquetas.includes('Gestión de activos') && etiquetas.includes('Help desk'));
@@ -2566,12 +2792,13 @@ test('Líneas: «Recargar datos» también vacía las hojas que la lectura guard
 
 test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
   const html = read('src/html/js/lineas.html');
-  const ini = html.indexOf('      function dinero(n, centavos) {');
-  const dinero = new Function(html.slice(ini, html.indexOf('\n      }', ini) + 8) + '\nreturn dinero;')();
+  const linea = html.split('\n').find((l) => l.includes('const dinero = (n, centavos) =>'));
+  assert.ok(linea, 'el dinero de Facturación sale de Formato.moneda');
+  const dinero = new Function(require('./formato-fuente') + linea + '\nreturn dinero;')();
   assert.strictEqual(dinero(-7.74, true), '-$7.74');
   assert.strictEqual(dinero(269.78, true), '$269.78');
   assert.strictEqual(dinero(1049), '$1,049');
-  assert.strictEqual(dinero(''), null);
+  assert.strictEqual(dinero(''), '');
 });
 
 test('Facturación: la parcialidad del equipo se ve y la diferencia contra la renta es sin ella (usuario, 14-oct)', () => {

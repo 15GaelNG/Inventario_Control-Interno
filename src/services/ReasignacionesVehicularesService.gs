@@ -69,9 +69,7 @@ const ReasignacionesVehicularesService = (function () {
     const responsableEntrante = String(datos['Responsable Entrante'] || '').trim();
     if (!responsableEntrante) throw new Error('Captura el responsable entrante.');
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const vehiculo = VehiculosService.buscar(token, folio);
       if (!vehiculo) throw new Error('No se encontró el vehículo ' + folio);
 
@@ -104,18 +102,14 @@ const ReasignacionesVehicularesService = (function () {
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('REASIGNACIONES_VEHICULOS', fila, fila);
       SheetUtils.insert(HojaServicio.libro(REASIGNACIONES), REASIGNACIONES.hoja, fila);
 
-      // candadoTomado: este hilo ya tiene el candado del script (arriba), y waitLock no es
-      // reentrante — sin avisarlo, la propagación esperaba 20 s y moría en silencio.
       VehiculosService.actualizar(token, idVehiculo, {
         'RESPONSABLE VEHICULO': fila['Responsable Entrante'],
         'NO EMPLEADO': fila['No Empleado Entrante'],
         'DEPARTAMENTO': fila['Departamento Entrante'] || vehiculo['DEPARTAMENTO'],
-      }, { candadoTomado: true });
+      });
 
       return { ID: fila['ID'] };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   return {

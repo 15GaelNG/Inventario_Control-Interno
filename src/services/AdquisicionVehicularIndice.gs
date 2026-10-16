@@ -47,6 +47,7 @@ function adquisicionVehicularIndice_todo() {
 }
 
 function adquisicionVehicularIndice_continuar() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   indiceAdqBorrarActivadores_();
   const st = indiceAdqLeer_();
   if (!st || st.fase !== 'OCR') return indiceAdqInforme_(st);
@@ -75,10 +76,12 @@ function adquisicionVehicularIndice_continuar() {
 }
 
 function adquisicionVehicularIndice_estado() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   return indiceAdqInforme_(indiceAdqLeer_());
 }
 
 function adquisicionVehicularIndice_detener() {
+  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
   indiceAdqBorrarActivadores_();
   const st = indiceAdqLeer_();
   if (st && st.fase === 'OCR') { st.fase = 'DETENIDO'; indiceAdqGuardar_(st); }

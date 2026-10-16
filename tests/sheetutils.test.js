@@ -11,10 +11,8 @@ const contexto = vm.createContext({
   SpreadsheetApp: {}, CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
   LockService: {}, Utilities: {},
 });
-vm.runInContext(
-  fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'SheetUtils.gs'), 'utf8') + '\nthis.SheetUtils = SheetUtils;',
-  contexto
-);
+const leerUtil = (archivo) => fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', archivo), 'utf8');
+vm.runInContext(leerUtil('Candado.gs') + leerUtil('SheetUtils.gs') + '\nthis.SheetUtils = SheetUtils;\nthis.Candado = Candado;', contexto);
 const { SheetUtils } = contexto;
 
 let fallas = 0;
@@ -138,6 +136,71 @@ ok(SheetUtils.removeMany('x', 'INSPECCION VEHICULAR', ['2026_25_290'], 'ID INSPE
 let mensaje = '';
 try { SheetUtils.findById('x', 'INSPECCION VEHICULAR', '1', 'NO EXISTE'); } catch (e) { mensaje = e.message; }
 ok(/no tiene columna "NO EXISTE"/.test(mensaje), 'una columna de ID que de verdad no existe sigue dando error claro');
+
+console.log('9. Escribir sin pisar a nadie (fase 1 de docs/homologacion-codigo.md)');
+// LockService como el real: no es reentrante (pedirlo dos veces sin soltarlo truena). Cada lectura y escritura
+// queda en `bitacora` para ver el orden.
+let bitacora = [];
+let tomado = false;
+contexto.LockService.getScriptLock = () => ({
+  waitLock: () => { if (tomado) throw new Error('Lock timeout'); tomado = true; bitacora.push('candado'); },
+  releaseLock: () => { tomado = false; bitacora.push('suelta'); },
+});
+const hojaVigilada = (valores) => {
+  const h = hojaEditable(valores);
+  const getRange = h.getRange;
+  h.getRange = (r, c, nr, nc) => {
+    const rango = getRange(r, c, nr, nc);
+    return {
+      getValues: () => { bitacora.push('lee ' + r + ',' + c + ' ' + (nr || 1) + 'x' + (nc || 1)); return rango.getValues(); },
+      setValues: (v) => { bitacora.push('escribe ' + r + ',' + c + ' ' + v.length + 'x' + v[0].length); return rango.setValues(v); },
+    };
+  };
+  h.deleteRow = (n) => { bitacora.push('borra ' + n); valores.splice(n - 1, 1); };
+  return h;
+};
+libro.CAJAS = hojaVigilada([
+  ['ID', 'ID CCH', 'MONTO ACTUAL', 'TOTAL (FÓRMULA)', 'RESPONSABLE', 'DEPARTAMENTO'],
+  ['CCH-1', 'C1', 100, '=C2*2', 'ANA', 'VENTAS'],
+  ['CCH-2', 'C2', 200, '=C3*2', 'LUIS', 'OBRA'],
+]);
+const cajas = libro.CAJAS.valores;
+
+bitacora = [];
+const r9 = SheetUtils.update('x', 'CAJAS', 'CCH-2', { 'MONTO ACTUAL': 250, RESPONSABLE: 'PEPE' });
+ok(cajas[2][3] === '=C3*2', 'no toca la columna de fórmula (antes la reescribía con su valor)');
+ok(cajas[2][2] === 250 && cajas[2][4] === 'PEPE' && cajas[2][5] === 'OBRA', 'escribe lo que cambió y deja lo demás');
+ok(bitacora.filter((b) => b.startsWith('escribe')).join('|') === 'escribe 3,3 1x1|escribe 3,5 1x1',
+  'solo escribe las celdas que cambian, por tramos (MONTO y RESPONSABLE no están juntas)');
+ok(bitacora[0] === 'candado' && bitacora[bitacora.length - 1] === 'suelta', 'busca, lee y escribe bajo el candado');
+ok(!bitacora.some((b) => /^lee 2,1 \d+x6$/.test(b)) && bitacora.includes('lee 2,1 2x1'),
+  'para buscar el ID lee solo esa columna, no la hoja entera');
+ok(r9['MONTO ACTUAL'] === 250 && r9['ID CCH'] === 'C2' && r9['DEPARTAMENTO'] === 'OBRA', 'regresa el registro completo, ya mezclado');
+
+// Otro cambió DEPARTAMENTO mientras tanto: el update de MONTO no lo regresa a lo de antes
+cajas[1][5] = 'CAMBIO DE OTRO';
+SheetUtils.update('x', 'CAJAS', 'CCH-1', { 'MONTO ACTUAL': 110 });
+ok(cajas[1][5] === 'CAMBIO DE OTRO', 'no pisa lo que otro cambió en otra columna');
+
+bitacora = [];
+SheetUtils.update('x', 'CAJAS', 'CCH-1', { 'NO EXISTE': 1 });
+ok(!bitacora.some((b) => b.startsWith('escribe')), 'una columna que la hoja no tiene no escribe nada');
+
+bitacora = [];
+contexto.Candado.con(() => {
+  SheetUtils.update('x', 'CAJAS', 'CCH-1', { 'MONTO ACTUAL': 120 });
+  ok(SheetUtils.remove('x', 'CAJAS', 'NO-EXISTE') === false, 'remove de algo que no existe: false');
+});
+ok(cajas[1][2] === 120 && bitacora.filter((b) => b === 'candado').length === 1,
+  'dentro de un candado ya tomado (Cambios de Monto → Cajas) no se cuelga ni lo pide otra vez');
+
+bitacora = [];
+ok(SheetUtils.remove('x', 'CAJAS', 'CCH-1') === true && cajas.length === 2 && cajas[1][0] === 'CCH-2', 'remove borra el renglón');
+ok(bitacora[0] === 'candado' && bitacora.indexOf('borra 2') > 0 && bitacora[bitacora.length - 1] === 'suelta',
+  'y busca y borra bajo el candado (antes, sin él, otro podía recorrer los renglones en medio)');
+let msg9 = '';
+try { SheetUtils.update('x', 'CAJAS', 'CCH-9', { RESPONSABLE: 'X' }); } catch (e) { msg9 = e.message; }
+ok(/No se encontró el registro con ID=CCH-9/.test(msg9) && !tomado, 'un ID que no existe truena claro y suelta el candado');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
