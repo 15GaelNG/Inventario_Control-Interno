@@ -125,7 +125,7 @@ const Modulos = (function () {
       ],
     },
     {
-      id: 'arqueos', etiqueta: 'Arqueos', icono: 'wallet',
+      id: 'arqueos', etiqueta: 'Caja chica', icono: 'wallet',
       modulos: [
         { id: 'arqueos', etiqueta: 'Arqueos' },
         {
