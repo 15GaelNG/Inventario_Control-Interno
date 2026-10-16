@@ -2461,7 +2461,7 @@
      *  etiquetas legibles que Registrar/Editar, en vez del volcado plano de antes. Lo que
      *  no está en CAMPOS_VEHICULO (columnas legadas del AppSheet) cae en "Otros datos".
      *  soloGrupos filtra a solo esos grupos (null: todos, más "Otros datos"). */
-    function seccionesFichaVehiculo(completo, soloGrupos) {
+    function seccionesFichaVehiculo(completo, soloGrupos, extras) {
       const porGrupo = {};
       const grupos = [];
       const usadas = new Set();
@@ -2486,13 +2486,17 @@
         if (otros.length) { porGrupo['Otros datos'] = otros; grupos.push('Otros datos'); }
       }
 
+      // Lo que una sección trae además de sus campos (las piezas de la unidad en "Accesorios y sensor")
+      Object.keys(extras || {}).forEach((g) => { if (extras[g] && !porGrupo[g]) { porGrupo[g] = []; grupos.push(g); } });
+
       // Pestaña Datos: las secciones del formulario de Editar, en su orden. Plegables; en celular solo las dos primeras
       // abiertas para que no sea un scroll eterno. "Documentación y seguro" aquí solo trae los estados.
       const abiertas = Pantalla.esCelular() ? 2 : grupos.length;
       return grupos.map((g, i) => '<details class="card ln-card ficha-seccion"' + (i < abiertas ? ' open' : '') + '><summary><h3>' +
         '<i data-lucide="' + (ICONO_GRUPO_VEHICULO[g] || 'info') + '" class="ico ln-icon"></i> ' + (TITULO_SECCION_FICHA[g] || g) +
         (g === 'Documentación y seguro' ? ' <a href="#" class="ln-enlace ficha-ver-documentos" data-ir-pestana="documentos">Ver documentos</a>' : '') +
-        '</h3></summary><div class="info-grid">' + porGrupo[g].join('') + '</div></details>').join('');
+        '</h3></summary>' + (porGrupo[g].length ? '<div class="info-grid">' + porGrupo[g].join('') + '</div>' : '') +
+        ((extras && extras[g]) || '') + '</details>').join('');
     }
 
     const TITULO_SECCION_FICHA = { 'Documentación y seguro': 'Seguro, tenencia y verificación' };
@@ -2529,6 +2533,74 @@
     function cerrarCapturaVehiculo() {
       document.getElementById('veh-modal-captura').hidden = true;
       document.getElementById('veh-captura-cuerpo').innerHTML = '';
+    }
+
+    // ---------- Accesorios de la unidad (AccesoriosVehiculoService, 16-oct-2026) ----------
+    // El estado de cada pieza sale de su último movimiento (CARGA INICIAL de la responsiva, ALTA o BAJA); sin
+    // movimientos es "sin dato", no "no tiene". Desde aquí solo se registran altas y bajas.
+    const ACC_ESTADO = { SI: { clase: 'acc-si', icono: 'check', texto: 'Tiene' }, NO: { clase: 'acc-no', icono: 'x', texto: 'No tiene' },
+      '': { clase: 'acc-sin', icono: 'minus', texto: 'Sin dato' } };
+    const ACC_MOVIMIENTO = { 'CARGA INICIAL': 'Carga inicial', ALTA: 'Alta', BAJA: 'Baja' };
+
+    function htmlAccesoriosUnidad(acc) {
+      const nombreDe = {};
+      (acc.catalogo || []).forEach((p) => { nombreDe[p.CLAVE] = p.NOMBRE; });
+      const editar = puedeEditarModulo('vehiculos.accesorios');
+      const piezas = (acc.estado || []).map((p) => {
+        const e = ACC_ESTADO[p.TIENE] || ACC_ESTADO[''];
+        return '<div class="acc-pieza ' + e.clase + '" title="' + escaparHtml(e.texto + (p.DESDE ? ' desde ' + formatearFecha(p.DESDE) : '')) + '">' +
+          Iconos.svg(e.icono) + '<span class="acc-nombre">' + escaparHtml(p.NOMBRE) + '</span>' +
+          (p.DESDE ? '<span class="acc-desde">' + escaparHtml(formatearFecha(p.DESDE)) + '</span>' : '') + '</div>';
+      }).join('');
+      const historia = (acc.historial || []).map((m) => {
+        const doc = /^https?:/i.test(m.ORIGEN) ? ' · <a href="' + escaparHtml(m.ORIGEN) + '" target="_blank" rel="noopener">documento</a>' : '';
+        return '<li><span class="acc-mov acc-mov-' + escaparHtml(String(m.MOVIMIENTO).toLowerCase().replace(/\s+/g, '-')) + '">' +
+          escaparHtml(ACC_MOVIMIENTO[m.MOVIMIENTO] || m.MOVIMIENTO) + '</span> ' +
+          '<strong>' + escaparHtml(nombreDe[m.ACCESORIO] || m.ACCESORIO) + '</strong> · ' + escaparHtml(formatearFecha(m.FECHA)) +
+          (m.MOTIVO ? ' · ' + escaparHtml(m.MOTIVO) : '') + (m.REGISTRO ? ' · <span class="ln-tenue">' + escaparHtml(m.REGISTRO) + '</span>' : '') +
+          doc + '</li>';
+      }).join('');
+      return '<div class="acc-unidad">' +
+        '<div class="acc-cabeza"><strong>Piezas de la unidad</strong>' +
+          (editar ? '<span class="acc-botones">' +
+            '<button type="button" class="secondary ln-btn-chico" data-acc-movimiento="ALTA">' + Iconos.svg('plus') + ' Registrar alta</button>' +
+            '<button type="button" class="secondary ln-btn-chico" data-acc-movimiento="BAJA">' + Iconos.svg('minus') + ' Registrar baja</button></span>' : '') +
+        '</div>' +
+        '<div class="acc-piezas">' + piezas + '</div>' +
+        (historia ? '<details class="acc-historia"><summary>Historia (' + acc.historial.length + ')</summary><ul>' + historia + '</ul></details>'
+          : '<p class="ln-tenue acc-vacio">Sin movimientos registrados todavía: lo de cada unidad se carga desde su responsiva.</p>') +
+        '</div>';
+    }
+
+    /** ALTA (de lo que no tiene o no hay dato) o BAJA (de lo que tiene), con el modal de captura de la ficha */
+    function abrirMovimientoAccesorio(vResumen, acc, movimiento) {
+      const alta = movimiento === 'ALTA';
+      const activas = {};
+      (acc.catalogo || []).forEach((p) => { activas[p.CLAVE] = p.ACTIVO; });
+      const opciones = (acc.estado || []).filter((p) => (alta ? p.TIENE !== 'SI' && activas[p.CLAVE] : p.TIENE === 'SI'))
+        .map((p) => ({ valor: p.CLAVE, etiqueta: p.NOMBRE }));
+      if (!opciones.length) {
+        Notificar.info(alta ? 'La unidad ya tiene todas las piezas del catálogo.' : 'La unidad no tiene piezas registradas que dar de baja.');
+        return;
+      }
+      const cuerpo = abrirCapturaVehiculo(alta ? 'plus' : 'minus', 'ACCESORIOS', alta ? 'Registrar alta de una pieza' : 'Registrar baja de una pieza',
+        'Nucco ' + (vResumen.NUCCO || '') + ' · ' + (vResumen.FOLIO || ''));
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 2,
+        campos: [
+          { id: 'ACCESORIO', etiqueta: 'Pieza', tipo: 'lista', opciones: opciones, requerido: true },
+          { id: 'FECHA', etiqueta: alta ? 'Desde cuándo la tiene' : 'Desde cuándo no la tiene', tipo: 'fecha', requerido: true, valor: hoyLocal() },
+          { id: 'MOTIVO', etiqueta: 'Motivo', tipo: 'parrafo', requerido: !alta,
+            ayuda: alta ? 'Opcional: compra, reposición, se encontró…' : 'Extravío, robo, daño, se retiró…' },
+        ],
+        alValidar: (v) => (v.FECHA && v.FECHA > hoyLocal() ? { FECHA: 'No puede ser una fecha futura' } : null),
+        textoGuardar: alta ? 'Registrar alta' : 'Registrar baja', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiRegistrarAccesorioVehiculo', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, MOVIMIENTO: movimiento }, valores));
+        },
+        textoExito: () => (alta ? 'Alta registrada' : 'Baja registrada'),
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'datos'); },
+      });
     }
 
     function abrirAgregarVerificacion(vResumen) {
@@ -3725,7 +3797,7 @@
         // cualquier guardado borra las copias (ESCRIBE en api.html).
         // Por el ID del vehículo (el folio se reasigna; el ID no)
         const ficha = JSON.parse((await callServerListaCacheada('apiFichaVehiculo', state.token, vResumen.ID_VEHICULO || vResumen.FOLIO)) || '{}');
-        const { completo, cambios, reasignaciones, verificaciones, inspecciones, sensores, hologramas, incidencias, responsivas, adherentes } = ficha;
+        const { completo, cambios, reasignaciones, verificaciones, inspecciones, sensores, hologramas, incidencias, responsivas, adherentes, accesorios } = ficha;
         // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
         if (detalle.hidden || !document.body.contains(detalle) || fichaVehiculoAbierta !== vResumen) return;
         if (!completo) {
@@ -3756,7 +3828,9 @@
         });
 
         // Una sola pestaña Datos (12-oct-2026; antes General + Detalles): todo el vehículo, por secciones
-        const datos = seccionesFichaVehiculo(completo, null);
+        // Las piezas de la unidad (sección vehiculos.accesorios): sin permiso llega null y no sale
+        const datos = seccionesFichaVehiculo(completo, null,
+          accesorios && accesorios.estado ? { 'Accesorios y sensor': htmlAccesoriosUnidad(accesorios) } : null);
 
         // Cada parte del historial es de su módulo (Cambios / Reasignaciones): sin permiso, no sale
         const historial = (cambios === null ? '' : '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
@@ -3926,6 +4000,10 @@
         if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
         const btnEditar = document.getElementById('veh-btn-editar-ficha');
         if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
+        detalle.querySelectorAll('[data-acc-movimiento]').forEach((btn) => btn.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          abrirMovimientoAccesorio(vResumen, accesorios, btn.dataset.accMovimiento);
+        }));
         detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.agregar;

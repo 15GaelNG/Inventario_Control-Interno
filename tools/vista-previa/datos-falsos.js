@@ -29,6 +29,25 @@
   (window.__NODOS || []).forEach((n) => { if (n.padre && permisos[n.padre]) permisos[n.id] = permisos[n.padre]; });
 
   const hace = (dias) => new Date(Date.now() - dias * 864e5).toISOString();
+  // Las piezas de la unidad (AccesoriosVehiculoService.deVehiculo): carga inicial de su responsiva y una baja
+  const ACCESORIOS_FICHA = (() => {
+    const piezas = [['GATO HIDRAULICO', 'Gato hidráulico'], ['GATO MECANICO', 'Gato mecánico'], ['LLAVE CRUZ', 'Llave de cruz'],
+      ['MANERAL', 'Maneral'], ['LLANTA REFACCION', 'Llanta de refacción'], ['KIT SEGURIDAD', 'Kit de seguridad'], ['PARASOL', 'Parasol'],
+      ['TAPETES RUDO', 'Tapetes uso rudo'], ['TAPETES ALFOMBRA', 'Tapetes alfombra'], ['CUBRE VOLANTE', 'Cubre volante'],
+      ['CUBRE ASIENTOS', 'Cubre asientos'], ['BED LINER', 'Bed liner'], ['CUBIERTA BATEA', 'Cubierta de batea']];
+    const catalogo = piezas.map(([CLAVE, NOMBRE], i) => ({ ID: 'CAV-' + i, CLAVE, NOMBRE, ORDEN: i + 1, ACTIVO: true }));
+    const carga = { GATO_MECANICO: 'SI', MANERAL: 'SI', LLANTA_REFACCION: 'SI', KIT_SEGURIDAD: 'SI', TAPETES_ALFOMBRA: 'SI',
+      GATO_HIDRAULICO: 'NO', LLAVE_CRUZ: 'NO', BED_LINER: 'NO', CUBIERTA_BATEA: 'NO' };
+    const historial = [
+      { ID: 'MAV-3', FECHA: hace(5), ACCESORIO: 'KIT SEGURIDAD', MOVIMIENTO: 'BAJA', TIENE: 'NO', MOTIVO: 'Extravío', ORIGEN: 'MANUAL', REGISTRO: 'prueba@ciudadmaderas.com' },
+    ].concat(Object.keys(carga).map((k, i) => ({ ID: 'MAV-0' + i, FECHA: hace(200), ACCESORIO: k.replace(/_/g, ' '), MOVIMIENTO: 'CARGA INICIAL',
+      TIENE: carga[k], MOTIVO: '', ORIGEN: 'https:' + '/' + '/drive.google.com/file/d/RESP/view', REGISTRO: 'jorge@ciudadmaderas.com' })));
+    const ultimo = {};
+    historial.slice().reverse().forEach((m) => { ultimo[m.ACCESORIO] = m; });
+    const estado = catalogo.map((p) => ({ CLAVE: p.CLAVE, NOMBRE: p.NOMBRE, TIENE: ultimo[p.CLAVE] ? ultimo[p.CLAVE].TIENE : '',
+      DESDE: ultimo[p.CLAVE] ? ultimo[p.CLAVE].FECHA : '' }));
+    return { catalogo, estado, historial };
+  })();
   const VEHICULO = {
     FOLIO: 'AUT0024', PLACA: 'GGY886F', MARCA: 'CHEVROLET', 'LINEA VEHICULO': 'BEAT', MODELO: 2019,
     'RESPONSABLE VEHICULO': 'JUAN MANUEL FULGENCIO HERNANDEZ', DEPARTAMENTO: 'TI', SEDE: 'QUERETARO',
@@ -293,6 +312,7 @@
         sensores: parte('instalacion-sensores', '[]'), hologramas: parte('hologramas', '[]'),
         incidencias: parte('incidencias', FICHAS.apiIncidenciasPorFolio),
         responsivas: parte('vehiculos.responsiva', '[]'), adherentes: parte('vehiculos.adherente', '[]'),
+        accesorios: parte('vehiculos.accesorios', ACCESORIOS_FICHA),
       });
     },
     // Inspecciones del expediente del NUCO (ExpedienteNuco.inspecciones): carpetas con sus secciones y fotos
@@ -748,6 +768,13 @@
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
+    'vehiculos-accesorios': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('.acc-unidad')).scrollIntoView({ block: 'center' });
+      document.querySelector('.acc-historia').open = true; await esperar(300);
+    },
+    'vehiculos-accesorios-baja': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('[data-acc-movimiento="BAJA"]')).click(); await hasta('#veh-captura-cuerpo select'); await esperar(400);
+    },
     'vehiculos-inspecciones': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
       (await hasta('.ficha-pestanas [data-tab="inspecciones"]')).click();

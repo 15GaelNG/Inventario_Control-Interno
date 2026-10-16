@@ -900,6 +900,30 @@
   }
   .info-value { font-size: var(--texto-s); font-weight: 500; word-break: break-word; }
   .info-vacio { color: var(--color-text-muted); font-weight: 400; }
+  /* Accesorios de la unidad (ficha del vehículo, sección Accesorios y sensor) */
+  .acc-unidad { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
+  .acc-cabeza { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .acc-botones { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+  .acc-piezas { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+  .acc-pieza { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: var(--radio-m); font-size: var(--texto-s);
+    background: var(--color-bg); border: 1px solid var(--color-border); }
+  .acc-pieza .ico { width: 14px; height: 14px; flex-shrink: 0; }
+  .acc-nombre { flex: 1 1 auto; min-width: 0; }
+  .acc-desde { font-size: var(--texto-2xs); color: var(--color-text-muted); white-space: nowrap; }
+  .acc-si .ico { color: var(--color-success); }
+  .acc-no { color: var(--color-text-muted); }
+  .acc-no .ico { color: var(--color-danger); }
+  .acc-no .acc-nombre { text-decoration: line-through; }
+  .acc-sin { color: var(--color-text-muted); border-style: dashed; }
+  .acc-historia { margin-top: 10px; font-size: var(--texto-s); }
+  .acc-historia summary { cursor: pointer; color: var(--color-text-muted); }
+  .acc-historia ul { margin: 6px 0 0; padding-left: 18px; }
+  .acc-historia li { margin: 3px 0; }
+  .acc-mov { font-size: var(--texto-2xs); font-weight: 700; text-transform: uppercase; letter-spacing: .3px; padding: 1px 6px;
+    border-radius: var(--radio-s); background: var(--color-bg); border: 1px solid var(--color-border); }
+  .acc-mov-alta { color: var(--color-success); }
+  .acc-mov-baja { color: var(--color-danger); }
+  .acc-vacio { margin: 8px 0 0; font-size: var(--texto-s); }
   .info-section-title {
     grid-column: 1 / -1; font-size: var(--texto-s); font-weight: 700; color: var(--color-primary);
     text-transform: uppercase; letter-spacing: .4px; margin: 10px 0 -2px;

@@ -124,6 +124,8 @@ function apiFichaVehiculo(token, idVehiculo) {
     incidencias: parte('incidencias', () => IncidenciasService.listarPorVehiculo(token, id)),
     responsivas: parte('vehiculos.responsiva', () => ResponsivaVehicularService.listarPorVehiculo(token, id)),
     adherentes: parte('vehiculos.adherente', () => AdherenteVehicularService.listarPorVehiculo(token, id)),
+    // Las piezas de la unidad y su historia (AccesoriosVehiculoService, 16-oct-2026)
+    accesorios: parte('vehiculos.accesorios', () => AccesoriosVehiculoService.deVehiculo(token, id)),
   });
 }
 /**
