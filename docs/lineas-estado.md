@@ -37,7 +37,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
   Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
 - **Recargar datos** (botón solo para administrador, junto a Agregar equipo y Agregar línea; `TelefoniaService.recargarDatos`): vacía las cachés de `LineasRepo` y, desde `4013989` (14-oct; publicado en la v120, 15-oct),
-  también las hojas LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS que `LineasLectura` guarda 30 min (`LineasDatos.tocar`). Lo escrito en el libro por fuera de la app, como la carga del proveedor, no las renueva solo:
+  también las hojas LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS que `LineasLectura` guarda 30 min (`LineasDatos.tocar`); desde `c1bcbba` (16-oct, sin publicar) llama a `LineasLectura.limpiarCaches()`, que además vacía los encabezados
+  guardados 1 h de las hojas nuevas (`enc_<hoja>`): si no, al quitar una columna del libro cada dato de su derecha se leería en la columna equivocada hasta 1 h. Lo escrito en el libro por fuera de la app, como la carga del proveedor, no las renueva solo:
   después de escribir basta «Recargar datos»; sin él se ve a más tardar 30 min después.
 - **Agregar línea** (8-oct): «¿Se vincula a un equipo?». Sí → se elige un NUCO en USO o RESGUARDO sin línea (lista con
   modelo y responsable) y la línea queda con el equipo, en su asignación: el responsable es el del equipo y el estatus
@@ -103,13 +104,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, `a23f9ec`,
   `soloPlan` en `LineasRegistros.gs`). Un SIM BASICO que ya traía datos de adendum los sigue enseñando y no se borran
   al corregir otra cosa.
-- **La fecha de alta** (16-oct, `7dec4e8`, sin publicar; usuario, pendiente 2.51): ya no hay columna FECHA DE ALTA en EQUIPOS ni en LINEAS que el sistema escriba o lea (en los libros de producción y del DEV la columna
-  sigue, sin uso; `LineasEstructura` ya no la tiene en su esquema). El alta de un equipo o una línea es su primer movimiento ALTA de MOVIMIENTOS (el «Alta de registro» del historial). `FECHA REGISTRO`
+- **La fecha de alta** (16-oct, `7dec4e8`, sin publicar; usuario, pendiente 2.51): ya no hay columna FECHA DE ALTA en EQUIPOS ni en LINEAS que el sistema escriba o lea (`LineasEstructura` ya no la tiene en su esquema; en el DEV la columna se quitó de las dos hojas el 16-oct; en el libro de producción
+  sigue, sin uso, y se borra después de publicar, con respaldo, decisión del usuario del 16-oct, pendiente 2.51). El alta de un equipo o una línea es su primer movimiento ALTA de MOVIMIENTOS (el «Alta de registro» del historial). `FECHA REGISTRO`
   (la columna «Fecha registro» de la tabla, oculta por defecto; la antigüedad del Panorama y el primer tramo de las asignaciones) sale de ahí: `LineasLectura.altas` lo lee entero una vez y lo guarda aparte en la caché `altas_movimientos_v1`
   (6 h; «Recargar datos» lo vuelve a leer), porque MOVIMIENTOS cambia con cada acción; `anotarAlta` suma el alta nueva al crear el renglón (`LineasEscritura.agregar` y la línea nueva de `lineaParaEquipo_`), sin releer. La
   línea nueva que Corregir le pone a un equipo sin línea deja su movimiento ALTA (antes solo EDICION). Los movimientos ALTA de lo migrado salen de la columna con `reporte_lineas/actualizacion_base/altas_movimientos.js` (FECHA = la de la columna con su
-  hora, COMENTARIO «Alta tomada de la columna FECHA DE ALTA, que se quitó», QUIEN MIGRACIÓN, ORIGEN MIGRACION; el historial lo muestra «Migración»; sin fecha, o con fecha futura —pendiente 7.11—, no se crea). **Estado:** en el DEV
-  están creados (2,529); en producción **no** (pendiente 2.51: hay que escribirlos antes de publicar `7dec4e8`). La carga del proveedor (`actualizar.py`) y `para_lineas.py` ya no escriben la columna y leen el alta del movimiento. Caché `estructura_virtual_v6`.
+  hora, COMENTARIO «Alta tomada de la columna FECHA DE ALTA», QUIEN MIGRACIÓN, ORIGEN MIGRACION; el historial lo muestra «Migración»; sin fecha, con fecha futura —pendiente 7.11— o anterior a 2000 —el 31/12/1969 que el AppSheet dejaba por fecha en blanco— no se crea). **Estado:** están creados en el DEV (2,527) y en producción (2,528, con permiso del usuario, 16-oct); la columna, en el DEV, quitada con
+  `reporte_lineas/actualizacion_base/quitar_fecha_alta.js` (guarda antes `RESPALDO FECHA DE ALTA - <libro>.json/.csv` y comprueba que cada fecha tenga su ALTA); en producción se quita después de publicar (pendiente 2.51). La carga del proveedor (`actualizar.py`) y `para_lineas.py` ya no escriben la columna y leen el alta del movimiento. Caché `estructura_virtual_v6`.
 - **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
   equipo, Vincular línea (sin línea) o Cambiar línea y Desvincular línea; en la línea, Vincular a equipo (suelta y
   DISPONIBLE) o Cambiar de equipo y Desvincular del equipo. Solo líneas sueltas DISPONIBLE y equipos en USO o RESGUARDO
