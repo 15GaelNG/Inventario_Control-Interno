@@ -1608,6 +1608,24 @@
       opciones: ['SI', 'NO'], ...DE_SENSORES,
     },
 
+    // Lo que el vehículo trae puesto ahora mismo (usuario, 15-oct-2026): mismos 13 accesorios que
+    // "El vehículo se entrega con" de la Responsiva (ver RESV_ACCESORIOS, más abajo en este archivo),
+    // pero en su propia columna de VEHICULOS -- edita quien tenga EDICIÓN en Vehículos, igual que
+    // cualquier otro campo de la ficha (sin deOtroModulo), y nunca toca la Responsiva ya firmada.
+    { grupo: 'Accesorios del vehículo', clave: 'GATO HIDRAULICO', etiqueta: 'Gato hidráulico', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'GATO MECANICO', etiqueta: 'Gato mecánico', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'LLAVE CRUZ', etiqueta: 'Llave de cruz', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'MANERAL', etiqueta: 'Maneral', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'LLANTA REFACCION', etiqueta: 'Llanta de refacción', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'KIT SEGURIDAD', etiqueta: 'Kit de seguridad', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'PARASOL', etiqueta: 'Parasol', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'TAPETES RUDO', etiqueta: 'Tapetes uso rudo', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'TAPETES ALFOMBRA', etiqueta: 'Tapetes alfombra', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'CUBRE VOLANTE', etiqueta: 'Cubre volante', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'CUBRE ASIENTOS', etiqueta: 'Cubre asientos', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'BED LINER', etiqueta: 'Bed liner', tipo: 'sino' },
+    { grupo: 'Accesorios del vehículo', clave: 'CUBIERTA BATEA', etiqueta: 'Cubierta de batea', tipo: 'sino' },
+
     { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
     // La columna se llamaba UBICACION; se homologó al nombre que usa el resto de la base
     // (limpieza #23). La etiqueta para la gente sigue siendo "Ubicación".

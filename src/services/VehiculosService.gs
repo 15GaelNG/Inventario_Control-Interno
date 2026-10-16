@@ -29,6 +29,18 @@ const VehiculosService = (function () {
   // Columnas de documento que la hoja vieja no traía (9-oct-2026): si faltan, se agregan al final la primera vez que
   // se sube uno (asegurarColumnasDocumento_). ADJUNTAR FACTURA ya existía (como texto, vacía en los 648).
   const COLUMNAS_DOCUMENTO_NUEVAS = ['TARJETA CIRCULACION', 'ALTA PLACAS'];
+
+  // Lo que el vehículo trae puesto ahora mismo (sección "Accesorios del vehículo" de la ficha, usuario
+  // 15-oct-2026) -- mismos 13 nombres que ResponsivaVehicularService.ACCESORIOS / RESV_ACCESORIOS en
+  // app.html (es el mismo objeto físico), pero en su PROPIA columna de VEHICULOS: a propósito una copia
+  // independiente de lo que quedó firmado en la Responsiva. Se edita aquí libremente (cualquiera con
+  // EDICIÓN en Vehículos) y nunca toca la hoja RESPONSIVA ni dispara una firma nueva. La hoja vieja no
+  // trae estas columnas: se agregan solas la primera vez que se guarda una (asegurarColumnasAccesorios_).
+  const ACCESORIOS_VEHICULO = [
+    'GATO HIDRAULICO', 'GATO MECANICO', 'LLAVE CRUZ', 'MANERAL', 'LLANTA REFACCION',
+    'KIT SEGURIDAD', 'PARASOL', 'TAPETES RUDO', 'TAPETES ALFOMBRA', 'CUBRE VOLANTE',
+    'CUBRE ASIENTOS', 'BED LINER', 'CUBIERTA BATEA',
+  ];
   // Etiqueta corta para el nombre de archivo en Drive, por columna ("<ID>_<ETIQUETA>_<fecha>.ext")
   const ETIQUETA_ARCHIVO = {
     'RESPONSIVA': 'RESPONSIVA',
@@ -68,6 +80,7 @@ const VehiculosService = (function () {
     persona: true,
     alCrear: (fila, ctx) => {
       asegurarColumnasDocumento_(fila);
+      asegurarColumnasAccesorios_(fila);
       // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
       // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
       const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
@@ -93,6 +106,7 @@ const VehiculosService = (function () {
     deOtroModulo: { 'instalacion-sensores': ['ACCESORIOS', 'ADITAMENTOS', 'ACTIVADOR', '$ Costo del Sensor', 'LLAVE DUPLICADA'] },
     alActualizar: (cambios, ctx) => {
       asegurarColumnasDocumento_(cambios);
+      asegurarColumnasAccesorios_(cambios);
       // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
       // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
       Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete cambios[c]; });
@@ -411,6 +425,19 @@ const VehiculosService = (function () {
    */
   function asegurarColumnasDocumento_(datos) {
     const quiere = COLUMNAS_DOCUMENTO_NUEVAS.filter((c) => datos && datos[c]);
+    if (!quiere.length) return;
+    const hoja = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const indices = SheetUtils.indiceDeColumnas(encabezados, quiere);
+    const faltan = quiere.filter((c) => indices[c] === -1);
+    if (!faltan.length) return;
+    hoja.getRange(1, encabezados.length + 1, 1, faltan.length).setValues([faltan]);
+    CacheHojas.tocarHoja(hoja);
+  }
+
+  /** Igual que asegurarColumnasDocumento_, para ACCESORIOS_VEHICULO (ver su comentario arriba) */
+  function asegurarColumnasAccesorios_(datos) {
+    const quiere = ACCESORIOS_VEHICULO.filter((c) => datos && datos[c] !== undefined);
     if (!quiere.length) return;
     const hoja = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
     const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
