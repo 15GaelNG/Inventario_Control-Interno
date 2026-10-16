@@ -10,10 +10,11 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'componentes', 'avatar.html'), 'utf8');
+const FORMATO = require('./formato-fuente');
 const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
 const dom = new JSDOM('<!doctype html><body><div id="antes"></div><div id="despues"></div></body>', { url: 'https://prueba.local/', runScripts: 'outside-only' });
 const { window } = dom;
-window.eval(js + '\nwindow.Avatar = Avatar;');
+window.eval(FORMATO + js + '\nwindow.Avatar = Avatar;');
 const { Avatar } = window;
 const doc = window.document;
 

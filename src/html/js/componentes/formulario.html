@@ -41,17 +41,17 @@
   .form-panel .form-ficha-datos { align-content: start; }
   .form-ficha-pie {
     margin-top: auto; padding-top: 12px; border-top: 1px dashed var(--color-border);
-    font-size: 11.5px; color: var(--color-text-muted);
+    font-size: var(--texto-xs); color: var(--color-text-muted);
   }
   .form-panel-titulo {
-    font-size: 11.5px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+    font-size: var(--texto-xs); font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
     color: var(--color-text-muted); margin: 0 0 8px;
   }
   .form-panel .form-ficha { margin-bottom: 14px; }
   /* En 320px de ancho, dos columnas de datos aprietan: en el panel va uno por renglón */
   .form-panel .form-ficha-datos { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 9px 14px; }
   .form-panel-seccion { margin-bottom: 14px; }
-  .form-panel-vacio { font-size: 12.5px; color: var(--color-text-muted); }
+  .form-panel-vacio { font-size: var(--texto-s); color: var(--color-text-muted); }
   .form-resumen-panel { display: grid; gap: 8px; }
   @media (max-width: 1024px) {
     .form-doble { grid-template-columns: 1fr; }
@@ -71,41 +71,41 @@
   .form-seccion {
     grid-column: 1 / -1; margin: 6px 0 10px; padding-top: 12px;
     border-top: 1px solid var(--color-border);
-    font-size: 12px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+    font-size: var(--texto-s); font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
     color: var(--color-text-muted);
   }
   .form-campos > .form-seccion:first-child { margin-top: 0; padding-top: 0; border-top: none; }
 
   /* La ayuda va DEBAJO del campo y se queda a la vista mientras se escribe
      (un placeholder desaparece justo cuando hace falta). */
-  .form-ayuda { display: block; margin-top: 4px; font-size: 11.5px; color: var(--color-text-muted); }
-  .form-error-campo { display: block; margin-top: 4px; font-size: 12px; color: var(--color-danger); font-weight: 500; }
+  .form-ayuda { display: block; margin-top: 4px; font-size: var(--texto-xs); color: var(--color-text-muted); }
+  .form-error-campo { display: block; margin-top: 4px; font-size: var(--texto-s); color: var(--color-danger); font-weight: 500; }
   .form-campo-error input, .form-campo-error select, .form-campo-error textarea { border-color: var(--color-danger); }
 
   /* Ficha: lo que el sistema ya sabe, para confirmar de un vistazo (no son campos:
      campos deshabilitados no los leen los lectores de pantalla — Carbon Design System). */
   .form-ficha {
-    border: 1px solid var(--color-border); border-radius: 10px; padding: 12px 14px;
+    border: 1px solid var(--color-border); border-radius: var(--radio-l); padding: 12px 14px;
     background: var(--color-bg); margin: 0 0 16px;
   }
-  .form-ficha-titulo { font-size: 15px; font-weight: 700; color: var(--color-text); }
-  .form-ficha-subtitulo { font-size: 12.5px; color: var(--color-text-muted); margin-top: 2px; }
+  .form-ficha-titulo { font-size: var(--texto-l); font-weight: 700; color: var(--color-text); }
+  .form-ficha-subtitulo { font-size: var(--texto-s); color: var(--color-text-muted); margin-top: 2px; }
   .form-ficha-datos {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 10px 14px; margin-top: 12px;
   }
-  .form-ficha-dato .form-ficha-etiqueta { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
-  .form-ficha-dato .form-ficha-valor { font-size: 13px; color: var(--color-text); word-break: break-word; }
+  .form-ficha-dato .form-ficha-etiqueta { font-size: var(--texto-xs); color: var(--color-text-muted); font-weight: 500; }
+  .form-ficha-dato .form-ficha-valor { font-size: var(--texto-s); color: var(--color-text); word-break: break-word; }
   .form-ficha-extra { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
   .form-ficha-mas {
     background: transparent; border: none; color: var(--color-primary); padding: 8px 0 0;
-    font-size: 12px; text-decoration: underline;
+    font-size: var(--texto-s); text-decoration: underline;
   }
   :root[data-theme="dark"] .form-ficha-mas { color: var(--color-accent); }
   .form-ficha-mas:hover { background: transparent; }
   .form-aviso {
     display: flex; align-items: flex-start; gap: 7px; margin-top: 10px; padding: 8px 10px;
-    border-radius: 8px; font-size: 12.5px; background: var(--color-primary-soft); color: var(--color-text);
+    border-radius: var(--radio-m); font-size: var(--texto-s); background: var(--color-primary-soft); color: var(--color-text);
   }
   .form-aviso.form-aviso-alerta { background: #F3ECD6; color: var(--color-danger); }
   :root[data-theme="dark"] .form-aviso.form-aviso-alerta { background: rgba(255,138,128,.15); color: #ff8a80; }
@@ -116,12 +116,12 @@
     /* Menos relleno del lado del número: así caben 8 pasos en un renglón (inspección) */
     display: inline-flex; align-items: center; gap: 7px; padding: 6px 11px 6px 6px; border-radius: 999px;
     background: transparent; border: 1px solid var(--color-border); color: var(--color-text-muted);
-    font-size: 12.5px; font-weight: 600;
+    font-size: var(--texto-s); font-weight: 600;
   }
   .form-paso-chip:disabled { cursor: default; opacity: 1; }
   .form-paso-chip .form-paso-num {
     display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px;
-    border-radius: 50%; background: var(--color-border); color: var(--color-text); font-size: 11px;
+    border-radius: 50%; background: var(--color-border); color: var(--color-text); font-size: var(--texto-xs);
   }
   .form-paso-chip.completado { border-color: var(--color-success); color: var(--color-success); }
   .form-paso-chip.completado .form-paso-num { background: var(--color-success); color: #fff; }
@@ -136,21 +136,21 @@
     .form-pasos::-webkit-scrollbar { display: none; }
     .form-pasos > * { flex-shrink: 0; }
     .form-paso-chip:not(.activo) { font-size: 0; gap: 0; padding: 4px; }
-    .form-paso-chip .form-paso-num { font-size: 11px; flex-shrink: 0; }
+    .form-paso-chip .form-paso-num { font-size: var(--texto-xs); flex-shrink: 0; }
     .form-paso-chip.activo { white-space: nowrap; }
   }
-  .form-paso-titulo { margin: 0 0 2px; font-size: 15px; }
+  .form-paso-titulo { margin: 0 0 2px; font-size: var(--texto-l); }
   /* El foco se pone ahí al cambiar de paso (para lectores de pantalla), no por teclado:
      el contorno negro solo estorba */
   .form-paso-titulo:focus { outline: none; }
-  .form-paso-desc { margin: 0 0 14px; font-size: 12.5px; color: var(--color-text-muted); }
+  .form-paso-desc { margin: 0 0 14px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .form-acciones-pasos { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
-  .form-acciones-pasos .form-cuenta { margin-left: auto; font-size: 12px; color: var(--color-text-muted); }
+  .form-acciones-pasos .form-cuenta { margin-left: auto; font-size: var(--texto-s); color: var(--color-text-muted); }
 
   /* Resumen final antes de guardar */
   .form-resumen { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 18px; }
-  .form-resumen-dato .form-resumen-etiqueta { font-size: 11px; color: var(--color-text-muted); font-weight: 500; }
-  .form-resumen-dato .form-resumen-valor { font-size: 13.5px; color: var(--color-text); word-break: break-word; }
+  .form-resumen-dato .form-resumen-etiqueta { font-size: var(--texto-xs); color: var(--color-text-muted); font-weight: 500; }
+  .form-resumen-dato .form-resumen-valor { font-size: var(--texto-m); color: var(--color-text); word-break: break-word; }
   .form-resumen-vacio { color: var(--color-text-muted); }
 
   /* ---- Campo de opciones (radio): una pregunta que decide el resto del formulario ---- */
@@ -159,20 +159,20 @@
      y el círculo quedaba en su propio renglón, arriba del título */
   .form-opciones .form-opcion {
     display: flex; align-items: flex-start; gap: 9px; margin: 0; padding: 11px 13px; cursor: pointer;
-    border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface);
+    border: 1px solid var(--color-border); border-radius: var(--radio-l); background: var(--color-surface);
     color: var(--color-text); font-weight: 400;
   }
   .form-opcion:hover { border-color: var(--color-accent); }
   .form-opciones .form-opcion input { width: 18px; height: 18px; margin: 1px 0 0; flex-shrink: 0; accent-color: var(--color-primary); }
   .form-opcion:has(input:checked) { border-color: var(--color-accent); background: var(--color-primary-soft); }
-  .form-opcion strong { display: block; font-size: 13.5px; }
-  .form-opcion small { display: block; margin-top: 2px; font-size: 11.5px; color: var(--color-text-muted); }
+  .form-opcion strong { display: block; font-size: var(--texto-m); }
+  .form-opcion small { display: block; margin-top: 2px; font-size: var(--texto-xs); color: var(--color-text-muted); }
 
-  .form-archivo-info { margin-top: 6px; font-size: 12px; color: var(--color-text-muted); }
-  .form-archivo-preview { margin-top: 8px; max-height: 180px; border-radius: 8px; border: 1px solid var(--color-border); }
+  .form-archivo-info { margin-top: 6px; font-size: var(--texto-s); color: var(--color-text-muted); }
+  .form-archivo-preview { margin-top: 8px; max-height: 180px; border-radius: var(--radio-m); border: 1px solid var(--color-border); }
   .form-acciones { margin-top: 4px; }
   .form-acciones button { display: inline-flex; align-items: center; gap: 7px; }
-  .form-nota { font-size: 11.5px; color: var(--color-text-muted); margin: 0 0 14px; }
+  .form-nota { font-size: var(--texto-xs); color: var(--color-text-muted); margin: 0 0 14px; }
   .form-nota::before { content: "*"; color: var(--color-danger); font-weight: 700; margin-right: 3px; }
 
   /* Celular: los botones (Anterior / Siguiente / Guardar) se quedan pegados abajo de la pantalla
@@ -282,6 +282,8 @@
    * Métodos: getValores() · getArchivos() · setValor(id, v) · sugerir(id, v) · setOpciones(id, [..]) ·
    *          setSoloLectura(id, si, motivo) · setError(id, msg) · limpiar() · enfocar() ·
    *          elemento(id) · irAPaso(i)
+   * Fuera de un formulario: Formulario.marcarError(cajaDelCampo, mensaje) marca (o quita) el error con el mismo aspecto.
+   * Los pasos (indicador, Atrás / Siguiente) son el componente Pasos.
    *
    * ─── ¿POR PASOS O TODO DE UNA VEZ? ────────────────────────────────────────────────
    *   Todo de una vez (default): hasta ~10 campos. Se ve completo y se llena de corrido.
@@ -308,15 +310,25 @@
   const Formulario = (function () {
     const TIPOS_INPUT = { texto: 'text', numero: 'number', fecha: 'date' };
 
-    function esc(v) {
-      return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
-    }
+    const esc = Formato.esc;
     const vacio = (v) => v === null || v === undefined || String(v).trim() === '';
     /** Lleva el campo a la vista (no todos los entornos traen scrollIntoView) */
     const irA = (el) => { if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
     const ic = (nombre) => (typeof Iconos !== 'undefined' ? Iconos.svg(nombre) : '');
+
+    /**
+     * El error de un campo, igual en todo el sistema: borde rojo (.form-campo-error) y el mensaje debajo
+     * (.form-error-campo, se crea si la caja no lo trae). mensaje vacío lo quita. También lo usan las capturas de Líneas.
+     */
+    function marcarError(caja, mensaje) {
+      let span = caja.querySelector(':scope > .form-error-campo');
+      if (!span && !mensaje) { caja.classList.remove('form-campo-error'); return; }
+      if (!span) span = caja.appendChild(document.createElement('span'));
+      span.className = 'form-error-campo';
+      caja.classList.toggle('form-campo-error', !!mensaje);
+      span.hidden = !mensaje;
+      span.textContent = mensaje || '';
+    }
 
     function crear(contenedor, cfg) {
       const campos = (cfg.campos || []).map((c) => Object.assign({ tipo: 'texto' }, c));
@@ -469,9 +481,7 @@
         </aside>` : '';
 
       const htmlPrincipal = `
-        ${pasos ? `<ol class="form-pasos">${pasos.map((p, i) =>
-          `<li><button type="button" class="form-paso-chip" data-ir="${i}" ${i === 0 ? 'disabled' : ''}>
-            <span class="form-paso-num">${i + 1}</span>${esc(p.titulo || 'Paso ' + (i + 1))}</button></li>`).join('')}</ol>` : ''}
+        ${pasos ? Pasos.htmlChips(pasos.map((p, i) => esc(p.titulo || 'Paso ' + (i + 1)))) : ''}
         ${campos.some((c) => c.requerido) || (buscar && buscar.requerido !== false) ? '<p class="form-nota">Campos obligatorios</p>' : ''}
         ${htmlCuerpo()}
         ${htmlAcciones}
@@ -568,11 +578,7 @@
       // ---------- errores ----------
       function setError(id, mensaje) {
         const caja = campoDe(id);
-        if (!caja) return;
-        const span = caja.querySelector('.form-error-campo');
-        caja.classList.toggle('form-campo-error', !!mensaje);
-        span.hidden = !mensaje;
-        span.textContent = mensaje || '';
+        if (caja) marcarError(caja, mensaje);
       }
       const limpiarErrores = () => {
         [].concat(buscar ? [buscar.campo] : [], campos.map((c) => c.id)).forEach((id) => setError(id, null));
@@ -638,10 +644,8 @@
           const ficha = contenedor.querySelector('.form-ficha');
           if (ficha && !seVe) ficha.hidden = true;
         }
-        if (!pasos) return;
-        // Si la respuesta cambió y el paso donde está parado ya no aplica, hay que moverlo
-        if (!visible(pasos[pasoActual])) mostrarPaso(pasoActual);
-        else actualizarPasos();
+        // Si la respuesta cambió y el paso donde está parado ya no aplica, Pasos lo mueve
+        if (nav) nav.refrescar();
       }
 
       /** El campo de búsqueda: obligatorio y confirmado, salvo que se haya declarado opcional */
@@ -826,9 +830,7 @@
         }
       }
 
-      // ---------- pasos ----------
-      let pasoActual = 0;
-      const vistos = { 0: true };
+      // ---------- pasos (la navegación es el componente Pasos) ----------
 
       /** Valida solo los campos de un paso; regresa el id del primero con error */
       function validarPaso(i) {
@@ -884,49 +886,14 @@
         if (cfg.panelExtra) contenedor.querySelector('.form-panel-extra').innerHTML = cfg.panelExtra(getValores(), datosFicha) || '';
       }
 
-      /** Índices de los pasos que aplican con lo respondido (los demás se saltan) */
-      const indicesVisibles = () => pasos.map((p, i) => i).filter((i) => visible(pasos[i]));
-      const siguienteVisible = (i) => indicesVisibles().find((x) => x > i);
-      const anteriorVisible = (i) => indicesVisibles().filter((x) => x < i).pop();
-      const esUltimoVisible = (i) => siguienteVisible(i) === undefined;
-
-      /** Redibuja el indicador y los botones según los pasos que apliquen ahora */
-      function actualizarPasos() {
-        const visibles = indicesVisibles();
-        const posicion = visibles.indexOf(pasoActual) + 1;
-        contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
-          const idx = Number(chip.dataset.ir);
-          const aplica = visibles.indexOf(idx) !== -1;
-          chip.closest('li').hidden = !aplica;
-          chip.classList.toggle('activo', idx === pasoActual);
-          chip.classList.toggle('completado', aplica && visibles.indexOf(idx) < posicion - 1);
-          chip.disabled = !vistos[idx] && idx > pasoActual;     // solo se salta a lo ya visitado
-          const numero = chip.querySelector('.form-paso-num');
-          if (numero) numero.textContent = visibles.indexOf(idx) + 1;
-        });
-        contenedor.querySelector('.form-atras').hidden = anteriorVisible(pasoActual) === undefined;
-        contenedor.querySelector('.form-siguiente').hidden = esUltimoVisible(pasoActual);
-        formulario.querySelector('button[type="submit"]').hidden = !esUltimoVisible(pasoActual);
-        contenedor.querySelector('.form-cuenta').textContent = `Paso ${posicion} de ${visibles.length}`;
-      }
-
-      function mostrarPaso(i) {
-        // Si el paso dejó de aplicar (cambió una respuesta), se pasa al siguiente que sí
-        if (!visible(pasos[i])) {
-          const destino = siguienteVisible(i) !== undefined ? siguienteVisible(i) : anteriorVisible(i);
-          if (destino === undefined) return;
-          i = destino;
-        }
-        pasoActual = i;
-        vistos[i] = true;
-        contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
+      /** Después de mostrar un paso (Pasos ya cambió la sección, el indicador y los botones) */
+      function alMostrarPaso(i) {
         // "* Campos obligatorios" solo donde hay alguno: en "Revisar" o en un paso de puros
         // opcionales la nota no explica nada
         const nota = contenedor.querySelector('.form-nota');
         if (nota) {
           nota.hidden = !contenedor.querySelector(`.form-paso[data-paso="${i}"] :is(input, select, textarea):required`);
         }
-        actualizarPasos();
         if (pasos[i].resumen) pintarResumen();
         actualizarPanel();
         const primerCampo = contenedor.querySelector(
@@ -936,36 +903,25 @@
         irA(formulario);
       }
 
-      function avanzar() {
-        const error = validarPaso(pasoActual);
-        if (error) {
-          const el = elemento(error);
+      const nav = pasos ? Pasos.navegar({
+        secciones: Array.from(contenedor.querySelectorAll('.form-paso')),
+        chips: Array.from(contenedor.querySelectorAll('.form-paso-chip')),
+        atras: contenedor.querySelector('.form-atras'),
+        siguiente: contenedor.querySelector('.form-siguiente'),
+        guardar: formulario.querySelector('button[type="submit"]'),
+        cuenta: contenedor.querySelector('.form-cuenta'),
+        teclas: formulario,
+        aplica: (i) => visible(pasos[i]),
+        // El paso tiene errores: se marcan y se lleva al primero
+        validar: (i) => {
+          const error = validarPaso(i);
+          const el = error && elemento(error);
           if (el) { el.focus(); irA(el); }
-          return;
-        }
-        const destino = siguienteVisible(pasoActual);
-        if (destino !== undefined) mostrarPaso(destino);
-      }
-
-      if (pasos) {
-        contenedor.querySelector('.form-siguiente').addEventListener('click', avanzar);
-        contenedor.querySelector('.form-atras').addEventListener('click', () => {
-          const destino = anteriorVisible(pasoActual);
-          if (destino !== undefined) mostrarPaso(destino);
-        });
-        contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => chip.addEventListener('click', () => {
-          const destino = Number(chip.dataset.ir);
-          if (destino <= pasoActual) mostrarPaso(destino);      // regresar siempre se puede
-          else if (!validarPaso(pasoActual)) mostrarPaso(destino);
-        }));
-        // Enter avanza de paso en vez de guardar a medias
-        formulario.addEventListener('keydown', (ev) => {
-          if (ev.key !== 'Enter' || ev.target.tagName === 'TEXTAREA' || esUltimoVisible(pasoActual)) return;
-          ev.preventDefault();
-          avanzar();
-        });
-        mostrarPaso(0);
-      }
+          return !!error;
+        },
+        alMostrar: alMostrarPaso,
+      }) : null;
+      if (nav) nav.ir(0);
 
       // Estado inicial de lo que depende de una respuesta (todavía sin responder)
       actualizarVisibilidad();
@@ -979,7 +935,7 @@
           // Con pasos, el error puede estar en otro paso: hay que llevar al usuario ahí
           if (pasos) {
             const destino = pasos.findIndex((p) => p.campos.indexOf(primerError) !== -1);
-            if (destino !== -1 && destino !== pasoActual) mostrarPaso(destino);
+            if (destino !== -1 && destino !== nav.actual()) nav.ir(destino);
           }
           const el = elemento(primerError);
           if (el) { el.focus(); irA(el); }
@@ -1012,10 +968,7 @@
         pintarFicha(null);
         limpiarErrores();
         campos.forEach((c) => { if (c.valor !== undefined) setValor(c.id, c.valor); });
-        if (pasos) {
-          Object.keys(vistos).forEach((k) => { if (k !== '0') delete vistos[k]; });
-          mostrarPaso(0);
-        }
+        if (nav) nav.reiniciar();
         actualizarPanel();
       }
 
@@ -1034,12 +987,12 @@
         limpiar,
         enfocar: () => { const el = elemento(buscar ? buscar.campo : campos[0].id); if (el) el.focus(); },
         elemento,
-        irAPaso: (i) => { if (pasos && pasos[i]) mostrarPaso(i); },
-        pasoActual: () => pasoActual,
+        irAPaso: (i) => { if (nav && pasos[i]) nav.ir(i); },
+        pasoActual: () => (nav ? nav.actual() : 0),
       };
       return api;
     }
 
-    return { crear };
+    return { crear, marcarError };
   })();
 </script>

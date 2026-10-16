@@ -90,7 +90,7 @@ function cargar(opciones) {
       }),
     },
   });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'DatosConectados.gs'), 'utf8') +
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'DatosConectados.gs'), 'utf8') +
     '\nthis.DatosConectados = DatosConectados;', ctx);
   return { D: ctx.DatosConectados, hs, usuarios };
 }

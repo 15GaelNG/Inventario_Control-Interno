@@ -267,6 +267,8 @@ const LineasNotificaciones = (function () {
    */
   function bandeja(correo, limite, opciones) {
     try { revisar(false); } catch (e) { console.warn('LineasNotificaciones.revisar: ' + e.message); }
+    // La huella de la campana (apiNotificaciones): crear y marcar leídas tocan la pestaña y el vigía lo ve
+    try { CacheHojas.versiones([[LineasDatos.id(), TAB]]); } catch (e) { /* sin huella: se vuelve a pedir al rato */ }
     const hoy = dia(new Date());
     if (!LineasDatos.existeTabla(TAB)) return { noLeidas: 0, total: 0, hoy: hoy, items: [] };
     const marca = marcaCorreo_(correo);

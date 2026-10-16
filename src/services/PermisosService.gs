@@ -619,9 +619,7 @@ const Permisos = (function () {
       }
     });
 
-    const candado = LockService.getScriptLock();
-    candado.waitLock(20000);
-    try {
+    Candado.con(() => {
       // Primero las reglas vigentes: si la hoja no existe son las de la semilla, y se crea con ellas
       const vigentes = reglas_(true).filas;
       const ss = SpreadsheetApp.openById(ssId());
@@ -631,9 +629,7 @@ const Permisos = (function () {
       escribirHoja_(hoja, aplicarCambios_(vigentes, cambios, nota));
       anotarHistorial_(ss, sesion, diferencias_(vigentes, cambios));
       SpreadsheetApp.flush();
-    } finally {
-      candado.releaseLock();
-    }
+    });
     // Que el cambio aplique ya, no en 5 minutos
     CacheService.getScriptCache().removeAll([].concat.apply([], usuarios.map((u) =>
       ['permisos_' + clave_(u['CORREO']), 'alcance_' + clave_(u['CORREO'])])));
@@ -731,10 +727,8 @@ const Permisos = (function () {
    * correr las veces que sea: lo que ya está no se toca. Lo corre permisosMigrarCatalogo() desde el editor.
    */
   function migrarCatalogo(quienCorre) {
-    const candado = LockService.getScriptLock();
-    candado.waitLock(20000);
     let m;
-    try {
+    const salida = Candado.con(() => {
       const vigentes = reglas_(true).filas;
       m = migracion_(vigentes, usuarios_());
       if (!m.agregadas.length && !m.renombradas) return 'No faltaba nada: PERMISOS ya estaba como el catálogo en árbol.';
@@ -743,9 +737,8 @@ const Permisos = (function () {
       escribirHoja_(hoja, m.reglas);
       anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Migrar catálogo' }, diferencias_(vigentes, m.agregadas));
       SpreadsheetApp.flush();
-    } finally {
-      candado.releaseLock();
-    }
+    });
+    if (salida !== undefined) return salida;
     CacheService.getScriptCache().removeAll(usuarios_().map((u) => 'permisos_' + clave_(u['CORREO'])));
     const porModulo = {};
     m.agregadas.forEach((c) => { porModulo[c.modulo] = (porModulo[c.modulo] || 0) + 1; });
@@ -781,10 +774,8 @@ const Permisos = (function () {
 
   /** Corre perfilesDesdeAreas_ sobre PERMISOS y lo anota en el historial. Lo corre permisosCrearPerfiles() */
   function crearPerfilesDesdeAreas(quienCorre) {
-    const candado = LockService.getScriptLock();
-    candado.waitLock(20000);
     let r;
-    try {
+    const salida = Candado.con(() => {
       const vigentes = reglas_(true).filas;
       r = perfilesDesdeAreas_(vigentes);
       if (!r.perfiles.length) return 'No faltaba nada: ninguna área tiene reglas fuera de un perfil.';
@@ -794,9 +785,8 @@ const Permisos = (function () {
       anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Perfiles desde las áreas' },
         r.perfiles.map((p) => ({ quien: p, modulo: PREFIJO_PERFIL + p, antes: '', despues: ASIGNADO })));
       SpreadsheetApp.flush();
-    } finally {
-      candado.releaseLock();
-    }
+    });
+    if (salida !== undefined) return salida;
     CacheService.getScriptCache().removeAll(usuarios_().map((u) => 'permisos_' + clave_(u['CORREO'])));
     return 'Se crearon ' + r.perfiles.length + ' perfiles (uno por área, con sus mismas reglas): ' + r.perfiles.join(', ') + '.';
   }
@@ -830,10 +820,8 @@ const Permisos = (function () {
 
   /** Corre alcanceDesdeClientes_ sobre PERMISOS y lo anota en el historial. Lo corre permisosAlcanceDesdeClientes() */
   function alcanceDesdeClientes(quienCorre) {
-    const candado = LockService.getScriptLock();
-    candado.waitLock(20000);
     let r;
-    try {
+    const salida = Candado.con(() => {
       const vigentes = reglas_(true).filas;
       r = alcanceDesdeClientes_(vigentes, usuarios_());
       if (!r.perfiles.length) return 'No faltaba nada: ningún perfil de un área de CLIENT está sin su alcance.';
@@ -842,9 +830,8 @@ const Permisos = (function () {
       anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Alcance desde CLIENT' },
         r.perfiles.map((p) => ({ quien: PREFIJO_PERFIL + p, modulo: MODULO_ALCANCE, antes: '', despues: ALCANCE_AREA })));
       SpreadsheetApp.flush();
-    } finally {
-      candado.releaseLock();
-    }
+    });
+    if (salida !== undefined) return salida;
     CacheService.getScriptCache().removeAll([].concat.apply([], usuarios_().map((u) =>
       ['permisos_' + clave_(u['CORREO']), 'alcance_' + clave_(u['CORREO'])])));
     return 'Quedaron con "solo lo de su área" ' + r.perfiles.length + ' perfiles: ' + r.perfiles.join(', ') + '.';

@@ -47,7 +47,7 @@
         ? `<span class="badge-estado ${b[0]}">${Iconos.svg(b[1])} ${escaparHtml(valor)}</span>`
         : `<span style="color:var(--color-text-muted)">${escaparHtml(valor || '—')}</span>`;
     }
-    const pesos = (v) => (v === '' || v === null || v === undefined ? '' : '$' + Number(v).toLocaleString('es-MX'));
+    const pesos = (v) => Formato.moneda(v);
     /** Ícono + valor en negritas, tal cual se veía en AppSheet (monedas verdes / gota azul). */
     function iconoValor_(icono, color, texto) {
       if (texto === '') return '';

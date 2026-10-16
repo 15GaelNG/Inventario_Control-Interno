@@ -11,7 +11,8 @@
 const LINEAS_DEV_SPREADSHEET_ID = '1fC77Uu1ePVUySNvhgWXMHqWpLhGhBMTZZMEblU2nUhI';
 /**
  * Carpetas de Drive (28-sep): la de la app AppSheet de pruebas ("PruebasCONTROLVEHICYTELEF-172665033", donde se lee
- * y se escribe con las rutas del AppSheet) y NUCOS de producción (solo lectura). Ninguna otra.
+ * y se escribe con las rutas del AppSheet). LINEAS_DRIVE_NUCOS_ID es NUCOS de producción: solo para LEER (inventario de
+ * INE, LineasIneNucos); nunca se le da a un DEV como LINEAS_DRIVE_NUCOS, porque ahí se ESCRIBE (15-oct).
  */
 const LINEAS_DRIVE_APPSHEET_ID = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
 const LINEAS_DRIVE_NUCOS_ID = '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-';
@@ -30,8 +31,10 @@ function diferenciasHojaLineas_(destinoId) {
 }
 
 /**
- * Deja listas las Script Properties de Líneas en un proyecto DEV personal: SS_ID_TELEFONIA, LINEAS_DRIVE_APPSHEET y
- * LINEAS_DRIVE_NUCOS, y borra LINEAS_DRIVE_CARPETA_RAIZ (la carpeta de pruebas personal que ya no se usa).
+ * Deja listas las Script Properties de Líneas en un proyecto DEV personal: SS_ID_TELEFONIA y LINEAS_DRIVE_APPSHEET, y
+ * borra LINEAS_DRIVE_CARPETA_RAIZ (la carpeta de pruebas personal que ya no se usa) y LINEAS_DRIVE_NUCOS: hasta el 15-oct
+ * apuntaba a NUCOS de producción y desde el 2-oct Líneas escribe ahí sus PDF y fotos. Sin ella, el DEV usa una
+ * "NUCOS TELEFONICOS" de pruebas en su raíz (LineasArchivos).
  * Si a la hoja le faltan pestañas de Líneas no cambia nada y dice cuáles. No toca las propiedades de los demás
  * módulos. Se niega a correr en el proyecto compartido.
  */
@@ -49,14 +52,13 @@ function configurarLineasDev() {
   props.setProperties({
     SS_ID_TELEFONIA: LINEAS_DEV_SPREADSHEET_ID,
     LINEAS_DRIVE_APPSHEET: LINEAS_DRIVE_APPSHEET_ID,
-    LINEAS_DRIVE_NUCOS: LINEAS_DRIVE_NUCOS_ID,
   });
   props.deleteProperty('LINEAS_DRIVE_CARPETA_RAIZ');
+  props.deleteProperty('LINEAS_DRIVE_NUCOS');
 
   // Toca la hoja y las carpetas para que Google pida los permisos desde ya.
   const nombre = SpreadsheetApp.openById(LINEAS_DEV_SPREADSHEET_ID).getName();
   const app = DriveApp.getFolderById(LINEAS_DRIVE_APPSHEET_ID).getName();
-  const nucos = DriveApp.getFolderById(LINEAS_DRIVE_NUCOS_ID).getName();
   LineasRepo.borrarCaches();
   CacheService.getScriptCache().remove('ln_api_sheets_off');
 
@@ -68,7 +70,7 @@ function configurarLineasDev() {
     api = 'API de Sheets NO habilitada en el proyecto de Google Cloud (se usará SpreadsheetApp, más lento): ' + String(e.message).slice(0, 160);
   }
 
-  const mensaje = 'Listo. Líneas usa la hoja "' + nombre + '", la carpeta de la app "' + app + '" y NUCOS "' + nucos + '" (solo lectura). ' + api;
+  const mensaje = 'Listo. Líneas usa la hoja "' + nombre + '", la carpeta de la app "' + app + '" y una NUCOS TELEFONICOS de pruebas en la raíz de este proyecto. ' + api;
   Logger.log(mensaje);
   return mensaje;
 }

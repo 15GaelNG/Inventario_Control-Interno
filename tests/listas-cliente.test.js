@@ -42,7 +42,7 @@ function navegador(localStorageInicial) {
   }) } };
   w.eval(js + '\nwindow.callServerListaCacheada = callServerListaCacheada; window.invalidarCacheLista = invalidarCacheLista;' +
     'window.escucharLista = escucharLista; window.limpiarListasGuardadas = limpiarListasGuardadas; window.precargarLista = precargarLista;' +
-    'window.verTiempos = verTiempos; window.adelantar = adelantar; window.callServer = callServer;');
+    'window.verTiempos = verTiempos; window.adelantar = adelantar; window.callServer = callServer; window.guardarListaLimpia = guardarListaLimpia;');
   w.eval('var state = { sesion: { correo: "ana@x.com" } };');
   return { w, servidor };
 }
@@ -182,6 +182,38 @@ function navegador(localStorageInicial) {
   ok(servidor.preguntas === antes, 'si ya se navegó a otro módulo, esa lista ya no se vigila');
   w.eval('state.token = "";');
   ok((await w.vigilarListas(true)) === 0, 'sin sesión no hace nada');
+
+  console.log('N. Guardar limpio: los PIN del índice de Líneas nunca quedan en el navegador (fase 5.2b)');
+  const sinPin = (v) => (v && v.pin && v.pin !== '••••' ? Object.assign({}, v, { pin: '••••' }) : v);
+  const LLAVE_LN = 'lista:ana@x.com:apiLineasIndice[]';
+  ({ w, servidor } = navegador());
+  w.guardarListaLimpia('apiLineasIndice', sinPin);
+  servidor.respuestas.apiLineasIndice = { pin: '1234', n: 1 };
+  r = await w.callServerListaCacheada('apiLineasIndice', 'token-1');
+  ok(r.pin === '1234', 'en memoria, el ADMIN tiene su PIN real');
+  ok(w.localStorage.getItem(LLAVE_LN) === '{"pin":"••••","n":1}', 'pero la copia guardada va sin PIN');
+  ok(!/1234/.test(JSON.stringify(Object.assign({}, w.localStorage))), 'en ningún lado del navegador quedó el PIN');
+  // Recargar la página con esa copia: se pinta sin PIN y, al llegar el real, se avisa para repintar con él
+  ({ w, servidor } = navegador({ [LLAVE_LN]: '{"pin":"••••","n":1}' }));
+  w.guardarListaLimpia('apiLineasIndice', sinPin);
+  let avisosLn = 0;
+  w.addEventListener('lista-actualizada', (ev) => { if (ev.detail.fn === 'apiLineasIndice') avisosLn++; });
+  servidor.respuestas.apiLineasIndice = { pin: '1234', n: 1 };
+  r = await w.callServerListaCacheada('apiLineasIndice', 'token-1');
+  ok(r.pin === '••••', 'con copia: sale al instante, sin PIN');
+  await espera(30);
+  ok(avisosLn === 1, 'llegó el real (con PIN): se avisa aunque lo guardado sea igual');
+  ok((await w.callServerListaCacheada('apiLineasIndice', 'token-1')).pin === '1234', 'y lo que se lee ya es el real');
+  ok(w.localStorage.getItem(LLAVE_LN) === '{"pin":"••••","n":1}', 'la copia sigue sin PIN');
+  // Quien no es ADMIN: el servidor ya lo manda oculto; con la copia igual no hay nada que repintar
+  ({ w, servidor } = navegador({ [LLAVE_LN]: '{"pin":"••••","n":1}' }));
+  w.guardarListaLimpia('apiLineasIndice', sinPin);
+  avisosLn = 0;
+  w.addEventListener('lista-actualizada', (ev) => { if (ev.detail.fn === 'apiLineasIndice') avisosLn++; });
+  servidor.respuestas.apiLineasIndice = { pin: '••••', n: 1 };
+  await w.callServerListaCacheada('apiLineasIndice', 'token-1');
+  await espera(30);
+  ok(avisosLn === 0, 'sin PIN y sin cambios: no se repinta');
 
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);

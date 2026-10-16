@@ -486,6 +486,6 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
   PIN o contraseña del equipo, contraseña del módem y correo (`literal` o `secreto` en el formulario). La excepción vive
   en `app.html`: al unir `master`, conservarla (`tests/lineas-pin-minusculas.test.cjs` falla si se pierde).
 - **Rol CLIENT** (POST VENTA, `45b97ba`, de Ayrton, 14-oct; `Permisos.alcanceDe`): solo ve los equipos y líneas de sus departamentos. La ficha se le muestra como está hoy: sin las
-  pestañas Documentos e Historial ni «Ver última inspección/responsiva» (`apiLineasPermisos` trae `conAlcance` y `lineas.html` lo usa en `sinPasado`), porque eso puede ser de cuando
+  pestañas Documentos e Historial ni «Ver última inspección/responsiva» (sus secciones no respetan el alcance, así que al limitado se le resuelven Sin acceso; desde la fase 5.1 de la homologación ya no hay `apiLineasPermisos`), porque eso puede ser de cuando
   el equipo era de otro departamento. El servidor se lo niega con `sinAlcance_` en `TelefoniaService.gs` (historial, asignaciones, evidencias, documentos, última inspección o responsiva
-  y el directorio de colaboradores de Capital Humano, que tampoco se pide en la precarga).
+  y el directorio de colaboradores de Capital Humano, que la precarga solo adelanta a quien captura).

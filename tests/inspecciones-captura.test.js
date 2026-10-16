@@ -92,7 +92,7 @@ window.callServer = (fn, token, ...args) => {
 // interesa la caché, solo que la llamada llegue al mismo servidor falso.
 window.callServerCacheado = (fn, ...args) => window.callServer(fn, 't', ...args);
 let confirmar = true;
-window.eval(['componentes/iconos.html', 'componentes/notificar.html', 'componentes/combobox.html', 'componentes/campo-auto.html',
+window.eval(['componentes/formato.html', 'componentes/iconos.html', 'componentes/notificar.html', 'componentes/combobox.html', 'componentes/campo-auto.html',
   'componentes/folio-nucco.html', 'componentes/lienzo.html', 'componentes/firma.html'].map(scriptDe).join('\n') + `
   var state = { token: 't', sesion: { nombre: 'AYRTON SEPULVEDA' } };
   var Confirmar = { pedir: () => Promise.resolve(window.__confirmar()) };

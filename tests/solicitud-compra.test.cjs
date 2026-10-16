@@ -73,6 +73,11 @@ function carpetaMock(nombrePropio, subcarpetasIniciales) {
       let i = 0;
       return { hasNext: () => i < lista.length, next: () => lista[i++] };
     },
+    getFolders() {
+      const lista = Object.values(subcarpetas);
+      let i = 0;
+      return { hasNext: () => i < lista.length, next: () => lista[i++] };
+    },
     createFolder(nombre) {
       const nueva = carpetaMock(nombre);
       subcarpetas[nombre] = nueva;
@@ -110,7 +115,7 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {}, 
       },
     },
     AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
-    DriveUtils: {
+    DriveUtils: { ...require("./drive-utils-real")(),
       archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [],
       carpetaDelAnio: (carpeta) => {
         const ex = carpeta.getFoldersByName(ANIO_FIJO);
@@ -179,7 +184,7 @@ test('crear da un mensaje claro si la cuenta no tiene permiso de EDITOR en la ca
     SpreadsheetApp: { openById: () => libroMock() },
     DriveApp: { getFolderById: () => ({}) },
     AdquisicionVehicularService: { RAIZ_ADQUISICION_VEHICULAR: 'RAIZ-ADQ-TEST' },
-    DriveUtils: {
+    DriveUtils: { ...require("./drive-utils-real")(),
       archivosDeCarpeta: () => [],
       carpetaDelAnio: () => { throw new Error('You do not have permission to access the requested resource.'); },
     },

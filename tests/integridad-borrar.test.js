@@ -93,7 +93,7 @@ function cargar(hojas) {
   });
   const lee = (...p) => fs.readFileSync(path.join(__dirname, '..', 'src', ...p), 'utf8');
   vm.runInContext(lee('config', 'Entidades.gs'), ctx);
-  vm.runInContext(lee('utils', 'SheetUtils.gs'), ctx);
+  vm.runInContext(lee('utils', 'Candado.gs') + lee('utils', 'SheetUtils.gs'), ctx);
   vm.runInContext(lee('services', 'Relaciones.gs') + '\nthis.Relaciones = Relaciones; this.Entidades = Entidades;', ctx);
   return { R: ctx.Relaciones, E: ctx.Entidades, candado };
 }

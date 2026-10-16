@@ -609,28 +609,12 @@ const MAPA = {
    * @param {Object} cambios      lo que se mandó a actualizar (de aquí se saca qué copiar)
    * @return {Object} { 'NOMBRE HOJA': filasActualizadas, ... } — solo las hojas que sí tenían algo que copiar
    */
-  function propagar(origen, filaOrigen, cambios) {
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
-      return propagarSinCandado_(origen, filaOrigen, cambios);
-    } finally {
-      lock.releaseLock();
-    }
+  function propagar(origen, filaOrigen, cambios, opciones) {
+    return Candado.con(() => propagar_(origen, filaOrigen, cambios, opciones));
   }
 
-  /**
-   * El cuerpo de propagar(), sin tomar el candado. Existe porque cambiarClave() ya lo
-   * tiene tomado cuando necesita propagar, y waitLock() no es reentrante: pedirlo dos
-   * veces desde el mismo hilo se cuelga hasta el timeout.
-   *
-   * SE EXPORTA, aunque sea la version peligrosa, porque el mismo choque aparece desde
-   * fuera: ReasignacionesVehicularesService.crear() toma el candado y desde ahi llama a
-   * VehiculosService.actualizar(), que propaga. Sin esta salida, esa propagacion esperaba
-   * 20 segundos y moria en el catch, en silencio. Quien la llame DEBE tener el candado
-   * tomado; si no, usa propagar().
-   */
-  function propagarSinCandado_(origen, filaOrigen, cambios, opciones) {
+  /** El cuerpo de propagar() (el candado es reentrante: se puede llamar con él ya tomado) */
+  function propagar_(origen, filaOrigen, cambios, opciones) {
     const definicion = mapa_()[origen];
     const soltar = !!(opciones && opciones.soltar);
     if (!definicion || !filaOrigen || (!cambios && !soltar)) return {};
@@ -748,13 +732,7 @@ const MAPA = {
    * @param {Object} filaOrigen  el registro como estaba ANTES (para encontrar su copia)
    */
   function soltar(origen, filaOrigen) {
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
-      return propagarSinCandado_(origen, filaOrigen, null, { soltar: true });
-    } finally {
-      lock.releaseLock();
-    }
+    return propagar(origen, filaOrigen, null, { soltar: true });
   }
 
   /**
@@ -876,17 +854,10 @@ const MAPA = {
     // reporte sigue contando todo, para que la pantalla vea lo que falta.
     const soloFilas = Array.isArray(o.filas) && o.filas.length ? o.filas.map(Number) : null;
     const quien = limpiar_(o.quien);
-    if (!corregir) return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle, soloFilas, quien);
-
+    const correr = () => revisar_(corregir, conLog, soloHojas, !!o.detalle, soloFilas, quien);
     // Al corregir se escribe sobre las mismas filas que propagar(): mismo candado, para
     // que un vehículo editado a la mitad del barrido no quede pisado con su valor viejo.
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
-      return revisarSinCandado_(corregir, conLog, soloHojas, !!o.detalle, soloFilas, quien);
-    } finally {
-      lock.releaseLock();
-    }
+    return corregir ? Candado.con(correr) : correr();
   }
 
   /** Cuántas entradas regresa revisar({detalle}) por hoja: lo que una tabla aguanta sin trabarse. */
@@ -911,7 +882,7 @@ const MAPA = {
     return r;
   }
 
-  function revisarSinCandado_(corregir, conLog, soloHojas, conDetalle, soloFilas, quien) {
+  function revisar_(corregir, conLog, soloHojas, conDetalle, soloFilas, quien) {
     const resultado = {};
 
     const mapa = mapa_();
@@ -1267,15 +1238,13 @@ const MAPA = {
    * conectado, se copia a las hojas que lo mantienen al día. Para que lo conectado desde la pantalla funcione con
    * cualquier hoja, no solo con las que ya llamaban a propagar().
    */
-  function alGuardar(hoja, registro, cambios, opciones) {
+  function alGuardar(hoja, registro, cambios) {
     if (!hoja || !registro || !cambios) return {};
     if (PROPAGA_EN_SU_SERVICIO.indexOf(normalizar_(hoja)) !== -1) return {};
     const mapa = mapa_();
     const dueno = Object.keys(mapa).find((k) => normalizar_(k) === normalizar_(hoja));
     if (!dueno || !mapa[dueno].copias.some((c) => !esBitacora_(c))) return {};
-    return opciones && opciones.candadoTomado
-      ? propagarSinCandado_(dueno, registro, cambios)
-      : propagar(dueno, registro, cambios);
+    return propagar(dueno, registro, cambios);
   }
 
   /** Cuántos renglones de una edición a mano se copian a la vez (un pegado enorme no debe agotar el activador) */
@@ -1396,9 +1365,7 @@ const MAPA = {
 
     if (!confirmar) return { impacto: impacto, aplicado: false };
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    Candado.con(() => {
       SheetUtils.update(ssId, definicion.hoja, claveVieja, { [claveNombre]: claveNueva }, claveNombre);
 
       // Desde que la llave es la SERIE, el FOLIO quedó como atributo copiado en hojas que
@@ -1409,7 +1376,7 @@ const MAPA = {
         (c) => c.claveOrigen !== claveNombre && c.columnas[claveNombre] !== undefined);
       if (llevanLaClaveDeAtributo) {
         const dueno = SheetUtils.findById(ssId, definicion.hoja, claveNueva, claveNombre);
-        if (dueno) propagarSinCandado_(origen, dueno.data, { [claveNombre]: claveNueva });
+        if (dueno) propagar(origen, dueno.data, { [claveNombre]: claveNueva });
       }
 
       // OJO: aquí NO se excluyen las bitácoras, al contrario de propagar(). Lo que cambia
@@ -1431,9 +1398,7 @@ const MAPA = {
           CacheHojas.tocarHoja(hoja);
         }
       });
-    } finally {
-      lock.releaseLock();
-    }
+    });
 
     return { impacto: impacto, aplicado: true };
   }
@@ -1602,9 +1567,7 @@ const MAPA = {
   function borrar(padre, ids) {
     const b = borrable_(padre);
     const ssId = b.libro();
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       const hoja = SpreadsheetApp.openById(ssId).getSheetByName(padre);
       if (!hoja) throw new Error('No existe la hoja "' + padre + '"');
       const padres = buscarPadres_(hoja, b.columnaId, ids);
@@ -1615,9 +1578,7 @@ const MAPA = {
       padres.map((p) => p.fila).sort((x, y) => y - x).forEach((fila) => hoja.deleteRow(fila));
       CacheHojas.tocarHoja(hoja);
       return { eliminadas: padres.length };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   return {
@@ -1627,7 +1588,5 @@ const MAPA = {
     anotar: escribirLog_, etiqueta: etiqueta_,
     // Lo conectado desde la pantalla (DatosConectados.gs)
     libroDe, olvidarMapa, alGuardar, alEditarAMano,
-    // Solo para quien ya tiene el candado tomado. Ver su comentario.
-    propagarSinCandado: propagarSinCandado_,
   };
 })();

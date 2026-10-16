@@ -1,0 +1,125 @@
+<style>
+  /* ---- Migas: Volver, la ruta (enlaces discretos) y la página actual en negritas ---- */
+  .ficha-migas {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;
+    font-size: var(--texto-s); color: var(--color-text-muted);
+  }
+  .ficha-migas-ruta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; list-style: none; margin: 0; padding: 0; min-width: 0; }
+  .ficha-migas-ruta li { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+  .ficha-migas .ficha-miga-enlace {
+    padding: 2px 4px; margin: 0 -2px; min-height: auto; border: 0; border-radius: var(--radio-s); background: none; color: var(--color-text-muted);
+    font: inherit; font-weight: 500; cursor: pointer; text-decoration: none;
+  }
+  .ficha-migas .ficha-miga-enlace:hover, .ficha-migas .ficha-miga-enlace:focus-visible {
+    color: var(--color-text); background: var(--color-bg); text-decoration: underline; text-underline-offset: 2px;
+  }
+  .ficha-miga-actual { color: var(--color-text); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ficha-miga-sep { width: 14px; height: 14px; }
+  .ficha-migas-volver { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ---- Encabezado: ícono, título, chips, acciones y el resumen rápido (lo que más se consulta, sin bajar) ---- */
+  .ficha-encabezado {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; padding: 22px;
+    background: linear-gradient(135deg, var(--color-surface), var(--color-bg)); border-radius: var(--radio-2xl);
+  }
+  .ficha-icono {
+    width: 48px; height: 48px; border-radius: var(--radio-2xl); background: var(--color-primary-soft);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--color-primary);
+  }
+  .ficha-icono.con-color { background: none; }
+  .ficha-icono .ico { width: 24px; height: 24px; }
+  :root[data-theme="dark"] .ficha-icono:not(.con-color) { color: var(--color-text); }
+  .ficha-titulo { flex: 1; min-width: 200px; }
+  .ficha-titulo h2 { margin: 0 0 6px; font-size: var(--texto-xl); line-height: 1.4; }
+  .ficha-sub { margin: -4px 0 6px; font-size: var(--texto-s); color: var(--color-text-muted); }
+  .ficha-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ficha-botones { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .ficha-botones > button, .ficha-botones > a.ln-boton, .ficha-migas > button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: 36px; padding: 8px 12px; font-size: var(--texto-s); font-weight: 600; line-height: 1.2; border-radius: var(--radio-m); white-space: nowrap;
+  }
+  .ficha-botones > button .ico { width: 15px; height: 15px; }
+  .ficha-resumen {
+    flex: 1 1 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px;
+    margin: 4px 0 0; padding-top: 14px; border-top: 1px solid var(--color-border);
+  }
+  .ficha-resumen > div { min-width: 0; }
+  .ficha-resumen dt { font-size: var(--texto-xs); font-weight: 600; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: .3px; }
+  .ficha-resumen dd { margin: 2px 0 0; font-size: var(--texto-m); font-weight: 600; overflow-wrap: anywhere; }
+  .ficha-tenue { color: var(--color-text-muted); font-weight: 400; }
+  .ficha-pestanas .tabs-lista { margin: 4px 0 14px; }
+
+  /* Celular: Volver y la página actual (sin los niveles de en medio); botones a todo lo ancho, en dos columnas */
+  @media (max-width: 640px) {
+    .ficha-botones { width: 100%; }
+    .ficha-botones > * { flex: 1 1 auto; }
+    .ficha-botones > .ln-btn-mas { flex: 0 0 auto; }
+    .ficha-migas { margin-bottom: 10px; }
+    .ficha-migas-ruta li:not(:last-child) { display: none; }
+    .ficha-migas-ruta li:last-child > .ficha-miga-sep { display: none; }
+    .ficha-migas-volver { max-width: 130px; }
+    .ficha-encabezado { padding: 14px; gap: 10px; }
+    .ficha-icono { width: 40px; height: 40px; border-radius: var(--radio-xl); }
+    .ficha-botones { gap: 8px; }
+    .ficha-botones > button, .ficha-botones > a.ln-boton { flex: 1 1 40%; white-space: normal; text-align: center; }
+    .ficha-resumen { grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+    .ficha-pestanas .tabs-lista .tab-btn { padding: 10px 12px; font-size: var(--texto-s); }
+    .ficha-pestanas .tabs-lista .tab-btn .ico { display: none; }
+  }
+</style>
+
+<script>
+  /**
+   * Ficha — la página de un registro (un vehículo, una caja, un equipo o línea, una persona): migas, encabezado con
+   * resumen rápido y, debajo, sus pestañas (Tabs.html). Lo mismo en todos los módulos.
+   *
+   *   Ficha.migas({
+   *     volver: { texto: 'Volver', atributos: 'id="veh-btn-volver"' },     // atributos: con qué lo conecta el módulo
+   *     ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }],
+   *     actual: 'Nucco 24',
+   *   })
+   *   Ficha.encabezado({
+   *     icono: 'car' | iconoHtml: Avatar.html(…),  color: 'var(--tono-azul)',   // color: el ícono sin placa de fondo
+   *     titulo: 'Nucco 24',  tituloHtml, subtitulo (HTML),  chips (HTML),  botones (HTML),
+   *     resumen: [['Placa', 'GGY886F'], ['Línea', '<a …>', true]],   // true: el valor ya es HTML; vacío → «—»
+   *   })
+   *   html = Ficha.migas(…) + Ficha.encabezado(…) + Tabs.html([…])
+   *
+   * Los textos se escapan aquí; lo que es HTML lo dice su nombre (tituloHtml, chips, botones, el true del resumen).
+   * Prueba: tests/ficha.test.js.
+   */
+  const Ficha = (function () {
+    const esc = Formato.esc;
+    const vacio = '<span class="ficha-tenue">—</span>';
+
+    function migas(o) {
+      const v = o.volver || { texto: 'Volver' };
+      const ruta = (o.ruta || []).map((r, i) => '<li>' + (i ? Iconos.svg('chevron-right', 'ficha-miga-sep') : '') +
+        '<button type="button" class="ficha-miga-enlace" ' + (r.atributos || '') + '>' + esc(r.texto) + '</button></li>');
+      if (o.actual) {
+        ruta.push('<li>' + (ruta.length ? Iconos.svg('chevron-right', 'ficha-miga-sep') : '') +
+          '<span class="ficha-miga-actual" aria-current="page">' + esc(o.actual) + '</span></li>');
+      }
+      return '<nav class="ficha-migas" aria-label="Ruta">' +
+        '<button type="button" class="secondary" ' + (v.atributos || '') + (v.titulo ? ' title="' + esc(v.titulo) + '"' : '') + '>' +
+        Iconos.svg('chevron-left') + ' <span class="ficha-migas-volver">' + esc(v.texto || 'Volver') + '</span></button>' +
+        (ruta.length ? '<ol class="ficha-migas-ruta">' + ruta.join('') + '</ol>' : '') + '</nav>';
+    }
+
+    function encabezado(o) {
+      const resumen = (o.resumen || []).filter(Boolean);
+      const icono = o.iconoHtml || Iconos.svg(o.icono || 'file-text');
+      return '<div class="card ficha-encabezado">' +
+        '<div class="ficha-icono' + (o.color ? ' con-color" style="color:' + esc(o.color) : '') + '">' + icono + '</div>' +
+        '<div class="ficha-titulo"><h2>' + (o.tituloHtml || esc(o.titulo)) + '</h2>' +
+        (o.subtitulo ? '<div class="ficha-sub">' + o.subtitulo + '</div>' : '') +
+        '<div class="ficha-chips">' + (o.chips || '') + '</div></div>' +
+        '<div class="ficha-botones">' + (o.botones || '') + '</div>' +
+        (resumen.length ? '<dl class="ficha-resumen">' + resumen.map((d) => '<div><dt>' + esc(d[0]) + '</dt><dd>' +
+          (d[2] ? (d[1] || vacio) : (d[1] === null || d[1] === undefined || d[1] === '' ? vacio : esc(d[1]))) + '</dd></div>').join('') + '</dl>' : '') +
+        '</div>';
+    }
+
+    return { migas, encabezado };
+  })();
+</script>

@@ -297,11 +297,9 @@ const DatosConectados = (function () {
    */
   function guardar(token, propuesta, ponerAlDia) {
     const sesion = Permisos.puedeEditar(token, MODULO);
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
     let p;
     let nuevas;
-    try {
+    const salida = Candado.con(() => {
       p = validar_(propuesta, {});
       nuevas = p.columnas.filter(([cd, cc]) => norm_(p.yaReciben[norm_(cc)]) !== norm_(cd));
       if (!nuevas.length) return { conectados: 0, mensaje: 'Esos datos ya estaban conectados' };
@@ -315,9 +313,8 @@ const DatosConectados = (function () {
       CacheHojas.tocarHoja(hoja);
       anotarHistorial_(ss, sesion, 'CONECTAR', filas);
       Relaciones.olvidarMapa();
-    } finally {
-      lock.releaseLock();
-    }
+    });
+    if (salida !== undefined) return salida;
     let alDia = null;
     if (ponerAlDia && p.tipo === 'cache') {
       alDia = Relaciones.revisar({ corregir: true, hojas: [p.copia], quien: sesion.correo });
@@ -328,9 +325,7 @@ const DatosConectados = (function () {
   /** Desconecta un dato puesto desde la pantalla (lo del código no se quita aquí). No borra: ACTIVO = FALSE. */
   function quitar(token, dueno, copia, colDueno) {
     const sesion = Permisos.puedeEditar(token, MODULO);
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       const ss = SpreadsheetApp.openById(ssId());
       const hoja = ss.getSheetByName(HOJA);
       if (!hoja || hoja.getLastRow() < 2) throw new Error('Ese dato no se conectó desde la pantalla');
@@ -351,9 +346,7 @@ const DatosConectados = (function () {
       anotarHistorial_(ss, sesion, 'QUITAR', quitadas);
       Relaciones.olvidarMapa();
       return { quitados: quitadas.length };
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /** Poner al día lo que ya está distinto en una copia "al día" (lo mismo que Salud, desde la tarjeta) */

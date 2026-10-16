@@ -264,6 +264,7 @@ function cargar(hs, extra) {
   const ids = path.join(__dirname, '..', 'src', 'utils', 'Ids.gs');
   const ruta = path.join(__dirname, '..', 'src', 'services', 'Relaciones.gs');
   vm.runInContext(
+    fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') +
     fs.readFileSync(ids, 'utf8') + '\n' + fs.readFileSync(ruta, 'utf8') +
     '\nthis.Relaciones = Relaciones; this.Ids = Ids;',
     ctx

@@ -34,8 +34,7 @@
    */
   const FolioNucco = (function () {
     const elementoDe = (el) => (typeof el === 'string' ? document.getElementById(el) : el);
-    const esc = (s) => String(s === null || s === undefined ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const esc = Formato.esc;
 
     /** Una entrada por FOLIO y otra por NUCO, las dos al mismo vehículo. */
     function indexar(vehiculos, destino) {
