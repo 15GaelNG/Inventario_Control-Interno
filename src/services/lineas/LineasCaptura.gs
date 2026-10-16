@@ -88,7 +88,7 @@ const LineasCaptura = (function () {
   /** Número de la línea sin equipo (su carpeta en LINEAS se llama así): sin número no hay responsiva (usuario, 15-oct). */
   function numeroParaResponsiva_(obj) {
     const numero = LineasUtil.digitos(LineasUtil.col(obj.fila, 'NUMERO TELEFONO'));
-    if (!numero) throw new Error('La línea no tiene número: captúralo con Editar línea.');
+    if (!numero) throw new Error('La línea no tiene número: captúralo con Corregir.');
     return numero;
   }
 

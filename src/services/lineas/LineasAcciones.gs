@@ -206,7 +206,7 @@ const LineasAcciones = (function () {
         tocados.push(txt(lineaFila['ID']), s.idLinea);
       } else if (may(col(lineaFila, 'ESTATUS LINEA')) !== 'DISPONIBLE') {
         throw new Error('La línea ' + numeroNuevo + ' está en ' + (may(col(lineaFila, 'ESTATUS LINEA')) || 'blanco') +
-          ': solo se vinculan líneas DISPONIBLE (quítale el responsable en Editar línea).');
+          ': solo se vinculan líneas DISPONIBLE (quítale el responsable en Corregir).');
       }
     }
     let numeroAnterior = '';

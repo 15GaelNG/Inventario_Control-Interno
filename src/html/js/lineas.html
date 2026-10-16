@@ -2553,8 +2553,15 @@
       const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'];
       // Por qué se cancela la línea (LineasResguardos.MOTIVOS_CANCELACION; usuario, 13-oct)
       const MOTIVOS_CANCELACION = ['LINEA VENCIDA', 'CANCELACION ANTICIPADA'];
-      // Los de la línea que en Editar llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
+      // Los de la línea que en Corregir llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
       const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
+      // El equipo que sale del inventario (LineasRegistros.ESTATUS_EQUIPO_FINAL; usuario, 16-oct, pendiente 2.50)
+      const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+      // La línea con el adendum vencido que se manda sola a cancelación: quien captura elige (LineasRegistros.CANCELACION_PANEL
+      // y CANCELACION_DIRECTA; usuario, 16-oct, pendiente 2.50)
+      const CANCELACION_LINEA = [{ valor: 'PANEL', texto: 'PANEL DE RESGUARDOS Y CANCELACIONES' }, { valor: 'DIRECTO', texto: 'CANCELADA SIN PANEL' }];
+      // Directo, sin pasar por el panel (LineasResguardos.LINEA_SIN_PANEL)
+      const LINEA_SIN_PANEL = 'CANCELADA';
       let marcarKpi = null;
       raiz.querySelectorAll('#ln-tabs .tab-btn').forEach((tab) => {
         tab.addEventListener('click', () => mostrarModulo(tab.dataset.tab));
@@ -2821,7 +2828,8 @@
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelAbierto ? panelAbierto.cerrar() : mostrarDetalles(tipo, f[0])) };
-        const editar = { icono: 'pencil', texto: tipo === 'linea' ? 'Editar línea' : 'Editar equipo', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
+        // «Corregir» en lugar de «Editar» (usuario, 16-oct; pendiente 2.50): solo corrige lo mal capturado; la persona cambia con la Responsiva
+        const editar = { icono: 'pencil', texto: 'Corregir', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
           alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
         const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', visible: veHistorial, alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
@@ -2832,15 +2840,16 @@
         // La barra de arriba son los de enBarra, en este mismo orden
         if (modulo === 'equipos') {
           return [detalles,
-            // Responsiva en lugar de Reasignar (pendiente 2.49, usuario 16-oct): la misma persona renueva, otra reasigna
-            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'mover', visible: operar,
+            // Responsiva en lugar de Reasignar (pendiente 2.49, usuario 16-oct): la misma persona renueva, otra reasigna.
+            // Responsiva e Inspección juntas, la Responsiva primero (usuario, 16-oct; pendiente 2.50)
+            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,
               alHacer: (f) => abrirResponsiva('equipo', f[0]) },
+            // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
+            { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
+              alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
               visible: operar, alHacer: (f) => abrirResguardo(f) },
-            // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
-            { icono: 'clipboard-check', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
-              alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
-            // En el equipo solo Editar equipo: la línea se edita desde la línea (usuario, 13-oct)
+            // En el equipo solo corrige el equipo: la línea se corrige desde la línea (usuario, 13-oct)
             editar,
             vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
             vinculo('arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA', (r) => !!r.lineaId),
@@ -2851,7 +2860,7 @@
         }
         return [detalles,
           // La línea sin equipo también entrega con su Responsiva (pendiente 2.49); la de un equipo, con su equipo
-          { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna', maximo: UNO, grupo: 'mover',
+          { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna', maximo: UNO, grupo: 'documentos',
             visible: (f) => operar() && !f[0].equipoId, alHacer: (f) => abrirResponsiva('linea', f[0]) },
           { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
@@ -3571,16 +3580,17 @@
       }
 
       /**
-       * Acciones de la ficha (estilo Drive, usuario 30-sep): a la vista solo Nueva inspección y Responsiva
+       * Acciones de la ficha (estilo Drive, usuario 30-sep): a la vista solo Responsiva e Inspección (en ese orden, usuario 16-oct)
        * (`conCaptura`; una línea en un equipo no captura, lo hace su equipo, y la línea sin equipo solo tiene responsiva:
        * pendiente 2.45), luego `extra` (Drive o Ver equipo) y al final ⋮ con todo lo demás (abrirMenuFicha). Sin permiso
        * de operar solo queda `extra`.
        */
       function botonesFicha(atributoRef, id, tipo, conCaptura, extra, conMas) {
         const mas = conMas === undefined ? conCaptura : conMas;
-        return (!conCaptura ? '' : (tipo === 'linea' ? '' :
-          '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Nueva inspección</button>') +
-          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Responsiva</button>') +
+        return (!conCaptura ? '' :
+          '<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA" ' + atributoRef + '="' + esc(id) + '">' + icono('signature') + ' Responsiva</button>' +
+          (tipo === 'linea' ? '' :
+          '<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION" ' + atributoRef + '="' + esc(id) + '">' + icono('clipboard-check') + ' Inspección</button>')) +
           (extra || '') + (!mas ? '' : '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-ficha-mas="' + esc(tipo) + '" data-id="' + esc(id) + '" title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>');
       }
 
@@ -3591,11 +3601,11 @@
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
         const operar = !!(memoria.permisos && memoria.permisos.puedeOperar);
-        // Editar línea y Editar equipo por separado (usuario, 8-oct; «Editar información» hasta el 13-oct). En el equipo ya no
-        // van Editar línea ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
+        // Corregir el equipo y corregir la línea por separado (usuario, 8-oct; «Editar» hasta el 16-oct, pendiente 2.50). En el
+        // equipo no va la línea ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
         const editar = [tipo === 'equipo'
-          ? { icono: 'pencil', texto: 'Editar equipo', separador: true, alHacer: () => abrirEditor(id) }
-          : { icono: 'pencil', texto: 'Editar línea', separador: true, alHacer: () => abrirEditor(id, 'LINEA') }];
+          ? { icono: 'pencil', texto: 'Corregir', separador: true, alHacer: () => abrirEditor(id) }
+          : { icono: 'pencil', texto: 'Corregir', separador: true, alHacer: () => abrirEditor(id, 'LINEA') }];
         // La carpeta de Drive va sola, separada de inspección y responsiva (usuario, 30-sep)
         // Con su sección (lineas-telefonicas.carpetas): operación interna, un CLIENT no la tiene (el servidor ni la manda)
         const carpeta = fichaActual && fichaActual.id === id && puede('lineas-telefonicas.carpetas') ? fichaActual.carpetaDriveId : null;
@@ -3616,7 +3626,7 @@
             : (String(r.estatus || '').toUpperCase() === 'DISPONIBLE'
               ? [{ icono: 'link', texto: 'Vincular a equipo', separador: true, alHacer: () => abrirVinculo('VINCULAR_EQUIPO', r) }] : [])));
         // Mismo orden que el clic derecho de la lista (usuario, 12-oct; pendiente 2.34): mover · documentos · editar ·
-        // vincular · historial. Nueva inspección y Nueva responsiva están en los botones de la ficha
+        // vincular · historial. Responsiva e Inspección están en los botones de la ficha
         const historial = veHistorial() ? [{ icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') }] : [];
         const items = tipo === 'equipo'
           ? (operar ? [
@@ -4266,16 +4276,17 @@
             const valor = b && b.valor;
             return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, valor) ? valor || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
           });
-          // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación, sin
-          // elegir; vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo).
+          // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación y se elige
+          // si pasa por el panel (EN PROCESO DE CANCELACION) o queda CANCELADA sin panel, sin nada elegido de inicio (usuario,
+          // 16-oct; pendiente 2.50); vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo).
           // Ya en la bandeja de Pau, sin el estatus que tiene: solo se cambia a otro (usuario, 13-oct)
           const posibles = q.opcionesEstatus || form.estatusEquipo;
           const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles,
             valor: posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : '', requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
           if (q.tieneLinea) {
             const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
-            estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea] : form.estatusLinea,
-              valor: q.propuestaLinea, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS }));
+            estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea,
+              valor: vencido ? '' : q.propuestaLinea, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS }));
           }
           elementosFila[q.id] = els.concat(estatus);
           vistaFila[q.id] = [titulo(q, 'EQUIPO', 'smartphone'),
@@ -4319,7 +4330,8 @@
             const v = (c) => String(valores[columnaFila(q.id, c)] || '').trim();
             porEquipo[q.id] = { _ETIQUETA: 'NUCO ' + (q.nuco || '—'), DEPARTAMENTO: v('DEPARTAMENTO'), SEDE: v('SEDE'), 'OFICINA / DESARROLLO': v('OFICINA / DESARROLLO'),
               'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
-              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.propuestaLinea === 'EN PROCESO DE CANCELACION' ? q.propuestaLinea : v('ESTATUS LINEA')) };
+              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.propuestaLinea === 'EN PROCESO DE CANCELACION' ? q.propuestaLinea : v('ESTATUS LINEA')),
+              cancelacionLinea: q.tieneLinea && q.propuestaLinea === 'EN PROCESO DE CANCELACION' && v('ESTATUS LINEA') === LINEA_SIN_PANEL ? 'DIRECTO' : '' };
           });
           if (captura !== sesion) return; // sin ventana de confirmación (usuario, 4-oct)
           // La inspección es obligatoria al mandar a resguardo (pendiente 2.6) y se captura dentro de la acción (decisión
@@ -4532,8 +4544,9 @@
 
       // ---- Alta y edición directa del inventario ----
       /**
-       * Editar equipo y Agregar equipo / Agregar línea (usuario, 4-oct): todo lo guardado en pestañas (equipo,
-       * responsable, línea, adendum, accesorios y accesos); FOLIO, NUCO y TIPO fijos y el TIPO se asigna solo. Los estatus
+       * Corregir y Agregar equipo / Agregar línea (usuario, 4-oct): todo lo guardado en pestañas (equipo,
+       * responsable, línea, adendum, accesorios y accesos); FOLIO, NUCO y TIPO fijos y el TIPO se asigna solo. Corregir equipo
+       * no trae Responsable: la persona solo cambia con la Responsiva (usuario, 16-oct; pendiente 2.50). Los estatus
        * se cambian aquí: RESGUARDO, PARA VENTA y PARA DESECHO abren Mandar a resguardo y EN PROCESO DE CANCELACION, Mandar
        * a cancelación (al guardar). `parte` (alta): EQUIPO o LINEA.
        */
@@ -4542,7 +4555,7 @@
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(id ? 'pencil' : (parte === 'LINEA' ? 'card-sim' : 'smartphone'));
         $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
-        $('#ln-captura-titulo', raiz).textContent = id ? (parte === 'LINEA' ? 'Editar línea' : 'Editar equipo') : agregar;
+        $('#ln-captura-titulo', raiz).textContent = id ? (parte === 'LINEA' ? 'Corregir línea' : 'Corregir equipo') : agregar;
         $('#ln-captura-subtitulo', raiz).textContent = '';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesionEditor = captura = { tipo: 'REGISTRO', idObjetivo: id, firmas: {} };
@@ -4612,13 +4625,16 @@
             const avisos = [];
             if (cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO)) avisos.push('Equipo: ' + (inicial['ESTATUS EQUIPO'] || '—') + ' → ' + valores['ESTATUS EQUIPO']);
             if (cambiaA('ESTATUS LINEA', ESTATUS_LINEA_PANEL)) avisos.push('Línea: ' + (inicial['ESTATUS LINEA'] || '—') + ' → ' + valores['ESTATUS LINEA']);
-            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar). Editar equipo
+            // El servidor deja DISPONIBLE la línea en uso del equipo que se guarda (LineasRegistros.editar). Corregir equipo
             // del equipo ya no trae la línea: su estatus llega en form.estatusLinea
             else if (avisos.length && (inicial['ESTATUS LINEA'] || form.estatusLinea) === 'USO' && (valores['ESTATUS LINEA'] || 'USO') === 'USO') avisos.push('Línea: USO → DISPONIBLE');
             if (patron) {
               const p = patronParaGuardar();
               if (p === undefined) delete valores[patron.columna]; else valores[patron.columna] = p;
             }
+            // El equipo que sale del inventario deja su línea en USO DISPONIBLE (el servidor); con el adendum vencido va a
+            // cancelación y se pregunta en la ventana del comentario si pasa por el panel (usuario, 16-oct; pendiente 2.50)
+            const lineaACancelar = form.lineaVencida && cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL);
             const avisoEstatus = !avisos.length ? Promise.resolve(true) : Confirmar.pedir({
               titulo: 'Cambio de estatus',
               mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial.',
@@ -4626,13 +4642,14 @@
             });
             // Segunda ventana: un solo COMENTARIO obligatorio y el TICKET (plan §5.2), ya con los cambios aceptados
             avisoEstatus.then((ok) => (!ok || captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
-              [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+              (lineaACancelar ? [{ clave: 'cancelacionLinea', etiqueta: 'Línea · adendum vencido', opciones: CANCELACION_LINEA.map((x) => x.texto), elegir: true, requerido: true }] : [])
+                .concat([{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }]),
               id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')))).then((nota) => {
               if (!nota || captura !== sesionEditor) return null;
               return leerArchivosEn(cuerpo).then((archivos) => {
               estadoGuardado(id ? 'Guardando cambios' : 'Guardando');
               const datos = { valores: valores, archivos: archivos, comentario: nota.comentario, ticket: nota.ticket, parte: ctx.parte, bloqueo: bloqueoElegido(cuerpo),
-                sinPanel: avisos.length > 0 };
+                sinPanel: avisos.length > 0, cancelacionLinea: (CANCELACION_LINEA.filter((x) => x.texto === nota.cancelacionLinea)[0] || {}).valor || '' };
               return (id ? llamar('apiLineasEditarRegistro', id, datos) : llamar('apiLineasCrearRegistro', datos)).then((r) => aplicarCambiosIndice(r.filas).then(() => {
                 cerrarCaptura(true);
                 aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
@@ -5242,7 +5259,7 @@
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono(tipo === 'INSPECCION' ? 'clipboard-check' : 'signature');
         $('#ln-captura-tipo', raiz).textContent = tipo === 'INSPECCION' ? 'Inspección de telefonía' : 'Responsiva de entrega';
-        $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Nueva inspección' : 'Responsiva';
+        $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Inspección' : 'Responsiva';
         $('#ln-captura-subtitulo', raiz).textContent = 'Preparando datos y carpeta de evidencia…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {}, flujo: flujo || null };

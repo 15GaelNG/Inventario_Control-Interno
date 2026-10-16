@@ -35,7 +35,7 @@ const LineasLectura = (function () {
   const PROPIEDAD = 'LINEAS_LECTURA';
   const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v4'; // v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v5'; // v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
@@ -55,6 +55,17 @@ const LineasLectura = (function () {
   const DE_LA_HOJA_VIEJA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'SEDE',
     'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
+  /**
+   * Responsable en blanco en los estatus finales (usuario, 16-oct; pendiente 2.50): el equipo VENDIDO, DONADO, DESECHADO o
+   * EXTRAVIO-ROBO (y sus nombres viejos) y la línea sin equipo CANCELADA ya no son de nadie. No se borra nada: las
+   * asignaciones cerradas siguen en su pestaña; aquí solo no se muestran como su responsable. La ubicación se queda.
+   */
+  const ESTATUS_FINAL = { equipo: ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'], linea: ['CANCELADA'] };
+  const PERSONA_FINAL = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
+  function esFinal_(e, l) {
+    const may = (x) => String(x === undefined || x === null ? '' : x).trim().toUpperCase();
+    return e ? ESTATUS_FINAL.equipo.indexOf(may(e['ESTATUS EQUIPO'])) >= 0 : ESTATUS_FINAL.linea.indexOf(may(l && l['ESTATUS LINEA'])) >= 0;
+  }
 
   let activo_ = null;
   let filas_ = null;
@@ -210,6 +221,7 @@ const LineasLectura = (function () {
         if (esCodigo(o['RESPONSABLE'])) o['RESPONSABLE'] = '';
       }
       if (!a && ['VENDIDO', 'DESECHADO'].indexOf(String(o['ESTATUS EQUIPO']).toUpperCase()) >= 0) o['DEPARTAMENTO'] = 'N/A';
+      if (esFinal_(e, l)) PERSONA_FINAL.forEach((c) => { o[c] = ''; });
       return o;
     };
 

@@ -185,11 +185,13 @@ test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y �
   };
   // Responsiva en lugar de Reasignar y de Nueva responsiva (pendiente 2.49, usuario 16-oct)
   assert.doesNotMatch(equipo, /'Reasignar'|'Nueva responsiva'/);
-  enOrden(equipo, ['[detalles,', "'Responsiva'", "'Mandar a resguardo'", "'Nueva inspección'", '    editar,',
+  // Responsiva e Inspección juntas, la Responsiva primero (usuario, 16-oct; pendiente 2.50)
+  enOrden(equipo, ['[detalles,', "'Responsiva'", "'Inspección'", "'Mandar a resguardo'", '    editar,',
     "'Vincular línea'", "'Cambiar línea'", "'Desvincular línea'", "'Ir a la línea'", 'historial];']);
-  // En el clic derecho del equipo solo Editar equipo: la línea se edita desde la línea (usuario, 13-oct)
-  assert.doesNotMatch(equipo, /'Editar línea'/);
-  assert.match(barra, /texto: tipo === 'linea' \? 'Editar línea' : 'Editar equipo'/);
+  // En el clic derecho del equipo solo se corrige el equipo: la línea se corrige desde la línea (usuario, 13-oct); «Corregir»
+  // en lugar de «Editar» (usuario, 16-oct; pendiente 2.50)
+  assert.doesNotMatch(barra, /'Editar línea'|'Editar equipo'/);
+  assert.match(barra, /const editar = \{ icono: 'pencil', texto: 'Corregir', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,/);
   assert.doesNotMatch(cliente, /'Editar información'/);
   // Ver la última inspección o responsiva ya no va en el clic derecho del equipo
   assert.doesNotMatch(equipo, /Ver última/);

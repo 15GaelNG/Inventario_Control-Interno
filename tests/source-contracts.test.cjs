@@ -983,7 +983,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v8';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v9';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1591,8 +1591,12 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   const els = Reg._elementos(base, cat, u, { nuevo: false });
   assert.equal(campo(els, 'ESTATUS LINEA').valor, '');
   assert.equal(campo(els, 'ESTATUS EQUIPO').valor, 'FUERA DE INVENTARIO');
-  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo);
-  assert.ok(campo(els, 'DEPARTAMENTO').opciones.indexOf('DISPONIBLE') >= 0 && campo(els, 'DEPARTAMENTO').opciones.indexOf('CONTROL INTERNO') >= 0);
+  // Corregir equipo no pasa a USO: eso es la Responsiva (usuario, 16-oct; pendiente 2.50)
+  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo.filter((x) => x !== 'USO'));
+  // Corregir equipo sin la pestaña Responsable (usuario, 16-oct; pendiente 2.50); en el alta sí
+  assert.ok(!els.some((e) => ['RESPONSABLE', 'NO EMPLEADO', 'DEPARTAMENTO'].indexOf(e.columna) >= 0));
+  const alta = Reg._elementos(base, cat, u, { nuevo: true, parte: 'EQUIPO' });
+  assert.ok(campo(alta, 'DEPARTAMENTO').opciones.indexOf('DISPONIBLE') >= 0 && campo(alta, 'DEPARTAMENTO').opciones.indexOf('CONTROL INTERNO') >= 0);
   assert.equal(Reg._elementos({ TIPO: 'EQUIPO', 'ESTATUS EQUIPO': 'N/A' }, cat, u, { nuevo: false }).filter((e) => e.columna === 'ESTATUS EQUIPO')[0].valor, '');
   assert.ok(!Reg._elementos({ TIPO: 'LINEA' }, cat, u, { nuevo: false }).some((e) => e.columna === 'ESTATUS EQUIPO')); // una línea sola no tiene equipo
 
@@ -1604,8 +1608,10 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   const cambia = Reg._resolver(soloEstatus, base, { 'ESTATUS EQUIPO': 'VENDIDO', 'ESTATUS LINEA': '' }, { nuevo: false });
   assert.equal(cambia.valores['ESTATUS EQUIPO'], 'VENDIDO');
   assert.match(Reg._resolver(soloEstatus, base, { 'ESTATUS EQUIPO': 'CANCELADO' }, { nuevo: false }).errores.join(' | '), /Estatus del equipo: VALOR NO ENCONTRADO EN LA LISTA/);
-  // La persona se corrige en Editar (usuario, 4-oct): siempre editable; en blanco solo con Mandar a resguardo
-  assert.equal(campo(Reg._elementos({ TIPO: 'EQUIPO', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }), 'RESPONSABLE').editable, 'SIEMPRE');
+  // La persona de la línea sola se corrige en Corregir (usuario, 4-oct): siempre editable; en blanco solo con Mandar a
+  // resguardo. La del equipo, solo con la Responsiva (usuario, 16-oct; pendiente 2.50)
+  assert.equal(campo(Reg._elementos({ TIPO: 'LINEA', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }), 'RESPONSABLE').editable, 'SIEMPRE');
+  assert.ok(!Reg._elementos({ TIPO: 'EQUIPO', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }).some((e) => e.columna === 'RESPONSABLE'));
 
   // Colores de los estatus nuevos
   const cliente = read('src/html/js/lineas.html');
@@ -1801,8 +1807,9 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.match(dt, /class="dt-menu-titulo">\$\{esc\(a\.tituloGrupo\)\}/);
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
-  // Nueva inspección en documentos; la Responsiva es la acción que entrega (pendiente 2.49, 16-oct); Ver la última, solo en la ficha (12-oct)
-  assert.match(lineas, /texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  // Inspección en documentos, junto a la Responsiva (pendientes 2.49 y 2.50, 16-oct); Ver la última, solo en la ficha (12-oct)
+  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.doesNotMatch(lineas, /Nueva inspección/);
   assert.doesNotMatch(lineas, /texto: 'Nueva responsiva'/);
   assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);
   assert.match(lineas, /conservarSeleccion: \(el\) => !!el\.closest\('#ln-listado \.ln-cuadro, #ln-modal-captura, \.ln-menu-flotante'\)/);
@@ -2087,10 +2094,11 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION'].forEach((e) => assert.ok(cliente.includes("'" + e + "': '"), e));
   assert.match(cliente, /' title="' \+ esc\(ayudas\[v\]\) \+ '"'/);
   assert.match(cliente, /\(ayuda \? ' title="' \+ esc\(ayuda\) \+ '"' : ''\)/);
-  // Adendum vencido: la línea va a cancelación sin elegir; vigente o sin fecha, se elige
+  // Adendum vencido: la línea va a cancelación y se elige panel o CANCELADA directo (usuario, 16-oct; pendiente 2.50);
+  // vigente o sin fecha, se elige DISPONIBLE o cancelación
   assert.match(resg, /const vencido = q\.propuestaLinea === 'EN PROCESO DE CANCELACION';/);
-  assert.match(resg, /'Estatus de la línea', 'escala', \{ opciones: vencido \? \[q\.propuestaLinea\] : form\.estatusLinea,/);
-  assert.match(read('src/services/lineas/LineasResguardos.gs'), /if \(tieneLinea && propuestaLinea_\(tipo, vigencia_\(LineasUtil\.col\(f, 'FIN PLAN'\), hoy\)\) === LINEA_CANCELACION\) pedido\['ESTATUS LINEA'\] = LINEA_CANCELACION;/);
+  assert.match(resg, /'Estatus de la línea', 'escala', \{ opciones: vencido \? \[q\.propuestaLinea, LINEA_SIN_PANEL\] : form\.estatusLinea,\s+valor: vencido \? '' : q\.propuestaLinea,/);
+  assert.match(read('src/services/lineas/LineasResguardos.gs'), /if \(vencida\) pedido\['ESTATUS LINEA'\] = pedido\.directa \? LINEA_SIN_PANEL : LINEA_CANCELACION;/);
   // Sin ventana de confirmación
   assert.doesNotMatch(resg, /Confirmar\.pedir/);
   // Inspección dentro del resguardo: responsable en blanco, solo las personas de procesos, y no se copia la persona

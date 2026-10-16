@@ -403,7 +403,7 @@ const LineasArchivos = (function () {
   function carpetaDeLinea_(lineaId, numero) {
     const nombre = LineasUtil.digitos(numero);
     if (!lineaId) throw new Error('Falta la línea.');
-    if (!nombre) throw new Error('La línea no tiene número: captúralo con Editar línea.');
+    if (!nombre) throw new Error('La línea no tiene número: captúralo con Corregir.');
     let carpeta = null;
     const abrir = (x) => {
       try { const c = x ? DriveApp.getFolderById(x.id) : null; return c && !c.isTrashed() ? c : null; } catch (e) { return null; }

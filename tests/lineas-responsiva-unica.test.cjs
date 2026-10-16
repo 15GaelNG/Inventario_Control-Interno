@@ -149,7 +149,7 @@ test('pantalla: un botón «Responsiva»; inspección solo si otra persona recib
   assert.doesNotMatch(cliente, /abrirReasignar|apiLineasReasignar|texto: 'Reasignar', alHacer|Nueva responsiva<\/button>/);
   assert.match(cliente, /icono\('signature'\) \+ ' Responsiva<\/button>'/);
   assert.match(cliente, /if \(btnCaptura\.dataset\.lnCaptura === 'RESPONSIVA'\) abrirResponsiva\(/);
-  assert.match(cliente, /texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'mover', visible: operar,\s*alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\) \},/);
+  assert.match(cliente, /texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,\s*alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\) \},/);
   assert.match(cliente, /visible: \(f\) => operar\(\) && !f\[0\]\.equipoId, alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\) \},/);
   assert.match(cliente, /else if \(a\.tipo === 'responsiva'\) abrirResponsiva\('equipo', a\.fila, a\.persona\);/);
   const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
