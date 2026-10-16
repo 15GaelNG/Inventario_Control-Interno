@@ -114,6 +114,7 @@ function captura(registro) {
     LineasDatos: { nuevoId: () => 'RES-1' },
     LineasFirmas: { tiene: () => false },
     LineasChecklist: { CONDICIONES: [] },
+    LineasAcciones: { exigirEstatusParaResponsiva: () => '' },
     LineasUtil: {
       col: (f, c) => (c in f ? f[c] : null), digitos: (v) => String(v || '').replace(/\D/g, ''),
       nucoVisible: (v) => (v ? String(v) : null),

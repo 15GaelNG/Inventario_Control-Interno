@@ -333,7 +333,7 @@ const LineasEscritura = (function () {
       const lugar = PERSONA.indexOf(c) >= 0 ? conPersona : conUbicacion;
       if (lugar || pP[c] === '') return;
       sinLugar(PERSONA.indexOf(c) >= 0 && g.RESGUARDO
-        ? 'está guardado (asignación de resguardo, sin persona): para entregarlo a alguien usa «Reasignar».'
+        ? 'está guardado (asignación de resguardo, sin persona): para entregarlo a alguien usa «Responsiva».'
         : 'no tiene asignación vigente (estatus ' + (limpio_(e ? (pE['ESTATUS EQUIPO'] || e['ESTATUS EQUIPO']) : (pL['ESTATUS LINEA'] || l['ESTATUS LINEA'])) || 'vacío') + '): ' + c + ' no tiene dónde guardarse.');
       delete pP[c];
     });

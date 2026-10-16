@@ -725,7 +725,7 @@ const LineasRegistros = (function () {
         texto_(r.valores[CAMBIO_NUMERO]).toUpperCase() === MOTIVO_CAMBIO_NUMERO;
       const antes = LineasRepo.convertirRegistro(fila);
       // corregir: cambiar a la persona aquí es corregir el dato en la misma asignación (usuario, 4-oct); pasar el equipo a
-      // otra persona es Reasignar, con su responsiva
+      // otra persona es la Responsiva (pendiente 2.49)
       const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, new Date(), { corregir: true });
       LineasRepo.registrarMovimiento(cambioDeNumero ? LineasRepo.ACCION_CAMBIO_NUMERO : 'EDICION', { motivo: motivo, ticket: texto_(datos && datos.ticket) }, usuario, new Date(), {
         refs: [id].concat(guardado.refs || []), nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
@@ -756,7 +756,8 @@ const LineasRegistros = (function () {
   // ---------------- Acciones masivas de equipos (pedido del área, 29-sep) ----------------
   //
   // Uno o varios equipos: reasignar. Cada equipo deja su movimiento REASIGNACION con el comentario. Sin acciones
-  // masivas en la pantalla por ahora (usuario, 4-oct): Reasignar abre la responsiva (LineasAcciones.reasignar).
+  // masivas en la pantalla (usuario, 4-oct; sigue apagada el 16-oct, pendiente 2.49): de uno en uno es la Responsiva
+  // (LineasAcciones.responsiva).
 
   const MASIVAS = {
     // "Mandar a resguardo" vive en LineasResguardos (datos por NUCO, persona en blanco y bandeja de Pau), 30-sep
@@ -871,6 +872,11 @@ const LineasRegistros = (function () {
           return;
         }
         if (porEquipo && !porEquipo[id]) { omitidos.push({ id: id, nuco: nuco, motivo: 'Sin cambios' }); return; }
+        // La misma regla que la Responsiva (pendiente 2.49, usuario 16-oct): lo que ya no se entrega se deja; la misma
+        // persona se actualiza en su asignación y otra abre una nueva (guardarCambiosRegistro)
+        if (clave === 'REASIGNAR') {
+          try { LineasAcciones.exigirEstatusParaResponsiva(f, conEquipo); } catch (e) { omitidos.push({ id: id, nuco: nuco, motivo: e.message }); return; }
+        }
         const estatusAntes = texto_(LineasUtil.col(f, cfg.parte === 'linea' ? 'ESTATUS LINEA' : 'ESTATUS EQUIPO')).toUpperCase();
         const cambios = Object.assign({}, pedidos, porEquipo ? porEquipo[id] : {});
         if (cfg.lineaDisponibleAUso && texto_(LineasUtil.col(f, 'ESTATUS LINEA')).toUpperCase() === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';

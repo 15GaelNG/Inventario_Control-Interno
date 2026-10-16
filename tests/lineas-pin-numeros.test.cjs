@@ -156,10 +156,10 @@ test('la responsiva pasa a la línea el PIN de WhatsApp', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const resp = captura.slice(captura.indexOf('  function guardarResponsivaEnCandado_('), captura.indexOf('  function exigirInspeccion('));
   assert.match(resp, /if \(obj\.linea && 'PIN WHATSAPP' in valores\) copia\['PIN WHATSAPP'\] = valores\['PIN WHATSAPP'\];\s*\}\s*const g = Object\.keys\(copia\)\.length \? LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia/);
-  // La línea sin equipo no le pasa nada al inventario (pendiente 2.45)
-  assert.match(resp, /const copia = \{\};\s*if \(!sinEquipo\) \{/);
-  // Después de la acción (Vincular, Cambiar línea, Reasignar): obj es el registro como quedó, con la línea que se puso
-  assert.ok(resp.indexOf("if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });") < resp.indexOf("copia['PIN WHATSAPP']"));
+  // La línea sin equipo solo pasa la persona (pendiente 2.45; 2.49, 16-oct)
+  assert.match(resp, /const copia = \{\};\s*LineasAcciones\.PERSONA_DE_RESPONSIVA\.forEach[^\n]*\n\s*if \(!sinEquipo\) \{/);
+  // Después de la acción (Vincular, Cambiar línea, Responsiva): obj es el registro como quedó, con la línea que se puso
+  assert.ok(resp.indexOf("if (hecho) obj = objetivoCaptura_(ref);") < resp.indexOf("copia['PIN WHATSAPP']"));
   // PIN WHATSAPP va a la hoja EQUIPOS (usuario, 13-oct; pendiente 2.25) y se borra cuando la línea deja al equipo
   const esc = read('src/services/lineas/LineasEscritura.gs');
   assert.match(esc, /'NUCO': 'NUCO', 'PIN WHATSAPP': 'PIN WHATSAPP' \};/);

@@ -12,7 +12,8 @@
  *                   bot ACTUALIZAR DESDE INSPECCION: copia 13 campos a LINEAS TELEFONICAS
  *                   (con su bitácora en CAMBIOS LINEAS TELEFONICAS / HISTORIAL_REASIGNACIONES), y el COLOR.
  *   - Responsiva  → fila en RESPONSIVAS LINEAS; bot MAYUSCULAS (IDENTIFICACION, COMENTARIO, antes OBSERVACIONES).
- *                   Del registro solo toca el COLOR del equipo (decisión del usuario, 3-oct).
+ *                   Es la acción que entrega (pendiente 2.49, usuario 16-oct: LineasAcciones.responsiva): lo de la
+ *                   responsiva pasa a la ficha y, si firma otra persona, reasigna.
  *   - Ambos       → PDF con las plantillas del AppSheet, después de guardar (generarPdf).
  * PDF en NUCOS (desde el corte a producción, 2-oct-2026), igual que los que sube el área a mano:
  *   <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM/INSP <NUCO> DD MM.pdf   (junto a su FOTOS)
@@ -264,8 +265,8 @@ const LineasCaptura = (function () {
    * RESPONSIVAS LINEAS_Form (sin Show_If; TIPO CONTRASEÑA está oculta en el AppSheet).
    * Mejora (pedido del área, 29-sep): los datos del responsable y del equipo vienen de la línea, como en el AppSheet,
    * pero se pueden corregir antes de firmar, igual que en la inspección (listas y autollenado del colaborador). Lo
-   * corregido queda en la responsiva y su PDF; al inventario (la responsiva no tiene el bot de la inspección) solo pasan
-   * el color, el bloqueo del equipo y el PIN de WhatsApp (guardarResponsivaEnCandado_). Solo ID, ID LINEA, NUCO, FECHA
+   * corregido queda en la responsiva y su PDF y pasa a la ficha (usuario, 16-oct, L2: la persona, modelo, IMEI,
+   * accesorios, color, bloqueo y PIN de WhatsApp; guardarResponsivaEnCandado_). ID, ID LINEA, NUCO, la línea, FECHA
    * RESPONSIVA y NOMBRE CI siguen fijos.
    */
   /** Sugerencias de identificación en la responsiva (usuario, 4-oct: la lista traía números y textos sin sentido; se puede escribir otra). */
@@ -273,8 +274,8 @@ const LineasCaptura = (function () {
 
   /**
    * RESPONSIVAS LINEAS_Form, ordenada como la inspección (usuario, 4-oct): Datos en Equipo, Línea y Responsable;
-   * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Comentario y Firmas. Los datos del equipo y
-   * la línea se pueden corregir antes de firmar (lo dijo el usuario: la reasignación llevará directo a la responsiva).
+   * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Comentario y Firmas. Los datos del equipo se
+   * pueden corregir antes de firmar; los de la línea van fijos (16-oct).
    * La fecha es una sola, como en la inspección; DIA, MES y AÑO (los que usa el PDF) se sacan de ella al guardar.
    * Lleva al DIRECTOR de la persona, como el AppSheet; el jefe directo va en la inspección (usuario, 6-oct: del 4 al
    * 6-oct la responsiva guardó al jefe en DIRECTOR).
@@ -300,17 +301,20 @@ const LineasCaptura = (function () {
   const COLUMNAS_DE_LINEA = ['NUMERO TELEFONO', 'NUMERO SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'PIN WHATSAPP'];
 
   function formularioResponsiva_(fila, catalogos, usuario, id, ahora, modo, lineaFila, sinEquipo) {
-    // Reasignar (usuario, 4-oct): la responsiva es la acción; equipo y línea fijos, la persona nueva se elige aquí y
-    // accesorios y accesos empiezan vacíos
-    const reasignar = String(modo || '').toUpperCase() === 'REASIGNAR';
-    const acceso = (c) => (reasignar ? '' : v(c));
-    // Vincular, Cambiar línea o Cambiar de equipo (etapa 3, 8-oct): la línea es la que se pone (lineaFila), fija
+    // Vincular, Cambiar línea o Cambiar de equipo (etapa 3, 8-oct): la línea es la que se pone (lineaFila), fija, y la
+    // persona es la que ya lo tiene (usuario, 16-oct): para cambiarla, primero la Responsiva
+    const conLinea = String(modo || '').toUpperCase() === 'LINEA';
     const v = (c) => valorLinea_(lineaFila && COLUMNAS_DE_LINEA.indexOf(c) >= 0 ? lineaFila : fila, c);
-    const persona = (c) => (reasignar ? '' : v(c));
+    const acceso = (c) => v(c);
+    // La responsiva es la acción (pendiente 2.49, usuario 16-oct): empieza con la persona que lo tiene (si firma ella,
+    // es renovación); si está en resguardo o DISPONIBLE no tiene persona y se elige aquí (reasignación)
+    const sinPersona = String(valorLinea_(fila, sinEquipo ? 'ESTATUS LINEA' : 'ESTATUS EQUIPO')).trim().toUpperCase() !== 'USO';
+    const persona = (c) => (sinPersona ? '' : v(c));
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
     const ed = (columna, etiqueta, control, valor, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: valor }, extra || {}));
-    // La línea: editable (con sugerencias) en la responsiva suelta; fija al reasignar
-    const deLinea = (columna, etiqueta, valor, extra) => (reasignar || lineaFila ? ro(columna, etiqueta, valor) : ed(columna, etiqueta, 'listaAbierta', valor, extra));
+    // La línea, fija (usuario, 16-oct: lo que pasa a la ficha es de la persona y del equipo): se cambia con Vincular o
+    // Cambiar línea y un dato mal capturado se corrige con Editar línea
+    const deLinea = (columna, etiqueta, valor) => ro(columna, etiqueta, valor);
     // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma) y lo que
     // ya traiga el equipo fuera de la lista, para no perderlo
     const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
@@ -333,18 +337,17 @@ const LineasCaptura = (function () {
       ro('ID', 'ID', id),
       ro('ID LINEA', 'ID LINEA', v('IMEI') || v('ID')),
       ro('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || ''),
-      // El equipo no se cambia en la responsiva (usuario, 4-oct): se guarda en su NUCO; un dato mal capturado se corrige
-      // con Editar. El color sí, como en la inspección
-      ro('MODELO', 'Modelo', v('EQUIPO')),
-      ro('IMEI', 'IMEI', v('IMEI')),
+      // Modelo e IMEI se corrigen aquí y pasan a la ficha (usuario, 16-oct, L2; del 4 al 16-oct iban fijos). El equipo
+      // sigue siendo el mismo: se guarda en su NUCO
+      ed('MODELO', 'Modelo', 'texto', v('EQUIPO')),
+      ed('IMEI', 'IMEI', 'texto', v('IMEI'), { literal: true }),
       campo_('COLOR', 'Color', 'listaAbierta', { valor: v('COLOR'), requerido: 'SIEMPRE', opciones: catalogos.colores || [] }),
       titulo_('LÍNEA', 'card-sim'),
-      // Sugerencias del inventario; al elegir un número (o un SIM) se llenan los demás datos de esa línea (usuario, 4-oct)
-      deLinea('No TELEFONO', 'Número', v('NUMERO TELEFONO'), { sugerencias: 'NUMEROS', autollenar: { 'SIM': 'sim', 'COMPAÑIA': 'compania', 'RAZON SOCIAL': 'razonSocial' } }),
-      deLinea('SIM', 'SIM', v('NUMERO SIM'), { sugerencias: 'SIMS', autollenar: { 'No TELEFONO': 'numero', 'COMPAÑIA': 'compania', 'RAZON SOCIAL': 'razonSocial' } }),
-      deLinea('COMPAÑIA', 'Compañía', v('COMPAÑIA'), { opciones: catalogos.companias || [] }),
+      deLinea('No TELEFONO', 'Número', v('NUMERO TELEFONO')),
+      deLinea('SIM', 'SIM', v('NUMERO SIM')),
+      deLinea('COMPAÑIA', 'Compañía', v('COMPAÑIA')),
       // La razón social es de la línea (la del contrato), no del responsable (§3.3)
-      deLinea('RAZON SOCIAL', 'Razón social', v('RAZON SOCIAL'), { opciones: catalogos.razonesSociales || [] }),
+      deLinea('RAZON SOCIAL', 'Razón social', v('RAZON SOCIAL')),
     ];
     const accesos = sinEquipo ? [] : [
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
@@ -356,9 +359,11 @@ const LineasCaptura = (function () {
       campo_('CONTRASEÑA', 'Patrón', 'patron', { valor: acceso('PATRON'), secreto: true }),
     ];
     return datos.concat([
-      titulo_(reasignar ? 'NUEVO RESPONSABLE' : 'RESPONSABLE', reasignar ? 'user-round-check' : 'user'),
-      ed('No EMPLEADO', 'No. de empleado', 'listaAbierta', persona('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH), llenarVacios: true }),
-      ed('RESPONSABLE', 'Nombre', 'listaAbierta', persona('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true }),
+      titulo_('RESPONSABLE', 'user'),
+      conLinea ? ro('No EMPLEADO', 'No. de empleado', persona('NO EMPLEADO'))
+        : ed('No EMPLEADO', 'No. de empleado', 'listaAbierta', persona('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH), llenarVacios: true }),
+      conLinea ? ro('RESPONSABLE', 'Nombre', persona('RESPONSABLE'))
+        : ed('RESPONSABLE', 'Nombre', 'listaAbierta', persona('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true }),
       campo_('IDENTIFICACION', 'Identificación', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES }),
       archivoIdentificacion_(0),
       // Listas abiertas: un valor viejo fuera de la lista no debe impedir firmar la responsiva
@@ -370,7 +375,7 @@ const LineasCaptura = (function () {
       ed('DIRECTOR', 'Director', 'listaAbierta', persona('DIRECTOR'), { opciones: catalogos.directores || [] }),
       ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
     ]).concat(
-      // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; al reasignar empiezan vacíos. Cada uno con su
+      // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; sin persona empiezan vacíos. Cada uno con su
       // identificación debajo de su nombre (usuario, 9-oct)
       conIdentificacionAdicional_(LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), persona)), accesos, [
       // Paso de firmas en tres partes, como la inspección (usuario, 4-oct)
@@ -432,6 +437,8 @@ const LineasCaptura = (function () {
   function contextoResponsiva(ref, usuario, puedeVerSecretos) {
     const obj = objetivoCaptura_(ref);
     if (!obj.equipo) numeroParaResponsiva_(obj);
+    // Lo vendido, desechado, robado o la línea cancelada ya no se entrega (usuario, 16-oct); Vincular ya lo revisó
+    if (!(ref && String(ref.modo || '').toUpperCase() === 'LINEA')) LineasAcciones.exigirEstatusParaResponsiva(obj.fila, !!obj.equipo);
     const ahora = new Date();
     const lineaFila = lineaDeRef_(ref);
     return {
@@ -587,7 +594,7 @@ const LineasCaptura = (function () {
   // ======================================================================
 
   /**
-   * accion (opcional, LineasAcciones.reasignar): { ref, modo, aplicar(ahora, valores) → { id } }. Primero se revisa la
+   * accion (LineasAcciones.responsiva y vincular): { ref, modo, aplicar(ahora, valores) → { id } }. Primero se revisa la
    * responsiva; si está bien, se hace la acción (aplicar) y la responsiva se guarda en el registro, todo dentro del
    * mismo candado.
    */
@@ -605,7 +612,7 @@ const LineasCaptura = (function () {
     const fecha = LineasIdentificaciones.fechaDe(enviados['FECHA RESPONSIVA']);
     // La línea sin equipo (pendiente 2.45): su carpeta en LINEAS se crea antes, como la de las identificaciones, y el
     // PDF va ahí (APP_EVIDENCIAS la liga); si la responsiva no se guarda, se manda a la papelera
-    const carpetaLinea = objetivo.equipo || accion ? null
+    const carpetaLinea = objetivo.equipo ? null
       : LineasArchivos.carpetaEvidenciaLinea(objetivo.reg.id, numeroParaResponsiva_(objetivo), fecha);
     const escritos = identificaciones.length
       ? LineasIdentificaciones.escribir(identificaciones, LineasUtil.col(objetivo.fila, 'NUCO'), fecha, PDF.RESPONSIVA.carpeta, carpetaLinea)
@@ -629,7 +636,7 @@ const LineasCaptura = (function () {
     return LineasDatos.conCandado(() => {
       const ahora = new Date();
       let obj = objetivoCaptura_(ref);
-      const sinEquipo = !obj.equipo && !accion;
+      const sinEquipo = !obj.equipo;
       const elementos = formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, accion ? accion.modo : '', accion ? accion.lineaFila || null : null, sinEquipo)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       const ocultos = {};
@@ -653,7 +660,7 @@ const LineasCaptura = (function () {
       valores['COMENTARIO'] = String(valores['COMENTARIO'] || '').toUpperCase();
       // La responsiva está completa: ahora sí la acción, y la responsiva queda en el registro
       const hecho = accion ? accion.aplicar(ahora, valores) : null;
-      if (hecho) obj = objetivoCaptura_({ equipoId: hecho.id });
+      if (hecho) obj = objetivoCaptura_(ref);
 
       // ID LINEA es el registro (el equipo, o la línea sin equipo); ID LINEA ENTREGADA, la línea que se entregó ese día
       // (pendiente 2.45): con ella la ficha de la línea encuentra las responsivas que firmó dentro de un equipo
@@ -665,10 +672,17 @@ const LineasCaptura = (function () {
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, ADICIONALES);
       if (fila[LineasRepo.COL_LINEA_ENTREGADA]) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, [LineasRepo.COL_LINEA_ENTREGADA]);
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
-      // El color es del aparato (EQUIPOS): la responsiva lo actualiza, igual que la inspección (decisión del usuario, 3-oct).
-      // La línea sin equipo no le pasa nada al inventario (pendiente 2.45)
+      // Todo lo de la responsiva pasa a la ficha (usuario, 16-oct, L2; pendiente 2.49): la persona y, en un equipo, el
+      // modelo, el IMEI, los accesorios, el color, el bloqueo y el PIN de WhatsApp. Si firmó otra persona, la acción ya la
+      // puso (LineasAcciones.responsiva) y aquí no cambia nada; si es la misma, se corrige en la misma asignación
+      // (corregir). En Vincular la persona va fija. La línea sin equipo solo pasa la persona
       const copia = {};
+      LineasAcciones.PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { if (origen in valores) copia[destino] = valores[origen]; });
       if (!sinEquipo) {
+        copia['EQUIPO'] = valores['MODELO'] || '';
+        copia['IMEI'] = valores['IMEI'] || '';
+        copia['ACCESORIOS'] = valores['ACCESORIOS'] || '';
+        // El color es del aparato (EQUIPOS): la responsiva lo actualiza, igual que la inspección (decisión del usuario, 3-oct)
         if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
         // El patrón trazado (o borrado) en la responsiva también pasa al equipo, como el de la inspección (usuario, 5-oct);
         // PIN EQUIPO solo si dice PATRON. Sin trazar, datos.patron no llega y el del equipo se queda igual
@@ -682,7 +696,7 @@ const LineasCaptura = (function () {
         // NUCO 1712 se vinculó con su responsiva el 12-oct y el PIN se quedó el de antes hasta corregirlo con Editar)
         if (obj.linea && 'PIN WHATSAPP' in valores) copia['PIN WHATSAPP'] = valores['PIN WHATSAPP'];
       }
-      const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true }) : null;
+      const g = Object.keys(copia).length ? LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true, corregir: true }) : null;
 
       // Con identificación, la carpeta de la responsiva ya existe (la suya): su PDF se guarda ahí (destinoPdf_)
       LineasRepo.asegurarPestanaApp(LineasRepo.TAB.APP_EVID);

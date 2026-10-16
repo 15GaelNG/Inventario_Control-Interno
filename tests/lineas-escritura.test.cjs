@@ -196,7 +196,7 @@ test('de resguardo a uso sin cambiar la línea: la línea DISPONIBLE se queda gu
 test('lo que no tiene dónde guardarse avisa; la inspección (tolerante) lo ignora', () => {
   const t = cargar(BASE);
   assert.throws(() => t.guardar('EQU-3', { 'RESPONSABLE': 'PEDRO' }), /no tiene asignación vigente/);
-  assert.throws(() => t.guardar('EQU-2', { 'RESPONSABLE': 'PEDRO' }), /Reasignar/);
+  assert.throws(() => t.guardar('EQU-2', { 'RESPONSABLE': 'PEDRO' }), /usa «Responsiva»/);
   assert.throws(() => t.guardar('LIN-C', { 'NUCO': '1500' }), /NUCO es del aparato/);
   const r = t.guardar('EQU-2', { 'RESPONSABLE': 'PEDRO', 'SEDE': 'CANCUN' }, { tolerante: true });
   assert.deepStrictEqual(r.campos.map((c) => c.campo), ['SEDE']);

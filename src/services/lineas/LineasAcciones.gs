@@ -1,7 +1,8 @@
 /**
  * LineasAcciones.gs
- * Las acciones que guardan junto con su documento: Reasignar (usuario, 4-oct), que abre directo la responsiva, y
- * Vincular / Cambiar línea / Cambiar de equipo / Desvincular (etapa 3, 8-oct), con responsiva si el equipo queda en uso.
+ * Las acciones que guardan junto con su documento: la Responsiva (pendiente 2.49, usuario 16-oct: una sola acción en
+ * lugar de Reasignar, también para la línea sin equipo) y Vincular / Cambiar línea / Cambiar de equipo / Desvincular
+ * (etapa 3, 8-oct), con responsiva si el equipo queda en uso.
  *
  * "¿Qué pasó?" y la regla de acciones por estatus se quitaron (usuario, 4-oct): las acciones del menú ya no dependen
  * del estatus y el servidor no las rechaza por él; el estatus se cambia en Editar (desde el 4-oct, sin «Cambiar estatus»).
@@ -11,7 +12,7 @@ const LineasAcciones = (function () {
   const txt = (v) => (v === null || v === undefined ? '' : String(v).trim());
   const may = (v) => txt(v).toUpperCase();
 
-  // ---------------- Reasignar ----------------
+  // ---------------- Responsiva (antes Reasignar) ----------------
 
   /** Datos de la persona en la responsiva → columnas del inventario. */
   const PERSONA_DE_RESPONSIVA = [
@@ -20,48 +21,92 @@ const LineasAcciones = (function () {
   ].concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat([['NO EMPLEADO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE'],
     ['NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']]), []));
 
+  /** Lo que ya no se entrega (usuario, 16-oct): primero se corrige su estatus con Editar. */
+  const ESTATUS_SIN_RESPONSIVA = {
+    equipo: ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'],
+    linea: ['CANCELADA', 'EN PROCESO DE CANCELACION'],
+  };
+  const sinAcentos_ = (v) => may(v).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ');
+
+  /** «NUCO 0012» o «La línea 4421234567». */
+  function nombreRegistro_(f, esEquipo) {
+    return esEquipo ? 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '') : 'La línea ' + (txt(LineasUtil.col(f, 'NUMERO TELEFONO')) || txt(LineasUtil.col(f, 'NUMERO SIM')));
+  }
+
+  /** El estatus del registro (el del equipo, o el de la línea sin equipo), o error si ya no se entrega. */
+  function exigirEstatusParaResponsiva(f, esEquipo) {
+    const estatus = may(LineasUtil.col(f, esEquipo ? 'ESTATUS EQUIPO' : 'ESTATUS LINEA'));
+    if (ESTATUS_SIN_RESPONSIVA[esEquipo ? 'equipo' : 'linea'].indexOf(estatus) >= 0) throw new Error(nombreRegistro_(f, esEquipo) + ' está ' + estatus + '.');
+    return estatus;
+  }
+
   /**
-   * Reasignar (usuario, 4-oct): abre directo la responsiva, sin formulario intermedio. Equipo y línea van fijos; la
-   * persona nueva se elige en la responsiva y su COMENTARIO es el de la acción. Al guardar, primero se revisa la
-   * responsiva; si está completa, se reasigna (el equipo queda en USO, D5.1; su línea DISPONIBLE pasa a USO) y la
-   * responsiva queda guardada, todo junto.
-   * La inspección también es obligatoria (usuario, 5-oct): se captura antes, dentro de la acción, y llega como
-   * `inspeccionId` (del mismo equipo y de hoy, LineasCaptura.exigirInspeccion), como en Mandar a resguardo.
+   * ¿Firma la misma persona que lo tiene hoy? Solo en USO y con el mismo nombre (sin acentos). Si no, es reasignación:
+   * otra persona, o el registro estaba en resguardo o DISPONIBLE (usuario, 16-oct). La pantalla pregunta lo mismo
+   * (mismaPersonaResponsiva en lineas.html) para saber si pide la inspección.
    */
-  function reasignar(responsiva, usuario, puedeVerSecretos) {
-    const id = txt((responsiva || {}).equipoId);
-    if (!id) throw new Error('Elige el equipo que se reasigna.');
-    const inspeccionId = txt((responsiva || {}).inspeccionId);
-    const r = LineasCaptura.guardarResponsiva(responsiva || {}, usuario, puedeVerSecretos, {
-      ref: { equipoId: id }, modo: 'REASIGNAR',
-      aplicar: (ahora, valores) => {
-        const f = LineasRepo.leerRegistroObligatorio(id, 'el equipo');
-        const nombre = 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '');
-        LineasCaptura.exigirInspeccion(inspeccionId, LineasDatos.idsDeFila(f), nombre);
-        const estatus = txt(LineasUtil.col(f, 'ESTATUS EQUIPO'));
-        const comentario = txt(valores['COMENTARIO']);
-        if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
-        const nuevo = txt(valores['RESPONSABLE']).toUpperCase();
-        const antes = txt(LineasUtil.col(f, 'RESPONSABLE'));
-        if (nuevo && nuevo === antes.toUpperCase()) throw new Error(nombre + ' ya lo tiene ' + antes + ': elige a la persona nueva.');
-        const cambios = { 'ESTATUS EQUIPO': 'USO' };
-        PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { cambios[destino] = txt(valores[origen]); });
-        // El jefe directo no viene en la responsiva (lleva al director): el de la inspección, que se puede corregir ahí, o
-        // el de Capital Humano de la persona elegida (usuario, 6-oct; del 4 al 6-oct era al revés)
-        const deInspeccion = may(LineasCaptura.datoDeInspeccion(inspeccionId, 'RESPONSABLE')) === nuevo ? LineasCaptura.datoDeInspeccion(inspeccionId, 'JEFE DIRECTO') : '';
-        cambios['JEFE DIRECTO'] = deInspeccion || datoDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE'], 'jefe');
-        if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
-        const g = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora, { tolerante: true });
-        LineasRepo.registrarMovimiento('REASIGNACION', { motivo: comentario, ticket: txt(valores['TICKET']) }, usuario, ahora, {
-          refs: [id].concat(g.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'),
-          antes: { estatus: may(estatus), responsable: { nombre: antes } },
-          despues: { estatus: 'USO', responsable: { nombre: txt(valores['RESPONSABLE']) } },
-          detalle: { accion: 'REASIGNAR', inspeccionId: inspeccionId, idsCambios: g.idsCambios, idsReasignacion: g.idReasignacion ? [g.idReasignacion] : [], cambios: g.campos },
-        });
-        return { id: id };
-      },
+  function esRenovacion(estatus, responsableActual, responsableNuevo) {
+    const antes = sinAcentos_(responsableActual);
+    return may(estatus) === 'USO' && !!antes && antes === sinAcentos_(responsableNuevo);
+  }
+
+  /**
+   * Responsiva (pendiente 2.49, usuario 16-oct: «una reasignación es lo mismo que una responsiva»), del equipo o de la
+   * línea sin equipo. Equipo y línea van fijos; la persona se elige en la responsiva y su COMENTARIO es el de la acción.
+   *   - Firma la misma persona que lo tiene: renovación. Solo se genera el documento y lo de la responsiva pasa a la ficha
+   *     en la misma asignación (LineasCaptura.guardarResponsivaEnCandado_). Sin inspección.
+   *   - Otra persona, o el registro estaba en resguardo o DISPONIBLE: reasignación. Se cierra la asignación vigente y se
+   *     abre otra con la persona de la responsiva; queda en USO (D5.1) y, en un equipo, su línea DISPONIBLE pasa a USO con
+   *     él (L1). En un equipo la inspección es obligatoria (usuario, 5-oct y 16-oct): se captura antes, dentro de la acción,
+   *     y llega como `inspeccionId` (del mismo equipo y de hoy, LineasCaptura.exigirInspeccion). La línea sin equipo no
+   *     lleva inspección.
+   * Primero se revisa la responsiva; si está completa, se reasigna y la responsiva queda guardada, todo junto.
+   */
+  function responsiva(datos, usuario, puedeVerSecretos) {
+    const d = datos || {};
+    const ref = txt(d.equipoId) ? { equipoId: txt(d.equipoId) } : { lineaId: txt(d.lineaId) };
+    if (!ref.equipoId && !ref.lineaId) throw new Error('Elige el equipo o la línea.');
+    const inspeccionId = txt(d.inspeccionId);
+    const r = LineasCaptura.guardarResponsiva(d, usuario, puedeVerSecretos, {
+      ref: ref, modo: 'RESPONSIVA',
+      aplicar: (ahora, valores) => aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora),
     });
-    return { id: r.id, registroId: r.registroId, pdfPendiente: true, filas: r.filas };
+    return { id: r.id, registroId: r.registroId, pdfPendiente: true, filas: r.filas, reasignado: !!(r.hecho && r.hecho.reasignado) };
+  }
+
+  /** Dentro del candado de la responsiva: si es reasignación, cambia a la persona y el estatus (ver responsiva). */
+  function aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora) {
+    const esEquipo = !!ref.equipoId;
+    const id = ref.equipoId || ref.lineaId;
+    const f = LineasRepo.leerRegistroObligatorio(id, esEquipo ? 'el equipo' : 'la línea');
+    const estatus = exigirEstatusParaResponsiva(f, esEquipo);
+    const comentario = txt(valores['COMENTARIO']);
+    if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
+    const antes = txt(LineasUtil.col(f, 'RESPONSABLE'));
+    if (esRenovacion(estatus, antes, valores['RESPONSABLE'])) return { id: id, reasignado: false };
+    if (esEquipo) LineasCaptura.exigirInspeccion(inspeccionId, LineasDatos.idsDeFila(f), nombreRegistro_(f, true));
+    const nuevo = may(valores['RESPONSABLE']);
+    const cambios = {};
+    PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { cambios[destino] = txt(valores[origen]); });
+    // El jefe directo no viene en la responsiva (lleva al director): el de la inspección, que se puede corregir ahí, o
+    // el de Capital Humano de la persona elegida (usuario, 6-oct; del 4 al 6-oct era al revés)
+    const deInspeccion = esEquipo && may(LineasCaptura.datoDeInspeccion(inspeccionId, 'RESPONSABLE')) === nuevo ? LineasCaptura.datoDeInspeccion(inspeccionId, 'JEFE DIRECTO') : '';
+    cambios['JEFE DIRECTO'] = deInspeccion || datoDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE'], 'jefe');
+    if (esEquipo) {
+      cambios['ESTATUS EQUIPO'] = 'USO';
+      if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
+    } else {
+      cambios['ESTATUS LINEA'] = 'USO';
+    }
+    const g = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora, { tolerante: true });
+    LineasRepo.registrarMovimiento('REASIGNACION', { motivo: comentario, ticket: txt(valores['TICKET']) }, usuario, ahora, {
+      refs: [id].concat(g.refs || []), nuco: esEquipo ? LineasUtil.col(f, 'NUCO') : null, numero: LineasUtil.col(f, 'NUMERO TELEFONO'),
+      antes: { estatus: estatus, responsable: { nombre: antes } },
+      despues: { estatus: 'USO', responsable: { nombre: txt(valores['RESPONSABLE']) } },
+      detalle: { accion: 'RESPONSIVA', inspeccionId: esEquipo ? inspeccionId : undefined, idsCambios: g.idsCambios,
+        idsReasignacion: g.idReasignacion ? [g.idReasignacion] : [], cambios: g.campos },
+    });
+    return { id: id, reasignado: true };
   }
 
   /** Un dato de la persona en Capital Humano ('jefe', 'director'…) por número de empleado o, si no, por nombre; '' si no está. */
@@ -192,5 +237,5 @@ const LineasAcciones = (function () {
   }
 
   // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado
-  return { reasignar, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_ };
+  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_, esRenovacion, exigirEstatusParaResponsiva };
 })();
