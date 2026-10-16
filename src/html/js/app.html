@@ -2586,7 +2586,7 @@
         { t: 'Pieza', r: (m) => escaparHtml(nombreDe[m.ACCESORIO] || m.ACCESORIO) },
         { t: 'Motivo', r: (m) => escaparHtml(m.MOTIVO || '—') },
         { t: 'Registró', r: (m) => escaparHtml(m.REGISTRO || '—') },
-        { t: 'Documento', r: (m) => (/^https?:/i.test(m.ORIGEN) ? '<a href="' + escaparHtml(m.ORIGEN) + '" target="_blank" rel="noopener">Ver</a>' : '—') },
+        { t: 'Documento', r: (m) => (/^https?:/i.test(m.ORIGEN) ? TablaFicha.boton({ href: m.ORIGEN }) : '—') },
       ], acc.historial || []);
       return '<div class="card ln-card"><h3 class="acc-titulo">' + Iconos.svg('wrench') + ' Accesorios' + botones + '</h3>' +
         '<div class="acc-piezas">' + piezas + '</div></div>' +
