@@ -2461,7 +2461,12 @@
      *  etiquetas legibles que Registrar/Editar, en vez del volcado plano de antes. Lo que
      *  no está en CAMPOS_VEHICULO (columnas legadas del AppSheet) cae en "Otros datos".
      *  soloGrupos filtra a solo esos grupos (null: todos, más "Otros datos"). */
-    function seccionesFichaVehiculo(completo, soloGrupos, extras) {
+    /**
+     * opciones.reemplazados: campos que ya tienen su fuente nueva (ACCESORIOS → la pestaña Accesorios): vacíos no se
+     * muestran (ni con vacioEnFicha) y con texto salen como «(nota anterior)», para no contradecir al dato nuevo.
+     */
+    function seccionesFichaVehiculo(completo, soloGrupos, extras, opciones) {
+      const reemplazados = (opciones && opciones.reemplazados) || [];
       const porGrupo = {};
       const grupos = [];
       const usadas = new Set();
@@ -2473,9 +2478,10 @@
         const valor = completo[campo.clave];
         const vacio = valor === '' || valor === null || valor === undefined;
         // Un campo vacío no se muestra, salvo el que pide decirlo (vacioEnFicha: "Sin accesorios registrados")
-        if (vacio && !campo.vacioEnFicha) return;
+        const reemplazado = reemplazados.indexOf(campo.clave) >= 0;
+        if (vacio && (!campo.vacioEnFicha || reemplazado)) return;
         if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
-        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, vacio
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta + (reemplazado ? ' (nota anterior)' : ''), vacio
           ? '<span class="info-vacio">' + escaparHtml(campo.vacioEnFicha) + '</span>'
           : (campo.moneda ? formatearMoneda(valor) : valor)));
       });
@@ -2488,6 +2494,11 @@
 
       // Lo que una sección trae además de sus campos (las piezas de la unidad en "Accesorios y sensor")
       Object.keys(extras || {}).forEach((g) => { if (extras[g] && !porGrupo[g]) { porGrupo[g] = []; grupos.push(g); } });
+      // En el orden del formulario (una sección que solo trae su extra no se va al final)
+      const ordenGrupo = [];
+      CAMPOS_VEHICULO.forEach((c) => { if (ordenGrupo.indexOf(c.grupo) < 0) ordenGrupo.push(c.grupo); });
+      const posicion = (g) => (ordenGrupo.indexOf(g) < 0 ? ordenGrupo.length : ordenGrupo.indexOf(g));
+      grupos.sort((a, b) => posicion(a) - posicion(b));
 
       // Pestaña Datos: las secciones del formulario de Editar, en su orden. Plegables; en celular solo las dos primeras
       // abiertas para que no sea un scroll eterno. "Documentación y seguro" aquí solo trae los estados.
@@ -2538,11 +2549,23 @@
     // ---------- Accesorios de la unidad (AccesoriosVehiculoService, 16-oct-2026) ----------
     // El estado de cada pieza sale de su último movimiento (CARGA INICIAL de la responsiva, ALTA o BAJA); sin
     // movimientos es "sin dato", no "no tiene". Desde aquí solo se registran altas y bajas.
+    // Como todo lo que se registra sobre la unidad, vive en SU pestaña (con los botones en la cabecera); Datos solo
+    // dice cuántas tiene y lleva a ella (usuario, 16-oct: un solo lugar predecible para cada cosa).
     const ACC_ESTADO = { SI: { clase: 'acc-si', icono: 'check', texto: 'Tiene' }, NO: { clase: 'acc-no', icono: 'x', texto: 'No tiene' },
       '': { clase: 'acc-sin', icono: 'minus', texto: 'Sin dato' } };
     const ACC_MOVIMIENTO = { 'CARGA INICIAL': 'Carga inicial', ALTA: 'Alta', BAJA: 'Baja' };
 
-    function htmlAccesoriosUnidad(acc) {
+    /** En Datos (solo lectura): cuántas piezas tiene y la liga a la pestaña Accesorios */
+    function resumenAccesorios(acc) {
+      const tiene = (acc.estado || []).filter((p) => p.TIENE === 'SI').length;
+      const conDato = (acc.estado || []).some((p) => p.TIENE);
+      return '<p class="acc-resumen">' + Iconos.svg('wrench') + ' ' +
+        (conDato ? 'Tiene <strong>' + tiene + ' de ' + (acc.estado || []).length + '</strong> piezas' : 'Sin accesorios cargados todavía') +
+        ' · <a href="#" class="ln-enlace" data-ir-pestana="accesorios">Ver accesorios</a></p>';
+    }
+
+    /** La pestaña Accesorios: las piezas con su estado y la historia; Registrar alta / baja en la cabecera */
+    function pestanaAccesorios(acc) {
       const nombreDe = {};
       (acc.catalogo || []).forEach((p) => { nombreDe[p.CLAVE] = p.NOMBRE; });
       const editar = puedeEditarModulo('vehiculos.accesorios');
@@ -2552,24 +2575,24 @@
           Iconos.svg(e.icono) + '<span class="acc-nombre">' + escaparHtml(p.NOMBRE) + '</span>' +
           (p.DESDE ? '<span class="acc-desde">' + escaparHtml(formatearFecha(p.DESDE)) + '</span>' : '') + '</div>';
       }).join('');
-      const historia = (acc.historial || []).map((m) => {
-        const doc = /^https?:/i.test(m.ORIGEN) ? ' · <a href="' + escaparHtml(m.ORIGEN) + '" target="_blank" rel="noopener">documento</a>' : '';
-        return '<li><span class="acc-mov acc-mov-' + escaparHtml(String(m.MOVIMIENTO).toLowerCase().replace(/\s+/g, '-')) + '">' +
-          escaparHtml(ACC_MOVIMIENTO[m.MOVIMIENTO] || m.MOVIMIENTO) + '</span> ' +
-          '<strong>' + escaparHtml(nombreDe[m.ACCESORIO] || m.ACCESORIO) + '</strong> · ' + escaparHtml(formatearFecha(m.FECHA)) +
-          (m.MOTIVO ? ' · ' + escaparHtml(m.MOTIVO) : '') + (m.REGISTRO ? ' · <span class="ln-tenue">' + escaparHtml(m.REGISTRO) + '</span>' : '') +
-          doc + '</li>';
-      }).join('');
-      return '<div class="acc-unidad">' +
-        '<div class="acc-cabeza"><strong>Piezas de la unidad</strong>' +
-          (editar ? '<span class="acc-botones">' +
-            '<button type="button" class="secondary ln-btn-chico" data-acc-movimiento="ALTA">' + Iconos.svg('plus') + ' Registrar alta</button>' +
-            '<button type="button" class="secondary ln-btn-chico" data-acc-movimiento="BAJA">' + Iconos.svg('minus') + ' Registrar baja</button></span>' : '') +
-        '</div>' +
-        '<div class="acc-piezas">' + piezas + '</div>' +
-        (historia ? '<details class="acc-historia"><summary>Historia (' + acc.historial.length + ')</summary><ul>' + historia + '</ul></details>'
-          : '<p class="ln-tenue acc-vacio">Sin movimientos registrados todavía: lo de cada unidad se carga desde su responsiva.</p>') +
-        '</div>';
+      const botones = editar ? '<span class="acc-botones">' +
+        '<button type="button" class="secondary" data-acc-movimiento="ALTA">' + Iconos.svg('plus') + ' Registrar alta</button>' +
+        '<button type="button" class="secondary" data-acc-movimiento="BAJA">' + Iconos.svg('minus') + ' Registrar baja</button></span>' : '';
+      // La historia, con la misma tabla de solo lectura que las demás pestañas de la ficha
+      const historia = tablaFicha([
+        { t: 'Fecha', r: (m) => formatearFecha(m.FECHA) },
+        { t: 'Movimiento', r: (m) => '<span class="acc-mov acc-mov-' + escaparHtml(String(m.MOVIMIENTO).toLowerCase().replace(/\s+/g, '-')) + '">' +
+          escaparHtml(ACC_MOVIMIENTO[m.MOVIMIENTO] || m.MOVIMIENTO) + '</span>' },
+        { t: 'Pieza', r: (m) => escaparHtml(nombreDe[m.ACCESORIO] || m.ACCESORIO) },
+        { t: 'Motivo', r: (m) => escaparHtml(m.MOTIVO || '—') },
+        { t: 'Registró', r: (m) => escaparHtml(m.REGISTRO || '—') },
+        { t: 'Documento', r: (m) => (/^https?:/i.test(m.ORIGEN) ? '<a href="' + escaparHtml(m.ORIGEN) + '" target="_blank" rel="noopener">Ver</a>' : '—') },
+      ], acc.historial || []);
+      return '<div class="card ln-card"><h3 class="acc-titulo">' + Iconos.svg('wrench') + ' Accesorios' + botones + '</h3>' +
+        '<div class="acc-piezas">' + piezas + '</div></div>' +
+        '<div class="card ln-card"><h3>' + Iconos.svg('history') + ' Historia</h3>' +
+        ((acc.historial || []).length ? historia
+          : '<p class="empty-state">Sin movimientos registrados todavía: lo de cada unidad se carga desde su responsiva.</p>') + '</div>';
     }
 
     /** ALTA (de lo que no tiene o no hay dato) o BAJA (de lo que tiene), con el modal de captura de la ficha */
@@ -2599,7 +2622,7 @@
           await callServer('apiRegistrarAccesorioVehiculo', state.token, Object.assign({ ID_VEHICULO: vResumen.ID_VEHICULO, MOVIMIENTO: movimiento }, valores));
         },
         textoExito: () => (alta ? 'Alta registrada' : 'Baja registrada'),
-        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'datos'); },
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'accesorios'); },
       });
     }
 
@@ -3829,8 +3852,10 @@
 
         // Una sola pestaña Datos (12-oct-2026; antes General + Detalles): todo el vehículo, por secciones
         // Las piezas de la unidad (sección vehiculos.accesorios): sin permiso llega null y no sale
+        const conAccesorios = !!(accesorios && accesorios.estado);
         const datos = seccionesFichaVehiculo(completo, null,
-          accesorios && accesorios.estado ? { 'Accesorios y sensor': htmlAccesoriosUnidad(accesorios) } : null);
+          conAccesorios ? { 'Accesorios y sensor': resumenAccesorios(accesorios) } : null,
+          conAccesorios ? { reemplazados: ['ACCESORIOS'] } : null);
 
         // Cada parte del historial es de su módulo (Cambios / Reasignaciones): sin permiso, no sale
         const historial = (cambios === null ? '' : '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
@@ -3916,6 +3941,11 @@
               { t: '', r: (s) => accionesFichaRegistro('sensor', s.ID, { editar: puedeEditarModulo('instalacion-sensores'), eliminar: puedeEditarModulo('instalacion-sensores') }) },
             ], sensores, 'Sin sensor instalado para este vehículo.',
             puedeEditarModulo('instalacion-sensores') ? { tipo: 'sensor', texto: 'Agregar' } : null),
+          },
+          // Sección vehiculos.accesorios: sin permiso llega null y no sale
+          accesorios && accesorios.estado && {
+            id: 'accesorios', titulo: 'Accesorios', icono: 'wrench', num: accesorios.estado.filter((p) => p.TIENE === 'SI').length,
+            contenido: pestanaAccesorios(accesorios),
           },
           hologramas && {
             id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,

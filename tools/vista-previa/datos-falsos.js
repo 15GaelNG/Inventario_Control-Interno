@@ -769,11 +769,15 @@
     'vehiculos': () => abrir('vehiculos'),
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
     'vehiculos-accesorios': async () => {
-      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('.acc-unidad')).scrollIntoView({ block: 'center' });
-      document.querySelector('.acc-historia').open = true; await esperar(300);
+      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('.tab-btn[data-tab="accesorios"]')).click(); await esperar(500);
+    },
+    // Datos: solo el resumen (cuántas tiene) y la liga a la pestaña
+    'vehiculos-datos-accesorios': async () => {
+      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('.acc-resumen')).scrollIntoView({ block: 'center' }); await esperar(300);
     },
     'vehiculos-accesorios-baja': async () => {
-      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('[data-acc-movimiento="BAJA"]')).click(); await hasta('#veh-captura-cuerpo select'); await esperar(400);
+      await abrir('vehiculos'); await abrirPrimeraFila(); (await hasta('.tab-btn[data-tab="accesorios"]')).click(); await esperar(300);
+      (await hasta('[data-acc-movimiento="BAJA"]')).click(); await hasta('#veh-captura-cuerpo select'); await esperar(400);
     },
     'vehiculos-inspecciones': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();
