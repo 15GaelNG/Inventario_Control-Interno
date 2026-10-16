@@ -198,7 +198,7 @@ const LineasRegistros = (function () {
       ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'),
         opciones: nuevo || texto_(v('ESTATUS EQUIPO')).toUpperCase() === 'USO' ? LineasRepo.CATALOGO.estatusEquipo : LineasRepo.CATALOGO.estatusEquipo.filter((x) => x !== 'USO'),
         requerido: 'SIEMPRE', valida: 'LISTA', validaSiCambia: true }),
-    ], nuevo ? [] : [fijo('FECHA REGISTRO', 'Fecha de alta', v('FECHA REGISTRO'))]);
+    ]); // Sin «Fecha de alta»: el alta está en el historial (usuario, 16-oct; pendiente 2.51)
     const responsable = [
       titulo('RESPONSABLE', 'user'),
       ed('NO EMPLEADO', 'No. de empleado', 'listaAbierta', { valida: 'MAYUS', sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH) }),
@@ -766,6 +766,15 @@ const LineasRegistros = (function () {
         refs: [id].concat(guardado.refs || []), nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: antes, despues: cambios,
         detalle: { idsCambios: guardado.idsCambios, idsReasignacion: guardado.idReasignacion ? [guardado.idReasignacion] : [], cambios: guardado.campos,
           sinPanel: sinPanel || undefined },
+      });
+      // La línea nueva que se le puso al equipo sin línea: su alta en el historial (sin columna FECHA DE ALTA; pendiente 2.51)
+      (guardado.altas || []).forEach((idLinea) => {
+        const despues = {};
+        COLUMNAS_LINEA_ALTA.forEach((c) => { if (c in cambios) despues[c] = cambios[c]; });
+        LineasRepo.registrarMovimiento('ALTA', { motivo: motivo, ticket: texto_(datos && datos.ticket) }, usuario, new Date(), {
+          refs: [idLinea], nuco: valores.NUCO, numero: valores['NUMERO TELEFONO'], antes: {}, despues: despues,
+          detalle: { vinculadaA: 'NUCO ' + (LineasUtil.nucoVisible(base['NUCO']) || '') },
+        });
       });
       // CANCELADA directo: queda en el historial como cancelación (usuario, 16-oct; pendiente 2.50)
       if (lineaSale && lineaSale.estatus === LineasResguardos.LINEA_SIN_PANEL) {

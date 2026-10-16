@@ -228,7 +228,9 @@ const LineasEscritura = (function () {
     const nombre = e ? 'NUCO ' + (LineasUtil.nucoVisible(e['NUCO']) || '') : 'la línea ' + (l['NUMERO TELEFONO'] || l['NUMERO SIM'] || '');
     const sinLugar = (mensaje) => { if (!tolerante) throw new Error(nombre + ': ' + mensaje); };
     // 0) Ponerle línea a un equipo que no tiene (Editar, 4-oct): una línea sola que ya existe con ese número, o una nueva
+    // (altaNueva: su ID, para el movimiento ALTA que deja quien llama; pendiente 2.51)
     let enlazada = false;
+    let altaNueva = null;
     if (e && !l && !tolerante) {
       const num = limpio_(cambios['NUMERO TELEFONO']);
       const sim = limpio_(cambios['NUMERO SIM']);
@@ -236,6 +238,7 @@ const LineasEscritura = (function () {
         const r = lineaParaEquipo_(e, num, sim, cambios, a, ahora);
         l = r.linea;
         enlazada = r.enlazada;
+        if (!enlazada) altaNueva = String(l['ID']);
       }
     }
 
@@ -394,7 +397,7 @@ const LineasEscritura = (function () {
       tocados_.push(String(l['ID']));
     }
     if (campos.length) LineasLectura.olvidar();
-    return { idsCambios: [], idReasignacion: null, campos: campos, refs: refs.filter(Boolean) };
+    return { idsCambios: [], idReasignacion: null, campos: campos, refs: refs.filter(Boolean), altas: altaNueva ? [altaNueva] : [] };
   }
 
   /**
@@ -424,8 +427,10 @@ const LineasEscritura = (function () {
     const nueva = agregar_('LINEAS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUMERO TELEFONO': num, 'TIPO DE LINEA': limpio_(cambios['TIPO DE LINEA']) || 'PLAN',
       'COMPAÑIA': limpio_(cambios['COMPAÑIA']), 'CUENTA PADRE': '', 'CUENTA': '', 'RAZON SOCIAL': limpio_(cambios['RAZON SOCIAL']), 'NUMERO SIM': sim,
-      'ESTATUS LINEA': estatus, 'FECHA DE ALTA': ahora,
+      'ESTATUS LINEA': estatus,
     });
+    // Sin columna FECHA DE ALTA (pendiente 2.51): el alta es su movimiento ALTA
+    LineasLectura.anotarAlta([nueva['ID']], ahora);
     cambios['ESTATUS LINEA'] = estatus;
     return { linea: nueva, enlazada: false };
   }
@@ -448,16 +453,18 @@ const LineasEscritura = (function () {
     const e = conEquipo ? agregar_('EQUIPOS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUCO': LineasUtil.nucoVisible(v('NUCO')) || '', 'TIPO DE EQUIPO': ESTRUCTURA_TIPO_EQUIPO[tipo],
       'MODELO': v('EQUIPO'), 'COLOR': v('COLOR'), 'IMEI': v('IMEI'), 'ACCESORIOS': v('ACCESORIOS'), 'PIN EQUIPO': v('PIN EQUIPO'), 'PATRON': v('PATRON'),
-      'CONTRASEÑA MODEM': v('CONTRASEÑA MODEM'), 'ESTATUS EQUIPO': v('ESTATUS EQUIPO'), 'FECHA DE ALTA': ahora,
+      'CONTRASEÑA MODEM': v('CONTRASEÑA MODEM'), 'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
       'PIN WHATSAPP': conLinea ? v('PIN WHATSAPP') : '',
     }) : null;
     const l = conLinea ? agregar_('LINEAS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUMERO TELEFONO': numero, 'TIPO DE LINEA': v('TIPO DE LINEA') || ESTRUCTURA_TIPO_LINEA[tipo] || '',
       'COMPAÑIA': v('COMPAÑIA'), 'CUENTA PADRE': '', 'CUENTA': '', 'RAZON SOCIAL': v('RAZON SOCIAL'), 'NUMERO SIM': sim,
-      'ESTATUS LINEA': v('ESTATUS LINEA'), 'FECHA DE ALTA': ahora,
+      'ESTATUS LINEA': v('ESTATUS LINEA'),
     }) : null;
     if (e) refs.push(e['ID']);
     if (l) refs.push(l['ID']);
+    // Sin columna FECHA DE ALTA (usuario, 16-oct; pendiente 2.51): el alta es el movimiento ALTA que deja quien llama
+    LineasLectura.anotarAlta([e && e['ID'], l && l['ID']], ahora);
     if (l && A_ADENDUM.some((c) => !vacio_(v(c)))) {
       refs.push(agregar_('ADENDUMS', {
         'ID LINEA': l['ID'], 'NUMERO TELEFONO': numero, 'COMPAÑIA': v('COMPAÑIA'), 'CUENTA PADRE': '', 'PLAN': '',

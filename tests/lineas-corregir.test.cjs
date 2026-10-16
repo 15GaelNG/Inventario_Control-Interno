@@ -106,6 +106,10 @@ test('responsable en blanco en el equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-R
     existeTabla: (n) => !!hojas[n], leerTabla: (n) => (hojas[n] || []).map((f) => Object.assign({}, f)),
     recordar: (clave, nombres, armar) => JSON.parse(JSON.stringify(armar())),
     esColumnaFecha: (h) => /FECHA|INICIO PLAN|FIN PLAN/i.test(h), normCol: (h) => String(h || '').toUpperCase().trim(),
+    // El alta sale del movimiento ALTA de MOVIMIENTOS (pendiente 2.51)
+    cacheLeer: () => null, cacheGuardar: () => {},
+    buscarFilas: (n, col, valor) => (hojas[n] || []).map((f, i) => (String(f[col]) === valor ? i + 2 : 0)).filter(Boolean),
+    leerFilas: (pedidos) => pedidos.map((p) => p.filas.map((i) => Object.assign({ _fila: i }, hojas[p.tabla][i - 2]))),
   };
   const L = new Function('LineasDatos', 'LineasRepo', 'PropertiesService', 'ESTRUCTURA_ES_CODIGO_RESGUARDO', 'soloEditor_',
     read('src/services/lineas/LineasLectura.gs') + '; return LineasLectura;')(LineasDatos, { folioRegistro: () => '', borrarCaches: () => {} },
