@@ -329,7 +329,7 @@ const VehiculosService = (function () {
 
     // Lo que el vehículo trae puesto ahora (hoja ACCESORIOS VEHICULO aparte, ver su comentario
     // arriba): se junta aquí para que la ficha lo vea como si fuera una columna más de VEHICULOS.
-    Object.assign(limpio, obtenerAccesoriosVehiculo_(limpio[ID_COLUMN]));
+    Object.assign(limpio, obtenerAccesoriosVehiculo_(token, limpio[ID_COLUMN]));
 
     return limpio;
   }
@@ -472,11 +472,36 @@ const VehiculosService = (function () {
 
   /** Los accesorios de un vehículo ({columna: 'SI'|'NO'}), o {} si todavía no tiene renglón (o la
    *  hoja ni siquiera existe: nadie ha guardado accesorios de nadie todavía). */
-  function obtenerAccesoriosVehiculo_(idVehiculo) {
+  function obtenerAccesoriosVehiculo_(token, idVehiculo) {
     if (!idVehiculo) return {};
     try {
       const encontrado = SheetUtils.findById(ssId(), ACCESORIOS_SHEET, idVehiculo, 'ID VEHICULO');
-      return encontrado ? encontrado.data : {};
+      if (encontrado) return encontrado.data;
+    } catch (e) {
+      // La hoja propia todavía no existe: sigue abajo, a precargar de la Responsiva.
+    }
+    return accesoriosDeResponsivaMasReciente_(token, idVehiculo);
+  }
+
+  /**
+   * Mientras el vehículo no tenga su propio renglón en ACCESORIOS VEHICULO (nadie ha guardado
+   * nada ahí todavía), se precarga con lo que diga su Responsiva más reciente -- "el vehículo se
+   * entrega con..." es la entrada original de estos datos (usuario, 15-oct-2026); las
+   * inspecciones periódicas son harina de otro costal (su checklist de "Inventarios" no tiene
+   * los mismos 13 nombres ni la misma granularidad -- CRUCETA/TAPETES ahí, LLAVE CRUZ/TAPETES
+   * RUDO+ALFOMBRA aquí -- así que no se intenta mapear). En cuanto se guarde aquí una vez, el
+   * vehículo ya tiene su propio renglón y esto deja de consultarse para él. Sin acceso a
+   * Responsiva (ResponsivaVehicularService ya revisa el permiso) o sin ninguna responsiva
+   * todavía: se deja en blanco, nunca truena la ficha por esto.
+   */
+  function accesoriosDeResponsivaMasReciente_(token, idVehiculo) {
+    try {
+      const responsivas = ResponsivaVehicularService.listarPorVehiculo(token, idVehiculo);
+      if (!responsivas.length) return {};
+      const completa = ResponsivaVehicularService.buscarPorId(token, responsivas[0].ID);
+      const datos = {};
+      ACCESORIOS_VEHICULO.forEach((c) => { if (completa && completa[c]) datos[c] = completa[c]; });
+      return datos;
     } catch (e) {
       return {};
     }
