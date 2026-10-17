@@ -828,6 +828,35 @@ const LineasCaptura = (function () {
   }
 
   /**
+   * La responsiva de una línea sin equipo firmada antes de la v122 (pendiente 2.48, usuario 16-oct: la de la línea
+   * 4461456715, del 14-oct): sin «NO APLICA» ni carpeta, al regenerar salía como de equipo (NUCO «0000», en `Files`, con
+   * lo del equipo en blanco). Antes de hacer el PDF se deja como las de ahora: la fila con SIN_EQUIPO, su carpeta en
+   * LINEAS (ligada en APP_EVIDENCIAS), su identificación movida ahí y los PDF de antes en `Files` a la papelera; el PDF
+   * nuevo se liga solo (generarPdf). Regresa la ruta de `Files` que dejó, o '' si la responsiva ya estaba bien.
+   */
+  function pasarALineas_(fila, ev, id) {
+    const lineaId = String(LineasUtil.col(fila, 'ID LINEA') || '').trim();
+    if (!/^LIN-/i.test(lineaId) || (responsivaSinEquipo_(fila) && ev.carpetaId && LineasArchivos.enLineas(ev.carpetaId))) return '';
+    const fr = LineasUtil.col(fila, 'FECHA RESPONSIVA');
+    const fecha = fr instanceof Date && !isNaN(fr) ? fr : (ev.fecha || new Date());
+    const c = LineasArchivos.carpetaEvidenciaLinea(lineaId, LineasUtil.col(fila, 'No TELEFONO'), fecha);
+    LineasDatos.conCandado(() => {
+      const filas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.RESP, id);
+      if (filas.length) LineasDatos.actualizarFila(LineasRepo.TAB.RESP, filas[0], SIN_EQUIPO);
+      if (ev._fila) LineasDatos.actualizarFila(LineasRepo.TAB.APP_EVID, ev._fila, { 'CARPETA_ID': c.carpetaId, 'RUTA': c.ruta, 'ACTUALIZADO_EN': new Date() });
+    });
+    Object.assign(fila, SIN_EQUIPO);
+    ev.carpetaId = c.carpetaId;
+    ev.ruta = c.ruta;
+    const carpeta = DriveApp.getFolderById(c.carpetaId);
+    LineasIdentificaciones.deResponsiva(LineasDatos.idsDeFila(fila)).forEach((x) => DriveApp.getFileById(x.id).moveTo(carpeta));
+    // Los PDF que dejó en `Files` cada intento (con el nombre del AppSheet: solo los de esta responsiva)
+    const viejos = LineasArchivos.carpetaDeApp(PDF.RESPONSIVA.carpeta).getFilesByName(PDF.RESPONSIVA.nombre(id));
+    while (viejos.hasNext()) viejos.next().setTrashed(true);
+    return PDF.RESPONSIVA.carpeta + '/' + PDF.RESPONSIVA.nombre(id);
+  }
+
+  /**
    * Genera el PDF de una inspección o responsiva capturada en el sistema. `forzar` = Regenerar PDF (usuario, 5-oct): se
    * vuelve a hacer con la plantilla y los datos de la hoja, sin capturar de nuevo, y queda como versión nueva del MISMO
    * archivo (mismo enlace; la anterior se conserva en el historial de versiones de Drive, como Subir PDF firmado).
@@ -871,6 +900,7 @@ const LineasCaptura = (function () {
     // Con responsables adicionales, la firma del principal va más chica: los demás firman el PDF impreso en la misma línea
     const nombreFirmaResponsable = ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firma-principal.png' : 'firma-responsable.png';
     const destino = PDF[tipo];
+    const deFiles = esInspeccion ? '' : pasarALineas_(fila, ev, id);
     const d = destinoPdf_(tipo, fila, ev, id);
     const carpeta = d.carpeta;
     const nombre = d.nombre;
@@ -897,7 +927,14 @@ const LineasCaptura = (function () {
         return { id: anterior.getId(), nombre: anterior.getName(), url: anterior.getUrl(), avisos: pdf.avisos };
       }
       const ruta = d.enNucos ? 'https://drive.google.com/file/d/' + pdf.id + '/view' : destino.carpeta + '/' + nombre;
-      LineasDatos.conCandado(() => ligarPdf_(tabla, destino.columna, ids, pdf, ruta));
+      LineasDatos.conCandado(() => {
+        ligarPdf_(tabla, destino.columna, ids, pdf, ruta);
+        // La responsiva que pasó de `Files` a LINEAS queda en el historial
+        if (deFiles) LineasRepo.registrarMovimiento('PDF_REGENERADO', { motivo: '' }, usuario, new Date(), {
+          refs: [col('ID LINEA')], nuco: null,
+          detalle: { responsivaId: id, cambios: [{ campo: 'PDF', antes: deFiles, despues: (ev.ruta || '') + '/' + pdf.nombre }] },
+        });
+      });
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
