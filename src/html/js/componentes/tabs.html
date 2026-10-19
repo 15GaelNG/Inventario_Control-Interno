@@ -18,6 +18,19 @@
   :root[data-theme="dark"] .tab-btn.activa { color: var(--color-text); }
   .tab-num { font-weight: 500; opacity: .7; }
   .tab-num:empty { display: none; }
+  /* Subpestañas (Tabs.html con hijos): un segundo nivel más ligero que el primero, en píldoras (como las secondary
+     tabs de Material 3), pegado debajo de la barra. Nunca un tercer nivel. */
+  .tabs-sub > .tabs-lista { border-bottom: none; gap: 6px; margin: -6px 0 16px; padding-bottom: 2px; }
+  .tabs-sub > .tabs-lista > .tab-btn {
+    padding: 5px 12px; font-size: var(--texto-s); gap: 6px;
+    border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface);
+  }
+  .tabs-sub > .tabs-lista > .tab-btn:hover { background: var(--color-bg); }
+  .tabs-sub > .tabs-lista > .tab-btn.activa {
+    background: var(--color-accent-soft); border-color: var(--color-accent); color: var(--color-accent-hover);
+  }
+  :root[data-theme="dark"] .tabs-sub > .tabs-lista > .tab-btn.activa { color: var(--color-text); }
+  .tabs-sub > .tabs-lista > .tab-btn .ico { width: 14px; height: 14px; }
   [data-tab-panel][hidden] { display: none; }
   @media (max-width: 640px) {
     .tabs-lista { margin-bottom: 14px; }
@@ -41,6 +54,10 @@
    *
    *   Tabs.iniciar(contenedor, { inicial, alCambiar })   // marca el contenedor como grupo; → { mostrar, actual }
    *   Tabs.html([{ id, titulo, icono, num, contenido }], { activa })   // una ficha: el grupo listo como texto
+   *   Tabs.html([{ id: 'cumplimiento', titulo, icono, hijos: [{ id, titulo, icono, num, contenido }, …] }, …])
+   *       // con subpestañas: el grupo es una pestaña y sus hijos, píldoras debajo. Con un solo hijo, ese hijo es la
+   *       // pestaña; sin hijos (sin permiso), no sale. activa, mostrar, contar y tabs-cambio usan el id del hijo, así
+   *       // que quien abría 'inspecciones' sigue igual. Dos niveles como máximo.
    *   Tabs.mostrar(contenedor, 'historial')              // false si esa pestaña no existe (sin permiso)
    *   Tabs.actual(contenedor)  ·  Tabs.contar(contenedor, 'historial', 12)
    *   contenedor.addEventListener('tabs-cambio', (ev) => ev.detail.nombre)   // también con el clic
@@ -55,27 +72,46 @@
     const grupoDe = (el) => (el && el.hasAttribute && el.hasAttribute('data-tabs') ? el : el && el.querySelector('[data-tabs]'));
     const suyos = (grupo, selector) => Array.from(grupo.querySelectorAll(selector)).filter((x) => x.closest('[data-tabs]') === grupo);
 
-    function mostrar(contenedor, nombre) {
+    /** Las subpestañas de un panel (Tabs.html con hijos): el data-tabs que es hijo directo del panel */
+    const subDe = (panel) => panel && Array.from(panel.children).find((el) => el.hasAttribute('data-tabs'));
+
+    function mostrar(contenedor, nombre, sinSub) {
       const grupo = grupoDe(contenedor);
       if (!grupo) return false;
       const botones = suyos(grupo, '.tab-btn[data-tab]');
-      if (!botones.some((b) => b.dataset.tab === nombre)) return false;
+      if (!botones.some((b) => b.dataset.tab === nombre)) {
+        // Una subpestaña: se abre su grupo (sin avisar la que tenía) y luego ella
+        const boton = Array.from(grupo.querySelectorAll('.tab-btn[data-tab]')).find((b) => b.dataset.tab === nombre);
+        const panel = boton && boton.closest('[data-tab-panel]');
+        if (!panel || panel.closest('[data-tabs]') !== grupo || !mostrar(grupo, panel.dataset.tabPanel, true)) return false;
+        return mostrar(boton.closest('[data-tabs]'), nombre);
+      }
       botones.forEach((b) => {
         const activa = b.dataset.tab === nombre;
         b.classList.toggle('activa', activa);
         b.setAttribute('aria-selected', String(activa));
       });
-      suyos(grupo, '[data-tab-panel]').forEach((p) => { p.hidden = p.dataset.tabPanel !== nombre; });
+      const paneles = suyos(grupo, '[data-tab-panel]');
+      paneles.forEach((p) => { p.hidden = p.dataset.tabPanel !== nombre; });
+      // Una subpestaña de un grupo que no se ve (un clic desde código): primero se abre su grupo
+      const panelPadre = grupo.parentElement && grupo.parentElement.closest('[data-tab-panel]');
+      if (panelPadre && panelPadre.hidden && subDe(panelPadre) === grupo) mostrar(panelPadre.closest('[data-tabs]'), panelPadre.dataset.tabPanel, true);
       const fn = alCambiar.get(grupo);
       if (fn) fn(nombre);
       grupo.dispatchEvent(new CustomEvent('tabs-cambio', { bubbles: true, detail: { nombre } }));
+      // Si el panel trae subpestañas, también se avisa la que se ve: lo que carga al abrir escucha su nombre
+      const sub = subDe(paneles.find((p) => p.dataset.tabPanel === nombre));
+      if (sub && !sinSub) mostrar(sub, actual(sub));
       return true;
     }
 
+    /** La que se ve: con subpestañas, la subpestaña (así una ficha repintada vuelve al mismo lugar) */
     function actual(contenedor) {
       const grupo = grupoDe(contenedor);
       const b = grupo && suyos(grupo, '.tab-btn.activa[data-tab]')[0];
-      return b ? b.dataset.tab : null;
+      if (!b) return null;
+      const sub = subDe(suyos(grupo, '[data-tab-panel]').find((p) => p.dataset.tabPanel === b.dataset.tab));
+      return (sub && actual(sub)) || b.dataset.tab;
     }
 
     function iniciar(contenedor, opciones) {
@@ -90,24 +126,42 @@
 
     function contar(contenedor, nombre, n) {
       const grupo = grupoDe(contenedor);
-      const el = grupo && suyos(grupo, '[data-tab-num="' + nombre + '"]')[0];
+      // La propia o, si no, la de una subpestaña
+      const el = grupo && (suyos(grupo, '[data-tab-num="' + nombre + '"]')[0] || grupo.querySelector('[data-tab-num="' + nombre + '"]'));
       if (el) el.textContent = Formato.miles(n);
     }
 
-    /** pestanas: [{ id, titulo, icono, num?, contenido }] (las false se saltan); activa: la abierta (si no, la primera) */
-    function html(pestanas, opciones) {
-      const o = opciones || {};
-      const lista = pestanas.filter(Boolean);
-      const activa = lista.some((t) => t.id === o.activa) ? o.activa : (lista[0] && lista[0].id);
-      return '<div class="ficha-pestanas" data-tabs>' +
-        '<div class="tabs-lista" role="tablist" aria-label="' + Formato.esc(o.etiqueta || 'Secciones de la ficha') + '">' +
+    /** Un grupo sin hijos no sale; con uno solo, ese hijo es la pestaña (no tiene caso una píldora sola) */
+    const aplanar = (pestanas) => pestanas.filter(Boolean).map((t) => {
+      if (!t.hijos) return t;
+      const hijos = t.hijos.filter(Boolean);
+      return hijos.length > 1 ? Object.assign({}, t, { hijos }) : hijos[0] || null;
+    }).filter(Boolean);
+
+    function grupoHtml(lista, activa, etiqueta, clase, contenidoDe) {
+      return '<div class="' + clase + '" data-tabs>' +
+        '<div class="tabs-lista" role="tablist" aria-label="' + Formato.esc(etiqueta) + '">' +
         lista.map((t) => '<button type="button" class="tab-btn' + (t.id === activa ? ' activa' : '') + '" role="tab" aria-selected="' +
           (t.id === activa) + '" data-tab="' + Formato.esc(t.id) + '">' + (t.icono ? Iconos.svg(t.icono) + ' ' : '') + Formato.esc(t.titulo) +
           ' <span class="tab-num" data-tab-num="' + Formato.esc(t.id) + '">' + (t.num === undefined || t.num === null ? '' : Formato.miles(t.num)) +
           '</span></button>').join('') +
         '</div>' +
-        lista.map((t) => '<div data-tab-panel="' + Formato.esc(t.id) + '"' + (t.id === activa ? '' : ' hidden') + '>' + (t.contenido || '') + '</div>').join('') +
+        lista.map((t) => '<div data-tab-panel="' + Formato.esc(t.id) + '"' + (t.id === activa ? '' : ' hidden') + '>' + contenidoDe(t) + '</div>').join('') +
         '</div>';
+    }
+
+    /**
+     * pestanas: [{ id, titulo, icono, num?, contenido }] o un grupo { id, titulo, icono, hijos: [ … ] } (las false se
+     * saltan); activa: la abierta, de cualquier nivel (si no, la primera)
+     */
+    function html(pestanas, opciones) {
+      const o = opciones || {};
+      const lista = aplanar(pestanas);
+      const tiene = (t, id) => t.id === id || (t.hijos && t.hijos.some((h) => h.id === id));
+      const activa = (lista.find((t) => tiene(t, o.activa)) || lista[0] || {}).id;
+      return grupoHtml(lista, activa, o.etiqueta || 'Secciones de la ficha', 'ficha-pestanas', (t) => (t.hijos
+        ? grupoHtml(t.hijos, t.hijos.some((h) => h.id === o.activa) ? o.activa : t.hijos[0].id, t.titulo, 'tabs-sub', (h) => h.contenido || '')
+        : t.contenido || ''));
     }
 
     document.addEventListener('click', (ev) => {

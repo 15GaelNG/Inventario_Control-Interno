@@ -61,5 +61,38 @@ ficha.innerHTML = Tabs.html([{ id: 'a', titulo: 'A' }, { id: 'b', titulo: 'B' }]
 clic(ficha.querySelector('[data-tab="b"]'));
 ok(Tabs.actual(ficha) === 'b', 'una ficha repintada con innerHTML responde sin volver a conectar nada');
 
+console.log('4. Subpestañas (un grupo con hijos)');
+const insp = { id: 'inspecciones', titulo: 'Inspecciones', num: 12, contenido: 'tabla insp' };
+ficha.innerHTML = Tabs.html([
+  { id: 'datos', titulo: 'Datos', contenido: 'd' },
+  { id: 'cumplimiento', titulo: 'Cumplimiento', hijos: [{ id: 'verificaciones', titulo: 'Verificaciones', num: 2, contenido: 'v' }, insp, false] },
+  { id: 'equipamiento', titulo: 'Equipamiento', hijos: [false, { id: 'sensor', titulo: 'Sensor', contenido: 's' }] },
+  { id: 'seguimiento', titulo: 'Seguimiento', hijos: [false, false] },
+], { activa: 'inspecciones' });
+const principales = () => Array.from(ficha.querySelector('.tabs-lista').children).map((b) => b.dataset.tab);
+ok(principales().join() === 'datos,cumplimiento,sensor', 'un grupo de un solo hijo es ese hijo; uno sin hijos no sale');
+ok(ficha.querySelectorAll('.tabs-sub .tab-btn').length === 2, 'las subpestañas sin permiso no se pintan');
+ok(Tabs.actual(ficha) === 'inspecciones' && visibles(ficha).includes('cumplimiento') && visibles(ficha).includes('inspecciones'),
+  'activa con el id de una subpestaña abre su grupo y a ella');
+const avisos = [];
+ficha.addEventListener('tabs-cambio', (ev) => avisos.push(ev.detail.nombre));
+clic(ficha.querySelector('[data-tab="datos"]'));
+avisos.length = 0;
+clic(ficha.querySelector('[data-tab="cumplimiento"]'));
+ok(avisos.includes('inspecciones'), 'abrir el grupo avisa también la subpestaña que se ve (lo que carga al abrir)');
+avisos.length = 0;
+ok(Tabs.mostrar(ficha, 'verificaciones') === true && Tabs.actual(ficha) === 'verificaciones', 'mostrar con el id de una subpestaña');
+ok(!avisos.includes('inspecciones'), 'ir directo a una subpestaña no avisa la que tenía su grupo');
+clic(ficha.querySelector('[data-tab="datos"]'));
+ok(Tabs.mostrar(ficha, 'inspecciones') && visibles(ficha).includes('cumplimiento'), 'desde otra pestaña, mostrar abre el grupo de la subpestaña');
+clic(ficha.querySelector('.tabs-sub [data-tab="verificaciones"]'));
+ok(Tabs.actual(ficha) === 'verificaciones', 'el clic en una píldora');
+Tabs.contar(ficha, 'inspecciones', 1500);
+ok(ficha.querySelector('[data-tab-num="inspecciones"]').textContent === '1,500', 'contar una subpestaña');
+ok(Tabs.mostrar(ficha, 'seguimiento') === false && Tabs.mostrar(ficha, 'no-existe') === false, 'lo que no se pintó no se abre');
+clic(ficha.querySelector('[data-tab="datos"]'));
+clic(ficha.querySelector('.tabs-sub [data-tab="inspecciones"]'));
+ok(Tabs.actual(ficha) === 'inspecciones' && visibles(ficha).includes('cumplimiento'), 'un clic (desde código) en la píldora de un grupo escondido abre el grupo');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
