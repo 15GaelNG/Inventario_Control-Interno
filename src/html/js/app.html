@@ -3904,8 +3904,9 @@
           { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
           { id: 'documentacion', titulo: 'Documentación', icono: 'folder-open', hijos: [
               // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla.
-              // Su sección (vehiculos.documentos)
-              puede('vehiculos.documentos') && { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+              // Su sección (vehiculos.documentos). Se llama Expediente (usuario, 19-oct): es el archivo de papeles del NUCO,
+              // y sus hermanas (Adquisición, Responsiva, Adherentes) son trámites; "Documentación › Documentos" se repetía
+              puede('vehiculos.documentos') && { id: 'documentos', titulo: 'Expediente', icono: 'archive', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
               // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
               // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab).
               // Con el permiso de Adquisición, no el de Vehículos (14-oct)
