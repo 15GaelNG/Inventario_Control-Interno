@@ -289,7 +289,8 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
     'ID', 'ID LINEA', 'NUCO',
     // Accesorios y accesos se declaran antes del responsable (la línea sin equipo no los lleva) y se pintan después de él
     'MODELO', 'IMEI', 'COLOR', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
-    'No EMPLEADO', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO',
+    // La persona: fija en Vincular o Cambiar línea, editable en la Responsiva (pendiente 2.49, 16-oct)
+    'No EMPLEADO', 'No EMPLEADO', 'RESPONSABLE', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO',
     'FECHA RESPONSIVA', 'TICKET', 'COMENTARIO', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
   assert.match(captura, /conIdentificacionAdicional_\(LineasRegistros\.camposAdicionales\([^\n]*\), accesos, \[/);
   assert.match(captura, /valores\['MES'\] = MESES\[/);
@@ -303,9 +304,11 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   assert.match(captura, /e\.valida === 'COMENTARIOS' && valor\.length <= 3/);
   assert.match(read('src/html/js/lineas.html'), /campo\('_MOTIVO', 'Comentario', 'area', \{ requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' \}\)/);
   assert.doesNotMatch(captura, /'OBSERVACIONES'/);
-  assert.match(captura, /const acceso = \(c\) => \(reasignar \? '' : v\(c\)\);/);
+  // Accesorios y accesos empiezan con los del equipo (la Responsiva, 16-oct; Reasignar los dejaba vacíos)
+  assert.match(captura, /const acceso = \(c\) => v\(c\);/);
   assert.match(captura, /const IDENTIFICACIONES = \['INE', 'LICENCIA DE CONDUCIR'\]/);
-  assert.doesNotMatch(captura, /ESTATUS EQUIPO/);
+  // La captura no cambia el estatus (lo hace la acción, LineasAcciones.responsiva); solo lo lee para saber si hay persona (16-oct)
+  assert.doesNotMatch(captura, /'ESTATUS EQUIPO':/);
   assert.doesNotMatch(captura, /'RESPONSIVA': urlArchivo_/);
 });
 
@@ -715,15 +718,13 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
   assert.equal(control(cap, 'OTRA'), 'texto', 'inspección OTRA: texto libre (usuario, 4-oct)');
   ['MODELO', 'COMPAÑIA', 'RAZON SOCIAL', 'TIPO'].forEach((c) => assert.equal(control(cap, c), 'texto', 'inspección (fijo) ' + c));
-  // Responsiva: el equipo es fijo (usuario, 4-oct); la línea, con sugerencias (fija al reasignar)
-  assert.match(resp, /ro\('MODELO', 'Modelo', v\('EQUIPO'\)\)/);
-  assert.match(resp, /ro\('IMEI', 'IMEI', v\('IMEI'\)\)/);
+  // Responsiva: modelo e IMEI se corrigen y pasan a la ficha (usuario, 16-oct, L2; del 4 al 16-oct fijos); la línea, fija
+  assert.match(resp, /ed\('MODELO', 'Modelo', 'texto', v\('EQUIPO'\)\)/);
+  assert.match(resp, /ed\('IMEI', 'IMEI', 'texto', v\('IMEI'\), \{ literal: true \}\)/);
   ['COMPAÑIA', 'RAZON SOCIAL'].forEach((c) => assert.match(resp, new RegExp("deLinea\\('" + c + "'")));
-  // Fija también con Vincular / Cambiar línea (la línea que se pone, etapa 3, 8-oct)
-  assert.match(resp, /const deLinea = \(columna, etiqueta, valor, extra\) => \(reasignar \|\| lineaFila \? ro\(columna, etiqueta, valor\) : ed\(columna, etiqueta, 'listaAbierta', valor, extra\)\);/);
+  assert.match(resp, /const deLinea = \(columna, etiqueta, valor\) => ro\(columna, etiqueta, valor\);/);
   assert.equal(control(resp, 'IDENTIFICACION'), 'listaAbierta', 'responsiva IDENTIFICACION: sugiere INE y licencia y se puede escribir (usuario, 4-oct)');
   assert.match(resp, /'IDENTIFICACION', 'Identificación', 'listaAbierta', \{ valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES \}/);
-  assert.match(resp, /sugerencias: 'NUMEROS', autollenar: \{ 'SIM': 'sim'/);
   // Responsiva: una sola fecha como la inspección (usuario, 4-oct); DIA, MES y AÑO ya no se capturan
   assert.equal(control(resp, 'FECHA RESPONSIVA'), 'fechaHora', 'responsiva FECHA RESPONSIVA');
   ['DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(resp, c), undefined, 'responsiva sin ' + c));
@@ -1159,7 +1160,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v8';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v9';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1426,8 +1427,8 @@ test('Acciones masivas de equipos: reasignar deja en USO; la línea solo pasa a 
   // Cliente (estilo Drive, 30-sep): las acciones salen de accionesSeleccionDe(modulo); Reasignar ya desde 1
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /accionesSeleccion: accionesSeleccionDe\(modulo\),/);
-  // Reasignar abre directo la responsiva (usuario, 4-oct); el formulario masivo se queda para cuando regresen las masivas
-  assert.match(cliente, /alHacer: \(f\) => abrirReasignar\(f\[0\]\)/);
+  // La Responsiva en lugar de Reasignar (pendiente 2.49, 16-oct); el formulario masivo se queda para cuando regresen las masivas
+  assert.match(cliente, /alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\)/);
   assert.match(cliente, /clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true/);
   assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, datos\)/);
   assert.match(read('src/html/js/componentes/datatable.html'), /b\.hidden = nSel < \(\(accionesSeleccion\[Number\(b\.dataset\.accionSel\)\] \|\| \{\}\)\.minimo \|\| 1\)/);
@@ -1455,7 +1456,7 @@ test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian 
   };
   const Reg = new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasDatos', 'LineasAcciones', reg + '; return LineasRegistros;')(
     Repo, { getScriptCache: () => ({ get: () => '', put: () => {} }) }, { formatDate: () => '2026-09-29' }, {}, {}, LineasUtil,
-    { leerTabla: () => hoja, conCandado: (fn) => fn(), idsDeFila: (f) => [f.ID] }, cargarAcciones(Repo));
+    { leerTabla: () => hoja, conCandado: (fn) => fn(), idsDeFila: (f) => [f.ID] }, cargarAcciones(Repo, {}, LineasUtil));
   const u = { correo: 'x@y.z', nombre: 'X' };
   assert.deepEqual(Reg.formularioMasivo('REASIGNAR', u).columnasResponsable, ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO']);
 
@@ -1548,10 +1549,11 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
 test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo de la inspección', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const resp = captura.slice(captura.indexOf('function formularioResponsiva_'), captura.indexOf('function ocultarSecretos_'));
-  // Fijos: ID, ID LINEA, NUCO, el equipo (modelo e IMEI) y NOMBRE CI (usuario, 4-oct); el responsable se puede corregir.
+  // Fijos: ID, ID LINEA, NUCO, la línea (deLinea) y NOMBRE CI; modelo e IMEI se corrigen (usuario, 16-oct, L2); el
+  // responsable se puede corregir, salvo en Vincular o Cambiar línea (la persona que ya lo tiene, 16-oct).
   // La línea sin equipo (pendiente 2.45, 15-oct): ID, ID LINEA y su línea, fija, sin equipo
   const fijos = [...resp.matchAll(/ro\('([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ID', 'ID LINEA', 'NUCO', 'MODELO', 'IMEI', 'NOMBRE CI']);
+  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ID', 'ID LINEA', 'NUCO', 'No EMPLEADO', 'RESPONSABLE', 'NOMBRE CI']);
   assert.match(resp, /ed\('RESPONSABLE', 'Nombre', 'listaAbierta', persona\('RESPONSABLE'\), \{ requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true \}\)/);
   assert.match(resp, /ed\('ACCESORIOS', 'Accesorios entregados', 'multi'/);
   const cliente = read('src/html/js/lineas.html');
@@ -1772,8 +1774,12 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   const els = Reg._elementos(base, cat, u, { nuevo: false });
   assert.equal(campo(els, 'ESTATUS LINEA').valor, '');
   assert.equal(campo(els, 'ESTATUS EQUIPO').valor, 'FUERA DE INVENTARIO');
-  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo);
-  assert.ok(campo(els, 'DEPARTAMENTO').opciones.indexOf('DISPONIBLE') >= 0 && campo(els, 'DEPARTAMENTO').opciones.indexOf('CONTROL INTERNO') >= 0);
+  // Corregir equipo no pasa a USO: eso es la Responsiva (usuario, 16-oct; pendiente 2.50)
+  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo.filter((x) => x !== 'USO'));
+  // Corregir equipo sin la pestaña Responsable (usuario, 16-oct; pendiente 2.50); en el alta sí
+  assert.ok(!els.some((e) => ['RESPONSABLE', 'NO EMPLEADO', 'DEPARTAMENTO'].indexOf(e.columna) >= 0));
+  const alta = Reg._elementos(base, cat, u, { nuevo: true, parte: 'EQUIPO' });
+  assert.ok(campo(alta, 'DEPARTAMENTO').opciones.indexOf('DISPONIBLE') >= 0 && campo(alta, 'DEPARTAMENTO').opciones.indexOf('CONTROL INTERNO') >= 0);
   assert.equal(Reg._elementos({ TIPO: 'EQUIPO', 'ESTATUS EQUIPO': 'N/A' }, cat, u, { nuevo: false }).filter((e) => e.columna === 'ESTATUS EQUIPO')[0].valor, '');
   assert.ok(!Reg._elementos({ TIPO: 'LINEA' }, cat, u, { nuevo: false }).some((e) => e.columna === 'ESTATUS EQUIPO')); // una línea sola no tiene equipo
 
@@ -1785,8 +1791,10 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   const cambia = Reg._resolver(soloEstatus, base, { 'ESTATUS EQUIPO': 'VENDIDO', 'ESTATUS LINEA': '' }, { nuevo: false });
   assert.equal(cambia.valores['ESTATUS EQUIPO'], 'VENDIDO');
   assert.match(Reg._resolver(soloEstatus, base, { 'ESTATUS EQUIPO': 'CANCELADO' }, { nuevo: false }).errores.join(' | '), /Estatus del equipo: VALOR NO ENCONTRADO EN LA LISTA/);
-  // La persona se corrige en Editar (usuario, 4-oct): siempre editable; en blanco solo con Mandar a resguardo
-  assert.equal(campo(Reg._elementos({ TIPO: 'EQUIPO', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }), 'RESPONSABLE').editable, 'SIEMPRE');
+  // La persona de la línea sola se corrige en Corregir (usuario, 4-oct): siempre editable; en blanco solo con Mandar a
+  // resguardo. La del equipo, solo con la Responsiva (usuario, 16-oct; pendiente 2.50)
+  assert.equal(campo(Reg._elementos({ TIPO: 'LINEA', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }), 'RESPONSABLE').editable, 'SIEMPRE');
+  assert.ok(!Reg._elementos({ TIPO: 'EQUIPO', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }).some((e) => e.columna === 'RESPONSABLE'));
 
   // Colores de los estatus nuevos
   const cliente = read('src/html/js/lineas.html');
@@ -1982,9 +1990,10 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.match(dt, /class="dt-menu-titulo">\$\{esc\(a\.tituloGrupo\)\}/);
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
-  // Nueva inspección y Nueva responsiva juntas; Ver la última, solo en la ficha (usuario, 12-oct; pendiente 2.34)
-  assert.match(lineas, /texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
-  assert.match(lineas, /texto: 'Nueva responsiva', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  // Inspección en documentos, junto a la Responsiva (pendientes 2.49 y 2.50, 16-oct); Ver la última, solo en la ficha (12-oct)
+  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.doesNotMatch(lineas, /Nueva inspección/);
+  assert.doesNotMatch(lineas, /texto: 'Nueva responsiva'/);
   assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);
   assert.match(lineas, /conservarSeleccion: \(el\) => !!el\.closest\('#ln-listado \.ln-cuadro, #ln-modal-captura, \.ln-menu-flotante'\)/);
   // Documentos, historial, bandeja…: sin columna de Acciones; sus botones van a la barra y al clic derecho
@@ -2290,10 +2299,11 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION'].forEach((e) => assert.ok(cliente.includes("'" + e + "': '"), e));
   assert.match(cliente, /' title="' \+ esc\(ayudas\[v\]\) \+ '"'/);
   assert.match(cliente, /\(ayuda \? ' title="' \+ esc\(ayuda\) \+ '"' : ''\)/);
-  // Adendum vencido: la línea va a cancelación sin elegir; vigente o sin fecha, se elige
+  // Adendum vencido: la línea va a cancelación y se elige panel o CANCELADA directo (usuario, 16-oct; pendiente 2.50);
+  // vigente o sin fecha, se elige DISPONIBLE o cancelación
   assert.match(resg, /const vencido = q\.propuestaLinea === 'EN PROCESO DE CANCELACION';/);
-  assert.match(resg, /'Estatus de la línea', 'escala', \{ opciones: vencido \? \[q\.propuestaLinea\] : form\.estatusLinea,/);
-  assert.match(read('src/services/lineas/LineasResguardos.gs'), /if \(tieneLinea && propuestaLinea_\(tipo, vigencia_\(LineasUtil\.col\(f, 'FIN PLAN'\), hoy\)\) === LINEA_CANCELACION\) pedido\['ESTATUS LINEA'\] = LINEA_CANCELACION;/);
+  assert.match(resg, /'Estatus de la línea', 'escala', \{ opciones: vencido \? \[q\.propuestaLinea, LINEA_SIN_PANEL\] : form\.estatusLinea,\s+valor: vencido \? '' : q\.propuestaLinea,/);
+  assert.match(read('src/services/lineas/LineasResguardos.gs'), /if \(vencida\) pedido\['ESTATUS LINEA'\] = pedido\.directa \? LINEA_SIN_PANEL : LINEA_CANCELACION;/);
   // Sin ventana de confirmación
   assert.doesNotMatch(resg, /Confirmar\.pedir/);
   // Inspección dentro del resguardo: responsable en blanco, solo las personas de procesos, y no se copia la persona
@@ -2783,9 +2793,13 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
 test('Líneas: «Recargar datos» también vacía las hojas que la lectura guarda 30 min (carga del proveedor, 14-oct)', () => {
   const svc = read('src/services/TelefoniaService.gs');
   const cuerpo = svc.slice(svc.indexOf('  function recargarDatos(token) {'), svc.indexOf('  // ---------------- Captura: inspección y responsiva nuevas'));
-  assert.match(cuerpo, /LineasRepo\.borrarCaches\(\);/);
-  assert.match(cuerpo, /LineasDatos\.tocar\(\['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS'\]\);/);
+  // limpiarCaches: las de LineasRepo, toca las hojas y también vacía los encabezados guardados 1 h (pendiente 2.51)
+  assert.match(cuerpo, /LineasLectura\.limpiarCaches\(\);/);
   const lectura = read('src/services/lineas/LineasLectura.gs');
+  const limpiar = lectura.slice(lectura.indexOf('  function limpiarCaches() {'), lectura.indexOf('  return {', lectura.indexOf('  function limpiarCaches() {')));
+  assert.match(limpiar, /LineasRepo\.borrarCaches\(\);/);
+  assert.match(limpiar, /nuevas\.map\(\(n\) => 'enc_' \+ n\)/);
+  assert.match(limpiar, /LineasDatos\.tocar\(\[HOJA_VIEJA, HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS\]\);/);
   assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS, HOJA_VIEJA\];/,
     'si la lectura guarda otra hoja, «Recargar datos» también debe tocarla');
 });

@@ -160,10 +160,24 @@ const LineasArchivos = (function () {
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     const nombre = String(llave).replace(/[\\/]/g, '_') + '.' + columna + '.' + Utilities.formatDate(new Date(), ZONA, 'HHmmss') + '.' + EXTENSION[mime];
     const archivo = DriveUtils.marcarAutor(carpetaDeApp(carpeta).createFile(Utilities.newBlob(bytes, mime, nombre)));
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    compartirEnDominio(archivo);
     return carpeta + '/' + nombre;
+  }
+
+  /**
+   * Abre al dominio (solo ver) un archivo que la app crea fuera de NUCOS y LINEAS: sin esto, si su carpeta no lo comparte,
+   * solo lo ve la cuenta que despliega la app. Si Drive no deja cambiar cómo se comparte («Acceso denegado: DriveApp»,
+   * 16-oct: la responsiva de la línea 4461456715 en `Files`, con la cuenta de producción), el archivo ya se guardó y se
+   * queda con los permisos de su carpeta: no es error. Regresa si lo compartió.
+   */
+  function compartirEnDominio(archivo) {
+    try {
+      archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+      return true;
+    } catch (e) {
+      console.warn('No se pudo compartir con el dominio el archivo ' + archivo.getId() + ': ' + e.message);
+      return false;
+    }
   }
 
   // ---------------- NUCOS (producción): lectura ----------------
@@ -390,7 +404,7 @@ const LineasArchivos = (function () {
   function carpetaDeLinea_(lineaId, numero) {
     const nombre = LineasUtil.digitos(numero);
     if (!lineaId) throw new Error('Falta la línea.');
-    if (!nombre) throw new Error('La línea no tiene número: captúralo con Editar línea.');
+    if (!nombre) throw new Error('La línea no tiene número: captúralo con Corregir.');
     let carpeta = null;
     const abrir = (x) => {
       try { const c = x ? DriveApp.getFolderById(x.id) : null; return c && !c.isTrashed() ? c : null; } catch (e) { return null; }
@@ -592,7 +606,7 @@ const LineasArchivos = (function () {
   }
 
   return {
-    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet,
+    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet, compartirEnDominio,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
     reemplazarPdf, pdfsFueraDeCarpeta, listarDrive, carpetaLineasId, carpetasLineas, carpetaLineaId, carpetaEvidenciaLinea, enLineas,
   };

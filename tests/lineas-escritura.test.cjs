@@ -22,6 +22,10 @@ function cargar(inicial, retirada) {
     esColumnaFecha: (h) => /FECHA|INICIO PLAN|FIN PLAN|_EN$/i.test(h),
     normCol: (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim(),
     olvidarTabla: () => {}, cacheBorrar: () => {}, tocar: () => {},
+    // El alta sale del movimiento ALTA de MOVIMIENTOS (pendiente 2.51)
+    cacheLeer: () => null, cacheGuardar: () => {},
+    buscarFilas: (n, col, valor) => (hojas[n] || []).map((f, i) => (String(f[col]) === valor ? i + 2 : 0)).filter(Boolean),
+    leerFilas: (pedidos) => pedidos.map((p) => p.filas.map((i) => Object.assign({ _fila: i }, hojas[p.tabla][i - 2]))),
   };
   const LineasRepo = { DEPARTAMENTO_DISPONIBLE: 'DISPONIBLE', folioRegistro: (t, n) => t + n, borrarCaches: () => {} };
   let n = 0;
@@ -196,7 +200,7 @@ test('de resguardo a uso sin cambiar la línea: la línea DISPONIBLE se queda gu
 test('lo que no tiene dónde guardarse avisa; la inspección (tolerante) lo ignora', () => {
   const t = cargar(BASE);
   assert.throws(() => t.guardar('EQU-3', { 'RESPONSABLE': 'PEDRO' }), /no tiene asignación vigente/);
-  assert.throws(() => t.guardar('EQU-2', { 'RESPONSABLE': 'PEDRO' }), /Reasignar/);
+  assert.throws(() => t.guardar('EQU-2', { 'RESPONSABLE': 'PEDRO' }), /usa «Responsiva»/);
   assert.throws(() => t.guardar('LIN-C', { 'NUCO': '1500' }), /NUCO es del aparato/);
   const r = t.guardar('EQU-2', { 'RESPONSABLE': 'PEDRO', 'SEDE': 'CANCUN' }, { tolerante: true });
   assert.deepStrictEqual(r.campos.map((c) => c.campo), ['SEDE']);

@@ -112,7 +112,7 @@ test('alSoltar: en el lienzo cada movimiento abre la acción de siempre con lo q
   assert.match(V.alSoltar(equipo, { tipo: 'caja', caja: 'cancelacion' }).aviso, /arrastra la línea/);
   assert.equal(V.alSoltar(equipo, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
   const guardado = { tipo: 'equipo', fila: e('E13'), dueno: null };
-  assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Reasignar · NUCO 0013 → ANA RUIZ');
+  assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Responsiva · NUCO 0013 → ANA RUIZ');
   assert.equal(V.alSoltar(guardado, { tipo: 'caja', caja: 'resguardo' }), null);
 });
 
@@ -188,7 +188,7 @@ test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas
   assert.match(js, /if \(a\.tipo === 'vinculo'\) abrirVinculo\(a\.modo, a\.fila, a\.pre\);/);
   assert.match(js, /else if \(a\.tipo === 'cancelacion'\) abrirCancelacion\(\[a\.fila\]\);/);
   assert.match(js, /else if \(a\.tipo === 'resguardo'\) abrirResguardo\(\[a\.fila\], \{ estatus: a\.estatus \}\);/);
-  assert.match(js, /else if \(a\.tipo === 'reasignar'\) abrirReasignar\(a\.fila, a\.persona\);/);
+  assert.match(js, /else if \(a\.tipo === 'responsiva'\) abrirResponsiva\('equipo', a\.fila, a\.persona\);/);
   // Lo soltado llega ya elegido a la ventana de Vincular
   assert.match(js, /mensaje: 'ELIGE UNA LÍNEA DISPONIBLE', valor: elegido\.linea \|\| '' \}/);
   assert.match(js, /mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido\.nuco \|\| '' \}/);

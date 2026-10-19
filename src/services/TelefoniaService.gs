@@ -628,12 +628,6 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasAcciones.vincular(datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
-  /** Reasignar: la responsiva es la acción (LineasAcciones.reasignar). */
-  function reasignar(token, responsiva) {
-    const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasAcciones.reasignar(responsiva || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
-  }
-
   /** Fotos de una inspección ya guardada: 'preparar' (carpeta autorizada) o 'actualizar' (recuento). */
   function fotosInspeccion(token, id, accion) {
     const sesion = operar_(token);
@@ -647,10 +641,10 @@ const TelefoniaService = (function () {
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
-    LineasRepo.borrarCaches();
-    // También las hojas que LineasLectura guarda 30 min: lo escrito por fuera de la app (la carga del proveedor del
-    // 14-oct) no las marca como cambiadas y la ficha seguía con la línea de antes
-    LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']);
+    // Las cachés de Líneas y las hojas que LineasLectura guarda 30 min (lo escrito por fuera de la app, como la carga del
+    // proveedor del 14-oct, no las marca como cambiadas), más los encabezados de las hojas nuevas (1 h): al quitar una
+    // columna del libro (FECHA DE ALTA, pendiente 2.51) se leía cada dato de la derecha en la columna equivocada
+    LineasLectura.limpiarCaches();
     return { ok: true };
   }
 
@@ -700,10 +694,13 @@ const TelefoniaService = (function () {
       LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion))));
   }
 
-  /** Guarda una responsiva nueva. El PDF se pide aparte. */
+  /**
+   * Guarda una responsiva nueva: la acción que entrega (pendiente 2.49, usuario 16-oct; antes también Reasignar). Con otra
+   * persona en un equipo trae `inspeccionId`. El PDF se pide aparte.
+   */
   function guardarResponsiva(token, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+    return LineasUtil.paraCliente(LineasAcciones.responsiva(datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Paso 3 de la identificación (pendiente 2.29): la registrada de cada responsable de la responsiva que se captura. */
@@ -930,7 +927,7 @@ const TelefoniaService = (function () {
   return {
     indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
-    reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
+    vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
     MODULOS_LINEAS,

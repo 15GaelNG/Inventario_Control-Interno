@@ -37,11 +37,12 @@
  */
 
 const ESTRUCTURA_HOJAS = {
-  // NUCO ANTERIOR y las rutas del AppSheet se llenan al retirar LINEAS TELEFONICAS (paso 4, LineasRetiro.gs)
+  // NUCO ANTERIOR y las rutas del AppSheet se llenan al retirar LINEAS TELEFONICAS (paso 4, LineasRetiro.gs). Sin FECHA DE
+  // ALTA desde el 16-oct (pendiente 2.51): el alta es el movimiento ALTA de MOVIMIENTOS
   LINEAS: ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'NUMERO TELEFONO', 'TIPO DE LINEA', 'COMPAÑIA', 'CUENTA PADRE', 'CUENTA', 'RAZON SOCIAL',
-    'NUMERO SIM', 'PIN WHATSAPP', 'ESTATUS LINEA', 'FECHA DE ALTA', 'NUCO ANTERIOR', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'],
+    'NUMERO SIM', 'PIN WHATSAPP', 'ESTATUS LINEA', 'NUCO ANTERIOR', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'],
   EQUIPOS: ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'NUCO', 'TIPO DE EQUIPO', 'MODELO', 'COLOR', 'IMEI', 'ACCESORIOS', 'PIN EQUIPO', 'PATRON',
-    'CONTRASEÑA MODEM', 'ESTATUS EQUIPO', 'FECHA DE ALTA', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION', 'PIN WHATSAPP'],
+    'CONTRASEÑA MODEM', 'ESTATUS EQUIPO', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION', 'PIN WHATSAPP'],
   ASIGNACIONES: ['ID', 'TIPO', 'ID LINEA', 'ID EQUIPO', 'ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
     'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CUENTA GOOGLE',
     'FECHA INICIO', 'FECHA FIN', 'JEFE DIRECTO'], // JEFE DIRECTO: usuario, 4-oct (lo traen Reasignar y Editar). Sin «quien lo usa» (6-oct)
@@ -262,7 +263,6 @@ function reestructuraArmarEstructura() {
           'NUMERO TELEFONO': numero, 'TIPO DE LINEA': tipoLinea,
           'COMPAÑIA': tal(f['COMPAÑIA']), 'CUENTA PADRE': '', 'CUENTA': '', 'RAZON SOCIAL': tal(f['RAZON SOCIAL']),
           'NUMERO SIM': sim, 'PIN WHATSAPP': tal(f['PIN WHATSAPP']), 'ESTATUS LINEA': estLn,
-          'FECHA DE ALTA': tal(f['FECHA REGISTRO']),
         });
         // Adendum: lo que hoy dice el inventario, tal cual y marcado como no confirmado
         const ini = tal(f['INICIO PLAN']);
@@ -295,7 +295,6 @@ function reestructuraArmarEstructura() {
         'ID': idEquipo, 'ID ANTERIOR': idFila, 'ID APPSHEET': tal(f['ID ANTERIOR']), 'NUCO': nuco, 'TIPO DE EQUIPO': ESTRUCTURA_TIPO_EQUIPO[tipo],
         'MODELO': tal(f['EQUIPO']), 'COLOR': colorDe(nuco), 'IMEI': imei, 'ACCESORIOS': accesoriosDe(f['ACCESORIOS']), 'PIN EQUIPO': tal(f['PIN EQUIPO']),
         'PATRON': tal(f['PATRON']), 'CONTRASEÑA MODEM': tal(f['CONTRASEÑA MODEM']), 'ESTATUS EQUIPO': estEq,
-        'FECHA DE ALTA': tal(f['FECHA REGISTRO']),
       });
     }
 

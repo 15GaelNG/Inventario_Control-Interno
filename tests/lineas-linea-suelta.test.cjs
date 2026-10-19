@@ -89,7 +89,7 @@ test('carpeta de la línea: un número reciclado tiene la suya y un cambio de n�
 
 test('carpeta de la línea: sin número no hay responsiva; en producción sin LINEAS configurada, tampoco', () => {
   const d = driveFalso();
-  assert.throws(() => archivos(d).carpetaEvidenciaLinea('LIN-1', '', new Date()), /La línea no tiene número: captúralo con Editar línea\./);
+  assert.throws(() => archivos(d).carpetaEvidenciaLinea('LIN-1', '', new Date()), /La línea no tiene número: captúralo con Corregir\./);
   const ctx = vm.createContext({ leerConfig_: () => '', Config: { ENTORNO: 'PROD' } });
   vm.runInContext(read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
   assert.throws(() => ctx.A.carpetaLineasId(), /Falta la carpeta LINEAS en Drive/);
@@ -116,6 +116,7 @@ function captura(registro) {
     LineasDatos: { nuevoId: () => 'RES-1' },
     LineasFirmas: { tiene: () => false },
     LineasChecklist: { CONDICIONES: [] },
+    LineasAcciones: { exigirEstatusParaResponsiva: () => '' },
     LineasUtil: {
       col: (f, c) => (c in f ? f[c] : null), digitos: (v) => String(v || '').replace(/\D/g, ''),
       nucoVisible: (v) => (v ? String(v) : null),
@@ -165,9 +166,10 @@ test('al guardar: «NO APLICA» en lo del equipo, NUCO vacío, nada al inventari
   assert.match(pdf, /valor = fija \? String\(fijas\[fija\]\) : aTexto_\(/);
 });
 
-test('la pantalla: la línea solo ofrece Nueva responsiva y su carpeta en Drive', () => {
+test('la pantalla: la línea solo ofrece la Responsiva y su carpeta en Drive', () => {
   const html = read('src/html/js/lineas.html');
-  assert.match(html, /return \(!conCaptura \? '' : \(tipo === 'linea' \? '' :\s*'<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION"/);
+  // Responsiva primero e Inspección después, solo en el equipo (usuario, 16-oct; pendiente 2.50)
+  assert.match(html, /return \(!conCaptura \? '' :\s*'<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA"[^\n]*\n\s*\(tipo === 'linea' \? '' :\s*'<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION"[^\n]*' Inspección<\/button>'\)\)/);
   assert.match(html, /estatusLinea: l\.estatus \|\| '', carpetaDriveId: l\.carpetaDriveId \|\| null \};/);
   // El ⋮ de la línea la ofrece (la prueba en /dev del 15-oct no la encontró: el menú de la línea no la llevaba)
   assert.match(html, /abrirCancelacion\(\[r\]\) \} : null\]\s*\.concat\(drive, editar, vinculo, historial\);/);
