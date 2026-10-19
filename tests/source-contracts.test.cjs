@@ -279,8 +279,10 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   const orden = (desde, hasta) => [...captura.slice(captura.indexOf(desde), captura.indexOf(hasta)).matchAll(/(?:campo_|ro|ed|deLinea)\('([^']+)'/g)].map((m) => m[1]);
   // Inspección (usuario, 3-oct): Datos en tres partes, equipo, línea y responsable; la fecha pasa a la de firmas
   assert.deepEqual(orden('function formularioInspeccion_', 'const agregarSeccion'), ['ID', 'ID LINEA', 'NUCO', 'TIPO', 'MODELO', 'IMEI', 'COLOR',
-    'No TELEFONO', 'SIM', 'COMPAÑIA', 'PLAN', 'RAZON SOCIAL', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
-    'JEFE DIRECTO', 'CORREO']);
+    'No TELEFONO', 'SIM', 'COMPAÑIA', 'PLAN', 'RAZON SOCIAL']);
+  // Los datos del responsable, los mismos en las dos (19-oct, pendiente 2.54): camposResponsable_, revisado con los
+  // formularios armados en lineas-responsable-homologado.test.cjs
+  assert.match(captura, /\]\.concat\(camposResponsable_\(catalogos, persona, \{ soloProcesos: !!enAccion \}\),/);
   assert.match(captura, /campo_\('FECHA DE REGISTRO', 'Fecha de la inspección'/);
   // Responsiva (usuario, 4-oct): ordenada como la inspección; una sola fecha (DIA, MES y AÑO salen de ella al guardar)
   // La línea sin equipo (pendiente 2.45) empieza con su línea, fija; el resto es el de siempre
@@ -289,14 +291,15 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
     'ID', 'ID LINEA', 'NUCO',
     // Accesorios y accesos se declaran antes del responsable (la línea sin equipo no los lleva) y se pintan después de él
     'MODELO', 'IMEI', 'COLOR', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ACCESORIOS', 'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA',
-    // La persona: fija en Vincular o Cambiar línea, editable en la Responsiva (pendiente 2.49, 16-oct)
-    'No EMPLEADO', 'No EMPLEADO', 'RESPONSABLE', 'RESPONSABLE', 'IDENTIFICACION', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'DIRECTOR', 'CORREO',
+    // La persona (camposResponsable_), con su identificación
+    'IDENTIFICACION',
     'FECHA RESPONSIVA', 'TICKET', 'COMENTARIO', 'FIRMA RESPONSABLE', 'NOMBRE CI', 'FIRMA CI']);
   assert.match(captura, /conIdentificacionAdicional_\(LineasRegistros\.camposAdicionales\([^\n]*\), accesos, \[/);
   assert.match(captura, /valores\['MES'\] = MESES\[/);
   assert.match(captura, /'Septiembre'/);
   // Parte 6 (usuario, 6-oct): la responsiva lleva al director (como el AppSheet) y el comentario va en COMENTARIO
-  assert.match(captura, /ed\('DIRECTOR', 'Director', 'listaAbierta', persona\('DIRECTOR'\), \{ opciones: catalogos\.directores \|\| \[\] \}\)/);
+  assert.match(captura, /lista\('DIRECTOR', 'Director', catalogos\.directores\),/);
+  assert.match(captura, /camposResponsable_\(catalogos, persona, \{ personaFija: conLinea, identificacion: \[/);
   // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO, la columna que imprime el PDF, y es obligatorio
   // Un solo comentario por acción (usuario, 4-oct): en la inspección no es obligatorio si la acción ya pidió el suyo (resguardo)
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
@@ -316,7 +319,7 @@ test('la inspección replica el bot ACTUALIZAR DESDE INSPECCION', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const copia = captura.slice(captura.indexOf('const COPIA_INSPECCION_A_LINEA'), captura.indexOf('function guardarInspeccion'));
   assert.deepEqual([...copia.matchAll(/\['([^']+)', '([^']+)'\]/g)].map((m) => m[1]), ['RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE',
-    'OFICINA / DESARROLLO', 'PUESTO', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM']);
+    'OFICINA / DESARROLLO', 'PUESTO', 'JEFE DIRECTO', 'NO EMPLEADO', 'DIRECTOR', 'CUENTA GOOGLE', 'PIN WHATSAPP', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM']);
   assert.match(captura, /'FECHA INSPECCION': new Date\(/);
   // Con las hojas nuevas (reestructura) lo que no tiene dónde guardarse se ignora: tolerante
   assert.match(captura, /LineasRepo\.guardarCambiosRegistro\(obj\.fila, copia, usuario, ahora, \{ tolerante: true \}\)/);
@@ -715,7 +718,9 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   assert.doesNotMatch(reg, /RESPONSABLE USA EL EQUIPO|'Quien lo usa'/);
   // Inspección (usuario, 3-oct): el equipo y la línea vienen del registro (fijos); en la responsiva siguen con lista
   const resp = cap.slice(cap.indexOf('function formularioResponsiva_'));
-  ['RESPONSABLE', 'PUESTO', 'JEFE DIRECTO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
+  // Los datos del responsable de la inspección y la responsiva: listas de CH en camposResponsable_ (19-oct)
+  ['RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO', 'DIRECTOR']
+    .forEach((c) => assert.ok(cap.includes("lista('" + c + "', '"), 'responsable ' + c));
   assert.equal(control(cap, 'OTRA'), 'texto', 'inspección OTRA: texto libre (usuario, 4-oct)');
   ['MODELO', 'COMPAÑIA', 'RAZON SOCIAL', 'TIPO'].forEach((c) => assert.equal(control(cap, c), 'texto', 'inspección (fijo) ' + c));
   // Responsiva: modelo e IMEI se corrigen y pasan a la ficha (usuario, 16-oct, L2; del 4 al 16-oct fijos); la línea, fija
@@ -733,7 +738,6 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   ['sedes', 'areas', 'oficinas', 'puestos', 'jefes', 'directores'].forEach((k) => assert.match(repo, new RegExp(k + ": unicos\\(ch, '")));
   assert.match(repo, /CapitalHumano\.activos\(\)/);
   assert.match(repo, /indice_colaboradores_v6/);
-  ['DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO'].forEach((c) => assert.equal(control(cap, c), 'listaAbierta', 'inspección ' + c));
   // "Agregar 'x'": lo tecleado sin elegirlo no se guarda, y solo en los datos del responsable
   const cbx = read('src/html/js/componentes/combobox.html');
   assert.match(cbx, /agregar: false/);
@@ -742,7 +746,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   assert.match(lineas, /agregar: e\.control === 'listaAbierta' && !e\.soloLista,/);
   // Autollenado con lo que dice CH (correo empresarial a la cuenta de Google)
   assert.match(reg, /'CUENTA GOOGLE': 'correo'/);
-  assert.match(cap, /'JEFE DIRECTO': 'jefe', 'CORREO': 'correo'/);
+  assert.match(cap, /'JEFE DIRECTO': 'jefe', 'DIRECTOR': 'director', 'CORREO': 'correo'/);
   // Abreviaturas confirmadas: se guarda como CH y se muestra completo
   const util = read('src/services/lineas/LineasUtil.gs');
   assert.match(util, /'QRO': 'QUERETARO', 'SLP': 'SAN LUIS POTOSI', 'EDO\. MEXICO': 'ESTADO DE MEXICO'/);
@@ -1553,8 +1557,10 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
   // responsable se puede corregir, salvo en Vincular o Cambiar línea (la persona que ya lo tiene, 16-oct).
   // La línea sin equipo (pendiente 2.45, 15-oct): ID, ID LINEA y su línea, fija, sin equipo
   const fijos = [...resp.matchAll(/ro\('([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ID', 'ID LINEA', 'NUCO', 'No EMPLEADO', 'RESPONSABLE', 'NOMBRE CI']);
-  assert.match(resp, /ed\('RESPONSABLE', 'Nombre', 'listaAbierta', persona\('RESPONSABLE'\), \{ requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true \}\)/);
+  assert.deepEqual(fijos, ['ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ID', 'ID LINEA', 'NUCO', 'NOMBRE CI']);
+  // El responsable, fijo solo en Vincular o Cambiar línea (camposResponsable_, personaFija)
+  assert.match(captura, /const noEmpleado = o\.personaFija \? fijo\('No EMPLEADO', 'No\. de empleado'\)/);
+  assert.match(captura, /const nombre = o\.personaFija \? fijo\('RESPONSABLE', 'Nombre'\)/);
   assert.match(resp, /ed\('ACCESORIOS', 'Accesorios entregados', 'multi'/);
   const cliente = read('src/html/js/lineas.html');
   // Sin columna de Acciones (30-sep): clic = vista rápida, doble clic = ficha; la vista rápida trae "Abrir ficha completa"
@@ -2309,8 +2315,9 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   // Inspección dentro del resguardo: responsable en blanco, solo las personas de procesos, y no se copia la persona
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /const PERSONAS_PROCESOS = \['DAFNE DONIS GARCIA', 'GAMALIEL JAIR MORA GONZALEZ', 'YOVANNI NAVA PERALTA'\];/);
-  assert.match(captura, /const persona = \(c, enResponsiva\) => \(enAccion \? '' : \(resp \? deResp\(enResponsiva \|\| c, ''\) : v\(c\)\)\);/);
-  assert.match(captura, /enAccion \? \{ opciones: PERSONAS_PROCESOS, soloLista: true \} : \{\}/);
+  assert.match(captura, /const persona = \(c\) => \(enAccion \? '' : \(resp \? deResp\(c, ''\) : v\(columnaFicha_\(c\)\)\)\);/);
+  assert.match(captura, /lista\('RESPONSABLE', 'Nombre', o\.soloProcesos \? PERSONAS_PROCESOS : \[\]/);
+  assert.match(captura, /o\.soloProcesos \? \{ soloLista: true \} : \{\}/);
   assert.match(captura, /if \(\(e\.control === 'lista' \|\| e\.soloLista\) && e\.opciones/);
   assert.match(captura, /else if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA/);
   assert.match(cliente, /cbx\.setOpciones\(e\.soloLista \? unirOpciones\(ops\.filter/);

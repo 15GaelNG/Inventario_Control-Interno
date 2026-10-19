@@ -22,7 +22,6 @@ function accionesCon(registro) {
       leerRegistroObligatorio: () => registro,
       guardarCambiosRegistro: (...a) => { escritos.push(a); return { refs: [], campos: [] }; },
       registrarMovimiento: (...a) => escritos.push(a),
-      indiceColaboradores: () => ({ columnas: ['noEmpleado', 'nombre', 'director', 'jefe'], filas: [['AC1', 'LUIS', 'DIR', 'JEFE DE CH']] }),
     },
     LineasCaptura: {
       exigirInspeccion: (id, ids, nombre) => {
@@ -30,9 +29,9 @@ function accionesCon(registro) {
         if (!id) throw new Error(nombre + ': falta su inspección (se captura dentro de la acción).');
         return id;
       },
-      datoDeInspeccion: (id, c) => ({ RESPONSABLE: 'LUIS', 'JEFE DIRECTO': 'JEFA DE LA INSPECCION' })[c] || '',
       guardarResponsiva: (datos, usuario, secretos, accion) => {
-        const hecho = accion.aplicar(new Date(), Object.assign({ COMENTARIO: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1' }, datos.valores || {}));
+        const hecho = accion.aplicar(new Date(), Object.assign({ COMENTARIO: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1',
+          'JEFE DIRECTO': 'JEFA DE LA RESPONSIVA', DIRECTOR: 'DIR' }, datos.valores || {}));
         return { id: 'RES-1', registroId: hecho.id, filas: [], hecho: hecho };
       },
     },
@@ -43,7 +42,7 @@ function accionesCon(registro) {
 
 test('servidor: la responsiva es la acción; Reasignar ya no existe', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  const cuerpo = acciones.slice(acciones.indexOf('function responsiva('), acciones.indexOf('function datoDeCH_('));
+  const cuerpo = acciones.slice(acciones.indexOf('function responsiva('), acciones.indexOf('// ---------------- Vincular'));
   assert.match(cuerpo, /ref: ref, modo: 'RESPONSIVA'/);
   assert.match(cuerpo, /registrarMovimiento\('REASIGNACION', \{ motivo: comentario, ticket: txt\(valores\['TICKET'\]\) \}/);
   assert.match(acciones, /\['DIRECTOR', 'DIRECTOR'\]/); // la responsiva lleva al director (usuario, 6-oct)
@@ -63,8 +62,10 @@ test('otra persona en un equipo es reasignación y la inspección es obligatoria
   const mov = escritos.find((a) => a[0] === 'REASIGNACION');
   assert.equal(mov[4].detalle.inspeccionId, 'INS-9');
   const cambios = escritos.find((a) => a[1] && a[1]['ESTATUS EQUIPO'] === 'USO')[1];
-  // El jefe directo que se corrigió en la inspección (de la misma persona) es el que queda; su línea DISPONIBLE se va con él (L1)
-  assert.equal(cambios['JEFE DIRECTO'], 'JEFA DE LA INSPECCION');
+  // El jefe directo y el director son los de la responsiva (usuario, 19-oct); su línea DISPONIBLE se va con él (L1)
+  assert.equal(cambios['JEFE DIRECTO'], 'JEFA DE LA RESPONSIVA');
+  assert.equal(cambios['DIRECTOR'], 'DIR');
+  assert.equal(cambios['NO EMPLEADO'], 'AC1');
   assert.equal(cambios['ESTATUS LINEA'], 'USO');
   assert.equal(cambios['RESPONSABLE'], 'LUIS');
 });
@@ -89,7 +90,7 @@ test('la línea sin equipo: DISPONIBLE pasa a USO con la persona, sin inspecció
   assert.equal(exigidas.length, 0, 'la línea sin equipo no lleva inspección');
   const cambios = escritos.find((a) => a[1] && a[1]['ESTATUS LINEA'] === 'USO')[1];
   assert.equal(cambios['RESPONSABLE'], 'LUIS');
-  assert.equal(cambios['JEFE DIRECTO'], 'JEFE DE CH');
+  assert.equal(cambios['JEFE DIRECTO'], 'JEFA DE LA RESPONSIVA');
   assert.ok(!('ESTATUS EQUIPO' in cambios));
   assert.ok(escritos.some((a) => a[0] === 'REASIGNACION'));
   [['LIN-2', { 'ESTATUS LINEA': 'CANCELADA', 'NUMERO TELEFONO': '4420000000' }, /La línea 4420000000 está CANCELADA\./],

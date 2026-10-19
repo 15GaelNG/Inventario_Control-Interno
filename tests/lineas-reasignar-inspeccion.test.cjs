@@ -7,13 +7,14 @@ const path = require('node:path');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-test('la inspección de Reasignar se llena con la responsiva y el jefe directo sale de Capital Humano', () => {
+test('la inspección de Reasignar se llena con la responsiva, también el jefe directo (19-oct)', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const form = captura.slice(captura.indexOf('function formularioInspeccion_('), captura.indexOf('function ocultarSecretos_'));
   assert.match(form, /const resp = !enAccion && deResponsiva && deResponsiva\.valores \? deResponsiva\.valores : null;/);
-  assert.match(form, /valor: persona\('CUENTA GOOGLE', 'CORREO'\)/);
-  assert.match(form, /valor: resp \? jefeDeCH\(\) : persona\('JEFE DIRECTO'\)/);
-  assert.match(form, /LineasAcciones\.datoDeCH_\(resp\['No EMPLEADO'\], resp\['RESPONSABLE'\], 'jefe'\)/);
+  // Los datos del responsable, por la columna del documento (No EMPLEADO, CORREO, JEFE DIRECTO…): de la responsiva o de la ficha
+  assert.match(form, /const persona = \(c\) => \(enAccion \? '' : \(resp \? deResp\(c, ''\) : v\(columnaFicha_\(c\)\)\)\);/);
+  assert.match(form, /camposResponsable_\(catalogos, persona, \{ soloProcesos: !!enAccion \}\)/);
+  assert.doesNotMatch(form, /jefeDeCH|datoDeCH_/);
   ['COLOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'TICKET', 'COMENTARIO'].forEach((c) => assert.match(form, new RegExp("deResp\\('" + c + "'"), c));
   assert.match(form, /deResponsiva\.patron !== undefined && deResponsiva\.patron !== null \? String\(deResponsiva\.patron\)/);
   // Es una inspección normal: lo de la responsiva llega llenado y se puede cambiar (usuario, 6-oct en la tarde)

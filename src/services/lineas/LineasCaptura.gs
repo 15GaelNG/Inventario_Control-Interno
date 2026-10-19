@@ -199,16 +199,57 @@ const LineasCaptura = (function () {
    * inspecciona el aparato del registro; cambiar aquí el IMEI o el NUCO solo cambiaba el documento, no el inventario);
    * el COLOR sí se captura, precargado con el del equipo; los datos del responsable se pueden cambiar, como antes.
    */
+  /**
+   * Datos del responsable, los mismos en la inspección y la responsiva (usuario, 19-oct; pendiente 2.54): número de
+   * empleado, nombre, puesto, departamento, área, sede, oficina, jefe directo, director y correo. La responsiva agrega
+   * la identificación (opciones.identificacion). Listas de Capital Humano y, al elegir a la persona, se llenan con lo que
+   * dice CH. Obligatorio lo que CH siempre trae; jefe directo, director y correo pueden venir vacíos de CH (19-oct: 410,
+   * 117 y 1,810 de los activos sin ellos) y no lo son.
+   *   valor(columna): el valor inicial, por la columna del documento (No EMPLEADO, CORREO).
+   *   opciones.personaFija: nombre y número fijos (Vincular o Cambiar línea: la persona es la que ya lo tiene).
+   *   opciones.soloProcesos: Mandar a resguardo; el nombre solo se elige entre las personas de procesos.
+   */
+  const DATOS_CH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
+    'OFICINA / DESARROLLO': 'oficina', 'JEFE DIRECTO': 'jefe', 'DIRECTOR': 'director', 'CORREO': 'correo' };
+  /** Columna del inventario de cada dato del responsable que en los documentos se llama distinto. */
+  const COLUMNA_FICHA = { 'No EMPLEADO': 'NO EMPLEADO', 'CORREO': 'CUENTA GOOGLE' };
+  const columnaFicha_ = (c) => COLUMNA_FICHA[c] || c;
+  /** Lo que cada hoja del AppSheet no tenía: la inspección no pedía número ni director y la responsiva, jefe directo. */
+  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR'], RESPONSIVA: ['JEFE DIRECTO'] };
+  function camposResponsable_(catalogos, valor, opciones) {
+    const o = opciones || {};
+    const req = { requerido: 'SIEMPRE' };
+    const lista = (columna, etiqueta, opcionesLista, extra) => campo_(columna, etiqueta, 'listaAbierta', Object.assign({ valor: valor(columna), opciones: opcionesLista || [] }, extra || {}));
+    const fijo = (columna, etiqueta) => campo_(columna, etiqueta, 'texto', { valor: valor(columna), soloLectura: true });
+    const noEmpleado = o.personaFija ? fijo('No EMPLEADO', 'No. de empleado')
+      // En Mandar a resguardo el número sale de la persona de procesos elegida
+      : lista('No EMPLEADO', 'No. de empleado', [], Object.assign(o.soloProcesos ? {} : { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, DATOS_CH), llenarVacios: true }, req));
+    // llenarVacios: al abrir, lo que falte de la persona se llena con Capital Humano (usuario, 4-oct: el jefe directo no salía)
+    const nombre = o.personaFija ? fijo('RESPONSABLE', 'Nombre')
+      : lista('RESPONSABLE', 'Nombre', o.soloProcesos ? PERSONAS_PROCESOS : [], Object.assign({ sugerencias: 'PERSONAS', autollenar: Object.assign({ 'No EMPLEADO': 'noEmpleado' }, DATOS_CH), llenarVacios: true },
+        o.soloProcesos ? { soloLista: true } : {}, req));
+    return [noEmpleado, nombre].concat(o.identificacion || [], [
+      // Listas abiertas: un valor viejo fuera de la lista no debe impedir guardar
+      lista('PUESTO', 'Puesto', catalogos.puestos, Object.assign({ sugerencias: 'PUESTOS' }, req)),
+      lista('DEPARTAMENTO', 'Departamento', catalogos.departamentos, req),
+      lista('AREA', 'Área', catalogos.areas, req),
+      lista('SEDE', 'Sede', catalogos.sedes, req),
+      lista('OFICINA / DESARROLLO', 'Oficina o desarrollo', catalogos.oficinas, req),
+      lista('JEFE DIRECTO', 'Jefe directo', catalogos.jefes),
+      lista('DIRECTOR', 'Director', catalogos.directores),
+      campo_('CORREO', 'Correo', 'texto', { valor: valor('CORREO'), literal: true }),
+    ]);
+  }
+
   function formularioInspeccion_(fila, catalogos, usuario, id, ahora, enAccion, deResponsiva) {
     const v = (c) => valorLinea_(fila, c);
     // Dentro de Reasignar (usuario, 6-oct), la inspección empieza con lo que se capturó en la responsiva: la persona
-    // nueva, el color, los accesos, el ticket y el comentario. El jefe directo, que la responsiva no lleva, sale de CH
+    // nueva (con su jefe directo y su director desde el 19-oct), el color, los accesos, el ticket y el comentario
     const resp = !enAccion && deResponsiva && deResponsiva.valores ? deResponsiva.valores : null;
     const deResp = (c, siNo) => (resp && Object.prototype.hasOwnProperty.call(resp, c) ? String(resp[c] === null || resp[c] === undefined ? '' : resp[c]) : siNo);
     // Dentro de Mandar a resguardo (enAccion), el responsable es quien recibe: empieza en blanco y solo se elige entre
     // las personas de procesos; lo demás se llena con Capital Humano (usuario, 4-oct)
-    const persona = (c, enResponsiva) => (enAccion ? '' : (resp ? deResp(enResponsiva || c, '') : v(c)));
-    const jefeDeCH = () => (typeof LineasAcciones === 'undefined' ? '' : LineasAcciones.datoDeCH_(resp['No EMPLEADO'], resp['RESPONSABLE'], 'jefe'));
+    const persona = (c) => (enAccion ? '' : (resp ? deResp(c, '') : v(columnaFicha_(c))));
     // Es una inspección normal: lo de la responsiva solo llega llenado y se puede cambiar (usuario, 6-oct; del 6-oct en la
     // mañana a la tarde quedaba fijo)
     const patronResp = resp && deResponsiva.patron !== undefined && deResponsiva.patron !== null ? String(deResponsiva.patron) : '';
@@ -216,10 +257,6 @@ const LineasCaptura = (function () {
     const esEquipo = tipo === 'EQUIPO';
     const req = { requerido: 'SIEMPRE' };
     const fijo = (extra) => Object.assign({ soloLectura: true }, extra);
-    // Datos del responsable: listas de Capital Humano y, al elegir a la persona, se llenan con lo que dice CH. El jefe
-    // directo solo va en la inspección (PLAN_REESTRUCTURA_LINEAS.md §3.3)
-    const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
-      'OFICINA / DESARROLLO': 'oficina', 'JEFE DIRECTO': 'jefe', 'CORREO': 'correo' };
     const elementos = [
       titulo_('EQUIPO', 'smartphone'),
       campo_('ID', 'ID', 'texto', { valor: id, soloLectura: true }),
@@ -236,18 +273,7 @@ const LineasCaptura = (function () {
       campo_('PLAN', 'Plan', 'texto', fijo({ valor: esEquipo ? '' : v('COSTO PLAN'), mostrar: 'NO_EQUIPO' })),
       campo_('RAZON SOCIAL', 'Razón social', 'texto', fijo({ valor: v('RAZON SOCIAL'), mostrar: 'NO_EQUIPO' })),
       titulo_('RESPONSABLE', 'user'),
-      // llenarVacios: al abrir, lo que falte de la persona se llena con Capital Humano (usuario, 4-oct: el jefe directo no salía)
-      campo_('RESPONSABLE', 'Nombre', 'listaAbierta', Object.assign({ valor: persona('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: datosCH, llenarVacios: true },
-        enAccion ? { opciones: PERSONAS_PROCESOS, soloLista: true } : {}, req)),
-      campo_('PUESTO', 'Puesto', 'listaAbierta', Object.assign({ valor: persona('PUESTO'), opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }, req)),
-      campo_('DEPARTAMENTO', 'Departamento', 'listaAbierta', Object.assign({ valor: persona('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req)),
-      campo_('AREA', 'Área', 'listaAbierta', Object.assign({ valor: persona('AREA'), opciones: catalogos.areas || [] }, req)),
-      campo_('SEDE', 'Sede', 'listaAbierta', Object.assign({ valor: persona('SEDE'), opciones: catalogos.sedes || [] }, req)),
-      campo_('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', Object.assign({ valor: persona('OFICINA / DESARROLLO'), opciones: catalogos.oficinas || [] }, req)),
-      // La responsiva no lleva al jefe directo: se puede corregir aquí y Reasignar lo toma de esta inspección
-      campo_('JEFE DIRECTO', 'Jefe directo', 'listaAbierta', Object.assign({ valor: resp ? jefeDeCH() : persona('JEFE DIRECTO'), opciones: catalogos.jefes || [] }, req)),
-      campo_('CORREO', 'Correo', 'texto', Object.assign({ valor: persona('CUENTA GOOGLE', 'CORREO'), literal: true }, req)),
-    ].concat(
+    ].concat(camposResponsable_(catalogos, persona, { soloProcesos: !!enAccion }),
       // Los responsables adicionales (usuario, 6-oct): los del registro o, en Reasignar, los de la responsiva; se pueden
       // quitar o agregar. Al mandar a resguardo no hay (recibe procesos)
       enAccion ? [] : LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra),
@@ -309,8 +335,8 @@ const LineasCaptura = (function () {
    * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Comentario y Firmas. Los datos del equipo se
    * pueden corregir antes de firmar; los de la línea van fijos (16-oct).
    * La fecha es una sola, como en la inspección; DIA, MES y AÑO (los que usa el PDF) se sacan de ella al guardar.
-   * Lleva al DIRECTOR de la persona, como el AppSheet; el jefe directo va en la inspección (usuario, 6-oct: del 4 al
-   * 6-oct la responsiva guardó al jefe en DIRECTOR).
+   * Lleva al DIRECTOR y al JEFE DIRECTO de la persona, como la inspección (usuario, 19-oct; hasta el 19-oct solo el
+   * director, como el AppSheet, y el jefe iba en la inspección; del 4 al 6-oct la responsiva guardó al jefe en DIRECTOR).
    */
   /**
    * Identificación de cada responsable (usuario, 9-oct; pendiente 2.27): fotos o PDF que se revisan antes de subir. No
@@ -341,7 +367,7 @@ const LineasCaptura = (function () {
     // La responsiva es la acción (pendiente 2.49, usuario 16-oct): empieza con la persona que lo tiene (si firma ella,
     // es renovación); si está en resguardo o DISPONIBLE no tiene persona y se elige aquí (reasignación)
     const sinPersona = String(valorLinea_(fila, sinEquipo ? 'ESTATUS LINEA' : 'ESTATUS EQUIPO')).trim().toUpperCase() !== 'USO';
-    const persona = (c) => (sinPersona ? '' : v(c));
+    const persona = (c) => (sinPersona ? '' : v(columnaFicha_(c)));
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
     const ed = (columna, etiqueta, control, valor, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: valor }, extra || {}));
     // La línea, fija (usuario, 16-oct: lo que pasa a la ficha es de la persona y del equipo): se cambia con Vincular o
@@ -350,10 +376,6 @@ const LineasCaptura = (function () {
     // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma) y lo que
     // ya traiga el equipo fuera de la lista, para no perderlo
     const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
-    // Al elegir a la persona (o al abrir, si falta algo) se llenan sus datos con lo que dice Capital Humano
-    const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
-      'OFICINA / DESARROLLO': 'oficina', 'DIRECTOR': 'director', 'CORREO': 'correo' };
-    const autoResponsable = Object.assign({ 'No EMPLEADO': 'noEmpleado' }, datosCH);
     // La línea sin equipo (pendiente 2.45): solo la línea, fija (es la responsiva de esa línea; un dato mal capturado se
     // corrige con Editar línea), sin equipo ni accesorios y accesos
     const datos = sinEquipo ? [
@@ -390,23 +412,11 @@ const LineasCaptura = (function () {
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: acceso('PIN EQUIPO'), literal: true, secreto: true }),
       campo_('CONTRASEÑA', 'Patrón', 'patron', { valor: acceso('PATRON'), secreto: true }),
     ];
-    return datos.concat([
-      titulo_('RESPONSABLE', 'user'),
-      conLinea ? ro('No EMPLEADO', 'No. de empleado', persona('NO EMPLEADO'))
-        : ed('No EMPLEADO', 'No. de empleado', 'listaAbierta', persona('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH), llenarVacios: true }),
-      conLinea ? ro('RESPONSABLE', 'Nombre', persona('RESPONSABLE'))
-        : ed('RESPONSABLE', 'Nombre', 'listaAbierta', persona('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true }),
+    // Los mismos datos del responsable que la inspección (19-oct, pendiente 2.54), más su identificación
+    return datos.concat([titulo_('RESPONSABLE', 'user')], camposResponsable_(catalogos, persona, { personaFija: conLinea, identificacion: [
       campo_('IDENTIFICACION', 'Identificación', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES }),
       archivoIdentificacion_(0),
-      // Listas abiertas: un valor viejo fuera de la lista no debe impedir firmar la responsiva
-      ed('PUESTO', 'Puesto', 'listaAbierta', persona('PUESTO'), { opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }),
-      ed('DEPARTAMENTO', 'Departamento', 'listaAbierta', persona('DEPARTAMENTO'), { opciones: catalogos.departamentos || [] }),
-      ed('AREA', 'Área', 'listaAbierta', persona('AREA'), { opciones: catalogos.areas || [] }),
-      ed('SEDE', 'Sede', 'listaAbierta', persona('SEDE'), { opciones: catalogos.sedes || [] }),
-      ed('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', persona('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
-      ed('DIRECTOR', 'Director', 'listaAbierta', persona('DIRECTOR'), { opciones: catalogos.directores || [] }),
-      ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
-    ]).concat(
+    ] })).concat(
       // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; sin persona empiezan vacíos. Cada uno con su
       // identificación debajo de su nombre (usuario, 9-oct)
       conIdentificacionAdicional_(LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), persona)), accesos, [
@@ -536,6 +546,8 @@ const LineasCaptura = (function () {
   const COPIA_INSPECCION_A_LINEA = [
     ['RESPONSABLE', 'RESPONSABLE'], ['DEPARTAMENTO', 'DEPARTAMENTO'], ['AREA', 'AREA'], ['SEDE', 'SEDE'],
     ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['PUESTO', 'PUESTO'], ['JEFE DIRECTO', 'JEFE DIRECTO'],
+    // Número de empleado y director, desde que la inspección los pide como la responsiva (19-oct, pendiente 2.54)
+    ['NO EMPLEADO', 'No EMPLEADO'], ['DIRECTOR', 'DIRECTOR'],
     ['CUENTA GOOGLE', 'CORREO'], ['PIN WHATSAPP', 'PIN WHATSAPP'], ['PIN EQUIPO', 'PIN EQUIPO'], ['PATRON', 'PATRON'],
     ['CONTRASEÑA MODEM', 'CONTRASEÑA MODEM'],
   ];
@@ -578,6 +590,9 @@ const LineasCaptura = (function () {
         'CALIFICACION': calificacion, 'NOMBRE INSPECTOR': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       });
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, ADICIONALES);
+      // Las columnas que la hoja del AppSheet no tiene (19-oct, pendiente 2.54) se agregan con el primero que las trae
+      const nuevas = COLUMNAS_NUEVAS.INSPECCION.filter((c) => fila[c]);
+      if (nuevas.length) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, nuevas);
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
 
       // 2) Bot ACTUALIZAR DESDE INSPECCION: copia a la línea (la bitácora la deja guardarCambiosRegistro).
@@ -705,6 +720,8 @@ const LineasCaptura = (function () {
       });
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, ADICIONALES);
       if (fila[LineasRepo.COL_LINEA_ENTREGADA]) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, [LineasRepo.COL_LINEA_ENTREGADA]);
+      const nuevas = COLUMNAS_NUEVAS.RESPONSIVA.filter((c) => fila[c]);
+      if (nuevas.length) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, nuevas);
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
       // Todo lo de la responsiva pasa a la ficha (usuario, 16-oct, L2; pendiente 2.49): la persona y, en un equipo, el
       // modelo, el IMEI, los accesorios, el color, el bloqueo y el PIN de WhatsApp. Si firmó otra persona, la acción ya la
@@ -764,13 +781,6 @@ const LineasCaptura = (function () {
     const dia = (d) => Utilities.formatDate(d, ZONA, 'yyyy-MM-dd');
     if (!(fecha instanceof Date) || dia(fecha) !== dia(new Date())) throw new Error(nombre + ': la inspección ' + id + ' no es de hoy.');
     return id;
-  }
-
-  /** Un dato de una inspección guardada ('' si no está). */
-  function datoDeInspeccion(id, columna) {
-    const fila = id ? leerFilaPorId_(LineasRepo.TAB.INSP, String(id)) : null;
-    const v = fila ? LineasUtil.col(fila, columna) : '';
-    return v === null || v === undefined ? '' : String(v).trim();
   }
 
   // ======================================================================
@@ -1119,7 +1129,7 @@ const LineasCaptura = (function () {
   }
 
   return {
-    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, datoDeInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
+    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
     contextoInspeccion: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoInspeccion(ref, usuario, puedeVerSecretos)),
     contextoResponsiva: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoResponsiva(ref, usuario, puedeVerSecretos)),
     // Para pruebas: las definiciones de los formularios

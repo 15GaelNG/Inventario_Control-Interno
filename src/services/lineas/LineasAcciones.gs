@@ -14,10 +14,10 @@ const LineasAcciones = (function () {
 
   // ---------------- Responsiva (antes Reasignar) ----------------
 
-  /** Datos de la persona en la responsiva → columnas del inventario. */
+  /** Datos de la persona en la responsiva → columnas del inventario (con el jefe directo desde el 19-oct, pendiente 2.54). */
   const PERSONA_DE_RESPONSIVA = [
     ['NO EMPLEADO', 'No EMPLEADO'], ['RESPONSABLE', 'RESPONSABLE'], ['PUESTO', 'PUESTO'], ['DEPARTAMENTO', 'DEPARTAMENTO'], ['AREA', 'AREA'],
-    ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['DIRECTOR', 'DIRECTOR'], ['CUENTA GOOGLE', 'CORREO'],
+    ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['JEFE DIRECTO', 'JEFE DIRECTO'], ['DIRECTOR', 'DIRECTOR'], ['CUENTA GOOGLE', 'CORREO'],
   ].concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat([['NO EMPLEADO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE'],
     ['NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']]), []));
 
@@ -85,13 +85,10 @@ const LineasAcciones = (function () {
     const antes = txt(LineasUtil.col(f, 'RESPONSABLE'));
     if (esRenovacion(estatus, antes, valores['RESPONSABLE'])) return { id: id, reasignado: false };
     if (esEquipo) LineasCaptura.exigirInspeccion(inspeccionId, LineasDatos.idsDeFila(f), nombreRegistro_(f, true));
-    const nuevo = may(valores['RESPONSABLE']);
     const cambios = {};
+    // El jefe directo también es de la responsiva (usuario, 19-oct; pendiente 2.54): del 6 al 19-oct salía de la
+    // inspección o de Capital Humano, porque la responsiva no lo pedía
     PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { cambios[destino] = txt(valores[origen]); });
-    // El jefe directo no viene en la responsiva (lleva al director): el de la inspección, que se puede corregir ahí, o
-    // el de Capital Humano de la persona elegida (usuario, 6-oct; del 4 al 6-oct era al revés)
-    const deInspeccion = esEquipo && may(LineasCaptura.datoDeInspeccion(inspeccionId, 'RESPONSABLE')) === nuevo ? LineasCaptura.datoDeInspeccion(inspeccionId, 'JEFE DIRECTO') : '';
-    cambios['JEFE DIRECTO'] = deInspeccion || datoDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE'], 'jefe');
     if (esEquipo) {
       cambios['ESTATUS EQUIPO'] = 'USO';
       if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
@@ -107,16 +104,6 @@ const LineasAcciones = (function () {
         idsReasignacion: g.idReasignacion ? [g.idReasignacion] : [], cambios: g.campos },
     });
     return { id: id, reasignado: true };
-  }
-
-  /** Un dato de la persona en Capital Humano ('jefe', 'director'…) por número de empleado o, si no, por nombre; '' si no está. */
-  function datoDeCH_(noEmpleado, nombre, campo) {
-    const ix = LineasRepo.indiceColaboradores();
-    const c = ix.columnas;
-    const iNum = c.indexOf('noEmpleado'), iNom = c.indexOf('nombre'), iDir = c.indexOf(campo);
-    const num = may(noEmpleado), nom = may(nombre);
-    const fila = (num && ix.filas.filter((f) => may(f[iNum]) === num)[0]) || (nom && ix.filas.filter((f) => may(f[iNom]) === nom)[0]);
-    return fila ? txt(fila[iDir]) : '';
   }
 
   // ---------------- Vincular, cambiar y desvincular línea y equipo (etapa 3, usuario 8-oct; pendiente 2.24) ----------------
@@ -237,5 +224,5 @@ const LineasAcciones = (function () {
   }
 
   // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado
-  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_, esRenovacion, exigirEstatusParaResponsiva };
+  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, esRenovacion, exigirEstatusParaResponsiva };
 })();

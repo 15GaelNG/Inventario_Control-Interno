@@ -9,11 +9,11 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /return \{ responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_, esRenovacion, exigirEstatusParaResponsiva \};/);
-  // Reasignar: el director sale de la responsiva y el jefe directo de la inspección (si es de la misma persona) o de
-  // Capital Humano (usuario, 6-oct)
-  assert.match(acciones, /cambios\['JEFE DIRECTO'\] = deInspeccion \|\| datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
-  assert.match(acciones, /may\(LineasCaptura\.datoDeInspeccion\(inspeccionId, 'RESPONSABLE'\)\) === nuevo \? LineasCaptura\.datoDeInspeccion\(inspeccionId, 'JEFE DIRECTO'\) : ''/);
+  assert.match(acciones, /return \{ responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, esRenovacion, exigirEstatusParaResponsiva \};/);
+  // Reasignar: el director y el jefe directo salen de la responsiva (usuario, 19-oct; del 6 al 19-oct el jefe salía de la
+  // inspección o de Capital Humano)
+  assert.match(acciones, /\['JEFE DIRECTO', 'JEFE DIRECTO'\], \['DIRECTOR', 'DIRECTOR'\]/);
+  assert.doesNotMatch(acciones, /datoDeCH_|datoDeInspeccion/);
   assert.doesNotMatch(acciones, /function (reglas|permite|hayCamino|cerrar|cambiar)\(/);
   assert.match(read('src/services/TelefoniaService.gs'), /function catalogos\(token\) \{\r?\n    leer_\(token\);\r?\n    return LineasRepo\.catalogos\(\);/);
   const api = read('src/ClientApi.gs');
@@ -93,7 +93,8 @@ test('inspección: el equipo y la línea vienen del registro y no se cambian; el
     assert.match(cuerpo, new RegExp("campo_\\('" + c + "', '[^']+', 'texto', fijo\\("), c + ' debe ser fijo');
   });
   assert.match(cuerpo, /campo_\('COLOR', 'Color', 'listaAbierta', \{ valor: deResp\('COLOR', v\('COLOR'\)\)/);
-  assert.match(cuerpo, /campo_\('RESPONSABLE', 'Nombre', 'listaAbierta'/);
+  // El responsable, con los mismos campos que la responsiva (19-oct, pendiente 2.54; lineas-responsable-homologado.test.cjs)
+  assert.match(cuerpo, /camposResponsable_\(catalogos, persona, \{ soloProcesos: !!enAccion \}\)/);
   const pantalla = leer('src/html/js/lineas.html');
   assert.doesNotMatch(pantalla, /Opcional\. Se guardan en Drive/);
   assert.match(pantalla, /desde: 'titulo:EQUIPO'/);
