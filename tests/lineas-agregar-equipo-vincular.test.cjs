@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -70,5 +71,5 @@ test('al guardar: se revisa antes de escribir y se vincula como «Vincular líne
   const revisa = reg.slice(reg.indexOf('function lineaParaVincular_'), reg.indexOf('/** Columnas de la línea y de su adendum'));
   assert.match(revisa, /lineasSueltas_\(\)\.filter/);
   assert.match(revisa, /ESTATUS_VINCULABLE\.indexOf\(estatus\) < 0/);
-  assert.match(read('src/html/js/lineas.html'), /if \(cond\.o\) return cond\.o\.some\(\(c\) => cumpleCondicion\(c, tipo, valores, ctx\)\);/);
+  assert.match(LINEAS, /if \(cond\.o\) return cond\.o\.some\(\(c\) => cumpleCondicion\(c, tipo, valores, ctx\)\);/);
 });

@@ -1,0 +1,813 @@
+<script>
+  /**
+   * lineas-telefonicas.html — Líneas Telefónicas: inventario (tabla, tarjetas o vínculos), ficha, documentos, historial y las capturas.
+   * Era parte de lineas.html (fase 6.2, tools/lineas/partir.js): lo de la base sale de Lineas.comun.
+   */
+  (function () {
+    'use strict';
+    const { $, CATALOGOS_LINEAS, COLOR_ESTATUS, REGLAS_FORMATO, abrirPanelLateral, alternarMulti, aviso,
+      cargarIndice, chip, colorAppSheet, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion, ico, icono,
+      llamar, memoria, mensajeError, miles, montaje, panelActual, pintarIconos, precargarUltimosNucos, puedeOperar,
+      tablaLineas, vacio, veDocumentos, veHistorial, verFotoEnGrande } = Lineas.comun;
+
+    // ======================================================================
+    // Líneas Telefónicas
+    // ======================================================================
+
+    /**
+     * Columnas de la vista de tabla LINEAS TELEFONICAS del AppSheet, en su orden (llegan en el índice, bloque
+     * "vista"). Títulos = nombre de la columna o su DisplayName del AppSheet; EMAIL USUARIO con correo (acción
+     * Compose Email). RESPONSIVA y FORMATO INSPECCION son "Última responsiva" / "Última inspección": abren la más
+     * reciente de la carpeta del NUCO en NUCOS (no el archivo del AppSheet).
+     */
+    const COLUMNAS_VISTA_LINEAS = [
+      ['NUMERO TELEFONO', 'Número teléfono', 'mono'], ['NUCO', 'NUCO', 'mono'], ['TIPO', 'Tipo', 'tipo'],
+      ['ESTATUS GENERAL', 'Estatus general', 'chip'], ['NO EMPLEADO', 'No. empleado', 'mono'], ['RESPONSABLE', 'Responsable'],
+      ['PUESTO', 'Puesto'], ['NOMBRE RESPONSABLES 2', 'Nombre colaborador/es'], ['PUESTO RESPONSABLES 2', 'Puesto colaborador/es'],
+      ['EQUIPO', 'Equipo', 'lista'], ['IMEI', 'IMEI', 'mono'], ['NUMERO SIM', 'Número SIM', 'mono'], ['ACCESORIOS', 'Accesorios'],
+      ['SEDE', 'Sede', 'lista'], ['OFICINA / DESARROLLO', 'Oficina / desarrollo', 'lista'], ['DEPARTAMENTO', 'Departamento', 'lista'],
+      ['AREA', 'Área', 'lista'], ['JEFE DIRECTO', 'Jefe directo'], ['DIRECTOR', 'Director'], ['FOLIO', 'Folio', 'mono'],
+      ['RAZON SOCIAL', 'Razón social', 'lista'], ['PIN WHATSAPP', 'PIN WhatsApp', 'mono'], ['PIN EQUIPO', 'PIN equipo', 'mono'],
+      ['CUENTA GOOGLE', 'Cuenta Google'], ['COMPAÑIA', 'Compañía', 'lista'], ['COSTO PLAN', 'Costo plan', 'precio'],
+      ['FECHA REGISTRO', 'Fecha registro', 'fecha'], ['INICIO PLAN', 'Inicio plan', 'fecha'], ['FIN PLAN', 'Fin plan', 'fecha'],
+      ['ESTATUS LINEA', 'Estatus línea', 'chip'], ['FECHA CAMBIO TEMPORAL', 'Fecha cambio temporal', 'fecha'],
+      ['EMAIL USUARIO', 'Email usuario', 'correo'], ['ESTATUS EQUIPO', 'Estatus equipo', 'chip'], ['RESPONSIVA', 'Última responsiva', 'ultimo'],
+      ['COMENTARIOS', 'Comentarios'], ['FECHA INSPECCION', 'Fecha inspección', 'fecha'], ['FORMATO INSPECCION', 'Última inspección', 'ultimo'],
+    ];
+    /** "Ver": abre la última inspección o responsiva de la carpeta del NUCO en NUCOS (se busca al hacer clic). */
+    function botonUltimoNucos(tipo, id) {
+      if (!veDocumentos()) return '';
+      const titulo = (tipo === 'INSPECCION' ? 'Última inspección' : 'Última responsiva') + ' en la carpeta NUCOS';
+      return '<button type="button" class="ln-btn-icono ln-archivo" data-ln-ultimo="' + tipo + '" data-id="' + esc(id) + '" title="' + titulo + '">' +
+        icono('file-text') + ' Ver</button>';
+    }
+    const tieneNuco = (r) => !!(r.NUCO || r.nuco || r.nucoEquipo);
+    /**
+     * Columnas de la vista del AppSheet que la tabla aún no tiene (`sinEstas`): ocultas, salvo "Última responsiva" y
+     * "Última inspección", que van al final.
+     */
+    function columnasVistaLineas(sinEstas) {
+      return COLUMNAS_VISTA_LINEAS.filter(([campo]) => sinEstas.indexOf(campo) < 0).map(([campo, titulo, clase]) => {
+        const c = { campo: campo, titulo: titulo, tipo: 'texto', visible: false };
+        if (clase === 'mono') c.render = (v) => '<span class="ln-mono">' + guion(v) + '</span>';
+        if (clase === 'lista') c.tipo = 'lista';
+        if (clase === 'tipo') { c.tipo = 'lista'; c.render = (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v); }
+        if (clase === 'chip') { c.tipo = 'lista'; c.render = (v) => chip(v); }
+        if (clase === 'fecha') c.tipo = 'lnFechaHora';
+        if (clase === 'precio') { c.tipo = 'numero'; c.render = (v) => Formato.moneda(v) || vacio; }
+        if (clase === 'ultimo') {
+          const tipo = campo === 'RESPONSIVA' ? 'RESPONSIVA' : 'INSPECCION';
+          c.visible = true;
+          c.tipo = 'lista';
+          c.valor = (r) => (tieneNuco(r) ? titulo : '');
+          c.render = (v, r) => (tieneNuco(r) ? botonUltimoNucos(tipo, r.id) : vacio);
+        }
+        if (clase === 'correo') c.render = (v) => (v ? '<a class="ln-enlace" href="mailto:' + esc(v) + '">' + icono('mail') + ' ' + esc(v) + '</a>' : vacio);
+        return c;
+      });
+    }
+
+    /**
+     * Columnas del inventario (DataTable): las de siempre a la vista; las demás de la vista del AppSheet, ocultas
+     * (se agregan desde "Vista").
+     */
+    /** Acciones masivas de equipos (barra de la tabla con 2 o más seleccionados). `clave` = LineasRegistros.MASIVAS. */
+    const ACCIONES_MASIVAS = [
+      // Mandar a resguardo tiene su propio formulario (abrirResguardo): datos por NUCO, N/A y bandeja de Pau (30-sep)
+      { clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true,
+        ayuda: 'Manda los equipos seleccionados a resguardo: cada uno con su ubicación y el estatus de su línea' },
+      { clave: 'REASIGNAR', texto: 'Reasignar', boton: 'Reasignar', icono: 'user-round-pen',
+        ayuda: 'Asigna los equipos seleccionados a otro responsable', efecto: 'Todos los equipos pasan al nuevo responsable y quedan en USO (su línea también, si estaba DISPONIBLE); lo que dejes vacío (No. empleado, puesto, departamento) queda como estaba en cada equipo.' },
+      // "Cancelar equipos" se quitó el 30-sep: los equipos no se cancelan, solo las líneas
+    ];
+
+    const TABLAS_INVENTARIO = {
+      equipos: {
+        detalle: 'equipo', textoVacio: 'Sin equipos',
+        etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
+        columnas: [
+          { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
+          { campo: 'modelo', titulo: 'Modelo', tipo: 'texto' },
+          { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
+          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
+          { campo: 'sede', titulo: 'Sede', tipo: 'lista', visible: false },
+        ].concat(columnasVistaLineas(['NUCO', 'TIPO', 'EQUIPO', 'IMEI', 'ESTATUS EQUIPO', 'NUMERO TELEFONO', 'COMPAÑIA', 'ESTATUS LINEA', 'RESPONSABLE', 'DEPARTAMENTO', 'SEDE'])),
+      },
+      lineas: {
+        detalle: 'linea', textoVacio: 'Sin líneas',
+        etiqueta: (r) => 'Línea ' + (r.numero || '—'),
+        columnas: [
+          // La búsqueda encuentra la línea por un número que tuvo (8-oct); en la celda solo se ve el actual y los anteriores
+          // van en la ficha, abajo del número (usuario, 12-oct)
+          { campo: 'numero', titulo: 'Número', tipo: 'texto', fijada: true,
+            valor: (r) => [r.numero, r.numerosAnteriores].filter(Boolean).join(' '),
+            render: (v, r) => '<span class="ln-mono ln-fuerte">' + guion(r && r.numero) + '</span>' },
+          { campo: 'tipoHoja', titulo: 'Tipo', tipo: 'lista', render: (v) => formatoAppSheet('LINEAS', 'TIPO', v) || guion(v) },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'suelta', titulo: 'Suelta', tipo: 'lista', valor: (r) => (r.suelta ? 'Sí' : 'No'), render: (v) => (v === 'Sí' ? chip('Suelta', 'ambar') : '<span class="ln-tenue">En equipo</span>') },
+          { campo: 'nucoEquipo', titulo: 'Equipo (NUCO)', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'sim', titulo: 'SIM', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
+          { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
+        ].concat(columnasVistaLineas(['NUMERO TELEFONO', 'TIPO', 'COMPAÑIA', 'ESTATUS LINEA', 'NUCO', 'NUMERO SIM', 'RESPONSABLE', 'DEPARTAMENTO'])),
+      },
+    };
+
+    // ---- Partes de Líneas Telefónicas (fase 6.2b) ----
+    // initTelefonicas es el arranque y la lista; la ficha, documentos, acciones, captura, historial y páginas viven en
+    // lineas-telefonicas-<parte>.html. Cada una es (T) => { …; return { lo que usan las demás } }: lo del arranque
+    // (raiz, pila…) sale de T, lo de otra parte de T.de('parte') (se busca al llamar, así no importa el orden) y un let
+    // que usan varias lo publica su dueña con get/set en T (T.captura). Al montar se revisa que exista todo lo pedido.
+    const PARTES_TELEFONICAS = {};
+    function contextoTelefonicas() {
+      const exportados = {};
+      const pedidos = [];
+      const de = (parte) => (typeof exportados[parte] === 'function' ? (exportados[parte] = exportados[parte]()) : exportados[parte] || {});
+      const T = {
+        de: (parte) => new Proxy({}, {
+          get: (_, nombre) => {
+            if (typeof nombre === 'string') pedidos.push([parte, nombre]);
+            return (...args) => de(parte)[nombre](...args);
+          },
+        }),
+        // datos: lo del arranque; principal: lo de la lista que piden las partes (perezoso: sus const van más abajo)
+        montar: (datos, principal) => {
+          Object.assign(T, datos);
+          exportados.principal = principal;
+          Object.keys(PARTES_TELEFONICAS).forEach((p) => { exportados[p] = PARTES_TELEFONICAS[p](T); });
+          pedidos.filter(([p]) => p !== 'principal').forEach(([p, nombre]) => {
+            if (typeof de(p)[nombre] !== 'function') console.error('Líneas Telefónicas: la parte ' + p + ' no publica ' + nombre);
+          });
+        },
+      };
+      return T;
+    }
+    Lineas.telefonicas = {
+      registrar: (nombre, fabrica) => { PARTES_TELEFONICAS[nombre] = fabrica; },
+      // Lo de esta pantalla que usan las partes
+      comun: { tieneNuco: tieneNuco },
+    };
+
+    function initTelefonicas() {
+      const n = ++montaje.n;
+      const raiz = document.getElementById('ln-telefonicas');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      const pila = []; // navegación dentro del detalle: [{ tipo, id }]
+      // Las partes (lineas-telefonicas-*.html): se montan abajo, cuando ya está lo que piden del arranque
+      const T = contextoTelefonicas();
+      const { abrir, abrirMenuFicha, abrirRegistro, alAbrirPestanaFicha, cerrarDetalle, volver } = T.de('ficha');
+      const { copiarDetalles, pintarTextoDetalles } = T.de('documentos');
+      const { abrirCancelacion, abrirResguardo, abrirResponsiva, abrirVinculo, filaDelIndice } = T.de('acciones');
+      const { abrirCaptura, abrirEditor, actualizarProgresoChecklist, cerrarCaptura, ocultarEspera } = T.de('captura');
+      pintarIconos(raiz);
+      document.addEventListener('app:before-navigate', () => { if (vigente() && T.captura) cerrarCaptura(); }, { once: true });
+
+      // ---- Eventos ----
+      const tablas = {};
+      const filtrosActuales = { equipos: {}, lineas: {} };
+      const PASO_TARJETAS = 48; // vista de tarjetas: cuántas se agregan con "Mostrar más"
+      const tarjetasVisibles = { equipos: PASO_TARJETAS, lineas: PASO_TARJETAS };
+      // Estatus del equipo que van por el formulario de resguardo (LineasResguardos.ESTATUS_EQUIPO_RESGUARDO)
+      const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'];
+      // Por qué se cancela la línea (LineasResguardos.MOTIVOS_CANCELACION; usuario, 13-oct)
+      const MOTIVOS_CANCELACION = ['LINEA VENCIDA', 'CANCELACION ANTICIPADA'];
+      // Los de la línea que en Corregir llevan el mismo aviso (LineasRegistros.ESTATUS_LINEA_PANEL)
+      const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
+      // El equipo que sale del inventario (LineasRegistros.ESTATUS_EQUIPO_FINAL; usuario, 16-oct, pendiente 2.50)
+      const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+      // La línea con el adendum vencido que se manda sola a cancelación: quien captura elige (LineasRegistros.CANCELACION_PANEL
+      // y CANCELACION_DIRECTA; usuario, 16-oct, pendiente 2.50)
+      const CANCELACION_LINEA = [{ valor: 'PANEL', texto: 'PANEL DE RESGUARDOS Y CANCELACIONES' }, { valor: 'DIRECTO', texto: 'CANCELADA SIN PANEL' }];
+      // Directo, sin pasar por el panel (LineasResguardos.LINEA_SIN_PANEL)
+      const LINEA_SIN_PANEL = 'CANCELADA';
+      let marcarKpi = null;
+      const resumenDocumentos = {}; // de ficha; lo usan otras partes
+      const ETIQUETA_DOCUMENTO = { inspeccion: 'Inspección', responsiva: 'Responsiva' }; // de ficha; lo usan otras partes
+      const ORIGEN_DOCUMENTO = { APPSHEET: 'AppSheet', SISTEMA: 'Sistema nuevo', DRIVE: 'Carpeta NUCOS' }; // de documentos; lo usan otras partes
+      const COLOR_ORIGEN_DOCUMENTO = { AppSheet: 'azul', 'Sistema nuevo': 'verde', 'Carpeta NUCOS': 'neutro' }; // de documentos; lo usan otras partes
+      T.montar({
+        CANCELACION_LINEA, COLOR_ORIGEN_DOCUMENTO, ESTATUS_EQUIPO_FINAL, ESTATUS_EQUIPO_RESGUARDO,
+        ESTATUS_LINEA_PANEL, ETIQUETA_DOCUMENTO, LINEA_SIN_PANEL, MOTIVOS_CANCELACION, ORIGEN_DOCUMENTO,
+        pasoHistorial, pila, pintarIndicadores, pintarListado, raiz, resumenDocumentos, tablas, vigente,
+      }, () => ({
+        pilaParaHistorial,
+      }));
+      Tabs.iniciar($('#ln-listado', raiz), { inicial: memoria.modulo });
+      $('#ln-listado', raiz).addEventListener('tabs-cambio', (ev) => {
+        if (ev.target.id === 'ln-listado' && ev.detail.nombre !== memoria.modulo) mostrarModulo(ev.detail.nombre);
+      });
+      $('#ln-recargar', raiz).addEventListener('click', (ev) => {
+        const b = ev.currentTarget;
+        b.disabled = true;
+        llamar('apiLineasRecargarDatos')
+          .then(() => { CATALOGOS_LINEAS.forEach((fn) => invalidarCacheCatalogo(fn, state.token)); return cargarIndice(true); })
+          .then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } })
+          .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 12000))
+          .then(() => { b.disabled = false; });
+      });
+      // Agregar equipo o línea (usuario, 4-oct): el TIPO ya no se elige, se asigna solo. Solo con edición (antes se
+      // veían y el servidor lo negaba al guardar)
+      if (puedeEditarModulo('lineas-telefonicas')) {
+        $('#ln-nuevo-equipo', raiz).addEventListener('click', () => abrirEditor(null, 'EQUIPO'));
+        $('#ln-nueva-linea', raiz).addEventListener('click', () => abrirEditor(null, 'LINEA'));
+      } else {
+        $('#ln-nuevo-equipo', raiz).remove();
+        $('#ln-nueva-linea', raiz).remove();
+      }
+      raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => b.addEventListener('click', () => {
+        memoria.modoVista = b.dataset.modo;
+        try { localStorage.setItem('lineas.modoVista', memoria.modoVista); } catch (e) { /* solo no se recuerda */ }
+        aplicarModoVista();
+      }));
+
+      // La pestaña de la ficha la cambia Tabs; aquí lo que pasa al abrir cada una
+      $('#ln-detalle', raiz).addEventListener('tabs-cambio', (ev) => alAbrirPestanaFicha(ev.detail.nombre));
+
+      // Clic en filas, enlaces internos y botones del detalle (delegación).
+      raiz.addEventListener('click', (ev) => {
+        if (ev.target.closest('a[target="_blank"]')) return;
+        const ir = ev.target.closest('[data-ln-ir]');
+        if (ir) {
+          ev.preventDefault();
+          // Tarjetas del listado, como en Drive: con el mouse el clic selecciona (doble clic abre); con el dedo o el
+          // teclado (Enter) se abre la ficha
+          const tabla = ir.classList.contains('ln-cuadro') && ir.closest('#ln-listado') ? tablas[memoria.modulo] : null;
+          const conMouse = ev.detail > 0 && (ev.pointerType ? ev.pointerType === 'mouse' : !Pantalla.esTactil());
+          if (tabla && conMouse) { tabla.clicSeleccion(ir.dataset.id, ev); return; }
+          abrir(ir.dataset.lnIr, ir.dataset.id);
+          return;
+        }
+        const masFicha = ev.target.closest('[data-ln-ficha-mas]');
+        if (masFicha) { ev.preventDefault(); abrirMenuFicha(masFicha); return; }
+        const mas = ev.target.closest('[data-ln-mas-tarjetas]');
+        if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
+        const copiar = ev.target.closest('[data-ln-copiar-detalles]');
+        if (copiar) { copiarDetalles(copiar); return; }
+        if (ev.target.closest('[data-ln-volver]')) { ev.preventDefault(); volver(); return; }
+        if (ev.target.closest('[data-ln-lista]')) { ev.preventDefault(); cerrarDetalle(); return; }
+        const miga = ev.target.closest('[data-ln-miga]');
+        if (miga) {
+          ev.preventDefault();
+          const indice = Number(miga.dataset.lnMiga);
+          const destino = pila[indice];
+          if (destino) { pila.splice(indice + 1); abrir(destino.tipo, destino.id, true); }
+          return;
+        }
+        const btnCaptura = ev.target.closest('[data-ln-captura]');
+        if (btnCaptura) {
+          ev.preventDefault();
+          const ref = btnCaptura.dataset.equipoId ? { equipoId: btnCaptura.dataset.equipoId } : { lineaId: btnCaptura.dataset.lineaId };
+          // La Responsiva es la acción que entrega (pendiente 2.49): renueva o reasigna
+          if (btnCaptura.dataset.lnCaptura === 'RESPONSIVA') abrirResponsiva(ref.equipoId ? 'equipo' : 'linea', filaDelIndice(ref.equipoId ? 'equipo' : 'linea', ref.equipoId || ref.lineaId));
+          else abrirCaptura(btnCaptura.dataset.lnCaptura, ref);
+          return;
+        }
+        const multi = ev.target.closest('.ln-pastilla-multi');
+        if (multi) { alternarMulti(multi); actualizarProgresoChecklist(); return; }
+        const pastilla = ev.target.closest('.ln-pastilla');
+        if (pastilla) {
+          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => { b.classList.remove('activa'); if (b.hasAttribute('aria-checked')) b.setAttribute('aria-checked', 'false'); });
+          pastilla.classList.add('activa');
+          if (pastilla.hasAttribute('aria-checked')) pastilla.setAttribute('aria-checked', 'true');
+          actualizarProgresoChecklist();
+          return;
+        }
+        const quitarFoto = ev.target.closest('[data-quitar-foto]');
+        if (quitarFoto) {
+          if (T.captura) T.captura.fotos = T.captura.fotos.filter((f) => f.id !== quitarFoto.dataset.quitarFoto);
+          const caja = quitarFoto.closest('.ln-miniatura, .ln-foto-chip');
+          const img = caja.querySelector('img');
+          if (img && /^blob:/.test(img.src)) URL.revokeObjectURL(img.src);
+          caja.remove();
+          return;
+        }
+        // Miniatura de una foto (inspección o identificación): en grande
+        const verFoto = ev.target.closest('[data-ver-foto]');
+        if (verFoto) { verFotoEnGrande(verFoto.getAttribute('src')); return; }
+      });
+      raiz.addEventListener('dblclick', (ev) => {
+        const tarjeta = ev.target.closest('#ln-listado .ln-cuadro[data-ln-ir]');
+        if (tarjeta) abrir(tarjeta.dataset.lnIr, tarjeta.dataset.id);
+      });
+      raiz.addEventListener('contextmenu', (ev) => {
+        const tarjeta = ev.target.closest('#ln-listado .ln-cuadro[data-ln-ir]');
+        const tabla = tarjeta ? tablas[memoria.modulo] : null;
+        if (!tabla) return;
+        ev.preventDefault();
+        tabla.asegurarSeleccionada(tarjeta.dataset.id);
+        tabla.abrirMenu(ev.clientX, ev.clientY);
+      });
+      raiz.addEventListener('input', (ev) => { if (ev.target.closest('[data-ln-copiar]')) pintarTextoDetalles(); });
+      raiz.addEventListener('keydown', (ev) => {
+        if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][tabindex="0"]')) {
+          ev.preventDefault();
+          ev.target.click();
+        }
+        if (ev.key === 'Escape' && !$('#ln-modal-captura', raiz).hidden) cerrarCaptura();
+        // Tarjetas: el foco queda en la tarjeta (no en la tabla), así que Esc quita la selección desde aquí
+        else if (ev.key === 'Escape' && ev.target.closest && ev.target.closest('#ln-listado .ln-cuadro') && tablas[memoria.modulo]) tablas[memoria.modulo].limpiarSeleccion();
+      });
+      $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
+        if (ev.target.closest('[data-espera-volver]')) { ocultarEspera(); return; }
+        // Un clic afuera no cierra la ventana (usuario, 4-oct): solo la X, Cancelar o Cerrar
+        if (ev.target.closest('[data-cerrar-modal]')) cerrarCaptura();
+      });
+
+      // ---- Vínculos (usuario, 8-oct): personas, equipos y líneas en un espacio; arrastrar abre la acción de siempre ----
+      // Es una idea que se queda así: en producción está apagada (MODULOS_APAGADOS de Entornos.gs, como Help Desk) y no hay
+      // botón ni espacio; en los DEV sí. No tiene llamadas propias al servidor: solo abre las ventanas de siempre
+      const vinculosApagado = (() => {
+        try { return JSON.parse(document.body.dataset.apagados || '[]').indexOf('vinculos-lineas') >= 0; } catch (e) { return false; }
+      })();
+      if (vinculosApagado) {
+        const boton = raiz.querySelector('#ln-modo-vista [data-modo="vinculos"]');
+        if (boton) boton.remove();
+      }
+      const espacioVinculos = vinculosApagado ? { pintar: () => {} } : LineasVinculos.montar($('#ln-vinculos', raiz), {
+        indice: () => memoria.indice,
+        puedeOperar: puedeOperar,
+        icono: icono,
+        esc: esc,
+        color: (estatus) => COLOR_ESTATUS[String(estatus || '').toUpperCase()] || '',
+        alVer: (tipo, fila) => vistaRapida(tipo, fila),
+        alAbrir: (tipo, fila) => abrir(tipo, fila.id),
+        alAvisar: (texto) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(texto), 7000),
+        alSoltar: (a) => {
+          if (a.tipo === 'vinculo') abrirVinculo(a.modo, a.fila, a.pre);
+          else if (a.tipo === 'cancelacion') abrirCancelacion([a.fila]);
+          else if (a.tipo === 'resguardo') abrirResguardo([a.fila], { estatus: a.estatus });
+          else if (a.tipo === 'responsiva') abrirResponsiva('equipo', a.fila, a.persona);
+        },
+      });
+
+      // ---- Carga inicial ----
+      if (!memoria.modoVista) {
+        // Sin preferencia guardada: tarjetas en celular (una tabla de 10 columnas no cabe) y tabla en lo demás
+        const porDefecto = Pantalla.esCelular() ? 'tarjetas' : 'tabla';
+        let guardado = null;
+        try { guardado = localStorage.getItem('lineas.modoVista'); } catch (e) { guardado = null; }
+        memoria.modoVista = ['tabla', 'tarjetas', 'vinculos'].indexOf(guardado) >= 0 ? guardado : porDefecto;
+      }
+      if (vinculosApagado && memoria.modoVista === 'vinculos') memoria.modoVista = 'tabla';
+      mostrarModulo(memoria.modulo, true);
+      crearTabla(memoria.modulo).setCargando(true);
+      aplicarModoVista();
+      // Atrás / Adelante del navegador (gesto de dos dedos): la ficha que se veía en ese paso
+      const subInicial = typeof HistorialApp !== 'undefined' ? HistorialApp.registrar('lineas-telefonicas', (sub) => { if (vigente()) restaurarPaso(sub); }) : null;
+      // Se pintó con el índice guardado en el navegador y llegó uno distinto: pintar de nuevo
+      escucharLista('apiLineasIndice', () => cargarIndice().then(() => { if (vigente()) { pintarIndicadores(); pintarListado(); } }), raiz);
+      cargarIndice().then(() => {
+        if (!vigente()) return;
+        $('#ln-recargar', raiz).hidden = !(state.sesion && state.sesion.rol === 'ADMIN');
+        pintarIndicadores();
+        pintarListado();
+        if (subInicial) restaurarPaso(subInicial);
+        if (memoria.abrirAlEntrar) {
+          const id = memoria.abrirAlEntrar;
+          memoria.abrirAlEntrar = null;
+          abrirRegistro(id);
+        }
+        if (memoria.filtrarAlEntrar) {
+          const f = memoria.filtrarAlEntrar;
+          memoria.filtrarAlEntrar = null;
+          crearTabla(f.modulo).setFiltro('estatus', { valores: Array.isArray(f.estatus) ? f.estatus : [f.estatus] });
+        }
+      }).catch((e) => {
+        if (!vigente()) return;
+        crearTabla(memoria.modulo).setError('No se pudo cargar el inventario: ' + (e.message || e));
+      });
+
+      // ---- Indicadores (clic = filtrar, como en los módulos de la rama jorge) ----
+      function pintarIndicadores() {
+        const ix = memoria.indice;
+        const eq = ix.equipos;
+        const li = ix.lineas;
+        // filasDe: lo que hay bajo los filtros activos de esa tabla (o el índice completo si
+        // esa tabla todavía no se ha creado — no puede haber filtro sin tabla).
+        const filasDe = (modulo) => (tablas[modulo] ? tablas[modulo].getFiltradas() : (modulo === 'equipos' ? eq : li));
+        const defs = [
+          { icono: 'smartphone', calcular: (f) => f.length, etiqueta: 'Equipos', modulo: 'equipos', filtros: {} },
+          { icono: 'circle-check', calcular: (f) => f.filter((e) => e.estatus === 'USO').length, etiqueta: 'Equipos en uso', clase: 'stat-tile-ok', modulo: 'equipos', filtros: { estatus: { valores: ['USO'] } } },
+          { icono: 'unplug', calcular: (f) => f.filter((e) => !e.lineaId).length, etiqueta: 'Equipos sin línea', modulo: 'equipos', filtros: { numero: { op: 'vacio' } } },
+          { icono: 'card-sim', calcular: (f) => f.length, etiqueta: 'Líneas', modulo: 'lineas', filtros: {} },
+          { icono: 'unlink', calcular: (f) => f.filter((l) => l.suelta).length, etiqueta: 'Líneas sueltas', clase: 'stat-tile-warn', modulo: 'lineas', filtros: { suelta: { valores: ['Sí'] } } },
+        ];
+        const cont = $('#ln-indicadores', raiz);
+        cont.innerHTML = defs.map((d, i) => '<div class="stat-tile stat-tile-clickable ' + (d.clase || '') + '" data-kpi="' + i + '" role="button" tabindex="0">' +
+          '<div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + miles(d.calcular(filasDe(d.modulo))) + '</div><div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
+        const campos = { equipos: ['estatus', 'numero'], lineas: ['suelta'] };
+        const igual = (x, y) => JSON.stringify(x || null) === JSON.stringify(y || null);
+        // Los valores reflejan lo que hay bajo los filtros activos de cada tabla, no siempre
+        // el índice completo — igual que el resto de los módulos (jorge).
+        marcarKpi = () => {
+          cont.querySelectorAll('[data-kpi]').forEach((t) => {
+            const d = defs[Number(t.dataset.kpi)];
+            const f = filtrosActuales[d.modulo] || {};
+            t.classList.toggle('stat-tile-activo', memoria.modulo === d.modulo && campos[d.modulo].every((c) => igual(f[c], d.filtros[c])));
+            const valorEl = t.querySelector('.stat-value');
+            if (valorEl) valorEl.textContent = miles(d.calcular(filasDe(d.modulo)));
+          });
+        };
+        const clic = (t) => {
+          const d = defs[Number(t.dataset.kpi)];
+          const quitar = t.classList.contains('stat-tile-activo') && Object.keys(d.filtros).length > 0;
+          // Los indicadores filtran la tabla: desde Vínculos se regresa a ella
+          if (memoria.modoVista === 'vinculos') { memoria.modoVista = 'tabla'; aplicarModoVista(); }
+          mostrarModulo(d.modulo);
+          const tabla = crearTabla(d.modulo);
+          campos[d.modulo].forEach((c) => tabla.setFiltro(c, quitar ? null : (d.filtros[c] || null)));
+          marcarKpi();
+        };
+        cont.querySelectorAll('[data-kpi]').forEach((t) => {
+          t.addEventListener('click', () => clic(t));
+          t.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clic(t); } });
+        });
+        marcarKpi();
+        $('#ln-num-equipos', raiz).textContent = miles(eq.length);
+        $('#ln-num-lineas', raiz).textContent = miles(li.length);
+      }
+
+      // ---- Selección estilo Google Drive (30-sep): acciones de la barra, del ⋮ y del clic derecho ----
+      const ACCION_REASIGNAR = ACCIONES_MASIVAS.filter((a) => a.clave === 'REASIGNAR')[0];
+
+
+      /** Abre la ficha directo en una pestaña (p. ej. Historial desde el menú). */
+      function abrirEnPestana(tipo, id, pestana) {
+        const existente = pila.findIndex((x) => x.tipo === tipo && x.id === id);
+        if (existente >= 0) pila.splice(existente + 1); else pila.push({ tipo: tipo, id: id, etiqueta: null });
+        pila[pila.length - 1].pestana = pestana;
+        abrir(tipo, id, true);
+      }
+
+      /**
+       * enBarra (por omisión) = a la vista en la barra azul; enBarra: false = dentro de ⋮. El clic derecho y el ⋮ de la
+       * fila muestran todas. `grupo` separa con una línea en el menú. Reparto acordado con el usuario el 30-sep. Las
+       * acciones no dependen del estatus («¿Qué pasó?» se quitó el 4-oct, usuario) y los estatus se cambian en Editar
+       * (sin «Cambiar estatus», 4-oct).
+       * Sin acciones masivas por ahora (usuario, 3-oct): todas son de un registro a la vez (UNO) hasta pulir cada
+       * proceso; después se regresan las de varios.
+       */
+      function accionesSeleccionDe(modulo) {
+        const tipo = TABLAS_INVENTARIO[modulo].detalle;
+        const operar = puedeOperar;
+        const UNO = 1; // sin acciones masivas por ahora
+        const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
+          activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelActual() ? panelActual().cerrar() : mostrarDetalles(tipo, f[0])) };
+        // «Corregir» en lugar de «Editar» (usuario, 16-oct; pendiente 2.50): solo corrige lo mal capturado; la persona cambia con la Responsiva
+        const editar = { icono: 'pencil', texto: 'Corregir', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
+          alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
+        const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', visible: veHistorial, alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
+        // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
+        const vinculo = (ic, texto, modo, cuando) => ({ icono: ic, texto: texto, maximo: 1, enBarra: false, grupo: 'vinculo',
+          visible: (f) => operar() && cuando(f[0]), alHacer: (f) => abrirVinculo(modo, f[0]) });
+        const disponible = (r) => String(r.estatus || '').toUpperCase() === 'DISPONIBLE';
+        // Orden (usuario, 12-oct; pendiente 2.34): Detalles · mover · documentos nuevos · editar · vincular · ir e historial.
+        // La barra de arriba son los de enBarra, en este mismo orden
+        if (modulo === 'equipos') {
+          return [detalles,
+            // Responsiva en lugar de Reasignar (pendiente 2.49, usuario 16-oct): la misma persona renueva, otra reasigna.
+            // Responsiva e Inspección juntas, la Responsiva primero (usuario, 16-oct; pendiente 2.50)
+            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,
+              alHacer: (f) => abrirResponsiva('equipo', f[0]) },
+            // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
+            { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
+              alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
+              visible: operar, alHacer: (f) => abrirResguardo(f) },
+            // En el equipo solo corrige el equipo: la línea se corrige desde la línea (usuario, 13-oct)
+            editar,
+            vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
+            vinculo('arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA', (r) => !!r.lineaId),
+            vinculo('unlink', 'Desvincular línea', 'DESVINCULAR', (r) => !!r.lineaId),
+            // Lo de la línea (estatus, cancelación) se hace desde la línea (usuario, 4-oct)
+            { icono: 'card-sim', texto: 'Ir a la línea', maximo: 1, grupo: 'ir', visible: (f) => !!f[0].lineaId, alHacer: (f) => abrir('linea', f[0].lineaId) },
+            historial];
+        }
+        return [detalles,
+          // La línea sin equipo también entrega con su Responsiva (pendiente 2.49); la de un equipo, con su equipo
+          { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna', maximo: UNO, grupo: 'documentos',
+            visible: (f) => operar() && !f[0].equipoId, alHacer: (f) => abrirResponsiva('linea', f[0]) },
+          { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
+            visible: operar, alHacer: (f) => abrirCancelacion(f) },
+          editar,
+          vinculo('link', 'Vincular a equipo', 'VINCULAR_EQUIPO', (r) => !r.equipoId && disponible(r)),
+          vinculo('arrow-left-right', 'Cambiar de equipo', 'CAMBIAR_EQUIPO', (r) => !!r.equipoId),
+          vinculo('unlink', 'Desvincular del equipo', 'DESVINCULAR', (r) => !!r.equipoId),
+          { icono: 'smartphone', texto: 'Ir al equipo', maximo: 1, grupo: 'ir', visible: (f) => !!f[0].equipoId, alHacer: (f) => abrir('equipo', f[0].equipoId) },
+          historial];
+      }
+
+      // "Detalles" = la vista rápida como el panel "Ver detalles" de Drive: abierto, sigue a la fila seleccionada
+      let detallesAbiertos = false;
+      function mostrarDetalles(tipo, r) {
+        vistaRapida(tipo, r, { noModal: true });
+        detallesAbiertos = true;
+        if (panelActual()) {
+          panelActual().alCerrar = () => {
+            detallesAbiertos = false;
+            Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].refrescarSeleccion(); });
+          };
+        }
+      }
+      function alCambiarSeleccion(modulo, filas) {
+        if (detallesAbiertos && filas.length === 1 && modulo === memoria.modulo && vigente()) mostrarDetalles(TABLAS_INVENTARIO[modulo].detalle, filas[0]);
+        marcarTarjetasSeleccionadas(modulo);
+      }
+      function marcarTarjetasSeleccionadas(modulo) {
+        const cont = $('#ln-tarjetas-' + modulo, raiz);
+        if (!cont || !tablas[modulo]) return;
+        const sel = new Set(tablas[modulo].getSeleccion().map((r) => r.id));
+        cont.querySelectorAll('.ln-cuadro[data-id]').forEach((b) => {
+          b.classList.toggle('ln-cuadro-sel', sel.has(b.dataset.id));
+          b.setAttribute('aria-pressed', String(sel.has(b.dataset.id)));
+        });
+      }
+
+      // ---- Listado: una DataTable por pestaña (se crea al mostrarla) ----
+      function crearTabla(modulo) {
+        if (tablas[modulo]) return tablas[modulo];
+        const cfg = TABLAS_INVENTARIO[modulo];
+        const contenedor = $('#ln-tabla-' + modulo, raiz);
+        tablas[modulo] = tablaLineas(contenedor, {
+          idCampo: 'id',
+          idTabla: 'lineas-' + modulo + '-v4',
+          columnas: cfg.columnas,
+          textoVacio: cfg.textoVacio,
+          exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
+          etiquetaFila: cfg.etiqueta,
+          detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
+          // Estilo Google Drive (30-sep): clic = seleccionar (barra con lo más usado y ⋮), doble clic = ficha,
+          // "Detalles" = la vista rápida que sigue a la selección; con el dedo, tocar abre la vista rápida
+          accionesSeleccion: accionesSeleccionDe(modulo),
+          alAbrirFila: (r) => abrir(cfg.detalle, r.id),
+          alTocarFila: (r) => vistaRapida(cfg.detalle, r),
+          alCambiarSeleccion: (filas) => alCambiarSeleccion(modulo, filas),
+          alCambiarFiltros: (filtros) => { filtrosActuales[modulo] = filtros || {}; if (marcarKpi) marcarKpi(); marcarTipos(modulo); },
+        });
+        // La tabla se repinta con cada filtro, búsqueda, orden o KPI: las tarjetas la siguen
+        let repintePendiente = false;
+        new MutationObserver(() => {
+          if (memoria.modoVista !== 'tarjetas' || repintePendiente) return;
+          repintePendiente = true;
+          requestAnimationFrame(() => { repintePendiente = false; tarjetasVisibles[modulo] = PASO_TARJETAS; pintarTarjetas(modulo); });
+        }).observe(contenedor.querySelector('tbody'), { childList: true });
+        if (memoria.indice) tablas[modulo].setDatos(memoria.indice[modulo]);
+        return tablas[modulo];
+      }
+
+      // ---- Vista rápida: panel lateral con lo fundamental (sin ir al servidor: sale del índice y la vista) ----
+      /** Días al fin del adendum como chip (vencido / vence pronto / vigente). */
+      function chipAdendum(valor) {
+        if (!valor) return '';
+        const d = new Date(valor);
+        if (isNaN(d)) return '';
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        const dias = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - hoy) / 864e5);
+        if (dias < 0) return chip('Vencido hace ' + miles(-dias) + ' días', 'rojo');
+        if (dias <= 30) return chip(dias === 0 ? 'Vence hoy' : 'Vence en ' + dias + ' días', 'ambar');
+        return chip('Vigente', 'verde');
+      }
+
+      function vistaRapida(tipo, r, opciones) {
+        const v = (c) => (r[c] === undefined || r[c] === null ? '' : r[c]);
+        const nuco = r.nuco || r.nucoEquipo || v('NUCO');
+        const titulo = tipo === 'equipo' ? 'NUCO ' + (nuco || '—') : 'Línea ' + (r.numero || v('NUMERO TELEFONO') || '—');
+        const sub = tipo === 'equipo' ? [r.modelo || v('EQUIPO'), r.numero ? 'Línea ' + r.numero : 'Sin línea'].filter(Boolean).join(' · ')
+          : [r.compania || v('COMPAÑIA'), nuco ? 'NUCO ' + nuco : 'Suelta'].filter(Boolean).join(' · ');
+        const panel = abrirPanelLateral(titulo, sub, opciones);
+        if (tieneNuco(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
+        const campo = (t, valor, html) => '<div class="dt-campo"><div class="dt-campo-titulo">' + esc(t) + '</div><div class="dt-campo-valor">' +
+          (html ? (valor || vacio) : guion(valor)) + '</div></div>';
+        const seccion = (icono, t, filas) => '<section class="ln-vr-seccion"><h4>' + ico(icono) + ' ' + esc(t) + '</h4>' + filas.join('') + '</section>';
+        const finPlan = v('FIN PLAN');
+        // Todo conectado: desde el equipo se salta a su línea y desde la línea a su equipo, sin salir de la vista rápida
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const suLinea = tipo === 'equipo' ? ix.lineas.filter((x) => x.id === r.id)[0] : null;
+        const suEquipo = tipo === 'linea' ? ix.equipos.filter((x) => x.id === (r.equipoId || r.id))[0] : null;
+        const saltar = (destino, texto, icon) => '<button type="button" class="ln-ir-chip" data-vr-ir="' + destino + '">' + ico(icon) +
+          '<span>' + esc(texto) + '</span>' + ico('chevron-right') + '</button>';
+        const numero = r.numero || v('NUMERO TELEFONO');
+        const celdaNumero = suLinea && numero ? saltar('linea', numero, 'card-sim') : numero;
+        const celdaNuco = suEquipo && nuco ? saltar('equipo', 'NUCO ' + nuco, 'smartphone') : nuco;
+        panel.cuerpo.innerHTML =
+          '<div class="ln-vr-resumen"><div class="ln-chips">' +
+            (v('ESTATUS EQUIPO') ? chip('Equipo: ' + v('ESTATUS EQUIPO'), COLOR_ESTATUS[String(v('ESTATUS EQUIPO')).toUpperCase()]) : '') +
+            (v('ESTATUS LINEA') ? chip('Línea: ' + v('ESTATUS LINEA'), COLOR_ESTATUS[String(v('ESTATUS LINEA')).toUpperCase()]) : '') +
+            (formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || (r.tipoHoja ? chip(r.tipoHoja) : '')) +
+          '</div><div class="ln-vr-acciones">' +
+            '<button type="button" class="ln-btn-icono" data-vr-ficha>' + icono('maximize-2') + ' Abrir ficha completa</button>' +
+            (tieneNuco(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
+              botonUltimoNucos('INSPECCION', r.id).replace(' Ver</button>', ' Última inspección</button>') : '') +
+          '</div></div>' +
+          seccion('user', 'Responsable', [
+            campo('Responsable', v('RESPONSABLE') || r.responsable), campo('No. empleado', v('NO EMPLEADO')), campo('Puesto', v('PUESTO')),
+            campo('Departamento', v('DEPARTAMENTO') || r.departamento), campo('Área', v('AREA')),
+            campo('Sede', v('SEDE') || r.sede), campo('Oficina / desarrollo', v('OFICINA / DESARROLLO')), campo('Jefe directo', v('JEFE DIRECTO')),
+          ]) +
+          seccion('smartphone', 'Equipo', [
+            campo('NUCO', celdaNuco, !!suEquipo && !!nuco), campo('Modelo', r.modelo || v('EQUIPO')), campo('IMEI', v('IMEI') || r.imei),
+            campo('Accesorios', v('ACCESORIOS')), campo('Última inspección', fecha(v('FECHA INSPECCION'))),
+          ]) +
+          seccion('card-sim', 'Línea', [
+            campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
+            campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', Formato.moneda(v('COSTO PLAN'))),
+            campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
+          ]) +
+          (v('COMENTARIOS') ? seccion('message-square-text', 'Comentarios', ['<p class="ln-vr-comentario">' + esc(v('COMENTARIOS')) + '</p>']) : '');
+        panel.cuerpo.querySelector('[data-vr-ficha]').addEventListener('click', () => { panel.cerrar(); abrir(tipo, r.id); });
+        panel.cuerpo.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-vr-ir]');
+          if (!b) return;
+          if (b.dataset.vrIr === 'linea' && suLinea) vistaRapida('linea', suLinea, opciones);
+          if (b.dataset.vrIr === 'equipo' && suEquipo) vistaRapida('equipo', suEquipo, opciones);
+        });
+        pintarIconos(panel.cuerpo);
+      }
+
+      // ---- Vista de tarjetas (antes el módulo "Detalles Líneas Telefónicas") ----
+      // Muestra lo mismo que la tabla: la búsqueda, los filtros de columna, el orden y los KPIs de arriba.
+
+      function tarjetaInventario(modulo, r) {
+        const tipo = formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || guion(r.tipoHoja);
+        const pie = (izq, der) => '<div class="ln-cuadro-pie"><span>' + izq + '</span><span>' + der + '</span></div>';
+        // Departamento y sede (usuario, 9-oct): «POST VENTA · QUERETARO»
+        const depto = guion([r.departamento, r['SEDE'] || r.sede].filter(Boolean).join(' · '));
+        if (modulo === 'equipos') {
+          return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="equipo" data-id="' + esc(r.id) + '" aria-label="Abrir NUCO ' + esc(r.nuco || '') + '">' +
+            '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">NUCO ' + guion(r.nuco) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
+            '<div class="ln-cuadro-depto">' + depto + '</div>' +
+            '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
+            '<div class="ln-cuadro-secundario">' + guion(r.modelo) + '</div>' +
+            pie(icono('phone') + ' <span class="ln-mono">' + (r.numero ? esc(r.numero) : 'Sin línea') + '</span>', icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
+            pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
+        }
+        return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="linea" data-id="' + esc(r.id) + '" aria-label="Abrir línea ' + esc(r.numero || '') + '">' +
+          '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + guion(r.numero) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
+          '<div class="ln-cuadro-depto">' + depto + '</div>' +
+          '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
+          '<div class="ln-cuadro-secundario">' + guion(r.compania) + '</div>' +
+          pie(icono('card-sim') + ' <span class="ln-mono">' + guion(r.sim) + '</span>', r.suelta ? chip('Suelta', 'ambar') : icono('smartphone') + ' NUCO ' + guion(r.nucoEquipo)) +
+          pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
+      }
+
+      function pintarTarjetas(modulo) {
+        const cont = $('#ln-tarjetas-' + modulo, raiz);
+        if (!cont || memoria.modoVista !== 'tarjetas' || !tablas[modulo]) return;
+        const filas = tablas[modulo].getFiltradas();
+        const visibles = Math.min(tarjetasVisibles[modulo], filas.length);
+        cont.innerHTML = (filas.length
+          ? '<div class="ln-cuadros-grid">' + filas.slice(0, visibles).map((r) => tarjetaInventario(modulo, r)).join('') + '</div>'
+          : '<p class="empty-state">' + (memoria.indice ? 'No hay registros que coincidan con la búsqueda o los filtros.' : '<span class="ln-spinner"></span> Cargando…') + '</p>') +
+          '<div class="ln-cuadros-mas"><span class="ln-tenue">Mostrando ' + miles(visibles) + ' de ' + miles(filas.length) + '</span>' +
+          (visibles < filas.length ? '<button type="button" class="secondary" data-ln-mas-tarjetas="' + modulo + '">Mostrar más</button>' : '') + '</div>';
+        marcarTarjetasSeleccionadas(modulo);
+      }
+
+      function aplicarModoVista() {
+        const tarjetas = memoria.modoVista === 'tarjetas';
+        const enVinculos = memoria.modoVista === 'vinculos';
+        $('#ln-listado', raiz).classList.toggle('ln-modo-tarjetas', tarjetas);
+        // Vínculos (usuario, 8-oct): el espacio en lugar de las pestañas Equipos / Líneas (lineas-vinculos.html)
+        $('#ln-listado', raiz).classList.toggle('ln-modo-vinculos', enVinculos);
+        $('#ln-vinculos', raiz).hidden = !enVinculos;
+        raiz.querySelectorAll('#ln-modo-vista [data-modo]').forEach((b) => {
+          const activo = b.dataset.modo === memoria.modoVista;
+          b.classList.toggle('activo', activo);
+          b.setAttribute('aria-pressed', String(activo));
+        });
+        ['equipos', 'lineas'].forEach((m) => { $('#ln-tarjetas-' + m, raiz).hidden = !tarjetas; });
+        if (enVinculos) espacioVinculos.pintar();
+        else if (tarjetas) { tarjetasVisibles[memoria.modulo] = PASO_TARJETAS; pintarTarjetas(memoria.modulo); }
+        else if (tablas[memoria.modulo]) tablas[memoria.modulo].ajustarAlto();
+      }
+
+      function mostrarModulo(modulo, sinTabla) {
+        memoria.modulo = modulo;
+        if (Tabs.actual($('#ln-listado', raiz)) !== modulo) Tabs.mostrar($('#ln-listado', raiz), modulo);
+        if (sinTabla) return;
+        crearTabla(modulo).ajustarAlto();
+        if (memoria.modoVista === 'tarjetas') pintarTarjetas(modulo);
+        if (marcarKpi) marcarKpi();
+      }
+
+      // ---- Filtro rápido por tipo: columna a la izquierda, como la lista agrupada del AppSheet (usuario, 1-oct) ----
+      // Las MISMAS opciones en Equipos y en Líneas (todas las del AppSheet, aunque hoy tengan 0) con el ícono y el color de
+      // la columna Tipo y cuántos registros hay (como el AppSheet: registros de la hoja, sin contar dos veces un equipo con
+      // línea). Clic = solo ese tipo; si en esta pestaña no hay de ese tipo (una LINEA suelta en Equipos), lleva a la
+      // otra pestaña con el filtro. Otra vez (o Todos) = todos. Es una franja de íconos que se despliega con el mouse
+      // (o el teclado) por encima de la tabla, como el menú lateral de Gmail: sin botón y sin mover la tabla (solo CSS).
+      const ORDEN_TIPOS = ['EQUIPO', 'EQUIPO + SIM', 'EQUIPO + SIM BASICO', 'LINEA', 'SIM BASICO', 'BANDA ANCHA', 'MODEM', 'CAMARA'];
+      const TIPOS_APPSHEET = ORDEN_TIPOS.filter((t) => t !== 'CAMARA'); // la lista del AppSheet; CAMARA solo si hay
+      const PESTANA_TIPO = { 'LINEA': 'lineas', 'SIM BASICO': 'lineas' }; // sin registros: a dónde lleva (el resto, Equipos)
+      /** { tipo: { total (registros únicos), equipos, lineas } } de todo el inventario. */
+      function conteoTipos() {
+        const c = {};
+        const vistos = {};
+        ['equipos', 'lineas'].forEach((m) => memoria.indice[m].forEach((r) => {
+          const t = r.tipoHoja || '';
+          const x = c[t] = c[t] || { total: 0, equipos: 0, lineas: 0 };
+          x[m]++;
+          if (!vistos[r.id]) { vistos[r.id] = true; x.total++; }
+        }));
+        return c;
+      }
+      /** Pestaña donde se filtra un tipo: la actual si tiene de ese tipo; si no, la que sí tiene. */
+      function pestanaDeTipo(t, actual) {
+        const x = conteoTipos()[t];
+        if (x && x[actual]) return actual;
+        if (x) return x.equipos ? 'equipos' : 'lineas';
+        return PESTANA_TIPO[t] || 'equipos';
+      }
+      /** El filtro de tipo de cada pestaña (FiltroTipo); se crea la primera vez que se pide */
+      function filtroTipos(modulo) {
+        const cont = $('#ln-tipos-' + modulo, raiz);
+        if (!cont.filtroTipo) {
+          const regla = (t) => ((REGLAS_FORMATO.LINEAS || {}).TIPO || {})[t] || null;
+          cont.filtroTipo = FiltroTipo.crear(cont, {
+            titulo: 'Tipo', todos: 'TODOS',
+            estilo: (t) => { const r = regla(t); return r ? { icono: r.icono || 'circle', color: colorAppSheet(r.color) } : null; },
+            nombre: (t) => t || 'SIN TIPO',
+            alElegir: (t) => {
+              if (t === null) { crearTabla(modulo).setFiltro('tipoHoja', null); marcarTipos(modulo); return; }
+              // Un tipo que vive en la otra pestaña (LINEA estando en Equipos): se va allá con el filtro
+              const destino = pestanaDeTipo(t, modulo);
+              if (destino !== modulo) mostrarModulo(destino);
+              crearTabla(destino).setFiltro('tipoHoja', { valores: [t] });
+              marcarTipos(destino);
+            },
+          });
+        }
+        return cont.filtroTipo;
+      }
+      function pintarTipos(modulo) {
+        if (!memoria.indice) return;
+        const conteo = conteoTipos();
+        const tipos = TIPOS_APPSHEET.concat(Object.keys(conteo).filter((t) => TIPOS_APPSHEET.indexOf(t) < 0)).sort((a, b) => {
+          const ia = ORDEN_TIPOS.indexOf(a);
+          const ib = ORDEN_TIPOS.indexOf(b);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+        });
+        const total = Object.keys(conteo).reduce((s, t) => s + conteo[t].total, 0);
+        const porTipo = {};
+        tipos.forEach((t) => { porTipo[t] = conteo[t] ? conteo[t].total : 0; });
+        filtroTipos(modulo).pintar({ conteo: porTipo, total: total, valores: tipos });
+        marcarTipos(modulo);
+      }
+      function marcarTipos(modulo) {
+        filtroTipos(modulo).marcar((filtrosActuales[modulo] || {}).tipoHoja);
+      }
+
+      function pintarListado() {
+        if (!memoria.indice) return;
+        Object.keys(tablas).forEach((m) => tablas[m].setDatos(memoria.indice[m]));
+        pintarTipos('equipos');
+        pintarTipos('lineas');
+        mostrarModulo(memoria.modulo);
+        if (memoria.modoVista === 'vinculos') espacioVinculos.pintar();
+        $('#ln-conteo', raiz).textContent = 'Datos de la hoja al ' + fechaHora(memoria.indice.generadoEn) + '.';
+      }
+
+      // ---- Atrás / Adelante del navegador (html/historial-navegador.html) ----
+      // Cada ficha que se abre es un paso; la pestaña solo actualiza el paso actual (no llena el historial).
+      const pilaParaHistorial = () => ({ pila: pila.map((p) => ({ tipo: p.tipo, id: p.id, etiqueta: p.etiqueta || null, pestana: p.pestana || null })) });
+      function pasoHistorial() { if (typeof HistorialApp !== 'undefined') HistorialApp.paso(pilaParaHistorial()); }
+      /** Aplica un paso guardado: la lista (sin pila) o la ficha de hasta arriba de su pila. No guarda otro paso. */
+      function restaurarPaso(sub) {
+        if (panelActual()) panelActual().cerrar();
+        const destino = sub && sub.pila && sub.pila.length ? sub.pila : null;
+        if (!destino) { if (pila.length) cerrarDetalle(true); return; }
+        pila.length = 0;
+        destino.forEach((p) => pila.push(Object.assign({}, p)));
+        const arriba = pila[pila.length - 1];
+        abrir(arriba.tipo, arriba.id, true, true);
+      }
+
+    }
+
+    /** Desde una bitácora: abre el registro en Líneas Telefónicas. */
+    function irARegistro(id) {
+      memoria.abrirAlEntrar = id;
+      navegarA('lineas-telefonicas', 'Líneas telefónicas');
+    }
+
+    /** Desde el Panorama: abre Líneas Telefónicas en Equipos o Líneas, filtrada por un estatus. */
+    function irConEstatus(modulo, estatus) {
+      memoria.modulo = modulo;
+      memoria.filtrarAlEntrar = estatus && estatus !== 'SIN ESTATUS' ? { modulo: modulo, estatus: estatus } : null;
+      navegarA('lineas-telefonicas', 'Líneas telefónicas');
+    }
+
+    Object.assign(Lineas, {
+      initTelefonicas: initTelefonicas,
+      irARegistro: irARegistro, // desde Notificaciones: "Ver línea"
+      irConEstatus: irConEstatus, // desde Notificaciones: "Ver líneas disponibles"
+    });
+  })();
+</script>

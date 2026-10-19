@@ -57,6 +57,29 @@ dividir es seguro mientras el orden de `<?!= include(...) ?>` en
 `src/html/Index.html` mantenga los archivos "base" (api, app) antes de los
 que dependen de sus helpers.
 
+Desde el 19-oct (fase 6.1, `tools/app/partir.js`) `app.html` es solo la base (shell, login, inicio, `NAV_GRUPOS`,
+ayudantes, tabla interactiva, ficha genérica); Vehículos, Incidencias, Uber y Tickets viven en `app-vehiculos.html`,
+`app-incidencias.html`, `app-uber.html` y `app-tickets.html`, incluidos justo después de `app` (otros archivos usan
+`CAMPOS_VEHICULO` y `CAMPOS_TICKET` al cargar). Lo que usan varios módulos se queda en la base. **Contrato del orden de
+carga** (`tests/orden-de-carga.js`): nada que corre al cargar (fuera de funciones, o en una IIFE) usa algo declarado en
+un archivo que carga después; si falla, se mueve la declaración a un archivo anterior o se usa dentro de una función.
+
+**Líneas es distinto** (19-oct, fase 6.2): todo vive dentro de `const Lineas = (function () { … })()`, así que sus
+partes no comparten el espacio global. `lineas.html` es la base (utilidades, formularios, estado) y cada pantalla
+(`lineas-telefonicas.html`, `-panorama`, `-activos`, `-accesorios`, `-resguardos`, `-bitacora`) es su propia
+función: toma lo que usa con `const { … } = Lineas.comun;` y se publica con `Object.assign(Lineas, { init… })`.
+Algo nuevo de la base que use una pantalla va en `Lineas.comun`. Un `let` de la base nunca se toma así (se
+copiaría su valor al cargar): se lee con una función (`panelActual()`) o va dentro de un objeto (`montaje.n`).
+Las pruebas leen todo Líneas con `tests/lineas-fuente.js`; un contrato revisa la forma y el orden en `Index.html`.
+
+**Líneas Telefónicas, por partes** (19-oct, fase 6.2b): `initTelefonicas` (en `lineas-telefonicas.html`) es el
+arranque y la lista; la ficha, documentos, acciones, captura, historial y páginas viven en
+`lineas-telefonicas-<parte>.html`, cada una `Lineas.telefonicas.registrar('parte', (T) => { …; return { … } })`, y
+`initTelefonicas` las monta con `T.montar(…)` antes de cablear los eventos. Lo del arranque (`raiz`, `pila`, `vigente`…)
+sale de `T`; lo de otra parte se pide arriba como un import, `const { abrirResguardo } = T.de('acciones');` (se busca al
+llamar, así no importa el orden); un `let` que usan varias partes vive en su dueña, que lo publica con get/set en `T`, y
+las demás lo leen como `T.captura`. Una función nueva que otra parte necesite va en el `return` de su parte.
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen

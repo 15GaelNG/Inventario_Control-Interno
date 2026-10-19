@@ -26,6 +26,7 @@
     "@google/clasp": "^3.0.0",
     "acorn": "^8.19.0",
     "csso": "^5.0.5",
+    "eslint-scope": "^9.1.2",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "puppeteer-core": "^25.11.0",

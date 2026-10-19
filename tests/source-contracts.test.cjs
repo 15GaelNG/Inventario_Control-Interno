@@ -2,6 +2,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const LINEAS = require('./lineas-fuente');
+const APP = require('./app-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -56,7 +58,7 @@ test('el login acepta hash y conserva compatibilidad con la hoja histórica', ()
 });
 
 test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera del grupo', () => {
-  const app = read('src/html/js/app.html');
+  const app = APP;
   // Solo el bloque del grupo Líneas (con master hay más grupos después)
   const inicioLineas = app.indexOf("id: 'lineas'");
   const lineas = app.slice(inicioLineas, app.indexOf('\n    },', inicioLineas));
@@ -100,7 +102,7 @@ test('Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus p
   assert.ok(!fs.existsSync(path.join(root, 'src/services/lineas/LineasOperativas.gs')));
   assert.ok(!fs.existsSync(path.join(root, 'src/html/views/lineas/lineas-operativa.html')));
   assert.doesNotMatch(read('src/ClientApi.gs') + read('src/services/TelefoniaService.gs'), /VistaOperativa|FormularioOperativa|LineasOperativas/);
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /POST_VENTA|initPostVenta|initOperativa|abrirAltaAppSheet|initReactivacion|initDesechos/);
+  assert.doesNotMatch(LINEAS, /POST_VENTA|initPostVenta|initOperativa|abrirAltaAppSheet|initReactivacion|initDesechos/);
   // Ya no se escribe HISTORIAL_REASIGNACIONES; lo migrado se lee de APP_MOVIMIENTOS (TIPO HISTORICO)
   assert.doesNotMatch(repo, /LineasDatos\.agregarFilas\(TAB\.REASIG/);
   assert.match(repo, /const HOJAS_MIGRADAS = \[TAB\.REASIG, TAB\.DESECHO, TAB\.REACTIVACION\];/);
@@ -121,7 +123,7 @@ test('Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus p
 });
 
 test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de la tabla', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const vista = read('src/html/views/lineas/lineas-telefonicas.html');
   const tabla = read('src/html/js/componentes/datatable.html');
   assert.match(vista, /id="ln-modo-vista"/);
@@ -133,18 +135,22 @@ test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de
   assert.match(lineas, /tablas\[modulo\]\.getFiltradas\(\)/);
   assert.match(lineas, /new MutationObserver/);
   assert.match(lineas, /localStorage\.setItem\('lineas\.modoVista'/);
-  // Con "Tarjetas" recordado la carga inicial ya usa estas constantes: deben declararse antes (zona muerta de const)
-  const inicio = lineas.indexOf('// ---- Carga inicial ----');
-  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'let detallesFicha', 'let tablaHistorial'].forEach((decl) => {
-    assert.ok(lineas.indexOf(decl) > 0 && lineas.indexOf(decl) < inicio, decl + ' debe declararse antes de la carga inicial');
+  // Con "Tarjetas" recordado la carga inicial ya usa estas constantes: deben declararse antes (zona muerta de const).
+  // detallesFicha y tablaHistorial viven en sus partes (fase 6.2b): se declaran al montarlas, antes de la carga inicial
+  const tel = read('src/html/js/lineas-telefonicas.html');
+  const inicio = tel.indexOf('// ---- Carga inicial ----');
+  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'T.montar({'].forEach((decl) => {
+    assert.ok(tel.indexOf(decl) > 0 && tel.indexOf(decl) < inicio, decl + ' debe ir antes de la carga inicial');
   });
+  assert.match(read('src/html/js/lineas-telefonicas-documentos.html'), /\n      let detallesFicha = /);
+  assert.match(read('src/html/js/lineas-telefonicas-historial.html'), /\n      let tablaHistorial = /);
   const gestion = read('src/html/views/lineas/lineas-gestion-activos.html');
   assert.match(gestion, /id="lnga-grid" class="ln-cuadros-grid"/);
   assert.match(lineas, /function tarjetaColaborador/);
 });
 
 test('la ficha trae los Detalles para copiar en el orden de DETALLES LINEAS TELEFONICAS', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const repo = read('src/services/lineas/LineasRepo.gs');
   const servicio = read('src/services/TelefoniaService.gs');
   assert.equal((servicio.match(/detalles: r\.detalles/g) || []).length, 2);
@@ -162,7 +168,7 @@ test('la ficha trae los Detalles para copiar en el orden de DETALLES LINEAS TELE
 });
 
 test('el historial es una lista filtrable por movimiento y exportable a Excel', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const src = read('src/services/lineas/LineasRepo.gs');
   const Repo = new Function('LineasUtil', 'LineasDatos', 'Utilities', src + '\nreturn LineasRepo;')({}, {}, {});
   const casos = {
@@ -190,7 +196,7 @@ test('no se descargan CSV y los botones usan los mismos nombres y medidas', () =
   const todo = archivos.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
   assert.doesNotMatch(todo, /text\/csv|\.csv'|exportarCsv/);
   assert.doesNotMatch(todo, /Exportar vista|Descargar|Bajar Excel|Agregar NUCO|Nuevo registro ·|Nuevo artículo|'Abrir PDF'|'Carpeta en Drive'/);
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /\(id \? ' Guardar cambios' : ' ' \+ agregar\)/);
   // Acciones de la ficha con color (botón principal, sin .secondary)
   const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('// ---- Detalles: la columna'));
@@ -205,7 +211,7 @@ test('las capturas canceladas tienen un flujo completo de limpieza', () => {
   assert.match(read('src/ClientApi.gs'), /apiLineasCancelarEvidencia/);
   assert.match(read('src/services/TelefoniaService.gs'), /cancelarEvidencia/);
   assert.match(read('src/services/lineas/LineasEvidencias.gs'), /cancelarCarpetaEvidencia/);
-  assert.match(read('src/html/js/lineas.html'), /apiLineasCancelarEvidencia/);
+  assert.match(LINEAS, /apiLineasCancelarEvidencia/);
 });
 
 test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del AppSheet', () => {
@@ -302,7 +308,7 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
   assert.match(captura, /e\.valida === 'COMENTARIOS' && valor\.length <= 3/);
-  assert.match(read('src/html/js/lineas.html'), /campo\('_MOTIVO', 'Comentario', 'area', \{ requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' \}\)/);
+  assert.match(LINEAS, /campo\('_MOTIVO', 'Comentario', 'area', \{ requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' \}\)/);
   assert.doesNotMatch(captura, /'OBSERVACIONES'/);
   // Accesorios y accesos empiezan con los del equipo (la Responsiva, 16-oct; Reasignar los dejaba vacíos)
   assert.match(captura, /const acceso = \(c\) => v\(c\);/);
@@ -348,7 +354,7 @@ test('el patrón conserva su proporción y cabe completo en las plantillas PDF',
 });
 
 test('cada inspección inicia limpia y no modifica accesorios desde el checklist', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /valor: '', checklist: true/);
   assert.doesNotMatch(cliente, /cap-actualizar-accesorios/);
@@ -356,7 +362,7 @@ test('cada inspección inicia limpia y no modifica accesorios desde el checklist
 });
 
 test('el patrón usa fondo azul en inspección y blanco en responsiva solo al exportar', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /controlPatron\.base64\('#ddebf7'\)/);
   assert.match(cliente, /controlPatron\.base64\('#ffffff'\)/);
   assert.match(cliente, /x\.fillStyle = fondoPdf \|\| '#ffffff'/);
@@ -369,13 +375,91 @@ test('los movimientos rechazan artículos inexistentes', () => {
 
 test('el shell es el de master y Líneas es uno de sus grupos', () => {
   const index = read('src/html/Index.html');
-  const app = read('src/html/js/app.html');
+  const app = APP;
   assert.match(index, /include\('html\/js\/componentes\/datatable'\)/);
   assert.ok(index.indexOf("include('html/js/componentes/datatable')") < index.indexOf("include('html/js/lineas')"),
     'lineas.html debe cargarse después de la librería de componentes');
   const grupos = /const NAV_GRUPOS = \[([\s\S]*?)\n  \];/.exec(app)[1];
   // Desde la unión con master (1-oct) el menú trae los módulos de todos; Líneas es un grupo más
   assert.ok([...grupos.matchAll(/^      id: '([^']+)'/gm)].map((m) => m[1]).includes('lineas'));
+});
+
+test('nada que corre al cargar usa algo de un archivo que carga después (orden de Index.html)', () => {
+  // Los <script> comparten el espacio global en el orden de los include. Una función que se llama después lo ve todo;
+  // lo que corre al cargar (fuera de funciones, o en una que se llama ahí mismo) solo lo de su archivo y los anteriores.
+  // Sin esto, mover algo a un archivo posterior (p. ej. al partir app.html, fase 6.1) trona la pantalla en blanco.
+  const { revisarOrdenDeCarga } = require('./orden-de-carga');
+  assert.deepEqual(revisarOrdenDeCarga(), [], 'mover la declaración a un archivo anterior, o usarla dentro de una función');
+});
+
+test('app.html es la base; Vehículos, Incidencias, Uber y Tickets viven en su archivo (fase 6.1)', () => {
+  // tools/app/partir.js lo partió (19-oct): solo movió, sin cambiar código. Cada rama lo corre sobre su propio app.html.
+  const lista = /const ARCHIVOS = \[([^\]]+)\]/.exec(read('tests/app-fuente.js'))[1];
+  const ARCHIVOS = [...lista.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const index = read('src/html/Index.html');
+  const seguidos = ARCHIVOS.map((a) => "  <?!= include('html/js/" + a + "'); ?>").join('\n');
+  assert.ok(index.replace(/\r\n/g, '\n').includes(seguidos), 'Index.html incluye las pantallas justo después de app, en el orden de app-fuente.js');
+  const base = read('src/html/js/app.html');
+  assert.doesNotMatch(base, /(async )?function (initVehiculos|initIncidencias|initUber|initTickets)\(|const (CAMPOS_VEHICULO|CAMPOS_TICKET) = /,
+    'las pantallas viven en su archivo');
+  [['app-vehiculos', 'initVehiculos'], ['app-incidencias', 'initIncidencias'], ['app-uber', 'initUber'], ['app-tickets', 'initTickets']]
+    .forEach(([a, init]) => assert.match(read('src/html/js/' + a + '.html'), new RegExp('^  (async )?function ' + init + '\\(', 'm'), a + ' trae ' + init));
+  // Lo genérico se queda en la base (lo usan Arqueos, Caja Chica, Sensores, Permisos…)
+  ['function slugCampo(', 'function leerArchivoBase64(', 'function fechaParaInput(', 'function pestanaFicha(', 'function crearTablaInteractiva(']
+    .forEach((f) => assert.ok(base.includes(f) || base.includes(f.replace('function ', 'const ').replace('(', ' =')), f + ' en app.html'));
+});
+
+test('Líneas: la base y una pantalla por archivo, unidas solo por Lineas.comun (fase 6.2)', () => {
+  // lineas.html era una sola función de 7,132 líneas; tools/lineas/partir.js la partió (19-oct). Las pantallas no
+  // comparten variables: lo de la base sale de Lineas.comun y cada una publica su init… con Object.assign(Lineas, …).
+  const lista = /const ARCHIVOS = \[([^\]]+)\]/.exec(read('tests/lineas-fuente.js'))[1];
+  const ARCHIVOS = [...lista.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const index = read('src/html/Index.html');
+  const enIndex = [...index.matchAll(/include\('html\/js\/(lineas[a-z-]*)'\)/g)].map((m) => m[1]).filter((a) => ARCHIVOS.includes(a));
+  assert.deepEqual(enIndex, ARCHIVOS, 'tests/lineas-fuente.js lista las pantallas en el orden de Index.html');
+  assert.ok(index.indexOf("include('html/js/lineas-bitacora')") < index.indexOf("include('html/js/lineas-correcciones')"),
+    'las pantallas van antes de los módulos que usan Lineas');
+  const base = read('src/html/js/lineas.html');
+  assert.match(base, /const Lineas = \(function \(\) \{/);
+  assert.match(base, /const montaje = \{ n: 0 \};/);
+  assert.match(base, /const panelActual = \(\) => panelAbierto;/);
+  assert.doesNotMatch(base, /function init(Telefonicas|Panorama|GestionActivos|AccesoriosLineas|Resguardos|Bitacora)\(/,
+    'las pantallas viven en su archivo, no en la base');
+  ARCHIVOS.slice(1).forEach((a) => {
+    const js = read('src/html/js/' + a + '.html');
+    assert.match(js, /^  \(function \(\) \{\r?\n    'use strict';\r?\n    const \{ [^}]+ \} = Lineas\.comun;/m, a + ': toma la base de Lineas.comun');
+    // Las pantallas se publican en Lineas; las partes de Telefónicas se registran para que initTelefonicas las monte
+    const parte = /^lineas-telefonicas-(\w+)$/.exec(a);
+    if (parte) assert.match(js, new RegExp("\\n    Lineas\\.telefonicas\\.registrar\\('" + parte[1] + "', \\(T\\) => \\{"), a + ': se registra con Lineas.telefonicas.registrar');
+    else assert.match(js, /\n    Object\.assign\(Lineas, \{/, a + ': se publica con Object.assign(Lineas, …)');
+    // Una copia de un let de la base se quedaría con su valor al cargar
+    assert.doesNotMatch(js, /\blet montaje\b|\bmontaje = |\+\+montaje(?!\.n)|\bpanelAbierto\b/, a + ': montaje.n y panelActual()');
+  });
+});
+
+test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo T y T.de (fase 6.2b)', () => {
+  // initTelefonicas era una función de 3,161 líneas; tools/lineas/partir-telefonicas.js la abrió (19-oct). Cada parte
+  // (lineas-telefonicas-<parte>.html) es (T) => {…}: lo del arranque sale de T, lo de otra parte de T.de('parte') y un let
+  // que usan varias lo publica su dueña con get/set en T. Una parte no declara lo que otra ya tiene.
+  const tel = read('src/html/js/lineas-telefonicas.html');
+  assert.match(tel, /const T = contextoTelefonicas\(\);/);
+  assert.match(tel, /\n      T\.montar\(\{/);
+  assert.ok(tel.indexOf('T.montar({') < tel.indexOf('Tabs.iniciar('), 'se monta antes del cableado de eventos');
+  const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/lineas-telefonicas-(\w+)'\)/g)].map((m) => m[1]);
+  assert.deepEqual(partes, ['ficha', 'documentos', 'acciones', 'captura', 'historial', 'paginas']);
+  const declarados = {};
+  partes.forEach((p) => {
+    const js = read('src/html/js/lineas-telefonicas-' + p + '.html');
+    // Lo de otra parte llega por T.de: nunca se toma la otra parte entera ni se busca en Lineas.telefonicas
+    assert.doesNotMatch(js, /T\.de\('[a-z]+'\)\./, p + ': de otra parte se toman nombres, no el objeto');
+    [...js.matchAll(/^      (?:async )?function (\w+)\(|^      (?:const|let) (\w+) =/gm)].forEach((m) => {
+      const n = m[1] || m[2];
+      assert.ok(!declarados[n], n + ' está en ' + declarados[n] + ' y en ' + p);
+      declarados[n] = p;
+    });
+    // Un let que usan varias partes lo publica su dueña: las demás lo leen con T.
+    [...js.matchAll(/Object\.defineProperty\(T, '(\w+)'/g)].forEach((m) => assert.match(js, new RegExp('\\n      let ' + m[1] + ' = '), p + ': ' + m[1] + ' es suyo'));
+  });
 });
 
 test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
@@ -515,17 +599,17 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
     }));
   assert.deepEqual(fuera, [], 'Usa Ficha.migas / Ficha.encabezado (componentes/ficha.html)');
   const usa = (archivo, n) => assert.ok((read(archivo).match(/Ficha\.encabezado\(/g) || []).length >= n, archivo + ' usa Ficha.encabezado');
-  usa('src/html/js/app.html', 1);
+  usa('src/html/js/app-vehiculos.html', 1);
   usa('src/html/js/app-cajachica.html', 1);
   usa('src/html/js/app-permisos.html', 3);
-  usa('src/html/js/lineas.html', 1);
+  usa('src/html/js/lineas-telefonicas-ficha.html', 1);
   assert.match(read('package.json'), /node tests\/ficha\.test\.js/);
   const index = read('src/html/Index.html');
   assert.ok(index.indexOf("include('html/js/componentes/tabs')") < index.indexOf("include('html/js/componentes/ficha')"));
 });
 
 test('el índice de Líneas es una lista como las demás: copia sin PIN, huella y vigía (fase 5.2b)', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   // Por la caché común, nunca por su cuenta en localStorage
   assert.match(lineas, /callServerListaCacheada\('apiLineasIndice', state\.token\)/);
   assert.doesNotMatch(lineas, /localStorage\.(get|set)Item\(LLAVE_INDICE|llamar\('apiLineasIndice'/);
@@ -547,7 +631,7 @@ test('el filtro rápido por tipo / clase / estatus es el componente FiltroTipo',
     .filter((f) => /class="filtro-tipo-(item|panel)|\.filtro-tipo-item'|\.filtro-tipo[\w-]*\s*\{/.test(fs.readFileSync(f, 'utf8')))
     .map((f) => path.relative(root, f).replace(/\\/g, '/'));
   assert.deepEqual(fuera.filter((f) => !f.endsWith('lineas-estilos.html')), [], 'Usa FiltroTipo.crear (componentes/filtro-tipo.html)');
-  ['src/html/js/app.html', 'src/html/js/app-cajachica.html', 'src/html/js/lineas.html'].forEach((a) => assert.match(read(a), /FiltroTipo\.crear\(/, a));
+  ['src/html/js/app-vehiculos.html', 'src/html/js/app-cajachica.html', 'src/html/js/lineas-telefonicas.html'].forEach((a) => assert.match(read(a), /FiltroTipo\.crear\(/, a));
   assert.match(read('package.json'), /node tests\/filtro-tipo\.test\.js/);
 });
 
@@ -574,11 +658,11 @@ test('las pestañas son una sola implementación: Tabs (componentes/tabs.html)',
   const index = read('src/html/Index.html');
   assert.ok(index.indexOf("include('html/js/componentes/formato')") < index.indexOf("include('html/js/componentes/tabs')"));
   // montarVista suelta las pestañas de la vista anterior (Tabs.iniciar sobre #view-container)
-  assert.match(read('src/html/js/app.html'), /container\.removeAttribute\('data-tabs'\);/);
+  assert.match(APP, /container\.removeAttribute\('data-tabs'\);/);
 });
 
 test('cada vista es una sola entrada (NAV_GRUPOS / VISTAS_FUERA_DEL_MENU) y todo lo que nombra existe', () => {
-  const app = read('src/html/js/app.html');
+  const app = APP;
   const index = read('src/html/Index.html');
   const arreglo = (nombre) => new Function('return ' + new RegExp(`const ${nombre} = (\\[[\\s\\S]*?\\n  \\]);`).exec(app)[1])();
   const entradas = [];
@@ -648,7 +732,7 @@ test('el JS de los .html no tiene "//" dentro de strings (Apps Script lo corta c
 });
 
 test('las tablas de Líneas usan el DataTable del sistema con KPIs que filtran', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const api = read('src/ClientApi.gs');
   assert.match(cliente, /DataTable\.crear\(contenedor/);
   assert.equal((cliente.match(/tablaLineas\(\$\('#(ln-tabla-' \+ modulo|lac-tabla|ln-bit-tabla)'?/g) || []).length >= 3, true);
@@ -672,7 +756,7 @@ test('la bitácora automática registra exactamente los 23 campos del bot CAMBIO
 });
 
 test('las reglas de formato y los íconos son los del AppSheet (flechas, colores y estilos)', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const reglas = lineas.slice(lineas.indexOf('const REGLAS_FORMATO'), lineas.indexOf('function estiloAppSheet'));
   // HISTORIAL_REASIGNACIONES: Entrada (verde, fa-angle-double-up) y Salida (rojo, fa-angle-double-down)
   assert.match(reglas, /'Responsable Entrante': \{ '\*': \{ color: 'green', icono: 'chevrons-up', fondo: true \} \}/);
@@ -692,7 +776,7 @@ test('las reglas de formato y los íconos son los del AppSheet (flechas, colores
   assert.match(lineas, /13 \* 24/);
   // (View Ref "Ver línea" era de Reactivación, retirada el 30-sep)
   // Menú con los íconos de las vistas del AppSheet
-  const app = read('src/html/js/app.html');
+  const app = APP;
   [['lineas-telefonicas', 'smartphone'], ['accesorios-lineas', 'boxes'], ['cambios-lineas', 'eye']].forEach(([vista, icono]) => {
     assert.match(app, new RegExp(`vista: '${vista}', etiqueta: '[^']+', icono: '${icono}'`), vista);
   });
@@ -702,7 +786,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const cap = read('src/services/lineas/LineasCaptura.gs');
   const repo = read('src/services/lineas/LineasRepo.gs');
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const control = (src, columna) => {
     const c = columna.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
     if (new RegExp(`listaCH\\('${c}'`).test(src)) return 'listaAbierta';   // datos del responsable: listas de Capital Humano
@@ -768,7 +852,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
 });
 
 test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama Detalles', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const estilos = read('src/html/lineas-estilos.html');
   // La franja de color la da el .stat-tile global (styles.html); Líneas ya no trae la suya (jorge, 25-sep)
   assert.doesNotMatch(estilos, /\.ln-modulo \.stat-tile::before \{/);
@@ -784,7 +868,7 @@ test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama De
 test('experiencia de uso: menú en celular, ficha en pestañas y formularios por pasos', () => {
   const index = read('src/html/Index.html');
   const movil = read('src/html/shell-movil.html');
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const estilos = read('src/html/lineas-estilos.html');
   // Menú en celular y tableta: archivo aparte, incluido al final, con los cortes del sistema (Pantalla)
   assert.match(index, /include\('html\/shell-movil'\)/);
@@ -841,8 +925,8 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
 });
 
 test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, fotos y estatus', () => {
-  const lineas = read('src/html/js/lineas.html');
-  const app = read('src/html/js/app.html');
+  const lineas = LINEAS;
+  const app = APP;
   // Bloqueo: una lista decide PIN / patrón / contraseña y el valor sigue yendo en PIN EQUIPO
   assert.match(lineas, /const OPCIONES_BLOQUEO = \['PIN', 'PATRÓN', 'CONTRASEÑA', 'SIN BLOQUEO'\];/);
   assert.match(lineas, /if \(t === 'PATRÓN'\) input\.value = 'PATRON';/);
@@ -879,13 +963,13 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
 });
 
 test('la sección de fotos de la inspección no se oculta con las condiciones del AppSheet', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.doesNotMatch(lineas, /\.ln-af-seccion'\)\.forEach\(/);
   assert.match(lineas, /#ln-captura-cuerpo \.ln-af-seccion:not\(\.ln-af-extra\)'\)\.forEach\(/);
 });
 
 test('Exportar a Excel descarga la base completa del módulo, no solo lo que se ve', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   // Todas las tablas de módulo usan la base completa; el historial de una ficha sigue exportando lo filtrado
   assert.match(lineas, /exportar: exportarBase\('INVENTARIO', /);
   assert.match(lineas, /exportar: exportarBase\('ACCESORIOS', /);
@@ -956,7 +1040,7 @@ test('Líneas usa la BD de pruebas del equipo y ninguna carpeta personal de prue
 });
 
 test('Gestión de Activos abre al colaborador en el panel lateral, no al final de la página', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /function abrirPanelLateral\(titulo, subtitulo, opciones\)/);
   assert.match(lineas, /elemento\.className = 'dt-panel ln-panel' \+ \(o\.noModal \? ' ln-panel-nomodal' : ''\);/);   // mismo panel que el detalle de DataTable
   const gestion = lineas.slice(lineas.indexOf('function initGestionActivos'), lineas.indexOf('function pintarCuadros'));
@@ -1031,7 +1115,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
 
   // Cliente: Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep). El patrón volvió a
   // General el 5-oct, dibujado o con la imagen del AppSheet, no como archivo (lineas-patron-consulta.test.cjs)
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.doesNotMatch(lineas, /\['Patrón', botonArchivo/);
   assert.doesNotMatch(lineas, /\['Última responsiva', botonUltimoNucos/);
   assert.match(lineas, /texto: 'Ver última responsiva', alHacer: \(\) => abrirUltimoDesdeMenu\('RESPONSIVA', id\)/);
@@ -1112,7 +1196,7 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
   const repo = read('src/services/lineas/LineasRepo.gs');
   const servidor = repo.slice(repo.indexOf('const COLS_VISTA_LINEAS'), repo.indexOf('];', repo.indexOf('const COLS_VISTA_LINEAS')));
   assert.deepEqual([...servidor.matchAll(/'([^']+)'/g)].map((m) => m[1]), appsheet);
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   const cliente = lineas.slice(lineas.indexOf('const COLUMNAS_VISTA_LINEAS'), lineas.indexOf('function columnasVistaLineas'));
   assert.deepEqual([...cliente.matchAll(/\['([^']+)', '[^']+'/g)].map((m) => m[1]), appsheet);
   // DisplayName del AppSheet; RESPONSIVA y FORMATO INSPECCION = la última de NUCOS; PIN solo para ADMIN
@@ -1135,14 +1219,16 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
 
 test('detalle de la inspección: mismo diseño que la ficha, sin revisión del activo, firmas ni registro completo', () => {
   const servicio = read('src/services/TelefoniaService.gs');
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.doesNotMatch(servicio, /DETALLE_RESPONSIVA|DETALLE_INSPECCION|registroDetalle_|checklist: LineasChecklist\.secciones\(\)|firmas: puedeVerSecretos_/);
   // Firmas y patrón no se listan como fotos; PIN y patrón ocultos para quien no es ADMIN
   assert.ok(servicio.includes("const esFotoDeInspeccion_ = (nombre, mime) => /^(image|video)\\//.test(mime) && !/^(FIRMA|PATRON)/i.test(nombre);"), 'las firmas y el patrón no son fotos de la inspección');
   assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
   // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
   assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
-  const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
+  // pintarInspeccion es lo último de su parte (fase 6.2b: lineas-telefonicas-paginas.html)
+  const paginas = read('src/html/js/lineas-telefonicas-paginas.html');
+  const detalle = paginas.slice(paginas.indexOf('function pintarInspeccion('), paginas.lastIndexOf('\n      return {'));
   assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
   assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
 });
@@ -1267,11 +1353,11 @@ test('Historial: números que ha tenido un NUCO y NUCOs por los que pasó un nú
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /const motivo = comentarioObligatorio_\(datos, 'qué se corrigió y por qué'\);/);
   // El campo del comentario no es un campo del AppSheet: aplicarReglasEn busca .ln-af-req en cada .ln-af-campo (29-sep)
   // El comentario y el ticket van en otra ventana, al aceptar los cambios (usuario, 4-oct)
-  assert.match(read('src/html/js/lineas.html'), /pedirDatos\('Comentario', \$\('#ln-captura-subtitulo', raiz\)\.textContent/);
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /id="cap-motivo"/);
+  assert.match(LINEAS, /pedirDatos\('Comentario', \$\('#ln-captura-subtitulo', raiz\)\.textContent/);
+  assert.doesNotMatch(LINEAS, /id="cap-motivo"/);
   // Una hoja sin las pestañas APP_*: leerFilas no abre una pestaña de la que no se pide ninguna fila
   assert.match(read('src/services/lineas/LineasDatos.gs'), /if \(peticiones\.some\(\(p\) => !p\.filas\.length\)\) \{\s*const leidas = leerFilas\(peticiones\.filter\(\(p\) => p\.filas\.length\)\);/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /llamar\('apiLineasAsignaciones', id, vista\)/);
   assert.match(cliente, /equipo: 'Números que ha tenido', linea: 'Equipos en los que ha estado'/);
   // Número / NUCO / IMEI como botón visible que abre la ficha (asignaciones y cambios de línea o equipo)
@@ -1351,8 +1437,8 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.match(read('src/services/lineas/LineasNotificaciones.gs'), /CacheHojas\.versiones\(\[\[LineasDatos\.id\(\), TAB\]\]\)/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /LineasNotificaciones\.revisarPronto\(\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/notificaciones'\)/);
-  assert.match(read('src/html/js/app.html'), /vista: 'notificaciones'[^\n]*plantilla: 'tpl-notificaciones', init: \(\) => Notificaciones\.initVista\(\)/);
-  assert.match(read('src/html/js/lineas.html'), /irARegistro: irARegistro/);
+  assert.match(APP, /vista: 'notificaciones'[^\n]*plantilla: 'tpl-notificaciones', init: \(\) => Notificaciones\.initVista\(\)/);
+  assert.match(LINEAS, /irARegistro: irARegistro/);
 });
 
 test('Acciones masivas de equipos: reasignar deja en USO; la línea solo pasa a USO si estaba DISPONIBLE', () => {
@@ -1422,10 +1508,10 @@ test('Acciones masivas de equipos: reasignar deja en USO; la línea solo pasa a 
   guardados.length = 0;
   assert.throws(() => Reg.accionMasiva('CANCELAR', ['a', 'b'], { valores: { _MOTIVO: 'EQUIPOS OBSOLETOS' } }, u));
   assert.equal(guardados.length, 0);
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /clave: 'CANCELAR'/);
+  assert.doesNotMatch(LINEAS, /clave: 'CANCELAR'/);
 
   // Cliente (estilo Drive, 30-sep): las acciones salen de accionesSeleccionDe(modulo); Reasignar ya desde 1
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /accionesSeleccion: accionesSeleccionDe\(modulo\),/);
   // La Responsiva en lugar de Reasignar (pendiente 2.49, 16-oct); el formulario masivo se queda para cuando regresen las masivas
   assert.match(cliente, /alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\)/);
@@ -1474,7 +1560,7 @@ test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian 
   assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { modo: 'INDIVIDUAL', valores: { _MOTIVO: 'AJUSTE' }, porEquipo: { a: { RESPONSABLE: 'pedro', _ETIQUETA: 'NUCO 0001' } } }, u), /NUCO 0001 · RESPONSABLE: ESCRIBIR EN MAYUSCULAS/);
   assert.throws(() => Reg.accionMasiva('REASIGNAR', ['a', 'b'], { modo: 'INDIVIDUAL', valores: { _MOTIVO: 'AJUSTE' }, porEquipo: {} }, u), /al menos un equipo/);
 
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /data-modo="INDIVIDUAL"[^>]*>' \+ icono\('list'\) \+ ' Uno por uno/);
   assert.match(cliente, /const columnaFila = \(id, c\) => 'FILA\|' \+ id \+ '\|' \+ c;/);
 });
@@ -1520,7 +1606,7 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.deepEqual([R.lineas.b[2], R.cuentas[R.lineas.c[2]], R.deps[R.lineas.d[1]], R.fechas[R.lineas.f[0]]], [1, '', 'POST VENTA', '2027-01-31']);
   assert.deepEqual(estados(R.equipos.s[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
   // La interfaz lo desempaca a un objeto por registro y guarda la última copia para pintar al instante
-  const cli = read('src/html/js/lineas.html');
+  const cli = LINEAS;
   assert.match(cli, /function expandirRegistros\(R\)/);
   assert.match(cli, /registros: expandirRegistros\(Object\.assign\(\{ mesesTotal: r\.meses\.length \}, r\.registros\)\)/);
   assert.match(cli, /const copia = !forzar && !est\.datos \? leerCopiaPanorama\(\) : null;/);
@@ -1532,13 +1618,13 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.equal(P._cuentaDe('Telcel', 'FRACCIONADORA LA ROMITA SA DE CV'), 'TELCEL FRO');
   assert.equal(P._cuentaDe('', ''), '');
   // Portada: líneas activas = no canceladas ni sin línea; RESGUARDO cuenta como disponible (mapeo M6); SIM básicos aparte
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /'DISPONIBLE': 'disponible', 'RESGUARDO': 'disponible',/);
   assert.match(lineas, /if \(g === 'cancelada' \|\| g === 'sin'\) return;/);
   assert.match(lineas, /if \(l\.b\) \{ r\.basicos\+\+; return; \} \/\/ los SIM básicos no tienen adendum/);
   assert.match(read('src/html/views/lineas/lineas-panorama.html'), /<select id="lnp-mes" disabled>/);
   // Menú: Panorama primero; Reactivación se retiró con su pestaña (30-sep)
-  const app = read('src/html/js/app.html');
+  const app = APP;
   assert.match(app, /\{ vista: 'panorama-lineas', etiqueta: 'Panorama', icono: 'layout-dashboard', requiere: 'panorama-lineas'[^\n]*\},\s*\{ vista: 'lineas-telefonicas'/);
   assert.doesNotMatch(app, /'reactivacion-lineas'/);
   assert.match(app, /plantilla: 'tpl-lineas-panorama', init: \(\) => Lineas\.initPanorama\(\)/);
@@ -1556,7 +1642,7 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
   assert.deepEqual(fijos, ['ID', 'ID LINEA', 'No TELEFONO', 'SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'ID', 'ID LINEA', 'NUCO', 'No EMPLEADO', 'RESPONSABLE', 'NOMBRE CI']);
   assert.match(resp, /ed\('RESPONSABLE', 'Nombre', 'listaAbierta', persona\('RESPONSABLE'\), \{ requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true \}\)/);
   assert.match(resp, /ed\('ACCESORIOS', 'Accesorios entregados', 'multi'/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // Sin columna de Acciones (30-sep): clic = vista rápida, doble clic = ficha; la vista rápida trae "Abrir ficha completa"
   assert.doesNotMatch(cliente, /titulo: 'Vista rápida', alHacer/);
   assert.match(cliente, /data-vr-ficha>' \+ icono\('maximize-2'\) \+ ' Abrir ficha completa/);
@@ -1566,7 +1652,7 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
 });
 
 test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordada, clic = vista rápida, fotos en NUCOS y tema marcado', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // La línea se nombra por su número (antes decía el NUCO de su equipo) y la inspección por su fecha
   assert.match(cliente, /pila\[pila\.length - 1\]\.etiqueta = 'Línea ' \+ \(l\.numero \|\| '—'\);/);
   assert.doesNotMatch(cliente, /etiqueta = e \? 'NUCO ' \+ \(e\.nuco \|\| '—'\) : 'Línea '/);
@@ -1589,7 +1675,7 @@ test('Navegación de la ficha: migas por lo que es cada nivel, pestaña recordad
   assert.match(tel, /function carpetaFotosExtra_\(id\)/);
   assert.match(read('src/services/lineas/LineasCaptura.gs'), /'ORIGEN': externa \? 'NUCOS_FOTOS'/);
   // Tema: el botón del modo actual se marca también al entrar con la sesión guardada
-  const app = read('src/html/js/app.html');
+  const app = APP;
   assert.match(app, /function marcarTemaActual\(\)/);
   assert.match(app, /marcarTemaActual\(\); \/\/ entrar con la sesión guardada/);
 });
@@ -1602,13 +1688,13 @@ test('Tablas con modo selección, gestos Atrás/Adelante, vista rápida conectad
   assert.match(dt, /if \(!st\.modoSeleccion && \(ev\.ctrlKey \|\| ev\.metaKey\)\) \{ setModoSeleccion\(true\);/);
   assert.match(dt, /tbody\.addEventListener\('pointermove', \(ev\) => \{\s*if \(!arrastre\.inicio/);
   assert.match(dt, /setModoSeleccion, enModoSeleccion: \(\) => st\.modoSeleccion,/);
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /seleccionable: true, modoSeleccion: true, seleccionDrive: true, accionesDeTabla: false,/);
   // Historial del navegador
   const hist = read('src/html/historial-navegador.html');
   assert.match(hist, /google\.script\.history/);
   assert.match(hist, /api\(\)\.setChangeHandler\(alCambiar\)/);
-  assert.match(read('src/html/js/app.html'), /if \(typeof HistorialApp !== 'undefined'\) HistorialApp\.alNavegar\(vista, etiqueta\);/);
+  assert.match(APP, /if \(typeof HistorialApp !== 'undefined'\) HistorialApp\.alNavegar\(vista, etiqueta\);/);
   assert.match(read('src/html/Index.html'), /include\('html\/historial-navegador'\)/);
   assert.match(lineas, /if \(!sinHistorial\) pasoHistorial\(\);/);
   assert.match(lineas, /HistorialApp\.registrar\('lineas-telefonicas'/);
@@ -1797,7 +1883,7 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   assert.ok(!Reg._elementos({ TIPO: 'EQUIPO', RESPONSABLE: 'ANA' }, cat, u, { nuevo: false }).some((e) => e.columna === 'RESPONSABLE'));
 
   // Colores de los estatus nuevos
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   ['DISPONIBLE', 'PARA VENTA', 'PARA DESECHO', 'EXTRAVIO-ROBO'].forEach((e) => assert.match(cliente, new RegExp(`'${e}': '(azul|ambar|rojo)'`), e));
 });
 
@@ -1898,14 +1984,14 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   const notif = read('src/services/lineas/LineasNotificaciones.gs');
   assert.match(notif, /return !para \|\| \(para === PARA_APROBADORES && esAprobador\);/);
   // Cliente: Mandar a resguardo desde 1, con su propio formulario; vista de la bandeja
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /async function abrirResguardo\(filas, opciones\)/);
   assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\),\s+Object\.assign\(\{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo \}, extra\)\)/);
   // La inspección de cada equipo que viene de una persona, dentro de la acción (pendiente 2.6; usuario, 3-oct)
   assert.match(cliente, /const hechas = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo', \{/);
   assert.match(src, /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\], LineasDatos\.idsDeFila\(f\),/);
   assert.match(cliente, /function initResguardos\(\)/);
-  assert.match(read('src/html/js/app.html'), /vista: 'resguardos-lineas'[^\n]*plantilla: 'tpl-lineas-resguardos', init: \(\) => Lineas\.initResguardos\(\)/);
+  assert.match(APP, /vista: 'resguardos-lineas'[^\n]*plantilla: 'tpl-lineas-resguardos', init: \(\) => Lineas\.initResguardos\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_RESGUARDOS': \{ prefijo: 'RSG'/);
   // En el historial se leen con nombre (no RESGUARDO / CANCELACION_LINEA)
   assert.match(read('src/services/lineas/LineasRepo.gs'), /RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta'/);
@@ -1914,7 +2000,7 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
 test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario, 30-sep)', () => {
   const reg = read('src/services/lineas/LineasRegistros.gs');
   const resg = read('src/services/lineas/LineasResguardos.gs');
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // Sin el aviso confirmado el servidor no deja llegar a esos estatus por la edición directa
   assert.match(reg, /function exigirFormularioResguardo_\(tipo, estatusAntes, estatusNuevo\)/);
   assert.match(reg, /LineasResguardos\.ESTATUS_EQUIPO_RESGUARDO\.indexOf\(nuevo\)/);
@@ -1953,7 +2039,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(dt, /if \(fila && cfg\.alTocarFila\) cfg\.alTocarFila\(fila\);/);
   assert.match(dt, /setModoSeleccion\(true\);\s*if \(navigator\.vibrate\)/);
   // Líneas: sin botón "Seleccionar"; Detalles sigue a la selección en un panel sin fondo
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /function accionesSeleccionDe\(modulo\)/);
   assert.match(lineas, /if \(detallesAbiertos && filas\.length === 1 && modulo === memoria\.modulo && vigente\(\)\) mostrarDetalles/);
   assert.match(lineas, /if \(o\.noModal\) document\.body\.append\(elemento\); else document\.body\.append\(fondo, elemento\);/);
@@ -1988,7 +2074,7 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   assert.match(dt, /document\.addEventListener\('pointerdown', alPresionarFuera\);/);
   assert.match(dt, /cfg\.accionesDeTabla === false \? \[\] : \[accionCopiar\]/);
   assert.match(dt, /class="dt-menu-titulo">\$\{esc\(a\.tituloGrupo\)\}/);
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
   // Inspección en documentos, junto a la Responsiva (pendientes 2.49 y 2.50, 16-oct); Ver la última, solo en la ficha (12-oct)
   assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
@@ -2074,7 +2160,7 @@ test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, 
   assert.match(read('.gitignore'), /src\/services\/lineas\/LineasCorreccionesSemilla\.gs/);
   assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesMarcar\(token, accion, ids, comentario\)/);
   assert.doesNotMatch(read('src/ClientApi.gs'), /Correcciones/);
-  assert.match(read('src/html/js/app.html'), /vista: 'correcciones-lineas'[^\n]*plantilla: 'tpl-lineas-correcciones', init: \(\) => LineasCorrecciones\.init\(\)/);
+  assert.match(APP, /vista: 'correcciones-lineas'[^\n]*plantilla: 'tpl-lineas-correcciones', init: \(\) => LineasCorrecciones\.init\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_CORRECCIONES': \{ prefijo: 'COR'/);
   assert.match(read('package.json'), /"correcciones:semilla": "node tools\/correcciones-semilla\.cjs"/);
 });
@@ -2123,9 +2209,9 @@ test('Notificaciones de seguimiento (30-sep): equipos sin recibir, cancelaciones
   assert.equal((read('src/services/lineas/LineasResguardos.gs').match(/avisar_\('CANCELACION', 'Líneas para cancelar · '/g) || []).length, 2);
   const vista = read('src/html/notificaciones.html');
   assert.match(vista, /DISPONIBLE_VENCIDA: \{ grupo: 'pagos', icono: 'banknote', color: 'vencida', accion: 'Ver líneas disponibles', estatus: \['lineas', \['DISPONIBLE', 'RESGUARDO'\]\]/);
-  assert.match(read('src/html/js/lineas.html'), /valores: Array\.isArray\(f\.estatus\) \? f\.estatus : \[f\.estatus\]/);
+  assert.match(LINEAS, /valores: Array\.isArray\(f\.estatus\) \? f\.estatus : \[f\.estatus\]/);
   assert.match(vista, /const AGRUPAR_DESDE = 3;/);
-  assert.match(read('src/html/js/lineas.html'), /irConEstatus: irConEstatus, \/\/ desde Notificaciones/);
+  assert.match(LINEAS, /irConEstatus: irConEstatus, \/\/ desde Notificaciones/);
 });
 
 test('la etiqueta "auto" y el par Folio/Nucco solo viven en sus componentes', () => {
@@ -2164,7 +2250,7 @@ test('los formularios por columnas usan un solo motor (CamposHoja)', () => {
   // Vehículos, Caja Chica y Arqueos traían cada uno su copia de pintar/leer/llenar campos
   // (y tres copias de llenarSelect). Ahora delegan en componentes/campos-hoja.html.
   // (Las fichas de solo lectura, seccionesFicha*, son otra cosa: muestran, no capturan.)
-  const modulos = { 'src/html/js/app.html': 'VEHICULO', 'src/html/js/app-cajachica.html': 'CAJACHICA', 'src/html/js/app-arqueos.html': 'ARQUEO' };
+  const modulos = { 'src/html/js/app-vehiculos.html': 'VEHICULO', 'src/html/js/app-cajachica.html': 'CAJACHICA', 'src/html/js/app-arqueos.html': 'ARQUEO' };
   Object.keys(modulos).forEach((m) => {
     const src = read(m);
     const lista = 'CAMPOS_' + modulos[m];
@@ -2184,9 +2270,9 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
   // a mano en la vista (dos veces cuando había Editar) y su propio recolectar/poblar.
   // Ahora la vista solo deja el contenedor y el módulo declara la lista.
   const casos = [
-    ['uber', 'src/html/js/app.html', 'CAMPOS_UBER', ['form-uber', 'form-editar-uber']],
-    ['tickets', 'src/html/js/app.html', 'CAMPOS_TICKET', ['form-ticket', 'form-editar-ticket']],
-    ['incidencias', 'src/html/js/app.html', 'CAMPOS_INCIDENCIA', ['form-incidencia', 'form-editar-incidencia', 'form-cerrar-incidencia']],
+    ['uber', 'src/html/js/app-uber.html', 'CAMPOS_UBER', ['form-uber', 'form-editar-uber']],
+    ['tickets', 'src/html/js/app-tickets.html', 'CAMPOS_TICKET', ['form-ticket', 'form-editar-ticket']],
+    ['incidencias', 'src/html/js/app-incidencias.html', 'CAMPOS_INCIDENCIA', ['form-incidencia', 'form-editar-incidencia', 'form-cerrar-incidencia']],
     ['reasignaciones-vehiculares', 'src/html/js/app-reasignaciones.html', 'CAMPOS_REASIGNACION', ['form-reasignacion-vehicular']],
     ['cambios-monto-cch', 'src/html/js/app-cajachica.html', 'CAMPOS_CAMBIO_MONTO', ['form-cambio-monto']],
   ];
@@ -2203,7 +2289,7 @@ test('los formularios que antes iban escritos a mano también se declaran en Cam
     assert.match(src, new RegExp('CamposHoja\\.html\\(' + lista + '\\b'), modulo + ': pinta ' + lista + ' con CamposHoja');
     assert.match(src, new RegExp('CamposHoja\\.recolectar\\(' + lista + '\\b'), modulo + ': lee ' + lista + ' con CamposHoja');
   });
-  assert.doesNotMatch(read('src/html/js/app.html'), /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
+  assert.doesNotMatch(APP, /function (recolectar|poblar)(Uber|Ticket)\(/, 'sin recolectar/poblar propios de Uber y Tickets');
 });
 
 test('formularios por pasos: el indicador y la navegación son el componente Pasos (fase 5.6)', () => {
@@ -2271,7 +2357,7 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
 });
 
 test('Mandar a resguardo: formulario intermedio informativo y la persona solo queda en blanco ahí (usuario, 4-oct)', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const resg = cliente.slice(cliente.indexOf('async function abrirResguardo('), cliente.indexOf("$('#cap-guardar', raiz).addEventListener('click', async () => {", cliente.indexOf('async function abrirResguardo(')));
   // Equipo, línea y adendum informativos (como la inspección); solo se captura destino, comentario y ticket
   ["titulo(q, 'EQUIPO'", "titulo(q, 'LÍNEA'", "titulo(q, 'ADENDUM'", "titulo(q, 'DESTINO'"].forEach((t) => assert.ok(resg.includes(t), t));
@@ -2292,7 +2378,7 @@ test('Mandar a resguardo: formulario intermedio informativo y la persona solo qu
 });
 
 test('Mandar a resguardo: estatus con su significado, línea vencida a cancelación, sin confirmación y procesos en la inspección (usuario, 4-oct)', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const resg = cliente.slice(cliente.indexOf('async function abrirResguardo('), cliente.indexOf('async function abrirCancelacion('));
   // Significado de cada estatus al pasar el ratón: chips, botones del resguardo y opciones de Cambiar estatus
   assert.match(cliente, /const SIGNIFICADO_ESTATUS = \{/);
@@ -2381,7 +2467,7 @@ test('Historial único (paso 3): MOVIMIENTOS un renglón por acción, ediciones 
 });
 
 test('Mandar a cancelación: textos técnicos y espera desde el clic (prueba del 4-oct)', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const cuerpo = cliente.slice(cliente.indexOf('async function abrirCancelacion'), cliente.indexOf('// ---- Alta y edición directa del inventario'));
   assert.match(cuerpo, /espera: 'Mandando a cancelación',\s*alConfirmar: \(datos\) => llamar\('apiLineasMandarCancelacion'/);
   assert.doesNotMatch(cuerpo, /queda en el historial|\(opcional\)|Quedan EN PROCESO/);
@@ -2405,7 +2491,7 @@ test('el calentador (Calentador.gs) solo llama lo que cada servicio expone', () 
 });
 
 test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean los mismos campos', () => {
-  const app = read('src/html/js/app.html');
+  const app = APP;
   const enPantalla = app.split(/\r?\n/).filter((l) => l.includes('...DE_SENSORES') || /opciones: \['SI', 'NO'\], \.\.\.DE_SENSORES/.test(l))
     .map((l) => (/clave: '([^']+)'/.exec(l) || [])[1]).filter(Boolean);
   // LLAVE DUPLICADA ocupa dos renglones: su clave va en el renglón de arriba
@@ -2420,7 +2506,7 @@ test('las fichas van en una llamada y piden lo de otro módulo solo si la person
   // que la deja en null sin permiso (su pestaña no aparece), y la anota en FICHAS_GUARDADAS para
   // que un guardado borre su copia.
   const FICHAS = [
-    { archivo: 'src/html/js/app.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
+    { archivo: 'src/html/js/app-vehiculos.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
     { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', servidor: 'apiFichaCajaChica' },
   ];
   const api = read('src/ClientApi.gs');
@@ -2588,7 +2674,7 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   const archivos = lista(/const CAMPOS_ARCHIVO = \[([^\]]*)\]/);
   const nuevas = lista(/const COLUMNAS_DOCUMENTO_NUEVAS = \[([^\]]*)\]/);
   const etiquetas = /const ETIQUETA_ARCHIVO = \{([\s\S]*?)\};/.exec(veh)[1];
-  const app = read('src/html/js/app.html');
+  const app = APP;
   for (const c of archivos) {
     assert.match(etiquetas, new RegExp("'" + c + "':"), c + ' tiene su etiqueta para el nombre del archivo');
     assert.match(app, new RegExp("clave: '" + c + "'[^}]*tipo: 'file'"), c + ' es campo de archivo en CAMPOS_VEHICULO');
@@ -2600,7 +2686,7 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
 
 test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {
   const index = read('src/html/Index.html');
-  const app = read('src/html/js/app.html');
+  const app = APP;
   const css = read('src/html/styles.html');
   assert.match(index, /<nav id="sidebar" class="collapsed">/);
   assert.doesNotMatch(index + app + read('src/html/shell-movil.html'), /sidebar-collapse-btn|sidebarColapsado|data-tooltip/);
@@ -2650,7 +2736,7 @@ test('la ficha y las altas de Vehículos ligan por el ID del vehículo, nunca po
   assert.match(ficha, /VehiculosService\.buscar\(token/, 'la ficha busca el vehículo por su ID');
   const porFolio = ficha.split(/\r?\n/).filter((l) => /listarPorFolio\(/.test(l) && !/HologramasService/.test(l));
   assert.deepEqual(porFolio, [], 'cada pestaña de la ficha (salvo Hologramas, aparte) se pide con listarPorVehiculo');
-  assert.match(read('src/html/js/app.html'), /callServerListaCacheada\('apiFichaVehiculo', state\.token, vResumen\.ID_VEHICULO/);
+  assert.match(APP, /callServerListaCacheada\('apiFichaVehiculo', state\.token, vResumen\.ID_VEHICULO/);
   // Cada alta resuelve el vehículo con lo que manda el formulario: primero su ID
   [
     ['src/services/VerificacionesService.gs', /datos\.ID_VEHICULO \|\| datos\.FOLIO/],
@@ -2748,7 +2834,7 @@ test('lo que un módulo le pide a ExportarExcel existe (prod: «ExportarExcel.ca
 });
 
 test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Facturación del proveedor', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const css = read('src/html/lineas-estilos.html');
   // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
   // Facturación, con su sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
@@ -2774,14 +2860,14 @@ test('Facturación sin «Motivo» (usuario, 14-oct): una palabra sacada de los c
   assert.doesNotMatch(repo, /motivoFactura/);
   const facturas = repo.slice(repo.indexOf('  function facturasDeLinea('), repo.indexOf('  /** Día de corte de una cuenta padre'));
   assert.doesNotMatch(facturas, /motivo/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const tarjeta = cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable('));
   assert.ok(tarjeta.length > 100);
   assert.doesNotMatch(tarjeta, /motivo|Motivo/);
 });
 
 test('SIM básico: la renta sale de su último mes completo facturado (usuario, 14-oct)', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const ini = html.indexOf('      const rentaSimBasico = ');
   const renta = new Function('return ' + html.slice(ini, html.indexOf('\n', ini)).replace('      const rentaSimBasico = ', '').replace(/;\s*$/, ''))();
   assert.strictEqual(renta([{ cobrado: -7.74 }, { cobrado: 12, parcial: true }, { cobrado: 29, origen: 'x' }]).cobrado, 29);
@@ -2805,7 +2891,7 @@ test('Líneas: «Recargar datos» también vacía las hojas que la lectura guard
 });
 
 test('Líneas: un importe negativo se escribe «-$7.74», no «$-7.74» (nota de crédito, prueba en /dev del 14-oct)', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const linea = html.split('\n').find((l) => l.includes('const dinero = (n, centavos) =>'));
   assert.ok(linea, 'el dinero de Facturación sale de Formato.moneda');
   const dinero = new Function(require('./formato-fuente') + linea + '\nreturn dinero;')();
@@ -2819,7 +2905,7 @@ test('Facturación: la parcialidad del equipo se ve y la diferencia contra la re
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
   assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
-  assert.match(read('src/html/js/lineas.html'), /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
+  assert.match(LINEAS, /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
 });
 
 test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra lo que la línea paga normalmente', () => {
@@ -2834,7 +2920,7 @@ test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra 
   assert.strictEqual(habitual([m(120, true), m(-45), m(269.78)]), 269.78, 'sin meses parciales ni notas de crédito');
   assert.strictEqual(habitual([m(1), m(2), m(3), m(1)]), 1, 'solo los 3 meses anteriores');
   assert.match(repo, /f\.habitual = cobroHabitual\(todas\.slice\(i \+ 1\)\);/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /resumen \|\| !conHabitual\(f\) \? null : \['Habitual', dinero\(f\.habitual, true\)\],/);
   assert.doesNotMatch(cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable(')), /f\.renta/);
 });
@@ -2881,6 +2967,6 @@ test('cada permiso que se pide (pantalla y servidor) existe en el catálogo en �
 test('Exportar es la sección exportar del módulo de la pantalla', () => {
   const dt = read('src/html/js/componentes/datatable.html');
   assert.match(dt, /if \(cfg\.exportar && typeof puedeExportarAqui === 'function' && !puedeExportarAqui\(\)\) cfg\.exportar = false;/);
-  const app = read('src/html/js/app.html');
+  const app = APP;
   assert.match(app, /function puedeExportarAqui\(\) \{[\s\S]*?return !modulo \|\| puede\(modulo \+ '\.exportar'\);/);
 });

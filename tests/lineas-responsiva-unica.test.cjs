@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -145,7 +146,7 @@ test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la p
 });
 
 test('pantalla: un botón «Responsiva»; inspección solo si otra persona recibe el equipo; luego se guarda con las dos', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /abrirReasignar|apiLineasReasignar|texto: 'Reasignar', alHacer|Nueva responsiva<\/button>/);
   assert.match(cliente, /icono\('signature'\) \+ ' Responsiva<\/button>'/);
   assert.match(cliente, /if \(btnCaptura\.dataset\.lnCaptura === 'RESPONSIVA'\) abrirResponsiva\(/);

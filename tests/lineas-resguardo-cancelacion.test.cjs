@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Mandar a resguardo y Mandar a cancelación (usuario, 13-oct): ubicación DISPONIBLE · QUERETARO · JARDINES DE LA
 // HACIENDA, PARA VENTA CON DETALLE, un equipo ya en la bandeja no se vuelve a mandar con el mismo estatus, uno guardado
@@ -60,7 +61,7 @@ test('la ubicación sale DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA, no 
   assert.deepEqual(f.estatusEquipo, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
   assert.deepEqual(f.equipos[0].opcionesEstatus, f.estatusEquipo);
   // La pantalla toma el valor del servidor, no la sede ni la oficina del equipo
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /const actual = \{ DEPARTAMENTO: 'DISPONIBLE', SEDE: q\.sede/);
   assert.match(cliente, /const valor = b && b\.valor;/);
 });
@@ -126,7 +127,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario, \{ motivoDelAdendum: true \}\);/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /\{ clave: 'motivo', etiqueta: 'Motivo', requerido: true, opciones: MOTIVOS_CANCELACION, elegir: true \}/);
   assert.match(cliente, /const MOTIVOS_CANCELACION = \['LINEA VENCIDA', 'CANCELACION ANTICIPADA'\];/);
   assert.match(cliente, /\{ motivoCancelacion: datos\.motivo, comentario: datos\.comentario, ticket: datos\.ticket \}/);
@@ -136,7 +137,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
 
 test('PARA VENTA CON DETALLE vive en resguardo y se ve como los otros de venta', () => {
   assert.match(read('src/services/lineas/LineasEstructura.gs'), /'PARA VENTA CON DETALLE': 'RESGUARDO'/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'\];/);
   assert.match(cliente, /'PARA VENTA CON DETALLE': 'ambar'/);
   assert.match(cliente, /'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta'/);
@@ -186,7 +187,7 @@ test('al mandar a resguardo se guardan los accesorios del equipo en la bandeja',
 });
 
 test('cada paso de la bandeja espera en su ventana hasta que contesta el servidor', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const paso = html.slice(html.indexOf('async function paso(accion, filas, opciones)'), html.indexOf('const ACCIONES = {'));
   assert.match(paso, /pedirDatos\(o\.titulo, o\.mensaje, o\.campos \|\| \[\], o\.boton, \{/);
   assert.match(paso, /alConfirmar: \(extra\) => llamar\('apiLineasAccionBandejaResguardo'/);

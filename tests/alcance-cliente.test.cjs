@@ -5,6 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
+const APP = require('./app-fuente');
 
 const leer = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8').replace(/\r/g, '');
 const telefonia = leer('src/services/TelefoniaService.gs');
@@ -83,7 +85,7 @@ test('toda lectura de Líneas pasa por el alcance', () => {
     assert.ok(f && /sinAlcance_\(/.test(f.cuerpo), n + ' se le niega al rol CLIENT');
   });
   // Y la pantalla no pinta las pestañas ni los botones que no va a poder abrir
-  const lineas = leer('src/html/js/lineas.html');
+  const lineas = LINEAS;
   // Documentos e Historial: su sección (permisos en árbol). Nunca para un CLIENT: no respetan el alcance, así que al
   // limitado se le resuelven Sin acceso (lo revisa abajo «Modulos: Documentos e Historial sin alcance»)
   assert.match(lineas, /const veDocumentos = \(\) => veSeccion\('documentos'\);/);
@@ -128,7 +130,7 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   const adq = leer('src/services/AdquisicionVehicularService.gs');
   assert.match(adq, /function buscar\(token, serie\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
   assert.match(adq, /function archivos\(token, liga\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
-  assert.match(leer('src/html/js/app.html'), /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
+  assert.match(APP, /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
   assert.match(adq, /function buscar\(token, serie\) \{[\s\S]*?sesion\.alcance && !VehiculosService\.serieEnAlcance/);
   assert.match(adq, /function archivos\(token, liga\) \{[\s\S]*?if \(sesion\.alcance\) \{[\s\S]*?serieEnAlcance/);
 });

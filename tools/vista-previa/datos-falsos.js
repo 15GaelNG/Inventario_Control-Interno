@@ -748,6 +748,23 @@
     'menu-abierto': async () => { await abrir('inspeccion-vehicular'); (await hasta('.shell-menu-btn')).click(); await esperar(400); },
     // ---- Módulos de la base (Inicio, Vehículos, Caja Chica, Uber, Administración) ----
     'lineas': async () => { await abrir('lineas-telefonicas'); await hasta('#ln-listado .ln-cuadro, #ln-listado tbody tr'); await esperar(500); },
+    // Cada pantalla de Líneas en su archivo (fase 6.2): que cargue sin errores con lo que toma de Lineas.comun
+    // La ficha y el menú del clic derecho pasan por las partes de Telefónicas (fase 6.2b: T.de); sin datos de la ficha
+    // en la vista previa, lo que importa es que no truene JavaScript
+    'lineas-ficha': async () => {
+      await abrir('lineas-telefonicas'); await hasta('#ln-listado tbody tr[data-id]');
+      $('#ln-listado tbody tr[data-id]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); await esperar(1200);
+    },
+    'lineas-menu': async () => {
+      await abrir('lineas-telefonicas'); const fila = await hasta('#ln-listado tbody tr[data-id]');
+      const r = fila.getBoundingClientRect();
+      fila.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 80, clientY: r.top + 10 })); await esperar(600);
+    },
+    'lineas-panorama': async () => { await abrir('panorama-lineas'); await esperar(800); },
+    'lineas-activos': async () => { await abrir('gestion-activos'); await esperar(800); },
+    'lineas-accesorios': async () => { await abrir('accesorios-lineas'); await esperar(800); },
+    'lineas-resguardos': async () => { await abrir('resguardos-lineas'); await esperar(800); },
+    'lineas-cambios': async () => { await abrir('cambios-lineas'); await esperar(800); },
     // Agregar equipo: la captura por pasos de Líneas (Pasos, fase 5.6); con un paso avanzado y un error marcado
     'lineas-agregar': async () => {
       await abrir('lineas-telefonicas'); (await hasta('#ln-nuevo-equipo')).click();

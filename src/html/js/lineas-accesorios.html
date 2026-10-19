@@ -1,0 +1,194 @@
+<script>
+  /**
+   * lineas-accesorios.html — Inventario de Accesorios de Líneas (ACCESORIOS CELULARES / MOVIMIENTOS_ACCESORIOS).
+   * Era parte de lineas.html (fase 6.2, tools/lineas/partir.js): lo de la base sale de Lineas.comun.
+   */
+  (function () {
+    'use strict';
+    const { $, aviso, cargarAccesorios, esc, exportarBase, fechaTabla, formatoAppSheet, guion, ico, llamar,
+      mensajeError, miles, montaje, normal, pintarIconos, tablaLineas, tilesKpi } = Lineas.comun;
+
+    // ======================================================================
+    // Inventario de Accesorios (Líneas) — ACCESORIOS CELULARES / MOVIMIENTOS_ACCESORIOS
+    // en la copia de pruebas de Líneas; no toca el módulo de accesorios del equipo.
+    // ======================================================================
+
+    function initAccesoriosLineas() {
+      const n = ++montaje.n;
+      const raiz = document.getElementById('ln-accesorios');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      pintarIconos(raiz);
+
+      let indiceAcc = null;
+      let seleccionado = null;
+      let guardandoAccesorio = false;
+      let movimientoActual = 0;
+
+      let tabla = null;
+      let filtrosAcc = {};
+      let marcarKpi = null;
+
+      function pintarIndicadores() {
+        if (!indiceAcc) return;
+        const filas = indiceAcc.filas;
+        marcarKpi = tilesKpi($('#lac-indicadores', raiz), [
+          { icono: 'package', valor: miles(filas.length), etiqueta: 'Artículos', calcular: (f) => miles(f.length) },
+          { icono: 'triangle-alert', valor: miles(filas.filter((a) => a.reabasto).length), etiqueta: 'Por reabastecer',
+            titulo: 'Aviso del AppSheet: Cargadores ≤ 10, Micas ≤ 182, Fundas ≤ 182',
+            clase: 'stat-tile-warn', filtros: { reabasto: { valores: ['Sí'] } }, calcular: (f) => miles(f.filter((a) => a.reabasto).length) },
+          { icono: 'package-x', valor: miles(filas.filter((a) => (Number(a.stock) || 0) <= 0).length), etiqueta: 'Sin stock',
+            clase: 'stat-tile-warn', filtros: { stock: { op: '<=', v1: 0 } }, calcular: (f) => miles(f.filter((a) => (Number(a.stock) || 0) <= 0).length) },
+          { icono: 'circle-check', valor: miles(filas.reduce((t, a) => t + (Number(a.stock) || 0), 0)), etiqueta: 'Piezas en stock', clase: 'stat-tile-ok', filtros: false,
+            calcular: (f) => miles(f.reduce((t, a) => t + (Number(a.stock) || 0), 0)) },
+        ], () => tabla);
+        marcarKpi(filtrosAcc);
+      }
+
+      /** Panel de detalle de DataTable: movimientos del artículo, del más reciente al más antiguo. */
+      function movimientosEnPanel(a, cont) {
+        const turno = ++movimientoActual;
+        cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos</div><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>';
+        llamar('apiLineasAccesoriosMovimientos', a.id).then((movs) => {
+          if (!vigente() || turno !== movimientoActual || !document.body.contains(cont)) return;
+          cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos (' + movs.length + ')</div>' + (movs.length
+            ? '<div class="historial-timeline">' + movs.map((m) => '<div class="historial-item"><div class="historial-icon' + (m.tipo === 'ENTRADA' ? '' : ' historial-icon-accent') + '">' +
+                ico(m.tipo === 'ENTRADA' ? 'arrow-down-to-line' : 'arrow-up-from-line') + '</div><div style="flex:1; min-width:0">' +
+                '<div><strong>' + (m.tipo === 'ENTRADA' ? 'Entrada' : 'Salida') + ' de ' + esc(String(m.cantidad)) + '</strong> <span class="ln-tenue">· ' + esc(fechaTabla(m.fecha)) + '</span></div>' +
+                '<div class="ln-tenue">' + guion(m.usuario) + (m.comentarios ? ' — ' + esc(m.comentarios) : '') + '</div></div></div>').join('') + '</div>'
+            : '<p class="empty-state">Sin movimientos.</p>');
+        }).catch((e) => { if (vigente() && turno === movimientoActual) cont.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+      }
+
+      function crearTablaAcc() {
+        tabla = tablaLineas($('#lac-tabla', raiz), {
+          idCampo: 'id',
+          idTabla: 'lineas-accesorios-v2',
+          ordenInicial: { campo: 'categoria', dir: 'asc' },
+          textoVacio: 'Sin artículos',
+          exportar: exportarBase('ACCESORIOS', 'Inventario de accesorios'),
+          etiquetaFila: (a) => a.nombre,
+          detalle: { titulo: (a) => a.nombre, contenidoExtra: movimientosEnPanel },
+          alCambiarFiltros: (f) => { filtrosAcc = f || {}; if (marcarKpi) marcarKpi(filtrosAcc); },
+          // Solo con EDICION en el inventario (en AppSheet, la tabla la editaba una lista de correos)
+          accionesFila: puedeEditarModulo('accesorios-lineas') ? [
+            { icono: 'arrow-down-to-line', titulo: 'Registrar entrada', alHacer: (a) => abrirModalMovimiento(a.id, 'ENTRADA') },
+            { icono: 'arrow-up-from-line', titulo: 'Registrar salida', alHacer: (a) => abrirModalMovimiento(a.id, 'SALIDA') },
+          ] : [],
+          columnas: [
+            // Orden de la vista INVENTARIO DE ACCESORIOS del AppSheet (agrupada por Categoria)
+            { campo: 'reabasto', titulo: 'Aviso Reabastecimiento', tipo: 'lista', valor: (a) => (a.reabasto ? 'Sí' : 'No'),
+              render: (v) => (v === 'Sí' ? '<span class="ln-regla" style="color:var(--tono-rojo);font-weight:700">' + ico('triangle-alert') + ' REABASTECER PRODUCTO</span>' : '') },
+
+            { campo: 'categoria', titulo: 'Categoria', tipo: 'lista', render: (v) => formatoAppSheet('ACCESORIOS', 'Categoria', v) || esc(v) },
+            { campo: 'nombre', titulo: 'Nombre del Articulo', tipo: 'texto', fijada: false },
+            { campo: 'marca', titulo: 'Marca', tipo: 'texto' },
+            { campo: 'stock', titulo: 'Stock', tipo: 'numero', agregado: 'suma',
+              // Reglas ALERTA BAJO STOCK (rojo sobre amarillo, ícono) y Stock disponible (var(--tono-verde)), solo para las 3 categorías
+              render: (v, a) => (a.reabasto
+                ? '<span class="ln-regla ln-regla-chip" style="color:var(--tono-rojo);background:var(--tono-alerta-fondo);border:1px solid var(--tono-amarillo);font-weight:700">' + ico('rotate-cw') + ' ' + esc(String(v)) + '</span>'
+                : (['Cargadores', 'Micas', 'Fundas'].indexOf(a.categoria) >= 0 ? '<span class="ln-regla" style="color:var(--tono-verde);font-weight:700">' + esc(String(v)) + '</span>' : esc(String(v)))) },
+          ],
+        });
+      }
+
+      function cargar(forzar) {
+        if (!tabla) crearTablaAcc();
+        tabla.setCargando(true);
+        cargarAccesorios(!!forzar).then((r) => {
+          if (!vigente()) return;
+          indiceAcc = r;
+          pintarIndicadores();
+          tabla.setDatos(r.filas);
+        }).catch((e) => {
+          if (!vigente()) return;
+          tabla.setError('No se pudo cargar el inventario: ' + mensajeError(e));
+        });
+      }
+
+      // Nombre y Marca: listas con lo ya registrado (se puede escribir uno nuevo)
+      let combosArticulo = null;
+      function opcionesArticulo() {
+        const filas = (indiceAcc && indiceAcc.filas) || [];
+        const marcas = filas.map((a) => String(a.marca || '').trim()).filter((v, i, x) => v && x.indexOf(v) === i).sort();
+        return {
+          nombres: filas.map((a) => ({ valor: a.nombre, etiqueta: [a.categoria, a.marca, 'stock ' + a.stock].filter(Boolean).join(' · ') })),
+          marcas: marcas,
+        };
+      }
+      function abrirModalNuevo() {
+        const ops = opcionesArticulo();
+        if (!combosArticulo && typeof Combobox !== 'undefined') {
+          combosArticulo = {
+            nombre: Combobox.crear($('#lac-nombre', raiz), { opciones: ops.nombres, maximo: 50 }),
+            marca: Combobox.crear($('#lac-marca', raiz), { opciones: ops.marcas, maximo: 50 }),
+          };
+        } else if (combosArticulo) {
+          combosArticulo.nombre.setOpciones(ops.nombres);
+          combosArticulo.marca.setOpciones(ops.marcas);
+        }
+        $('#lac-nombre', raiz).value = ''; $('#lac-categoria', raiz).value = ''; $('#lac-marca', raiz).value = '';
+        $('#lac-nuevo-error', raiz).hidden = true;
+        $('#lac-modal-nuevo', raiz).hidden = false;
+      }
+      function cerrarModalNuevo() { if (!guardandoAccesorio) $('#lac-modal-nuevo', raiz).hidden = true; }
+
+      function abrirModalMovimiento(id, tipo) {
+        seleccionado = { id: id, tipo: tipo };
+        const a = (indiceAcc.filas || []).filter((x) => x.id === id)[0];
+        $('#lac-mov-titulo', raiz).textContent = (tipo === 'ENTRADA' ? 'Registrar entrada' : 'Registrar salida');
+        $('#lac-mov-subtitulo', raiz).textContent = (a ? a.nombre + ' · stock actual ' + a.stock : '');
+        $('#lac-cantidad', raiz).value = '';
+        $('#lac-comentarios', raiz).value = '';
+        $('#lac-mov-error', raiz).hidden = true;
+        $('#lac-modal-mov', raiz).hidden = false;
+      }
+      function cerrarModalMov() { if (guardandoAccesorio) return; $('#lac-modal-mov', raiz).hidden = true; seleccionado = null; }
+
+      function estadoAccesorio(modalId, ocupado) {
+        guardandoAccesorio = ocupado;
+        const modal = $(modalId, raiz);
+        modal.querySelectorAll('button, input, textarea').forEach((el) => { el.disabled = ocupado; });
+        const boton = modal.querySelector('.primary');
+        if (ocupado) { boton.dataset.texto = boton.innerHTML; boton.innerHTML = '<span class="ln-spinner"></span> Guardando…'; }
+        else boton.innerHTML = boton.dataset.texto;
+      }
+
+      $('#lac-nuevo', raiz).hidden = !puedeEditarModulo('accesorios-lineas');
+      $('#lac-nuevo', raiz).addEventListener('click', abrirModalNuevo);
+      raiz.querySelectorAll('[data-cerrar-modal-nuevo]').forEach((b) => b.addEventListener('click', cerrarModalNuevo));
+      raiz.querySelectorAll('[data-cerrar-modal-mov]').forEach((b) => b.addEventListener('click', cerrarModalMov));
+
+      $('#lac-guardar-nuevo', raiz).addEventListener('click', () => {
+        if (guardandoAccesorio) return;
+        const nombre = $('#lac-nombre', raiz).value.trim();
+        const categoria = $('#lac-categoria', raiz).value;
+        const faltan = [!categoria && 'Categoria', !nombre && 'Nombre del Articulo'].filter(Boolean);
+        if (faltan.length) { $('#lac-nuevo-error', raiz).textContent = faltan.join(', ') + (faltan.length > 1 ? ' son obligatorios.' : ' es obligatorio.'); $('#lac-nuevo-error', raiz).hidden = false; return; }
+        const repetido = ((indiceAcc && indiceAcc.filas) || []).some((a) => a.categoria === categoria && normal(a.nombre).trim() === normal(nombre));
+        if (repetido) { $('#lac-nuevo-error', raiz).textContent = 'Ese artículo ya existe en ' + categoria + ': registra una entrada con la flecha de su fila.'; $('#lac-nuevo-error', raiz).hidden = false; return; }
+        estadoAccesorio('#lac-modal-nuevo', true);
+        llamar('apiLineasAccesoriosAgregarArticulo', { nombre: nombre, categoria: $('#lac-categoria', raiz).value, marca: $('#lac-marca', raiz).value })
+          .then(() => { guardandoAccesorio = false; cerrarModalNuevo(); aviso('Artículo guardado correctamente.', 6000); cargar(true); })
+          .catch((e) => { $('#lac-nuevo-error', raiz).textContent = mensajeError(e); $('#lac-nuevo-error', raiz).hidden = false; })
+          .finally(() => estadoAccesorio('#lac-modal-nuevo', false));
+      });
+
+      $('#lac-guardar-mov', raiz).addEventListener('click', () => {
+        if (!seleccionado || guardandoAccesorio) return;
+        const cantidad = Number($('#lac-cantidad', raiz).value);
+        if (!Number.isInteger(cantidad) || cantidad <= 0) { $('#lac-mov-error', raiz).textContent = 'Captura una cantidad entera mayor que cero.'; $('#lac-mov-error', raiz).hidden = false; return; }
+        estadoAccesorio('#lac-modal-mov', true);
+        llamar('apiLineasAccesoriosRegistrarMovimiento', { accesorioId: seleccionado.id, tipo: seleccionado.tipo, cantidad: cantidad, comentarios: $('#lac-comentarios', raiz).value })
+          .then(() => { guardandoAccesorio = false; cerrarModalMov(); aviso('Movimiento registrado correctamente.', 6000); cargar(true); })
+          .catch((e) => { $('#lac-mov-error', raiz).textContent = mensajeError(e); $('#lac-mov-error', raiz).hidden = false; })
+          .finally(() => estadoAccesorio('#lac-modal-mov', false));
+      });
+
+      cargar();
+    }
+
+    Object.assign(Lineas, {
+      initAccesoriosLineas: initAccesoriosLineas,
+    });
+  })();
+</script>

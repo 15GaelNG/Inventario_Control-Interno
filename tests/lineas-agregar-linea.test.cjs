@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -61,7 +62,7 @@ test('solo se vinculan equipos en uso o en resguardo y sin línea', () => {
 });
 
 test('la pantalla hace las mismas cuentas y los campos con «_» no se escriben en la hoja', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const reg = read('src/services/lineas/LineasRegistros.gs');
   assert.match(html, /nombre === 'ESTATUS_LINEA_ALTA'/);
   assert.match(html, /nombre === 'RESPONSABLE_EQUIPO'/);

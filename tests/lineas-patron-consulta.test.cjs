@@ -5,9 +5,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
-const cliente = read('src/html/js/lineas.html');
+const cliente = LINEAS;
 const tramo = (desde, hasta) => {
   const i = cliente.indexOf(desde);
   const f = cliente.indexOf(hasta, i);
