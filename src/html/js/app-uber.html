@@ -1,0 +1,342 @@
+<script>
+  /**
+   * app-uber.html — Uber (usuarios autorizados): la pantalla (initUber) y su ayuda.
+   * Era parte de app.html (fase 6.1, tools/app/partir.js). Comparte el espacio global: usa los ayudantes de app.html,
+   * que carga antes (Index.html lo incluye justo después de app; los que vienen después ya lo ven).
+   */
+
+  // ---------- Uber (usuarios autorizados) ----------
+  async function initUber() {
+    Tabs.iniciar(document.getElementById('view-container'));
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('uber');
+    if (!puedeEditar) document.querySelector('#uber-tabs .tab-btn[data-tab="registrar"]').remove();
+    const modalEditar = document.getElementById('modal-editar-uber');
+    let usuariosPorId = {};
+    let todosLosUsuarios = [];
+
+    // Razón social / Sede / Oficina-Desarrollo / Departamento: catálogos reales (hoja "LISTAS
+    // VEHICULOS"), se llenan en cargarCatalogosUber; se puede escribir una opción nueva.
+    // SOLICITUD es archivo (se sube aparte, subirArchivoUber). FECHA DE ALTA no se edita:
+    // la fija el servidor solo al crear (siempre "hoy").
+    const CAMPOS_UBER = [
+      { clave: 'NOMBRE COMPLETO', etiqueta: 'Nombre completo', tipo: 'select', catalogo: true, requerido: true },
+      { clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select', catalogo: true },
+      { clave: 'ESTAUS USUARIO', etiqueta: 'Estatus', tipo: 'select', opciones: ['ACTIVO', 'BAJA', 'PENDIENTE'] },
+      { clave: 'ROL', etiqueta: 'Rol', tipo: 'select', opciones: ['ADMINISTRADOR', 'BENEFICIARIO', 'EMPLEADO'] },
+      { clave: 'FECHA DE ALTA', etiqueta: 'Fecha de alta', tipo: 'text', soloLectura: true },
+      { clave: 'CORREO ELECTRONICO', etiqueta: 'Correo electrónico', tipo: 'email' },
+      { clave: 'NUMERO TELEFONO', etiqueta: 'Teléfono', tipo: 'text' },
+      { clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+      { clave: 'OFICINA/DESARROLLO', etiqueta: 'Oficina / Desarrollo', tipo: 'select', catalogo: true },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+      { clave: 'PUESTO', etiqueta: 'Puesto', tipo: 'text' },
+      { clave: 'DIAS AUTORIZADOS', etiqueta: 'Días autorizados', tipo: 'text', placeholder: 'Ej. Lunes a viernes' },
+      { clave: 'HORARIO AUTORIZADO', etiqueta: 'Horario autorizado', tipo: 'text', placeholder: 'Ej. 07:00 - 19:00' },
+      { clave: 'SOLICITUD', etiqueta: 'Solicitud', tipo: 'file' },
+    ];
+    document.getElementById('campos-form-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'uber' });
+    document.getElementById('campos-form-editar-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'editar-uber', esEdicion: true });
+
+    document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
+
+    function badgeEstatusUber(estatus) {
+      const valor = String(estatus || '').toUpperCase();
+      if (valor.includes('BAJA')) {
+        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Baja</span>';
+      }
+      if (valor.includes('PENDIENTE')) {
+        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
+      }
+      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Activo</span>';
+    }
+
+    function etiquetaRol(rol) {
+      const mapa = { ADMINISTRADOR: 'tag-navy', BENEFICIARIO: 'tag-gold', EMPLEADO: 'tag-green' };
+      const clase = mapa[String(rol || '').toUpperCase()] || 'tag-slate';
+      return rol ? `<span class="tag ${clase}">${rol}</span>` : '—';
+    }
+
+    const llenarSelect = CamposHoja.llenarOpciones;
+    // En su propia función para correr en paralelo con cargar() más abajo.
+    /** Al elegir (o escribir exacto) un nombre de Capital Humano en "Nombre completo", sugiere
+     *  Departamento/Puesto/Sede/Oficina-Desarrollo/Correo -- no bloquea los campos, se pueden
+     *  corregir a mano. Si el nombre no coincide con nadie (alguien nuevo que CH no ha
+     *  cargado), no hace nada: se deja capturar todo a mano, como ya era antes. Mismo patrón
+     *  que wireResponsableVehiculo (arriba, para Vehículos).
+     *
+     *  Razón social y Teléfono NO se autollenan a propósito: razón social es del contrato
+     *  (puede variar entre línea/vehículo/caja chica de la misma persona), y el teléfono ni
+     *  siquiera llega a este sistema (CapitalHumano.gs lo excluye por privacidad). */
+    function wireColaboradorUber(prefijo, colaboradores) {
+      const porNombre = {};
+      colaboradores.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      const idNombre = prefijo + '-nombre-completo';
+      const input = document.getElementById(idNombre);
+      if (!input || input.dataset.wireado) return; // una sola vez por campo, aunque se recarguen catálogos
+      input.dataset.wireado = '1';
+      input.addEventListener('input', () => {
+        const colaborador = porNombre[input.value.trim().toUpperCase()];
+        const depto = document.getElementById(prefijo + '-departamento');
+        const puesto = document.getElementById(prefijo + '-puesto');
+        const sede = document.getElementById(prefijo + '-sede');
+        const oficina = document.getElementById(prefijo + '-oficina-desarrollo');
+        const correo = document.getElementById(prefijo + '-correo-electronico');
+        if (!colaborador) { [depto, puesto, sede, oficina, correo].forEach((el) => el && CampoAuto.quitar(el)); return; }
+        if (depto && colaborador.DEPARTAMENTO) CampoAuto.llenar(depto, colaborador.DEPARTAMENTO);
+        if (puesto && colaborador.PUESTO) CampoAuto.llenar(puesto, colaborador.PUESTO);
+        if (sede && colaborador.SEDE) CampoAuto.llenar(sede, colaborador.SEDE);
+        if (oficina && colaborador.OFICINA) CampoAuto.llenar(oficina, colaborador.OFICINA);
+        if (correo && colaborador.CORREO) CampoAuto.llenar(correo, colaborador.CORREO);
+      });
+    }
+
+    async function cargarCatalogosUber() {
+      try {
+        const [razones, sedes, oficinas, deptos, colaboradores] = await Promise.all([
+          callServerCacheado('apiListarRazonesSociales', state.token),
+          callServerCacheado('apiListarSedes', state.token),
+          callServerCacheado('apiListarOficinasDesarrollo', state.token),
+          callServerCacheado('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarColaboradores', state.token),
+        ]);
+        ['uber-razon-social', 'editar-uber-razon-social'].forEach((id) => llenarSelect(id, razones));
+        ['uber-sede', 'editar-uber-sede'].forEach((id) => llenarSelect(id, sedes));
+        ['uber-oficina-desarrollo', 'editar-uber-oficina-desarrollo'].forEach((id) => llenarSelect(id, oficinas));
+        ['uber-departamento', 'editar-uber-departamento'].forEach((id) => llenarSelect(id, deptos));
+        const nombresColaboradores = Array.from(new Set((colaboradores || []).map((c) => c.NOMBRE)));
+        ['uber-nombre-completo', 'editar-uber-nombre-completo'].forEach((id) => llenarSelect(id, nombresColaboradores));
+        wireColaboradorUber('uber', colaboradores || []);
+        wireColaboradorUber('editar-uber', colaboradores || []);
+      } catch (err) {
+        console.error('No se pudieron cargar los catálogos de Razón social/Sede/Oficina/Departamento/Colaboradores:', err);
+      }
+    }
+
+    async function subirArchivoUber(prefijo) {
+      const input = document.getElementById(prefijo + '-solicitud');
+      const file = input && input.files && input.files[0];
+      if (!file) return {};
+      const base64 = await leerArchivoBase64(file);
+      const subido = await callServer('apiSubirArchivoUber', state.token, file.name, file.type, base64);
+      // SOLICITUD_FILE_ID no es una columna real (UberService.crear/actualizar la quita antes
+      // de guardar) -- solo viaja para que el servidor pueda renombrar el archivo a
+      // "<ID>_SOLICITUD_<fecha>" una vez que sabe el ID real del usuario.
+      return { SOLICITUD: subido.url, SOLICITUD_FILE_ID: subido.id };
+    }
+
+    const tabla = DataTable.crear(document.getElementById('uber-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'uber',
+      textoVacio: 'Todavía no hay usuarios registrados',
+      exportar: {
+        nombreArchivo: 'Uber',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Uber', filas: JSON.parse(await callServer('apiUberCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiUberCompleto', state.token)) },
+      etiquetaFila: (u) => u.NOMBRE_COMPLETO,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      detalle: { titulo: (u) => u.NOMBRE_COMPLETO || '' },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (u) => tabla.abrirDetalle(String(u.ID)),
+      alTocarFila: (u) => tabla.abrirDetalle(String(u.ID)),
+      columnas: [
+        { campo: 'NOMBRE_COMPLETO', titulo: 'Nombre', tipo: 'texto', fijada: true },
+        { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
+        { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => etiquetaRol(v) },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'PUESTO', titulo: 'Puesto', tipo: 'texto' },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusUber(v) },
+        { campo: 'CORREO ELECTRONICO', titulo: 'Correo electrónico', tipo: 'texto', visible: false },
+        { campo: 'NUMERO TELEFONO', titulo: 'Teléfono', tipo: 'texto', visible: false },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false },
+        { campo: 'OFICINA/DESARROLLO', titulo: 'Oficina / Desarrollo', tipo: 'lista', visible: false },
+        { campo: 'DIAS AUTORIZADOS', titulo: 'Días autorizados', tipo: 'texto', visible: false },
+        { campo: 'HORARIO AUTORIZADO', titulo: 'Horario autorizado', tipo: 'texto', visible: false },
+        { campo: 'FECHA DE ALTA', titulo: 'Fecha de alta', tipo: 'fecha', visible: false },
+        {
+          campo: 'SOLICITUD', titulo: 'Solicitud', filtrable: false, ordenable: false,
+          render: (ruta) => (ruta ? `<a href="${escaparHtml(ruta)}" target="_blank" rel="noopener">📎 Ver archivo</a>` : '—'),
+        },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'pencil', titulo: 'Editar', alHacer: (u) => abrirEditarUber(u.ID),
+      }] : [],
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarUber', state.token, f.ID)));
+        invalidarCacheLista('apiListarUberResumen', state.token);
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    // ---- Filtro rápido por Estatus (FiltroTipo). Mismos colores que badgeEstatusUber.
+    const ORDEN_ESTATUS_UBER = ['ACTIVO', 'PENDIENTE', 'BAJA'];
+    const ESTILO_ESTATUS_UBER = {
+      'ACTIVO': { icono: 'circle-check', color: 'var(--color-success)' },
+      'PENDIENTE': { icono: 'clock', color: 'var(--color-primary)' },
+      'BAJA': { icono: 'ban', color: 'var(--color-danger)' },
+    };
+    let filtrosActualesUber = {};
+    const panelEstatusUber = FiltroTipo.crear(document.getElementById('uber-filtro-estatus'), {
+      titulo: 'Estatus', todos: 'Todos', campo: 'ESTATUS', orden: ORDEN_ESTATUS_UBER, estilos: ESTILO_ESTATUS_UBER,
+      alElegir: (valor) => tabla.setFiltro('ESTATUS', valor ? { valores: [valor] } : null),
+    });
+    function marcarEstatusUberFiltro() { panelEstatusUber.marcar(filtrosActualesUber.ESTATUS); }
+    function pintarEstatusUber(filas) { panelEstatusUber.pintar(filas); }
+
+    // KPI clickeables: los valores de ESTATUS son exactos (ACTIVO/PENDIENTE/BAJA,
+    // las mismas 3 opciones del <select> de Registrar), así que un filtro de
+    // lista exacta basta — no hace falta la prueba "contains" que traía la
+    // versión anterior por si acaso.
+    const KPI_FILTRO_UBER = { 'uber-stat-activos': 'ACTIVO', 'uber-stat-pendientes': 'PENDIENTE', 'uber-stat-baja': 'BAJA' };
+    const tileTotalUber = document.getElementById('uber-stat-total').closest('.stat-tile');
+    tileTotalUber.classList.add('stat-tile-clickable');
+    tileTotalUber.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_FILTRO_UBER).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: [KPI_FILTRO_UBER[id]] });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      filtrosActualesUber = filtros || {};
+      marcarEstatusUberFiltro();
+      const valores = filtros.ESTATUS && filtros.ESTATUS.valores;
+      tileTotalUber.classList.toggle('stat-tile-activo', !valores);
+      Object.keys(KPI_FILTRO_UBER).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(valores && valores.length === 1 && valores[0] === KPI_FILTRO_UBER[id])
+        );
+      });
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('uber-stat-total').textContent = filas.length;
+      document.getElementById('uber-stat-activos').textContent =
+        filas.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('ACTIVO')).length;
+      document.getElementById('uber-stat-pendientes').textContent =
+        filas.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('PENDIENTE')).length;
+      document.getElementById('uber-stat-baja').textContent =
+        filas.filter((u) => String(u.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        todosLosUsuarios = (await callServerListaCacheada('apiListarUberResumen', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el catálogo: ' + err.message);
+        return;
+      }
+
+      usuariosPorId = {};
+      todosLosUsuarios.forEach((u) => { usuariosPorId[u.ID] = u; });
+
+      actualizarKpis(todosLosUsuarios);
+      pintarEstatusUber(todosLosUsuarios);
+      tabla.setDatos(todosLosUsuarios);
+    }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarUberResumen', cargar, document.getElementById('view-container').firstElementChild);
+
+    async function abrirEditarUber(id) {
+      const resumen = usuariosPorId[id];
+      if (!resumen) return;
+      document.getElementById('editar-uber-id').value = id;
+      document.getElementById('editar-uber-nombre-label').textContent = resumen.NOMBRE_COMPLETO || '';
+      document.getElementById('editar-uber-error').hidden = true;
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarUberPorId', state.token, id);
+        if (completo) {
+          CamposHoja.poblar(CAMPOS_UBER, 'editar-uber', completo, {
+            mostrar: (campo, valor) => (campo.clave === 'FECHA DE ALTA' ? formatearFecha(valor) : undefined),
+          });
+        }
+      } catch (err) {
+        const errorBox = document.getElementById('editar-uber-error');
+        errorBox.textContent = 'No se pudo cargar el registro: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarUber() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-uber').reset();
+      document.getElementById('editar-uber-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-uber').addEventListener('click', cerrarEditarUber);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarUber(); });
+
+    document.getElementById('form-editar-uber').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-uber-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-uber');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        const archivo = await subirArchivoUber('editar-uber');
+        const datos = Object.assign(CamposHoja.recolectar(CAMPOS_UBER, 'editar-uber'), archivo);
+        await callServer('apiActualizarUber', state.token, document.getElementById('editar-uber-id').value, datos);
+        cerrarEditarUber();
+        invalidarCacheLista('apiListarUberResumen', state.token);
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('form-uber').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('uber-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-uber');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Registrando…');
+      try {
+        const archivo = await subirArchivoUber('uber');
+        const datos = Object.assign(CamposHoja.recolectar(CAMPOS_UBER, 'uber'), archivo);
+        await callServer('apiCrearUber', state.token, datos);
+        ev.target.reset();
+        document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
+        invalidarCacheLista('apiListarUberResumen', state.token);
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await Promise.all([cargarCatalogosUber(), cargar()]);
+  }
+
+  const AYUDA_UBER = [
+    { pregunta: '¿Qué es este catálogo?', respuesta: 'Quiénes están autorizados para usar Uber por viáticos de la empresa.' },
+    { pregunta: '¿Cómo doy de alta a alguien?', respuesta: 'Pestaña "Registrar" -- nombre, departamento y los datos que pida el formulario.' },
+    { pregunta: '¿Qué significa "Pendientes de activar"?', respuesta: 'Ya están dados de alta en el catálogo pero todavía no se confirma su activación real en Uber.' },
+    { pregunta: '¿Cómo doy de baja a alguien?', respuesta: 'Edita su registro y cambia el estatus -- queda en el historial, no se borra.' },
+  ];
+</script>
