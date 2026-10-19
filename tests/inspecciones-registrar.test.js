@@ -14,6 +14,7 @@ const guardados = [];      // lo que se guardó en el expediente del NUCO
 const buscadas = [];       // en qué carpeta raíz se buscó cada dibujo en blanco
 let actualizado = null;    // lo que se escribió después (la liga del PDF)
 let nuccoVehiculo = '25';
+const correos = [];        // lo que se mandó por MailApp.sendEmail
 const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
 
 const ESTRUCTURA = {
@@ -73,7 +74,10 @@ const contexto = vm.createContext({
     nombreArchivo: (partes) => partes.join(' '),
     fechaParaNombre: () => '2026-09-18',
   },
-  Plantilla: {}, DocumentApp: {}, Utilities: {},
+  Plantilla: {}, DocumentApp: {},
+  Session: { getScriptTimeZone: () => 'America/Mexico_City' },
+  Utilities: { formatDate: () => '12/10/2026 12:00' },
+  MailApp: { sendEmail: (opciones) => { correos.push(opciones); } },
 });
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') +
@@ -150,6 +154,31 @@ ok(guardados.length === 0 && subidas.length === 1 && subidas[0].carpetaId === 'i
 ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRONTAL']), 'con la ruta de AppSheet');
 ok(paraPdf.carpetaId === 'formatos' && paraPdf.subcarpeta === ESTRUCTURA.carpeta, 'y el PDF a REPORTES, como antes');
 ok(actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/' + ESTRUCTURA.carpeta + '/INSPECCION.pdf', 'con su ruta');
+
+console.log('6. Notificar por correo (paso "Revisar y firmar")');
+ok(resultado.correo && resultado.correo.enviado === false && resultado.correo.motivo === 'No se capturó ningún correo' && correos.length === 0,
+  'sin NOTIFICAR no se manda nada, y no truena el guardado');
+
+const conCorreo = contexto.InspeccionesService.registrar('token', {
+  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'MALO' }, llantas: {},
+  OBSERVACIONES: 'Se firmó en ausencia del responsable',
+  NOTIFICAR: { responsable: 'responsable@x.com', inspector: 'inspector@x.com', asistente: 'no-es-correo', otros: ['otro@x.com', 'responsable@x.com', ''] },
+  HALLAZGOS: [{ pieza: 'PARABRISAS', estado: 'MALO', seccion: 'Cristalería' }],
+}, { 'FIRMA INSPECTOR': { base64: 'FIRMA', mimeType: 'image/png' } });
+ok(conCorreo.correo.enviado === true && correos.length === 1, 'con un correo válido para el responsable, se manda');
+ok(correos[0].to === 'responsable@x.com', 'va "para" el responsable');
+ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
+  'en copia el inspector y los demás -- sin el asistente (correo inválido) ni repetir al responsable: ' + correos[0].cc);
+ok(/PARABRISAS/.test(correos[0].htmlBody) && /MALO/.test(correos[0].htmlBody), 'el cuerpo lleva el hallazgo');
+ok(correos[0].htmlBody.indexOf('Se firmó en ausencia del responsable') !== -1, 'y las observaciones');
+
+correos.length = 0;
+const sinResponsable = contexto.InspeccionesService.registrar('token', {
+  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
+  NOTIFICAR: { responsable: '', inspector: 'inspector@x.com', asistente: '', otros: [] },
+}, {});
+ok(sinResponsable.correo.enviado === true && correos[0].to === 'inspector@x.com' && !correos[0].cc,
+  'sin correo del responsable, se manda al primero que sí sea válido');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

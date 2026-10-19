@@ -8,6 +8,12 @@
   .chk-tabla th, .chk-tabla td { text-align: center; }
   .chk-tabla th:first-child, .chk-tabla td:first-child { text-align: left; }
   .chk-tabla td input[type="radio"] { width: auto; }
+
+  /* Renglones libres de "Notificar por correo" (paso Revisar y firmar): un input que
+     ocupa el ancho y un botón angosto para quitarlo, uno debajo del otro. */
+  .ins-correo-extra-fila { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .ins-correo-extra-fila input { flex: 1; }
+  .ins-correo-extra-fila button { flex-shrink: 0; padding: 6px 10px; }
 </style>
 <script>
   /**
@@ -511,7 +517,15 @@
       alResolver: (v) => { if (v) buscarVehiculo(); },
     });
 
+    const colaboradoresPorNombre = {};
     const catalogos = Promise.all([
+      callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
+        (colaboradores || []).forEach((c) => {
+          const clave = String(c.NOMBRE || '').trim().toUpperCase();
+          if (clave && c.CORREO) colaboradoresPorNombre[clave] = c.CORREO;
+        });
+      }).catch(() => {}),   // si falla, el campo del correo del responsable simplemente queda vacío
+
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         FolioNucco.indexar(vehiculos, vehiculoPorClave);
         Combobox.crear(campoNucco, { opciones: FolioNucco.opcionesLista(vehiculos) });
@@ -672,6 +686,7 @@
         conectarChecklist();
         prepararDiagramas();
         prepararFirmas();
+        prepararCorreos();
         // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
         // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
         // seguir editando; no viene con soloLectura porque puede no ser el conductor real),
@@ -796,7 +811,20 @@
             <label class="requerido">Firma del inspector</label>
             <div data-firma="FIRMA INSPECTOR"></div>
           </div>
-        </div>`;
+        </div>
+        <h4 class="ins-revision-titulo">Notificar por correo</h4>
+        <p class="form-paso-desc" style="margin-top:-8px">Al guardar se les avisa con el resumen de la
+          inspección y lo que salió mal. Déjalo vacío si no hay a quién avisar.</p>
+        <div class="form-campos" style="--form-columnas:2">
+          <div class="field"><label for="ins-correo-inspector">Tu correo (quien inspecciona)</label>
+            <input type="email" id="ins-correo-inspector" autocomplete="off" /></div>
+          <div class="field"><label for="ins-correo-responsable">Correo del responsable</label>
+            <input type="email" id="ins-correo-responsable" autocomplete="off" /></div>
+          <div class="field"><label for="ins-correo-asistente">Correo del asistente</label>
+            <input type="email" id="ins-correo-asistente" autocomplete="off" /></div>
+        </div>
+        <div id="ins-correos-extra"></div>
+        <button type="button" class="secondary" id="ins-correo-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar otro correo</button>`;
     }
 
     // Azul: el mismo con el que se marcaba en AppSheet (sigue siendo el color por default).
@@ -856,6 +884,30 @@
           alCambiar: () => errorGeneral(null),
         });
       });
+    }
+
+    /** Un renglón más de correo libre, para "los demás involucrados" */
+    function agregarCorreoExtra(valor) {
+      const cont = $('#ins-correos-extra');
+      if (!cont) return;
+      const fila = document.createElement('div');
+      fila.className = 'ins-correo-extra-fila';
+      fila.innerHTML = `<input type="email" class="ins-correo-extra" placeholder="correo@dominio.com" autocomplete="off" />
+        <button type="button" class="secondary" aria-label="Quitar este correo">${Iconos.svg('cancelar')}</button>`;
+      if (valor) fila.querySelector('input').value = valor;
+      fila.querySelector('button').addEventListener('click', () => fila.remove());
+      cont.appendChild(fila);
+    }
+
+    /** El correo de quien inspecciona se precarga solo (ya lo sabemos de la sesión), pero se
+        puede corregir; el del responsable se intenta en pintarRevision() (ahí ya hay vehículo). */
+    function prepararCorreos() {
+      const campoInspector = $('#ins-correo-inspector');
+      if (campoInspector && !campoInspector.value && state.sesion && state.sesion.correo) {
+        CampoAuto.llenar(campoInspector, state.sesion.correo);
+      }
+      const btnAgregar = $('#ins-correo-agregar');
+      if (btnAgregar) btnAgregar.addEventListener('click', () => agregarCorreoExtra());
     }
 
     const marcados = () => Object.keys(lienzos).filter((campo) => !lienzos[campo].vacio());
@@ -1086,6 +1138,11 @@
       const r = calcular();
       if (firmas['FIRMA RESPONSABLE']) firmas['FIRMA RESPONSABLE'].setNombre((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '');
       if (firmas['FIRMA INSPECTOR']) firmas['FIRMA INSPECTOR'].setNombre((state.sesion && state.sesion.nombre) || '');
+      const campoCorreoResponsable = $('#ins-correo-responsable');
+      if (campoCorreoResponsable && !campoCorreoResponsable.value) {
+        const nombre = String((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '').trim().toUpperCase();
+        if (colaboradoresPorNombre[nombre]) CampoAuto.llenar(campoCorreoResponsable, colaboradoresPorNombre[nombre]);
+      }
       const faltantes = estructura.secciones
         .map((s, i) => ({ s, i, a: r.porSeccion[i] }))
         .filter((x) => x.a.contestadas < x.a.total);
@@ -1183,6 +1240,14 @@
           if (firma) imagenes[campo] = firma;
         });
 
+        // Lo mismo que ya se le mostró en "Lo que salió mal" -- no se vuelve a calcular en
+        // el servidor, es solo texto para el correo
+        const hallazgos = [];
+        r.porSeccion.forEach((a, i) => a.problemas.forEach((p) =>
+          hallazgos.push({ pieza: p.pieza, estado: p.valor, seccion: estructura.secciones[i].titulo })));
+        const otrosCorreos = Array.from(cajaPasos.querySelectorAll('.ins-correo-extra'))
+          .map((el) => el.value.trim()).filter(Boolean);
+
         const res = await callServer('apiRegistrarInspeccion', state.token, {
           // El vehículo va por su ID; el folio solo se queda para el mensaje
           ID_VEHICULO: (vehiculoPorClave[campoFolio.value.trim()] || {}).ID || '',
@@ -1196,6 +1261,13 @@
           VOLTAJE: valorDe('ins-voltaje'),
           ULTIMO_SERVICIO: valorDe('ins-servicio'),
           OBSERVACIONES: valorDe('ins-observaciones'),
+          NOTIFICAR: {
+            responsable: valorDe('ins-correo-responsable'),
+            inspector: valorDe('ins-correo-inspector'),
+            asistente: valorDe('ins-correo-asistente'),
+            otros: otrosCorreos,
+          },
+          HALLAZGOS: hallazgos,
         }, imagenes);
 
         if (res.aviso) Notificar.error(res.aviso);
@@ -1204,6 +1276,9 @@
           accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
         });
         if (res.advertencia) Notificar.info(res.advertencia, { duracion: 12000 });
+        if (res.correo && !res.correo.enviado && res.correo.motivo !== 'No se capturó ningún correo') {
+          Notificar.info('No se pudo avisar por correo: ' + res.correo.motivo, { duracion: 10000 });
+        }
         invalidarCacheLista('apiListarInspecciones', state.token);
         if (opciones.alGuardado) {
           // La ficha de Vehículos: ella decide qué hacer (cerrar su modal y refrescar

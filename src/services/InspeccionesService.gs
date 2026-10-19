@@ -481,6 +481,7 @@ const InspeccionesService = (function () {
         puntaje: puntaje.final,
         pdf: null,
         aviso: 'La inspección se guardó, pero no se pudo generar el PDF: ' + err.message,
+        correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, null),
       };
     }
 
@@ -490,7 +491,74 @@ const InspeccionesService = (function () {
         ? 'El PDF salió sin estos dibujos porque no están en Drive: ' + sinDibujo.join(', ') +
           '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
         : '',
+      correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, pdf.url),
     };
+  }
+
+  // ---------- aviso por correo ----------
+  /** Suficiente para no mandar correos basura; no hace falta validar contra el RFC completo */
+  function correoValido_(correo) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpiar_(correo));
+  }
+
+  function escaparHtml_(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /**
+   * El aviso que arma el inspector en el paso "Revisar y firmar": nunca bloquea el guardado
+   * de la inspección, un fallo aquí solo queda en lo que regresa `registrar` (igual que el
+   * aviso de diagramas faltantes). Los correos no se guardan en la hoja: son solo para
+   * mandar este aviso, no quedan como dato de la inspección.
+   * @param {Object} notificar  { responsable, inspector, asistente, otros: [] } -- puede venir undefined
+   * @param {Object} fila       la fila ya armada de la inspección (vehículo, puntaje, observaciones…)
+   * @param {Array} hallazgos   [{pieza, estado, seccion}], lo mismo que ya vio el inspector en "Revisar"
+   * @param {string|null} pdfUrl
+   */
+  function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl) {
+    if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
+    const para = correoValido_(notificar.responsable) ? limpiar_(notificar.responsable) : '';
+    const candidatosCc = [notificar.inspector, notificar.asistente].concat(notificar.otros || [])
+      .map(limpiar_)
+      .filter((c) => c && correoValido_(c) && c.toLowerCase() !== para.toLowerCase());
+    const cc = Array.from(new Set(candidatosCc));
+    let destinatario = para;
+    let copia = cc;
+    if (!destinatario) {
+      if (!cc.length) return { enviado: false, motivo: 'No se capturó ningún correo válido' };
+      destinatario = cc[0];
+      copia = cc.slice(1);
+    }
+
+    const dato = (etiqueta, valor) => (valor
+      ? '<tr><td style="padding:3px 14px 3px 0;color:#666">' + etiqueta + '</td><td><b>' + escaparHtml_(valor) + '</b></td></tr>'
+      : '');
+    const listaHallazgos = (hallazgos || []).length
+      ? '<ul style="margin:4px 0 0;padding-left:18px">' + hallazgos.map((h) =>
+          '<li>' + escaparHtml_(h.pieza) + (h.seccion ? ' <span style="color:#888">(' + escaparHtml_(h.seccion) + ')</span>' : '') +
+          ': <b>' + escaparHtml_(h.estado) + '</b></li>').join('') + '</ul>'
+      : '<p style="margin:4px 0 0">Ninguno: todo lo revisado salió bien.</p>';
+
+    const asunto = 'Inspección vehicular -- ' + [fila['VEHICULO'], fila['PLACAS'], fila['FOLIO']].filter(Boolean).join(' · ');
+    const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
+      '<h2 style="margin:0 0 12px;font-size:18px">Inspección vehicular</h2>' +
+      '<table style="border-collapse:collapse">' +
+        dato('Vehículo', fila['VEHICULO']) + dato('Placas', fila['PLACAS']) + dato('Folio', fila['FOLIO']) +
+        dato('Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')) +
+        dato('Inspector', fila['NOMBRE INSPECTOR']) + dato('Puntaje final', fila['PUNTAJE FINAL INSPECCION']) +
+      '</table>' +
+      (fila['OBSERVACIONES'] ? '<p><b>Observaciones:</b> ' + escaparHtml_(fila['OBSERVACIONES']) + '</p>' : '') +
+      '<h3 style="font-size:15px;margin:16px 0 0">Piezas con hallazgo (REGULAR o MALO)</h3>' + listaHallazgos +
+      (pdfUrl ? '<p style="margin-top:16px"><a href="' + pdfUrl + '">Ver el formato en PDF</a></p>' : '') +
+      '</div>';
+
+    try {
+      MailApp.sendEmail({ to: destinatario, cc: copia.join(','), subject: asunto, htmlBody: cuerpo });
+      return { enviado: true, para: destinatario, cc: copia };
+    } catch (err) {
+      return { enviado: false, motivo: 'No se pudo mandar el correo: ' + err.message };
+    }
   }
 
   /**
