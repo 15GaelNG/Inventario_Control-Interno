@@ -17,10 +17,11 @@ negra de tools/migracion/conexion.py y se quita a propósito, en su propio commi
 
 Reglas (las mismas que el servicio, AccesoriosVehiculoService.gs):
   - La unidad es la del NUCO de la carpeta donde está la responsiva; el No. de serie del papel solo confirma (clave serie
-    o NUCO, nunca FOLIO). Serie distinta → no se carga.
+    o NUCO, nunca FOLIO). Serie distinta → no se carga; a un carácter (letra a mano) sí, marcada en el plan.
   - SI y NO son dato; (vacío), N/A y en blanco no generan movimiento (sin dato).
-  - No se carga: formatos sin casillas, "no es responsiva", notas de Jorge sobre las marcas (rayada, fuera de la casilla,
-    guiones), una responsiva que ya no es la vigente (está en RESPONSIVAS ANTERIORES: hay una más nueva) y una unidad que
+  - Las dudas de Jorge sobre las marcas (rayada, fuera de la casilla, guiones) se cargan con lo que él leyó, marcadas en el
+    plan (usuario, 19-oct: lo capturó a mano viendo cada papel).
+  - No se carga: formatos sin casillas, "no es responsiva", una responsiva que ya no es la vigente (está en RESPONSIVAS ANTERIORES: hay una más nueva) y una unidad que
     ya tiene movimientos (así el plan se puede repetir).
   - FECHA: la del texto del PDF (Accesorios leidos.xlsx); si no, cuándo se subió el PDF a Drive (createdTime, si es de antes de la
     homologación de NUCOS del 8-oct-2026); si tampoco, la de la carga, marcada en el plan. ORIGEN: la liga al PDF.
@@ -51,7 +52,7 @@ HOJA_VEH, HOJA_CAT, HOJA_MOV = "VEHICULOS", "CATALOGO ACCESORIOS VEHICULOS", "MO
 COLUMNAS_MOV = ["ID", "FECHA", "ID VEHICULO", "NUCCO", "ACCESORIO", "MOVIMIENTO", "TIENE", "MOTIVO", "ORIGEN", "EVIDENCIA", "REGISTRO"]
 FORMATOS = ("Completo (13 casillas)", "Corto (5 casillas)")
 DUDA_MARCAS = re.compile(r"MARCA|RAYAD|GUION|CASILLA (SI|NO)", re.I)
-REGISTRO = "Carga inicial (responsivas leídas por Jorge)"
+REGISTRO = "Carga inicial (última responsiva)"   # sin nombres de personas en la hoja (usuario, 19-oct)
 CARPETA = "application/vnd.google-apps.folder"
 HOMOLOGACION = datetime(2026, 10, 8, tzinfo=timezone.utc)
 
@@ -108,6 +109,16 @@ def serie_cuadra(papel, hoja):
         return True
     cola_a, cola_b = a[-8:], b[-8:]
     return len(cola_a) == 8 and len(cola_b) == 8 and all(x == "?" or x == y for x, y in zip(cola_a, cola_b))
+
+
+def un_caracter(papel, hoja):
+    """¿Difieren en un solo carácter (uno cambiado, de más o de menos)? La letra a mano (U/V, Q/R, un 0 que falta):
+    la misma unidad (usuario, 19-oct: se confía en lo que Jorge leyó)."""
+    a, b = re.sub(r"[^A-Z0-9]", "", normal(papel)), re.sub(r"[^A-Z0-9]", "", normal(hoja))
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b)) == 1
+    corto, largo = sorted((a, b), key=len)
+    return len(largo) - len(corto) == 1 and any(largo[:i] + largo[i + 1:] == corto for i in range(len(largo)))
 
 
 def leer_excel(ruta):
@@ -216,9 +227,9 @@ def plan(libro, ruta_excel):
         if not con_dato:
             no("ninguna casilla marcada")
             continue
-        if DUDA_MARCAS.search(str(base["nota"])):
-            no("Jorge anotó duda en las marcas")
-            continue
+        # Las dudas que Jorge anotó sobre las marcas se cargan con lo que él leyó (usuario, 19-oct: lo capturó a mano
+        # viendo cada papel); quedan marcadas en revisar.xlsx
+        duda = bool(DUDA_MARCAS.search(str(base["nota"])))
         unidades = por_nuco.get(nuco, [])
         if not unidades:
             no("el NUCO no está en VEHICULOS")
@@ -231,6 +242,8 @@ def plan(libro, ruta_excel):
             unidades = cuadran
         u = unidades[0]
         cuadra = serie_cuadra(f.get("No. de serie"), u.get(col_serie)) if col_serie else None
+        if cuadra is False and un_caracter(f.get("No. de serie"), u.get(col_serie)):
+            cuadra = "un carácter"
         if cuadra is False:
             no("la serie del papel no es la de la unidad", serie_papel=str(f.get("No. de serie")), serie_hoja=u.get(col_serie, ""))
             continue
@@ -253,7 +266,9 @@ def plan(libro, ruta_excel):
             fecha, de_donde = datetime.now(timezone.utc), "SIN FECHA (la de la carga)"
         origen = ("https://drive.google.com/file/d/%s/view" % pdf["id"]) if pdf else archivo
         cargar.append(dict(base, id_vehiculo=id_veh, nucco=u.get("NUCCO", ""), folio=u.get("FOLIO", ""),
-                           serie=("confirmada" if cuadra else "el papel no la trae"), fecha=fecha.strftime("%Y-%m-%d"),
+                           serie=("difiere en un carácter (letra a mano)" if cuadra == "un carácter" else
+                                  "confirmada" if cuadra else "el papel no la trae") + (" · duda de Jorge en las marcas" if duda else ""),
+                           fecha=fecha.strftime("%Y-%m-%d"),
                            fecha_de=de_donde, origen=origen, pdf_en_drive=bool(pdf), valores=con_dato))
 
     movs = [(c, clave, tiene) for c in cargar for clave, tiene in sorted(c["valores"].items(), key=lambda x: list(piezas.values()).index(x[0]))]
