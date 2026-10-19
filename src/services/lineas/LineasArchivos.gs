@@ -6,12 +6,19 @@
  *   LINEAS_DRIVE_APPSHEET   carpeta de la app AppSheet (en DEV: "PruebasCONTROLVEHICYTELEF-172665033", la de la hoja
  *                           VEHICULOS). Ahí están "<TABLA>_Files_", "<TABLA>_Images", "INSPECCIONES_Files_" y "Files".
  *                           Se lee y se ESCRIBE aquí, con las mismas rutas que usa el AppSheet.
- *   LINEAS_DRIVE_NUCOS      carpeta NUCOS de producción (una carpeta por NUCO). La ficha la muestra en "Documentos"
+ *   LINEAS_DRIVE_NUCOS      carpeta NUCOS de producción (una carpeta por NUCO; solo en el bloque de producción de
+ *                           Entornos.gs: un DEV sin la clave usa una "NUCOS TELEFONICOS" de pruebas en su raíz y nunca
+ *                           escribe en la real; revisarEntorno avisa si un DEV apunta a ella). La ficha la muestra en "Documentos"
  *                           y, desde el corte a producción (2-oct-2026), las inspecciones y responsivas nuevas
  *                           guardan ahí su PDF y sus fotos, con la misma estructura que llena el área a mano:
  *                             <NUCO>/INSPECCIONES/<AÑO>/<N> CUATRIMESTRE/<MES>/INSP DD MM/  (+ FOTOS)
  *                             <NUCO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM/
  *                           Un registro sin NUCO sigue en la carpeta de la app.
+ *   LINEAS_DRIVE_LINEAS     carpeta LINEAS, junto a NUCOS (pendiente 2.45, 15-oct): la responsiva de una línea sin
+ *                           equipo va a la carpeta de su línea, no a NUCOS (que es de los equipos):
+ *                             <NÚMERO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM/
+ *                           En producción se configura (la crea el área junto a NUCOS, con sus permisos); en un DEV sin
+ *                           la clave es una carpeta «LINEAS» dentro de la de pruebas.
  *
  * Una columna File/Image/Signature del AppSheet guarda "BITACORA DE DESECHO_Files_/xxxx.EVIDENCIA.123.jpg":
  * se resuelve caminando desde la carpeta de la app (nunca sale de ella).
@@ -19,7 +26,9 @@
 
 const LineasArchivos = (function () {
   const APPSHEET_POR_OMISION = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
-  const NUCOS_POR_OMISION = '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-';
+  // Sin LINEAS_DRIVE_NUCOS (un DEV): una "NUCOS TELEFONICOS" de pruebas en la raíz de ESE proyecto, como ExpedienteNuco.
+  // Antes caía al ID de NUCOS de producción y un DEV sin la clave escribía ahí sus inspecciones y responsivas (15-oct).
+  const NUCOS_PRUEBAS = 'NUCOS TELEFONICOS';
   const ZONA = 'America/Mexico_City';
   const SEG_CACHE = 21600;
   // Archivos con secretos (patrón, contraseña) y firmas: solo quien puede ver secretos
@@ -29,7 +38,7 @@ const LineasArchivos = (function () {
 
   const prop_ = (clave) => leerConfig_(clave);   // config/Entornos.gs o Script Properties
   function carpetaAppSheetId() { return prop_('LINEAS_DRIVE_APPSHEET') || APPSHEET_POR_OMISION; }
-  function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || NUCOS_POR_OMISION; }
+  function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || DriveUtils.carpetaEnRaiz(NUCOS_PRUEBAS).getId(); }
   /**
    * Dónde se buscan los archivos del AppSheet: la carpeta de la app y, si está configurada, otra solo para leer
    * (el DEV escribe en una carpeta de pruebas, pero su libro es copia de producción y sus rutas son de la app real).
@@ -50,10 +59,7 @@ const LineasArchivos = (function () {
   }
 
   /** Subcarpeta por nombre (la crea si no existe). */
-  function subcarpeta_(padre, nombre) {
-    const it = padre.getFoldersByName(nombre);
-    return it.hasNext() ? it.next() : padre.createFolder(nombre);
-  }
+  const subcarpeta_ = (padre, nombre) => DriveUtils.subcarpeta(padre, nombre);
 
   /** Carpeta de la app "<ruta>" ("INSPECCIONES_Files_", "Files", …); la crea si no existe. */
   function carpetaDeApp(ruta) {
@@ -154,10 +160,24 @@ const LineasArchivos = (function () {
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     const nombre = String(llave).replace(/[\\/]/g, '_') + '.' + columna + '.' + Utilities.formatDate(new Date(), ZONA, 'HHmmss') + '.' + EXTENSION[mime];
     const archivo = DriveUtils.marcarAutor(carpetaDeApp(carpeta).createFile(Utilities.newBlob(bytes, mime, nombre)));
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-    archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    compartirEnDominio(archivo);
     return carpeta + '/' + nombre;
+  }
+
+  /**
+   * Abre al dominio (solo ver) un archivo que la app crea fuera de NUCOS y LINEAS: sin esto, si su carpeta no lo comparte,
+   * solo lo ve la cuenta que despliega la app. Si Drive no deja cambiar cómo se comparte («Acceso denegado: DriveApp»,
+   * 16-oct: la responsiva de la línea 4461456715 en `Files`, con la cuenta de producción), el archivo ya se guardó y se
+   * queda con los permisos de su carpeta: no es error. Regresa si lo compartió.
+   */
+  function compartirEnDominio(archivo) {
+    try {
+      archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+      return true;
+    } catch (e) {
+      console.warn('No se pudo compartir con el dominio el archivo ' + archivo.getId() + ': ' + e.message);
+      return false;
+    }
   }
 
   // ---------------- NUCOS (producción): lectura ----------------
@@ -327,16 +347,149 @@ const LineasArchivos = (function () {
     };
   }
 
+  // ---------------- Escritura en LINEAS: la carpeta de cada línea sin equipo (pendiente 2.45, 15-oct) ----------------
+
+  /**
+   * Carpeta LINEAS: la de Entornos.gs. Sin ella, en producción no hay dónde guardar (truena: la crea el área junto a
+   * NUCOS y su ID va en LINEAS_DRIVE_LINEAS); en un DEV, «LINEAS» dentro de la carpeta de pruebas.
+   */
+  function carpetaLineasId() {
+    const id = prop_('LINEAS_DRIVE_LINEAS');
+    if (id) return id;
+    if (Config.ENTORNO === 'PROD') throw new Error('Falta la carpeta LINEAS en Drive (LINEAS_DRIVE_LINEAS en Entornos.gs).');
+    return subcarpeta_(DriveApp.getFolderById(carpetaNucosId()), 'LINEAS').getId();
+  }
+
+  /**
+   * ID de la línea → { id, nombre } de su carpeta dentro de LINEAS. La carpeta se reconoce por la propiedad `idLinea` de
+   * Drive, no por su nombre: el número cambia (Editar, Cambiar línea, la carga del proveedor) y la compañía lo recicla
+   * para otra línea. Caché 6 h.
+   */
+  function carpetasLineas() {
+    const enCache = LineasDatos.cacheLeer('carpetas_lineas_v1');
+    if (enCache) return enCache;
+    const mapa = {};
+    let pagina = null;
+    do {
+      const r = listarDrive({
+        q: "'" + carpetaLineasId() + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
+        pageSize: 1000, fields: 'nextPageToken,files(id,name,properties)', pageToken: pagina || undefined,
+      });
+      (r.files || []).forEach((f) => {
+        const idLinea = f.properties && f.properties.idLinea;
+        if (idLinea) mapa[idLinea] = { id: f.id, nombre: f.name };
+      });
+      pagina = r.nextPageToken || null;
+    } while (pagina);
+    LineasDatos.cacheGuardar('carpetas_lineas_v1', mapa, SEG_CACHE);
+    return mapa;
+  }
+
+  /** «4421234567» o, si ya hay otra carpeta con ese nombre (un número reciclado), «4421234567 (2)». */
+  function nombreLibre_(padre, nombre, propiaId) {
+    const ocupado = (n) => {
+      const it = padre.getFoldersByName(n);
+      while (it.hasNext()) { if (it.next().getId() !== propiaId) return true; }
+      return false;
+    };
+    let candidato = nombre;
+    for (let n = 2; ocupado(candidato); n++) candidato = nombre + ' (' + n + ')';
+    return candidato;
+  }
+
+  /**
+   * Carpeta de la línea en LINEAS, con el número de hoy como nombre. Se crea con su primera responsiva (no todas de
+   * golpe; usuario, 15-oct) y, si el número cambió desde entonces, se renombra al usarla.
+   */
+  function carpetaDeLinea_(lineaId, numero) {
+    const nombre = LineasUtil.digitos(numero);
+    if (!lineaId) throw new Error('Falta la línea.');
+    if (!nombre) throw new Error('La línea no tiene número: captúralo con Corregir.');
+    let carpeta = null;
+    const abrir = (x) => {
+      try { const c = x ? DriveApp.getFolderById(x.id) : null; return c && !c.isTrashed() ? c : null; } catch (e) { return null; }
+    };
+    carpeta = abrir(carpetasLineas()[lineaId]);
+    if (!carpeta) {
+      LineasDatos.cacheBorrar('carpetas_lineas_v1');
+      carpeta = abrir(carpetasLineas()[lineaId]);
+    }
+    const raiz = DriveApp.getFolderById(carpetaLineasId());
+    if (!carpeta) {
+      const nueva = Drive.Files.create({ name: nombreLibre_(raiz, nombre, null), mimeType: 'application/vnd.google-apps.folder',
+        parents: [raiz.getId()], properties: { idLinea: String(lineaId) } }, null, { supportsAllDrives: true, fields: 'id' });
+      LineasDatos.cacheBorrar('carpetas_lineas_v1');
+      return DriveApp.getFolderById(nueva.id);
+    }
+    if (carpeta.getName().replace(/ \(\d+\)$/, '') !== nombre) {
+      carpeta.setName(nombreLibre_(raiz, nombre, carpeta.getId()));
+      LineasDatos.cacheBorrar('carpetas_lineas_v1');
+    }
+    return carpeta;
+  }
+
+  /** Id de la carpeta de la línea, si ya tiene (la ficha: «Ver carpeta en Drive»), o null. Sin LINEAS, null. */
+  function carpetaLineaId(lineaId) {
+    try {
+      const x = lineaId ? carpetasLineas()[lineaId] : null;
+      return x ? x.id : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
+   * Carpeta nueva de una responsiva de la línea sin equipo, del día `fecha`:
+   *   LINEAS/<NÚMERO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM   (el PDF «RESP <NÚMERO> DD MM.pdf» y las identificaciones)
+   * Regresa { carpetaId, ruta, nombrePdf }, como carpetaEvidenciaNuco.
+   */
+  function carpetaEvidenciaLinea(lineaId, numero, fecha) {
+    const f = fecha instanceof Date && !isNaN(fecha) ? fecha : new Date();
+    const anio = Utilities.formatDate(f, ZONA, 'yyyy');
+    const ddmm = Utilities.formatDate(f, ZONA, 'dd MM');
+    const raizLinea = carpetaDeLinea_(lineaId, numero);
+    const ramas = ['CARTA RESPONSIVA', anio];
+    const carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizLinea), 'RESP ' + ddmm);
+    return {
+      carpetaId: carpeta.getId(),
+      ruta: ['LINEAS', raizLinea.getName()].concat(ramas, [carpeta.getName()]).join('/'),
+      nombrePdf: 'RESP ' + LineasUtil.digitos(numero) + ' ' + ddmm + '.pdf',
+    };
+  }
+
+  /** ¿La carpeta está dentro de LINEAS? Sin LINEAS configurada, no. */
+  function enLineas(carpetaId) {
+    if (!carpetaId) return false;
+    let raiz;
+    try { raiz = carpetaLineasId(); } catch (e) { return false; }
+    return estaDentroDe(carpetaId, raiz);
+  }
+
   /**
    * Manda a la papelera la carpeta de una captura cancelada y las carpetas de año / cuatrimestre / mes que quedaron
-   * vacías por ella (nunca la del NUCO, ni INSPECCIONES / CARTA RESPONSIVA).
+   * vacías por ella (nunca la del NUCO, ni INSPECCIONES / CARTA RESPONSIVA). En LINEAS, también la de la línea si quedó
+   * vacía (su primera responsiva no se guardó).
    */
   function descartarCarpeta(carpetaId) {
     const c = DriveApp.getFolderById(carpetaId);
-    const dentroDeNucos = estaDentroDe(carpetaId, carpetaNucosId());
+    const dentroDeLineas = enLineas(carpetaId);
+    const dentroDeNucos = !dentroDeLineas && estaDentroDe(carpetaId, carpetaNucosId());
     const padres = c.getParents();
     let padre = padres.hasNext() ? padres.next() : null;
     c.setTrashed(true);
+    if (dentroDeLineas) {
+      // RESP DD MM → <AÑO> → CARTA RESPONSIVA → <NÚMERO>; nunca LINEAS
+      const raiz = carpetaLineasId();
+      for (let n = 0; padre && n < 3 && padre.getId() !== raiz; n++) {
+        if (padre.searchFiles('trashed = false').hasNext() || padre.searchFolders('trashed = false').hasNext()) break;
+        const arriba = padre.getParents();
+        const siguiente = arriba.hasNext() ? arriba.next() : null;
+        padre.setTrashed(true);
+        padre = siguiente;
+      }
+      LineasDatos.cacheBorrar('carpetas_lineas_v1');
+      return;
+    }
     if (!dentroDeNucos) return;
     for (let n = 0; padre && n < 3; n++) {
       const nombre = padre.getName().trim();
@@ -372,10 +525,10 @@ const LineasArchivos = (function () {
     return !!carpetaId && estaDentroDe(carpetaId, carpetaNucosId());
   }
 
-  /** Error si la carpeta no es de la app AppSheet ni de NUCOS. */
+  /** Error si la carpeta no es de la app AppSheet, de NUCOS ni de LINEAS. */
   function exigirEscribible(carpetaId) {
-    if (!carpetaId || !(estaDentroDe(carpetaId, carpetaAppSheetId()) || enNucos(carpetaId))) {
-      throw new Error('Los archivos solo se pueden guardar en la carpeta de la app o en NUCOS.');
+    if (!carpetaId || !(estaDentroDe(carpetaId, carpetaAppSheetId()) || enNucos(carpetaId) || enLineas(carpetaId))) {
+      throw new Error('Los archivos solo se pueden guardar en la carpeta de la app, en NUCOS o en LINEAS.');
     }
   }
 
@@ -453,8 +606,8 @@ const LineasArchivos = (function () {
   }
 
   return {
-    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet,
+    carpetaAppSheetId, carpetaNucosId, carpetaDeApp, idDeUrl, rutaAppSheet, resolver, imagen, blob, guardarComoAppSheet, compartirEnDominio,
     carpetasNucos, archivosNuco, estaDentroDe, exigirEscribible, enNucos, carpetaEvidenciaNuco, descartarCarpeta, olvidarNuco,
-    reemplazarPdf, pdfsFueraDeCarpeta, listarDrive,
+    reemplazarPdf, pdfsFueraDeCarpeta, listarDrive, carpetaLineasId, carpetasLineas, carpetaLineaId, carpetaEvidenciaLinea, enLineas,
   };
 })();

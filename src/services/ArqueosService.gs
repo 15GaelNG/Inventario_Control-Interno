@@ -540,9 +540,7 @@ const ArqueosService = (function () {
    *  aunque se acabara de generar (usuario, 15-oct-2026). */
   function generarLigaArqueo(token, id, quien, forzar) {
     Permisos.puedeEditar(token, 'arqueos');
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
       if (!encontrado) throw new Error('No se encontró el arqueo.');
       const fila = encontrado.data;
@@ -579,9 +577,7 @@ const ArqueosService = (function () {
       cambios[col.firmadoPor] = '';
       SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
       return construirLigaArqueo_(tokenNuevo, quien);
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /** El renglón completo por el token vigente de la columna dada; null si no hay match. */
@@ -640,9 +636,7 @@ const ArqueosService = (function () {
    *  avisa en vez de perderla (mismo criterio que el resto de la app). */
   function completarFirmaArqueo(tokenFirma, quien, firma) {
     if (!firma || !firma.base64) throw new Error('Falta la firma.');
-    const lock = LockService.getScriptLock();
-    lock.waitLock(30000);
-    try {
+    return Candado.con(() => {
       const col = columnasFirmaArqueo_(quien);
       const fila = buscarPorTokenArqueo_(tokenFirma, col.token);
       if (!fila) throw new Error('Esta liga no es válida.');
@@ -690,9 +684,7 @@ const ArqueosService = (function () {
         SheetUtils.update(ssId(), hoja_().getName(), fila['ID ARQUEO'], cambios, ID_COLUMN);
         return { PDF: null, aviso: 'Tu firma quedó registrada, pero no se pudo generar el documento final: ' + err.message };
       }
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   // ---------- Generación automática del PDF (plantilla F-CI03-009) ----------

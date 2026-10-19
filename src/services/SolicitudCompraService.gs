@@ -60,8 +60,7 @@ const SolicitudCompraService = (function () {
   function carpetaDelMes_(carpetaAnio) {
     const mes = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M'));
     const nombreMes = String(mes).padStart(2, '0') + '. ' + MESES_ES_[mes - 1];
-    const existentes = carpetaAnio.getFoldersByName(nombreMes);
-    return existentes.hasNext() ? existentes.next() : carpetaAnio.createFolder(nombreMes);
+    return DriveUtils.subcarpeta(carpetaAnio, nombreMes);
   }
 
   /** La subcarpeta "<folio>-<nombre>" dentro de raíz/AÑO/MES de Adquisición Vehicular (misma
@@ -73,8 +72,7 @@ const SolicitudCompraService = (function () {
     try {
       const raiz = DriveApp.getFolderById(AdquisicionVehicularService.RAIZ_ADQUISICION_VEHICULAR);
       const mesCarpeta = carpetaDelMes_(DriveUtils.carpetaDelAnio(raiz));
-      const existentes = mesCarpeta.getFoldersByName(nombreCarpeta);
-      return existentes.hasNext() ? existentes.next() : mesCarpeta.createFolder(nombreCarpeta);
+      return DriveUtils.subcarpeta(mesCarpeta, nombreCarpeta);
     } catch (e) {
       // "Acceso denegado" casi siempre = la cuenta puede VER la carpeta de Adquisición Vehicular
       // pero no EDITARLA (falta carpeta de año o de mes, o la de la solicitud -- cualquiera).

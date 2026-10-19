@@ -122,6 +122,7 @@ function crearContexto(filas) {
     },
   });
   vm.runInContext(
+    fs.readFileSync(path.join(__dirname, '../src/utils/Candado.gs'), 'utf8') + '\n' +
     fs.readFileSync(path.join(__dirname, '../src/services/ArqueosService.gs'), 'utf8') +
     '\nthis.Servicio = ArqueosService;',
     contexto

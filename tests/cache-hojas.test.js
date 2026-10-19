@@ -131,7 +131,7 @@ const hoja = {
   getLastRow: () => filasHoja.length, getLastColumn: () => 2,
   getRange: (f, c, nf, nc) => ({
     getValues: () => filasHoja.slice(f - 1, f - 1 + (nf || 1)).map((x) => x.slice(c - 1, c - 1 + (nc || 1))),
-    setValues: (v) => { v.forEach((x, i) => { filasHoja[f - 1 + i] = x; }); },
+    setValues: (v) => { v.forEach((x, i) => { x.forEach((valor, j) => { filasHoja[f - 1 + i][c - 1 + j] = valor; }); }); },
   }),
   appendRow: (x) => filasHoja.push(x),
   deleteRow: (n) => filasHoja.splice(n - 1, 1),
@@ -145,7 +145,7 @@ const ctxSU = vm.createContext({
   Ids: { nuevo: () => 'VEH-2' }, Entidades: { prefijo: () => 'VEH' },
   CacheHojas: { tocar: (ss, h) => tocadas.push(ss + '|' + h) },
 });
-vm.runInContext(leer('utils/SheetUtils.gs') + '\nthis.SheetUtils = SheetUtils;', ctxSU);
+vm.runInContext(leer('utils/Candado.gs') + leer('utils/SheetUtils.gs') + '\nthis.SheetUtils = SheetUtils;', ctxSU);
 const SU = ctxSU.SheetUtils;
 SU.insert('libro', 'VEHICULOS', { FOLIO: 'A2' });
 ok(tocadas.pop() === 'libro|VEHICULOS', 'insert toca la hoja');

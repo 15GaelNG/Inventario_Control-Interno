@@ -117,6 +117,8 @@
   <?!= include('html/views/lineas/lineas-gestion-activos'); ?>
   <?!= include('html/views/lineas/lineas-accesorios'); ?>
 
+  <!-- Formato: esc, fechas, moneda, normal. Antes que todo: lo usan los componentes y los módulos. -->
+  <?!= include('html/js/componentes/formato'); ?>
   <?!= include('html/js/api'); ?>
   <!-- Pantalla: los cortes celular / tableta / táctil del sistema. Antes que todo lo que pregunta
        "¿es celular?" (notificaciones, app, shell-movil, Líneas). -->
@@ -163,10 +165,13 @@
   <?!= include('html/js/componentes/tour'); ?>
   <?!= include('html/js/componentes/ayuda'); ?>
   <?!= include('html/js/componentes/tabs'); ?>
+  <?!= include('html/js/componentes/ficha'); ?>
+  <?!= include('html/js/componentes/filtro-tipo'); ?>
   <?!= include('html/js/componentes/combobox'); ?>
   <?!= include('html/js/componentes/campo-auto'); ?>
   <?!= include('html/js/componentes/folio-nucco'); ?>
   <?!= include('html/js/componentes/datatable'); ?>
+  <?!= include('html/js/componentes/pasos'); ?>
   <?!= include('html/js/componentes/formulario'); ?>
   <?!= include('html/js/componentes/firma'); ?>
   <?!= include('html/js/datos-firmas-automaticas'); ?>

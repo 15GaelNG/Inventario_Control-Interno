@@ -105,19 +105,6 @@ const TelefoniaService = (function () {
     return doc;
   }
 
-  /** Permisos del usuario dentro del módulo (la interfaz decide qué botones mostrar). */
-  function permisos(token) {
-    const sesion = leer_(token);
-    return {
-      puedeOperar: puedeOperar_(sesion),
-      puedeVerSecretos: puedeVerSecretos_(sesion),
-      esAdmin: sesion.rol === Config.ROLES.ADMIN,
-      // Rol CLIENT: la ficha sin su pasado (Historial, Documentos), que el servidor le niega con sinAlcance_
-      conAlcance: !!sesion.alcance,
-      puedeAprobarResguardos: LineasResguardos.puedeAprobar(usuarioResguardo_(sesion)),
-    };
-  }
-
   /** Índices de equipos y líneas para los listados, con las columnas de la vista del AppSheet (caché 30 min). */
   function indice(token) {
     const sesion = leer_(token);
@@ -165,6 +152,9 @@ const TelefoniaService = (function () {
     const r = registro_(id);
     if (!r || !r.linea) throw new Error('No existe la línea ' + id);
     exigirAlcance_(sesion, r);
+    // Sin equipo, la carpeta de la línea en LINEAS (pendiente 2.45), si ya tiene; con su sección, como la del NUCO
+    if (!r.equipo) r.linea.carpetaDriveId = LineasArchivos.carpetaLineaId(r.linea._id);
+    sinCarpeta_(r.linea, sesion);
     return LineasUtil.paraCliente({
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
@@ -295,6 +285,8 @@ const TelefoniaService = (function () {
         pdfPendiente: d.origen === 'SISTEMA' && !pdf,
         responsable: d.snapshot ? d.snapshot.responsable : (d.responsable ? d.responsable.nombre : null),
         fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
+        // Firmada dentro de un equipo, vista desde la línea (pendiente 2.45): su NUCO y el registro del equipo
+        enNuco: d.enEquipo ? (d.nuco || '—') : null, registroId: d.enEquipo ? d.registroId || null : null,
       };
     }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
   }
@@ -302,14 +294,30 @@ const TelefoniaService = (function () {
   /**
    * Inspecciones y responsivas de un registro: las de la hoja (AppSheet y sistema) y las de la carpeta del NUCO en
    * NUCOS. Una de la hoja sin carpeta y del mismo día que una de NUCOS toma su PDF y su carpeta (no se repite).
+   * `vista` 'linea' (la ficha de la línea, pendiente 2.45): las de la línea, sin las de su equipo: las de cuando estuvo
+   * suelta y las responsivas que firmó dentro de un equipo (ID LINEA ENTREGADA), con su NUCO.
    */
-  function evidencias(token, id) {
+  function evidencias(token, id, vista) {
     // Rol CLIENT: sin el pasado del registro (usuario, 14-oct: puede ser de otro departamento)
     const sesion = sinAlcance_(leerSeccion_(token, 'documentos'));
-    const ev = LineasRepo.evidenciasDeRegistro(id);
+    let base = id;
+    let enEquipo = false;
+    if (vista === 'linea') {
+      const r = registro_(id);
+      if (!r || !r.linea) throw new Error('No existe la línea ' + id);
+      base = r.linea.idLinea || id;
+      enEquipo = !!r.equipo;
+    }
+    const ev = LineasRepo.evidenciasDeRegistro(base);
+    if (vista === 'linea') {
+      const vistas = {};
+      ev.responsivas.forEach((d) => { vistas[d._id] = true; });
+      LineasRepo.responsivasEntregadas(base).forEach((d) => { if (!vistas[d._id]) ev.responsivas.push(d); });
+    }
     let nucos = [];
     try {
-      nucos = evidenciasNucos_(id, sesion);
+      // La línea en un equipo: la carpeta del NUCO es la del equipo, no la suya
+      if (!enEquipo) nucos = evidenciasNucos_(id, sesion);
     } catch (e) {
       console.warn('evidencias NUCOS ' + id + ': ' + e.message); // sin acceso a NUCOS: solo lo de la hoja
     }
@@ -620,12 +628,6 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasAcciones.vincular(datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
-  /** Reasignar: la responsiva es la acción (LineasAcciones.reasignar). */
-  function reasignar(token, responsiva) {
-    const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasAcciones.reasignar(responsiva || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
-  }
-
   /** Fotos de una inspección ya guardada: 'preparar' (carpeta autorizada) o 'actualizar' (recuento). */
   function fotosInspeccion(token, id, accion) {
     const sesion = operar_(token);
@@ -639,10 +641,10 @@ const TelefoniaService = (function () {
   /** Vacía las cachés del módulo (después de editar la hoja a mano). Solo ADMIN. */
   function recargarDatos(token) {
     Auth.requiereRol(token, [Config.ROLES.ADMIN]);
-    LineasRepo.borrarCaches();
-    // También las hojas que LineasLectura guarda 30 min: lo escrito por fuera de la app (la carga del proveedor del
-    // 14-oct) no las marca como cambiadas y la ficha seguía con la línea de antes
-    LineasDatos.tocar(['LINEAS', 'EQUIPOS', 'ASIGNACIONES', 'ADENDUMS']);
+    // Las cachés de Líneas y las hojas que LineasLectura guarda 30 min (lo escrito por fuera de la app, como la carga del
+    // proveedor del 14-oct, no las marca como cambiadas), más los encabezados de las hojas nuevas (1 h): al quitar una
+    // columna del libro (FECHA DE ALTA, pendiente 2.51) se leía cada dato de la derecha en la columna equivocada
+    LineasLectura.limpiarCaches();
     return { ok: true };
   }
 
@@ -669,6 +671,7 @@ const TelefoniaService = (function () {
     const sesion = operar_(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de evidencia inválido.');
     const obj = LineasCaptura.objetivo(ref); // valida que el equipo o la línea existan
+    if (tipo === 'INSPECCION' && !obj.equipo) throw new Error('La línea sin equipo no lleva inspección: solo responsiva.');
     return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, idRegistro, sesion.correo, obj.reg.nuco, new Date()));
   }
 
@@ -691,10 +694,13 @@ const TelefoniaService = (function () {
       LineasUtil.paraCliente(LineasCaptura.guardarInspeccion(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion))));
   }
 
-  /** Guarda una responsiva nueva. El PDF se pide aparte. */
+  /**
+   * Guarda una responsiva nueva: la acción que entrega (pendiente 2.49, usuario 16-oct; antes también Reasignar). Con otra
+   * persona en un equipo trae `inspeccionId`. El PDF se pide aparte.
+   */
   function guardarResponsiva(token, datos) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasCaptura.guardarResponsiva(datos, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
+    return LineasUtil.paraCliente(LineasAcciones.responsiva(datos || {}, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
   /** Paso 3 de la identificación (pendiente 2.29): la registrada de cada responsable de la responsiva que se captura. */
@@ -795,12 +801,13 @@ const TelefoniaService = (function () {
    * PDF firmado de una inspección o responsiva (usuario, 5-oct), del sistema, del AppSheet o de la carpeta NUCOS. Solo
    * documentos que Documentos le muestra a ese registro, y su PDF y su carpeta salen de ahí, no del cliente.
    */
-  function subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
+  function subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64, vista) {
     const sesion = operar_(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
     const r = registro_(registroId);
     if (!r) throw new Error('No existe el registro ' + registroId);
-    const docs = evidencias(token, registroId);
+    // Desde la ficha de la línea (pendiente 2.45), los documentos que esa ficha muestra
+    const docs = evidencias(token, registroId, vista === 'linea' ? 'linea' : '');
     const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId)[0];
     if (!doc || (pdfId && doc.pdfId !== pdfId)) throw new Error('El PDF no es de este registro.');
     return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, {
@@ -918,9 +925,9 @@ const TelefoniaService = (function () {
   }
 
   return {
-    permisos, indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
+    indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
-    reasignar, vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
+    vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
     MODULOS_LINEAS,

@@ -16,7 +16,7 @@ const scriptDe = (archivo) => {
 const dom = new JSDOM('<!doctype html><body><div id="f"></div></body>', { url: 'https://prueba.local/', runScripts: 'outside-only' });
 const { window } = dom;
 // fechaParaInput vive en app.html: aquí una igual de simple para ver que se usa en los date
-window.eval('function fechaParaInput(v) { return v ? v.split("/").reverse().join("-") : ""; }\n' + scriptDe('campos-hoja.html') + '\nwindow.CamposHoja = CamposHoja;');
+window.eval('function fechaParaInput(v) { return v ? v.split("/").reverse().join("-") : ""; }\n' + scriptDe('formato.html') + '\n' + scriptDe('campos-hoja.html') + '\nwindow.CamposHoja = CamposHoja;');
 
 const doc = window.document;
 const $ = (s) => doc.querySelector(s);

@@ -62,12 +62,10 @@ const LineasEvidencias = (function () {
     const bytes = Utilities.base64Decode(base64);
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     const archivo = DriveUtils.marcarAutor(DriveApp.getFolderById(carpetaId).createFile(Utilities.newBlob(bytes, mime, String(nombre).replace(/[\\/]/g, '_'))));
-    // Sin esto, el archivo solo lo puede ver la cuenta que despliega la app
-    // (quien lo creó) — nadie más puede abrir el link, aunque sea válido.
-    // En NUCOS no: ahí cada archivo toma los permisos de la carpeta, como los que sube el área.
+    // Fuera de NUCOS se abre al dominio; en NUCOS no: ahí cada archivo toma los permisos de la carpeta, como los que sube el área.
     const nuco = CacheService.getScriptCache().get(claveNuco_(carpetaId)) || (LineasArchivos.enNucos(carpetaId) ? nucoDeCarpeta_(carpetaId) : null);
     if (nuco) LineasArchivos.olvidarNuco(nuco);
-    else archivo.setSharing(DriveApp.Access.DOMAIN, DriveApp.Permission.VIEW);
+    else LineasArchivos.compartirEnDominio(archivo);
     return { id: archivo.getId(), nombre: archivo.getName() };
   }
 

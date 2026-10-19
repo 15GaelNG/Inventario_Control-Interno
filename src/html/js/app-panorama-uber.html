@@ -36,7 +36,7 @@
   }
 
   function formatoMonedaPU(valor) {
-    return '$' + (Number(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return Formato.moneda(valor, { centavos: false }) || '$0';
   }
 
   async function initPanoramaUber() {
@@ -102,7 +102,7 @@
       if (!document.getElementById('pu-filtros')) return; // se navegó a otra vista mientras cargaba
       const gen = r && r.generadoEn ? new Date(r.generadoEn) : null;
       document.getElementById('pu-generado').textContent = gen
-        ? 'Datos al ' + gen.toLocaleDateString('es-MX') + ' ' + gen.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) + ' -- la hoja de origen se alimenta cada semana'
+        ? 'Datos al ' + Formato.fechaHora(gen) + ' -- la hoja de origen se alimenta cada semana'
         : '';
       llenarTodosLosFiltros();
       pintarTodo();
@@ -149,10 +149,10 @@
       const pctJustificado = filas.length ? Math.round(porEstatus['JUSTIFICADO'] / filas.length * 100) : 0;
 
       const tiles = [
-        { etiqueta: 'Total de viajes', valor: filas.length.toLocaleString('es-MX'), icono: 'route', clase: '' },
+        { etiqueta: 'Total de viajes', valor: Formato.miles(filas.length), icono: 'route', clase: '' },
         { etiqueta: 'Gasto total', valor: formatoMonedaPU(gastoTotal), icono: 'coins', clase: 'stat-tile-ok' },
         { etiqueta: 'Gasto promedio', valor: formatoMonedaPU(promedio), icono: 'calculator', clase: '' },
-        { etiqueta: 'Justificado', valor: porEstatus['JUSTIFICADO'].toLocaleString('es-MX') + ' (' + pctJustificado + '%)', icono: PU_ICONO_ESTATUS['JUSTIFICADO'], clase: 'stat-tile-ok' },
+        { etiqueta: 'Justificado', valor: Formato.miles(porEstatus['JUSTIFICADO']) + ' (' + pctJustificado + '%)', icono: PU_ICONO_ESTATUS['JUSTIFICADO'], clase: 'stat-tile-ok' },
         { etiqueta: 'Sin estatus', valor: porEstatus['SIN ESTATUS'], icono: PU_ICONO_ESTATUS['SIN ESTATUS'], clase: porEstatus['SIN ESTATUS'] ? 'stat-tile-warn' : '' },
         { etiqueta: 'A revisar', valor: porEstatus['REVISAR'], icono: PU_ICONO_ESTATUS['REVISAR'], clase: porEstatus['REVISAR'] ? 'stat-tile-warn' : '' },
         { etiqueta: 'Cobrado/devuelto', valor: porEstatus['COBRADO/DEVUELTO'], icono: PU_ICONO_ESTATUS['COBRADO/DEVUELTO'], clase: '' },

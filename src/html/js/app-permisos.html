@@ -34,8 +34,7 @@
     let fichaActual = null;   // { tipo: 'persona' | 'area' | 'perfil', id, pestana }
 
     // ---------------------------------------------------------------- reglas
-    const normal = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[̀-ͯ]/g, '')
-      .toUpperCase().trim().replace(/\s+/g, ' ');
+    const normal = (t) => Formato.normal(t).toUpperCase().trim().replace(/\s+/g, ' ');
     const llave = (quien, modulo) => normal(quien) + '|' + modulo;
     const modulos = () => datos.grupos.reduce((t, g) => t.concat(g.modulos), []);
     /** Las secciones de un módulo (o []), como las manda el panel: { id, etiqueta, icono, hereda } */
@@ -234,7 +233,7 @@
           : padreDe(modulo) ? '<span class="usr-origen area">' + ico('corner-down-right') + ' Hereda</span>' : nivel('NINGUNO'));
     const cambioHistorial = (h) => '<span class="usr-historial-cambio">' + chipHistorial(h.antes, esDePersona(h), h.modulo) + ico('arrow-right') +
       chipHistorial(h.despues, esDePersona(h), h.modulo) + '</span>';
-    const fechaHora = (iso) => (iso ? formatearFecha(iso) + ' ' + new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—');
+    const fechaHora = (iso) => Formato.fechaHora(iso) || '—';
     /** Lo de ese área, correo o perfil; de un perfil, también sus asignaciones (que se anotan con el área) */
     const historialDe = (quien) => datos.historial.filter((h) => normal(h.quien) === normal(quien) ||
       (/^perfil:/i.test(quien) && normal(h.modulo) === normal(quien)));
@@ -289,8 +288,7 @@
     function migas() {
       const anterior = pila.length ? pila[pila.length - 1] : null;
       const texto = anterior ? (anterior.tipo === 'persona' ? ((persona(anterior.id) || {}).nombre || anterior.id) : anterior.id) : 'Usuarios y permisos';
-      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" data-usr-volver>' + ico('chevron-left') + ' Volver</button>' +
-        '<span>' + escaparHtml(texto) + '</span></div>';
+      return Ficha.migas({ volver: { atributos: 'data-usr-volver' }, ruta: [{ texto: texto, atributos: 'data-usr-volver' }] });
     }
 
     // ---------------------------------------------------------------- ficha de persona
@@ -314,14 +312,13 @@
 
       const resumen = [['Correo', p.correo], ['Área', p.area], ['Coordinación', p.coordinacion], ['Sede', [p.oficina, p.sede].filter(Boolean).join(' · ')]]
         .filter((d) => d[1]);
-      let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono">' + Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }) + '</div>' +
-        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(p.nombre || p.correo) + '</h2><div class="ln-chips">' +
-        badgeRol(p.rol) + badgeActivo(p.activo) +
-        (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : '') +
-        '</div></div>' +
-        '<div class="ln-detalle-botones">' + (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') + '</div>' +
-        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(d[1]) + '</dd></div>').join('') + '</dl></div>';
+      let html = migas() + Ficha.encabezado({
+        iconoHtml: Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }), titulo: p.nombre || p.correo,
+        chips: badgeRol(p.rol) + badgeActivo(p.activo) +
+          (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
+        botones: total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        resumen: resumen,
+      });
 
       // En una línea: cuánto le viene de su área (y sus perfiles) y cuánto es solo suyo
       const porSuArea = modulos().filter((m) => regla(p.correo, m.id) === undefined && deArea(p.area, m.id) !== 'NINGUNO').length;
@@ -361,9 +358,9 @@
         [['Nombre', p.nombre], ['Correo', p.correo], ['No. de empleado', p.noEmpleado], ['Rol', p.rol], ['Estatus', p.activo ? 'Activo' : 'Inactivo'],
           ['Área', p.area], ['Coordinación', p.coordinacion], ['Oficina', p.oficina], ['Sede', p.sede], ['Departamentos permitidos', p.dptosPermitidos]]
           .map((d) => itemInfo(d[0], d[1] || '—')).join('') +
-        '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:12px">Estos datos se cambian en la hoja USUARIOS.</p></div>';
+        '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:var(--texto-s)">Estos datos se cambian en la hoja USUARIOS.</p></div>';
 
-      return html + fichaEnPestanas([
+      return html + Tabs.html([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: conAcceso(p) },
         { id: 'datos', titulo: 'Datos', icono: 'id-card', contenido: datosHoja },
         pestanaHistorial(p.correo),
@@ -377,12 +374,12 @@
       const cuenta = (v) => modulos().filter((m) => deArea(a.nombre, m.id) === v).length;
       const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
         ['Con excepciones', plural(activas.filter((p) => excepcionesDe(p).length).length, 'persona', 'personas')]];
-      let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono"><i data-lucide="users" class="ico ln-icon"></i></div>' +
-        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(a.nombre) + '</h2><div class="ln-chips">' +
-        '<span class="badge-estado pendiente">Área</span><span class="badge-estado activo">' + plural(activas.length, 'persona activa', 'personas activas') + '</span></div></div>' +
-        '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button></div>' +
-        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
+      let html = migas() + Ficha.encabezado({
+        icono: 'users', titulo: a.nombre,
+        chips: '<span class="badge-estado pendiente">Área</span><span class="badge-estado activo">' + plural(activas.length, 'persona activa', 'personas activas') + '</span>',
+        botones: '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        resumen: resumen,
+      });
 
       const susPerfiles = perfilesDe(a.nombre).map((k) => perfilesPorClave[k].nombre);
       const tarjetaPerfiles = '<div class="card ln-card usr-perfiles-area"><h3>' + ico('layers') + ' Perfiles' +
@@ -421,7 +418,7 @@
         ], gente.slice().sort((x, y) => (y.activo - x.activo) || String(x.nombre).localeCompare(String(y.nombre))))
         : '<p class="empty-state">Nadie tiene esta área.</p>') + '</div>';
 
-      return html + fichaEnPestanas([
+      return html + Tabs.html([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
         { id: 'personas', titulo: 'Personas', icono: 'users', contenido: personas, num: gente.length },
         pestanaHistorial(a.nombre),
@@ -436,15 +433,15 @@
       const cuenta = (v) => modulos().filter((m) => dePerfil(k, m.id) === v).length;
       const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
         ['Lo reciben', plural(gente.length, 'persona activa', 'personas activas')]];
-      let html = migas() + '<div class="ln-detalle-header card">' +
-        '<div class="ln-detalle-icono"><i data-lucide="layers" class="ico ln-icon"></i></div>' +
-        '<div class="ln-detalle-titulo"><h2>' + escaparHtml(pf.nombre) + '</h2><div class="ln-chips">' +
-        '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span>' +
-        (pf.alcance === 'AREA' ? '<span class="badge-estado pendiente">' + ico('map-pin') + ' Solo lo de su área</span>' : '') + '</div></div>' +
-        '<div class="ln-detalle-botones"><button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
-        '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
-        '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button></div>' +
-        '<dl class="ln-resumen-rapido">' + resumen.map((d) => '<div><dt>' + d[0] + '</dt><dd>' + d[1] + '</dd></div>').join('') + '</dl></div>';
+      let html = migas() + Ficha.encabezado({
+        icono: 'layers', titulo: pf.nombre,
+        chips: '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span>' +
+          (pf.alcance === 'AREA' ? '<span class="badge-estado pendiente">' + ico('map-pin') + ' Solo lo de su área</span>' : ''),
+        botones: '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
+          '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
+          '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button>',
+        resumen: resumen,
+      });
 
       const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo reciben todas las áreas que tienen este perfil (y sus personas). Si un área tiene varios perfiles, gana el más alto; lo que el área o la persona tengan como regla propia manda sobre el perfil.</div></div>' +
         (pf.alcance === 'AREA' ? '<div class="usr-aviso">' + ico('map-pin') + '<div><b>Solo lo de su área.</b> Quien tenga este perfil (aunque sea USER) solo ve los renglones de su área (DPTOS PERMITIDOS o su AREA), y solo en lo que respeta ese límite (Vehículos y Líneas Telefónicas, sin el pasado de la ficha); lo demás se le cierra.</div></div>' : '') +
@@ -465,7 +462,7 @@
         ], areas)
         : '<p class="empty-state">Ninguna área tiene este perfil todavía.</p>') + '</div>';
 
-      return html + fichaEnPestanas([
+      return html + Tabs.html([
         { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
         { id: 'areas', titulo: 'Áreas', icono: 'users', contenido: listaAreas, num: areas.length },
         pestanaHistorial(quienPerfil(pf.nombre)),
@@ -488,7 +485,7 @@
       $('usr-listado').hidden = true;
       detalle.hidden = false;
       detalle.innerHTML = html;
-      if (fichaActual.pestana) mostrarPestanaFicha(detalle, fichaActual.pestana);
+      if (fichaActual.pestana) Tabs.mostrar(detalle, fichaActual.pestana);
       refreshIcons();
       document.getElementById('view-container').scrollTop = 0;
     }
@@ -1146,7 +1143,7 @@
       const dePersona = esDePersona(h);
       const p = dePersona ? persona(h.quien) : null;
       return {
-        ID: i, FECHA: h.fecha, HORA: h.fecha ? new Date(h.fecha).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '',
+        ID: i, FECHA: h.fecha, HORA: Formato.hora(h.fecha),
         QUIEN: h.quien, A_QUIEN: p ? (p.nombre || p.correo) : esDePerfil(h) ? 'Perfil ' + h.quien.replace(/^perfil:/i, '') : h.quien,
         TIPO: dePersona ? 'Persona' : esDePerfil(h) ? 'Perfil' : 'Área',
         MODULO: etiquetaModulo(h.modulo), ANTES: textoHistorial(h.antes, dePersona, h.modulo), DESPUES: textoHistorial(h.despues, dePersona, h.modulo),
@@ -1213,7 +1210,7 @@
     });
 
     const tablaActiva = () => {
-      const pestana = $('usr-tabs').querySelector('.tab-btn.active').dataset.tab;
+      const pestana = Tabs.actual($('usr-listado'));
       return pestana === 'areas' ? tablaAreas : pestana === 'perfiles' ? tablaPerfiles : pestana === 'historial' ? tablaHistorial : tablaPersonas;
     };
 
@@ -1261,13 +1258,14 @@
     }
 
     // ---------------------------------------------------------------- eventos
-    wireTabsSimple($('usr-listado'));
+    Tabs.iniciar($('usr-listado'));
     $('usr-tabs').querySelectorAll('.tab-btn').forEach((b) => b.addEventListener('click', () => requestAnimationFrame(() => tablaActiva().ajustarAlto())));
 
     $('usr-detalle').addEventListener('click', (ev) => {
-      const el = ev.target.closest('button, [data-ficha-tab]');
+      const el = ev.target.closest('button');
       if (!el) return;
-      if (el.dataset.fichaTab) { fichaActual.pestana = el.dataset.fichaTab; mostrarPestanaFicha($('usr-detalle'), el.dataset.fichaTab); return; }
+      // la pestaña la cambia Tabs; aquí solo se recuerda para volver a ella al repintar
+      if (el.dataset.tab) { fichaActual.pestana = el.dataset.tab; return; }
       if (el.hasAttribute('data-usr-volver')) { volver(); return; }
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(fichaActual.tipo, fichaActual.id); return; }

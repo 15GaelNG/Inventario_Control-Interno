@@ -56,6 +56,8 @@ const ENTORNOS = {
     // Líneas (opcionales: sin esto usan las carpetas de AppSheet que trae el código)
     LINEAS_DRIVE_APPSHEET: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
     LINEAS_DRIVE_NUCOS: '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-',
+    // La carpeta LINEAS junto a NUCOS, para la responsiva de la línea sin equipo (pendiente 2.45, 15-oct-2026)
+    LINEAS_DRIVE_LINEAS: '1MSkzelEJzIL0C7prDFRo1ytV9Ajh_yLA',
 
     // Geotab (opcional): usuario, base y servidor aquí; GEOTAB_PASSWORD solo en Script Properties
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',
@@ -105,6 +107,44 @@ const ENTORNOS = {
 
     // Líneas lee las hojas nuevas (LINEAS, EQUIPOS, ASIGNACIONES…) y LINEAS TELEFONICAS ya no existe en la copia, igual
     // que en producción (allá son Script Properties: LineasLectura)
+    LINEAS_LECTURA: 'ESTRUCTURA',
+    LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+  },
+
+  // ---------------------------------------------------------------- DEV de la homologación (rama common)
+  // docs/homologacion-codigo.md. Lo que escribe va a la carpeta de pruebas "DEV COMMON".
+  '1WXvJaGJl1ACfisfibb__FCxzljexGfbpL5yjrUEjog82O0Uyq1YZ_7as': {
+    ENTORNO: 'DEV',
+
+    // Como producción: la copia del libro no trae APP_HELPDESK
+    MODULOS_APAGADOS: 'helpdesk',
+
+    // Copia del libro de producción ("DEV COMMON - Copia de produccion 2026-10-15")
+    SS_ID_USUARIOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_VEHICULOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_TELEFONIA: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_ACCESORIOS: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+    SS_ID_CAJACHICA: '1kQmp9ZuXNBGzPC9dr4AavfHA1dHzvZ2G8wrzu7ziH_Y',
+
+    // Lo que escribe: "DEV COMMON" y sus subcarpetas, con el nombre que esperan las rutas (sin NUCOS_VEHICULOS: usa una
+    // "NUCOS VEHICULOS" de pruebas en esta raíz)
+    DRIVE_FOLDER_ID_RAIZ: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    DRIVE_FOLDER_ID_REPORTES: '1GSrhzADsVJ3IKdB0gAGv5m_QDPrtyYH7',
+    DRIVE_FOLDER_ID_VERIFICACIONES: '11OBa-ogumeR_Pjhi53rKDbCJJ5q41yYe',
+    DRIVE_FOLDER_ID_SENSORES: '1sAZLNZmGjidMwrs3G97LZi7Oqiv_yQBw',
+    DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES: '14VQV8zqv1uAis3rPl8j7x_93SJ4l9phT',
+    DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS: '12sMkTry8sMV4312S8EzfYtkGLO4tjPnz',
+    DRIVE_FOLDER_ID_INSPECCIONES_IMAGENES: '1QmevzmGAiz9XELVKpW7DNf01iqWfyzoP',
+    LINEAS_DRIVE_APPSHEET: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+    LINEAS_DRIVE_NUCOS: '1r_cElgP92DB8bBcje5OU9qCY21wtkdR1',
+
+    // Solo lectura: los archivos que cita la copia del libro viven en las carpetas de producción. Nunca se escribe ahí.
+    DRIVE_FOLDER_ID_MODELOS: '1ddRghL8izS63UYWDHn9w_YFHPuRC8bTm',
+    DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C',
+    DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: '1D3m1H3C_Is2Bol9IBPdnV6ugJiXizSCN',
+    LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
+
+    // Líneas lee las hojas nuevas, igual que producción (como el DEV de Emmanuel)
     LINEAS_LECTURA: 'ESTRUCTURA',
     LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
   },

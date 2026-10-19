@@ -75,6 +75,12 @@ validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
 `Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar` y `Apariencia`. Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
+De la homologación (rama `common`, docs/homologacion-codigo.md), también: `Formato` (esc, fechas, moneda, miles: nunca
+otra copia de `escaparHtml`/`formatearFecha`), `Tabs` (`data-tabs` + `.tab-btn[data-tab]`), `Ficha` (migas y
+encabezado de una ficha), `FiltroTipo` (el filtro rápido por tipo/estatus) y `Pasos` (la navegación de un formulario
+por pasos: `Pasos.htmlChips` + `Pasos.navegar`; `libre`, `guardarAlFinal`). El error de un campo, fuera de un
+`Formulario`: `Formulario.marcarError(caja, mensaje)`. Cada uno tiene su contrato: una copia nueva hace fallar las pruebas.
+
 - **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
   su perfil de Google, del directorio del dominio (`FotosDirectorio.gs`, People API, guardada en
   caché y rehecha por el Calentador). No pintes iniciales a mano.
@@ -133,6 +139,15 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   que los DEV escribieran en producción. Una carpeta nueva va también en `REVISION_EN_RAIZ`
   (Diagnostico.gs); un contrato revisa las dos cosas. Las plantillas sí pueden ir fijas: solo se copian.
 - Cada `createFile` va dentro de `DriveUtils.marcarAutor(…)` (quién lo subió; contrato).
+- **Una subcarpeta (o crearla) → `DriveUtils.subcarpeta(padre, nombre)`**: la reconoce aunque el nombre traiga espacios o
+  acentos de más ("2.- SERVICIOS"), así nunca se crea otra al lado. Nadie escribe su propio `getFoldersByName … createFolder`
+  (contrato).
+- **NUCOS de Líneas**: solo producción tiene `LINEAS_DRIVE_NUCOS` (Entornos.gs). Un DEV sin la clave usa una "NUCOS
+  TELEFONICOS" de pruebas en su raíz; `revisarEntorno` marca error si un DEV apunta a una carpeta de producción. Nunca le
+  pongas a un DEV el ID de NUCOS de producción: ahí se escriben los PDF y las fotos de inspecciones y responsivas.
+- **Toda función de nivel superior** (sin `_` al final, que no sea `api…`) empieza con `soloEditor_()`: cualquiera la puede
+  llamar desde la consola del navegador. `tests/candado-editor.test.js` revisa todo `src/`. Un activador de edición no
+  puede llevarlo (ahí el usuario activo es quien editó): lleva su guarda, como `alEditarLibro`.
 - **Un documento de un vehículo va a su expediente: `ExpedienteNuco`** (`src/utils/ExpedienteNuco.gs`). La carpeta
   NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA` (docs/nucos-expediente.md).
   `ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')` lo mueve ahí, le pone su nombre (`SEGURO-0088.pdf`) y pasa el

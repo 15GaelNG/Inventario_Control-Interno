@@ -14,6 +14,10 @@ function cargar(hojas, encendido) {
     esColumnaFecha: (h) => /FECHA|INICIO PLAN|FIN PLAN|_EN$/i.test(h),
     normCol: (h) => String(h || '').toUpperCase().replace(/\s+/g, ' ').trim(),
     olvidarTabla: () => {}, cacheBorrar: () => {}, tocar: () => {},
+    // El alta sale del movimiento ALTA de MOVIMIENTOS (pendiente 2.51)
+    cacheLeer: () => null, cacheGuardar: () => {},
+    buscarFilas: (n, col, valor) => (hojas[n] || []).map((f, i) => (String(f[col]) === valor ? i + 2 : 0)).filter(Boolean),
+    leerFilas: (pedidos) => pedidos.map((p) => p.filas.map((i) => Object.assign({ _fila: i }, hojas[p.tabla][i - 2]))),
   };
   const LineasRepo = { folioRegistro: (tipo, nuco) => (tipo === 'EQUIPO + SIM' ? 'EQS' : 'X') + nuco, borrarCaches: () => {} };
   const PropertiesService = { getScriptProperties: () => ({ getProperty: () => (encendido ? 'ESTRUCTURA' : null) }) };

@@ -35,7 +35,7 @@ const LineasLectura = (function () {
   const PROPIEDAD = 'LINEAS_LECTURA';
   const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v4'; // v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v6'; // v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
@@ -55,9 +55,60 @@ const LineasLectura = (function () {
   const DE_LA_HOJA_VIEJA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'SEDE',
     'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
+  /**
+   * Responsable en blanco en los estatus finales (usuario, 16-oct; pendiente 2.50): el equipo VENDIDO, DONADO, DESECHADO o
+   * EXTRAVIO-ROBO (y sus nombres viejos) y la línea sin equipo CANCELADA ya no son de nadie. No se borra nada: las
+   * asignaciones cerradas siguen en su pestaña; aquí solo no se muestran como su responsable. La ubicación se queda.
+   */
+  const ESTATUS_FINAL = { equipo: ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'], linea: ['CANCELADA'] };
+  const PERSONA_FINAL = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
+  function esFinal_(e, l) {
+    const may = (x) => String(x === undefined || x === null ? '' : x).trim().toUpperCase();
+    return e ? ESTATUS_FINAL.equipo.indexOf(may(e['ESTATUS EQUIPO'])) >= 0 : ESTATUS_FINAL.linea.indexOf(may(l && l['ESTATUS LINEA'])) >= 0;
+  }
 
   let activo_ = null;
   let filas_ = null;
+
+  // ---------------- Fecha del alta (pendiente 2.51) ----------------
+  /**
+   * Sin columna FECHA DE ALTA (usuario, 16-oct: «tener una columna que almacena lo mismo no tiene sentido»): el alta de un
+   * equipo o una línea es su movimiento ALTA de MOVIMIENTOS (el primero, si hay varios). Se guarda aparte, { ID: fecha
+   * ISO }, porque MOVIMIENTOS cambia con cada acción y releerlo rehacía todo: el alta se anota aquí al crear el renglón
+   * (anotarAlta, desde LineasEscritura) y la lista entera se relee solo si no está en la caché (6 h o «Recargar datos»).
+   */
+  const HOJA_MOVIMIENTOS = 'MOVIMIENTOS';
+  const CLAVE_ALTAS = 'altas_movimientos_v1';
+  const SEG_ALTAS = 21600;
+  let altas_ = null;
+  const idsDe_ = (v) => String(v === null || v === undefined ? '' : v).split(',').map((x) => x.trim()).filter(Boolean);
+  function anotar_(m, ids, fecha) {
+    const d = fecha instanceof Date ? fecha : new Date(fecha);
+    if (!fecha || isNaN(d.getTime())) return;
+    const iso = d.toISOString();
+    ids.forEach((k) => { if (!m[k] || iso < m[k]) m[k] = iso; });
+  }
+  function altas() {
+    if (altas_) return altas_;
+    const guardadas = LineasDatos.cacheLeer(CLAVE_ALTAS);
+    if (guardadas) return (altas_ = guardadas);
+    const m = {};
+    if (LineasDatos.existeTabla(HOJA_MOVIMIENTOS)) {
+      const filas = LineasDatos.buscarFilas(HOJA_MOVIMIENTOS, 'ACCION', 'ALTA');
+      if (filas.length) {
+        LineasDatos.leerFilas([{ tabla: HOJA_MOVIMIENTOS, filas: filas }])[0]
+          .forEach((mv) => anotar_(m, idsDe_(mv['ID EQUIPO']).concat(idsDe_(mv['ID LINEA'])), mv['FECHA']));
+      }
+    }
+    LineasDatos.cacheGuardar(CLAVE_ALTAS, m, SEG_ALTAS);
+    return (altas_ = m);
+  }
+  /** El equipo o la línea que se acaba de crear: su alta, sin releer MOVIMIENTOS. */
+  function anotarAlta(ids, fecha) {
+    const m = altas();
+    anotar_(m, (ids || []).map(String).filter(Boolean), fecha);
+    LineasDatos.cacheGuardar(CLAVE_ALTAS, m, SEG_ALTAS);
+  }
   let porId_ = null;
 
   /** El interruptor y la fecha de retiro: los de Entornos.gs para este proyecto (DEV, 5-oct) o la Script Property. */
@@ -140,6 +191,7 @@ const LineasLectura = (function () {
     const asignaciones = t(HOJAS.ASIGNACIONES);
     const adendums = t(HOJAS.ADENDUMS);
     const vieja = retirada() ? {} : vieja_();
+    const alta = altas();
 
     const lineaPorId = {};
     lineas.forEach((l) => { lineaPorId[String(l['ID'])] = l; });
@@ -190,7 +242,7 @@ const LineasLectura = (function () {
         // El PIN de WhatsApp es del equipo (usuario, 8 y 13-oct; pendiente 2.25): el de LINEAS solo mientras no se pase
         'PIN WHATSAPP': e ? (v(e, 'PIN WHATSAPP') || v(l, 'PIN WHATSAPP')) : '', 'PIN EQUIPO': v(e, 'PIN EQUIPO'), 'CONTRASEÑA MODEM': v(e, 'CONTRASEÑA MODEM'),
         'PATRON': v(e, 'PATRON'), 'CUENTA GOOGLE': v(a, 'CUENTA GOOGLE'), 'COMPAÑIA': v(l, 'COMPAÑIA'),
-        'COSTO PLAN': v(d, 'COSTO PLAN'), 'FECHA REGISTRO': v(e || l, 'FECHA DE ALTA'), 'INICIO PLAN': v(d, 'INICIO PLAN'),
+        'COSTO PLAN': v(d, 'COSTO PLAN'), 'FECHA REGISTRO': alta[String(v(e || l, 'ID'))] || '', 'INICIO PLAN': v(d, 'INICIO PLAN'),
         'FIN PLAN': v(d, 'FIN PLAN'), 'ESTATUS LINEA': v(l, 'ESTATUS LINEA'), 'ESTATUS EQUIPO': v(e, 'ESTATUS EQUIPO'),
         'ID PERSONA': v(a, 'ID PERSONA'),
         'ID EQUIPO': e ? String(e['ID']) : '', 'ID LINEA': l ? String(l['ID']) : '', 'ID ASIGNACION': v(a, 'ID'),
@@ -210,6 +262,7 @@ const LineasLectura = (function () {
         if (esCodigo(o['RESPONSABLE'])) o['RESPONSABLE'] = '';
       }
       if (!a && ['VENDIDO', 'DESECHADO'].indexOf(String(o['ESTATUS EQUIPO']).toUpperCase()) >= 0) o['DEPARTAMENTO'] = 'N/A';
+      if (esFinal_(e, l)) PERSONA_FINAL.forEach((c) => { o[c] = ''; });
       return o;
     };
 
@@ -281,14 +334,16 @@ const LineasLectura = (function () {
     // También los encabezados de las hojas nuevas: si el armado cambió sus columnas (p. ej. COLOR en EQUIPOS, 3-oct), los
     // guardados (1 h) leerían cada dato en la columna equivocada
     const nuevas = [HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS, 'FACTURAS', 'CUENTAS', 'CATALOGOS'];
-    nuevas.map((n) => 'enc_' + n).concat(['enc_' + HOJA_VIEJA, 'ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2'])
+    nuevas.map((n) => 'enc_' + n).concat(['enc_' + HOJA_VIEJA, 'ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS])
       .forEach(LineasDatos.cacheBorrar);
+    altas_ = null;
     LineasDatos.tocar([HOJA_VIEJA, HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS]);
   }
 
   return {
     HOJA_VIEJA, PROPIEDAD, PROPIEDAD_RETIRADA, VALOR_NUEVO, HOJAS, ENCABEZADOS,
     activo, retirada, esVirtual, bloquearEscritura, filas, porNumero, buscar, buscarEnTodo, tipoViejo_, limpiarCaches, esAdendumMasReciente,
+    altas, anotarAlta,
     /** Después de escribir en las hojas nuevas: la siguiente lectura vuelve a armar los renglones. */
     olvidar: () => { filas_ = null; },
     // Solo para comparar las dos lecturas en una misma ejecución (reestructuraCompararLectura)

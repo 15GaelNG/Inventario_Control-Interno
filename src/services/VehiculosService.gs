@@ -123,11 +123,9 @@ const VehiculosService = (function () {
       if (ctx.accion !== 'actualizar') return;
       CambiosVehiculosService.registrarCambios(ctx.actual.FOLIO, ctx.actual, ctx.cambios, ctx.sesion.nombre);
       // El vehículo YA se guardó: si propagar falla no se revierte nada, solo se avisa en los
-      // logs y revisar() lo corrige en la corrida nocturna. candadoTomado: quien llama ya tiene
-      // el candado (Reasignaciones) y waitLock no es reentrante.
+      // logs y revisar() lo corrige en la corrida nocturna.
       try {
-        if (ctx.opciones.candadoTomado) Relaciones.propagarSinCandado('VEHICULOS', registro, ctx.cambios);
-        else Relaciones.propagar('VEHICULOS', registro, ctx.cambios);
+        Relaciones.propagar('VEHICULOS', registro, ctx.cambios);
       } catch (err) {
         console.error('Relaciones.propagar falló para el vehículo ' + ctx.id + ': ' + err.message);
       }
@@ -607,11 +605,6 @@ const VehiculosService = (function () {
     /** Lo mismo por la serie (el expediente de Adquisición va por serie) */
     serieEnAlcance: (token, serie) => !!buscarPor_(token, 'SERIE VEHICULO', serie),
     crear: (token, datos) => HojaServicio.crear(VEHICULOS, token, datos),
-    /**
-     * @param opciones.candadoTomado  true si el llamador YA tiene el candado del script.
-     *   waitLock() no es reentrante, así que propagar() se colgaría 20 s y moriría en
-     *   silencio. Lo usa ReasignacionesVehicularesService.crear().
-     */
     actualizar: (token, id, cambios, opciones) => HojaServicio.actualizar(VEHICULOS, token, id, cambios, opciones),
     /** Borrado físico, para altas hechas por error — el negocio normalmente "da de baja"
      * (ESTATUS = BAJA VEHICULAR). Por Relaciones (lo hace HojaServicio): se niega si el

@@ -114,11 +114,11 @@
       if (dias <= 0) return 'hoy';
       if (dias === 1) return 'ayer';
       if (dias < 30) return 'hace ' + dias + ' días';
-      return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: dias > 300 ? 'numeric' : undefined });
+      return dias > 300 ? Formato.fechaTexto(d) : Formato.fechaTexto(d).slice(0, -5);
     }
     const fechaHora = (iso) => {
       const f = iso ? new Date(iso) : null;
-      return f && !isNaN(f) ? f.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      return Formato.fechaTexto(f, { hora: true });
     };
 
     // ---------- tiempo sin respuesta. Lo mide el helpdesk (minutos desde la última respuesta y su
@@ -309,7 +309,7 @@
         total = r.total;
         siguiente = r.siguiente || null;
         HD_CONTEOS[b.id] = r.total;
-        const hora = new Date(r.consultado).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        const hora = Formato.hora(r.consultado);
         $('hd-consultado').textContent = hora;
         $('hd-consultado').title = 'Actualizado a las ' + hora;
         if (b.porRegistrar) {
@@ -594,9 +594,9 @@
       if (!campos.length) return '<p class="form-ayuda" style="margin:0">El formulario no tiene campos llenos.</p>';
       // Las fechas llegan como "2026-08-27T13:37" o "2026-08-27"
       const valor = (c) => {
-        if (c.TIPO === 'date' && /^d{4}-d{2}-d{2}/.test(c.VALOR)) {
-          const f = new Date(c.VALOR.length === 10 ? c.VALOR + 'T12:00:00' : c.VALOR);
-          if (!isNaN(f)) return f.toLocaleString('es-MX', c.VALOR.length === 10 ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' });
+        if (c.TIPO === 'date' && /^\d{4}-\d{2}-\d{2}/.test(c.VALOR)) {
+          const texto = Formato.fechaTexto(c.VALOR, { hora: c.VALOR.length > 10 });
+          if (texto) return texto;
         }
         return c.VALOR;
       };
@@ -704,7 +704,7 @@
         SOLICITANTE: d.SOLICITANTE, PLACA: placa, COMENTARIO: d.TITULO,
       });
       document.getElementById('hd-ticket-ticket').disabled = true;   // siempre el número del helpdesk (el servidor lo pone igual)
-      document.getElementById('hd-ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
+      document.getElementById('hd-ticket-fecha-de-registro').value = Formato.fecha(new Date());
       $('hd-ticket-error').hidden = true;
       modalRegistro.hidden = false;
       refreshIcons();
@@ -832,7 +832,7 @@
       $('hd-yo').innerHTML = Avatar.html(state.sesion.correo, est.nombre || state.sesion.nombre, { tam: 44 });
       $('hd-quien').textContent = est.nombre || '';
       const vence = est.vence ? new Date(est.vence) : null;
-      $('hd-vence').textContent = vence && !isNaN(vence) ? 'Tu sesión del helpdesk vence ' + vence.toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' }) : '';
+      $('hd-vence').textContent = vence && !isNaN(vence) ? 'Tu sesión del helpdesk vence ' + Formato.fechaTexto(vence, { hora: true }) : '';
     }
     $('hd-form-conectar').addEventListener('submit', async (ev) => {
       ev.preventDefault();

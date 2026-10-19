@@ -42,7 +42,7 @@
     const s = state.sesion;
     const p = perfil || {};
     const ch = p.ch || {};
-    const esc = escaparHtml;
+    const esc = Formato.esc;
     const cargando = !perfil;
     const area = ch.area || ch.departamento || p.area || s.departamento || '';
     const dato = (icono, etiqueta, valor) => valor

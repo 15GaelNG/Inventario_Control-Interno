@@ -92,23 +92,58 @@ const SheetUtils = (function () {
     return values.map((row) => rowToObject_(headers, row));
   }
 
+  /**
+   * Número de renglón (base 1) del registro con ese ID, o -1. Lee SOLO la columna del ID: antes cada búsqueda
+   * leía la hoja entera, y actualizar con ganchos eran dos lecturas completas.
+   */
+  function filaDeId_(sheet, headers, id, idColumn, sheetName) {
+    const idCol = columnaId_(headers, idColumn, sheetName);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return -1;
+    const ids = sheet.getRange(2, idCol + 1, lastRow - 1, 1).getValues();
+    const buscado = String(id);
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === buscado) return i + 2;
+    }
+    return -1;
+  }
+
   /** Busca una fila por columna ID. Devuelve {rowIndex, data} o null */
   function findById(spreadsheetId, sheetName, id, idColumn) {
     idColumn = idColumn || 'ID';
     const sheet = getSheet(spreadsheetId, sheetName);
     const headers = getHeaders_(sheet);
-    const idCol = columnaId_(headers, idColumn, sheetName);
+    const fila = filaDeId_(sheet, headers, id, idColumn, sheetName);
+    if (fila < 0) return null;
+    return { rowIndex: fila, data: rowToObject_(headers, sheet.getRange(fila, 1, 1, headers.length).getValues()[0]) };
+  }
 
-    const lastRow = sheet.getLastRow();
-    if (lastRow < 2) return null;
-    const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+  /**
+   * Las columnas que `cambios` trae, como [{ i, valor }] (i base 0), con la misma búsqueda tolerante a espacios y
+   * acentos de objectToRow_. Un encabezado repetido recibe el valor en todas sus columnas, igual que antes.
+   */
+  function columnasDeCambios_(headers, cambios) {
+    const porNombre = {};
+    Object.keys(cambios || {}).forEach((clave) => { porNombre[normalizarEncabezado_(clave)] = cambios[clave]; });
+    const columnas = [];
+    headers.forEach((h, i) => {
+      if (normalizarEncabezado_(h) === '') return;
+      const valor = cambios[h] !== undefined ? cambios[h] : porNombre[normalizarEncabezado_(h)];
+      if (valor !== undefined) columnas.push({ i: i, valor: valor });
+    });
+    return columnas;
+  }
 
-    for (let i = 0; i < values.length; i++) {
-      if (String(values[i][idCol]) === String(id)) {
-        return { rowIndex: i + 2, data: rowToObject_(headers, values[i]) };
+  /** Escribe esas columnas de un renglón: un setValues por cada tramo de columnas seguidas, nada en los huecos */
+  function escribirColumnas_(sheet, fila, columnas) {
+    for (let k = 0; k < columnas.length;) {
+      const tramo = [columnas[k]];
+      while (k + tramo.length < columnas.length && columnas[k + tramo.length].i === tramo[tramo.length - 1].i + 1) {
+        tramo.push(columnas[k + tramo.length]);
       }
+      sheet.getRange(fila, tramo[0].i + 1, 1, tramo.length).setValues([tramo.map((c) => c.valor)]);
+      k += tramo.length;
     }
-    return null;
   }
 
   /**
@@ -143,18 +178,27 @@ const SheetUtils = (function () {
     return obj;
   }
 
-  /** Actualiza (merge) una fila existente localizada por ID */
+  /**
+   * Actualiza (merge) una fila existente localizada por ID. Devuelve el registro completo ya mezclado.
+   *
+   * Bajo el candado, y busca el renglón ADENTRO: si alguien borra un renglón más arriba entre la búsqueda y la
+   * escritura, los números se recorren y la escritura caía en OTRO registro, sin error. Y escribe solo las
+   * columnas que trae `changes`: reescribir el renglón completo pisaba lo que otro (o alguien a mano en la hoja)
+   * había cambiado en otra columna, y convertía en valor cualquier fórmula del renglón.
+   */
   function update(spreadsheetId, sheetName, id, changes, idColumn) {
-    const found = findById(spreadsheetId, sheetName, id, idColumn);
-    if (!found) throw new Error('No se encontró el registro con ID=' + id + ' en "' + sheetName + '"');
-
-    const sheet = getSheet(spreadsheetId, sheetName);
-    const headers = getHeaders_(sheet);
-    const merged = Object.assign({}, found.data, changes);
-    const row = objectToRow_(headers, merged);
-    sheet.getRange(found.rowIndex, 1, 1, headers.length).setValues([row]);
-    tocar_(spreadsheetId, sheetName);
-    return merged;
+    idColumn = idColumn || 'ID';
+    return Candado.con(() => {
+      const sheet = getSheet(spreadsheetId, sheetName);
+      const headers = getHeaders_(sheet);
+      const fila = filaDeId_(sheet, headers, id, idColumn, sheetName);
+      if (fila < 0) throw new Error('No se encontró el registro con ID=' + id + ' en "' + sheetName + '"');
+      const actual = rowToObject_(headers, sheet.getRange(fila, 1, 1, headers.length).getValues()[0]);
+      const columnas = columnasDeCambios_(headers, changes);
+      escribirColumnas_(sheet, fila, columnas);
+      if (columnas.length) tocar_(spreadsheetId, sheetName);
+      return Object.assign({}, actual, changes);
+    });
   }
 
   /**
@@ -171,9 +215,7 @@ const SheetUtils = (function () {
     idColumn = idColumn || 'ID';
     if (!updates || !updates.length) return 0;
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       const sheet = getSheet(spreadsheetId, sheetName);
       const headers = getHeaders_(sheet);
       const idCol = columnaId_(headers, idColumn, sheetName);
@@ -198,18 +240,20 @@ const SheetUtils = (function () {
         tocar_(spreadsheetId, sheetName);
       }
       return cambiadas;
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
-  /** Elimina físicamente una fila por ID (usar con cuidado; preferir "baja lógica") */
+  /** Elimina físicamente una fila por ID (usar con cuidado; preferir "baja lógica"). Bajo el candado, como update. */
   function remove(spreadsheetId, sheetName, id, idColumn) {
-    const found = findById(spreadsheetId, sheetName, id, idColumn);
-    if (!found) return false;
-    getSheet(spreadsheetId, sheetName).deleteRow(found.rowIndex);
-    tocar_(spreadsheetId, sheetName);
-    return true;
+    idColumn = idColumn || 'ID';
+    return Candado.con(() => {
+      const sheet = getSheet(spreadsheetId, sheetName);
+      const fila = filaDeId_(sheet, getHeaders_(sheet), id, idColumn, sheetName);
+      if (fila < 0) return false;
+      sheet.deleteRow(fila);
+      tocar_(spreadsheetId, sheetName);
+      return true;
+    });
   }
 
   /**
@@ -222,9 +266,7 @@ const SheetUtils = (function () {
     const buscados = new Set((ids || []).map(String));
     if (!buscados.size) return 0;
 
-    const lock = LockService.getScriptLock();
-    lock.waitLock(20000);
-    try {
+    return Candado.con(() => {
       const sheet = getSheet(spreadsheetId, sheetName);
       const idCol = columnaId_(getHeaders_(sheet), idColumn, sheetName);
       const lastRow = sheet.getLastRow();
@@ -244,9 +286,7 @@ const SheetUtils = (function () {
       }
       if (filas.length) tocar_(spreadsheetId, sheetName);
       return filas.length;
-    } finally {
-      lock.releaseLock();
-    }
+    });
   }
 
   /**

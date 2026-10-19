@@ -92,7 +92,7 @@ const LineasRepo = (function () {
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v8'; // v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v9'; // v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -402,9 +402,25 @@ const LineasRepo = (function () {
     return { columnas: ['ID'].concat(COLS_VISTA_LINEAS), filas: filas };
   }
 
+  /**
+   * La huella del índice (apiListaConHuella, fase 5.2b): la versión de cada pestaña de la que sale, aunque se responda
+   * de la caché. Con ella el vigía de la pantalla (api.html) sabe si cambió sin volver a pedirlo. Solo CacheService.
+   * Las pestañas: la de líneas (o, leyendo la estructura nueva, las que la arman: LineasLectura.filas) y MOVIMIENTOS
+   * (los cambios de número). Las escrituras de LineasDatos las tocan (CacheHojas.tocar); lo editado a mano, AvisoDeCambios.
+   */
+  function huellaIndice_() {
+    try {
+      if (typeof CacheHojas === 'undefined') return;
+      const L = typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(TAB.LINEAS) ? LineasLectura : null;
+      const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS, L.HOJA_VIEJA] : [TAB.LINEAS];
+      CacheHojas.versiones(hojas.concat([TAB.MOV]).map((n) => [LineasDatos.id(), n]));
+    } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
+  }
+
   /** Índices de equipos y líneas + columnas de la vista de tabla del AppSheet (1 lectura de la pestaña; caché 30 min). */
   function indice(forzar) {
     const inicio = Date.now();
+    huellaIndice_();
     if (!forzar) {
       const enCache = LineasDatos.cacheLeer(CLAVE_INDICE);
       if (enCache) { LineasDatos.tiempo('índice (de la caché)', inicio); return enCache; }
@@ -867,6 +883,44 @@ const LineasRepo = (function () {
       },
       accesorios: txt(col(f, 'ACCESORIOS')), comentario: txt(col(f, 'COMENTARIO')),
     };
+  }
+
+  /** RESPONSIVAS LINEAS: la línea que se entregó ese día (ID LINEA es el registro: el equipo o la línea sin equipo). */
+  const COL_LINEA_ENTREGADA = 'ID LINEA ENTREGADA';
+
+  /**
+   * Responsivas que la línea firmó dentro de un equipo (pendiente 2.45, 15-oct): las de RESPONSIVAS LINEAS con su ID en
+   * ID LINEA ENTREGADA y otro registro en ID LINEA. Cada una con el registro de su equipo (registroId), su NUCO y
+   * enEquipo. Las anteriores al 15-oct solo si se pudo probar su línea (la asignación del equipo en esa fecha y el número
+   * de la responsiva dicen lo mismo, o el número, su SIM y la única línea del equipo; reporte_lineas/actualizacion_base/
+   * ligar_responsivas.js).
+   */
+  function responsivasEntregadas(idLinea) {
+    const ids = idsDeRegistro(idLinea);
+    if (!ids.length || !LineasDatos.existeTabla(TAB.RESP)) return [];
+    // Los encabezados se leen de caché (1 h): la columna pudo agregarse después (la primera responsiva o el llenado de
+    // ligar_responsivas.js, 15-oct: la ficha no la veía). Si no está, se releen una vez; sin ella aún no hay ninguna
+    const buscar = () => LineasDatos.buscarFilasVarios(TAB.RESP, COL_LINEA_ENTREGADA, ids);
+    const sinColumna = (e) => /no tiene la columna/.test(e.message);
+    let filas;
+    try {
+      filas = buscar();
+    } catch (e) {
+      if (!sinColumna(e)) throw e;
+      LineasDatos.tablaFresca(TAB.RESP);
+      try { filas = buscar(); } catch (e2) { if (sinColumna(e2)) return []; throw e2; }
+    }
+    if (!filas.length) return [];
+    const resp = LineasDatos.leerFilas([{ tabla: TAB.RESP, filas: filas }])[0]
+      .filter((f) => ids.indexOf(idActual(col(f, 'ID LINEA'))) < 0);
+    if (!resp.length) return [];
+    const hayApp = LineasDatos.existeTabla(TAB.APP_EVID);
+    const filasEv = hayApp ? LineasDatos.buscarFilasVarios(TAB.APP_EVID, 'ID_REGISTRO', resp.map((f) => txt(f['ID']))) : [];
+    const evidencias = filasEv.length ? LineasDatos.leerFilas([{ tabla: TAB.APP_EVID, filas: filasEv }])[0].map(evidenciaDesdeFila) : [];
+    revisarPdfsLigados(evidencias);
+    const evPorRegistro = {};
+    evidencias.forEach((e) => { if (e.idRegistro) evPorRegistro[e.idRegistro] = e; });
+    return resp.map((f) => Object.assign(responsivaDesdeFila(f, evPorRegistro[txt(f['ID'])]), { enEquipo: true }));
   }
 
   /** Responsiva que solo existe como carpeta en Drive. */
@@ -1581,7 +1635,7 @@ const LineasRepo = (function () {
     indice, vistaCompleta, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
-    evidenciasDeRegistro, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
+    evidenciasDeRegistro, responsivasEntregadas, COL_LINEA_ENTREGADA, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, cobroHabitual, diaDeCorte,
     catalogos, indiceColaboradores, borrarCaches,
   };

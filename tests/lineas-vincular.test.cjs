@@ -41,7 +41,7 @@ test('la responsiva enseña fija la línea que se pone', () => {
   assert.match(cap, /const COLUMNAS_DE_LINEA = \['NUMERO TELEFONO', 'NUMERO SIM', 'COMPAÑIA', 'RAZON SOCIAL', 'PIN WHATSAPP'\];/);
   assert.match(cap, /const v = \(c\) => valorLinea_\(lineaFila && COLUMNAS_DE_LINEA\.indexOf\(c\) >= 0 \? lineaFila : fila, c\);/);
   assert.match(cap, /return ref && ref\.lineaNueva \? LineasRepo\.leerRegistroObligatorio\(String\(ref\.lineaNueva\), 'la línea'\) : null;/);
-  assert.match(cap, /accion \? accion\.lineaFila \|\| null : null\)/);
+  assert.match(cap, /accion \? accion\.lineaFila \|\| null : null, sinEquipo\)/);
 });
 
 test('la pantalla: las acciones en el ⋮ y el formulario de la acción', () => {

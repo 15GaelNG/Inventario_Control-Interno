@@ -18,7 +18,7 @@ function apiPing() {
 // (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
 // Solo las listas (apiListar…, apiFicha…, el Inicio y las campanitas), no cualquier api…: source-contracts revisa que
 // cada callServerListaCacheada de la pantalla entre aquí
-const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|NotificacionesPendientes|LineasNotificaciones)$/;
+const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|Notificaciones|LineasIndice)$/;
 function apiListaConHuella(token, fn, args) {
   if (!LISTAS_CON_HUELLA_.test(String(fn))) throw new Error('Lista desconocida: ' + fn);
   const f = globalThis[fn];
@@ -179,8 +179,9 @@ function apiListarVehiculosResumen(token) {
 function apiDiagnosticoIdVehiculo(token) {
   return VehiculosService.diagnosticoIds(token);
 }
-function apiNotificacionesPendientes(token) {
-  return JSON.stringify(NotificacionesService.listar(token));
+// La campana: los avisos de todos los módulos en una llamada ({ lineas, vehiculos }; null = ese módulo falló)
+function apiNotificaciones(token, limite) {
+  return NotificacionesService.campana(token, limite);
 }
 function apiVehiculosCompleto(token) {
   return JSON.stringify(VehiculosService.completo(token));
@@ -648,9 +649,6 @@ function apiListarOficinasCCH(token) {
 }
 
 // --- Líneas (equipos y líneas telefónicas) ---
-function apiLineasPermisos(token) {
-  return TelefoniaService.permisos(token);
-}
 function apiLineasIndice(token) {
   return TelefoniaService.indice(token);
 }
@@ -660,8 +658,8 @@ function apiLineasEquipo(token, id) {
 function apiLineasLinea(token, id) {
   return TelefoniaService.linea(token, id);
 }
-function apiLineasEvidencias(token, id) {
-  return TelefoniaService.evidencias(token, id);
+function apiLineasEvidencias(token, id, vista) {
+  return TelefoniaService.evidencias(token, id, vista);
 }
 function apiLineasHistorial(token, id) {
   return TelefoniaService.historial(token, id);
@@ -740,8 +738,8 @@ function apiLineasPasosServidor(token, nombre) {
 function apiLineasGenerarPdf(token, tipo, id, forzar, firmas) {
   return TelefoniaService.generarPdf(token, tipo, id, forzar, firmas);
 }
-function apiLineasSubirPdfFirmado(token, registroId, tipo, docId, pdfId, base64) {
-  return TelefoniaService.subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64);
+function apiLineasSubirPdfFirmado(token, registroId, tipo, docId, pdfId, base64, vista) {
+  return TelefoniaService.subirPdfFirmado(token, registroId, tipo, docId, pdfId, base64, vista);
 }
 function apiLineasFormularioRegistro(token, id, parte) {
   return TelefoniaService.formularioRegistro(token, id, parte);
@@ -751,9 +749,6 @@ function apiLineasCrearRegistro(token, datos) {
 }
 function apiLineasEditarRegistro(token, id, datos) {
   return TelefoniaService.editarRegistro(token, id, datos);
-}
-function apiLineasReasignar(token, responsiva) {
-  return TelefoniaService.reasignar(token, responsiva);
 }
 function apiLineasVincular(token, datos) {
   return TelefoniaService.vincular(token, datos);
@@ -803,9 +798,6 @@ function apiLineasBandejaResguardos(token) {
 }
 function apiLineasAccionBandejaResguardo(token, accion, ids, datos) {
   return TelefoniaService.accionBandejaResguardo(token, accion, ids, datos);
-}
-function apiLineasNotificaciones(token, limite) {
-  return TelefoniaService.notificaciones(token, limite);
 }
 function apiLineasMarcarNotificaciones(token, ids) {
   return TelefoniaService.marcarNotificaciones(token, ids);

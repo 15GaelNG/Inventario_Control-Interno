@@ -60,22 +60,9 @@ const ExpedienteNuco = (function () {
     return id ? DriveApp.getFolderById(id) : DriveUtils.carpetaEnRaiz(RAIZ_NOMBRE);
   }
 
-  /** Para comparar nombres de carpeta: sin espacios ni acentos, en mayúsculas ("2.- Servicios" = "2.-SERVICIOS") */
-  function clave_(nombre) {
-    return String(nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '').toUpperCase();
-  }
-
-  function subcarpeta_(padre, nombre) {
-    const exacta = padre.getFoldersByName(nombre);
-    if (exacta.hasNext()) return exacta.next();
-    const buscada = clave_(nombre);
-    const todas = padre.getFolders();
-    while (todas.hasNext()) {
-      const c = todas.next();
-      if (clave_(c.getName()) === buscada) return c;
-    }
-    return padre.createFolder(nombre);
-  }
+  // Reconocer una carpeta aunque su nombre traiga espacios o acentos de más: DriveUtils (la misma regla en todo el sistema)
+  const clave_ = (nombre) => DriveUtils.claveCarpeta(nombre);
+  const subcarpeta_ = (padre, nombre) => DriveUtils.subcarpeta(padre, nombre);
 
   /** "88", "0088" y 88 son el mismo NUCO; la carpeta se llama sin ceros, como las que ya existen */
   function nombreNuco_(nucco) {

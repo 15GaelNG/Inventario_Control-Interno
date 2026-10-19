@@ -42,7 +42,7 @@
   }
 
   function formatoMonedaPCC(valor) {
-    return '$' + (Number(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    return Formato.moneda(Number(valor) || 0, { centavos: false });
   }
 
   async function initPanoramaCajaChica() {

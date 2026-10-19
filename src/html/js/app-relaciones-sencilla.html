@@ -94,8 +94,8 @@
         texto: 'Se ven distintos, pero así debe ser.' },
     ];
 
-    const esc = (v) => escaparHtml(v == null ? '' : String(v));
-    const num = (x) => Number(x || 0).toLocaleString('es-MX');
+    const esc = Formato.esc;
+    const num = Formato.miles;
     const dato = (col) => {
       if (DATOS[col]) return DATOS[col];
       const t = String(col || '').toLowerCase();

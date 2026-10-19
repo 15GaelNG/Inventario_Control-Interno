@@ -60,8 +60,7 @@
   const CamposHoja = (function () {
     /** 'TIPO DE COMBUSTIBLE' → 'tipo-de-combustible' (sin acentos ni símbolos) */
     function slug(clave) {
-      return clave.toLowerCase()
-        .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      return Formato.normal(clave)
         .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     }
     const idDe = (prefijo, clave) => prefijo + '-' + slug(clave);
@@ -191,7 +190,7 @@
           const info = document.getElementById(id + '-actual');
           if (info) {
             info.innerHTML = campo.tipo === 'firma'
-              ? (valor ? `<img src="${valor}" alt="Firma guardada" style="max-width:220px;border:1px solid var(--color-border);border-radius:8px;background:#fff" />`
+              ? (valor ? `<img src="${valor}" alt="Firma guardada" style="max-width:220px;border:1px solid var(--color-border);border-radius:var(--radio-m);background:#fff" />`
                 : '<span class="empty-state" style="margin:0">Sin firma</span>')
               : (valor ? `<a href="${valor}" target="_blank" rel="noopener">📎 Ver archivo actual</a>`
                 : '<span class="empty-state" style="margin:0">Sin archivo</span>');

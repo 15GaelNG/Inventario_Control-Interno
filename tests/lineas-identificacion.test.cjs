@@ -48,7 +48,8 @@ function modulo(opciones) {
       }),
     },
     DriveUtils: { marcarAutor: (f) => f },
-    CapitalHumano: { idPara: (hoja, r) => (r['RESPONSABLE'] === 'JUAN PEREZ LOPEZ' ? 'PER-000123' : '') },
+    // Como el de verdad (13-oct): si el correo es de otra persona, no decide
+    CapitalHumano: { idPara: (hoja, r) => (r['RESPONSABLE'] === 'JUAN PEREZ LOPEZ' && (!r['CUENTA GOOGLE'] || r['CUENTA GOOGLE'] === 'juan@x.com') ? 'PER-000123' : '') },
     LineasUtil: {
       nuco4: (n) => (/^\d+$/.test(String(n || '').trim()) ? String(n).trim().padStart(4, '0') : ''),
       nucoVisible: (n) => String(n || ''),
@@ -145,7 +146,7 @@ test('la responsiva: la identificación se escribe antes y se descarta si la res
   assert.match(fn, /\} catch \(e\) \{\n\s+LineasIdentificaciones\.descartar\(escritos\);\n\s+throw e;/);
   // La carpeta de la responsiva es la de su identificación: su PDF va ahí (destinoPdf_ usa CARPETA_ID)
   assert.match(fn, /'CARPETA_ID': escritos \? escritos\.carpetaId : '', 'RUTA': escritos \? escritos\.ruta : ''/);
-  assert.match(fn, /LineasIdentificaciones\.registrar\(escritos, id, obj\.reg, usuario, ahora\);/);
+  assert.match(fn, /LineasIdentificaciones\.registrar\(escritos, id, sinEquipo \? Object\.assign\(\{\}, obj\.reg, \{ nuco: '' \}\) : obj\.reg, usuario, ahora\);/);
   // El formulario: una para el principal y una debajo del nombre de cada responsable adicional
   assert.match(captura, /campo_\('IDENTIFICACION', 'Identificación', 'listaAbierta'[^\n]*\n\s+archivoIdentificacion_\(0\),/);
   assert.match(captura, /conIdentificacionAdicional_\(LineasRegistros\.camposAdicionales\(/);
@@ -285,4 +286,28 @@ test('paso 3 en la pantalla: busca al cambiar el responsable, pregunta «¿Es co
   tiene(pantalla, "if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);", 'sin contestar no se guarda: lleva a la pregunta');
   tiene(read('src/ClientApi.gs'), 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
   tiene(read('src/services/TelefoniaService.gs'), 'function identificacionesRegistradas(token, personas) {\n    operar_(token);', 'con permiso de operar Líneas');
+});
+
+test('la cuenta Google del equipo no es la de la persona: se reconoce por nombre y número (prod 14 y 15-oct)', () => {
+  // El correo de la responsiva es de otra persona en CH (admon.oficinasjhda@, simeon.lugo@): antes daba «no es de…»
+  const valores = Object.assign({}, VALORES, { 'CORREO': 'admon.oficinas@x.com' });
+  const m = modulo({ registro: REGISTRO });
+  const escritos = m.I.escribir(m.I.revisar([{ orden: 0, reutilizar: 'IDN-NUEVA' }], valores), '15', new Date(), 'Files');
+  assert.equal(escritos.archivos[0].idPersona, 'PER-000123');
+  assert.deepEqual(m.copias.map((c) => c.de), ['A-NUEVA']);
+  const nueva = modulo();
+  assert.equal(nueva.I.escribir(nueva.I.revisar([{ orden: 0, base64: PDF }], valores), '15', new Date(), 'Files').archivos[0].idPersona, 'PER-000123');
+});
+
+test('la registrada sin ID PERSONA se usa si es el mismo nombre y número (prod 15-oct: ALAN MARTINEZ GONZALEZ)', () => {
+  const sinId = Object.assign({}, REGISTRO[1], { 'ID': 'IDN-SINID', 'ID PERSONA': '', 'ARCHIVO ID': 'A-SINID' });
+  const m = modulo({ registro: REGISTRO.concat([sinId]) });
+  m.I.escribir(m.I.revisar([{ orden: 0, reutilizar: 'IDN-SINID' }], VALORES), '15', new Date(), 'Files');
+  assert.deepEqual(m.copias.map((c) => c.de), ['A-SINID']);
+  // Otro número de empleado: no es la misma persona
+  const otro = modulo({ registro: REGISTRO.concat([Object.assign({}, sinId, { 'NO EMPLEADO': 'HA99999' })]) });
+  assert.throws(() => otro.I.escribir(otro.I.revisar([{ orden: 0, reutilizar: 'IDN-SINID' }], VALORES), '15', new Date(), 'Files'), /no es de JUAN PEREZ LOPEZ/);
+  // Con ID PERSONA de los dos lados manda el ID, aunque el nombre sea igual
+  const ajeno = modulo({ registro: REGISTRO.concat([Object.assign({}, sinId, { 'ID PERSONA': 'PER-777' })]) });
+  assert.throws(() => ajeno.I.escribir(ajeno.I.revisar([{ orden: 0, reutilizar: 'IDN-SINID' }], VALORES), '15', new Date(), 'Files'), /no es de JUAN PEREZ LOPEZ/);
 });

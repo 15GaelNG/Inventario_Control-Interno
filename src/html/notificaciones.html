@@ -5,7 +5,8 @@
      NotificacionesService de jorge: verificaciones, seguro e inspecciones; se recalculan en vivo y se quitan
      solas al atenderse, pero también se pueden marcar como leídas a mano -- esas se guardan solo en el
      navegador, ver LeidasVehiculo más abajo, porque no hay un renglón de verdad que marcar en una hoja).
-     Un módulo nuevo necesita su entrada en MODULOS, sus tipos en TIPOS/GRUPOS y su fuente en FUENTES. */
+     Un módulo nuevo necesita su entrada en MODULOS, sus tipos en TIPOS/GRUPOS y su fuente en FUENTES_ del servidor
+     (NotificacionesService.campana). */
   :root {
     --ntf-pronto: #b54708; --ntf-pronto-bg: #fef0c7;
     --ntf-vencida: #b42318; --ntf-vencida-bg: #fee4e2;
@@ -26,7 +27,7 @@
   .ntf-campana:hover, .ntf-campana[aria-expanded="true"] { background: var(--color-bg); color: var(--color-text); }
   .ntf-contador {
     position: absolute; top: -5px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
-    background: var(--ntf-vencida); color: #fff; font-size: 10.5px; font-weight: 700; line-height: 18px; text-align: center;
+    background: var(--ntf-vencida); color: #fff; font-size: var(--texto-2xs); font-weight: 700; line-height: 18px; text-align: center;
     border: 2px solid var(--color-surface);
   }
   .ntf-contador[hidden] { display: none; }
@@ -34,7 +35,7 @@
   /* Fijo y acomodado por JS debajo de la campana (colocarPanel): con position absolute quedaba bajo el menú lateral */
   .ntf-panel {
     position: fixed; top: 60px; left: 12px; z-index: 950; width: 390px; max-width: calc(100vw - 24px);
-    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius);
+    background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radio-xl);
     box-shadow: 0 12px 32px rgba(6, 20, 30, .18); overflow: hidden;
   }
   .ntf-panel[hidden] { display: none; }
@@ -42,10 +43,10 @@
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 12px 14px; border-bottom: 1px solid var(--color-border);
   }
-  .ntf-panel-cabeza strong { font-size: 14px; color: var(--color-text); }
+  .ntf-panel-cabeza strong { font-size: var(--texto-m); color: var(--color-text); }
   .ntf-enlace {
-    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: 12.5px; font-weight: 600;
-    cursor: pointer; border-radius: 6px;
+    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: var(--texto-s); font-weight: 600;
+    cursor: pointer; border-radius: var(--radio-s);
   }
   :root[data-theme="dark"] .ntf-enlace { color: var(--color-accent); }
   .ntf-enlace:hover { background: var(--color-bg); }
@@ -62,49 +63,49 @@
   .ntf-item.no-leida { border-left-color: var(--color-accent); background: var(--color-primary-soft); }
   .ntf-item.no-leida:hover { filter: brightness(.98); }
   .ntf-item-icono {
-    flex-shrink: 0; width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: var(--radio-l); display: flex; align-items: center; justify-content: center;
     background: var(--ntf-pronto-bg); color: var(--ntf-pronto);
   }
   .ntf-item-icono.vencida { background: var(--ntf-vencida-bg); color: var(--ntf-vencida); }
   .ntf-item-icono.info { background: var(--ntf-info-bg); color: var(--ntf-info); }
   .ntf-item-cuerpo { min-width: 0; flex: 1; }
-  .ntf-item-titulo { font-size: 13.5px; font-weight: 600; color: var(--color-text); margin: 0 0 2px; }
-  .ntf-item-mensaje { font-size: 12.5px; color: var(--color-text-muted); margin: 0 0 6px; line-height: 1.4; }
-  .ntf-item-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 11.5px; color: var(--color-text-muted); }
-  .ntf-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  .ntf-item-titulo { font-size: var(--texto-m); font-weight: 600; color: var(--color-text); margin: 0 0 2px; }
+  .ntf-item-mensaje { font-size: var(--texto-s); color: var(--color-text-muted); margin: 0 0 6px; line-height: 1.4; }
+  .ntf-item-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: var(--texto-xs); color: var(--color-text-muted); }
+  .ntf-chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 700;
     background: var(--ntf-pronto-bg); color: var(--ntf-pronto); }
   .ntf-chip.vencida { background: var(--ntf-vencida-bg); color: var(--ntf-vencida); }
   .ntf-chip.info { background: var(--ntf-info-bg); color: var(--ntf-info); }
-  .ntf-vacio { padding: 28px 16px; text-align: center; color: var(--color-text-muted); font-size: 13px; }
+  .ntf-vacio { padding: 28px 16px; text-align: center; color: var(--color-text-muted); font-size: var(--texto-s); }
   .ntf-vacio .ico { width: 28px; height: 28px; margin-bottom: 6px; opacity: .7; }
 
   /* Vista completa */
   .ntf-vista .ntf-lista { padding: 0; overflow: hidden; }
   .ntf-vista .ntf-item { padding: 14px 18px; cursor: default; }
   .ntf-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .ntf-acciones button { padding: 6px 12px; font-size: 12.5px; }
+  .ntf-acciones button { padding: 6px 12px; font-size: var(--texto-s); }
   .ntf-controles { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-  .ntf-controles .tabs-simple { margin-bottom: 0; }
-  .ntf-filtro-tipo { font-size: 12.5px; color: var(--color-text-muted); }
+  .ntf-controles .tabs-lista { margin-bottom: 0; }
+  .ntf-filtro-tipo { font-size: var(--texto-s); color: var(--color-text-muted); }
   .ntf-filtro-tipo button { margin-left: 4px; }
   .ntf-modulos { margin-bottom: 12px; }
   .ntf-modulo-titulo {
     display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; padding: 10px 14px; border: none; border-radius: 0; text-align: left;
     background: var(--color-bg); border-bottom: 1px solid var(--color-border); color: var(--color-text);
-    font-size: 12.5px; font-weight: 700; cursor: pointer;
+    font-size: var(--texto-s); font-weight: 700; cursor: pointer;
   }
   .ntf-modulo-titulo span { font-weight: 500; color: var(--color-text-muted); }
   /* button:hover global pinta de azul oscuro: aquí el hover es suave, como el de los avisos */
   .ntf-modulo-titulo:hover, .ntf-modulo-titulo:focus-visible { background: var(--color-primary-soft); color: var(--color-text); }
   .ntf-modulo-titulo:hover span { color: var(--color-text-muted); }
-  .ntf-vista .ntf-modulo-titulo { font-size: 13.5px; padding: 12px 18px; cursor: default; }
+  .ntf-vista .ntf-modulo-titulo { font-size: var(--texto-m); padding: 12px 18px; cursor: default; }
   .ntf-vista .ntf-modulo-titulo:hover { background: var(--color-bg); }
   .ntf-seccion {
-    padding: 10px 18px 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    padding: 10px 18px 8px; font-size: var(--texto-xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
     color: var(--color-text-muted); background: var(--color-bg); border-bottom: 1px solid var(--color-border);
   }
   .ntf-mas {
-    display: block; width: 100%; padding: 9px 18px; text-align: left; font-size: 12.5px; font-weight: 600;
+    display: block; width: 100%; padding: 9px 18px; text-align: left; font-size: var(--texto-s); font-weight: 600;
     background: transparent; border: none; border-bottom: 1px solid var(--color-border); color: var(--color-primary); cursor: pointer;
   }
   :root[data-theme="dark"] .ntf-mas { color: var(--color-accent); }
@@ -130,15 +131,15 @@
       </div>
     </div>
 
-    <div class="tabs-simple ntf-modulos" id="ntf-modulo" role="tablist" aria-label="Módulo"></div>
+    <div class="tabs-lista ntf-modulos" id="ntf-modulo" role="tablist" aria-label="Módulo"></div>
     <!-- Una tarjeta por tipo: clic = ver solo ese tipo -->
     <div class="stat-row" id="ntf-kpis">
       <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
     </div>
 
     <div class="ntf-controles">
-      <div class="tabs-simple" id="ntf-filtro" role="tablist" aria-label="Qué notificaciones ver">
-        <button type="button" class="tab-btn active" data-filtro="no-leidas" role="tab"><i data-lucide="bell-dot" class="ico"></i> Por atender <span id="ntf-num-no-leidas"></span></button>
+      <div class="tabs-lista" id="ntf-filtro" role="tablist" aria-label="Qué notificaciones ver">
+        <button type="button" class="tab-btn activa" data-filtro="no-leidas" role="tab"><i data-lucide="bell-dot" class="ico"></i> Por atender <span id="ntf-num-no-leidas"></span></button>
         <button type="button" class="tab-btn" data-filtro="todas" role="tab"><i data-lucide="inbox" class="ico"></i> Todas <span id="ntf-num-todas"></span></button>
       </div>
       <div class="ntf-filtro-tipo" id="ntf-filtro-tipo" hidden></div>
@@ -151,8 +152,9 @@
 <script>
   /**
    * Notificaciones: campana de la barra superior (contador de no leídas y las más recientes) y la vista completa.
-   * Datos: apiLineasNotificaciones(token, limite)/apiLineasMarcarNotificaciones(token, ids|null) para Líneas,
-   * apiNotificacionesPendientes(token) para Vehículos (su "leída" vive en LeidasVehiculo, solo local).
+   * Datos: apiNotificaciones(token, limite) trae los avisos de todos los módulos en una llamada, ya con la misma forma
+   * (NotificacionesService.campana); apiLineasMarcarNotificaciones(token, ids|null) marca los de Líneas. Los de
+   * Vehículos se marcan solo en el navegador (LeidasVehiculo).
    * Cada tipo (TIPOS) dice su ícono y a dónde lleva: la ficha de la línea, la bandeja de resguardos o Líneas
    * Telefónicas filtrada. Abrir un aviso lo marca como leído.
    */
@@ -195,7 +197,7 @@
     /** grupo: para filtrar; color: pronto (ámbar) | vencida (rojo) | info (azul); destino: a dónde lleva. */
     const TIPOS = {
       // Vehículos (NotificacionesService.gs): el color sale de la severidad, no del tipo.
-      // "Leída" se resuelve contra LeidasVehiculo (ver arriba, solo local) en deVehiculo():
+      // "Leída" se resuelve contra LeidasVehiculo (ver arriba, solo local) en DE_MODULO.vehiculos:
       // mientras siga marcada ahí, sigue entrando como leída aunque NotificacionesService
       // la vuelva a traer con los días ya cambiados (el id es folio+tipo, no cambia).
       // Sin etiqueta de días: el mensaje de NotificacionesService ya dice cuántos
@@ -219,31 +221,18 @@
       { clave: 'seguro', modulo: VEHICULOS, etiqueta: 'Seguros', icono: 'shield' },
       { clave: 'inspeccion', modulo: VEHICULOS, etiqueta: 'Inspecciones atrasadas', icono: 'clipboard-list' },
     ];
-    const ETIQUETA_VEH = { verificacion: 'Verificación', seguro: 'Seguro', inspeccion: 'Inspección' };
-
-    /** Pendiente de Vehículos ({ tipo, folio, nucco, dias, severidad, texto }) con la forma de un aviso. */
-    function deVehiculo(v) {
-      const tipo = String(v.tipo || '').toLowerCase();
-      const id = 'veh-' + tipo + '-' + v.folio;
-      return {
-        id: id, modulo: VEHICULOS, tipo: 'VEH_' + tipo.toUpperCase(), folio: v.folio,
-        titulo: (ETIQUETA_VEH[tipo] || tipo) + ' · Nucco ' + (v.nucco || v.folio) + (v.nucco && v.folio ? ' (' + v.folio + ')' : ''),
-        mensaje: v.texto || '', dias: v.dias, severidad: v.severidad, fecha: null, leida: LeidasVehiculo.tiene(id),
-      };
-    }
 
     /**
-     * De dónde sale cada módulo. Cada uno regresa { items, noLeidas }; si uno falla (sin permiso, por ejemplo) los
-     * demás siguen. Los de Vehículos se siguen recalculando en vivo cada vez (si ya no aplican, se quitan solos),
-     * pero ahora también se pueden marcar como leídos a mano (ver LeidasVehiculo arriba).
+     * Lo que llega de cada módulo (apiNotificaciones: { lineas, vehiculos }, ya con la misma forma; null si ese módulo
+     * falló, y los demás siguen) → { items, noLeidas }. Los de Vehículos se recalculan en vivo cada vez (si ya no
+     * aplican, se quitan solos) y su "leída" es de este navegador (LeidasVehiculo): por eso se cuenta aquí.
      */
-    // Con la copia de la visita anterior al instante; si lo de ahora llega distinto, se repinta
-    // (el evento lista-actualizada, más abajo en vigilarSesion)
-    const FUENTES = {
-      lineas: (limite) => callServerListaCacheada('apiLineasNotificaciones', state.token, limite || 0)
-        .then((r) => ({ items: (r.items || []).map((n) => Object.assign(n, { modulo: 'lineas' })), noLeidas: r.noLeidas || 0 })),
-      vehiculos: () => callServerListaCacheada('apiNotificacionesPendientes', state.token)
-        .then((t) => { const items = JSON.parse(t || '[]').map(deVehiculo); return { items: items, noLeidas: items.filter((n) => !n.leida).length }; }),
+    const DE_MODULO = {
+      lineas: (x) => ({ items: x.items || [], noLeidas: x.noLeidas || 0 }),
+      vehiculos: (x) => {
+        const items = (x.items || []).map((n) => Object.assign(n, { leida: LeidasVehiculo.tiene(n.id) }));
+        return { items: items, noLeidas: items.filter((n) => !n.leida).length };
+      },
     };
     const OTRO = { grupo: 'otros', icono: 'bell', color: 'info' };
     /** Los avisos de "líneas para cancelar" anteriores al 30-sep se guardaron como RESGUARDO. */
@@ -258,7 +247,7 @@
     let contador = null;
     let boton = null;
 
-    const esc = (v) => (typeof escaparHtml === 'function' ? escaparHtml(v) : String(v == null ? '' : v));
+    const esc = Formato.esc;
     const icono = (nombre) => '<i data-lucide="' + nombre + '" class="ico"></i>';
     const pintarIconos = () => { if (typeof refreshIcons === 'function') refreshIcons(); };
 
@@ -271,13 +260,7 @@
       return 'Venció hace ' + (-dias) + ' días';
     }
 
-    function fechaCorta(v) {
-      if (!v) return '';
-      const d = new Date(v);
-      if (isNaN(d)) return '';
-      return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' +
-        d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
-    }
+    const fechaCorta = (v) => Formato.fechaTexto(v, { hora: true });
 
     /** Color del ícono: el adendum depende de si ya venció; los demás, de su tipo. */
     function colorDe(n) {
@@ -348,19 +331,21 @@
       pintarIconos();
     }
 
-    /** Pide todos los módulos a la vez. noLeidas (el número de la campana) = no leídas de Líneas + pendientes de Vehículos. */
+    /** Pide todos los módulos en una llamada. noLeidas (el número de la campana) = no leídas de Líneas + pendientes de Vehículos. */
     async function actualizar(limite) {
       if (typeof state === 'undefined' || !state.token) return null;
       pedidoEn = Date.now();
-      const claves = Object.keys(FUENTES);
-      const res = await Promise.all(claves.map((k) => FUENTES[k](limite).catch((e) => {
-        console.warn('Notificaciones (' + k + '): ' + (e && e.message));
+      // Con la copia de la visita anterior al instante; si lo de ahora llega distinto, se repinta
+      // (el evento lista-actualizada, más abajo en vigilarSesion)
+      const res = await callServerListaCacheada('apiNotificaciones', state.token, limite || 0).catch((e) => {
+        console.warn('Notificaciones: ' + (e && e.message));
         return null;
-      })));
-      if (res.every((x) => !x)) return null;
+      });
+      const claves = Object.keys(DE_MODULO);
+      if (!res || claves.every((k) => !res[k])) return null;
       const r = { items: [], noLeidas: 0, porModulo: {} };
-      claves.forEach((k, i) => {
-        const x = res[i] || { items: [], noLeidas: 0 };
+      claves.forEach((k) => {
+        const x = res[k] ? DE_MODULO[k](res[k]) : { items: [], noLeidas: 0 };
         r.items = r.items.concat(x.items);
         r.porModulo[k] = x.noLeidas;
         r.noLeidas += x.noLeidas;
@@ -414,7 +399,7 @@
       const idsLineas = ids ? candidatos.filter((n) => !esVehiculo(n)).map((n) => n.id) : null;
       if (!ids || idsLineas.length) {
         await callServer('apiLineasMarcarNotificaciones', state.token, idsLineas);
-        invalidarListasDe('apiLineasNotificaciones');   // que la copia no las vuelva a enseñar sin leer
+        invalidarListasDe('apiNotificaciones');   // que la copia no las vuelva a enseñar sin leer
       }
       aplicarLeidas(ultima, ids || null);
       if (datosVista && datosVista !== ultima) aplicarLeidas(datosVista, ids || null);
@@ -502,7 +487,7 @@
       // Se pintó con la copia y lo fresco llegó distinto: se repinta (sin volver a pedir: ya está en memoria)
       window.addEventListener('lista-actualizada', (ev) => {
         const fn = ev.detail && ev.detail.fn;
-        if (!shell.hidden && (fn === 'apiLineasNotificaciones' || fn === 'apiNotificacionesPendientes')) actualizar(EN_CAMPANA);
+        if (!shell.hidden && fn === 'apiNotificaciones') actualizar(EN_CAMPANA);
       });
       alCambiar();
     }
@@ -532,7 +517,7 @@
       /** Selector de módulo: Todos · Líneas · Vehículos, con cuántas hay en el filtro actual. */
       function pintarModulos(items) {
         const cuenta = (m) => items.filter((n) => (!m || n.modulo === m) && (filtro === 'todas' || !n.leida)).length;
-        const boton = (clave, ico, etiqueta) => '<button type="button" class="tab-btn' + ((modulo || '') === clave ? ' active' : '') +
+        const boton = (clave, ico, etiqueta) => '<button type="button" class="tab-btn' + ((modulo || '') === clave ? ' activa' : '') +
           '" role="tab" data-ntf-mod="' + clave + '">' + icono(ico) + ' ' + esc(etiqueta) + ' (' + cuenta(clave || null) + ')</button>';
         raiz.querySelector('#ntf-modulo').innerHTML = boton('', 'layers', 'Todos') + MODULOS.map((m) => boton(m.clave, m.icono, m.etiqueta)).join('');
       }
@@ -592,7 +577,7 @@
         raiz.querySelector('#ntf-num-todas').textContent = '(' + delGrupo.length + ')';
         raiz.querySelectorAll('#ntf-filtro .tab-btn').forEach((b) => {
           const activo = b.dataset.filtro === filtro;
-          b.classList.toggle('active', activo);
+          b.classList.toggle('activa', activo);
           b.setAttribute('aria-selected', String(activo));
         });
         const etiquetaGrupo = (GRUPOS.filter((g) => g.clave === grupo)[0] || {}).etiqueta;

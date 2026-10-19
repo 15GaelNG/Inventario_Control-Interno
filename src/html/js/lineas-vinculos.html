@@ -22,8 +22,8 @@
     'use strict';
 
     const may = (v) => String(v === null || v === undefined ? '' : v).trim().toUpperCase();
-    const normal = (s) => String(s === null || s === undefined ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-    const miles = (n) => Number(n || 0).toLocaleString('es-MX');
+    const normal = Formato.normal;
+    const miles = (n) => Formato.miles(n);
 
     // Estatus del catálogo (LineasRepo.CATALOGO) y los de antes del 30-sep que siguen en la hoja (COLOR_ESTATUS de
     // lineas.html). En uso solo lo que está en uso; lo que no se reconoce cuenta como baja (FUERA DE INVENTARIO,
@@ -206,7 +206,7 @@
      * origen = { tipo: 'linea' | 'equipo', fila, equipo (el de la línea), dueno (clave de su persona) };
      * destino = { tipo: 'equipo', fila, linea } | { tipo: 'persona', persona } | { tipo: 'caja', caja }.
      * → { tipo: 'vinculo', modo, fila, pre } (abrirVinculo) | { tipo: 'cancelacion', fila } | { tipo: 'resguardo', fila,
-     * estatus } | { tipo: 'reasignar', fila, persona }
+     * estatus } | { tipo: 'responsiva', fila, persona }
      */
     function alSoltar(o, d) {
       if (!o || !d) return null;
@@ -235,7 +235,7 @@
       }
       if (o.tipo !== 'equipo') return null;
       const e = o.fila;
-      if (d.tipo === 'persona') return o.dueno === d.persona.clave ? null : { tipo: 'reasignar', fila: e, persona: d.persona };
+      if (d.tipo === 'persona') return o.dueno === d.persona.clave ? null : { tipo: 'responsiva', fila: e, persona: d.persona };
       if (d.tipo !== 'caja') return null;
       if (d.caja === 'resguardo') return may(e.estatus) === 'RESGUARDO' ? null : { tipo: 'resguardo', fila: e, estatus: 'RESGUARDO' };
       if (d.caja === 'venta') return VENTA.indexOf(may(e.estatus)) >= 0 ? null : { tipo: 'resguardo', fila: e, estatus: 'PARA VENTA' };
@@ -257,7 +257,7 @@
       }
       if (a.tipo === 'cancelacion') return 'Mandar a cancelación · ' + num(a.fila);
       if (a.tipo === 'resguardo') return (a.estatus === 'RESGUARDO' ? 'Mandar a resguardo · ' : 'Venta o desecho · ') + nuco(a.fila);
-      if (a.tipo === 'reasignar') return 'Reasignar · ' + nuco(a.fila) + (a.persona ? ' → ' + a.persona.nombre : '');
+      if (a.tipo === 'responsiva') return 'Responsiva · ' + nuco(a.fila) + (a.persona ? ' → ' + a.persona.nombre : '');
       return '';
     }
 

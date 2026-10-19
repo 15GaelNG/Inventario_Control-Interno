@@ -10,11 +10,12 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('el servidor solo acepta el PDF que Documentos le muestra al registro', () => {
   const api = read('src/ClientApi.gs');
-  assert.match(api, /function apiLineasSubirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64\) \{\r?\n  return TelefoniaService\.subirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64\);/);
+  assert.match(api, /function apiLineasSubirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64, vista\) \{\r?\n  return TelefoniaService\.subirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64, vista\);/);
   const servicio = read('src/services/TelefoniaService.gs');
   const fn = servicio.slice(servicio.indexOf('function subirPdfFirmado('), servicio.indexOf('/** Panorama de Líneas'));
   assert.match(fn, /const sesion = operar_\(token\);/);
-  assert.match(fn, /const docs = evidencias\(token, registroId\);/);
+  // Desde la ficha de la línea, los que esa ficha muestra (pendiente 2.45)
+  assert.match(fn, /const docs = evidencias\(token, registroId, vista === 'linea' \? 'linea' : ''\);/);
   // El documento sale de Documentos por su id; si el cliente manda un PDF, debe ser el suyo
   assert.match(fn, /\.filter\(\(d\) => d\.id === docId\)\[0\];/);
   assert.match(fn, /if \(!doc \|\| \(pdfId && doc\.pdfId !== pdfId\)\) throw new Error\('El PDF no es de este registro\.'\);/);
@@ -71,13 +72,13 @@ test('solo PDF: el contenido debe empezar con %PDF- y pesar 15 MB o menos; queda
 test('la pantalla: «Subir PDF firmado» en Documentos, solo con permiso de operar y solo PDF', () => {
   const cliente = read('src/html/js/lineas.html');
   // Del sistema con su PDF; del AppSheet y de NUCOS siempre (usuario, 5-oct)
-  assert.match(cliente, /doc\('file-up', 'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA'\), \(d\) => subirPdfFirmado\(id, d\)\)/);
+  assert.match(cliente, /doc\('file-up', 'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA'\),\s*\(d\) => \(d\.registroId \? subirPdfFirmado\(d\.registroId, d\) : subirPdfFirmado\(id, d, vista\)\)\)/);
   const fn = cliente.slice(cliente.indexOf('function subirPdfFirmado('), cliente.indexOf('function soltarDocumentos('));
   assert.match(fn, /input\.accept = 'application\/pdf,\.pdf';/);
   assert.match(fn, /Solo se aceptan archivos PDF\./);
   assert.match(fn, /mostrarEspera\('Subiendo PDF firmado'\);/);
-  assert.match(fn, /llamar\('apiLineasSubirPdfFirmado', registroId, d\.tipoPdf, d\.id, d\.pdfId \|\| '', base64\)/);
-  assert.match(fn, /cargarEvidencias\(registroId\);\r?\n\s+cargarHistorial\(registroId\);/);
+  assert.match(fn, /llamar\('apiLineasSubirPdfFirmado', registroId, d\.tipoPdf, d\.id, d\.pdfId \|\| '', base64, vista \|\| ''\)/);
+  assert.match(fn, /const ficha = enFicha && \(enFicha\.tipo === 'linea' \|\| enFicha\.tipo === 'equipo'\) \? enFicha\.id : registroId;\r?\n\s+cargarEvidencias\(ficha\);\r?\n\s+cargarHistorial\(ficha\);/);
   assert.match(cliente, /'PDF firmado': 'file-up'/);
   assert.match(cliente, /\['Documentos', \['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado'\]\]/);
 });

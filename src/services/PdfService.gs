@@ -254,10 +254,7 @@ const PdfService = (function () {
    * ("INSPECCIONES L200", "INSPECCIONES XPANDER"…): se respeta esa organización para
    * que quien busca un documento lo siga encontrando donde siempre.
    */
-  function subcarpeta_(carpeta, nombre) {
-    const existentes = carpeta.getFoldersByName(nombre);
-    return existentes.hasNext() ? existentes.next() : carpeta.createFolder(nombre);
-  }
+  const subcarpeta_ = (carpeta, nombre) => DriveUtils.subcarpeta(carpeta, nombre);
 
   /**
    * Llena una COPIA ya creada de la plantilla (imágenes + texto + formato), y de paso le

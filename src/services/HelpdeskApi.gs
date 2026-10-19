@@ -152,9 +152,8 @@ const HelpdeskApi = (function () {
     if (pausa > ahora_()) {
       throw new Error('El helpdesk pidió esperar. Vuelve a intentar en ' + Math.ceil((pausa - ahora_()) / 1000) + ' s.');
     }
-    const lock = LockService.getScriptLock();
-    if (!lock.tryLock(3000)) throw new Error('El helpdesk está ocupado con otras consultas. Intenta en unos segundos.');
-    try {
+    const ocupado = () => { throw new Error('El helpdesk está ocupado con otras consultas. Intenta en unos segundos.'); };
+    Candado.con(() => {
       const ultima = Number(c.get('hd_ultima_' + correo) || 0);
       if (ahora_() - ultima < MIN_ENTRE_MS) throw new Error('Espera un par de segundos entre consultas al helpdesk.');
       const k = minuto_();
@@ -165,9 +164,7 @@ const HelpdeskApi = (function () {
       if (mias + cuantas > MAX_POR_MINUTO) throw new Error('Ya consultaste el helpdesk ' + mias + ' veces en este minuto. Espera un momento.');
       if (todas + cuantas > MAX_POR_MINUTO_TODOS) throw new Error('El helpdesk está recibiendo muchas consultas de la app. Intenta en un minuto.');
       c.putAll({ [llaveMia]: String(mias + cuantas), [llaveTodos]: String(todas + cuantas), ['hd_ultima_' + correo]: String(ahora_()) }, 120);
-    } finally {
-      lock.releaseLock();
-    }
+    }, { siOcupado: ocupado });
   }
 
   /** Respuesta 429/5xx: toda la app deja de llamar el tiempo que pida */

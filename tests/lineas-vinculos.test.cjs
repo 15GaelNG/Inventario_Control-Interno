@@ -8,7 +8,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 // Vínculos (usuario, 8-oct): el grafo con todo, el cajón y el lienzo donde soltar abre la acción que ya existe
 
-const fuente = read('src/html/js/lineas-vinculos.html').replace(/^\s*<script>/, '').replace(/<\/script>\s*$/, '');
+const fuente = require('./formato-fuente') + read('src/html/js/lineas-vinculos.html').replace(/^\s*<script>/, '').replace(/<\/script>\s*$/, '');
 const cargar = (dom) => {
   const w = dom ? dom.window : {};
   return new Function('window', 'document', 'getComputedStyle', 'localStorage', 'requestAnimationFrame', 'performance', fuente + '; return LineasVinculos;')(
@@ -112,7 +112,7 @@ test('alSoltar: en el lienzo cada movimiento abre la acción de siempre con lo q
   assert.match(V.alSoltar(equipo, { tipo: 'caja', caja: 'cancelacion' }).aviso, /arrastra la línea/);
   assert.equal(V.alSoltar(equipo, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
   const guardado = { tipo: 'equipo', fila: e('E13'), dueno: null };
-  assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Reasignar · NUCO 0013 → ANA RUIZ');
+  assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Responsiva · NUCO 0013 → ANA RUIZ');
   assert.equal(V.alSoltar(guardado, { tipo: 'caja', caja: 'resguardo' }), null);
 });
 
@@ -188,12 +188,12 @@ test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas
   assert.match(js, /if \(a\.tipo === 'vinculo'\) abrirVinculo\(a\.modo, a\.fila, a\.pre\);/);
   assert.match(js, /else if \(a\.tipo === 'cancelacion'\) abrirCancelacion\(\[a\.fila\]\);/);
   assert.match(js, /else if \(a\.tipo === 'resguardo'\) abrirResguardo\(\[a\.fila\], \{ estatus: a\.estatus \}\);/);
-  assert.match(js, /else if \(a\.tipo === 'reasignar'\) abrirReasignar\(a\.fila, a\.persona\);/);
+  assert.match(js, /else if \(a\.tipo === 'responsiva'\) abrirResponsiva\('equipo', a\.fila, a\.persona\);/);
   // Lo soltado llega ya elegido a la ventana de Vincular
   assert.match(js, /mensaje: 'ELIGE UNA LÍNEA DISPONIBLE', valor: elegido\.linea \|\| '' \}/);
   assert.match(js, /mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido\.nuco \|\| '' \}/);
   // El permiso y el espacio existen antes de la carga inicial (aplicarModoVista los usa al entrar)
-  const permiso = js.indexOf('let puedeOperarTabla = false;');
+  const permiso = js.indexOf('const puedeOperar = () => puedeEditarModulo(');
   const espacio = js.indexOf('const espacioVinculos = ');
   const carga = js.indexOf('// ---- Carga inicial ----');
   assert.ok(permiso > 0 && permiso < espacio && espacio < carga);

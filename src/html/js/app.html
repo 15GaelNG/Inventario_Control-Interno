@@ -14,13 +14,6 @@
   }
 
   /**
-   * Barra de pestañas simple (ej. "Catálogo" / "Registrar" arriba de cada
-   * módulo) — conecta los <button class="tab-btn" data-tab="clave"> con sus
-   * <div class="tab-panel" data-tab-panel="clave"> dentro de `contenedor`.
-   * Un panel visible a la vez. Se llama una vez por módulo, después de
-   * pintar su HTML (montarVista ya lo hace fresco cada vez que se navega).
-   */
-  /**
    * Convierte un stat-tile (KPI, ej. "Activos" en Vehículos) en un filtro
    * de la tabla con un solo clic: aplica `prueba` (la MISMA función que ya
    * se usa para contar ese KPI, así nunca se desincroniza el número del
@@ -59,18 +52,6 @@
       actualizado = await funcionApi(id, campo, cambios[campo]);
     }
     return actualizado;
-  }
-
-  function wireTabsSimple(contenedor) {
-    const botones = contenedor.querySelectorAll('.tab-btn');
-    botones.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        botones.forEach((b) => b.classList.toggle('active', b === btn));
-        contenedor.querySelectorAll('.tab-panel').forEach((panel) => {
-          panel.hidden = panel.dataset.tabPanel !== btn.dataset.tab;
-        });
-      });
-    });
   }
 
   /**
@@ -368,18 +349,11 @@
    */
   const deModulo = (modulo, fn, vacio) => (permisoDe(modulo) ? fn().catch(() => vacio) : Promise.resolve(null));
 
-  /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas) */
-  function escaparHtml(valor) {
-    return String(valor == null ? '' : valor).replace(/[&<>"']/g, (c) => (
-      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-    ));
-  }
+  /** Escapa HTML al insertar texto dinámico con innerHTML (evita XSS con datos de hojas). Es Formato.esc. */
+  function escaparHtml(valor) { return Formato.esc(valor); }
 
   /** Fecha de hoy en horario LOCAL como "YYYY-MM-DD" (a diferencia de hoyISO(), que usa UTC) */
-  function hoyLocal() {
-    const f = new Date();
-    return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
-  }
+  function hoyLocal() { return Formato.dia(new Date()); }
 
   function guardarSesion(resultadoLogin) {
     state.token = resultadoLogin.token;
@@ -580,6 +554,8 @@
     container = container || document.getElementById('view-container');
     const tpl = document.getElementById(templateId);
     container.innerHTML = '';
+    // Las pestañas de la vista anterior (Tabs.iniciar sobre #view-container) no son de la nueva
+    container.removeAttribute('data-tabs');
     container.appendChild(tpl.content.cloneNode(true));
     refreshIcons();
     if (initFn) initFn();
@@ -692,9 +668,9 @@
   function mostrarSinAcceso(nombreModulo) {
     document.getElementById('view-container').innerHTML =
       '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
-      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="lock" class="ico"></i></div>' +
+      '<div style="font-size:var(--texto-3xl); margin-bottom:10px;"><i data-lucide="lock" class="ico"></i></div>' +
       '<h2 style="margin-bottom:6px;">' + escaparHtml(nombreModulo) + '</h2>' +
-      '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
+      '<p style="color:var(--color-text-muted); font-size:var(--texto-s); margin:0;">' +
       'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.</p>' +
       '</div>';
     refreshIcons();
@@ -704,9 +680,9 @@
   function mostrarProximamente(nombreModulo) {
     document.getElementById('view-container').innerHTML =
       '<div class="card" style="max-width:420px; margin:60px auto; text-align:center;">' +
-      '<div style="font-size:32px; margin-bottom:10px;"><i data-lucide="construction" class="ico"></i></div>' +
+      '<div style="font-size:var(--texto-3xl); margin-bottom:10px;"><i data-lucide="construction" class="ico"></i></div>' +
       '<h2 style="margin-bottom:6px;">' + nombreModulo + '</h2>' +
-      '<p style="color:var(--color-text-muted); font-size:13px; margin:0;">' +
+      '<p style="color:var(--color-text-muted); font-size:var(--texto-s); margin:0;">' +
       'Este módulo todavía no está construido — muy pronto.</p>' +
       '</div>';
     refreshIcons();
@@ -1125,25 +1101,12 @@
     return new Date().toISOString().slice(0, 10);
   }
   function fijarFechaRegistroHoy() {
-    document.getElementById('inc-fecha-registro').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('inc-fecha-registro').value = Formato.fecha(new Date());
   }
-  function fechaParaInput(valor) {
-    if (!valor) return '';
-    const f = new Date(valor);
-    return isNaN(f) ? '' : f.toISOString().slice(0, 10);
-  }
-  function formatearFecha(valor) {
-    if (!valor) return '—';
-    const f = new Date(valor);
-    return isNaN(f) ? '—' : f.toLocaleDateString('es-MX');
-  }
-  /** Formatea un monto como pesos mexicanos ($1,234.56) — solo para mostrar
-   * en tablas/detalle; los campos de captura siguen siendo number normal. */
-  function formatearMoneda(valor) {
-    if (valor === '' || valor === null || valor === undefined) return '—';
-    const n = Number(valor);
-    return isNaN(n) ? '—' : n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
-  }
+  function fechaParaInput(valor) { return Formato.dia(valor); }
+  function formatearFecha(valor) { return Formato.fecha(valor) || '—'; }
+  /** Un monto como pesos ($1,234.56), solo para mostrar; los campos de captura siguen siendo number. */
+  function formatearMoneda(valor) { return Formato.moneda(valor, { centavos: true }) || '—'; }
 
   // ============================================================
   // Motor genérico de "tabla interactiva": buscador global, orden
@@ -1456,12 +1419,12 @@
    *  acentos/ñ correctos gracias al BOM). `columnas` = [{clave, etiqueta}],
    *  igual que las que ya usa crearTablaInteractiva. */
   function exportarCSV(nombreArchivo, columnas, filas) {
-    const escapar = (valor) => {
+    const celda = (valor) => {
       const texto = String(valor == null ? '' : valor);
       return /[",\n]/.test(texto) ? '"' + texto.replace(/"/g, '""') + '"' : texto;
     };
-    const encabezado = columnas.map((c) => escapar(c.etiqueta)).join(',');
-    const cuerpo = (filas || []).map((fila) => columnas.map((c) => escapar(fila[c.clave])).join(',')).join('\r\n');
+    const encabezado = columnas.map((c) => celda(c.etiqueta)).join(',');
+    const cuerpo = (filas || []).map((fila) => columnas.map((c) => celda(fila[c.clave])).join(',')).join('\r\n');
     const contenido = '﻿' + encabezado + '\r\n' + cuerpo;
     const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -1592,7 +1555,8 @@
     },
     { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'file' },
 
-    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text', ...DE_SENSORES },
+    // vacioEnFicha: en la ficha, vacío no se esconde: dice que no hay nada (usuario, 15-oct)
+    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text', vacioEnFicha: 'Sin accesorios registrados', ...DE_SENSORES },
     { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text', ...DE_SENSORES },
     // SENSOR y SERIE SENSOR los manda Instalación de Sensores (Relaciones.gs): se ven aquí
     // pero se cambian allá. El servidor tampoco las acepta desde este formulario.
@@ -1663,10 +1627,7 @@
    * "auto" (ver wireResponsableVehiculo). `columnas` es el ancho de la rejilla de cada
    * paso (3 en Registrar, 2 en el modal de Editar, que es más angosto). */
   function renderCamposVehiculo(prefijo, esEdicion, columnas) {
-    return '<ol class="form-pasos">' + VEH_GRUPOS_PASO.map((g, i) =>
-        '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
-          '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(g) + '</button></li>').join('') +
-      '</ol>' +
+    return Pasos.htmlChips(VEH_GRUPOS_PASO.map(escaparHtml)) +
       VEH_GRUPOS_PASO.map((g, i) =>
         '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
           '<div class="form-rejilla" data-columnas="' + (columnas || 3) + '">' +
@@ -1684,27 +1645,16 @@
    * cada uno con su propio contenedor y botones. Regresa { ir } para volver al paso 1
    * después de guardar o cerrar. */
   function wirePasosVehiculo(contenedor, ids) {
-    let pasoActual = 0;
-    function mostrar(i) {
-      pasoActual = i;
-      contenedor.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-      contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
-        const idx = Number(chip.dataset.ir);
-        chip.classList.toggle('activo', idx === i);
-        chip.classList.toggle('completado', idx < i);
-      });
-      document.getElementById(ids.atras).hidden = i === 0;
-      document.getElementById(ids.siguiente).hidden = i === VEH_GRUPOS_PASO.length - 1;
-      document.getElementById(ids.guardar).hidden = i !== VEH_GRUPOS_PASO.length - 1;
-      document.getElementById(ids.cuenta).textContent = 'Paso ' + (i + 1) + ' de ' + VEH_GRUPOS_PASO.length;
-    }
-    document.getElementById(ids.siguiente).addEventListener('click', () => mostrar(Math.min(pasoActual + 1, VEH_GRUPOS_PASO.length - 1)));
-    document.getElementById(ids.atras).addEventListener('click', () => mostrar(Math.max(pasoActual - 1, 0)));
-    contenedor.querySelectorAll('.form-paso-chip').forEach((chip) => {
-      chip.addEventListener('click', () => mostrar(Number(chip.dataset.ir)));
+    // La navegación es el componente Pasos: libre, sin validar, Guardar en el último
+    const nav = Pasos.navegar({
+      secciones: Array.from(contenedor.querySelectorAll('.form-paso')),
+      chips: Array.from(contenedor.querySelectorAll('.form-paso-chip')),
+      atras: document.getElementById(ids.atras), siguiente: document.getElementById(ids.siguiente),
+      guardar: document.getElementById(ids.guardar), cuenta: document.getElementById(ids.cuenta),
+      libre: true, guardarAlFinal: true,
     });
-    mostrar(0);
-    return { ir: mostrar };
+    nav.ir(0);
+    return { ir: nav.ir };
   }
 
   /** {columna real: valor}. Los "file" se suben aparte (subirArchivosVehiculo). */
@@ -1797,7 +1747,7 @@
   }
 
   async function initIncidencias() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('incidencias');
     if (!puedeEditar) document.querySelector('#inc-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -2036,49 +1986,19 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // ---- Filtro rápido por Estado: misma franja de íconos de Líneas/Vehículos/Caja Chica --
-    // el CSS es genérico (.filtro-tipo*, styles.html). Mismos colores que badgeEstadoIncidencia.
+    // ---- Filtro rápido por Estado (FiltroTipo). Mismos colores que badgeEstadoIncidencia.
     const ORDEN_ESTADO_INC = ['ABIERTA', 'CERRADA'];
     const ESTILO_ESTADO_INC = {
       'ABIERTA': { icono: 'lock-open', color: 'var(--color-danger)' },
       'CERRADA': { icono: 'circle-check', color: 'var(--color-success)' },
     };
     let filtrosActualesInc = {};
-    function marcarEstadoInc() {
-      const cont = document.getElementById('inc-filtro-estado');
-      if (!cont) return;
-      const f = filtrosActualesInc.ESTADO;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.estado === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estado) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarEstadoInc(filas) {
-      const cont = document.getElementById('inc-filtro-estado');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((i) => { const e = String(i.ESTADO || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
-      const estados = ORDEN_ESTADO_INC.concat(Object.keys(conteo).filter((e) => ORDEN_ESTADO_INC.indexOf(e) < 0 && e));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estado="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estado</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
-        estados.map((e) => {
-          const estilo = ESTILO_ESTADO_INC[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
-        }).join('') + '</div>';
-      marcarEstadoInc();
-    }
-    document.getElementById('inc-filtro-estado').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const e = b.dataset.estado;
-      tabla.setFiltro('ESTADO', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    const panelEstadoInc = FiltroTipo.crear(document.getElementById('inc-filtro-estado'), {
+      titulo: 'Estado', todos: 'Todas', campo: 'ESTADO', orden: ORDEN_ESTADO_INC, estilos: ESTILO_ESTADO_INC,
+      alElegir: (valor) => tabla.setFiltro('ESTADO', valor ? { valores: [valor] } : null),
     });
+    function marcarEstadoInc() { panelEstadoInc.marcar(filtrosActualesInc.ESTADO); }
+    function pintarEstadoInc(filas) { panelEstadoInc.pintar(filas); }
 
     const tilesKpiIncidencias = { 'stat-total': null, 'stat-abiertas': 'ABIERTA', 'stat-cerradas': 'CERRADA' };
     Object.keys(tilesKpiIncidencias).forEach((id) => {
@@ -2202,25 +2122,8 @@
   // ---------- Ficha por pestañas (genérica: la usa cualquier módulo con una "ficha
   // única" — Vehículos, Caja Chica, ...) ----------
 
-  /** pestanas: [{id, titulo, icono, contenido, num?}], la primera queda activa.
-   *  num (si viene) se muestra como contador junto al título. */
-  function fichaEnPestanas(pestanas) {
-    return '<div class="tabs-simple ln-ficha-tabs" role="tablist" aria-label="Secciones de la ficha">' + pestanas.map((t, n) =>
-      '<button type="button" class="tab-btn' + (n ? '' : ' active') + '" role="tab" aria-selected="' + (n ? 'false' : 'true') + '" data-ficha-tab="' + t.id + '">' +
-      '<i data-lucide="' + t.icono + '" class="ico"></i> ' + t.titulo +
-      (t.num === undefined ? '' : ' <span class="ln-tab-num">' + t.num + '</span>') + '</button>').join('') + '</div>' +
-      pestanas.map((t, n) => '<div data-ficha-panel="' + t.id + '"' + (n ? ' hidden' : '') + '>' + t.contenido + '</div>').join('');
-  }
-  function mostrarPestanaFicha(contenedor, nombre) {
-    // Una pestaña sin permiso no existe (deModulo): se queda en la que ya está
-    if (!contenedor.querySelector('[data-ficha-tab="' + nombre + '"]')) return;
-    contenedor.querySelectorAll('[data-ficha-tab]').forEach((b) => {
-      const activa = b.dataset.fichaTab === nombre;
-      b.classList.toggle('active', activa);
-      b.setAttribute('aria-selected', String(activa));
-    });
-    contenedor.querySelectorAll('[data-ficha-panel]').forEach((p) => { p.hidden = p.dataset.fichaPanel !== nombre; });
-  }
+  // Las pestañas son de Tabs (componentes/tabs.html): Tabs.html([{ id, titulo, icono, contenido, num? }]) y
+  // Tabs.mostrar(contenedor, nombre); una pestaña sin permiso no existe y mostrar() se queda en la que está.
   /** Tabla sencilla de solo lectura (sin filtros/orden/edición) para las pestañas de una
    *  ficha que muestran lo que hay de este registro en otro módulo. */
   function tablaFicha(columnas, filas, opciones) {
@@ -2238,7 +2141,7 @@
 
   /** Ver completo/Editar/Eliminar por fila en las tablas de solo lectura de una ficha
    *  (Vehículos: Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias; Caja Chica:
-   *  Arqueos/Cambios de monto) -- de nivel de módulo, como fichaEnPestanas/pestanaFicha/
+   *  Arqueos/Cambios de monto) -- de nivel de módulo, como pestanaFicha/
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
     const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null,
@@ -2351,14 +2254,14 @@
       (item.titulo ? '<label style="margin-top:' + (i ? '12px' : '0') + '">' + escaparHtml(item.titulo) + '</label>' : '') +
       '<div style="display:flex;gap:8px;margin-top:' + (item.titulo ? '6px' : (i ? '12px' : '0')) + '">' +
         '<input type="text" readonly value="' + escaparHtml(item.liga) + '" id="liga-firma-' + i + '" ' +
-          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-bg);color:var(--color-text);font-size:13px">' +
+          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:var(--radio-m);background:var(--color-bg);color:var(--color-text);font-size:var(--texto-s)">' +
         '<button type="button" class="secondary" data-copiar="liga-firma-' + i + '" title="Copiar liga"><i data-lucide="copy" class="ico"></i></button>' +
       '</div>'
     ).join('');
     fondo.innerHTML =
       '<div class="modal-card">' +
         '<h3><i data-lucide="link" class="ico"></i> Liga' + (lista.length > 1 ? 's' : '') + ' para firmar a distancia</h3>' +
-        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:13px">' +
+        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:var(--texto-s)">' +
           'Mánda' + (lista.length > 1 ? 'selas' : 'sela') + ' a la persona (WhatsApp, correo…) para que la abra y firme desde su celular.</p>' +
         campos +
         '<div class="form-acciones" style="margin-top:14px">' +
@@ -2388,7 +2291,7 @@
 
   // ---------- Vehículos ----------
   async function initVehiculos() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('vehiculos');
     if (!puedeEditar) document.querySelector('#veh-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -2527,17 +2430,17 @@
 
     // Color + ícono por clase, tal cual se veían en AppSheet.
     const CLASE_ESTILO = {
-      'AUTOMOVIL': { icono: 'car', color: '#2979ff' },
+      'AUTOMOVIL': { icono: 'car', color: 'var(--tono-azul)' },
       // var(--color-neutro-fuerte) en vez de un negro fijo: se pierde contra
       // el fondo del modo oscuro si no se adapta con el tema.
       'CAMION': { icono: 'truck', color: 'var(--color-neutro-fuerte)' },
-      'CAMIONETA': { icono: 'car-front', color: '#ff9800' },
-      'CUATRIMOTO': { icono: 'tractor', color: '#d4b106' },
-      'MOTOCARRO': { icono: 'bike', color: '#9c27b0' },
+      'CAMIONETA': { icono: 'car-front', color: 'var(--tono-naranja)' },
+      'CUATRIMOTO': { icono: 'tractor', color: 'var(--tono-amarillo)' },
+      'MOTOCARRO': { icono: 'bike', color: 'var(--tono-morado)' },
       'MOTOCICLETA': { icono: 'bike', color: 'var(--color-neutro-fuerte)' },
-      'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: '#d32f2f' },
-      'REMOLQUE': { icono: 'container', color: '#43a047' },
-      'MAQUINARIA MENOR': { icono: 'wrench', color: '#607d8b' },
+      'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: 'var(--tono-rojo)' },
+      'REMOLQUE': { icono: 'container', color: 'var(--tono-verde)' },
+      'MAQUINARIA MENOR': { icono: 'wrench', color: 'var(--tono-pizarra)' },
     };
     function etiquetaClase(clase) {
       if (!clase) return '—';
@@ -2562,9 +2465,7 @@
      * y el registro completo (41 columnas) + los dos historiales enlazados.
      */
     function migasVehiculo() {
-      return '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver">' +
-        '<i data-lucide="chevron-left" class="ico"></i> Volver</button>' +
-        '<span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a></span></div>';
+      return Ficha.migas({ volver: { atributos: 'id="veh-btn-volver"' }, ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }] });
     }
 
     function wireMigasVehiculo() {
@@ -2577,10 +2478,11 @@
     /** Las fotos de una inspección (de la app o solo del expediente): Vehículos › NUCO › Inspección */
     function abrirFotosInspeccionVehiculo(vResumen, d, app) {
       const detalle = document.getElementById('veh-detalle');
-      detalle.innerHTML = '<div class="ln-migas"><button type="button" class="secondary ln-btn-icono" id="veh-btn-volver-ficha">' +
-        Iconos.svg('chevron-left') + ' Volver</button><span><a href="#" class="ln-enlace" id="veh-enlace-lista">Vehículos</a> › ' +
-        '<a href="#" class="ln-enlace" id="veh-enlace-ficha">Nucco ' + escaparHtml(vResumen.NUCCO || '') + '</a> › Inspección ' +
-        escaparHtml(d.nombre + ' ' + d.anio) + '</span></div><div id="veh-insp-fotos"></div>';
+      detalle.innerHTML = Ficha.migas({
+        volver: { atributos: 'id="veh-btn-volver-ficha"' },
+        ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }, { texto: 'Nucco ' + (vResumen.NUCCO || ''), atributos: 'id="veh-enlace-ficha"' }],
+        actual: 'Inspección ' + d.nombre + ' ' + d.anio,
+      }) + '<div id="veh-insp-fotos"></div>';
       const aLaFicha = (ev) => { if (ev) ev.preventDefault(); abrirFichaVehiculo(vResumen, 'inspecciones'); };
       document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
       document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
@@ -2616,9 +2518,13 @@
         // Los archivos (factura, póliza, responsiva…) se ven en las pestañas Documentos y Responsiva, no aquí
         if (campo.tipo === 'file') return;
         const valor = completo[campo.clave];
-        if (valor === '' || valor === null || valor === undefined) return;
+        const vacio = valor === '' || valor === null || valor === undefined;
+        // Un campo vacío no se muestra, salvo el que pide decirlo (vacioEnFicha: "Sin accesorios registrados")
+        if (vacio && !campo.vacioEnFicha) return;
         if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
-        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, campo.moneda ? formatearMoneda(valor) : valor));
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, vacio
+          ? '<span class="info-vacio">' + escaparHtml(campo.vacioEnFicha) + '</span>'
+          : (campo.moneda ? formatearMoneda(valor) : valor)));
       });
       if (!soloGrupos || soloGrupos.indexOf('Otros datos') !== -1) {
         const otros = Object.keys(completo)
@@ -2938,10 +2844,7 @@
 
       cuerpo.innerHTML =
         '<form id="resv-captura-form" novalidate>' +
-          '<ol class="form-pasos">' + RESV_PASOS.map((p, i) =>
-            '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
-              '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(p.titulo) + '</button></li>').join('') +
-          '</ol>' +
+          Pasos.htmlChips(RESV_PASOS.map((p) => escaparHtml(p.titulo))) +
           RESV_PASOS.map((p, i) =>
             '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
               '<h3 class="form-paso-titulo" tabindex="-1">' + escaparHtml(p.titulo) + '</h3>' +
@@ -2980,29 +2883,18 @@
 
       // Navegación de pasos: libre en los dos sentidos, sin validar (el usuario pidió
       // "un tema a la vez" nada más, no bloquear el avance si falta algo).
-      let resvPasoActual = 0;
-      function resvMostrarPaso(i) {
-        resvPasoActual = i;
-        cuerpo.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-        cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-          const idx = Number(chip.dataset.ir);
-          chip.classList.toggle('activo', idx === i);
-          chip.classList.toggle('completado', idx < i);
-        });
-        document.getElementById('resv-atras').hidden = i === 0;
-        document.getElementById('resv-siguiente').hidden = i === RESV_PASOS.length - 1;
-        document.getElementById('resv-captura-guardar').hidden = i !== RESV_PASOS.length - 1;
-        document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
-        document.getElementById('resv-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + RESV_PASOS.length;
-        const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
-        if (titulo) titulo.focus();
-      }
-      document.getElementById('resv-siguiente').addEventListener('click', () => resvMostrarPaso(Math.min(resvPasoActual + 1, RESV_PASOS.length - 1)));
-      document.getElementById('resv-atras').addEventListener('click', () => resvMostrarPaso(Math.max(resvPasoActual - 1, 0)));
-      cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-        chip.addEventListener('click', () => resvMostrarPaso(Number(chip.dataset.ir)));
-      });
-      resvMostrarPaso(0);
+      // (el componente Pasos; "Enviar liga(s)" sale junto con Guardar, en el último)
+      Pasos.navegar({
+        secciones: Array.from(cuerpo.querySelectorAll('.form-paso')), chips: Array.from(cuerpo.querySelectorAll('.form-paso-chip')),
+        atras: document.getElementById('resv-atras'), siguiente: document.getElementById('resv-siguiente'),
+        guardar: document.getElementById('resv-captura-guardar'), cuenta: document.getElementById('resv-cuenta'),
+        libre: true, guardarAlFinal: true,
+        alMostrar: (i) => {
+          document.getElementById('resv-enviar-liga-jefe').hidden = i !== RESV_PASOS.length - 1;
+          const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
+          if (titulo) titulo.focus();
+        },
+      }).ir(0);
 
       document.getElementById('resv-fecha').value = hoyISO();
       // "No. de inventario" es el Nucco del vehículo (así lo usa este formato) -- se autollena
@@ -3160,10 +3052,7 @@
 
       cuerpo.innerHTML =
         '<form id="adh-captura-form" novalidate>' +
-          '<ol class="form-pasos">' + ADH_PASOS.map((p, i) =>
-            '<li><button type="button" class="form-paso-chip" data-ir="' + i + '">' +
-              '<span class="form-paso-num">' + (i + 1) + '</span>' + escaparHtml(p.titulo) + '</button></li>').join('') +
-          '</ol>' +
+          Pasos.htmlChips(ADH_PASOS.map((p) => escaparHtml(p.titulo))) +
           ADH_PASOS.map((p, i) =>
             '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
               '<h3 class="form-paso-titulo" tabindex="-1">' + escaparHtml(p.titulo) + '</h3>' +
@@ -3191,29 +3080,18 @@
       });
       refreshIcons();
 
-      let adhPasoActual = 0;
-      function adhMostrarPaso(i) {
-        adhPasoActual = i;
-        cuerpo.querySelectorAll('.form-paso').forEach((s) => { s.hidden = Number(s.dataset.paso) !== i; });
-        cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-          const idx = Number(chip.dataset.ir);
-          chip.classList.toggle('activo', idx === i);
-          chip.classList.toggle('completado', idx < i);
-        });
-        document.getElementById('adh-atras').hidden = i === 0;
-        document.getElementById('adh-siguiente').hidden = i === ADH_PASOS.length - 1;
-        document.getElementById('adh-captura-guardar').hidden = i !== ADH_PASOS.length - 1;
-        document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
-        document.getElementById('adh-cuenta').textContent = 'Paso ' + (i + 1) + ' de ' + ADH_PASOS.length;
-        const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
-        if (titulo) titulo.focus();
-      }
-      document.getElementById('adh-siguiente').addEventListener('click', () => adhMostrarPaso(Math.min(adhPasoActual + 1, ADH_PASOS.length - 1)));
-      document.getElementById('adh-atras').addEventListener('click', () => adhMostrarPaso(Math.max(adhPasoActual - 1, 0)));
-      cuerpo.querySelectorAll('.form-paso-chip').forEach((chip) => {
-        chip.addEventListener('click', () => adhMostrarPaso(Number(chip.dataset.ir)));
-      });
-      adhMostrarPaso(0);
+      // Navegación de pasos: el componente Pasos, libre y sin validar (igual que la Responsiva)
+      Pasos.navegar({
+        secciones: Array.from(cuerpo.querySelectorAll('.form-paso')), chips: Array.from(cuerpo.querySelectorAll('.form-paso-chip')),
+        atras: document.getElementById('adh-atras'), siguiente: document.getElementById('adh-siguiente'),
+        guardar: document.getElementById('adh-captura-guardar'), cuenta: document.getElementById('adh-cuenta'),
+        libre: true, guardarAlFinal: true,
+        alMostrar: (i) => {
+          document.getElementById('adh-enviar-liga-jefe').hidden = i !== ADH_PASOS.length - 1;
+          const titulo = cuerpo.querySelector('.form-paso[data-paso="' + i + '"] .form-paso-titulo');
+          if (titulo) titulo.focus();
+        },
+      }).ir(0);
 
       document.getElementById('adh-fecha').value = hoyISO();
       // "No. de inventario" es el Nucco del vehículo -- ver el comentario gemelo en
@@ -3485,8 +3363,11 @@
     }
 
     function mostrarPestanaFichaVehiculo(nombre) {
+      Tabs.mostrar(document.getElementById('veh-detalle'), nombre);
+    }
+    /** Lo que se lee al abrir una pestaña (con el clic o con mostrarPestanaFichaVehiculo) */
+    function alAbrirPestanaVehiculo(nombre) {
       const detalle = document.getElementById('veh-detalle');
-      mostrarPestanaFicha(detalle, nombre);
       if (nombre === 'documentos') DocumentosVehiculo.cargar(detalle.querySelector('[data-docs-vehiculo]'));
       if (nombre === 'inspecciones') InspeccionesFicha.cargar(detalle.querySelector('[data-insp-ficha]'));
       if (nombre === 'adquisicion') cargarArchivosAdquisicionFichaTab(detalle.querySelector('[data-adq-ficha-archivos]'));
@@ -3641,7 +3522,7 @@
       return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
         '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' +
         (liga ? '<span style="margin-left:auto">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</span>' : boton) + '</h3>' +
-        '<dl class="ln-resumen-rapido"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
+        '<dl class="ficha-resumen"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
         (liga ? '<div data-adq-ficha-archivos data-liga="' + escaparHtml(liga) + '" style="margin-top:12px">' +
           '<p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>'
           : '<p class="empty-state" style="margin-top:12px">No se encontró la carpeta en Drive.</p>') +
@@ -3914,16 +3795,12 @@
         ].filter((d) => d[1]);
 
         let html = migasVehiculo();
-        html += '<div class="ln-detalle-header card">' +
-          '<div class="ln-detalle-icono" style="background:none; color:' + estilo.color + '"><i data-lucide="' + estilo.icono + '" class="ico ln-icon"></i></div>' +
-          '<div class="ln-detalle-titulo"><h2>Nucco: ' + escaparHtml(vResumen.NUCCO || '') + '</h2>' +
-          '<div class="ln-chips">' + badgeEstatus(completo['ESTATUS']) + chipAdherentes + '</div></div>' +
-          '<div class="ln-detalle-botones">' +
-          (puedeEditar ? '<button type="button" id="veh-btn-editar-ficha"><i data-lucide="pencil" class="ico"></i> Editar</button>' : '') +
-          '</div>' +
-          (resumenRapido.length ? '<dl class="ln-resumen-rapido">' + resumenRapido.map((d) =>
-            '<div><dt>' + d[0] + '</dt><dd>' + escaparHtml(String(d[1])) + '</dd></div>').join('') + '</dl>' : '') +
-          '</div>';
+        html += Ficha.encabezado({
+          icono: estilo.icono, color: estilo.color, titulo: 'Nucco: ' + (vResumen.NUCCO || ''),
+          chips: badgeEstatus(completo['ESTATUS']) + chipAdherentes,
+          botones: puedeEditar ? '<button type="button" id="veh-btn-editar-ficha">' + Iconos.svg('editar') + ' Editar</button>' : '',
+          resumen: resumenRapido,
+        });
 
         // Una sola pestaña Datos (12-oct-2026; antes General + Detalles): todo el vehículo, por secciones
         const datos = seccionesFichaVehiculo(completo, null);
@@ -3966,7 +3843,7 @@
               </div>
             `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>');
 
-        html += fichaEnPestanas([
+        html += Tabs.html([
           { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
           (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
           // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla.
@@ -4346,20 +4223,18 @@
       sensor: abrirResponsivaSensor, holograma: abrirSolicitudHolograma,
     };
     document.getElementById('veh-detalle').addEventListener('click', (ev) => {
-      const pestana = ev.target.closest('[data-ficha-tab]');
-      if (pestana) { mostrarPestanaFichaVehiculo(pestana.dataset.fichaTab); return; }
       const ir = ev.target.closest('[data-ir-pestana]');
       if (ir) { ev.preventDefault(); mostrarPestanaFichaVehiculo(ir.dataset.irPestana); return; }
       const archivo = ev.target.closest('[data-archivo]');
       if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
     });
+    document.getElementById('veh-detalle').addEventListener('tabs-cambio', (ev) => alAbrirPestanaVehiculo(ev.detail.nombre));
     // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
     // misma pestaña (sin "Cargando…" ni volver arriba)
     escucharLista('apiFichaVehiculo', () => {
       const detalle = document.getElementById('veh-detalle');
       if (!fichaVehiculoAbierta || detalle.hidden) return;
-      const activa = detalle.querySelector('[data-ficha-tab].active');
-      abrirFichaVehiculo(fichaVehiculoAbierta, activa ? activa.dataset.fichaTab : undefined, true);
+      abrirFichaVehiculo(fichaVehiculoAbierta, Tabs.actual(detalle) || undefined, true);
     }, document.getElementById('veh-detalle'));
 
     // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
@@ -4373,46 +4248,15 @@
     document.getElementById('veh-ver-registro-cerrar').addEventListener('click', cerrarVerRegistroFicha);
     modalVerRegistro.addEventListener('click', (ev) => { if (ev.target === modalVerRegistro) cerrarVerRegistroFicha(); });
 
-    // ---- Filtro rápido por Clase: misma franja de íconos de Líneas Telefónicas (filtro por
-    // TIPO), aquí por CLASE -- el CSS ya es genérico (.filtro-tipo*, movido a styles.html) y
-    // CLASE_ESTILO/etiquetaClase ya traían el ícono y color de cada clase, así que solo hace
-    // falta pintar el panel y cablearlo (usuario, 6-oct: "los filtros... pero por la clase"). ----
+    // ---- Filtro rápido por Clase (FiltroTipo), con el ícono y color de CLASE_ESTILO (usuario, 6-oct). ----
     let filtrosActualesVeh = {};
-    function marcarClasesVeh() {
-      const cont = document.getElementById('veh-clases');
-      if (!cont) return;
-      const f = filtrosActualesVeh.CLASE;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.clase === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.clase) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarClasesVeh(filas) {
-      const cont = document.getElementById('veh-clases');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((v) => { const c = String(v.CLASE || '').toUpperCase(); conteo[c] = (conteo[c] || 0) + 1; });
-      const clases = ORDEN_CLASES_VEH.concat(Object.keys(conteo).filter((c) => ORDEN_CLASES_VEH.indexOf(c) < 0 && c));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-clase="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Clase</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todas', filas.length) +
-        clases.map((c) => {
-          const e = CLASE_ESTILO[c] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(c, e.icono, e.color, NOMBRE_CLASE_VEH[c] || c, conteo[c] || 0);
-        }).join('') + '</div>';
-      marcarClasesVeh();
-    }
-    document.getElementById('veh-clases').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const c = b.dataset.clase;
-      tabla.setFiltro('CLASE', (c === '*' || b.classList.contains('activo')) ? null : { valores: [c] });
+    const panelClasesVeh = FiltroTipo.crear(document.getElementById('veh-clases'), {
+      titulo: 'Clase', todos: 'Todas', campo: 'CLASE', orden: ORDEN_CLASES_VEH, estilos: CLASE_ESTILO,
+      nombre: (c) => NOMBRE_CLASE_VEH[c] || c,
+      alElegir: (valor) => tabla.setFiltro('CLASE', valor ? { valores: [valor] } : null),
     });
+    function marcarClasesVeh() { panelClasesVeh.marcar(filtrosActualesVeh.CLASE); }
+    function pintarClasesVeh(filas) { panelClasesVeh.pintar(filas); }
 
     // Binario de antes (Activos = no es baja / Inactivos = es baja), más un KPI clickeable
     // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO). "Baja de placa"
@@ -4711,17 +4555,17 @@
   function iniciarTourFichaVehiculo() {
     Tour.iniciar([
       {
-        selector: '.ln-detalle-header',
+        selector: '.ficha-encabezado',
         titulo: 'La ficha de un vehículo',
         texto: 'Nucco, estatus, departamento, responsable y placa de un vistazo. "Volver" (arriba) regresa a la lista; "Editar" corrige cualquier dato del vehículo.',
       },
       {
-        selector: '.ln-ficha-tabs',
+        selector: '.ficha-pestanas .tabs-lista',
         titulo: 'El desglose por pestañas',
         texto: 'Debajo, la ficha se reparte en pestañas: General, Detalles, Historial, Verificaciones, Inspecciones, Sensor, Hologramas, Incidencias, Responsiva… cada una con lo que le toca a ese vehículo.',
       },
       {
-        selector: '.ln-ficha-tabs',
+        selector: '.ficha-pestanas .tabs-lista',
         titulo: 'Si llegaste desde otro lado',
         texto: 'Al abrir la ficha desde una Incidencia, una Responsiva u otro módulo, arranca directo en esa pestaña en vez de en General -- no es un error, solo cambia por dónde empieza: las demás siguen aquí mismo, a un clic.',
       },
@@ -4815,7 +4659,7 @@
 
   // ---------- Uber (usuarios autorizados) ----------
   async function initUber() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('uber');
     if (!puedeEditar) document.querySelector('#uber-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -4846,7 +4690,7 @@
     document.getElementById('campos-form-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'uber' });
     document.getElementById('campos-form-editar-uber').innerHTML = CamposHoja.html(CAMPOS_UBER, { prefijo: 'editar-uber', esEdicion: true });
 
-    document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
 
     function badgeEstatusUber(estatus) {
       const valor = String(estatus || '').toUpperCase();
@@ -4982,9 +4826,7 @@
       motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
     });
 
-    // ---- Filtro rápido por Estatus: misma franja de íconos de Líneas/Vehículos/Caja
-    // Chica/Incidencias -- el CSS es genérico (.filtro-tipo*, styles.html). Mismos colores
-    // que badgeEstatusUber.
+    // ---- Filtro rápido por Estatus (FiltroTipo). Mismos colores que badgeEstatusUber.
     const ORDEN_ESTATUS_UBER = ['ACTIVO', 'PENDIENTE', 'BAJA'];
     const ESTILO_ESTATUS_UBER = {
       'ACTIVO': { icono: 'circle-check', color: 'var(--color-success)' },
@@ -4992,41 +4834,12 @@
       'BAJA': { icono: 'ban', color: 'var(--color-danger)' },
     };
     let filtrosActualesUber = {};
-    function marcarEstatusUberFiltro() {
-      const cont = document.getElementById('uber-filtro-estatus');
-      if (!cont) return;
-      const f = filtrosActualesUber.ESTATUS;
-      const elegidos = f && f.valores && f.valores.length ? f.valores : null;
-      cont.querySelectorAll('.filtro-tipo-item').forEach((b) => {
-        const activo = b.dataset.estatus === '*' ? !elegidos : !!(elegidos && elegidos.indexOf(b.dataset.estatus) >= 0);
-        b.classList.toggle('activo', activo);
-        b.setAttribute('aria-pressed', String(activo));
-      });
-    }
-    function pintarEstatusUber(filas) {
-      const cont = document.getElementById('uber-filtro-estatus');
-      if (!cont) return;
-      const conteo = {};
-      filas.forEach((u) => { const e = String(u.ESTATUS || '').toUpperCase(); conteo[e] = (conteo[e] || 0) + 1; });
-      const estatus = ORDEN_ESTATUS_UBER.concat(Object.keys(conteo).filter((e) => ORDEN_ESTATUS_UBER.indexOf(e) < 0 && e));
-      const fila = (valor, icono, color, nombre, n) =>
-        '<button type="button" class="filtro-tipo-item' + (n ? '' : ' filtro-tipo-item-vacio') + '" data-estatus="' + escaparHtml(valor) + '" aria-pressed="false" title="' + escaparHtml(nombre + ' · ' + n) + '">' +
-          '<span class="filtro-tipo-ico" style="color:' + color + '">' + Iconos.svg(icono) + '</span>' +
-          '<span class="filtro-tipo-nombre">' + escaparHtml(nombre) + '</span><span class="filtro-tipo-num">' + n + '</span></button>';
-      cont.innerHTML = '<div class="filtro-tipo-panel"><div class="filtro-tipo-titulo">Estatus</div>' +
-        fila('*', 'layers', 'var(--color-text-muted)', 'Todos', filas.length) +
-        estatus.map((e) => {
-          const estilo = ESTILO_ESTATUS_UBER[e] || { icono: 'circle', color: 'var(--color-text-muted)' };
-          return fila(e, estilo.icono, estilo.color, e, conteo[e] || 0);
-        }).join('') + '</div>';
-      marcarEstatusUberFiltro();
-    }
-    document.getElementById('uber-filtro-estatus').addEventListener('click', (ev) => {
-      const b = ev.target.closest('.filtro-tipo-item');
-      if (!b) return;
-      const e = b.dataset.estatus;
-      tabla.setFiltro('ESTATUS', (e === '*' || b.classList.contains('activo')) ? null : { valores: [e] });
+    const panelEstatusUber = FiltroTipo.crear(document.getElementById('uber-filtro-estatus'), {
+      titulo: 'Estatus', todos: 'Todos', campo: 'ESTATUS', orden: ORDEN_ESTATUS_UBER, estilos: ESTILO_ESTATUS_UBER,
+      alElegir: (valor) => tabla.setFiltro('ESTATUS', valor ? { valores: [valor] } : null),
     });
+    function marcarEstatusUberFiltro() { panelEstatusUber.marcar(filtrosActualesUber.ESTATUS); }
+    function pintarEstatusUber(filas) { panelEstatusUber.pintar(filas); }
 
     // KPI clickeables: los valores de ESTATUS son exactos (ACTIVO/PENDIENTE/BAJA,
     // las mismas 3 opciones del <select> de Registrar), así que un filtro de
@@ -5155,7 +4968,7 @@
         const datos = Object.assign(CamposHoja.recolectar(CAMPOS_UBER, 'uber'), archivo);
         await callServer('apiCrearUber', state.token, datos);
         ev.target.reset();
-        document.getElementById('uber-fecha-de-alta').value = new Date().toLocaleDateString('es-MX');
+        document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
         invalidarCacheLista('apiListarUberResumen', state.token);
         await cargar();
         toastExito('Registrado exitosamente');
@@ -5210,7 +5023,7 @@
   ];
 
   async function initTickets() {
-    wireTabsSimple(document.getElementById('view-container'));
+    Tabs.iniciar(document.getElementById('view-container'));
     // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
     const puedeEditar = puedeEditarModulo('tickets');
     if (!puedeEditar) document.querySelector('#tickets-tabs .tab-btn[data-tab="registrar"]').remove();
@@ -5220,7 +5033,7 @@
     document.getElementById('campos-form-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'ticket' });
     document.getElementById('campos-form-editar-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'editar-ticket', esEdicion: true });
 
-    document.getElementById('ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
+    document.getElementById('ticket-fecha-de-registro').value = Formato.fecha(new Date());
     document.getElementById('ticket-fecha').value = hoyISO();
 
     // Departamentos (hoja "LISTAS VEHICULOS") y Solicitantes (sugerencias =
@@ -5357,7 +5170,7 @@
       try {
         await callServer('apiCrearTicket', state.token, CamposHoja.recolectar(CAMPOS_TICKET, 'ticket'));
         ev.target.reset();
-        document.getElementById('ticket-fecha-de-registro').value = new Date().toLocaleDateString('es-MX');
+        document.getElementById('ticket-fecha-de-registro').value = Formato.fecha(new Date());
         document.getElementById('ticket-fecha').value = hoyISO();
         invalidarCacheLista('apiListarTicketsResumen', state.token);
         await cargar();

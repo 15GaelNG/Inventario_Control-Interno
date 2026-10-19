@@ -43,7 +43,7 @@ function cargar(drive, opciones) {
   const pruebas = drive.nodo('NUCOS VEHICULOS (DEV)', null, CARPETA);
   const ctx = vm.createContext({
     Config: { DRIVE_FOLDERS: { NUCOS_VEHICULOS: () => (op.sinClave ? '' : nucos.id) } },
-    DriveUtils: {
+    DriveUtils: { ...require("./drive-utils-real")(),
       carpetaEnRaiz: () => pruebas,
       marcarAutor: (a) => a,
       idDeLiga: (l) => { const m = /\/d\/([A-Za-z0-9_-]{20,})|[?&]id=([A-Za-z0-9_-]{20,})/.exec(String(l || '')); return m ? (m[1] || m[2]) : null; },

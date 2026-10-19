@@ -80,10 +80,12 @@ test('línea sola: Quitar responsable y responsable para USO', () => {
 
 test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por número anterior', () => {
   const html = read('src/html/js/lineas.html');
-  // Editar línea solo desde la línea, en la lista y en la ficha; el equipo trae Editar equipo (usuario, 13-oct)
-  assert.doesNotMatch(html, /texto: 'Editar línea', maximo: 1, enBarra: false, grupo: 'abrir', visible: \(f\) => operar\(\) && !!f\[0\]\.lineaId/);
-  assert.match(html, /texto: 'Editar equipo', separador: true, alHacer: \(\) => abrirEditor\(id\)/);
-  assert.match(html, /texto: 'Editar línea', separador: true, alHacer: \(\) => abrirEditor\(id, 'LINEA'\)/);
+  // Corregir la línea solo desde la línea, en la lista y en la ficha; el equipo corrige el equipo (usuario, 13-oct). «Corregir»
+  // en lugar de «Editar» (usuario, 16-oct; pendiente 2.50)
+  assert.doesNotMatch(html, /'Editar línea'|'Editar equipo'/);
+  assert.match(html, /texto: 'Corregir', separador: true, alHacer: \(\) => abrirEditor\(id\)/);
+  assert.match(html, /texto: 'Corregir', separador: true, alHacer: \(\) => abrirEditor\(id, 'LINEA'\)/);
+  assert.match(html, /textContent = id \? \(parte === 'LINEA' \? 'Corregir línea' : 'Corregir equipo'\) : agregar;/);
   assert.match(html, /if \(cond\.cambio\) return/);
   // La búsqueda encuentra la línea por un número anterior, pero en la celda solo va el actual; los anteriores, en la ficha
   // abajo del número (usuario, 12-oct)

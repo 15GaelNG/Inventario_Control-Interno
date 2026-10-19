@@ -27,7 +27,7 @@
         return d ? dos(d.d) + '/' + dos(d.m) + '/' + d.y : '';
       }
       if (celda.t === 'd' && celda.v instanceof Date) {
-        return dos(celda.v.getDate()) + '/' + dos(celda.v.getMonth() + 1) + '/' + celda.v.getFullYear();
+        return Formato.fecha(celda.v);
       }
       return limpio(celda.v);
     }
@@ -78,7 +78,7 @@
       return btoa(bin);
     }
 
-    const num = (n) => Number(n || 0).toLocaleString('es-MX');
+    const num = Formato.miles;
 
     async function pintarResumen() {
       try {

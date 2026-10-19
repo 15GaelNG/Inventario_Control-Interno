@@ -224,6 +224,8 @@ const REVISION_CARPETAS = {
   // El expediente por NUCO: no vive en la raíz de la app (en un DEV sin la clave, sí: ExpedienteNuco)
   DRIVE_FOLDER_ID_NUCOS_VEHICULOS: { nombre: 'NUCOS VEHICULOS', sinRaiz: true },
   LINEAS_DRIVE_NUCOS: {},
+  // La carpeta LINEAS, junto a NUCOS (pendiente 2.45): la responsiva de la línea sin equipo
+  LINEAS_DRIVE_LINEAS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: { soloLee: true },
 };
 /**
@@ -286,6 +288,12 @@ function revisarEntorno() {
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
+}
+
+/** El ID que tiene esa clave en el bloque de producción de Entornos.gs ('' si no la tiene) */
+function carpetaDeProduccion_(clave) {
+  const prod = typeof ENTORNOS !== 'undefined' && typeof SCRIPT_ID_COMPARTIDO !== 'undefined' ? ENTORNOS[SCRIPT_ID_COMPARTIDO] : null;
+  return String((prod && prod[clave]) || '').trim();
 }
 
 function revisionEntorno_() {
@@ -372,6 +380,11 @@ function revisionEntorno_() {
       return;
     }
     if (carpeta.isTrashed()) { anotar(x, 'la carpeta está en la papelera', true); return; }
+    // Un DEV que escribe en la misma carpeta que producción (configurarLineasDev le ponía NUCOS de producción, 15-oct)
+    if (!esProd && !regla.soloLee && x.id === carpetaDeProduccion_(clave)) {
+      anotar(x, 'es la carpeta de PRODUCCIÓN: este DEV escribiría ahí sus pruebas (quita la clave o pon una de pruebas)', true);
+      return;
+    }
     if (clave === 'DRIVE_FOLDER_ID_RAIZ') raiz = carpeta;
     if (!regla.soloLee) exigir(x, x.id, 'canAddChildren', 'solo puede ver esta carpeta: lo que se guarde ahí va a fallar (necesita ser Editor)');
     const prueba = esProd && enPruebas(carpeta);
