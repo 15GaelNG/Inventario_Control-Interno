@@ -5,11 +5,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const LINEAS = require('./lineas-fuente');
+const APP = require('./app-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 test('la regla de mayúsculas de app.html no toca los campos con data-respetar-texto', () => {
-  const app = read('src/html/js/app.html');
+  const app = APP;
   const regla = app.slice(app.indexOf("document.getElementById('view-container').addEventListener('input'"));
   const corte = regla.indexOf('el.value = el.value.toUpperCase();');
   assert.ok(corte > 0, 'existe la regla de mayúsculas');

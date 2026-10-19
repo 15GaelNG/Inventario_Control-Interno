@@ -57,6 +57,13 @@ dividir es seguro mientras el orden de `<?!= include(...) ?>` en
 `src/html/Index.html` mantenga los archivos "base" (api, app) antes de los
 que dependen de sus helpers.
 
+Desde el 19-oct (fase 6.1, `tools/app/partir.js`) `app.html` es solo la base (shell, login, inicio, `NAV_GRUPOS`,
+ayudantes, tabla interactiva, ficha genérica); Vehículos, Incidencias, Uber y Tickets viven en `app-vehiculos.html`,
+`app-incidencias.html`, `app-uber.html` y `app-tickets.html`, incluidos justo después de `app` (otros archivos usan
+`CAMPOS_VEHICULO` y `CAMPOS_TICKET` al cargar). Lo que usan varios módulos se queda en la base. **Contrato del orden de
+carga** (`tests/orden-de-carga.js`): nada que corre al cargar (fuera de funciones, o en una IIFE) usa algo declarado en
+un archivo que carga después; si falla, se mueve la declaración a un archivo anterior o se usa dentro de una función.
+
 **Líneas es distinto** (19-oct, fase 6.2): todo vive dentro de `const Lineas = (function () { … })()`, así que sus
 partes no comparten el espacio global. `lineas.html` es la base (utilidades, formularios, estado) y cada pantalla
 (`lineas-telefonicas.html`, `-panorama`, `-activos`, `-accesorios`, `-resguardos`, `-bitacora`) es su propia

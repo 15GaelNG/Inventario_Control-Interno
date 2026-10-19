@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const LINEAS = require('./lineas-fuente');
+const APP = require('./app-fuente');
 
 const leer = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8').replace(/\r/g, '');
 const telefonia = leer('src/services/TelefoniaService.gs');
@@ -129,7 +130,7 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   const adq = leer('src/services/AdquisicionVehicularService.gs');
   assert.match(adq, /function buscar\(token, serie\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
   assert.match(adq, /function archivos\(token, liga\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
-  assert.match(leer('src/html/js/app.html'), /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
+  assert.match(APP, /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
   assert.match(adq, /function buscar\(token, serie\) \{[\s\S]*?sesion\.alcance && !VehiculosService\.serieEnAlcance/);
   assert.match(adq, /function archivos\(token, liga\) \{[\s\S]*?if \(sesion\.alcance\) \{[\s\S]*?serieEnAlcance/);
 });

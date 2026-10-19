@@ -206,10 +206,14 @@ captura más simple (cancelación o vincular) → una por una, probando cada una
 Jorge, Emmanuel y Ayrton cambien en esos archivos mientras tanto (un conflicto por cada cambio suyo). Se hacen en un día
 acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin cambiar código) para que se revise fácil.
 
-- [ ] 6.1 Vehículos sale de `app.html` a `app-vehiculos.html` (como Arqueos y Caja Chica); Uber y Tickets también.
-      `app.html` queda como la base: menú, sesión, inicio, ayudantes. **Pendiente (usuario, 19-oct)**: después de
-      Líneas, y cuando Jorge suba lo suyo (213 líneas de `app.html` sin subir). Es más fácil que 6.2: `app.html` no
-      está encerrado en una función, sus partes ya comparten el espacio global como `app-arqueos.html`.
+- [x] 6.1 `app.html` por pantallas (19-oct), con `tools/app/partir.js`: 5,038 → 1,596 líneas; `app-vehiculos`
+      (2,539), `app-incidencias` (384), `app-uber` (343) y `app-tickets` (212), justo después de `app` en Index.
+      Solo mueve: `app.html` no está encerrado en una función. **Corta por nombres, no por renglones**, para que cada
+      rama lo corra sobre su propio `app.html` antes de traer master (probado en `ayrton`, que trae 285 líneas más, y en
+      la de Jorge: la base sale idéntica y lo de cada rama viaja con su pantalla). `slugCampo` y `leerArchivoBase64`
+      se quedan en la base (las usan otros). Contrato nuevo y permanente del **orden de carga**
+      (`tests/orden-de-carga.js`): nada que corre al cargar usa algo de un archivo posterior.
+- [ ] 6.1b Abrir `initVehiculos` (2,044 líneas, una sola función) como la 6.2b. Con su propio plan.
 - [x] 6.2 `lineas.html` por pantallas (19-oct), con `tools/lineas/partir.js`: el archivo era **una sola función**
       (`const Lineas = (function () { … })()`), así que no bastaba con mover. Queda la base (`lineas.html`, 2,394
       líneas: utilidades, formularios, estado) y una pantalla por archivo (`lineas-telefonicas`, `-panorama`,
@@ -272,6 +276,7 @@ juntan por primera vez.
 
 | Fecha | Fase | Qué | Pasó a master |
 |---|---|---|---|
+| 19-oct | 6.1 | `app.html` en la base + Vehículos, Incidencias, Uber y Tickets, con `tools/app/partir.js` (cada rama lo corre sobre su `app.html`); contrato del orden de carga | pendiente |
 | 19-oct | 6.2b | `initTelefonicas` en el arranque + 6 partes (`T`, `T.de`), con `tools/lineas/partir-telefonicas.js` y `eslint-scope`; contrato y 2 escenas | pendiente |
 | 19-oct | 6.2 | `lineas.html` (7,132 líneas) en la base + 6 pantallas sobre `Lineas.comun`, con `tools/lineas/partir.js`; `tests/lineas-fuente.js`, contrato y 5 escenas | pendiente |
 | 15-oct | — | Rama `common` desde `master` (46b73b0) y este plan | — |
