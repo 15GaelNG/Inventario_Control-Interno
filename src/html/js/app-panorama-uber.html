@@ -1,0 +1,355 @@
+<script>
+  /**
+   * app-panorama-uber.html — "Panorama" dentro de Uber: KPIs y gráficas (Chart.js, cargado en
+   * Index.html) de los viajes justificados de Uber, con filtros que se aplican a todo en vivo.
+   * Mismo patrón que app-panorama-vehiculos.html / app-panorama-cajachica.html — en su propio
+   * archivo, nada de esto vive en app.html.
+   *
+   * A diferencia de esos dos, aquí NO hay un catálogo propio ya cacheado: los datos salen de
+   * apiUberPanorama (UberPanorama.gs), que lee EN VIVO y SOLO LECTURA la hoja externa de Uber
+   * (la lleva otra área) y los guarda en caché del servidor 30 min. Por eso se usa callServer
+   * normal (no callServerListaCacheada) y hay un botón "Actualizar" que fuerza a releerla.
+   */
+
+  const PU_ORDEN_ESTATUS = ['JUSTIFICADO', 'SIN ESTATUS', 'REVISAR', 'COBRADO/DEVUELTO'];
+  const PU_COLOR_ESTATUS = {
+    'JUSTIFICADO': '#06263A', 'SIN ESTATUS': '#B4A169', 'REVISAR': '#2f7bb0', 'COBRADO/DEVUELTO': '#8a6d3a',
+  };
+  const PU_ICONO_ESTATUS = {
+    'JUSTIFICADO': 'circle-check', 'SIN ESTATUS': 'help-circle', 'REVISAR': 'alert-triangle', 'COBRADO/DEVUELTO': 'rotate-ccw',
+  };
+  const PU_ETIQUETA_ESTATUS = {
+    'JUSTIFICADO': 'Justificados', 'SIN ESTATUS': 'Sin estatus', 'REVISAR': 'A revisar', 'COBRADO/DEVUELTO': 'Cobrado/devuelto',
+  };
+  // SÍ ya viene fusionado (SI/SÍ/IS) desde el servidor -- ver UberPanorama.gs
+  const PU_ORDEN_AUTORIZACION = ['SÍ', 'SIN DATO', 'AUTORIZADO POR DA', 'NO', '-'];
+  const PU_MES_ORDEN = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE', 'SIN MES'];
+  // "SEM 28", "SEM 29"… -- se ordena por el número, no alfabético (si no, "SEM 30" quedaría antes que "SEM 9")
+  function puNumSemana(semana) {
+    const n = parseInt(String(semana).replace(/\D/g, ''), 10);
+    return isNaN(n) ? Infinity : n;
+  }
+
+  if (!window.__puDataLabelsRegistrado) {
+    Chart.register(ChartDataLabels);
+    window.__puDataLabelsRegistrado = true;
+  }
+
+  function formatoMonedaPU(valor) {
+    return '$' + (Number(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  async function initPanoramaUber() {
+    const cuerpo = document.getElementById('view-container');
+    let todos = [];
+    const graficas = {}; // id → instancia de Chart, para destruir antes de repintar
+
+    // ---------- Filtros ----------
+    // Declarados ANTES de cargar() a propósito: cargar() llama llenarTodosLosFiltros() en cuanto
+    // llegan los datos, y esa función lee FILTROS -- con un `const` más abajo, la primera carga
+    // tronaría con "Cannot access 'FILTROS' before initialization".
+    const FILTROS = [
+      { id: 'pu-f-departamento', campo: 'DEPARTAMENTO' },
+      { id: 'pu-f-sede', campo: 'SEDE' },
+      { id: 'pu-f-categoria', campo: 'CATEGORIA' },
+      { id: 'pu-f-estatus', campo: 'ESTATUS' },
+      { id: 'pu-f-autorizacion', campo: 'AUTORIZACION' },
+      { id: 'pu-f-mes', campo: 'MES' },
+      { id: 'pu-f-semana', campo: 'SEMANA' },
+    ];
+
+    /** Opciones de un filtro según los VALORES QUE YA DEJAN los demás filtros activos (ver
+     *  mismo comentario en app-panorama-vehiculos.html). El de Mes se ordena cronológicamente,
+     *  no alfabéticamente (si no, AGOSTO quedaría antes que JULIO). */
+    function llenarOpcionesFiltro(campo, id) {
+      const select = document.getElementById(id);
+      const valorActual = select.value;
+      const filasBase = todos.filter((v) => FILTROS.every((f) => {
+        if (f.id === id) return true;
+        const elegido = document.getElementById(f.id).value;
+        return !elegido || v[f.campo] === elegido;
+      }));
+      let valores = Array.from(new Set(filasBase.map((v) => v[campo]).filter(Boolean)));
+      valores = (campo === 'MES') ? valores.sort((a, b) => PU_MES_ORDEN.indexOf(a) - PU_MES_ORDEN.indexOf(b))
+        : (campo === 'SEMANA') ? valores.sort((a, b) => puNumSemana(a) - puNumSemana(b))
+        : valores.sort((a, b) => a.localeCompare(b));
+      select.innerHTML = '<option value="">' + select.options[0].textContent + '</option>' +
+        valores.map((v) => `<option value="${escaparHtml(v)}">${escaparHtml(v)}</option>`).join('');
+      if (valores.indexOf(valorActual) !== -1) select.value = valorActual;
+    }
+    function llenarTodosLosFiltros() {
+      FILTROS.forEach((f) => llenarOpcionesFiltro(f.campo, f.id));
+    }
+
+    function filasFiltradas() {
+      return todos.filter((v) => FILTROS.every((f) => {
+        const elegido = document.getElementById(f.id).value;
+        return !elegido || v[f.campo] === elegido;
+      }));
+    }
+
+    FILTROS.forEach((f) => document.getElementById(f.id).addEventListener('change', () => { llenarTodosLosFiltros(); pintarTodo(); }));
+    document.getElementById('pu-limpiar-filtros').addEventListener('click', () => {
+      FILTROS.forEach((f) => { document.getElementById(f.id).value = ''; });
+      llenarTodosLosFiltros();
+      pintarTodo();
+    });
+
+    // ---------- Carga de datos ----------
+    async function cargar(forzar) {
+      const r = await callServer('apiUberPanorama', state.token, !!forzar);
+      todos = (r && r.filas) || [];
+      if (!document.getElementById('pu-filtros')) return; // se navegó a otra vista mientras cargaba
+      const gen = r && r.generadoEn ? new Date(r.generadoEn) : null;
+      document.getElementById('pu-generado').textContent = gen
+        ? 'Datos al ' + gen.toLocaleDateString('es-MX') + ' ' + gen.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) + ' -- la hoja de origen se alimenta cada semana'
+        : '';
+      llenarTodosLosFiltros();
+      pintarTodo();
+    }
+
+    try {
+      await cargar(false);
+    } catch (err) {
+      if (!document.getElementById('pu-filtros')) return;
+      cuerpo.innerHTML = '<p class="error-msg">No se pudo cargar el panorama de Uber: ' + escaparHtml(err.message) + '</p>';
+      return;
+    }
+    if (!document.getElementById('pu-filtros')) return;
+
+    document.getElementById('pu-actualizar').addEventListener('click', async (ev) => {
+      const boton = ev.currentTarget;
+      boton.disabled = true;
+      try {
+        await cargar(true);
+      } catch (err) {
+        Notificar.error('No se pudo actualizar: ' + escaparHtml(err.message));
+      } finally {
+        if (document.body.contains(boton)) boton.disabled = false;
+      }
+    });
+
+    /** Clic en una rebanada/barra activa ese valor en el <select> del mismo campo (segundo clic lo quita). */
+    function activarFiltroDesdeGrafica(idSelect, valor) {
+      if (valor === 'Otros') return; // categoría agregada, no es una opción real del filtro
+      const select = document.getElementById(idSelect);
+      if (Array.from(select.options).every((o) => o.value !== valor)) return; // no es una opción real (p. ej. "SIN MES" fuera de rango)
+      select.value = (select.value === valor) ? '' : valor;
+      llenarTodosLosFiltros();
+      pintarTodo();
+    }
+
+    // ---------- KPIs ----------
+    function pintarKpis(filas) {
+      const porEstatus = {};
+      PU_ORDEN_ESTATUS.forEach((e) => { porEstatus[e] = 0; });
+      filas.forEach((v) => { if (porEstatus[v.ESTATUS] !== undefined) porEstatus[v.ESTATUS]++; });
+      const gastoTotal = filas.reduce((acc, v) => acc + (Number(v.MONTO) || 0), 0);
+      const promedio = filas.length ? gastoTotal / filas.length : 0;
+      const pctJustificado = filas.length ? Math.round(porEstatus['JUSTIFICADO'] / filas.length * 100) : 0;
+
+      const tiles = [
+        { etiqueta: 'Total de viajes', valor: filas.length.toLocaleString('es-MX'), icono: 'route', clase: '' },
+        { etiqueta: 'Gasto total', valor: formatoMonedaPU(gastoTotal), icono: 'coins', clase: 'stat-tile-ok' },
+        { etiqueta: 'Gasto promedio', valor: formatoMonedaPU(promedio), icono: 'calculator', clase: '' },
+        { etiqueta: 'Justificado', valor: porEstatus['JUSTIFICADO'].toLocaleString('es-MX') + ' (' + pctJustificado + '%)', icono: PU_ICONO_ESTATUS['JUSTIFICADO'], clase: 'stat-tile-ok' },
+        { etiqueta: 'Sin estatus', valor: porEstatus['SIN ESTATUS'], icono: PU_ICONO_ESTATUS['SIN ESTATUS'], clase: porEstatus['SIN ESTATUS'] ? 'stat-tile-warn' : '' },
+        { etiqueta: 'A revisar', valor: porEstatus['REVISAR'], icono: PU_ICONO_ESTATUS['REVISAR'], clase: porEstatus['REVISAR'] ? 'stat-tile-warn' : '' },
+        { etiqueta: 'Cobrado/devuelto', valor: porEstatus['COBRADO/DEVUELTO'], icono: PU_ICONO_ESTATUS['COBRADO/DEVUELTO'], clase: '' },
+      ];
+
+      document.getElementById('pu-kpis').innerHTML = tiles.map((t) => `
+        <div class="stat-tile ${t.clase}">
+          <div class="stat-icon"><i data-lucide="${t.icono}" class="ico"></i></div>
+          <div><div class="stat-value">${t.valor}</div><div class="stat-label">${escaparHtml(t.etiqueta)}</div></div>
+        </div>`).join('');
+      refreshIcons();
+    }
+
+    // ---------- Gráficas ----------
+    function colorTexto() { return getComputedStyle(document.documentElement).getPropertyValue('--color-text-muted').trim(); }
+    function colorBorde() { return getComputedStyle(document.documentElement).getPropertyValue('--color-border').trim(); }
+    function colorPrimario() { return getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim(); }
+
+    function sumarPor(filas, campo, campoMonto) {
+      const suma = {};
+      filas.forEach((f) => { const v = f[campo] || 'Sin dato'; suma[v] = (suma[v] || 0) + (Number(f[campoMonto]) || 0); });
+      return Object.keys(suma).map((k) => [k, suma[k]]).sort((a, b) => b[1] - a[1]);
+    }
+    function crearOActualizarGrafica(id, config) {
+      if (graficas[id]) graficas[id].destroy();
+      graficas[id] = new Chart(document.getElementById(id), config);
+    }
+    function mutar(colorHex) { return colorHex + '40'; }
+
+    /** Las barras horizontales muestran TODOS los valores (sin agrupar en "Otros"), así que el alto
+     *  del lienzo crece según cuántas haya -- si no, con 50 categorías o 200 colaboradores se
+     *  verían amontonadas en los mismos 280px fijos. */
+    function ajustarAltoHorizontal(id, cantidad) {
+      document.getElementById(id).parentElement.style.height = Math.max(240, cantidad * 26 + 50) + 'px';
+    }
+
+    function graficaDona(filas) {
+      const filtroActivo = document.getElementById('pu-f-estatus').value;
+      const valores = PU_ORDEN_ESTATUS.map((e) => filas.filter((v) => v.ESTATUS === e).length);
+      const colores = PU_ORDEN_ESTATUS.map((e) => {
+        const base = PU_COLOR_ESTATUS[e];
+        return (!filtroActivo || filtroActivo === e) ? base : mutar(base);
+      });
+      crearOActualizarGrafica('pu-chart-estatus', {
+        type: 'doughnut',
+        data: {
+          labels: PU_ORDEN_ESTATUS.map((e) => PU_ETIQUETA_ESTATUS[e]),
+          datasets: [{ data: valores, backgroundColor: colores, borderWidth: 2, borderColor: getComputedStyle(document.documentElement).getPropertyValue('--color-surface').trim() }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, cutout: '62%',
+          onClick: (evt, elementos) => { if (elementos.length) activarFiltroDesdeGrafica('pu-f-estatus', PU_ORDEN_ESTATUS[elementos[0].index]); },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+          plugins: {
+            legend: { position: 'right', labels: { color: colorTexto(), boxWidth: 13, padding: 14, font: { size: 12 } } },
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed} (${filas.length ? Math.round(ctx.parsed / filas.length * 100) : 0}%)` } },
+            datalabels: { color: '#fff', font: { weight: 'bold', size: 12 }, formatter: (valor) => (valor > 0 ? valor : '') },
+          },
+        },
+      });
+    }
+
+    function graficaBarrasMonto(id, filas, campo, filtroId) {
+      const pares = sumarPor(filas, campo, 'MONTO');
+      ajustarAltoHorizontal(id, pares.length);
+      const filtroActivo = filtroId ? document.getElementById(filtroId).value : '';
+      const colorBase = colorPrimario();
+      const colores = pares.map((p) => (!filtroActivo || filtroActivo === p[0]) ? colorBase : mutar(colorBase));
+      crearOActualizarGrafica(id, {
+        type: 'bar',
+        data: { labels: pares.map((p) => p[0]), datasets: [{ data: pares.map((p) => p[1]), backgroundColor: colores, borderRadius: 6, maxBarThickness: 34 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          layout: { padding: { right: 48 } },
+          onClick: (evt, elementos) => { if (elementos.length && filtroId) activarFiltroDesdeGrafica(filtroId, pares[elementos[0].index][0]); },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = (elementos.length && filtroId) ? 'pointer' : 'default'; },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${formatoMonedaPU(ctx.parsed.x)}` } },
+            datalabels: { color: colorTexto(), anchor: 'end', align: 'end', offset: 4, font: { size: 11, weight: '600' }, clip: false, formatter: (valor) => (valor > 0 ? formatoMonedaPU(valor) : '') },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: colorTexto(), callback: (v) => formatoMonedaPU(v) }, grid: { color: colorBorde() } },
+            y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    /** Gasto por mes, en orden cronológico (no por tamaño) -- un vistazo a si el gasto sube o baja mes con mes. */
+    function graficaTendenciaMensual(filas) {
+      const suma = {};
+      filas.forEach((f) => { suma[f.MES] = (suma[f.MES] || 0) + (Number(f.MONTO) || 0); });
+      const meses = Object.keys(suma).sort((a, b) => PU_MES_ORDEN.indexOf(a) - PU_MES_ORDEN.indexOf(b));
+      const filtroActivo = document.getElementById('pu-f-mes').value;
+      const colorBase = colorPrimario();
+      const colores = meses.map((m) => (!filtroActivo || filtroActivo === m) ? colorBase : mutar(colorBase));
+      crearOActualizarGrafica('pu-chart-tendencia', {
+        type: 'bar',
+        data: { labels: meses, datasets: [{ data: meses.map((m) => suma[m]), backgroundColor: colores, borderRadius: 6, maxBarThickness: 56 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          onClick: (evt, elementos) => { if (elementos.length) activarFiltroDesdeGrafica('pu-f-mes', meses[elementos[0].index]); },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${formatoMonedaPU(ctx.parsed.y)}` } },
+            datalabels: { color: colorTexto(), anchor: 'end', align: 'end', offset: 4, font: { size: 11, weight: '600' }, formatter: (valor) => (valor > 0 ? formatoMonedaPU(valor) : '') },
+          },
+          scales: {
+            x: { ticks: { color: colorTexto() }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { color: colorTexto(), callback: (v) => formatoMonedaPU(v) }, grid: { color: colorBorde() } },
+          },
+        },
+      });
+    }
+
+    /** Igual que graficaTendenciaMensual pero por SEMANA. */
+    function graficaTendenciaSemanal(filas) {
+      const suma = {};
+      filas.forEach((f) => { suma[f.SEMANA] = (suma[f.SEMANA] || 0) + (Number(f.MONTO) || 0); });
+      const semanas = Object.keys(suma).sort((a, b) => puNumSemana(a) - puNumSemana(b));
+      const filtroActivo = document.getElementById('pu-f-semana').value;
+      const colorBase = colorPrimario();
+      const colores = semanas.map((s) => (!filtroActivo || filtroActivo === s) ? colorBase : mutar(colorBase));
+      crearOActualizarGrafica('pu-chart-tendencia-semanal', {
+        type: 'bar',
+        data: { labels: semanas, datasets: [{ data: semanas.map((s) => suma[s]), backgroundColor: colores, borderRadius: 6, maxBarThickness: 34 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          onClick: (evt, elementos) => { if (elementos.length) activarFiltroDesdeGrafica('pu-f-semana', semanas[elementos[0].index]); },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${formatoMonedaPU(ctx.parsed.y)}` } },
+            datalabels: { color: colorTexto(), anchor: 'end', align: 'end', offset: 4, font: { size: 10, weight: '600' }, formatter: (valor) => (valor > 0 ? formatoMonedaPU(valor) : '') },
+          },
+          scales: {
+            x: { ticks: { color: colorTexto(), font: { size: 10.5 } }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { color: colorTexto(), callback: (v) => formatoMonedaPU(v) }, grid: { color: colorBorde() } },
+          },
+        },
+      });
+    }
+
+    function graficaAutorizacion(filas) {
+      const conteo = {};
+      PU_ORDEN_AUTORIZACION.forEach((a) => { conteo[a] = 0; });
+      filas.forEach((f) => { if (conteo[f.AUTORIZACION] !== undefined) conteo[f.AUTORIZACION]++; });
+      ajustarAltoHorizontal('pu-chart-autorizacion', PU_ORDEN_AUTORIZACION.length);
+      const filtroActivo = document.getElementById('pu-f-autorizacion').value;
+      const colorBase = colorPrimario();
+      const colores = PU_ORDEN_AUTORIZACION.map((a) => (!filtroActivo || filtroActivo === a) ? colorBase : mutar(colorBase));
+      crearOActualizarGrafica('pu-chart-autorizacion', {
+        type: 'bar',
+        data: { labels: PU_ORDEN_AUTORIZACION, datasets: [{ data: PU_ORDEN_AUTORIZACION.map((a) => conteo[a]), backgroundColor: colores, borderRadius: 6, maxBarThickness: 34 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          layout: { padding: { right: 24 } },
+          onClick: (evt, elementos) => { if (elementos.length) activarFiltroDesdeGrafica('pu-f-autorizacion', PU_ORDEN_AUTORIZACION[elementos[0].index]); },
+          onHover: (evt, elementos) => { evt.native.target.style.cursor = elementos.length ? 'pointer' : 'default'; },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ` ${ctx.parsed.x} viaje(s)` } },
+            datalabels: { color: colorTexto(), anchor: 'end', align: 'end', offset: 4, font: { size: 11, weight: '600' }, clip: false, formatter: (valor) => (valor > 0 ? valor : '') },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: colorTexto(), precision: 0 }, grid: { color: colorBorde() } },
+            y: { ticks: { color: colorTexto(), font: { size: 11.5 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    function pintarTodo() {
+      const filas = filasFiltradas();
+      document.getElementById('pu-sin-datos').hidden = filas.length > 0;
+      document.getElementById('pu-graficas').hidden = filas.length === 0;
+      pintarKpis(filas);
+      if (!filas.length) return;
+      graficaDona(filas);
+      graficaTendenciaMensual(filas);
+      graficaTendenciaSemanal(filas);
+      graficaBarrasMonto('pu-chart-departamento', filas, 'DEPARTAMENTO', 'pu-f-departamento');
+      graficaBarrasMonto('pu-chart-sede', filas, 'SEDE', 'pu-f-sede');
+      graficaBarrasMonto('pu-chart-categoria', filas, 'CATEGORIA', 'pu-f-categoria');
+      graficaAutorizacion(filas);
+      // Sin filtroId a propósito: cientos de nombres distintos no caben en un <select> útil
+      graficaBarrasMonto('pu-chart-colaboradores', filas, 'NOMBRE_COMPLETO', null);
+    }
+  }
+
+  const AYUDA_PANORAMA_UBER = [
+    { pregunta: '¿Qué muestra esta pantalla?', respuesta: 'KPIs y gráficas de los viajes de Uber registrados en la hoja de justificaciones -- todo se recalcula en vivo según los filtros que elijas.' },
+    { pregunta: '¿De dónde salen los datos?', respuesta: 'Se leen de la hoja de Google Sheets que lleva otra área (se alimenta cada semana); este panorama solo la lee, nunca la modifica. El botón "Actualizar" fuerza a releerla (si no, se guarda hasta 30 minutos).' },
+    { pregunta: '¿Por qué "Por autorización" no trae "SI" y "SÍ" por separado?', respuesta: 'Se fusionaron a propósito (control interno, oct-2026): eran la misma respuesta escrita de formas distintas (con/sin acento, y un typo "IS").' },
+    { pregunta: '¿Cómo filtro?', respuesta: 'Elige Departamento, Sede, Categoría, Estatus, Autorización, Mes o Semana arriba -- se combinan entre sí, y también puedes hacer clic en una barra o rebanada para filtrar por ese valor.' },
+    { pregunta: '¿Cómo quito los filtros?', respuesta: 'Botón "Limpiar filtros".' },
+  ];
+</script>

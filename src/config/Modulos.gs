@@ -151,6 +151,9 @@ const Modulos = (function () {
     {
       id: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front',
       modulos: [
+        // KPIs y gráficas de los viajes de Uber, leídos en vivo de la hoja externa que lleva
+        // otra área (UberPanorama.gs). Sin alcance: es un reporte (igual que panorama-vehiculos).
+        { id: 'panorama-uber', etiqueta: 'Panorama de Uber' },
         { id: 'uber', etiqueta: 'Uber' },
         {
           id: 'tickets', etiqueta: 'Tickets',

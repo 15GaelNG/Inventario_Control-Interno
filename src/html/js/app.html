@@ -775,6 +775,7 @@
     {
       id: 'uber', icono: 'car-taxi-front', etiqueta: 'Uber',
       items: [
+        { vista: 'panorama-uber', etiqueta: 'Panorama', icono: 'bar-chart-3', requiere: 'panorama-uber', plantilla: 'tpl-panorama-uber', init: () => initPanoramaUber(), ayuda: () => AYUDA_PANORAMA_UBER },
         { vista: 'uber', etiqueta: 'Uber', icono: 'car-taxi-front', requiere: 'uber', plantilla: 'tpl-uber', init: () => initUber(), ayuda: () => AYUDA_UBER },
         { vista: 'tickets', etiqueta: 'Tickets', icono: 'ticket', requiere: 'tickets', plantilla: 'tpl-tickets', init: () => initTickets(), ayuda: () => AYUDA_TICKETS },
       ],

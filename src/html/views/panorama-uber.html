@@ -1,0 +1,88 @@
+<template id="tpl-panorama-uber">
+  <div class="page-header">
+    <div>
+      <h2><i data-lucide="bar-chart-3" class="ico"></i> Panorama de Uber</h2>
+      <p class="page-subtitle">KPIs y gráficas de los viajes justificados de Uber -- los filtros se aplican a todo en vivo</p>
+    </div>
+    <div class="page-header-actions">
+      <button type="button" class="secondary" id="pu-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+    </div>
+  </div>
+
+  <p class="page-note" id="pu-generado"></p>
+
+  <div class="card pv-filtros" id="pu-filtros">
+    <div class="pv-filtros-grid">
+      <div class="field">
+        <label for="pu-f-departamento">Departamento</label>
+        <select id="pu-f-departamento"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pu-f-sede">Sede</label>
+        <select id="pu-f-sede"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pu-f-categoria">Categoría</label>
+        <select id="pu-f-categoria"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pu-f-estatus">Estatus</label>
+        <select id="pu-f-estatus"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pu-f-autorizacion">Autorización</label>
+        <select id="pu-f-autorizacion"><option value="">Todas</option></select>
+      </div>
+      <div class="field">
+        <label for="pu-f-mes">Mes</label>
+        <select id="pu-f-mes"><option value="">Todos</option></select>
+      </div>
+      <div class="field">
+        <label for="pu-f-semana">Semana</label>
+        <select id="pu-f-semana"><option value="">Todas</option></select>
+      </div>
+      <button type="button" class="secondary" id="pu-limpiar-filtros"><i data-lucide="x" class="ico"></i> Limpiar filtros</button>
+    </div>
+  </div>
+
+  <div class="stat-row" id="pu-kpis"></div>
+
+  <div id="pu-sin-datos" class="card" hidden>
+    <p class="empty-state">Ningún viaje coincide con estos filtros.</p>
+  </div>
+
+  <div class="pv-grid-graficas" id="pu-graficas">
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="pie-chart" class="ico ln-icon"></i> Por estatus</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-estatus"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="trending-up" class="ico ln-icon"></i> Tendencia mensual (gasto)</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-tendencia"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="calendar-range" class="ico ln-icon"></i> Tendencia semanal (gasto)</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-tendencia-semanal"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="building-2" class="ico ln-icon"></i> Por departamento (gasto)</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-departamento"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica">
+      <h3><i data-lucide="map-pin" class="ico ln-icon"></i> Por sede (gasto)</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-sede"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="tag" class="ico ln-icon"></i> Por categoría (gasto)</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-categoria"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="shield-check" class="ico ln-icon"></i> Por autorización</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-autorizacion"></canvas></div>
+    </div>
+    <div class="card pv-card-grafica pv-card-grafica-grande">
+      <h3><i data-lucide="users" class="ico ln-icon"></i> Colaboradores por gasto</h3>
+      <div class="pv-lienzo-wrap"><canvas id="pu-chart-colaboradores"></canvas></div>
+    </div>
+  </div>
+</template>
