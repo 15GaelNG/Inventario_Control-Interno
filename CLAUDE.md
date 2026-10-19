@@ -65,6 +65,14 @@ Algo nuevo de la base que use una pantalla va en `Lineas.comun`. Un `let` de la 
 copiaría su valor al cargar): se lee con una función (`panelActual()`) o va dentro de un objeto (`montaje.n`).
 Las pruebas leen todo Líneas con `tests/lineas-fuente.js`; un contrato revisa la forma y el orden en `Index.html`.
 
+**Líneas Telefónicas, por partes** (19-oct, fase 6.2b): `initTelefonicas` (en `lineas-telefonicas.html`) es el
+arranque y la lista; la ficha, documentos, acciones, captura, historial y páginas viven en
+`lineas-telefonicas-<parte>.html`, cada una `Lineas.telefonicas.registrar('parte', (T) => { …; return { … } })`, y
+`initTelefonicas` las monta con `T.montar(…)` antes de cablear los eventos. Lo del arranque (`raiz`, `pila`, `vigente`…)
+sale de `T`; lo de otra parte se pide arriba como un import, `const { abrirResguardo } = T.de('acciones');` (se busca al
+llamar, así no importa el orden); un `let` que usan varias partes vive en su dueña, que lo publica con get/set en `T`, y
+las demás lo leen como `T.captura`. Una función nueva que otra parte necesite va en el `return` de su parte.
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen

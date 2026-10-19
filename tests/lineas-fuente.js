@@ -7,8 +7,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVOS = ['lineas', 'lineas-telefonicas', 'lineas-panorama', 'lineas-activos', 'lineas-accesorios',
-  'lineas-resguardos', 'lineas-bitacora'];
+const ARCHIVOS = ['lineas', 'lineas-telefonicas', 'lineas-telefonicas-ficha', 'lineas-telefonicas-documentos',
+  'lineas-telefonicas-acciones', 'lineas-telefonicas-captura', 'lineas-telefonicas-historial', 'lineas-telefonicas-paginas',
+  'lineas-panorama', 'lineas-activos', 'lineas-accesorios', 'lineas-resguardos', 'lineas-bitacora'];
 
 // Con \n, como lo leían las pruebas (en Windows el archivo se baja con CRLF)
 module.exports = ARCHIVOS.map((a) => fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', a + '.html'), 'utf8'))

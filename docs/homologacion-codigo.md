@@ -219,9 +219,17 @@ acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin
       `pedirDatos` suben a la base. El script revisa que cada sentencia quede una vez y que deshaciendo esos cambios
       salga el original; las pruebas leen todo con `tests/lineas-fuente.js`. Vista previa: las 8 escenas de Líneas
       (5 nuevas, una por pantalla) idénticas antes y después, sin errores.
-- [ ] 6.2b Abrir `initTelefonicas` (3,161 líneas, 177 declaraciones, 12 `let` de estado compartido: `captura`,
-      `fichaActual`, `tablaHistorial`…) en ficha / acciones / captura. Ya no es mover: el estado pasa a un objeto
-      compartido. Con su propio plan.
+- [x] 6.2b `initTelefonicas` (3,161 líneas, 177 declaraciones) en partes (19-oct), con
+      `tools/lineas/partir-telefonicas.js` y `eslint-scope` (dependencia de desarrollo: los ámbitos de verdad, sin
+      confundir una variable local que se llama igual). Queda el arranque + la lista (`lineas-telefonicas.html`, 814
+      líneas) y seis partes: `-ficha`, `-documentos`, `-acciones`, `-captura`, `-historial`, `-paginas` (188 a 808).
+      El cuerpo de las funciones no cambia: lo de otra parte se pide arriba con `T.de('parte')` (como un import, 185
+      llamadas), lo del arranque sale de `T`, y de los 12 `let` 8 pasan enteros a su parte; los 4 que se comparten
+      (`captura` y las tres tablas de la ficha) los publica su dueña con get/set y las demás dicen `T.captura` (las
+      únicas 32 reescrituras). Cuatro literales que compartían ficha y documentos suben al arranque. El script revisa
+      que cada sentencia quede una vez y que los archivos nuevos no dejen ningún nombre sin resolver que el original
+      resolvía (así se cacharon dos olvidos antes de escribir). Vista previa: 10 escenas de Líneas (2 nuevas: la ficha
+      y el clic derecho) sin errores y como antes.
 - [ ] 6.3 `ClientApi.gs`: una forma de nombrar (`api<Módulo><Qué>`). **Sin renombrar de golpe**: los nombres viejos
       quedan como alias hasta que nadie los llame; agrupar por módulo en el archivo.
 - [x] 6.4 Lo del editor, detrás del candado (15-oct): `candado-editor.test.js` ya no revisa una lista fija de 11
@@ -264,6 +272,7 @@ juntan por primera vez.
 
 | Fecha | Fase | Qué | Pasó a master |
 |---|---|---|---|
+| 19-oct | 6.2b | `initTelefonicas` en el arranque + 6 partes (`T`, `T.de`), con `tools/lineas/partir-telefonicas.js` y `eslint-scope`; contrato y 2 escenas | pendiente |
 | 19-oct | 6.2 | `lineas.html` (7,132 líneas) en la base + 6 pantallas sobre `Lineas.comun`, con `tools/lineas/partir.js`; `tests/lineas-fuente.js`, contrato y 5 escenas | pendiente |
 | 15-oct | — | Rama `common` desde `master` (46b73b0) y este plan | — |
 | 15-oct | 0 | DEV propio (`Inventario DEV - common`, copia del libro de prod, carpeta DEV COMMON); la Action sube `common` | — |

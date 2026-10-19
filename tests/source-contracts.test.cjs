@@ -134,11 +134,15 @@ test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de
   assert.match(lineas, /tablas\[modulo\]\.getFiltradas\(\)/);
   assert.match(lineas, /new MutationObserver/);
   assert.match(lineas, /localStorage\.setItem\('lineas\.modoVista'/);
-  // Con "Tarjetas" recordado la carga inicial ya usa estas constantes: deben declararse antes (zona muerta de const)
-  const inicio = lineas.indexOf('// ---- Carga inicial ----');
-  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'let detallesFicha', 'let tablaHistorial'].forEach((decl) => {
-    assert.ok(lineas.indexOf(decl) > 0 && lineas.indexOf(decl) < inicio, decl + ' debe declararse antes de la carga inicial');
+  // Con "Tarjetas" recordado la carga inicial ya usa estas constantes: deben declararse antes (zona muerta de const).
+  // detallesFicha y tablaHistorial viven en sus partes (fase 6.2b): se declaran al montarlas, antes de la carga inicial
+  const tel = read('src/html/js/lineas-telefonicas.html');
+  const inicio = tel.indexOf('// ---- Carga inicial ----');
+  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'T.montar({'].forEach((decl) => {
+    assert.ok(tel.indexOf(decl) > 0 && tel.indexOf(decl) < inicio, decl + ' debe ir antes de la carga inicial');
   });
+  assert.match(read('src/html/js/lineas-telefonicas-documentos.html'), /\n      let detallesFicha = /);
+  assert.match(read('src/html/js/lineas-telefonicas-historial.html'), /\n      let tablaHistorial = /);
   const gestion = read('src/html/views/lineas/lineas-gestion-activos.html');
   assert.match(gestion, /id="lnga-grid" class="ln-cuadros-grid"/);
   assert.match(lineas, /function tarjetaColaborador/);
@@ -398,9 +402,37 @@ test('Líneas: la base y una pantalla por archivo, unidas solo por Lineas.comun 
   ARCHIVOS.slice(1).forEach((a) => {
     const js = read('src/html/js/' + a + '.html');
     assert.match(js, /^  \(function \(\) \{\r?\n    'use strict';\r?\n    const \{ [^}]+ \} = Lineas\.comun;/m, a + ': toma la base de Lineas.comun');
-    assert.match(js, /\n    Object\.assign\(Lineas, \{/, a + ': se publica con Object.assign(Lineas, …)');
+    // Las pantallas se publican en Lineas; las partes de Telefónicas se registran para que initTelefonicas las monte
+    const parte = /^lineas-telefonicas-(\w+)$/.exec(a);
+    if (parte) assert.match(js, new RegExp("\\n    Lineas\\.telefonicas\\.registrar\\('" + parte[1] + "', \\(T\\) => \\{"), a + ': se registra con Lineas.telefonicas.registrar');
+    else assert.match(js, /\n    Object\.assign\(Lineas, \{/, a + ': se publica con Object.assign(Lineas, …)');
     // Una copia de un let de la base se quedaría con su valor al cargar
     assert.doesNotMatch(js, /\blet montaje\b|\bmontaje = |\+\+montaje(?!\.n)|\bpanelAbierto\b/, a + ': montaje.n y panelActual()');
+  });
+});
+
+test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo T y T.de (fase 6.2b)', () => {
+  // initTelefonicas era una función de 3,161 líneas; tools/lineas/partir-telefonicas.js la abrió (19-oct). Cada parte
+  // (lineas-telefonicas-<parte>.html) es (T) => {…}: lo del arranque sale de T, lo de otra parte de T.de('parte') y un let
+  // que usan varias lo publica su dueña con get/set en T. Una parte no declara lo que otra ya tiene.
+  const tel = read('src/html/js/lineas-telefonicas.html');
+  assert.match(tel, /const T = contextoTelefonicas\(\);/);
+  assert.match(tel, /\n      T\.montar\(\{/);
+  assert.ok(tel.indexOf('T.montar({') < tel.indexOf('Tabs.iniciar('), 'se monta antes del cableado de eventos');
+  const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/lineas-telefonicas-(\w+)'\)/g)].map((m) => m[1]);
+  assert.deepEqual(partes, ['ficha', 'documentos', 'acciones', 'captura', 'historial', 'paginas']);
+  const declarados = {};
+  partes.forEach((p) => {
+    const js = read('src/html/js/lineas-telefonicas-' + p + '.html');
+    // Lo de otra parte llega por T.de: nunca se toma la otra parte entera ni se busca en Lineas.telefonicas
+    assert.doesNotMatch(js, /T\.de\('[a-z]+'\)\./, p + ': de otra parte se toman nombres, no el objeto');
+    [...js.matchAll(/^      (?:async )?function (\w+)\(|^      (?:const|let) (\w+) =/gm)].forEach((m) => {
+      const n = m[1] || m[2];
+      assert.ok(!declarados[n], n + ' está en ' + declarados[n] + ' y en ' + p);
+      declarados[n] = p;
+    });
+    // Un let que usan varias partes lo publica su dueña: las demás lo leen con T.
+    [...js.matchAll(/Object\.defineProperty\(T, '(\w+)'/g)].forEach((m) => assert.match(js, new RegExp('\\n      let ' + m[1] + ' = '), p + ': ' + m[1] + ' es suyo'));
   });
 });
 
@@ -544,7 +576,7 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
   usa('src/html/js/app.html', 1);
   usa('src/html/js/app-cajachica.html', 1);
   usa('src/html/js/app-permisos.html', 3);
-  usa('src/html/js/lineas-telefonicas.html', 1);
+  usa('src/html/js/lineas-telefonicas-ficha.html', 1);
   assert.match(read('package.json'), /node tests\/ficha\.test\.js/);
   const index = read('src/html/Index.html');
   assert.ok(index.indexOf("include('html/js/componentes/tabs')") < index.indexOf("include('html/js/componentes/ficha')"));
@@ -1168,7 +1200,9 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   assert.match(servicio, /doc\.pinEquipo = doc\.pinEquipo \? '••••' : null;/);
   // Una inspección o responsiva de la hoja sin carpeta toma la de NUCOS del mismo día
   assert.match(servicio, /x\.tipo === tipo && dia_\(x\.doc\.fecha\) === dia_\(doc\.fecha\)/);
-  const detalle = lineas.slice(lineas.indexOf('function pintarInspeccion('), lineas.indexOf('/** Desde una bitácora: abre el registro'));
+  // pintarInspeccion es lo último de su parte (fase 6.2b: lineas-telefonicas-paginas.html)
+  const paginas = read('src/html/js/lineas-telefonicas-paginas.html');
+  const detalle = paginas.slice(paginas.indexOf('function pintarInspeccion('), paginas.lastIndexOf('\n      return {'));
   assert.doesNotMatch(detalle, /Registro completo|Firmas de validación|Revisión del activo|ln-secciones-nav/);
   assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
 });
