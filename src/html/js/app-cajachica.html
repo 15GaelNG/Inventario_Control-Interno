@@ -149,6 +149,15 @@
       });
     });
 
+    // Estatus → Fecha de cierre (solo en Editar: Fecha de cierre es soloEdicion, no existe en
+    // Registrar). Al pasar a CERRADA se llena sola con hoy (CampoAuto: queda marcada "auto" y se
+    // puede corregir a mano); no se toca si ya estaba en CERRADA o si se elige otro estatus.
+    document.getElementById('editar-cajachica-estatus').addEventListener('change', (ev) => {
+      if (ev.target.value === 'CERRADA') {
+        CampoAuto.llenar(document.getElementById('editar-cajachica-fecha-de-cierre'), hoyISO());
+      }
+    });
+
     // Departamento / Sede / Oficina: catálogos reales de la hoja
     // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
     // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar. Son
