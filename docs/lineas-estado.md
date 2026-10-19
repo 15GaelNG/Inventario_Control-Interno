@@ -285,9 +285,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
 - **Firma guardada** (`LineasFirmas.gs`): la de quien captura en Líneas va sola en FIRMA INSPECTOR o FIRMA CI («Se usa tu
-  firma guardada», con «Firmar a mano»). Va cifrada en las propiedades del proyecto (clave `LINEAS_FIRMAS_CLAVE`,
+  firma guardada», con «Firmar a mano»), y también en FIRMA RESPONSABLE cuando el responsable elegido es quien captura
+  (su NOMBRE de USUARIOS o su nombre en Capital Humano; el servidor lo revisa al guardar y, al regenerar el PDF, usa
+  su firma si él es el responsable y ya está la de Control Interno). Va cifrada en las propiedades del proyecto (clave `LINEAS_FIRMAS_CLAVE`,
   creada ahí); la imagen no llega a la pantalla y solo se usa la del correo de la sesión. Se carga con
-  `lineasFirmasGuardadas_revisar` / `_cargar` (LineasAdmin) desde la carpeta privada «FIRMAS LINEAS (CARGAR)».
+  `lineasFirmasGuardadas_revisar` / `_cargar` (LineasAdmin) desde la carpeta privada «FIRMAS LINEAS (CARGAR)»;
+  `_cargar` quita la firma de quien no esté en la carpeta, y `lineasFirmasGuardadas_agregar` guarda las de la carpeta
+  sin quitar a nadie.
 - **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
   General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
   con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Corregir, al
