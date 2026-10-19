@@ -20,10 +20,13 @@ const LineasPdf = (function () {
    * Las que usa el sistema: copias «(SISTEMA)» de las del AppSheet, en sus mismas carpetas (FORMATOS y
    * RESPONSIVAS_LINEAS), con el título «Comentario» y el marcador [COMENTARIO] (6-oct; la función que las hizo,
    * lineasPlantillasComentario_copiar, se quitó el 7-oct y sigue en el historial de git).
+   * Desde el 19-oct (pendiente 2.54), sus copias «- PRUEBA RESPONSABLE 19-oct» con los mismos datos del responsable en
+   * las dos: la responsiva agrega JEFE DIRECTO y la inspección No. empleado y Director de Dpto. Las «(SISTEMA)» de
+   * antes (inspección 11l9vL9K…, responsiva 13qeTsLm…) siguen como estaban: las usa producción hasta que salga este cambio.
    */
   const PLANTILLAS = {
-    INSPECCION_CELULAR: '11l9vL9KK4T1vawnI-X0arnNTMHDa53Y92kmO-m5Alw4',
-    RESPONSIVA_CELULAR: '13qeTsLmV5FiRxgNI9hbb_8BH83olIiSVB6GdXNbXIF0',
+    INSPECCION_CELULAR: '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',
+    RESPONSIVA_CELULAR: '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ',
   };
 
   // Cómo imprime el AppSheet ("Task for GENERAR PDF": carta, márgenes de la tarea en 0): convierte el Doc a HTML y lo
