@@ -422,11 +422,12 @@ function lineasPruebas4oct_borrar() {
 // Quien corre la función crea en su Drive la carpeta «FIRMAS LINEAS (CARGAR)», sin compartir, con un PNG por persona
 // nombrado con su correo («ejecutivotelefonia.ci@ciudadmaderas.com.png»). _revisar dice qué se cargaría y qué se quitaría;
 // _cargar las guarda cifradas en este proyecto y quita las de quien ya no esté en la carpeta. Se corre en cada proyecto
-// (DEV y producción) y al final la carpeta se borra: la firma solo queda cifrada aquí.
+// (DEV y producción) y al final la carpeta se borra: la firma solo queda cifrada aquí. _agregar guarda las de la carpeta sin
+// quitar a nadie (19-oct: para sumar a una persona sin volver a juntar las de todos).
 
 const CARPETA_FIRMAS_LINEAS = 'FIRMAS LINEAS (CARGAR)';
 
-function firmasGuardadas_(aplicar) {
+function firmasGuardadas_(aplicar, sinQuitar) {
   const carpetas = DriveApp.getFoldersByName(CARPETA_FIRMAS_LINEAS);
   if (!carpetas.hasNext()) throw new Error('No está la carpeta «' + CARPETA_FIRMAS_LINEAS + '» en tu Drive.');
   const carpeta = carpetas.next();
@@ -455,7 +456,7 @@ function firmasGuardadas_(aplicar) {
     if (aplicar) LineasFirmas.guardar(correo, blob.getBytes());
   }
   LineasFirmas.lista().forEach((g) => {
-    if (enCarpeta[g.correo]) return;
+    if (enCarpeta[g.correo] || sinQuitar) return;
     salida.quitar.push(g.correo);
     if (aplicar) LineasFirmas.quitar(g.correo);
   });
@@ -472,4 +473,8 @@ function lineasFirmasGuardadas_revisar() {
 function lineasFirmasGuardadas_cargar() {
   soloEditor_();
   return firmasGuardadas_(true);
+}
+function lineasFirmasGuardadas_agregar() {
+  soloEditor_();
+  return firmasGuardadas_(true, true);
 }

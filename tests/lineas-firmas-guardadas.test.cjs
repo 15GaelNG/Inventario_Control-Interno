@@ -101,6 +101,9 @@ test('la imagen solo la usa el servidor, con el correo de la sesión; la pantall
   assert.match(admin, /function lineasFirmasGuardadas_revisar\(\)/);
   assert.match(admin, /if \(aplicar && salida\.compartida\) throw/);
   assert.match(admin, /ese correo no está en USUARIOS/);
+  // _agregar suma las de la carpeta sin quitar a nadie (19-oct)
+  assert.match(admin, /function lineasFirmasGuardadas_agregar\(\) \{\r?\n  soloEditor_\(\);\r?\n  return firmasGuardadas_\(true, true\);/);
+  assert.match(admin, /if \(enCarpeta\[g\.correo\] \|\| sinQuitar\) return;/);
 });
 
 test('al terminar Reasignar se ofrecen los dos PDF, cada uno con su nombre', () => {
