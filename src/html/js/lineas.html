@@ -1283,8 +1283,10 @@
               Object.keys(e.autollenar).forEach((columna) => {
                 const destino = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
                 const valor = opcion.datos[e.autollenar[columna]];
-                if (!destino || destino.disabled || destino.readOnly || !valor) return;
-                CampoAuto.llenar(destino, valor);   // "auto" hasta que lo cambien
+                if (!destino || destino.disabled || destino.readOnly) return;
+                // Lo que CH no tiene de la persona elegida queda vacío, no con lo de la anterior (usuario, 19-oct: el
+                // correo de otra persona se quedaba); el correo también
+                CampoAuto.llenar(destino, valor || '');   // "auto" hasta que lo cambien
                 // solo "change": "input" abriría la lista del otro campo
                 destino.dispatchEvent(new Event('change', { bubbles: true }));
               });

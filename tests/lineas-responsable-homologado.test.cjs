@@ -123,3 +123,24 @@ test('al guardar: la inspección pasa también número y director a la ficha; la
   // La responsiva guarda el jefe directo en la ficha, como lo demás de la persona (renovación y reasignación)
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\['OFICINA \/ DESARROLLO', 'OFICINA \/ DESARROLLO'\], \['JEFE DIRECTO', 'JEFE DIRECTO'\], \['DIRECTOR', 'DIRECTOR'\]/);
 });
+
+test('al elegir a otra persona, lo que Capital Humano no tiene de ella queda vacío, no lo de la anterior (19-oct)', () => {
+  // Caso del 19-oct: de EMMANUEL (con correo) a ABED (sin CORREO EMPRESARIAL en CH); el correo de Emmanuel se quedaba
+  const cliente = read('src/html/js/lineas.html');
+  const inicio = cliente.indexOf('alElegir: (opcion) => {') + 'alElegir: (opcion) => {'.length;
+  const cuerpoFn = cliente.slice(inicio, cliente.indexOf('\n          },\n', inicio));
+  const alElegir = new Function('e', 'cuerpo', 'input', 'CampoAuto', 'CSS', 'Event', 'opcion', cuerpoFn);
+  const campos = { CORREO: { value: 'auxiliar7datos.ci@ciudadmaderas.com' }, 'JEFE DIRECTO': { value: 'KARLA' }, PUESTO: { value: 'AUXILIAR' },
+    DIRECTOR: { value: 'FIJO', readOnly: true } };
+  Object.values(campos).forEach((c) => { c.dispatchEvent = () => {}; });
+  const cuerpo = { querySelector: (sel) => campos[/data-columna="([^"]+)"/.exec(sel)[1]] || null };
+  const CampoAuto = { llenar: (el, v) => { el.value = v; } };
+  const e = { autollenar: { CORREO: 'correo', 'JEFE DIRECTO': 'jefe', PUESTO: 'puesto', DIRECTOR: 'director' } };
+  alElegir(e, cuerpo, { dispatchEvent: () => {} }, CampoAuto, { escape: (s) => s }, function () {}, { datos: { puesto: 'ANALISTA', correo: '', jefe: null } });
+  assert.equal(campos.PUESTO.value, 'ANALISTA');
+  assert.equal(campos.CORREO.value, '');
+  assert.equal(campos['JEFE DIRECTO'].value, '');
+  assert.equal(campos.DIRECTOR.value, 'FIJO', 'lo fijo no se toca');
+  // Al abrir (llenarVacios) solo se llenan los vacíos: eso no cambia
+  assert.match(cliente, /if \(!destino \|\| destino\.disabled \|\| destino\.readOnly \|\| !valor \|\| String\(destino\.value \|\| ''\)\.trim\(\)\) return;/);
+});
