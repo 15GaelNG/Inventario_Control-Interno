@@ -728,6 +728,12 @@
     'menu-abierto': async () => { await abrir('inspeccion-vehicular'); (await hasta('.shell-menu-btn')).click(); await esperar(400); },
     // ---- Módulos de la base (Inicio, Vehículos, Caja Chica, Uber, Administración) ----
     'lineas': async () => { await abrir('lineas-telefonicas'); await hasta('#ln-listado .ln-cuadro, #ln-listado tbody tr'); await esperar(500); },
+    // Cada pantalla de Líneas en su archivo (fase 6.2): que cargue sin errores con lo que toma de Lineas.comun
+    'lineas-panorama': async () => { await abrir('panorama-lineas'); await esperar(800); },
+    'lineas-activos': async () => { await abrir('gestion-activos'); await esperar(800); },
+    'lineas-accesorios': async () => { await abrir('accesorios-lineas'); await esperar(800); },
+    'lineas-resguardos': async () => { await abrir('resguardos-lineas'); await esperar(800); },
+    'lineas-cambios': async () => { await abrir('cambios-lineas'); await esperar(800); },
     // Agregar equipo: la captura por pasos de Líneas (Pasos, fase 5.6); con un paso avanzado y un error marcado
     'lineas-agregar': async () => {
       await abrir('lineas-telefonicas'); (await hasta('#ln-nuevo-equipo')).click();

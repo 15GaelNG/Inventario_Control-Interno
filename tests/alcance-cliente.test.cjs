@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const leer = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8').replace(/\r/g, '');
 const telefonia = leer('src/services/TelefoniaService.gs');
@@ -83,7 +84,7 @@ test('toda lectura de Líneas pasa por el alcance', () => {
     assert.ok(f && /sinAlcance_\(/.test(f.cuerpo), n + ' se le niega al rol CLIENT');
   });
   // Y la pantalla no pinta las pestañas ni los botones que no va a poder abrir
-  const lineas = leer('src/html/js/lineas.html');
+  const lineas = LINEAS;
   // Documentos e Historial: su sección (permisos en árbol). Nunca para un CLIENT: no respetan el alcance, así que al
   // limitado se le resuelven Sin acceso (lo revisa abajo «Modulos: Documentos e Historial sin alcance»)
   assert.match(lineas, /const veDocumentos = \(\) => veSeccion\('documentos'\);/);

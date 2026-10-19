@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const zlib = require('node:zlib');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -155,7 +156,7 @@ test('las firmas de la captura (caché) bastan para regenerar sin pedirlas', () 
 });
 
 test('la pantalla: «Regenerar PDF» solo en responsivas del sistema con PDF y con permiso de operar; pide solo las firmas', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // Fuera de la barra: en el ⋮ y el clic derecho (usuario, 12-oct; pendiente 2.34)
   assert.match(cliente, /doc\('refresh-ccw', 'Regenerar PDF', 'pdf', false, \(d\) => operar && d\.tipoPdf === 'RESPONSIVA' && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+\(d\) => regenerarPdf\(d\)\)/);
   assert.match(cliente, /refrescarDespuesDeCaptura\(registroId \|\| pila\[pila\.length - 1\]\.id, d\.tipoPdf, d\.id, true\);/);

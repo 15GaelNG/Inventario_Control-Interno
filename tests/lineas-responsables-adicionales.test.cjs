@@ -7,6 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
+const LINEAS = require('./lineas-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
@@ -87,7 +88,7 @@ test('limpiarAdicionales_: borra los bloques de más y no guarda la cuenta; sin 
 });
 
 test('la pantalla: «Agregar responsable», «Quitar» (los de abajo suben) y la condición { cuantos }', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /if \(e\.control === 'adicionales'\)/);
   assert.match(lineas, /data-agregar-adicional/);
   assert.match(lineas, /data-quitar-adicional="' \+ Number\(e\.quitarAdicional\) \+ '"/);
@@ -124,7 +125,7 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   assert.equal(conOrden({ CONTRASEÑA: '', 'PIN EQUIPO': '1234' })['PIN EQUIPO'], '1234');
   assert.equal(conOrden({ PATRON: '1-5-9', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], 'PATRON', 'la inspección no cambia');
   // Solo firma el principal; con adicionales su firma va más chica para que los demás firmen el impreso (usuario, 6-oct)
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.doesNotMatch(lineas, /function unirFirmas|function firmasDeResponsables|FIRMAS_RESPONSABLES/);
   assert.match(cap, /'firma-principal\.png' : 'firma-responsable\.png'/);
   assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable\), 'FIRMA INSPECTOR'/);
@@ -136,7 +137,7 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
 test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus columnas se borraron: DEV 6-oct, producción 7-oct)', () => {
   ['LineasEscritura', 'LineasLectura', 'LineasResguardos', 'LineasRetiro', 'LineasEstructura', 'LineasRegistros', 'LineasCaptura']
     .forEach((f) => assert.doesNotMatch(read('src/services/lineas/' + f + '.gs'), /'(NOMBRE|PUESTO) QUIEN USA'/, f));
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /QUIEN USA/);
+  assert.doesNotMatch(LINEAS, /QUIEN USA/);
   const admin = read('src/services/lineas/LineasAdmin.gs');
   assert.doesNotMatch(admin, /QuienUsaASegundo|lineasQuitarQuienUsa|QUIEN USA/);
   const datos = read('src/services/lineas/LineasDatos.gs');
@@ -146,6 +147,6 @@ test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus colu
   // La ficha sigue mostrando a los adicionales
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /rol: 'Responsable ' \+ \(i \+ 2\), nombre: txt\(col\(f, 'NOMBRE ' \+ n \+ ' RESPONSABLE'\)\)/);
-  assert.match(read('src/html/js/lineas.html'), /<div class="ln-subtitulo">Responsables adicionales<\/div>/);
+  assert.match(LINEAS, /<div class="ln-subtitulo">Responsables adicionales<\/div>/);
 });
 

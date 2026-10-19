@@ -207,9 +207,21 @@ Jorge, Emmanuel y Ayrton cambien en esos archivos mientras tanto (un conflicto p
 acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin cambiar código) para que se revise fácil.
 
 - [ ] 6.1 Vehículos sale de `app.html` a `app-vehiculos.html` (como Arqueos y Caja Chica); Uber y Tickets también.
-      `app.html` queda como la base: menú, sesión, inicio, ayudantes.
-- [ ] 6.2 `lineas.html` en archivos por pantalla (telefónicas, gestión de activos, resguardos, cambios) sobre un
-      `lineas-base.html`.
+      `app.html` queda como la base: menú, sesión, inicio, ayudantes. **Pendiente (usuario, 19-oct)**: después de
+      Líneas, y cuando Jorge suba lo suyo (213 líneas de `app.html` sin subir). Es más fácil que 6.2: `app.html` no
+      está encerrado en una función, sus partes ya comparten el espacio global como `app-arqueos.html`.
+- [x] 6.2 `lineas.html` por pantallas (19-oct), con `tools/lineas/partir.js`: el archivo era **una sola función**
+      (`const Lineas = (function () { … })()`), así que no bastaba con mover. Queda la base (`lineas.html`, 2,394
+      líneas: utilidades, formularios, estado) y una pantalla por archivo (`lineas-telefonicas`, `-panorama`,
+      `-activos`, `-accesorios`, `-resguardos`, `-bitacora`). Cada pantalla toma lo que usa de `Lineas.comun` y se
+      publica con `Object.assign(Lineas, …)`. Cambios de código, los mínimos: `montaje` pasa a `{ n }` (lo reasignan
+      todas), las pantallas leen `panelAbierto` con `panelActual()` (una copia se quedaría vieja), `dinero` y
+      `pedirDatos` suben a la base. El script revisa que cada sentencia quede una vez y que deshaciendo esos cambios
+      salga el original; las pruebas leen todo con `tests/lineas-fuente.js`. Vista previa: las 8 escenas de Líneas
+      (5 nuevas, una por pantalla) idénticas antes y después, sin errores.
+- [ ] 6.2b Abrir `initTelefonicas` (3,161 líneas, 177 declaraciones, 12 `let` de estado compartido: `captura`,
+      `fichaActual`, `tablaHistorial`…) en ficha / acciones / captura. Ya no es mover: el estado pasa a un objeto
+      compartido. Con su propio plan.
 - [ ] 6.3 `ClientApi.gs`: una forma de nombrar (`api<Módulo><Qué>`). **Sin renombrar de golpe**: los nombres viejos
       quedan como alias hasta que nadie los llame; agrupar por módulo en el archivo.
 - [x] 6.4 Lo del editor, detrás del candado (15-oct): `candado-editor.test.js` ya no revisa una lista fija de 11
@@ -252,6 +264,7 @@ juntan por primera vez.
 
 | Fecha | Fase | Qué | Pasó a master |
 |---|---|---|---|
+| 19-oct | 6.2 | `lineas.html` (7,132 líneas) en la base + 6 pantallas sobre `Lineas.comun`, con `tools/lineas/partir.js`; `tests/lineas-fuente.js`, contrato y 5 escenas | pendiente |
 | 15-oct | — | Rama `common` desde `master` (46b73b0) y este plan | — |
 | 15-oct | 0 | DEV propio (`Inventario DEV - common`, copia del libro de prod, carpeta DEV COMMON); la Action sube `common` | — |
 | 15-oct | 1 | `Candado` reentrante en todo el servidor; `SheetUtils.update`/`remove` bajo candado y escribiendo solo lo que cambia | pendiente: probar en DEV |

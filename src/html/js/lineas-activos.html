@@ -1,0 +1,400 @@
+<script>
+  /**
+   * lineas-activos.html — Gestión de Activos: busca un colaborador y muestra sus líneas y equipos.
+   * Era parte de lineas.html (fase 6.2, tools/lineas/partir.js): lo de la base sale de Lineas.comun.
+   */
+  (function () {
+    'use strict';
+    const { $, TIPO_EQUIPO, abrirPanelLateral, cargarColaboradores, cargarIndice, chip, deOtroModulo, esc,
+      filasComoObjetos, guion, ico, icono, mensajeError, miles, montaje, normal, panelActual, pintarIconos } = Lineas.comun;
+    const { irARegistro } = Lineas;
+
+    // ======================================================================
+    // Gestión de Activos: busca un colaborador y muestra sus líneas/equipos
+    // (vehículos, hologramas, Uber y cajas chicas se integran con los demás módulos)
+    // ======================================================================
+
+    function initGestionActivos() {
+      const n = ++montaje.n;
+      const raiz = document.getElementById('ln-gestion-activos');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      const paso = 48;
+      pintarIconos(raiz);
+
+      let colaboradores = [];
+      let filtrados = [];
+      let visibles = paso;
+      let temporizador = null;
+      // Para "Exportar a Excel" (todo el catálogo de activos, ya cacheado para los KPIs y el
+      // panel lateral) -- se guarda aquí para no volver a pedirlo al exportar.
+      let catalogosActivos = { indice: null, vehiculos: [], hologramas: [], uber: [], cajasChicas: [] };
+
+      function filasPorResponsable(indice, nombre) {
+        const texto = normal(nombre);
+        return {
+          equipos: indice.equipos.filter((r) => normal(r.responsable) === texto),
+          lineas: indice.lineas.filter((r) => r.suelta && normal(r.responsable) === texto),
+        };
+      }
+
+      function tarjetaLineas(nombre, datos) {
+        const filaEq = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('smartphone') + ' NUCO ' + guion(r.nuco) + ' ' + icono('chevron-right') + '</button></td><td>' +
+          esc(TIPO_EQUIPO[r.tipo] || r.tipo || '') + '</td><td>' + guion(r.modelo) + '</td><td>' + chip(r.estatus) + '</td><td class="ln-mono">' +
+          (r.numero ? esc(r.numero) : '<span class="ln-tenue">Sin línea</span>') + '</td></tr>';
+        const filaLi = (r) => '<tr class="ln-fila-clic" data-ir="' + esc(r.id) + '"><td><button type="button" class="ln-btn-icono" data-ir="' + esc(r.id) + '">' + icono('phone') + ' ' + guion(r.numero) + ' ' + icono('chevron-right') + '</button>' +
+          '</td><td>Línea suelta</td><td>' + guion(r.compania) + '</td><td>' + chip(r.estatus) + '</td><td>—</td></tr>';
+        const filas = datos.equipos.map(filaEq).concat(datos.lineas.map(filaLi));
+        return '<div class="card ln-card"><h3>' + icono('smartphone') + ' Líneas y equipos (' + filas.length + ')</h3>' +
+          (filas.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>NUCO / Número</th><th>Tipo</th><th>Modelo / Compañía</th><th>Estatus</th><th>Línea</th></tr></thead><tbody>' + filas.join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin líneas ni equipos asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Vehículos del colaborador (apiListarVehiculosBasico, el mismo catálogo cacheado que
+       *  ya usan Vehículos/Incidencias/Reasignaciones/etc. para autocompletar por folio) --
+       *  mismo patrón que tarjetaLineas, pero clic va a la ficha de Vehículos (data-ir-vehiculo,
+       *  no data-ir: ese es de Líneas/irARegistro). El identificador principal que se muestra
+       *  es el NUCO (igual que en el resto de la app desde este ciclo), pero la navegación
+       *  sigue usando el FOLIO real: verFichaVehiculoDesdeOtroModulo necesita folio, no nuco. */
+      function tarjetaVehiculos(nombre, lista) {
+        const fila = (v) => '<tr class="ln-fila-clic" data-ir-vehiculo="' + esc(v.FOLIO) + '"><td><button type="button" class="ln-btn-icono" data-ir-vehiculo="' + esc(v.FOLIO) + '">' +
+          icono('car') + ' NUCO ' + guion(v.NUCO) + ' ' + icono('chevron-right') + '</button></td><td class="ln-mono">' + guion(v.FOLIO) + '</td><td>' +
+          esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) + '</td><td>' + guion(v.MODELO) + '</td></tr>';
+        return '<div class="card ln-card"><h3>' + icono('car') + ' Vehículos (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Nucco</th><th>Folio</th><th>Marca / Línea</th><th>Año</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin vehículos asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Hologramas / combustible del colaborador (apiListarHologramas, catálogo cacheado).
+       *  Cuando el holograma ya está ligado a un vehículo del catálogo trae FOLIO -- en ese
+       *  caso la fila es clicable e igual navega a la ficha de Vehículos; si no, es informativa. */
+      function tarjetaHologramas(nombre, lista) {
+        const claseEox = (e) => (String(e).toUpperCase() === 'HABILITADO' ? 'verde' : 'rojo');
+        const fila = (h) => {
+          const folio = h.FOLIO || '';
+          const etiqueta = icono('sticker') + ' ' + guion(h.PLACA) + (folio ? ' ' + icono('chevron-right') : '');
+          const celda = folio
+            ? '<button type="button" class="ln-btn-icono" data-ir-vehiculo="' + esc(folio) + '">' + etiqueta + '</button>'
+            : etiqueta;
+          return '<tr' + (folio ? ' class="ln-fila-clic" data-ir-vehiculo="' + esc(folio) + '"' : '') + '><td>' + celda + '</td><td>' + guion(h.CALCOMANIA) + '</td><td>' +
+            esc([h.MARCA, h.LINEA].filter(Boolean).join(' ')) + '</td><td>' + chip(h.ESTATUS_EOX || 'Sin estatus', claseEox(h.ESTATUS_EOX)) + '</td></tr>';
+        };
+        return '<div class="card ln-card"><h3>' + icono('fuel') + ' Hologramas / combustible (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Placa</th><th>Calcomanía</th><th>Marca / Línea</th><th>Estatus EOX</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin hologramas asignados a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Uber del colaborador (apiListarUberResumen). No tiene ficha propia en otro módulo
+       *  (su detalle vive solo en el panel lateral de la tabla de Uber), así que es informativa. */
+      function tarjetaUber(nombre, lista) {
+        const fila = (u) => '<tr><td>' + guion(u.ROL) + '</td><td>' + chip(u.ESTATUS || 'Sin estatus', String(u.ESTATUS).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') + '</td><td>' + guion(u.RAZON_SOCIAL) + '</td></tr>';
+        return '<div class="card ln-card"><h3>' + icono('car-front') + ' Uber (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Rol</th><th>Estatus</th><th>Razón social</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin registro de Uber para ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Cajas chicas del colaborador (apiListarCajasChicasResumen) -- clic va a la ficha de
+       *  Caja Chica (data-ir-cch → verFichaCajaChicaDesdeOtroModulo, igual patrón que Vehículos). */
+      function tarjetaCajasChicas(nombre, lista) {
+        const claseCch = (e) => {
+          const u = String(e).toUpperCase();
+          return u === 'VIGENTE' ? 'verde' : u === 'CERRADA' ? 'rojo' : u === 'EN PROCESO DE CIERRE' ? 'ambar' : 'neutro';
+        };
+        const fila = (c) => '<tr class="ln-fila-clic" data-ir-cch="' + esc(c.ID_CCH) + '"><td><button type="button" class="ln-btn-icono" data-ir-cch="' + esc(c.ID_CCH) + '">' +
+          icono('wallet') + ' ' + esc(c.ID_CCH) + ' ' + icono('chevron-right') + '</button></td><td>' + guion(c.DEPARTAMENTO) + '</td><td>' + guion(c.SEDE) + '</td><td>' +
+          chip(c.ESTATUS || 'Sin estatus', claseCch(c.ESTATUS)) + '</td></tr>';
+        return '<div class="card ln-card"><h3>' + icono('wallet') + ' Cajas chicas (' + lista.length + ')</h3>' +
+          (lista.length
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>ID CCH</th><th>Departamento</th><th>Sede</th><th>Estatus</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            : '<p class="empty-state">Sin cajas chicas asignadas a ' + esc(nombre) + '.</p>') + '</div>';
+      }
+
+      /** Asignaciones del colaborador en el panel lateral (como el detalle de los demás módulos): la lista no se mueve. */
+      function mostrarColaborador(c, tarjeta) {
+        raiz.querySelectorAll('.ln-cuadro-colaborador.seleccionado').forEach((el) => el.classList.remove('seleccionado'));
+        if (tarjeta) tarjeta.classList.add('seleccionado');
+        const panel = abrirPanelLateral(c.nombre || 'Colaborador', [c.puesto, c.departamento].filter(Boolean).join(' · ') || 'Activos asignados');
+        panel.alCerrar = () => { if (tarjeta) tarjeta.classList.remove('seleccionado'); };
+        panel.cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Consultando asignaciones…</p>';
+        // Ir a una línea/equipo (Líneas, data-ir), a un vehículo/holograma (Control Vehicular,
+        // data-ir-vehiculo) o a una caja chica (data-ir-cch): se cierra el panel y se abre su
+        // ficha en el módulo que toque.
+        panel.cuerpo.addEventListener('click', (ev) => {
+          const fLinea = ev.target.closest('[data-ir]');
+          if (fLinea) { panel.cerrar(); irARegistro(fLinea.dataset.ir); return; }
+          const fVehiculo = ev.target.closest('[data-ir-vehiculo]');
+          if (fVehiculo) { panel.cerrar(); verFichaVehiculoDesdeOtroModulo(fVehiculo.dataset.irVehiculo); return; }
+          const fCch = ev.target.closest('[data-ir-cch]');
+          if (fCch) { panel.cerrar(); verFichaCajaChicaDesdeOtroModulo(fCch.dataset.irCch); return; }
+        });
+        // callServerCacheado vive en api.html (mismo scope global que todo el cliente) -- son
+        // los mismos catálogos ya cacheados para el resto de la app, así que esto normalmente
+        // no pide nada nuevo al servidor.
+        Promise.all([
+          cargarIndice(),
+          deOtroModulo('vehiculos', 'apiListarVehiculosBasico'),
+          deOtroModulo('hologramas', 'apiListarHologramas'),
+          deOtroModulo('uber', 'apiListarUberResumen'),
+          deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
+        ]).then(([indice, vehiculos, hologramas, uber, cajasChicas]) => {
+          if (!vigente() || panelActual() !== panel) return;
+          const datos = filasPorResponsable(indice, c.nombre);
+          const texto = normal(c.nombre);
+          const misVehiculos = (vehiculos || []).filter((v) => normal(v.RESPONSABLE_VEHICULO) === texto);
+          const misHologramas = (hologramas || []).filter((h) => normal(h.RESPONSABLE) === texto);
+          const miUber = (uber || []).filter((u) => normal(u.NOMBRE_COMPLETO) === texto);
+          const misCch = (cajasChicas || []).filter((cch) => normal(cch.RESPONSABLE) === texto);
+          const pie = [c.noEmpleado ? 'Empleado ' + c.noEmpleado : '', c.area, c.sede, c.oficina].filter(Boolean).map(esc).join(' · ');
+          panel.cuerpo.innerHTML =
+            '<div class="ln-panel-resumen"><div class="ln-chips">' +
+              (c.estatus ? chip(c.estatus, String(c.estatus).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') : '') +
+              (c.departamento ? chip(c.departamento, 'azul') : '') +
+            '</div>' + (pie ? '<p class="ln-pie ln-tenue">' + pie + '</p>' : '') + '</div>' +
+            tarjetaLineas(c.nombre, datos) +
+            (vehiculos ? tarjetaVehiculos(c.nombre, misVehiculos) : '') +
+            (hologramas ? tarjetaHologramas(c.nombre, misHologramas) : '') +
+            (uber ? tarjetaUber(c.nombre, miUber) : '') +
+            (cajasChicas ? tarjetaCajasChicas(c.nombre, misCch) : '');
+          pintarIconos(panel.cuerpo);
+        }).catch((e) => {
+          if (panelActual() === panel) panel.cuerpo.innerHTML = '<p class="error-msg">No se pudieron consultar las asignaciones: ' + mensajeError(e) + '</p>';
+        });
+      }
+
+      function tarjetaColaborador(c) {
+        const conActivos = c.totalActivos > 0;
+        return '<button type="button" class="card ln-cuadro ln-cuadro-colaborador ' + (conActivos ? 'con-activos' : 'sin-activos') + '" data-colaborador-i="' + c._i + '">' +
+          '<div class="ln-cuadro-superior"><span class="ln-cuadro-departamento">' + guion(c.departamento) + '</span>' +
+          '<span class="ln-cuadro-area">' + guion(c.area) + '</span></div>' +
+          '<div class="ln-cuadro-principal">' + guion(c.nombre) + '</div>' +
+          '<div class="ln-cuadro-secundario">' + guion(c.puesto) + '</div>' +
+          '<div class="ln-cuadro-pie"><span>' + icono('map-pin') + ' ' + guion(c.sede) + '</span><span>' + icono('building-2') + ' ' + guion(c.oficina) + '</span></div>' +
+          '<div class="ln-cuadro-pie"><span>' + icono('briefcase-business') + ' ' + chip(c.estatus || 'Sin estatus', String(c.estatus).toUpperCase() === 'ACTIVO' ? 'verde' : 'neutro') + '</span>' +
+          '<span class="ln-activos-estado ' + (conActivos ? 'si' : 'no') + '">' + icono(conActivos ? 'package-check' : 'package-x') + ' ' +
+          (conActivos ? miles(c.totalActivos) + ' activo(s)' : 'Sin activos') + '</span></div><div class="ln-cuadro-pie"><span>Consultar asignaciones ' + icono('chevron-right') + '</span></div></button>';
+      }
+
+      function pintarCuadros() {
+        $('#lnga-grid', raiz).innerHTML = filtrados.length
+          ? filtrados.slice(0, visibles).map(tarjetaColaborador).join('')
+          : '<div class="card empty-state ln-cuadro-vacio">No hay colaboradores que coincidan con los filtros.</div>';
+        $('#lnga-conteo', raiz).textContent = 'Mostrando ' + miles(Math.min(visibles, filtrados.length)) + ' de ' + miles(filtrados.length);
+        $('#lnga-mas', raiz).hidden = visibles >= filtrados.length;
+      }
+
+      function aplicarFiltros() {
+        const texto = normal($('#lnga-q', raiz).value).trim();
+        const activos = $('#lnga-filtro-activos', raiz).value;
+        filtrados = colaboradores.filter((c) => {
+          if (activos === 'CON' && !c.totalActivos) return false;
+          if (activos === 'SIN' && c.totalActivos) return false;
+          return !texto || ['nombre', 'noEmpleado', 'puesto', 'departamento', 'area', 'sede', 'oficina']
+            .some((campo) => normal(c[campo]).indexOf(texto) >= 0);
+        });
+        visibles = paso;
+        pintarCuadros();
+        pintarKpis();
+      }
+
+      $('#lnga-q', raiz).addEventListener('input', (ev) => {
+        clearTimeout(temporizador);
+        temporizador = setTimeout(aplicarFiltros, 150);
+      });
+      // KPIs: clic = filtro "Con / Sin activos" (el mismo del selector); otro clic lo quita.
+      // Los valores reflejan `filtrados` (lo que hay bajo el texto/selector actuales), no
+      // siempre todos los colaboradores — igual que en el resto de los módulos.
+      function valoresKpi(lista) {
+        const con = lista.filter((c) => c.totalActivos).length;
+        return {
+          TODOS: lista.length, CON: con, SIN: lista.length - con,
+          asignados: lista.reduce((t, c) => t + c.totalActivos, 0),
+        };
+      }
+      function pintarKpis() {
+        const v = valoresKpi(filtrados);
+        const kpiDefs = [
+          { icono: 'users', valor: v.TODOS, etiqueta: 'Colaboradores', filtro: 'TODOS' },
+          { icono: 'user-check', valor: v.CON, etiqueta: 'Con activos', clase: 'stat-tile-ok', filtro: 'CON' },
+          { icono: 'user-x', valor: v.SIN, etiqueta: 'Sin activos', clase: 'stat-tile-warn', filtro: 'SIN' },
+          { icono: 'package', valor: v.asignados, etiqueta: 'Activos asignados' },
+        ];
+        const cont = $('#lnga-kpis', raiz);
+        cont.innerHTML = kpiDefs.map((d, i) => '<div class="stat-tile ' + (d.clase || '') + (d.filtro ? ' stat-tile-clickable' : '') + '" data-kpi="' + i + '"' +
+          (d.filtro ? ' role="button" tabindex="0"' : '') + '><div class="stat-icon">' + ico(d.icono) + '</div><div><div class="stat-value">' + miles(d.valor) + '</div>' +
+          '<div class="stat-label">' + esc(d.etiqueta) + '</div></div></div>').join('');
+        const marcar = () => cont.querySelectorAll('[data-kpi]').forEach((t) => {
+          const d = kpiDefs[Number(t.dataset.kpi)];
+          t.classList.toggle('stat-tile-activo', !!d.filtro && d.filtro !== 'TODOS' && $('#lnga-filtro-activos', raiz).value === d.filtro);
+        });
+        cont.querySelectorAll('[data-kpi]').forEach((t) => {
+          const d = kpiDefs[Number(t.dataset.kpi)];
+          if (!d.filtro) return;
+          const clic = () => {
+            const select = $('#lnga-filtro-activos', raiz);
+            select.value = select.value === d.filtro ? 'TODOS' : d.filtro;
+            aplicarFiltros();
+          };
+          t.addEventListener('click', clic);
+          t.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); clic(); } });
+        });
+        marcar();
+      }
+
+      /**
+       * Exportar a Excel: respeta la búsqueda/filtro actuales (como el de DataTable), con una
+       * hoja de colaboradores y una hoja por tipo de activo (Líneas y equipos, Vehículos,
+       * Hologramas, Uber, Cajas chicas) -- cada fila con el nombre del colaborador, para poder
+       * auditar quién tiene qué. Los catálogos ya están en memoria (catalogosActivos, los mismos
+       * que usan los KPIs): no se vuelve a pedir nada al servidor.
+       */
+      async function exportarActivos(boton) {
+        if (!filtrados.length) { Notificar.error('No hay colaboradores que coincidan con la búsqueda o los filtros.'); return; }
+        const original = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="ln-spinner"></span> Generando…';
+        try {
+          const nombres = new Set(filtrados.map((c) => normal(c.nombre)));
+          const enFiltro = (nombre) => nombres.has(normal(nombre));
+          const { indice, vehiculos, hologramas, uber, cajasChicas } = catalogosActivos;
+
+          const filasColaboradores = filtrados.map((c) => ({
+            Nombre: c.nombre, 'No. empleado': c.noEmpleado, Puesto: c.puesto, Departamento: c.departamento,
+            Área: c.area, Sede: c.sede, 'Oficina/Desarrollo': c.oficina, Estatus: c.estatus, 'Total de activos': c.totalActivos,
+          }));
+
+          const filasLineas = (indice.equipos || []).filter((r) => enFiltro(r.responsable)).map((r) => ({
+            Colaborador: r.responsable, NUCO: r.nuco, Tipo: TIPO_EQUIPO[r.tipo] || r.tipo || '', Modelo: r.modelo,
+            Estatus: r.estatus, 'Número de línea': r.numero || '',
+          })).concat((indice.lineas || []).filter((r) => r.suelta && enFiltro(r.responsable)).map((r) => ({
+            Colaborador: r.responsable, NUCO: '', Tipo: 'Línea suelta', Modelo: r.compania, Estatus: r.estatus, 'Número de línea': r.numero,
+          })));
+
+          const filasVehiculos = (vehiculos || []).filter((v) => enFiltro(v.RESPONSABLE_VEHICULO)).map((v) => ({
+            Colaborador: v.RESPONSABLE_VEHICULO, Folio: v.FOLIO, Nucco: v.NUCO,
+            'Marca/Línea': [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '), Modelo: v.MODELO,
+          }));
+
+          const filasHologramas = (hologramas || []).filter((h) => enFiltro(h.RESPONSABLE)).map((h) => ({
+            Colaborador: h.RESPONSABLE, Placa: h.PLACA, Calcomanía: h.CALCOMANIA,
+            'Marca/Línea': [h.MARCA, h.LINEA].filter(Boolean).join(' '), 'Estatus EOX': h.ESTATUS_EOX || 'Sin estatus',
+          }));
+
+          const filasUber = (uber || []).filter((u) => enFiltro(u.NOMBRE_COMPLETO)).map((u) => ({
+            Colaborador: u.NOMBRE_COMPLETO, Rol: u.ROL, Estatus: u.ESTATUS || 'Sin estatus', 'Razón social': u.RAZON_SOCIAL,
+          }));
+
+          const filasCch = (cajasChicas || []).filter((c) => enFiltro(c.RESPONSABLE)).map((c) => ({
+            Colaborador: c.RESPONSABLE, 'ID CCH': c.ID_CCH, Departamento: c.DEPARTAMENTO, Sede: c.SEDE,
+            Estatus: c.ESTATUS || 'Sin estatus',
+          }));
+
+          // Hoja "General": una fila por colaborador con el mismo estilo de la vista vieja de
+          // AppSheet (AppSheet.ViewData.*.csv) -- emoji y un resumen de texto por tipo de activo
+          // en vez de una tabla aparte. agrupar() junta el detalle de cada tipo por colaborador.
+          function agrupar(lista, campoResponsable, formatear) {
+            const mapa = {};
+            (lista || []).forEach((item) => {
+              const clave = normal(item[campoResponsable]);
+              if (!clave) return;
+              (mapa[clave] = mapa[clave] || []).push(formatear(item));
+            });
+            return (nombre) => (mapa[normal(nombre)] || []).join('  |  ');
+          }
+          const lineasEquiposTexto = agrupar(indice.equipos, 'responsable', (r) => '📱 EQUIPO + SIM: ' + (r.numero || 'sin línea'));
+          const lineasSueltasTexto = agrupar((indice.lineas || []).filter((r) => r.suelta), 'responsable', (r) => '📞 LÍNEA SUELTA: ' + (r.numero || ''));
+          const lineasTexto = (nombre) => [lineasEquiposTexto(nombre), lineasSueltasTexto(nombre)].filter(Boolean).join('  |  ');
+          const vehiculosTexto = agrupar(vehiculos, 'RESPONSABLE_VEHICULO', (v) => '🚗 ' + [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') + (v.NUCO ? ' · NUCO ' + v.NUCO : ''));
+          const hologramasTexto = agrupar(hologramas, 'RESPONSABLE', (h) => '⛽ PLACA ' + (h.PLACA || '—') + (h.CALCOMANIA ? ' · ' + h.CALCOMANIA : ''));
+          const uberTexto = agrupar(uber, 'NOMBRE_COMPLETO', (u) => '🚕 ' + (u.ROL || 'UBER') + (u.ESTATUS ? ' · ' + u.ESTATUS : ''));
+          const cchTexto = agrupar(cajasChicas, 'RESPONSABLE', (c) => '💰 ID ' + (c.ID_CCH || '—') + (c.DEPARTAMENTO ? ' · ' + c.DEPARTAMENTO : ''));
+
+          const filasGeneral = filtrados.map((c) => {
+            const conActivos = c.totalActivos > 0;
+            const estatusLaboral = String(c.estatus).toUpperCase() === 'ACTIVO' ? '🟢 ACTIVO' : '🔴 ' + (c.estatus || 'SIN ESTATUS');
+            const estatusActivos = conActivos ? '🟢 CON ACTIVOS ASOCIADOS' : '🔴 SIN ACTIVOS ASOCIADOS';
+            return {
+              'No. empleado': c.noEmpleado, 'Nombre completo': c.nombre, Departamento: c.departamento, Área: c.area,
+              Puesto: c.puesto, Sede: c.sede, 'Oficina/Desarrollo': c.oficina, 'Estatus colaborador': c.estatus,
+              'Sede / oficina': '📍 ' + (c.sede || '—') + '  ┃  🏢 ' + (c.oficina || '—') + '  ┃  👤 LABORAL: ' + estatusLaboral + '  ┃  📦 ACTIVOS: ' + estatusActivos,
+              Estatus: estatusActivos,
+              'Líneas:': lineasTexto(c.nombre), 'Vehículos:': vehiculosTexto(c.nombre), 'Hologramas:': hologramasTexto(c.nombre),
+              'Uber:': uberTexto(c.nombre), 'Cajas chicas:': cchTexto(c.nombre),
+            };
+          });
+
+          const total = await ExportarExcel.descargarLibroCrudo({
+            nombreArchivo: 'Gestion_de_Activos',
+            hojas: [
+              { nombre: 'General', filas: filasGeneral },
+              { nombre: 'Colaboradores', filas: filasColaboradores },
+              { nombre: 'Lineas y equipos', filas: filasLineas },
+              { nombre: 'Vehiculos', filas: filasVehiculos },
+              { nombre: 'Hologramas', filas: filasHologramas },
+              { nombre: 'Uber', filas: filasUber },
+              { nombre: 'Cajas chicas', filas: filasCch },
+            ],
+          });
+          Notificar.exito('Se descargaron ' + miles(total) + ' filas en el Excel.');
+        } catch (e) {
+          Notificar.error(mensajeError(e));
+        } finally {
+          boton.disabled = false;
+          boton.innerHTML = original;
+        }
+      }
+
+      $('#lnga-filtro-activos', raiz).addEventListener('change', aplicarFiltros);
+      $('#lnga-mas', raiz).addEventListener('click', () => { visibles += paso; pintarCuadros(); });
+      // Exportar con su permiso (gestion-activos.exportar, Modulos.gs), como las tablas (puedeExportarAqui)
+      if (puede('gestion-activos.exportar')) $('#lnga-exportar', raiz).addEventListener('click', (ev) => exportarActivos(ev.currentTarget));
+      else $('#lnga-exportar', raiz).remove();
+      raiz.addEventListener('click', (ev) => {
+        const sug = ev.target.closest('[data-colaborador-i]');
+        if (sug) {
+          const c = colaboradores[Number(sug.dataset.colaboradorI)];
+          if (c) mostrarColaborador(c, sug);
+          return;
+        }
+        const f = ev.target.closest('[data-ir]');
+        if (f) irARegistro(f.dataset.ir);
+      });
+
+      // El conteo de "activos" debe reflejar TODO lo que puede traer un colaborador en el panel
+      // lateral (mostrarColaborador), no solo equipos/líneas de Líneas -- si no, alguien con
+      // solo un vehículo, holograma, Uber o caja chica aparecía como "Sin activos".
+      Promise.all([
+        cargarColaboradores(),
+        cargarIndice(),
+        deOtroModulo('vehiculos', 'apiListarVehiculosBasico'),
+        deOtroModulo('hologramas', 'apiListarHologramas'),
+        deOtroModulo('uber', 'apiListarUberResumen'),
+        deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
+      ]).then(([r, indice, vehiculos, hologramas, uber, cajasChicas]) => {
+        if (!vigente()) return;
+        catalogosActivos = { indice: indice, vehiculos: vehiculos || [], hologramas: hologramas || [], uber: uber || [], cajasChicas: cajasChicas || [] };
+        const conteo = {};
+        const suma = (lista, campo) => (lista || []).forEach((a) => { const k = normal(a[campo]); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        indice.lineas.filter((a) => a.suelta).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        suma(vehiculos, 'RESPONSABLE_VEHICULO');
+        suma(hologramas, 'RESPONSABLE');
+        suma(uber, 'NOMBRE_COMPLETO');
+        suma(cajasChicas, 'RESPONSABLE');
+        colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
+        aplicarFiltros();
+      }).catch((e) => {
+        if (!vigente()) return;
+        $('#lnga-grid', raiz).innerHTML = '';
+        $('#lnga-error', raiz).textContent = 'No se pudieron cargar los colaboradores: ' + mensajeError(e);
+        $('#lnga-error', raiz).hidden = false;
+      });
+    }
+
+    Object.assign(Lineas, {
+      initGestionActivos: initGestionActivos,
+    });
+  })();
+</script>

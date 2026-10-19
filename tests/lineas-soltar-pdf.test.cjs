@@ -2,11 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Arrastrar y soltar archivos y carátula de los PDF (usuario, 13-oct; pendiente 2.42): soltar sobre un botón de subir o
 // un campo de archivo es como elegirlos, y un PDF elegido se ve como las fotos, con su primera hoja.
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
-const lineas = read('src/html/js/lineas.html');
+const lineas = LINEAS;
 const css = read('src/html/lineas-estilos.html');
 const bloque = lineas.slice(lineas.indexOf('// ---- Arrastrar y soltar archivos'), lineas.indexOf('/** La miniatura de Drive'));
 

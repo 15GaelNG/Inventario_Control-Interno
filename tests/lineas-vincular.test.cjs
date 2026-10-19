@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -45,7 +46,7 @@ test('la responsiva enseña fija la línea que se pone', () => {
 });
 
 test('la pantalla: las acciones en el ⋮ y el formulario de la acción', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   ['Vincular línea', 'Cambiar línea', 'Desvincular línea', 'Cambiar de equipo', 'Desvincular del equipo', 'Vincular a equipo']
     .forEach((t) => assert.match(html, new RegExp("texto: '" + t + "'"), t));
   assert.match(html, /async function abrirVinculo\(modo, fila, pre\)/);
@@ -62,7 +63,7 @@ test('la ventana de comentario sigue las esquinas redondeadas', () => {
 });
 
 test('el clic derecho de la lista trae las mismas acciones que el ⋮ de la ficha', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const fn = html.slice(html.indexOf('function accionesSeleccionDe('), html.indexOf('let detallesAbiertos'));
   [["'link', 'Vincular línea', 'VINCULAR_LINEA'"], ["'arrow-left-right', 'Cambiar línea', 'CAMBIAR_LINEA'"], ["'unlink', 'Desvincular línea', 'DESVINCULAR'"],
     ["'link', 'Vincular a equipo', 'VINCULAR_EQUIPO'"], ["'arrow-left-right', 'Cambiar de equipo', 'CAMBIAR_EQUIPO'"], ["'unlink', 'Desvincular del equipo', 'DESVINCULAR'"]]

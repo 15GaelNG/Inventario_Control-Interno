@@ -57,6 +57,14 @@ dividir es seguro mientras el orden de `<?!= include(...) ?>` en
 `src/html/Index.html` mantenga los archivos "base" (api, app) antes de los
 que dependen de sus helpers.
 
+**Líneas es distinto** (19-oct, fase 6.2): todo vive dentro de `const Lineas = (function () { … })()`, así que sus
+partes no comparten el espacio global. `lineas.html` es la base (utilidades, formularios, estado) y cada pantalla
+(`lineas-telefonicas.html`, `-panorama`, `-activos`, `-accesorios`, `-resguardos`, `-bitacora`) es su propia
+función: toma lo que usa con `const { … } = Lineas.comun;` y se publica con `Object.assign(Lineas, { init… })`.
+Algo nuevo de la base que use una pantalla va en `Lineas.comun`. Un `let` de la base nunca se toma así (se
+copiaría su valor al cargar): se lee con una función (`panelActual()`) o va dentro de un objeto (`montaje.n`).
+Las pruebas leen todo Líneas con `tests/lineas-fuente.js`; un contrato revisa la forma y el orden en `Index.html`.
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
