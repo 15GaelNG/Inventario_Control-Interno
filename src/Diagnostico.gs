@@ -290,6 +290,44 @@ function revisarEntorno() {
   return texto;
 }
 
+/**
+ * A diferencia de revisarEntorno() (que solo reporta), ESTA función sí escribe: corrige, en este
+ * mismo DEV, las Script Properties que revisarEntorno() marca como "es la carpeta de PRODUCCIÓN" --
+ * crea (o encuentra) su propia carpeta de pruebas dentro de la raíz de este proyecto y deja ahí la
+ * Script Property, para dejar de escribir pruebas en los archivos reales de producción.
+ *
+ * Córrela una sola vez, desde el editor de ESTE proyecto (nunca en producción: se niega sola).
+ * Después, revisarEntorno() ya no debe marcar ninguna de estas cinco como error.
+ */
+function repararCarpetasDevPrueba() {
+  soloEditor_();
+  if (String(Config.ENTORNO).toUpperCase() === 'PROD') {
+    throw new Error('Esto es para arreglar un DEV de pruebas: no se corre en producción.');
+  }
+  const props = PropertiesService.getScriptProperties();
+  const conCarpetaPropia = (clave, nombreCarpeta) => {
+    const carpeta = DriveUtils.carpetaEnRaiz(nombreCarpeta);
+    props.setProperty(clave, carpeta.getId());
+    return clave + ': "' + nombreCarpeta + '" (' + carpeta.getId() + ')';
+  };
+  const resultado = [
+    conCarpetaPropia('DRIVE_FOLDER_ID_VERIFICACIONES', 'VERIFICACIONES_Images'),
+    conCarpetaPropia('DRIVE_FOLDER_ID_SENSORES', 'INSTALACION DE SENSORES_Files_'),
+    conCarpetaPropia('DRIVE_FOLDER_ID_HOLOGRAMAS_IMAGENES', 'HOLOGRAMAS_Images'),
+    conCarpetaPropia('DRIVE_FOLDER_ID_HOLOGRAMAS_ARCHIVOS', 'HOLOGRAMAS_Files_'),
+  ];
+  // LINEAS_DRIVE_NUCOS no pide un nombre fijo (REVISION_CARPETAS): se deja como la raíz de este
+  // DEV, igual que ya hacen el DEV de Emmanuel y el de la homologación (Entornos.gs).
+  const raizId = Config.DRIVE_FOLDERS.RAIZ();
+  props.setProperty('LINEAS_DRIVE_NUCOS', raizId);
+  resultado.push('LINEAS_DRIVE_NUCOS: la raíz de este DEV (' + raizId + ')');
+
+  const texto = 'Corregido en Propiedades del script:\n  ' + resultado.join('\n  ') +
+    '\n\nCorre revisarEntorno() otra vez para confirmar que ya no salen como error.';
+  Logger.log(texto);
+  return texto;
+}
+
 /** El ID que tiene esa clave en el bloque de producción de Entornos.gs ('' si no la tiene) */
 function carpetaDeProduccion_(clave) {
   const prod = typeof ENTORNOS !== 'undefined' && typeof SCRIPT_ID_COMPARTIDO !== 'undefined' ? ENTORNOS[SCRIPT_ID_COMPARTIDO] : null;
