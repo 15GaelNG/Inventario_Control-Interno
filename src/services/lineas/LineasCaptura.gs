@@ -68,6 +68,38 @@ const LineasCaptura = (function () {
     return png;
   }
 
+  /** Nombre para comparar: mayúsculas, sin acentos ni espacios de más (igual que nombreDeFirma en lineas.html). */
+  function nombreDeFirma_(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  }
+
+  /**
+   * Los nombres de quien captura (usuario, 19-oct): el de USUARIOS y el suyo en Capital Humano (por su correo). Si el
+   * responsable es uno de ellos (p. ej. procesos recibe en Mandar a resguardo), su firma guardada va también como
+   * FIRMA RESPONSABLE. Solo los de la sesión: cada quien con su firma.
+   */
+  function nombresPropios_(usuario) {
+    const nombres = [nombreDeFirma_(usuario && usuario.nombre)];
+    const correo = String((usuario && usuario.correo) || '').trim().toLowerCase();
+    if (correo) {
+      const ix = LineasRepo.indiceColaboradores();
+      const iNom = ix.columnas.indexOf('nombre'), iCor = ix.columnas.indexOf('correo');
+      ix.filas.forEach((f) => { if (String(f[iCor] || '').toLowerCase() === correo) nombres.push(nombreDeFirma_(f[iNom])); });
+    }
+    return nombres.filter((n, i) => n && nombres.indexOf(n) === i);
+  }
+
+  /** Los nombres de quien captura, solo si tiene firma guardada (la pantalla los compara con el responsable). */
+  function nombresConFirma_(usuario) {
+    return LineasFirmas.tiene(usuario && usuario.correo) ? nombresPropios_(usuario) : [];
+  }
+
+  /** La firma guardada como FIRMA RESPONSABLE: solo si el responsable es quien captura. */
+  function firmaResponsablePropia_(usuario, responsable) {
+    if (nombresPropios_(usuario).indexOf(nombreDeFirma_(responsable)) < 0) throw new Error('Tu firma guardada solo va si el responsable eres tú: firma en el recuadro.');
+    return firmaPropia_(usuario);
+  }
+
   /** Registro objetivo a partir de { equipoId } o { lineaId } (línea suelta). */
   function objetivoCaptura_(ref) {
     const id = ref.equipoId || ref.lineaId;
@@ -423,7 +455,7 @@ const LineasCaptura = (function () {
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
-      formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES, firmaGuardada: LineasFirmas.tiene(usuario.correo),
+      formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES, firmaGuardada: LineasFirmas.tiene(usuario.correo), nombresPropios: nombresConFirma_(usuario),
       _armar: (id) => ocultarSecretos_(formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!(ref && ref.enAccion),
         ref && ref.reasignar ? ref.desdeResponsiva : null), puedeVerSecretos),
     };
@@ -443,7 +475,7 @@ const LineasCaptura = (function () {
     const lineaFila = lineaDeRef_(ref);
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.RESP), nombreCI: usuario.nombre,
-      firmaGuardada: LineasFirmas.tiene(usuario.correo),
+      firmaGuardada: LineasFirmas.tiene(usuario.correo), nombresPropios: nombresConFirma_(usuario),
       _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, ref && ref.modo, lineaFila, !obj.equipo), puedeVerSecretos),
     };
   }
@@ -515,6 +547,7 @@ const LineasCaptura = (function () {
     LineasUtil.exigirPinEquipo(datos);
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaInspectorBase64 = firmaPropia_(usuario);
+    if (datos.usarFirmaGuardadaResponsable) datos.firmaResponsableBase64 = firmaResponsablePropia_(usuario, (datos.valores || {})['RESPONSABLE']);
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
@@ -602,6 +635,7 @@ const LineasCaptura = (function () {
     LineasUtil.exigirPinEquipo(datos);
     const ref = accion ? accion.ref : { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaCiBase64 = firmaPropia_(usuario);
+    if (datos.usarFirmaGuardadaResponsable) datos.firmaResponsableBase64 = firmaResponsablePropia_(usuario, (datos.valores || {})['RESPONSABLE']);
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
     // Identificación de cada responsable (usuario, 9-oct): se escribe antes, en la carpeta de la responsiva; si la
@@ -883,6 +917,11 @@ const LineasCaptura = (function () {
     if ((!firmas || !firmas[rolCI]) && usuario && nombreCI && nombreCI === String(usuario.nombre || '').trim().toUpperCase()) {
       const propia = LineasFirmas.png(usuario.correo);
       if (propia) firmas = firmasCache_(tipo, id, { [rolCI]: propia });
+    }
+    // Lo mismo con la del responsable, si es quien regenera (usuario, 19-oct) y ya está la de Control Interno
+    if (firmas && firmas[rolCI] && !firmas.responsable && usuario && nombresPropios_(usuario).indexOf(nombreDeFirma_(col('RESPONSABLE'))) >= 0) {
+      const propia = LineasFirmas.png(usuario.correo);
+      if (propia) firmas = firmasCache_(tipo, id, { responsable: propia });
     }
     if (!firmas && !col(esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI')) {
       return { faltanFirmas: true, nombres: esInspeccion

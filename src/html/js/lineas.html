@@ -975,6 +975,11 @@
       return { guardada: true, estaVacia: () => false, limpiar: () => {}, ajustar: () => {}, setNombre: () => {}, base64: () => Promise.resolve(null) };
     }
 
+    /** Nombre para comparar con los de quien captura (igual que nombreDeFirma_ en LineasCaptura.gs). */
+    function nombreDeFirma(s) {
+      return Formato.normal(s).replace(/\s+/g, ' ').trim().toUpperCase();
+    }
+
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
     function crearFirma(contenedor, nombre) {
       if (!contenedor || typeof Firma === 'undefined') return null;
@@ -4542,6 +4547,7 @@
           const origen = NOMBRE_DE_FIRMA[col] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[col]) + '"]');
           if (f && f.setNombre && origen) f.setNombre(origen.value);
         });
+        if (captura.revisarFirmaResponsable) captura.revisarFirmaResponsable();
       }
       const actualizarProgresoChecklist = actualizarFormularioAppSheet;
 
@@ -4601,7 +4607,23 @@
             // La de quien captura (inspector o Control Interno) puede ser su firma guardada
             const propia = sesion.contexto.firmaGuardada && e.columna === (sesion.tipo === 'INSPECCION' ? 'FIRMA INSPECTOR' : 'FIRMA CI');
             if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
-            else aMano();
+            else if (e.columna === 'FIRMA RESPONSABLE' && origen && (sesion.contexto.nombresPropios || []).length) {
+              // También la del responsable, cuando el responsable es quien captura (usuario, 19-oct: en Mandar a resguardo
+              // recibe procesos). Cambia sola al elegir a otra persona; «Firmar a mano» queda mientras siga siendo ella
+              let aManoElegido = false;
+              sesion.revisarFirmaResponsable = () => {
+                const suya = (sesion.contexto.nombresPropios || []).indexOf(nombreDeFirma(origen.value)) >= 0;
+                if (!suya) aManoElegido = false;
+                const actual = sesion.firmas[e.columna];
+                if (suya && !aManoElegido && !(actual && actual.guardada)) {
+                  sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen.value, () => { aManoElegido = true; aMano(); });
+                } else if (!suya && (!actual || actual.guardada)) {
+                  lienzo.innerHTML = '';
+                  aMano();
+                }
+              };
+              sesion.revisarFirmaResponsable();
+            } else aMano();
           }
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
@@ -4981,7 +5003,7 @@
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaInspector.guardada,
+            usarFirmaGuardada: !!firmaInspector.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada),
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
         }).then((r) => {
@@ -5036,7 +5058,7 @@
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaCi.guardada, identificaciones: identificaciones,
+            usarFirmaGuardada: !!firmaCi.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada), identificaciones: identificaciones,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {

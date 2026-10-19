@@ -86,7 +86,9 @@ function captura(fila, opciones) {
       evidenciaDesdeFila: () => ev,
       revisarPdfsLigados: () => {},
       registrarMovimiento: (...a) => hechos.movimientos.push(a),
+      indiceColaboradores: () => ({ columnas: ['nombre', 'correo'], filas: [] }),
     },
+    LineasFirmas: { png: () => null, tiene: () => false },
     LineasDatos: {
       buscarFilasPorId: () => [2], leerFilas: () => [[fila]], idsDeFila: () => [fila.ID], existeTabla: () => true,
       buscarFilasVarios: () => [7], conCandado: (f) => f(), actualizarFila: (...a) => hechos.ligados.push(a),

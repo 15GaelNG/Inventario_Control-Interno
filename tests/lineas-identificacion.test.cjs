@@ -165,7 +165,7 @@ test('pantalla: fotos o PDF por responsable, se ven antes de guardar y viajan co
   assert.match(pantalla, /if \(pdfs\.length && fotos\.length\) return error\('Elige fotos o un PDF, no los dos\.'\);/);
   assert.match(pantalla, /activarIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\)\);/);
   assert.match(pantalla, /leerIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\), valores\)\]\)\.then\(\(\[responsable, ci, identificaciones\]\)/);
-  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, identificaciones: identificaciones,/);
+  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\), identificaciones: identificaciones,/);
   // Las listas del cuerpo del modal se escuchan una sola vez (el cuerpo se reutiliza)
   assert.match(pantalla, /if \(cuerpo\._identificacionesActivas\) return;/);
 });
