@@ -268,6 +268,8 @@ function noSePide_(hoja) {
   if (hoja === 'APP_CORRECCIONES') return true;
   // Se crea sola con la primera identificación que se sube en una responsiva (Líneas, 9-oct)
   if (hoja === 'APP_IDENTIFICACIONES') return true;
+  // Se crea sola con el primer pendiente que anote un inspector (PendientesInspeccionService, 20-oct)
+  if (hoja === 'PENDIENTES INSPECCION') return true;
   return hoja === 'LINEAS TELEFONICAS' && !!leerConfig_('LINEAS_HOJA_VIEJA_RETIRADA');
 }
 /** Un nombre así, en la carpeta o en una de arriba, en producción es casi seguro un error */

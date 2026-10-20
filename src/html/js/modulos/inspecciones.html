@@ -14,6 +14,14 @@
   .ins-correo-extra-fila { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
   .ins-correo-extra-fila input { flex: 1; }
   .ins-correo-extra-fila button { flex-shrink: 0; padding: 6px 10px; }
+
+  /* Renglones de "Tickets a generar" (mismo paso): asunto libre + familia + prioridad + quitar.
+     En celular se apilan en una sola columna (regla de responsivo: dos cortes, 640/1024). */
+  .ins-ticket-extra-fila { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; margin-top: 8px; }
+  .ins-ticket-extra-fila button { flex-shrink: 0; padding: 6px 10px; }
+  @media (max-width: 640px) {
+    .ins-ticket-extra-fila { grid-template-columns: 1fr; }
+  }
 </style>
 <script>
   /**
@@ -310,6 +318,16 @@
 
   /** Alto máximo de un diagrama en pantalla: una moto de frente a todo lo ancho mediría 700 px */
   const ALTO_DIAGRAMA = 340;
+
+  /**
+   * Catálogo cerrado de "a qué familia o grupo pertenece" un pendiente de inspección (20-oct-2026).
+   * Solo sirve para que Kike filtre y dé seguimiento (punto C): el match automático con Help
+   * Desk (PendientesInspeccionService.revisarCargaHelpdesk) es por el ASUNTO, no por esto -- el
+   * responsable es un tercero sin acceso a este sistema y no elige ninguna familia.
+   */
+  const FAMILIAS_PENDIENTE_INSPECCION = [
+    'MECANICA', 'HOJALATERIA Y PINTURA', 'ACCESORIOS', 'OTROS', 'CERRAJERIA, CRISTALERIA Y TAPICERIA',
+  ];
 
   /**
    * Cómo se reparten las secciones del formato en pasos: en el orden en que el inspector
@@ -685,6 +703,7 @@
         conectarChecklist();
         prepararDiagramas();
         prepararFirmas();
+        prepararTicketsAGenerar();
         prepararCorreos();
         // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
         // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
@@ -811,6 +830,14 @@
             <div data-firma="FIRMA INSPECTOR"></div>
           </div>
         </div>
+        <h4 class="ins-revision-titulo">Tickets a generar (Help Desk)</h4>
+        <p class="form-paso-desc" style="margin-top:-8px">Anota lo que el responsable debe subir como ticket
+          en el Help Desk de TI. Va en el correo en su propia sección, con instrucciones de usar ese mismo
+          texto como asunto del ticket (el folio de esta inspección se le agrega solo, para que el sistema
+          lo detecte en automático). La familia es solo para dar seguimiento, no participa en el match.
+          Déjalo vacío si no hace falta ningún ticket.</p>
+        <div id="ins-tickets-extra"></div>
+        <button type="button" class="secondary" id="ins-ticket-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar ticket a generar</button>
         <h4 class="ins-revision-titulo">Notificar por correo</h4>
         <p class="form-paso-desc" style="margin-top:-8px">Al guardar se les avisa con el resumen de la
           inspección y lo que salió mal. Déjalo vacío si no hay a quién avisar.</p>
@@ -883,6 +910,38 @@
           alCambiar: () => errorGeneral(null),
         });
       });
+    }
+
+    /** Un renglón más de "ticket a generar": asunto libre + familia (catálogo) + prioridad */
+    function agregarTicketExtra(valores) {
+      const cont = $('#ins-tickets-extra');
+      if (!cont) return;
+      const fila = document.createElement('div');
+      fila.className = 'ins-ticket-extra-fila';
+      fila.innerHTML = `
+        <input type="text" class="ins-ticket-asunto" placeholder="Qué debe reportar (ej. Reparación de faro)" aria-label="Asunto del ticket" autocomplete="off" />
+        <select class="ins-ticket-familia" aria-label="Familia o grupo a reportar">
+          <option value="">Familia…</option>
+          ${FAMILIAS_PENDIENTE_INSPECCION.map((f) => `<option value="${escaparHtml(f)}">${escaparHtml(f)}</option>`).join('')}
+        </select>
+        <select class="ins-ticket-prioridad" aria-label="Prioridad">
+          <option value="NO URGENTE">No urgente</option>
+          <option value="URGENTE">Urgente</option>
+        </select>
+        <button type="button" class="secondary" aria-label="Quitar este ticket">${Iconos.svg('cancelar')}</button>`;
+      if (valores) {
+        fila.querySelector('.ins-ticket-asunto').value = valores.asunto || '';
+        fila.querySelector('.ins-ticket-familia').value = valores.familia || '';
+        fila.querySelector('.ins-ticket-prioridad').value = valores.prioridad || 'NO URGENTE';
+      }
+      fila.querySelector('button').addEventListener('click', () => fila.remove());
+      cont.appendChild(fila);
+    }
+
+    /** Conecta el botón "Agregar ticket a generar" (sin precarga: la lista nace vacía) */
+    function prepararTicketsAGenerar() {
+      const btnAgregar = $('#ins-ticket-agregar');
+      if (btnAgregar) btnAgregar.addEventListener('click', () => agregarTicketExtra());
     }
 
     /** Un renglón más de correo libre, para "los demás involucrados" */
@@ -1221,6 +1280,16 @@
         if (!ok) { irAFirmas(); return; }
       }
 
+      const ticketsAGenerar = Array.from(cajaPasos.querySelectorAll('.ins-ticket-extra-fila')).map((fila) => ({
+        asunto: fila.querySelector('.ins-ticket-asunto').value.trim(),
+        familia: fila.querySelector('.ins-ticket-familia').value,
+        prioridad: fila.querySelector('.ins-ticket-prioridad').value,
+      })).filter((it) => it.asunto);
+      if (ticketsAGenerar.some((it) => !it.familia)) {
+        errorGeneral('Falta elegir la familia o grupo en algún "ticket a generar"');
+        return;
+      }
+
       const llantas = {};
       cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => {
         if (el.value !== '') llantas[el.dataset.llanta] = Number(el.value);
@@ -1267,6 +1336,7 @@
             otros: otrosCorreos,
           },
           HALLAZGOS: hallazgos,
+          PENDIENTES: ticketsAGenerar,
         }, imagenes);
 
         if (res.aviso) Notificar.error(res.aviso);

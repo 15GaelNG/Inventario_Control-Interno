@@ -918,6 +918,22 @@
       await esperar(400);
       const f = $('#ins-correo-agregar'); if (f) f.scrollIntoView({ block: 'center' });
     },
+    'inspecciones-tickets-a-generar': async () => {
+      await iniciarInspeccion();
+      const visible = (el) => el && el.offsetParent !== null;
+      for (let i = 0; i < 15 && !visible($('#ins-ticket-agregar')); i++) { $('#ins-siguiente').click(); await esperar(400); }
+      await esperar(400);
+      $('#ins-ticket-agregar').click();
+      $('#ins-ticket-agregar').click();
+      await esperar(200);
+      const filas = document.querySelectorAll('.ins-ticket-extra-fila');
+      filas[0].querySelector('.ins-ticket-asunto').value = 'Reparación de faro delantero';
+      filas[0].querySelector('.ins-ticket-familia').value = 'HOJALATERIA Y PINTURA';
+      filas[0].querySelector('.ins-ticket-prioridad').value = 'URGENTE';
+      filas[1].querySelector('.ins-ticket-asunto').value = 'Cambio de llanta trasera';
+      const tit = Array.from(document.querySelectorAll('.ins-revision-titulo')).find((h) => /Tickets a generar/.test(h.textContent));
+      if (tit) tit.scrollIntoView({ block: 'start' });
+    },
   };
 
   window.addEventListener('load', async () => {

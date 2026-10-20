@@ -112,6 +112,11 @@ const Entidades = (function () {
     'INCREMENTOS': { prefijo: 'MON', llaveAnterior: 'ID', familia: 'cajachica' },
     'UBER': { prefijo: 'UBE', llaveAnterior: 'ID', familia: 'otros' },
     'TICKETS': { prefijo: 'TCK', llaveAnterior: 'ID', familia: 'otros' },
+    // Pendientes de inspección (20-oct-2026): lo que el inspector detecta que hay que subir a
+    // Help Desk como ticket, con su familia y prioridad -- aparte de TICKETS porque esa está
+    // enfocada a otros rubros (Uber, tarjetas de combustible, hologramas). La crea sola
+    // PendientesInspeccionService la primera vez que una inspección trae algo que reportar.
+    'PENDIENTES INSPECCION': { prefijo: 'PDI', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'vehiculos' },
     // Catálogo de personas: su identidad es el número de empleado, no un ID generado
     // El más claro de los cuatro: CIB01608 es el número de empleado de Capital Humano.
     // Renombrarlo a "ID ANTERIOR" sería borrarle el nombre a un dato de la empresa.

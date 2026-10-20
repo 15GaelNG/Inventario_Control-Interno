@@ -15,6 +15,7 @@ const buscadas = [];       // en qué carpeta raíz se buscó cada dibujo en bla
 let actualizado = null;    // lo que se escribió después (la liga del PDF)
 let nuccoVehiculo = '25';
 const correos = [];        // lo que se mandó por MailApp.sendEmail
+let pendientesRegistrados = null;   // lo último que recibió PendientesInspeccionService.agregar
 const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
 
 const ESTRUCTURA = {
@@ -78,6 +79,24 @@ const contexto = vm.createContext({
   Session: { getScriptTimeZone: () => 'America/Mexico_City' },
   Utilities: { formatDate: () => '12/10/2026 12:00' },
   MailApp: { sendEmail: (opciones) => { correos.push(opciones); } },
+  // El match con Tickets (PendientesInspeccionService.intentarMatch) se prueba aparte
+  // (tests/pendientes-inspeccion.test.js); aquí solo importa que registrar() le pase lo
+  // que escribió el inspector y meta lo que regresa en el correo.
+  PendientesInspeccionService: {
+    agregar: (filaInspeccion, idInspeccion, items) => {
+      const limpios = (items || [])
+        .map((it) => ({
+          asunto: String((it && it.asunto) || '').trim(),
+          familia: String((it && it.familia) || '').trim(),
+          prioridad: /^URGENTE$/i.test(String((it && it.prioridad) || '').trim()) ? 'URGENTE' : 'NO URGENTE',
+        }))
+        .filter((it) => it.asunto);
+      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios };
+      return limpios.map((it) => ({
+        ASUNTO: it.asunto, 'FAMILIA O GRUPO A REPORTAR': it.familia, PRIORIDAD: it.prioridad,
+      }));
+    },
+  },
 });
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') +
@@ -171,6 +190,8 @@ ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
   'en copia el inspector y los demás -- sin el asistente (correo inválido) ni repetir al responsable: ' + correos[0].cc);
 ok(/PARABRISAS/.test(correos[0].htmlBody) && /MALO/.test(correos[0].htmlBody), 'el cuerpo lleva el hallazgo');
 ok(correos[0].htmlBody.indexOf('Se firmó en ausencia del responsable') !== -1, 'y las observaciones');
+ok(correos[0].subject === 'INSPECCION: HONDA 150XR 12/10/2026 12:00',
+  'asunto: INSPECCION: nuco-departamento-clase-no de serie y la fecha (los vacíos del vehículo de prueba se omiten): ' + correos[0].subject);
 
 correos.length = 0;
 const sinResponsable = contexto.InspeccionesService.registrar('token', {
@@ -179,6 +200,34 @@ const sinResponsable = contexto.InspeccionesService.registrar('token', {
 }, {});
 ok(sinResponsable.correo.enviado === true && correos[0].to === 'inspector@x.com' && !correos[0].cc,
   'sin correo del responsable, se manda al primero que sí sea válido');
+
+console.log('7. Tickets a generar (pendientes de inspección)');
+correos.length = 0;
+pendientesRegistrados = null;
+const conPendientes = contexto.InspeccionesService.registrar('token', {
+  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
+  NOTIFICAR: { responsable: 'responsable@x.com', inspector: '', asistente: '', otros: [] },
+  PENDIENTES: [
+    { asunto: 'Reparación de faro', familia: 'ELECTRICO Y LUCES', prioridad: 'URGENTE' },
+    { asunto: '  ', familia: 'MOTOR', prioridad: 'NO URGENTE' },   // sin asunto real: se ignora
+  ],
+}, {});
+ok(pendientesRegistrados && pendientesRegistrados.idInspeccion === conPendientes.ID,
+  'se le pasa a PendientesInspeccionService.agregar el ID de la inspección recién creada');
+ok(pendientesRegistrados.filaInspeccion['PLACAS'] === 'GGR658F', 'y la fila ya armada (placas, nuco, etc.)');
+ok(pendientesRegistrados.items.length === 1 && pendientesRegistrados.items[0].asunto === 'Reparación de faro',
+  'el renglón sin asunto real se ignora');
+ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
+  'el correo trae su propia sección con lo que hay que subir a Help Desk');
+ok(/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
+
+correos.length = 0;
+const sinPendientes = contexto.InspeccionesService.registrar('token', {
+  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
+  NOTIFICAR: { responsable: 'responsable@x.com', inspector: '', asistente: '', otros: [] },
+}, {});
+ok(!/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'sin PENDIENTES, el correo no trae esa sección');
+void sinPendientes;
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

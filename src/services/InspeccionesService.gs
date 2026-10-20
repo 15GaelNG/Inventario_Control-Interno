@@ -309,6 +309,8 @@ const InspeccionesService = (function () {
    * @param {Object} p.checklist   { 'PIEZA': 'BUENO' }
    * @param {Object} p.llantas     { 'LLANTA DD': 7 }
    * @param {Object} [p.imagenes]  { 'INS FRONTAL': {base64, mimeType}, 'FIRMA INSPECTOR': {…} }
+   * @param {Array} [p.PENDIENTES] [{asunto, familia, prioridad}] -- lo que el inspector dice que hay
+   *   que subir a Help Desk (PendientesInspeccionService.agregar); se ignoran los sin asunto
    * @return {{ID, puntaje, pdf, url}}
    */
   function registrar(token, p, imagenes) {
@@ -405,6 +407,7 @@ const InspeccionesService = (function () {
     const subidas = [];
     const paraPdf = {};
     const sinDibujo = [];   // diagramas en blanco que no están en Drive
+    let pendientes = [];    // lo que el inspector dijo que hay que subir a Help Desk (si hubo)
     try {
       COLUMNAS_IMAGEN.forEach(([columna]) => {
         const imagen = (imagenes || {})[columna];
@@ -444,6 +447,7 @@ const InspeccionesService = (function () {
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      pendientes = PendientesInspeccionService.agregar(fila, id, p.PENDIENTES);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -481,7 +485,7 @@ const InspeccionesService = (function () {
         puntaje: puntaje.final,
         pdf: null,
         aviso: 'La inspección se guardó, pero no se pudo generar el PDF: ' + err.message,
-        correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, null),
+        correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, null, pendientes),
       };
     }
 
@@ -491,7 +495,7 @@ const InspeccionesService = (function () {
         ? 'El PDF salió sin estos dibujos porque no están en Drive: ' + sinDibujo.join(', ') +
           '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
         : '',
-      correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, pdf.url),
+      correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, pdf.url, pendientes),
     };
   }
 
@@ -515,8 +519,10 @@ const InspeccionesService = (function () {
    * @param {Object} fila       la fila ya armada de la inspección (vehículo, puntaje, observaciones…)
    * @param {Array} hallazgos   [{pieza, estado, seccion}], lo mismo que ya vio el inspector en "Revisar"
    * @param {string|null} pdfUrl
+   * @param {Array} [pendientes] los pendientes de Help Desk que ya se dieron de alta (PendientesInspeccionService.agregar):
+   *   van en su propia sección de color -- el responsable los sube como ticket con la MISMA familia
    */
-  function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl) {
+  function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes) {
     if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
     const para = correoValido_(notificar.responsable) ? limpiar_(notificar.responsable) : '';
     const candidatosCc = [notificar.inspector, notificar.asistente].concat(notificar.otros || [])
@@ -540,7 +546,24 @@ const InspeccionesService = (function () {
           ': <b>' + escaparHtml_(h.estado) + '</b></li>').join('') + '</ul>'
       : '<p style="margin:4px 0 0">Ninguno: todo lo revisado salió bien.</p>';
 
-    const asunto = 'Inspección vehicular -- ' + [fila['VEHICULO'], fila['PLACAS'], fila['FOLIO']].filter(Boolean).join(' · ');
+    // Sección de color propia (ámbar): lo que el inspector dijo que hay que subir a Help Desk.
+    // El ASUNTO ya trae el folio de esta inspección al frente (PendientesInspeccionService.agregar):
+    // usar ese mismo texto como asunto del ticket es lo que hace que el sistema lo detecte solo.
+    const seccionPendientes = (pendientes || []).length
+      ? '<div style="margin-top:16px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
+        '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Tickets a generar en Help Desk</h3>' +
+        '<p style="margin:0 0 6px;font-size:13px;color:#78350f">Da de alta cada uno como ticket en Help Desk usando ' +
+        'EXACTAMENTE este texto como asunto (ya trae el folio de esta inspección): así el sistema lo detecta solo, ' +
+        'sin que nadie tenga que buscarlo.</p>' +
+        '<ul style="margin:0;padding-left:18px">' + pendientes.map((pe) =>
+          '<li><code>' + escaparHtml_(pe['ASUNTO']) + '</code>' +
+          (pe['FAMILIA O GRUPO A REPORTAR'] ? ' <span style="color:#92400e">(' + escaparHtml_(pe['FAMILIA O GRUPO A REPORTAR']) + ')</span>' : '') +
+          ' — <b>' + escaparHtml_(pe['PRIORIDAD']) + '</b></li>').join('') + '</ul></div>'
+      : '';
+
+    const fechaInspeccion = Utilities.formatDate(fila['FECHA'], Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    const asunto = 'INSPECCION: ' +
+      [fila['NUCO'], fila['DEPARTAMENTO'], fila['TIPO'], fila['NO SERIE']].filter(Boolean).join('-') + ' ' + fechaInspeccion;
     const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
       '<h2 style="margin:0 0 12px;font-size:18px">Inspección vehicular</h2>' +
       '<table style="border-collapse:collapse">' +
@@ -550,6 +573,7 @@ const InspeccionesService = (function () {
       '</table>' +
       (fila['OBSERVACIONES'] ? '<p><b>Observaciones:</b> ' + escaparHtml_(fila['OBSERVACIONES']) + '</p>' : '') +
       '<h3 style="font-size:15px;margin:16px 0 0">Piezas con hallazgo (REGULAR o MALO)</h3>' + listaHallazgos +
+      seccionPendientes +
       (pdfUrl ? '<p style="margin-top:16px"><a href="' + pdfUrl + '">Ver el formato en PDF</a></p>' : '') +
       '</div>';
 

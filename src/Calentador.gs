@@ -22,6 +22,10 @@ function pasosCalentador_() {
     ['Inspecciones', () => InspeccionesService.calentar()],
     ['Verificaciones', () => VerificacionesService.calentar()],
     ['Tickets', () => TicketsService.calentar()],
+    // Compara los pendientes de inspección "sin cargar" contra lo que ya se sincronizó de Help
+    // Desk (no llama al Help Desk ella misma: ver la nota de credenciales en
+    // PendientesInspeccionService.revisarCargaHelpdesk)
+    ['Pendientes de inspección (match con Help Desk)', () => PendientesInspeccionService.revisarCargaHelpdesk()],
     ['Incidencias', () => IncidenciasService.calentar()],
     ['Cajas chicas', () => CajasChicasService.calentar()],
     ['Arqueos', () => ArqueosService.calentar()],
