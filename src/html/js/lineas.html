@@ -841,7 +841,8 @@
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
           const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
-          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron' || e.control === 'identificacion');
+          // La identificación (archivo) no va al final: se queda en su lugar, a todo lo ancho, debajo de su tipo (usuario, 20-oct)
+          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
           const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
           const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos, escalas].every((g) => g.indexOf(e) < 0));
           cuerpo = (lectura.length ? '<div class="ln-af-grid ln-af-datos">' + html(lectura) + '</div>' : '') +
@@ -1521,7 +1522,9 @@
     /**
      * Lo elegido en cada apartado vive en el propio elemento: caja._ine = { pdf, fotos: [{ archivo, url }], reutilizar },
      * caja._registrada = la identificación que ya tiene la persona en el registro (o null) y caja._clave = de quién se
-     * buscó (nombre|número). Con una registrada se pregunta «¿Es correcta?»: sí = se usa esa (reutilizar = su registro).
+     * buscó (nombre|número). Con una registrada se elige entre dos tarjetas (usuario, 20-oct): «Usar la registrada»
+     * (reutilizar = su registro; queda una tarjeta verde «en uso» con Cambiar) o «Subir otra» (r.subirOtra: salen los
+     * botones de fotos y PDF). Usarla llena el tipo de identificación con el suyo (CampoAuto).
      */
     function activarIdentificaciones(cuerpo) {
       const pintarRegistrada = (caja) => {
@@ -1529,18 +1532,35 @@
         const s = caja._ine;
         const bloque = caja.querySelector('.ln-ine-registrada');
         const usa = !!(r && s.reutilizar);
-        bloque.hidden = !r || r.descartada;
-        caja.querySelector('.ln-fotos-botones').hidden = usa;
-        caja.querySelector('.ln-ine-lista').hidden = usa;
+        bloque.hidden = !r;
+        // Con una registrada, los botones de fotos y PDF solo salen al elegir «Subir otra»
+        caja.querySelector('.ln-fotos-botones').hidden = !!r && !r.subirOtra;
+        caja.querySelector('.ln-ine-lista').hidden = !!r && !r.subirOtra;
         if (bloque.hidden) { bloque.innerHTML = ''; return; }
-        const detalle = [r.tipo || 'INE', 'registrada', r.nuco ? 'NUCO ' + r.nuco : '', r.fecha].filter(Boolean).join(' · ');
-        bloque.innerHTML = icono('id-card') + '<span class="ln-ine-registrada-texto">' + esc(detalle) + '</span>' +
-          '<a href="https:\/\/drive.google.com/file/d/' + esc(r.archivoId) + '/view" target="_blank" rel="noopener">Ver</a>' +
-          (usa ? '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="cambiar">Cambiar</button>'
-            : '<span class="ln-ine-pregunta">¿Es correcta?</span>' +
-              '<button type="button" class="primary ln-btn-chico" data-ine-registrada="si">Sí</button>' +
-              '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="no">No</button>');
+        const tipo = r.tipo || 'INE';
+        const datos = [r.nuco ? 'NUCO ' + r.nuco : '', r.fecha].filter(Boolean).join(' · ');
+        const ver = '<a class="ln-btn-chico ln-ine-ver" href="https:\/\/drive.google.com/file/d/' + esc(r.archivoId) + '/view" target="_blank" rel="noopener">' + icono('eye', 'ln-icon-sm') + ' Ver</a>';
+        const nombre = 'ine-eleccion-' + caja.dataset.ineOrden;
+        const opcion = (valor, activa, icon, titulo, detalle, extra) => '<label class="ln-ine-opcion' + (activa ? ' activa' : '') + '">' +
+          '<input type="radio" name="' + nombre + '" value="' + valor + '" data-ine-registrada="' + valor + '"' + (activa ? ' checked' : '') + ' />' +
+          '<span class="ln-ine-opcion-icono">' + icono(icon) + '</span>' +
+          '<span class="ln-ine-opcion-texto"><b>' + esc(titulo) + '</b><small>' + esc(detalle) + '</small></span>' + (extra || '') + '</label>';
+        bloque.innerHTML = usa
+          ? '<div class="ln-ine-en-uso"><span class="ln-ine-opcion-icono">' + icono('circle-check') + '</span>' +
+            '<span class="ln-ine-opcion-texto"><b>' + esc(tipo) + ' registrada · en uso</b><small>' + esc(datos) + '</small></span>' + ver +
+            '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="cambiar">Cambiar</button></div>'
+          : '<div class="ln-ine-opciones">' +
+            opcion('si', false, 'id-card', 'Usar la registrada', [tipo, datos].filter(Boolean).join(' · '), ver) +
+            opcion('no', !!r.subirOtra, 'upload', 'Subir otra', 'Fotos o PDF') + '</div>';
         pintarIconos(bloque);
+      };
+      // Usar la registrada llena el tipo con el suyo: el del principal es IDENTIFICACION; el de los demás, su lista
+      const llenarTipo = (caja, tipo) => {
+        const orden = Number(caja.dataset.ineOrden);
+        const campo = orden === 0 ? cuerpo.querySelector('[data-columna="IDENTIFICACION"]') : caja.querySelector('[data-ine-tipo]');
+        if (!campo || !tipo || campo.disabled) return;
+        CampoAuto.llenar(campo, tipo);
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
       };
       const pintar = (caja) => {
         const s = caja._ine;
@@ -1624,18 +1644,24 @@
         }
         pintar(caja);
       });
+      // Las dos tarjetas son radios: el teclado también elige; Cambiar regresa a las dos
+      const elegirRegistrada = (control) => {
+        const caja = control.closest('.ln-ine');
+        const r = caja._registrada;
+        if (!r) return;
+        caja.querySelector('.ln-ine-registrada').classList.remove('ln-ine-registrada-falta');
+        const eleccion = control.dataset.ineRegistrada;
+        if (eleccion === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; r.subirOtra = false; llenarTipo(caja, r.tipo || 'INE'); }
+        else if (eleccion === 'no') { r.subirOtra = true; caja._ine.reutilizar = null; }
+        else { r.subirOtra = false; caja._ine.reutilizar = null; }
+        pintar(caja);
+      };
+      cuerpo.addEventListener('change', (ev) => {
+        if (ev.target.matches && ev.target.matches('input[type="radio"][data-ine-registrada]')) elegirRegistrada(ev.target);
+      });
       cuerpo.addEventListener('click', (ev) => {
-        const respuesta = ev.target.closest('[data-ine-registrada]');
-        if (respuesta) {
-          const caja = respuesta.closest('.ln-ine');
-          const r = caja._registrada;
-          if (!r) return;
-          if (respuesta.dataset.ineRegistrada === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; }
-          else if (respuesta.dataset.ineRegistrada === 'no') { r.descartada = true; caja._ine.reutilizar = null; }
-          else caja._ine.reutilizar = null;
-          pintar(caja);
-          return;
-        }
+        const cambiar = ev.target.closest('button[data-ine-registrada]');
+        if (cambiar) { elegirRegistrada(cambiar); return; }
         const quitar = ev.target.closest('[data-ine-quitar]');
         if (quitar) {
           const caja = quitar.closest('.ln-ine');
@@ -5031,16 +5057,16 @@
       function guardarResponsivaDesdeFormulario() {
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
-        // La INE registrada no se puede pasar por alto (usuario, 9-oct): sin contestar «¿Es correcta?» no se guarda
+        // La INE registrada no se puede pasar por alto (usuario, 9-oct): sin elegir «Usar la registrada» o «Subir otra» no se guarda
         const sinContestar = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-ine')).filter((caja) => {
           const s = caja._ine;
           const campo = caja.closest('.ln-af-campo');
-          return caja._registrada && !caja._registrada.descartada && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);
+          return caja._registrada && !caja._registrada.subirOtra && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);
         })[0];
         if (sinContestar) {
           if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);
           sinContestar.querySelector('.ln-ine-registrada').classList.add('ln-ine-registrada-falta');
-          mostrarErrorCaptura('Contesta si la INE registrada es correcta.', '.ln-ine[data-ine-orden="' + sinContestar.dataset.ineOrden + '"]');
+          mostrarErrorCaptura('Elige si se usa la identificación registrada o se sube otra.', '.ln-ine[data-ine-orden="' + sinContestar.dataset.ineOrden + '"]');
           return;
         }
         const firmaCi = captura.firmas['FIRMA CI'];
