@@ -85,6 +85,7 @@ window.callServer = (fn, token, ...args) => {
       : null,
     apiEstructuraInspeccion: ESTRUCTURA,
     apiRegistrarInspeccion: { puntaje: 90, pdf: '' },
+    apiListarColaboradores: [{ NOMBRE: 'JUAN PEREZ', CORREO: 'juan.perez@x.com', JEFE_DIRECTO: 'MARIA LOPEZ' }],
   };
   return Promise.resolve(respuestas[fn]);
 };
@@ -244,6 +245,16 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
 
   $('#ins-voltaje').value = '12.6';
   $('#ins-conductor').value = 'JUAN PEREZ';
+  evento($('#ins-conductor'), 'input');
+  await esperar(5);
+
+  console.log('9b. Jefe directo: se sugiere con el de Capital Humano del Conductor');
+  ok($('#ins-jefe').value === 'MARIA LOPEZ', 'en cuanto el Conductor coincide con alguien conocido: ' + $('#ins-jefe').value);
+  const tagJefe = $('#ins-jefe').closest('.field').querySelector('label .auto-tag');
+  ok(tagJefe && !tagJefe.hidden, 'y lo marca "auto" (se puede corregir)');
+  $('#ins-jefe').value = 'OTRO JEFE';
+  evento($('#ins-jefe'), 'input');
+  ok(tagJefe.hidden, 'al corregirlo a mano, deja de decir "auto"');
 
   console.log('10. Firmas');
   $('#ins-guardar').click();
@@ -274,6 +285,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   ok(registrado && registrado.FOLIO === 'CTA0100' && registrado.TIPO === 'L200', 'manda folio y tipo');
   ok(registrado && registrado.checklist.POLIZA === 'MALO' && registrado.checklist.SULFATADA === 'NO', 'manda las respuestas');
   ok(registrado && registrado.VOLTAJE === '12.6' && registrado.CONDUCTOR === 'JUAN PEREZ', 'manda los datos de los otros pasos');
+  ok(registrado && registrado.JEFE_DIRECTO === 'OTRO JEFE', 'y el Jefe directo que se corrigió a mano, no el sugerido: ' + registrado.JEFE_DIRECTO);
   ok(imagenesMandadas && imagenesMandadas['INS FRONTAL'] && imagenesMandadas['INS FRONTAL'].base64 === 'TRAZO',
     'manda el diagrama marcado, con las marcas');
   ok(imagenesMandadas && !imagenesMandadas['INS IZQUIERDA'], 'no manda los diagramas sin marcar (el servidor usa el dibujo en blanco)');

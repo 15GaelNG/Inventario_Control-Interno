@@ -641,13 +641,26 @@
     });
 
     const colaboradoresPorNombre = {};
+    /** Si el Conductor coincide con alguien de Capital Humano, sugiere su Jefe directo (igual
+     *  que ya hace Responsiva Vehicular): se puede corregir, y deja de ser "auto" en cuanto se
+     *  toca. soloSiVacio evita pisar lo que ya haya escrito el inspector mientras cargaba el
+     *  catálogo (una carrera: el catálogo llega después de que ya se armó el paso). */
+    function sugerirJefe_(soloSiVacio) {
+      const campoConductor = $('#ins-conductor');
+      const campoJefe = $('#ins-jefe');
+      if (!campoConductor || !campoJefe) return;
+      if (soloSiVacio && campoJefe.value) return;
+      const colaborador = colaboradoresPorNombre[String(campoConductor.value || '').trim().toUpperCase()];
+      if (colaborador && colaborador.JEFE_DIRECTO) CampoAuto.llenar(campoJefe, colaborador.JEFE_DIRECTO);
+    }
     const catalogos = Promise.all([
       callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
         (colaboradores || []).forEach((c) => {
           const clave = String(c.NOMBRE || '').trim().toUpperCase();
-          if (clave && c.CORREO) colaboradoresPorNombre[clave] = c.CORREO;
+          if (clave) colaboradoresPorNombre[clave] = c;
         });
-      }).catch(() => {}),   // si falla, el campo del correo del responsable simplemente queda vacío
+        sugerirJefe_(true);
+      }).catch(() => {}),   // si falla, el correo del responsable y el jefe sugerido simplemente quedan vacíos
 
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         FolioNucco.indexar(vehiculos, vehiculoPorClave);
@@ -821,6 +834,11 @@
         if (opciones.hologramaSugerido && $('#ins-holograma') && !$('#ins-holograma').value) {
           CampoAuto.llenar($('#ins-holograma'), opciones.hologramaSugerido);
         }
+        // Jefe directo: se sugiere con el de Capital Humano en cuanto se sabe el Conductor (ya
+        // sea el sugerido de arriba o el que escriba a mano el inspector), y se corrige solo si
+        // cambia el Conductor -- igual que ya hace Responsiva Vehicular con su "quien entrega".
+        sugerirJefe_(true);
+        $('#ins-conductor').addEventListener('input', () => sugerirJefe_(false));
       }
       $('#ins-panel-avance').hidden = !estructura;
       mostrarPaso(0);
@@ -1305,7 +1323,8 @@
       const campoCorreoResponsable = $('#ins-correo-responsable');
       if (campoCorreoResponsable && !campoCorreoResponsable.value) {
         const nombre = String((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '').trim().toUpperCase();
-        if (colaboradoresPorNombre[nombre]) CampoAuto.llenar(campoCorreoResponsable, colaboradoresPorNombre[nombre]);
+        const colaborador = colaboradoresPorNombre[nombre];
+        if (colaborador && colaborador.CORREO) CampoAuto.llenar(campoCorreoResponsable, colaborador.CORREO);
       }
       const faltantes = estructura.secciones
         .map((s, i) => ({ s, i, a: r.porSeccion[i] }))
