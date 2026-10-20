@@ -52,41 +52,78 @@
       seleccionable: false,
     });
 
+    // Resuelto/cerrado en Help Desk es el mismo criterio que ya usa badgeEstatusHelpdesk (el
+    // color del badge): el resto de los estatus que de verdad mande Help Desk (Abierto, En
+    // proceso…) cuentan como "sigue abierto". Como ese vocabulario no lo controlamos nosotros,
+    // los KPIs filtran por los valores REALES que haya en los datos de hoy, no por uno fijo.
+    const esHelpdeskResuelto_ = (estatus) => /resuelto|cerrado/i.test(estatus || '');
+    const valoresEstatusHelpdesk_ = (resuelto) => Array.from(new Set((pendientes || [])
+      .map((p) => p['ESTATUS HELPDESK'])
+      .filter((v) => v && esHelpdeskResuelto_(v) === resuelto)));
+
     function marcarKpiActivo(filtros) {
       const estatus = filtros.ESTATUS;
-      document.getElementById('pdi-kpi-cargados').classList.toggle(
-        'activo', !!(estatus && estatus.valores && estatus.valores[0] === 'CARGADO EN HELPDESK')
-      );
+      const estatusHd = filtros['ESTATUS HELPDESK'];
+      const esCargado = !!(estatus && estatus.valores && estatus.valores.length === 1 && estatus.valores[0] === 'CARGADO EN HELPDESK');
+      document.getElementById('pdi-kpi-cargados').classList.toggle('activo', esCargado && !estatusHd);
       const prioridad = filtros.PRIORIDAD;
       document.getElementById('pdi-kpi-urgentes').classList.toggle(
         'activo', !!(prioridad && prioridad.valores && prioridad.valores[0] === 'URGENTE')
+      );
+      const valoresHd = (estatusHd && estatusHd.valores) || [];
+      document.getElementById('pdi-kpi-abiertos-hd').classList.toggle(
+        'activo', esCargado && valoresHd.length > 0 && valoresHd.every((v) => !esHelpdeskResuelto_(v))
+      );
+      document.getElementById('pdi-kpi-resueltos').classList.toggle(
+        'activo', esCargado && valoresHd.length > 0 && valoresHd.every((v) => esHelpdeskResuelto_(v))
       );
       pintarStats(tabla.getFiltradas());
     }
 
     function pintarStats(todos) {
       const sinCargar = (pendientes || []).filter((p) => /^SIN CARGAR/i.test(p.ESTATUS || ''));
+      const cargados = (pendientes || []).filter((p) => /^CARGADO/i.test(p.ESTATUS || ''));
       document.getElementById('pdi-stat-total').textContent = sinCargar.length;
       document.getElementById('pdi-stat-urgentes').textContent =
         sinCargar.filter((p) => /^URGENTE$/i.test(p.PRIORIDAD || '')).length;
-      document.getElementById('pdi-stat-cargados').textContent =
-        (pendientes || []).filter((p) => /^CARGADO/i.test(p.ESTATUS || '')).length;
+      document.getElementById('pdi-stat-cargados').textContent = cargados.length;
+      document.getElementById('pdi-stat-abiertos-hd').textContent =
+        cargados.filter((p) => p['ESTATUS HELPDESK'] && !esHelpdeskResuelto_(p['ESTATUS HELPDESK'])).length;
+      document.getElementById('pdi-stat-resueltos').textContent =
+        cargados.filter((p) => esHelpdeskResuelto_(p['ESTATUS HELPDESK'])).length;
       void todos;
     }
 
     document.getElementById('pdi-kpi-total').addEventListener('click', () => {
       tabla.setFiltro('PRIORIDAD', null);
+      tabla.setFiltro('ESTATUS HELPDESK', null);
       tabla.setFiltro('ESTATUS', { valores: ['SIN CARGAR EN HELPDESK'] });
     });
     document.getElementById('pdi-kpi-urgentes').addEventListener('click', (ev) => {
       const yaActivo = ev.currentTarget.classList.contains('activo');
+      tabla.setFiltro('ESTATUS HELPDESK', null);
       tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['SIN CARGAR EN HELPDESK'] });
       tabla.setFiltro('PRIORIDAD', yaActivo ? null : { valores: ['URGENTE'] });
     });
     document.getElementById('pdi-kpi-cargados').addEventListener('click', (ev) => {
       const yaActivo = ev.currentTarget.classList.contains('activo');
       tabla.setFiltro('PRIORIDAD', null);
+      tabla.setFiltro('ESTATUS HELPDESK', null);
       tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['CARGADO EN HELPDESK'] });
+    });
+    document.getElementById('pdi-kpi-abiertos-hd').addEventListener('click', (ev) => {
+      const yaActivo = ev.currentTarget.classList.contains('activo');
+      tabla.setFiltro('PRIORIDAD', null);
+      if (yaActivo) { tabla.setFiltro('ESTATUS', null); tabla.setFiltro('ESTATUS HELPDESK', null); return; }
+      tabla.setFiltro('ESTATUS', { valores: ['CARGADO EN HELPDESK'] });
+      tabla.setFiltro('ESTATUS HELPDESK', { valores: valoresEstatusHelpdesk_(false) });
+    });
+    document.getElementById('pdi-kpi-resueltos').addEventListener('click', (ev) => {
+      const yaActivo = ev.currentTarget.classList.contains('activo');
+      tabla.setFiltro('PRIORIDAD', null);
+      if (yaActivo) { tabla.setFiltro('ESTATUS', null); tabla.setFiltro('ESTATUS HELPDESK', null); return; }
+      tabla.setFiltro('ESTATUS', { valores: ['CARGADO EN HELPDESK'] });
+      tabla.setFiltro('ESTATUS HELPDESK', { valores: valoresEstatusHelpdesk_(true) });
     });
 
     let pendientes = [];

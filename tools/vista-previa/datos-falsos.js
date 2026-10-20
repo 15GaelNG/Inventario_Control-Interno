@@ -921,6 +921,12 @@
       (await hasta('#pdi-tabla .dt-acciones-fila button[title^="Enviar recordatorio"]')).click();
       await esperar(300);
     },
+    'pendientes-inspeccion-resueltos': async () => {
+      await abrir('pendientes-inspeccion');
+      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
+      (await hasta('#pdi-kpi-resueltos')).click();
+      await esperar(300);
+    },
     'inspecciones-form': async () => { await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio'); },
     'inspecciones-checklist': async () => {
       await iniciarInspeccion();

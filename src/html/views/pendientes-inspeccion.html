@@ -1,7 +1,7 @@
 <template id="tpl-pendientes-inspeccion">
   <div class="page-header-compacto">
     <div>
-      <h2><i data-lucide="list-checks" class="ico"></i> Pendientes de inspección</h2>
+      <h2><i data-lucide="list-checks" class="ico"></i> Tickets de inspección</h2>
       <p class="page-subtitle">Lo que el inspector dijo que hay que subir como ticket a Help Desk, y su seguimiento</p>
     </div>
     <!-- KPIs: clic = filtrar la tabla -->
@@ -17,6 +17,14 @@
       <button type="button" class="kpi-chip" id="pdi-kpi-cargados" title="Filtrar: ya cargados en Help Desk">
         <span class="kpi-chip-label">Cargados</span>
         <strong class="kpi-chip-value" id="pdi-stat-cargados">0</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="pdi-kpi-abiertos-hd" title="Filtrar: ya cargados, pero el ticket sigue abierto en Help Desk">
+        <span class="kpi-chip-label">Abierto en Help Desk</span>
+        <strong class="kpi-chip-value" id="pdi-stat-abiertos-hd">0</strong>
+      </button>
+      <button type="button" class="kpi-chip" id="pdi-kpi-resueltos" title="Filtrar: el ticket ya se resolvió o se cerró en Help Desk">
+        <span class="kpi-chip-label">Resuelto en Help Desk</span>
+        <strong class="kpi-chip-value" id="pdi-stat-resueltos">0</strong>
       </button>
     </div>
   </div>
