@@ -535,6 +535,11 @@
     });
 
     const colaboradoresPorNombre = {};
+    // A quién le toca de "jefe directo" alguien cuyo puesto es de asistente (Capital Humano no
+    // lleva "asiste a X", pero si le damos la vuelta a Jefe Directo -- el único reporte directo
+    // de este jefe que es asistente -- sale lo mismo sin pedirle un dato nuevo a nadie). Uno por
+    // jefe (el primero que aparezca, si por algún motivo tuviera más de uno).
+    const asistentePorJefe = {};
     /** Si el Conductor coincide con alguien de Capital Humano, sugiere su Jefe directo (igual
      *  que ya hace Responsiva Vehicular): se puede corregir, y deja de ser "auto" en cuanto se
      *  toca. soloSiVacio evita pisar lo que ya haya escrito el inspector mientras cargaba el
@@ -552,9 +557,11 @@
         (colaboradores || []).forEach((c) => {
           const clave = String(c.NOMBRE || '').trim().toUpperCase();
           if (clave) colaboradoresPorNombre[clave] = c;
+          const jefe = String(c.JEFE_DIRECTO || '').trim().toUpperCase();
+          if (jefe && /ASISTENTE/i.test(c.PUESTO || '') && !asistentePorJefe[jefe]) asistentePorJefe[jefe] = c;
         });
         sugerirJefe_(true);
-      }).catch(() => {}),   // si falla, el correo del responsable y el jefe sugerido simplemente quedan vacíos
+      }).catch(() => {}),   // si falla, el correo del responsable, el jefe y el asistente sugeridos simplemente quedan vacíos
 
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         FolioNucco.indexar(vehiculos, vehiculoPorClave);
@@ -1214,11 +1221,18 @@
       const r = calcular();
       if (firmas['FIRMA RESPONSABLE']) firmas['FIRMA RESPONSABLE'].setNombre((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '');
       if (firmas['FIRMA INSPECTOR']) firmas['FIRMA INSPECTOR'].setNombre((state.sesion && state.sesion.nombre) || '');
+      const nombreResponsable = String((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '').trim().toUpperCase();
       const campoCorreoResponsable = $('#ins-correo-responsable');
       if (campoCorreoResponsable && !campoCorreoResponsable.value) {
-        const nombre = String((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '').trim().toUpperCase();
-        const colaborador = colaboradoresPorNombre[nombre];
+        const colaborador = colaboradoresPorNombre[nombreResponsable];
         if (colaborador && colaborador.CORREO) CampoAuto.llenar(campoCorreoResponsable, colaborador.CORREO);
+      }
+      // El asistente DE ESE responsable (no del Conductor): a quien se avisa es al responsable,
+      // y es su asistente el que tiene sentido copiar.
+      const campoCorreoAsistente = $('#ins-correo-asistente');
+      if (campoCorreoAsistente && !campoCorreoAsistente.value) {
+        const asistente = asistentePorJefe[nombreResponsable];
+        if (asistente && asistente.CORREO) CampoAuto.llenar(campoCorreoAsistente, asistente.CORREO);
       }
       const faltantes = estructura.secciones
         .map((s, i) => ({ s, i, a: r.porSeccion[i] }))

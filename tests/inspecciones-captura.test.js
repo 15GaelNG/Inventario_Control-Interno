@@ -81,11 +81,16 @@ window.callServer = (fn, token, ...args) => {
     // El buscador de Folio/Nucco (jorge, 2-oct) carga la lista de vehículos activos
     apiListarVehiculosBasico: [{ ID: 'VEH-1', FOLIO: 'CTA0100', NUCO: '0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', LINEA_VEHICULO: 'L200', MODELO: 2022 }],
     apiBuscarVehiculoPorFolio: args[0] === 'CTA0100'
-      ? { FOLIO: 'CTA0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', 'LINEA VEHICULO': 'L200', MODELO: 2022 }
+      ? { FOLIO: 'CTA0100', PLACA: 'ABC-123', MARCA: 'MITSUBISHI', 'LINEA VEHICULO': 'L200', MODELO: 2022, 'RESPONSABLE VEHICULO': 'JUAN PEREZ' }
       : null,
     apiEstructuraInspeccion: ESTRUCTURA,
     apiRegistrarInspeccion: { puntaje: 90, pdf: '' },
-    apiListarColaboradores: [{ NOMBRE: 'JUAN PEREZ', CORREO: 'juan.perez@x.com', JEFE_DIRECTO: 'MARIA LOPEZ' }],
+    apiListarColaboradores: [
+      { NOMBRE: 'JUAN PEREZ', CORREO: 'juan.perez@x.com', JEFE_DIRECTO: 'MARIA LOPEZ' },
+      // Capital Humano no lleva "asiste a X", pero si su Jefe Directo es JUAN PEREZ y su puesto
+      // dice "asistente", es su asistente (misma lógica que ya usa sugerirJefe_, al revés)
+      { NOMBRE: 'LUCIA TORRES', CORREO: 'lucia.torres@x.com', JEFE_DIRECTO: 'JUAN PEREZ', PUESTO: 'ASISTENTE DE GERENCIA' },
+    ],
   };
   return Promise.resolve(respuestas[fn]);
 };
@@ -256,6 +261,13 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   evento($('#ins-jefe'), 'input');
   ok(tagJefe.hidden, 'al corregirlo a mano, deja de decir "auto"');
 
+  console.log('9c. Correo del responsable y de su asistente: se sugieren solos desde el vehículo');
+  ok($('#ins-correo-responsable').value === 'juan.perez@x.com', 'el correo del responsable del VEHÍCULO (no el Conductor que se haya tecleado): ' + $('#ins-correo-responsable').value);
+  ok($('#ins-correo-asistente').value === 'lucia.torres@x.com',
+    'y el de su asistente -- alguien cuyo Jefe Directo es ese responsable y cuyo puesto dice "asistente": ' + $('#ins-correo-asistente').value);
+  const tagAsistente = $('#ins-correo-asistente').closest('.field').querySelector('label .auto-tag');
+  ok(tagAsistente && !tagAsistente.hidden, 'también va marcado "auto"');
+
   console.log('10. Firmas');
   $('#ins-guardar').click();
   await esperar(20);
@@ -286,6 +298,8 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   ok(registrado && registrado.checklist.POLIZA === 'MALO' && registrado.checklist.SULFATADA === 'NO', 'manda las respuestas');
   ok(registrado && registrado.VOLTAJE === '12.6' && registrado.CONDUCTOR === 'JUAN PEREZ', 'manda los datos de los otros pasos');
   ok(registrado && registrado.JEFE_DIRECTO === 'OTRO JEFE', 'y el Jefe directo que se corrigió a mano, no el sugerido: ' + registrado.JEFE_DIRECTO);
+  ok(registrado && registrado.NOTIFICAR.responsable === 'juan.perez@x.com' && registrado.NOTIFICAR.asistente === 'lucia.torres@x.com',
+    'y el correo del responsable y el de su asistente, los sugeridos (nadie los tocó): ' + JSON.stringify(registrado.NOTIFICAR));
   ok(imagenesMandadas && imagenesMandadas['INS FRONTAL'] && imagenesMandadas['INS FRONTAL'].base64 === 'TRAZO',
     'manda el diagrama marcado, con las marcas');
   ok(imagenesMandadas && !imagenesMandadas['INS IZQUIERDA'], 'no manda los diagramas sin marcar (el servidor usa el dibujo en blanco)');
