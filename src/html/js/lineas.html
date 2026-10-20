@@ -6531,13 +6531,22 @@
         if (!vigente()) return;
         catalogosActivos = { indice: indice, vehiculos: vehiculos || [], hologramas: hologramas || [], uber: uber || [], cajasChicas: cajasChicas || [] };
         const conteo = {};
-        const suma = (lista, campo) => (lista || []).forEach((a) => { const k = normal(a[campo]); if (k) conteo[k] = (conteo[k] || 0) + 1; });
-        indice.equipos.forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
-        indice.lineas.filter((a) => a.suelta).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        // Cuenta solo lo que de verdad sigue activo -- lo dado de baja se queda viendo en el
+        // panel de la persona (mostrarColaborador no filtra nada), pero ya no debe sumar aquí
+        // (usuario, 20-oct: un vehículo/línea/equipo/holograma/Uber/caja dado de baja seguía
+        // contando como activo). Vehículos no necesita su propio filtro: apiListarVehiculosBasico
+        // ya excluye BAJA VEHICULAR desde el servidor.
+        const suma = (lista, campo, activo) => (lista || []).forEach((a) => {
+          if (activo && !activo(a)) return;
+          const k = normal(a[campo]); if (k) conteo[k] = (conteo[k] || 0) + 1;
+        });
+        const enUso = (a) => String(a.estatus || '').toUpperCase() === 'USO';
+        indice.equipos.filter(enUso).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
+        indice.lineas.filter((a) => a.suelta && enUso(a)).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         suma(vehiculos, 'RESPONSABLE_VEHICULO');
-        suma(hologramas, 'RESPONSABLE');
-        suma(uber, 'NOMBRE_COMPLETO');
-        suma(cajasChicas, 'RESPONSABLE');
+        suma(hologramas, 'RESPONSABLE', (h) => String(h.ESTATUS_EOX || '').toUpperCase() === 'HABILITADO');
+        suma(uber, 'NOMBRE_COMPLETO', (u) => String(u.ESTATUS || '').toUpperCase() === 'ACTIVO');
+        suma(cajasChicas, 'RESPONSABLE', (cch) => String(cch.ESTATUS || '').toUpperCase() === 'VIGENTE');
         colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
         aplicarFiltros();
       }).catch((e) => {
