@@ -4174,7 +4174,8 @@
             valor: actual['ESTATUS EQUIPO'] || (posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : ''), requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
           if (q.tieneLinea && !q.cancelacion) {
             const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
-            const opciones = vencido ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea;
+            // Al corregir también se puede dejar DISPONIBLE la vencida (el servidor no la manda sola)
+            const opciones = vencido ? (corregir ? form.estatusLinea.concat([LINEA_SIN_PANEL]) : [q.propuestaLinea, LINEA_SIN_PANEL]) : form.estatusLinea;
             estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: opciones,
               valor: opciones.indexOf(actual['ESTATUS LINEA']) >= 0 ? actual['ESTATUS LINEA'] : (vencido ? '' : q.propuestaLinea), requerido: 'SIEMPRE',
               ayudas: SIGNIFICADO_ESTATUS, notas: { [LINEA_SIN_PANEL]: NOTA_SIN_PANEL } }));
@@ -4222,8 +4223,9 @@
             const v = (c) => String(valores[columnaFila(q.id, c)] || '').trim();
             porEquipo[q.id] = { _ETIQUETA: 'NUCO ' + (q.nuco || '—'), DEPARTAMENTO: v('DEPARTAMENTO'), SEDE: v('SEDE'), 'OFICINA / DESARROLLO': v('OFICINA / DESARROLLO'),
               'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
-              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.propuestaLinea === 'EN PROCESO DE CANCELACION' ? q.propuestaLinea : v('ESTATUS LINEA')),
-              cancelacionLinea: q.tieneLinea && q.propuestaLinea === 'EN PROCESO DE CANCELACION' && v('ESTATUS LINEA') === LINEA_SIN_PANEL ? 'DIRECTO' : '' };
+              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.cancelacion || (!corregir && q.propuestaLinea === 'EN PROCESO DE CANCELACION') || v('ESTATUS LINEA') === LINEA_SIN_PANEL
+                ? 'EN PROCESO DE CANCELACION' : v('ESTATUS LINEA')),
+              cancelacionLinea: q.tieneLinea && !q.cancelacion && v('ESTATUS LINEA') === LINEA_SIN_PANEL ? 'DIRECTO' : '' };
           });
           if (captura !== sesion) return; // sin ventana de confirmación (usuario, 4-oct)
           // La inspección es obligatoria al mandar a resguardo (pendiente 2.6) y se captura dentro de la acción (decisión

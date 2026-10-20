@@ -288,7 +288,7 @@ const LineasResguardos = (function () {
         actual: abierto ? {
           'DEPARTAMENTO': txt(abierto['DEPARTAMENTO']), 'SEDE': txt(abierto['SEDE']), 'OFICINA / DESARROLLO': txt(abierto['OFICINA']),
           'ESTATUS EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')), 'ESTATUS LINEA': linea ? txt(LineasUtil.col(f, 'ESTATUS LINEA')) : '',
-          COMENTARIO: txt(abierto['COMENTARIO']), ESTADO: txt(abierto['ESTADO']),
+          COMENTARIO: txt(abierto['COMENTARIO']) || txt(abierto['MOTIVO']), ESTADO: txt(abierto['ESTADO']),
         } : null,
       });
     });
@@ -399,13 +399,14 @@ const LineasResguardos = (function () {
           return;
         }
         // Adendum vencido: la línea va a cancelación (usuario, 4-oct); quien captura eligió si pasa por el panel o queda
-        // LINEA_SIN_PANEL directo (usuario, 16-oct; pendiente 2.50). Vigente o sin fecha: lo que se eligió
-        const vencida = tieneLinea && !enCurso && propuestaLinea_(tipo, vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy)) === LINEA_CANCELACION;
-        if (vencida) pedido['ESTATUS LINEA'] = pedido.directa ? LINEA_SIN_PANEL : LINEA_CANCELACION;
-        if (enCurso) pedido['ESTATUS LINEA'] = LINEA_CANCELACION;
+        // LINEA_SIN_PANEL directo (usuario, 16-oct; pendiente 2.50). Vigente o sin fecha: lo que se eligió. Corregir resguardo
+        // no la manda solo: respeta lo que se eligió y la que ya está en Cancelaciones se queda como está (prueba del 20-oct)
+        const vencida = !corregir && tieneLinea && !enCurso && propuestaLinea_(tipo, vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy)) === LINEA_CANCELACION;
+        if (vencida || (corregir && pedido.directa)) pedido['ESTATUS LINEA'] = pedido.directa ? LINEA_SIN_PANEL : LINEA_CANCELACION;
+        if (enCurso) pedido['ESTATUS LINEA'] = corregir ? may(LineasUtil.col(f, 'ESTATUS LINEA')) : LINEA_CANCELACION;
         if (tieneLinea && !pedido['ESTATUS LINEA']) { omitidos.push({ id: id, nuco: nuco, motivo: 'Falta el estatus de la línea' }); return; }
         // Cómo deja la línea al equipo: SIGUE (ya está en Cancelaciones), PANEL (entra a Cancelaciones) o DIRECTA
-        const sale = !tieneLinea ? '' : (enCurso ? 'SIGUE' : ({ [LINEA_CANCELACION]: 'PANEL', [LINEA_SIN_PANEL]: 'DIRECTA' })[pedido['ESTATUS LINEA']] || '');
+        const sale = !tieneLinea ? '' : (enCurso ? (corregir ? '' : 'SIGUE') : ({ [LINEA_CANCELACION]: 'PANEL', [LINEA_SIN_PANEL]: 'DIRECTA' })[pedido['ESTATUS LINEA']] || '');
         const lineaQueda = tieneLinea && !sale;
         const motivoCancelacion = sale === 'PANEL' || sale === 'DIRECTA' ? motivoCancelacionDe_(f) : '';
         const antes = { estatus: txt(LineasUtil.col(f, 'ESTATUS EQUIPO')), estatusLinea: txt(LineasUtil.col(f, 'ESTATUS LINEA')), responsable: { nombre: txt(LineasUtil.col(f, 'RESPONSABLE')) } };
@@ -450,7 +451,7 @@ const LineasResguardos = (function () {
           // Corregir resguardo: se actualiza su renglón (el de un renglón viejo con su cancelación conserva el número)
           LineasDatos.actualizarFila(TAB, abierto._fila, Object.assign({
             'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': lineaQueda ? pedido['ESTATUS LINEA'] : '',
-            'COMENTARIO': pedido.COMENTARIO || motivo, 'ACTUALIZADO_EN': ahora, 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
+            'COMENTARIO': pedido.COMENTARIO || motivo, 'MOTIVO': motivo, 'ACTUALIZADO_EN': ahora, 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
           }, ubicacion, sale && !txt(abierto['CANCELACION']) ? { 'NUMERO': '' } : {},
           !txt(abierto['LINEA_AL_MANDAR']) && txt(abierto['NUMERO']) ? { 'LINEA_AL_MANDAR': txt(abierto['NUMERO']) } : {}));
           hechos.push({ id: id, nuco: nuco, cancelacion: cancelacion, porRecibir: false });

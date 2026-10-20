@@ -341,3 +341,30 @@ test('cada paso de la bandeja espera en su ventana hasta que contesta el servido
   assert.match(html, /\{ campo: 'LINEA_AL_MANDAR', titulo: 'Línea al mandar'/);
   assert.match(html, /\{ campo: 'ACCESORIOS', titulo: 'Accesorios'/);
 });
+
+// Prueba en /dev del 20-oct: Corregir resguardo del NUCO 0035 desligó su línea vencida (DISPONIBLE con el equipo)
+test('Corregir resguardo no separa la línea: la vencida se queda DISPONIBLE y la que está en Cancelaciones, como está', () => {
+  const abierto = (id) => ({ 'ID': 'RSG-' + id, 'REGISTRO_ID': id, 'ESTADO': 'EN RESGUARDO', 'MOTIVO': 'SE GUARDA' });
+  const vencida = equipo('EQU-1', '0035', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'ID LINEA': 'LIN-1', 'NUMERO TELEFONO': '6633231987',
+    'FIN PLAN': '01/01/2025', 'ESTATUS LINEA': 'DISPONIBLE' });
+  const t = cargar([vencida], [abierto('EQU-1')]);
+  assert.equal(t.R.formulario(['EQU-1'], usuario, { corregir: true }).equipos[0].actual.COMENTARIO, 'SE GUARDA', 'sin COMENTARIO, el MOTIVO');
+  t.R.mandar(['EQU-1'], { corregir: true, comentario: 'otra sede', porEquipo: { 'EQU-1': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE', SEDE: 'LEON' }) } }, usuario);
+  assert.equal(vencida['NUMERO TELEFONO'], '6633231987');
+  assert.equal(vencida['ESTATUS LINEA'], 'DISPONIBLE');
+  assert.equal(t.tablas.APP_RESGUARDOS.length, 1, 'sin cancelación nueva');
+  assert.equal(t.tablas.APP_RESGUARDOS[0].MOTIVO, 'otra sede');
+  // Renglón viejo que junta resguardo y cancelación: Corregir no la separa ni cambia su estatus
+  const enCurso = equipo('EQU-2', '0036', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'ID LINEA': 'LIN-2', 'NUMERO TELEFONO': '4420000036',
+    'FIN PLAN': '01/01/2027', 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' });
+  const t2 = cargar([enCurso], [Object.assign(abierto('EQU-2'), { 'NUMERO': '4420000036', 'CANCELACION': 'POR FIRMAR' })]);
+  t2.R.mandar(['EQU-2'], { corregir: true, comentario: 'otra sede', porEquipo: { 'EQU-2': pedido('PARA VENTA', { 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' }) } }, usuario);
+  assert.equal(enCurso['NUMERO TELEFONO'], '4420000036');
+  assert.equal(enCurso['ESTATUS LINEA'], 'EN PROCESO DE CANCELACION');
+  assert.equal(t2.tablas.APP_RESGUARDOS[0].ESTATUS_EQUIPO, 'PARA VENTA');
+  // Y si al corregir se elige mandarla a cancelación, entonces sí se separa y entra sola
+  const t3 = cargar([equipo('EQU-3', '0037', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'ID LINEA': 'LIN-3', 'NUMERO TELEFONO': '4420000037',
+    'FIN PLAN': '01/01/2027', 'ESTATUS LINEA': 'DISPONIBLE' })], [abierto('EQU-3')]);
+  t3.R.mandar(['EQU-3'], { corregir: true, comentario: 'ya no', porEquipo: { 'EQU-3': pedido('RESGUARDO', { 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' }) } }, usuario);
+  assert.deepEqual(t3.tablas.APP_RESGUARDOS.map((x) => [x.ESTADO, x.CANCELACION || '', x.NUMERO]), [['EN RESGUARDO', '', ''], ['', 'POR FIRMAR', '4420000037']]);
+});
