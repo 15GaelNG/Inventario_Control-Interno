@@ -79,11 +79,11 @@ const contexto = vm.createContext({
   Session: { getScriptTimeZone: () => 'America/Mexico_City' },
   Utilities: { formatDate: () => '12/10/2026 12:00' },
   MailApp: { sendEmail: (opciones) => { correos.push(opciones); } },
-  // El match con Tickets (PendientesInspeccionService.intentarMatch) se prueba aparte
-  // (tests/pendientes-inspeccion.test.js); aquí solo importa que registrar() le pase lo
-  // que escribió el inspector y meta lo que regresa en el correo.
+  // El match con Help Desk (revisarCargaHelpdesk) se prueba aparte (tests/pendientes-inspeccion.test.js);
+  // aquí solo importa que registrar() le pase lo que escribió el inspector, el correo YA VALIDADO
+  // del aviso original, y meta lo que regresa en el correo.
   PendientesInspeccionService: {
-    agregar: (filaInspeccion, idInspeccion, items) => {
+    agregar: (filaInspeccion, idInspeccion, items, correoResponsable) => {
       const limpios = (items || [])
         .map((it) => ({
           asunto: String((it && it.asunto) || '').trim(),
@@ -91,7 +91,7 @@ const contexto = vm.createContext({
           prioridad: /^URGENTE$/i.test(String((it && it.prioridad) || '').trim()) ? 'URGENTE' : 'NO URGENTE',
         }))
         .filter((it) => it.asunto);
-      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios };
+      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios, correoResponsable };
       return limpios.map((it) => ({
         ASUNTO: it.asunto, 'FAMILIA O GRUPO A REPORTAR': it.familia, PRIORIDAD: it.prioridad,
       }));
@@ -217,6 +217,8 @@ ok(pendientesRegistrados && pendientesRegistrados.idInspeccion === conPendientes
 ok(pendientesRegistrados.filaInspeccion['PLACAS'] === 'GGR658F', 'y la fila ya armada (placas, nuco, etc.)');
 ok(pendientesRegistrados.items.length === 1 && pendientesRegistrados.items[0].asunto === 'Reparación de faro',
   'el renglón sin asunto real se ignora');
+ok(pendientesRegistrados.correoResponsable === 'responsable@x.com',
+  'le pasa el correo YA VALIDADO del aviso (no el de Capital Humano, no el del inspector): ' + pendientesRegistrados.correoResponsable);
 ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
   'el correo trae su propia sección con lo que hay que subir a Help Desk');
 ok(/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');

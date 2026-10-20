@@ -447,7 +447,11 @@ const InspeccionesService = (function () {
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
-      pendientes = PendientesInspeccionService.agregar(fila, id, p.PENDIENTES);
+      // El MISMO correo validado que recibió el aviso original (no el de Capital Humano): así el
+      // recordatorio de un pendiente le llega exactamente a quien ya se avisó, aunque el inspector
+      // lo haya corregido a mano al capturar.
+      const correoResponsable = correoValido_(p.NOTIFICAR && p.NOTIFICAR.responsable) ? limpiar_(p.NOTIFICAR.responsable) : '';
+      pendientes = PendientesInspeccionService.agregar(fila, id, p.PENDIENTES, correoResponsable);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;

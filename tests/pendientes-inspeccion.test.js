@@ -40,7 +40,7 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
     { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
     { asunto: '   ', familia: 'OTROS', prioridad: 'NO URGENTE' },
     { asunto: 'Cambio de llanta', familia: 'ACCESORIOS', prioridad: 'raro' },
-  ]);
+  ], 'responsable@x.com');
   ok(e.libros.libro.getSheetByName('PENDIENTES INSPECCION') !== null, 'se crea sola al primer uso');
   ok(creados.length === 2, 'el renglón sin asunto real se ignora: ' + creados.length);
   ok(creados[0]['ID'] && /^PDI-/.test(creados[0]['ID']), 'cada pendiente nace con su propio ID (prefijo PDI): ' + creados[0]['ID']);
@@ -49,7 +49,14 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
   ok(creados[0]['PLACAS'] === 'ggr658f' && creados[0]['ID INSPECCION'] === '2026_25_1', 'se liga a la inspección y copia sus datos');
   ok(creados[0]['ESTATUS'] === 'SIN CARGAR EN HELPDESK' && creados[0]['ID TICKET HELPDESK'] === '', 'nace SIN CARGAR y sin ticket');
   ok(creados[1]['PRIORIDAD'] === 'NO URGENTE', 'una prioridad que no es "URGENTE" cae en NO URGENTE: ' + creados[1]['PRIORIDAD']);
+  ok(creados[0]['CORREO RESPONSABLE'] === 'responsable@x.com',
+    'guarda el correo YA VALIDADO del aviso original, el mismo para todos los pendientes de esa inspección');
   ok(tocados.indexOf('PENDIENTES INSPECCION') !== -1, 'invalida la caché de la hoja al escribir');
+
+  console.log('1b. Sin correo validado al capturar (p. ej. no se llenó el aviso), se guarda vacío');
+  const { P: P2 } = entorno();
+  const sinCorreo = P2.agregar(FILA_INSPECCION, '2026_25_2', [{ asunto: 'Algo', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  ok(sinCorreo[0]['CORREO RESPONSABLE'] === '', 'queda vacío, no "undefined" ni null: "' + sinCorreo[0]['CORREO RESPONSABLE'] + '"');
 }
 
 console.log('2. agregar(): sin items reales no crea la hoja ni nada');
@@ -119,34 +126,44 @@ console.log('6. listar(): la vista de Kike -- vacía si nunca hubo nada, y con f
   ok(typeof lista[0]['FECHA'] === 'string', 'la fecha sale como texto ISO, no como Date: ' + typeof lista[0]['FECHA']);
 }
 
-console.log('7. enviarRecordatorio(): manda el correo al responsable (buscado en Capital Humano) y anota cuándo');
+console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso original, no al de Capital Humano');
 {
   const correos = [];
-  const { e, P } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }], correos);
-  const creados = P.agregar(FILA_INSPECCION, '2026_25_1', [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }]);
+  // Capital Humano dice OTRO correo (o nada): no debería importarle, porque ya tiene el real guardado
+  const { e, P } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'el-de-capital-humano@x.com' }], correos);
+  const creados = P.agregar(FILA_INSPECCION, '2026_25_1',
+    [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], 'el-que-se-avisco@x.com');
   const res = P.enviarRecordatorio('token', creados[0]['ID']);
-  ok(res.enviado === true && res.correo === 'jorge@x.com', 'regresa a quién se le mandó');
-  ok(correos.length === 1 && correos[0].to === 'jorge@x.com', 'de verdad se mandó el correo');
+  ok(res.enviado === true && res.correo === 'el-que-se-avisco@x.com',
+    'usa el correo guardado del aviso original, no el de Capital Humano: ' + res.correo);
+  ok(correos.length === 1 && correos[0].to === 'el-que-se-avisco@x.com', 'de verdad se mandó ahí');
   ok(/2026_25_1 - Reparaci.n de faro/.test(correos[0].htmlBody), 'con el asunto exacto que debe pegar en Help Desk');
   const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
   const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
   ok(/^\d{4}-\d{2}-\d{2}T/.test(filas[0][col('ULTIMO RECORDATORIO')]), 'y queda anotado cuándo se mandó el recordatorio');
 
-  console.log('7b. No se puede recordar uno que ya está cargado en Help Desk');
-  const { e: e2, P: P2 } = entorno([{ 'ID TICKET HD': 1, TITULO: '2026_25_1 - Reparación de faro', DESCRIPCION: '' }],
-    [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }]);
+  console.log('7b. Sin correo guardado (pendiente de antes, o no se validó ninguno), cae a Capital Humano');
+  const { P: P2 } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }]);
   const creados2 = P2.agregar(FILA_INSPECCION, '2026_25_1', [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }]);
-  P2.revisarCargaHelpdesk();
-  let truenaYaCargado = null;
-  try { P2.enviarRecordatorio('token', creados2[0]['ID']); } catch (err) { truenaYaCargado = err.message; }
-  ok(/ya está cargado/.test(truenaYaCargado || ''), 'truena en vez de mandar un recordatorio de algo que ya se resolvió: ' + truenaYaCargado);
-  void e2;
+  ok(creados2[0]['CORREO RESPONSABLE'] === '', 'este, a propósito, no trae correo guardado');
+  const res2 = P2.enviarRecordatorio('token', creados2[0]['ID']);
+  ok(res2.correo === 'jorge@x.com', 'cae al de Capital Humano por nombre, como antes: ' + res2.correo);
 
-  console.log('7c. Sin su correo en Capital Humano, truena claro (no manda nada a ciegas)');
-  const { P: P3 } = entorno([], []);
-  const creados3 = P3.agregar(FILA_INSPECCION, '2026_25_1', [{ asunto: 'Otra cosa', familia: 'OTROS', prioridad: 'NO URGENTE' }]);
+  console.log('7c. No se puede recordar uno que ya está cargado en Help Desk');
+  const { e: e3, P: P3 } = entorno([{ 'ID TICKET HD': 1, TITULO: '2026_25_1 - Reparación de faro', DESCRIPCION: '' }],
+    [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }]);
+  const creados3 = P3.agregar(FILA_INSPECCION, '2026_25_1', [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], 'resp@x.com');
+  P3.revisarCargaHelpdesk();
+  let truenaYaCargado = null;
+  try { P3.enviarRecordatorio('token', creados3[0]['ID']); } catch (err) { truenaYaCargado = err.message; }
+  ok(/ya está cargado/.test(truenaYaCargado || ''), 'truena en vez de mandar un recordatorio de algo que ya se resolvió: ' + truenaYaCargado);
+  void e3;
+
+  console.log('7d. Sin correo guardado NI en Capital Humano, truena claro (no manda nada a ciegas)');
+  const { P: P4 } = entorno([], []);
+  const creados4 = P4.agregar(FILA_INSPECCION, '2026_25_1', [{ asunto: 'Otra cosa', familia: 'OTROS', prioridad: 'NO URGENTE' }]);
   let truenaSinCorreo = null;
-  try { P3.enviarRecordatorio('token', creados3[0]['ID']); } catch (err) { truenaSinCorreo = err.message; }
+  try { P4.enviarRecordatorio('token', creados4[0]['ID']); } catch (err) { truenaSinCorreo = err.message; }
   ok(/No se encontr. el correo/.test(truenaSinCorreo || ''), 'avisa que no encontró el correo: ' + truenaSinCorreo);
 }
 

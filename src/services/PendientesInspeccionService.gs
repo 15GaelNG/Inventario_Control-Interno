@@ -36,7 +36,7 @@ const PendientesInspeccionService = (function () {
   const ENCABEZADOS = [
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
     'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'FECHA CARGADO',
-    'ULTIMO RECORDATORIO',
+    'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
@@ -88,9 +88,12 @@ const PendientesInspeccionService = (function () {
    *   anteponerlo al asunto (el responsable lo pega tal cual en Help Desk: es lo que hace el
    *   match exacto en revisarCargaHelpdesk())
    * @param {Array} items          [{ asunto, familia, prioridad }] -- lo que escribió el inspector
+   * @param {string} [correoResponsable] el correo YA VALIDADO que de verdad recibió el aviso original
+   *   (InspeccionesService.avisarInspeccion_) -- se guarda tal cual para que el recordatorio le
+   *   llegue a la MISMA persona, aunque el inspector lo haya corregido a mano al capturar
    * @return {Array} los pendientes creados (mismas columnas que la hoja), para el correo
    */
-  function agregar(filaInspeccion, idInspeccion, items) {
+  function agregar(filaInspeccion, idInspeccion, items, correoResponsable) {
     const limpios = (items || [])
       .map((it) => ({
         asunto: limpiar_(it && it.asunto),
@@ -121,6 +124,7 @@ const PendientesInspeccionService = (function () {
         'ID TICKET HELPDESK': '',
         'FECHA CARGADO': '',
         'ULTIMO RECORDATORIO': '',
+        'CORREO RESPONSABLE': limpiar_(correoResponsable),
       };
       hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
       return fila;
@@ -201,9 +205,10 @@ const PendientesInspeccionService = (function () {
 
   /**
    * Le manda al responsable un recordatorio de un pendiente que sigue SIN CARGAR -- Kike lo
-   * dispara a mano desde su vista. El correo del responsable no se guarda en ningún lado (ver
-   * InspeccionesService.avisarInspeccion_): se busca por su nombre en Capital Humano, igual que
-   * hace el wizard al capturar.
+   * dispara a mano desde su vista. Va al MISMO correo que recibió el aviso original de esa
+   * inspección (CORREO RESPONSABLE, guardado por agregar()); si ese pendiente es de antes de que
+   * existiera esa columna (o nunca se capturó un correo válido), se busca por su nombre en
+   * Capital Humano, como antes.
    * @return {{enviado: true, correo: string}}
    */
   function enviarRecordatorio(token, id) {
@@ -215,14 +220,17 @@ const PendientesInspeccionService = (function () {
     if (normalizar_(fila['ESTATUS']) !== ESTATUS_SIN_CARGAR) {
       throw new Error('Ese pendiente ya está cargado en Help Desk: no hace falta recordarlo.');
     }
-    const nombreBuscado = normalizar_(fila['RESPONSABLE']);
-    if (!nombreBuscado) throw new Error('Este pendiente no tiene responsable capturado.');
-    const colaborador = (CapitalHumano.listarColaboradores(token) || [])
-      .find((c) => normalizar_(c.NOMBRE) === nombreBuscado);
-    if (!colaborador || !limpiar_(colaborador.CORREO)) {
-      throw new Error('No se encontró el correo de ' + fila['RESPONSABLE'] + ' en Capital Humano; avísale directamente.');
+    let correo = limpiar_(fila['CORREO RESPONSABLE']);
+    if (!correo) {
+      const nombreBuscado = normalizar_(fila['RESPONSABLE']);
+      if (!nombreBuscado) throw new Error('Este pendiente no tiene responsable capturado.');
+      const colaborador = (CapitalHumano.listarColaboradores(token) || [])
+        .find((c) => normalizar_(c.NOMBRE) === nombreBuscado);
+      if (!colaborador || !limpiar_(colaborador.CORREO)) {
+        throw new Error('No se encontró el correo de ' + fila['RESPONSABLE'] + ' en Capital Humano; avísale directamente.');
+      }
+      correo = limpiar_(colaborador.CORREO);
     }
-    const correo = limpiar_(colaborador.CORREO);
     const asunto = 'Recordatorio: pendiente de inspección sin subir a Help Desk';
     const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
       '<h2 style="margin:0 0 12px;font-size:18px">Pendiente sin subir a Help Desk</h2>' +
