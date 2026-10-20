@@ -414,6 +414,10 @@ const LineasEscritura = (function () {
     const clase = a ? may(a['TIPO']) : clase_('equipo', limpio_(cambios['ESTATUS EQUIPO']) || e['ESTATUS EQUIPO']);
     const estatus = limpio_(cambios['ESTATUS LINEA']) || (clase === 'PERSONA' ? 'USO' : 'DISPONIBLE');
     if (existente) {
+      // Una línea en Cancelaciones no pasa a otro equipo (pendiente 3.12): la retira Pau
+      if (typeof LineasResguardos !== 'undefined') {
+        LineasResguardos.exigirSinCancelacion({ 'ID': existente['ID'], 'ID LINEA': existente['ID'], 'NUMERO TELEFONO': existente['NUMERO TELEFONO'] });
+      }
       const suya = h.ASIGNACIONES.filas.filter((x) => String(x['ID LINEA'] || '') === String(existente['ID']) && !x['FECHA FIN'])[0];
       if (suya && suya['ID EQUIPO']) {
         const otro = h.EQUIPOS.porId[String(suya['ID EQUIPO'])];
@@ -511,9 +515,11 @@ const LineasEscritura = (function () {
    * asignación del registro y abre dos: la del equipo, igual que estaba (su persona o su resguardo), y la de la línea
    * sola y guardada (departamento DISPONIBLE, la sede y la oficina de antes), con ESTATUS LINEA DISPONIBLE. Funciona
    * también con el equipo guardado, donde cambiar el estatus no los separa (los dos quedan en RESGUARDO).
-   * Regresa { idLinea, campos, refs }.
+   * opciones.estatus: el que conserva la línea (la que ya está en Cancelaciones sigue EN PROCESO DE CANCELACION; pendiente
+   * 3.12). Regresa { idLinea, campos, refs }.
    */
-  function separarLinea(f, ahora) {
+  function separarLinea(f, ahora, opciones) {
+    const estatus = (opciones && opciones.estatus) || 'DISPONIBLE';
     const h = hojas();
     const id = (c) => String(f[c] === null || f[c] === undefined ? '' : f[c]).trim();
     const e = id('ID EQUIPO') ? h.EQUIPOS.porId[id('ID EQUIPO')] || null : null;
@@ -533,9 +539,9 @@ const LineasEscritura = (function () {
     }))['ID']);
     const campos = [{ campo: 'NUMERO TELEFONO', antes: texto_(l['NUMERO TELEFONO']), despues: '' }];
     sinPinWhatsapp_(e, campos);
-    if (may(l['ESTATUS LINEA']) !== 'DISPONIBLE') {
-      campos.push({ campo: 'ESTATUS LINEA', antes: texto_(l['ESTATUS LINEA']), despues: 'DISPONIBLE' });
-      actualizar_('LINEAS', l, { 'ESTATUS LINEA': 'DISPONIBLE' });
+    if (may(l['ESTATUS LINEA']) !== estatus) {
+      campos.push({ campo: 'ESTATUS LINEA', antes: texto_(l['ESTATUS LINEA']), despues: estatus });
+      actualizar_('LINEAS', l, { 'ESTATUS LINEA': estatus });
     }
     tocados_.push(String(l['ID']));
     LineasLectura.olvidar();

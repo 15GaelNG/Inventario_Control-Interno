@@ -87,12 +87,12 @@ const LineasRepo = (function () {
     'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO',
     'RESPONSIVA', 'TIPO', 'COMPAÑIA', 'COSTO PLAN', 'NUCO', 'COMENTARIOS'];
 
-  const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
+  const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel'];
   // numerosAnteriores: los que tuvo la línea por un cambio de número (8-oct); la búsqueda de la tabla los encuentra
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v9'; // v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v10'; // v10: panel (su renglón abierto en Resguardos, 20-oct; pendiente 3.12); v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
@@ -251,12 +251,16 @@ const LineasRepo = (function () {
 
   // ---------------- Índices de listados (caché) ----------------
 
-  function filaIndiceEquipo_(equipo, linea) {
+  /**
+   * panel: el ESTADO de su renglón abierto en Resguardos y cancelaciones (PENDIENTE DE RECEPCION o EN RESGUARDO) o null;
+   * la pantalla cambia «Mandar a resguardo» por «Corregir resguardo» y «Quitar del panel» (pendiente 3.12).
+   */
+  function filaIndiceEquipo_(equipo, linea, panel) {
     const r = equipo.responsable || {};
     return [equipo._id, equipo.nuco || null, equipo.tipo || null, equipo.modelo || null, equipo.imei || null, equipo.estatus || null,
       r.nombre || null, r.departamento || null, r.sede || null,
       equipo.lineaId || null, linea ? linea.numero || null : null, linea ? linea.compania || null : null, linea ? linea.estatus || null : null,
-      (equipo.legado || {}).tipo || null]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
+      (equipo.legado || {}).tipo || null, panel || null]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
   }
 
   function filaIndiceLinea_(linea, equipo, cambiosNumero) {
@@ -413,7 +417,7 @@ const LineasRepo = (function () {
       if (typeof CacheHojas === 'undefined') return;
       const L = typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(TAB.LINEAS) ? LineasLectura : null;
       const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS, L.HOJA_VIEJA] : [TAB.LINEAS];
-      CacheHojas.versiones(hojas.concat([TAB.MOV]).map((n) => [LineasDatos.id(), n]));
+      CacheHojas.versiones(hojas.concat([TAB.MOV, 'APP_RESGUARDOS']).map((n) => [LineasDatos.id(), n]));
     } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
   }
 
@@ -429,10 +433,11 @@ const LineasRepo = (function () {
     const lineas = [];
     const vista = [];
     const cambiosNumero = cambiosDeNumero_();
+    const panel = enPanel_();
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const r = convertirRegistro(f);
       if (!r) return;
-      if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea));
+      if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea, panelDe_(panel, f)));
       if (r.linea) lineas.push(filaIndiceLinea_(r.linea, r.equipo, cambiosNumero));
       if (r.equipo || r.linea) vista.push(filaVista_(f, r));
     });
@@ -446,6 +451,10 @@ const LineasRepo = (function () {
     LineasDatos.tiempo('índice (armado completo)', inicio);
     return ix;
   }
+
+  /** Equipos con su renglón abierto en el panel de Pau ({ ID de registro: ESTADO }). */
+  const enPanel_ = () => (typeof LineasResguardos !== 'undefined' ? LineasResguardos.abiertosPorEquipo() : {});
+  const panelDe_ = (panel, f) => LineasDatos.idsDeFila(f).map((k) => panel[k]).filter(Boolean)[0] || null;
 
   /**
    * Tras una operación: vuelve a leer los registros tocados y actualiza la caché del índice.
@@ -463,6 +472,7 @@ const LineasRepo = (function () {
     // Hojas nuevas: una línea que se separa de su equipo aparece como registro aparte
     const todos = (ids || []).concat(LineasLectura.activo() ? LineasEscritura.tocados() : []);
     let cambiosNumero = null;
+    let panel = null;
     todos.filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).forEach((id) => {
       const f = leerRegistroPorId(id);
       const r = f ? convertirRegistro(f) : null;
@@ -478,7 +488,8 @@ const LineasRepo = (function () {
         if (ix && ix.vista) ix.vista.filas.push(fv);
       }
       if (r && r.equipo) {
-        const fe = LineasUtil.paraCliente(filaIndiceEquipo_(r.equipo, r.linea));
+        if (!panel) panel = enPanel_();
+      const fe = LineasUtil.paraCliente(filaIndiceEquipo_(r.equipo, r.linea, panelDe_(panel, f)));
         cambios.equipos.push(fe);
         if (ix) ix.equipos.filas.push(fe);
       } else {
@@ -1010,6 +1021,8 @@ const LineasRepo = (function () {
     ASIGNAR_LINEA: 'Vincular línea', RETIRAR_LINEA: 'Desvincular línea', CAMBIO_EQUIPO: 'Cambio de equipo',
     // Resguardos y cancelaciones (30-sep)
     RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta',
+    // Panel de Pau (pendiente 3.12)
+    CORREGIR_RESGUARDO: 'Corrección de resguardo', QUITAR_PANEL: 'Quitado del panel', RETIRAR_CANCELACION: 'Cancelación retirada',
     // Acciones con nombre (etapa 3, paso 2): Entregar y el cierre (vendido, donado, desechado o extravío-robo)
     ENTREGA: 'Entrega', CIERRE: 'Cierre', NOTA: 'Nota', CAMBIO_LINEA: 'Cambio de línea',
     // Editar (corrige y cambia estatus, 4-oct)

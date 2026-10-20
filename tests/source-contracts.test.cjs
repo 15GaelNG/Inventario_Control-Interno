@@ -305,7 +305,7 @@ test('los formularios de inspección y responsiva siguen el orden y las etiqueta
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: deResp\('COMENTARIO', ''\), requerido: enAccion \|\| resp \? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
   assert.match(captura, /campo_\('COMENTARIO', 'Comentario', 'area', \{ valor: '', requerido: 'SIEMPRE', valida: 'COMENTARIOS' \}\)/);
   assert.match(captura, /e\.valida === 'COMENTARIOS' && valor\.length <= 3/);
-  assert.match(read('src/html/js/lineas.html'), /campo\('_MOTIVO', 'Comentario', 'area', \{ requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' \}\)/);
+  assert.match(read('src/html/js/lineas.html'), /campo\('_MOTIVO', 'Comentario', 'area', \{ requerido: 'SIEMPRE', valor: corregir && equipos\.length === 1 && equipos\[0\]\.actual \? equipos\[0\]\.actual\.COMENTARIO : '',\s+valida: 'COMENTARIOS' \}\)/);
   assert.doesNotMatch(captura, /'OBSERVACIONES'/);
   // Accesorios y accesos empiezan con los del equipo (la Responsiva, 16-oct; Reasignar los dejaba vacíos)
   assert.match(captura, /const acceso = \(c\) => v\(c\);/);
@@ -1164,7 +1164,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v9';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v10';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1896,17 +1896,17 @@ test('Mandar a resguardo (30-sep): persona en blanco, línea según el adendum, 
   assert.doesNotMatch(read('src/config/Entornos.gs'), /LINEAS_APROBADORES_RESGUARDO/);
   assert.deepEqual(R.ESTATUS_EQUIPO_RESGUARDO, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
 
-  // Confirmar la cancelación: línea CANCELADA, TIPO sin línea y solo si el registro conserva ese número
+  // Confirmar la cancelación: línea CANCELADA y TIPO sin línea, esté donde esté la línea (pendiente 3.12)
   assert.match(src, /Object\.assign\(\{\}, LineasRepo\.VALORES_SIN_LINEA, \{ 'ESTATUS LINEA': 'CANCELADA' \}\)/);
   assert.match(src, /cambios\['TIPO'\] = LineasRepo\.tipoSinLinea/);
-  assert.match(src, /LineasUtil\.digitos\(LineasUtil\.col\(f, 'NUMERO TELEFONO'\)\) !== LineasUtil\.digitos\(sol\['NUMERO'\]\)/);
+  assert.match(src, /'CANCELACION_LINEA', usuario, porId, true\);/);
   // Aviso solo para quien aprueba
   const notif = read('src/services/lineas/LineasNotificaciones.gs');
   assert.match(notif, /return !para \|\| \(para === PARA_APROBADORES && esAprobador\);/);
   // Cliente: Mandar a resguardo desde 1, con su propio formulario; vista de la bandeja
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /async function abrirResguardo\(filas, opciones\)/);
-  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\),\s+Object\.assign\(\{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo \}, extra\)\)/);
+  assert.match(cliente, /llamar\('apiLineasMandarResguardo', equipos\.map\(\(q\) => q\.id\),\s+Object\.assign\(\{ comentario: valores\._MOTIVO, ticket: valores\._TICKET, porEquipo: porEquipo, corregir: corregir \}, extra\)\)/);
   // La inspección de cada equipo que viene de una persona, dentro de la acción (pendiente 2.6; usuario, 3-oct)
   assert.match(cliente, /const hechas = await inspeccionesEnFlujo\(deUnaPersona, 'al mandarlo a resguardo', \{/);
   assert.match(src, /LineasCaptura\.exigirInspeccion\(\(d\.inspecciones \|\| \{\}\)\[id\], LineasDatos\.idsDeFila\(f\),/);
@@ -1927,15 +1927,13 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
   // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
   assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
-  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa; si ya está en la bandeja, el que tiene
-  // se ve sin poder elegirlo (usuario, 13 y 20-oct; lo prueba lineas-resguardo-cancelacion)
+  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa; el que ya está en el panel se corrige,
+  // sin restricciones (pendiente 3.12; sustituye al estatus fijo del 20-oct; lo prueba lineas-resguardo-cancelacion)
   assert.match(cliente, /const posibles = q\.opcionesEstatus \|\| form\.estatusEquipo;/);
-  assert.match(cliente, /const fijas = q\.estatusFijo \? \[q\.estatusFijo\] : \[\];/);
-  assert.match(cliente, /fija\(v\) \? ' ln-pastilla-fija" disabled aria-disabled="true' : ''/);
-  assert.match(cliente, /if \(pastilla\.disabled\) return;/);
+  assert.doesNotMatch(cliente, /estatusFijo|ln-pastilla-fija/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);
-  // Si ya tiene su renglón abierto no se pide otra recepción: se actualiza; sin renglón abierto, Pau lo recibe
-  assert.match(resg, /const abierto = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0 \? abiertoDe_\(abiertos, f\) : null;/);
+  // Con su renglón abierto se corrige (Corregir resguardo, pendiente 3.12); sin renglón abierto, Pau lo recibe
+  assert.match(resg, /if \(!corregir && abierto\) \{ omitidos\.push/);
   assert.match(resg, /LineasDatos\.actualizarFila\(TAB, abierto\._fila,/);
   assert.match(resg, /'ESTADO': ESTADO\.PENDIENTE, 'RECIBIO': '',/);
 });
@@ -1984,8 +1982,8 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(resg, /function mandarCancelacion\(ids, datos, usuario, opciones\)/);
   assert.match(resg, /'SOLICITO_CORREO': usuario\.correo, 'SOLICITO_NOMBRE': usuario\.nombre, 'ESTADO': '',/);
   // Con cualquiera de los IDs del registro: la bandeja guarda el que tenía al mandarlo (reestructura, etapa 3)
-  assert.match(resg, /if \(enCancelacion_\(cancelando, f, numero\)\)/);
-  assert.match(resg, /LineasDatos\.idsDeFila\(f\)\.some\(\(k\) => cancelando\[claveCancelacion_\(k, numero\)\]\)/);
+  assert.match(resg, /if \(enCancelacion_\(cancelando, f\)\)/);
+  assert.match(resg, /const ids = \[txt\(LineasUtil\.col\(f, 'ID LINEA'\)\)\]\.concat\(LineasDatos\.idsDeFila\(f\)\)\.filter\(Boolean\);/);
   // Una línea suelta conserva su número al confirmar la cancelación
   assert.match(resg, /if \(!LineasRepo\.TIPOS_CON_EQUIPO\[tipo\]\) return \{ 'ESTATUS LINEA': 'CANCELADA' \};/);
 });
@@ -2311,7 +2309,7 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   // Adendum vencido: la línea va a cancelación y se elige panel o CANCELADA directo (usuario, 16-oct; pendiente 2.50);
   // vigente o sin fecha, se elige DISPONIBLE o cancelación
   assert.match(resg, /const vencido = q\.propuestaLinea === 'EN PROCESO DE CANCELACION';/);
-  assert.match(resg, /'Estatus de la línea', 'escala', \{ opciones: vencido \? \[q\.propuestaLinea, LINEA_SIN_PANEL\] : form\.estatusLinea,\s+valor: vencido \? '' : q\.propuestaLinea,/);
+  assert.match(resg, /const opciones = vencido \? \[q\.propuestaLinea, LINEA_SIN_PANEL\] : form\.estatusLinea;[\s\S]{0,200}valor: opciones\.indexOf\(actual\['ESTATUS LINEA'\]\) >= 0 \? actual\['ESTATUS LINEA'\] : \(vencido \? '' : q\.propuestaLinea\),[\s\S]{0,120}notas: \{ \[LINEA_SIN_PANEL\]: NOTA_SIN_PANEL \}/);
   assert.match(read('src/services/lineas/LineasResguardos.gs'), /if \(vencida\) pedido\['ESTATUS LINEA'\] = pedido\.directa \? LINEA_SIN_PANEL : LINEA_CANCELACION;/);
   // Sin ventana de confirmación
   assert.doesNotMatch(resg, /Confirmar\.pedir/);

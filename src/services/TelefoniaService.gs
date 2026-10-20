@@ -850,16 +850,29 @@ const TelefoniaService = (function () {
    */
   function usuarioResguardo_(sesion) {
     const permisos = sesion.permisos || Permisos.deCorreo(sesion.correo);
-    return Object.assign(usuarioOperacion_(sesion), { puedeAprobar: permisos[MODULO_RESGUARDOS] === Permisos.EDICION });
+    // puedeOperar: los de Líneas, que en el panel corrigen y quitan lo que mandaron (pendiente 3.12)
+    return Object.assign(usuarioOperacion_(sesion), { puedeAprobar: permisos[MODULO_RESGUARDOS] === Permisos.EDICION,
+      puedeOperar: permisos[MODULO_OPERAR] === Permisos.EDICION });
   }
 
   // Mandar a resguardo o a cancelación se hace desde Líneas telefónicas: pide su edición, no la de la bandeja (con
   // solo lectura en la bandeja, el área de Líneas sigue mandando; usuario, 12-oct)
 
-  /** Formulario de "Mandar a resguardo": datos de cada equipo y la propuesta de su línea. */
-  function formularioResguardo(token, ids) {
+  /** Formulario de "Mandar a resguardo" (o de "Corregir resguardo", opciones.corregir): cada equipo y la propuesta de su línea. */
+  function formularioResguardo(token, ids, opciones) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion)));
+    return LineasUtil.paraCliente(LineasResguardos.formulario(ids, usuarioResguardo_(sesion), { corregir: !!(opciones && opciones.corregir) }));
+  }
+
+  /** Quitar del panel (pendiente 3.12): solo los de Líneas. La vista dice qué regresa y qué se queda de cada equipo. */
+  function vistaQuitarPanel(token, ids) {
+    operar_(token);
+    return LineasUtil.paraCliente(LineasResguardos.vistaQuitar(ids));
+  }
+
+  function quitarDelPanel(token, ids, datos) {
+    const sesion = operar_(token);
+    return conPasosEnDev_('apiLineasQuitarDelPanel', () => LineasUtil.paraCliente(LineasResguardos.quitarDelPanel(ids, datos || {}, usuarioResguardo_(sesion))));
   }
 
   /**
@@ -900,7 +913,7 @@ const TelefoniaService = (function () {
     return JSON.stringify(LineasUtil.paraCliente(LineasResguardos.bandeja(usuarioResguardo_(sesion))));
   }
 
-  /** accion: RECIBIR | ENTREGAR | VENDIDO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA. */
+  /** accion: RECIBIR | ENTREGAR | VENDIDO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA | RETIRAR_CANCELACION. */
   function accionBandejaResguardo(token, accion, ids, datos) {
     // Cada paso además exige ser aprobador (LineasResguardos.exigirAprobador_); un CLIENT nunca
     const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
@@ -914,6 +927,7 @@ const TelefoniaService = (function () {
       CARTA_FIRMADA: () => R.faseCancelacion(ids, R.FASE.FIRMADA, d, u),
       CARTA_ENVIADA: () => R.faseCancelacion(ids, R.FASE.ENVIADA, d, u),
       CANCELADA: () => R.confirmarCancelacion(ids, d, u),
+      RETIRAR_CANCELACION: () => R.retirarCancelacion(ids, d, u),
     }[String(accion || '').toUpperCase()];
     if (!hacer) throw new Error('Acción desconocida: ' + accion);
     return LineasUtil.paraCliente(hacer());
@@ -929,7 +943,7 @@ const TelefoniaService = (function () {
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
-    formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo,
+    formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo, vistaQuitarPanel, quitarDelPanel,
     MODULOS_LINEAS,
     filtrarIndice_, deptoDeRegistro_,   // expuestas para las pruebas
   };

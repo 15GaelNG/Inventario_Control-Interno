@@ -25,7 +25,10 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   // La pantalla: el botón «Cambiar estatus» y todas las acciones sin depender del estatus
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /texto: '¿Qué pasó\?'|function (abrirQuePaso|accionesPosibles|permiteAccion|abrirCierre|abrirCambio)\(|ACCION_ENTREGAR|estatusPosibles/);
-  assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: operar, alHacer: \(f\) => abrirResguardo\(f\)/);
+  assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: \(f\) => operar\(\) && !f\.some\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f\)/);
+  // Ya en el panel de Pau: Corregir resguardo y, si aún no lo recibe, Quitar del panel (pendiente 3.12)
+  assert.match(cliente, /texto: 'Corregir resguardo'[^\n]*\n\s+visible: \(f\) => operar\(\) && f\.every\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f, \{ corregir: true \}\)/);
+  assert.match(cliente, /visible: \(f\) => operar\(\) && f\.every\(\(r\) => r\.panel === 'PENDIENTE DE RECEPCION'\), alHacer: \(f\) => quitarDelPanel\(f\.map\(\(r\) => r\.id\), trasQuitar\)/);
   // Reasignar se volvió la Responsiva (pendiente 2.49, usuario 16-oct): solo revisa lo que ya no se entrega
   assert.match(cliente, /texto: 'Responsiva'[^\n]*visible: operar,/);
   assert.doesNotMatch(cliente, /apiLineasAgregarNota|esNota/);
@@ -47,10 +50,13 @@ test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel d
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /abrirCambioEstatus|fichaDeFila|texto: 'Cambiar estatus'/);
   const editar = cliente.slice(cliente.indexOf('function abrirEditor('), cliente.indexOf('// ---- Captura: inspección y responsiva nuevas'));
-  // Ya no abre Mandar a resguardo ni Mandar a cancelación: avisa, se confirma y se guarda con sinPanel
+  // Ya no abre Mandar a resguardo ni Mandar a cancelación: la nota bajo el estatus avisa y se guarda con sinPanel (sin la
+  // ventana «Cambio de estatus»; usuario, 20-oct, pendiente 3.12)
   assert.match(editar, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
   assert.match(editar, /cambiaA\('ESTATUS LINEA', ESTATUS_LINEA_PANEL\)/);
-  assert.match(editar, /mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial\.'/);
+  assert.doesNotMatch(editar, /Confirmar\.pedir|titulo: 'Cambio de estatus'/);
+  assert.match(editar, /nota\.hidden = !\(v\[par\[0\]\] !== ctx\.inicial\[par\[0\]\] && par\[1\]\.indexOf\(v\[par\[0\]\]\) >= 0\);/);
+  assert.match(cliente, /const NOTA_SIN_PANEL = 'No entra al panel de Resguardos y cancelaciones; queda en el historial\.';/);
   assert.match(editar, /sinPanel: avisos\.length > 0/);
   assert.doesNotMatch(editar, /seguirFlujo|abrirResguardo\(|abrirCancelacion\(/);
   assert.doesNotMatch(editar, /placeholder=|class="ln-nota"/); // sin textos de ayuda

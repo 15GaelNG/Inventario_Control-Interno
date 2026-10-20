@@ -156,7 +156,8 @@ const LineasAcciones = (function () {
     // La línea que deja el equipo y va a cancelación entra a la bandeja de Pau, como con «Mandar a cancelación»; su motivo
     // sale del adendum (13-oct)
     if (hecho.anteriorACancelar) {
-      LineasResguardos.mandarCancelacion([hecho.anteriorACancelar], { comentario: comentario, ticket: ticket }, usuario, { motivoDelAdendum: true });
+      LineasResguardos.mandarCancelacion([hecho.anteriorACancelar], { comentario: comentario, ticket: ticket }, usuario,
+        { motivoDelAdendum: true, nucos: { [hecho.anteriorACancelar]: hecho.nuco } });
     }
     const filas = LineasRepo.refrescarIndice([equipoId].concat(hecho.tocados));
     return { id: responsivaId || equipoId, responsivaId: responsivaId, equipoId: equipoId, pdfPendiente: !!responsivaId, filas: filas };
@@ -178,6 +179,11 @@ const LineasAcciones = (function () {
     const refs = [equipoId];
     const tocados = [];
     const lineaFila = lineaId ? LineasRepo.leerRegistroObligatorio(lineaId, 'la línea') : null;
+    // Una línea en Cancelaciones no pasa a otro equipo ni a DISPONIBLE: avisa su fase (pendiente 3.12). Se revisa antes de
+    // escribir nada. La del equipo que ya está ahí solo sale «a cancelación» (sigue en su renglón, sin otro)
+    if (lineaFila) LineasResguardos.exigirSinCancelacion(lineaFila);
+    const anteriorEnCurso = tieneLinea ? LineasResguardos.cancelacionDe(fE) : null;
+    if (anteriorEnCurso && may(anterior) !== 'CANCELACION') LineasResguardos.exigirSinCancelacion(fE);
     let numeroNuevo = '';
     let desde = '';
     if (lineaFila) {
@@ -200,11 +206,11 @@ const LineasAcciones = (function () {
     let anteriorACancelar = null;
     if (tieneLinea) {
       numeroAnterior = txt(col(fE, 'NUMERO TELEFONO'));
-      const s = LineasEscritura.separarLinea(fE, ahora);
+      const s = LineasEscritura.separarLinea(fE, ahora, anteriorEnCurso ? { estatus: 'EN PROCESO DE CANCELACION' } : null);
       s.campos.forEach((c) => campos.push(c));
       s.refs.forEach((x) => refs.push(x));
       tocados.push(s.idLinea);
-      if (may(anterior) === 'CANCELACION') anteriorACancelar = s.idLinea;
+      if (may(anterior) === 'CANCELACION' && !anteriorEnCurso) anteriorACancelar = s.idLinea;
     }
     if (lineaFila) {
       // La misma escritura que ponerle línea a un equipo en Editar (LineasEscritura.lineaParaEquipo_): la encuentra por
@@ -220,7 +226,7 @@ const LineasAcciones = (function () {
       antes: { numero: numeroAnterior }, despues: { numero: numeroNuevo },
       detalle: { cambios: campos, desde: desde || undefined, anteriorACancelacion: !!anteriorACancelar || undefined },
     });
-    return { tocados: tocados, anteriorACancelar: anteriorACancelar };
+    return { tocados: tocados, anteriorACancelar: anteriorACancelar, nuco: nuco };
   }
 
   // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado

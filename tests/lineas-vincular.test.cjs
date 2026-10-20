@@ -15,7 +15,8 @@ test('separar la línea de su equipo deja dos asignaciones: el equipo como estab
   assert.match(fn, /'ID LINEA': '', 'FECHA INICIO': ahora, 'FECHA FIN': ''/);
   assert.match(fn, /datosAsignacion_\('RESGUARDO', a \|\| \{\}, \{\}, null\)/);
   assert.match(fn, /'TIPO': 'RESGUARDO', 'ID LINEA': l\['ID'\], 'ID EQUIPO': ''/);
-  assert.match(fn, /actualizar_\('LINEAS', l, \{ 'ESTATUS LINEA': 'DISPONIBLE' \}\)/);
+  assert.match(fn, /const estatus = \(opciones && opciones\.estatus\) \|\| 'DISPONIBLE';/);
+  assert.match(fn, /actualizar_\('LINEAS', l, \{ 'ESTATUS LINEA': estatus \}\)/);
   assert.match(fn, /tocados_\.push\(String\(l\['ID'\]\)\)/);
   assert.match(esc, /ADICIONALES, guardar, agregar, hojasEnMemoria, separarLinea,/);
 });

@@ -68,7 +68,7 @@ test('el equipo que sale del inventario: su línea en USO queda DISPONIBLE o, co
   const reg = read('src/services/lineas/LineasRegistros.gs');
   // Al panel: ya suelta, entra a la bandeja como con «Mandar a cancelación», desde su propio registro (ID LINEA)
   assert.match(reg, /lineaAlPanel: lineaSale && lineaSale\.alPanel \? texto_\(base\['ID LINEA'\]\) : null/);
-  assert.match(reg, /LineasResguardos\.mandarCancelacion\(\[resultado\.lineaAlPanel\], \{ comentario: resultado\.motivo, ticket: texto_\(datos && datos\.ticket\) \}, usuario, \{ motivoDelAdendum: true \}\);/);
+  assert.match(reg, /LineasResguardos\.mandarCancelacion\(\[resultado\.lineaAlPanel\], \{ comentario: resultado\.motivo, ticket: texto_\(datos && datos\.ticket\) \}, usuario,\s+\{ motivoDelAdendum: true, nucos: \{ \[resultado\.lineaAlPanel\]: resultado\.nuco \} \}\);/);
   // La pantalla lo pregunta en la ventana del comentario
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /const lineaACancelar = form\.lineaVencida && cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL\);/);
@@ -79,12 +79,11 @@ test('Mandar a resguardo con el adendum vencido: se elige el panel o CANCELADA s
   const resg = read('src/services/lineas/LineasResguardos.gs');
   assert.match(resg, /const LINEA_SIN_PANEL = 'CANCELADA';/);
   assert.match(resg, /directa: may\(p\.cancelacionLinea\) === CANCELACION_DIRECTA/);
-  // Sin panel no abre el camino de cancelación en la bandeja; Pau sigue recibiendo el equipo
-  assert.match(resg, /const cancela = tieneLinea && pedido\['ESTATUS LINEA'\] === LINEA_CANCELACION &&/);
-  assert.match(resg, /'MOTIVO_CANCELACION': cancela \? motivoCancelacion : '',/);
+  // La línea se separa: al panel entra sola a Cancelaciones; sin panel queda CANCELADA suelta (pendiente 3.12)
+  assert.match(resg, /const sale = !tieneLinea \? '' : \(enCurso \? 'SIGUE' : \(\{ \[LINEA_CANCELACION\]: 'PANEL', \[LINEA_SIN_PANEL\]: 'DIRECTA' \}\)/);
   const cliente = read('src/html/js/lineas.html');
   // CANCELADA directo queda en el historial como cancelación (usuario, 16-oct), también desde Corregir
-  assert.match(resg, /if \(vencida && pedido\.directa\) registrarCancelacionDirecta\(f, txt\(LineasUtil\.col\(f, 'ID LINEA'\)\), pedido\.COMENTARIO \|\| motivo, ticket, usuario, ahora\);/);
+  assert.match(resg, /registrarCancelacionDirecta\(f0, idLinea, pedido\.COMENTARIO \|\| motivo, ticket, usuario, ahora\);/);
   assert.match(resg, /LineasRepo\.registrarMovimiento\('CANCELACION_LINEA', \{ motivo: motivo, ticket: ticket \}, usuario, ahora, \{\s+refs: \[idLinea, txt\(f\['ID'\]\)\]/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /if \(lineaSale && lineaSale\.estatus === LineasResguardos\.LINEA_SIN_PANEL\) \{\s+LineasResguardos\.registrarCancelacionDirecta\(fila, texto_\(base\['ID LINEA'\]\)/);
   assert.match(cliente, /cancelacionLinea: q\.tieneLinea && q\.propuestaLinea === 'EN PROCESO DE CANCELACION' && v\('ESTATUS LINEA'\) === LINEA_SIN_PANEL \? 'DIRECTO' : ''/);

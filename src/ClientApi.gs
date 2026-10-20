@@ -759,8 +759,14 @@ function apiLineasFormularioMasivo(token, accion) {
 function apiLineasAccionMasiva(token, accion, ids, datos) {
   return TelefoniaService.accionMasiva(token, accion, ids, datos);
 }
-function apiLineasFormularioResguardo(token, ids) {
-  return TelefoniaService.formularioResguardo(token, ids);
+function apiLineasFormularioResguardo(token, ids, opciones) {
+  return TelefoniaService.formularioResguardo(token, ids, opciones);
+}
+function apiLineasVistaQuitarPanel(token, ids) {
+  return TelefoniaService.vistaQuitarPanel(token, ids);
+}
+function apiLineasQuitarDelPanel(token, ids, datos) {
+  return TelefoniaService.quitarDelPanel(token, ids, datos);
 }
 function apiLineasMandarResguardo(token, ids, datos) {
   return TelefoniaService.mandarResguardo(token, ids, datos);

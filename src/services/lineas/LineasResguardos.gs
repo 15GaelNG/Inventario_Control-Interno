@@ -24,8 +24,7 @@
  * - Aprueba quien EDITA Resguardos y cancelaciones (Pau por correo, y ADMIN): lo calcula TelefoniaService
  *   (usuario.puedeAprobar). El área de Líneas la ve (el avance) y manda desde Líneas telefónicas (usuario, 12-oct).
  * - Usuario, 13-oct: la ubicación sale siempre DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA (se puede cambiar), con
- *   PARA VENTA CON DETALLE como estatus nuevo. Un equipo que ya tiene su renglón abierto en la bandeja no se vuelve a
- *   mandar con el mismo estatus (solo a otro de los de resguardo); uno guardado sin renglón abierto (viene así del
+ *   PARA VENTA CON DETALLE como estatus nuevo. Uno guardado sin renglón abierto (viene así del
  *   AppSheet, o Pau ya lo entregó a Líneas) entra a la bandeja por recibir: Líneas decide cuáles manda. Cada línea que va
  *   a cancelación lleva su motivo (MOTIVO_CANCELACION): LINEA VENCIDA o CANCELACION ANTICIPADA; en «Mandar a
  *   cancelación» se elige y aquí sale del adendum (vencido o no).
@@ -33,6 +32,12 @@
  *   accesorios, número, compañía, razón social y fin del adendum salen del registro de hoy (`espejo_`, al leer; la hoja
  *   guarda lo de cuando se mandó). Lo que se llena al mandar (estatus, departamento, sede, oficina, comentario) es del
  *   trámite y no sigue al inventario. Lo cerrado (entregado, vendido, cancelado) se queda como quedó.
+ * - Usuario, 20-oct (pendiente 3.12): resguardo y cancelación van separados. El renglón de Resguardos sigue al equipo
+ *   (su línea DISPONIBLE o «Sin línea»; LINEA_AL_MANDAR guarda el número que tenía) y el de Cancelaciones sigue a la línea
+ *   (ID_LINEA). Al mandar a resguardo un equipo cuya línea va a cancelación, la línea se separa primero y entra sola. Los
+ *   renglones viejos que juntan las dos cosas se siguen leyendo (su cancelación se encuentra por el número). Un equipo ya
+ *   en el panel no se vuelve a mandar: se corrige (Corregir resguardo) o, si Pau aún no lo recibe, se quita (Quitar del
+ *   panel: regresa lo que nadie tocó después). Pau retira una cancelación (Retirar cancelación); Líneas no.
  */
 const LineasResguardos = (function () {
   const TAB = 'APP_RESGUARDOS';
@@ -40,10 +45,15 @@ const LineasResguardos = (function () {
     'ESTATUS_EQUIPO', 'ESTATUS_LINEA', 'DEPARTAMENTO', 'SEDE', 'OFICINA', 'COMENTARIO', 'MOTIVO', 'SOLICITO_CORREO', 'SOLICITO_NOMBRE',
     'ESTADO', 'RECIBIDO_EN', 'RECIBIO', 'ENTREGADO_EN', 'ENTREGADO_A', 'ENTREGA_ASUNTO',
     'CANCELACION', 'ASESOR', 'CARTA_FIRMADA_EN', 'CARTA_ENVIADA_EN', 'CANCELACION_ASUNTO', 'CANCELADA_EN', 'CANCELO', 'ACTUALIZADO_EN',
-    'MOTIVO_CANCELACION', 'ACCESORIOS'];
+    'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO'];
+  /** Las que llegaron después a una hoja que ya existía (13 y 20-oct). */
+  const COLUMNAS_NUEVAS = ['MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO'];
 
-  const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO' };
-  const FASE = { POR_FIRMAR: 'POR FIRMAR', FIRMADA: 'CARTA FIRMADA', ENVIADA: 'CARTA ENVIADA', CANCELADA: 'CANCELADA' };
+  // RETIRADO: Líneas lo quitó antes de que Pau lo recibiera; RETIRADA: Pau retiró la cancelación (pendiente 3.12)
+  const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO', RETIRADO: 'RETIRADO' };
+  const FASE = { POR_FIRMAR: 'POR FIRMAR', FIRMADA: 'CARTA FIRMADA', ENVIADA: 'CARTA ENVIADA', CANCELADA: 'CANCELADA', RETIRADA: 'RETIRADA' };
+  const ABIERTOS = [ESTADO.PENDIENTE, ESTADO.RESGUARDO];
+  const EN_CURSO = [FASE.POR_FIRMAR, FASE.FIRMADA, FASE.ENVIADA];
 
   /** Estatus del equipo que tienen sentido al mandarlo al almacén (los demás son bajas). PARA VENTA CON DETALLE, 13-oct. */
   const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'];
@@ -154,30 +164,67 @@ const LineasResguardos = (function () {
   /** El motivo, como un renglón más de CAMBIOS en el historial (MOVIMIENTOS). */
   const cambioMotivo_ = (motivo) => (motivo ? [{ campo: 'MOTIVO DE CANCELACION', antes: '', despues: motivo }] : []);
 
-  /** La bandeja con todas sus columnas (MOTIVO_CANCELACION llegó el 13-oct a una hoja que ya existía). */
+  /** La bandeja con todas sus columnas (COLUMNAS_NUEVAS llegaron después a una hoja que ya existía). */
   function asegurarBandeja_() {
     if (!LineasDatos.existeTabla(TAB)) { LineasDatos.asegurarPestana(TAB, ENCABEZADOS); return; }
-    // La columna se revisa una vez cada 6 h, no en cada guardado (rapidez, 13-oct)
+    // Las columnas se revisan una vez cada 6 h, no en cada guardado (rapidez, 13-oct)
     const cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null;
-    if (cache && cache.get('ln_resguardos_esquema_v2') === '1') return;
-    if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, ['MOTIVO_CANCELACION', 'ACCESORIOS']);
-    if (cache) cache.put('ln_resguardos_esquema_v2', '1', 21600);
+    if (cache && cache.get('ln_resguardos_esquema_v3') === '1') return;
+    if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, COLUMNAS_NUEVAS);
+    if (cache) cache.put('ln_resguardos_esquema_v3', '1', 21600);
   }
 
   /** Renglón abierto de la bandeja (PENDIENTE DE RECEPCION o EN RESGUARDO) por ID de registro. */
   function abiertosPorRegistro_(filas) {
     const abiertos = {};
     filas.forEach((r) => {
-      if ([ESTADO.PENDIENTE, ESTADO.RESGUARDO].indexOf(txt(r['ESTADO'])) >= 0) abiertos[txt(r['REGISTRO_ID'])] = r;
+      if (ABIERTOS.indexOf(txt(r['ESTADO'])) >= 0) abiertos[txt(r['REGISTRO_ID'])] = r;
     });
     return abiertos;
   }
   const abiertoDe_ = (abiertos, f) => LineasDatos.idsDeFila(f).map((k) => abiertos[k]).filter(Boolean)[0] || null;
 
+  /**
+   * Equipos con su renglón abierto en el panel: { ID de registro: ESTADO }. Lo usa el índice de la pantalla para cambiar
+   * «Mandar a resguardo» por «Corregir resguardo» y «Quitar del panel» (pendiente 3.12).
+   */
+  function abiertosPorEquipo() {
+    if (!LineasDatos.existeTabla(TAB)) return {};
+    const m = {};
+    LineasDatos.leerTabla(TAB).forEach((r) => { if (ABIERTOS.indexOf(txt(r['ESTADO'])) >= 0) m[txt(r['REGISTRO_ID'])] = txt(r['ESTADO']); });
+    return m;
+  }
+
   function filasPorId_() {
+    return indices_().porId;
+  }
+
+  /**
+   * Los registros del inventario por ID (con los anteriores), por ID de su línea y por número (el de la línea que no está
+   * cancelada): una cancelación sigue a la línea esté donde esté (pendiente 3.12).
+   */
+  function indices_() {
     const porId = {};
-    LineasDatos.leerTabla(LineasRepo.TAB.LINEAS).forEach((f) => { LineasDatos.idsDeFila(f).forEach((k) => { porId[k] = f; }); });
-    return porId;
+    const porLinea = {};
+    const porNumero = {};
+    LineasDatos.leerTabla(LineasRepo.TAB.LINEAS).forEach((f) => {
+      LineasDatos.idsDeFila(f).forEach((k) => { porId[k] = f; });
+      const idLinea = txt(LineasUtil.col(f, 'ID LINEA'));
+      if (idLinea) porLinea[idLinea] = f;
+      const n = LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO'));
+      if (n && (!porNumero[n] || may(LineasUtil.col(f, 'ESTATUS LINEA')) !== 'CANCELADA')) porNumero[n] = f;
+    });
+    return { porId: porId, porLinea: porLinea, porNumero: porNumero };
+  }
+
+  /** El registro donde está hoy la línea de un renglón de cancelación: por su ID o, en los viejos, por su número. */
+  function registroDeLinea_(s, ix) {
+    const idLinea = txt(s['ID_LINEA']);
+    if (idLinea && (ix.porLinea[idLinea] || ix.porId[idLinea])) return ix.porLinea[idLinea] || ix.porId[idLinea];
+    const n = LineasUtil.digitos(s['NUMERO']);
+    const f = ix.porId[txt(s['REGISTRO_ID'])];
+    if (f && LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO')) === n) return f;
+    return (n && ix.porNumero[n]) || null;
   }
 
   function limpiarIds_(ids) {
@@ -199,14 +246,18 @@ const LineasResguardos = (function () {
 
   /**
    * Datos para el formulario: por cada equipo lo que tiene hoy, la propuesta de la línea y los estatus que se pueden
-   * elegir. Si ya está en la bandeja, su estatus se ve pero no se elige (`estatusFijo`; usuario, 20-oct: antes no
-   * salía y era confuso). Los que no son equipo se regresan en `omitidos`.
+   * elegir. Un equipo ya en el panel no se manda otra vez: se corrige (opciones.corregir, pendiente 3.12), con el
+   * formulario lleno con lo de su renglón (`actual`) y sin restricciones de estatus. Si su línea ya está en Cancelaciones,
+   * `cancelacion` dice su fase (su estatus no se cambia aquí). Los que no son equipo se regresan en `omitidos`.
    */
-  function formulario(ids, usuario) {
+  function formulario(ids, usuario, opciones) {
+    const corregir = !!(opciones && opciones.corregir);
     const lista = limpiarIds_(ids);
     const porId = filasPorId_();
     const hoy = dia(new Date());
-    const abiertos = abiertosPorRegistro_(LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB) : []);
+    const bandejaActual = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB) : [];
+    const abiertos = abiertosPorRegistro_(bandejaActual);
+    const cancelando = cancelacionesEnCurso_(bandejaActual);
     const equipos = [];
     const omitidos = [];
     lista.forEach((id) => {
@@ -215,12 +266,14 @@ const LineasResguardos = (function () {
       const tipo = may(LineasUtil.col(f, 'TIPO'));
       const nuco = LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '';
       if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) { omitidos.push({ id: id, nuco: nuco, motivo: 'No es un equipo (TIPO ' + (tipo || 'vacío') + ')' }); return; }
+      const abierto = abiertoDe_(abiertos, f);
+      if (corregir && !abierto) { omitidos.push({ id: id, nuco: nuco, motivo: 'No está en Resguardos y cancelaciones' }); return; }
+      if (!corregir && abierto) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya está en Resguardos y cancelaciones: usa «Corregir resguardo»' }); return; }
       const reg = LineasRepo.convertirRegistro(f);
       const linea = reg && reg.linea;
       const vig = vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy);
       const inicio = vigencia_(LineasUtil.col(f, 'INICIO PLAN'), hoy).fin;
-      const estatusActual = may(LineasUtil.col(f, 'ESTATUS EQUIPO'));
-      const enBandeja = ESTATUS_EQUIPO_RESGUARDO.indexOf(estatusActual) >= 0 && !!abiertoDe_(abiertos, f);
+      const enCurso = linea ? enCancelacion_(cancelando, f) : null;
       equipos.push({
         id: txt(f['ID']), nuco: nuco, tipo: tipo, modelo: txt(LineasUtil.col(f, 'EQUIPO')), imei: txt(LineasUtil.col(f, 'IMEI')),
         color: txt(LineasUtil.col(f, 'COLOR')), sim: linea ? txt(LineasUtil.col(f, 'NUMERO SIM')) : '', razonSocial: linea ? txt(LineasUtil.col(f, 'RAZON SOCIAL')) : '',
@@ -229,12 +282,18 @@ const LineasResguardos = (function () {
         departamento: txt(LineasUtil.col(f, 'DEPARTAMENTO')), sede: txt(LineasUtil.col(f, 'SEDE')), oficina: txt(LineasUtil.col(f, 'OFICINA / DESARROLLO')),
         tieneLinea: !!linea, numero: linea ? txt(LineasUtil.col(f, 'NUMERO TELEFONO')) : '', compania: txt(LineasUtil.col(f, 'COMPAÑIA')),
         estatusLinea: txt(LineasUtil.col(f, 'ESTATUS LINEA')), finPlan: vig.fin, vigencia: vig.vigencia,
-        propuestaLinea: linea ? propuestaLinea_(tipo, vig) : '',
-        enBandeja: enBandeja, opcionesEstatus: ESTATUS_EQUIPO_RESGUARDO, estatusFijo: enBandeja ? estatusActual : '',
+        propuestaLinea: linea ? (enCurso ? LINEA_CANCELACION : propuestaLinea_(tipo, vig)) : '',
+        cancelacion: enCurso ? txt(enCurso['CANCELACION']) : '',
+        opcionesEstatus: ESTATUS_EQUIPO_RESGUARDO,
+        actual: abierto ? {
+          'DEPARTAMENTO': txt(abierto['DEPARTAMENTO']), 'SEDE': txt(abierto['SEDE']), 'OFICINA / DESARROLLO': txt(abierto['OFICINA']),
+          'ESTATUS EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')), 'ESTATUS LINEA': linea ? txt(LineasUtil.col(f, 'ESTATUS LINEA')) : '',
+          COMENTARIO: txt(abierto['COMENTARIO']), ESTADO: txt(abierto['ESTADO']),
+        } : null,
       });
     });
     return {
-      maximo: MAXIMO, equipos: equipos, omitidos: omitidos, campos: camposUbicacion_(usuario),
+      corregir: corregir, maximo: MAXIMO, equipos: equipos, omitidos: omitidos, campos: camposUbicacion_(usuario),
       estatusEquipo: ESTATUS_EQUIPO_RESGUARDO, estatusLinea: ESTATUS_LINEA_RESGUARDO,
       camposEnBlanco: CAMPOS_PERSONA.concat(CAMPOS_PERSONA_SI_HAY, CAMPOS_BORRAR),
     };
@@ -261,13 +320,18 @@ const LineasResguardos = (function () {
 
   /**
    * datos = { motivo, porEquipo: { id: { DEPARTAMENTO, SEDE, 'OFICINA / DESARROLLO', 'ESTATUS EQUIPO', 'ESTATUS LINEA', COMENTARIO } },
-   *   inspecciones: { id: idInspeccion } }. Cada equipo que viene de una persona (USO) trae su inspección, capturada
-   * dentro de la acción (pendiente 2.6; decisión del usuario, 3-oct); sin ella no se manda ninguno.
-   * Regresa { hechos: [{ id, nuco, cancelacion }], omitidos: [{ id, nuco, motivo }] }.
+   *   inspecciones: { id: idInspeccion }, corregir }. Cada equipo que viene de una persona (USO) trae su inspección,
+   * capturada dentro de la acción (pendiente 2.6; decisión del usuario, 3-oct); sin ella no se manda ninguno.
+   * Pendiente 3.12 (usuario, 20-oct): si su línea va a cancelación (o ya está en Cancelaciones), primero se separa del
+   * equipo y entra sola a Cancelaciones; con CANCELADA directo queda cancelada y suelta. Al panel solo entra el equipo (su
+   * línea DISPONIBLE o «Sin línea»; LINEA_AL_MANDAR guarda el número que tenía). datos.corregir (Corregir resguardo): el
+   * equipo ya tiene su renglón abierto; sin inspección ni renglón nuevo, se actualiza el abierto y queda el movimiento.
+   * Regresa { hechos: [{ id, nuco, cancelacion, porRecibir }], omitidos: [{ id, nuco, motivo }] }.
    */
   function mandar(ids, datos, usuario) {
     const lista = limpiarIds_(ids);
     const d = datos || {};
+    const corregir = !!d.corregir;
     // Un solo COMENTARIO (plan §5.2): el general se copia a cada equipo y se puede cambiar en el que haga falta
     const motivo = txt(d.comentario || d.motivo);
     if (motivo.length <= 3) throw new Error('Escribe el comentario del resguardo (queda en el historial de cada equipo).');
@@ -301,85 +365,110 @@ const LineasResguardos = (function () {
       const porId = filasPorId_();
       const hoy = dia(new Date());
       const nuevos = [];
-      // Renglón abierto de la bandeja por equipo: si ya lo tiene, no se pide otra recepción
       const bandejaActual = LineasDatos.leerTabla(TAB);
       const abiertos = abiertosPorRegistro_(bandejaActual);
       const cancelando = cancelacionesEnCurso_(bandejaActual);
-      // Ya en la bandeja con ese mismo estatus: no hay nada que mandar (usuario, 13-oct)
-      lista.forEach((id) => {
-        const f = porId[id];
-        const actual = f ? may(LineasUtil.col(f, 'ESTATUS EQUIPO')) : '';
-        if (!f || actual !== pedidos[id]['ESTATUS EQUIPO'] || !abiertoDe_(abiertos, f)) return;
-        throw new Error('NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '') + ': ya está en Resguardos y cancelaciones como ' + actual + '; elige otro estatus.');
-      });
-      // Antes de escribir: la inspección de cada equipo que viene de una persona
+      // Antes de escribir: la inspección de cada equipo que viene de una persona (Corregir no la pide)
       const t1 = Date.now();
-      lista.forEach((id) => {
-        const f = porId[id];
-        if (!f || may(LineasUtil.col(f, 'ESTATUS EQUIPO')) !== 'USO') return;
-        LineasCaptura.exigirInspeccion((d.inspecciones || {})[id], LineasDatos.idsDeFila(f), 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || ''));
-      });
+      if (!corregir) {
+        lista.forEach((id) => {
+          const f = porId[id];
+          if (!f || may(LineasUtil.col(f, 'ESTATUS EQUIPO')) !== 'USO' || abiertoDe_(abiertos, f)) return;
+          LineasCaptura.exigirInspeccion((d.inspecciones || {})[id], LineasDatos.idsDeFila(f), 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || ''));
+        });
+      }
       marca_('mandar · revisar inspecciones', t1);
       lista.forEach((id) => {
-        const f = porId[id];
+        let f = porId[id];
         const nuco = f ? LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '' : '';
         if (!f) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya no existe en la hoja' }); return; }
         const tipo = may(LineasUtil.col(f, 'TIPO'));
         if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) { omitidos.push({ id: id, nuco: nuco, motivo: 'No es un equipo' }); return; }
+        // Un equipo ya en el panel no se vuelve a mandar: se corrige (pendiente 3.12)
+        const abierto = abiertoDe_(abiertos, f);
+        if (corregir && !abierto) { omitidos.push({ id: id, nuco: nuco, motivo: 'No está en Resguardos y cancelaciones' }); return; }
+        if (!corregir && abierto) { omitidos.push({ id: id, nuco: nuco, motivo: 'Ya está en Resguardos y cancelaciones: usa «Corregir resguardo»' }); return; }
         const reg = LineasRepo.convertirRegistro(f);
         const tieneLinea = !!(reg && reg.linea);
+        const numero = tieneLinea ? txt(LineasUtil.col(f, 'NUMERO TELEFONO')) : '';
         const pedido = pedidos[id];
+        // Su línea ya está en Cancelaciones: sigue ahí (no se pasa a DISPONIBLE; la retira Pau)
+        const enCurso = tieneLinea ? enCancelacion_(cancelando, f) : null;
+        if (enCurso && pedido['ESTATUS LINEA'] && pedido['ESTATUS LINEA'] !== LINEA_CANCELACION) {
+          omitidos.push({ id: id, nuco: nuco, motivo: avisoFase_(numero, enCurso) });
+          return;
+        }
         // Adendum vencido: la línea va a cancelación (usuario, 4-oct); quien captura eligió si pasa por el panel o queda
         // LINEA_SIN_PANEL directo (usuario, 16-oct; pendiente 2.50). Vigente o sin fecha: lo que se eligió
-        const vencida = tieneLinea && propuestaLinea_(tipo, vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy)) === LINEA_CANCELACION;
+        const vencida = tieneLinea && !enCurso && propuestaLinea_(tipo, vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy)) === LINEA_CANCELACION;
         if (vencida) pedido['ESTATUS LINEA'] = pedido.directa ? LINEA_SIN_PANEL : LINEA_CANCELACION;
+        if (enCurso) pedido['ESTATUS LINEA'] = LINEA_CANCELACION;
         if (tieneLinea && !pedido['ESTATUS LINEA']) { omitidos.push({ id: id, nuco: nuco, motivo: 'Falta el estatus de la línea' }); return; }
+        // Cómo deja la línea al equipo: SIGUE (ya está en Cancelaciones), PANEL (entra a Cancelaciones) o DIRECTA
+        const sale = !tieneLinea ? '' : (enCurso ? 'SIGUE' : ({ [LINEA_CANCELACION]: 'PANEL', [LINEA_SIN_PANEL]: 'DIRECTA' })[pedido['ESTATUS LINEA']] || '');
+        const lineaQueda = tieneLinea && !sale;
+        const motivoCancelacion = sale === 'PANEL' || sale === 'DIRECTA' ? motivoCancelacionDe_(f) : '';
         const antes = { estatus: txt(LineasUtil.col(f, 'ESTATUS EQUIPO')), estatusLinea: txt(LineasUtil.col(f, 'ESTATUS LINEA')), responsable: { nombre: txt(LineasUtil.col(f, 'RESPONSABLE')) } };
-        // Si su línea ya va en la bandeja de cancelaciones (Mandar a cancelación), no se abre otro camino
-        const cancela = tieneLinea && pedido['ESTATUS LINEA'] === LINEA_CANCELACION &&
-          !enCancelacion_(cancelando, f, LineasUtil.col(f, 'NUMERO TELEFONO'));
-        const motivoCancelacion = cancela || (vencida && pedido.directa) ? motivoCancelacionDe_(f) : '';
         const ahora = new Date();
+        const f0 = f;
+        const cambios = [];
+        const refs = [id];
+        let idLinea = '';
         const t2 = Date.now();
-        const guardado = LineasRepo.guardarCambiosRegistro(f, cambiosResguardo_(f, pedido, tieneLinea), usuario, ahora);
+        if (sale) {
+          const s = LineasEscritura.separarLinea(f, ahora, sale === 'SIGUE' ? { estatus: LINEA_CANCELACION } : null);
+          s.campos.forEach((c) => cambios.push(c));
+          s.refs.forEach((x) => refs.push(x));
+          idLinea = s.idLinea;
+          f = LineasRepo.leerRegistroObligatorio(id, 'el equipo');
+        }
+        const guardado = LineasRepo.guardarCambiosRegistro(f, cambiosResguardo_(f, pedido, lineaQueda), usuario, ahora);
+        guardado.campos.forEach((c) => cambios.push(c));
+        (guardado.refs || []).forEach((x) => refs.push(x));
         marca_('mandar · guardar el registro', t2);
         const t3 = Date.now();
-        LineasRepo.registrarMovimiento('RESGUARDO', { motivo: pedido.COMENTARIO || motivo, ticket: ticket }, usuario, ahora, {
-          refs: [id].concat(guardado.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: LineasUtil.col(f, 'NUMERO TELEFONO'),
+        const idMovimiento = LineasRepo.registrarMovimiento(corregir ? 'CORREGIR_RESGUARDO' : 'RESGUARDO', { motivo: pedido.COMENTARIO || motivo, ticket: ticket }, usuario, ahora, {
+          refs: refs, nuco: LineasUtil.col(f0, 'NUCO'), numero: numero,
           antes: antes, despues: { estatus: pedido['ESTATUS EQUIPO'], estatusLinea: tieneLinea ? pedido['ESTATUS LINEA'] : '' },
-          detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos.concat(cambioMotivo_(motivoCancelacion)) },
+          detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: cambios.concat(cambioMotivo_(motivoCancelacion)) },
         });
-        if (vencida && pedido.directa) registrarCancelacionDirecta(f, txt(LineasUtil.col(f, 'ID LINEA')), pedido.COMENTARIO || motivo, ticket, usuario, ahora);
+        // La línea ya suelta: a Cancelaciones o cancelada sin panel
+        let cancelacion = false;
+        if (sale === 'PANEL' || sale === 'DIRECTA') {
+          const fl = LineasRepo.leerRegistroObligatorio(idLinea, 'la línea');
+          if (sale === 'PANEL') {
+            nuevos.push(abrirCancelacion_(fl, idLinea, nuco, motivoCancelacion, pedido.COMENTARIO || motivo, ticket, usuario, ahora, hoy));
+            cancelacion = true;
+          } else {
+            LineasRepo.guardarCambiosRegistro(fl, { 'ESTATUS LINEA': LINEA_SIN_PANEL }, usuario, ahora);
+            registrarCancelacionDirecta(f0, idLinea, pedido.COMENTARIO || motivo, ticket, usuario, ahora);
+          }
+        }
         marca_('mandar · movimiento', t3);
-        const compania = txt(LineasUtil.col(f, 'COMPAÑIA'));
-        const razon = txt(LineasUtil.col(f, 'RAZON SOCIAL'));
-        // Ya en la bandeja (p. ej. RESGUARDO → PARA VENTA): el teléfono ya está con quien recibe
-        const abierto = ESTATUS_EQUIPO_RESGUARDO.indexOf(may(antes.estatus)) >= 0 ? abiertoDe_(abiertos, f) : null;
+        const ubicacion = { 'DEPARTAMENTO': pedido.DEPARTAMENTO, 'SEDE': pedido.SEDE, 'OFICINA': pedido['OFICINA / DESARROLLO'] };
         if (abierto) {
-          // Se actualiza su renglón; si la línea ahora va a cancelación, arranca ese camino
-          const nuevaCancelacion = cancela && !txt(abierto['CANCELACION']);
+          // Corregir resguardo: se actualiza su renglón (el de un renglón viejo con su cancelación conserva el número)
           LineasDatos.actualizarFila(TAB, abierto._fila, Object.assign({
-            'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': tieneLinea ? pedido['ESTATUS LINEA'] : '',
-            'DEPARTAMENTO': pedido.DEPARTAMENTO, 'SEDE': pedido.SEDE, 'OFICINA': pedido['OFICINA / DESARROLLO'], 'ACTUALIZADO_EN': ahora,
-            'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
-          }, nuevaCancelacion ? { 'CANCELACION': FASE.POR_FIRMAR, 'ASESOR': asesorPara(compania, razon), 'MOTIVO_CANCELACION': motivoCancelacion } : {}));
-          hechos.push({ id: id, nuco: nuco, cancelacion: nuevaCancelacion, porRecibir: false });
+            'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': lineaQueda ? pedido['ESTATUS LINEA'] : '',
+            'COMENTARIO': pedido.COMENTARIO || motivo, 'ACTUALIZADO_EN': ahora, 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
+          }, ubicacion, sale && !txt(abierto['CANCELACION']) ? { 'NUMERO': '' } : {},
+          !txt(abierto['LINEA_AL_MANDAR']) && txt(abierto['NUMERO']) ? { 'LINEA_AL_MANDAR': txt(abierto['NUMERO']) } : {}));
+          hechos.push({ id: id, nuco: nuco, cancelacion: cancelacion, porRecibir: false });
           return;
         }
         // Sin renglón abierto (viene de una persona, o está guardado desde el AppSheet o ya se entregó a Líneas): Pau
         // lo recibe (usuario, 13-oct; antes uno ya guardado no entraba a la bandeja)
-        nuevos.push({
-          'FECHA': ahora, 'REGISTRO_ID': txt(f['ID']), 'NUCO': nuco, 'NUMERO': tieneLinea ? txt(LineasUtil.col(f, 'NUMERO TELEFONO')) : '',
-          'TIPO': tipo, 'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'COMPANIA': compania,
-          'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')), 'RAZON_SOCIAL': razon, 'FIN_PLAN': vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin,
-          'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': tieneLinea ? pedido['ESTATUS LINEA'] : '',
-          'DEPARTAMENTO': pedido.DEPARTAMENTO, 'SEDE': pedido.SEDE, 'OFICINA': pedido['OFICINA / DESARROLLO'],
+        nuevos.push(Object.assign({
+          'FECHA': ahora, 'REGISTRO_ID': txt(f['ID']), 'NUCO': nuco, 'NUMERO': lineaQueda ? numero : '', 'LINEA_AL_MANDAR': numero,
+          'TIPO': may(LineasUtil.col(f, 'TIPO')) || tipo, 'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')),
+          'COMPANIA': lineaQueda ? txt(LineasUtil.col(f, 'COMPAÑIA')) : '', 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
+          'RAZON_SOCIAL': lineaQueda ? txt(LineasUtil.col(f, 'RAZON SOCIAL')) : '', 'FIN_PLAN': lineaQueda ? vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin : '',
+          'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': lineaQueda ? pedido['ESTATUS LINEA'] : '',
           'COMENTARIO': pedido.COMENTARIO, 'MOTIVO': motivo, 'SOLICITO_CORREO': usuario.correo, 'SOLICITO_NOMBRE': usuario.nombre,
-          'ESTADO': ESTADO.PENDIENTE, 'RECIBIO': '',
-          'CANCELACION': cancela ? FASE.POR_FIRMAR : '', 'ASESOR': cancela ? asesorPara(compania, razon) : '', 'MOTIVO_CANCELACION': cancela ? motivoCancelacion : '',
-          'ACTUALIZADO_EN': ahora,
-        });
-        hechos.push({ id: id, nuco: nuco, cancelacion: cancela, porRecibir: true });
+          'ESTADO': ESTADO.PENDIENTE, 'RECIBIO': '', 'CANCELACION': '', 'ASESOR': '', 'MOTIVO_CANCELACION': '',
+          'MOVIMIENTO_ID': idMovimiento || '', 'ACTUALIZADO_EN': ahora,
+        }, ubicacion));
+        hechos.push({ id: id, nuco: nuco, cancelacion: cancelacion, porRecibir: true });
       });
       LineasDatos.agregarFilas(TAB, nuevos);
     });
@@ -402,21 +491,69 @@ const LineasResguardos = (function () {
     return { hechos: hechos, omitidos: omitidos, indice: indice };
   }
 
-  const claveCancelacion_ = (registroId, numero) => txt(registroId) + '|' + LineasUtil.digitos(numero);
-  /**
-   * ¿La línea del registro ya va en la bandeja de cancelaciones? Con cualquiera de sus IDs: la bandeja guarda el que
-   * tenía el registro al mandarlo, y desde la reestructura (hojas nuevas) el registro tiene otro (EQU-/LIN-).
-   */
-  const enCancelacion_ = (cancelando, f, numero) => LineasDatos.idsDeFila(f).some((k) => cancelando[claveCancelacion_(k, numero)]);
+  /** «Línea 4421090805: está en POR FIRMAR en Cancelaciones; Pau tiene que retirarla.» (usuario, 20-oct) */
+  const avisoFase_ = (numero, r) => 'Línea ' + (txt(numero) || txt(r['NUMERO'])) + ': está en ' + txt(r['CANCELACION']) + ' en Cancelaciones; Pau tiene que retirarla.';
 
-  /** Líneas con un camino de cancelación abierto en la bandeja (clave REGISTRO_ID|número). */
+  /**
+   * ¿La línea del registro ya está en Cancelaciones? Por el ID de su línea o por su número (los renglones viejos no
+   * guardan el ID). Regresa el renglón o null.
+   */
+  function enCancelacion_(cancelando, f) {
+    const ids = [txt(LineasUtil.col(f, 'ID LINEA'))].concat(LineasDatos.idsDeFila(f)).filter(Boolean);
+    for (let i = 0; i < ids.length; i++) if (cancelando.porLinea[ids[i]]) return cancelando.porLinea[ids[i]];
+    const n = LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO'));
+    return (n && cancelando.porNumero[n]) || null;
+  }
+
+  /** Renglones con su cancelación en curso (POR FIRMAR, CARTA FIRMADA o CARTA ENVIADA), por ID de línea y por número. */
   function cancelacionesEnCurso_(filas) {
-    const m = {};
+    const m = { porLinea: {}, porNumero: {} };
     filas.forEach((r) => {
-      const fase = txt(r['CANCELACION']);
-      if (fase && fase !== FASE.CANCELADA) m[claveCancelacion_(r['REGISTRO_ID'], r['NUMERO'])] = true;
+      if (EN_CURSO.indexOf(txt(r['CANCELACION'])) < 0) return;
+      if (txt(r['ID_LINEA'])) m.porLinea[txt(r['ID_LINEA'])] = r;
+      const n = LineasUtil.digitos(r['NUMERO']);
+      if (n) m.porNumero[n] = r;
     });
     return m;
+  }
+
+  /** El renglón de Cancelaciones del registro `f`, o null (Desvincular, Cambiar línea y Corregir lo revisan). */
+  function cancelacionDe(f) {
+    if (!f || !LineasDatos.existeTabla(TAB)) return null;
+    return enCancelacion_(cancelacionesEnCurso_(LineasDatos.leerTabla(TAB)), f);
+  }
+
+  /** Líneas no saca una línea de Cancelaciones: avisa su fase (usuario, 20-oct; pendiente 3.12). */
+  function exigirSinCancelacion(f) {
+    const r = cancelacionDe(f);
+    if (r) throw new Error(avisoFase_(LineasUtil.col(f, 'NUMERO TELEFONO'), r));
+  }
+
+  /**
+   * La línea `fl` entra a Cancelaciones: queda EN PROCESO DE CANCELACION, deja su movimiento y regresa su renglón (sin
+   * recepción: ESTADO vacío). `nuco`: el equipo del que salió (la columna NUCO dice de dónde viene).
+   */
+  function abrirCancelacion_(fl, idLinea, nuco, motivoCancelacion, motivo, ticket, usuario, ahora, hoy) {
+    const numero = txt(LineasUtil.col(fl, 'NUMERO TELEFONO'));
+    const antes = { estatusLinea: txt(LineasUtil.col(fl, 'ESTATUS LINEA')) };
+    const guardado = LineasRepo.guardarCambiosRegistro(fl, { 'ESTATUS LINEA': LINEA_CANCELACION }, usuario, ahora);
+    LineasRepo.registrarMovimiento('CANCELACION_LINEA', { motivo: motivo, ticket: ticket }, usuario, ahora, {
+      refs: [txt(fl['ID'])].concat(guardado.refs || []), nuco: nuco || LineasUtil.col(fl, 'NUCO'), numero: numero, antes: antes,
+      despues: { estatusLinea: LINEA_CANCELACION },
+      detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos.concat(cambioMotivo_(motivoCancelacion)) },
+    });
+    const compania = txt(LineasUtil.col(fl, 'COMPAÑIA'));
+    const razon = txt(LineasUtil.col(fl, 'RAZON SOCIAL'));
+    return {
+      'FECHA': ahora, 'REGISTRO_ID': txt(fl['ID']), 'ID_LINEA': txt(idLinea) || txt(LineasUtil.col(fl, 'ID LINEA')) || txt(fl['ID']),
+      'NUCO': nuco || LineasUtil.nucoVisible(LineasUtil.col(fl, 'NUCO')) || '', 'NUMERO': numero, 'TIPO': may(LineasUtil.col(fl, 'TIPO')),
+      'MODELO': txt(LineasUtil.col(fl, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(fl, 'IMEI')), 'COMPANIA': compania, 'RAZON_SOCIAL': razon,
+      'ACCESORIOS': txt(LineasUtil.col(fl, 'ACCESORIOS')), 'FIN_PLAN': vigencia_(LineasUtil.col(fl, 'FIN PLAN'), hoy).fin,
+      'ESTATUS_EQUIPO': txt(LineasUtil.col(fl, 'ESTATUS EQUIPO')), 'ESTATUS_LINEA': LINEA_CANCELACION,
+      'DEPARTAMENTO': txt(LineasUtil.col(fl, 'DEPARTAMENTO')), 'SEDE': txt(LineasUtil.col(fl, 'SEDE')), 'OFICINA': txt(LineasUtil.col(fl, 'OFICINA / DESARROLLO')),
+      'COMENTARIO': '', 'MOTIVO': motivo, 'SOLICITO_CORREO': usuario.correo, 'SOLICITO_NOMBRE': usuario.nombre, 'ESTADO': '',
+      'CANCELACION': FASE.POR_FIRMAR, 'ASESOR': asesorPara(compania, razon), 'ACTUALIZADO_EN': ahora, 'MOTIVO_CANCELACION': motivoCancelacion,
+    };
   }
 
   // ---------------- Mandar a cancelación (sin resguardo) ----------------
@@ -424,16 +561,18 @@ const LineasResguardos = (function () {
   /**
    * "Mandar a cancelación" (usuario, 30-sep): una o varias líneas se mandan a cancelar sin mandar el equipo a
    * resguardo (el colaborador se queda con el teléfono, o es una línea suelta). La línea pasa a EN PROCESO DE
-   * CANCELACION y entra a la pestaña Cancelaciones de la bandeja (POR FIRMAR, con su asesor). Su renglón no lleva
-   * recepción (ESTADO vacío): no aparece en la pestaña Resguardos. Al confirmarla, queda CANCELADA como siempre.
+   * CANCELACION y entra a la pestaña Cancelaciones de la bandeja (POR FIRMAR, con su asesor y el ID de la línea). Su
+   * renglón no lleva recepción (ESTADO vacío): no aparece en la pestaña Resguardos. Al confirmarla, queda CANCELADA.
    * datos = { motivoCancelacion (LINEA VENCIDA o CANCELACION ANTICIPADA, usuario 13-oct), comentario, ticket }. Regresa
-   * { hechos: [{ id, nuco, numero }], omitidos: [{ id, nuco, motivo }] }. opciones.motivoDelAdendum (Desvincular y
-   * Cambiar línea, que no lo eligen; no llega desde la pantalla): el motivo de cada línea sale de su adendum.
+   * { hechos: [{ id, nuco, numero }], omitidos: [{ id, nuco, motivo }] }. opciones.motivoDelAdendum (Desvincular,
+   * Cambiar línea y Corregir, que no lo eligen; no llega desde la pantalla): el motivo de cada línea sale de su adendum.
+   * opciones.nucos: { id: NUCO } del equipo del que salió la línea (la línea suelta ya no lo tiene).
    */
   function mandarCancelacion(ids, datos, usuario, opciones) {
     const lista = limpiarIds_(ids);
     const d = datos || {};
     const delAdendum = !!(opciones && opciones.motivoDelAdendum);
+    const nucos = (opciones && opciones.nucos) || {};
     const motivoElegido = may(d.motivoCancelacion);
     if (!delAdendum && MOTIVOS_CANCELACION.indexOf(motivoElegido) < 0) throw new Error('Elige el motivo de la cancelación: ' + MOTIVOS_CANCELACION.join(' o ') + '.');
     const motivo = txt(d.comentario || d.motivo);
@@ -455,28 +594,10 @@ const LineasResguardos = (function () {
         const numero = txt(LineasUtil.col(f, 'NUMERO TELEFONO'));
         if (!reg || !reg.linea) { omitidos.push({ id: id, nuco: nuco, motivo: 'No tiene línea' }); return; }
         if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'CANCELADA') { omitidos.push({ id: id, nuco: nuco, numero: numero, motivo: 'Ya está cancelada' }); return; }
-        if (enCancelacion_(cancelando, f, numero)) { omitidos.push({ id: id, nuco: nuco, numero: numero, motivo: 'Ya está en la bandeja de cancelaciones' }); return; }
-        const ahora = new Date();
+        if (enCancelacion_(cancelando, f)) { omitidos.push({ id: id, nuco: nuco, numero: numero, motivo: 'Ya está en la bandeja de cancelaciones' }); return; }
         const motivoCancelacion = delAdendum ? motivoCancelacionDe_(f) : motivoElegido;
-        const antes = { estatusLinea: txt(LineasUtil.col(f, 'ESTATUS LINEA')) };
-        const guardado = LineasRepo.guardarCambiosRegistro(f, { 'ESTATUS LINEA': LINEA_CANCELACION }, usuario, ahora);
-        LineasRepo.registrarMovimiento('CANCELACION_LINEA', { motivo: motivo, ticket: ticket }, usuario, ahora, {
-          refs: [id].concat(guardado.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: numero, antes: antes, despues: { estatusLinea: LINEA_CANCELACION },
-          detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos.concat(cambioMotivo_(motivoCancelacion)) },
-        });
-        const compania = txt(LineasUtil.col(f, 'COMPAÑIA'));
-        const razon = txt(LineasUtil.col(f, 'RAZON SOCIAL'));
-        nuevos.push({
-          'FECHA': ahora, 'REGISTRO_ID': txt(f['ID']), 'NUCO': nuco, 'NUMERO': numero, 'TIPO': may(LineasUtil.col(f, 'TIPO')),
-          'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'COMPANIA': compania, 'RAZON_SOCIAL': razon,
-          'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
-          'FIN_PLAN': vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin, 'ESTATUS_EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')),
-          'ESTATUS_LINEA': LINEA_CANCELACION, 'DEPARTAMENTO': txt(LineasUtil.col(f, 'DEPARTAMENTO')), 'SEDE': txt(LineasUtil.col(f, 'SEDE')),
-          'OFICINA': txt(LineasUtil.col(f, 'OFICINA / DESARROLLO')), 'COMENTARIO': '', 'MOTIVO': motivo,
-          'SOLICITO_CORREO': usuario.correo, 'SOLICITO_NOMBRE': usuario.nombre, 'ESTADO': '',
-          'CANCELACION': FASE.POR_FIRMAR, 'ASESOR': asesorPara(compania, razon), 'ACTUALIZADO_EN': ahora, 'MOTIVO_CANCELACION': motivoCancelacion,
-        });
-        hechos.push({ id: id, nuco: nuco, numero: numero });
+        nuevos.push(abrirCancelacion_(f, txt(LineasUtil.col(f, 'ID LINEA')), nucos[id] || nuco, motivoCancelacion, motivo, ticket, usuario, new Date(), hoy));
+        hechos.push({ id: id, nuco: nucos[id] || nuco, numero: numero });
       });
       LineasDatos.agregarFilas(TAB, nuevos);
     });
@@ -502,49 +623,64 @@ const LineasResguardos = (function () {
   function fila_(r) {
     const o = {};
     ENCABEZADOS.forEach((h) => { o[h] = r[h] instanceof Date ? r[h] : txt(r[h]); });
+    // Los renglones de antes del 3.12 no guardan LINEA_AL_MANDAR: era el número con que se mandó
+    if (!o['LINEA_AL_MANDAR'] && o['ESTADO']) o['LINEA_AL_MANDAR'] = o['NUMERO'];
     o._fila = r._fila;
     return o;
   }
 
   /** ¿El renglón sigue abierto? Por recibir o en resguardo, o con su cancelación en curso. */
-  const abierto_ = (r) => [ESTADO.PENDIENTE, ESTADO.RESGUARDO].indexOf(r['ESTADO']) >= 0 ||
-    (!!r['CANCELACION'] && r['CANCELACION'] !== FASE.CANCELADA);
+  const abierto_ = (r) => ABIERTOS.indexOf(r['ESTADO']) >= 0 || EN_CURSO.indexOf(r['CANCELACION']) >= 0;
 
   /**
-   * El renglón abierto con lo de hoy del inventario (ver el encabezado). El equipo (modelo, IMEI, tipo, accesorios)
-   * siempre; la línea (número, compañía, razón social, fin del adendum) si el renglón no va a cancelación o si el
-   * registro sigue con el mismo número: una cancelación es de ese número, aunque el equipo ya tenga otra línea.
+   * El renglón abierto con lo de hoy del inventario (ver el encabezado). Resguardos sigue al equipo: modelo, IMEI, tipo,
+   * accesorios, su estatus y su línea de hoy (o «Sin línea») con su estatus. Cancelaciones sigue a la línea, esté donde
+   * esté (número, compañía, razón social, fin del adendum); su NUCO dice de qué equipo salió. Un renglón viejo que junta
+   * las dos cosas conserva el número de su cancelación si el equipo ya tiene otra línea.
    */
-  function espejo_(r, f, hoy) {
-    if (!f || !abierto_(r)) return r;
+  function espejo_(r, ix, hoy) {
+    if (!abierto_(r)) return r;
+    const deLinea = (f, o) => {
+      o['NUMERO'] = txt(LineasUtil.col(f, 'NUMERO TELEFONO')) || o['NUMERO'];
+      o['COMPANIA'] = txt(LineasUtil.col(f, 'COMPAÑIA'));
+      o['RAZON_SOCIAL'] = txt(LineasUtil.col(f, 'RAZON SOCIAL'));
+      o['FIN_PLAN'] = vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin;
+      return o;
+    };
+    if (ABIERTOS.indexOf(r['ESTADO']) < 0) {
+      const fl = registroDeLinea_(r, ix);
+      return fl ? deLinea(fl, Object.assign({}, r)) : r;
+    }
+    const f = ix.porId[r['REGISTRO_ID']];
+    if (!f) return r;
     const tipo = may(LineasUtil.col(f, 'TIPO'));
     const numero = txt(LineasUtil.col(f, 'NUMERO TELEFONO'));
     const tieneLinea = !!numero && !/^EQUIPO$/.test(tipo);
     const o = Object.assign({}, r, {
       'NUCO': LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || r['NUCO'], 'TIPO': tipo || r['TIPO'],
       'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
+      'ESTATUS_EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')) || r['ESTATUS_EQUIPO'],
     });
     const mismaLinea = LineasUtil.digitos(numero) === LineasUtil.digitos(r['NUMERO']);
     if (r['CANCELACION'] && !mismaLinea) return o;
-    if (!r['CANCELACION']) o['NUMERO'] = tieneLinea ? numero : '';
-    if (tieneLinea) {
-      o['COMPANIA'] = txt(LineasUtil.col(f, 'COMPAÑIA'));
-      o['RAZON_SOCIAL'] = txt(LineasUtil.col(f, 'RAZON SOCIAL'));
-      o['FIN_PLAN'] = vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin;
+    if (!r['CANCELACION']) {
+      o['NUMERO'] = tieneLinea ? numero : '';
+      o['ESTATUS_LINEA'] = tieneLinea ? txt(LineasUtil.col(f, 'ESTATUS LINEA')) : '';
     }
-    return o;
+    return tieneLinea ? deLinea(f, o) : o;
   }
 
-  /** Todos los renglones de la bandeja, del más reciente al más antiguo, y si la persona puede aprobar. */
+  /** Todos los renglones de la bandeja, del más reciente al más antiguo, y lo que la persona puede hacer. */
   function bandeja(usuario) {
     let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
     if (filas.some(abierto_)) {
-      const porId = filasPorId_();
+      const ix = indices_();
       const hoy = dia(new Date());
-      filas = filas.map((r) => espejo_(r, porId[r['REGISTRO_ID']], hoy));
+      filas = filas.map((r) => espejo_(r, ix, hoy));
     }
     filas.sort((a, b) => (b.FECHA instanceof Date ? b.FECHA.getTime() : 0) - (a.FECHA instanceof Date ? a.FECHA.getTime() : 0));
-    return { puedeAprobar: puedeAprobar(usuario), filas: filas, estados: ESTADO, fases: FASE };
+    // puedeOperar: los de Líneas (Corregir resguardo y Quitar del panel; pendiente 3.12)
+    return { puedeAprobar: puedeAprobar(usuario), puedeOperar: !!(usuario && usuario.puedeOperar), filas: filas, estados: ESTADO, fases: FASE };
   }
 
   /** Aplica `cambiar(fila) → cambios | null` a los renglones `ids` (ID de APP_RESGUARDOS). */
@@ -561,17 +697,24 @@ const LineasResguardos = (function () {
         const res = cambiar(r);
         if (!res || res.omitir) { omitidos.push({ id: id, nuco: txt(r['NUCO']), motivo: (res && res.omitir) || 'Sin cambio' }); return; }
         LineasDatos.actualizarFila(TAB, r._fila, Object.assign({ 'ACTUALIZADO_EN': new Date() }, res));
-        hechos.push({ id: id, nuco: txt(r['NUCO']) });
+        hechos.push({ id: id, nuco: txt(r['NUCO']), registro: txt(r['REGISTRO_ID']) });
       });
     });
     return { hechos: hechos, omitidos: omitidos };
   }
 
+  /** El índice de la pantalla sabe qué equipos siguen en el panel: se rehace el de los tocados. */
+  function refrescarEquipos_(r) {
+    const ids = r.hechos.map((h) => h.registro).filter(Boolean);
+    if (ids.length) r.indice = LineasRepo.refrescarIndice(ids);
+    return r;
+  }
+
   /** Pau confirma que recibió físicamente los equipos. */
   function recibir(ids, usuario) {
     exigirAprobador_(usuario);
-    return actualizar_(ids, (r) => (txt(r['ESTADO']) !== ESTADO.PENDIENTE ? { omitir: 'Ya estaba ' + (txt(r['ESTADO']) || 'sin estado').toLowerCase() }
-      : { 'ESTADO': ESTADO.RESGUARDO, 'RECIBIDO_EN': new Date(), 'RECIBIO': usuario.nombre }));
+    return refrescarEquipos_(actualizar_(ids, (r) => (txt(r['ESTADO']) !== ESTADO.PENDIENTE ? { omitir: 'Ya estaba ' + (txt(r['ESTADO']) || 'sin estado').toLowerCase() }
+      : { 'ESTADO': ESTADO.RESGUARDO, 'RECIBIDO_EN': new Date(), 'RECIBIO': usuario.nombre })));
   }
 
   /** Pau entrega a Líneas un equipo guardado (datos = { recibe, asunto }). */
@@ -579,8 +722,8 @@ const LineasResguardos = (function () {
     exigirAprobador_(usuario);
     const recibe = txt((datos || {}).recibe).toUpperCase();
     if (!recibe) throw new Error('Escribe quién de Líneas recibe el equipo.');
-    return actualizar_(ids, (r) => (txt(r['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
-      : { 'ESTADO': ESTADO.ENTREGADO, 'ENTREGADO_EN': new Date(), 'ENTREGADO_A': recibe, 'ENTREGA_ASUNTO': txt((datos || {}).asunto) }));
+    return refrescarEquipos_(actualizar_(ids, (r) => (txt(r['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
+      : { 'ESTADO': ESTADO.ENTREGADO, 'ENTREGADO_EN': new Date(), 'ENTREGADO_A': recibe, 'ENTREGA_ASUNTO': txt((datos || {}).asunto) })));
   }
 
   /** Pau marca como vendido un equipo guardado; también cambia ESTATUS EQUIPO a VENDIDO en el inventario. */
@@ -602,7 +745,7 @@ const LineasResguardos = (function () {
     return actualizar_(ids, (r) => {
       const actual = txt(r['CANCELACION']);
       if (!actual) return { omitir: 'Su línea no va a cancelación' };
-      if (actual === FASE.CANCELADA) return { omitir: 'Ya está cancelada' };
+      if (EN_CURSO.indexOf(actual) < 0) return { omitir: 'Ya está ' + actual.toLowerCase() };
       const cambios = { 'CANCELACION': f };
       if (txt(d.asesor)) cambios['ASESOR'] = may(d.asesor);
       if (txt(d.asunto)) cambios['CANCELACION_ASUNTO'] = txt(d.asunto);
@@ -612,8 +755,9 @@ const LineasResguardos = (function () {
   }
 
   /**
-   * El proveedor confirmó: la línea queda CANCELADA en el inventario, el NUCO pasa a solo EQUIPO y sus datos de línea se
-   * limpian (el número queda en la bitácora). Solo si el registro sigue teniendo ese número.
+   * El proveedor confirmó: la línea queda CANCELADA en el inventario esté donde esté (pendiente 3.12: antes solo si el
+   * equipo del renglón seguía con ese número; arregla 2.52 y 3.11). Si está en un equipo, el NUCO pasa a solo EQUIPO y
+   * sus datos de línea se limpian (el número queda en la bitácora).
    */
   function confirmarCancelacion(ids, datos, usuario) {
     exigirAprobador_(usuario);
@@ -622,45 +766,72 @@ const LineasResguardos = (function () {
     const r = actualizar_(ids, (x) => {
       const actual = txt(x['CANCELACION']);
       if (!actual) return { omitir: 'Su línea no va a cancelación' };
-      if (actual === FASE.CANCELADA) return { omitir: 'Ya estaba cancelada' };
+      if (EN_CURSO.indexOf(actual) < 0) return { omitir: 'Ya estaba ' + actual.toLowerCase() };
       porId[txt(x['ID'])] = x;
       return Object.assign({ 'CANCELACION': FASE.CANCELADA, 'CANCELADA_EN': new Date(), 'CANCELO': usuario.nombre }, asunto ? { 'CANCELACION_ASUNTO': asunto } : {});
     });
-    espejar_(r.hechos, (f, sol) => {
-      if (LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO')) !== LineasUtil.digitos(sol['NUMERO'])) return null; // ya tiene otra línea
+    espejar_(r.hechos, (f) => {
       const tipo = may(LineasUtil.col(f, 'TIPO'));
       // Registro de solo línea (TIPO LINEA / SIM BASICO): el número es el registro; solo queda CANCELADA
       if (!LineasRepo.TIPOS_CON_EQUIPO[tipo]) return { 'ESTATUS LINEA': 'CANCELADA' };
       const cambios = Object.assign({}, LineasRepo.VALORES_SIN_LINEA, { 'ESTATUS LINEA': 'CANCELADA' });
       cambios['TIPO'] = LineasRepo.tipoSinLinea(tipo);
       return cambios;
-    }, 'Cancelación de línea confirmada' + (asunto ? ': ' + asunto : ''), 'CANCELACION_LINEA', usuario, porId);
+    }, 'Cancelación de línea confirmada' + (asunto ? ': ' + asunto : ''), 'CANCELACION_LINEA', usuario, porId, true);
     return r;
   }
 
-  /** Lleva un paso de la bandeja al inventario (bitácora CAMBIOS y movimiento, como una edición). */
-  function espejar_(hechos, cambiosDe, motivo, tipoMovimiento, usuario, solicitudes) {
+  /**
+   * Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): el renglón queda RETIRADA (en el historial) y la línea
+   * deja EN PROCESO DE CANCELACION: DISPONIBLE, o USO si sigue en un equipo con persona. datos = { comentario }.
+   */
+  function retirarCancelacion(ids, datos, usuario) {
+    exigirAprobador_(usuario);
+    const comentario = txt((datos || {}).comentario);
+    if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial de la línea).');
+    asegurarBandeja_();
+    const porId = {};
+    const r = actualizar_(ids, (x) => {
+      const actual = txt(x['CANCELACION']);
+      if (EN_CURSO.indexOf(actual) < 0) return { omitir: actual ? 'Ya estaba ' + actual.toLowerCase() : 'Su línea no va a cancelación' };
+      porId[txt(x['ID'])] = x;
+      return { 'CANCELACION': FASE.RETIRADA, 'RETIRADO_EN': new Date(), 'RETIRO': usuario.nombre, 'RETIRO_MOTIVO': comentario };
+    });
+    espejar_(r.hechos, (f) => {
+      if (may(LineasUtil.col(f, 'ESTATUS LINEA')) !== LINEA_CANCELACION) return null;
+      const conPersona = !!LineasRepo.TIPOS_CON_EQUIPO[may(LineasUtil.col(f, 'TIPO'))] && may(LineasUtil.col(f, 'ESTATUS EQUIPO')) === 'USO';
+      return { 'ESTATUS LINEA': conPersona ? 'USO' : LINEA_DISPONIBLE };
+    }, comentario, 'RETIRAR_CANCELACION', usuario, porId, true);
+    return r;
+  }
+
+  /**
+   * Lleva un paso de la bandeja al inventario (bitácora CAMBIOS y movimiento, como una edición). deLinea: el paso es
+   * de la cancelación y sigue a la línea (registroDeLinea_); si no, al equipo del renglón.
+   */
+  function espejar_(hechos, cambiosDe, motivo, tipoMovimiento, usuario, solicitudes, deLinea) {
     if (!hechos.length) return;
     const sol = solicitudes || {};
     const porIdBandeja = {};
     LineasDatos.leerTabla(TAB).forEach((r) => { porIdBandeja[txt(r['ID'])] = r; });
     const tocados = [];
     LineasDatos.conCandado(() => {
-      const porId = filasPorId_();
+      const ix = indices_();
       hechos.forEach((h) => {
         const s = sol[h.id] || porIdBandeja[h.id];
-        const f = s && porId[txt(s['REGISTRO_ID'])];
-        if (!f) { h.aviso = 'El equipo ya no está en el inventario'; return; }
+        const f = s && (deLinea ? registroDeLinea_(s, ix) : ix.porId[txt(s['REGISTRO_ID'])]);
+        if (!f) { h.aviso = deLinea ? 'La línea ya no está en el inventario' : 'El equipo ya no está en el inventario'; return; }
         tocados.push(txt(f['ID']));
         const cambios = cambiosDe(f, s);
-        if (!cambios) { h.aviso = 'El equipo ya tiene otra línea: el inventario no se tocó'; return; }
+        if (!cambios) { h.aviso = 'La línea ya no estaba en proceso de cancelación: el inventario no se tocó'; return; }
         const ahora = new Date();
-        const antes = { estatus: txt(LineasUtil.col(f, tipoMovimiento === 'VENTA' ? 'ESTATUS EQUIPO' : 'ESTATUS LINEA')) };
+        const venta = tipoMovimiento === 'VENTA';
+        const antes = { estatus: txt(LineasUtil.col(f, venta ? 'ESTATUS EQUIPO' : 'ESTATUS LINEA')) };
         const guardado = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora);
         if (!guardado.campos.length) return;
         LineasRepo.registrarMovimiento(tipoMovimiento, { motivo: motivo }, usuario, ahora, {
           refs: [txt(f['ID'])].concat(guardado.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: s['NUMERO'], antes: antes,
-          despues: { estatus: tipoMovimiento === 'VENTA' ? 'VENDIDO' : 'CANCELADA' },
+          despues: { estatus: venta ? 'VENDIDO' : txt(cambios['ESTATUS LINEA']) },
           detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos, resguardo: h.id },
         });
       });
@@ -668,10 +839,142 @@ const LineasResguardos = (function () {
     if (tocados.length) LineasRepo.refrescarIndice(tocados); // solo los tocados
   }
 
+  // ---------------- Quitar del panel (pendiente 3.12) ----------------
+  //
+  // Para un equipo mandado por error que Pau aún no recibe (PENDIENTE DE RECEPCION); solo los de Líneas. El renglón queda
+  // RETIRADO y el equipo vuelve a como estaba antes de mandarlo, campo por campo, con lo que guardó el movimiento del envío:
+  // solo regresa el campo que sigue con el valor que dejó el envío; lo que alguien cambió después se queda (usuario,
+  // 20-oct). La línea que se fue a Cancelaciones no regresa (la retira Pau) y los datos de la persona solo vuelven si el
+  // equipo vuelve a USO.
+
+  /** Lo que el envío cambió pero no se regresa: la línea que salió, el tipo, el comentario y los calculados. */
+  const NO_REGRESA = ['NUMERO TELEFONO', 'NUMERO SIM', 'TIPO', 'COMPAÑIA', 'RAZON SOCIAL', 'COMENTARIOS', 'MOTIVO DE CANCELACION', 'ID PERSONA'];
+  const DE_LA_LINEA = ['ESTATUS LINEA', 'PIN WHATSAPP'];
+  const DE_LA_PERSONA = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE'];
+  const esDeLaPersona_ = (c) => DE_LA_PERSONA.indexOf(c) >= 0 || / RESPONSABLE$/.test(c);
+  /** En la ventana no se ve el valor (solo que regresa). */
+  const SECRETOS = ['PIN EQUIPO', 'PIN WHATSAPP', 'PATRON', 'CONTRASEÑA MODEM'];
+  const igualTexto_ = (a, b) => may(a).replace(/\s+/g, ' ') === may(b).replace(/\s+/g, ' ');
+
+  /** Lo que cambió el envío (CAMBIOS del movimiento RESGUARDO): por su ID o, en los renglones viejos, por equipo y hora. */
+  function cambiosDelEnvio_(r, f) {
+    const MOV = LineasRepo.TAB.MOV;
+    if (!MOV || !LineasDatos.existeTabla(MOV)) return [];
+    const idMov = txt(r['MOVIMIENTO_ID']);
+    const filas = idMov ? LineasDatos.buscarFilas(MOV, 'ID', idMov)
+      : LineasDatos.buscarFilasVarios(MOV, 'ID EQUIPO', [txt(f['ID']), txt(LineasUtil.col(f, 'ID EQUIPO'))].filter(Boolean), true);
+    if (!filas.length) return [];
+    const t = r['FECHA'] instanceof Date ? r['FECHA'].getTime() : 0;
+    const distancia = (m) => (m['FECHA'] instanceof Date ? Math.abs(m['FECHA'].getTime() - t) : Infinity);
+    const m = LineasDatos.leerFilas([{ tabla: MOV, filas: filas }])[0]
+      .filter((x) => txt(x['ACCION']) === 'RESGUARDO' && (idMov || distancia(x) < 120000))
+      .sort((a, b) => distancia(a) - distancia(b))[0];
+    if (!m) return [];
+    try { return JSON.parse(txt(m['CAMBIOS']) || '[]'); } catch (e) { return []; }
+  }
+
+  /** { regresa: [{ campo, de, a }], seQueda: [{ campo, valor, motivo }] } del renglón `r` y su equipo `f`. */
+  function planQuitar_(r, f) {
+    const porCampo = {};
+    const orden = [];
+    cambiosDelEnvio_(r, f).forEach((c) => {
+      const k = txt(c.campo);
+      if (!k) return;
+      if (!porCampo[k]) { porCampo[k] = { antes: c.antes, despues: c.despues }; orden.push(k); } else porCampo[k].despues = c.despues;
+    });
+    const numeroHoy = LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO'));
+    const lineaSigue = !!numeroHoy && numeroHoy === LineasUtil.digitos(r['LINEA_AL_MANDAR'] || r['NUMERO']);
+    const regresa = [];
+    const seQueda = [];
+    orden.forEach((k) => {
+      const c = porCampo[k];
+      const K = LineasDatos.normCol(k);
+      if (NO_REGRESA.indexOf(K) >= 0 || igualTexto_(c.antes, c.despues)) return;
+      if (DE_LA_LINEA.indexOf(K) >= 0 && !lineaSigue) return;
+      const hoy = txt(LineasUtil.col(f, k));
+      if (igualTexto_(hoy, c.despues)) regresa.push({ campo: k, de: hoy, a: txt(c.antes) });
+      else seQueda.push({ campo: k, valor: hoy, motivo: 'Cambió después' });
+    });
+    // Sin USO el equipo sigue guardado: la persona no regresa (y su línea no vuelve a USO)
+    const estatus = regresa.filter((x) => LineasDatos.normCol(x.campo) === 'ESTATUS EQUIPO')[0];
+    const final = may(estatus ? estatus.a : LineasUtil.col(f, 'ESTATUS EQUIPO'));
+    if (final === 'USO') return { regresa: regresa, seQueda: seQueda };
+    const queda = regresa.filter((x) => !(esDeLaPersona_(LineasDatos.normCol(x.campo)) || (LineasDatos.normCol(x.campo) === 'ESTATUS LINEA' && may(x.a) === 'USO')));
+    regresa.filter((x) => queda.indexOf(x) < 0).forEach((x) => seQueda.push({ campo: x.campo, valor: x.de, motivo: 'El equipo sigue en ' + final }));
+    return { regresa: queda, seQueda: seQueda };
+  }
+
+  /** Los renglones que se quitan: `ids` son de la bandeja o de equipos (el inventario manda el del equipo). */
+  function renglonesParaQuitar_(ids) {
+    const lista = limpiarIds_(ids);
+    const filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB) : [];
+    const porIdBandeja = {};
+    filas.forEach((r) => { porIdBandeja[txt(r['ID'])] = r; });
+    const abiertos = abiertosPorRegistro_(filas);
+    const ix = indices_();
+    return lista.map((id) => {
+      const r = porIdBandeja[id] || (ix.porId[id] ? abiertoDe_(abiertos, ix.porId[id]) : null);
+      const f = r ? ix.porId[txt(r['REGISTRO_ID'])] || null : null;
+      let omitir = '';
+      if (!r) omitir = 'No está en Resguardos y cancelaciones';
+      else if (txt(r['ESTADO']) === ESTADO.RESGUARDO) omitir = 'Ya lo recibió Pau: lo saca con «Entregar a líneas»';
+      else if (txt(r['ESTADO']) !== ESTADO.PENDIENTE) omitir = 'Ya no está por recibir';
+      else if (!f) omitir = 'El equipo ya no está en el inventario';
+      return { id: id, r: r, f: f, nuco: r ? txt(r['NUCO']) : '', omitir: omitir };
+    });
+  }
+
+  /** La ventana de Quitar del panel: qué regresa y qué se queda de cada equipo (los secretos sin su valor). */
+  function vistaQuitar(ids) {
+    const oculto = (x, c) => (SECRETOS.indexOf(LineasDatos.normCol(x.campo)) >= 0 ? Object.assign({}, x, c) : x);
+    return {
+      filas: renglonesParaQuitar_(ids).map((q) => {
+        if (q.omitir) return { id: q.id, nuco: q.nuco, omitir: q.omitir, regresa: [], seQueda: [] };
+        const p = planQuitar_(q.r, q.f);
+        return {
+          id: txt(q.r['ID']), nuco: q.nuco, modelo: txt(LineasUtil.col(q.f, 'EQUIPO')), estado: txt(q.r['ESTADO']), omitir: '',
+          regresa: p.regresa.map((x) => oculto(x, { de: x.de ? '••••' : '', a: x.a ? '••••' : '' })),
+          seQueda: p.seQueda.map((x) => oculto(x, { valor: x.valor ? '••••' : '' })),
+        };
+      }),
+    };
+  }
+
+  /** datos = { comentario, ticket }. Regresa { hechos: [{ id, nuco }], omitidos, indice }. */
+  function quitarDelPanel(ids, datos, usuario) {
+    const d = datos || {};
+    const comentario = txt(d.comentario);
+    if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial del equipo).');
+    const hechos = [];
+    const omitidos = [];
+    const registros = [];
+    LineasDatos.conCandado(() => {
+      asegurarBandeja_();
+      renglonesParaQuitar_(ids).forEach((q) => {
+        if (q.omitir) { omitidos.push({ id: q.id, nuco: q.nuco, motivo: q.omitir }); return; }
+        const ahora = new Date();
+        const p = planQuitar_(q.r, q.f);
+        const cambios = {};
+        p.regresa.forEach((x) => { cambios[x.campo] = x.a; });
+        const guardado = p.regresa.length ? LineasRepo.guardarCambiosRegistro(q.f, cambios, usuario, ahora) : { campos: [], refs: [], idsCambios: [] };
+        LineasRepo.registrarMovimiento('QUITAR_PANEL', { motivo: comentario, ticket: txt(d.ticket) }, usuario, ahora, {
+          refs: [txt(q.f['ID'])].concat(guardado.refs || []), nuco: LineasUtil.col(q.f, 'NUCO'), numero: LineasUtil.col(q.f, 'NUMERO TELEFONO'),
+          antes: { estatus: txt(LineasUtil.col(q.f, 'ESTATUS EQUIPO')) }, despues: { estatus: txt(cambios['ESTATUS EQUIPO'] || LineasUtil.col(q.f, 'ESTATUS EQUIPO')) },
+          detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos, resguardo: txt(q.r['ID']) },
+        });
+        LineasDatos.actualizarFila(TAB, q.r._fila, { 'ESTADO': ESTADO.RETIRADO, 'RETIRADO_EN': ahora, 'RETIRO': usuario.nombre, 'RETIRO_MOTIVO': comentario, 'ACTUALIZADO_EN': ahora });
+        registros.push(txt(q.f['ID']));
+        hechos.push({ id: txt(q.r['ID']), nuco: q.nuco });
+      });
+    });
+    return { hechos: hechos, omitidos: omitidos, indice: registros.length ? LineasRepo.refrescarIndice(registros) : null };
+  }
+
   return {
-    formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion, puedeAprobar, asesorPara,
+    formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion,
+    retirarCancelacion, vistaQuitar, quitarDelPanel, abiertosPorEquipo, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
-    _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_,
+    _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_, _planQuitar: planQuitar_,
   };
 })();

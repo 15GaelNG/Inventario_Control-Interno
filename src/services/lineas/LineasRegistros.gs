@@ -758,6 +758,8 @@ const LineasRegistros = (function () {
       // CORRECCION DE CAPTURA, un dato mal escrito (solo Edición en el historial)
       const cambioDeNumero = 'NUMERO TELEFONO' in cambios && !!texto_(base['NUMERO TELEFONO']) &&
         texto_(r.valores[CAMBIO_NUMERO]).toUpperCase() === MOTIVO_CAMBIO_NUMERO;
+      // Una línea en Cancelaciones no cambia de estatus aquí: la retira Pau (pendiente 3.12)
+      if ('ESTATUS LINEA' in cambios) LineasResguardos.exigirSinCancelacion(fila);
       const antes = LineasRepo.convertirRegistro(fila);
       // corregir: cambiar a la persona aquí es corregir el dato en la misma asignación (usuario, 4-oct); pasar el equipo a
       // otra persona es la Responsiva (pendiente 2.49)
@@ -780,11 +782,13 @@ const LineasRegistros = (function () {
       if (lineaSale && lineaSale.estatus === LineasResguardos.LINEA_SIN_PANEL) {
         LineasResguardos.registrarCancelacionDirecta(fila, texto_(base['ID LINEA']), motivo, texto_(datos && datos.ticket), usuario, new Date());
       }
-      return { guardado: guardado, lineaAlPanel: lineaSale && lineaSale.alPanel ? texto_(base['ID LINEA']) : null, motivo: motivo };
+      return { guardado: guardado, lineaAlPanel: lineaSale && lineaSale.alPanel ? texto_(base['ID LINEA']) : null, motivo: motivo,
+        nuco: LineasUtil.nucoVisible(base['NUCO']) || '' };
     });
     // La línea que va al panel ya quedó sola: entra a la bandeja como con «Mandar a cancelación», desde su propio registro
     if (resultado.lineaAlPanel) {
-      LineasResguardos.mandarCancelacion([resultado.lineaAlPanel], { comentario: resultado.motivo, ticket: texto_(datos && datos.ticket) }, usuario, { motivoDelAdendum: true });
+      LineasResguardos.mandarCancelacion([resultado.lineaAlPanel], { comentario: resultado.motivo, ticket: texto_(datos && datos.ticket) }, usuario,
+        { motivoDelAdendum: true, nucos: { [resultado.lineaAlPanel]: resultado.nuco } });
     }
     return { id: id, cambios: resultado.guardado.campos, filas: LineasRepo.refrescarIndice([id].concat(resultado.lineaAlPanel ? [resultado.lineaAlPanel] : [])) };
   }

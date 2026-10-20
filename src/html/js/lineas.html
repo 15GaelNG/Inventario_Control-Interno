@@ -566,16 +566,25 @@
     // guarda no cambia (SI, NO, N/A…); solo el texto en pantalla y el color según lo que significa.
     const TEXTO_ESCALA = { SI: 'Sí', NO: 'No', 'N/A': 'N/A', BUENO: 'Bueno', REGULAR: 'Regular', MALO: 'Malo', INSTALADA: 'Instalada', 'NO INSTALADA': 'No instalada' };
     const CLASE_ESCALA = { SI: 'ln-pastilla-bien', BUENO: 'ln-pastilla-bien', INSTALADA: 'ln-pastilla-bien', NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
-    // fijas: opciones que se ven pero no se eligen (el estatus que ya tiene en la bandeja de Pau; usuario, 20-oct)
-    function grupoEscala(opciones, valorPrevio, ayudas, fijas) {
+    function grupoEscala(opciones, valorPrevio, ayudas) {
       const textos = opciones.map((v) => TEXTO_ESCALA[v] || v);
       const ancho = Math.max(64, Math.max.apply(null, textos.map((t) => t.length)) * 8 + 28);
-      const fija = (v) => (fijas || []).indexOf(v) >= 0;
       return '<div class="ln-pastillas ln-segmento" role="radiogroup" style="--ancho-opcion:' + ancho + 'px">' + opciones.map((v, i) =>
         '<button type="button" role="radio" aria-checked="' + (v === valorPrevio) + '" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (CLASE_ESCALA[v] ? ' ' + CLASE_ESCALA[v] : '') +
-        (fija(v) ? ' ln-pastilla-fija" disabled aria-disabled="true' : '') +
         '" data-valor="' + esc(v) + '"' + (ayudas && ayudas[v] ? ' title="' + esc(ayudas[v]) + '"' : '') + '>' + esc(textos[i]) + '</button>').join('') + '</div>';
     }
+
+    /** La nota de una escala (e.notas) según lo que se eligió: sale en cuanto se elige, sin otra ventana (usuario, 20-oct). */
+    function notaDeEscala(pastilla) {
+      const punto = pastilla.closest('[data-notas]');
+      const caja = punto && punto.parentElement.querySelector('[data-escala-nota]');
+      if (!caja) return;
+      const texto = JSON.parse(punto.dataset.notas || '{}')[pastilla.dataset.valor] || '';
+      caja.innerHTML = texto ? icono('info', 'ln-icon-sm') + ' ' + esc(texto) : '';
+      caja.hidden = !texto;
+    }
+    /** Lo que no pasa por el panel de Pau se avisa con esta nota bajo el estatus (pendiente 3.12). */
+    const NOTA_SIN_PANEL = 'No entra al panel de Resguardos y cancelaciones; queda en el historial.';
 
     /**
      * Patrón: además de la forma, el orden y la dirección (usuario, 4-oct). Cada punto marcado lleva su número (1 = donde
@@ -759,7 +768,11 @@
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
-        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null, e.ayudas, e.fijas) + '</div>';
+        // notas: { VALOR: texto } bajo el control cuando ese valor está elegido (CANCELADA sin panel; pendiente 3.12)
+        const nota = e.notas && e.notas[valor];
+        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '"' + (e.notas ? ' data-notas="' + esc(JSON.stringify(e.notas)) + '"' : '') + '>' +
+          grupoEscala(e.opciones || [], valor || null, e.ayudas) + '</div>' +
+          (e.notas ? '<div class="ln-nota ln-nota-campo" data-escala-nota' + (nota ? '' : ' hidden') + '>' + (nota ? icono('info', 'ln-icon-sm') + ' ' + esc(nota) : '') + '</div>' : '');
       } else if (e.control === 'lista') {
         const opciones = (e.opciones || []).slice();
         const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
@@ -2147,6 +2160,7 @@
       modulo: 'equipos',
       modoVista: null, // 'tabla' | 'tarjetas' (se recuerda en el navegador)
       abrirAlEntrar: null, // id de registro a abrir al entrar a Líneas Telefónicas (desde una bitácora)
+      corregirAlEntrar: null, // y abrir su «Corregir resguardo» (desde el panel de Pau; pendiente 3.12)
       filtrarAlEntrar: null, // { modulo, estatus }: filtro al entrar a Líneas Telefónicas (desde el Panorama)
     };
     let montaje = 0; // cambia en cada init: respuestas tardías de una vista anterior se ignoran
@@ -2539,6 +2553,7 @@
           pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => { b.classList.remove('activa'); if (b.hasAttribute('aria-checked')) b.setAttribute('aria-checked', 'false'); });
           pastilla.classList.add('activa');
           if (pastilla.hasAttribute('aria-checked')) pastilla.setAttribute('aria-checked', 'true');
+          notaDeEscala(pastilla);
           actualizarProgresoChecklist();
           return;
         }
@@ -2636,6 +2651,10 @@
           const id = memoria.abrirAlEntrar;
           memoria.abrirAlEntrar = null;
           abrirRegistro(id);
+          if (memoria.corregirAlEntrar === id) {
+            memoria.corregirAlEntrar = null;
+            abrirResguardo([filaDelIndice('equipo', id) || { id: id }], { corregir: true });
+          }
         }
         if (memoria.filtrarAlEntrar) {
           const f = memoria.filtrarAlEntrar;
@@ -2742,8 +2761,13 @@
             // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
             { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
               alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            // Ya en el panel de Pau: se corrige y, si aún no lo recibe, se quita (usuario, 20-oct; pendiente 3.12)
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
-              visible: operar, alHacer: (f) => abrirResguardo(f) },
+              visible: (f) => operar() && !f.some((r) => r.panel), alHacer: (f) => abrirResguardo(f) },
+            { icono: 'archive-restore', texto: 'Corregir resguardo', titulo: 'Destino, estatus y comentario de su renglón en Resguardos y cancelaciones', maximo: UNO, grupo: 'mover',
+              visible: (f) => operar() && f.every((r) => r.panel), alHacer: (f) => abrirResguardo(f, { corregir: true }) },
+            { icono: 'archive-x', texto: 'Quitar del panel', titulo: 'Mandado por error: vuelve a como estaba antes de mandarlo', maximo: UNO, grupo: 'mover',
+              visible: (f) => operar() && f.every((r) => r.panel === 'PENDIENTE DE RECEPCION'), alHacer: (f) => quitarDelPanel(f.map((r) => r.id), trasQuitar) },
             // En el equipo solo corrige el equipo: la línea se corrige desde la línea (usuario, 13-oct)
             editar,
             vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
@@ -3490,7 +3514,9 @@
         const historial = veHistorial() ? [{ icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') }] : [];
         const items = tipo === 'equipo'
           ? (operar ? [
-            { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
+            r.panel ? { icono: 'archive-restore', texto: 'Corregir resguardo', alHacer: () => abrirResguardo([r], { corregir: true }) }
+              : { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
+            r.panel === 'PENDIENTE DE RECEPCION' ? { icono: 'archive-x', texto: 'Quitar del panel', alHacer: () => quitarDelPanel([r.id], trasQuitar) } : null,
           ] : []).concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)
           // La línea sin equipo: su carpeta en LINEAS, si ya tiene responsiva (pendiente 2.45)
           : [r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) } : null]
@@ -4084,20 +4110,24 @@
        * N/A en el servidor; la línea se propone DISPONIBLE o EN PROCESO DE CANCELACION según su FIN PLAN.
        * Al guardar se crea el renglón de la bandeja de Pau (Resguardos y cancelaciones).
        * opciones.estatus: estatus del equipo ya elegido (desde "Cambiar estatus": PARA VENTA, PARA DESECHO…).
+       * opciones.corregir (Corregir resguardo, pendiente 3.12): el equipo ya está en el panel; el formulario llega lleno con
+       * lo de su renglón, sin restricciones de estatus, sin inspección y sin renglón nuevo.
        */
       async function abrirResguardo(filas, opciones) {
         const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
+        const corregir = !!(opciones && opciones.corregir);
+        const accionTexto = corregir ? 'Corregir resguardo' : (estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial);
         if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('archive');
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
-        $('#ln-captura-titulo', raiz).textContent = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
+        $('#ln-captura-titulo', raiz).textContent = accionTexto;
         const cuerpo = $('#ln-captura-cuerpo', raiz);
         cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesion = captura = { tipo: 'RESGUARDO', firmas: {} };
         let form;
         try {
-          form = await llamar('apiLineasFormularioResguardo', filas.map((r) => r.id));
+          form = await llamar('apiLineasFormularioResguardo', filas.map((r) => r.id), { corregir: corregir });
         } catch (e) {
           if (captura === sesion) cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
           return;
@@ -4105,7 +4135,7 @@
         if (captura !== sesion) return;
         const equipos = form.equipos || [];
         if (!equipos.length) {
-          cuerpo.innerHTML = '<p class="error-msg">Ninguno de los seleccionados es un equipo: ' + esc((form.omitidos || []).map((o) => o.motivo).join(' · ')) + '</p>';
+          cuerpo.innerHTML = '<p class="error-msg">' + esc((form.omitidos || []).map((o) => (o.nuco ? 'NUCO ' + o.nuco + ': ' : '') + o.motivo).join(' · ')) + '</p>';
           return;
         }
         const columnaFila = (id, c) => 'FILA|' + id + '|' + c;
@@ -4114,7 +4144,6 @@
         const campo = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control,
           requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false }, extra || {});
         const ubicacion = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
-        const accionTexto = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
         $('#ln-captura-subtitulo', raiz).textContent = equipos.length === 1
           ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ')
           : miles(equipos.length) + ' equipos';
@@ -4131,21 +4160,24 @@
           // cambiar (usuario, 13-oct; el valor lo pone el servidor: LineasResguardos.UBICACION_RESGUARDO)
           const els = ubicacion.map((c) => {
             const b = base(c);
-            const valor = b && b.valor;
+            const valor = (corregir && q.actual && q.actual[c]) || (b && b.valor);
             return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, valor) ? valor || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
           });
           // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación y se elige
           // si pasa por el panel (EN PROCESO DE CANCELACION) o queda CANCELADA sin panel, sin nada elegido de inicio (usuario,
-          // 16-oct; pendiente 2.50); vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo).
-          // Ya en la bandeja de Pau solo se cambia a otro (usuario, 13-oct); el que tiene se ve, sin poder elegirlo (usuario, 20-oct)
+          // 16-oct; pendiente 2.50), con su nota al elegir CANCELADA (usuario, 20-oct); vigente o sin fecha, se elige DISPONIBLE o
+          // cancelación (usuario, 4-oct; el servidor revisa lo mismo). Corregir resguardo llega con lo de su renglón y sin
+          // restricciones (pendiente 3.12). La línea que ya está en Cancelaciones no se elige: la retira Pau
           const posibles = q.opcionesEstatus || form.estatusEquipo;
-          const fijas = q.estatusFijo ? [q.estatusFijo] : [];
-          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles, fijas: fijas,
-            valor: posibles.indexOf(estatusInicial) >= 0 && fijas.indexOf(estatusInicial) < 0 ? estatusInicial : '', requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
-          if (q.tieneLinea) {
+          const actual = (corregir && q.actual) || {};
+          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles,
+            valor: actual['ESTATUS EQUIPO'] || (posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : ''), requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
+          if (q.tieneLinea && !q.cancelacion) {
             const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
-            estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea,
-              valor: vencido ? '' : q.propuestaLinea, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS }));
+            const opciones = vencido ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea;
+            estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: opciones,
+              valor: opciones.indexOf(actual['ESTATUS LINEA']) >= 0 ? actual['ESTATUS LINEA'] : (vencido ? '' : q.propuestaLinea), requerido: 'SIEMPRE',
+              ayudas: SIGNIFICADO_ESTATUS, notas: { [LINEA_SIN_PANEL]: NOTA_SIN_PANEL } }));
           }
           elementosFila[q.id] = els.concat(estatus);
           vistaFila[q.id] = [titulo(q, 'EQUIPO', 'smartphone'),
@@ -4153,7 +4185,7 @@
             info(q, 'COLOR', 'Color', q.color), info(q, 'ESTATUS EQUIPO', 'Estatus actual', q.estatusEquipo)]
             .concat(q.tieneLinea ? [titulo(q, 'LÍNEA', 'card-sim'),
               info(q, 'NUMERO', 'Número', q.numero), info(q, 'SIM', 'SIM', q.sim), info(q, 'COMPANIA', 'Compañía', q.compania),
-              info(q, 'RAZON SOCIAL', 'Razón social', q.razonSocial), info(q, 'ESTATUS LINEA', 'Estatus actual', q.estatusLinea),
+              info(q, 'RAZON SOCIAL', 'Razón social', q.razonSocial), info(q, 'ESTATUS LINEA', 'Estatus actual', q.cancelacion ? q.estatusLinea + ' · ' + q.cancelacion + ' en Cancelaciones' : q.estatusLinea),
               titulo(q, 'ADENDUM', 'file-text'),
               info(q, 'INICIO PLAN', 'Inicio', q.inicioPlan), info(q, 'FIN PLAN', 'Fin', q.finPlan), info(q, 'COSTO PLAN', 'Costo del plan', q.costoPlan),
               info(q, 'VIGENCIA', 'Vigencia', vigenciaTexto(q))] : [])
@@ -4161,7 +4193,8 @@
         });
         // Un solo COMENTARIO (plan §5.2) y el TICKET. La regla del servidor (más de 3 caracteres) se revisa aquí, antes de
         // pedir las inspecciones: si no, el error salía al final, con las inspecciones ya guardadas (usuario, 8-oct)
-        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' });
+        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: corregir && equipos.length === 1 && equipos[0].actual ? equipos[0].actual.COMENTARIO : '',
+          valida: 'COMENTARIOS' });
         const ticketEl = campo('_TICKET', 'Ticket', 'texto', { valor: '', literal: true });
         cuerpo.innerHTML =
           ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +
@@ -4196,10 +4229,10 @@
           // La inspección es obligatoria al mandar a resguardo (pendiente 2.6) y se captura dentro de la acción (decisión
           // del usuario, 3-oct): una por cada equipo que viene de una persona. Si se cierra una sin guardar, no se manda
           // ninguno; las que ya se guardaron no se vuelven a pedir hoy
-          const deUnaPersona = equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
-          const textoEspera = estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
+          const deUnaPersona = corregir ? [] : equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
+          const textoEspera = corregir ? 'Corrigiendo ' + miles(equipos.length) + ' resguardo(s)' : estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
           const enviar = (extra) => llamar('apiLineasMandarResguardo', equipos.map((q) => q.id),
-            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo }, extra));
+            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo, corregir: corregir }, extra));
           // La espera también después de la inspección (usuario, 13-oct): antes solo salía un aviso en la esquina y no se
           // sabía si se estaba mandando. Igual que Reasignar: la ventana vuelve con la pantalla de espera
           const ventanaEspera = () => {
@@ -4267,6 +4300,16 @@
             }
             errorAlGuardar(e);
           }
+        });
+      }
+
+      /** Después de Quitar del panel: el índice y la ficha abierta con lo que regresó (pendiente 3.12). */
+      function trasQuitar(r) {
+        return (r && r.indice ? aplicarCambiosIndice(r.indice) : Promise.resolve()).then(() => {
+          if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+          if (vigente()) { pintarIndicadores(); pintarListado(); }
+          const actual = pila[pila.length - 1];
+          if (actual) abrir(actual.tipo, actual.id, true);
         });
       }
 
@@ -4443,7 +4486,26 @@
             captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
             captura.controlPatron = activarPatron('af-' + patron.columna.replace(/[^A-Za-z0-9]+/g, '-') + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
           }
-          const aplicar = () => aplicarReglasEn(cuerpo, elementos, ctx);
+          // Un estatus que no entra al panel de Pau se avisa con una nota bajo el campo al elegirlo, sin ventana al guardar
+          // (usuario, 20-oct; pendiente 3.12)
+          const notaPanel = () => {
+            if (!id) return;
+            const v = leerFormularioEn(cuerpo, elementos);
+            [['ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO], ['ESTATUS LINEA', ESTATUS_LINEA_PANEL]].forEach((par) => {
+              const caja = cuerpo.querySelector('[data-af-columna="' + par[0] + '"]');
+              if (!caja) return;
+              let nota = caja.querySelector('[data-nota-panel]');
+              if (!nota) {
+                nota = document.createElement('div');
+                nota.className = 'ln-nota ln-nota-campo';
+                nota.setAttribute('data-nota-panel', '');
+                nota.innerHTML = icono('info', 'ln-icon-sm') + ' ' + esc(NOTA_SIN_PANEL);
+                caja.appendChild(nota);
+              }
+              nota.hidden = !(v[par[0]] !== ctx.inicial[par[0]] && par[1].indexOf(v[par[0]]) >= 0);
+            });
+          };
+          const aplicar = () => { aplicarReglasEn(cuerpo, elementos, ctx); notaPanel(); };
           cuerpo.addEventListener('input', aplicar);
           cuerpo.addEventListener('change', aplicar);
           cuerpo.addEventListener('click', (ev) => {
@@ -4493,13 +4555,9 @@
             // El equipo que sale del inventario deja su línea en USO DISPONIBLE (el servidor); con el adendum vencido va a
             // cancelación y se pregunta en la ventana del comentario si pasa por el panel (usuario, 16-oct; pendiente 2.50)
             const lineaACancelar = form.lineaVencida && cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL);
-            const avisoEstatus = !avisos.length ? Promise.resolve(true) : Confirmar.pedir({
-              titulo: 'Cambio de estatus',
-              mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial.',
-              detalle: avisos, textoConfirmar: 'Confirmar',
-            });
-            // Segunda ventana: un solo COMENTARIO obligatorio y el TICKET (plan §5.2), ya con los cambios aceptados
-            avisoEstatus.then((ok) => (!ok || captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
+            // La nota bajo el estatus ya avisó que no entra al panel (usuario, 20-oct; pendiente 3.12): directo a la ventana
+            // del comentario, un solo COMENTARIO obligatorio y el TICKET (plan §5.2)
+            Promise.resolve().then(() => (captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
               (lineaACancelar ? [{ clave: 'cancelacionLinea', etiqueta: 'Línea · adendum vencido', opciones: CANCELACION_LINEA.map((x) => x.texto), elegir: true, requerido: true }] : [])
                 .concat([{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }]),
               id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')))).then((nota) => {
@@ -6791,6 +6849,7 @@
      * opciones }]. Regresa una promesa con { clave: valor } o null si se cancela.
      * opciones.alConfirmar(valores) (promesa): la ventana se queda con la pantalla de espera (opciones.espera) desde el
      * clic hasta que termina; si falla, muestra el error y "Volver" regresa a lo capturado. Regresa lo que regrese.
+     * opciones.cuerpo: promesa con el HTML de lo que se va a hacer (Quitar del panel); hasta que llega no se confirma.
      * opciones.detalle: lista de lo que se va a tocar (como Confirmar); opciones.peligro: botón rojo. Sin campos sirve
      * de confirmación con espera (pasos de la bandeja de Pau, 13-oct). opciones.encima: por arriba del visor de fotos.
      */
@@ -6806,6 +6865,7 @@
           '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
           (detalle.length ? '<ul class="confirmar-detalle">' + detalle.slice(0, 50).map((d) => '<li>' + esc(d) + '</li>').join('') +
             (detalle.length > 50 ? '<li><em>…y ' + miles(detalle.length - 50) + ' más</em></li>' : '') + '</ul>' : '') +
+          (o.cuerpo ? '<div data-cuerpo><p class="empty-state"><span class="ln-spinner"></span> Cargando…</p></div>' : '') +
           campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
             // elegir: la lista empieza sin nada elegido («Selecciona…»), como las de los formularios
             (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + (c.elegir ? '<option value="">Selecciona…</option>' : '') +
@@ -6818,6 +6878,12 @@
         document.body.appendChild(fondo);
         const espera = fondo.querySelector('[data-espera]');
         let ocupado = false;
+        // o.cuerpo: promesa con el HTML de lo que se va a hacer; hasta que llega no se confirma
+        let listo = !o.cuerpo;
+        if (o.cuerpo) {
+          o.cuerpo.then((html) => { fondo.querySelector('[data-cuerpo]').innerHTML = html; pintarIconos(fondo); listo = true; })
+            .catch((e) => { fondo.querySelector('[data-cuerpo]').innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+        }
         const cerrar = (valor) => { fondo.remove(); document.removeEventListener('keydown', tecla, true); resolve(valor); };
         const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); if (!ocupado) cerrar(null); } };
         document.addEventListener('keydown', tecla, true);
@@ -6833,6 +6899,7 @@
           espera.hidden = false;
         };
         fondo.querySelector('[data-ok]').addEventListener('click', async () => {
+          if (!listo) return;
           const valores = {};
           fondo.querySelectorAll('[data-clave]').forEach((el) => { valores[el.dataset.clave] = String(el.value || '').trim(); });
           const falta = campos.filter((c) => (c.requerido && !valores[c.clave]) || (c.minimo && valores[c.clave].length < c.minimo))[0];
@@ -6850,6 +6917,32 @@
         const primero = fondo.querySelector('[data-clave]');
         if (primero) primero.focus();
       });
+    }
+
+    /**
+     * Quitar del panel (usuario, 20-oct; pendiente 3.12): un equipo mandado por error que Pau aún no recibe. La ventana dice
+     * qué vuelve a como estaba antes de mandarlo y qué se queda porque alguien lo cambió después, y pide el comentario.
+     * `ids`: de equipos (inventario) o de renglones (panel). alTerminar(r) con lo que contestó el servidor.
+     */
+    function quitarDelPanel(ids, alTerminar) {
+      const etiqueta = (c) => c.charAt(0) + c.slice(1).toLowerCase();
+      const fila = (campo, hoy, queda) => '<tr><td>' + esc(etiqueta(campo)) + '</td><td>' + hoy + '</td><td>' + queda + '</td></tr>';
+      const cuerpo = llamar('apiLineasVistaQuitarPanel', ids).then((v) => v.filas.map((q) => '<div class="ln-quitar"><p class="ln-fuerte">NUCO ' + esc(q.nuco || '—') +
+        (q.modelo ? ' · ' + esc(q.modelo) : '') + '</p>' + (q.omitir ? '<p class="ln-tenue">' + esc(q.omitir) + '</p>'
+        : (!q.regresa.length && !q.seQueda.length ? '<p class="ln-tenue">Sin cambios que regresar: solo sale del panel.</p>'
+          : '<p class="ln-quitar-texto">El equipo vuelve a como estaba antes de mandarlo:</p><table class="ln-quitar-tabla"><thead><tr><th>Campo</th><th>Hoy</th><th>Queda</th></tr></thead><tbody>' +
+            q.regresa.map((x) => fila(x.campo, '<span class="ln-tenue">' + guion(x.de) + '</span>', icono('undo-2', 'ln-icon-sm') + ' ' + guion(x.a))).join('') +
+            q.seQueda.map((x) => fila(x.campo, guion(x.valor), '<span class="ln-chip ambar">Se queda: ' + esc(x.motivo.charAt(0).toLowerCase() + x.motivo.slice(1)) + '</span>')).join('') +
+            '</tbody></table>')) + '</div>').join(''));
+      return pedirDatos('Quitar del panel', '', [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+        'Quitar del panel', { peligro: true, cuerpo: cuerpo, espera: 'Quitando del panel', alConfirmar: (datos) => llamar('apiLineasQuitarDelPanel', ids, datos) })
+        .then((r) => {
+          if (!r) return null;
+          const omitidos = r.omitidos || [];
+          aviso(icono('circle-check') + ' Quitados del panel: ' + miles(r.hechos.length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
+            omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
+          return alTerminar ? alTerminar(r) : r;
+        });
     }
 
     function initResguardos() {
@@ -6876,6 +6969,8 @@
           { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          // La que tenía al mandarlo: dato del trámite, no sigue al inventario (pendiente 3.12)
+          { campo: 'LINEA_AL_MANDAR', titulo: 'Línea al mandar', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
           { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },
@@ -6888,6 +6983,8 @@
           { campo: 'ENTREGA_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto', visible: false },
           { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', visible: false },
           { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', visible: false },
+          { campo: 'RETIRADO_EN', titulo: 'Quitado', tipo: 'lnFechaHora', visible: false },
+          { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se quitó', tipo: 'texto', visible: false },
         ],
         CANCELACIONES: [
           { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
@@ -6907,6 +7004,8 @@
           { campo: 'ESTADO', titulo: 'Equipo (resguardo)', tipo: 'lista', render: (v) => chip(v), visible: false },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista', visible: false },
           { campo: 'CANCELO', titulo: 'Confirmó', tipo: 'lista', visible: false },
+          { campo: 'RETIRADO_EN', titulo: 'Retirada', tipo: 'lnFechaHora', visible: false },
+          { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se retiró', tipo: 'texto', visible: false },
         ],
       };
 
@@ -6938,8 +7037,9 @@
           { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1,
             alHacer: (filas) => paso('RECIBIR', filas, { titulo: '¿Confirmas que recibiste ' + miles(filas.length) + ' equipo(s)?',
               mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos', espera: 'Recibiendo ' + miles(filas.length) + ' equipo(s)' }) },
-          { icono: 'hand-helping', texto: 'Entregar a Líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1,
-            alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a Líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
+          // Textos en oración (usuario, 20-oct; pendiente 3.12)
+          { icono: 'hand-helping', texto: 'Entregar a líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1,
+            alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
               campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
               boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
           { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1,
@@ -6958,8 +7058,22 @@
             alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
               mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
               peligro: true, hecho: 'Canceladas', inventario: true, espera: 'Cancelando ' + miles(filas.length) + ' línea(s)' }) },
+          // Solo Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): la línea deja de estar en proceso
+          { icono: 'undo-2', texto: 'Retirar cancelación', titulo: 'Ya no se cancela: sale de Cancelaciones (queda en el historial) y la línea deja de estar en proceso', minimo: 1,
+            alHacer: (filas) => paso('RETIRAR_CANCELACION', filas, { titulo: 'Retirar cancelación', mensaje: miles(filas.length) + ' línea(s) pasan a RETIRADA; la línea queda DISPONIBLE (o en USO si sigue con su equipo).',
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Retirar cancelación', hecho: 'Retiradas', inventario: true,
+              espera: 'Retirando ' + miles(filas.length) + ' cancelación(es)' }) },
         ],
       };
+      // Los de Líneas, en lo que mandaron (pendiente 3.12): corregirlo y, si Pau aún no lo recibe, quitarlo
+      const ACCIONES_LINEAS = [
+        { icono: 'archive-restore', texto: 'Corregir resguardo', titulo: 'Destino, estatus y comentario; abre el equipo en Líneas telefónicas', maximo: 1,
+          visible: (filas) => filas.length === 1 && ['PENDIENTE DE RECEPCION', 'EN RESGUARDO'].indexOf(filas[0].ESTADO) >= 0,
+          alHacer: (filas) => { memoria.corregirAlEntrar = filas[0].REGISTRO_ID; irARegistro(filas[0].REGISTRO_ID); } },
+        { icono: 'archive-x', texto: 'Quitar del panel', titulo: 'Mandado por error: vuelve a como estaba antes de mandarlo', minimo: 1,
+          visible: (filas) => filas.every((f) => f.ESTADO === 'PENDIENTE DE RECEPCION'),
+          alHacer: (filas) => quitarDelPanel(filas.map((f) => f.ID), () => { if (tabla) tabla.limpiarSeleccion(); memoria.cargadoEn = 0; cargar(); }) },
+      ];
 
       function filasVista() {
         const todas = (datos && datos.filas) || [];
@@ -6974,14 +7088,16 @@
           { icono: 'archive', valor: miles(filas.length), etiqueta: 'Mandados a resguardo' },
           { icono: 'clock', valor: miles(cuenta('ESTADO', 'PENDIENTE DE RECEPCION')), etiqueta: 'Por recibir', clase: 'stat-tile-warn', filtros: { ESTADO: { valores: ['PENDIENTE DE RECEPCION'] } } },
           { icono: 'package-check', valor: miles(cuenta('ESTADO', 'EN RESGUARDO')), etiqueta: 'En resguardo', filtros: { ESTADO: { valores: ['EN RESGUARDO'] } } },
-          { icono: 'hand-helping', valor: miles(cuenta('ESTADO', 'ENTREGADO A LINEAS')), etiqueta: 'Entregados a Líneas', clase: 'stat-tile-ok', filtros: { ESTADO: { valores: ['ENTREGADO A LINEAS'] } } },
+          { icono: 'hand-helping', valor: miles(cuenta('ESTADO', 'ENTREGADO A LINEAS')), etiqueta: 'Entregados a líneas', clase: 'stat-tile-ok', filtros: { ESTADO: { valores: ['ENTREGADO A LINEAS'] } } },
           { icono: 'badge-dollar-sign', valor: miles(cuenta('ESTADO', 'VENDIDO')), etiqueta: 'Vendidos', filtros: { ESTADO: { valores: ['VENDIDO'] } } },
+          { icono: 'archive-x', valor: miles(cuenta('ESTADO', 'RETIRADO')), etiqueta: 'Quitados', filtros: { ESTADO: { valores: ['RETIRADO'] } } },
         ] : [
           { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Líneas a cancelar' },
           { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] } } },
           { icono: 'signature', valor: miles(cuenta('CANCELACION', 'CARTA FIRMADA')), etiqueta: 'Carta firmada', filtros: { CANCELACION: { valores: ['CARTA FIRMADA'] } } },
           { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
           { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
+          { icono: 'undo-2', valor: miles(cuenta('CANCELACION', 'RETIRADA')), etiqueta: 'Retiradas', filtros: { CANCELACION: { valores: ['RETIRADA'] } } },
         ];
         marcarKpi = tilesKpi($('#lnr-kpis', raiz), defs, () => tabla);
         marcarKpi(filtros);
@@ -6989,6 +7105,7 @@
 
       function crearTabla() {
         const puede = !!(datos && datos.puedeAprobar);
+        const opera = !!(datos && datos.puedeOperar);
         $('#lnr-tabla', raiz).innerHTML = '';
         tabla = tablaLineas($('#lnr-tabla', raiz), {
           idCampo: 'ID',
@@ -7000,11 +7117,11 @@
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
           accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
-          accionesSeleccion: puede ? ACCIONES[vista] : [],
+          accionesSeleccion: (puede ? ACCIONES[vista] : []).concat(opera && vista === 'RESGUARDOS' ? ACCIONES_LINEAS : []),
           alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
         });
         tabla.setDatos(filasVista());
-        $('#lnr-solo-lectura', raiz).hidden = puede;
+        $('#lnr-solo-lectura', raiz).hidden = puede || opera;
       }
 
       function cargar() {
