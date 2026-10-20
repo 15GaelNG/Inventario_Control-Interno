@@ -267,6 +267,9 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
     'y el de su asistente -- alguien cuyo Jefe Directo es ese responsable y cuyo puesto dice "asistente": ' + $('#ins-correo-asistente').value);
   const tagAsistente = $('#ins-correo-asistente').closest('.field').querySelector('label .auto-tag');
   ok(tagAsistente && !tagAsistente.hidden, 'también va marcado "auto"');
+  $('#ins-correo-asistente').value = 'otro.asistente@x.com';
+  evento($('#ins-correo-asistente'), 'input');
+  ok(tagAsistente.hidden, 'y el campo se puede corregir a mano (deja de decir "auto")');
 
   console.log('10. Firmas');
   $('#ins-guardar').click();
@@ -298,8 +301,9 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   ok(registrado && registrado.checklist.POLIZA === 'MALO' && registrado.checklist.SULFATADA === 'NO', 'manda las respuestas');
   ok(registrado && registrado.VOLTAJE === '12.6' && registrado.CONDUCTOR === 'JUAN PEREZ', 'manda los datos de los otros pasos');
   ok(registrado && registrado.JEFE_DIRECTO === 'OTRO JEFE', 'y el Jefe directo que se corrigió a mano, no el sugerido: ' + registrado.JEFE_DIRECTO);
-  ok(registrado && registrado.NOTIFICAR.responsable === 'juan.perez@x.com' && registrado.NOTIFICAR.asistente === 'lucia.torres@x.com',
-    'y el correo del responsable y el de su asistente, los sugeridos (nadie los tocó): ' + JSON.stringify(registrado.NOTIFICAR));
+  ok(registrado && registrado.NOTIFICAR.responsable === 'juan.perez@x.com', 'y el correo del responsable, el sugerido (no se tocó): ' + registrado.NOTIFICAR.responsable);
+  ok(registrado && registrado.NOTIFICAR.asistente === 'otro.asistente@x.com',
+    'y el del asistente, el corregido a mano, no el sugerido: ' + registrado.NOTIFICAR.asistente);
   ok(imagenesMandadas && imagenesMandadas['INS FRONTAL'] && imagenesMandadas['INS FRONTAL'].base64 === 'TRAZO',
     'manda el diagrama marcado, con las marcas');
   ok(imagenesMandadas && !imagenesMandadas['INS IZQUIERDA'], 'no manda los diagramas sin marcar (el servidor usa el dibujo en blanco)');
