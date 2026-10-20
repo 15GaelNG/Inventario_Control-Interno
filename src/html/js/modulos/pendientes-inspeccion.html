@@ -27,7 +27,8 @@
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay pendientes de inspección',
       ayuda: 'Lo que el inspector dijo que el responsable debe subir como ticket a Help Desk. "Sin cargar en Help Desk" ' +
-        'quiere decir que el sistema todavía no lo encuentra allá -- "Enviar recordatorio" le manda otro correo al responsable. ' +
+        'quiere decir que el sistema todavía no lo encuentra allá -- "Enviar recordatorio" le manda otro correo al responsable, ' +
+        'y "Vincular a un ticket de Help Desk" lo liga a mano si tú ya lo viste allá pero el sistema no lo encontró solo. ' +
         '"Estatus en Help Desk" es el estatus real del ticket allá (Abierto, Resuelto…), una vez que ya se encontró.',
       alCambiarFiltros: (filtros) => { marcarKpiActivo(filtros); },
       etiquetaFila: (p) => p.ASUNTO,
@@ -48,6 +49,9 @@
       accionesFila: puedeEditar ? [{
         icono: 'mail', titulo: 'Enviar recordatorio', visible: (p) => /^SIN CARGAR/i.test(p.ESTATUS || ''),
         alHacer: (p) => enviarRecordatorio(p),
+      }, {
+        icono: 'link', titulo: 'Vincular a un ticket de Help Desk', visible: (p) => /^SIN CARGAR/i.test(p.ESTATUS || ''),
+        alHacer: (p) => abrirVincular(p),
       }] : [],
       seleccionable: false,
     });
@@ -155,12 +159,54 @@
       }
     }
 
+    // ----- Vincular a mano (cuando el match automático no encontró el ticket solo) -----
+    const modalVincular = document.getElementById('pdi-modal-vincular');
+    const formVincular = document.getElementById('pdi-form-vincular');
+    const campoTicket = document.getElementById('pdi-vincular-ticket');
+    const errorVincular = document.getElementById('pdi-vincular-error');
+    let pendienteAVincular = null;
+
+    function abrirVincular(p) {
+      pendienteAVincular = p;
+      document.getElementById('pdi-vincular-asunto').textContent = p.ASUNTO;
+      campoTicket.value = '';
+      errorVincular.hidden = true;
+      modalVincular.hidden = false;
+      campoTicket.focus();
+    }
+    function cerrarVincular() {
+      modalVincular.hidden = true;
+      pendienteAVincular = null;
+    }
+    document.getElementById('pdi-vincular-cerrar').addEventListener('click', cerrarVincular);
+    modalVincular.addEventListener('click', (ev) => { if (ev.target === modalVincular) cerrarVincular(); });
+
+    formVincular.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      if (!pendienteAVincular) return;
+      errorVincular.hidden = true;
+      const boton = formVincular.querySelector('button[type="submit"]');
+      boton.disabled = true;
+      try {
+        await callServer('apiVincularTicketHelpdesk', state.token, pendienteAVincular.ID, campoTicket.value);
+        Notificar.exito('Pendiente vinculado al ticket de Help Desk');
+        cerrarVincular();
+        await cargar();
+      } catch (err) {
+        errorVincular.textContent = err.message;
+        errorVincular.hidden = false;
+      } finally {
+        boton.disabled = false;
+      }
+    });
+
     await cargar();
   }
 
   const AYUDA_PENDIENTES_INSPECCION = [
     { pregunta: '¿Qué es un pendiente de inspección?', respuesta: 'Algo que el inspector dijo que el responsable debe reportar como ticket en Help Desk, con su familia y su prioridad.' },
-    { pregunta: '¿Cómo sabe el sistema que ya se dio de alta el ticket?', respuesta: 'Compara el asunto contra los tickets ya sincronizados de Help Desk; cuando coincide, pasa a "Cargado".' },
+    { pregunta: '¿Cómo sabe el sistema que ya se dio de alta el ticket?', respuesta: 'Compara el ID de la inspección contra los tickets ya sincronizados de Help Desk; cuando coincide, pasa a "Cargado".' },
     { pregunta: '¿Qué hace "Enviar recordatorio"?', respuesta: 'Le manda otro correo al responsable (y a quien se notificó en la inspección) con el mismo asunto que debe usar en Help Desk.' },
+    { pregunta: '¿Y si el sistema no lo encuentra solo?', respuesta: '"Vincular a un ticket de Help Desk" lo liga a mano con el número que tú ya viste allá (el ticket tiene que estar ya sincronizado: abre Help Desk primero si hace falta).' },
   ];
 </script>

@@ -370,6 +370,7 @@
         ESTATUS: 'CARGADO EN HELPDESK', 'ID TICKET HELPDESK': 61790, 'ESTATUS HELPDESK': 'Resuelto', 'FECHA CARGADO': hace(23), 'ULTIMO RECORDATORIO': '' },
     ],
     apiEnviarRecordatorioPendiente: { enviado: true, correo: 'juan.fulgencio@ejemplo.com' },
+    apiVincularTicketHelpdesk: { vinculado: true, idTicketHelpdesk: 61850, estatusHelpdesk: 'Abierto' },
     // Un folio AUT… solo ofrece KWID y AUTOS (TIPOS_POR_PREFIJO_FOLIO en modulos/inspecciones.html)
     apiTiposInspeccion: [{ tipo: 'AUTOS', listo: true }, { tipo: 'KWID', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'PIPA', listo: true }],
     apiEstructuraInspeccion: {
@@ -919,6 +920,12 @@
       await abrir('pendientes-inspeccion');
       await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
       (await hasta('#pdi-tabla .dt-acciones-fila button[title^="Enviar recordatorio"]')).click();
+      await esperar(300);
+    },
+    'pendientes-inspeccion-vincular': async () => {
+      await abrir('pendientes-inspeccion');
+      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
+      (await hasta('#pdi-tabla .dt-acciones-fila button[title^="Vincular a un ticket de Help Desk"]')).click();
       await esperar(300);
     },
     'pendientes-inspeccion-resueltos': async () => {

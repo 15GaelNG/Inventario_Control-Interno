@@ -32,4 +32,27 @@
   <div class="card card-compacta">
     <div id="pdi-tabla"></div>
   </div>
+
+  <!-- Modal: vincular a mano un pendiente con un ticket que Kike ya vio en Help Desk (cuando
+       el match automático no lo encontró solo) -->
+  <div class="modal-backdrop" id="pdi-modal-vincular" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Vincular a un ticket de Help Desk</h3>
+          <p class="modal-subtitle" id="pdi-vincular-asunto"></p>
+        </div>
+        <button type="button" class="modal-close" id="pdi-vincular-cerrar"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <form id="pdi-form-vincular">
+        <div class="field">
+          <label for="pdi-vincular-ticket">Número de ticket en Help Desk</label>
+          <input type="text" id="pdi-vincular-ticket" inputmode="numeric" autocomplete="off" />
+          <span class="form-ayuda">Úsalo cuando ya viste el ticket allá, pero el sistema todavía no lo encontró solo</span>
+        </div>
+        <div class="error-msg" id="pdi-vincular-error" hidden></div>
+        <button type="submit" style="width:100%"><i data-lucide="link" class="ico"></i> Vincular</button>
+      </form>
+    </div>
+  </div>
 </template>

@@ -123,6 +123,54 @@ console.log('4. revisarCargaHelpdesk(): empata por el ASUNTO completo (con el fo
   ok(tocados.length === tocadosAntes + 1, 'y esta vez sí hizo falta escribir (cambió el estatus de Help Desk)');
 }
 
+console.log('4d. El ID solo basta cuando es el único candidato (tolera que reescriban el resto)');
+{
+  // El responsable reescribió todo menos el ID: nada de "reparacion" ni "faro"
+  const { e, P } = entorno([
+    { 'ID TICKET HD': 91001, TITULO: 'Urgente', DESCRIPCION: 'Favor de revisar, folio 2026_30_1 cuando puedan', ESTATUS: 'Abierto' },
+  ]);
+  P.agregar(FILA_INSPECCION, '2026_30_1', [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }]);
+  const r = P.revisarCargaHelpdesk();
+  ok(r.encontrados === 1, 'un solo ticket con el ID adentro ya es suficiente, aunque no comparta ninguna palabra: ' + JSON.stringify(r));
+  const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
+  const fila = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1)[0];
+  ok(fila[col('ID TICKET HELPDESK')] === 91001, 'y se queda con ese ticket: ' + fila[col('ID TICKET HELPDESK')]);
+}
+
+console.log('4e. Dos pendientes de la MISMA inspección (mismo ID): desempata por las palabras de cada uno');
+{
+  const { e, P } = entorno([
+    { 'ID TICKET HD': 92001, TITULO: 'Cambio de amortiguador', DESCRIPCION: '2026_31_1', ESTATUS: 'Abierto' },
+    { 'ID TICKET HD': 92002, TITULO: 'Reparación de faro delantero', DESCRIPCION: '2026_31_1', ESTATUS: 'Abierto' },
+  ]);
+  P.agregar(FILA_INSPECCION, '2026_31_1', [
+    { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
+    { asunto: 'Cambio de amortiguador', familia: 'MECANICA', prioridad: 'NO URGENTE' },
+  ]);
+  const r = P.revisarCargaHelpdesk();
+  ok(r.encontrados === 2, 'los dos se encuentran, cada quien el suyo: ' + JSON.stringify(r));
+  const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
+  const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
+  const faro = filas.find((f) => f[col('ASUNTO')] === '2026_31_1 - Reparación de faro');
+  const amortiguador = filas.find((f) => f[col('ASUNTO')] === '2026_31_1 - Cambio de amortiguador');
+  ok(faro[col('ID TICKET HELPDESK')] === 92002, 'el de faro se liga al ticket que habla de faro, no al otro: ' + faro[col('ID TICKET HELPDESK')]);
+  ok(amortiguador[col('ID TICKET HELPDESK')] === 92001, 'y el de amortiguador al que habla de amortiguador: ' + amortiguador[col('ID TICKET HELPDESK')]);
+}
+
+console.log('4f. Mismo caso, pero ningún ticket se distingue: no adivina, los deja para vincular a mano');
+{
+  const { P } = entorno([
+    { 'ID TICKET HD': 93001, TITULO: 'Ticket 1', DESCRIPCION: '2026_32_1', ESTATUS: 'Abierto' },
+    { 'ID TICKET HD': 93002, TITULO: 'Ticket 2', DESCRIPCION: '2026_32_1', ESTATUS: 'Abierto' },
+  ]);
+  P.agregar(FILA_INSPECCION, '2026_32_1', [
+    { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
+    { asunto: 'Cambio de amortiguador', familia: 'MECANICA', prioridad: 'NO URGENTE' },
+  ]);
+  const r = P.revisarCargaHelpdesk();
+  ok(r.encontrados === 0, 'ninguno de los dos tickets comparte palabra con ninguno de los pendientes: no arriesga el equivocado: ' + JSON.stringify(r));
+}
+
 console.log('5. revisarCargaHelpdesk(): si Help Desk nunca se ha abierto en esta app (sin copia local), no truena');
 {
   const { P } = entorno();
@@ -189,6 +237,46 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   let truenaSinCorreo = null;
   try { P4.enviarRecordatorio('token', creados4[0]['ID']); } catch (err) { truenaSinCorreo = err.message; }
   ok(/No se encontr. el correo/.test(truenaSinCorreo || ''), 'avisa que no encontró el correo: ' + truenaSinCorreo);
+}
+
+console.log('8. vincularManual(): liga a mano cuando el automático no lo encontró solo');
+{
+  const { e, P } = entorno([{ 'ID TICKET HD': 94001, TITULO: 'Lo que sea', DESCRIPCION: '', ESTATUS: 'Abierto' }]);
+  const creados = P.agregar(FILA_INSPECCION, '2026_33_1', [{ asunto: 'Algo irreconocible', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  const res = P.vincularManual('token', creados[0]['ID'], '94001');
+  ok(res.vinculado === true && res.idTicketHelpdesk === 94001 && res.estatusHelpdesk === 'Abierto', 'regresa el ticket y su estatus: ' + JSON.stringify(res));
+  const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
+  const fila = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1)[0];
+  ok(fila[col('ESTATUS')] === 'CARGADO EN HELPDESK' && fila[col('ID TICKET HELPDESK')] === 94001 && fila[col('ESTATUS HELPDESK')] === 'Abierto' && fila[col('FECHA CARGADO')],
+    'queda igual que si lo hubiera encontrado solo');
+
+  console.log('8b. El número no corresponde a ningún ticket ya sincronizado: avisa, no inventa nada');
+  const { P: P2 } = entorno([{ 'ID TICKET HD': 95001, TITULO: 'Otro', DESCRIPCION: '', ESTATUS: 'Abierto' }]);
+  const creados2 = P2.agregar(FILA_INSPECCION, '2026_33_2', [{ asunto: 'Algo', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  let truenaSinTicket = null;
+  try { P2.vincularManual('token', creados2[0]['ID'], '99999'); } catch (err) { truenaSinTicket = err.message; }
+  ok(/no est. en la copia sincronizada/.test(truenaSinTicket || ''), 'avisa que ese ticket no está sincronizado: ' + truenaSinTicket);
+
+  console.log('8c. No se puede vincular uno que ya está cargado');
+  const { P: P3 } = entorno([{ 'ID TICKET HD': 96001, TITULO: '2026_33_3 - Algo', DESCRIPCION: '', ESTATUS: 'Abierto' }]);
+  const creados3 = P3.agregar(FILA_INSPECCION, '2026_33_3', [{ asunto: 'Algo', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  P3.revisarCargaHelpdesk();
+  let truenaYaCargado2 = null;
+  try { P3.vincularManual('token', creados3[0]['ID'], '96001'); } catch (err) { truenaYaCargado2 = err.message; }
+  ok(/ya está cargado/.test(truenaYaCargado2 || ''), 'truena en vez de vincular algo que ya se encontró solo: ' + truenaYaCargado2);
+
+  console.log('8d. Sin número de ticket, avisa claro (no manda vacío)');
+  const { P: P4 } = entorno([]);
+  const creados4 = P4.agregar(FILA_INSPECCION, '2026_33_4', [{ asunto: 'Algo', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  let truenaSinNumero = null;
+  try { P4.vincularManual('token', creados4[0]['ID'], ''); } catch (err) { truenaSinNumero = err.message; }
+  ok(/Escribe el n.mero de ticket/.test(truenaSinNumero || ''), 'pide el número de ticket: ' + truenaSinNumero);
+
+  console.log('8e. Un pendiente que no existe, truena claro');
+  const { P: P5 } = entorno([]);
+  let truenaSinPendiente = null;
+  try { P5.vincularManual('token', 'PDI-NOEXISTE', '1'); } catch (err) { truenaSinPendiente = err.message; }
+  ok(/No se encontr. ese pendiente/.test(truenaSinPendiente || ''), 'avisa que no existe: ' + truenaSinPendiente);
 }
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');

@@ -981,6 +981,9 @@ function apiListarPendientesInspeccion(token) {
 function apiEnviarRecordatorioPendiente(token, id) {
   return PendientesInspeccionService.enviarRecordatorio(token, id);
 }
+function apiVincularTicketHelpdesk(token, id, idTicketHelpdesk) {
+  return PendientesInspeccionService.vincularManual(token, id, idTicketHelpdesk);
+}
 
 // --- Datos conectados y Salud (Administración) ---
 // Dos pantallas sobre el mismo motor (Relaciones.gs): Datos conectados enseña el mapa (quién

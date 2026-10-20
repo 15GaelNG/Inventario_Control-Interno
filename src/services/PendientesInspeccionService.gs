@@ -24,10 +24,19 @@
  *     entre.
  *  4. revisarCargaHelpdesk() (llamada por el Calentador cada 10 min) compara cada pendiente
  *     "SIN CARGAR EN HELPDESK" contra esa copia (TITULO + DESCRIPCION): si el texto del ticket
- *     contiene el ASUNTO completo (con su ID de inspección), lo marca "CARGADO EN HELPDESK"
- *     con el número real del ticket. Nunca llama al Help Desk ella misma: solo lee lo que YA se
- *     sincronizó la última vez que alguien abrió esa pantalla (ver la nota de credenciales ahí).
- *  5. Kike ve los que llevan tiempo "SIN CARGAR EN HELPDESK" (pendiente: vista de seguimiento, C).
+ *     contiene el ID DE LA INSPECCIÓN en cualquier parte (no hace falta el asunto completo:
+ *     tolera que el responsable edite o resuma el resto al pegarlo en Help Desk), lo marca
+ *     "CARGADO EN HELPDESK" con el número real del ticket. Si una misma inspección generó más de
+ *     un pendiente (el mismo ID aparece en varios tickets), desempata por las palabras propias
+ *     de CADA pendiente (sin el ID): el candidato que más comparte. Si ninguno se distingue, no
+ *     adivina -- lo deja "SIN CARGAR" para que alguien lo vincule a mano (ver el punto 6). Nunca
+ *     llama al Help Desk ella misma: solo lee lo que YA se sincronizó la última vez que alguien
+ *     abrió esa pantalla (ver la nota de credenciales ahí).
+ *  5. Kike ve los que llevan tiempo "SIN CARGAR EN HELPDESK" (vista de seguimiento, punto C).
+ *  6. Cuando el match automático no lo encuentra (texto irreconocible, o Help Desk todavía no
+ *     sincronizado), Kike lo vincula a mano con vincularManual(): escribe el número de ticket que
+ *     ya vio ella misma en Help Desk, y si ese ticket ya está en la copia local, lo liga igual que
+ *     si lo hubiera encontrado solo.
  *
  * La hoja no viene de AppSheet -- no existe hasta que hace falta (mismo patrón que
  * SolicitudCompraService.hoja_ / HelpdeskService.hoja_, NO el de HojaServicio: ese exige que
@@ -143,14 +152,28 @@ const PendientesInspeccionService = (function () {
     return creados;
   }
 
+  /** Palabras de 4+ letras del texto propio del inspector (sin el ID por delante): para
+   *  desempatar cuando el ID por sí solo encuentra más de un ticket. Las de 1-3 letras
+   *  ("DE", "LA", "EN"...) casi nunca distinguen nada y se descartan solas, sin necesidad de
+   *  una lista de palabras vacías. */
+  function palabrasPropias_(asuntoCompleto, idInsp) {
+    const prefijo = idInsp ? idInsp + ' - ' : '';
+    const libre = prefijo && asuntoCompleto.indexOf(prefijo) === 0 ? asuntoCompleto.slice(prefijo.length) : asuntoCompleto;
+    return libre.split(/[^A-Z0-9Ñ]+/).filter((p) => p.length >= 4);
+  }
+
   /**
    * Compara los pendientes SIN CARGAR contra lo que ya se sincronizó de Help Desk (APP_HELPDESK,
-   * HelpdeskService.gs): si el título o la descripción de algún ticket contienen el ASUNTO
-   * completo (con el folio de inspección que se le antepuso en agregar()), ese pendiente queda
-   * CARGADO EN HELPDESK con el número real del ticket. De paso, a los que YA estaban CARGADO les
-   * refresca ESTATUS HELPDESK (Abierto/Resuelto/Cerrado…, lo que diga Help Desk hoy) -- es OTRO
-   * estatus, el de nuestro propio seguimiento (ESTATUS: si ya se encontró el ticket o no) nunca
-   * se le pisa ni se le confunde una vez que ya es CARGADO.
+   * HelpdeskService.gs): si el ID de la inspección (el que agregar() antepone al asunto) aparece
+   * en cualquier parte del título o la descripción de algún ticket, ese pendiente queda CARGADO
+   * EN HELPDESK con el número real del ticket -- no hace falta el asunto completo, para tolerar
+   * que el responsable edite o resuma el resto del texto al pegarlo en Help Desk. Si el MISMO ID
+   * aparece en más de un ticket (una inspección que generó varios pendientes, cada quien con el
+   * suyo), desempata por las palabras propias de CADA pendiente (palabrasPropias_); si ninguno
+   * se distingue, no adivina -- lo deja SIN CARGAR para vincularManual(). De paso, a los que YA
+   * estaban CARGADO les refresca ESTATUS HELPDESK (Abierto/Resuelto/Cerrado…, lo que diga Help
+   * Desk hoy) -- es OTRO estatus, el de nuestro propio seguimiento (ESTATUS: si ya se encontró
+   * el ticket o no) nunca se le pisa ni se le confunde una vez que ya es CARGADO.
    *
    * OJO -- no llama al Help Desk ella misma: HelpdeskApi.gs necesita el token personal de
    * alguien con sesión ahí (24 h, no hay cuenta de servicio), así que esta función solo lee la
@@ -168,6 +191,7 @@ const PendientesInspeccionService = (function () {
     const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
     const colEstatus = ENCABEZADOS.indexOf('ESTATUS');
     const colAsunto = ENCABEZADOS.indexOf('ASUNTO');
+    const colIdInspeccion = ENCABEZADOS.indexOf('ID INSPECCION');
     const colIdTicket = ENCABEZADOS.indexOf('ID TICKET HELPDESK');
     const colEstatusHelpdesk = ENCABEZADOS.indexOf('ESTATUS HELPDESK');
     const pendientes = [];
@@ -195,10 +219,30 @@ const PendientesInspeccionService = (function () {
       const colFechaCargado = ENCABEZADOS.indexOf('FECHA CARGADO');
       const ahora = new Date();
       pendientes.forEach((i) => {
-        const asunto = normalizar_(valores[i][colAsunto]);
-        if (!asunto) return;
-        const match = textosDeTicket.find((t) => t.texto.indexOf(asunto) !== -1);
-        if (!match) return;
+        const asuntoCompleto = normalizar_(valores[i][colAsunto]);
+        if (!asuntoCompleto) return;
+        const idInsp = normalizar_(valores[i][colIdInspeccion]);
+        // Con ID: basta con que aparezca en cualquier parte (tolera texto editado). Sin ID
+        // (pendientes de antes de que existiera, o algún caso raro): la regla estricta de
+        // siempre, el asunto completo tal cual.
+        const candidatos = idInsp
+          ? textosDeTicket.filter((t) => t.texto.indexOf(idInsp) !== -1)
+          : textosDeTicket.filter((t) => t.texto.indexOf(asuntoCompleto) !== -1);
+        if (!candidatos.length) return;
+        let match = candidatos[0];
+        if (candidatos.length > 1) {
+          const palabras = palabrasPropias_(asuntoCompleto, idInsp);
+          let mejorPuntaje = 0;
+          let elegido = null;
+          candidatos.forEach((t) => {
+            const puntaje = palabras.filter((p) => t.texto.indexOf(p) !== -1).length;
+            if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; elegido = t; }
+          });
+          // Ninguno se distingue de los demás: mejor dejarlo para vincular a mano que arriesgar
+          // el ticket equivocado de un pendiente hermano de la misma inspección.
+          if (!elegido) return;
+          match = elegido;
+        }
         hoja.getRange(i + 2, colEstatus + 1, 1, 1).setValue(ESTATUS_CARGADO);
         hoja.getRange(i + 2, colIdTicket + 1, 1, 1).setValue(match.idTicket);
         hoja.getRange(i + 2, colEstatusHelpdesk + 1, 1, 1).setValue(match.estatus);
@@ -284,8 +328,44 @@ const PendientesInspeccionService = (function () {
     return { enviado: true, correo: correo, cc: cc };
   }
 
+  /**
+   * Vincula a mano un pendiente SIN CARGAR con un ticket que Kike ya vio ella misma en Help
+   * Desk, para cuando revisarCargaHelpdesk() no lo encontró solo (texto irreconocible, o un
+   * pendiente hermano de la misma inspección que ganó el desempate). Mismo resultado que un
+   * match automático: CARGADO EN HELPDESK, con el número real y su estatus de allá -- pero el
+   * ticket tiene que estar YA en la copia sincronizada (no se inventa, y esta app no escribe en
+   * Help Desk): si no está, hay que abrir esa pantalla primero para que se sincronice.
+   * @return {{vinculado: true, idTicketHelpdesk, estatusHelpdesk: string}}
+   */
+  function vincularManual(token, id, idTicketHelpdesk) {
+    Permisos.puedeEditar(token, MODULO);
+    const hoja = hoja_(false);
+    const encontrado = hoja && SheetUtils.findById(ssId(), HOJA, id, 'ID');
+    if (!encontrado) throw new Error('No se encontró ese pendiente.');
+    if (normalizar_(encontrado.data['ESTATUS']) !== ESTATUS_SIN_CARGAR) {
+      throw new Error('Ese pendiente ya está cargado en Help Desk.');
+    }
+    const idBuscado = limpiar_(idTicketHelpdesk);
+    if (!idBuscado) throw new Error('Escribe el número de ticket de Help Desk.');
+    const tickets = typeof HelpdeskService !== 'undefined' ? HelpdeskService.copiaLocal_() : [];
+    const ticket = tickets.find((t) => String(t['ID TICKET HD']) === idBuscado);
+    if (!ticket) {
+      throw new Error('Ese ticket no está en la copia sincronizada de Help Desk todavía: abre esa pantalla ' +
+        'para traerlo y vuelve a intentar.');
+    }
+    const estatusHelpdesk = limpiar_(ticket['ESTATUS']);
+    SheetUtils.update(ssId(), HOJA, id, {
+      'ESTATUS': ESTATUS_CARGADO,
+      'ID TICKET HELPDESK': ticket['ID TICKET HD'],
+      'ESTATUS HELPDESK': estatusHelpdesk,
+      'FECHA CARGADO': new Date(),
+    }, 'ID');
+    CacheHojas.tocarHoja(hoja);
+    return { vinculado: true, idTicketHelpdesk: ticket['ID TICKET HD'], estatusHelpdesk: estatusHelpdesk };
+  }
+
   return {
-    agregar, revisarCargaHelpdesk, listar, enviarRecordatorio,
+    agregar, revisarCargaHelpdesk, listar, enviarRecordatorio, vincularManual,
     ENCABEZADOS, HOJA, ESTATUS_SIN_CARGAR, ESTATUS_CARGADO,
   };
 })();
