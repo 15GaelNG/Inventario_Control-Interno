@@ -10,11 +10,13 @@
  *     (texto libre: "qué debe reportar el responsable"), la FAMILIA O GRUPO (catálogo cerrado,
  *     FAMILIAS_PENDIENTE_INSPECCION en modulos/inspecciones.html -- es para que Kike filtre y dé
  *     seguimiento, punto C; no participa en el match) y la PRIORIDAD (urgente/no urgente, la
- *     decide el inspector). agregar() le pone AL ASUNTO, en automático, el folio de ESTA
- *     inspección por delante ("2026_25_1 - Reparación de faro"): es lo único que hace el match
- *     más exacto, porque es el único texto que de verdad llega a Help Desk.
- *  2. Van en el correo de aviso, en su propia sección de color, con instrucciones de usar ESE
- *     mismo texto como asunto del ticket en Help Desk (InspeccionesService.avisarInspeccion_).
+ *     decide el inspector). agregar() le pone AL ASUNTO, en automático, el ID real de ESTA
+ *     inspección por delante ("INS-67M8DXDS439WXR - Reparación de faro", NO el folio de negocio
+ *     "2026_649_314": ese se puede repetir o confundirse entre inspecciones, el ID nunca): es lo
+ *     único que hace el match más exacto, porque es el único texto que de verdad llega a Help Desk.
+ *  2. Van en el correo de aviso, en su propia sección de color (Asunto / Familia o grupo a
+ *     reportar / Prioridad, cada quien su línea), con instrucciones de usar ESE mismo texto de
+ *     "Asunto" como asunto del ticket en Help Desk (InspeccionesService.avisarInspeccion_).
  *  3. El responsable da de alta el ticket en el Help Desk de verdad (fuera de este sistema). Esta
  *     app nunca le habla directo: solo LEE el Help Desk por su API, con el token de quien tenga
  *     sesión aquí (HelpdeskApi.gs) y guarda una copia en APP_HELPDESK (HelpdeskService.gs) cada
@@ -22,7 +24,7 @@
  *     entre.
  *  4. revisarCargaHelpdesk() (llamada por el Calentador cada 10 min) compara cada pendiente
  *     "SIN CARGAR EN HELPDESK" contra esa copia (TITULO + DESCRIPCION): si el texto del ticket
- *     contiene el ASUNTO completo (con su folio de inspección), lo marca "CARGADO EN HELPDESK"
+ *     contiene el ASUNTO completo (con su ID de inspección), lo marca "CARGADO EN HELPDESK"
  *     con el número real del ticket. Nunca llama al Help Desk ella misma: solo lee lo que YA se
  *     sincronizó la última vez que alguien abrió esa pantalla (ver la nota de credenciales ahí).
  *  5. Kike ve los que llevan tiempo "SIN CARGAR EN HELPDESK" (pendiente: vista de seguimiento, C).
@@ -84,9 +86,10 @@ const PendientesInspeccionService = (function () {
    * Da de alta los pendientes de UNA inspección ya guardada (InspeccionesService.registrar).
    * Nunca truena por un renglón vacío: los que no traen asunto simplemente se ignoran.
    * @param {Object} filaInspeccion la fila ya armada de la inspección (folio, placas, nuco…)
-   * @param {string} idInspeccion   el ID de esa inspección (ID INSPECCION), para la liga Y para
-   *   anteponerlo al asunto (el responsable lo pega tal cual en Help Desk: es lo que hace el
-   *   match exacto en revisarCargaHelpdesk())
+   * @param {string} idInspeccion   el ID real de esa inspección (fila['ID'], prefijo INS -- NO el
+   *   folio de negocio de ID INSPECCION), para la liga Y para anteponerlo al asunto (el
+   *   responsable lo pega tal cual en Help Desk: es lo que hace el match exacto en
+   *   revisarCargaHelpdesk(), sin depender de un folio que se pueda repetir o confundir)
    * @param {Array} items          [{ asunto, familia, prioridad }] -- lo que escribió el inspector
    * @param {string} [correoResponsable] el correo YA VALIDADO que de verdad recibió el aviso original
    *   (InspeccionesService.avisarInspeccion_) -- se guarda tal cual para que el recordatorio le

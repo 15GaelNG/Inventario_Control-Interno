@@ -16,6 +16,7 @@ let actualizado = null;    // lo que se escribió después (la liga del PDF)
 let nuccoVehiculo = '25';
 const correos = [];        // lo que se mandó por MailApp.sendEmail
 let pendientesRegistrados = null;   // lo último que recibió PendientesInspeccionService.agregar
+let idsGenerados = 0;       // para el ID (prefijo INS) que simula poner SheetUtils.insert
 const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
 
 const ESTRUCTURA = {
@@ -44,7 +45,9 @@ const contexto = vm.createContext({
     // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
     // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).
     findById: () => ({ data: { ID: 'VEH-00000000AAAAAA', FOLIO: 'AUT0025', NUCCO: nuccoVehiculo, 'RESPONSABLE VEHICULO': 'JORGE AVECILLA', PLACA: 'GGR658F' } }),
-    insert: (id, hoja, datos) => { fila = datos; },
+    // La hoja real sí tiene columna 'ID' (prefijo INS), aparte del folio de ID INSPECCION:
+    // SheetUtils.insert se la pone sola, como en producción (ver docs/ids-asignacion.md).
+    insert: (id, hoja, datos) => { datos.ID = 'INS-FAKE' + (++idsGenerados); fila = datos; },
     update: (libro, hoja, id, cambios) => { actualizado = cambios; },
   },
   ExpedienteNuco: {
@@ -212,8 +215,10 @@ const conPendientes = contexto.InspeccionesService.registrar('token', {
     { asunto: '  ', familia: 'MOTOR', prioridad: 'NO URGENTE' },   // sin asunto real: se ignora
   ],
 }, {});
-ok(pendientesRegistrados && pendientesRegistrados.idInspeccion === conPendientes.ID,
-  'se le pasa a PendientesInspeccionService.agregar el ID de la inspección recién creada');
+ok(pendientesRegistrados && pendientesRegistrados.idInspeccion === fila['ID'] && /^INS-/.test(pendientesRegistrados.idInspeccion),
+  'se le pasa a PendientesInspeccionService.agregar el ID real de la inspección (prefijo INS), no el folio: ' + pendientesRegistrados.idInspeccion);
+ok(pendientesRegistrados.idInspeccion !== conPendientes.ID,
+  'y es distinto del folio de negocio que regresa la API (ID INSPECCION): ' + conPendientes.ID);
 ok(pendientesRegistrados.filaInspeccion['PLACAS'] === 'GGR658F', 'y la fila ya armada (placas, nuco, etc.)');
 ok(pendientesRegistrados.items.length === 1 && pendientesRegistrados.items[0].asunto === 'Reparación de faro',
   'el renglón sin asunto real se ignora');
@@ -224,6 +229,11 @@ ok(pendientesRegistrados.correosCc.slice().sort().join(',') === 'inspector@x.com
 ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
   'el correo trae su propia sección con lo que hay que subir a Help Desk');
 ok(/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
+ok(/Asunto:.*<code>[^<]*Reparaci.n de faro/.test(correos[0].htmlBody),
+  'el asunto va en su propia línea, con su etiqueta: ' + correos[0].htmlBody);
+ok(/Familia o grupo a reportar:.*ELECTRICO Y LUCES/.test(correos[0].htmlBody),
+  'la familia va en otra línea, aparte (ya no entre paréntesis pegada al asunto)');
+ok(/Prioridad:.*<b>URGENTE<\/b>/.test(correos[0].htmlBody), 'y la prioridad en la suya');
 
 correos.length = 0;
 const sinPendientes = contexto.InspeccionesService.registrar('token', {

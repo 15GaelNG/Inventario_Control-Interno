@@ -446,12 +446,15 @@ const InspeccionesService = (function () {
 
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
-      SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      SheetUtils.insert(ssId(), hoja_().getName(), fila);   // aquí nace fila['ID'] (prefijo INS), aparte del folio en COL_ID
       // Los MISMOS correos validados que recibieron el aviso original (no los de Capital Humano):
       // así el recordatorio de un pendiente le llega exactamente a quien ya se avisó -- responsable
       // y copia -- aunque el inspector lo haya corregido a mano al capturar.
+      // El ID que antepone el folio al asunto es fila['ID'] (INS-xxxxx, único de verdad), NO el
+      // folio de negocio en COL_ID (2026_649_314): dos inspecciones de un mismo vehículo el mismo
+      // año pueden mezclarse en el folio, nunca en el ID.
       const dest = destinatariosNotificar_(p.NOTIFICAR);
-      pendientes = PendientesInspeccionService.agregar(fila, id, p.PENDIENTES, dest.para, dest.cc);
+      pendientes = PendientesInspeccionService.agregar(fila, fila['ID'], p.PENDIENTES, dest.para, dest.cc);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -571,13 +574,16 @@ const InspeccionesService = (function () {
     const seccionPendientes = (pendientes || []).length
       ? '<div style="margin-top:16px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
         '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Tickets a generar en Help Desk</h3>' +
-        '<p style="margin:0 0 6px;font-size:13px;color:#78350f">Da de alta cada uno como ticket en Help Desk usando ' +
-        'EXACTAMENTE este texto como asunto (ya trae el folio de esta inspección): así el sistema lo detecta solo, ' +
+        '<p style="margin:0 0 10px;font-size:13px;color:#78350f">Da de alta cada uno como ticket en Help Desk usando ' +
+        'EXACTAMENTE el texto de "Asunto" (ya trae el folio de esta inspección): así el sistema lo detecta solo, ' +
         'sin que nadie tenga que buscarlo.</p>' +
-        '<ul style="margin:0;padding-left:18px">' + pendientes.map((pe) =>
-          '<li><code>' + escaparHtml_(pe['ASUNTO']) + '</code>' +
-          (pe['FAMILIA O GRUPO A REPORTAR'] ? ' <span style="color:#92400e">(' + escaparHtml_(pe['FAMILIA O GRUPO A REPORTAR']) + ')</span>' : '') +
-          ' — <b>' + escaparHtml_(pe['PRIORIDAD']) + '</b></li>').join('') + '</ul></div>'
+        pendientes.map((pe) =>
+          '<div style="margin:0 0 8px;padding:8px 10px;background:#fff;border:1px solid #f0b429;border-radius:4px">' +
+          '<div style="margin:0 0 3px"><span style="color:#92400e">Asunto:</span> <code>' + escaparHtml_(pe['ASUNTO']) + '</code></div>' +
+          '<div style="margin:0 0 3px"><span style="color:#92400e">Familia o grupo a reportar:</span> ' +
+            escaparHtml_(pe['FAMILIA O GRUPO A REPORTAR']) + '</div>' +
+          '<div><span style="color:#92400e">Prioridad:</span> <b>' + escaparHtml_(pe['PRIORIDAD']) + '</b></div>' +
+          '</div>').join('') + '</div>'
       : '';
 
     const fechaInspeccion = Utilities.formatDate(fila['FECHA'], Session.getScriptTimeZone(), 'dd/MM/yyyy');
