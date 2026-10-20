@@ -326,7 +326,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   - **Estatus:** `ESTATUS_EQUIPO_RESGUARDO` = RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE (estatus nuevo; ámbar, «Tiene
     un detalle; se ofrece en venta», `GRUPO_EQUIPO` del Panorama y `VENTA` de Vínculos) y PARA DESECHO.
   - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): no se vuelve a
-    mandar; `mandar` lo omite con «usa Corregir resguardo» (20-oct, pendiente 3.12; antes `c5954bd` mostraba el estatus
+    mandar; `mandar` lo omite con «usa Corregir resguardo» (20-oct, panel de Pau; antes `c5954bd` mostraba el estatus
     fijo y rechazaba el mismo). El menú ofrece «Corregir resguardo» en vez de «Mandar a resguardo» (ver abajo).
   - **Equipo sin renglón abierto** (viene de una persona, viene guardado del AppSheet o Pau ya lo entregó a Líneas): crea un
     renglón PENDIENTE DE RECEPCION, que Pau recibe; las respuestas traen `porRecibir` (antes `yaGuardado`: uno ya guardado no
@@ -373,7 +373,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     caché `ln_resguardos_esquema_v2`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
     mandar a cancelación; la pestaña Resguardos tiene la columna «Accesorios» después de IMEI.
 - **Panel de Pau: resguardo y cancelación separados, Corregir resguardo, Quitar del panel y Retirar cancelación**
-  (20-oct, `6cbb7c5`, `36e0947`, `484de50`; pendiente 3.12; sin publicar; `LineasResguardos.gs`, `LineasEscritura.gs`,
+  (20-oct, `6cbb7c5`, `36e0947`, `484de50`; reestructura del panel de Pau; sin publicar; `LineasResguardos.gs`, `LineasEscritura.gs`,
   `LineasAcciones.gs`, `LineasRegistros.gs`):
   - **Separados:** al mandar a resguardo un equipo cuya línea va a cancelación (o que ya está en Cancelaciones), la línea se
     separa primero del equipo (`LineasEscritura.separarLinea`, con opción de conservar el estatus) y entra sola a
@@ -404,7 +404,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     elegir CANCELADA en Mandar/Corregir resguardo y en Corregir con RESGUARDO, PARA VENTA, PARA DESECHO o EN PROCESO DE
     CANCELACION; ya no sale la ventana «Cambio de estatus».
   - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Quitados» y «Retiradas». El
-    índice del cliente trae la columna `panel` (`CLAVE_INDICE` v10; huella con APP_RESGUARDOS).
+    índice del cliente trae la columna `panel` (`CLAVE_INDICE`, caché del índice; huella con APP_RESGUARDOS).
 - **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
   sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
   escribe como en Capital Humano (`guardarCH`: QUERETARO → QRO). Cachés `indice_colaboradores_v6` y `catalogos_telefonia_v8`.
