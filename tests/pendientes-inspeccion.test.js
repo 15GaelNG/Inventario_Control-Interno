@@ -40,7 +40,7 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
     { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
     { asunto: '   ', familia: 'OTROS', prioridad: 'NO URGENTE' },
     { asunto: 'Cambio de llanta', familia: 'ACCESORIOS', prioridad: 'raro' },
-  ], 'responsable@x.com');
+  ], 'responsable@x.com', ['inspector@x.com', 'otro@x.com']);
   ok(e.libros.libro.getSheetByName('PENDIENTES INSPECCION') !== null, 'se crea sola al primer uso');
   ok(creados.length === 2, 'el renglón sin asunto real se ignora: ' + creados.length);
   ok(creados[0]['ID'] && /^PDI-/.test(creados[0]['ID']), 'cada pendiente nace con su propio ID (prefijo PDI): ' + creados[0]['ID']);
@@ -51,6 +51,8 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
   ok(creados[1]['PRIORIDAD'] === 'NO URGENTE', 'una prioridad que no es "URGENTE" cae en NO URGENTE: ' + creados[1]['PRIORIDAD']);
   ok(creados[0]['CORREO RESPONSABLE'] === 'responsable@x.com',
     'guarda el correo YA VALIDADO del aviso original, el mismo para todos los pendientes de esa inspección');
+  ok(creados[0]['CORREOS CC'] === 'inspector@x.com, otro@x.com',
+    'y también los demás que recibieron ese aviso en copia: ' + creados[0]['CORREOS CC']);
   ok(tocados.indexOf('PENDIENTES INSPECCION') !== -1, 'invalida la caché de la hoja al escribir');
 
   console.log('1b. Sin correo validado al capturar (p. ej. no se llenó el aviso), se guarda vacío');
@@ -132,22 +134,27 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   // Capital Humano dice OTRO correo (o nada): no debería importarle, porque ya tiene el real guardado
   const { e, P } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'el-de-capital-humano@x.com' }], correos);
   const creados = P.agregar(FILA_INSPECCION, '2026_25_1',
-    [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], 'el-que-se-avisco@x.com');
+    [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], 'el-que-se-avisco@x.com',
+    ['inspector@x.com', 'el-que-se-avisco@x.com', 'otro@x.com']);
   const res = P.enviarRecordatorio('token', creados[0]['ID']);
   ok(res.enviado === true && res.correo === 'el-que-se-avisco@x.com',
     'usa el correo guardado del aviso original, no el de Capital Humano: ' + res.correo);
   ok(correos.length === 1 && correos[0].to === 'el-que-se-avisco@x.com', 'de verdad se mandó ahí');
+  ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
+    'y también en cc a los demás que ya habían recibido el aviso original, sin repetir al responsable: ' + correos[0].cc);
+  ok(res.cc.slice().sort().join(',') === 'inspector@x.com,otro@x.com', 'y lo regresa también en el resultado: ' + res.cc);
   ok(/2026_25_1 - Reparaci.n de faro/.test(correos[0].htmlBody), 'con el asunto exacto que debe pegar en Help Desk');
   const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
   const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
   ok(/^\d{4}-\d{2}-\d{2}T/.test(filas[0][col('ULTIMO RECORDATORIO')]), 'y queda anotado cuándo se mandó el recordatorio');
 
-  console.log('7b. Sin correo guardado (pendiente de antes, o no se validó ninguno), cae a Capital Humano');
+  console.log('7b. Sin correo guardado (pendiente de antes, o no se validó ninguno), cae a Capital Humano y sin cc');
   const { P: P2 } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }]);
   const creados2 = P2.agregar(FILA_INSPECCION, '2026_25_1', [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }]);
   ok(creados2[0]['CORREO RESPONSABLE'] === '', 'este, a propósito, no trae correo guardado');
   const res2 = P2.enviarRecordatorio('token', creados2[0]['ID']);
   ok(res2.correo === 'jorge@x.com', 'cae al de Capital Humano por nombre, como antes: ' + res2.correo);
+  ok(res2.cc.length === 0, 'sin cc: no hay forma de saber quiénes más se habían notificado');
 
   console.log('7c. No se puede recordar uno que ya está cargado en Help Desk');
   const { e: e3, P: P3 } = entorno([{ 'ID TICKET HD': 1, TITULO: '2026_25_1 - Reparación de faro', DESCRIPCION: '' }],

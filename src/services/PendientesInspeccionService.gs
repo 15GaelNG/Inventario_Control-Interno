@@ -36,7 +36,7 @@ const PendientesInspeccionService = (function () {
   const ENCABEZADOS = [
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
     'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'FECHA CARGADO',
-    'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE',
+    'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
@@ -91,9 +91,11 @@ const PendientesInspeccionService = (function () {
    * @param {string} [correoResponsable] el correo YA VALIDADO que de verdad recibió el aviso original
    *   (InspeccionesService.avisarInspeccion_) -- se guarda tal cual para que el recordatorio le
    *   llegue a la MISMA persona, aunque el inspector lo haya corregido a mano al capturar
+   * @param {Array<string>} [correosCc] los demás correos (inspector, asistente, otros) que SÍ
+   *   recibieron el aviso original en copia -- el recordatorio se los manda también en cc
    * @return {Array} los pendientes creados (mismas columnas que la hoja), para el correo
    */
-  function agregar(filaInspeccion, idInspeccion, items, correoResponsable) {
+  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc) {
     const limpios = (items || [])
       .map((it) => ({
         asunto: limpiar_(it && it.asunto),
@@ -125,6 +127,7 @@ const PendientesInspeccionService = (function () {
         'FECHA CARGADO': '',
         'ULTIMO RECORDATORIO': '',
         'CORREO RESPONSABLE': limpiar_(correoResponsable),
+        'CORREOS CC': (correosCc || []).map(limpiar_).filter(Boolean).join(', '),
       };
       hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
       return fila;
@@ -208,8 +211,10 @@ const PendientesInspeccionService = (function () {
    * dispara a mano desde su vista. Va al MISMO correo que recibió el aviso original de esa
    * inspección (CORREO RESPONSABLE, guardado por agregar()); si ese pendiente es de antes de que
    * existiera esa columna (o nunca se capturó un correo válido), se busca por su nombre en
-   * Capital Humano, como antes.
-   * @return {{enviado: true, correo: string}}
+   * Capital Humano, como antes. También va en cc a los demás que ya habían recibido ese mismo
+   * aviso original (CORREOS CC: inspector, asistente, otros) -- si el correo del responsable se
+   * tuvo que buscar en Capital Humano, no hay cc porque no hay forma de saber quiénes eran.
+   * @return {{enviado: true, correo: string, cc: Array<string>}}
    */
   function enviarRecordatorio(token, id) {
     Permisos.puedeEditar(token, MODULO);
@@ -221,6 +226,7 @@ const PendientesInspeccionService = (function () {
       throw new Error('Ese pendiente ya está cargado en Help Desk: no hace falta recordarlo.');
     }
     let correo = limpiar_(fila['CORREO RESPONSABLE']);
+    let cc = [];
     if (!correo) {
       const nombreBuscado = normalizar_(fila['RESPONSABLE']);
       if (!nombreBuscado) throw new Error('Este pendiente no tiene responsable capturado.');
@@ -230,6 +236,9 @@ const PendientesInspeccionService = (function () {
         throw new Error('No se encontró el correo de ' + fila['RESPONSABLE'] + ' en Capital Humano; avísale directamente.');
       }
       correo = limpiar_(colaborador.CORREO);
+    } else {
+      cc = limpiar_(fila['CORREOS CC']).split(',').map(limpiar_)
+        .filter((c) => c && c.toLowerCase() !== correo.toLowerCase());
     }
     const asunto = 'Recordatorio: pendiente de inspección sin subir a Help Desk';
     const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
@@ -242,10 +251,10 @@ const PendientesInspeccionService = (function () {
       '<p style="margin:10px 0 0">Da de alta el ticket en Help Desk usando EXACTAMENTE ese texto como asunto, ' +
       'para que quede ligado a esta inspección.</p>' +
       '</div>';
-    MailApp.sendEmail({ to: correo, subject: asunto, htmlBody: cuerpo });
+    MailApp.sendEmail({ to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo });
     SheetUtils.update(ssId(), HOJA, id, { 'ULTIMO RECORDATORIO': new Date() }, 'ID');
     CacheHojas.tocarHoja(hoja);
-    return { enviado: true, correo: correo };
+    return { enviado: true, correo: correo, cc: cc };
   }
 
   return {

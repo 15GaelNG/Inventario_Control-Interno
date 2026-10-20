@@ -83,7 +83,7 @@ const contexto = vm.createContext({
   // aquí solo importa que registrar() le pase lo que escribió el inspector, el correo YA VALIDADO
   // del aviso original, y meta lo que regresa en el correo.
   PendientesInspeccionService: {
-    agregar: (filaInspeccion, idInspeccion, items, correoResponsable) => {
+    agregar: (filaInspeccion, idInspeccion, items, correoResponsable, correosCc) => {
       const limpios = (items || [])
         .map((it) => ({
           asunto: String((it && it.asunto) || '').trim(),
@@ -91,7 +91,7 @@ const contexto = vm.createContext({
           prioridad: /^URGENTE$/i.test(String((it && it.prioridad) || '').trim()) ? 'URGENTE' : 'NO URGENTE',
         }))
         .filter((it) => it.asunto);
-      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios, correoResponsable };
+      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios, correoResponsable, correosCc };
       return limpios.map((it) => ({
         ASUNTO: it.asunto, 'FAMILIA O GRUPO A REPORTAR': it.familia, PRIORIDAD: it.prioridad,
       }));
@@ -206,7 +206,7 @@ correos.length = 0;
 pendientesRegistrados = null;
 const conPendientes = contexto.InspeccionesService.registrar('token', {
   FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
-  NOTIFICAR: { responsable: 'responsable@x.com', inspector: '', asistente: '', otros: [] },
+  NOTIFICAR: { responsable: 'responsable@x.com', inspector: 'inspector@x.com', asistente: 'no-es-correo', otros: ['otro@x.com', 'responsable@x.com', ''] },
   PENDIENTES: [
     { asunto: 'Reparación de faro', familia: 'ELECTRICO Y LUCES', prioridad: 'URGENTE' },
     { asunto: '  ', familia: 'MOTOR', prioridad: 'NO URGENTE' },   // sin asunto real: se ignora
@@ -219,6 +219,8 @@ ok(pendientesRegistrados.items.length === 1 && pendientesRegistrados.items[0].as
   'el renglón sin asunto real se ignora');
 ok(pendientesRegistrados.correoResponsable === 'responsable@x.com',
   'le pasa el correo YA VALIDADO del aviso (no el de Capital Humano, no el del inspector): ' + pendientesRegistrados.correoResponsable);
+ok(pendientesRegistrados.correosCc.slice().sort().join(',') === 'inspector@x.com,otro@x.com',
+  'y los demás que SÍ se notificaron en copia -- sin el asistente (correo inválido) ni repetir al responsable: ' + pendientesRegistrados.correosCc);
 ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
   'el correo trae su propia sección con lo que hay que subir a Help Desk');
 ok(/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');

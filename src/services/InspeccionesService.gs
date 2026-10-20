@@ -447,11 +447,11 @@ const InspeccionesService = (function () {
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
-      // El MISMO correo validado que recibió el aviso original (no el de Capital Humano): así el
-      // recordatorio de un pendiente le llega exactamente a quien ya se avisó, aunque el inspector
-      // lo haya corregido a mano al capturar.
-      const correoResponsable = correoValido_(p.NOTIFICAR && p.NOTIFICAR.responsable) ? limpiar_(p.NOTIFICAR.responsable) : '';
-      pendientes = PendientesInspeccionService.agregar(fila, id, p.PENDIENTES, correoResponsable);
+      // Los MISMOS correos validados que recibieron el aviso original (no los de Capital Humano):
+      // así el recordatorio de un pendiente le llega exactamente a quien ya se avisó -- responsable
+      // y copia -- aunque el inspector lo haya corregido a mano al capturar.
+      const dest = destinatariosNotificar_(p.NOTIFICAR);
+      pendientes = PendientesInspeccionService.agregar(fila, id, p.PENDIENTES, dest.para, dest.cc);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -515,6 +515,23 @@ const InspeccionesService = (function () {
   }
 
   /**
+   * Separa lo que el inspector capturó en NOTIFICAR en "para" (el responsable, si su correo es
+   * válido) y "cc" (inspector + asistente + otros, validados, sin duplicar al responsable). La usan
+   * avisarInspeccion_ (el aviso original) y registrar() (para guardarlos en PendientesInspeccionService
+   * y que el recordatorio le llegue a la MISMA gente que ya se avisó).
+   * @param {Object} notificar  { responsable, inspector, asistente, otros: [] } -- puede venir undefined
+   * @return {{para: string, cc: Array<string>}}
+   */
+  function destinatariosNotificar_(notificar) {
+    if (!notificar) return { para: '', cc: [] };
+    const para = correoValido_(notificar.responsable) ? limpiar_(notificar.responsable) : '';
+    const cc = Array.from(new Set([notificar.inspector, notificar.asistente].concat(notificar.otros || [])
+      .map(limpiar_)
+      .filter((c) => c && correoValido_(c) && c.toLowerCase() !== para.toLowerCase())));
+    return { para: para, cc: cc };
+  }
+
+  /**
    * El aviso que arma el inspector en el paso "Revisar y firmar": nunca bloquea el guardado
    * de la inspección, un fallo aquí solo queda en lo que regresa `registrar` (igual que el
    * aviso de diagramas faltantes). Los correos no se guardan en la hoja: son solo para
@@ -528,11 +545,9 @@ const InspeccionesService = (function () {
    */
   function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes) {
     if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
-    const para = correoValido_(notificar.responsable) ? limpiar_(notificar.responsable) : '';
-    const candidatosCc = [notificar.inspector, notificar.asistente].concat(notificar.otros || [])
-      .map(limpiar_)
-      .filter((c) => c && correoValido_(c) && c.toLowerCase() !== para.toLowerCase());
-    const cc = Array.from(new Set(candidatosCc));
+    const dest = destinatariosNotificar_(notificar);
+    const para = dest.para;
+    const cc = dest.cc;
     let destinatario = para;
     let copia = cc;
     if (!destinatario) {
