@@ -325,9 +325,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     (`UBICACION_RESGUARDO`, valor de `camposUbicacion_`), sin importar la sede ni la oficina que traiga el equipo.
   - **Estatus:** `ESTATUS_EQUIPO_RESGUARDO` = RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE (estatus nuevo; ámbar, «Tiene
     un detalle; se ofrece en venta», `GRUPO_EQUIPO` del Panorama y `VENTA` de Vínculos) y PARA DESECHO.
-  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): el formulario no
-    ofrece su estatus actual (`formulario` regresa por equipo `enBandeja` y `opcionesEstatus`), y `mandar` rechaza el
-    mismo estatus («NUCO X: ya está en Resguardos y cancelaciones como RESGUARDO; elige otro estatus.»). Con otro
+  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): el formulario
+    muestra los 4 estatus (`opcionesEstatus`) y su estatus actual (`estatusFijo`, solo si `enBandeja`) se ve distinto
+    (`ln-pastilla-fija`, deshabilitada) y no se puede elegir (usuario, 20-oct: ocultarlo era confuso); al abrir no viene
+    ninguno elegido, salvo desde «Pasar a X». `mandar` rechaza el mismo estatus («NUCO X: ya está en Resguardos y cancelaciones como RESGUARDO; elige otro estatus.»). Con otro
     estatus se actualiza su renglón; no se pide otra recepción.
   - **Equipo sin renglón abierto** (viene de una persona, viene guardado del AppSheet o Pau ya lo entregó a Líneas): crea un
     renglón PENDIENTE DE RECEPCION, que Pau recibe; las respuestas traen `porRecibir` (antes `yaGuardado`: uno ya guardado no
