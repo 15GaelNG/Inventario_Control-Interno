@@ -1,0 +1,129 @@
+<script>
+  /**
+   * pendientes-inspeccion.js — Pendientes de inspección (vista de Kike, punto C del
+   * requerimiento de Control Interno sobre inspecciones): lo que el inspector dijo que hay
+   * que subir como ticket a Help Desk, con su estatus (si el sistema ya encontró ese ticket)
+   * y el estatus real del ticket allá (Abierto/Resuelto/Cerrado…), una vez encontrado.
+   *
+   * Antes era una pestaña de Inspección Vehicular; se independizó (20-oct-2026) porque quien
+   * le da seguimiento a esto no necesariamente captura inspecciones, y necesita su propio
+   * permiso (PendientesInspeccionService.MODULO = 'pendientes-inspeccion', Modulos.gs).
+   */
+  async function initPendientesInspeccion() {
+    const puedeEditar = puedeEditarModulo('pendientes-inspeccion');
+
+    const colorEstatus = (estatus) => (/^CARGADO/i.test(estatus || '') ? 'cerrada' : 'abierta');
+    const badgeEstatus = (estatus) => `<span class="badge-estado ${colorEstatus(estatus)}">${escaparHtml(estatus || '')}</span>`;
+    const badgePrioridad = (prioridad) => `<span class="badge-estado ${/^URGENTE$/i.test(prioridad || '') ? 'abierta' : ''}">${escaparHtml(prioridad || '')}</span>`;
+    // El estatus REAL del ticket allá en Help Desk (Abierto/Resuelto/Cerrado…) -- distinto de
+    // ESTATUS (que es si NOSOTROS ya encontramos ese ticket o no). Vacío mientras no se ha
+    // encontrado: no se pinta nada.
+    const badgeEstatusHelpdesk = (estatus) => (estatus
+      ? `<span class="badge-estado ${/resuelto|cerrado/i.test(estatus) ? 'cerrada' : 'abierta'}">${escaparHtml(estatus)}</span>` : '');
+
+    const tabla = DataTable.crear(document.getElementById('pdi-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'pendientes-inspeccion',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      textoVacio: 'Todavía no hay pendientes de inspección',
+      ayuda: 'Lo que el inspector dijo que el responsable debe subir como ticket a Help Desk. "Sin cargar en Help Desk" ' +
+        'quiere decir que el sistema todavía no lo encuentra allá -- "Enviar recordatorio" le manda otro correo al responsable. ' +
+        '"Estatus en Help Desk" es el estatus real del ticket allá (Abierto, Resuelto…), una vez que ya se encontró.',
+      alCambiarFiltros: (filtros) => { marcarKpiActivo(filtros); },
+      etiquetaFila: (p) => p.ASUNTO,
+      columnas: [
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha', fijada: true },
+        { campo: 'VEHICULO', titulo: 'Vehículo', tipo: 'lista' },
+        { campo: 'PLACAS', titulo: 'Placas', tipo: 'texto' },
+        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'lista' },
+        { campo: 'ASUNTO', titulo: 'Asunto', tipo: 'texto' },
+        { campo: 'FAMILIA O GRUPO A REPORTAR', titulo: 'Familia', tipo: 'lista' },
+        { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista', render: badgePrioridad },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: badgeEstatus },
+        { campo: 'ID TICKET HELPDESK', titulo: 'Ticket Help Desk', tipo: 'texto', visible: false },
+        { campo: 'ESTATUS HELPDESK', titulo: 'Estatus en Help Desk', tipo: 'lista', render: badgeEstatusHelpdesk },
+        { campo: 'FECHA CARGADO', titulo: 'Cargado el', tipo: 'fecha', visible: false },
+        { campo: 'ULTIMO RECORDATORIO', titulo: 'Último recordatorio', tipo: 'fecha' },
+      ],
+      accionesFila: puedeEditar ? [{
+        icono: 'mail', titulo: 'Enviar recordatorio', visible: (p) => /^SIN CARGAR/i.test(p.ESTATUS || ''),
+        alHacer: (p) => enviarRecordatorio(p),
+      }] : [],
+      seleccionable: false,
+    });
+
+    function marcarKpiActivo(filtros) {
+      const estatus = filtros.ESTATUS;
+      document.getElementById('pdi-kpi-cargados').classList.toggle(
+        'activo', !!(estatus && estatus.valores && estatus.valores[0] === 'CARGADO EN HELPDESK')
+      );
+      const prioridad = filtros.PRIORIDAD;
+      document.getElementById('pdi-kpi-urgentes').classList.toggle(
+        'activo', !!(prioridad && prioridad.valores && prioridad.valores[0] === 'URGENTE')
+      );
+      pintarStats(tabla.getFiltradas());
+    }
+
+    function pintarStats(todos) {
+      const sinCargar = (pendientes || []).filter((p) => /^SIN CARGAR/i.test(p.ESTATUS || ''));
+      document.getElementById('pdi-stat-total').textContent = sinCargar.length;
+      document.getElementById('pdi-stat-urgentes').textContent =
+        sinCargar.filter((p) => /^URGENTE$/i.test(p.PRIORIDAD || '')).length;
+      document.getElementById('pdi-stat-cargados').textContent =
+        (pendientes || []).filter((p) => /^CARGADO/i.test(p.ESTATUS || '')).length;
+      void todos;
+    }
+
+    document.getElementById('pdi-kpi-total').addEventListener('click', () => {
+      tabla.setFiltro('PRIORIDAD', null);
+      tabla.setFiltro('ESTATUS', { valores: ['SIN CARGAR EN HELPDESK'] });
+    });
+    document.getElementById('pdi-kpi-urgentes').addEventListener('click', (ev) => {
+      const yaActivo = ev.currentTarget.classList.contains('activo');
+      tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['SIN CARGAR EN HELPDESK'] });
+      tabla.setFiltro('PRIORIDAD', yaActivo ? null : { valores: ['URGENTE'] });
+    });
+    document.getElementById('pdi-kpi-cargados').addEventListener('click', (ev) => {
+      const yaActivo = ev.currentTarget.classList.contains('activo');
+      tabla.setFiltro('PRIORIDAD', null);
+      tabla.setFiltro('ESTATUS', yaActivo ? null : { valores: ['CARGADO EN HELPDESK'] });
+    });
+
+    let pendientes = [];
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        pendientes = (await callServer('apiListarPendientesInspeccion', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudieron cargar los pendientes: ' + err.message);
+        return;
+      }
+      tabla.setDatos(pendientes);
+      pintarStats(tabla.getFiltradas());
+    }
+
+    async function enviarRecordatorio(p) {
+      const ok = await Confirmar.pedir({
+        titulo: 'Enviar recordatorio',
+        mensaje: `Se le manda un correo a ${p.RESPONSABLE || 'el responsable'} recordándole "${p.ASUNTO}". ¿Continuar?`,
+        textoConfirmar: 'Enviar recordatorio',
+      });
+      if (!ok) return;
+      try {
+        const res = await callServer('apiEnviarRecordatorioPendiente', state.token, p.ID);
+        Notificar.exito('Recordatorio enviado a ' + res.correo);
+        await cargar();
+      } catch (err) {
+        Notificar.error('No se pudo enviar el recordatorio: ' + err.message);
+      }
+    }
+
+    await cargar();
+  }
+
+  const AYUDA_PENDIENTES_INSPECCION = [
+    { pregunta: '¿Qué es un pendiente de inspección?', respuesta: 'Algo que el inspector dijo que el responsable debe reportar como ticket en Help Desk, con su familia y su prioridad.' },
+    { pregunta: '¿Cómo sabe el sistema que ya se dio de alta el ticket?', respuesta: 'Compara el asunto contra los tickets ya sincronizados de Help Desk; cuando coincide, pasa a "Cargado".' },
+    { pregunta: '¿Qué hace "Enviar recordatorio"?', respuesta: 'Le manda otro correo al responsable (y a quien se notificó en la inspección) con el mismo asunto que debe usar en Help Desk.' },
+  ];
+</script>

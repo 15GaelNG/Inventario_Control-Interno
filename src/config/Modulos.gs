@@ -74,6 +74,10 @@ const Modulos = (function () {
         // Hoja INSPECCION VEHICULAR (290 registros, 195 columnas de checklist) +
         // MODELOS INSPECCION (18 diagramas por tipo de unidad), ver docs/mapeo-modulos.md
         { id: 'inspeccion-vehicular', etiqueta: 'Inspección Vehicular' },
+        // Antes era una pestaña de Inspección Vehicular (punto C del requerimiento, 20-oct-2026):
+        // se independizó porque quien le da seguimiento a esto no necesariamente captura
+        // inspecciones (Kike). Hoja PENDIENTES INSPECCION (PendientesInspeccionService.gs).
+        { id: 'pendientes-inspeccion', etiqueta: 'Pendientes de inspección' },
         { id: 'instalacion-sensores', etiqueta: 'Instalación de Sensores', editaEn: [{ modulo: 'vehiculos', que: 'la sección «Accesorios y sensor» de la ficha' }] },
         { id: 'hologramas', etiqueta: 'Hologramas' },
         // Puente hacia Adquisición Vehicular (13-oct-2026): el expediente de una compra desde

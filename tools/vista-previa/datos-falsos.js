@@ -908,17 +908,17 @@
     'hologramas': () => abrir('hologramas'),
     'hologramas-form': async () => { await abrir('hologramas', 'nuevo'); },
     'inspecciones': () => abrir('inspeccion-vehicular'),
-    'inspecciones-pendientes': async () => { await abrir('inspeccion-vehicular', 'pendientes'); await hasta('#ins-pend-tabla table, #ins-pend-tabla .dt-vacio'); await esperar(300); },
-    'inspecciones-pendientes-urgentes': async () => {
-      await abrir('inspeccion-vehicular', 'pendientes');
-      await hasta('#ins-pend-tabla table, #ins-pend-tabla .dt-vacio');
-      (await hasta('#ins-pend-kpi-urgentes')).click();
+    'pendientes-inspeccion': async () => { await abrir('pendientes-inspeccion'); await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio'); await esperar(300); },
+    'pendientes-inspeccion-urgentes': async () => {
+      await abrir('pendientes-inspeccion');
+      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
+      (await hasta('#pdi-kpi-urgentes')).click();
       await esperar(300);
     },
-    'inspecciones-pendientes-recordatorio': async () => {
-      await abrir('inspeccion-vehicular', 'pendientes');
-      await hasta('#ins-pend-tabla table, #ins-pend-tabla .dt-vacio');
-      (await hasta('#ins-pend-tabla .dt-acciones-fila button[title^="Enviar recordatorio"]')).click();
+    'pendientes-inspeccion-recordatorio': async () => {
+      await abrir('pendientes-inspeccion');
+      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
+      (await hasta('#pdi-tabla .dt-acciones-fila button[title^="Enviar recordatorio"]')).click();
       await esperar(300);
     },
     'inspecciones-form': async () => { await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio'); },

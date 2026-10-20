@@ -276,115 +276,6 @@
     // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
     escucharLista('apiListarInspecciones', cargar, document.getElementById('view-container').firstElementChild);
 
-    // ----- Pendientes (vista de Kike, punto C): pendientes de inspección sin cargar en Help Desk -----
-    const colorEstatusPendiente = (estatus) => (/^CARGADO/i.test(estatus || '') ? 'cerrada' : 'abierta');
-    const badgeEstatusPendiente = (estatus) => `<span class="badge-estado ${colorEstatusPendiente(estatus)}">${escaparHtml(estatus || '')}</span>`;
-    const badgePrioridad = (prioridad) => `<span class="badge-estado ${/^URGENTE$/i.test(prioridad || '') ? 'abierta' : ''}">${escaparHtml(prioridad || '')}</span>`;
-    // El estatus REAL del ticket allá en Help Desk (Abierto/Resuelto/Cerrado…) -- distinto de
-    // ESTATUS (que es si NOSOTROS ya encontramos ese ticket o no). Vacío mientras no se ha
-    // encontrado: no se pinta nada.
-    const badgeEstatusHelpdesk = (estatus) => (estatus
-      ? `<span class="badge-estado ${/resuelto|cerrado/i.test(estatus) ? 'cerrada' : 'abierta'}">${escaparHtml(estatus)}</span>` : '');
-
-    const tablaPendientes = DataTable.crear(document.getElementById('ins-pend-tabla'), {
-      idCampo: 'ID',
-      idTabla: 'inspecciones-pendientes',
-      ordenInicial: { campo: 'FECHA', dir: 'desc' },
-      textoVacio: 'Todavía no hay pendientes de inspección',
-      ayuda: 'Lo que el inspector dijo que el responsable debe subir como ticket a Help Desk. "Sin cargar en Help Desk" ' +
-        'quiere decir que el sistema todavía no lo encuentra allá -- "Enviar recordatorio" le manda otro correo al responsable. ' +
-        '"Estatus en Help Desk" es el estatus real del ticket allá (Abierto, Resuelto…), una vez que ya se encontró.',
-      alCambiarFiltros: (filtros) => { marcarKpiActivoPendientes(filtros); },
-      etiquetaFila: (p) => p.ASUNTO,
-      columnas: [
-        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha', fijada: true },
-        { campo: 'VEHICULO', titulo: 'Vehículo', tipo: 'lista' },
-        { campo: 'PLACAS', titulo: 'Placas', tipo: 'texto' },
-        { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'lista' },
-        { campo: 'ASUNTO', titulo: 'Asunto', tipo: 'texto' },
-        { campo: 'FAMILIA O GRUPO A REPORTAR', titulo: 'Familia', tipo: 'lista' },
-        { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista', render: badgePrioridad },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: badgeEstatusPendiente },
-        { campo: 'ID TICKET HELPDESK', titulo: 'Ticket Help Desk', tipo: 'texto', visible: false },
-        { campo: 'ESTATUS HELPDESK', titulo: 'Estatus en Help Desk', tipo: 'lista', render: badgeEstatusHelpdesk },
-        { campo: 'FECHA CARGADO', titulo: 'Cargado el', tipo: 'fecha', visible: false },
-        { campo: 'ULTIMO RECORDATORIO', titulo: 'Último recordatorio', tipo: 'fecha' },
-      ],
-      accionesFila: puedeEditar ? [{
-        icono: 'mail', titulo: 'Enviar recordatorio', visible: (p) => /^SIN CARGAR/i.test(p.ESTATUS || ''),
-        alHacer: (p) => enviarRecordatorioPendiente(p),
-      }] : [],
-      seleccionable: false,
-    });
-
-    function marcarKpiActivoPendientes(filtros) {
-      const estatus = filtros.ESTATUS;
-      document.getElementById('ins-pend-kpi-cargados').classList.toggle(
-        'activo', !!(estatus && estatus.valores && estatus.valores[0] === 'CARGADO EN HELPDESK')
-      );
-      const prioridad = filtros.PRIORIDAD;
-      document.getElementById('ins-pend-kpi-urgentes').classList.toggle(
-        'activo', !!(prioridad && prioridad.valores && prioridad.valores[0] === 'URGENTE')
-      );
-      pintarStatsPendientes(tablaPendientes.getFiltradas());
-    }
-
-    function pintarStatsPendientes(todos) {
-      const sinCargar = (pendientes || []).filter((p) => /^SIN CARGAR/i.test(p.ESTATUS || ''));
-      document.getElementById('ins-pend-stat-total').textContent = sinCargar.length;
-      document.getElementById('ins-pend-stat-urgentes').textContent =
-        sinCargar.filter((p) => /^URGENTE$/i.test(p.PRIORIDAD || '')).length;
-      document.getElementById('ins-pend-stat-cargados').textContent =
-        (pendientes || []).filter((p) => /^CARGADO/i.test(p.ESTATUS || '')).length;
-      void todos;
-    }
-
-    document.getElementById('ins-pend-kpi-total').addEventListener('click', () => {
-      tablaPendientes.setFiltro('PRIORIDAD', null);
-      tablaPendientes.setFiltro('ESTATUS', { valores: ['SIN CARGAR EN HELPDESK'] });
-    });
-    document.getElementById('ins-pend-kpi-urgentes').addEventListener('click', (ev) => {
-      const yaActivo = ev.currentTarget.classList.contains('activo');
-      tablaPendientes.setFiltro('ESTATUS', yaActivo ? null : { valores: ['SIN CARGAR EN HELPDESK'] });
-      tablaPendientes.setFiltro('PRIORIDAD', yaActivo ? null : { valores: ['URGENTE'] });
-    });
-    document.getElementById('ins-pend-kpi-cargados').addEventListener('click', (ev) => {
-      const yaActivo = ev.currentTarget.classList.contains('activo');
-      tablaPendientes.setFiltro('PRIORIDAD', null);
-      tablaPendientes.setFiltro('ESTATUS', yaActivo ? null : { valores: ['CARGADO EN HELPDESK'] });
-    });
-
-    let pendientes = [];
-    let pendientesCargados = false;
-    async function cargarPendientes() {
-      tablaPendientes.setCargando(true);
-      try {
-        pendientes = (await callServer('apiListarPendientesInspeccion', state.token)) || [];
-      } catch (err) {
-        tablaPendientes.setError('No se pudieron cargar los pendientes: ' + err.message);
-        return;
-      }
-      pendientesCargados = true;
-      tablaPendientes.setDatos(pendientes);
-      pintarStatsPendientes(tablaPendientes.getFiltradas());
-    }
-
-    async function enviarRecordatorioPendiente(p) {
-      const ok = await Confirmar.pedir({
-        titulo: 'Enviar recordatorio',
-        mensaje: `Se le manda un correo a ${p.RESPONSABLE || 'el responsable'} recordándole "${p.ASUNTO}". ¿Continuar?`,
-        textoConfirmar: 'Enviar recordatorio',
-      });
-      if (!ok) return;
-      try {
-        const res = await callServer('apiEnviarRecordatorioPendiente', state.token, p.ID);
-        Notificar.exito('Recordatorio enviado a ' + res.correo);
-        await cargarPendientes();
-      } catch (err) {
-        Notificar.error('No se pudo enviar el recordatorio: ' + err.message);
-      }
-    }
-
     // La captura (y sus catálogos) se prepara hasta que hace falta: al abrir la pestaña,
     // o en cuanto termina de cargar la tabla. Así no compite con la lista por el servidor.
     let captura = null;
@@ -397,10 +288,6 @@
       alCambiar: (nombre) => {
         if (nombre === 'registros') requestAnimationFrame(tabla.ajustarAlto);
         if (nombre === 'nueva') prepararSiFalta();
-        if (nombre === 'pendientes') {
-          if (!pendientesCargados) cargarPendientes();
-          requestAnimationFrame(tablaPendientes.ajustarAlto);
-        }
       },
     });
 

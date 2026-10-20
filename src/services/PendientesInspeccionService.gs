@@ -42,7 +42,10 @@ const PendientesInspeccionService = (function () {
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
-  const MODULO = 'inspeccion-vehicular';
+  // Antes era parte del permiso de 'inspeccion-vehicular' (una pestaña suya); tiene su propio
+  // módulo (Modulos.gs) desde que se independizó a su propia vista (20-oct-2026): quien le da
+  // seguimiento a esto no necesariamente captura inspecciones.
+  const MODULO = 'pendientes-inspeccion';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
