@@ -866,8 +866,8 @@ const TelefoniaService = (function () {
 
   /** Quitar del panel (pendiente 3.12): solo los de Líneas. La vista dice qué regresa y qué se queda de cada equipo. */
   function vistaQuitarPanel(token, ids) {
-    operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.vistaQuitar(ids));
+    const sesion = operar_(token);
+    return LineasUtil.paraCliente(LineasResguardos.vistaQuitar(ids, puedeVerSecretos_(sesion)));
   }
 
   function quitarDelPanel(token, ids, datos) {

@@ -4174,8 +4174,8 @@
             valor: actual['ESTATUS EQUIPO'] || (posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : ''), requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
           if (q.tieneLinea && !q.cancelacion) {
             const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
-            // Al corregir también se puede dejar DISPONIBLE la vencida (el servidor no la manda sola)
-            const opciones = vencido ? (corregir ? form.estatusLinea.concat([LINEA_SIN_PANEL]) : [q.propuestaLinea, LINEA_SIN_PANEL]) : form.estatusLinea;
+            // Al corregir, las dos de siempre: la vencida se puede dejar DISPONIBLE (el servidor no la manda sola; tres no caben)
+            const opciones = vencido && !corregir ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea;
             estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: opciones,
               valor: opciones.indexOf(actual['ESTATUS LINEA']) >= 0 ? actual['ESTATUS LINEA'] : (vencido ? '' : q.propuestaLinea), requerido: 'SIEMPRE',
               ayudas: SIGNIFICADO_ESTATUS, notas: { [LINEA_SIN_PANEL]: NOTA_SIN_PANEL } }));
@@ -6971,8 +6971,6 @@
           { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
-          // La que tenía al mandarlo: dato del trámite, no sigue al inventario (pendiente 3.12)
-          { campo: 'LINEA_AL_MANDAR', titulo: 'Línea al mandar', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
           { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },

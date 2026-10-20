@@ -2309,7 +2309,7 @@ test('Mandar a resguardo: estatus con su significado, línea vencida a cancelaci
   // Adendum vencido: la línea va a cancelación y se elige panel o CANCELADA directo (usuario, 16-oct; pendiente 2.50);
   // vigente o sin fecha, se elige DISPONIBLE o cancelación
   assert.match(resg, /const vencido = q\.propuestaLinea === 'EN PROCESO DE CANCELACION';/);
-  assert.match(resg, /const opciones = vencido \? \(corregir \? form\.estatusLinea\.concat\(\[LINEA_SIN_PANEL\]\) : \[q\.propuestaLinea, LINEA_SIN_PANEL\]\) : form\.estatusLinea;[\s\S]{0,200}valor: opciones\.indexOf\(actual\['ESTATUS LINEA'\]\) >= 0 \? actual\['ESTATUS LINEA'\] : \(vencido \? '' : q\.propuestaLinea\),[\s\S]{0,120}notas: \{ \[LINEA_SIN_PANEL\]: NOTA_SIN_PANEL \}/);
+  assert.match(resg, /const opciones = vencido && !corregir \? \[q\.propuestaLinea, LINEA_SIN_PANEL\] : form\.estatusLinea;[\s\S]{0,200}valor: opciones\.indexOf\(actual\['ESTATUS LINEA'\]\) >= 0 \? actual\['ESTATUS LINEA'\] : \(vencido \? '' : q\.propuestaLinea\),[\s\S]{0,120}notas: \{ \[LINEA_SIN_PANEL\]: NOTA_SIN_PANEL \}/);
   assert.match(read('src/services/lineas/LineasResguardos.gs'), /if \(vencida \|\| \(corregir && pedido\.directa\)\) pedido\['ESTATUS LINEA'\] = pedido\.directa \? LINEA_SIN_PANEL : LINEA_CANCELACION;/);
   // Sin ventana de confirmación
   assert.doesNotMatch(resg, /Confirmar\.pedir/);

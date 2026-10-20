@@ -52,6 +52,7 @@ function cargar(inventario, bandeja, movimientos) {
       const linea = { 'ID': f['ID LINEA'], 'ID LINEA': f['ID LINEA'], 'TIPO': 'LINEA', 'NUMERO TELEFONO': f['NUMERO TELEFONO'], 'FIN PLAN': f['FIN PLAN'],
         'COMPAÑIA': f['COMPAÑIA'], 'ESTATUS LINEA': (opciones && opciones.estatus) || 'DISPONIBLE' };
       const campos = [{ campo: 'NUMERO TELEFONO', antes: f['NUMERO TELEFONO'], despues: '' }];
+      if (f['ESTATUS LINEA'] !== linea['ESTATUS LINEA']) campos.push({ campo: 'ESTATUS LINEA', antes: f['ESTATUS LINEA'], despues: linea['ESTATUS LINEA'] });
       tablas['LINEAS TELEFONICAS'].push(linea);
       Object.assign(f, { 'NUMERO TELEFONO': '', 'ID LINEA': '', 'TIPO': 'EQUIPO', 'ESTATUS LINEA': '' });
       return { idLinea: linea['ID'], campos: campos, refs: [] };
@@ -146,9 +147,12 @@ test('la línea que va a cancelación se separa del equipo y entra sola a Cancel
   const filas = t.tablas.APP_RESGUARDOS;
   const resg = filas.filter((x) => x.ESTADO);
   const canc = filas.filter((x) => x.CANCELACION);
-  // Resguardos solo tiene equipos: su línea DISPONIBLE o «Sin línea», y la que tenía en LINEA_AL_MANDAR
+  // Resguardos solo tiene equipos (sin cancelación); el número que tenía se queda en NUMERO y LINEA_AL_MANDAR
   assert.deepEqual(resg.map((x) => [x.NUCO, x.NUMERO, x.LINEA_AL_MANDAR, x.ESTATUS_LINEA, x.CANCELACION]),
-    [['0050', '', '4420050', '', ''], ['0060', '', '4420060', '', ''], ['0070', '4420070', '4420070', 'DISPONIBLE', '']]);
+    [['0050', '4420050', '4420050', '', ''], ['0060', '4420060', '4420060', '', ''], ['0070', '4420070', '4420070', 'DISPONIBLE', '']]);
+  // En el panel, «Línea» de la que se fue dice su número con el estatus de hoy (Líneas, 20-oct: «así les funciona»)
+  const enPanel = t.R.bandeja(usuario).filas.filter((x) => x.ESTADO && x.NUCO === '0050')[0];
+  assert.deepEqual([enPanel.NUMERO, enPanel.ESTATUS_LINEA], ['4420050', 'EN PROCESO DE CANCELACION']);
   assert.ok(resg.every((x) => /^MVT-/.test(x.MOVIMIENTO_ID)), 'guarda el movimiento del envío');
   // Cancelaciones solo líneas: su ID, de qué NUCO salió y su motivo
   assert.deepEqual(canc.map((x) => [x.REGISTRO_ID, x.ID_LINEA, x.NUCO, x.ESTADO, x.CANCELACION, x.MOTIVO_CANCELACION]),
@@ -170,7 +174,7 @@ test('CANCELADA directo: la línea queda cancelada y suelta, y el equipo entra s
   const t = cargar([conLinea('EQU-5', '0050', '01/01/2025')], []);
   t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: {
     'EQU-5': pedido('RESGUARDO', { 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION', cancelacionLinea: 'DIRECTO' }) } }, usuario);
-  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((x) => [x.ESTADO, x.NUMERO, x.CANCELACION]), [['PENDIENTE DE RECEPCION', '', '']]);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((x) => [x.ESTADO, x.NUMERO, x.CANCELACION]), [['PENDIENTE DE RECEPCION', '4420050', '']]);
   assert.equal(t.tablas['LINEAS TELEFONICAS'].filter((f) => f.ID === 'LIN-0050')[0]['ESTATUS LINEA'], 'CANCELADA');
   assert.ok(t.escritas.movimientos.some((m) => m.tipo === 'CANCELACION_LINEA' && m.extra.detalle.sinPanel));
 });
@@ -227,7 +231,8 @@ test('Quitar del panel: solo lo pendiente; regresa lo que nadie tocó y respeta 
   const campos = vista.regresa.map((x) => x.campo);
   assert.ok(['ESTATUS EQUIPO', 'RESPONSABLE', 'PUESTO', 'PIN EQUIPO', 'DEPARTAMENTO'].every((c) => campos.indexOf(c) >= 0), campos.join());
   assert.deepEqual(vista.seQueda, [{ campo: 'SEDE', valor: 'LEON', motivo: 'Cambió después' }]);
-  assert.deepEqual(vista.regresa.filter((x) => x.campo === 'PIN EQUIPO')[0], { campo: 'PIN EQUIPO', de: '', a: '••••' }, 'el PIN no se ve');
+  assert.deepEqual(vista.regresa.filter((x) => x.campo === 'PIN EQUIPO')[0], { campo: 'PIN EQUIPO', de: '', a: '••••' }, 'sin permiso, el PIN no se ve');
+  assert.deepEqual(t.R.vistaQuitar(['EQU-1'], true).filas[0].regresa.filter((x) => x.campo === 'PIN EQUIPO')[0], { campo: 'PIN EQUIPO', de: '', a: '1234' });
   assert.throws(() => t.R.quitarDelPanel(['EQU-1'], { comentario: '' }, usuario), /Escribe el comentario/);
   const r = t.R.quitarDelPanel(['EQU-1'], { comentario: 'mandado por error' }, usuario);
   assert.equal(r.hechos.length, 1);
@@ -338,7 +343,7 @@ test('cada paso de la bandeja espera en su ventana hasta que contesta el servido
   assert.match(html, /accionesSeleccion: \(puede \? ACCIONES\[vista\] : \[\]\)\.concat\(opera && vista === 'RESGUARDOS' \? ACCIONES_LINEAS : \[\]\),/);
   assert.match(html, /function quitarDelPanel\(ids, alTerminar\)/);
   assert.match(html, /llamar\('apiLineasVistaQuitarPanel', ids\)/);
-  assert.match(html, /\{ campo: 'LINEA_AL_MANDAR', titulo: 'Línea al mandar'/);
+  assert.doesNotMatch(html, /titulo: 'Línea al mandar'/); // la línea va en «Línea» (Líneas, 20-oct)
   assert.match(html, /\{ campo: 'ACCESORIOS', titulo: 'Accesorios'/);
 });
 
@@ -366,5 +371,26 @@ test('Corregir resguardo no separa la línea: la vencida se queda DISPONIBLE y l
   const t3 = cargar([equipo('EQU-3', '0037', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'ID LINEA': 'LIN-3', 'NUMERO TELEFONO': '4420000037',
     'FIN PLAN': '01/01/2027', 'ESTATUS LINEA': 'DISPONIBLE' })], [abierto('EQU-3')]);
   t3.R.mandar(['EQU-3'], { corregir: true, comentario: 'ya no', porEquipo: { 'EQU-3': pedido('RESGUARDO', { 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' }) } }, usuario);
-  assert.deepEqual(t3.tablas.APP_RESGUARDOS.map((x) => [x.ESTADO, x.CANCELACION || '', x.NUMERO]), [['EN RESGUARDO', '', ''], ['', 'POR FIRMAR', '4420000037']]);
+  assert.deepEqual(t3.tablas.APP_RESGUARDOS.map((x) => [x.ESTADO, x.CANCELACION || '', x.NUMERO || '']), [['EN RESGUARDO', '', ''], ['', 'POR FIRMAR', '4420000037']]);
+});
+
+// Usuario, 20-oct: al quitar del panel, la línea que se fue a Cancelaciones con ese envío también regresa
+test('Quitar del panel regresa la línea que se fue a Cancelaciones si sigue POR FIRMAR', () => {
+  const t = cargar([conLinea('EQU-5', '0050', '01/01/2025', { 'RESPONSABLE': 'ANA' })], []);
+  t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: { 'EQU-5': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  assert.equal(eq['NUMERO TELEFONO'], '');
+  const vista = t.R.vistaQuitar(['EQU-5'], true).filas[0];
+  assert.deepEqual(vista.regresa.filter((x) => x.campo === 'NUMERO TELEFONO')[0], { campo: 'NUMERO TELEFONO', de: '', a: '4420050' });
+  assert.ok(vista.regresa.some((x) => x.campo === 'ESTATUS LINEA' && x.a === 'USO'), 'con su estatus de antes');
+  t.R.quitarDelPanel(['EQU-5'], { comentario: 'mandado por error' }, usuario);
+  const canc = t.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0];
+  assert.equal(canc.CANCELACION, 'RETIRADA');
+  assert.deepEqual([eq['NUMERO TELEFONO'], eq['ESTATUS LINEA'], eq['ESTATUS EQUIPO'], eq['RESPONSABLE']], ['4420050', 'USO', 'USO', 'ANA']);
+  // Si Pau ya avanzó la cancelación, la línea se queda
+  const t2 = cargar([conLinea('EQU-6', '0060', '01/01/2025')], []);
+  t2.R.mandar(['EQU-6'], { comentario: 'renuncia', inspecciones: { 'EQU-6': 'INS-6' }, porEquipo: { 'EQU-6': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  t2.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0].CANCELACION = 'CARTA FIRMADA';
+  assert.deepEqual(t2.R.vistaQuitar(['EQU-6']).filas[0].seQueda.filter((x) => x.campo === 'NUMERO TELEFONO')[0],
+    { campo: 'NUMERO TELEFONO', valor: '', motivo: 'Línea 4420060: está en CARTA FIRMADA en Cancelaciones; Pau tiene que retirarla.' });
 });
