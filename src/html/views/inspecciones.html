@@ -38,11 +38,30 @@
   <div id="ins-tabs">
     <div class="tabs-lista">
       <button type="button" class="tab-btn" data-tab="registros"><i data-lucide="table" class="ico"></i> Inspecciones</button>
+      <button type="button" class="tab-btn" data-tab="pendientes"><i data-lucide="list-checks" class="ico"></i> Pendientes</button>
       <button type="button" class="tab-btn" data-tab="nueva"><i data-lucide="plus" class="ico"></i> Nueva inspección</button>
     </div>
 
     <div class="card card-compacta" data-tab-panel="registros">
       <div id="ins-tabla"></div>
+    </div>
+
+    <div class="card card-compacta" data-tab-panel="pendientes">
+      <div class="kpi-chips" style="margin-bottom:12px">
+        <button type="button" class="kpi-chip" id="ins-pend-kpi-total" title="Ver todos los pendientes">
+          <span class="kpi-chip-label">Sin cargar</span>
+          <strong class="kpi-chip-value" id="ins-pend-stat-total">0</strong>
+        </button>
+        <button type="button" class="kpi-chip kpi-warn" id="ins-pend-kpi-urgentes" title="Filtrar: urgentes sin cargar">
+          <span class="kpi-chip-label">Urgentes</span>
+          <strong class="kpi-chip-value" id="ins-pend-stat-urgentes">0</strong>
+        </button>
+        <button type="button" class="kpi-chip" id="ins-pend-kpi-cargados" title="Filtrar: ya cargados en Help Desk">
+          <span class="kpi-chip-label">Cargados</span>
+          <strong class="kpi-chip-value" id="ins-pend-stat-cargados">0</strong>
+        </button>
+      </div>
+      <div id="ins-pend-tabla"></div>
     </div>
 
     <div class="card form-card" data-tab-panel="nueva">

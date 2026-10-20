@@ -36,15 +36,21 @@ const PendientesInspeccionService = (function () {
   const ENCABEZADOS = [
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
     'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'FECHA CARGADO',
+    'ULTIMO RECORDATORIO',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
+  const MODULO = 'inspeccion-vehicular';
 
   function ssId() {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
-  /** La hoja (o null si no existe y no se pide crearla) -- mismo patrón que SolicitudCompraService.hoja_ */
+  /**
+   * La hoja (o null si no existe y no se pide crearla) -- mismo patrón que SolicitudCompraService.hoja_.
+   * Si ya existe pero le falta alguna columna (un ENCABEZADOS que creció después), se la agrega sola
+   * al final, como HelpdeskService.hoja_.
+   */
   function hoja_(crear) {
     const ss = SpreadsheetApp.openById(ssId());
     let hoja = ss.getSheetByName(HOJA);
@@ -53,6 +59,14 @@ const PendientesInspeccionService = (function () {
       hoja = ss.insertSheet(HOJA);
       hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
       hoja.setFrozenRows(1);
+      return hoja;
+    }
+    const enc = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => String(h).trim());
+    const indices = SheetUtils.indiceDeColumnas(enc, ENCABEZADOS);
+    const faltan = ENCABEZADOS.filter((c) => indices[c] === -1);
+    if (faltan.length && crear) {
+      const desde = enc.filter(Boolean).length + 1;
+      hoja.getRange(1, desde, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
     }
     return hoja;
   }
@@ -61,6 +75,10 @@ const PendientesInspeccionService = (function () {
   /** Sin acentos, en mayúsculas y con los espacios de sobra colapsados -- para comparar texto libre */
   const normalizar_ = (v) => limpiar_(v).normalize('NFD').replace(/[̀-ͯ]/g, '')
     .toUpperCase().replace(/\s+/g, ' ');
+  function escaparHtml_(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
 
   /**
    * Da de alta los pendientes de UNA inspección ya guardada (InspeccionesService.registrar).
@@ -102,6 +120,7 @@ const PendientesInspeccionService = (function () {
         'ESTATUS': ESTATUS_SIN_CARGAR,
         'ID TICKET HELPDESK': '',
         'FECHA CARGADO': '',
+        'ULTIMO RECORDATORIO': '',
       };
       hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
       return fila;
@@ -164,5 +183,65 @@ const PendientesInspeccionService = (function () {
     });
   }
 
-  return { agregar, revisarCargaHelpdesk, ENCABEZADOS, HOJA, ESTATUS_SIN_CARGAR, ESTATUS_CARGADO };
+  /**
+   * La vista de Kike (punto C): todos los pendientes, con lo que hace falta para priorizar
+   * (prioridad, estatus, cuánto llevan) y decidir a quién recordarle. Vacío si todavía no hay
+   * ninguno. Mismo permiso que el resto del módulo: no es una sección aparte.
+   */
+  function listar(token) {
+    Permisos.puedeLeer(token, MODULO);
+    const hoja = hoja_(false);
+    if (!hoja) return [];
+    return SheetUtils.getAll(ssId(), HOJA).map((r) => Object.assign({}, r, {
+      FECHA: HojaServicio.fechaISO(r['FECHA']),
+      'FECHA CARGADO': HojaServicio.fechaISO(r['FECHA CARGADO']),
+      'ULTIMO RECORDATORIO': HojaServicio.fechaISO(r['ULTIMO RECORDATORIO']),
+    }));
+  }
+
+  /**
+   * Le manda al responsable un recordatorio de un pendiente que sigue SIN CARGAR -- Kike lo
+   * dispara a mano desde su vista. El correo del responsable no se guarda en ningún lado (ver
+   * InspeccionesService.avisarInspeccion_): se busca por su nombre en Capital Humano, igual que
+   * hace el wizard al capturar.
+   * @return {{enviado: true, correo: string}}
+   */
+  function enviarRecordatorio(token, id) {
+    Permisos.puedeEditar(token, MODULO);
+    const hoja = hoja_(false);
+    const encontrado = hoja && SheetUtils.findById(ssId(), HOJA, id, 'ID');
+    if (!encontrado) throw new Error('No se encontró ese pendiente.');
+    const fila = encontrado.data;
+    if (normalizar_(fila['ESTATUS']) !== ESTATUS_SIN_CARGAR) {
+      throw new Error('Ese pendiente ya está cargado en Help Desk: no hace falta recordarlo.');
+    }
+    const nombreBuscado = normalizar_(fila['RESPONSABLE']);
+    if (!nombreBuscado) throw new Error('Este pendiente no tiene responsable capturado.');
+    const colaborador = (CapitalHumano.listarColaboradores(token) || [])
+      .find((c) => normalizar_(c.NOMBRE) === nombreBuscado);
+    if (!colaborador || !limpiar_(colaborador.CORREO)) {
+      throw new Error('No se encontró el correo de ' + fila['RESPONSABLE'] + ' en Capital Humano; avísale directamente.');
+    }
+    const correo = limpiar_(colaborador.CORREO);
+    const asunto = 'Recordatorio: pendiente de inspección sin subir a Help Desk';
+    const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
+      '<h2 style="margin:0 0 12px;font-size:18px">Pendiente sin subir a Help Desk</h2>' +
+      '<p style="margin:0 0 10px">Hola, este pendiente de una inspección a tu unidad ' +
+      (fila['VEHICULO'] ? '(<b>' + escaparHtml_(fila['VEHICULO']) + (fila['PLACAS'] ? ' · ' + escaparHtml_(fila['PLACAS']) : '') + '</b>) ' : '') +
+      'todavía no aparece como ticket en el Help Desk:</p>' +
+      '<p style="margin:0 0 6px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
+      '<code>' + escaparHtml_(fila['ASUNTO']) + '</code></p>' +
+      '<p style="margin:10px 0 0">Da de alta el ticket en Help Desk usando EXACTAMENTE ese texto como asunto, ' +
+      'para que quede ligado a esta inspección.</p>' +
+      '</div>';
+    MailApp.sendEmail({ to: correo, subject: asunto, htmlBody: cuerpo });
+    SheetUtils.update(ssId(), HOJA, id, { 'ULTIMO RECORDATORIO': new Date() }, 'ID');
+    CacheHojas.tocarHoja(hoja);
+    return { enviado: true, correo: correo };
+  }
+
+  return {
+    agregar, revisarCargaHelpdesk, listar, enviarRecordatorio,
+    ENCABEZADOS, HOJA, ESTATUS_SIN_CARGAR, ESTATUS_CARGADO,
+  };
 })();

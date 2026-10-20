@@ -974,6 +974,13 @@ function apiOlvidarTipoInspeccion(token, tipo) {
 function apiRegistrarInspeccion(token, datos, imagenes) {
   return InspeccionesService.registrar(token, datos, imagenes);
 }
+// Vista de Kike (punto C): pendientes de inspección sin cargar en Help Desk, y su recordatorio
+function apiListarPendientesInspeccion(token) {
+  return PendientesInspeccionService.listar(token);
+}
+function apiEnviarRecordatorioPendiente(token, id) {
+  return PendientesInspeccionService.enviarRecordatorio(token, id);
+}
 
 // --- Datos conectados y Salud (Administración) ---
 // Dos pantallas sobre el mismo motor (Relaciones.gs): Datos conectados enseña el mapa (quién

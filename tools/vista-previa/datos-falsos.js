@@ -354,6 +354,19 @@
       { ID: '2026_25_291', FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', FECHA: hace(3), PLACAS: 'GGR658F', PUNTAJE: 84.5, RESPONSABLE: 'JORGE LUIS AVECILLA', INSPECTOR: 'AYRTON SEPULVEDA', PDF: '' },
       { ID: '2026_30_290', FOLIO: 'AUT0030', TIPO: 'L200', FECHA: hace(40), PLACAS: 'UNK093H', PUNTAJE: 71, RESPONSABLE: 'MOISÉS MALDONADO', INSPECTOR: 'J. ENRIQUE MORA', PDF: 'x.pdf' },
     ],
+    // Pestaña "Pendientes" (vista de Kike, punto C): mezcla de sin cargar/cargados y urgente/no urgente
+    apiListarPendientesInspeccion: [
+      { ID: 'PDI-1', FECHA: hace(6), VEHICULO: 'HONDA 150XR', PLACAS: 'GGR658F', RESPONSABLE: 'JORGE LUIS AVECILLA',
+        ASUNTO: '2026_25_291 - Reparación de faro delantero', 'FAMILIA O GRUPO A REPORTAR': 'ELECTRICO Y LUCES', PRIORIDAD: 'URGENTE',
+        ESTATUS: 'SIN CARGAR EN HELPDESK', 'ID TICKET HELPDESK': '', 'FECHA CARGADO': '', 'ULTIMO RECORDATORIO': '' },
+      { ID: 'PDI-2', FECHA: hace(6), VEHICULO: 'HONDA 150XR', PLACAS: 'GGR658F', RESPONSABLE: 'JORGE LUIS AVECILLA',
+        ASUNTO: '2026_25_291 - Cambio de amortiguador trasero', 'FAMILIA O GRUPO A REPORTAR': 'MECANICA', PRIORIDAD: 'NO URGENTE',
+        ESTATUS: 'SIN CARGAR EN HELPDESK', 'ID TICKET HELPDESK': '', 'FECHA CARGADO': '', 'ULTIMO RECORDATORIO': hace(1) },
+      { ID: 'PDI-3', FECHA: hace(20), VEHICULO: 'RIFTER', PLACAS: 'GGY886F', RESPONSABLE: 'JUAN MANUEL FULGENCIO',
+        ASUNTO: '2026_24_292 - Golpe en la puerta del piloto', 'FAMILIA O GRUPO A REPORTAR': 'HOJALATERIA Y PINTURA', PRIORIDAD: 'URGENTE',
+        ESTATUS: 'CARGADO EN HELPDESK', 'ID TICKET HELPDESK': 61802, 'FECHA CARGADO': hace(18), 'ULTIMO RECORDATORIO': '' },
+    ],
+    apiEnviarRecordatorioPendiente: { enviado: true, correo: 'juan.fulgencio@ejemplo.com' },
     // Un folio AUT… solo ofrece KWID y AUTOS (TIPOS_POR_PREFIJO_FOLIO en modulos/inspecciones.html)
     apiTiposInspeccion: [{ tipo: 'AUTOS', listo: true }, { tipo: 'KWID', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'PIPA', listo: true }],
     apiEstructuraInspeccion: {
@@ -892,6 +905,19 @@
     'hologramas': () => abrir('hologramas'),
     'hologramas-form': async () => { await abrir('hologramas', 'nuevo'); },
     'inspecciones': () => abrir('inspeccion-vehicular'),
+    'inspecciones-pendientes': async () => { await abrir('inspeccion-vehicular', 'pendientes'); await hasta('#ins-pend-tabla table, #ins-pend-tabla .dt-vacio'); await esperar(300); },
+    'inspecciones-pendientes-urgentes': async () => {
+      await abrir('inspeccion-vehicular', 'pendientes');
+      await hasta('#ins-pend-tabla table, #ins-pend-tabla .dt-vacio');
+      (await hasta('#ins-pend-kpi-urgentes')).click();
+      await esperar(300);
+    },
+    'inspecciones-pendientes-recordatorio': async () => {
+      await abrir('inspeccion-vehicular', 'pendientes');
+      await hasta('#ins-pend-tabla table, #ins-pend-tabla .dt-vacio');
+      (await hasta('#ins-pend-tabla .dt-acciones-fila button[title^="Enviar recordatorio"]')).click();
+      await esperar(300);
+    },
     'inspecciones-form': async () => { await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio'); },
     'inspecciones-checklist': async () => {
       await iniciarInspeccion();
