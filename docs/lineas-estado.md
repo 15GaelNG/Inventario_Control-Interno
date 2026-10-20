@@ -308,7 +308,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
   (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Corregir, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
-- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta). Los pasos
+- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a líneas, vendido, cancelación con carta). Los pasos
   de la bandeja y sus notificaciones (campana) los hace quien tiene EDICION en `resguardos-lineas`
   (`usuario.puedeAprobar`, calculado con `Permisos.deCorreo` en `TelefoniaService.usuarioResguardo_`); ADMIN y SUPER también,
   porque editan todo. Con solo LECTURA se ve y no se modifica («Solo puedes consultar Resguardos y cancelaciones, no
@@ -325,11 +325,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     (`UBICACION_RESGUARDO`, valor de `camposUbicacion_`), sin importar la sede ni la oficina que traiga el equipo.
   - **Estatus:** `ESTATUS_EQUIPO_RESGUARDO` = RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE (estatus nuevo; ámbar, «Tiene
     un detalle; se ofrece en venta», `GRUPO_EQUIPO` del Panorama y `VENTA` de Vínculos) y PARA DESECHO.
-  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): el formulario
-    muestra los 4 estatus (`opcionesEstatus`) y su estatus actual (`estatusFijo`, solo si `enBandeja`) se ve distinto
-    (`ln-pastilla-fija`, deshabilitada) y no se puede elegir (usuario, 20-oct: ocultarlo era confuso); al abrir no viene
-    ninguno elegido, salvo desde «Pasar a X». `mandar` rechaza el mismo estatus («NUCO X: ya está en Resguardos y cancelaciones como RESGUARDO; elige otro estatus.»). Con otro
-    estatus se actualiza su renglón; no se pide otra recepción.
+  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): no se vuelve a
+    mandar; `mandar` lo omite con «usa Corregir resguardo» (20-oct, pendiente 3.12; antes `c5954bd` mostraba el estatus
+    fijo y rechazaba el mismo). El menú ofrece «Corregir resguardo» en vez de «Mandar a resguardo» (ver abajo).
   - **Equipo sin renglón abierto** (viene de una persona, viene guardado del AppSheet o Pau ya lo entregó a Líneas): crea un
     renglón PENDIENTE DE RECEPCION, que Pau recibe; las respuestas traen `porRecibir` (antes `yaGuardado`: uno ya guardado no
     entraba a la bandeja o entraba como EN RESGUARDO con «Ya estaba en resguardo»). Líneas decide cuáles de los equipos
@@ -356,7 +354,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     `ln_notif_esquema_v1` y `ln_resguardos_esquema_v2`). Tiempos, en `migracion/TIEMPOS_LINEAS.md` (cambio 4).
 - **La bandeja de Pau: espera en cada paso, espejo del inventario y accesorios** (13-oct, `93e77a8`; `LineasResguardos.gs` y
   `initResguardos` en `lineas.html`):
-  - **Espera:** Recibir, Entregar a Líneas, Vendido, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
+  - **Espera:** Recibir, Entregar a líneas, Vendido, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
     `pedirDatos` con `{ detalle, peligro, espera, alConfirmar }`: la ventana lista lo que se toca (`detalle`, clase
     `confirmar-detalle`), y al aceptar se queda con la pantalla de espera («Recibiendo N equipo(s)», «Entregando…»,
     «Marcando… como vendidos», «Guardando N carta(s)…», «Cancelando N línea(s)») hasta que contesta el servidor; un error se
@@ -374,6 +372,39 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   - **Accesorios:** columna ACCESORIOS al final de APP_RESGUARDOS (`asegurarBandeja_` la agrega a la hoja que ya existe;
     caché `ln_resguardos_esquema_v2`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
     mandar a cancelación; la pestaña Resguardos tiene la columna «Accesorios» después de IMEI.
+- **Panel de Pau: resguardo y cancelación separados, Corregir resguardo, Quitar del panel y Retirar cancelación**
+  (20-oct, `6cbb7c5`, `36e0947`, `484de50`; pendiente 3.12; sin publicar; `LineasResguardos.gs`, `LineasEscritura.gs`,
+  `LineasAcciones.gs`, `LineasRegistros.gs`):
+  - **Separados:** al mandar a resguardo un equipo cuya línea va a cancelación (o que ya está en Cancelaciones), la línea se
+    separa primero del equipo (`LineasEscritura.separarLinea`, con opción de conservar el estatus) y entra sola a
+    Cancelaciones con su ID_LINEA y el NUCO del que salió; con CANCELADA directo queda cancelada y suelta, solo en el
+    historial. El equipo entra a Resguardos con NUMERO y LINEA_AL_MANDAR (el número que tenía). **La cancelación sigue a la
+    línea:** por ID_LINEA o, en renglones viejos, por número; `confirmarCancelacion` marca CANCELADA esté donde esté y los
+    duplicados se revisan por línea. Los renglones viejos que juntan las dos cosas se siguen leyendo (se separarán una
+    vez al publicar: pendiente 3.13). La columna «Línea» del panel muestra el número aunque la línea ya esté en
+    Cancelaciones, con su estatus de hoy.
+  - **Corregir resguardo** (equipo con renglón abierto; en el inventario y en el panel; EDICION de `lineas-telefonicas`):
+    formulario lleno (comentario = COMENTARIO o MOTIVO del renglón), sin restricciones, inspección ni renglón nuevo;
+    movimiento CORREGIR_RESGUARDO («Corrección de resguardo»). No separa la línea salvo que se elija mandarla a
+    cancelación; la que ya está en Cancelaciones se queda; dos opciones de estatus de línea (DISPONIBLE, EN PROCESO DE
+    CANCELACION). Desde el panel lleva a Líneas telefónicas y abre el formulario.
+  - **Quitar del panel** (EDICION de `lineas-telefonicas`; solo renglones PENDIENTE DE RECEPCION; en el inventario y en el
+    panel; `vistaQuitar` y `quitarDelPanel`): ventana con tabla Campo | Hoy | Queda. Regresa campo por campo lo que el
+    envío cambió y nadie tocó después (lo demás: «Se queda: cambió después»), con el movimiento del envío (MOVIMIENTO_ID
+    o, en renglones viejos, por equipo y hora). La persona solo regresa si el equipo vuelve a USO. La línea que se fue a
+    Cancelaciones con ese envío también regresa si su cancelación sigue POR FIRMAR (su renglón queda RETIRADA). PIN y
+    patrón con su valor para ADMIN y el área de Líneas. Renglón RETIRADO; movimiento QUITAR_PANEL («Quitado del panel»).
+  - **Retirar cancelación** (solo aprobadores; pestaña Cancelaciones; comentario obligatorio; `retirarCancelacion`):
+    fase RETIRADA; la línea queda DISPONIBLE, o en USO si sigue en un equipo con persona; movimiento RETIRAR_CANCELACION
+    («Cancelación retirada»).
+  - **Líneas no saca una línea de Cancelaciones:** Desvincular y Cambiar línea (salvo «a cancelación»), Cambiar de
+    equipo, Corregir el estatus y poner la línea en otro equipo avisan «Línea N: está en FASE en Cancelaciones; Pau tiene
+    que retirarla.»
+  - **Nota de CANCELADA:** bajo el estatus, «No entra al panel de Resguardos y cancelaciones; queda en el historial.», al
+    elegir CANCELADA en Mandar/Corregir resguardo y en Corregir con RESGUARDO, PARA VENTA, PARA DESECHO o EN PROCESO DE
+    CANCELACION; ya no sale la ventana «Cambio de estatus».
+  - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Quitados» y «Retiradas». El
+    índice del cliente trae la columna `panel` (`CLAVE_INDICE` v10; huella con APP_RESGUARDOS).
 - **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
   sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
   escribe como en Capital Humano (`guardarCH`: QUERETARO → QRO). Cachés `indice_colaboradores_v6` y `catalogos_telefonia_v8`.
@@ -409,7 +440,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct). Desde el 19-oct (sin publicar) INSPECCIONES LINEAS suma `No EMPLEADO` y `DIRECTOR`, y RESPONSIVAS LINEAS `JEFE DIRECTO`. RESPONSIVAS LINEAS lleva ID LINEA (el registro: el equipo o la línea sin equipo) e **ID LINEA ENTREGADA** (la línea de ese día; columna AR en producción, creada el 15-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
-| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario), avisos, fotos y correcciones |
+| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario; desde el 20-oct ID_LINEA, LINEA_AL_MANDAR, MOVIMIENTO_ID, RETIRADO_EN, RETIRO y RETIRO_MOTIVO, ESTADO RETIRADO y fase RETIRADA), avisos, fotos y correcciones |
 | APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
