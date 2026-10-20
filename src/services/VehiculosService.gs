@@ -175,10 +175,15 @@ const VehiculosService = (function () {
    * el frontend (app.html usa idCampo: 'ID_VEHICULO'), pero el VALOR sale de la columna 'ID'.
    */
   const RESUMEN = Object.assign({}, VEHICULOS, {
-    // El Panorama de Vehículos se arma con esta lista (su propio permiso desde el 14-oct)
-    leenTambien: ['panorama-vehiculos'],
+    // El Panorama de Vehículos se arma con esta lista (su propio permiso desde el 14-oct).
+    // Gestión de Activos también (20-oct): a diferencia de BASICO (solo para autocompletar,
+    // nunca trae BAJA VEHICULAR), esta sí los incluye con su ESTATUS -- es la que necesita para
+    // seguir mostrando en el panel de la persona un vehículo que ya dio de baja, sin que cuente
+    // como activo (RESPONSABLE VEHICULO se agregó para ese match).
+    leenTambien: ['panorama-vehiculos', 'gestion-activos'],
     columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
-      'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI'],
+      'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
+      'RESPONSABLE VEHICULO'],
     incluir: (r) => !!r['FOLIO'],
     fila: (r) => ({
       ID_VEHICULO: r['ID'],
@@ -196,6 +201,7 @@ const VehiculosService = (function () {
       SEDE: r['SEDE'] || '',
       ESTATUS: r['ESTATUS'] || '',
       FECHA_REGISTRO: r['FECHA REGISTRO SISTEMA CI'] || '',
+      RESPONSABLE_VEHICULO: r['RESPONSABLE VEHICULO'] || '',
     }),
     orden: { campo: 'FOLIO' },
   });

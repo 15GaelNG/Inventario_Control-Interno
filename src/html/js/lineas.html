@@ -6212,12 +6212,17 @@
        *  es el NUCO (igual que en el resto de la app desde este ciclo), pero la navegación
        *  sigue usando el FOLIO real: verFichaVehiculoDesdeOtroModulo necesita folio, no nuco. */
       function tarjetaVehiculos(nombre, lista) {
+        // apiListarVehiculosResumen (a diferencia del BASICO de los selectores) sí trae los
+        // BAJA VEHICULAR: se quedan en el panel, con su chip en rojo, pero el conteo de arriba
+        // ya no los suma (usuario, 20-oct).
+        const claseEstatus = (e) => (String(e || '').toUpperCase() === 'BAJA VEHICULAR' ? 'rojo' : 'verde');
         const fila = (v) => '<tr class="ln-fila-clic" data-ir-vehiculo="' + esc(v.FOLIO) + '"><td><button type="button" class="ln-btn-icono" data-ir-vehiculo="' + esc(v.FOLIO) + '">' +
-          icono('car') + ' NUCO ' + guion(v.NUCO) + ' ' + icono('chevron-right') + '</button></td><td class="ln-mono">' + guion(v.FOLIO) + '</td><td>' +
-          esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) + '</td><td>' + guion(v.MODELO) + '</td></tr>';
+          icono('car') + ' NUCO ' + guion(v.NUCCO) + ' ' + icono('chevron-right') + '</button></td><td class="ln-mono">' + guion(v.FOLIO) + '</td><td>' +
+          esc([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ')) + '</td><td>' + guion(v.MODELO) + '</td><td>' +
+          chip(v.ESTATUS || 'Sin estatus', claseEstatus(v.ESTATUS)) + '</td></tr>';
         return '<div class="card ln-card"><h3>' + icono('car') + ' Vehículos (' + lista.length + ')</h3>' +
           (lista.length
-            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Nucco</th><th>Folio</th><th>Marca / Línea</th><th>Año</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
+            ? '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr><th>Nucco</th><th>Folio</th><th>Marca / Línea</th><th>Año</th><th>Estatus</th></tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>'
             : '<p class="empty-state">Sin vehículos asignados a ' + esc(nombre) + '.</p>') + '</div>';
       }
 
@@ -6290,7 +6295,7 @@
         // no pide nada nuevo al servidor.
         Promise.all([
           cargarIndice(),
-          deOtroModulo('vehiculos', 'apiListarVehiculosBasico'),
+          deOtroModulo('vehiculos', 'apiListarVehiculosResumen'),
           deOtroModulo('hologramas', 'apiListarHologramas'),
           deOtroModulo('uber', 'apiListarUberResumen'),
           deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
@@ -6428,8 +6433,9 @@
           })));
 
           const filasVehiculos = (vehiculos || []).filter((v) => enFiltro(v.RESPONSABLE_VEHICULO)).map((v) => ({
-            Colaborador: v.RESPONSABLE_VEHICULO, Folio: v.FOLIO, Nucco: v.NUCO,
+            Colaborador: v.RESPONSABLE_VEHICULO, Folio: v.FOLIO, Nucco: v.NUCCO,
             'Marca/Línea': [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '), Modelo: v.MODELO,
+            Estatus: v.ESTATUS || 'Sin estatus',
           }));
 
           const filasHologramas = (hologramas || []).filter((h) => enFiltro(h.RESPONSABLE)).map((h) => ({
@@ -6461,7 +6467,7 @@
           const lineasEquiposTexto = agrupar(indice.equipos, 'responsable', (r) => '📱 EQUIPO + SIM: ' + (r.numero || 'sin línea'));
           const lineasSueltasTexto = agrupar((indice.lineas || []).filter((r) => r.suelta), 'responsable', (r) => '📞 LÍNEA SUELTA: ' + (r.numero || ''));
           const lineasTexto = (nombre) => [lineasEquiposTexto(nombre), lineasSueltasTexto(nombre)].filter(Boolean).join('  |  ');
-          const vehiculosTexto = agrupar(vehiculos, 'RESPONSABLE_VEHICULO', (v) => '🚗 ' + [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') + (v.NUCO ? ' · NUCO ' + v.NUCO : ''));
+          const vehiculosTexto = agrupar(vehiculos, 'RESPONSABLE_VEHICULO', (v) => '🚗 ' + [v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' ') + (v.NUCCO ? ' · NUCO ' + v.NUCCO : ''));
           const hologramasTexto = agrupar(hologramas, 'RESPONSABLE', (h) => '⛽ PLACA ' + (h.PLACA || '—') + (h.CALCOMANIA ? ' · ' + h.CALCOMANIA : ''));
           const uberTexto = agrupar(uber, 'NOMBRE_COMPLETO', (u) => '🚕 ' + (u.ROL || 'UBER') + (u.ESTATUS ? ' · ' + u.ESTATUS : ''));
           const cchTexto = agrupar(cajasChicas, 'RESPONSABLE', (c) => '💰 ID ' + (c.ID_CCH || '—') + (c.DEPARTAMENTO ? ' · ' + c.DEPARTAMENTO : ''));
@@ -6523,7 +6529,7 @@
       Promise.all([
         cargarColaboradores(),
         cargarIndice(),
-        deOtroModulo('vehiculos', 'apiListarVehiculosBasico'),
+        deOtroModulo('vehiculos', 'apiListarVehiculosResumen'),
         deOtroModulo('hologramas', 'apiListarHologramas'),
         deOtroModulo('uber', 'apiListarUberResumen'),
         deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
@@ -6534,8 +6540,9 @@
         // Cuenta solo lo que de verdad sigue activo -- lo dado de baja se queda viendo en el
         // panel de la persona (mostrarColaborador no filtra nada), pero ya no debe sumar aquí
         // (usuario, 20-oct: un vehículo/línea/equipo/holograma/Uber/caja dado de baja seguía
-        // contando como activo). Vehículos no necesita su propio filtro: apiListarVehiculosBasico
-        // ya excluye BAJA VEHICULAR desde el servidor.
+        // contando como activo). apiListarVehiculosResumen SÍ trae los BAJA VEHICULAR (a
+        // diferencia de apiListarVehiculosBasico, que los excluye y por eso no sirve aquí): se
+        // queda en el panel con su estatus, pero no cuenta.
         const suma = (lista, campo, activo) => (lista || []).forEach((a) => {
           if (activo && !activo(a)) return;
           const k = normal(a[campo]); if (k) conteo[k] = (conteo[k] || 0) + 1;
@@ -6543,7 +6550,7 @@
         const enUso = (a) => String(a.estatus || '').toUpperCase() === 'USO';
         indice.equipos.filter(enUso).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
         indice.lineas.filter((a) => a.suelta && enUso(a)).forEach((a) => { const k = normal(a.responsable); if (k) conteo[k] = (conteo[k] || 0) + 1; });
-        suma(vehiculos, 'RESPONSABLE_VEHICULO');
+        suma(vehiculos, 'RESPONSABLE_VEHICULO', (v) => String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR');
         suma(hologramas, 'RESPONSABLE', (h) => String(h.ESTATUS_EOX || '').toUpperCase() === 'HABILITADO');
         suma(uber, 'NOMBRE_COMPLETO', (u) => String(u.ESTATUS || '').toUpperCase() === 'ACTIVO');
         suma(cajasChicas, 'RESPONSABLE', (cch) => String(cch.ESTATUS || '').toUpperCase() === 'VIGENTE');
