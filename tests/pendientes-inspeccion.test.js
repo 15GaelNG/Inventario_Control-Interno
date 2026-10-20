@@ -123,54 +123,6 @@ console.log('4. revisarCargaHelpdesk(): empata por el ASUNTO completo (con el fo
   ok(tocados.length === tocadosAntes + 1, 'y esta vez sí hizo falta escribir (cambió el estatus de Help Desk)');
 }
 
-console.log('4d. El ID solo basta cuando es el único candidato (tolera que reescriban el resto)');
-{
-  // El responsable reescribió todo menos el ID: nada de "reparacion" ni "faro"
-  const { e, P } = entorno([
-    { 'ID TICKET HD': 91001, TITULO: 'Urgente', DESCRIPCION: 'Favor de revisar, folio 2026_30_1 cuando puedan', ESTATUS: 'Abierto' },
-  ]);
-  P.agregar(FILA_INSPECCION, '2026_30_1', [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }]);
-  const r = P.revisarCargaHelpdesk();
-  ok(r.encontrados === 1, 'un solo ticket con el ID adentro ya es suficiente, aunque no comparta ninguna palabra: ' + JSON.stringify(r));
-  const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
-  const fila = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1)[0];
-  ok(fila[col('ID TICKET HELPDESK')] === 91001, 'y se queda con ese ticket: ' + fila[col('ID TICKET HELPDESK')]);
-}
-
-console.log('4e. Dos pendientes de la MISMA inspección (mismo ID): desempata por las palabras de cada uno');
-{
-  const { e, P } = entorno([
-    { 'ID TICKET HD': 92001, TITULO: 'Cambio de amortiguador', DESCRIPCION: '2026_31_1', ESTATUS: 'Abierto' },
-    { 'ID TICKET HD': 92002, TITULO: 'Reparación de faro delantero', DESCRIPCION: '2026_31_1', ESTATUS: 'Abierto' },
-  ]);
-  P.agregar(FILA_INSPECCION, '2026_31_1', [
-    { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
-    { asunto: 'Cambio de amortiguador', familia: 'MECANICA', prioridad: 'NO URGENTE' },
-  ]);
-  const r = P.revisarCargaHelpdesk();
-  ok(r.encontrados === 2, 'los dos se encuentran, cada quien el suyo: ' + JSON.stringify(r));
-  const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
-  const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
-  const faro = filas.find((f) => f[col('ASUNTO')] === '2026_31_1 - Reparación de faro');
-  const amortiguador = filas.find((f) => f[col('ASUNTO')] === '2026_31_1 - Cambio de amortiguador');
-  ok(faro[col('ID TICKET HELPDESK')] === 92002, 'el de faro se liga al ticket que habla de faro, no al otro: ' + faro[col('ID TICKET HELPDESK')]);
-  ok(amortiguador[col('ID TICKET HELPDESK')] === 92001, 'y el de amortiguador al que habla de amortiguador: ' + amortiguador[col('ID TICKET HELPDESK')]);
-}
-
-console.log('4f. Mismo caso, pero ningún ticket se distingue: no adivina, los deja para vincular a mano');
-{
-  const { P } = entorno([
-    { 'ID TICKET HD': 93001, TITULO: 'Ticket 1', DESCRIPCION: '2026_32_1', ESTATUS: 'Abierto' },
-    { 'ID TICKET HD': 93002, TITULO: 'Ticket 2', DESCRIPCION: '2026_32_1', ESTATUS: 'Abierto' },
-  ]);
-  P.agregar(FILA_INSPECCION, '2026_32_1', [
-    { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
-    { asunto: 'Cambio de amortiguador', familia: 'MECANICA', prioridad: 'NO URGENTE' },
-  ]);
-  const r = P.revisarCargaHelpdesk();
-  ok(r.encontrados === 0, 'ninguno de los dos tickets comparte palabra con ninguno de los pendientes: no arriesga el equivocado: ' + JSON.stringify(r));
-}
-
 console.log('5. revisarCargaHelpdesk(): si Help Desk nunca se ha abierto en esta app (sin copia local), no truena');
 {
   const { P } = entorno();

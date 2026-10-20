@@ -24,14 +24,10 @@
  *     entre.
  *  4. revisarCargaHelpdesk() (llamada por el Calentador cada 10 min) compara cada pendiente
  *     "SIN CARGAR EN HELPDESK" contra esa copia (TITULO + DESCRIPCION): si el texto del ticket
- *     contiene el ID DE LA INSPECCIÓN en cualquier parte (no hace falta el asunto completo:
- *     tolera que el responsable edite o resuma el resto al pegarlo en Help Desk), lo marca
- *     "CARGADO EN HELPDESK" con el número real del ticket. Si una misma inspección generó más de
- *     un pendiente (el mismo ID aparece en varios tickets), desempata por las palabras propias
- *     de CADA pendiente (sin el ID): el candidato que más comparte. Si ninguno se distingue, no
- *     adivina -- lo deja "SIN CARGAR" para que alguien lo vincule a mano (ver el punto 6). Nunca
- *     llama al Help Desk ella misma: solo lee lo que YA se sincronizó la última vez que alguien
- *     abrió esa pantalla (ver la nota de credenciales ahí).
+ *     contiene el ASUNTO completo tal cual se escribió (con su ID de inspección), lo marca
+ *     "CARGADO EN HELPDESK" con el número real del ticket. Nunca llama al Help Desk ella misma:
+ *     solo lee lo que YA se sincronizó la última vez que alguien abrió esa pantalla (ver la nota
+ *     de credenciales ahí).
  *  5. Kike ve los que llevan tiempo "SIN CARGAR EN HELPDESK" (vista de seguimiento, punto C).
  *  6. Cuando el match automático no lo encuentra (texto irreconocible, o Help Desk todavía no
  *     sincronizado), Kike lo vincula a mano con vincularManual(): escribe el número de ticket que
@@ -152,28 +148,19 @@ const PendientesInspeccionService = (function () {
     return creados;
   }
 
-  /** Palabras de 4+ letras del texto propio del inspector (sin el ID por delante): para
-   *  desempatar cuando el ID por sí solo encuentra más de un ticket. Las de 1-3 letras
-   *  ("DE", "LA", "EN"...) casi nunca distinguen nada y se descartan solas, sin necesidad de
-   *  una lista de palabras vacías. */
-  function palabrasPropias_(asuntoCompleto, idInsp) {
-    const prefijo = idInsp ? idInsp + ' - ' : '';
-    const libre = prefijo && asuntoCompleto.indexOf(prefijo) === 0 ? asuntoCompleto.slice(prefijo.length) : asuntoCompleto;
-    return libre.split(/[^A-Z0-9Ñ]+/).filter((p) => p.length >= 4);
-  }
-
   /**
    * Compara los pendientes SIN CARGAR contra lo que ya se sincronizó de Help Desk (APP_HELPDESK,
-   * HelpdeskService.gs): si el ID de la inspección (el que agregar() antepone al asunto) aparece
-   * en cualquier parte del título o la descripción de algún ticket, ese pendiente queda CARGADO
-   * EN HELPDESK con el número real del ticket -- no hace falta el asunto completo, para tolerar
-   * que el responsable edite o resuma el resto del texto al pegarlo en Help Desk. Si el MISMO ID
-   * aparece en más de un ticket (una inspección que generó varios pendientes, cada quien con el
-   * suyo), desempata por las palabras propias de CADA pendiente (palabrasPropias_); si ninguno
-   * se distingue, no adivina -- lo deja SIN CARGAR para vincularManual(). De paso, a los que YA
+   * HelpdeskService.gs): si el título o la descripción de algún ticket contienen el ASUNTO
+   * completo tal cual se escribió (con el ID de inspección que se le antepuso en agregar()), ese
+   * pendiente queda CARGADO EN HELPDESK con el número real del ticket. De paso, a los que YA
    * estaban CARGADO les refresca ESTATUS HELPDESK (Abierto/Resuelto/Cerrado…, lo que diga Help
    * Desk hoy) -- es OTRO estatus, el de nuestro propio seguimiento (ESTATUS: si ya se encontró
    * el ticket o no) nunca se le pisa ni se le confunde una vez que ya es CARGADO.
+   *
+   * Si el texto no coincide tal cual (el responsable lo editó al pegarlo en Help Desk, o
+   * Help Desk aún no se ha sincronizado), esta función simplemente no lo encuentra -- para esos
+   * casos está vincularManual(), que Kike dispara a mano desde su vista con el número de ticket
+   * que ya vio ella misma.
    *
    * OJO -- no llama al Help Desk ella misma: HelpdeskApi.gs necesita el token personal de
    * alguien con sesión ahí (24 h, no hay cuenta de servicio), así que esta función solo lee la
@@ -191,7 +178,6 @@ const PendientesInspeccionService = (function () {
     const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
     const colEstatus = ENCABEZADOS.indexOf('ESTATUS');
     const colAsunto = ENCABEZADOS.indexOf('ASUNTO');
-    const colIdInspeccion = ENCABEZADOS.indexOf('ID INSPECCION');
     const colIdTicket = ENCABEZADOS.indexOf('ID TICKET HELPDESK');
     const colEstatusHelpdesk = ENCABEZADOS.indexOf('ESTATUS HELPDESK');
     const pendientes = [];
@@ -219,30 +205,10 @@ const PendientesInspeccionService = (function () {
       const colFechaCargado = ENCABEZADOS.indexOf('FECHA CARGADO');
       const ahora = new Date();
       pendientes.forEach((i) => {
-        const asuntoCompleto = normalizar_(valores[i][colAsunto]);
-        if (!asuntoCompleto) return;
-        const idInsp = normalizar_(valores[i][colIdInspeccion]);
-        // Con ID: basta con que aparezca en cualquier parte (tolera texto editado). Sin ID
-        // (pendientes de antes de que existiera, o algún caso raro): la regla estricta de
-        // siempre, el asunto completo tal cual.
-        const candidatos = idInsp
-          ? textosDeTicket.filter((t) => t.texto.indexOf(idInsp) !== -1)
-          : textosDeTicket.filter((t) => t.texto.indexOf(asuntoCompleto) !== -1);
-        if (!candidatos.length) return;
-        let match = candidatos[0];
-        if (candidatos.length > 1) {
-          const palabras = palabrasPropias_(asuntoCompleto, idInsp);
-          let mejorPuntaje = 0;
-          let elegido = null;
-          candidatos.forEach((t) => {
-            const puntaje = palabras.filter((p) => t.texto.indexOf(p) !== -1).length;
-            if (puntaje > mejorPuntaje) { mejorPuntaje = puntaje; elegido = t; }
-          });
-          // Ninguno se distingue de los demás: mejor dejarlo para vincular a mano que arriesgar
-          // el ticket equivocado de un pendiente hermano de la misma inspección.
-          if (!elegido) return;
-          match = elegido;
-        }
+        const asunto = normalizar_(valores[i][colAsunto]);
+        if (!asunto) return;
+        const match = textosDeTicket.find((t) => t.texto.indexOf(asunto) !== -1);
+        if (!match) return;
         hoja.getRange(i + 2, colEstatus + 1, 1, 1).setValue(ESTATUS_CARGADO);
         hoja.getRange(i + 2, colIdTicket + 1, 1, 1).setValue(match.idTicket);
         hoja.getRange(i + 2, colEstatusHelpdesk + 1, 1, 1).setValue(match.estatus);
