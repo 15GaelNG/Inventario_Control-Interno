@@ -1927,9 +1927,12 @@ test('PARA VENTA y PARA DESECHO siguen la lógica de Mandar a resguardo (usuario
   assert.equal((reg.match(/exigirFormularioResguardo_\(/g) || []).length, 2, 'definición + editar');
   // Editar ya no abre el formulario de resguardo (usuario, 8-oct): avisa que no entra al panel y se guarda con sinPanel
   assert.match(cliente, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
-  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa, menos el que ya tiene si ya está en la
-  // bandeja (usuario, 13-oct; lo prueba lineas-resguardo-cancelacion)
+  // Sin regla de estatus (usuario, 4-oct): cada equipo ofrece la lista completa; si ya está en la bandeja, el que tiene
+  // se ve sin poder elegirlo (usuario, 13 y 20-oct; lo prueba lineas-resguardo-cancelacion)
   assert.match(cliente, /const posibles = q\.opcionesEstatus \|\| form\.estatusEquipo;/);
+  assert.match(cliente, /const fijas = q\.estatusFijo \? \[q\.estatusFijo\] : \[\];/);
+  assert.match(cliente, /fija\(v\) \? ' ln-pastilla-fija" disabled aria-disabled="true' : ''/);
+  assert.match(cliente, /if \(pastilla\.disabled\) return;/);
   assert.doesNotMatch(resg, /LineasAcciones\.hayCamino|estatusPosibles/);
   // Si ya tiene su renglón abierto no se pide otra recepción: se actualiza; sin renglón abierto, Pau lo recibe
   assert.match(resg, /const abierto = ESTATUS_EQUIPO_RESGUARDO\.indexOf\(may\(antes\.estatus\)\) >= 0 \? abiertoDe_\(abiertos, f\) : null;/);

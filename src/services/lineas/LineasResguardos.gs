@@ -199,7 +199,8 @@ const LineasResguardos = (function () {
 
   /**
    * Datos para el formulario: por cada equipo lo que tiene hoy, la propuesta de la línea y los estatus que se pueden
-   * elegir (sin el que ya tiene si ya está en la bandeja, 13-oct). Los que no son equipo se regresan en `omitidos`.
+   * elegir. Si ya está en la bandeja, su estatus se ve pero no se elige (`estatusFijo`; usuario, 20-oct: antes no
+   * salía y era confuso). Los que no son equipo se regresan en `omitidos`.
    */
   function formulario(ids, usuario) {
     const lista = limpiarIds_(ids);
@@ -229,7 +230,7 @@ const LineasResguardos = (function () {
         tieneLinea: !!linea, numero: linea ? txt(LineasUtil.col(f, 'NUMERO TELEFONO')) : '', compania: txt(LineasUtil.col(f, 'COMPAÑIA')),
         estatusLinea: txt(LineasUtil.col(f, 'ESTATUS LINEA')), finPlan: vig.fin, vigencia: vig.vigencia,
         propuestaLinea: linea ? propuestaLinea_(tipo, vig) : '',
-        enBandeja: enBandeja, opcionesEstatus: ESTATUS_EQUIPO_RESGUARDO.filter((x) => !enBandeja || x !== estatusActual),
+        enBandeja: enBandeja, opcionesEstatus: ESTATUS_EQUIPO_RESGUARDO, estatusFijo: enBandeja ? estatusActual : '',
       });
     });
     return {

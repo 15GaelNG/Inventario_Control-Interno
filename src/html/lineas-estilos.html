@@ -1027,6 +1027,10 @@
   /* Con el color del resto del sistema (el gris neutro es del checklist), usuario 4-oct */
   [data-resg-fila] .ln-segmento .ln-pastilla.activa,
   :root[data-theme="dark"] [data-resg-fila] .ln-segmento .ln-pastilla.activa { background: var(--color-primary); color: #fff; }
+  /* El estatus que ya tiene en la bandeja de Pau: se ve marcado, sin poder elegirlo (usuario, 20-oct) */
+  .ln-segmento .ln-pastilla.ln-pastilla-fija,
+  .ln-segmento .ln-pastilla.ln-pastilla-fija:hover { background: var(--color-primary-soft); color: var(--color-primary); box-shadow: inset 0 -3px 0 var(--color-primary); cursor: not-allowed; }
+  :root[data-theme="dark"] .ln-segmento .ln-pastilla.ln-pastilla-fija { color: var(--color-text); }
   .lnr-pestanas { margin: 4px 0 12px; }
   /* ================= Inspección más clara (usuario, 3-oct) ================= */
   /* Datos que vienen del registro: se leen como ficha, no como campos por llenar */

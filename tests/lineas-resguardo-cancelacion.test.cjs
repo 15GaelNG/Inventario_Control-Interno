@@ -59,18 +59,21 @@ test('la ubicación sale DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA, no 
   assert.ok(f.campos.every((c) => c.editable === 'SIEMPRE'), 'se puede cambiar');
   assert.deepEqual(f.estatusEquipo, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
   assert.deepEqual(f.equipos[0].opcionesEstatus, f.estatusEquipo);
+  assert.equal(f.equipos[0].estatusFijo, '');
   // La pantalla toma el valor del servidor, no la sede ni la oficina del equipo
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /const actual = \{ DEPARTAMENTO: 'DISPONIBLE', SEDE: q\.sede/);
   assert.match(cliente, /const valor = b && b\.valor;/);
 });
 
-test('ya en la bandeja: el formulario no ofrece su estatus y el servidor no lo vuelve a mandar con él', () => {
+test('ya en la bandeja: su estatus se ve sin poder elegirlo y el servidor no lo vuelve a mandar con él', () => {
   const bandeja = [{ 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-2', 'NUCO': '0020', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' }];
   const t = cargar([equipo('EQU-2', '0020', 'RESGUARDO')], bandeja);
   const f = t.R.formulario(['EQU-2'], usuario);
   assert.equal(f.equipos[0].enBandeja, true);
-  assert.deepEqual(f.equipos[0].opcionesEstatus, ['PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
+  // Se ven los cuatro y el que tiene queda fijo (usuario, 20-oct: antes no salía y era confuso)
+  assert.deepEqual(f.equipos[0].opcionesEstatus, ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO']);
+  assert.equal(f.equipos[0].estatusFijo, 'RESGUARDO');
   assert.throws(() => t.R.mandar(['EQU-2'], { comentario: 'ya guardado', porEquipo: { 'EQU-2': pedido('RESGUARDO') } }, usuario),
     /NUCO 0020: ya está en Resguardos y cancelaciones como RESGUARDO; elige otro estatus\./);
   assert.equal(t.escritas.agregadas.length + t.escritas.actualizadas.length, 0, 'no escribió nada');
@@ -87,7 +90,7 @@ test('guardado desde el AppSheet (sin renglón abierto): Líneas lo manda y entr
   const bandeja = [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'EQU-3', 'NUCO': '0030', 'ESTADO': 'ENTREGADO A LINEAS', 'ESTATUS_EQUIPO': 'RESGUARDO' }];
   const t = cargar([equipo('EQU-3', '0030', 'RESGUARDO'), equipo('EQU-4', '0040', 'RESGUARDO')], bandeja);
   const f = t.R.formulario(['EQU-3', 'EQU-4'], usuario);
-  assert.ok(f.equipos.every((q) => !q.enBandeja && q.opcionesEstatus.indexOf('RESGUARDO') >= 0));
+  assert.ok(f.equipos.every((q) => !q.enBandeja && !q.estatusFijo && q.opcionesEstatus.indexOf('RESGUARDO') >= 0));
   const r = t.R.mandar(['EQU-3', 'EQU-4'], { comentario: 'del appsheet', porEquipo: { 'EQU-3': pedido('RESGUARDO'), 'EQU-4': pedido('RESGUARDO') } }, usuario);
   assert.deepEqual(r.hechos.map((h) => h.porRecibir), [true, true]);
   const nuevos = t.escritas.agregadas.map((a) => a.fila);

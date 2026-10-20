@@ -566,11 +566,14 @@
     // guarda no cambia (SI, NO, N/A…); solo el texto en pantalla y el color según lo que significa.
     const TEXTO_ESCALA = { SI: 'Sí', NO: 'No', 'N/A': 'N/A', BUENO: 'Bueno', REGULAR: 'Regular', MALO: 'Malo', INSTALADA: 'Instalada', 'NO INSTALADA': 'No instalada' };
     const CLASE_ESCALA = { SI: 'ln-pastilla-bien', BUENO: 'ln-pastilla-bien', INSTALADA: 'ln-pastilla-bien', NO: 'ln-pastilla-mal', MALO: 'ln-pastilla-mal', REGULAR: 'ln-pastilla-media' };
-    function grupoEscala(opciones, valorPrevio, ayudas) {
+    // fijas: opciones que se ven pero no se eligen (el estatus que ya tiene en la bandeja de Pau; usuario, 20-oct)
+    function grupoEscala(opciones, valorPrevio, ayudas, fijas) {
       const textos = opciones.map((v) => TEXTO_ESCALA[v] || v);
       const ancho = Math.max(64, Math.max.apply(null, textos.map((t) => t.length)) * 8 + 28);
+      const fija = (v) => (fijas || []).indexOf(v) >= 0;
       return '<div class="ln-pastillas ln-segmento" role="radiogroup" style="--ancho-opcion:' + ancho + 'px">' + opciones.map((v, i) =>
         '<button type="button" role="radio" aria-checked="' + (v === valorPrevio) + '" class="ln-pastilla' + (v === valorPrevio ? ' activa' : '') + (CLASE_ESCALA[v] ? ' ' + CLASE_ESCALA[v] : '') +
+        (fija(v) ? ' ln-pastilla-fija" disabled aria-disabled="true' : '') +
         '" data-valor="' + esc(v) + '"' + (ayudas && ayudas[v] ? ' title="' + esc(ayudas[v]) + '"' : '') + '>' + esc(textos[i]) + '</button>').join('') + '</div>';
     }
 
@@ -756,7 +759,7 @@
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
-        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null, e.ayudas) + '</div>';
+        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null, e.ayudas, e.fijas) + '</div>';
       } else if (e.control === 'lista') {
         const opciones = (e.opciones || []).slice();
         const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
@@ -2532,6 +2535,7 @@
         if (multi) { alternarMulti(multi); actualizarProgresoChecklist(); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
         if (pastilla) {
+          if (pastilla.disabled) return;
           pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => { b.classList.remove('activa'); if (b.hasAttribute('aria-checked')) b.setAttribute('aria-checked', 'false'); });
           pastilla.classList.add('activa');
           if (pastilla.hasAttribute('aria-checked')) pastilla.setAttribute('aria-checked', 'true');
@@ -4133,10 +4137,11 @@
           // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación y se elige
           // si pasa por el panel (EN PROCESO DE CANCELACION) o queda CANCELADA sin panel, sin nada elegido de inicio (usuario,
           // 16-oct; pendiente 2.50); vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo).
-          // Ya en la bandeja de Pau, sin el estatus que tiene: solo se cambia a otro (usuario, 13-oct)
+          // Ya en la bandeja de Pau solo se cambia a otro (usuario, 13-oct); el que tiene se ve, sin poder elegirlo (usuario, 20-oct)
           const posibles = q.opcionesEstatus || form.estatusEquipo;
-          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles,
-            valor: posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : '', requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
+          const fijas = q.estatusFijo ? [q.estatusFijo] : [];
+          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles, fijas: fijas,
+            valor: posibles.indexOf(estatusInicial) >= 0 && fijas.indexOf(estatusInicial) < 0 ? estatusInicial : '', requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
           if (q.tieneLinea) {
             const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
             estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea,
