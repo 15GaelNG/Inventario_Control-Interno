@@ -37,8 +37,8 @@ const PendientesInspeccionService = (function () {
   const HOJA = 'PENDIENTES INSPECCION';
   const ENCABEZADOS = [
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
-    'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'FECHA CARGADO',
-    'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC',
+    'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'ESTATUS HELPDESK',
+    'FECHA CARGADO', 'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
@@ -127,6 +127,7 @@ const PendientesInspeccionService = (function () {
         'PRIORIDAD': it.prioridad,
         'ESTATUS': ESTATUS_SIN_CARGAR,
         'ID TICKET HELPDESK': '',
+        'ESTATUS HELPDESK': '',
         'FECHA CARGADO': '',
         'ULTIMO RECORDATORIO': '',
         'CORREO RESPONSABLE': limpiar_(correoResponsable),
@@ -143,13 +144,16 @@ const PendientesInspeccionService = (function () {
    * Compara los pendientes SIN CARGAR contra lo que ya se sincronizó de Help Desk (APP_HELPDESK,
    * HelpdeskService.gs): si el título o la descripción de algún ticket contienen el ASUNTO
    * completo (con el folio de inspección que se le antepuso en agregar()), ese pendiente queda
-   * CARGADO EN HELPDESK con el número real del ticket.
+   * CARGADO EN HELPDESK con el número real del ticket. De paso, a los que YA estaban CARGADO les
+   * refresca ESTATUS HELPDESK (Abierto/Resuelto/Cerrado…, lo que diga Help Desk hoy) -- es OTRO
+   * estatus, el de nuestro propio seguimiento (ESTATUS: si ya se encontró el ticket o no) nunca
+   * se le pisa ni se le confunde una vez que ya es CARGADO.
    *
    * OJO -- no llama al Help Desk ella misma: HelpdeskApi.gs necesita el token personal de
    * alguien con sesión ahí (24 h, no hay cuenta de servicio), así que esta función solo lee la
    * copia local, que se actualiza cuando alguien abre Help Desk en la app. Por eso "cada 10 min
    * se revisa" es la REVISIÓN, no la lectura de Help Desk: si nadie abre esa pantalla, la copia
-   * no trae tickets nuevos y aquí no hay nada que encontrar todavía.
+   * no trae tickets nuevos (ni dice si alguno ya se resolvió) y aquí no hay nada nuevo que ver.
    *
    * La llama el Calentador (pasosCalentador_, cada 10 min). Nunca truena hacia afuera: un fallo
    * aquí no debe tumbar el resto de lo que calienta.
@@ -161,21 +165,30 @@ const PendientesInspeccionService = (function () {
     const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
     const colEstatus = ENCABEZADOS.indexOf('ESTATUS');
     const colAsunto = ENCABEZADOS.indexOf('ASUNTO');
+    const colIdTicket = ENCABEZADOS.indexOf('ID TICKET HELPDESK');
+    const colEstatusHelpdesk = ENCABEZADOS.indexOf('ESTATUS HELPDESK');
     const pendientes = [];
-    valores.forEach((fila, i) => { if (normalizar_(fila[colEstatus]) === ESTATUS_SIN_CARGAR) pendientes.push(i); });
-    if (!pendientes.length) return { revisados: 0, encontrados: 0 };
+    const cargados = [];
+    valores.forEach((fila, i) => {
+      if (normalizar_(fila[colEstatus]) === ESTATUS_SIN_CARGAR) pendientes.push(i);
+      else if (fila[colIdTicket]) cargados.push(i);
+    });
+    if (!pendientes.length && !cargados.length) return { revisados: 0, encontrados: 0 };
 
     // APP_HELPDESK todavía podría no existir (nadie ha abierto Help Desk en esta app)
     if (typeof HelpdeskService === 'undefined') return { revisados: pendientes.length, encontrados: 0 };
     const tickets = HelpdeskService.copiaLocal_();
     if (!tickets.length) return { revisados: pendientes.length, encontrados: 0 };
     const textosDeTicket = tickets.map((t) => ({
-      idTicket: t['ID TICKET HD'], texto: normalizar_((t['TITULO'] || '') + ' ' + (t['DESCRIPCION'] || '')),
+      idTicket: t['ID TICKET HD'], estatus: limpiar_(t['ESTATUS']),
+      texto: normalizar_((t['TITULO'] || '') + ' ' + (t['DESCRIPCION'] || '')),
     }));
+    const porIdTicket = {};
+    textosDeTicket.forEach((t) => { porIdTicket[String(t.idTicket)] = t; });
 
     return Candado.con(() => {
       let encontrados = 0;
-      const colIdTicket = ENCABEZADOS.indexOf('ID TICKET HELPDESK');
+      let tocado = false;
       const colFechaCargado = ENCABEZADOS.indexOf('FECHA CARGADO');
       const ahora = new Date();
       pendientes.forEach((i) => {
@@ -185,10 +198,18 @@ const PendientesInspeccionService = (function () {
         if (!match) return;
         hoja.getRange(i + 2, colEstatus + 1, 1, 1).setValue(ESTATUS_CARGADO);
         hoja.getRange(i + 2, colIdTicket + 1, 1, 1).setValue(match.idTicket);
+        hoja.getRange(i + 2, colEstatusHelpdesk + 1, 1, 1).setValue(match.estatus);
         hoja.getRange(i + 2, colFechaCargado + 1, 1, 1).setValue(ahora);
         encontrados++;
+        tocado = true;
       });
-      if (encontrados) CacheHojas.tocarHoja(hoja);
+      cargados.forEach((i) => {
+        const ticket = porIdTicket[String(valores[i][colIdTicket])];
+        if (!ticket || ticket.estatus === limpiar_(valores[i][colEstatusHelpdesk])) return;
+        hoja.getRange(i + 2, colEstatusHelpdesk + 1, 1, 1).setValue(ticket.estatus);
+        tocado = true;
+      });
+      if (tocado) CacheHojas.tocarHoja(hoja);
       return { revisados: pendientes.length, encontrados: encontrados };
     });
   }

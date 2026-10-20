@@ -280,6 +280,11 @@
     const colorEstatusPendiente = (estatus) => (/^CARGADO/i.test(estatus || '') ? 'cerrada' : 'abierta');
     const badgeEstatusPendiente = (estatus) => `<span class="badge-estado ${colorEstatusPendiente(estatus)}">${escaparHtml(estatus || '')}</span>`;
     const badgePrioridad = (prioridad) => `<span class="badge-estado ${/^URGENTE$/i.test(prioridad || '') ? 'abierta' : ''}">${escaparHtml(prioridad || '')}</span>`;
+    // El estatus REAL del ticket allá en Help Desk (Abierto/Resuelto/Cerrado…) -- distinto de
+    // ESTATUS (que es si NOSOTROS ya encontramos ese ticket o no). Vacío mientras no se ha
+    // encontrado: no se pinta nada.
+    const badgeEstatusHelpdesk = (estatus) => (estatus
+      ? `<span class="badge-estado ${/resuelto|cerrado/i.test(estatus) ? 'cerrada' : 'abierta'}">${escaparHtml(estatus)}</span>` : '');
 
     const tablaPendientes = DataTable.crear(document.getElementById('ins-pend-tabla'), {
       idCampo: 'ID',
@@ -287,7 +292,8 @@
       ordenInicial: { campo: 'FECHA', dir: 'desc' },
       textoVacio: 'Todavía no hay pendientes de inspección',
       ayuda: 'Lo que el inspector dijo que el responsable debe subir como ticket a Help Desk. "Sin cargar en Help Desk" ' +
-        'quiere decir que el sistema todavía no lo encuentra allá -- "Enviar recordatorio" le manda otro correo al responsable.',
+        'quiere decir que el sistema todavía no lo encuentra allá -- "Enviar recordatorio" le manda otro correo al responsable. ' +
+        '"Estatus en Help Desk" es el estatus real del ticket allá (Abierto, Resuelto…), una vez que ya se encontró.',
       alCambiarFiltros: (filtros) => { marcarKpiActivoPendientes(filtros); },
       etiquetaFila: (p) => p.ASUNTO,
       columnas: [
@@ -300,6 +306,7 @@
         { campo: 'PRIORIDAD', titulo: 'Prioridad', tipo: 'lista', render: badgePrioridad },
         { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: badgeEstatusPendiente },
         { campo: 'ID TICKET HELPDESK', titulo: 'Ticket Help Desk', tipo: 'texto', visible: false },
+        { campo: 'ESTATUS HELPDESK', titulo: 'Estatus en Help Desk', tipo: 'lista', render: badgeEstatusHelpdesk },
         { campo: 'FECHA CARGADO', titulo: 'Cargado el', tipo: 'fecha', visible: false },
         { campo: 'ULTIMO RECORDATORIO', titulo: 'Último recordatorio', tipo: 'fecha' },
       ],

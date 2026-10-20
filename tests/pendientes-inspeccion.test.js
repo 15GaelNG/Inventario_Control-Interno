@@ -78,13 +78,15 @@ console.log('3. revisarCargaHelpdesk(): sin pendientes o sin hoja, no hace nada'
 
 console.log('4. revisarCargaHelpdesk(): empata por el ASUNTO completo (con el folio), tolera mayúsculas/acentos');
 {
-  const { e, P } = entorno([
-    { 'ID TICKET HD': 90001, TITULO: 'rifter abc123 | fundaciones', DESCRIPCION: 'algo sin relación' },
+  // Un array, no un literal suelto: 4c lo muta para simular que Help Desk cambia de estatus
+  const ticketsHelpdesk = [
+    { 'ID TICKET HD': 90001, TITULO: 'rifter abc123 | fundaciones', DESCRIPCION: 'algo sin relación', ESTATUS: 'Abierto' },
     // Mismo folio de inspección pero SIN el resto del asunto: no debe alcanzar para un match
-    { 'ID TICKET HD': 90002, TITULO: '2026_25_1 - otra cosa distinta', DESCRIPCION: '' },
+    { 'ID TICKET HD': 90002, TITULO: '2026_25_1 - otra cosa distinta', DESCRIPCION: '', ESTATUS: 'Abierto' },
     // El asunto completo, con acentos/mayúsculas distintas y en la DESCRIPCION, no en el título
-    { 'ID TICKET HD': 90003, TITULO: 'Ticket de Luis', DESCRIPCION: 'Hola, aquí está: 2026_25_1 - REPARACION DE FARO, gracias' },
-  ]);
+    { 'ID TICKET HD': 90003, TITULO: 'Ticket de Luis', DESCRIPCION: 'Hola, aquí está: 2026_25_1 - REPARACION DE FARO, gracias', ESTATUS: 'Abierto' },
+  ];
+  const { e, P, tocados } = entorno(ticketsHelpdesk);
   P.agregar(FILA_INSPECCION, '2026_25_1', [
     { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
     { asunto: 'Cambio de amortiguador', familia: 'MECANICA', prioridad: 'NO URGENTE' },
@@ -92,18 +94,33 @@ console.log('4. revisarCargaHelpdesk(): empata por el ASUNTO completo (con el fo
   const r = P.revisarCargaHelpdesk();
   ok(r.revisados === 2 && r.encontrados === 1, 'revisa los 2 pendientes y encuentra 1 match: ' + JSON.stringify(r));
 
-  const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
   const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
-  const faro = filas.find((f) => f[col('ASUNTO')] === '2026_25_1 - Reparación de faro');
+  const buscarFaro = () => e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1)
+    .find((f) => f[col('ASUNTO')] === '2026_25_1 - Reparación de faro');
+  let faro = buscarFaro();
   ok(faro[col('ESTATUS')] === 'CARGADO EN HELPDESK', 'el que sí matcheó (por texto, insensible a acentos/mayúsculas) queda CARGADO');
   ok(faro[col('ID TICKET HELPDESK')] === 90003, 'con el número real del ticket de Help Desk: ' + faro[col('ID TICKET HELPDESK')]);
+  ok(faro[col('ESTATUS HELPDESK')] === 'Abierto', 'y guarda el estatus REAL del ticket allá, aparte del nuestro: ' + faro[col('ESTATUS HELPDESK')]);
   ok(faro[col('FECHA CARGADO')], 'y la fecha en que se cargó');
-  const amortiguador = filas.find((f) => f[col('ASUNTO')] === '2026_25_1 - Cambio de amortiguador');
+  const amortiguador = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1)
+    .find((f) => f[col('ASUNTO')] === '2026_25_1 - Cambio de amortiguador');
   ok(amortiguador[col('ESTATUS')] === 'SIN CARGAR EN HELPDESK', 'el que no aparece completo en ningún ticket se queda SIN CARGAR');
 
-  console.log('4b. Una segunda revisión ya no vuelve a tocar el que ya quedó cargado');
+  console.log('4b. Una segunda revisión, si Help Desk no cambió nada, no vuelve a tocar la hoja');
+  const tocadosAntes = tocados.length;
   const r2 = P.revisarCargaHelpdesk();
   ok(r2.revisados === 1 && r2.encontrados === 0, 'solo revisa el que sigue SIN CARGAR: ' + JSON.stringify(r2));
+  ok(tocados.length === tocadosAntes, 'y como el estatus de Help Desk sigue igual, no escribe nada de más');
+
+  console.log('4c. Si el ticket YA CARGADO cambia de estatus en Help Desk (se resuelve), se refresca');
+  ticketsHelpdesk[2].ESTATUS = 'Resuelto';
+  const r3 = P.revisarCargaHelpdesk();
+  ok(r3.revisados === 1, 'sigue revisando solo el SIN CARGAR -- el ya cargado no cuenta como "revisado"');
+  faro = buscarFaro();
+  ok(faro[col('ESTATUS HELPDESK')] === 'Resuelto', 'el estatus de Help Desk se actualiza: ' + faro[col('ESTATUS HELPDESK')]);
+  ok(faro[col('ESTATUS')] === 'CARGADO EN HELPDESK' && faro[col('ID TICKET HELPDESK')] === 90003,
+    'pero NUESTRO estatus (que ya se encontró) y el número de ticket no se tocan');
+  ok(tocados.length === tocadosAntes + 1, 'y esta vez sí hizo falta escribir (cambió el estatus de Help Desk)');
 }
 
 console.log('5. revisarCargaHelpdesk(): si Help Desk nunca se ha abierto en esta app (sin copia local), no truena');
