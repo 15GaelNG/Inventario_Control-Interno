@@ -299,6 +299,10 @@
       cambios: permisos['caja-chica.cambios-monto'] ? JSON.parse(FICHAS.apiCambiosMontoPorIdCch) : null,
       arqueos: permisos.arqueos ? JSON.parse(FICHAS.apiArqueosPorIdCch) : null,
     }),
+    // Se muta en el mismo objeto (no se reasigna) para que apiFichaCajaChica y
+    // apiBuscarCajaChicaPorId, que lo referencian, vean el cambio sin recargar -- es justo lo
+    // que prueba la escena 'caja-chica-cerrar' (usuario, 20-oct).
+    apiActualizarCajaChica: (token, id, datos) => { if (datos && datos.ESTATUS) CAJA.ESTATUS = datos.ESTATUS; },
     // Como el servidor: cada pestaña con el permiso de su módulo (null sin él; quitarPermisos lo quita)
     apiFichaVehiculo: () => {
       const parte = (modulo, valor) => (permisos[modulo] ? (typeof valor === 'string' ? JSON.parse(valor) : valor) : null);
@@ -844,6 +848,19 @@
     'tickets': () => abrir('tickets'),
     'caja-chica': () => abrir('caja-chica'),
     'caja-chica-ficha': async () => { await abrir('caja-chica'); await abrirPrimeraFila(); },
+    // Confirma que al cerrar una caja desde la ficha (botón Editar), su encabezado se repinta
+    // con el estatus fresco sin recargar la página (usuario, 20-oct)
+    'caja-chica-cerrar': async () => {
+      await abrir('caja-chica');
+      await abrirPrimeraFila();
+      (await hasta('#cch-btn-editar-ficha')).click();
+      await esperar(400);
+      const estatus = await hasta('#editar-cajachica-estatus');
+      estatus.value = 'CERRADA';
+      estatus.dispatchEvent(new Event('change', { bubbles: true }));
+      (await hasta('#btn-guardar-editar-cajachica')).click();
+      await esperar(700);
+    },
     'panorama-cajachica': async () => { await abrir('panorama-cajachica'); await esperar(700); },
     'cambios-monto': () => abrir('cambios-monto-cch'),
     'arqueos': () => abrir('arqueos'),

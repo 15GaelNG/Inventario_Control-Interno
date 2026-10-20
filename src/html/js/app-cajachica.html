@@ -502,7 +502,11 @@
           const quien = btn.dataset.arqueoLiga;
           const etiqueta = quien === 'asistente' ? 'el Asistente' : 'el Responsable';
           btn.addEventListener('click', () => generarLigaArqueoFicha_(btn.dataset.id, quien, etiqueta, !!btn.dataset.yaFirmado, () => {
-            invalidarCacheLista('apiFichaCajaChica', state.token);
+            // invalidarCacheLista arma su llave con los MISMOS argumentos que la llamada real
+            // (ver llaveLista_, api.html): sin el id aquí, invalida una entrada que no es la
+            // de esta ficha, y el repintado de abajo lee la copia vieja en caché (bug latente,
+            // corregido de paso -- usuario, 20-oct, lo encontró en Caja Chica al cerrarla).
+            invalidarCacheLista('apiFichaCajaChica', state.token, cResumen['ID CCH']);
             abrirFichaCajaChica(cResumen, 'arqueos', true);
           }));
         });
@@ -680,11 +684,21 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
+        const id = document.getElementById('editar-cajachica-id').value;
         const datos = recolectarDatosCajaChica('editar-cajachica');
-        await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
+        await callServer('apiActualizarCajaChica', state.token, id, datos);
         cerrarEditarCajaChica();
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
+        // Si se cerró (o se editó cualquier cosa) desde el botón "Editar" de la ficha, esta
+        // se queda abierta y mostraba el estatus viejo (VIGENTE) hasta recargar la página --
+        // la tabla ya se repintaba sola, pero la ficha no (usuario, 20-oct). Mismo patrón que
+        // ya usa generarLigaArqueoFicha_ para repintarse con lo fresco -- la llave de
+        // invalidarCacheLista lleva el id, si no invalida la entrada equivocada.
+        if (fichaCajaAbierta && String(fichaCajaAbierta['ID CCH']) === String(id)) {
+          invalidarCacheLista('apiFichaCajaChica', state.token, id);
+          abrirFichaCajaChica(fichaCajaAbierta, Tabs.actual(document.getElementById('cch-detalle')) || undefined, true);
+        }
         toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
