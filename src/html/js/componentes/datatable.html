@@ -1213,7 +1213,11 @@
           return;
         }
         if (!pagina.length) {
-          const mensaje = st.datos.length ? 'Ningún registro coincide con los filtros' : cfg.textoVacio;
+          // Mientras se trae columnasCompletas, un "ningún registro coincide" sería mentira: todavía
+          // no se sabe (la búsqueda puede estar pegándole a una columna que ni siquiera ha llegado;
+          // usuario, 21-oct: "me dice que ningún registro coincide pero a la vez está cargando").
+          const buscando = st.columnasExtra.cargando && st.busqueda.trim();
+          const mensaje = buscando ? 'Buscando en todas las columnas…' : (st.datos.length ? 'Ningún registro coincide con los filtros' : cfg.textoVacio);
           tbody.innerHTML = `<tr><td class="dt-vacio" colspan="${nColumnas}">${esc(mensaje)}</td></tr>`;
           return;
         }
@@ -1273,7 +1277,9 @@
       }
 
       function pintarBarraYPie({ filas, pagina, inicio, totalPaginas }) {
-        $('.dt-barra-carga').hidden = !st.refrescando;
+        // También se ve mientras se trae columnasCompletas en segundo plano (usuario, 21-oct: un
+        // colchón visible de que algo está pasando, no un buscador que "no encuentra nada" en silencio).
+        $('.dt-barra-carga').hidden = !(st.refrescando || st.columnasExtra.cargando);
         $('.dt-resumen').textContent = st.cargando ? 'Cargando…'
           : filas.length
             ? `Mostrando ${inicio + 1}–${inicio + pagina.length} de ${filas.length}` + (filas.length !== st.datos.length ? ` (filtrados de ${st.datos.length})` : '')
@@ -1494,9 +1500,9 @@
         st.pagina = 1;
         revelarColumnasDeLaBusqueda_();
         render();
-        // Respaldo: si por lo que sea columnasCompletas no se había traído todavía (ver setDatos,
-        // que ya las dispara solas en cuanto llegan los primeros datos), que al menos buscar algo
-        // no se quede corto -- se trae una vez, calladita (ella misma repite la búsqueda al terminar).
+        // Si cfg.columnasCompletas no se había traído todavía, que al menos buscar algo no se quede
+        // corto -- se trae una vez, calladita (ella misma repite la búsqueda y repinta al terminar;
+        // la barra de carga de arriba es el colchón visible mientras tanto, ver pintarBarraYPie).
         if (texto.trim() && cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
           cargarColumnasCompletas(undefined, true);
         }
@@ -1744,6 +1750,7 @@
         if (!cfg.columnasCompletas || st.columnasExtra.cargadas) return Promise.resolve();
         if (st.columnasExtra.cargando) return st.columnasExtra.promesa;
         st.columnasExtra.cargando = true;
+        render();   // la barra de carga arriba de la tabla se ve desde que arranca, no solo al terminar
         st.columnasExtra.promesa = (async () => {
           try {
             await conBotonOcupado(boton, 'Cargando…', async () => {
@@ -1782,11 +1789,11 @@
             // Puede haber llegado mientras alguien ya tenía algo escrito en el buscador: que lo
             // encuentre sin volver a teclear (y repinta por si cambió algo visible para "Vista").
             revelarColumnasDeLaBusqueda_();
-            render();
           } catch (err) {
             Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
           } finally {
             st.columnasExtra.cargando = false;
+            render();   // quita la barra de carga y refleja lo que haya cambiado (columnas, revelado…)
           }
         })();
         return st.columnasExtra.promesa;

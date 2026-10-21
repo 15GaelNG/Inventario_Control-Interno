@@ -103,6 +103,7 @@ const CajasChicasService = (function () {
     calentar: () => HojaServicio.calentar(CAJAS_CHICAS),
     /** Todas las columnas de TODAS las cajas chicas (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(CAJAS_CHICAS, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(CAJAS_CHICAS),
     /** Registro completo por ID CCH (para el modal de detalle/editar) */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(CAJAS_CHICAS, token, id),
     crear: (token, datos) => HojaServicio.crear(CAJAS_CHICAS, token, datos),

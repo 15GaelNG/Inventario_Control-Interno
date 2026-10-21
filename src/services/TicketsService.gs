@@ -61,6 +61,7 @@ const TicketsService = (function () {
     calentar: () => HojaServicio.calentar(TICKETS),
     /** Todas las columnas de TODOS los tickets (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(TICKETS, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(TICKETS),
     buscarPorId: (token, id) => HojaServicio.buscarPorId(TICKETS, token, id),
     crear: (token, datos) => HojaServicio.crear(TICKETS, token, datos),
     actualizar: (token, id, cambios) => HojaServicio.actualizar(TICKETS, token, id, cambios),
