@@ -111,9 +111,16 @@ const LineasCaptura = (function () {
     return { fila: fila, reg: reg, equipo: reg.equipo, linea: reg.linea };
   }
 
-  /** La línea sin equipo solo tiene responsiva (pendiente 2.45, usuario 15-oct). */
-  function exigirEquipoParaInspeccion_(obj) {
+  /**
+   * La línea sin equipo solo tiene responsiva (pendiente 2.45, usuario 15-oct). El equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-ROBO no se inspecciona (usuario, 21-oct; pendiente 2.55; la pantalla no
+   * muestra el botón), salvo dentro de la Responsiva que abre «Corregir equipo» al pasarlo a USO (ref.desdeCorregir).
+   */
+  function exigirEquipoParaInspeccion_(obj, ref) {
     if (!obj.equipo) throw new Error('La línea sin equipo no lleva inspección: solo responsiva.');
+    const estatus = String(LineasUtil.col(obj.fila, 'ESTATUS EQUIPO') || '').trim().toUpperCase();
+    if (!(ref && ref.reasignar && ref.desdeCorregir) && LineasAcciones.ESTATUS_SIN_RESPONSIVA.equipo.indexOf(estatus) >= 0) {
+      throw new Error(LineasAcciones.nombreRegistro(obj.fila, true) + ' está ' + estatus + '.');
+    }
     return obj;
   }
 
@@ -461,7 +468,7 @@ const LineasCaptura = (function () {
   // ======================================================================
 
   function contextoInspeccion(ref, usuario, puedeVerSecretos) {
-    const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref));
+    const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref), ref);
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
@@ -480,7 +487,7 @@ const LineasCaptura = (function () {
     const obj = objetivoCaptura_(ref);
     if (!obj.equipo) numeroParaResponsiva_(obj);
     // Lo vendido, desechado, robado o la línea cancelada ya no se entrega (usuario, 16-oct); Vincular ya lo revisó
-    if (!(ref && String(ref.modo || '').toUpperCase() === 'LINEA')) LineasAcciones.exigirEstatusParaResponsiva(obj.fila, !!obj.equipo);
+    if (!(ref && String(ref.modo || '').toUpperCase() === 'LINEA')) LineasAcciones.exigirEstatusParaResponsiva(obj.fila, !!obj.equipo, !!(ref && ref.desdeCorregir));
     const ahora = new Date();
     const lineaFila = lineaDeRef_(ref);
     return {
@@ -568,7 +575,7 @@ const LineasCaptura = (function () {
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
       const t0 = Date.now();
-      const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref));
+      const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref), datos);
       const elementos = formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!datos.enAccion, datos.reasignar ? datos.desdeResponsiva : null)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       marca_('inspección · registro y formulario', t0);

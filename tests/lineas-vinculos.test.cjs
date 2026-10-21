@@ -113,6 +113,8 @@ test('alSoltar: en el lienzo cada movimiento abre la acción de siempre con lo q
   assert.equal(V.alSoltar(equipo, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
   const guardado = { tipo: 'equipo', fila: e('E13'), dueno: null };
   assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Responsiva · NUCO 0013 → ANA RUIZ');
+  // Lo vendido, donado, desechado o robado ya no se entrega: soltarlo en una persona no abre nada ni avisa (pendiente 2.55)
+  assert.equal(V.alSoltar({ tipo: 'equipo', fila: e('E30'), dueno: null }, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
   assert.equal(V.alSoltar(guardado, { tipo: 'caja', caja: 'resguardo' }), null);
 });
 

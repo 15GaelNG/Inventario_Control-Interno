@@ -1766,8 +1766,8 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   const els = Reg._elementos(base, cat, u, { nuevo: false });
   assert.equal(campo(els, 'ESTATUS LINEA').valor, '');
   assert.equal(campo(els, 'ESTATUS EQUIPO').valor, 'FUERA DE INVENTARIO');
-  // Corregir equipo no pasa a USO: eso es la Responsiva (usuario, 16-oct; pendiente 2.50)
-  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo.filter((x) => x !== 'USO'));
+  // Corregir equipo vuelve a ofrecer USO (usuario, 21-oct; pendiente 2.55): sin responsable lo pasa la Responsiva
+  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo);
   // Corregir equipo sin la pestaña Responsable (usuario, 16-oct; pendiente 2.50); en el alta sí
   assert.ok(!els.some((e) => ['RESPONSABLE', 'NO EMPLEADO', 'DEPARTAMENTO'].indexOf(e.columna) >= 0));
   const alta = Reg._elementos(base, cat, u, { nuevo: true, parte: 'EQUIPO' });
@@ -1954,11 +1954,11 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
   assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
   // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
-  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', operarEquipo, '', true\)/);
+  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos\('equipo', e\.estatus\), '', true\)/);
   assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
   assert.match(lineas, /\.concat\(documentos, drive, operar \? editar\.concat\(vinculo\) : \[\], historial\)/);
   assert.doesNotMatch(lineas, /Abrir carpeta/);
-  assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e,/);
+  assert.match(lineas, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e && conDocumentos\('linea', l\.estatus\),/);
   assert.match(lineas, /function abrirMenuFicha\(boton\)/);
   // Mandar a cancelación: cliente, API y servidor; la pestaña Resguardos solo muestra renglones con equipo
   assert.match(lineas, /llamar\('apiLineasMandarCancelacion', conNumero\.map\(\(x\) => x\.id\)/);
@@ -1984,7 +1984,7 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
   // Inspección en documentos, junto a la Responsiva (pendientes 2.49 y 2.50, 16-oct); Ver la última, solo en la ficha (12-oct)
-  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,/);
+  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus\),/);
   assert.doesNotMatch(lineas, /Nueva inspección/);
   assert.doesNotMatch(lineas, /texto: 'Nueva responsiva'/);
   assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);

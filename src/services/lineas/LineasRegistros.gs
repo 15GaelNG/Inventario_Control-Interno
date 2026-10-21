@@ -194,9 +194,8 @@ const LineasRegistros = (function () {
       ed('COLOR', 'Color', 'listaAbierta', { opciones: catalogos.colores || [] }),
       // Los estatus se cambian aquí (sin «Cambiar estatus», usuario 4-oct). RESGUARDO, PARA VENTA y PARA DESECHO, con un
       // aviso confirmado: no entran al panel de Pau, solo al historial (usuario, 8-oct; ver editar)
-      // Corregir equipo no entrega: a USO se pasa con la Responsiva (usuario, 16-oct; pendiente 2.50)
-      ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'),
-        opciones: nuevo || texto_(v('ESTATUS EQUIPO')).toUpperCase() === 'USO' ? LineasRepo.CATALOGO.estatusEquipo : LineasRepo.CATALOGO.estatusEquipo.filter((x) => x !== 'USO'),
+      // USO también en Corregir (usuario, 21-oct; pendiente 2.55): sin responsable vigente lo hace la Responsiva (editar)
+      ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo,
         requerido: 'SIEMPRE', valida: 'LISTA', validaSiCambia: true }),
     ]); // Sin «Fecha de alta»: el alta está en el historial (usuario, 16-oct; pendiente 2.51)
     const responsable = [
@@ -434,6 +433,8 @@ const LineasRegistros = (function () {
     const lineaVencida = !!fila && !ctx.parte && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO' && LineasResguardos.lineaVencida(fila);
     return { nuevo: ctx.nuevo, parte: parteDe_(ctx, tipo), tipo: tipo, lineaVencida: lineaVencida, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0 || !!ctx.lineaEnEquipo ||
       (!ctx.nuevo && !ctx.parte && !!LineasRepo.TIPOS_CON_EQUIPO[tipo] && !!(LineasUtil.txt(base['NUMERO TELEFONO']) || LineasUtil.txt(base['NUMERO SIM']))), estatusLinea: texto_(base['ESTATUS LINEA']).toUpperCase(),
+      // A USO sin responsable vigente, la pantalla abre la Responsiva al guardar (pendiente 2.55)
+      conResponsable: !!fila && responsableVigente_(base),
       elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
   }
 
@@ -560,15 +561,20 @@ const LineasRegistros = (function () {
   const PERSONA_SOLO_RESPONSIVA = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO',
     'DIRECTOR', 'CUENTA GOOGLE'].concat(ORDEN_ADICIONALES.reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []));
 
-  /** Corregir equipo: truena si llega otra persona o un estatus USO nuevo (una pestaña abierta antes del 16-oct los manda). */
+  /** Responsable vigente: la asignación es de una persona y tiene RESPONSABLE (usuario, 21-oct; pendiente 2.55). */
+  const responsableVigente_ = (base) => texto_(base['TIPO ASIGNACION']).toUpperCase() === 'PERSONA' && !enBlanco_(base['RESPONSABLE']);
+
+  /**
+   * Corregir equipo: truena si llega otra persona (una pestaña abierta antes del 16-oct la manda). Regresa true si pide
+   * USO para un equipo sin responsable vigente (usuario, 21-oct; pendiente 2.55): el estatus no cambia aquí, lo pasa a
+   * USO la Responsiva obligatoria que la pantalla abre al guardar. Con responsable vigente, a USO se guarda directo.
+   */
   function exigirSinPersona_(base, enviados) {
     const cambia = PERSONA_SOLO_RESPONSIVA.filter((c) => Object.prototype.hasOwnProperty.call(enviados, c) &&
       texto_(enviados[c]).toUpperCase() !== texto_(base[c]).toUpperCase());
     if (cambia.length) throw new Error(cambia.join(', ') + ': la persona se cambia con «Responsiva».');
     const estatus = texto_(enviados['ESTATUS EQUIPO']).toUpperCase();
-    if (estatus === 'USO' && texto_(base['ESTATUS EQUIPO']).toUpperCase() !== 'USO') {
-      throw new Error('Para pasar el equipo a USO usa «Responsiva».');
-    }
+    return estatus === 'USO' && texto_(base['ESTATUS EQUIPO']).toUpperCase() !== 'USO' && !responsableVigente_(base);
   }
 
   /** Un solo COMENTARIO obligatorio en cada acción (plan §5.2): el del alta o el de la corrección. */
@@ -675,13 +681,16 @@ const LineasRegistros = (function () {
       // Editar línea (datos.parte = 'LINEA') o lo que es el registro
       const edicion = contextoEdicion_(base, datos && datos.parte);
       const parte = parteDe_(edicion, base['TIPO']);
-      if (parte === 'EQUIPO') exigirSinPersona_(base, enviados);
+      // A USO sin responsable: se guardan las demás correcciones y el estatus se queda (lo cambia la Responsiva)
+      const pideResponsiva = parte === 'EQUIPO' && exigirSinPersona_(base, enviados);
+      const pedidos = pideResponsiva ? Object.assign({}, enviados) : enviados;
+      if (pideResponsiva) delete pedidos['ESTATUS EQUIPO'];
       // A un equipo sin línea se le puede poner una línea sola que ya existe: su número no cuenta como repetido
       const sinLinea = parte === 'EQUIPO' && !LineasUtil.txt(base['NUMERO TELEFONO']) && !LineasUtil.txt(base['NUMERO SIM']);
       const ctx = Object.assign(contextoValidacion_(id, false, sinLinea), edicion, { parte: parte });
       const elementos = elementos_(base, LineasRepo.catalogos(), usuario, ctx)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
-      const r = resolver_(elementos, base, enviados, ctx);
+      const r = resolver_(elementos, base, pedidos, ctx);
       if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
       const valores = homologarNuco_(aHoja_(elementos, r.valores));
       if (LineasUtil.bloqueoSinPatron(datos) && 'PATRON' in valores) valores['PATRON'] = '';
@@ -695,6 +704,8 @@ const LineasRegistros = (function () {
       // Los datos de la persona solo quedan en blanco al mandar a resguardo (usuario, 4-oct): aquí no se vacían
       const vacios = PERSONA_SOLO_RESGUARDO.filter((c) => !enBlanco_(base[c]) && c in cambios && enBlanco_(valores[c]));
       if (vacios.length) throw new Error(vacios.join(', ') + ': no se deja en blanco al corregir; solo «Mandar a resguardo» lo deja en blanco.');
+      // Solo pedía USO: no hay nada que guardar aquí
+      if (pideResponsiva && !Object.keys(cambios).length) return { guardado: { campos: [] }, lineaAlPanel: null, responsiva: true };
       // Editar es corregir un dato mal capturado: siempre con su comentario (qué se corrigió y por qué), §5.2
       const motivo = comentarioObligatorio_(datos, 'qué se corrigió y por qué');
       // RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE CANCELACION y CANCELADA de la línea (usuario,
@@ -767,14 +778,16 @@ const LineasRegistros = (function () {
         LineasResguardos.registrarCancelacionDirecta(fila, texto_(base['ID LINEA']), motivo, texto_(datos && datos.ticket), usuario, new Date());
       }
       return { guardado: guardado, lineaAlPanel: lineaSale && lineaSale.alPanel ? texto_(base['ID LINEA']) : null, motivo: motivo,
-        nuco: LineasUtil.nucoVisible(base['NUCO']) || '' };
+        nuco: LineasUtil.nucoVisible(base['NUCO']) || '', responsiva: pideResponsiva };
     });
     // La línea que va al panel ya quedó sola: entra a la bandeja como con «Mandar a cancelación», desde su propio registro
     if (resultado.lineaAlPanel) {
       LineasResguardos.mandarCancelacion([resultado.lineaAlPanel], { comentario: resultado.motivo, ticket: texto_(datos && datos.ticket) }, usuario,
         { motivoDelAdendum: true, nucos: { [resultado.lineaAlPanel]: resultado.nuco } });
     }
-    return { id: id, cambios: resultado.guardado.campos, filas: LineasRepo.refrescarIndice([id].concat(resultado.lineaAlPanel ? [resultado.lineaAlPanel] : [])) };
+    // responsiva: la pantalla abre la Responsiva obligatoria, que pasa el equipo a USO (pendiente 2.55)
+    return { id: id, cambios: resultado.guardado.campos, responsiva: !!resultado.responsiva,
+      filas: LineasRepo.refrescarIndice([id].concat(resultado.lineaAlPanel ? [resultado.lineaAlPanel] : [])) };
   }
 
   /**

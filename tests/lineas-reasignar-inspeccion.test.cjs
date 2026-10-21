@@ -33,6 +33,6 @@ test('guardar la inspección de Reasignar no cambia a la persona del inventario 
   // Fuera de una acción, también los responsables adicionales
   assert.match(captura, /else if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA\.concat\(ADICIONALES\.map\(\(c\) => \[c, c\]\)\)\.forEach\(copiar\);/);
   const cliente = read('src/html/js/lineas.html');
-  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
-  assert.match(fn, /reasignar: true, desdeResponsiva: \{ valores: resp\.datos\.valores, patron: resp\.datos\.patron \}/);
+  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para, opciones)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  assert.match(fn, /reasignar: true, desdeResponsiva: \{ valores: resp\.datos\.valores, patron: resp\.datos\.patron \} \},\s+desdeCorregir \? \{ desdeCorregir: true \} : \{\}\)/);
 });
