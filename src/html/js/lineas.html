@@ -2471,6 +2471,10 @@
       const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       // El equipo que sale del inventario (LineasRegistros.ESTATUS_EQUIPO_FINAL; usuario, 16-oct, pendiente 2.50)
       const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+      // Lo que ya no se entrega ni se inspecciona: sin botones de Responsiva ni de Inspección (LineasAcciones.ESTATUS_SIN_RESPONSIVA;
+      // usuario, 21-oct, pendiente 2.55). El equipo vuelve a USO con Corregir
+      const SIN_DOCUMENTOS = { equipo: ESTATUS_EQUIPO_FINAL.concat(['EXTRAVIADO', 'ROBADO', 'ROBO']), linea: ESTATUS_LINEA_PANEL };
+      const conDocumentos = (tipo, estatus) => SIN_DOCUMENTOS[tipo].indexOf(String(estatus || '').trim().toUpperCase()) < 0;
       // La línea con el adendum vencido que se manda sola a cancelación: quien captura elige (LineasRegistros.CANCELACION_PANEL
       // y CANCELACION_DIRECTA; usuario, 16-oct, pendiente 2.50)
       const CANCELACION_LINEA = [{ valor: 'PANEL', texto: 'PANEL DE RESGUARDOS Y CANCELACIONES' }, { valor: 'DIRECTO', texto: 'CANCELADA SIN PANEL' }];
@@ -2749,11 +2753,11 @@
           return [detalles,
             // Responsiva en lugar de Reasignar (pendiente 2.49, usuario 16-oct): la misma persona renueva, otra reasigna.
             // Responsiva e Inspección juntas, la Responsiva primero (usuario, 16-oct; pendiente 2.50)
-            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,
-              alHacer: (f) => abrirResponsiva('equipo', f[0]) },
+            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos',
+              visible: (f) => operar() && conDocumentos('equipo', f[0].estatus), alHacer: (f) => abrirResponsiva('equipo', f[0]) },
             // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
-            { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
-              alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',
+              visible: (f) => operar() && conDocumentos('equipo', f[0].estatus), alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
             // Ya en el panel de Pau: se corrige y, si aún no lo recibe, se quita (usuario, 20-oct; pendiente 3.12)
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
               visible: (f) => operar() && !f.some((r) => r.panel), alHacer: (f) => abrirResguardo(f) },
@@ -2773,7 +2777,7 @@
         return [detalles,
           // La línea sin equipo también entrega con su Responsiva (pendiente 2.49); la de un equipo, con su equipo
           { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna', maximo: UNO, grupo: 'documentos',
-            visible: (f) => operar() && !f[0].equipoId, alHacer: (f) => abrirResponsiva('linea', f[0]) },
+            visible: (f) => operar() && !f[0].equipoId && conDocumentos('linea', f[0].estatus), alHacer: (f) => abrirResponsiva('linea', f[0]) },
           { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
           editar,
@@ -3369,7 +3373,7 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo, '', true),
+              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos('equipo', e.estatus), '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
@@ -3418,7 +3422,7 @@
           detalle.innerHTML = migas() +
             encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
               // Con equipo, las capturas son del equipo: a la vista "Ver equipo"; suelta: sus capturas. El resto en ⋮
-              botonesFicha('data-linea-id', id, 'linea', puedeOperarLinea && !e,
+              botonesFicha('data-linea-id', id, 'linea', puedeOperarLinea && !e && conDocumentos('linea', l.estatus),
                 e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '', puedeOperarLinea),
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
                 ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]],
@@ -3803,12 +3807,14 @@
        * exige la inspección) y se genera su PDF. Cerrar cualquiera sin guardar no cambia nada; si falla, la inspección del
        * día ya no se vuelve a pedir. La línea sin equipo no lleva inspección.
        */
-      async function abrirResponsiva(tipo, fila, para) {
+      async function abrirResponsiva(tipo, fila, para, opciones) {
         if (!fila) return;
         const esEquipo = tipo === 'equipo';
         const nombre = esEquipo ? 'NUCO ' + (fila.nuco || '—') : 'Línea ' + (fila.numero || '—');
         const subtitulo = [nombre, esEquipo ? fila.modelo : fila.compania, fila.responsable].filter(Boolean).join(' · ');
-        const ref = Object.assign(esEquipo ? { equipoId: fila.id } : { lineaId: fila.id }, { modo: 'RESPONSIVA' });
+        // desdeCorregir: la que abre Corregir equipo al pasarlo a USO; el servidor acepta el estatus final (pendiente 2.55)
+        const desdeCorregir = !!(esEquipo && opciones && opciones.desdeCorregir);
+        const ref = Object.assign(esEquipo ? { equipoId: fila.id } : { lineaId: fila.id }, { modo: 'RESPONSIVA' }, desdeCorregir ? { desdeCorregir: true } : {});
         const reasigna = (valores) => esEquipo && !mismaPersonaResponsiva(fila, valores);
         const listo = (r) => aplicarCambiosIndice(r && r.filas).then(() => {
           Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
@@ -3829,7 +3835,8 @@
         let pdfInspeccion = null;
         if (!inspeccionId) {
           // Empieza con lo capturado en la responsiva y no cambia a la persona del inventario: eso lo hace la responsiva
-          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+          const r = await capturarEnFlujo('INSPECCION', Object.assign({ equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+            desdeCorregir ? { desdeCorregir: true } : {}),
             { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y responsiva' });
           if (!r) return;
           inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
@@ -4474,6 +4481,17 @@
             // El equipo que sale del inventario deja su línea en USO DISPONIBLE (el servidor); con el adendum vencido va a
             // cancelación y se pregunta en la ventana del comentario si pasa por el panel (usuario, 16-oct; pendiente 2.50)
             const lineaACancelar = form.lineaVencida && cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL);
+            // A USO sin responsable vigente (usuario, 21-oct; pendiente 2.55): se guardan las demás correcciones y se abre la
+            // Responsiva obligatoria, que es la que lo pasa a USO (el servidor deja el estatus). Si solo cambió el estatus, se
+            // abre ya; si se cierra sin guardar, el estatus no cambia
+            const aResponsiva = form.parte !== 'LINEA' && !form.conResponsable && cambiaA('ESTATUS EQUIPO', ['USO']);
+            const conArchivo = Array.from(cuerpo.querySelectorAll('input[type="file"][data-archivo]')).some((i) => i.files && i.files[0]);
+            const responsivaDeCorregir = () => abrirResponsiva('equipo', filaDelIndice('equipo', id), null, { desdeCorregir: true });
+            if (aResponsiva && !conArchivo && Object.keys(valores).every((c) => c === 'ESTATUS EQUIPO' || String(valores[c]) === (inicial[c] || ''))) {
+              cerrarCaptura(true);
+              responsivaDeCorregir();
+              return;
+            }
             // La nota bajo el estatus ya avisó que no entra al panel (usuario, 20-oct; pendiente 3.12): directo a la ventana
             // del comentario, un solo COMENTARIO obligatorio y el TICKET (plan §5.2)
             Promise.resolve().then(() => (captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
@@ -4489,6 +4507,7 @@
                 cerrarCaptura(true);
                 aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
                 abrirRegistro(id || r.id);
+                if (r.responsiva) responsivaDeCorregir();
               }));
               });
             }).catch(errorAlGuardar);

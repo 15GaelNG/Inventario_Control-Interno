@@ -39,12 +39,55 @@ test('Corregir equipo no trae la pestaña Responsable; Agregar equipo y Corregir
   assert.ok(campo(Reg._elementos(sola, {}, usuario, Reg._contextoEdicion(sola, null)), 'RESPONSABLE'));
 });
 
-test('Corregir equipo no pasa a USO: eso es la Responsiva', () => {
+test('Corregir equipo ofrece USO: con responsable vigente se guarda directo; sin él lo pasa la Responsiva (pendiente 2.55)', () => {
   const Reg = cargar();
   const opciones = (base) => campo(Reg._elementos(base, {}, usuario, Reg._contextoEdicion(base, null)), 'ESTATUS EQUIPO').opciones;
-  assert.ok(opciones(guardado).indexOf('USO') < 0);
-  assert.ok(opciones(enUso).indexOf('USO') >= 0); // ya en USO, se queda en la lista
-  assert.throws(() => Reg._exigirSinPersona(guardado, { 'ESTATUS EQUIPO': 'USO' }), /Para pasar el equipo a USO usa «Responsiva»\./);
+  assert.ok(opciones(guardado).indexOf('USO') >= 0);
+  assert.ok(opciones(enUso).indexOf('USO') >= 0);
+  // true = el estatus no cambia aquí y la pantalla abre la Responsiva; responsable vigente = TIPO ASIGNACION PERSONA y RESPONSABLE
+  const vendido = { TIPO: 'EQUIPO', NUCO: '14', 'ESTATUS EQUIPO': 'VENDIDO', RESPONSABLE: 'ANA', 'TIPO ASIGNACION': 'PERSONA' };
+  assert.equal(Reg._exigirSinPersona(guardado, { 'ESTATUS EQUIPO': 'USO' }), true);
+  assert.equal(Reg._exigirSinPersona(vendido, { 'ESTATUS EQUIPO': 'USO' }), false);
+  assert.equal(Reg._exigirSinPersona(Object.assign({}, vendido, { 'TIPO ASIGNACION': 'RESGUARDO' }), { 'ESTATUS EQUIPO': 'USO' }), true);
+  assert.equal(Reg._exigirSinPersona(Object.assign({}, vendido, { RESPONSABLE: 'N/A' }), { 'ESTATUS EQUIPO': 'USO' }), true);
+  assert.equal(Reg._exigirSinPersona(vendido, { 'ESTATUS EQUIPO': 'DONADO' }), false);
+  assert.equal(Reg._exigirSinPersona(enUso, { 'ESTATUS EQUIPO': 'USO' }), false);
+  // Se guarda lo demás sin el estatus; si solo pedía USO, no se escribe nada
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  assert.match(reg, /const pideResponsiva = parte === 'EQUIPO' && exigirSinPersona_\(base, enviados\);/);
+  assert.match(reg, /if \(pideResponsiva\) delete pedidos\['ESTATUS EQUIPO'\];/);
+  assert.match(reg, /const r = resolver_\(elementos, base, pedidos, ctx\);/);
+  assert.match(reg, /if \(pideResponsiva && !Object\.keys\(cambios\)\.length\) return \{ guardado: \{ campos: \[\] \}, lineaAlPanel: null, responsiva: true \};/);
+  assert.match(reg, /return \{ id: id, cambios: resultado\.guardado\.campos, responsiva: !!resultado\.responsiva,/);
+  assert.match(reg, /conResponsable: !!fila && responsableVigente_\(base\)/);
+  // La pantalla abre la Responsiva obligatoria: ya, si solo cambió el estatus; si no, después de guardar lo demás
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /const aResponsiva = form\.parte !== 'LINEA' && !form\.conResponsable && cambiaA\('ESTATUS EQUIPO', \['USO'\]\);/);
+  assert.match(cliente, /const responsivaDeCorregir = \(\) => abrirResponsiva\('equipo', filaDelIndice\('equipo', id\), null, \{ desdeCorregir: true \}\);/);
+  assert.match(cliente, /abrirRegistro\(id \|\| r\.id\);\s+if \(r\.responsiva\) responsivaDeCorregir\(\);/);
+});
+
+test('estatus finales: sin Responsiva ni Inspección, salvo la Responsiva que abre Corregir equipo (pendiente 2.55)', () => {
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
+  const Acc = new Function('LineasRepo', 'LineasDatos', 'LineasUtil', 'LineasResguardos', read('src/services/lineas/LineasAcciones.gs') + '; return LineasAcciones;')({}, {}, LineasUtil, {});
+  const vendido = { NUCO: '14', 'ESTATUS EQUIPO': 'VENDIDO' };
+  const cancelada = { 'NUMERO TELEFONO': '4420000001', 'ESTATUS LINEA': 'CANCELADA' };
+  assert.throws(() => Acc.exigirEstatusParaResponsiva(vendido, true), /NUCO 0014 está VENDIDO\./);
+  assert.equal(Acc.exigirEstatusParaResponsiva(vendido, true, true), 'VENDIDO');
+  // La línea cancelada no se reactiva con Responsiva: con Corregir a DISPONIBLE
+  assert.throws(() => Acc.exigirEstatusParaResponsiva(cancelada, false, true), /La línea 4420000001 está CANCELADA\./);
+  assert.deepEqual(Acc.ESTATUS_SIN_RESPONSIVA.equipo, ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO']);
+  assert.match(read('src/services/lineas/LineasAcciones.gs'), /aplicarResponsiva_\(ref, valores, inspeccionId, usuario, ahora, !!d\.desdeCorregir\)/);
+  // La Inspección también: al abrirla y al guardarla; dentro de la Responsiva de Corregir sí
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /if \(!\(ref && ref\.reasignar && ref\.desdeCorregir\) && LineasAcciones\.ESTATUS_SIN_RESPONSIVA\.equipo\.indexOf\(estatus\) >= 0\) \{/);
+  assert.match(captura, /const obj = exigirEquipoParaInspeccion_\(objetivoCaptura_\(ref\), ref\);/);
+  assert.match(captura, /const obj = exigirEquipoParaInspeccion_\(objetivoCaptura_\(ref\), datos\);/);
+  // La pantalla no muestra los botones (ficha y menú de la lista), sin mensaje
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /const SIN_DOCUMENTOS = \{ equipo: ESTATUS_EQUIPO_FINAL\.concat\(\['EXTRAVIADO', 'ROBADO', 'ROBO'\]\), linea: ESTATUS_LINEA_PANEL \};/);
+  assert.match(cliente, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e && conDocumentos\('linea', l\.estatus\),/);
+  assert.equal((cliente.match(/conDocumentos\('equipo', f\[0\]\.estatus\)/g) || []).length, 2);
 });
 
 test('el servidor rechaza otra persona desde Corregir equipo (una pestaña abierta antes la manda)', () => {
@@ -53,7 +96,7 @@ test('el servidor rechaza otra persona desde Corregir equipo (una pestaña abier
   assert.throws(() => Reg._exigirSinPersona(enUso, { 'NOMBRE SEGUNDO RESPONSABLE': 'ANA' }), /la persona se cambia con «Responsiva»/);
   // Lo mismo que ya tenía no cuenta
   assert.doesNotThrow(() => Reg._exigirSinPersona(enUso, { RESPONSABLE: 'danae', 'NO EMPLEADO': 'CM1', 'ESTATUS EQUIPO': 'USO', EQUIPO: 'HONOR' }));
-  assert.match(read('src/services/lineas/LineasRegistros.gs'), /if \(parte === 'EQUIPO'\) exigirSinPersona_\(base, enviados\);/);
+
 });
 
 test('el equipo que sale del inventario: su línea en USO queda DISPONIBLE o, con el adendum vencido, al panel o CANCELADA', () => {

@@ -116,7 +116,7 @@ test('todo lo de la responsiva pasa a la ficha: persona, modelo, IMEI, accesorio
   // La línea sin equipo guarda su carpeta en LINEAS también dentro de la acción
   assert.match(captura, /const carpetaLinea = objetivo\.equipo \? null\s*: LineasArchivos\.carpetaEvidenciaLinea\(/);
   // Lo vendido o cancelado no abre la responsiva (Vincular ya lo revisó)
-  assert.match(captura, /LineasAcciones\.exigirEstatusParaResponsiva\(obj\.fila, !!obj\.equipo\);/);
+  assert.match(captura, /LineasAcciones\.exigirEstatusParaResponsiva\(obj\.fila, !!obj\.equipo, !!\(ref && ref\.desdeCorregir\)\);/);
 });
 
 test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la persona fija', () => {
@@ -150,13 +150,13 @@ test('pantalla: un botón «Responsiva»; inspección solo si otra persona recib
   assert.doesNotMatch(cliente, /abrirReasignar|apiLineasReasignar|texto: 'Reasignar', alHacer|Nueva responsiva<\/button>/);
   assert.match(cliente, /icono\('signature'\) \+ ' Responsiva<\/button>'/);
   assert.match(cliente, /if \(btnCaptura\.dataset\.lnCaptura === 'RESPONSIVA'\) abrirResponsiva\(/);
-  assert.match(cliente, /texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,\s*alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\) \},/);
-  assert.match(cliente, /visible: \(f\) => operar\(\) && !f\[0\]\.equipoId, alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\) \},/);
+  assert.match(cliente, /texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos',\s*visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus\), alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\) \},/);
+  assert.match(cliente, /visible: \(f\) => operar\(\) && !f\[0\]\.equipoId && conDocumentos\('linea', f\[0\]\.estatus\), alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\) \},/);
   assert.match(cliente, /else if \(a\.tipo === 'responsiva'\) abrirResponsiva\('equipo', a\.fila, a\.persona\);/);
-  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para, opciones)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   // Orden (usuario, 5-oct): responsiva (se revisa, no se guarda) → inspección (se guarda) → responsiva con las dos
   const iResp = fn.indexOf("capturarEnFlujo('RESPONSIVA'");
-  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");
+  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', Object.assign({ equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");
   const iGuardar = fn.indexOf("llamar('apiLineasGuardarResponsiva', Object.assign({}, d, { inspeccionId: inspeccionId }))");
   assert.ok(iResp > 0 && iResp < iInsp && iInsp < iGuardar, 'responsiva, inspección y luego guardar');
   assert.match(fn, /const reasigna = \(valores\) => esEquipo && !mismaPersonaResponsiva\(fila, valores\);/);

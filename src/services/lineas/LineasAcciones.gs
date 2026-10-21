@@ -21,7 +21,10 @@ const LineasAcciones = (function () {
   ].concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat([['NO EMPLEADO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE'],
     ['NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']]), []));
 
-  /** Lo que ya no se entrega (usuario, 16-oct): primero se corrige su estatus con Editar. */
+  /**
+   * Lo que ya no se entrega (usuario, 16-oct) ni se inspecciona (21-oct; pendiente 2.55): la pantalla no muestra los
+   * botones. El equipo vuelve a USO con «Corregir», que abre la Responsiva (desdeCorregir).
+   */
   const ESTATUS_SIN_RESPONSIVA = {
     equipo: ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'],
     linea: ['CANCELADA', 'EN PROCESO DE CANCELACION'],
@@ -33,10 +36,15 @@ const LineasAcciones = (function () {
     return esEquipo ? 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '') : 'La línea ' + (txt(LineasUtil.col(f, 'NUMERO TELEFONO')) || txt(LineasUtil.col(f, 'NUMERO SIM')));
   }
 
-  /** El estatus del registro (el del equipo, o el de la línea sin equipo), o error si ya no se entrega. */
-  function exigirEstatusParaResponsiva(f, esEquipo) {
+  /**
+   * El estatus del registro (el del equipo, o el de la línea sin equipo), o error si ya no se entrega. desdeCorregir: la
+   * Responsiva que abre «Corregir equipo» al pasarlo a USO sí acepta el estatus final (usuario, 21-oct; pendiente 2.55).
+   */
+  function exigirEstatusParaResponsiva(f, esEquipo, desdeCorregir) {
     const estatus = may(LineasUtil.col(f, esEquipo ? 'ESTATUS EQUIPO' : 'ESTATUS LINEA'));
-    if (ESTATUS_SIN_RESPONSIVA[esEquipo ? 'equipo' : 'linea'].indexOf(estatus) >= 0) throw new Error(nombreRegistro_(f, esEquipo) + ' está ' + estatus + '.');
+    if (!(esEquipo && desdeCorregir) && ESTATUS_SIN_RESPONSIVA[esEquipo ? 'equipo' : 'linea'].indexOf(estatus) >= 0) {
+      throw new Error(nombreRegistro_(f, esEquipo) + ' está ' + estatus + '.');
+    }
     return estatus;
   }
 
@@ -69,17 +77,17 @@ const LineasAcciones = (function () {
     const inspeccionId = txt(d.inspeccionId);
     const r = LineasCaptura.guardarResponsiva(d, usuario, puedeVerSecretos, {
       ref: ref, modo: 'RESPONSIVA',
-      aplicar: (ahora, valores) => aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora),
+      aplicar: (ahora, valores) => aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora, !!d.desdeCorregir),
     });
     return { id: r.id, registroId: r.registroId, pdfPendiente: true, filas: r.filas, reasignado: !!(r.hecho && r.hecho.reasignado) };
   }
 
   /** Dentro del candado de la responsiva: si es reasignación, cambia a la persona y el estatus (ver responsiva). */
-  function aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora) {
+  function aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora, desdeCorregir) {
     const esEquipo = !!ref.equipoId;
     const id = ref.equipoId || ref.lineaId;
     const f = LineasRepo.leerRegistroObligatorio(id, esEquipo ? 'el equipo' : 'la línea');
-    const estatus = exigirEstatusParaResponsiva(f, esEquipo);
+    const estatus = exigirEstatusParaResponsiva(f, esEquipo, desdeCorregir);
     const comentario = txt(valores['COMENTARIO']);
     if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
     const antes = txt(LineasUtil.col(f, 'RESPONSABLE'));
@@ -230,5 +238,6 @@ const LineasAcciones = (function () {
   }
 
   // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado
-  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, esRenovacion, exigirEstatusParaResponsiva };
+  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, ESTATUS_SIN_RESPONSIVA, esRenovacion, exigirEstatusParaResponsiva,
+    nombreRegistro: nombreRegistro_ };
 })();
