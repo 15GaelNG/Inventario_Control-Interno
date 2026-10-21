@@ -82,6 +82,21 @@
     }
 
     // ----- Tabla -----
+    // Migración única (usuario, 21-oct): SERIE_VEHICULO nació oculta y mucha gente ya tiene esa
+    // vista guardada en su navegador (dt-vista:sensores); ahora que nace visible por código, se
+    // le quita de "ocultas" una sola vez a quien ya la tenía guardada, para que le aparezca sin
+    // que tenga que ir a activarla a mano en "Vista".
+    (function mostrarSerieVehiculoDeUnaVez_() {
+      const clave = 'dt-vista:sensores';
+      try {
+        const guardada = JSON.parse(localStorage.getItem(clave) || 'null');
+        if (guardada && Array.isArray(guardada.ocultas) && guardada.ocultas.indexOf('SERIE_VEHICULO') !== -1) {
+          guardada.ocultas = guardada.ocultas.filter((c) => c !== 'SERIE_VEHICULO');
+          localStorage.setItem(clave, JSON.stringify(guardada));
+        }
+      } catch (e) { /* localStorage no disponible: nada que migrar */ }
+    })();
+
     const tabla = DataTable.crear(document.getElementById('sen-tabla'), {
       idCampo: 'ID',
       idTabla: 'sensores',
