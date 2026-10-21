@@ -387,7 +387,14 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     formulario lleno (comentario = COMENTARIO o MOTIVO del renglón), sin restricciones, inspección ni renglón nuevo;
     movimiento CORREGIR_RESGUARDO («Corrección de resguardo»). No separa la línea salvo que se elija mandarla a
     cancelación; la que ya está en Cancelaciones se queda; dos opciones de estatus de línea (DISPONIBLE, EN PROCESO DE
-    CANCELACION). Desde el panel lleva a Líneas telefónicas y abre el formulario.
+    CANCELACION). Desde el panel (21-oct, `8ce4bb9`) abre el mismo formulario en una ventana ancha encima del panel
+    (`corregirEnPanel`; el armado es `formularioResguardo`, el mismo de Líneas telefónicas): al guardar sigue en el
+    panel y la tabla se recarga. Se espeja en los dos lados: el servidor guarda en el inventario (estatus del equipo y
+    de la línea, destino) y actualiza el renglón abierto de APP_RESGUARDOS; el panel muestra el estatus de hoy del inventario.
+  - **Quién los ve en el panel** (21-oct): «Corregir resguardo» y «Quitar del panel» solo salen a quien edita Líneas
+    (`operaPanel` de `TelefoniaService.usuarioResguardo_`: EDICION de `lineas-telefonicas` y rol que no sea ADMIN ni SUPER),
+    no a Pau ni a administradores; `LineasResguardos.bandeja` lo regresa. En Líneas telefónicas siguen saliendo a quien
+    edita Líneas telefónicas, administradores incluidos. El servidor las acepta con `puedeOperar`.
   - **Quitar del panel** (EDICION de `lineas-telefonicas`; solo renglones PENDIENTE DE RECEPCION; en el inventario y en el
     panel; `vistaQuitar` y `quitarDelPanel`): ventana con tabla Campo | Hoy | Queda. Regresa campo por campo lo que el
     envío cambió y nadie tocó después (lo demás: «Se queda: cambió después»), con el movimiento del envío (MOVIMIENTO_ID
