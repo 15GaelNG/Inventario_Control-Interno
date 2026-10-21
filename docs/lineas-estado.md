@@ -303,7 +303,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
 - **Tipo de bloqueo del equipo** (PIN, PATRÓN, CONTRASEÑA o SIN BLOQUEO): una lista en Corregir, la inspección y la
   responsiva (`conSelectorBloqueo` / `activarBloqueo`, lineas.html) que no se guarda: PIN y contraseña van en PIN
-  EQUIPO; patrón, «PATRON»; sin bloqueo, «NO APLICA» en la pantalla (desde el 16-oct; antes «N/A») y también «NO APLICA» en el inventario (21-oct: en blanco la pantalla no reconocía el tipo; los guardados antes quedan en blanco y abren en «Selecciona…»). Con «PIN» solo números (no deja escribir letras); la contraseña acepta
+  EQUIPO; patrón, «PATRON»; sin bloqueo, «NO APLICA» en la pantalla (desde el 16-oct; antes «N/A») y también «NO APLICA» en el inventario (21-oct: en blanco la pantalla no reconocía el tipo; los guardados antes quedan en blanco y abren en «Selecciona…»; la ficha lo muestra como «SIN BLOQUEO» en PIN equipo, `LineasRepo.convertirRegistro`, y los que están en blanco siguen en «—»). Con «PIN» solo números (no deja escribir letras); la contraseña acepta
   todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
   (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Corregir, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
