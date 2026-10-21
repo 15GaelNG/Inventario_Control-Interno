@@ -461,7 +461,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
 
 `LINEAS TELEFONICAS` (la hoja del AppSheet) se retiró y se borró el 4-oct; el sistema lee y escribe solo en las hojas
-de arriba (`LINEAS_LECTURA = ESTRUCTURA`, `LINEAS_HOJA_VIEJA_RETIRADA`).
+de arriba. Desde el 21-oct (`4808a97`, `c60942f`, sin publicar) tampoco queda en el código el interruptor de lectura ni la
+rama que escribía la hoja vieja: `LineasLectura` arma todo de las hojas nuevas, y `LineasRepo` guarda, agrega y anota
+movimientos solo en ellas (MOVIMIENTOS). CAMBIOS LINEAS TELEFONICAS y APP_MOVIMIENTOS ya no se escriben y solo se leen.
+`LINEAS_HOJA_VIEJA_RETIRADA` la usa solo `Diagnostico.gs` (no marca como grave que falte la hoja vieja); `LINEAS_LECTURA`
+sigue en `Entornos.gs` sin que nada la lea (pendiente 8.17).
 
 **Drive:** documentos y fotos en la carpeta de cada NUCO dentro de NUCOS (`LINEAS_DRIVE_NUCOS`); lo que no tiene NUCO, en
 la carpeta de la app (`LINEAS_DRIVE_APPSHEET`), salvo la responsiva de una línea sin equipo (15-oct, pendiente 2.45), que va a la raíz
