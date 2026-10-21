@@ -683,8 +683,10 @@ const LineasResguardos = (function () {
       filas = filas.map((r) => espejo_(r, ix, hoy));
     }
     filas.sort((a, b) => (b.FECHA instanceof Date ? b.FECHA.getTime() : 0) - (a.FECHA instanceof Date ? a.FECHA.getTime() : 0));
-    // puedeOperar: los de Líneas (Corregir resguardo y Quitar del panel; pendiente 3.12)
-    return { puedeAprobar: puedeAprobar(usuario), puedeOperar: !!(usuario && usuario.puedeOperar), filas: filas, estados: ESTADO, fases: FASE };
+    // puedeOperar: los de Líneas (Corregir resguardo y Quitar del panel; pendiente 3.12); operaPanel: quién las ve en el
+    // panel (sin administradores; usuario, 21-oct)
+    return { puedeAprobar: puedeAprobar(usuario), puedeOperar: !!(usuario && usuario.puedeOperar), operaPanel: !!(usuario && usuario.operaPanel),
+      filas: filas, estados: ESTADO, fases: FASE };
   }
 
   /** Aplica `cambiar(fila) → cambios | null` a los renglones `ids` (ID de APP_RESGUARDOS). */
