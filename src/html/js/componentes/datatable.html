@@ -1494,6 +1494,17 @@
         st.pagina = 1;
         revelarColumnasDeLaBusqueda_();
         render();
+        // Si la hoja tiene más columnas de las que ya trajo la lista (cfg.columnasCompletas) y nadie
+        // abrió "Vista" todavía, buscar sin haberlas traído deja fuera justo lo que no se ve (usuario,
+        // 21-oct: "34 columnas más disponibles" -- ahí es cuando sí se podía buscar por todas). Al
+        // escribir algo se traen una sola vez, igual que al abrir "Vista", y se vuelve a buscar.
+        if (texto.trim() && cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
+          cargarColumnasCompletas().then(() => {
+            if (normalizar(st.busqueda.trim()) !== normalizar(texto.trim())) return;   // la búsqueda ya cambió
+            revelarColumnasDeLaBusqueda_();
+            render();
+          });
+        }
       }
       function limpiarTodo() {
         st.filtros = {};
