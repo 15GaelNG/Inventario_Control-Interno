@@ -395,8 +395,16 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     Cancelaciones con ese envío también regresa si su cancelación sigue POR FIRMAR (su renglón queda RETIRADA). PIN y
     patrón con su valor para ADMIN y el área de Líneas. Renglón RETIRADO; movimiento QUITAR_PANEL («Quitado del panel»).
   - **Retirar cancelación** (solo aprobadores; pestaña Cancelaciones; comentario obligatorio; `retirarCancelacion`):
-    fase RETIRADA; la línea queda DISPONIBLE, o en USO si sigue en un equipo con persona; movimiento RETIRAR_CANCELACION
-    («Cancelación retirada»).
+    fase RETIRADA (se puede en POR FIRMAR, CARTA FIRMADA o CARTA ENVIADA). La línea vuelve a como estaba antes de mandarla
+    a cancelar, campo por campo, y lo que cambió después no se regresa («Cambió después»). Lo anterior sale del
+    movimiento de resguardo del envío (`envioDeCancelacion_`) o, si no hay, del CANCELACION_LINEA de la línea; sin envío
+    encontrado, la regla vieja (DISPONIBLE). La línea separada vuelve a su equipo, con su PIN de WhatsApp, si el equipo
+    no tiene otra línea y está en USO, RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE o PARA DESECHO; si no, se queda
+    suelta («Se queda: el NUCO X ya tiene la línea N» / «está en <estatus>»). El estatus es el de antes; si era USO y el
+    equipo no está en USO (o la línea queda sin equipo), queda DISPONIBLE con la nota «Antes USO: …». Si ya no está EN
+    PROCESO DE CANCELACION, se queda. La ventana (`vistaRetirarCancelacion`, `planRetirar_`) muestra la tabla Campo | Hoy
+    | Queda, la misma de Quitar del panel (`tablaRegreso`); PIN y patrón solo con `puedeVerSecretos_`. Movimiento
+    RETIRAR_CANCELACION («Cancelación retirada») con los cambios.
   - **Líneas no saca una línea de Cancelaciones:** Desvincular y Cambiar línea (salvo «a cancelación»), Cambiar de
     equipo, Corregir el estatus y poner la línea en otro equipo avisan «Línea N: está en FASE en Cancelaciones; Pau tiene
     que retirarla.»
