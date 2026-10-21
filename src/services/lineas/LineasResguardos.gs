@@ -57,6 +57,12 @@ const LineasResguardos = (function () {
 
   /** Estatus del equipo que tienen sentido al mandarlo al almacén (los demás son bajas). PARA VENTA CON DETALLE, 13-oct. */
   const ESTATUS_EQUIPO_RESGUARDO = ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'];
+  /**
+   * El equipo que se mandó y Pau aún no recibe (usuario, 21-oct; pendiente 3.15): queda guardado así en EQUIPOS y el
+   * estatus elegido espera en su renglón (ESTATUS_EQUIPO) hasta que Pau lo recibe. No se elige a mano: no está en
+   * LineasRepo.CATALOGO.estatusEquipo ni en las listas.
+   */
+  const POR_RECIBIR = 'POR RECIBIR';
   const LINEA_DISPONIBLE = 'DISPONIBLE';
   const LINEA_CANCELACION = 'EN PROCESO DE CANCELACION';
   const ESTATUS_LINEA_RESGUARDO = [LINEA_DISPONIBLE, LINEA_CANCELACION];
@@ -195,6 +201,16 @@ const LineasResguardos = (function () {
     return m;
   }
 
+  /**
+   * ¿El equipo `f` tiene su renglón abierto en el panel (por recibir o recibido)? Mientras tanto no lleva Responsiva ni
+   * Inspección y Corregir no cambia su estatus (usuario, 21-oct; pendiente 3.15): lo sacan Quitar del panel, Corregir
+   * resguardo o Pau (Entregar a líneas, Vendido).
+   */
+  function enPanel(f) {
+    const m = abiertosPorEquipo();
+    return LineasDatos.idsDeFila(f).some((k) => !!m[txt(k)]);
+  }
+
   function filasPorId_() {
     return indices_().porId;
   }
@@ -299,11 +315,14 @@ const LineasResguardos = (function () {
     };
   }
 
-  /** Cambios de LINEAS TELEFONICAS para un equipo que se manda a resguardo. */
-  function cambiosResguardo_(f, pedido, tieneLinea) {
+  /**
+   * Cambios de LINEAS TELEFONICAS para un equipo que se manda a resguardo. porRecibir: Pau aún no lo recibe; el equipo
+   * queda POR RECIBIR y el estatus elegido va solo al renglón (pendiente 3.15).
+   */
+  function cambiosResguardo_(f, pedido, tieneLinea, porRecibir) {
     const cambios = {};
     COLS_UBICACION.forEach((c) => { cambios[c] = pedido[c]; });
-    cambios['ESTATUS EQUIPO'] = pedido['ESTATUS EQUIPO'];
+    cambios['ESTATUS EQUIPO'] = porRecibir ? POR_RECIBIR : pedido['ESTATUS EQUIPO'];
     if (tieneLinea) cambios['ESTATUS LINEA'] = pedido['ESTATUS LINEA'];
     CAMPOS_PERSONA.forEach((c) => { cambios[c] = ''; });
     CAMPOS_PERSONA_SI_HAY.forEach((c) => {
@@ -423,14 +442,16 @@ const LineasResguardos = (function () {
           idLinea = s.idLinea;
           f = LineasRepo.leerRegistroObligatorio(id, 'el equipo');
         }
-        const guardado = LineasRepo.guardarCambiosRegistro(f, cambiosResguardo_(f, pedido, lineaQueda), usuario, ahora);
+        // Nuevo o aún por recibir: el equipo queda POR RECIBIR; ya recibido, Corregir resguardo le pone el elegido (3.15)
+        const porRecibir = !abierto || txt(abierto['ESTADO']) === ESTADO.PENDIENTE;
+        const guardado = LineasRepo.guardarCambiosRegistro(f, cambiosResguardo_(f, pedido, lineaQueda, porRecibir), usuario, ahora);
         guardado.campos.forEach((c) => cambios.push(c));
         (guardado.refs || []).forEach((x) => refs.push(x));
         marca_('mandar · guardar el registro', t2);
         const t3 = Date.now();
         const idMovimiento = LineasRepo.registrarMovimiento(corregir ? 'CORREGIR_RESGUARDO' : 'RESGUARDO', { motivo: pedido.COMENTARIO || motivo, ticket: ticket }, usuario, ahora, {
           refs: refs, nuco: LineasUtil.col(f0, 'NUCO'), numero: numero,
-          antes: antes, despues: { estatus: pedido['ESTATUS EQUIPO'], estatusLinea: tieneLinea ? pedido['ESTATUS LINEA'] : '' },
+          antes: antes, despues: { estatus: porRecibir ? POR_RECIBIR : pedido['ESTATUS EQUIPO'], estatusLinea: tieneLinea ? pedido['ESTATUS LINEA'] : '' },
           detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: cambios.concat(cambioMotivo_(motivoCancelacion)) },
         });
         // La línea ya suelta: a Cancelaciones o cancelada sin panel
@@ -656,10 +677,12 @@ const LineasResguardos = (function () {
     const tipo = may(LineasUtil.col(f, 'TIPO'));
     const numero = txt(LineasUtil.col(f, 'NUMERO TELEFONO'));
     const tieneLinea = !!numero && !/^EQUIPO$/.test(tipo);
+    const estatusEquipoHoy = txt(LineasUtil.col(f, 'ESTATUS EQUIPO'));
     const o = Object.assign({}, r, {
       'NUCO': LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || r['NUCO'], 'TIPO': tipo || r['TIPO'],
       'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')), 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
-      'ESTATUS_EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')) || r['ESTATUS_EQUIPO'],
+      // POR RECIBIR en el inventario: el panel muestra el que se eligió al mandarlo (pendiente 3.15)
+      'ESTATUS_EQUIPO': estatusEquipoHoy && may(estatusEquipoHoy) !== POR_RECIBIR ? estatusEquipoHoy : r['ESTATUS_EQUIPO'],
     });
     const mismaLinea = LineasUtil.digitos(numero) === LineasUtil.digitos(r['NUMERO']);
     if (r['CANCELACION'] && !mismaLinea) return o;
@@ -716,11 +739,17 @@ const LineasResguardos = (function () {
     return r;
   }
 
-  /** Pau confirma que recibió físicamente los equipos. */
+  /**
+   * Pau confirma que recibió físicamente los equipos: el equipo POR RECIBIR pasa al estatus elegido al mandarlo, con su
+   * movimiento RECEPCION (usuario, 21-oct; pendiente 3.15; antes no tocaba el inventario).
+   */
   function recibir(ids, usuario) {
     exigirAprobador_(usuario);
-    return refrescarEquipos_(actualizar_(ids, (r) => (txt(r['ESTADO']) !== ESTADO.PENDIENTE ? { omitir: 'Ya estaba ' + (txt(r['ESTADO']) || 'sin estado').toLowerCase() }
-      : { 'ESTADO': ESTADO.RESGUARDO, 'RECIBIDO_EN': new Date(), 'RECIBIO': usuario.nombre })));
+    const r = actualizar_(ids, (x) => (txt(x['ESTADO']) !== ESTADO.PENDIENTE ? { omitir: 'Ya estaba ' + (txt(x['ESTADO']) || 'sin estado').toLowerCase() }
+      : { 'ESTADO': ESTADO.RESGUARDO, 'RECIBIDO_EN': new Date(), 'RECIBIO': usuario.nombre }));
+    espejar_(r.hechos, (f, s) => (may(LineasUtil.col(f, 'ESTATUS EQUIPO')) === POR_RECIBIR && txt(s['ESTATUS_EQUIPO'])
+      ? { 'ESTATUS EQUIPO': may(s['ESTATUS_EQUIPO']) } : {}), 'Recibido en resguardo', 'RECEPCION', usuario);
+    return refrescarEquipos_(r);
   }
 
   /** Pau entrega a Líneas un equipo guardado (datos = { recibe, asunto }). */
@@ -806,14 +835,15 @@ const LineasResguardos = (function () {
         tocados.push(txt(f['ID']));
         const cambios = cambiosDe(f, s);
         if (!cambios) { h.aviso = 'La línea ya no estaba en proceso de cancelación: el inventario no se tocó'; return; }
+        if (!Object.keys(cambios).length) return; // nada que llevar (p. ej. recibido sin POR RECIBIR, de antes del 3.15)
         const ahora = new Date();
-        const venta = tipoMovimiento === 'VENTA';
-        const antes = { estatus: txt(LineasUtil.col(f, venta ? 'ESTATUS EQUIPO' : 'ESTATUS LINEA')) };
+        const columna = deLinea ? 'ESTATUS LINEA' : 'ESTATUS EQUIPO';
+        const antes = { estatus: txt(LineasUtil.col(f, columna)) };
         const guardado = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora);
         if (!guardado.campos.length) return;
         LineasRepo.registrarMovimiento(tipoMovimiento, { motivo: motivo }, usuario, ahora, {
           refs: [txt(f['ID'])].concat(guardado.refs || []), nuco: LineasUtil.col(f, 'NUCO'), numero: s['NUMERO'], antes: antes,
-          despues: { estatus: venta ? 'VENDIDO' : txt(cambios['ESTATUS LINEA']) },
+          despues: { estatus: txt(cambios[columna]) },
           detalle: { idsCambios: guardado.idsCambios, idsReasignacion: [], cambios: guardado.campos, resguardo: h.id },
         });
       });
@@ -894,8 +924,10 @@ const LineasResguardos = (function () {
       if (NO_REGRESA.indexOf(K) >= 0 || igualTexto_(c.antes, c.despues)) return;
       if (DE_LA_LINEA.indexOf(K) >= 0 && !lineaSigue) return;
       const hoy = txt(LineasUtil.col(f, k));
-      // La línea que regresa vuelve con su estatus y su PIN de antes
-      if (igualTexto_(hoy, c.despues) || (DE_LA_LINEA.indexOf(K) >= 0 && !numeroHoy)) regresa.push({ campo: k, de: hoy, a: txt(c.antes) });
+      // La línea que regresa vuelve con su estatus y su PIN de antes. POR RECIBIR solo lo pone el panel: nadie lo cambió
+      // después (los mandados antes del 3.15 tienen en su envío el estatus elegido; tools/lineas-resguardos/por-recibir.js)
+      const sinTocar = igualTexto_(hoy, c.despues) || (K === 'ESTATUS EQUIPO' && may(hoy) === POR_RECIBIR);
+      if (sinTocar || (DE_LA_LINEA.indexOf(K) >= 0 && !numeroHoy)) regresa.push({ campo: k, de: hoy, a: txt(c.antes) });
       else seQueda.push({ campo: k, valor: hoy, motivo: 'Cambió después' });
     });
     // Sin USO el equipo sigue guardado: la persona no regresa (y su línea no vuelve a USO)
@@ -1026,7 +1058,7 @@ const LineasResguardos = (function () {
   // tiene otra línea. Su estatus es el de antes, salvo USO con un equipo que ya no está en USO: queda DISPONIBLE.
 
   /** Donde la línea puede volver: un equipo en USO o guardado (no vendido ni dado de baja). */
-  const VUELVE_A = ['USO'].concat(ESTATUS_EQUIPO_RESGUARDO);
+  const VUELVE_A = ['USO', POR_RECIBIR].concat(ESTATUS_EQUIPO_RESGUARDO);
 
   /**
    * Lo que cambió el envío que mandó la línea a cancelación: { cambios, equipo }. El del resguardo (el renglón viejo que
@@ -1188,7 +1220,7 @@ const LineasResguardos = (function () {
 
   return {
     formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion,
-    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
+    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
     _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_, _planQuitar: planQuitar_,

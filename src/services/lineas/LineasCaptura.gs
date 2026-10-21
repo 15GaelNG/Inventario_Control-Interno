@@ -121,6 +121,8 @@ const LineasCaptura = (function () {
     if (!(ref && ref.reasignar && ref.desdeCorregir) && LineasAcciones.ESTATUS_SIN_RESPONSIVA.equipo.indexOf(estatus) >= 0) {
       throw new Error(LineasAcciones.nombreRegistro(obj.fila, true) + ' está ' + estatus + '.');
     }
+    // En el panel de Pau tampoco (pendiente 3.15)
+    if (LineasResguardos.enPanel(obj.fila)) throw new Error(LineasAcciones.nombreRegistro(obj.fila, true) + ' está en Resguardos y cancelaciones.');
     return obj;
   }
 

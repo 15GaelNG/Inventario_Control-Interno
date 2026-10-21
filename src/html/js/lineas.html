@@ -173,6 +173,7 @@
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'DISPONIBLE': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
       'PARA VENTA': 'ambar', 'PARA VENTA CON DETALLE': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      'POR RECIBIR': 'ambar',
       // Bandeja de resguardos y cancelaciones
       'PENDIENTE DE RECEPCION': 'ambar', 'EN RESGUARDO': 'azul', 'ENTREGADO A LINEAS': 'verde',
       'POR FIRMAR': 'ambar', 'CARTA FIRMADA': 'ambar', 'CARTA ENVIADA': 'azul',
@@ -185,7 +186,7 @@
     const SIGNIFICADO_ESTATUS = {
       'USO': 'En operación, con una persona', 'RESGUARDO': 'Guardado en almacén; puede volver a usarse',
       'PARA VENTA': 'Buen estado; se ofrece en venta', 'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta',
-      'PARA DESECHO': 'Apartado para desecharse', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
+      'PARA DESECHO': 'Apartado para desecharse', 'POR RECIBIR': 'Mandado a resguardo; Pau aún no lo recibe', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
       'DESECHADO': 'Ya se desechó', 'EXTRAVIO-ROBO': 'Extraviado o robado',
       'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Pasa a la bandeja de cancelaciones; se pide al proveedor',
       'CANCELADA': 'Cancelada; confirmada con el proveedor',
@@ -2472,9 +2473,10 @@
       // El equipo que sale del inventario (LineasRegistros.ESTATUS_EQUIPO_FINAL; usuario, 16-oct, pendiente 2.50)
       const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
       // Lo que ya no se entrega ni se inspecciona: sin botones de Responsiva ni de Inspección (LineasAcciones.ESTATUS_SIN_RESPONSIVA;
-      // usuario, 21-oct, pendiente 2.55). El equipo vuelve a USO con Corregir
+      // usuario, 21-oct, pendiente 2.55). El equipo vuelve a USO con Corregir. Tampoco el equipo en el panel de Pau (`panel`,
+      // por recibir o recibido; pendiente 3.15): sale con Quitar del panel o, ya recibido, con Entregar a líneas
       const SIN_DOCUMENTOS = { equipo: ESTATUS_EQUIPO_FINAL.concat(['EXTRAVIADO', 'ROBADO', 'ROBO']), linea: ESTATUS_LINEA_PANEL };
-      const conDocumentos = (tipo, estatus) => SIN_DOCUMENTOS[tipo].indexOf(String(estatus || '').trim().toUpperCase()) < 0;
+      const conDocumentos = (tipo, estatus, panel) => !panel && SIN_DOCUMENTOS[tipo].indexOf(String(estatus || '').trim().toUpperCase()) < 0;
       // La línea con el adendum vencido que se manda sola a cancelación: quien captura elige (LineasRegistros.CANCELACION_PANEL
       // y CANCELACION_DIRECTA; usuario, 16-oct, pendiente 2.50)
       const CANCELACION_LINEA = [{ valor: 'PANEL', texto: 'PANEL DE RESGUARDOS Y CANCELACIONES' }, { valor: 'DIRECTO', texto: 'CANCELADA SIN PANEL' }];
@@ -2754,10 +2756,10 @@
             // Responsiva en lugar de Reasignar (pendiente 2.49, usuario 16-oct): la misma persona renueva, otra reasigna.
             // Responsiva e Inspección juntas, la Responsiva primero (usuario, 16-oct; pendiente 2.50)
             { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos',
-              visible: (f) => operar() && conDocumentos('equipo', f[0].estatus), alHacer: (f) => abrirResponsiva('equipo', f[0]) },
+              visible: (f) => operar() && conDocumentos('equipo', f[0].estatus, f[0].panel), alHacer: (f) => abrirResponsiva('equipo', f[0]) },
             // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
             { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',
-              visible: (f) => operar() && conDocumentos('equipo', f[0].estatus), alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+              visible: (f) => operar() && conDocumentos('equipo', f[0].estatus, f[0].panel), alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
             // Ya en el panel de Pau: se corrige y, si aún no lo recibe, se quita (usuario, 20-oct; pendiente 3.12)
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
               visible: (f) => operar() && !f.some((r) => r.panel), alHacer: (f) => abrirResguardo(f) },
@@ -3373,7 +3375,7 @@
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos('equipo', e.estatus), '', true),
+              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos('equipo', e.estatus, filaDelIndice('equipo', id).panel), '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
@@ -5651,7 +5653,7 @@
     const GRUPO_EQUIPO = {
       'USO': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
       'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'PARA VENTA CON DETALLE': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado',
-      'PARA DESECHO': 'guardado', 'DESECHO': 'guardado',
+      'PARA DESECHO': 'guardado', 'DESECHO': 'guardado', 'POR RECIBIR': 'guardado',
       'VENDIDO': 'baja', 'DONADO': 'baja', 'DESECHADO': 'baja', 'EXTRAVIO-ROBO': 'baja', 'EXTRAVIADO': 'baja', 'ROBADO': 'baja', 'ROBO': 'baja',
     }; // el resto (FUERA DE INVENTARIO, CANCELADO, N/A…) = 'revisar'
     const CUENTAS = [

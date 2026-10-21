@@ -51,7 +51,8 @@
     function zonaEquipo(e) {
       const s = may(e.estatus);
       if (USO_EQUIPO.indexOf(s) >= 0) return 'uso';
-      return s === 'RESGUARDO' ? 'resguardo' : 'venta';
+      // POR RECIBIR: mandado a resguardo y Pau aún no lo recibe (pendiente 3.15)
+      return s === 'RESGUARDO' || s === 'POR RECIBIR' ? 'resguardo' : 'venta';
     }
     const zonaLinea = (l) => (USO_LINEA.indexOf(may(l.estatus)) >= 0 ? 'uso' : 'cancelacion');
     const arrastraEquipo = (e) => zonaEquipo(e) !== 'venta' || VENTA.indexOf(may(e.estatus)) >= 0;
@@ -237,6 +238,8 @@
       }
       if (o.tipo !== 'equipo') return null;
       const e = o.fila;
+      // En el panel de Pau (por recibir o recibido) no se entrega ni se vuelve a mandar: sin acción ni aviso (pendiente 3.15)
+      if (e.panel || may(e.estatus) === 'POR RECIBIR') return null;
       if (d.tipo === 'persona') {
         return o.dueno === d.persona.clave || SIN_RESPONSIVA.indexOf(may(e.estatus)) >= 0 ? null : { tipo: 'responsiva', fila: e, persona: d.persona };
       }

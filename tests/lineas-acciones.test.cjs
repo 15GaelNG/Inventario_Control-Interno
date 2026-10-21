@@ -30,7 +30,7 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   assert.match(cliente, /texto: 'Corregir resguardo'[^\n]*\n\s+visible: \(f\) => operar\(\) && f\.every\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f, \{ corregir: true \}\)/);
   assert.match(cliente, /visible: \(f\) => operar\(\) && f\.every\(\(r\) => r\.panel === 'PENDIENTE DE RECEPCION'\), alHacer: \(f\) => quitarDelPanel\(f\.map\(\(r\) => r\.id\), trasQuitar\)/);
   // Reasignar se volvió la Responsiva (pendiente 2.49, usuario 16-oct): sin botón en lo que ya no se entrega (pendiente 2.55)
-  assert.match(cliente, /texto: 'Responsiva'[^\n]*\n\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus\),/);
+  assert.match(cliente, /texto: 'Responsiva'[^\n]*\n\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
   assert.doesNotMatch(cliente, /apiLineasAgregarNota|esNota/);
 });
 

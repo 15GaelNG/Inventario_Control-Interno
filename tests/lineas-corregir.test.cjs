@@ -71,7 +71,7 @@ test('Corregir equipo ofrece USO: con responsable vigente se guarda directo; sin
 
 test('estatus finales: sin Responsiva ni Inspección, salvo la Responsiva que abre Corregir equipo (pendiente 2.55)', () => {
   const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
-  const Acc = new Function('LineasRepo', 'LineasDatos', 'LineasUtil', 'LineasResguardos', read('src/services/lineas/LineasAcciones.gs') + '; return LineasAcciones;')({}, {}, LineasUtil, {});
+  const Acc = new Function('LineasRepo', 'LineasDatos', 'LineasUtil', 'LineasResguardos', read('src/services/lineas/LineasAcciones.gs') + '; return LineasAcciones;')({}, {}, LineasUtil, { enPanel: (f) => !!f._enPanel });
   const vendido = { NUCO: '14', 'ESTATUS EQUIPO': 'VENDIDO' };
   const cancelada = { 'NUMERO TELEFONO': '4420000001', 'ESTATUS LINEA': 'CANCELADA' };
   assert.throws(() => Acc.exigirEstatusParaResponsiva(vendido, true), /NUCO 0014 está VENDIDO\./);
@@ -89,7 +89,7 @@ test('estatus finales: sin Responsiva ni Inspección, salvo la Responsiva que ab
   const cliente = read('src/html/js/lineas.html');
   assert.match(cliente, /const SIN_DOCUMENTOS = \{ equipo: ESTATUS_EQUIPO_FINAL\.concat\(\['EXTRAVIADO', 'ROBADO', 'ROBO'\]\), linea: ESTATUS_LINEA_PANEL \};/);
   assert.match(cliente, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e && conDocumentos\('linea', l\.estatus\),/);
-  assert.equal((cliente.match(/conDocumentos\('equipo', f\[0\]\.estatus\)/g) || []).length, 2);
+  assert.equal((cliente.match(/conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\)/g) || []).length, 2);
 });
 
 test('el servidor rechaza otra persona desde Corregir equipo (una pestaña abierta antes la manda)', () => {
@@ -172,4 +172,19 @@ test('pantalla: «Corregir» e «Inspección», Responsiva primero', () => {
   assert.match(cliente, /textContent = tipo === 'INSPECCION' \? 'Inspección' : 'Responsiva';/);
   const botones = cliente.slice(cliente.indexOf('function botonesFicha('), cliente.indexOf('function abrirMenuFicha('));
   assert.ok(botones.indexOf('data-ln-captura="RESPONSIVA"') < botones.indexOf('data-ln-captura="INSPECCION"'));
+});
+
+test('en el panel de Pau: Corregir no cambia el estatus y no hay Responsiva ni Inspección (pendiente 3.15)', () => {
+  const Reg = cargar();
+  const enPanel = campo(Reg._elementos(guardado, {}, usuario, Reg._contextoEdicion(guardado, null, true)), 'ESTATUS EQUIPO');
+  assert.ok(enPanel.soloLectura);
+  assert.equal(enPanel.valor, 'RESGUARDO');
+  assert.ok(!campo(Reg._elementos(guardado, {}, usuario, Reg._contextoEdicion(guardado, null, false)), 'ESTATUS EQUIPO').soloLectura);
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  assert.match(reg, /const edicion = contextoEdicion_\(base, datos && datos\.parte, equipoEnPanel_\(fila, base, datos && datos\.parte\)\);/);
+  assert.match(reg, /está en Resguardos y cancelaciones: su estatus lo cambia el panel\./);
+  const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
+  const Acc = new Function('LineasRepo', 'LineasDatos', 'LineasUtil', 'LineasResguardos', read('src/services/lineas/LineasAcciones.gs') + '; return LineasAcciones;')({}, {}, LineasUtil, { enPanel: (f) => !!f._enPanel });
+  assert.throws(() => Acc.exigirEstatusParaResponsiva({ NUCO: '15', 'ESTATUS EQUIPO': 'POR RECIBIR', _enPanel: true }, true), /NUCO 0015 está en Resguardos y cancelaciones\./);
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /if \(LineasResguardos\.enPanel\(obj\.fila\)\) throw new Error/);
 });

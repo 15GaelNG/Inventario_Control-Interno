@@ -413,14 +413,15 @@ test('Retirar cancelación: la línea separada al mandar a resguardo vuelve a su
   assert.deepEqual(vista.regresa, [
     { campo: 'NUCO', de: '', a: '0050' },
     { campo: 'PIN WHATSAPP', de: '', a: '9999' },
-    { campo: 'ESTATUS LINEA', de: 'EN PROCESO DE CANCELACION', a: 'DISPONIBLE', nota: 'Antes USO: el NUCO 0050 está en RESGUARDO' },
+    { campo: 'ESTATUS LINEA', de: 'EN PROCESO DE CANCELACION', a: 'DISPONIBLE', nota: 'Antes USO: el NUCO 0050 está en POR RECIBIR' },
   ]);
   assert.equal(t.R.vistaRetirar(['RSG-C']).filas[0].regresa[1].a, '••••', 'sin permiso, el PIN no se ve');
   assert.throws(() => t.R.retirarCancelacion(['RSG-C'], { comentario: 'ya no' }, usuario), /Solo puedes consultar/);
   const r = t.R.retirarCancelacion(['RSG-C'], { comentario: 'se queda con ella' }, pau);
   assert.equal(r.hechos.length, 1);
   assert.equal(canc.CANCELACION, 'RETIRADA');
-  assert.deepEqual([eq['NUMERO TELEFONO'], eq['PIN WHATSAPP'], eq['ESTATUS LINEA'], eq['ESTATUS EQUIPO']], ['4420050', '9999', 'DISPONIBLE', 'RESGUARDO']);
+  // Pau aún no lo recibe: el equipo sigue POR RECIBIR (pendiente 3.15)
+  assert.deepEqual([eq['NUMERO TELEFONO'], eq['PIN WHATSAPP'], eq['ESTATUS LINEA'], eq['ESTATUS EQUIPO']], ['4420050', '9999', 'DISPONIBLE', 'POR RECIBIR']);
   assert.equal(t.escritas.movimientos.slice(-1)[0].tipo, 'RETIRAR_CANCELACION');
   assert.equal(t.R.vistaRetirar(['RSG-C']).filas[0].omitir, 'Ya estaba retirada');
 });
@@ -480,4 +481,45 @@ test('el panel corrige sin salir de él y sus opciones de Líneas no salen a adm
   assert.strictEqual(t.R.bandeja({ puedeOperar: true, operaPanel: false }).operaPanel, false);
   assert.strictEqual(t.R.bandeja({ puedeOperar: true, operaPanel: true }).operaPanel, true);
   assert.strictEqual(t.R.bandeja({ puedeOperar: true, operaPanel: false }).puedeOperar, true);
+});
+
+// Pendiente 3.15 (usuario, 21-oct): POR RECIBIR se guarda en el inventario hasta que Pau recibe el equipo; el estatus
+// elegido espera en el renglón
+test('POR RECIBIR: mandar lo deja así, Corregir resguardo solo cambia el renglón y Pau al recibir pone el elegido', () => {
+  const t = cargar([equipo('EQU-7', '0070', 'USO', { 'RESPONSABLE': 'ANA' })], []);
+  t.R.mandar(['EQU-7'], { comentario: 'renuncia', inspecciones: { 'EQU-7': 'INS-7' }, porEquipo: { 'EQU-7': pedido('PARA VENTA') } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  const renglon = t.tablas.APP_RESGUARDOS[0];
+  renglon.ID = 'RSG-7';
+  assert.deepEqual([eq['ESTATUS EQUIPO'], renglon.ESTATUS_EQUIPO, renglon.ESTADO], ['POR RECIBIR', 'PARA VENTA', 'PENDIENTE DE RECEPCION']);
+  assert.equal(t.escritas.movimientos.slice(-1)[0].extra.despues.estatus, 'POR RECIBIR');
+  // El panel muestra el elegido, no POR RECIBIR
+  assert.equal(t.R.bandeja(usuario).filas[0].ESTATUS_EQUIPO, 'PARA VENTA');
+  t.R.mandar(['EQU-7'], { comentario: 'mejor desecho', corregir: true, porEquipo: { 'EQU-7': pedido('PARA DESECHO') } }, usuario);
+  assert.deepEqual([eq['ESTATUS EQUIPO'], renglon.ESTATUS_EQUIPO], ['POR RECIBIR', 'PARA DESECHO']);
+  t.R.recibir(['RSG-7'], pau);
+  assert.deepEqual([eq['ESTATUS EQUIPO'], renglon.ESTADO], ['PARA DESECHO', 'EN RESGUARDO']);
+  const mov = t.escritas.movimientos.slice(-1)[0];
+  assert.deepEqual([mov.tipo, mov.extra.antes.estatus, mov.extra.despues.estatus], ['RECEPCION', 'POR RECIBIR', 'PARA DESECHO']);
+  // Ya recibido, Corregir resguardo sí le pone el elegido al equipo
+  t.R.mandar(['EQU-7'], { comentario: 'se vende', corregir: true, porEquipo: { 'EQU-7': pedido('PARA VENTA') } }, usuario);
+  assert.equal(eq['ESTATUS EQUIPO'], 'PARA VENTA');
+});
+
+test('POR RECIBIR: Quitar del panel lo regresa a como estaba; un renglón de antes sin POR RECIBIR se recibe sin tocar el equipo', () => {
+  const t = cargar([equipo('EQU-8', '0080', 'USO', { 'RESPONSABLE': 'ANA' })], []);
+  t.R.mandar(['EQU-8'], { comentario: 'renuncia', inspecciones: { 'EQU-8': 'INS-8' }, porEquipo: { 'EQU-8': pedido('RESGUARDO') } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  t.tablas.APP_RESGUARDOS[0].ID = 'RSG-8';
+  t.R.quitarDelPanel(['RSG-8'], { comentario: 'por error' }, usuario);
+  assert.deepEqual([eq['ESTATUS EQUIPO'], eq['RESPONSABLE']], ['USO', 'ANA']);
+  const viejo = cargar([equipo('EQU-9', '0090', 'RESGUARDO')], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'EQU-9', 'NUCO': '0090', 'ESTADO': 'PENDIENTE DE RECEPCION',
+    'ESTATUS_EQUIPO': 'RESGUARDO' }]);
+  const antes = viejo.escritas.movimientos.length;
+  viejo.R.recibir(['RSG-9'], pau);
+  assert.equal(viejo.tablas['LINEAS TELEFONICAS'][0]['ESTATUS EQUIPO'], 'RESGUARDO');
+  assert.equal(viejo.escritas.movimientos.length, antes);
+  // No se elige a mano: no está en las listas de Mandar a resguardo
+  assert.ok(viejo.R.ESTATUS_EQUIPO_RESGUARDO.indexOf('POR RECIBIR') < 0);
+  assert.match(read('src/services/lineas/LineasEstructura.gs'), /'POR RECIBIR': 'RESGUARDO'/);
 });

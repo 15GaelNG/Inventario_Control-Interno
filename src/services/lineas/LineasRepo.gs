@@ -895,6 +895,8 @@ const LineasRepo = (function () {
     RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta',
     // Panel de Pau (pendiente 3.12)
     CORREGIR_RESGUARDO: 'Corrección de resguardo', QUITAR_PANEL: 'Quitado del panel', RETIRAR_CANCELACION: 'Cancelación retirada',
+    // Pau recibe el equipo POR RECIBIR: pasa al estatus elegido (pendiente 3.15)
+    RECEPCION: 'Recepción en resguardo',
     // Acciones con nombre (etapa 3, paso 2): Entregar y el cierre (vendido, donado, desechado o extravío-robo)
     ENTREGA: 'Entrega', CIERRE: 'Cierre', NOTA: 'Nota', CAMBIO_LINEA: 'Cambio de línea',
     // Editar (corrige y cambia estatus, 4-oct)

@@ -12,7 +12,7 @@ function cargarAcciones(Repo, Datos, LineasUtil, Resguardos) {
     // Los estatus de la reunión (LineasRepo.CATALOGO), aunque el doble del test traiga otros
     Object.assign({}, Repo || {}, { CATALOGO: { estatusEquipo: ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'],
       estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'] } }),
-    Datos || {}, LineasUtil || {}, Resguardos || {});
+    Datos || {}, LineasUtil || {}, Resguardos || { enPanel: () => false });
 }
 
 function filesBelow(dir) {
@@ -1955,7 +1955,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(lineas, /data-ln-ficha-mas="' \+ esc\(tipo\)/);
   assert.doesNotMatch(lineas, /data-ln-estatus=|data-ln-editar=/);
   // "Ver carpeta en Drive" del equipo va en el ⋮, sola (fuera de Documentos); mismo nombre en la tabla Documentos
-  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos\('equipo', e\.estatus\), '', true\)/);
+  assert.match(lineas, /botonesFicha\('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos\('equipo', e\.estatus, filaDelIndice\('equipo', id\)\.panel\), '', true\)/);
   assert.match(lineas, /texto: 'Ver carpeta en Drive', separador: true,/);
   assert.match(lineas, /\.concat\(documentos, drive, operar \? editar\.concat\(vinculo\) : \[\], historial\)/);
   assert.doesNotMatch(lineas, /Abrir carpeta/);
@@ -1985,7 +1985,7 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
   // Inspección en documentos, junto a la Responsiva (pendientes 2.49 y 2.50, 16-oct); Ver la última, solo en la ficha (12-oct)
-  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus\),/);
+  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
   assert.doesNotMatch(lineas, /Nueva inspección/);
   assert.doesNotMatch(lineas, /texto: 'Nueva responsiva'/);
   assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);

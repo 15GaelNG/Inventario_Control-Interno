@@ -45,6 +45,8 @@ const LineasAcciones = (function () {
     if (!(esEquipo && desdeCorregir) && ESTATUS_SIN_RESPONSIVA[esEquipo ? 'equipo' : 'linea'].indexOf(estatus) >= 0) {
       throw new Error(nombreRegistro_(f, esEquipo) + ' está ' + estatus + '.');
     }
+    // En el panel de Pau tampoco (pendiente 3.15): sale con Quitar del panel o, ya recibido, con Entregar a líneas
+    if (esEquipo && LineasResguardos.enPanel(f)) throw new Error(nombreRegistro_(f, true) + ' está en Resguardos y cancelaciones.');
     return estatus;
   }
 
