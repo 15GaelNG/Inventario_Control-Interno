@@ -92,12 +92,13 @@ const LineasRepo = (function () {
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v10'; // v10: panel (su renglón abierto en Resguardos, 20-oct; pendiente 3.12); v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v11'; // v11: sin ESTATUS GENERAL en la vista (21-oct); v10: panel (su renglón abierto en Resguardos, 20-oct; pendiente 3.12); v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
-   * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
+   * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO es fórmula del AppSheet. Sin ESTATUS GENERAL (usuario,
+   * 21-oct): combinaba el estatus del equipo y el de la línea, que en el AppSheet vivían en un mismo renglón.
    */
-  const COLS_VISTA_LINEAS = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
+  const COLS_VISTA_LINEAS = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
     'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
     'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
@@ -157,7 +158,6 @@ const LineasRepo = (function () {
     const legado = {
       id: id, idAnterior: txt(col(f, LineasDatos.COL_ID_APPSHEET)), fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
       nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
-      estatusGeneral: estatusGeneralRegistro(idParaDG_(f), tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
       responsivaRuta: txt(col(f, 'RESPONSIVA')), formatoInspeccionRuta: txt(col(f, 'FORMATO INSPECCION')),
       fechaInspeccion: fecha(col(f, 'FECHA INSPECCION')), fechaRegistro: fecha(col(f, 'FECHA REGISTRO')),
@@ -227,26 +227,6 @@ const LineasRepo = (function () {
   function folioRegistro(tipo, nuco) {
     const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
     return prefijo + ('0000' + (nuco === null || nuco === undefined ? '' : String(nuco))).slice(-4);
-  }
-
-  /**
-   * ID con el que la fórmula reconoce al personal de DG (DG001, DG002…). Tras la migración de IDs ese valor quedó en
-   * ID APPSHEET y el ID es LIN-…
-   */
-  function idParaDG_(f) {
-    return txt(col(f, LineasDatos.COL_ID_APPSHEET)) || txt(f['ID']);
-  }
-
-  /** Fórmula ESTATUS GENERAL del AppSheet. */
-  function estatusGeneralRegistro(id, tipo, estatusEquipo, estatusLinea) {
-    if (/^DG/i.test(id || '')) return 'PERSONAL DG';
-    if (tipo === 'EQUIPO') {
-      return { 'ESPERA DE RESPONSIVA': 'USO', 'EN ENVIO': 'USO', 'VENTA': 'RESGUARDO', 'DESECHADO': 'DESECHO' }[estatusEquipo] || estatusEquipo || '';
-    }
-    if (['EQUIPO + SIM', 'LINEA', 'MODEM', 'BANDA ANCHA'].indexOf(tipo) >= 0) {
-      return { 'ESPERA DE RESPONSIVA': 'USO', 'SIN LINEA': 'CANCELADA', 'EN PROCESO DE CANCELACION': 'CANCELADA' }[estatusLinea] || estatusLinea || '';
-    }
-    return '';
   }
 
   // ---------------- Índices de listados (caché) ----------------
@@ -379,7 +359,6 @@ const LineasRepo = (function () {
     const legado = ((r.equipo || r.linea) || {}).legado || {};
     return [r.id].concat(COLS_VISTA_LINEAS.map((c) => {
       if (c === 'FOLIO') return legado.folio || null;
-      if (c === 'ESTATUS GENERAL') return legado.estatusGeneral || null;
       // «Nombre colaborador/es» del AppSheet: los responsables adicionales
       if (c === 'NOMBRE RESPONSABLES 2') return usuariosAdicionales_(f).map((u) => u.nombre).join(' / ') || null;
       const v = col(f, c);
@@ -578,7 +557,7 @@ const LineasRepo = (function () {
 
   /**
    * Aplica cambios de columnas a una fila de LINEAS TELEFONICAS (recién leída, dentro del candado)
-   * y registra la bitácora como los bots del AppSheet. Recalcula FOLIO y ESTATUS GENERAL si existen.
+   * y registra la bitácora como los bots del AppSheet. Recalcula FOLIO si existe.
    * usuario = { correo, nombre }. Devuelve { idsCambios, idReasignacion, campos: [{campo, antes, despues}], refs }.
    * Reestructura, etapa 3: con el interruptor de la etapa 2 encendido, los cambios van a las hojas nuevas
    * (LineasEscritura) y `refs` trae los IDs de equipo, línea, adendum y asignaciones que tocó (para APP_MOVIMIENTOS).
@@ -607,9 +586,6 @@ const LineasRepo = (function () {
     efectivos.forEach((e) => { escribir[e.campo] = e.despues; });
     const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
-    if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) {
-      escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(idParaDG_(f), tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
-    }
     conPersona_(t, escribir, nuevo);
     LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
 
@@ -635,7 +611,7 @@ const LineasRepo = (function () {
   }
 
   /**
-   * Nueva fila en LINEAS TELEFONICAS (con FOLIO / ESTATUS GENERAL calculados).
+   * Nueva fila en LINEAS TELEFONICAS (con FOLIO calculado).
    * Reestructura, etapa 3: con el interruptor encendido crea equipo, línea, adendum y asignación en las hojas nuevas
    * (LineasEscritura), pone en datos.ID el ID del registro y regresa { id, refs }.
    */
@@ -644,7 +620,6 @@ const LineasRepo = (function () {
     const t = LineasDatos.tablaFresca(TAB.LINEAS);
     const tipo = (datos['TIPO'] || '').toUpperCase();
     if (LineasDatos.colIndice(t, 'FOLIO') >= 0) datos['FOLIO'] = folioRegistro(tipo, datos['NUCO']);
-    if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) datos['ESTATUS GENERAL'] = estatusGeneralRegistro(datos['ID'], tipo, txt(datos['ESTATUS EQUIPO']), txt(datos['ESTATUS LINEA']));
     conPersona_(t, datos, datos);
     return LineasDatos.agregarFilas(TAB.LINEAS, [datos])[0];
   }
@@ -699,7 +674,7 @@ const LineasRepo = (function () {
   }
 
   /** Lo que no es un cambio en el alta: IDs, campos calculados y los de la pantalla (empiezan con _). */
-  const NO_VA_EN_ALTA = ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'FOLIO', 'FECHA REGISTRO', 'ESTATUS GENERAL', 'ID PERSONA'];
+  const NO_VA_EN_ALTA = ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'FOLIO', 'FECHA REGISTRO', 'ID PERSONA'];
 
   /**
    * Un renglón de MOVIMIENTOS: ID, FECHA, ACCION, ID EQUIPO, ID LINEA, ID ASIGNACION (las que tocó), COMENTARIO, TICKET,
@@ -1644,7 +1619,7 @@ const LineasRepo = (function () {
   return {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
     COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE, CAMPOS_BITACORA,
-    tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro, estatusGeneralRegistro,
+    tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro,
     indice, vistaCompleta, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,

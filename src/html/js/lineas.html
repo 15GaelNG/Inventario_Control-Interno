@@ -1383,7 +1383,6 @@
       return errores;
     }
 
-    /** FOLIO y ESTATUS GENERAL (AppFormula de LINEAS TELEFONICAS) para mostrarlos en vivo. */
     /**
      * TIPO asignado solo (usuario, 4-oct; la misma cuenta que LineasRegistros.tipoAutomatico_): equipo sin línea → EQUIPO;
      * con línea → EQUIPO + SIM, o EQUIPO + SIM BASICO si es básica; línea sola → LINEA o SIM BASICO. Una línea
@@ -1408,7 +1407,8 @@
       return ((memoria.indice || {}).equipos || []).filter((e) => String(e.nuco || '') === clave)[0] || null;
     }
 
-    function formulaRegistro(nombre, v, id) {
+    /** Campos calculados del formulario, en vivo (FOLIO: AppFormula de LINEAS TELEFONICAS). */
+    function formulaRegistro(nombre, v) {
       const tipo = String(v.TIPO || '').toUpperCase();
       // Agregar línea (usuario, 8-oct; misma cuenta que LineasRegistros.estatusAltaLinea_): con equipo, USO si está en uso
       // y DISPONIBLE si está guardado; sola, USO con responsable y DISPONIBLE sin él
@@ -1428,12 +1428,6 @@
       if (nombre === 'FOLIO') {
         const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
         return prefijo + ('0000' + (v.NUCO || '')).slice(-4);
-      }
-      if (nombre === 'ESTATUS_GENERAL') {
-        if (/^DG/i.test(id || '')) return 'PERSONAL DG';
-        if (tipo === 'EQUIPO') return { 'ESPERA DE RESPONSIVA': 'USO', 'EN ENVIO': 'USO', 'VENTA': 'RESGUARDO', 'DESECHADO': 'DESECHO' }[v['ESTATUS EQUIPO']] || v['ESTATUS EQUIPO'] || '';
-        if (['EQUIPO + SIM', 'LINEA', 'MODEM', 'BANDA ANCHA'].indexOf(tipo) >= 0) return { 'ESPERA DE RESPONSIVA': 'USO', 'SIN LINEA': 'CANCELADA', 'EN PROCESO DE CANCELACION': 'CANCELADA' }[v['ESTATUS LINEA']] || v['ESTATUS LINEA'] || '';
-        return '';
       }
       return '';
     }
@@ -1469,7 +1463,7 @@
       cuerpo.querySelectorAll('.ln-af-seccion:not(.ln-af-extra)').forEach((sec) => { sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])'); });
       cuerpo.querySelectorAll('[data-formula]').forEach((el) => {
         if (el.dataset.formula === 'NO_ASIGNACION') return;
-        el.textContent = formulaRegistro(el.dataset.formula, valores, ctx.idDG || ctx.id) || '—';
+        el.textContent = formulaRegistro(el.dataset.formula, valores) || '—';
       });
     }
 
@@ -2340,7 +2334,7 @@
      */
     const COLUMNAS_VISTA_LINEAS = [
       ['NUMERO TELEFONO', 'Número teléfono', 'mono'], ['NUCO', 'NUCO', 'mono'], ['TIPO', 'Tipo', 'tipo'],
-      ['ESTATUS GENERAL', 'Estatus general', 'chip'], ['NO EMPLEADO', 'No. empleado', 'mono'], ['RESPONSABLE', 'Responsable'],
+      ['NO EMPLEADO', 'No. empleado', 'mono'], ['RESPONSABLE', 'Responsable'],
       ['PUESTO', 'Puesto'], ['NOMBRE RESPONSABLES 2', 'Nombre colaborador/es'], ['PUESTO RESPONSABLES 2', 'Puesto colaborador/es'],
       ['EQUIPO', 'Equipo', 'lista'], ['IMEI', 'IMEI', 'mono'], ['NUMERO SIM', 'Número SIM', 'mono'], ['ACCESORIOS', 'Accesorios'],
       ['SEDE', 'Sede', 'lista'], ['OFICINA / DESARROLLO', 'Oficina / desarrollo', 'lista'], ['DEPARTAMENTO', 'Departamento', 'lista'],
@@ -4467,7 +4461,7 @@
           const cuerpo = $('#ln-captura-cuerpo', raiz);
           const elementos = conSelectorBloqueo(form.elementos);
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
-          const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
+          const ctx = { nuevo: form.nuevo, id: id, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
             nuco: form.nuevo ? '' : valorDe('NUCO'), inicial: {} };
           elementos.forEach((e) => { if (e.tipo === 'campo') ctx.inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
           captura.contexto = { formulario: elementos };

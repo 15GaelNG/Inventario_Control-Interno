@@ -222,10 +222,6 @@ test('POSIBLE VENTA-DAÑO ya no existe y PARA VENTA CON DETALLE sí: 9 estatus d
   assert.doesNotMatch(estructura, /'POSIBLE VENTA': 'POSIBLE VENTA-DAÑO'|'POSIBLE VENTA-DAÑO'/);
   assert.match(estructura, /'POSIBLE VENTA': 'RESGUARDO'/); // sigue guardado mientras Líneas lo corrige
   assert.doesNotMatch(read('src/html/js/lineas.html'), /POSIBLE VENTA-DAÑO/);
-  const fn = read('src/services/lineas/LineasReestructura.gs');
-  // \r?\n: en Windows git deja los archivos con CRLF (core.autocrlf) y con \n solo fallaba ahí
-  assert.match(fn, /function reestructuraQuitarPosibleVentaDano\(\) \{\r?\n\s+soloEditor_\(\);/);
-  assert.match(fn, /guardarCambiosRegistro\(f, \{ 'ESTATUS EQUIPO': 'POSIBLE VENTA' \}/);
 });
 
 // Pendiente 2.39 (13-oct): el error del pie de las capturas flotaba sin fondo y se pintaba encima del Comentario de

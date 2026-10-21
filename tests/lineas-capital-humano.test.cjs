@@ -6,7 +6,6 @@ const path = require('path');
 // Desde el 12-oct-2026 Líneas toma a las personas de CapitalHumano (src/services/CapitalHumano.gs), como todos los módulos:
 // la misma lista de activos de COLABORADORES ACTUALIZADO, con su ID PERSONA. Ya no tiene su propia lectura de CH ni cae a
 // COLABORADORES (la vieja, que se retira). docs/personas-unificar.md
-const fuente = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasReestructura.gs'), 'utf8');
 const repo = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasRepo.gs'), 'utf8');
 
 test('Capital Humano en Líneas: la lista de personas sale de CapitalHumano.activos (solo activos, en mayúsculas)', () => {
@@ -26,7 +25,6 @@ test('Capital Humano en Líneas: la lista de personas sale de CapitalHumano.acti
 });
 
 test('Capital Humano en Líneas: nadie en Líneas lee la pestaña de CH directo', () => {
-  assert.doesNotMatch(fuente, /reestructuraLeerHojaCH_|REESTRUCTURA_HOJA_CH/);
   const ine = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasIneLectura.gs'), 'utf8');
   assert.match(ine, /CapitalHumano\.filasCH\(\)/);
   assert.doesNotMatch(ine, /getSheetByName\(CapitalHumano\.HOJA_(CH|PERSONAS)\)|leer\(CapitalHumano\.HOJA_/);

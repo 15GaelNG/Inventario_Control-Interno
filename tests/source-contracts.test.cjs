@@ -106,17 +106,9 @@ test('Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus p
   assert.match(repo, /const HOJAS_MIGRADAS = \[TAB\.REASIG, TAB\.DESECHO, TAB\.REACTIVACION\];/);
   // Exportar: sin los módulos retirados
   assert.doesNotMatch(read('src/services/lineas/LineasExportar.gs'), /REASIGNACIONES: \[|DESECHOS: \[|REACTIVACION: \[|SOLICITUD: \[/);
-  // Retiro de pestañas: solo en la BD de pruebas, con respaldo, y CAMBIOS no está en la lista
+  // Las herramientas de editor de la migración ya corridas se quitaron (21-oct): retiro de pestañas y pruebas del 4-oct
   const admin = read('src/services/lineas/LineasAdmin.gs');
-  ['retirarHojasLineas_revisar', 'retirarHojasLineas_migrar', 'retirarHojasLineas_borrar'].forEach((f) => assert.match(admin, new RegExp('function ' + f + '\\(\\)')));
-  // En producción solo con LINEAS TELEFONICAS ya retirada (4-oct); ella solo se borra así, y CAMBIOS nunca
-  assert.match(admin, /if \(id !== LINEAS_DEV_SPREADSHEET_ID && !LineasLectura\.retirada\(\)\) \{\s*throw new Error/);
-  assert.match(admin, /'LINEAS TELEFONICAS': \{ migrar: false, soloRetirada: true \}/);
-  assert.match(admin, /return !HOJAS_RETIRADAS_\[nombre\]\.soloRetirada \|\| !!LineasLectura\.retirada\(\);/);
-  assert.match(admin, /if \(!estado\.respaldo\) throw new Error/);
-  assert.match(admin, /LineasDatos\.cacheBorrar\('enc_' \+ nombre\);/); // si no, existeTabla la sigue viendo
-  const lista = admin.slice(admin.indexOf('const HOJAS_RETIRADAS_ = {'), admin.indexOf('const PROP_RESPALDO_RETIRADAS_'));
-  assert.doesNotMatch(lista, /CAMBIOS LINEAS TELEFONICAS/);
+  assert.doesNotMatch(admin, /retirarHojasLineas_|HOJAS_RETIRADAS_|pruebas4oct_|lineasPintarPestanas/);
   assert.doesNotMatch(admin.slice(admin.indexOf('function pestanasLineas_'), admin.indexOf('function diferenciasHojaLineas_')), /return \[[^\]]*(REASIG|DESECHO|REACTIVACION|SOLICITUD)/);
 });
 
@@ -1113,12 +1105,16 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
     'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
     'EMAIL USUARIO', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS', 'FECHA INSPECCION', 'FORMATO INSPECCION'];
+  // Menos ESTATUS GENERAL (usuario, 21-oct): combinaba el estatus del equipo y el de la línea; ya no existe en ninguna parte
+  const sistema = appsheet.filter((c) => c !== 'ESTATUS GENERAL');
+  ['src/services/lineas/LineasRepo.gs', 'src/services/lineas/LineasLectura.gs', 'src/services/lineas/LineasRegistros.gs', 'src/html/js/lineas.html']
+    .forEach((f) => assert.doesNotMatch(read(f), /'ESTATUS GENERAL'|ESTATUS_GENERAL|estatusGeneral|idDG|PERSONAL DG/, f));
   const repo = read('src/services/lineas/LineasRepo.gs');
   const servidor = repo.slice(repo.indexOf('const COLS_VISTA_LINEAS'), repo.indexOf('];', repo.indexOf('const COLS_VISTA_LINEAS')));
-  assert.deepEqual([...servidor.matchAll(/'([^']+)'/g)].map((m) => m[1]), appsheet);
+  assert.deepEqual([...servidor.matchAll(/'([^']+)'/g)].map((m) => m[1]), sistema);
   const lineas = read('src/html/js/lineas.html');
   const cliente = lineas.slice(lineas.indexOf('const COLUMNAS_VISTA_LINEAS'), lineas.indexOf('function columnasVistaLineas'));
-  assert.deepEqual([...cliente.matchAll(/\['([^']+)', '[^']+'/g)].map((m) => m[1]), appsheet);
+  assert.deepEqual([...cliente.matchAll(/\['([^']+)', '[^']+'/g)].map((m) => m[1]), sistema);
   // DisplayName del AppSheet; RESPONSIVA y FORMATO INSPECCION = la última de NUCOS; PIN solo para ADMIN
   assert.match(cliente, /\['NOMBRE RESPONSABLES 2', 'Nombre colaborador\/es'\]/);
   assert.match(cliente, /\['RESPONSIVA', 'Última responsiva', 'ultimo'\]/);
@@ -1164,7 +1160,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v10';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v11';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1669,8 +1665,6 @@ test('IDs estandarizados (LIN-…): la ficha encuentra lo que las demás pestañ
   // La inspección apunta a la línea con su ID vigente, no con el del AppSheet
   assert.equal(Repo.evidenciasDeRegistro('LIN-00000000AAAAAA').inspecciones[0].registroId, 'LIN-00000000AAAAAA');
 
-  // Personal de DG: la fórmula lo reconoce por el ID del AppSheet (DG001), aunque el ID ya sea LIN-…
-  assert.equal(Repo.convertirRegistro(hojas['LINEAS TELEFONICAS'][1]).equipo.legado.estatusGeneral, 'PERSONAL DG');
 
   // Lo nuevo nace con el prefijo de su hoja; la bitácora lleva el mismo ID en ID e ID_CAMBIO
   const datos = read('src/services/lineas/LineasDatos.gs');
@@ -1724,8 +1718,6 @@ test('Segunda corrida de IDs (30-sep): ID nuevo, el LIN- de ayer en ID ANTERIOR 
   assert.ok(insp.every((i) => i.registroId === 'LIN-000000006SRC6J'));
   // El alta del 29-sep sigue en el historial aunque su REFS tenga el LIN- de ayer
   assert.ok(Repo.historialDeRegistro('LIN-00000001EPD2BY', true).eventos.length >= 1);
-  // DG se sigue reconociendo por el ID del AppSheet, no por ID ANTERIOR
-  assert.equal(Repo.convertirRegistro(hojas['LINEAS TELEFONICAS'][2]).equipo.legado.estatusGeneral, 'PERSONAL DG');
 });
 
 test('Selección como en los equipos Apple: cuadro con el mouse, Shift+clic, Ctrl/Cmd+A y un Esc para salir', () => {
@@ -2699,8 +2691,8 @@ test('lo nuevo de Vehículos (inspección, verificación, responsiva de sensor, 
 test('Personas: solo CapitalHumano.gs lee la lista de Capital Humano y PERSONAS (docs/personas-unificar.md)', () => {
   // 12-oct-2026: había cuatro formas de leer personas (CapitalHumano, Líneas con su propia lectura de CH y su respaldo a
   // COLABORADORES, la revisión de INE). Desde ahora todo pasa por CapitalHumano (activos, idPara, conPersona, filasCH).
-  // Se permiten, hasta retirar COLABORADORES (fase 4): la carga del libro de pruebas de Líneas y su diagnóstico.
-  const PERMITIDOS = ['src/services/CapitalHumano.gs', 'src/services/lineas/LineasReestructura.gs', 'src/services/lineas/LineasRevisionBD.gs'];
+  // La carga del libro de pruebas de Líneas y su diagnóstico (LineasReestructura, LineasRevisionBD) se quitaron el 21-oct.
+  const PERMITIDOS = ['src/services/CapitalHumano.gs'];
   const malos = [];
   const recorrer = (dir) => fs.readdirSync(dir, { withFileTypes: true }).forEach((e) => {
     const p = path.join(dir, e.name);

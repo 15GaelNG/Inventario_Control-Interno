@@ -429,12 +429,10 @@ const LineasRegistros = (function () {
     if (!fila && parteDe_(ctx, '') === 'LINEA') ctx.equiposSinLinea = equiposSinLinea_().map((x) => x.nuco);
     // Agregar equipo: las líneas sueltas DISPONIBLE que se le pueden vincular (al guardar se revisan otra vez)
     if (!fila && parteDe_(ctx, '') === 'EQUIPO') ctx.lineasSueltas = lineasSueltas_().map((x) => x.numero);
-    // idDG: el ID con el que ESTATUS GENERAL reconoce al personal de DG (DG001…); tras migrar quedó en ID APPSHEET
-    const idDG = fila ? LineasDatos.idsDeFila(fila).filter((k) => /^DG/i.test(k))[0] || null : null;
     const tipo = texto_(base['TIPO']).toUpperCase();
     // La línea en USO del equipo con el adendum vencido: si el equipo sale del inventario, se pregunta cómo se cancela
     const lineaVencida = !!fila && !ctx.parte && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO' && LineasResguardos.lineaVencida(fila);
-    return { nuevo: ctx.nuevo, idDG: idDG, parte: parteDe_(ctx, tipo), tipo: tipo, lineaVencida: lineaVencida, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0 || !!ctx.lineaEnEquipo ||
+    return { nuevo: ctx.nuevo, parte: parteDe_(ctx, tipo), tipo: tipo, lineaVencida: lineaVencida, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0 || !!ctx.lineaEnEquipo ||
       (!ctx.nuevo && !ctx.parte && !!LineasRepo.TIPOS_CON_EQUIPO[tipo] && !!(LineasUtil.txt(base['NUMERO TELEFONO']) || LineasUtil.txt(base['NUMERO SIM']))), estatusLinea: texto_(base['ESTATUS LINEA']).toUpperCase(),
       elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
   }
@@ -621,7 +619,6 @@ const LineasRegistros = (function () {
     const ahora = new Date();
     valores.ID = estructura ? '' : LineasDatos.nuevoId(LineasRepo.TAB.LINEAS);
     valores['FECHA REGISTRO'] = ahora;
-    if (!estructura) valores['ESTATUS GENERAL'] = LineasRepo.estatusGeneralRegistro(valores.ID, texto_(valores.TIPO).toUpperCase(), texto_(valores['ESTATUS EQUIPO']), texto_(valores['ESTATUS LINEA']));
     let tocados = [];
     LineasDatos.conCandado(() => {
       const alta = LineasRepo.agregarRegistro(valores);

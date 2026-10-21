@@ -23,9 +23,7 @@
  * porque el historial de asignaciones de antes se arma en la parte 9. Sin el código de resguardo (decisión del
  * usuario) y, en lo vendido o desechado, con el departamento N/A (D-I3).
  *
- * Se enciende y se apaga desde el editor: reestructuraLeerHojasNuevas / reestructuraLeerHojaVieja.
- *
- * Paso 4 (LineasRetiro.gs, §I.6.7): con LINEAS TELEFONICAS retirada (Script Property LINEAS_HOJA_VIEJA_RETIRADA) ya no
+ * Paso 4 (4-oct, §I.6.7): con LINEAS TELEFONICAS retirada (Script Property LINEAS_HOJA_VIEJA_RETIRADA) ya no
  * se lee nada de ella: las rutas del AppSheet y el NUCO de la línea sola están en EQUIPOS / LINEAS, la última persona
  * en una asignación cerrada y el comentario viejo en MOVIMIENTOS.
  */
@@ -35,14 +33,14 @@ const LineasLectura = (function () {
   const PROPIEDAD = 'LINEAS_LECTURA';
   const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v6'; // v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v7'; // v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
   const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
   /** Responsables adicionales (6-oct): número de empleado y nombre del segundo al quinto. */
   const ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
   const ENCABEZADOS = ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'FOLIO', 'NUMERO TELEFONO', 'NUCO', 'TIPO', 'NO EMPLEADO',
-    'RESPONSABLE', 'PUESTO'].concat(ADICIONALES, [ 'ESTATUS GENERAL', 'EQUIPO', 'COLOR', 'IMEI', 'NUMERO SIM',
+    'RESPONSABLE', 'PUESTO'].concat(ADICIONALES, ['EQUIPO', 'COLOR', 'IMEI', 'NUMERO SIM',
     'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'RAZON SOCIAL',
     'PIN WHATSAPP', 'PIN EQUIPO', 'CONTRASEÑA MODEM', 'PATRON', 'CUENTA GOOGLE', 'COMPAÑIA', 'COSTO PLAN',
     'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO', 'RESPONSIVA', 'COMENTARIOS',
@@ -235,7 +233,6 @@ const LineasLectura = (function () {
         'ID': String(v(e || l, 'ID')), 'ID ANTERIOR': anterior, 'ID APPSHEET': v(e || l, 'ID APPSHEET'),
         'FOLIO': LineasRepo.folioRegistro(tipo, nuco), 'NUMERO TELEFONO': v(l, 'NUMERO TELEFONO'), 'NUCO': nuco, 'TIPO': tipo,
         'NO EMPLEADO': v(a, 'NO EMPLEADO'), 'RESPONSABLE': v(a, 'RESPONSABLE'), 'PUESTO': v(a, 'PUESTO'),
-        'ESTATUS GENERAL': '',
         'EQUIPO': v(e, 'MODELO'), 'COLOR': v(e, 'COLOR'), 'IMEI': v(e, 'IMEI'), 'NUMERO SIM': v(l, 'NUMERO SIM'), 'ACCESORIOS': v(e, 'ACCESORIOS'),
         'SEDE': v(a, 'SEDE'), 'OFICINA / DESARROLLO': v(a, 'OFICINA / DESARROLLO'), 'DEPARTAMENTO': v(a, 'DEPARTAMENTO'),
         'AREA': v(a, 'AREA'), 'JEFE DIRECTO': v(a, 'JEFE DIRECTO'), 'DIRECTOR': v(a, 'DIRECTOR'), 'RAZON SOCIAL': v(l, 'RAZON SOCIAL'),
@@ -346,97 +343,5 @@ const LineasLectura = (function () {
     altas, anotarAlta,
     /** Después de escribir en las hojas nuevas: la siguiente lectura vuelve a armar los renglones. */
     olvidar: () => { filas_ = null; },
-    // Solo para comparar las dos lecturas en una misma ejecución (reestructuraCompararLectura)
-    _forzar: (valor) => { activo_ = !!valor; filas_ = null; LineasDatos.olvidarTabla(HOJA_VIEJA); },
   };
 })();
-
-/** Etapa 2: el sistema lee de las hojas nuevas. Se corre desde el editor. */
-function reestructuraLeerHojasNuevas() {
-  soloEditor_();
-  PropertiesService.getScriptProperties().setProperty(LineasLectura.PROPIEDAD, LineasLectura.VALOR_NUEVO);
-  LineasLectura.limpiarCaches();
-  return 'Listo: el sistema lee de LINEAS, EQUIPOS, ASIGNACIONES y ADENDUMS (guardar está bloqueado).';
-}
-
-/** Regresa a leer de LINEAS TELEFONICAS (como antes de la etapa 2). */
-function reestructuraLeerHojaVieja() {
-  soloEditor_();
-  if (LineasLectura.retirada()) throw new Error('LINEAS TELEFONICAS ya se retiró (' + LineasLectura.retirada() + '): no se puede volver a leer.');
-  PropertiesService.getScriptProperties().deleteProperty(LineasLectura.PROPIEDAD);
-  LineasLectura.limpiarCaches();
-  return 'Listo: el sistema vuelve a leer de LINEAS TELEFONICAS.';
-}
-
-/**
- * Validación de la etapa 2: lee el inventario de las dos formas (hoja vieja y hojas nuevas), convierte cada registro
- * como lo hace la pantalla (LineasRepo.convertirRegistro) y cuenta qué se vería distinto, campo por campo, con los
- * cambios más comunes. No escribe nada. Se corre desde el editor.
- */
-function reestructuraCompararLectura() {
-  soloEditor_();
-  const txt = (v) => (v instanceof Date ? Utilities.formatDate(v, LineasDatos.ZONA_APP, 'yyyy-MM-dd') : String(v === null || v === undefined ? '' : v).trim().toUpperCase());
-  const campos = (f) => {
-    const r = LineasRepo.convertirRegistro(f);
-    if (!r) return null;
-    const e = r.equipo || {};
-    const l = r.linea || {};
-    const p = e.responsable || l.responsable || {};
-    return {
-      'TIPO': r.tipo, 'NUCO': r.nuco, 'NUMERO': l.numero, 'SIM': l.sim, 'COMPAÑIA': l.compania, 'ESTATUS EQUIPO': e.estatus,
-      'ESTATUS LINEA': l.estatus, 'FIN PLAN': l.finPlan, 'COSTO PLAN': l.costoPlan, 'MODELO': e.modelo, 'IMEI': e.imei,
-      'RESPONSABLE': p.nombre, 'NO EMPLEADO': p.noEmpleado, 'PUESTO': p.puesto, 'DEPARTAMENTO': p.departamento, 'AREA': p.area,
-      'SEDE': p.sede, 'OFICINA': p.oficina, 'DIRECTOR': p.director, 'JEFE DIRECTO': p.jefeDirecto,
-      'ADICIONALES': (p.usuariosAdicionales || []).map((u) => u.nombre).join(' / '), '¿EQUIPO?': !!r.equipo, '¿LINEA?': !!r.linea,
-    };
-  };
-  const leer = (nuevo) => {
-    LineasLectura._forzar(nuevo);
-    return LineasDatos.leerTabla(LineasLectura.HOJA_VIEJA);
-  };
-  const viejas = leer(false);
-  const nuevas = leer(true);
-  LineasLectura._forzar(PropertiesService.getScriptProperties().getProperty(LineasLectura.PROPIEDAD) === LineasLectura.VALOR_NUEVO);
-
-  // Cada registro nuevo se ubica por el ID de la fila vieja (ID ANTERIOR)
-  const nuevoPorViejo = {};
-  nuevas.forEach((f) => { if (f['ID ANTERIOR']) (nuevoPorViejo[f['ID ANTERIOR']] = nuevoPorViejo[f['ID ANTERIOR']] || []).push(f); });
-  const difs = {};
-  const sumar = (campo, antes, despues, nuco) => {
-    const d = difs[campo] = difs[campo] || { total: 0, pares: {}, ejemplos: [] };
-    d.total++;
-    const k = (antes || '(vacío)') + ' → ' + (despues || '(vacío)');
-    d.pares[k] = (d.pares[k] || 0) + 1;
-    if (d.ejemplos.length < 5) d.ejemplos.push('NUCO ' + nuco + ': ' + k);
-  };
-  let sinPareja = 0;
-  let partidos = 0;
-  const ejemplosSinPareja = [];
-  viejas.forEach((fv) => {
-    const cv = campos(fv);
-    if (!cv) return;
-    const pareja = nuevoPorViejo[fv['ID']] || [];
-    if (!pareja.length) { sinPareja++; if (ejemplosSinPareja.length < 8) ejemplosSinPareja.push(cv['NUCO'] + ' · ' + cv['TIPO']); return; }
-    if (pareja.length > 1) partidos++;
-    const cn = campos(pareja[0]);
-    Object.keys(cv).forEach((c) => {
-      const a = txt(cv[c]);
-      const b = txt(cn[c]);
-      if (a !== b) sumar(c, a, b, cv['NUCO']);
-    });
-  });
-  const salida = [
-    'Registros: hoja vieja ' + viejas.length + ' · hojas nuevas ' + nuevas.length,
-    'Filas viejas sin registro nuevo: ' + sinPareja + (ejemplosSinPareja.length ? ' (ej. ' + ejemplosSinPareja.join(' | ') + ')' : ''),
-    'Filas viejas que quedaron en dos registros (equipo y línea por separado): ' + partidos,
-    'Registros nuevos que no vienen de una fila vieja: ' + nuevas.filter((f) => !f['ID ANTERIOR']).length,
-    '', 'CAMPO | cuántos cambian | cambios más comunes',
-  ];
-  Object.keys(difs).sort((a, b) => difs[b].total - difs[a].total).forEach((c) => {
-    const d = difs[c];
-    const top = Object.keys(d.pares).sort((a, b) => d.pares[b] - d.pares[a]).slice(0, 6).map((k) => k + ' (' + d.pares[k] + ')');
-    salida.push(c + ' | ' + d.total + ' | ' + top.join(' · '));
-  });
-  for (let i = 0; i < salida.length; i += 25) console.log(salida.slice(i, i + 25).join('\n'));
-  return 'Listo: ver el registro de ejecución.';
-}
