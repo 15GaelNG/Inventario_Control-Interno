@@ -664,6 +664,21 @@
     });
   }
 
+  /** Botón "Actualizar" de la barra de arriba (Index.html): limpia TODO lo que el cliente tenga
+   *  guardado de listas y catálogos (limpiarListasGuardadas, api.html -- lo mismo que al cerrar
+   *  sesión) y vuelve a montar la vista actual, el mismo camino que entrar por primera vez a
+   *  ella -- así siempre pide todo fresco al servidor, sin que el usuario tenga que recargar el
+   *  navegador (usuario, 20-oct: "que se carguen los de la pestaña en donde se encuentre"). */
+  function refrescarVistaActual() {
+    if (!vistaActual) return;
+    const boton = document.getElementById('btn-refrescar-vista');
+    if (boton) { boton.classList.remove('girando'); void boton.offsetWidth; boton.classList.add('girando'); }
+    limpiarListasGuardadas();
+    const destino = vistaDe(vistaActual);
+    navegarA(vistaActual, destino ? destino.etiqueta : '');
+  }
+  document.getElementById('btn-refrescar-vista').addEventListener('click', refrescarVistaActual);
+
   /** Para una vista cuyo módulo no tiene permiso (ver navegarA) */
   function mostrarSinAcceso(nombreModulo) {
     document.getElementById('view-container').innerHTML =

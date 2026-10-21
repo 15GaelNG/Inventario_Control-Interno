@@ -56,6 +56,9 @@
           </div>
           <div class="topbar-right">
             <div class="topbar-date" id="topbar-date"></div>
+            <!-- Refresca solo la pantalla actual con datos frescos del servidor, sin recargar el
+                 navegador (usuario, 20-oct: tenía que recargar para dejar de ver algo desactualizado) -->
+            <button type="button" class="topbar-icon-boton" id="btn-refrescar-vista" title="Actualizar los datos de esta pantalla" aria-label="Actualizar los datos de esta pantalla"><i data-lucide="refresh-cw" class="ico"></i></button>
             <!-- Aquí se inserta sola la campana de Notificaciones (html/notificaciones.html), antes del engrane.
                  El usuario y salir viven al pie del menú lateral (.sidebar-usuario) -->
             <!-- Apariencia: modo, color, ancho, letra y la temporada (html/js/componentes/apariencia.html) -->

@@ -785,6 +785,15 @@
     'notificaciones': async () => { await abrir('notificaciones'); await hasta('#ntf-lista .ntf-item'); await esperar(400); },
     'inicio': async () => { await abrir('dashboard'); await hasta('#dash-actividad .historial-item'); await esperar(300); },
     'vehiculos': () => abrir('vehiculos'),
+    // Botón "Actualizar" de la topbar (usuario, 20-oct): remonta la vista actual con todo fresco,
+    // sin recargar el navegador -- aquí solo se confirma que no truena y repinta bien la MISMA
+    // pantalla (la prueba de que de verdad trae datos frescos va en gestion-activos-conteo /
+    // caja-chica-cerrar, con mocks con estado; este botón solo compone funciones ya probadas).
+    'vehiculos-refrescar': async () => {
+      await abrir('vehiculos');
+      (await hasta('#btn-refrescar-vista')).click();
+      await esperar(700);
+    },
     'vehiculos-ficha': async () => { await abrir('vehiculos'); await abrirPrimeraFila(); },
     'vehiculos-inspecciones': async () => {
       await abrir('vehiculos'); await abrirPrimeraFila();

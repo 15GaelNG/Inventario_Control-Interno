@@ -327,6 +327,18 @@
   .topbar-date {
     font-size: var(--texto-s); font-weight: 500; color: var(--color-text-muted);
   }
+  /* Botón circular genérico de la barra de arriba (igual look que .ap-boton, pero aparte: ese
+     selector lo usa Apariencia para encontrar SU botón con querySelector, y confundiría los dos
+     si hubiera más de uno con esa clase). Lo usa "Actualizar" (app.html); cualquier otro botón
+     suelto de la topbar puede reusarla. */
+  .topbar-icon-boton {
+    background: transparent; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text-muted);
+    width: 34px; height: 34px; padding: 0; flex-shrink: 0;
+  }
+  .topbar-icon-boton .ico { width: 18px; height: 18px; transition: transform .4s ease; }
+  .topbar-icon-boton:hover { background: var(--color-bg); color: var(--color-text); }
+  .topbar-icon-boton.girando .ico { animation: topbar-girar .6s linear; }
+  @keyframes topbar-girar { to { transform: rotate(360deg); } }
 
   /* Usuario + cerrar sesión, al pie del menú lateral (usuario, 13-oct; antes en la barra de arriba).
      Recogido: solo la foto, centrada como los íconos; abierto: nombre, puesto y salir. Lleva a Mi perfil. */
