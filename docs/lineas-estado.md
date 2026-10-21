@@ -193,7 +193,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (`guardarResponsivaEnCandado_`, por `guardarCambiosRegistro` con `corregir: true`, que solo anota lo que cambió): la persona (RESPONSABLE, No. de empleado, puesto, departamento, área, sede, oficina, jefe directo, director, cuenta Google y los
   adicionales; `PERSONA_DE_RESPONSIVA`) y, en un equipo, modelo (EQUIPO), IMEI, accesorios, color, bloqueo (PIN EQUIPO y PATRON) y, si el registro tiene línea (la que ya tenía o la que pone Vincular o Cambiar línea), el PIN de WhatsApp. Con la
   misma persona (renovación) se corrige en la misma asignación; con otra, la reasignación ya abrió la asignación nueva (`LineasAcciones.aplicarResponsiva_`) y aquí solo se anota. La línea sin equipo solo pasa la persona. A quien no ve los
-  secretos se le conserva el valor oculto. «SIN BLOQUEO» llena el PIN del equipo con «NO APLICA» en la pantalla (usuario, 16-oct; `aplicarBloqueo`, antes «N/A»); en el inventario se sigue guardando en blanco. Lo que no está en esta lista
+  secretos se le conserva el valor oculto. «SIN BLOQUEO» llena el PIN del equipo con «NO APLICA» en la pantalla (usuario, 16-oct; `aplicarBloqueo`, antes «N/A»); en el inventario se guarda igual, «NO APLICA» (usuario, 21-oct; `limpioDe_`; antes en blanco). Lo que no está en esta lista
   (fotos, comentario, firmas) queda en la responsiva y su PDF.
 - **Error del pie de las capturas** (13-oct): el mensaje (`#cap-error`, `.ln-error-fijo` en `lineas-estilos.html`) va en su
   lugar, arriba de los botones, y no flota; cada campo con error se sigue marcando. Aplica a las capturas que lo usan:
@@ -304,7 +304,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
 - **Tipo de bloqueo del equipo** (PIN, PATRÓN, CONTRASEÑA o SIN BLOQUEO): una lista en Corregir, la inspección y la
   responsiva (`conSelectorBloqueo` / `activarBloqueo`, lineas.html) que no se guarda: PIN y contraseña van en PIN
-  EQUIPO; patrón, «PATRON»; sin bloqueo, «NO APLICA» en la pantalla (desde el 16-oct; antes «N/A») y en blanco en el inventario. Con «PIN» solo números (no deja escribir letras); la contraseña acepta
+  EQUIPO; patrón, «PATRON»; sin bloqueo, «NO APLICA» en la pantalla (desde el 16-oct; antes «N/A») y también «NO APLICA» en el inventario (21-oct: en blanco la pantalla no reconocía el tipo; los guardados antes quedan en blanco y abren en «Selecciona…»). Con «PIN» solo números (no deja escribir letras); la contraseña acepta
   todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
   (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Corregir, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
