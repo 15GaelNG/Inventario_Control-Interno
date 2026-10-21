@@ -165,8 +165,9 @@ const LineasRepo = (function () {
       _id: id, nuco: nuco, tipo: TIPOS_CON_EQUIPO[tipo], modelo: txt(col(f, 'EQUIPO')), imei: digitos(col(f, 'IMEI')),
       simResidual: tipo === 'EQUIPO' ? sim : null,
       accesorios: (txt(col(f, 'ACCESORIOS')) || '').split(',').map((s) => s.trim()).filter(Boolean),
-      // Con un PIN o una contraseña, el patrón que quedó de antes no se muestra (usuario, 9-oct)
-      pinEquipo: texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
+      // Con un PIN o una contraseña, el patrón que quedó de antes no se muestra (usuario, 9-oct). «NO APLICA» es el
+      // bloqueo SIN BLOQUEO (2.53): la ficha lo dice así y no «—» (usuario, 21-oct; pendiente 2.56)
+      pinEquipo: sinAcentos_(col(f, 'PIN EQUIPO')) === 'NO APLICA' ? 'SIN BLOQUEO' : texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
       cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
       color: texto('COLOR'),
       // El PIN de WhatsApp es del equipo (pendiente 2.25); sin línea no tiene

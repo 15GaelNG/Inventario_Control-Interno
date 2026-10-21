@@ -166,3 +166,11 @@ test('la responsiva pasa a la línea el PIN de WhatsApp', () => {
   assert.doesNotMatch(esc, /'RAZON SOCIAL': 'RAZON SOCIAL', 'PIN WHATSAPP'/);
   assert.match(esc, /function sinPinWhatsapp_\(e, campos\)/);
 });
+
+test('la ficha dice SIN BLOQUEO cuando PIN EQUIPO está guardado NO APLICA (2.56)', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /pinEquipo: sinAcentos_\(col\(f, 'PIN EQUIPO'\)\) === 'NO APLICA' \? 'SIN BLOQUEO' : texto\('PIN EQUIPO'\)/);
+  const sinAcentos_ = new Function(repo.match(/const sinAcentos_ = [^\n]+/)[0] + '\nreturn sinAcentos_;')();
+  assert.strictEqual(sinAcentos_(' no  aplica '), 'NO APLICA');
+  assert.notStrictEqual(sinAcentos_('1234'), 'NO APLICA');
+});
