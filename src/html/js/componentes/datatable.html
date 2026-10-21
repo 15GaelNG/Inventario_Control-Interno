@@ -474,7 +474,7 @@
    *     buscarColumna: { campo: 'NUCCO', placeholder: 'Buscar por Nucco…' },   // opcional: uno o
    *       // varios buscadores más en la misma barra (o un arreglo: [{ campo, placeholder }, …]),
    *       // que solo filtran esa columna (op "contiene") -- para cuando el buscador general (que
-   *       // ya busca en todas las columnas visibles) mezcla demasiado.
+   *       // ya busca en todas las columnas filtrables, estén ocultas o no) mezcla demasiado.
    *   });
    *
    * ─── MODO TARJETAS (celular y tableta) ────────────────────────────────────────────
@@ -902,6 +902,11 @@
         return ordenadas.filter((c) => st.fijadas.has(c.campo)).concat(ordenadas.filter((c) => !st.fijadas.has(c.campo)));
       }
 
+      /** Todas las filtrables, estén ocultas o no (usuario, 21-oct): el buscador general no debe
+       *  depender de qué tenga activado cada quien en "Vista" -- el dato sigue ahí aunque la
+       *  columna esté oculta. Las no filtrables (botones, acciones) nunca participan. */
+      const columnasBuscables = () => columnas.filter((c) => c.filtrable !== false);
+
       /**
        * Columnas de una tarjeta: las que diga el módulo (cfg.tarjeta.campos) o, si no, las primeras
        * CAMPOS_TARJETA de la vista de la persona (respeta lo que ocultó y el orden que eligió en "Vista").
@@ -945,13 +950,13 @@
 
       function filasFiltradas() {
         const q = normalizar(st.busqueda.trim());
-        const visibles = columnasVisibles();
+        const buscables = columnasBuscables();
         const filas = st.datos.filter((fila) => {
           for (const campo in st.filtros) {
             const col = colPorCampo(campo);
             if (col && !cumpleFiltro(col, fila, st.filtros[campo])) return false;
           }
-          return !q || visibles.some((col) => normalizar(textoVisible(col, fila)).includes(q));
+          return !q || buscables.some((col) => normalizar(textoVisible(col, fila)).includes(q));
         });
         const criterios = st.orden
           .map((o) => ({ col: colPorCampo(o.campo), signo: o.dir === 'desc' ? -1 : 1 }))
