@@ -93,7 +93,7 @@ test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por n�
   assert.doesNotMatch(html, />antes ' \+ esc\(r\.numerosAnteriores\)/);
   assert.match(html, /anteriores \? 'Antes <span class="ln-mono">' \+ esc\(anteriores\) \+ '<\/span>' : ''\)/);
   assert.doesNotMatch(html, /tarjetaNumeros|Números de esta línea/);
-  assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores'\];/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores', 'dg'\];/);
 });
 
 test('al editar, un SIM BASICO sin datos de adendum no enseña el adendum', () => {

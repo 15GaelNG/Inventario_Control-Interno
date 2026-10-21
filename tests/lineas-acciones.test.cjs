@@ -25,12 +25,12 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   // La pantalla: el botón «Cambiar estatus» y todas las acciones sin depender del estatus
   const cliente = read('src/html/js/lineas.html');
   assert.doesNotMatch(cliente, /texto: '¿Qué pasó\?'|function (abrirQuePaso|accionesPosibles|permiteAccion|abrirCierre|abrirCambio)\(|ACCION_ENTREGAR|estatusPosibles/);
-  assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: \(f\) => operar\(\) && !f\.some\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f\)/);
+  assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: \(f\) => operar\(f\) && !f\.some\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f\)/);
   // Ya en el panel de Pau: Corregir resguardo y, si aún no lo recibe, Quitar del panel (pendiente 3.12)
-  assert.match(cliente, /texto: 'Corregir resguardo'[^\n]*\n\s+visible: \(f\) => operar\(\) && f\.every\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f, \{ corregir: true \}\)/);
-  assert.match(cliente, /visible: \(f\) => operar\(\) && f\.every\(\(r\) => r\.panel === 'PENDIENTE DE RECEPCION'\), alHacer: \(f\) => quitarDelPanel\(f\.map\(\(r\) => r\.id\), trasQuitar\)/);
+  assert.match(cliente, /texto: 'Corregir resguardo'[^\n]*\n\s+visible: \(f\) => operar\(f\) && f\.every\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f, \{ corregir: true \}\)/);
+  assert.match(cliente, /visible: \(f\) => operar\(f\) && f\.every\(\(r\) => r\.panel === 'PENDIENTE DE RECEPCION'\), alHacer: \(f\) => quitarDelPanel\(f\.map\(\(r\) => r\.id\), trasQuitar\)/);
   // Reasignar se volvió la Responsiva (pendiente 2.49, usuario 16-oct): sin botón en lo que ya no se entrega (pendiente 2.55)
-  assert.match(cliente, /texto: 'Responsiva'[^\n]*\n\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
+  assert.match(cliente, /texto: 'Responsiva'[^\n]*\n\s+visible: \(f\) => operar\(f\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
   assert.doesNotMatch(cliente, /apiLineasAgregarNota|esNota/);
 });
 
@@ -173,7 +173,7 @@ test('opciones separadas: el equipo no trae lo de la línea (usuario, 4-oct)', (
   ["texto: 'Mandar a cancelación'", "texto: 'Ir al equipo'"].forEach((t) => assert.ok(linea.includes(t), t));
   assert.doesNotMatch(linea, /abrirResguardo|abrirReasignar|abrirCaptura/);
   // La línea sin equipo entrega con su Responsiva (pendiente 2.49)
-  assert.match(linea, /visible: \(f\) => operar\(\) && !f\[0\]\.equipoId && conDocumentos\('linea', f\[0\]\.estatus\), alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\)/);
+  assert.match(linea, /visible: \(f\) => operar\(f\) && !f\[0\]\.equipoId && conDocumentos\('linea', f\[0\]\.estatus\), alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\)/);
   const ficha = cliente.slice(cliente.indexOf('function abrirMenuFicha'), cliente.indexOf('menuFlotante(boton, items.filter(Boolean));'));
   assert.doesNotMatch(ficha, /Mandar línea a cancelación/);
   // En la ficha ya no van Ir a la línea ni Ir al equipo: están en su información (usuario, 12-oct; pendiente 2.34)

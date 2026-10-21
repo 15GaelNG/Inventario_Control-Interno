@@ -925,7 +925,7 @@ const LineasResguardos = (function () {
       if (DE_LA_LINEA.indexOf(K) >= 0 && !lineaSigue) return;
       const hoy = txt(LineasUtil.col(f, k));
       // La línea que regresa vuelve con su estatus y su PIN de antes. POR RECIBIR solo lo pone el panel: nadie lo cambió
-      // después (los mandados antes del 3.15 tienen en su envío el estatus elegido; tools/lineas-resguardos/por-recibir.js)
+      // después (los mandados antes del 3.15 tienen en su envío el estatus elegido; tools/lineas-datos/por-recibir.js)
       const sinTocar = igualTexto_(hoy, c.despues) || (K === 'ESTATUS EQUIPO' && may(hoy) === POR_RECIBIR);
       if (sinTocar || (DE_LA_LINEA.indexOf(K) >= 0 && !numeroHoy)) regresa.push({ campo: k, de: hoy, a: txt(c.antes) });
       else seQueda.push({ campo: k, valor: hoy, motivo: 'Cambió después' });

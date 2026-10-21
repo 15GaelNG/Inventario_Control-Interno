@@ -72,7 +72,7 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   const leen = funciones.filter((f) => /\bleer_\(token\)|\bleerSeccion_\(token|Permisos\.puedeLeer\(token/.test(f.cuerpo) &&
     NO_SON_DE_UN_DEPARTAMENTO.indexOf(f.nombre) === -1);
   assert.ok(leen.length >= 12, leen.length + ' funciones leen');
-  const sueltas = leen.filter((f) => !/exigirAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance\)/.test(f.cuerpo));
+  const sueltas = leen.filter((f) => !/exigirAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance[,)]/.test(f.cuerpo));
   assert.deepEqual(sueltas.map((f) => f.nombre), [], 'leen Líneas sin revisar el alcance del rol CLIENT');
   assert.match(telefonia, /function notificaciones\(token, limite\) \{[^}]*Permisos\.alcanceDe\(sesion\.correo\)/,
     'la campana de Líneas sale vacía para un CLIENT');

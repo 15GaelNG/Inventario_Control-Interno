@@ -1066,6 +1066,7 @@ test('Documentos: inspecciones y responsivas de la hoja y de la carpeta del NUCO
     Permisos: { EDICION: 'EDICION', puedeLeerAlguno: () => ({ rol: 'OPERADOR', permisos: {} }), puedeLeer: () => ({ rol: 'OPERADOR', permisos: {} }), puedeEditar: () => ({ rol: 'OPERADOR', permisos: {} }) },
     Config: { ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR' } },
     LineasRepo: { leerRegistroPorId: () => ({ NUCO: 5 }), evidenciasDeRegistro: () => hoja },
+    LineasDG: { esFila: () => false, esRegistro: () => false, exigirAdmin: () => {} },
     LineasUtil: { nuco4: (v) => ('0000' + v).slice(-4), col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)) },
     LineasDatos: { cacheLeer: () => null, cacheGuardar: () => {}, ZONA_APP: 'X' },
     LineasArchivos: { archivosNuco: () => ({ carpetaId: 'raiz', grupos: grupos }) },
@@ -1153,7 +1154,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v11';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v12';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -1175,6 +1176,7 @@ test('"Última responsiva" / "Última inspección" abren la más reciente de la 
       col: (f, c) => f[c], paraCliente: (o) => JSON.parse(JSON.stringify(o)),
     },
     LineasDatos: { cacheLeer: () => null, cacheGuardar: () => {} },
+    LineasDG: { esFila: () => false, esRegistro: () => false, exigirAdmin: () => {} },
     LineasArchivos: { archivosNuco: () => ({ carpetaId: 'raiz', grupos: grupos }) },
   };
   const S = new Function(...Object.keys(globales), read('src/services/TelefoniaService.gs') + '\nreturn TelefoniaService;')(...Object.values(globales));
@@ -1985,7 +1987,7 @@ test('Ajustes a la selección estilo Drive: contador simple, clic fuera, sin Cop
   const lineas = read('src/html/js/lineas.html');
   assert.doesNotMatch(lineas, /texto: 'Abrir ficha'/);
   // Inspección en documentos, junto a la Responsiva (pendientes 2.49 y 2.50, 16-oct); Ver la última, solo en la ficha (12-oct)
-  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',\s+visible: \(f\) => operar\(\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
+  assert.match(lineas, /texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',\s+visible: \(f\) => operar\(f\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
   assert.doesNotMatch(lineas, /Nueva inspección/);
   assert.doesNotMatch(lineas, /texto: 'Nueva responsiva'/);
   assert.doesNotMatch(lineas, /texto: 'Ver última inspección', maximo: 1/);

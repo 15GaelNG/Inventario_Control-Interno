@@ -471,6 +471,7 @@ const LineasCaptura = (function () {
 
   function contextoInspeccion(ref, usuario, puedeVerSecretos) {
     const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref), ref);
+    LineasDG.exigirAdmin(obj.fila, usuario); // Dirección General: solo ADMIN (pendiente 8.16)
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
@@ -487,6 +488,7 @@ const LineasCaptura = (function () {
 
   function contextoResponsiva(ref, usuario, puedeVerSecretos) {
     const obj = objetivoCaptura_(ref);
+    LineasDG.exigirAdmin(obj.fila, usuario); // Dirección General: solo ADMIN (pendiente 8.16)
     if (!obj.equipo) numeroParaResponsiva_(obj);
     // Lo vendido, desechado, robado o la línea cancelada ya no se entrega (usuario, 16-oct); Vincular ya lo revisó
     if (!(ref && String(ref.modo || '').toUpperCase() === 'LINEA')) LineasAcciones.exigirEstatusParaResponsiva(obj.fila, !!obj.equipo, !!(ref && ref.desdeCorregir));
@@ -578,6 +580,7 @@ const LineasCaptura = (function () {
       const ahora = new Date();
       const t0 = Date.now();
       const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref), datos);
+      LineasDG.exigirAdmin(obj.fila, usuario);
       const elementos = formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!datos.enAccion, datos.reasignar ? datos.desdeResponsiva : null)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       marca_('inspección · registro y formulario', t0);

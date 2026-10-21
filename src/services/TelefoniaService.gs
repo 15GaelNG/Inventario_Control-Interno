@@ -90,6 +90,12 @@ const TelefoniaService = (function () {
    * = LINEAS; llega a la sesión como `departamento`).
    */
   const AREA_SECRETOS = 'LINEAS';
+  /** Dirección General (pendiente 8.16; LineasDG): solo ADMIN ve y modifica sus registros. */
+  const esAdmin_ = (sesion) => sesion.rol === Config.ROLES.ADMIN;
+  function sinDG_(sesion, id) {
+    if (!esAdmin_(sesion) && LineasDG.esFila(LineasRepo.leerRegistroPorId(id))) throw new Error('Es de Dirección General: solo ADMIN ve su información.');
+    return sesion;
+  }
   function puedeVerSecretos_(sesion) {
     const area = String(sesion.departamento || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
     return sesion.rol === Config.ROLES.ADMIN || area === AREA_SECRETOS;
@@ -122,7 +128,20 @@ const TelefoniaService = (function () {
         }),
       });
     }
-    return { equipos: Object.assign({ generadoEn: ix.generadoEn }, ix.equipos), lineas: ix.lineas, vista: vista };
+    // Dirección General: quien no es ADMIN ve DG, su estatus y el área (pendiente 8.16)
+    let equipos = ix.equipos;
+    let lineas = ix.lineas;
+    if (!esAdmin_(sesion)) {
+      const ocultar = (t) => {
+        if (!t) return t;
+        const i = t.columnas.indexOf('dg');
+        return i < 0 ? t : Object.assign({}, t, { filas: t.filas.map((f) => (f[i] ? LineasDG.ocultarRenglon(t.columnas, f, 0) : f)) });
+      };
+      equipos = ocultar(equipos);
+      lineas = ocultar(lineas);
+      vista = Object.assign({}, vista, { filas: vista.filas.map((f) => (LineasDG.esRenglonVista(vista.columnas, f, 1) ? LineasDG.ocultarRenglon(vista.columnas, f, 1) : f)) });
+    }
+    return { equipos: Object.assign({ generadoEn: ix.generadoEn }, equipos), lineas: lineas, vista: vista };
   }
 
   function registro_(id) {
@@ -136,6 +155,10 @@ const TelefoniaService = (function () {
     const r = registro_(id);
     if (!r || !r.equipo) throw new Error('No existe el equipo ' + id);
     exigirAlcance_(sesion, r);
+    if (LineasDG.esRegistro(r.equipo, r.linea)) {
+      if (!esAdmin_(sesion)) return LineasUtil.paraCliente({ equipo: LineasDG.fichaOculta(r.equipo, true), linea: LineasDG.fichaOculta(r.linea, false), detalles: null, corte: null, facturas: null });
+      r.equipo.dg = true;
+    }
     return LineasUtil.paraCliente({
       equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
@@ -152,6 +175,10 @@ const TelefoniaService = (function () {
     const r = registro_(id);
     if (!r || !r.linea) throw new Error('No existe la línea ' + id);
     exigirAlcance_(sesion, r);
+    if (LineasDG.esRegistro(r.equipo, r.linea)) {
+      if (!esAdmin_(sesion)) return LineasUtil.paraCliente({ linea: LineasDG.fichaOculta(r.linea, false), equipo: LineasDG.fichaOculta(r.equipo, true), detalles: null, corte: null, facturas: null });
+      r.linea.dg = true;
+    }
     // Sin equipo, la carpeta de la línea en LINEAS (pendiente 2.45), si ya tiene; con su sección, como la del NUCO
     if (!r.equipo) r.linea.carpetaDriveId = LineasArchivos.carpetaLineaId(r.linea._id);
     sinCarpeta_(r.linea, sesion);
@@ -207,6 +234,7 @@ const TelefoniaService = (function () {
     const sesion = leerSeccion_(token, 'documentos');
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de documento inválido.');
     sinAlcance_(sesion);
+    sinDG_(sesion, id);
     const nombreTipo = tipo === 'INSPECCION' ? 'inspección' : 'responsiva';
     const r = carpetaNucoDe_(id, sesion, tipo);
     if (!r.nuco) throw new Error('Este registro no tiene NUCO: no tiene carpeta en NUCOS.');
@@ -299,7 +327,7 @@ const TelefoniaService = (function () {
    */
   function evidencias(token, id, vista) {
     // Rol CLIENT: sin el pasado del registro (usuario, 14-oct: puede ser de otro departamento)
-    const sesion = sinAlcance_(leerSeccion_(token, 'documentos'));
+    const sesion = sinDG_(sinAlcance_(leerSeccion_(token, 'documentos')), id);
     let base = id;
     let enEquipo = false;
     if (vista === 'linea') {
@@ -390,13 +418,13 @@ const TelefoniaService = (function () {
 
   /** Historial de un registro (bitácora, reasignaciones, desechos y operaciones del sistema). */
   function historial(token, id) {
-    const sesion = sinAlcance_(leerSeccion_(token, 'historial'));
+    const sesion = sinDG_(sinAlcance_(leerSeccion_(token, 'historial')), id);
     return LineasUtil.paraCliente(LineasRepo.historialDeRegistro(id, puedeVerSecretos_(sesion)));
   }
 
   /** Números que ha tenido el NUCO del registro (vista 'equipo') o NUCOs por los que pasó su número (vista 'linea'). */
   function asignaciones(token, id, vista) {
-    sinAlcance_(leerSeccion_(token, 'historial'));
+    sinDG_(sinAlcance_(leerSeccion_(token, 'historial')), id);
     return LineasUtil.paraCliente(LineasRepo.asignacionesDeRegistro(id, vista));
   }
 
@@ -600,7 +628,7 @@ const TelefoniaService = (function () {
     if (!seccion) throw new Error('Módulo desconocido para exportar: ' + modulo);
     const sesion = Permisos.puedeLeer(token, seccion);
     // Con alcance: solo el inventario, filtrado (LineasExportar.baseCompleta niega las demás pestañas)
-    const json = JSON.stringify(LineasExportar.baseCompleta(modulo, puedeVerSecretos_(sesion), sesion.alcance));
+    const json = JSON.stringify(LineasExportar.baseCompleta(modulo, puedeVerSecretos_(sesion), sesion.alcance, !esAdmin_(sesion)));
     if (!comprimir) return json;
     return Utilities.base64Encode(Utilities.gzip(Utilities.newBlob(json, 'application/json')).getBytes());
   }
@@ -651,7 +679,8 @@ const TelefoniaService = (function () {
   // ---------------- Captura: inspección y responsiva nuevas ----------------
 
   function usuarioOperacion_(sesion) {
-    return { correo: sesion.correo, nombre: sesion.nombre || sesion.correo };
+    // esAdmin: Dirección General solo la modifica ADMIN (LineasDG.exigirAdmin; pendiente 8.16)
+    return { correo: sesion.correo, nombre: sesion.nombre || sesion.correo, esAdmin: esAdmin_(sesion) };
   }
 
   /** Datos precargados para el formulario de una inspección nueva. */
