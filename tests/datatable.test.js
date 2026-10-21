@@ -231,6 +231,13 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   ok(($('tbody mark') || {}).textContent === 'VEHÍCULO Ñandú', 'la coincidencia se resalta con <mark> conservando acentos');
   buscar.value = ''; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
 
+  console.log('12b. El buscador general también encuentra lo que está en una columna OCULTA (usuario, 21-oct)');
+  tabla.ocultarColumna('ESTADO');
+  buscar.value = 'vencida'; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
+  ok($$('tbody tr[data-id]').length > 0, 'con ESTADO oculta, buscar "vencida" igual encuentra esas filas');
+  buscar.value = ''; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tabla.mostrarColumna('ESTADO');
+
   console.log('13. Atajos de fecha y "solo este valor"');
   click($('.dt-btn-filtro[data-campo="FECHA"]'));
   ok($$('.dt-popover [data-preset]').length === 6, 'filtro de fecha ofrece 6 atajos');
