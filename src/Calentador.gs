@@ -19,6 +19,8 @@ const CALENTADOR_HORARIO = { desde: 6, hasta: 22 };   // hora local; fuera de es
 function pasosCalentador_() {
   return [
     ['Vehículos', () => VehiculosService.calentar()],
+    // Las 41 columnas completas (usuario, 21-oct: que "Vista" no tenga que esperar a leerlas)
+    ['Vehículos (todas las columnas)', () => VehiculosService.calentarCompleto()],
     ['Inspecciones', () => InspeccionesService.calentar()],
     ['Verificaciones', () => VerificacionesService.calentar()],
     ['Tickets', () => TicketsService.calentar()],
