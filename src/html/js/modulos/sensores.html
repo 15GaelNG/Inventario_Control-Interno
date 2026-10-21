@@ -85,6 +85,7 @@
     const tabla = DataTable.crear(document.getElementById('sen-tabla'), {
       idCampo: 'ID',
       idTabla: 'sensores',
+      buscarColumna: [{ campo: 'SERIE_VEHICULO', placeholder: 'Buscar por Serie…' }],
       ordenInicial: { campo: 'FECHA_INSTALACION', dir: 'desc' },
       textoVacio: 'Todavía no hay instalaciones registradas',
       ayuda: 'Los datos del vehículo (placa, marca, serie…) se copian del folio y no se editan aquí: ' +
@@ -129,7 +130,7 @@
         { campo: 'RESPONSABLE', titulo: 'Responsable', tipo: 'texto' },
         { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista', visible: false },
         { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista', visible: false },
-        { campo: 'SERIE_VEHICULO', titulo: 'Serie vehículo', tipo: 'texto', visible: false },
+        { campo: 'SERIE_VEHICULO', titulo: 'Serie vehículo', tipo: 'texto' },
         { campo: 'CAPACIDAD', titulo: 'Capacidad (L)', tipo: 'numero', visible: false },
         { campo: 'COLOR', titulo: 'Color', tipo: 'lista', visible: false },
         { campo: 'COMENTARIOS', titulo: 'Comentarios', tipo: 'texto', visible: false },
