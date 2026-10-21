@@ -948,16 +948,20 @@
         };
       }
 
+      /** Pasa los filtros de columna (st.filtros), sin importar la búsqueda general */
+      function pasaFiltrosColumna_(fila) {
+        for (const campo in st.filtros) {
+          const col = colPorCampo(campo);
+          if (col && !cumpleFiltro(col, fila, st.filtros[campo])) return false;
+        }
+        return true;
+      }
+
       function filasFiltradas() {
         const q = normalizar(st.busqueda.trim());
         const buscables = columnasBuscables();
-        const filas = st.datos.filter((fila) => {
-          for (const campo in st.filtros) {
-            const col = colPorCampo(campo);
-            if (col && !cumpleFiltro(col, fila, st.filtros[campo])) return false;
-          }
-          return !q || buscables.some((col) => normalizar(textoVisible(col, fila)).includes(q));
-        });
+        const filas = st.datos.filter((fila) => pasaFiltrosColumna_(fila) &&
+          (!q || buscables.some((col) => normalizar(textoVisible(col, fila)).includes(q))));
         const criterios = st.orden
           .map((o) => ({ col: colPorCampo(o.campo), signo: o.dir === 'desc' ? -1 : 1 }))
           .filter((c) => c.col);
@@ -1458,10 +1462,37 @@
         cerrarPopover();
         render();
       }
+      /**
+       * Si la búsqueda general solo encuentra una fila por una columna OCULTA (ninguna visible la
+       * explica), esa columna se muestra sola (usuario, 21-oct) -- para no dejar un resultado sin
+       * forma de ver por qué apareció. Queda como una más de la vista de la persona (igual que si
+       * la hubiera activado a mano en "Vista"): no se vuelve a ocultar sola al borrar la búsqueda.
+       */
+      function revelarColumnasDeLaBusqueda_() {
+        const q = normalizar(st.busqueda.trim());
+        if (!q) return;
+        const visibles = columnasVisibles();
+        const candidatas = columnasBuscables().filter((c) => st.ocultas.has(c.campo));
+        if (!candidatas.length) return;
+        const reveladoras = new Set();
+        st.datos.forEach((fila) => {
+          if (!pasaFiltrosColumna_(fila)) return;
+          if (visibles.some((v) => normalizar(textoVisible(v, fila)).includes(q))) return;   // ya se explica sola
+          candidatas.forEach((col) => {
+            if (!reveladoras.has(col.campo) && normalizar(textoVisible(col, fila)).includes(q)) reveladoras.add(col.campo);
+          });
+        });
+        if (!reveladoras.size) return;
+        const titulos = Array.from(reveladoras).map((campo) => colPorCampo(campo).titulo);
+        reveladoras.forEach((campo) => st.ocultas.delete(campo));
+        almacen.guardar();
+        Notificar.info(`Se ${plural(titulos.length, 'mostró', 'mostraron')} ${titulos.map((t) => `"${t}"`).join(', ')}: ahí coincidió tu búsqueda`);
+      }
       function cambiarBusqueda(texto) {
         st.busqueda = texto;
         if (buscador.value !== texto) buscador.value = texto;
         st.pagina = 1;
+        revelarColumnasDeLaBusqueda_();
         render();
       }
       function limpiarTodo() {
