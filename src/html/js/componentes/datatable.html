@@ -1733,57 +1733,63 @@
       /**
        * cfg.columnasCompletas = { idHoja, cargar }: trae TODAS las columnas de la hoja del servidor
        * (cargar() → [{ encabezado: valor, … }]) y agrega las que no estaban ya como columnas nuevas
-       * (ocultas, exportables). Se llama una sola vez, sola, en cuanto llegan los primeros datos
-       * (ver setDatos) -- para cuando alguien abre "Vista" o busca algo ya están ahí, sin tener que
-       * esperar ni ver un aviso de "actívalas" (usuario, 21-oct). `silencioso` calla el aviso de
-       * éxito (se usa en los disparadores automáticos; abrirVista sigue avisando por si acaso).
+       * (ocultas, exportables). `cargar()` suele ser pesada (trae la hoja completa, no nomás un
+       * resumen) -- por eso NO se dispara sola para todo el mundo en cuanto hay datos; se pide solo
+       * a quien de verdad la va a usar: al abrir "Vista" o al escribir algo en el buscador general.
+       * Si dos disparadores coinciden (alguien busca y abre Vista casi al mismo tiempo), los dos se
+       * cuelgan de la MISMA carga en curso (st.columnasExtra.promesa) en vez de duplicarla.
+       * `silencioso` calla el aviso de éxito (se usa al buscar; abrirVista sigue avisando por si acaso).
        */
-      async function cargarColumnasCompletas(boton, silencioso) {
-        if (!cfg.columnasCompletas || st.columnasExtra.cargando || st.columnasExtra.cargadas) return;
+      function cargarColumnasCompletas(boton, silencioso) {
+        if (!cfg.columnasCompletas || st.columnasExtra.cargadas) return Promise.resolve();
+        if (st.columnasExtra.cargando) return st.columnasExtra.promesa;
         st.columnasExtra.cargando = true;
-        try {
-          await conBotonOcupado(boton, 'Cargando…', async () => {
-            const raw = await cfg.columnasCompletas.cargar();
-            const yaExisten = new Set(columnas.map((c) => normCampo_(c.campo)));
-            const encabezados = raw.length ? Object.keys(raw[0]) : [];
-            const nuevas = encabezados.filter((h) => h && !yaExisten.has(normCampo_(h))).map((h) => {
-              const muestra = raw.slice(0, 60).map((r) => r[h]).filter((v) => v !== '' && v !== null && v !== undefined);
-              const esFecha = muestra.length > 0 && muestra.every((v) => /^\d{4}-\d{2}-\d{2}/.test(String(v)));
-              const esNumero = !esFecha && muestra.length > 0 && muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))));
-              return {
-                campo: h, titulo: tituloDesdeEncabezado_(h), tipo: esFecha ? 'fecha' : (esNumero ? 'numero' : 'texto'),
-                editable: false, filtrable: true, ordenable: true, visible: false, exportable: true, enDetalle: true,
-              };
-            });
-            columnas.push(...nuevas);
-            st.ordenColumnas = st.ordenColumnas.concat(nuevas.map((c) => c.campo));
-            nuevas.forEach((c) => st.ocultas.add(c.campo));
+        st.columnasExtra.promesa = (async () => {
+          try {
+            await conBotonOcupado(boton, 'Cargando…', async () => {
+              const raw = await cfg.columnasCompletas.cargar();
+              const yaExisten = new Set(columnas.map((c) => normCampo_(c.campo)));
+              const encabezados = raw.length ? Object.keys(raw[0]) : [];
+              const nuevas = encabezados.filter((h) => h && !yaExisten.has(normCampo_(h))).map((h) => {
+                const muestra = raw.slice(0, 60).map((r) => r[h]).filter((v) => v !== '' && v !== null && v !== undefined);
+                const esFecha = muestra.length > 0 && muestra.every((v) => /^\d{4}-\d{2}-\d{2}/.test(String(v)));
+                const esNumero = !esFecha && muestra.length > 0 && muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))));
+                return {
+                  campo: h, titulo: tituloDesdeEncabezado_(h), tipo: esFecha ? 'fecha' : (esNumero ? 'numero' : 'texto'),
+                  editable: false, filtrable: true, ordenable: true, visible: false, exportable: true, enDetalle: true,
+                };
+              });
+              columnas.push(...nuevas);
+              st.ordenColumnas = st.ordenColumnas.concat(nuevas.map((c) => c.campo));
+              nuevas.forEach((c) => st.ocultas.add(c.campo));
 
-            // Ids vacíos NO se indexan: varias filas sin id (ej. renglones viejos sin ID_CAMBIO en
-            // Cambios Vehículos) terminarían compartiendo por error los datos extra de la última.
-            const porId = {};
-            raw.forEach((r) => {
-              const idVal = String(r[cfg.columnasCompletas.idHoja] == null ? '' : r[cfg.columnasCompletas.idHoja]);
-              if (idVal) porId[idVal] = r;
-            });
-            st.datos.forEach((fila) => {
-              const id = idDe(fila);
-              const r = id && porId[id];
-              if (r) nuevas.forEach((c) => { fila[c.campo] = r[c.campo]; });
-            });
+              // Ids vacíos NO se indexan: varias filas sin id (ej. renglones viejos sin ID_CAMBIO en
+              // Cambios Vehículos) terminarían compartiendo por error los datos extra de la última.
+              const porId = {};
+              raw.forEach((r) => {
+                const idVal = String(r[cfg.columnasCompletas.idHoja] == null ? '' : r[cfg.columnasCompletas.idHoja]);
+                if (idVal) porId[idVal] = r;
+              });
+              st.datos.forEach((fila) => {
+                const id = idDe(fila);
+                const r = id && porId[id];
+                if (r) nuevas.forEach((c) => { fila[c.campo] = r[c.campo]; });
+              });
 
-            st.columnasExtra.cargadas = true;
-            if (!silencioso) Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
-          });
-          // Puede haber llegado mientras alguien ya tenía algo escrito en el buscador: que lo encuentre
-          // sin tener que volver a teclear (y repinta por si cambió algo visible, p. ej. para "Vista").
-          revelarColumnasDeLaBusqueda_();
-          render();
-        } catch (err) {
-          Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
-        } finally {
-          st.columnasExtra.cargando = false;
-        }
+              st.columnasExtra.cargadas = true;
+              if (!silencioso) Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
+            });
+            // Puede haber llegado mientras alguien ya tenía algo escrito en el buscador: que lo
+            // encuentre sin volver a teclear (y repinta por si cambió algo visible para "Vista").
+            revelarColumnasDeLaBusqueda_();
+            render();
+          } catch (err) {
+            Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
+          } finally {
+            st.columnasExtra.cargando = false;
+          }
+        })();
+        return st.columnasExtra.promesa;
       }
 
       /** Menú "Vista": columnas visibles, fijar, reordenar, densidad y restablecer */
@@ -1833,12 +1839,15 @@
           pop.querySelector('.dt-densidad').addEventListener('change', (ev) => setDensidad(ev.target.value));
         };
         abrirPopover(ancla, '', pintar);
-        // Trae TODAS las columnas de la base de datos la primera vez que se abre "Vista"
-        // (antes había que pedirlo con un botón aparte); el menú ya está abierto mientras carga.
-        if (cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
+        // Trae TODAS las columnas de la base de datos la primera vez que se abre "Vista" (antes había
+        // que pedirlo con un botón aparte); el menú ya está abierto mientras carga. Si ya la había
+        // disparado otra cosa (p. ej. el buscador) y sigue en curso, se cuelga de esa MISMA carga en
+        // vez de pedirla otra vez -- por eso no se pregunta por "cargando" aquí, cargarColumnasCompletas
+        // ya decide sola si hace falta pedir algo nuevo o devolver lo que ya está en camino.
+        if (cfg.columnasCompletas && !st.columnasExtra.cargadas) {
           const miPopover = popover;
           const promesa = cargarColumnasCompletas();
-          pintar(miPopover);   // ya cargando = true (se puso antes del primer await): refleja "Cargando…"
+          pintar(miPopover);   // si ya estaba cargando, refleja "Cargando…"; si no, lo pone y refleja igual
           promesa.then(() => { if (popover === miPopover) pintar(miPopover); });
         }
       }
@@ -2824,12 +2833,10 @@
           st.refrescando = false;
           st.error = null;
           if (!st.editando) { render(); refrescarPanel(); }
-          // Con los primeros datos ya en la mesa, trae las columnas completas sola y calladita (usuario,
-          // 21-oct: no quiere esperar a abrir "Vista" ni ver el aviso de "actívalas" -- para cuando las
-          // necesite, ya están ahí, listadas sin marcar, igual que cualquier otra columna oculta).
-          if (cfg.columnasCompletas && st.datos.length && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
-            cargarColumnasCompletas(undefined, true);
-          }
+          // cfg.columnasCompletas.cargar() suele ser pesada (trae la hoja completa, no un resumen):
+          // NO se dispara aquí para todo el mundo en cada carga de página (eso hacía la app más lenta
+          // para quien nunca usa "Vista" ni busca por una columna oculta). Se pide bajo demanda, al
+          // abrir "Vista" o al buscar (ver abrirVista / cambiarBusqueda).
         },
         /** Sin datos aún: filas grises. Con datos a la vista: barra de carga arriba, sin borrar lo que se ve. */
         setCargando(valor) {
