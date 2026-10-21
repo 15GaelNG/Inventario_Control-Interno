@@ -7,7 +7,7 @@ const path = require('path');
 // con las hojas en memoria: el renglón armado (LineasLectura) → guardar → cómo quedan las hojas y el renglón armado.
 const leer = (archivo) => fs.readFileSync(path.join(__dirname, '../src/services/lineas', archivo), 'utf8');
 
-function cargar(inicial, retirada) {
+function cargar(inicial) {
   const hojas = JSON.parse(JSON.stringify(inicial), (k, v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? new Date(v) : v));
   hojas['LINEAS TELEFONICAS'] = hojas['LINEAS TELEFONICAS'] || [];
   const escrituras = [];
@@ -31,11 +31,10 @@ function cargar(inicial, retirada) {
   let n = 0;
   const Ids = { nuevo: (p) => p + '-NUEVO' + (++n) };
   const Utilities = { formatDate: (d) => d.toISOString().slice(0, 10) };
-  const PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => (k === 'LINEAS_HOJA_VIEJA_RETIRADA' ? retirada || null : 'ESTRUCTURA') }) };
   const fuente = leer('LineasUtil.gs') + ';' + leer('LineasEstructura.gs') + ';' + leer('LineasLectura.gs') + ';' + leer('LineasEscritura.gs') +
     '; return { LineasLectura, LineasEscritura };';
-  const m = new Function('LineasDatos', 'LineasRepo', 'Ids', 'Utilities', 'PropertiesService', 'soloEditor_', fuente)(
-    LineasDatos, LineasRepo, Ids, Utilities, PropertiesService, () => {});
+  const m = new Function('LineasDatos', 'LineasRepo', 'Ids', 'Utilities', 'soloEditor_', fuente)(
+    LineasDatos, LineasRepo, Ids, Utilities, () => {});
   const usuario = { correo: 'prueba@x', nombre: 'PRUEBA' };
   const ahora = new Date('2026-10-03T18:00:00Z');
   const registro = (id) => m.LineasLectura.filas().find((f) => f['ID'] === id);
@@ -331,16 +330,10 @@ test('no se le pone a un equipo la línea de otro equipo, ni se borra el número
   assert.throws(() => t.guardar('EQU-1', { 'NUMERO TELEFONO': '' }), /no se borra/);
 });
 
-test('paso 4: con LINEAS TELEFONICAS retirada no se lee; rutas y NUCO de la línea sola salen de las hojas nuevas', () => {
-  const vieja = [{ 'ID': 'LIN-V4', 'NUCO': '0777', 'COMENTARIOS': 'VIEJO', 'RESPONSIVA': 'R_Files_/vieja.pdf' }];
-  const base = Object.assign({}, BASE, { 'LINEAS TELEFONICAS': vieja });
-  // Antes de retirarla: se lee de la hoja vieja
-  const antes = cargar(base);
-  assert.strictEqual(antes.registro('LIN-C')['NUCO'], '0777');
-  assert.strictEqual(antes.registro('LIN-C')['COMENTARIOS'], 'VIEJO');
-  // Retirada: la hoja vieja no se lee; lo copiado está en LINEAS (NUCO ANTERIOR y la ruta)
+test('la hoja vieja no se lee aunque exista (7.13); rutas y NUCO de la línea sola salen de las hojas nuevas', () => {
+  const vieja = [{ 'ID': 'LIN-V4', 'NUCO': '0999', 'COMENTARIOS': 'VIEJO', 'RESPONSIVA': 'R_Files_/otra.pdf' }];
   const lineas = BASE.LINEAS.map((l) => (l['ID'] === 'LIN-C' ? Object.assign({}, l, { 'NUCO ANTERIOR': '0777', 'RESPONSIVA': 'R_Files_/vieja.pdf' }) : l));
-  const t = cargar(Object.assign({}, base, { LINEAS: lineas }), '2026-10-04T23:00:00.000Z');
+  const t = cargar(Object.assign({}, BASE, { 'LINEAS TELEFONICAS': vieja, LINEAS: lineas }));
   assert.strictEqual(t.registro('LIN-C')['NUCO'], '0777');
   assert.strictEqual(t.registro('LIN-C')['RESPONSIVA'], 'R_Files_/vieja.pdf');
   assert.strictEqual(t.registro('LIN-C')['COMENTARIOS'], ''); // el comentario viejo vive en MOVIMIENTOS

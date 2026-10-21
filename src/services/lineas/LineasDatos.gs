@@ -45,8 +45,8 @@ const LineasDatos = (function () {
   // Estado por ejecución (cada llamada de google.script.run empieza de cero).
   const bd = { id: null, libro: null, tablas: {}, zona: null, apiSheets: undefined };
 
-  // Reestructura, etapa 2 (LineasLectura.gs): con el interruptor encendido, LINEAS TELEFONICAS se lee armada con las
-  // hojas nuevas y no se puede escribir. Apagado (lo normal), nada de esto cambia el comportamiento.
+  // Reestructura, etapa 2 (LineasLectura.gs): LINEAS TELEFONICAS se lee armada con las hojas nuevas y no se puede
+  // escribir (sin interruptor desde el 21-oct, pendiente 7.13).
   const virtual_ = (nombre) => typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(nombre);
   function tablaVirtual_(nombre) {
     if (bd.tablas[nombre] && bd.tablas[nombre].virtual) return bd.tablas[nombre];

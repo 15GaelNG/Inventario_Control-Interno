@@ -206,7 +206,8 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   assert.match(api, /apiLineasFormularioRegistro/);
   assert.match(api, /apiLineasCrearRegistro/);
   assert.match(api, /apiLineasEditarRegistro/);
-  assert.match(reg, /asegurarPestana\(LineasRepo\.TAB\.LINEAS, \['COLOR'\]\)/);
+  // LINEAS TELEFONICAS ya no se toca: ni COLOR se le agrega (7.13)
+  assert.doesNotMatch(reg, /asegurarPestana\(LineasRepo\.TAB\.LINEAS|asegurarEsquema_/);
   // Editar y Agregar (usuario, 4-oct): pestañas por parte; FOLIO, NUCO y TIPO fijos; el TIPO se asigna solo
   assert.doesNotMatch(reg, /'archivo'|guardarComoAppSheet|subirArchivos_|responsableExtra|ESTATUS_GENERAL'|'FECHA INSPECCION'/);
   const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
@@ -254,8 +255,8 @@ test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del
   assert.equal(T('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'SIM BASICO');
   assert.equal(T('EQUIPO', { 'NUMERO TELEFONO': '4420000001' }, 'MODEM'), 'MODEM'); // histórico: se queda
   assert.match(reg, /const valores = homologarNuco_\(aHoja_\(elementos, r\.valores\)\);/);
-  // La bitácora no registra "5 → 0005" como un cambio (solo se escribe homologado)
-  assert.match(read('src/services/lineas/LineasRepo.gs'), /LineasUtil\.nucoVisible\(antes\) === LineasUtil\.nucoVisible\(cambios\[c\]\)/);
+  // El historial no registra "5 → 0005" como un cambio (LineasEscritura, desde que la hoja vieja no se escribe)
+  assert.match(read('src/services/lineas/LineasEscritura.gs'), /c === 'NUCO' \? \(LineasUtil\.nucoVisible\(antes\) \|\| ''\) === \(LineasUtil\.nucoVisible\(despues\) \|\| ''\)/);
 });
 
 test('las firmas nuevas no se almacenan como archivos de Drive', () => {
@@ -656,14 +657,6 @@ test('las tablas de Líneas usan el DataTable del sistema con KPIs que filtran',
     assert.match(html, /class="page-header"/, vista);
     assert.match(html, /class="stat-row"/, vista);
   }
-});
-
-test('la bitácora automática registra exactamente los 23 campos del bot CAMBIOS TELEFONIA', () => {
-  const repo = read('src/services/lineas/LineasRepo.gs');
-  const lista = /const CAMPOS_BITACORA = \[([\s\S]*?)\];/.exec(repo)[1];
-  const campos = [...lista.matchAll(/'([^']+)'/g)].map((m) => m[1]);
-  assert.equal(campos.length, 23);
-  for (const fuera of ['IMEI', 'COLOR', 'PATRON', 'CONTRASEÑA MODEM']) assert.ok(!campos.includes(fuera), fuera);
 });
 
 test('las reglas de formato y los íconos son los del AppSheet (flechas, colores y estilos)', () => {
@@ -1673,7 +1666,8 @@ test('IDs estandarizados (LIN-…): la ficha encuentra lo que las demás pestañ
   // Los encabezados en blanco de CAMBIOS se ubican por la columna vecina, no por posición
   assert.match(datos, /'CAMBIOS LINEAS TELEFONICAS': \[\{ vecina: 'ID_LINEA', lado: -1, nombre: 'ID_CAMBIO' \}, \{ vecina: 'ID_LINEA', lado: 1, nombre: 'NUCO' \}\]/);
   const repo = read('src/services/lineas/LineasRepo.gs');
-  assert.match(repo, /bitacora\.forEach\(\(b\) => \{ b\['ID_CAMBIO'\] = b\['ID'\]; \}\);/);
+  // La bitácora CAMBIOS ya no se escribe (7.13): solo se lee en el historial
+  assert.doesNotMatch(repo, /agregarFilas\(TAB\.CAMBIOS|idCambio_/);
   assert.doesNotMatch(read('src/services/lineas/LineasRegistros.gs') + read('src/services/lineas/LineasCaptura.gs') + read('src/services/lineas/LineasNotificaciones.gs'), /\['ID'\]: LineasDatos\.nuevoIdCorto\(\)|'ID': LineasDatos\.nuevoIdCorto\(\)|const id = LineasDatos\.nuevoIdCorto\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_NOTIFICACIONES': \{ prefijo: 'NTF'/);
 });
@@ -2357,7 +2351,8 @@ test('Historial único (paso 3): MOVIMIENTOS un renglón por acción, ediciones 
   // Con las hojas nuevas, registrarMovimiento escribe en MOVIMIENTOS (sin el nombre de la acción en el comentario)
   const src = read('src/services/lineas/LineasRepo.gs');
   assert.match(src, /MOVIMIENTOS: \['ID', 'FECHA', 'ACCION', 'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'COMENTARIO', 'TICKET', 'DOCUMENTO', 'CAMBIOS', 'QUIEN', 'ORIGEN'\]/);
-  assert.match(src, /if \(typeof LineasLectura !== 'undefined' && LineasLectura\.activo\(\)\) return registrarEnMovimientos_\(/);
+  assert.match(src, /function registrarMovimiento\(tipo, datos, usuario, ahora, extra\) \{\s*return registrarEnMovimientos_\(/);
+  assert.doesNotMatch(src, /agregarFilas\(TAB\.APP_MOV/);
   const escritas = [];
   const datosMov = { existeTabla: () => true, normCol: normCol, agregarFilas: (t, filas) => { escritas.push([t, filas[0]]); return [2]; } };
   const Repo2 = new Function('LineasUtil', 'LineasDatos', 'LineasChecklist', 'Utilities', 'LineasLectura', 'LineasEscritura', 'Ids', src + '\nreturn LineasRepo;')(
@@ -2802,8 +2797,8 @@ test('Líneas: «Recargar datos» también vacía las hojas que la lectura guard
   const limpiar = lectura.slice(lectura.indexOf('  function limpiarCaches() {'), lectura.indexOf('  return {', lectura.indexOf('  function limpiarCaches() {')));
   assert.match(limpiar, /LineasRepo\.borrarCaches\(\);/);
   assert.match(limpiar, /nuevas\.map\(\(n\) => 'enc_' \+ n\)/);
-  assert.match(limpiar, /LineasDatos\.tocar\(\[HOJA_VIEJA, HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS\]\);/);
-  assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS, HOJA_VIEJA\];/,
+  assert.match(limpiar, /LineasDatos\.tocar\(\[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS\]\);/);
+  assert.match(lectura, /const nombres = \[HOJAS\.LINEAS, HOJAS\.EQUIPOS, HOJAS\.ASIGNACIONES, HOJAS\.ADENDUMS\];/,
     'si la lectura guarda otra hoja, «Recargar datos» también debe tocarla');
 });
 

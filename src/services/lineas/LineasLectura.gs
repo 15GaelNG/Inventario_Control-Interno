@@ -3,11 +3,10 @@
  * Etapa 2 de la implementación de las partes 4 y 5 del plan (migracion/PLAN_REESTRUCTURA_LINEAS.md): el sistema lee de
  * las hojas nuevas (LINEAS, EQUIPOS, ASIGNACIONES, ADENDUMS) y la pantalla sigue igual.
  *
- * Cómo: con el interruptor encendido (Script Property LINEAS_LECTURA = ESTRUCTURA), toda lectura de LINEAS TELEFONICAS
- * que pasa por LineasDatos (leerTabla, buscarFilas, leerFilas…) recibe renglones ARMADOS con las hojas nuevas y con los
- * mismos nombres de columna de la hoja vieja. Así el resto del código (índice, ficha, Panorama, avisos, resguardos…)
- * no cambia. LINEAS TELEFONICAS ya no se escribe: desde la etapa 3, guardar escribe en las hojas nuevas
- * (LineasEscritura.gs) y aquí solo se vuelve a armar lo leído (olvidar).
+ * Cómo: toda lectura de LINEAS TELEFONICAS que pasa por LineasDatos (leerTabla, buscarFilas, leerFilas…) recibe
+ * renglones ARMADOS con las hojas nuevas y con los mismos nombres de columna de la hoja vieja. Así el resto del código
+ * (índice, ficha, Panorama, avisos, resguardos…) no cambia. LINEAS TELEFONICAS ya no se escribe: desde la etapa 3,
+ * guardar escribe en las hojas nuevas (LineasEscritura.gs) y aquí solo se vuelve a armar lo leído (olvidar).
  *
  * Un renglón armado es:
  *   - cada EQUIPO, con su asignación vigente y la línea de esa asignación;
@@ -15,26 +14,18 @@
  * ID del renglón: el del equipo (EQU-…) o el de la línea (LIN-…). ID ANTERIOR: el de la fila vieja (LIN-…), con el
  * que citan al registro las inspecciones, responsivas, bitácora y APP_*. ID APPSHEET: el del AppSheet.
  *
- * Mientras no se migren (parte 9), unas pocas columnas de solo consulta se toman de la hoja vieja, por ID ANTERIOR:
- * COMENTARIOS (en el diseño nuevo viven en el historial), RESPONSIVA, FORMATO INSPECCION y FECHA INSPECCION (rutas
- * del AppSheet), el NUCO de las líneas sin equipo (para encontrar sus documentos en NUCOS) y, cuando el registro no
- * tiene asignación vigente (vendido, extraviado, fuera de inventario…), los datos de la última persona: los de su
- * última asignación cerrada si ya pasó por el sistema nuevo (etapa 3); si no, los de la hoja vieja tal como están,
- * porque el historial de asignaciones de antes se arma en la parte 9. Sin el código de resguardo (decisión del
- * usuario) y, en lo vendido o desechado, con el departamento N/A (D-I3).
+ * Cuando el registro no tiene asignación vigente (vendido, extraviado, fuera de inventario…), los datos de la última
+ * persona salen de su última asignación cerrada. En lo vendido o desechado, con el departamento N/A (D-I3).
  *
- * Paso 4 (4-oct, §I.6.7): con LINEAS TELEFONICAS retirada (Script Property LINEAS_HOJA_VIEJA_RETIRADA) ya no
- * se lee nada de ella: las rutas del AppSheet y el NUCO de la línea sola están en EQUIPOS / LINEAS, la última persona
- * en una asignación cerrada y el comentario viejo en MOVIMIENTOS.
+ * La hoja vieja se retiró el 4-oct (paso 4, §I.6.7): las rutas del AppSheet y el NUCO de la línea sola están en EQUIPOS
+ * y LINEAS, y el comentario viejo en MOVIMIENTOS. El interruptor LINEAS_LECTURA y la lectura de la hoja vieja se quitaron
+ * el 21-oct (pendiente 7.13); quedan en el historial de git.
  */
 
 const LineasLectura = (function () {
   const HOJA_VIEJA = 'LINEAS TELEFONICAS';
-  const PROPIEDAD = 'LINEAS_LECTURA';
-  const VALOR_NUEVO = 'ESTRUCTURA';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
   const CLAVE_CACHE = 'estructura_virtual_v7'; // v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
-  const PROPIEDAD_RETIRADA = 'LINEAS_HOJA_VIEJA_RETIRADA';
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
   /** Responsables adicionales (6-oct): número de empleado y nombre del segundo al quinto. */
@@ -49,8 +40,8 @@ const LineasLectura = (function () {
     'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'TIPO ASIGNACION', 'TIPO DE LINEA', 'TIPO DE EQUIPO',
     // Cuenta y plan del proveedor (usuario, 13-oct: la pestaña General de la línea los muestra)
     'CUENTA PADRE', 'CUENTA', 'PLAN', 'FUENTE PLAN', 'ORIGEN PLAN']);
-  // De la hoja vieja, solo de consulta, hasta la migración (ver la cabecera)
-  const DE_LA_HOJA_VIEJA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
+  // Del equipo o, si no hay, de la línea: las rutas del AppSheet y el comentario
+  const DEL_EQUIPO_O_LINEA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'SEDE',
     'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
   /**
@@ -65,7 +56,6 @@ const LineasLectura = (function () {
     return e ? ESTATUS_FINAL.equipo.indexOf(may(e['ESTATUS EQUIPO'])) >= 0 : ESTATUS_FINAL.linea.indexOf(may(l && l['ESTATUS LINEA'])) >= 0;
   }
 
-  let activo_ = null;
   let filas_ = null;
 
   // ---------------- Fecha del alta (pendiente 2.51) ----------------
@@ -109,23 +99,9 @@ const LineasLectura = (function () {
   }
   let porId_ = null;
 
-  /** El interruptor y la fecha de retiro: los de Entornos.gs para este proyecto (DEV, 5-oct) o la Script Property. */
-  const config_ = (clave) => (typeof leerConfig_ === 'function' ? leerConfig_(clave) : PropertiesService.getScriptProperties().getProperty(clave));
-
-  function activo() {
-    if (activo_ === null) activo_ = config_(PROPIEDAD) === VALOR_NUEVO;
-    return activo_;
-  }
-
-  /** Fecha (ISO) en que se retiró LINEAS TELEFONICAS, o null si todavía se lee (paso 4). */
-  function retirada() {
-    const v = config_(PROPIEDAD_RETIRADA);
-    return v && /^\d{4}-\d{2}-\d{2}T/.test(v) ? v : null;
-  }
-
-  /** ¿Esta lectura de `nombre` sale de las hojas nuevas? */
+  /** ¿Esta lectura de `nombre` sale de las hojas nuevas? (LINEAS TELEFONICAS siempre, desde el 4-oct) */
   function esVirtual(nombre) {
-    return String(nombre || '').trim().toUpperCase() === HOJA_VIEJA && activo();
+    return String(nombre || '').trim().toUpperCase() === HOJA_VIEJA;
   }
 
   function bloquearEscritura() {
@@ -162,24 +138,6 @@ const LineasLectura = (function () {
     return tl === 'SIM BASICO' ? 'SIM BASICO' : 'LINEA';
   }
 
-  /**
-   * De la hoja vieja solo lo que todavía se muestra (DE_LA_HOJA_VIEJA, la persona de antes y el NUCO), por ID. Ya no se
-   * escribe, así que se guarda aparte y no se vuelve a leer cada vez que cambia una hoja nueva (rapidez, paso 2).
-   */
-  function vieja_() {
-    const columnas = DE_LA_HOJA_VIEJA.concat(PERSONA_SIN_ASIGNACION, ['NUCO']);
-    return LineasDatos.recordar('estructura_vieja_v1', [HOJA_VIEJA], () => {
-      const m = {};
-      LineasDatos.leerTabla(HOJA_VIEJA, true).forEach((f) => {
-        if (!f['ID']) return;
-        const o = {};
-        columnas.forEach((c) => { if (f[c] !== '' && f[c] !== null && f[c] !== undefined) o[c] = f[c]; });
-        m[String(f['ID'])] = o;
-      });
-      return m;
-    }, 21600);
-  }
-
   function armar_() {
     // Si en esta ejecución ya se escribió (LineasEscritura), sus hojas en memoria ya traen lo escrito: no se releen
     const enMemoria = typeof LineasEscritura !== 'undefined' && LineasEscritura.hojasEnMemoria ? LineasEscritura.hojasEnMemoria() : null;
@@ -188,7 +146,6 @@ const LineasLectura = (function () {
     const equipos = t(HOJAS.EQUIPOS);
     const asignaciones = t(HOJAS.ASIGNACIONES);
     const adendums = t(HOJAS.ADENDUMS);
-    const vieja = retirada() ? {} : vieja_();
     const alta = altas();
 
     const lineaPorId = {};
@@ -224,11 +181,10 @@ const LineasLectura = (function () {
     const v = (o, c) => (o && o[c] !== undefined && o[c] !== null ? o[c] : '');
     const renglon = (e, l, a) => {
       const anterior = String(v(e || l, 'ID ANTERIOR'));
-      const viejo = vieja[anterior] || null;
       const d = l ? adendumPorLinea[String(l['ID'])] : null;
       const tipo = tipoViejo_(e, l);
       // La línea sin equipo: su NUCO viejo, solo para sus documentos (NUCO ANTERIOR desde el paso 4)
-      const nuco = e ? v(e, 'NUCO') : (v(l, 'NUCO ANTERIOR') || v(viejo, 'NUCO'));
+      const nuco = e ? v(e, 'NUCO') : v(l, 'NUCO ANTERIOR');
       const o = {
         'ID': String(v(e || l, 'ID')), 'ID ANTERIOR': anterior, 'ID APPSHEET': v(e || l, 'ID APPSHEET'),
         'FOLIO': LineasRepo.folioRegistro(tipo, nuco), 'NUMERO TELEFONO': v(l, 'NUMERO TELEFONO'), 'NUCO': nuco, 'TIPO': tipo,
@@ -248,15 +204,11 @@ const LineasLectura = (function () {
         'ORIGEN PLAN': v(d, 'ARCHIVO'),
       };
       ADICIONALES.forEach((c) => { o[c] = v(a, c); });
-      DE_LA_HOJA_VIEJA.forEach((c) => { o[c] = v(e, c) || v(l, c) || v(viejo, c); });
+      DEL_EQUIPO_O_LINEA.forEach((c) => { o[c] = v(e, c) || v(l, c); });
       const ultima = a ? null : (e ? ultimaPorEquipo[String(e['ID'])] : ultimaPorLinea[String(l['ID'])]) || null;
       if (ultima) {
         // Ya pasó por el sistema nuevo: la última asignación (ya cerrada) es su historia
         PERSONA_SIN_ASIGNACION.forEach((c) => { o[c] = v(ultima, c); });
-      } else if (!a && viejo) {
-        const esCodigo = (x) => ESTRUCTURA_ES_CODIGO_RESGUARDO.test(String(x || '').trim().toUpperCase());
-        PERSONA_SIN_ASIGNACION.forEach((c) => { o[c] = v(viejo, c); });
-        if (esCodigo(o['RESPONSABLE'])) o['RESPONSABLE'] = '';
       }
       if (!a && ['VENDIDO', 'DESECHADO'].indexOf(String(o['ESTATUS EQUIPO']).toUpperCase()) >= 0) o['DEPARTAMENTO'] = 'N/A';
       if (esFinal_(e, l)) PERSONA_FINAL.forEach((c) => { o[c] = ''; });
@@ -281,7 +233,7 @@ const LineasLectura = (function () {
   /** Los renglones armados (una vez por ejecución; entre ejecuciones, en caché mientras no cambie ninguna hoja). */
   function filas() {
     if (filas_) return filas_;
-    const nombres = [HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS, HOJA_VIEJA];
+    const nombres = [HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS];
     const crudas = LineasDatos.recordar(CLAVE_CACHE, nombres, armar_, 1800);
     // Al pasar por la caché, las fechas salen como texto ISO: se regresan a Date
     const esIso = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
@@ -331,15 +283,15 @@ const LineasLectura = (function () {
     // También los encabezados de las hojas nuevas: si el armado cambió sus columnas (p. ej. COLOR en EQUIPOS, 3-oct), los
     // guardados (1 h) leerían cada dato en la columna equivocada
     const nuevas = [HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS, 'FACTURAS', 'CUENTAS', 'CATALOGOS'];
-    nuevas.map((n) => 'enc_' + n).concat(['enc_' + HOJA_VIEJA, 'ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS])
+    nuevas.map((n) => 'enc_' + n).concat(['ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS])
       .forEach(LineasDatos.cacheBorrar);
     altas_ = null;
-    LineasDatos.tocar([HOJA_VIEJA, HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS]);
+    LineasDatos.tocar([HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS]);
   }
 
   return {
-    HOJA_VIEJA, PROPIEDAD, PROPIEDAD_RETIRADA, VALOR_NUEVO, HOJAS, ENCABEZADOS,
-    activo, retirada, esVirtual, bloquearEscritura, filas, porNumero, buscar, buscarEnTodo, tipoViejo_, limpiarCaches, esAdendumMasReciente,
+    HOJA_VIEJA, HOJAS, ENCABEZADOS,
+    esVirtual, bloquearEscritura, filas, porNumero, buscar, buscarEnTodo, tipoViejo_, limpiarCaches, esAdendumMasReciente,
     altas, anotarAlta,
     /** Después de escribir en las hojas nuevas: la siguiente lectura vuelve a armar los renglones. */
     olvidar: () => { filas_ = null; },

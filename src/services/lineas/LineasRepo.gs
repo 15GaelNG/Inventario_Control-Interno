@@ -82,10 +82,6 @@ const LineasRepo = (function () {
     noEmpleado: 'NO EMPLEADO', nombre: 'RESPONSABLE', puesto: 'PUESTO', departamento: 'DEPARTAMENTO', area: 'AREA',
     sede: 'SEDE', oficina: 'OFICINA / DESARROLLO', jefeDirecto: 'JEFE DIRECTO', director: 'DIRECTOR', razonSocial: 'RAZON SOCIAL',
   };
-  /** Los 23 campos que registra el bot "CAMBIOS TELEFONIA" del AppSheet (una fila por campo que cambia). */
-  const CAMPOS_BITACORA = ['NUMERO TELEFONO', 'RESPONSABLE', 'EQUIPO', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO',
-    'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO',
-    'RESPONSIVA', 'TIPO', 'COMPAÑIA', 'COSTO PLAN', 'NUCO', 'COMENTARIOS'];
 
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel'];
   // numerosAnteriores: los que tuvo la línea por un cambio de número (8-oct); la búsqueda de la tabla los encuentra
@@ -395,7 +391,7 @@ const LineasRepo = (function () {
     try {
       if (typeof CacheHojas === 'undefined') return;
       const L = typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(TAB.LINEAS) ? LineasLectura : null;
-      const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS, L.HOJA_VIEJA] : [TAB.LINEAS];
+      const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS] : [TAB.LINEAS];
       CacheHojas.versiones(hojas.concat([TAB.MOV, 'APP_RESGUARDOS']).map((n) => [LineasDatos.id(), n]));
     } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
   }
@@ -449,7 +445,7 @@ const LineasRepo = (function () {
     const cambios = { equipos: [], lineas: [], vista: [], quitar: { equipos: [], lineas: [] } };
     const ix = LineasDatos.cacheLeer(CLAVE_INDICE);
     // Hojas nuevas: una línea que se separa de su equipo aparece como registro aparte
-    const todos = (ids || []).concat(LineasLectura.activo() ? LineasEscritura.tocados() : []);
+    const todos = (ids || []).concat(LineasEscritura.tocados());
     let cambiosNumero = null;
     let panel = null;
     todos.filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).forEach((id) => {
@@ -544,133 +540,34 @@ const LineasRepo = (function () {
 
   // ---------------- Escritura: modelo → columnas + bitácora ----------------
 
-  function normalizarComparacion_(v) {
-    if (v instanceof Date) return 'D' + v.getTime();
-    if (v === null || v === undefined) return '';
-    return String(v).trim().toUpperCase();
-  }
-
   function textoBitacora_(v) {
     if (v instanceof Date) return Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy');
     return v === null || v === undefined ? '' : String(v);
   }
 
   /**
-   * Aplica cambios de columnas a una fila de LINEAS TELEFONICAS (recién leída, dentro del candado)
-   * y registra la bitácora como los bots del AppSheet. Recalcula FOLIO si existe.
-   * usuario = { correo, nombre }. Devuelve { idsCambios, idReasignacion, campos: [{campo, antes, despues}], refs }.
-   * Reestructura, etapa 3: con el interruptor de la etapa 2 encendido, los cambios van a las hojas nuevas
-   * (LineasEscritura) y `refs` trae los IDs de equipo, línea, adendum y asignaciones que tocó (para APP_MOVIMIENTOS).
+   * Guarda los cambios de un registro (renglón armado por LineasLectura, recién leído dentro del candado) en las hojas
+   * nuevas (LineasEscritura). usuario = { correo, nombre }. Devuelve { idsCambios, idReasignacion, campos:
+   * [{campo, antes, despues}], refs } (refs: los IDs de equipo, línea, adendum y asignaciones que tocó).
    * opciones.tolerante: lo que no tiene dónde guardarse en las hojas nuevas se ignora (la inspección).
+   * El camino que escribía en LINEAS TELEFONICAS y en la bitácora CAMBIOS se quitó el 21-oct (pendiente 7.13).
    */
   function guardarCambiosRegistro(f, cambios, usuario, ahora, opciones) {
-    if (LineasLectura.activo()) return LineasEscritura.guardar(f, cambios, usuario, ahora, opciones);
-    const t = LineasDatos.tablaFresca(TAB.LINEAS);
-    const efectivos = [];
-    const soloFormato = {}; // NUCO "5" → "0005": se escribe homologado, pero no es un cambio para la bitácora
-    const nuevo = Object.assign({}, f);
-    Object.keys(cambios).forEach((c) => {
-      if (LineasDatos.colIndice(t, c) < 0) return;
-      const antes = col(f, c);
-      if (normalizarComparacion_(antes) === normalizarComparacion_(cambios[c])) return;
-      nuevo[t.encabezados[LineasDatos.colIndice(t, c)]] = cambios[c];
-      if (LineasDatos.normCol(c) === 'NUCO' && LineasUtil.nucoVisible(antes) === LineasUtil.nucoVisible(cambios[c])) {
-        soloFormato[c] = cambios[c];
-        return;
-      }
-      efectivos.push({ campo: c, antes: antes, despues: cambios[c] });
-    });
-    if (!efectivos.length && !Object.keys(soloFormato).length) return { idsCambios: [], idReasignacion: null, campos: [] };
-
-    const escribir = Object.assign({}, soloFormato);
-    efectivos.forEach((e) => { escribir[e.campo] = e.despues; });
-    const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
-    if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
-    conPersona_(t, escribir, nuevo);
-    LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
-
-    const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
-      // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
-      'ID': idCambio_(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
-      'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
-      'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
-    }));
-    // Mismo valor en ID y en ID_CAMBIO: la hoja tiene una u otra según esté o no migrada
-    bitacora.forEach((b) => { b['ID_CAMBIO'] = b['ID']; });
-    LineasDatos.agregarFilas(TAB.CAMBIOS, bitacora);
-
-    // HISTORIAL_REASIGNACIONES ya no se escribe (módulo retirado el 30-sep): el cambio de responsable queda en la
-    // bitácora CAMBIOS y en el movimiento de APP_MOVIMIENTOS de la operación.
-    const idReasignacion = null;
-    return {
-      idsCambios: bitacora.map((b) => b['ID']),
-      idReasignacion: idReasignacion,
-      campos: efectivos.map((e) => ({ campo: e.campo, antes: textoBitacora_(e.antes), despues: textoBitacora_(e.despues) })),
-      refs: [f['ID']],
-    };
+    return LineasEscritura.guardar(f, cambios, usuario, ahora, opciones);
   }
 
-  /**
-   * Nueva fila en LINEAS TELEFONICAS (con FOLIO calculado).
-   * Reestructura, etapa 3: con el interruptor encendido crea equipo, línea, adendum y asignación en las hojas nuevas
-   * (LineasEscritura), pone en datos.ID el ID del registro y regresa { id, refs }.
-   */
+  /** Alta: crea equipo, línea, adendum y asignación en las hojas nuevas (LineasEscritura), pone en datos.ID el ID del registro y regresa { id, refs }. */
   function agregarRegistro(datos) {
-    if (LineasLectura.activo()) return LineasEscritura.agregar(datos);
-    const t = LineasDatos.tablaFresca(TAB.LINEAS);
-    const tipo = (datos['TIPO'] || '').toUpperCase();
-    if (LineasDatos.colIndice(t, 'FOLIO') >= 0) datos['FOLIO'] = folioRegistro(tipo, datos['NUCO']);
-    conPersona_(t, datos, datos);
-    return LineasDatos.agregarFilas(TAB.LINEAS, [datos])[0];
-  }
-
-  const personas_ = {}; // por ejecución: un resguardo o reasignación masiva calcula una sola vez por persona
-
-  /**
-   * ID PERSONA (catálogo de Ayrton, Capital Humano): no se captura, se calcula del responsable como en Vehículos y
-   * Caja Chica (CapitalHumano.idPara). Solo si en `escribir` cambia alguna columna de la persona (RESPONSABLE,
-   * NO EMPLEADO, EMAIL USUARIO) y la hoja ya tiene la columna. null = todavía no hay PERSONAS: no se toca.
-   */
-  function conPersona_(t, escribir, registro) {
-    if (typeof CapitalHumano === 'undefined' || LineasDatos.colIndice(t, CapitalHumano.COLUMNA) < 0) return;
-    Object.keys(escribir).forEach((c) => { if (LineasDatos.normCol(c) === CapitalHumano.COLUMNA) delete escribir[c]; });
-    const columnas = CapitalHumano.columnasDePersona(TAB.LINEAS);
-    const norm = columnas.map(LineasDatos.normCol);
-    if (!Object.keys(escribir).some((c) => norm.indexOf(LineasDatos.normCol(c)) >= 0)) return;
-    const persona = {};
-    columnas.forEach((c) => { persona[c] = txt(col(registro, c)) || ''; });
-    const clave = JSON.stringify(persona);
-    try {
-      if (!(clave in personas_)) personas_[clave] = CapitalHumano.idPara(TAB.LINEAS, persona);
-      if (personas_[clave] !== null) escribir[CapitalHumano.COLUMNA] = personas_[clave];
-    } catch (err) {
-      console.error('CapitalHumano: no se pudo calcular la persona de la línea: ' + err.message);
-    }
-  }
-
-  /** ID de una fila de la bitácora CAMBIOS (CLI-…). */
-  function idCambio_() {
-    return LineasDatos.nuevoId(TAB.CAMBIOS);
+    return LineasEscritura.agregar(datos);
   }
 
   /**
-   * Registro de la acción en el historial. Con las hojas nuevas (etapa 3, paso 3, §5.5), un renglón en MOVIMIENTOS; sin
-   * ellas, APP_MOVIMIENTOS como antes. datos = { motivo (el comentario, sin el nombre de la acción delante), ticket };
+   * Registro de la acción en el historial: un renglón en MOVIMIENTOS (etapa 3, paso 3, §5.5; APP_MOVIMIENTOS ya no se
+   * escribe, solo se lee en el historial). datos = { motivo (el comentario, sin el nombre de la acción delante), ticket };
    * extra = { refs, detalle: { cambios, inspeccionId, responsivaId }, despues, origen }.
    */
   function registrarMovimiento(tipo, datos, usuario, ahora, extra) {
-    if (typeof LineasLectura !== 'undefined' && LineasLectura.activo()) return registrarEnMovimientos_(tipo, datos, usuario, ahora, extra || {});
-    asegurarPestanaApp(TAB.APP_MOV);
-    const id = LineasDatos.nuevoId(TAB.APP_MOV);
-    LineasDatos.agregarFilas(TAB.APP_MOV, [{
-      'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(',') + ',',
-      'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',
-      'MOTIVO': txt(datos.motivo) || '', 'TICKET': txt(datos.ticket) || '',
-      'USUARIO_CORREO': usuario.correo, 'USUARIO_NOMBRE': usuario.nombre,
-      'ANTES_JSON': JSON.stringify(extra.antes || {}), 'DESPUES_JSON': JSON.stringify(extra.despues || {}),
-      'DETALLE_JSON': JSON.stringify(extra.detalle || {}),
-    }]);
-    return id;
+    return registrarEnMovimientos_(tipo, datos, usuario, ahora, extra || {});
   }
 
   /** Lo que no es un cambio en el alta: IDs, campos calculados y los de la pantalla (empiezan con _). */
@@ -1618,7 +1515,7 @@ const LineasRepo = (function () {
 
   return {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
-    COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE, CAMPOS_BITACORA,
+    COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE,
     tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro,
     indice, vistaCompleta, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,

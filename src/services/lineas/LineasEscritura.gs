@@ -1,11 +1,11 @@
 /**
  * LineasEscritura.gs
- * Etapa 3, paso 1 de la implementación de las partes 4 y 5 (migracion/PLAN_REESTRUCTURA_LINEAS.md §I.6): con el
- * interruptor de la etapa 2 encendido (LINEAS_LECTURA = ESTRUCTURA), guardar escribe en las hojas nuevas.
+ * Etapa 3, paso 1 de la implementación de las partes 4 y 5 (migracion/PLAN_REESTRUCTURA_LINEAS.md §I.6): guardar
+ * escribe en las hojas nuevas (el interruptor LINEAS_LECTURA y el guardado en la hoja vieja se quitaron el 21-oct, 7.13).
  *
  * Todo cambio al inventario pasa por LineasRepo.guardarCambiosRegistro (editar, cambiar estatus, reasignar, mandar a
- * resguardo o a cancelación, la bandeja de Pau y la inspección) o por LineasRepo.agregarRegistro (alta). Con el
- * interruptor encendido, esas dos funciones llaman a este archivo, que reparte cada columna de la hoja vieja a su hoja:
+ * resguardo o a cancelación, la bandeja de Pau y la inspección) o por LineasRepo.agregarRegistro (alta). Esas dos
+ * funciones llaman a este archivo, que reparte cada columna de la hoja vieja a su hoja:
  *   EQUIPOS       EQUIPO (→ MODELO), COLOR, IMEI, ACCESORIOS, PIN EQUIPO, PATRON, CONTRASEÑA MODEM, ESTATUS EQUIPO, NUCO y
  *                 PIN WHATSAPP (del equipo desde el 13-oct, pendiente 2.25: se borra cuando la línea deja al equipo)
  *   LINEAS        NUMERO TELEFONO, NUMERO SIM, COMPAÑIA, RAZON SOCIAL y ESTATUS LINEA
@@ -566,6 +566,6 @@ const LineasEscritura = (function () {
     ADICIONALES, guardar, agregar, hojasEnMemoria, separarLinea,
     /** Registros que aparecieron en esta ejecución (para refrescar el índice sin recargar). */
     tocados: () => tocados_.slice(),
-    _limpio: limpio_, _clase: clase_,
+    _limpio: limpio_,
   };
 })();

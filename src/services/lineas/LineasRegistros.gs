@@ -505,16 +505,6 @@ const LineasRegistros = (function () {
 
   // ---------------- Guardar ----------------
 
-  /**
-   * COLOR es una columna real del sistema nuevo (en AppSheet es virtual): se crea si falta. Con las hojas nuevas
-   * (reestructura) LINEAS TELEFONICAS ya no se toca.
-   */
-  function asegurarEsquema_() {
-    if (LineasLectura.activo()) return;
-    const tabla = LineasDatos.tablaFresca(LineasRepo.TAB.LINEAS);
-    if (LineasDatos.colIndice(tabla, 'COLOR') < 0) LineasDatos.asegurarPestana(LineasRepo.TAB.LINEAS, ['COLOR']);
-  }
-
   /** Columnas que se escriben en la hoja (las del formulario, sin las calculadas). */
   function columnasEscribibles_(elementos) {
     return elementos.filter((e) => e.tipo === 'campo' && e.control !== 'calculado' && e.control !== 'adicionales' && !e.soloLectura &&
@@ -589,7 +579,6 @@ const LineasRegistros = (function () {
   }
 
   function crear(datos, usuario) {
-    asegurarEsquema_();
     const comentario = comentarioObligatorio_(datos, 'de dónde sale este registro');
     LineasUtil.exigirPinEquipo(datos);
     const enviados = (datos && datos.valores) || datos || {};
@@ -614,10 +603,9 @@ const LineasRegistros = (function () {
       ? lineaParaVincular_(r.valores[LINEA_VINCULAR], valores) : null;
     if (vinculada) COLUMNAS_LINEA_NUEVA.forEach((c) => { valores[c] = ''; });
     valores.TIPO = tipoAutomatico_(parte, valores, '');
-    // Con las hojas nuevas, el ID del registro lo pone agregarRegistro (el del equipo o el de la línea)
-    const estructura = LineasLectura.activo();
+    // El ID del registro lo pone agregarRegistro (el del equipo o el de la línea)
     const ahora = new Date();
-    valores.ID = estructura ? '' : LineasDatos.nuevoId(LineasRepo.TAB.LINEAS);
+    valores.ID = '';
     valores['FECHA REGISTRO'] = ahora;
     let tocados = [];
     LineasDatos.conCandado(() => {
@@ -679,7 +667,6 @@ const LineasRegistros = (function () {
   }
 
   function editar(id, datos, usuario, puedeVerSecretos) {
-    asegurarEsquema_();
     LineasUtil.exigirPinEquipo(datos);
     const enviados = (datos && datos.valores) || datos || {};
     const resultado = LineasDatos.conCandado(() => {

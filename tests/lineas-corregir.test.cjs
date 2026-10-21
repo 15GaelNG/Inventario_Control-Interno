@@ -110,9 +110,8 @@ test('responsable en blanco en el equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-R
     buscarFilas: (n, col, valor) => (hojas[n] || []).map((f, i) => (String(f[col]) === valor ? i + 2 : 0)).filter(Boolean),
     leerFilas: (pedidos) => pedidos.map((p) => p.filas.map((i) => Object.assign({ _fila: i }, hojas[p.tabla][i - 2]))),
   };
-  const L = new Function('LineasDatos', 'LineasRepo', 'PropertiesService', 'ESTRUCTURA_ES_CODIGO_RESGUARDO', 'soloEditor_',
-    read('src/services/lineas/LineasLectura.gs') + '; return LineasLectura;')(LineasDatos, { folioRegistro: () => '', borrarCaches: () => {} },
-    { getScriptProperties: () => ({ getProperty: () => 'ESTRUCTURA' }) }, /^$/, () => {});
+  const L = new Function('LineasDatos', 'LineasRepo', read('src/services/lineas/LineasLectura.gs') + '; return LineasLectura;')(
+    LineasDatos, { folioRegistro: () => '', borrarCaches: () => {} });
   const por = (id) => L.filas().filter((f) => f.ID === id)[0];
   assert.equal(por('EQU-V').RESPONSABLE, '');
   assert.equal(por('EQU-V')['NO EMPLEADO'], '');
