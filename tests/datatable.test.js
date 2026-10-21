@@ -260,6 +260,28 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   buscarRevela.value = ''; buscarRevela.dispatchEvent(new window.Event('input', { bubbles: true }));
   tRevela.destruir();
 
+  console.log('12d. Buscar también trae columnasCompletas sola (antes solo pasaba al abrir "Vista"; usuario, 21-oct: "34 columnas más disponibles" era el aviso de que faltaban)');
+  let cajaCompletas = null;
+  const tCompletas = window.DataTable.crear((cajaCompletas = doc.body.appendChild(doc.createElement('div'))), {
+    idCampo: 'ID',
+    columnas: [{ campo: 'FOLIO', titulo: 'Folio' }],
+    columnasCompletas: {
+      idHoja: 'ID',
+      cargar: async () => [
+        { ID: 1, FOLIO: 'F001', RESPONSABLE: 'FULGENCIO PEREZ' },
+        { ID: 2, FOLIO: 'F002', RESPONSABLE: 'OTRA PERSONA' },
+      ],
+    },
+  });
+  tCompletas.setDatos([{ ID: 1, FOLIO: 'F001' }, { ID: 2, FOLIO: 'F002' }]);
+  const buscarCompletas = cajaCompletas.querySelector('.dt-buscar');
+  buscarCompletas.value = 'fulgencio'; buscarCompletas.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  ok(cajaCompletas.querySelectorAll('tbody tr[data-id]').length === 1, 'tras cargar columnasCompletas, buscar por RESPONSABLE encuentra la fila 1');
+  ok(!tCompletas.getVista().ocultas.includes('RESPONSABLE'), 'RESPONSABLE se revela sola: fue la única que explicó el match');
+  buscarCompletas.value = ''; buscarCompletas.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tCompletas.destruir();
+
   console.log('13. Atajos de fecha y "solo este valor"');
   click($('.dt-btn-filtro[data-campo="FECHA"]'));
   ok($$('.dt-popover [data-preset]').length === 6, 'filtro de fecha ofrece 6 atajos');
