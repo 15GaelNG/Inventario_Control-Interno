@@ -1213,7 +1213,11 @@
           return;
         }
         if (!pagina.length) {
-          const mensaje = st.datos.length ? 'Ningún registro coincide con los filtros' : cfg.textoVacio;
+          // Mientras se trae columnasCompletas, un "ningún registro coincide" sería mentira: todavía
+          // no se sabe (la búsqueda puede estar pegándole a una columna que ni siquiera ha llegado;
+          // usuario, 21-oct: "me dice que ningún registro coincide pero a la vez está cargando").
+          const buscando = st.columnasExtra.cargando && st.busqueda.trim();
+          const mensaje = buscando ? 'Buscando en todas las columnas…' : (st.datos.length ? 'Ningún registro coincide con los filtros' : cfg.textoVacio);
           tbody.innerHTML = `<tr><td class="dt-vacio" colspan="${nColumnas}">${esc(mensaje)}</td></tr>`;
           return;
         }
