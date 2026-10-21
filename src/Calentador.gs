@@ -24,16 +24,22 @@ function pasosCalentador_() {
     ['Inspecciones', () => InspeccionesService.calentar()],
     ['Verificaciones', () => VerificacionesService.calentar()],
     ['Tickets', () => TicketsService.calentar()],
+    ['Tickets (todas las columnas)', () => TicketsService.calentarCompleto()],
     // Compara los pendientes de inspección "sin cargar" contra lo que ya se sincronizó de Help
     // Desk (no llama al Help Desk ella misma: ver la nota de credenciales en
     // PendientesInspeccionService.revisarCargaHelpdesk)
     ['Tickets de inspección (match con Help Desk)', () => PendientesInspeccionService.revisarCargaHelpdesk()],
     ['Incidencias', () => IncidenciasService.calentar()],
     ['Cajas chicas', () => CajasChicasService.calentar()],
+    ['Cajas chicas (todas las columnas)', () => CajasChicasService.calentarCompleto()],
     ['Arqueos', () => ArqueosService.calentar()],
+    ['Arqueos (todas las columnas)', () => ArqueosService.calentarCompleto()],
     ['Cambios de monto CCH', () => CambiosMontoCCHService.calentar()],
+    ['Cambios de monto CCH (todas las columnas)', () => CambiosMontoCCHService.calentarCompleto()],
     ['Cambios de vehículos', () => CambiosVehiculosService.calentar()],
+    ['Cambios de vehículos (todas las columnas)', () => CambiosVehiculosService.calentarCompleto()],
     ['Reasignaciones', () => ReasignacionesVehicularesService.calentar()],
+    ['Reasignaciones (todas las columnas)', () => ReasignacionesVehicularesService.calentarCompleto()],
     ['Sensores', () => SensoresService.calentar()],
     ['Hologramas', () => HologramasService.calentar()],
     // Antes de calentar la lista de Uber, no después: sincronizarBajas escribe en la hoja, y
@@ -41,6 +47,7 @@ function pasosCalentador_() {
     // así la caché que se arma ya trae las bajas del día, sin un segundo round-trip.
     ['Uber (bajas automáticas)', () => UberService.sincronizarBajas()],
     ['Uber', () => UberService.calentar()],
+    ['Uber (todas las columnas)', () => UberService.calentarCompleto()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
     ['Líneas (índice)', () => LineasRepo.indice(true)],
     // Las fotos de perfil del directorio: se rehacen cada 3 h (casi nunca cambian)

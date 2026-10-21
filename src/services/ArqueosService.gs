@@ -997,6 +997,7 @@ const ArqueosService = (function () {
     calentar: () => HojaServicio.calentar(ARQUEOS),
     /** Todas las columnas de TODOS los arqueos (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(ARQUEOS, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(ARQUEOS),
     /** Registro completo por ID ARQUEO (para el modal de detalle/editar) */
     buscarPorId: (token, id) => HojaServicio.buscarPorId(ARQUEOS, token, id),
     /** Arqueos de una sola caja chica (ficha de Caja Chica) */

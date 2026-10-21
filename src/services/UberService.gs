@@ -92,6 +92,7 @@ const UberService = (function () {
     sincronizarBajas,
     /** Todas las columnas de TODOS los usuarios (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(UBER, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(UBER),
     buscarPorId: (token, id) => HojaServicio.buscarPorId(UBER, token, id),
     crear: (token, datos) => HojaServicio.crear(UBER, token, datos),
     actualizar: (token, id, cambios) => HojaServicio.actualizar(UBER, token, id, cambios),
