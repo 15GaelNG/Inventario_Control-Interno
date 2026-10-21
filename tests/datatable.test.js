@@ -276,11 +276,13 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   console.log('12d-bis. Buscar y abrir "Vista" casi al mismo tiempo no duplica la carga, y el menú se actualiza solo al terminar');
   const buscarPre = cajaPre.querySelector('.dt-buscar');
   buscarPre.value = 'fulgencio'; buscarPre.dispatchEvent(new window.Event('input', { bubbles: true }));
+  ok(!cajaPre.querySelector('.dt-barra-carga').hidden, 'la barra de carga se ve desde que arranca la carga en segundo plano (colchón visible, usuario 21-oct)');
   click(cajaPre.querySelector('.dt-btn-columnas'));   // casi a la vez que el buscador, antes de que termine de cargar
   ok(doc.body.querySelector('.dt-popover').textContent.includes('Cargando'), 'el menú Vista refleja "Cargando…" aunque la carga la haya disparado el buscador, no él');
   await new Promise((r) => setTimeout(r, 0));
   ok(vecesCargada === 1, 'una sola llamada real al servidor, aunque dos cosas la hayan pedido');
   ok(doc.body.querySelector('.dt-popover').textContent.includes('Responsable'), 'el menú Vista ya muestra la columna nueva al terminar, sin tener que cerrarlo y abrirlo');
+  ok(cajaPre.querySelector('.dt-barra-carga').hidden, 'y la barra de carga se quita sola al terminar');
   buscarPre.value = ''; buscarPre.dispatchEvent(new window.Event('input', { bubbles: true }));
   tPre.destruir();
 
