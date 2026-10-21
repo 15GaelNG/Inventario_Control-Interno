@@ -6926,16 +6926,33 @@
      * qué vuelve a como estaba antes de mandarlo y qué se queda porque alguien lo cambió después, y pide el comentario.
      * `ids`: de equipos (inventario) o de renglones (panel). alTerminar(r) con lo que contestó el servidor.
      */
-    function quitarDelPanel(ids, alTerminar) {
+    /**
+     * Lo que regresa y lo que se queda de un equipo (Quitar del panel) o de una línea (Retirar cancelación): tabla Campo |
+     * Hoy | Queda. `q` = { omitir, regresa: [{ campo, de, a, nota? }], seQueda: [{ campo, valor, motivo }] }.
+     */
+    function tablaRegreso(q, texto, sinCambios) {
+      if (q.omitir) return '<p class="ln-tenue">' + esc(q.omitir) + '</p>';
+      if (!q.regresa.length && !q.seQueda.length) return '<p class="ln-tenue">' + esc(sinCambios) + '</p>';
       const etiqueta = (c) => c.charAt(0) + c.slice(1).toLowerCase();
       const fila = (campo, hoy, queda) => '<tr><td>' + esc(etiqueta(campo)) + '</td><td>' + hoy + '</td><td>' + queda + '</td></tr>';
+      const minuscula = (t) => esc(t.charAt(0).toLowerCase() + t.slice(1));
+      return '<p class="ln-quitar-texto">' + esc(texto) + '</p><table class="ln-quitar-tabla"><thead><tr><th>Campo</th><th>Hoy</th><th>Queda</th></tr></thead><tbody>' +
+        q.regresa.map((x) => fila(x.campo, '<span class="ln-tenue">' + guion(x.de) + '</span>', icono('undo-2', 'ln-icon-sm') + ' ' + guion(x.a) +
+          (x.nota ? ' <span class="ln-chip ambar">' + minuscula(x.nota) + '</span>' : ''))).join('') +
+        q.seQueda.map((x) => fila(x.campo, guion(x.valor), '<span class="ln-chip ambar">Se queda: ' + minuscula(x.motivo) + '</span>')).join('') +
+        '</tbody></table>';
+    }
+
+    /** Retirar cancelación (pendiente 3.14): la línea vuelve a como estaba antes de mandarla a cancelar. */
+    function vistaRetiro(ids) {
+      return llamar('apiLineasVistaRetirarCancelacion', ids).then((v) => v.filas.map((q) => '<div class="ln-quitar"><p class="ln-fuerte">Línea ' + esc(q.numero || '—') +
+        (q.nuco ? ' · NUCO ' + esc(q.nuco) : '') + '</p>' + tablaRegreso(q, 'La línea vuelve a como estaba antes de mandarla a cancelar:', 'Sin cambios que regresar: solo sale de Cancelaciones.') +
+        '</div>').join(''));
+    }
+
+    function quitarDelPanel(ids, alTerminar) {
       const cuerpo = llamar('apiLineasVistaQuitarPanel', ids).then((v) => v.filas.map((q) => '<div class="ln-quitar"><p class="ln-fuerte">NUCO ' + esc(q.nuco || '—') +
-        (q.modelo ? ' · ' + esc(q.modelo) : '') + '</p>' + (q.omitir ? '<p class="ln-tenue">' + esc(q.omitir) + '</p>'
-        : (!q.regresa.length && !q.seQueda.length ? '<p class="ln-tenue">Sin cambios que regresar: solo sale del panel.</p>'
-          : '<p class="ln-quitar-texto">El equipo vuelve a como estaba antes de mandarlo:</p><table class="ln-quitar-tabla"><thead><tr><th>Campo</th><th>Hoy</th><th>Queda</th></tr></thead><tbody>' +
-            q.regresa.map((x) => fila(x.campo, '<span class="ln-tenue">' + guion(x.de) + '</span>', icono('undo-2', 'ln-icon-sm') + ' ' + guion(x.a))).join('') +
-            q.seQueda.map((x) => fila(x.campo, guion(x.valor), '<span class="ln-chip ambar">Se queda: ' + esc(x.motivo.charAt(0).toLowerCase() + x.motivo.slice(1)) + '</span>')).join('') +
-            '</tbody></table>')) + '</div>').join(''));
+        (q.modelo ? ' · ' + esc(q.modelo) : '') + '</p>' + tablaRegreso(q, 'El equipo vuelve a como estaba antes de mandarlo:', 'Sin cambios que regresar: solo sale del panel.') + '</div>').join(''));
       return pedirDatos('Quitar del panel', '', [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
         'Quitar del panel', { peligro: true, cuerpo: cuerpo, espera: 'Quitando del panel', alConfirmar: (datos) => llamar('apiLineasQuitarDelPanel', ids, datos) })
         .then((r) => {
@@ -7017,8 +7034,9 @@
       async function paso(accion, filas, opciones) {
         const o = opciones || {};
         const detalle = filas.map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || f.CANCELACION || ''));
+        // o.cuerpo (Retirar cancelación): la ventana ya dice qué pasa con cada una, sin la lista
         const r = await pedirDatos(o.titulo, o.mensaje, o.campos || [], o.boton, {
-          detalle: detalle, peligro: !!o.peligro, espera: o.espera || (o.hecho + '…'),
+          detalle: o.cuerpo ? [] : detalle, cuerpo: o.cuerpo, peligro: !!o.peligro, espera: o.espera || (o.hecho + '…'),
           alConfirmar: (extra) => llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra),
         });
         if (!r) return;
@@ -7058,9 +7076,9 @@
             alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
               mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
               peligro: true, hecho: 'Canceladas', inventario: true, espera: 'Cancelando ' + miles(filas.length) + ' línea(s)' }) },
-          // Solo Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): la línea deja de estar en proceso
-          { icono: 'undo-2', texto: 'Retirar cancelación', titulo: 'Ya no se cancela: sale de Cancelaciones (queda en el historial) y la línea deja de estar en proceso', minimo: 1,
-            alHacer: (filas) => paso('RETIRAR_CANCELACION', filas, { titulo: 'Retirar cancelación', mensaje: miles(filas.length) + ' línea(s) pasan a RETIRADA; la línea queda DISPONIBLE (o en USO si sigue con su equipo).',
+          // Solo Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): la línea vuelve a como estaba antes (3.14, 21-oct)
+          { icono: 'undo-2', texto: 'Retirar cancelación', titulo: 'Ya no se cancela: sale de Cancelaciones (queda en el historial) y la línea vuelve a como estaba', minimo: 1,
+            alHacer: (filas) => paso('RETIRAR_CANCELACION', filas, { titulo: 'Retirar cancelación', mensaje: '', cuerpo: vistaRetiro(filas.map((f) => f.ID)),
               campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Retirar cancelación', hecho: 'Retiradas', inventario: true,
               espera: 'Retirando ' + miles(filas.length) + ' cancelación(es)' }) },
         ],

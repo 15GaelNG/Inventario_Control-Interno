@@ -781,6 +781,9 @@ function apiLineasBandejaResguardos(token) {
 function apiLineasAccionBandejaResguardo(token, accion, ids, datos) {
   return TelefoniaService.accionBandejaResguardo(token, accion, ids, datos);
 }
+function apiLineasVistaRetirarCancelacion(token, ids) {
+  return TelefoniaService.vistaRetirarCancelacion(token, ids);
+}
 function apiLineasMarcarNotificaciones(token, ids) {
   return TelefoniaService.marcarNotificaciones(token, ids);
 }

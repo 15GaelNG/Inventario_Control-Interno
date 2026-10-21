@@ -786,30 +786,6 @@ const LineasResguardos = (function () {
   }
 
   /**
-   * Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): el renglón queda RETIRADA (en el historial) y la línea
-   * deja EN PROCESO DE CANCELACION: DISPONIBLE, o USO si sigue en un equipo con persona. datos = { comentario }.
-   */
-  function retirarCancelacion(ids, datos, usuario) {
-    exigirAprobador_(usuario);
-    const comentario = txt((datos || {}).comentario);
-    if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial de la línea).');
-    asegurarBandeja_();
-    const porId = {};
-    const r = actualizar_(ids, (x) => {
-      const actual = txt(x['CANCELACION']);
-      if (EN_CURSO.indexOf(actual) < 0) return { omitir: actual ? 'Ya estaba ' + actual.toLowerCase() : 'Su línea no va a cancelación' };
-      porId[txt(x['ID'])] = x;
-      return { 'CANCELACION': FASE.RETIRADA, 'RETIRADO_EN': new Date(), 'RETIRO': usuario.nombre, 'RETIRO_MOTIVO': comentario };
-    });
-    espejar_(r.hechos, (f) => {
-      if (may(LineasUtil.col(f, 'ESTATUS LINEA')) !== LINEA_CANCELACION) return null;
-      const conPersona = !!LineasRepo.TIPOS_CON_EQUIPO[may(LineasUtil.col(f, 'TIPO'))] && may(LineasUtil.col(f, 'ESTATUS EQUIPO')) === 'USO';
-      return { 'ESTATUS LINEA': conPersona ? 'USO' : LINEA_DISPONIBLE };
-    }, comentario, 'RETIRAR_CANCELACION', usuario, porId, true);
-    return r;
-  }
-
-  /**
    * Lleva un paso de la bandeja al inventario (bitácora CAMBIOS y movimiento, como una edición). deLinea: el paso es
    * de la cancelación y sigue a la línea (registroDeLinea_); si no, al equipo del renglón.
    */
@@ -956,17 +932,21 @@ const LineasResguardos = (function () {
    * verSecretos (ADMIN y el área de Líneas: TelefoniaService.puedeVerSecretos_).
    */
   function vistaQuitar(ids, verSecretos) {
-    const oculto = (x, c) => (!verSecretos && SECRETOS.indexOf(LineasDatos.normCol(x.campo)) >= 0 ? Object.assign({}, x, c) : x);
     return {
       filas: renglonesParaQuitar_(ids).map((q) => {
         if (q.omitir) return { id: q.id, nuco: q.nuco, omitir: q.omitir, regresa: [], seQueda: [] };
-        const p = planQuitar_(q.r, q.f, q.ctx);
-        return {
-          id: txt(q.r['ID']), nuco: q.nuco, modelo: txt(LineasUtil.col(q.f, 'EQUIPO')), estado: txt(q.r['ESTADO']), omitir: '',
-          regresa: p.regresa.map((x) => oculto({ campo: x.campo, de: x.de, a: x.a }, { de: x.de ? '••••' : '', a: x.a ? '••••' : '' })),
-          seQueda: p.seQueda.map((x) => oculto(x, { valor: x.valor ? '••••' : '' })),
-        };
+        return Object.assign({ id: txt(q.r['ID']), nuco: q.nuco, modelo: txt(LineasUtil.col(q.f, 'EQUIPO')), estado: txt(q.r['ESTADO']), omitir: '' },
+          paraVentana_(planQuitar_(q.r, q.f, q.ctx), verSecretos));
       }),
+    };
+  }
+
+  /** Lo que ve la ventana de Quitar del panel o de Retirar cancelación: los secretos sin su valor si no puede verlos. */
+  function paraVentana_(p, verSecretos) {
+    const oculto = (x, c) => (!verSecretos && SECRETOS.indexOf(LineasDatos.normCol(x.campo)) >= 0 ? Object.assign({}, x, c) : x);
+    return {
+      regresa: p.regresa.map((x) => oculto(Object.assign({ campo: x.campo, de: x.de, a: x.a }, x.nota ? { nota: x.nota } : {}), { de: x.de ? '••••' : '', a: x.a ? '••••' : '' })),
+      seQueda: p.seQueda.map((x) => oculto(x, { valor: x.valor ? '••••' : '' })),
     };
   }
 
@@ -1036,9 +1016,177 @@ const LineasResguardos = (function () {
     return { hechos: hechos, omitidos: omitidos, indice: registros.length ? LineasRepo.refrescarIndice(registros) : null };
   }
 
+  // ---------------- Retirar cancelación (pendientes 3.12 y 3.14) ----------------
+  //
+  // Solo Pau. El renglón queda RETIRADA (en el historial) y la línea vuelve a como estaba antes de mandarla a cancelar,
+  // con la misma lógica de Quitar del panel: regresa lo que nadie tocó y lo que alguien cambió después se queda (usuario,
+  // 21-oct). La que se separó al mandar su equipo a resguardo vuelve a ese equipo, con su PIN de WhatsApp, si el equipo no
+  // tiene otra línea. Su estatus es el de antes, salvo USO con un equipo que ya no está en USO: queda DISPONIBLE.
+
+  /** Donde la línea puede volver: un equipo en USO o guardado (no vendido ni dado de baja). */
+  const VUELVE_A = ['USO'].concat(ESTATUS_EQUIPO_RESGUARDO);
+
+  /**
+   * Lo que cambió el envío que mandó la línea a cancelación: { cambios, equipo }. El del resguardo (el renglón viejo que
+   * junta los dos, o el del equipo mandado a la misma hora con esa línea) dice también de qué equipo salió; si no hay, el
+   * movimiento CANCELACION_LINEA de la línea (Mandar a cancelación, Desvincular). Sin ninguno, cambios vacíos.
+   */
+  function envioDeCancelacion_(r, filas, ix, fl) {
+    const t = r['FECHA'] instanceof Date ? r['FECHA'].getTime() : 0;
+    const cerca = (x) => x['FECHA'] instanceof Date && Math.abs(x['FECHA'].getTime() - t) < 120000;
+    const n = LineasUtil.digitos(r['NUMERO']);
+    const delEquipo = txt(r['ESTADO']) ? r
+      : filas.filter((s) => s !== r && txt(s['ESTADO']) && n && LineasUtil.digitos(s['LINEA_AL_MANDAR']) === n && cerca(s))[0];
+    const e = delEquipo ? ix.porId[txt(delEquipo['REGISTRO_ID'])] : null;
+    if (e) return { cambios: cambiosDelEnvio_(delEquipo, e), equipo: e };
+    const MOV = LineasRepo.TAB.MOV;
+    const ids = [txt(r['ID_LINEA']), fl ? txt(LineasUtil.col(fl, 'ID LINEA')) : ''].filter(Boolean);
+    if (!MOV || !LineasDatos.existeTabla(MOV) || !ids.length) return { cambios: [], equipo: null };
+    const nums = LineasDatos.buscarFilasVarios(MOV, 'ID LINEA', ids, true);
+    const distancia = (m) => (m['FECHA'] instanceof Date ? Math.abs(m['FECHA'].getTime() - t) : Infinity);
+    const m = nums.length ? LineasDatos.leerFilas([{ tabla: MOV, filas: nums }])[0]
+      .filter((x) => txt(x['ACCION']) === 'CANCELACION_LINEA' && cerca(x)).sort((a, b) => distancia(a) - distancia(b))[0] : null;
+    try { return { cambios: m ? JSON.parse(txt(m['CAMBIOS']) || '[]') : [], equipo: null }; } catch (err) { return { cambios: [], equipo: null }; }
+  }
+
+  /**
+   * { fl, regresa: [{ campo, de, a, nota?, equipo? }], seQueda: [{ campo, valor, motivo }] } del renglón de cancelación `r`.
+   * `equipo` (en NUCO) = ID del equipo al que vuelve la línea; `nota` = por qué el estatus no es el de antes.
+   */
+  function planRetirar_(r, ctx) {
+    const fl = registroDeLinea_(r, ctx.ix);
+    if (!fl) return { fl: null, regresa: [], seQueda: [{ campo: 'NUMERO TELEFONO', valor: '', motivo: 'La línea ya no está en el inventario' }] };
+    const envio = envioDeCancelacion_(r, ctx.filas, ctx.ix, fl);
+    const antes = {};
+    envio.cambios.forEach((c) => { const k = LineasDatos.normCol(txt(c.campo)); if (k && !(k in antes)) antes[k] = txt(c.antes); });
+    const regresa = [];
+    const seQueda = [];
+    let equipo = LineasRepo.TIPOS_CON_EQUIPO[may(LineasUtil.col(fl, 'TIPO'))] ? fl : null;
+    const nucoDe = (f) => LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '';
+    // La que se separó de su equipo al mandarlo a resguardo vuelve a él
+    const e = envio.equipo;
+    const numero = LineasUtil.digitos(LineasUtil.col(fl, 'NUMERO TELEFONO'));
+    if (!equipo && e && numero && LineasUtil.digitos(antes['NUMERO TELEFONO']) === numero) {
+      const otra = txt(LineasUtil.col(e, 'NUMERO TELEFONO'));
+      const estatus = may(LineasUtil.col(e, 'ESTATUS EQUIPO'));
+      let motivo = '';
+      if (otra) motivo = 'El NUCO ' + nucoDe(e) + ' ya tiene la línea ' + otra;
+      else if (VUELVE_A.indexOf(estatus) < 0) motivo = 'El NUCO ' + nucoDe(e) + ' está en ' + (estatus || 'otro estatus');
+      if (motivo) seQueda.push({ campo: 'NUCO', valor: '', motivo: motivo });
+      else {
+        regresa.push({ campo: 'NUCO', de: '', a: nucoDe(e), equipo: txt(e['ID']) });
+        equipo = e;
+        const pin = antes['PIN WHATSAPP'];
+        const pinHoy = txt(LineasUtil.col(e, 'PIN WHATSAPP'));
+        if (pin && !pinHoy) regresa.push({ campo: 'PIN WHATSAPP', de: '', a: pin });
+        else if (pin && !igualTexto_(pin, pinHoy)) seQueda.push({ campo: 'PIN WHATSAPP', valor: pinHoy, motivo: 'Cambió después' });
+      }
+    }
+    const hoy = txt(LineasUtil.col(fl, 'ESTATUS LINEA'));
+    if (may(hoy) !== LINEA_CANCELACION) {
+      if (hoy) seQueda.push({ campo: 'ESTATUS LINEA', valor: hoy, motivo: 'Cambió después' });
+      return { fl: fl, regresa: regresa, seQueda: seQueda };
+    }
+    const enUso = !!equipo && may(LineasUtil.col(equipo, 'ESTATUS EQUIPO')) === 'USO';
+    let a = may(antes['ESTATUS LINEA']);
+    // Sin el envío (renglón muy viejo): DISPONIBLE, o USO si sigue en un equipo con persona
+    if (!a || a === LINEA_CANCELACION || a === LINEA_SIN_PANEL) a = enUso ? 'USO' : LINEA_DISPONIBLE;
+    let nota = '';
+    if (a === 'USO' && !enUso) {
+      nota = equipo ? 'Antes USO: el NUCO ' + nucoDe(equipo) + ' está en ' + may(LineasUtil.col(equipo, 'ESTATUS EQUIPO')) : 'Antes USO: la línea está sin equipo';
+      a = LINEA_DISPONIBLE;
+    }
+    regresa.push(Object.assign({ campo: 'ESTATUS LINEA', de: hoy, a: a }, nota ? { nota: nota } : {}));
+    return { fl: fl, regresa: regresa, seQueda: seQueda };
+  }
+
+  /** Los renglones de cancelación que se retiran, con su plan (o por qué no). */
+  function renglonesParaRetirar_(ids) {
+    const lista = limpiarIds_(ids);
+    const filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB) : [];
+    const porId = {};
+    filas.forEach((r) => { porId[txt(r['ID'])] = r; });
+    const ctx = { ix: indices_(), filas: filas };
+    return lista.map((id) => {
+      const r = porId[id];
+      const q = { id: id, r: r, nuco: r ? txt(r['NUCO']) : '', numero: r ? txt(r['NUMERO']) : '', omitir: '' };
+      const actual = r ? txt(r['CANCELACION']) : '';
+      if (!r) q.omitir = 'No existe';
+      else if (EN_CURSO.indexOf(actual) < 0) q.omitir = actual ? 'Ya estaba ' + actual.toLowerCase() : 'Su línea no va a cancelación';
+      else q.plan = planRetirar_(r, ctx);
+      return q;
+    });
+  }
+
+  /** La ventana de Retirar cancelación: qué regresa y qué se queda de cada línea (secretos como en Quitar del panel). */
+  function vistaRetirar(ids, verSecretos) {
+    return {
+      filas: renglonesParaRetirar_(ids).map((q) => Object.assign({ id: q.id, nuco: q.nuco, numero: q.numero, omitir: q.omitir },
+        q.omitir ? { regresa: [], seQueda: [] } : Object.assign({ fase: txt(q.r['CANCELACION']) }, paraVentana_(q.plan, verSecretos)))),
+    };
+  }
+
+  /** datos = { comentario, ticket }. Regresa { hechos: [{ id, nuco, aviso? }], omitidos, indice }. */
+  function retirarCancelacion(ids, datos, usuario) {
+    exigirAprobador_(usuario);
+    const d = datos || {};
+    const comentario = txt(d.comentario);
+    if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial de la línea).');
+    const hechos = [];
+    const omitidos = [];
+    const registros = [];
+    LineasDatos.conCandado(() => {
+      asegurarBandeja_();
+      renglonesParaRetirar_(ids).forEach((q) => {
+        if (q.omitir) { omitidos.push({ id: q.id, nuco: q.nuco, motivo: q.omitir }); return; }
+        const ahora = new Date();
+        const p = q.plan;
+        LineasDatos.actualizarFila(TAB, q.r._fila, { 'CANCELACION': FASE.RETIRADA, 'RETIRADO_EN': ahora, 'RETIRO': usuario.nombre,
+          'RETIRO_MOTIVO': comentario, 'ACTUALIZADO_EN': ahora });
+        if (!p.fl) { hechos.push({ id: q.id, nuco: q.nuco, aviso: p.seQueda[0].motivo }); return; }
+        const valor = (c) => (p.regresa.filter((x) => x.campo === c)[0] || {}).a;
+        const estatus = valor('ESTATUS LINEA');
+        const vuelve = p.regresa.filter((x) => x.equipo)[0];
+        const campos = [];
+        const refs = [txt(p.fl['ID'])];
+        const guardar = (f, cambios) => {
+          const g = LineasRepo.guardarCambiosRegistro(f, cambios, usuario, ahora);
+          g.campos.forEach((c) => campos.push(c));
+          (g.refs || []).forEach((x) => refs.push(x));
+        };
+        if (vuelve) {
+          // Suelta queda DISPONIBLE; al ponerla en el equipo toma el estatus que le toca y luego el de antes
+          if (may(LineasUtil.col(p.fl, 'ESTATUS LINEA')) !== LINEA_DISPONIBLE) guardar(p.fl, { 'ESTATUS LINEA': LINEA_DISPONIBLE });
+          liberando_ = txt(q.r['ID']);
+          try {
+            guardar(LineasRepo.leerRegistroObligatorio(vuelve.equipo, 'el equipo'),
+              { 'NUMERO TELEFONO': txt(LineasUtil.col(p.fl, 'NUMERO TELEFONO')), 'NUMERO SIM': txt(LineasUtil.col(p.fl, 'NUMERO SIM')) });
+          } finally { liberando_ = ''; }
+          const e = LineasRepo.leerRegistroObligatorio(vuelve.equipo, 'el equipo');
+          const resto = {};
+          if (valor('PIN WHATSAPP') !== undefined) resto['PIN WHATSAPP'] = valor('PIN WHATSAPP');
+          if (estatus !== undefined && may(LineasUtil.col(e, 'ESTATUS LINEA')) !== may(estatus)) resto['ESTATUS LINEA'] = estatus;
+          if (Object.keys(resto).length) guardar(e, resto);
+          refs.push(vuelve.equipo);
+          registros.push(vuelve.equipo);
+        } else if (estatus !== undefined) {
+          guardar(p.fl, { 'ESTATUS LINEA': estatus });
+        }
+        LineasRepo.registrarMovimiento('RETIRAR_CANCELACION', { motivo: comentario, ticket: txt(d.ticket) }, usuario, ahora, {
+          refs: refs, nuco: vuelve ? vuelve.a : LineasUtil.col(p.fl, 'NUCO') || q.nuco, numero: q.numero,
+          antes: { estatus: LINEA_CANCELACION }, despues: { estatus: estatus || txt(LineasUtil.col(p.fl, 'ESTATUS LINEA')) },
+          detalle: { idsCambios: [], idsReasignacion: [], cambios: campos, resguardo: txt(q.r['ID']) },
+        });
+        registros.push(txt(p.fl['ID']));
+        hechos.push({ id: q.id, nuco: q.nuco });
+      });
+    });
+    return { hechos: hechos, omitidos: omitidos, indice: registros.length ? LineasRepo.refrescarIndice(registros) : null };
+  }
+
   return {
     formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion,
-    retirarCancelacion, vistaQuitar, quitarDelPanel, abiertosPorEquipo, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
+    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
     _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_, _planQuitar: planQuitar_,

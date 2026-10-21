@@ -36,12 +36,13 @@ function cargar(inventario, bandeja, movimientos) {
       const campos = Object.keys(cambios).filter((c) => String(f[c] || '') !== String(cambios[c])).map((c) => ({ campo: c, antes: String(f[c] || ''), despues: String(cambios[c]) }));
       Object.assign(f, cambios);
       escritas.registros.push({ id: f['ID'], cambios: cambios });
-      return { campos: campos, refs: [], idsCambios: [] };
+      return { campos: campos, refs: [f['ID LINEA']].filter(Boolean), idsCambios: [] };
     },
     registrarMovimiento: (tipo, datos, u, ahora, extra) => {
       escritas.movimientos.push({ tipo: tipo, datos: datos, extra: extra });
       const id = 'MVT-' + escritas.movimientos.length;
-      tablas.MOVIMIENTOS.push({ 'ID': id, 'ACCION': tipo, 'FECHA': ahora, 'ID EQUIPO': (extra.refs || []).join(', '), 'CAMBIOS': JSON.stringify((extra.detalle || {}).cambios || []) });
+      const refs = (extra.refs || []).join(', ');
+      tablas.MOVIMIENTOS.push({ 'ID': id, 'ACCION': tipo, 'FECHA': ahora, 'ID EQUIPO': refs, 'ID LINEA': refs, 'CAMBIOS': JSON.stringify((extra.detalle || {}).cambios || []) });
       return id;
     },
     refrescarIndice: () => [],
@@ -52,9 +53,10 @@ function cargar(inventario, bandeja, movimientos) {
       const linea = { 'ID': f['ID LINEA'], 'ID LINEA': f['ID LINEA'], 'TIPO': 'LINEA', 'NUMERO TELEFONO': f['NUMERO TELEFONO'], 'FIN PLAN': f['FIN PLAN'],
         'COMPAÑIA': f['COMPAÑIA'], 'ESTATUS LINEA': (opciones && opciones.estatus) || 'DISPONIBLE' };
       const campos = [{ campo: 'NUMERO TELEFONO', antes: f['NUMERO TELEFONO'], despues: '' }];
+      if (f['PIN WHATSAPP']) campos.push({ campo: 'PIN WHATSAPP', antes: f['PIN WHATSAPP'], despues: '' });
       if (f['ESTATUS LINEA'] !== linea['ESTATUS LINEA']) campos.push({ campo: 'ESTATUS LINEA', antes: f['ESTATUS LINEA'], despues: linea['ESTATUS LINEA'] });
       tablas['LINEAS TELEFONICAS'].push(linea);
-      Object.assign(f, { 'NUMERO TELEFONO': '', 'ID LINEA': '', 'TIPO': 'EQUIPO', 'ESTATUS LINEA': '' });
+      Object.assign(f, { 'NUMERO TELEFONO': '', 'ID LINEA': '', 'TIPO': 'EQUIPO', 'ESTATUS LINEA': '', 'PIN WHATSAPP': '' });
       return { idLinea: linea['ID'], campos: campos, refs: [] };
     },
   };
@@ -393,4 +395,63 @@ test('Quitar del panel regresa la línea que se fue a Cancelaciones si sigue POR
   t2.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0].CANCELACION = 'CARTA FIRMADA';
   assert.deepEqual(t2.R.vistaQuitar(['EQU-6']).filas[0].seQueda.filter((x) => x.campo === 'NUMERO TELEFONO')[0],
     { campo: 'NUMERO TELEFONO', valor: '', motivo: 'Línea 4420060: está en CARTA FIRMADA en Cancelaciones; Pau tiene que retirarla.' });
+});
+
+// Pendiente 3.14 (usuario, 21-oct): al retirar una cancelación, la línea vuelve a como estaba antes de mandarla a cancelar,
+// con la lógica de Quitar del panel (lo que cambió después se queda)
+const pau = { correo: 'pau@x', nombre: 'PAU', puedeAprobar: true };
+
+test('Retirar cancelación: la línea separada al mandar a resguardo vuelve a su equipo con su PIN; DISPONIBLE porque el equipo sigue guardado', () => {
+  const t = cargar([conLinea('EQU-5', '0050', '01/01/2025', { 'RESPONSABLE': 'ANA', 'PIN WHATSAPP': '9999' })], []);
+  t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: { 'EQU-5': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  const canc = t.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0];
+  canc.ID = 'RSG-C';
+  canc.CANCELACION = 'CARTA ENVIADA'; // Pau la retira en cualquier fase en curso
+  assert.deepEqual([eq['NUMERO TELEFONO'], eq['PIN WHATSAPP']], ['', '']);
+  const vista = t.R.vistaRetirar(['RSG-C'], true).filas[0];
+  assert.deepEqual(vista.regresa, [
+    { campo: 'NUCO', de: '', a: '0050' },
+    { campo: 'PIN WHATSAPP', de: '', a: '9999' },
+    { campo: 'ESTATUS LINEA', de: 'EN PROCESO DE CANCELACION', a: 'DISPONIBLE', nota: 'Antes USO: el NUCO 0050 está en RESGUARDO' },
+  ]);
+  assert.equal(t.R.vistaRetirar(['RSG-C']).filas[0].regresa[1].a, '••••', 'sin permiso, el PIN no se ve');
+  assert.throws(() => t.R.retirarCancelacion(['RSG-C'], { comentario: 'ya no' }, usuario), /Solo puedes consultar/);
+  const r = t.R.retirarCancelacion(['RSG-C'], { comentario: 'se queda con ella' }, pau);
+  assert.equal(r.hechos.length, 1);
+  assert.equal(canc.CANCELACION, 'RETIRADA');
+  assert.deepEqual([eq['NUMERO TELEFONO'], eq['PIN WHATSAPP'], eq['ESTATUS LINEA'], eq['ESTATUS EQUIPO']], ['4420050', '9999', 'DISPONIBLE', 'RESGUARDO']);
+  assert.equal(t.escritas.movimientos.slice(-1)[0].tipo, 'RETIRAR_CANCELACION');
+  assert.equal(t.R.vistaRetirar(['RSG-C']).filas[0].omitir, 'Ya estaba retirada');
+});
+
+test('Retirar cancelación: lo que cambió después se queda (el equipo ya tiene otra línea)', () => {
+  const t = cargar([conLinea('EQU-6', '0060', '01/01/2025', { 'PIN WHATSAPP': '1111' })], []);
+  t.R.mandar(['EQU-6'], { comentario: 'renuncia', inspecciones: { 'EQU-6': 'INS-6' }, porEquipo: { 'EQU-6': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  const canc = t.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0];
+  canc.ID = 'RSG-C';
+  eq['NUMERO TELEFONO'] = '4429999';
+  const vista = t.R.vistaRetirar(['RSG-C'], true).filas[0];
+  assert.deepEqual(vista.seQueda, [{ campo: 'NUCO', valor: '', motivo: 'El NUCO 0060 ya tiene la línea 4429999' }]);
+  assert.deepEqual(vista.regresa, [{ campo: 'ESTATUS LINEA', de: 'EN PROCESO DE CANCELACION', a: 'DISPONIBLE', nota: 'Antes USO: la línea está sin equipo' }]);
+  t.R.retirarCancelacion(['RSG-C'], { comentario: 'se queda suelta' }, pau);
+  const linea = t.tablas['LINEAS TELEFONICAS'].filter((x) => x.ID === 'LIN-0060')[0];
+  assert.deepEqual([linea['ESTATUS LINEA'], eq['NUMERO TELEFONO']], ['DISPONIBLE', '4429999']);
+});
+
+test('Retirar cancelación: la mandada sin resguardo regresa a USO con su equipo', () => {
+  const t = cargar([conLinea('EQU-7', '0070', '01/01/2027')], []);
+  t.R.mandarCancelacion(['EQU-7'], { motivoCancelacion: 'CANCELACION ANTICIPADA', comentario: 'ya no se usa' }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  assert.equal(eq['ESTATUS LINEA'], 'EN PROCESO DE CANCELACION');
+  t.tablas.APP_RESGUARDOS[0].ID = 'RSG-7';
+  assert.deepEqual(t.R.vistaRetirar(['RSG-7']).filas[0].regresa, [{ campo: 'ESTATUS LINEA', de: 'EN PROCESO DE CANCELACION', a: 'USO' }]);
+  t.R.retirarCancelacion(['RSG-7'], { comentario: 'siempre no' }, pau);
+  assert.deepEqual([eq['ESTATUS LINEA'], eq['NUMERO TELEFONO']], ['USO', '4420070']);
+  // La pantalla: la ventana de Pau con la misma tabla de Quitar del panel
+  const html = read('src/html/js/lineas.html');
+  assert.match(html, /cuerpo: vistaRetiro\(filas\.map\(\(f\) => f\.ID\)\)/);
+  assert.match(html, /llamar\('apiLineasVistaRetirarCancelacion', ids\)/);
+  assert.match(read('src/ClientApi.gs'), /function apiLineasVistaRetirarCancelacion\(token, ids\)/);
 });
