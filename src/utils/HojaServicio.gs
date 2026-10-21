@@ -284,9 +284,25 @@ const HojaServicio = (function () {
     return listarPor(def, token, 'ID_VEHICULO', idVehiculo, opciones);
   }
 
-  /** Todas las columnas de todos los renglones (exportar / "Vista"), sin caché */
+  /**
+   * Todas las columnas de todos los renglones, guardada igual que listaGuardada_ (se rehace sola
+   * si la hoja cambia). Antes se leía la hoja completa en cada llamada (usuario, 21-oct: "Vista"
+   * de Vehículos tardaba un buen rato la primera vez que alguien la abría). Clave aparte de
+   * claveCache_ (esto no depende de def.columnas: trae TODO, no el resumen armado).
+   */
+  function completoGuardado_(def, rehacer) {
+    return CacheHojas.recordar('hs_completo_' + def.hoja, [[libro(def), nombreHoja(def)]],
+      () => SheetUtils.getAll(libro(def), nombreHoja(def)), rehacer ? SEG_CALIENTE : undefined, rehacer);
+  }
+
+  /** Todas las columnas de todos los renglones (exportar / "Vista") */
   function completo(def, token) {
-    return enAlcance_(def, Permisos.puedeLeer(token, def.modulo), SheetUtils.getAll(libro(def), nombreHoja(def)));
+    return enAlcance_(def, Permisos.puedeLeer(token, def.modulo), completoGuardado_(def));
+  }
+
+  /** calentarCompleto(def): para Calentador.gs, igual que calentar() pero de completo() */
+  function calentarCompleto(def) {
+    completoGuardado_(def, true);
   }
 
   /** El renglón completo (todas las columnas, fechas en ISO), o null */
@@ -509,7 +525,7 @@ const HojaServicio = (function () {
 
   return {
     // leer y escribir
-    listar, listarPor, listarPorVehiculo, completo, buscarPorId, crear, actualizar, eliminar, calentar,
+    listar, listarPor, listarPorVehiculo, completo, buscarPorId, crear, actualizar, eliminar, calentar, calentarCompleto,
     // la hoja, para lo propio de cada servicio
     hoja, libro, nombreHoja,
     // valores
