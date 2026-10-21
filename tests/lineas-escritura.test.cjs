@@ -369,3 +369,22 @@ test('rapidez (13-oct): una asignación sin persona deja el ID PERSONA en blanco
     delete globalThis.CapitalHumano;
   }
 });
+
+// Pendiente 2.53 (usuario, 21-oct): SIN BLOQUEO guarda «NO APLICA» en PIN EQUIPO; en blanco, Corregir equipo abría la
+// lista de bloqueo en «Selecciona…». Los demás «no aplica» siguen en blanco
+test('PIN EQUIPO «NO APLICA» (SIN BLOQUEO) se guarda tal cual; los demás «no aplica», en blanco', () => {
+  const t = cargar(BASE);
+  const r = t.guardar('EQU-1', { 'PIN EQUIPO': 'NO APLICA', 'COLOR': 'N/A' });
+  assert.strictEqual(t.hojas.EQUIPOS[0]['PIN EQUIPO'], 'NO APLICA');
+  assert.ok(!t.hojas.EQUIPOS[0]['COLOR']);
+  assert.deepStrictEqual(r.campos.map((c) => c.campo), ['PIN EQUIPO']);
+  t.olvidar();
+  assert.strictEqual(t.registro('EQU-1')['PIN EQUIPO'], 'NO APLICA', 'el renglón armado lo trae para la lista de bloqueo');
+  // Guardar otra vez lo mismo no es un cambio; «N/A» de antes sigue en blanco
+  assert.deepStrictEqual(t.guardar('EQU-1', { 'PIN EQUIPO': 'no aplica' }).campos, []);
+  t.guardar('EQU-1', { 'PIN EQUIPO': 'N/A' });
+  assert.strictEqual(t.hojas.EQUIPOS[0]['PIN EQUIPO'], '');
+  // El alta, igual
+  t.agregar({ 'TIPO': 'EQUIPO', 'NUCO': '0099', 'EQUIPO': 'MOTO', 'IMEI': '999', 'PIN EQUIPO': 'NO APLICA', 'ESTATUS EQUIPO': 'DISPONIBLE' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((e) => e['NUCO'] === '0099')['PIN EQUIPO'], 'NO APLICA');
+});
