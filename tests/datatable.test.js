@@ -260,6 +260,18 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   buscarRevela.value = ''; buscarRevela.dispatchEvent(new window.Event('input', { bubbles: true }));
   tRevela.destruir();
 
+  console.log('12d-pre. columnasCompletas ya está lista sin buscar ni abrir "Vista" (usuario, 21-oct: no quiere esperar ni ver el aviso de "actívalas")');
+  let cajaPre = null;
+  const tPre = window.DataTable.crear((cajaPre = doc.body.appendChild(doc.createElement('div'))), {
+    idCampo: 'ID',
+    columnas: [{ campo: 'FOLIO', titulo: 'Folio' }],
+    columnasCompletas: { idHoja: 'ID', cargar: async () => [{ ID: 1, FOLIO: 'F001', RESPONSABLE: 'FULGENCIO PEREZ' }] },
+  });
+  tPre.setDatos([{ ID: 1, FOLIO: 'F001' }]);
+  await new Promise((r) => setTimeout(r, 0));
+  ok(tPre.getVista().ocultas.includes('RESPONSABLE'), 'ya está en la lista de columnas (oculta, sin marcar) aunque nadie buscó ni abrió "Vista"');
+  tPre.destruir();
+
   console.log('12d. Buscar también trae columnasCompletas sola (antes solo pasaba al abrir "Vista"; usuario, 21-oct: "34 columnas más disponibles" era el aviso de que faltaban)');
   let cajaCompletas = null;
   const tCompletas = window.DataTable.crear((cajaCompletas = doc.body.appendChild(doc.createElement('div'))), {

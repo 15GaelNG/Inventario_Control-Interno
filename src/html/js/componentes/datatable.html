@@ -1494,16 +1494,11 @@
         st.pagina = 1;
         revelarColumnasDeLaBusqueda_();
         render();
-        // Si la hoja tiene más columnas de las que ya trajo la lista (cfg.columnasCompletas) y nadie
-        // abrió "Vista" todavía, buscar sin haberlas traído deja fuera justo lo que no se ve (usuario,
-        // 21-oct: "34 columnas más disponibles" -- ahí es cuando sí se podía buscar por todas). Al
-        // escribir algo se traen una sola vez, igual que al abrir "Vista", y se vuelve a buscar.
+        // Respaldo: si por lo que sea columnasCompletas no se había traído todavía (ver setDatos,
+        // que ya las dispara solas en cuanto llegan los primeros datos), que al menos buscar algo
+        // no se quede corto -- se trae una vez, calladita (ella misma repite la búsqueda al terminar).
         if (texto.trim() && cfg.columnasCompletas && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
-          cargarColumnasCompletas().then(() => {
-            if (normalizar(st.busqueda.trim()) !== normalizar(texto.trim())) return;   // la búsqueda ya cambió
-            revelarColumnasDeLaBusqueda_();
-            render();
-          });
+          cargarColumnasCompletas(undefined, true);
         }
       }
       function limpiarTodo() {
@@ -1738,9 +1733,12 @@
       /**
        * cfg.columnasCompletas = { idHoja, cargar }: trae TODAS las columnas de la hoja del servidor
        * (cargar() → [{ encabezado: valor, … }]) y agrega las que no estaban ya como columnas nuevas
-       * (ocultas, exportables). Se llama una sola vez, automático al abrir "Vista" (ver abrirVista).
+       * (ocultas, exportables). Se llama una sola vez, sola, en cuanto llegan los primeros datos
+       * (ver setDatos) -- para cuando alguien abre "Vista" o busca algo ya están ahí, sin tener que
+       * esperar ni ver un aviso de "actívalas" (usuario, 21-oct). `silencioso` calla el aviso de
+       * éxito (se usa en los disparadores automáticos; abrirVista sigue avisando por si acaso).
        */
-      async function cargarColumnasCompletas(boton) {
+      async function cargarColumnasCompletas(boton, silencioso) {
         if (!cfg.columnasCompletas || st.columnasExtra.cargando || st.columnasExtra.cargadas) return;
         st.columnasExtra.cargando = true;
         try {
@@ -1775,8 +1773,12 @@
             });
 
             st.columnasExtra.cargadas = true;
-            Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
+            if (!silencioso) Notificar.exito(nuevas.length ? `${nuevas.length} columna(s) más disponibles: actívalas en "Vista"` : 'La tabla ya tenía todas las columnas de la base de datos');
           });
+          // Puede haber llegado mientras alguien ya tenía algo escrito en el buscador: que lo encuentre
+          // sin tener que volver a teclear (y repinta por si cambió algo visible, p. ej. para "Vista").
+          revelarColumnasDeLaBusqueda_();
+          render();
         } catch (err) {
           Notificar.error('No se pudieron traer todas las columnas: ' + err.message);
         } finally {
@@ -2822,6 +2824,12 @@
           st.refrescando = false;
           st.error = null;
           if (!st.editando) { render(); refrescarPanel(); }
+          // Con los primeros datos ya en la mesa, trae las columnas completas sola y calladita (usuario,
+          // 21-oct: no quiere esperar a abrir "Vista" ni ver el aviso de "actívalas" -- para cuando las
+          // necesite, ya están ahí, listadas sin marcar, igual que cualquier otra columna oculta).
+          if (cfg.columnasCompletas && st.datos.length && !st.columnasExtra.cargadas && !st.columnasExtra.cargando) {
+            cargarColumnasCompletas(undefined, true);
+          }
         },
         /** Sin datos aún: filas grises. Con datos a la vista: barra de carga arriba, sin borrar lo que se ve. */
         setCargando(valor) {
