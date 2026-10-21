@@ -310,6 +310,7 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   buscarCompletas.value = ''; buscarCompletas.dispatchEvent(new window.Event('input', { bubbles: true }));
   tCompletas.destruir();
 
+
   console.log('13. Atajos de fecha y "solo este valor"');
   click($('.dt-btn-filtro[data-campo="FECHA"]'));
   ok($$('.dt-popover [data-preset]').length === 6, 'filtro de fecha ofrece 6 atajos');
