@@ -160,7 +160,7 @@ const PendientesInspeccionService = (function () {
    * Si el texto no coincide tal cual (el responsable lo editó al pegarlo en Help Desk, o
    * Help Desk aún no se ha sincronizado), esta función simplemente no lo encuentra -- para esos
    * casos está vincularManual(), que Kike dispara a mano desde su vista con el número de ticket
-   * que ya vio ella misma.
+   * que ya vio ella misma (y que, a diferencia de ésta, sí puede ir a traerlo en vivo).
    *
    * OJO -- no llama al Help Desk ella misma: HelpdeskApi.gs necesita el token personal de
    * alguien con sesión ahí (24 h, no hay cuenta de servicio), así que esta función solo lee la
@@ -298,9 +298,14 @@ const PendientesInspeccionService = (function () {
    * Vincula a mano un pendiente SIN CARGAR con un ticket que Kike ya vio ella misma en Help
    * Desk, para cuando revisarCargaHelpdesk() no lo encontró solo (texto irreconocible, o un
    * pendiente hermano de la misma inspección que ganó el desempate). Mismo resultado que un
-   * match automático: CARGADO EN HELPDESK, con el número real y su estatus de allá -- pero el
-   * ticket tiene que estar YA en la copia sincronizada (no se inventa, y esta app no escribe en
-   * Help Desk): si no está, hay que abrir esa pantalla primero para que se sincronice.
+   * match automático: CARGADO EN HELPDESK, con el número real y su estatus de allá.
+   *
+   * Si ese ticket todavía no está en la copia sincronizada (nadie ha abierto la Bandeja con ese
+   * folio reciente), se intenta traer EN VIVO (HelpdeskApi.detalle) con el token de HELPDESK de
+   * quien está vinculando (el mismo `token` de su sesión aquí) -- de paso lo sincroniza a
+   * APP_HELPDESK, como si lo hubiera visto en la Bandeja. Si esa persona no tiene su cuenta de
+   * Help Desk conectada, HelpdeskApi avisa claro ("Conecta tu cuenta del helpdesk primero.");
+   * esta app sigue sin escribir nada allá (solo lee).
    * @return {{vinculado: true, idTicketHelpdesk, estatusHelpdesk: string}}
    */
   function vincularManual(token, id, idTicketHelpdesk) {
@@ -313,8 +318,13 @@ const PendientesInspeccionService = (function () {
     }
     const idBuscado = limpiar_(idTicketHelpdesk);
     if (!idBuscado) throw new Error('Escribe el número de ticket de Help Desk.');
-    const tickets = typeof HelpdeskService !== 'undefined' ? HelpdeskService.copiaLocal_() : [];
-    const ticket = tickets.find((t) => String(t['ID TICKET HD']) === idBuscado);
+    const buscar_ = () => (typeof HelpdeskService !== 'undefined' ? HelpdeskService.copiaLocal_() : [])
+      .find((t) => String(t['ID TICKET HD']) === idBuscado);
+    let ticket = buscar_();
+    if (!ticket && typeof HelpdeskApi !== 'undefined') {
+      HelpdeskApi.detalle(token, idBuscado);
+      ticket = buscar_();
+    }
     if (!ticket) {
       throw new Error('Ese ticket no está en la copia sincronizada de Help Desk todavía: abre esa pantalla ' +
         'para traerlo y vuelve a intentar.');

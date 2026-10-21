@@ -11,10 +11,10 @@ const { crearEntorno } = require('./apps-script-simulado');
 let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
 
-function entorno(ticketsHelpdesk, colaboradores, correos) {
+function entorno(ticketsHelpdesk, colaboradores, correos, helpdeskApi) {
   const e = crearEntorno({ libros: { libro: {} } });
   const tocados = [];
-  Object.assign(e.contexto, {
+  const contexto = {
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'libro' } },
     CacheHojas: { tocarHoja: (hoja) => tocados.push(hoja.getName()), tocar: () => {} },
     HelpdeskService: { copiaLocal_: () => ticketsHelpdesk || [] },
@@ -22,7 +22,9 @@ function entorno(ticketsHelpdesk, colaboradores, correos) {
     HojaServicio: { fechaISO: (v) => (v instanceof Date ? v.toISOString() : (v || '')) },
     CapitalHumano: { listarColaboradores: () => colaboradores || [] },
     MailApp: { sendEmail: (opciones) => { (correos || []).push(opciones); } },
-  });
+  };
+  if (helpdeskApi) contexto.HelpdeskApi = helpdeskApi;
+  Object.assign(e.contexto, contexto);
   e.cargar('src/utils/SheetUtils.gs', 'src/utils/Ids.gs', 'src/config/Entidades.gs', 'src/services/PendientesInspeccionService.gs');
   return { e, P: e.global('PendientesInspeccionService'), tocados };
 }
@@ -229,6 +231,35 @@ console.log('8. vincularManual(): liga a mano cuando el automático no lo encont
   let truenaSinPendiente = null;
   try { P5.vincularManual('token', 'PDI-NOEXISTE', '1'); } catch (err) { truenaSinPendiente = err.message; }
   ok(/No se encontr. ese pendiente/.test(truenaSinPendiente || ''), 'avisa que no existe: ' + truenaSinPendiente);
+
+  console.log('8f. No está en la copia local: lo trae EN VIVO (HelpdeskApi.detalle) y lo vincula igual');
+  const ticketsVivos = [];
+  let pedidoDetalle = null;
+  const ticketsHelpdesk = ticketsVivos;
+  const { P: P6 } = entorno(ticketsHelpdesk, null, null, {
+    detalle: (token, idTicket) => {
+      pedidoDetalle = { token: token, idTicket: idTicket };
+      // Simula lo que HelpdeskApi.detalle hace de verdad: sincronizar la copia local al traerlo
+      ticketsVivos.push({ 'ID TICKET HD': Number(idTicket), TITULO: 'Traído en vivo', DESCRIPCION: '', ESTATUS: 'Abierto' });
+      return { ID: Number(idTicket), TITULO: 'Traído en vivo' };
+    },
+  });
+  const creados6 = P6.agregar(FILA_INSPECCION, '2026_40_1', [{ asunto: 'Algo nuevo', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  const res6 = P6.vincularManual('mi-token', creados6[0]['ID'], '97001');
+  ok(pedidoDetalle && pedidoDetalle.idTicket === '97001' && pedidoDetalle.token === 'mi-token',
+    'le pide a HelpdeskApi ese ticket, con el token de quien está vinculando: ' + JSON.stringify(pedidoDetalle));
+  ok(res6.vinculado === true && res6.idTicketHelpdesk === 97001 && res6.estatusHelpdesk === 'Abierto',
+    'y una vez sincronizado, lo vincula igual que si ya hubiera estado ahí: ' + JSON.stringify(res6));
+
+  console.log('8g. Si quien vincula no tiene su cuenta de Help Desk conectada, el aviso de HelpdeskApi se respeta tal cual');
+  const { P: P7 } = entorno([], null, null, {
+    detalle: () => { throw new Error('Conecta tu cuenta del helpdesk primero.'); },
+  });
+  const creados7 = P7.agregar(FILA_INSPECCION, '2026_40_2', [{ asunto: 'Otra cosa', familia: 'OTROS', prioridad: 'URGENTE' }]);
+  let truenaSinConectar = null;
+  try { P7.vincularManual('token', creados7[0]['ID'], '98001'); } catch (err) { truenaSinConectar = err.message; }
+  ok(/Conecta tu cuenta del helpdesk primero/.test(truenaSinConectar || ''),
+    'no inventa un mensaje propio: deja pasar el de HelpdeskApi: ' + truenaSinConectar);
 }
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
