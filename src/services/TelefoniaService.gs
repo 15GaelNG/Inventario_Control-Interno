@@ -850,9 +850,12 @@ const TelefoniaService = (function () {
    */
   function usuarioResguardo_(sesion) {
     const permisos = sesion.permisos || Permisos.deCorreo(sesion.correo);
-    // puedeOperar: los de Líneas, que en el panel corrigen y quitan lo que mandaron (pendiente 3.12)
+    // puedeOperar: los de Líneas, que corrigen y quitan lo que mandaron (pendiente 3.12). operaPanel: quién ve esas dos
+    // opciones en el panel: los de Líneas, ni Pau ni administradores (ADMIN y SUPER editan todo; usuario, 21-oct). En
+    // Líneas telefónicas las sigue viendo quien la edita
+    const puedeOperar = permisos[MODULO_OPERAR] === Permisos.EDICION;
     return Object.assign(usuarioOperacion_(sesion), { puedeAprobar: permisos[MODULO_RESGUARDOS] === Permisos.EDICION,
-      puedeOperar: permisos[MODULO_OPERAR] === Permisos.EDICION });
+      puedeOperar: puedeOperar, operaPanel: puedeOperar && ['ADMIN', 'SUPER'].indexOf(String(sesion.rol || '').toUpperCase()) < 0 });
   }
 
   // Mandar a resguardo o a cancelación se hace desde Líneas telefónicas: pide su edición, no la de la bandeja (con

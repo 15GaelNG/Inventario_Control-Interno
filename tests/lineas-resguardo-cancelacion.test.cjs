@@ -455,3 +455,29 @@ test('Retirar cancelación: la mandada sin resguardo regresa a USO con su equipo
   assert.match(html, /llamar\('apiLineasVistaRetirarCancelacion', ids\)/);
   assert.match(read('src/ClientApi.gs'), /function apiLineasVistaRetirarCancelacion\(token, ids\)/);
 });
+
+// Usuario, 21-oct: Corregir resguardo se hace encima del panel (antes llevaba al equipo en Líneas telefónicas) y, en el
+// panel, Corregir resguardo y Quitar del panel solo salen a los de Líneas: ni Pau ni administradores
+test('el panel corrige sin salir de él y sus opciones de Líneas no salen a administradores', () => {
+  const html = read('src/html/js/lineas.html');
+  const lineas = html.slice(html.indexOf('const ACCIONES_LINEAS = ['), html.indexOf('function filasVista()'));
+  assert.match(lineas, /alHacer: \(filas\) => corregirEnPanel\(filas\[0\], raiz, \(\) => \{ if \(tabla\) tabla\.limpiarSeleccion\(\); cargar\(\); \}\) \},/);
+  assert.doesNotMatch(html, /irARegistro\(filas\[0\]\.REGISTRO_ID\)|corregirAlEntrar/);
+  const corregir = html.slice(html.indexOf('function corregirEnPanel('), html.indexOf('function initResguardos()'));
+  assert.match(corregir, /llamar\('apiLineasFormularioResguardo', \[fila\.REGISTRO_ID\], \{ corregir: true \}\)/);
+  assert.match(corregir, /fr = formularioResguardo\(form, \{ corregir: true \}\);/);
+  assert.match(corregir, /ancho: \{ tipo: 'RESGUARDO', icono: 'archive' \}, dentro: dentro,/);
+  assert.match(corregir, /\{ comentario: d\.valores\._MOTIVO, ticket: d\.valores\._TICKET, porEquipo: d\.porEquipo, corregir: true \}/);
+  assert.match(corregir, /elegirPastilla\(p\)/);
+  // La misma pieza en Líneas telefónicas
+  const abrir = html.slice(html.indexOf('async function abrirResguardo('), html.indexOf('async function abrirCancelacion('));
+  assert.match(abrir, /const fr = formularioResguardo\(form,/);
+  assert.match(html, /const opera = !!\(datos && datos\.operaPanel\);/);
+  // Servidor: operaPanel = edita Líneas telefónicas y no es ADMIN ni SUPER; puedeOperar (Líneas telefónicas) no cambia
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /operaPanel: puedeOperar && \['ADMIN', 'SUPER'\]\.indexOf\(String\(sesion\.rol \|\| ''\)\.toUpperCase\(\)\) < 0/);
+  const t = cargar([], []);
+  assert.strictEqual(t.R.bandeja({ puedeOperar: true, operaPanel: false }).operaPanel, false);
+  assert.strictEqual(t.R.bandeja({ puedeOperar: true, operaPanel: true }).operaPanel, true);
+  assert.strictEqual(t.R.bandeja({ puedeOperar: true, operaPanel: false }).puedeOperar, true);
+});

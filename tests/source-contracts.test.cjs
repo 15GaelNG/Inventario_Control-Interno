@@ -2279,7 +2279,9 @@ test('responsivo: solo los cortes del sistema (640 / 1024) y matchMedia solo en 
 
 test('Mandar a resguardo: formulario intermedio informativo y la persona solo queda en blanco ahí (usuario, 4-oct)', () => {
   const cliente = read('src/html/js/lineas.html');
-  const resg = cliente.slice(cliente.indexOf('async function abrirResguardo('), cliente.indexOf("$('#cap-guardar', raiz).addEventListener('click', async () => {", cliente.indexOf('async function abrirResguardo(')));
+  // El formulario lo arma formularioResguardo, que también abre el panel de Pau (21-oct)
+  assert.match(cliente, /const fr = formularioResguardo\(form, \{ corregir: corregir, estatus: estatusInicial \}\);/);
+  const resg = cliente.slice(cliente.indexOf('function formularioResguardo('), cliente.indexOf('// Resguardos y cancelaciones (bandeja de Pau'));
   // Equipo, línea y adendum informativos (como la inspección); solo se captura destino, comentario y ticket
   ["titulo(q, 'EQUIPO'", "titulo(q, 'LÍNEA'", "titulo(q, 'ADENDUM'", "titulo(q, 'DESTINO'"].forEach((t) => assert.ok(resg.includes(t), t));
   assert.match(resg, /soloLectura: true, editable: 'NUNCA'/);
@@ -2300,7 +2302,8 @@ test('Mandar a resguardo: formulario intermedio informativo y la persona solo qu
 
 test('Mandar a resguardo: estatus con su significado, línea vencida a cancelación, sin confirmación y procesos en la inspección (usuario, 4-oct)', () => {
   const cliente = read('src/html/js/lineas.html');
-  const resg = cliente.slice(cliente.indexOf('async function abrirResguardo('), cliente.indexOf('async function abrirCancelacion('));
+  const resg = cliente.slice(cliente.indexOf('function formularioResguardo('), cliente.indexOf('// Resguardos y cancelaciones (bandeja de Pau')) +
+    cliente.slice(cliente.indexOf('async function abrirResguardo('), cliente.indexOf('async function abrirCancelacion('));
   // Significado de cada estatus al pasar el ratón: chips, botones del resguardo y opciones de Cambiar estatus
   assert.match(cliente, /const SIGNIFICADO_ESTATUS = \{/);
   ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA DESECHO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION'].forEach((e) => assert.ok(cliente.includes("'" + e + "': '"), e));
