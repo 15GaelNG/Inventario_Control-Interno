@@ -277,6 +277,8 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   const buscarPre = cajaPre.querySelector('.dt-buscar');
   buscarPre.value = 'fulgencio'; buscarPre.dispatchEvent(new window.Event('input', { bubbles: true }));
   ok(!cajaPre.querySelector('.dt-barra-carga').hidden, 'la barra de carga se ve desde que arranca la carga en segundo plano (colchón visible, usuario 21-oct)');
+  ok(cajaPre.querySelector('.dt-vacio').textContent === 'Buscando en todas las columnas…',
+    'mientras carga, NO dice "ningún registro coincide" (sería mentira: todavía no se sabe)');
   click(cajaPre.querySelector('.dt-btn-columnas'));   // casi a la vez que el buscador, antes de que termine de cargar
   ok(doc.body.querySelector('.dt-popover').textContent.includes('Cargando'), 'el menú Vista refleja "Cargando…" aunque la carga la haya disparado el buscador, no él');
   await new Promise((r) => setTimeout(r, 0));
