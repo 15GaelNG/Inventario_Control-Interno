@@ -4191,6 +4191,12 @@
         { campo: 'NO_ECONOMICO', titulo: 'No. económico', tipo: 'texto', visible: false, enDetalle: false },
         { campo: 'COLOR', titulo: 'Color', tipo: 'lista', visible: false, enDetalle: false },
         { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false, enDetalle: false },
+        // Oculta a propósito (no todos quieren verla en la tabla), pero ya era un campo real de
+        // apiListarVehiculosResumen que nunca se declaraba como columna -- sin declararla, ni el
+        // buscador general ni "Vista" sabían que existía (usuario, 21-oct: buscar por el nombre
+        // del responsable no encontraba nada hasta abrir "Vista" una vez, que la trae sola vía
+        // columnasCompletas).
+        { campo: 'RESPONSABLE_VEHICULO', titulo: 'Responsable', tipo: 'texto', visible: false, enDetalle: false },
         { campo: 'FECHA_REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false, enDetalle: false },
       ],
       accionesFila: [

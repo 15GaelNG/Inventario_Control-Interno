@@ -104,7 +104,7 @@
     MARCA: de(['CHEVROLET', 'NISSAN', 'MITSUBISHI', 'RAM', 'HONDA'], i), LINEA_VEHICULO: de(['BEAT', 'NP300', 'L200', '700', '150XR'], i),
     MODELO: 2017 + (i % 8), PLACA: 'GG' + String.fromCharCode(65 + i) + (880 + i) + 'F', ESTATUS: de(['UTILITARIO', 'UTILITARIO', 'PERSONAL', 'BAJA VEHICULAR'], i),
     NO_ECONOMICO: 'E-' + (100 + i), COLOR: de(['BLANCO', 'GRIS', 'ROJO'], i), SEDE: de(SEDES, i), FECHA_REGISTRO: hace(30 * i + 3),
-    SERIE_VEHICULO: 'MA6CA6CD4KT' + String(46600 + i * 37),
+    SERIE_VEHICULO: 'MA6CA6CD4KT' + String(46600 + i * 37), RESPONSABLE_VEHICULO: de(PERSONAS, i),
   }));
   // Volcado "crudo" de la hoja (columnasCompletas, botón "Vista"): encabezados reales, con
   // espacios -- para probar que no se duplica una columna que ya existe con otra clave
@@ -725,6 +725,13 @@
       temporada(); await abrir('vehiculos');
       const buscar = await hasta('.dt-buscar'); buscar.value = 'nada-que-coincida'; evento(buscar, 'input');
       await hasta('.dt-vacio'); await esperar(500);
+    },
+    // RESPONSABLE_VEHICULO está oculta por default: confirma que el buscador general igual la
+    // encuentra (usuario, 21-oct: antes ni siquiera era una columna declarada en esta tabla).
+    'vehiculos-buscar-responsable': async () => {
+      await abrir('vehiculos');
+      const buscar = await hasta('.dt-buscar'); buscar.value = 'fulgencio'; evento(buscar, 'input');
+      await hasta('tbody tr[data-id]'); await esperar(400);
     },
     'relaciones': async () => { await abrir('relaciones'); await vistaRelaciones(false); await hasta('.dc-tarjeta'); await esperar(300); },
     'relaciones-familia': async () => { await abrir('relaciones'); await vistaRelaciones(false); (await hasta('.tab-btn[data-tab="familia-0"]')).click(); await hasta('.rel-s-tabla'); await esperar(300); },
