@@ -238,6 +238,28 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   buscar.value = ''; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
   tabla.mostrarColumna('ESTADO');
 
+  console.log('12c. La columna oculta por la que empató se revela sola; si ya la explica una visible, no hace falta (usuario, 21-oct)');
+  let cajaRevela = null;
+  const tRevela = window.DataTable.crear((cajaRevela = doc.body.appendChild(doc.createElement('div'))), {
+    idCampo: 'ID',
+    columnas: [
+      { campo: 'FOLIO', titulo: 'Folio' },
+      { campo: 'ESTADO', titulo: 'Estado', visible: false },
+      { campo: 'NOTA', titulo: 'Nota', visible: false },
+    ],
+  });
+  tRevela.setDatos([
+    { ID: 1, FOLIO: 'F001', ESTADO: 'VENCIDA', NOTA: 'x' },
+    { ID: 2, FOLIO: 'VENCIDA-ESPECIAL', ESTADO: 'VIGENTE', NOTA: 'x' },
+  ]);
+  const buscarRevela = cajaRevela.querySelector('.dt-buscar');
+  buscarRevela.value = 'vencida'; buscarRevela.dispatchEvent(new window.Event('input', { bubbles: true }));
+  ok(cajaRevela.querySelectorAll('tbody tr[data-id]').length === 2, 'match por FOLIO (fila 2, visible) y por ESTADO oculta (fila 1)');
+  ok(!tRevela.getVista().ocultas.includes('ESTADO'), 'ESTADO se revela: a la fila 1 ninguna columna visible la explicaba');
+  ok(tRevela.getVista().ocultas.includes('NOTA'), 'NOTA sigue oculta: nunca coincidió con nada, revelar solo lo que hace falta');
+  buscarRevela.value = ''; buscarRevela.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tRevela.destruir();
+
   console.log('13. Atajos de fecha y "solo este valor"');
   click($('.dt-btn-filtro[data-campo="FECHA"]'));
   ok($$('.dt-popover [data-preset]').length === 6, 'filtro de fecha ofrece 6 atajos');
