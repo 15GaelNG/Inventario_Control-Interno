@@ -42,7 +42,9 @@ test('Corregir equipo no trae la pestaña Responsable; Agregar equipo y Corregir
 test('Corregir equipo ofrece USO: con responsable vigente se guarda directo; sin él lo pasa la Responsiva (pendiente 2.55)', () => {
   const Reg = cargar();
   const opciones = (base) => campo(Reg._elementos(base, {}, usuario, Reg._contextoEdicion(base, null)), 'ESTATUS EQUIPO').opciones;
-  assert.ok(opciones(guardado).indexOf('USO') >= 0);
+  // USO, RESGUARDO y los finales, más el que ya tiene; PARA VENTA y PARA DESECHO, con «Mandar a resguardo» (usuario, 21-oct)
+  assert.deepEqual(opciones(guardado), ['USO', 'RESGUARDO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO']);
+  assert.deepEqual(opciones(Object.assign({}, guardado, { 'ESTATUS EQUIPO': 'PARA VENTA' })), ['USO', 'RESGUARDO', 'PARA VENTA', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO']);
   assert.ok(opciones(enUso).indexOf('USO') >= 0);
   // true = el estatus no cambia aquí y la pantalla abre la Responsiva; responsable vigente = TIPO ASIGNACION PERSONA y RESPONSABLE
   const vendido = { TIPO: 'EQUIPO', NUCO: '14', 'ESTATUS EQUIPO': 'VENDIDO', RESPONSABLE: 'ANA', 'TIPO ASIGNACION': 'PERSONA' };

@@ -37,6 +37,8 @@ const LineasRegistros = (function () {
   const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
   /** El equipo que sale del inventario (usuario, 16-oct; pendiente 2.50): su línea en USO no se va con él. */
   const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+  /** Los que se eligen en Corregir equipo (usuario, 21-oct; pendiente 2.55); los demás del panel, con «Mandar a resguardo». */
+  const ESTATUS_EQUIPO_CORREGIR = ['USO', 'RESGUARDO'].concat(ESTATUS_EQUIPO_FINAL);
   /** Cómo va a cancelación la línea con el adendum vencido: lo elige quien captura (usuario, 16-oct; pendiente 2.50). */
   const CANCELACION_PANEL = 'PANEL';
   const CANCELACION_DIRECTA = 'DIRECTO';
@@ -194,8 +196,11 @@ const LineasRegistros = (function () {
       ed('COLOR', 'Color', 'listaAbierta', { opciones: catalogos.colores || [] }),
       // Los estatus se cambian aquí (sin «Cambiar estatus», usuario 4-oct). RESGUARDO, PARA VENTA y PARA DESECHO, con un
       // aviso confirmado: no entran al panel de Pau, solo al historial (usuario, 8-oct; ver editar)
-      // USO también en Corregir (usuario, 21-oct; pendiente 2.55): sin responsable vigente lo hace la Responsiva (editar)
-      ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'), opciones: LineasRepo.CATALOGO.estatusEquipo,
+      // Corregir equipo (usuario, 21-oct; pendiente 2.55): USO (sin responsable vigente lo hace la Responsiva, ver editar),
+      // RESGUARDO y los finales, más el que ya tiene; PARA VENTA y PARA DESECHO, con «Mandar a resguardo». El alta, todos
+      ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'),
+        opciones: nuevo ? LineasRepo.CATALOGO.estatusEquipo : LineasRepo.CATALOGO.estatusEquipo.filter((x) => ESTATUS_EQUIPO_CORREGIR.indexOf(x) >= 0 ||
+          x === texto_(v('ESTATUS EQUIPO')).toUpperCase()),
         requerido: 'SIEMPRE', valida: 'LISTA', validaSiCambia: true }),
     ]); // Sin «Fecha de alta»: el alta está en el historial (usuario, 16-oct; pendiente 2.51)
     const responsable = [
