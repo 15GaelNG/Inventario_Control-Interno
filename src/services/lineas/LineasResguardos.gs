@@ -788,7 +788,7 @@ const LineasResguardos = (function () {
   }
 
   /**
-   * Lleva un paso de la bandeja al inventario (bitácora CAMBIOS y movimiento, como una edición). deLinea: el paso es
+   * Lleva un paso de la bandeja al inventario (las hojas nuevas y su movimiento, como una edición). deLinea: el paso es
    * de la cancelación y sigue a la línea (registroDeLinea_); si no, al equipo del renglón.
    */
   function espejar_(hechos, cambiosDe, motivo, tipoMovimiento, usuario, solicitudes, deLinea) {

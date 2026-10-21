@@ -384,14 +384,13 @@ const LineasRepo = (function () {
   /**
    * La huella del índice (apiListaConHuella, fase 5.2b): la versión de cada pestaña de la que sale, aunque se responda
    * de la caché. Con ella el vigía de la pantalla (api.html) sabe si cambió sin volver a pedirlo. Solo CacheService.
-   * Las pestañas: la de líneas (o, leyendo la estructura nueva, las que la arman: LineasLectura.filas) y MOVIMIENTOS
-   * (los cambios de número). Las escrituras de LineasDatos las tocan (CacheHojas.tocar); lo editado a mano, AvisoDeCambios.
+   * Las pestañas: las que arman los renglones de líneas (LineasLectura.filas) y MOVIMIENTOS (los cambios de número). Las escrituras de LineasDatos las tocan (CacheHojas.tocar); lo editado a mano, AvisoDeCambios.
    */
   function huellaIndice_() {
     try {
       if (typeof CacheHojas === 'undefined') return;
-      const L = typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(TAB.LINEAS) ? LineasLectura : null;
-      const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS] : [TAB.LINEAS];
+      const H = LineasLectura.HOJAS;
+      const hojas = [H.LINEAS, H.EQUIPOS, H.ASIGNACIONES, H.ADENDUMS];
       CacheHojas.versiones(hojas.concat([TAB.MOV, 'APP_RESGUARDOS']).map((n) => [LineasDatos.id(), n]));
     } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
   }
@@ -538,7 +537,7 @@ const LineasRepo = (function () {
     return f;
   }
 
-  // ---------------- Escritura: modelo → columnas + bitácora ----------------
+  // ---------------- Escritura: a las hojas nuevas (LineasEscritura) y el renglón de MOVIMIENTOS ----------------
 
   function textoBitacora_(v) {
     if (v instanceof Date) return Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy');

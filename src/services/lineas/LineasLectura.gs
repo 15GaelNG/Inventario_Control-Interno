@@ -19,7 +19,8 @@
  *
  * La hoja vieja se retiró el 4-oct (paso 4, §I.6.7): las rutas del AppSheet y el NUCO de la línea sola están en EQUIPOS
  * y LINEAS, y el comentario viejo en MOVIMIENTOS. El interruptor LINEAS_LECTURA y la lectura de la hoja vieja se quitaron
- * el 21-oct (pendiente 7.13); quedan en el historial de git.
+ * el 21-oct (pendiente 7.13); quedan en el historial de git. La Script Property LINEAS_HOJA_VIEJA_RETIRADA NO se borra:
+ * con ella la revisión del entorno al publicar (Diagnostico.gs, noSePide_) no marca como grave que falte la hoja vieja.
  */
 
 const LineasLectura = (function () {
@@ -141,7 +142,7 @@ const LineasLectura = (function () {
   function armar_() {
     // Si en esta ejecución ya se escribió (LineasEscritura), sus hojas en memoria ya traen lo escrito: no se releen
     const enMemoria = typeof LineasEscritura !== 'undefined' && LineasEscritura.hojasEnMemoria ? LineasEscritura.hojasEnMemoria() : null;
-    const t = (nombre) => (enMemoria && enMemoria[nombre] ? enMemoria[nombre] : (LineasDatos.existeTabla(nombre) ? LineasDatos.leerTabla(nombre, true) : []));
+    const t = (nombre) => (enMemoria && enMemoria[nombre] ? enMemoria[nombre] : (LineasDatos.existeTabla(nombre) ? LineasDatos.leerTabla(nombre) : []));
     const lineas = t(HOJAS.LINEAS);
     const equipos = t(HOJAS.EQUIPOS);
     const asignaciones = t(HOJAS.ASIGNACIONES);

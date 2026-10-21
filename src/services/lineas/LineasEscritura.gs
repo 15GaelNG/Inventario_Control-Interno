@@ -12,8 +12,8 @@
  *   ADENDUMS      COSTO PLAN, INICIO PLAN y FIN PLAN, en el adendum más reciente (los que vienen de un archivo del
  *                 proveedor no se corrigen a mano: los corrige su carga)
  *   ASIGNACIONES  la persona y la ubicación
- * La bitácora CAMBIOS ya no recibe nada: el historial es APP_MOVIMIENTOS (§5.5), que sigue escribiendo quien llama
- * con los campos que regresa guardar().
+ * La bitácora CAMBIOS ya no recibe nada: el historial es MOVIMIENTOS (§5.5), que escribe quien llama
+ * (LineasRepo.registrarMovimiento) con los campos que regresa guardar().
  *
  * Reglas de la asignación (plan §4.3 y §5.4):
  *   - El estatus dice dónde vive cada parte: USO, con una persona; RESGUARDO, PARA VENTA,
