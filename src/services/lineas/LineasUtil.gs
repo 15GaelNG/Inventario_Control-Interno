@@ -170,5 +170,35 @@ const LineasUtil = (function () {
     return !pin || /^PATR[OÓ]N$/i.test(String(pin)) ? (txt(patron) || '') : '';
   }
 
-  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo, bloqueoSinPatron, patronVigente };
+  /**
+   * Región del proveedor por la lada del número, como la pide el asesor en el correo de cancelación (usuario, 22-oct; la
+   * tabla de regiones por estado que mandó Líneas). Solo las ladas seguras de cada estado; una que no está aquí deja la
+   * región vacía en vez de adivinarla. 442 y 446 son Querétaro Norte (región 6, ejemplos del usuario); las demás de
+   * Querétaro (427 San Juan del Río…) esperan a que Líneas diga si son Norte o Sur.
+   */
+  const LADAS_POR_REGION = {
+    1: ['664', '663', '686', '646', '612', '624'], // Baja California y Baja California Sur
+    2: ['662', '644', '631', '667', '669', '668'], // Sonora y Sinaloa
+    3: ['614', '656', '618'], // Chihuahua y Durango
+    4: ['81', '844', '866', '833', '899', '867', '868', '834'], // Coahuila, Nuevo León y Tamaulipas
+    5: ['33', '311', '312', '314', '322', '443', '452', '351'], // Nayarit, Jalisco, Colima y Michoacán
+    6: ['442', '446', '444', '488', '449', '492', '477', '479', '473', '461', '462', '464', '415'], // Zac, SLP, Ags, Gto y Qro Norte
+    7: ['222', '221', '220', '246', '229', '228', '744', '747', '951', '921'], // Guerrero, Tlaxcala, Puebla, Veracruz y Oaxaca
+    8: ['999', '990', '998', '984', '983', '981', '993', '961', '962'], // Tabasco, Chiapas, Campeche, Yucatán y Quintana Roo
+    9: ['55', '56', '722', '729', '771', '777', '595'], // Querétaro Sur, Hidalgo, Morelos, Estado de México y Ciudad de México
+  };
+  const REGION_DE_LADA = Object.keys(LADAS_POR_REGION).reduce((o, r) => {
+    LADAS_POR_REGION[r].forEach((l) => { o[l] = r; });
+    return o;
+  }, {});
+
+  /** «Región 6» por la lada de un número de 10 dígitos; '' si no es de 10 dígitos o su lada no está en la tabla. */
+  function regionDeNumero(v) {
+    const d = digitos(v);
+    if (!d || d.length !== 10) return '';
+    const r = REGION_DE_LADA[d.slice(0, 2)] || REGION_DE_LADA[d.slice(0, 3)];
+    return r ? 'Región ' + r : '';
+  }
+
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo, bloqueoSinPatron, patronVigente, regionDeNumero };
 })();

@@ -7205,6 +7205,9 @@
           { campo: 'MOTIVO_CANCELACION', titulo: 'Motivo', tipo: 'lista' },
           { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista' },
+          // Como en el correo al asesor (usuario, 22-oct): la región sale de la lada (LineasUtil.regionDeNumero)
+          { campo: 'REGION', titulo: 'Región', tipo: 'lista' },
+          { campo: 'CUENTA_PADRE', titulo: 'Cuenta padre', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
           { campo: 'FIN_PLAN', titulo: 'Fin del adendum', tipo: 'texto' },
           { campo: 'ASESOR', titulo: 'Asesor', tipo: 'lista' },
