@@ -277,6 +277,9 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   assert.match(cliente, /const MOTIVOS_CANCELACION = \['LINEA VENCIDA', 'CANCELACION ANTICIPADA'\];/);
   assert.match(cliente, /\{ motivoCancelacion: datos\.motivo, comentario: datos\.comentario, ticket: datos\.ticket \}/);
   assert.match(cliente, /\{ campo: 'MOTIVO_CANCELACION', titulo: 'Motivo', tipo: 'lista' \},/);
+  // El comentario se titula «Comentario» en las dos vistas, como en la ventana (usuario, 22-oct: «para homologar»)
+  assert.equal((cliente.match(/\{ campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto'/g) || []).length, 2);
+  assert.doesNotMatch(cliente, /\{ campo: 'MOTIVO', titulo: 'Motivo'/);
   assert.match(cliente, /\(c\.elegir \? '<option value="">Selecciona…<\/option>' : ''\)/);
 });
 

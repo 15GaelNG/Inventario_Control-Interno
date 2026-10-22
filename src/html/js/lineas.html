@@ -7250,8 +7250,10 @@
           { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
           { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },
-          { campo: 'MOTIVO', titulo: 'Motivo', tipo: 'texto' },
-          { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
+          // El comentario de la acción se guarda en MOTIVO; se titula «Comentario», como lo pide la ventana (usuario, 22-oct).
+          // COMENTARIO es el de cada equipo de antes (la ventana ya no lo pide; al corregir lleva el mismo texto)
+          { campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto' },
+          { campo: 'COMENTARIO', titulo: 'Comentario por equipo', tipo: 'texto', visible: false },
           { campo: 'RECIBIDO_EN', titulo: 'Recibido', tipo: 'lnFechaHora' },
           { campo: 'RECIBIO', titulo: 'Recibió', tipo: 'lista', visible: false },
           { campo: 'ENTREGADO_EN', titulo: 'Entregado', tipo: 'lnFechaHora', visible: false },
@@ -7279,6 +7281,7 @@
           { campo: 'CARTA_ENVIADA_EN', titulo: 'Carta enviada', tipo: 'lnFechaHora' },
           { campo: 'CANCELADA_EN', titulo: 'Cancelada', tipo: 'lnFechaHora' },
           { campo: 'CANCELACION_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto' },
+          { campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto', visible: false },
           { campo: 'ESTADO', titulo: 'Equipo (resguardo)', tipo: 'lista', render: (v) => chip(v), visible: false },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista', visible: false },
           { campo: 'CANCELO', titulo: 'Confirmó', tipo: 'lista', visible: false },
