@@ -7409,7 +7409,7 @@
           columnas: COLUMNAS[vista],
           ordenInicial: { campo: 'FECHA', dir: 'desc' },
           textoVacio: vista === 'RESGUARDOS' ? 'Todavía no se ha mandado nada a resguardo' : 'No hay líneas en cancelación',
-          // La base; «Base cancelaciones» (por asesor) va a su lado (botonBaseCancelaciones, usuario, 22-oct)
+          // La base; «Cancelaciones» (Excel por asesor) va a su lado (botonBaseCancelaciones, usuario, 22-oct)
           exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
@@ -7423,7 +7423,7 @@
       }
 
       /**
-       * «Base cancelaciones» (usuario, 22-oct): al lado de «Exportar a Excel» de la tabla (que da la base), el Excel por
+       * «Cancelaciones» (usuario, 22-oct; primero «Base cancelaciones»): al lado de «Exportar a Excel» de la tabla (que da la base), el Excel por
        * asesor (descargarPorAsesor). La barra de la tabla se arma una vez al crearla; sin el botón de la tabla (sin permiso
        * de exportar) tampoco sale este.
        */
@@ -7435,7 +7435,7 @@
         boton.className = 'btn-excel';
         boton.id = 'lnr-base-cancelaciones';
         boton.title = 'Las líneas POR FIRMAR, una hoja por compañía y asesor, con la tabla de la carta y el correo; respeta los filtros y la búsqueda';
-        boton.innerHTML = icono('file-spreadsheet') + ' Base cancelaciones';
+        boton.innerHTML = icono('file-spreadsheet') + ' Cancelaciones';
         excel.insertAdjacentElement('afterend', boton);
         boton.addEventListener('click', async () => {
           if (!tabla || boton.disabled) return;
