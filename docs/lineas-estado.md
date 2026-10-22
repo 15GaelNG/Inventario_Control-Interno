@@ -313,7 +313,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
   (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Corregir, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
-- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a líneas, vendido, cancelación con carta). Los pasos
+- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a líneas, vendido, donado, desechado, cancelación con carta). Los pasos
   de la bandeja y sus notificaciones (campana) los hace quien tiene EDICION en `resguardos-lineas`
   (`usuario.puedeAprobar`, calculado con `Permisos.deCorreo` en `TelefoniaService.usuarioResguardo_`); ADMIN y SUPER también,
   porque editan todo. Con solo LECTURA se ve y no se modifica («Solo puedes consultar Resguardos y cancelaciones, no
@@ -359,7 +359,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     `ln_notif_esquema_v1` y `ln_resguardos_esquema_v2`). Tiempos, en `migracion/TIEMPOS_LINEAS.md` (cambio 4).
 - **La bandeja de Pau: espera en cada paso, espejo del inventario y accesorios** (13-oct, `93e77a8`; `LineasResguardos.gs` y
   `initResguardos` en `lineas.html`):
-  - **Espera:** Recibir, Entregar a líneas, Vendido, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
+  - **Espera:** Recibir, Entregar a líneas, Vendido, Donado, Desechado, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
     `pedirDatos` con `{ detalle, peligro, espera, alConfirmar }`: la ventana lista lo que se toca (`detalle`, clase
     `confirmar-detalle`), y al aceptar se queda con la pantalla de espera («Recibiendo N equipo(s)», «Entregando…»,
     «Marcando… como vendidos», «Guardando N carta(s)…», «Cancelando N línea(s)») hasta que contesta el servidor; un error se
@@ -411,7 +411,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     `conDocumentos` con `panel`) y Corregir con el estatus fijo; el servidor lo rechaza (`exigirEstatusParaResponsiva`,
     `exigirEquipoParaInspeccion_` y `LineasRegistros.editar`). `reporte_lineas/scripts/conciliacion.py` cuenta POR RECIBIR como
     RESGUARDO. Datos: `tools/lineas-datos/por-recibir.js` (`--ensayo`; `--produccion` solo con permiso) pasa a POR RECIBIR los
-    equipos con renglón PENDIENTE DE RECEPCION. Abierto: DONADO o DESECHADO de uno ya recibido (pendiente 3.16).
+    equipos con renglón PENDIENTE DE RECEPCION. Los ya recibidos (EN RESGUARDO) también pueden pasar a DONADO o DESECHADO desde el panel (22-oct, ver «Panel»).
   - **Quitar del panel** (EDICION de `lineas-telefonicas`; solo renglones PENDIENTE DE RECEPCION (equipo POR RECIBIR); en el inventario y en el
     panel; `vistaQuitar` y `quitarDelPanel`): ventana con tabla Campo | Hoy | Queda. Regresa campo por campo lo que el
     envío cambió y nadie tocó después (lo demás: «Se queda: cambió después»), con el movimiento del envío (MOVIMIENTO_ID
@@ -438,7 +438,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   - **Nota de CANCELADA:** bajo el estatus, «No entra al panel de Resguardos y cancelaciones; queda en el historial.», al
     elegir CANCELADA en Mandar/Corregir resguardo y en Corregir con RESGUARDO, PARA VENTA, PARA DESECHO o EN PROCESO DE
     CANCELACION; ya no sale la ventana «Cambio de estatus».
-  - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Retiradas» (cancelaciones; el «Quitados» ya siempre da 0 y se quita con el pendiente 3.18). El
+  - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Retiradas» (cancelaciones; sin «Quitados»). Acciones «Donado» (gift) y «Desechado» (trash-2) junto a «Vendido», con referencia opcional y contadores «Donados» y «Desechados» (22-oct, `LineasResguardos.donado` y `desechado`, `TelefoniaService.accionBandejaResguardo`): solo renglones EN RESGUARDO (los demás se omiten con «No está en resguardo»); ESTADO del panel y ESTATUS EQUIPO pasan a DONADO o DESECHADO; movimiento CIERRE o DESECHO. El
     índice del cliente trae la columna `panel` (`CLAVE_INDICE`, caché del índice; huella con APP_RESGUARDOS).
 - **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
   sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
