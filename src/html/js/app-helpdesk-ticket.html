@@ -1,0 +1,305 @@
+<script>
+  /**
+   * app-helpdesk-ticket.html — Help Desk: el ticket abierto: su detalle, el contexto de la persona, respuestas y archivos.
+   * Parte de initHelpdesk (fase 6.3, tools/app/partir-helpdesk.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  Helpdesk.registrar('ticket', (T) => {
+    const { $, app, cuando, duracion, e, estado, fechaHora, prioridad, sinConexion, sinRespuesta } = T;
+    const { abrirRegistro, prepararRegistro } = T.de('registro');
+
+    // ---------- ticket abierto
+    let abierto = null;    // ID del ticket abierto
+    let esperaTeclas = null;
+    function abrir(id, retraso) {
+      if (!id) return;
+      abierto = id;
+      app.dataset.panel = 'ticket';
+      $('hd-filas').querySelectorAll('.hd-fila').forEach((f) => {
+        const es = Number(f.dataset.id) === id;
+        f.classList.toggle('activa', es);
+        f.setAttribute('aria-selected', es);
+        if (es) f.scrollIntoView({ block: 'nearest' });
+      });
+      const base = T.lista.find((t) => t.ID === id);
+      if (HD_DETALLES.has(id)) return pintarTicket(HD_DETALLES.get(id));
+      pintarTicket(base || { ID: id, TITULO: 'Ticket #' + id }, true);
+      clearTimeout(esperaTeclas);
+      // Con J/K se espera a que se deje de teclear: pasar por 5 tickets no son 5 llamadas
+      esperaTeclas = setTimeout(() => pedirDetalle(id), retraso || 0);
+    }
+    async function pedirDetalle(id) {
+      try {
+        const d = JSON.parse(await callServer('apiHelpdeskDetalle', state.token, id));
+        HD_DETALLES.set(id, d);
+        if (abierto === id) pintarTicket(d);
+      } catch (err) {
+        if (abierto !== id) return;
+        $('hd-t-conversacion').innerHTML = '<div class="hd-vacio"><div><i data-lucide="cloud-off" class="ico"></i><h3>No se pudo abrir</h3><p>' + e(err.message) + '</p></div></div>';
+        refreshIcons();
+        if (/venció|Conecta tu cuenta/.test(err.message)) sinConexion();
+      }
+    }
+
+    function pintarTicket(t, cargando) {
+      const deQuienPide = (m) => (m.CORREO && t.CORREO_SOLICITANTE ? m.CORREO === t.CORREO_SOLICITANTE : m.AUTOR === t.SOLICITANTE);
+      const mensajes = (t.MENSAJES || []).slice().sort((a, b) => String(a.FECHA).localeCompare(String(b.FECHA)));
+      const conversacion = cargando
+        ? '<div class="hd-esqueleto"></div><div class="hd-esqueleto"></div>'
+        : (mensajes.length ? mensajes : [{ AUTOR: t.SOLICITANTE, CORREO: t.CORREO_SOLICITANTE, FECHA: t.FECHA_CREACION, TEXTO: t.DESCRIPCION, ARCHIVOS: [], ADJUNTOS: [] }])
+          .map((m) => {
+            const archivos = m.ARCHIVOS || [];
+            const nombres = archivos.length ? [] : (m.ADJUNTOS || []);
+            return `<div class="hd-msj${deQuienPide(m) ? '' : ' de-agente'}${m.PRIVADO ? ' privado' : ''}">
+              ${Avatar.html(m.CORREO, m.AUTOR, { tam: 32 })}
+              <div class="hd-msj-caja">
+                <div class="hd-msj-cabeza"><strong>${e(m.AUTOR || '—')}</strong><span>${fechaHora(m.FECHA) || e(m.FECHA || '')}</span>
+                  ${m.PRIVADO ? '<span>· Nota interna</span>' : ''}${nombres.length ? '<span>· adjuntos: ' + e(nombres.join(', ')) + '</span>' : ''}</div>
+                <div class="hd-msj-texto">${e(m.TEXTO) || '<em>(sin texto)</em>'}</div>
+                ${archivos.length ? '<div class="hd-archivos">' + archivos.map((a) =>
+                  `<button type="button" class="secondary" data-hd-ruta="${e(a.RUTA)}" data-hd-nombre="${e(a.NOMBRE)}">${Iconos.svg(a.IMAGEN ? 'imagen' : 'documento')} Ver ${e(a.NOMBRE)}</button>`).join('') + '</div>' : ''}
+              </div></div>`;
+          }).join('');
+      const prop = (k, v) => (v ? `<dt>${k}</dt><dd>${v}</dd>` : '');
+      const gente = (t.INVOLUCRADOS || []).map((p) => `<div title="${e(p.CORREO)}">${Avatar.html(p.CORREO, p.NOMBRE, { tam: 24 })}<span>${e(p.NOMBRE)}</span></div>`).join('');
+      const formulario = HD_FORMULARIOS.get(t.ID);
+      $('hd-ticket').innerHTML = `
+        <div class="hd-t-cabeza">
+          <button type="button" class="secondary hd-t-volver" id="hd-t-volver"><i data-lucide="arrow-left" class="ico"></i> Bandeja</button>
+          <div class="hd-t-folio">#${t.ID}${t.FORMULARIO ? ' · ' + e(t.FORMULARIO) : ''}</div>
+          <h2 class="hd-t-titulo">${e(t.TITULO || '')}</h2>
+          <div class="hd-t-chips">${estado(t)}${prioridad(t)}${t.GRUPO ? '<span>' + e(t.GRUPO) + '</span>' : ''}${t.ULTIMA_RESPUESTA ? '<span>· ' + e(t.ULTIMA_RESPUESTA) + '</span>' : ''}</div>
+          <div class="hd-t-acciones">
+            <button type="button" class="secondary" id="hd-btn-abrir-hd">${Iconos.svg('externo')} Abrir en el helpdesk</button>
+            ${puedeEditarModulo('tickets') ? '<button type="button" class="secondary" id="hd-btn-registrar" hidden><i data-lucide="ticket" class="ico"></i> Registrar en Tickets</button><span class="form-ayuda" id="hd-registrado" hidden></span>' : ''}
+          </div>
+        </div>
+        <div class="hd-t-cuerpo">
+          <div class="hd-conversacion" id="hd-t-conversacion">${conversacion}</div>
+          <aside class="hd-lado">
+            <div>
+              <div class="hd-lado-titulo">Quien lo pide</div>
+              <div class="hd-persona-tarjeta">
+                <div class="hd-persona-cabeza">${Avatar.html(t.CORREO_SOLICITANTE, t.SOLICITANTE, { tam: 40 })}
+                  <div class="hd-persona-nombre"><strong>${e(t.SOLICITANTE || '—')}</strong>
+                    ${t.CORREO_SOLICITANTE ? `<small title="${e(t.CORREO_SOLICITANTE)}">${e(t.CORREO_SOLICITANTE)}</small>` : ''}</div></div>
+                <dl class="hd-persona-datos" id="hd-t-persona">${datosPersona(t, null)}</dl>
+              </div>
+            </div>
+            <div id="hd-t-contexto">${cargando ? '' : '<div class="hd-lado-titulo">En Control Interno</div><div class="hd-esqueleto hd-esqueleto-chico"></div>'}</div>
+            <div>
+              <div class="hd-lado-titulo">Propiedades</div>
+              <dl class="hd-props">
+                ${prop('Estatus', estado(t))}${prop('Prioridad', prioridad(t))}${prop('Agente', e(t.AGENTE))}${prop('Grupo', e(t.GRUPO))}
+                ${prop('Área destino', e(t.AREA_DESTINO))}${prop('Creado', t.FECHA_CREACION ? formatearFecha(t.FECHA_CREACION) : '')}
+                ${prop('Sin respuesta', (() => {
+                  const s = sinRespuesta(t);
+                  return s ? `<span class="hd-espera ${s.nivel}"><i data-lucide="hourglass" class="ico"></i>${duracion(s.min)}</span> <small>meta ${duracion(s.meta)}</small>` : '';
+                })())}
+                ${prop('Cerrado', fechaHora(t.FECHA_CIERRE))}${prop('Duración', t.DURACION_DIAS !== '' && t.DURACION_DIAS !== undefined ? e(t.DURACION_DIAS) + ' días' : '')}
+              </dl>
+            </div>
+            <div>
+              <div class="hd-lado-titulo">Formulario</div>
+              <div id="hd-t-formulario">${formulario ? respuestasHtml(formulario)
+                : '<button type="button" class="secondary" id="hd-btn-formulario"' + (cargando ? ' disabled' : '') + '><i data-lucide="list-checks" class="ico"></i> Ver respuestas (F)</button>'}</div>
+            </div>
+            ${gente ? '<div><div class="hd-lado-titulo">En el ticket</div><div class="hd-gente">' + gente + '</div></div>' : ''}
+          </aside>
+        </div>`;
+      refreshIcons();
+      Avatar.completar($('hd-ticket'));
+      if (!cargando && puedeEditarModulo('tickets')) prepararRegistro(t);
+      if (!cargando) pedirContexto(t);
+    }
+
+    /**
+     * El tarjetón de quien lo pide: lo del helpdesk (área y departamento) al momento, y lo de
+     * Capital Humano (puesto, número, jefe) cuando llega el contexto. Lo que no hay no se pinta.
+     */
+    function datosPersona(t, p) {
+      const dato = (icono, etiqueta, valor, ancho) => (valor
+        ? `<div${ancho ? ' class="ancho"' : ''}><dt><i data-lucide="${icono}" class="ico"></i>${etiqueta}</dt><dd title="${e(valor)}">${e(valor)}</dd></div>` : '');
+      const persona = p || {};
+      const html = dato('building-2', 'Área', t.AREA_SOLICITANTE || persona.AREA) +
+        dato('users', 'Departamento', t.DEPARTAMENTO_SOLICITANTE || persona.DEPARTAMENTO) +
+        dato('briefcase', 'Puesto', persona.PUESTO) +
+        dato('id-card', 'No. empleado', (persona.NUMEROS || []).join(' / ')) +
+        dato('user-round', 'Jefe directo', persona.JEFE_DIRECTO, true);
+      return html;
+    }
+
+    // ---------- lo que sabemos en Control Interno de quien lo pide (una llamada a NUESTRO servidor)
+    async function pedirContexto(t) {
+      const formulario = HD_FORMULARIOS.get(t.ID);
+      const llave = t.ID + (formulario ? ':f' : '');
+      if (HD_CONTEXTO.has(llave)) return pintarContexto(t, HD_CONTEXTO.get(llave));
+      // El texto del ticket, para encontrar la placa, el VIN o el folio que cita (con un tope)
+      const textos = [t.TITULO, t.DESCRIPCION].concat((t.MENSAJES || []).map((m) => m.TEXTO)).filter(Boolean).join('\n').slice(0, 20000);
+      const consulta = {
+        id: t.ID, correo: t.CORREO_SOLICITANTE || '', nombre: t.SOLICITANTE || '', formulario: t.ID_FORMULARIO || null, textos: [textos],
+        campos: formulario ? (formulario.CAMPOS || []).map((c) => ({ ETIQUETA: c.ETIQUETA, VALOR: c.VALOR })) : [],
+      };
+      try {
+        const c = JSON.parse(await callServer('apiHelpdeskContexto', state.token, consulta));
+        HD_CONTEXTO.set(llave, c);
+        if (abierto === t.ID) pintarContexto(t, c);
+      } catch (err) {
+        if (abierto === t.ID && $('hd-t-contexto')) $('hd-t-contexto').innerHTML = '<div class="hd-lado-titulo">En Control Interno</div><p class="form-ayuda" style="margin:0">No se pudo consultar: ' + e(err.message) + '</p>';
+      }
+    }
+
+    function pintarContexto(t, c) {
+      const caja = $('hd-t-contexto');
+      if (!caja) return;
+      if (c.persona && $('hd-t-persona')) $('hd-t-persona').innerHTML = datosPersona(t, c.persona);
+      const verVeh = !!permisoDe('vehiculos');
+      const verCaja = !!permisoDe('caja-chica');
+      const partes = [];
+      if (c.vehiculos) {
+        // Un vehículo citado y además a su cargo sale una vez, con las dos marcas
+        const vistos = new Map();
+        c.vehiculos.mencionados.forEach((v) => vistos.set(v.FOLIO, Object.assign({ citado: v.POR }, v)));
+        c.vehiculos.aCargo.forEach((v) => vistos.set(v.FOLIO, Object.assign(vistos.get(v.FOLIO) || v, { suyo: true })));
+        const filas = Array.from(vistos.values()).map((v) => `
+          <div class="hd-ci-fila">
+            <i data-lucide="car" class="ico"></i>
+            <div><strong>${e(v.FOLIO)}${v.PLACA ? ' · ' + e(v.PLACA) : ''}</strong>
+              <span>${e([v.MARCA, v.LINEA, v.MODELO].filter(Boolean).join(' '))}</span>
+              <span class="hd-ci-marcas">${v.citado ? '<span class="hd-ci-marca">Citado en el ticket (' + e(v.citado) + ')</span>' : ''}${v.suyo ? '<span class="hd-ci-marca suyo">A su cargo</span>' : ''}</span></div>
+            ${verVeh ? `<button type="button" class="secondary hd-ci-ver" data-hd-vehiculo="${e(v.FOLIO)}" title="Abrir su ficha en Vehículos">Ver</button>` : ''}
+          </div>`);
+        if (filas.length) partes.push('<div class="hd-ci-grupo">Vehículos</div>' + filas.join(''));
+      }
+      if (c.lineas) {
+        // Lo mismo que con vehículos: citado y además suyo sale una vez. Solo lo que no es secreto
+        // (el servidor no manda PIN, contraseñas, IMEI ni SIM)
+        const vistas = new Map();
+        c.lineas.mencionados.forEach((l) => vistas.set(l.ID, Object.assign({ citado: l.POR }, l)));
+        c.lineas.aCargo.forEach((l) => vistas.set(l.ID, Object.assign(vistas.get(l.ID) || l, { suyo: true })));
+        const verLinea = !!permisoDe('lineas-telefonicas');
+        const filas = Array.from(vistas.values()).map((l) => `
+          <div class="hd-ci-fila">
+            <i data-lucide="${l.TIPO === 'equipo' ? 'smartphone' : 'phone'}" class="ico"></i>
+            <div><strong>${l.TIPO === 'equipo' ? 'NUCO ' + e(l.NUCO || '—') : 'Línea suelta'}${l.NUMERO ? ' · ' + e(l.NUMERO) : ''}</strong>
+              <span>${e([l.TIPO_EQUIPO, l.MODELO, l.COMPANIA, l.ESTATUS].filter(Boolean).join(' · '))}</span>
+              <span class="hd-ci-marcas">${l.citado ? '<span class="hd-ci-marca">Citado en el ticket (' + e(l.citado) + ')</span>' : ''}${l.suyo ? '<span class="hd-ci-marca suyo">A su cargo</span>' : ''}</span></div>
+            ${verLinea ? `<button type="button" class="secondary hd-ci-ver" data-hd-linea="${e(l.ID)}" title="Abrir su ficha en Líneas Telefónicas">Ver</button>` : ''}
+          </div>`);
+        if (filas.length) partes.push('<div class="hd-ci-grupo">Líneas y equipos</div>' + filas.join(''));
+      }
+      if (c.cajas && c.cajas.length) {
+        partes.push('<div class="hd-ci-grupo">Caja chica</div>' + c.cajas.map((k) => `
+          <div class="hd-ci-fila">
+            <i data-lucide="wallet" class="ico"></i>
+            <div><strong>Caja ${e(k.ID_CCH)}</strong><span>${e([k.ESTATUS, k.MONTO_ACTUAL !== '' && k.MONTO_ACTUAL !== undefined && k.MONTO_ACTUAL !== null ? formatearMoneda(k.MONTO_ACTUAL) : ''].filter(Boolean).join(' · '))}</span></div>
+            ${verCaja ? `<button type="button" class="secondary hd-ci-ver" data-hd-caja="${e(k.ID_CCH)}" title="Abrir su ficha en Caja Chica">Ver</button>` : ''}
+          </div>`).join(''));
+      }
+      if (c.otrosTickets && c.otrosTickets.total) {
+        const o = c.otrosTickets;
+        partes.push(`<div class="hd-ci-grupo">Sus otros tickets · ${o.total}${o.abiertos ? ' (' + o.abiertos + (o.abiertos === 1 ? ' abierto' : ' abiertos') + ')' : ''}</div>` +
+          o.ultimos.map((x) => `<button type="button" class="hd-ci-ticket" data-hd-otro="${x.ID}">
+            <span>#${x.ID} · ${e(x.TITULO || '(sin título)')}</span><small>${e([x.ESTATUS, cuando(x.FECHA)].filter(Boolean).join(' · '))}</small></button>`).join('') +
+          (o.total > o.ultimos.length ? '<p class="form-ayuda" style="margin:4px 0 0">Se muestran los ' + o.ultimos.length + ' más recientes.</p>' : ''));
+      }
+      // Sin ningún módulo que lo pueda mostrar, la sección no aparece
+      const algo = c.vehiculos || c.cajas || c.lineas || c.otrosTickets;
+      caja.innerHTML = !algo ? '' : '<div class="hd-lado-titulo">En Control Interno</div>' +
+        (partes.length ? partes.join('') : '<p class="form-ayuda" style="margin:0">Nada ligado: no tiene vehículos, líneas ni cajas a su cargo y el ticket no cita ninguno.</p>');
+      refreshIcons();
+    }
+
+    function respuestasHtml(f) {
+      const campos = (f.CAMPOS || []).filter((c) => c.TIPO !== 'check' || c.VALOR);
+      if (!campos.length) return '<p class="form-ayuda" style="margin:0">El formulario no tiene campos llenos.</p>';
+      // Las fechas llegan como "2026-08-27T13:37" o "2026-08-27"
+      const valor = (c) => {
+        if (c.TIPO === 'date' && /^\d{4}-\d{2}-\d{2}/.test(c.VALOR)) {
+          const texto = Formato.fechaTexto(c.VALOR, { hora: c.VALOR.length > 10 });
+          if (texto) return texto;
+        }
+        return c.VALOR;
+      };
+      return '<div class="hd-respuestas">' + campos.map((c) => `<div><span>${e(c.ETIQUETA)}</span><strong>${e(valor(c)) || '—'}</strong></div>`).join('') + '</div>';
+    }
+    async function verFormulario() {
+      const id = abierto;
+      const btn = $('hd-btn-formulario');
+      if (!id || !btn || btn.disabled) return;
+      btn.disabled = true;
+      const t = HD_DETALLES.get(id) || {};
+      try {
+        const f = await callServer('apiHelpdeskFormulario', state.token, id, t.ID_FORMULARIO || null);
+        HD_FORMULARIOS.set(id, f);
+        if (abierto === id) $('hd-t-formulario').innerHTML = respuestasHtml(f);
+        // Las respuestas pueden traer la placa o el Nucco: se vuelve a preguntar con ellas
+        if (abierto === id && HD_DETALLES.has(id)) pedirContexto(HD_DETALLES.get(id));
+      } catch (err) {
+        Notificar.error(err.message);
+        btn.disabled = false;
+      }
+    }
+
+    $('hd-ticket').addEventListener('click', async (ev) => {
+      if (ev.target.closest('#hd-t-volver')) { app.dataset.panel = 'lista'; return; }
+      if (ev.target.closest('#hd-btn-abrir-hd')) { window.open(HELPDESK_PAGINA, '_blank', 'noopener'); return; }
+      if (ev.target.closest('#hd-btn-formulario')) return verFormulario();
+      if (ev.target.closest('#hd-btn-registrar')) return abrirRegistro(HD_DETALLES.get(abierto));
+      const veh = ev.target.closest('[data-hd-vehiculo]');
+      if (veh) return verFichaVehiculoDesdeOtroModulo(veh.dataset.hdVehiculo);
+      const lin = ev.target.closest('[data-hd-linea]');
+      if (lin) return Lineas.irARegistro(lin.dataset.hdLinea);
+      const cch = ev.target.closest('[data-hd-caja]');
+      if (cch) return verFichaCajaChicaDesdeOtroModulo(cch.dataset.hdCaja);
+      const otro = ev.target.closest('[data-hd-otro]');
+      if (otro) return abrir(Number(otro.dataset.hdOtro), 0);
+      const btn = ev.target.closest('[data-hd-ruta]');
+      if (btn) verArchivo(btn);
+    });
+
+    // ---------- archivos de la conversación: uno por uno, solo al darles clic
+    function mostrarArchivo(btn, a) {
+      const caja = document.createElement('div');
+      if (a.tipo.indexOf('image/') === 0) {
+        const img = document.createElement('img');
+        img.className = 'hd-imagen';
+        img.alt = btn.dataset.hdNombre || 'Imagen';
+        img.src = 'data:' + a.tipo + ';base64,' + a.base64;
+        caja.appendChild(img);
+      } else {
+        // PDF: como Blob (un data: largo no abre en todos los navegadores)
+        const bytes = Uint8Array.from(atob(a.base64), (c) => c.charCodeAt(0));
+        const liga = document.createElement('a');
+        liga.href = URL.createObjectURL(new Blob([bytes], { type: a.tipo }));
+        liga.target = '_blank';
+        liga.rel = 'noopener';
+        liga.download = (btn.dataset.hdNombre || 'archivo') + '.pdf';
+        liga.textContent = 'Abrir ' + (btn.dataset.hdNombre || 'el PDF');
+        caja.appendChild(liga);
+      }
+      btn.replaceWith(caja);
+    }
+    async function verArchivo(btn) {
+      const ruta = btn.dataset.hdRuta;
+      const id = abierto;
+      if (HD_ARCHIVOS.has(ruta)) return mostrarArchivo(btn, HD_ARCHIVOS.get(ruta));
+      btn.disabled = true;
+      try {
+        const a = await callServer('apiHelpdeskArchivo', state.token, id, ruta);
+        HD_ARCHIVOS.set(ruta, a);
+        if (abierto === id && btn.isConnected) mostrarArchivo(btn, a);
+      } catch (err) {
+        Notificar.error(err.message);
+        btn.disabled = false;
+      }
+    }
+
+    // Lo que también usan otras partes (T.abierto)
+    Object.defineProperty(T, 'abierto', { get: () => abierto, set: (v) => { abierto = v; } });
+
+    return {
+      abrir: abrir, verFormulario: verFormulario,
+    };
+  });
+</script>

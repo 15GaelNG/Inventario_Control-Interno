@@ -1,0 +1,83 @@
+<script>
+  /**
+   * app-helpdesk-registro.html — Help Desk: registrar un ticket en el sistema desde su formulario.
+   * Parte de initHelpdesk (fase 6.3, tools/app/partir-helpdesk.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  Helpdesk.registrar('registro', (T) => {
+    const { $, modalRegistro, pintarBandejas, pintarLista, vaEnTickets } = T;
+    const { bandejaActual } = T.de('principal');
+
+    // ---------- registrar en Tickets (quien edita Tickets)
+    async function prepararRegistro(d) {
+      let registrados = {};
+      try { registrados = await callServer('apiHelpdeskRegistrados', state.token, [d.ID]); } catch (err) { /* se ofrece igual: el servidor no deja duplicar */ }
+      if (vaEnTickets(d) && HD_REGISTRO.get(d.ID) !== (registrados[d.ID] || '')) {
+        HD_REGISTRO.set(d.ID, registrados[d.ID] || '');
+        pintarLista();
+      }
+      if (T.abierto !== d.ID || !$('hd-btn-registrar')) return;
+      if (registrados[d.ID]) {
+        $('hd-registrado').textContent = 'Ya está en Tickets (' + registrados[d.ID] + ')';
+        $('hd-registrado').hidden = false;
+      } else {
+        $('hd-btn-registrar').hidden = false;
+      }
+    }
+    const cerrarRegistro = () => { modalRegistro.hidden = true; };
+    $('hd-registrar-cerrar').addEventListener('click', cerrarRegistro);
+    modalRegistro.addEventListener('click', (ev) => { if (ev.target === modalRegistro) cerrarRegistro(); });
+    async function abrirRegistro(d) {
+      if (!d) return;
+      $('hd-registrar-sub').textContent = '#' + d.ID + ' · ' + d.TITULO;
+      $('hd-campos-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'hd-ticket' });
+      const placa = (String(d.TITULO).toUpperCase().match(PLACA_EN_TEXTO) || [''])[0];
+      CamposHoja.poblar(CAMPOS_TICKET, 'hd-ticket', {
+        TICKET: String(d.ID), FECHA: d.FECHA_CREACION, DEPARTAMENTO: d.DEPARTAMENTO_SOLICITANTE,
+        SOLICITANTE: d.SOLICITANTE, PLACA: placa, COMENTARIO: d.TITULO,
+      });
+      document.getElementById('hd-ticket-ticket').disabled = true;   // siempre el número del helpdesk (el servidor lo pone igual)
+      document.getElementById('hd-ticket-fecha-de-registro').value = Formato.fecha(new Date());
+      $('hd-ticket-error').hidden = true;
+      modalRegistro.hidden = false;
+      refreshIcons();
+      try {
+        const [departamentos, solicitantes] = await Promise.all([
+          callServerCacheado('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarSolicitantesTickets', state.token),
+        ]);
+        CamposHoja.llenarOpciones('hd-ticket-departamento', departamentos);
+        CamposHoja.llenarOpciones('hd-ticket-solicitante', solicitantes);
+      } catch (err) { /* son sugerencias: se puede escribir igual */ }
+      $('hd-form-ticket').onsubmit = async (ev) => {
+        ev.preventDefault();
+        const btn = $('hd-btn-guardar-ticket');
+        btn.disabled = true;
+        $('hd-ticket-error').hidden = true;
+        try {
+          const r = await callServer('apiHelpdeskRegistrarEnTickets', state.token, d.ID, CamposHoja.recolectar(CAMPOS_TICKET, 'hd-ticket'));
+          invalidarCacheLista('apiListarTicketsResumen', state.token);
+          Notificar.exito('Registrado en Tickets (' + r.ID + ')');
+          cerrarRegistro();
+          HD_REGISTRO.set(d.ID, r.ID);
+          pintarLista();   // en "Por registrar" sale de la lista
+          if (bandejaActual().porRegistrar) pintarBandejas();
+          if (T.abierto === d.ID && $('hd-btn-registrar')) {
+            $('hd-btn-registrar').hidden = true;
+            $('hd-registrado').textContent = 'Ya está en Tickets (' + r.ID + ')';
+            $('hd-registrado').hidden = false;
+          }
+        } catch (err) {
+          $('hd-ticket-error').textContent = err.message;
+          $('hd-ticket-error').hidden = false;
+        } finally {
+          btn.disabled = false;
+        }
+      };
+    }
+
+    return {
+      abrirRegistro: abrirRegistro, prepararRegistro: prepararRegistro,
+    };
+  });
+</script>

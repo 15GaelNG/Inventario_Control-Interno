@@ -518,6 +518,12 @@ test('Usuarios y permisos: initPermisosAdmin monta sus partes con Partes (fase 6
     'las reglas siguen en app-permisos.html');
 });
 
+test('Help Desk: initHelpdesk monta sus partes con Partes (fase 6.3)', () => {
+  // initHelpdesk era una función de 747 líneas; tools/app/partir-helpdesk.js la abrió (22-oct)
+  pantallaEnPartes({ archivo: 'app-helpdesk', funcion: 'initHelpdesk', registro: 'Helpdesk', pantalla: 'Help Desk',
+    partes: ['ticket', 'registro'], cableado: "$('hd-bandejas').addEventListener(", minPedidos: 2 });
+});
+
 test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con su nombre; la base es ClientApi.gs (fase 6.3)', () => {
   // tools/api/partir.js partió ClientApi.gs (22-oct): solo movió. Una api… nueva va en el archivo de su módulo (módulo
   // nuevo = archivo nuevo) y lleva el nombre del módulo: así se encuentra sin buscar y nadie edita el archivo de otro.
