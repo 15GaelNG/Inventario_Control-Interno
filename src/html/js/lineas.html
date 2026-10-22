@@ -2311,11 +2311,13 @@
      * instante y lo fresco por detrás. forzar (o CATALOGOS_LINEAS.forEach(olvidar…)) pide lo nuevo.
      */
     const CATALOGOS_LINEAS = ['apiLineasCatalogos', 'apiLineasColaboradores', 'apiLineasAccesoriosIndice'];
-    function catalogoLineas_(fn, forzar) {
-      if (forzar) invalidarCacheCatalogo(fn, state.token);
-      return callServerCacheado(fn, state.token);
+    function catalogoLineas_(fn, forzar, ...version) {
+      if (forzar) invalidarCacheCatalogo(fn, state.token, ...version);
+      return callServerCacheado(fn, state.token, ...version);
     }
-    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar);
+    // 'bajas': otra copia en el navegador desde que la lista trae las bajas recientes (2.58); la de antes, sin ellas,
+    // se enseñaba la primera vez mientras llegaba la nueva. El servidor no lo lee
+    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar, 'bajas');
     const cargarAccesorios = (forzar) => catalogoLineas_('apiLineasAccesoriosIndice', forzar);
     const cargarCatalogos = (forzar) => catalogoLineas_('apiLineasCatalogos', forzar);
 
@@ -4328,6 +4330,12 @@
               // La ficha que estaba abierta, la del equipo o la de la línea (2.61: se pintaba la del equipo con la de la línea
               // arriba en la pila, pintarEquipo no la reconocía y la página se quedaba en «Cargando…»)
               const arriba = pila[pila.length - 1];
+              // La línea cambia de registro al vincularla (pasa a ser la del equipo) o al desvincularla (vuelve a ser
+              // suelta): su ficha se busca otra vez por su número (DEV, 22-oct: «No existe la línea LIN-…»)
+              const numero = String((arriba && arriba.tipo === 'linea' && (fila.numero || numeroActual)) || '');
+              const conNumero = numero ? memoria.indice.lineas.filter((l) => String(l.numero) === numero) : [];
+              const laLinea = conNumero.filter((l) => may(l.estatus) !== 'CANCELADA')[0] || conNumero[0];
+              if (laLinea) arriba.id = laLinea.id;
               if (vigente() && arriba) abrir(arriba.tipo, arriba.id, true);
             });
           };
@@ -4421,6 +4429,11 @@
             htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' ' + agregar) + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
+          // Lo que el servidor propone y se puede cambiar (el NUCO de Agregar equipo, 2.59): «auto» hasta que lo escriban
+          elementos.forEach((e) => {
+            const el = e.sugerido && e.valor && cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
+            if (el) CampoAuto.llenar(el, e.valor);
+          });
           activarAdicionales(cuerpo);
           activarBloqueo(cuerpo);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
@@ -4677,11 +4690,6 @@
           }
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
-        // Lo que el servidor propone y se puede cambiar (el NUCO de Agregar equipo, 2.59): «auto» hasta que lo escriban
-        captura.contexto.formulario.forEach((e) => {
-          const el = e.sugerido && e.valor && cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
-          if (el) CampoAuto.llenar(el, e.valor);
-        });
         activarAdicionales(cuerpo);
         activarBloqueo(cuerpo);
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });

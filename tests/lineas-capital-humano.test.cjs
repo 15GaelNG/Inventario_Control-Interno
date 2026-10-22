@@ -100,4 +100,6 @@ test('Capital Humano en Líneas: la lista marca a las bajas y Gestión de activo
   assert.match(cliente, /\(c\.baja \? ' · BAJA' : ''\)/);
   assert.match(cliente, /const distintos = \(campo\) => gente\.filter\(\(c\) => !c\.baja\)/);
   assert.match(cliente, /colaboradores = filasComoObjetos\(r\)\.filter\(\(c\) => c\.estatus !== 'BAJA'\)/);
+  // Otra copia en el navegador: la de antes (sin bajas) no se enseña mientras llega la nueva
+  assert.match(cliente, /const cargarColaboradores = \(forzar\) => catalogoLineas_\('apiLineasColaboradores', forzar, 'bajas'\);/);
 });

@@ -71,5 +71,5 @@ test('el clic derecho de la lista trae las mismas acciones que el ⋮ de la fich
   // Sin Editar línea en el equipo (usuario, 13-oct): en los dos, el editar de su tipo
   assert.doesNotMatch(fn, /abrirEditor\(f\[0\]\.lineaId, 'LINEA'\)/);
   // Desde la lista no abre la ficha al terminar (como Reasignar): solo vuelve a pintar la que estaba abierta (2.61)
-  assert.match(html, /const arriba = pila\[pila\.length - 1\];\s*if \(vigente\(\) && arriba\) abrir\(arriba\.tipo, arriba\.id, true\);/);
+  assert.match(html, /if \(vigente\(\) && arriba\) abrir\(arriba\.tipo, arriba\.id, true\);/);
 });

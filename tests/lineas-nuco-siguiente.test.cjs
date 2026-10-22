@@ -29,5 +29,7 @@ test('NUCO del alta: se propone solo en Agregar equipo y la pantalla lo marca «
   assert.match(registros, /ctx\.nucoSiguiente = nucoSiguiente_\(filas\);/);
   // Al guardar se sigue revisando que no esté repetido
   assert.ok(registros.includes("case 'NUCO': return /^\\d+$/.test(valor) && !ctx.nucoRepetido(valor);"));
-  assert.match(cliente, /const el = e\.sugerido && e\.valor && cuerpo\.querySelector\('\[data-columna="' \+ CSS\.escape\(e\.columna\) \+ '"\]'\);\s*if \(el\) CampoAuto\.llenar\(el, e\.valor\);/);
+  // En el formulario de Agregar / Corregir (abrirEditor), que es donde se arma el alta
+  const editor = cliente.slice(cliente.indexOf('function abrirEditor(id, parte)'), cliente.indexOf('const patron = elementos.filter', cliente.indexOf('function abrirEditor(id, parte)')));
+  assert.match(editor, /const el = e\.sugerido && e\.valor && cuerpo\.querySelector\('\[data-columna="' \+ CSS\.escape\(e\.columna\) \+ '"\]'\);\s*if \(el\) CampoAuto\.llenar\(el, e\.valor\);/);
 });

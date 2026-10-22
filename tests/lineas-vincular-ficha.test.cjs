@@ -10,7 +10,11 @@ const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html
 
 test('Vincular / desvincular vuelve a pintar la ficha abierta, sea del equipo o de la línea (2.61)', () => {
   const vinculo = cliente.slice(cliente.indexOf('async function abrirVinculo(modo, fila, pre)'), cliente.indexOf('"Mandar a cancelación" (30-sep)'));
-  assert.match(vinculo, /const arriba = pila\[pila\.length - 1\];\s*if \(vigente\(\) && arriba\) abrir\(arriba\.tipo, arriba\.id, true\);/);
+  assert.match(vinculo, /const arriba = pila\[pila\.length - 1\];/);
+  assert.match(vinculo, /if \(vigente\(\) && arriba\) abrir\(arriba\.tipo, arriba\.id, true\);/);
+  // La línea cambia de registro al vincularla o desvincularla: su ficha se busca otra vez por su número (DEV, 22-oct)
+  assert.match(vinculo, /const numero = String\(\(arriba && arriba\.tipo === 'linea' && \(fila\.numero \|\| numeroActual\)\) \|\| ''\);/);
+  assert.match(vinculo, /if \(laLinea\) arriba\.id = laLinea\.id;/);
   assert.doesNotMatch(vinculo, /abrir\('equipo', equipo\.id, true\)/);
   // La razón: cada ficha solo se pinta si es la de arriba de la pila
   assert.match(cliente, /if \(!vigente\(\) \|\| !pila\.length \|\| pila\[pila\.length - 1\]\.tipo !== 'equipo' \|\| pila\[pila\.length - 1\]\.id !== id\) return;/);
