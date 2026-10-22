@@ -495,6 +495,8 @@ test('POR RECIBIR: mandar lo deja as√≠, Corregir resguardo solo cambia el rengl√
   assert.equal(t.escritas.movimientos.slice(-1)[0].extra.despues.estatus, 'POR RECIBIR');
   // El panel muestra el elegido, no POR RECIBIR
   assert.equal(t.R.bandeja(usuario).filas[0].ESTATUS_EQUIPO, 'PARA VENTA');
+  // Corregir resguardo abre con el elegido marcado, no con POR RECIBIR
+  assert.equal(t.R.formulario(['EQU-7'], usuario, { corregir: true }).equipos[0].actual['ESTATUS EQUIPO'], 'PARA VENTA');
   t.R.mandar(['EQU-7'], { comentario: 'mejor desecho', corregir: true, porEquipo: { 'EQU-7': pedido('PARA DESECHO') } }, usuario);
   assert.deepEqual([eq['ESTATUS EQUIPO'], renglon.ESTATUS_EQUIPO], ['POR RECIBIR', 'PARA DESECHO']);
   t.R.recibir(['RSG-7'], pau);

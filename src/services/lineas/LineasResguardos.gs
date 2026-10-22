@@ -303,7 +303,9 @@ const LineasResguardos = (function () {
         opcionesEstatus: ESTATUS_EQUIPO_RESGUARDO,
         actual: abierto ? {
           'DEPARTAMENTO': txt(abierto['DEPARTAMENTO']), 'SEDE': txt(abierto['SEDE']), 'OFICINA / DESARROLLO': txt(abierto['OFICINA']),
-          'ESTATUS EQUIPO': txt(LineasUtil.col(f, 'ESTATUS EQUIPO')), 'ESTATUS LINEA': linea ? txt(LineasUtil.col(f, 'ESTATUS LINEA')) : '',
+          // POR RECIBIR: el elegido está en su renglón (pendiente 3.15)
+          'ESTATUS EQUIPO': may(LineasUtil.col(f, 'ESTATUS EQUIPO')) === POR_RECIBIR ? txt(abierto['ESTATUS_EQUIPO']) : txt(LineasUtil.col(f, 'ESTATUS EQUIPO')),
+          'ESTATUS LINEA': linea ? txt(LineasUtil.col(f, 'ESTATUS LINEA')) : '',
           COMENTARIO: txt(abierto['COMENTARIO']) || txt(abierto['MOTIVO']), ESTADO: txt(abierto['ESTADO']),
         } : null,
       });
