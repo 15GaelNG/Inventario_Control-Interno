@@ -195,18 +195,7 @@ const LineasRepo = (function () {
       nucoLegado: tieneEquipo ? null : nuco, legado: legado,
     } : null;
 
-    // Columna virtual DETALLES LINEAS TELEFONICAS del AppSheet: los valores tal cual están en la fila
-    const crudo = (c) => {
-      const v = col(f, c);
-      return v === null || v === undefined ? '' : (v instanceof Date ? v : String(v).trim());
-    };
-    const detalles = {
-      nuco: LineasUtil.nucoVisible(crudo('NUCO')) || '', responsable: crudo('RESPONSABLE'), imei: crudo('IMEI'), sim: crudo('NUMERO SIM'),
-      numero: crudo('NUMERO TELEFONO'), modelo: crudo('EQUIPO'), compania: crudo('COMPAÑIA'), razonSocial: crudo('RAZON SOCIAL'),
-      finPlan: crudo('FIN PLAN'), estatusLinea: estatusLinea || '',
-    };
-
-    return { id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea, detalles: detalles };
+    return { id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea };
   }
 
   /**

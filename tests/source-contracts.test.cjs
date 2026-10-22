@@ -127,7 +127,7 @@ test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de
   assert.match(lineas, /localStorage\.setItem\('lineas\.modoVista'/);
   // Con "Tarjetas" recordado la carga inicial ya usa estas constantes: deben declararse antes (zona muerta de const)
   const inicio = lineas.indexOf('// ---- Carga inicial ----');
-  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'let detallesFicha', 'let tablaHistorial'].forEach((decl) => {
+  ['const PASO_TARJETAS', 'const tarjetasVisibles', 'let tablaHistorial'].forEach((decl) => {
     assert.ok(lineas.indexOf(decl) > 0 && lineas.indexOf(decl) < inicio, decl + ' debe declararse antes de la carga inicial');
   });
   const gestion = read('src/html/views/lineas/lineas-gestion-activos.html');
@@ -135,22 +135,20 @@ test('Líneas Telefónicas ofrece la vista de tarjetas con los mismos filtros de
   assert.match(lineas, /function tarjetaColaborador/);
 });
 
-test('la ficha trae los Detalles para copiar en el orden de DETALLES LINEAS TELEFONICAS', () => {
+test('la ficha ya no tiene la pestaña Detalles: cada tarjeta de General se copia (usuario, 22-oct)', () => {
   const lineas = read('src/html/js/lineas.html');
   const repo = read('src/services/lineas/LineasRepo.gs');
   const servicio = read('src/services/TelefoniaService.gs');
-  assert.equal((servicio.match(/detalles: r\.detalles/g) || []).length, 2);
-  assert.match(repo, /return \{ id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea, detalles: detalles \};/);
-  const cuerpo = lineas.slice(lineas.indexOf('function textoDetalles()'), lineas.indexOf('function pintarTextoDetalles()'));
-  const etiquetas = [...cuerpo.matchAll(/'(?:\\n)?([A-ZÁÉÍÓÚa-záéíóúñ /]+): '/g)].map((m) => m[1]);
-  assert.deepEqual(etiquetas, ['Motivo de resguardo', 'Ticket / Asunto', 'Código de resguardo', 'IMEI', 'SIM', 'Número', 'Modelo',
-    'Compañía', 'Razón Social', 'Estatus de adendum', 'Estatus actual de la línea']);
-  assert.match(cuerpo, /'NUCO ' \+ valor\(d\.nuco\) \+ '\\n-{55}\\n'/);
-  assert.match(lineas, /data-ln-copiar-detalles/);
+  assert.doesNotMatch(servicio, /detalles/);
+  assert.match(repo, /return \{ id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea \};/);
+  assert.doesNotMatch(lineas, /textoDetalles|tarjetaDetallesCopiar|data-ln-copiar-detalles|detallesFicha/);
+  assert.doesNotMatch(lineas, /id: 'detalles'/);
+  assert.doesNotMatch(read('src/html/lineas-estilos.html'), /ln-copiar-cabecera|ln-detalle-entrada|ln-copiar-texto/);
+  // La sección del permiso se quitó del catálogo con la pestaña
+  const modulos = read('src/config/Modulos.gs');
+  const telefonicas = modulos.slice(modulos.indexOf("id: 'lineas-telefonicas'"), modulos.indexOf("id: 'lineas-telefonicas'") + 1500);
+  assert.doesNotMatch(telefonicas, /id: 'detalles'/);
   assert.match(lineas, /function copiarTexto\(texto\)/);
-  // Mismo mapeo que la fórmula del AppSheet: Código de resguardo = [RESPONSABLE], Estatus de adendum = [FIN PLAN]
-  assert.match(repo, /responsable: crudo\('RESPONSABLE'\)/);
-  assert.match(repo, /finPlan: crudo\('FIN PLAN'\)/);
 });
 
 test('el historial es una lista filtrable por movimiento y exportable a Excel', () => {
@@ -185,7 +183,7 @@ test('no se descargan CSV y los botones usan los mismos nombres y medidas', () =
   const lineas = read('src/html/js/lineas.html');
   assert.match(lineas, /\(id \? ' Guardar cambios' : ' ' \+ agregar\)/);
   // Acciones de la ficha con color (botón principal, sin .secondary)
-  const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('// ---- Detalles: la columna'));
+  const botones = lineas.slice(lineas.indexOf('function botonesFicha'), lineas.indexOf('function copiarConAviso('));
   assert.doesNotMatch(botones, /secondary/);
   assert.match(lineas, /'<a class="externo ln-boton"/);
   const estilos = read('src/html/lineas-estilos.html');
@@ -756,7 +754,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   assert.match(read('src/services/lineas/LineasAccesorios.gs'), /Ese artículo ya existe/);
 });
 
-test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama Detalles', () => {
+test('todos los módulos tienen KPIs con línea lateral', () => {
   const lineas = read('src/html/js/lineas.html');
   const estilos = read('src/html/lineas-estilos.html');
   // La franja de color la da el .stat-tile global (styles.html); Líneas ya no trae la suya (jorge, 25-sep)
@@ -766,7 +764,6 @@ test('todos los módulos tienen KPIs con línea lateral y la tarjeta se llama De
   assert.match(lineas, /etiqueta: 'Sin activos'/);
   assert.match(lineas, /etiqueta: 'Sin stock'/);
   assert.match(lineas, /etiqueta: 'Cambios de estatus'/);
-  assert.match(lineas, /' Detalles<\/h3>'/);
   assert.doesNotMatch(lineas, /Detalles para copiar|se escriben aquí antes de copiar/);
 });
 
@@ -804,7 +801,7 @@ test('experiencia de uso: menú en celular, ficha en pestañas y formularios por
   assert.doesNotMatch(perfil, /SALT|PASSWORD_HASH|\.\.\.usuario/);
   assert.match(perfil, /porNombre\.length === 1 \? porNombre\[0\] : null/);
   // Ficha: resumen rápido + pestañas; Documentos con indicadores y tabla, como Historial
-  assert.match(lineas, /function pestanasFicha\(general, detalles, conDocumentos\) \{[\s\S]*?return Tabs\.html\(\[/);
+  assert.match(lineas, /function pestanasFicha\(general, conDocumentos\) \{[\s\S]*?return Tabs\.html\(\[/);
   assert.match(lineas, /return Ficha\.encabezado\(\{ icono: ico, tituloHtml: titulo/);
   assert.match(lineas, /function pintarDocumentos\(cont, inspecciones, responsivas, id, vista\)/);
   // Formularios por pasos con el mismo marcado del componente Formulario
@@ -1142,7 +1139,7 @@ test('detalle de la inspección: mismo diseño que la ficha, sin revisión del a
   assert.match(detalle, /tarjeta\(icono\('images'\) \+ ' Fotografías \('/);
 });
 
-test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y Excel)', () => {
+test('NUCO siempre a 4 dígitos (tabla, ficha, bitácoras, historial y Excel)', () => {
   const Util = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
   assert.equal(Util.nucoVisible(234), '0234');
   assert.equal(Util.nucoVisible('5'), '0005');
@@ -1153,7 +1150,6 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, detalles, bitácoras, historial y
   assert.equal(Util.nucoVisible(null), null);
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
-  assert.match(repo, /nuco: LineasUtil\.nucoVisible\(crudo\('NUCO'\)\) \|\| '',/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
   assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v12';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);

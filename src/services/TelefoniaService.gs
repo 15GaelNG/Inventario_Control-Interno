@@ -156,13 +156,12 @@ const TelefoniaService = (function () {
     if (!r || !r.equipo) throw new Error('No existe el equipo ' + id);
     exigirAlcance_(sesion, r);
     if (LineasDG.esRegistro(r.equipo, r.linea)) {
-      if (!esAdmin_(sesion)) return LineasUtil.paraCliente({ equipo: LineasDG.fichaOculta(r.equipo, true), linea: LineasDG.fichaOculta(r.linea, false), detalles: null, corte: null, facturas: null });
+      if (!esAdmin_(sesion)) return LineasUtil.paraCliente({ equipo: LineasDG.fichaOculta(r.equipo, true), linea: LineasDG.fichaOculta(r.linea, false), corte: null, facturas: null });
       r.equipo.dg = true;
     }
     return LineasUtil.paraCliente({
       equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
-      detalles: r.detalles,
       // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros (con su sección)
       corte: r.linea && veFacturacion_(sesion) ? LineasRepo.diaDeCorte(r.linea.cuentaPadre) : null,
       facturas: veFacturacion_(sesion) ? LineasRepo.facturasDeLinea(r.linea, 3) : null,
@@ -176,7 +175,7 @@ const TelefoniaService = (function () {
     if (!r || !r.linea) throw new Error('No existe la línea ' + id);
     exigirAlcance_(sesion, r);
     if (LineasDG.esRegistro(r.equipo, r.linea)) {
-      if (!esAdmin_(sesion)) return LineasUtil.paraCliente({ linea: LineasDG.fichaOculta(r.linea, false), equipo: LineasDG.fichaOculta(r.equipo, true), detalles: null, corte: null, facturas: null });
+      if (!esAdmin_(sesion)) return LineasUtil.paraCliente({ linea: LineasDG.fichaOculta(r.linea, false), equipo: LineasDG.fichaOculta(r.equipo, true), corte: null, facturas: null });
       r.linea.dg = true;
     }
     // Sin equipo, la carpeta de la línea en LINEAS (pendiente 2.45), si ya tiene; con su sección, como la del NUCO
@@ -185,7 +184,6 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente({
       linea: ocultarSecretos_(r.linea, CAMPOS_SECRETOS_LINEA, sesion),
       equipo: sinCarpeta_(ocultarSecretos_(r.equipo, CAMPOS_SECRETOS_EQUIPO, sesion), sesion),
-      detalles: r.detalles,
       // Del proveedor (13-oct): el día de corte de su cuenta y los últimos 3 cobros. «Números de esta línea» se quitó:
       // los anteriores se ven abajo del número («Antes …») y en el historial
       corte: veFacturacion_(sesion) ? LineasRepo.diaDeCorte(r.linea.cuentaPadre) : null,
