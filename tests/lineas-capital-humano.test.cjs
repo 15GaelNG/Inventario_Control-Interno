@@ -57,6 +57,25 @@ test('La ventana de captura se abre sin la marca de guardado de la anterior (fir
   assert.doesNotMatch(cliente, /\$\('#ln-modal-captura', raiz\)\.hidden = false;/);
 });
 
+test('La X de la ventana se prende al abrirla: un guardado que cerró la ventana la dejaba apagada (usuario, 22-oct, 2.64)', () => {
+  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const inicio = cliente.indexOf('function mostrarModalCaptura()');
+  const fuente = cliente.slice(inicio, cliente.indexOf('function cerrarCaptura(', inicio));
+  // La ventana como la dejó un Corregir guardado: X y Cancelar apagados, con la marca de guardado y escondida
+  const botones = [{ disabled: true }, { disabled: true }];
+  const atributos = { 'aria-busy': 'true' };
+  const modal = {
+    hidden: true,
+    removeAttribute: (a) => { delete atributos[a]; },
+    querySelectorAll: (sel) => (sel === '[data-cerrar-modal]' ? botones : []),
+  };
+  const mostrar = new Function('$', 'raiz', fuente + '\nreturn mostrarModalCaptura;')(() => modal, {});
+  mostrar();
+  assert.strictEqual(modal.hidden, false);
+  assert.strictEqual(atributos['aria-busy'], undefined);
+  assert.deepStrictEqual(botones.map((b) => b.disabled), [false, false]);
+});
+
 test('Después de Reasignar se vuelve a pintar la ficha abierta (producción, 4-oct)', () => {
   const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
   const reasignar = cliente.slice(cliente.indexOf('function abrirResponsiva(tipo, fila, para, opciones)'), cliente.indexOf('const inspeccionesDelDia = {};'));

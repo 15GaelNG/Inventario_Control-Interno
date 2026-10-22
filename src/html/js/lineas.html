@@ -4572,10 +4572,13 @@
       // ---- Captura: inspección y responsiva nuevas ----
 
       /** La ventana de captura se reutiliza: se abre siempre sin la marca de guardado de la anterior (con ella el lienzo
-       *  de firma no recibe trazos; pasaba en Reasignar después de la inspección de Mandar a resguardo, 4-oct). */
+       *  de firma no recibe trazos; pasaba en Reasignar después de la inspección de Mandar a resguardo, 4-oct). Ni con la X
+       *  apagada: el guardado la apaga y Corregir, Mandar a resguardo o una acción de varios cierran la ventana sin
+       *  prenderla; la siguiente salía con el reloj y no cerraba (usuario, 22-oct, pendiente 2.64). */
       function mostrarModalCaptura() {
         const modal = $('#ln-modal-captura', raiz);
         modal.removeAttribute('aria-busy');
+        modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
         modal.hidden = false;
       }
 
