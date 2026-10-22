@@ -2646,6 +2646,15 @@
         // Tarjetas: el foco queda en la tarjeta (no en la tabla), así que Esc quita la selección desde aquí
         else if (ev.key === 'Escape' && ev.target.closest && ev.target.closest('#ln-listado .ln-cuadro') && tablas[memoria.modulo]) tablas[memoria.modulo].limpiarSeleccion();
       });
+      // Escape también con el foco fuera de la ventana (en la página, tras un clic en su encabezado o con el panel Detalles
+      // abierto; pendiente 2.37): el keydown de la raíz solo lo oye con el foco dentro
+      // (se quita sola cuando la pantalla ya no está: al volver a Líneas se pone otra)
+      const escapeVentana = (ev) => {
+        if (!document.body.contains(raiz)) { document.removeEventListener('keydown', escapeVentana); return; }
+        if (ev.key !== 'Escape' || raiz.contains(ev.target) || $('#ln-modal-captura', raiz).hidden) return;
+        cerrarCaptura();
+      };
+      document.addEventListener('keydown', escapeVentana);
       $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
         if (ev.target.closest('[data-espera-volver]')) { ocultarEspera(); return; }
         // Un clic afuera no cierra la ventana (usuario, 4-oct): solo la X, Cancelar o Cerrar

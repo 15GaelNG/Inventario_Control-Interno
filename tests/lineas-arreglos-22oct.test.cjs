@@ -55,6 +55,9 @@ test('2.37: con una ventana abierta, el panel lateral va detrás y no se queda c
   const panel = cliente.slice(cliente.indexOf('function abrirPanelLateral('), cliente.indexOf('function cerrarMenusFlotantes('));
   assert.match(panel, /if \(ev\.key !== 'Escape' \|\| document\.querySelector\('#ln-modal-captura:not\(\[hidden\]\)'\)\) return;/);
   assert.match(panel, /fondo\.className = 'dt-panel-fondo ln-panel-fondo';/);
+  // Escape cierra la ventana aunque el foco esté fuera de ella (en la página)
+  assert.match(cliente, /if \(ev\.key !== 'Escape' \|\| raiz\.contains\(ev\.target\) \|\| \$\('#ln-modal-captura', raiz\)\.hidden\) return;\s*cerrarCaptura\(\);/);
+  assert.match(cliente, /if \(!document\.body\.contains\(raiz\)\) \{ document\.removeEventListener\('keydown', escapeVentana\); return; \}/);
   const estilos = leer('src/html/lineas-estilos.html');
   assert.match(estilos, /body:has\(#ln-modal-captura:not\(\[hidden\]\)\) \.dt-panel\.ln-panel,\s*body:has\(#ln-modal-captura:not\(\[hidden\]\)\) \.ln-panel-fondo \{ z-index: 490; \}/);
 });
