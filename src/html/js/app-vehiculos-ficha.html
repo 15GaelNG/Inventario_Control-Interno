@@ -1,0 +1,376 @@
+<script>
+  /**
+   * app-vehiculos-ficha.html — Vehículos: la ficha de un vehículo: abrirla y cerrarla, sus secciones y pestañas.
+   * Parte de initVehiculos (fase 6.1b, tools/app/partir-vehiculos.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  Vehiculos.registrar('ficha', (T) => {
+    const { CLASE_ESTILO, abrirEditarVehiculo, abrirFotosInspeccionVehiculo, badgeEstatus, migasVehiculo,
+      puedeEditar, wireMigasVehiculo } = T;
+    const { buscarExpedienteAdquisicionFicha, cambiarEstatusFicha, cargarArchivosAdquisicionFichaTab,
+      contenidoAdquisicionFicha, copiarLigaFicha_, devolverPrestamoFicha, eliminarRegistroFicha, regenerarLigaFicha_,
+      verRegistroFicha } = T.de('registros');
+    const { abrirAgregarHolograma, abrirAgregarIncidencia, abrirAgregarInspeccion, abrirAgregarSensor,
+      abrirAgregarVerificacion, abrirEditarHologramaFicha, abrirEditarIncidenciaFicha, abrirEditarSensorFicha,
+      abrirEditarVerificacionFicha } = T.de('capturas');
+    const { abrirAgregarAdherenteVehicular, abrirAgregarResponsivaVehicular } = T.de('documentos');
+
+    function cerrarFichaVehiculo() {
+      T.fichaVehiculoAbierta = null;
+      document.getElementById('veh-detalle').hidden = true;
+      document.getElementById('veh-detalle').innerHTML = '';
+      document.getElementById('veh-listado').hidden = false;
+    }
+
+    const ICONO_GRUPO_VEHICULO = {
+      'Vehículo': 'car', 'Identificación': 'id-card', 'Documentación y seguro': 'file-text',
+      'Accesorios y sensor': 'radio', 'Ubicación y registro': 'map-pin', 'Otros datos': 'more-horizontal',
+    };
+
+    /** Igual que renderCamposVehiculo pero para MOSTRAR (no capturar): mismos grupos y
+     *  etiquetas legibles que Registrar/Editar, en vez del volcado plano de antes. Lo que
+     *  no está en CAMPOS_VEHICULO (columnas legadas del AppSheet) cae en "Otros datos".
+     *  soloGrupos filtra a solo esos grupos (null: todos, más "Otros datos"). */
+    function seccionesFichaVehiculo(completo, soloGrupos) {
+      const porGrupo = {};
+      const grupos = [];
+      const usadas = new Set();
+      CAMPOS_VEHICULO.forEach((campo) => {
+        usadas.add(campo.clave);
+        if (soloGrupos && soloGrupos.indexOf(campo.grupo) === -1) return;
+        // Los archivos (factura, póliza, responsiva…) se ven en las pestañas Documentos y Responsiva, no aquí
+        if (campo.tipo === 'file') return;
+        const valor = completo[campo.clave];
+        const vacio = valor === '' || valor === null || valor === undefined;
+        // Un campo vacío no se muestra, salvo el que pide decirlo (vacioEnFicha: "Sin accesorios registrados")
+        if (vacio && !campo.vacioEnFicha) return;
+        if (!porGrupo[campo.grupo]) { porGrupo[campo.grupo] = []; grupos.push(campo.grupo); }
+        porGrupo[campo.grupo].push(itemInfo(campo.etiqueta, vacio
+          ? '<span class="info-vacio">' + escaparHtml(campo.vacioEnFicha) + '</span>'
+          : (campo.moneda ? formatearMoneda(valor) : valor)));
+      });
+      if (!soloGrupos || soloGrupos.indexOf('Otros datos') !== -1) {
+        const otros = Object.keys(completo)
+          .filter((k) => !usadas.has(k) && completo[k] !== '' && completo[k] !== null && completo[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), completo[k]));
+        if (otros.length) { porGrupo['Otros datos'] = otros; grupos.push('Otros datos'); }
+      }
+
+      // Pestaña Datos: las secciones del formulario de Editar, en su orden. Plegables; en celular solo las dos primeras
+      // abiertas para que no sea un scroll eterno. "Documentación y seguro" aquí solo trae los estados.
+      const abiertas = Pantalla.esCelular() ? 2 : grupos.length;
+      return grupos.map((g, i) => '<details class="card ln-card ficha-seccion"' + (i < abiertas ? ' open' : '') + '><summary><h3>' +
+        '<i data-lucide="' + (ICONO_GRUPO_VEHICULO[g] || 'info') + '" class="ico ln-icon"></i> ' + (TITULO_SECCION_FICHA[g] || g) +
+        (g === 'Documentación y seguro' ? ' <a href="#" class="ln-enlace ficha-ver-documentos" data-ir-pestana="documentos">Ver documentos</a>' : '') +
+        '</h3></summary><div class="info-grid">' + porGrupo[g].join('') + '</div></details>').join('');
+    }
+
+    const TITULO_SECCION_FICHA = { 'Documentación y seguro': 'Seguro, tenencia y verificación' };
+
+    function botonArchivoFicha(tipo, ruta) {
+      if (!ruta) return '—';
+      // Lo nuevo guarda la liga de Drive (expediente del NUCO): se abre directo; lo viejo es una ruta que resuelve el servidor
+      if (/^https?:/i.test(String(ruta))) return TablaFicha.boton({ href: ruta });
+      return TablaFicha.boton({ datos: { archivo: tipo, ruta: ruta } });
+    }
+
+    function mostrarPestanaFichaVehiculo(nombre) {
+      Tabs.mostrar(document.getElementById('veh-detalle'), nombre);
+    }
+    /** Lo que se lee al abrir una pestaña (con el clic o con mostrarPestanaFichaVehiculo) */
+    function alAbrirPestanaVehiculo(nombre) {
+      const detalle = document.getElementById('veh-detalle');
+      if (nombre === 'documentos') DocumentosVehiculo.cargar(detalle.querySelector('[data-docs-vehiculo]'));
+      if (nombre === 'inspecciones') InspeccionesFicha.cargar(detalle.querySelector('[data-insp-ficha]'));
+      if (nombre === 'adquisicion') cargarArchivosAdquisicionFichaTab(detalle.querySelector('[data-adq-ficha-archivos]'));
+    }
+
+    /** repintar: la misma ficha con datos nuevos, sin "Cargando…" ni volver arriba */
+    async function abrirFichaVehiculo(vResumen, pestanaInicial, repintar) {
+      const listado = document.getElementById('veh-listado');
+      const detalle = document.getElementById('veh-detalle');
+      T.fichaVehiculoAbierta = vResumen;
+      listado.hidden = true;
+      detalle.hidden = false;
+      if (!repintar) {
+        detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        wireMigasVehiculo();
+        document.getElementById('view-container').scrollTop = 0;
+        window.scrollTo(0, 0);
+      }
+
+      try {
+        // Todo en UNA llamada (apiFichaVehiculo en ClientApi.gs): el servidor pide cada pestaña
+        // con el permiso de su módulo y manda null en las que la persona no puede ver (su pestaña
+        // no aparece, igual que en el menú); si una que sí puede ver falla, sale vacía. Una ficha
+        // ya vista sale al instante de su copia guardada y se repinta sola si llegó algo distinto;
+        // cualquier guardado borra las copias (ESCRIBE en api.html).
+        // Por el ID del vehículo (el folio se reasigna; el ID no)
+        const ficha = JSON.parse((await callServerListaCacheada('apiFichaVehiculo', state.token, vResumen.ID_VEHICULO || vResumen.FOLIO)) || '{}');
+        const { completo, cambios, reasignaciones, verificaciones, inspecciones, sensores, hologramas, incidencias, responsivas, adherentes } = ficha;
+        // Se pudo haber vuelto a la lista (o abierto otro folio) mientras cargaba.
+        if (detalle.hidden || !document.body.contains(detalle) || T.fichaVehiculoAbierta !== vResumen) return;
+        if (!completo) {
+          detalle.innerHTML = migasVehiculo() + '<p class="empty-state">No se encontró el registro completo.</p>';
+          wireMigasVehiculo();
+          return;
+        }
+
+        const estilo = CLASE_ESTILO[String(completo['CLASE'] || '').toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+        const adherentesActivos = (adherentes || []).filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length;
+        const chipAdherentes = adherentesActivos
+          ? '<span class="badge-estado pendiente"><i data-lucide="users" class="ico"></i> ' +
+            adherentesActivos + (adherentesActivos === 1 ? ' adherente' : ' adherentes') + '</span>'
+          : '';
+        const resumenRapido = [
+          ['Marca / Línea', [completo['MARCA'], completo['LINEA VEHICULO']].filter(Boolean).join(' · ')],
+          ['Departamento', completo['DEPARTAMENTO']],
+          ['Responsable', completo['RESPONSABLE VEHICULO']],
+          ['Placa', completo['PLACA']],
+        ].filter((d) => d[1]);
+
+        let html = migasVehiculo();
+        html += Ficha.encabezado({
+          icono: estilo.icono, color: estilo.color, titulo: 'Nucco: ' + (vResumen.NUCCO || ''),
+          chips: badgeEstatus(completo['ESTATUS']) + chipAdherentes,
+          botones: puedeEditar ? '<button type="button" id="veh-btn-editar-ficha">' + Iconos.svg('editar') + ' Editar</button>' : '',
+          resumen: resumenRapido,
+        });
+
+        // Una sola pestaña Datos (12-oct-2026; antes General + Detalles): todo el vehículo, por secciones
+        const datos = seccionesFichaVehiculo(completo, null);
+
+        // Cada parte del historial es de su módulo (Cambios / Reasignaciones): sin permiso, no sale
+        const historial = (cambios === null ? '' : '<div class="card ln-card"><h3><i data-lucide="pencil" class="ico ln-icon"></i> Historial de cambios</h3>' +
+          ((cambios || []).length ? '<div class="historial-timeline">' + cambios.map((c) => `
+              <div class="historial-item">
+                <div class="historial-icon"><i data-lucide="pencil" class="ico"></i></div>
+                <div class="historial-main">
+                  <div class="historial-campo">${escaparHtml(c.CAMPO || '—')}</div>
+                  <div class="historial-valores">
+                    <span class="chip-valor chip-antes">${escaparHtml(c.ANTES || '(vacío)')}</span>
+                    <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                    <span class="chip-valor chip-despues">${escaparHtml(c.DESPUES || '(vacío)')}</span>
+                  </div>
+                </div>
+                <div class="historial-meta">
+                  <div>${escaparHtml(c.ACTUALIZADO_POR || '—')}</div>
+                  <div>${formatearFecha(c.FECHA)}</div>
+                </div>
+              </div>
+            `).join('') + '</div>' : '<p class="empty-state">Sin cambios registrados para este vehículo.</p>') + '</div>') +
+          (reasignaciones === null ? '' : '<div class="card ln-card"><h3><i data-lucide="arrow-left-right" class="ico ln-icon"></i> Historial de reasignaciones</h3>' +
+          ((reasignaciones || []).length ? '<div class="historial-timeline">' + reasignaciones.map((r) => `
+              <div class="historial-item">
+                <div class="historial-icon historial-icon-accent"><i data-lucide="arrow-left-right" class="ico"></i></div>
+                <div class="historial-main">
+                  <div class="historial-valores">
+                    <span class="chip-valor chip-antes">${escaparHtml(r.RESPONSABLE_SALIENTE || '—')}</span>
+                    <i data-lucide="arrow-right" class="ico historial-flecha"></i>
+                    <span class="chip-valor chip-despues">${escaparHtml(r.RESPONSABLE_ENTRANTE || '—')}</span>
+                  </div>
+                  <div class="historial-departamento">${escaparHtml(r.DEPARTAMENTO_ENTRANTE || '—')}</div>
+                </div>
+                <div class="historial-meta">
+                  <div>${escaparHtml(r.QUIEN_REGISTRO || '—')}</div>
+                  <div>${formatearFecha(r.FECHA)}</div>
+                </div>
+              </div>
+            `).join('') + '</div>' : '<p class="empty-state">Sin reasignaciones registradas para este vehículo.</p>') + '</div>');
+
+        html += Tabs.html([
+          { id: 'datos', titulo: 'Datos', icono: 'layout-grid', contenido: datos },
+          (cambios || reasignaciones) && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: historial, num: (cambios || []).length + (reasignaciones || []).length },
+          // Lo que hay en la carpeta del NUCO, por tipo de documento (app-documentos-vehiculo.html): se lee al abrirla.
+          // Su sección (vehiculos.documentos)
+          puede('vehiculos.documentos') && { id: 'documentos', titulo: 'Documentos', icono: 'folder-open', contenido: DocumentosVehiculo.contenedor(vResumen.NUCCO || completo['NUCCO']) },
+          // Expediente externo de Adquisición Vehicular (AdquisicionVehicularService.gs): folio/carpeta ya
+          // ligados a esta ficha; los archivos de la carpeta se leen al abrir la pestaña (cargarArchivosAdquisicionFichaTab).
+          // Con el permiso de Adquisición, no el de Vehículos (14-oct)
+          permisoDe('adquisicion-vehicular') && { id: 'adquisicion', titulo: 'Adquisición', icono: 'receipt', contenido: contenidoAdquisicionFicha(completo, puedeEditar) },
+          verificaciones && {
+            id: 'verificaciones', titulo: 'Verificaciones', icono: 'clipboard-check', num: verificaciones.length,
+            contenido: pestanaFicha('clipboard-check', 'Verificaciones', [
+              { t: 'Verificación', r: (v) => formatearFecha(v.FECHA_VERIFICACION) },
+              { t: 'Próxima', r: (v) => formatearFecha(v.FECHA_PROXIMA) },
+              { t: 'Comprobante', r: (v) => botonArchivoFicha('verificacion', v.COMPROBANTE) },
+              { t: '', r: (v) => accionesFichaRegistro('verificacion', v.ID, { editar: puedeEditarModulo('verificaciones'), eliminar: puedeEditarModulo('verificaciones') }) },
+            ], verificaciones, 'Sin verificaciones registradas para este vehículo.',
+            puedeEditarModulo('verificaciones') ? { tipo: 'verificacion', texto: 'Agregar' } : null),
+          },
+          // Las de la app y las del expediente del NUCO (Drive) en una tabla por año, cada una con sus fotos
+          // (app-inspecciones-vehiculo.html): el expediente se lee al abrir la pestaña
+          inspecciones && {
+            id: 'inspecciones', titulo: 'Inspecciones', icono: 'clipboard-list', num: inspecciones.length,
+            contenido: InspeccionesFicha.preparar(vResumen.NUCCO || completo['NUCCO'], {
+              app: inspecciones,
+              botonPdf: (ruta) => botonArchivoFicha('inspeccion', ruta),
+              acciones: (id) => accionesFichaRegistro('inspeccion', id, {}),
+              agregar: puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null,
+              alPintar: (el) => {
+                el.querySelectorAll('[data-ficha-ver]').forEach((btn) => btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id)));
+                el.querySelectorAll('[data-agregar]').forEach((btn) => btn.addEventListener('click', () => abrirAgregarInspeccion(vResumen, completo, hologramas || [])));
+              },
+              alFotos: (d, app) => abrirFotosInspeccionVehiculo(vResumen, d, app),
+            }),
+          },
+          sensores && {
+            id: 'sensor', titulo: 'Sensor', icono: 'radio', num: sensores.length,
+            contenido: pestanaFicha('radio', 'Sensor', [
+              { t: 'Instalación', r: (s) => formatearFecha(s.FECHA_INSTALACION) },
+              { t: 'Serie', r: (s) => escaparHtml(s.SERIE_SENSOR || '—') },
+              { t: 'Estatus', r: (s) => escaparHtml(s.ESTATUS || '—') },
+              { t: 'Responsiva', r: (s) => botonArchivoFicha('sensor', s.RESPONSIVA) },
+              { t: '', r: (s) => accionesFichaRegistro('sensor', s.ID, { editar: puedeEditarModulo('instalacion-sensores'), eliminar: puedeEditarModulo('instalacion-sensores') }) },
+            ], sensores, 'Sin sensor instalado para este vehículo.',
+            puedeEditarModulo('instalacion-sensores') ? { tipo: 'sensor', texto: 'Agregar' } : null),
+          },
+          hologramas && {
+            id: 'hologramas', titulo: 'Hologramas', icono: 'credit-card', num: hologramas.length,
+            contenido: pestanaFicha('credit-card', 'Hologramas', [
+              { t: 'Proveedor', r: (h) => escaparHtml(h.PROVEEDOR || '—') },
+              { t: 'Estatus', r: (h) => escaparHtml(h.ESTATUS_EOX || '—') },
+              { t: 'Calcomanía', r: (h) => escaparHtml(h.CALCOMANIA || '—') },
+              { t: 'Autorizado', r: (h) => (h.AUTORIZADO_PESOS === '' || h.AUTORIZADO_PESOS === null || h.AUTORIZADO_PESOS === undefined) ? '—' : formatearMoneda(h.AUTORIZADO_PESOS) },
+              { t: 'Solicitud', r: (h) => botonArchivoFicha('holograma', h.SOLICITUD) },
+              { t: '', r: (h) => accionesFichaRegistro('holograma', h.ID, { editar: puedeEditarModulo('hologramas'), eliminar: puedeEditarModulo('hologramas') }) },
+            ], hologramas, 'Sin hologramas registrados para este vehículo.',
+            puedeEditarModulo('hologramas') ? { tipo: 'holograma', texto: 'Agregar' } : null),
+          },
+          incidencias && {
+            id: 'incidencias', titulo: 'Incidencias', icono: 'wrench', num: incidencias.length,
+            contenido: pestanaFicha('wrench', 'Incidencias', [
+              { t: 'Fecha', r: (i) => formatearFecha(i.FECHA_REGISTRO) },
+              { t: 'Motivo', r: (i) => escaparHtml(i.INSPECCION_INGRESO || '—') },
+              { t: 'Estado', r: (i) => '<span class="badge-estado ' + (i.ESTADO === 'ABIERTA' ? 'abierta' : 'cerrada') + '">' + (i.ESTADO === 'ABIERTA' ? 'Abierta' : 'Cerrada') + '</span>' },
+              { t: 'Mecánico', r: (i) => escaparHtml(i.MECANICO || '—') },
+              { t: '', r: (i) => accionesFichaRegistro('incidencia', i.ID, { editar: puedeEditarModulo('incidencias'), eliminar: puedeEditarModulo('incidencias') }) },
+            ], incidencias, 'Sin incidencias registradas para este vehículo.',
+            puedeEditarModulo('incidencias') ? { tipo: 'incidencia', texto: 'Agregar' } : null),
+          },
+          responsivas && {
+            id: 'responsiva', titulo: 'Responsiva', icono: 'file-signature', num: responsivas.length,
+            contenido: pestanaFicha('file-signature', 'Responsiva', [
+              { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
+              { t: 'Responsable', r: (r) => escaparHtml(r.RESPONSABLE || '—') },
+              { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'Préstamo', r: (r) => badgePrestamo(r) },
+              { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
+              { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
+              { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
+                eliminar: puedeEditarModulo('vehiculos.responsiva'),
+                copiarLiga: r.TOKEN_FIRMA || null,
+                copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                regenerarLiga: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
+                devolverPrestamo: puedeEditarModulo('vehiculos.responsiva') && r.TIPO_RESPONSIVA === 'PRESTAMO' && r.ESTATUS_PRESTAMO === 'EN PRESTAMO',
+              }) },
+            ], responsivas, 'Sin responsivas registradas para este vehículo.',
+            puedeEditarModulo('vehiculos.responsiva') ? { tipo: 'responsiva', texto: 'Generar nueva responsiva' } : null),
+          },
+          adherentes && {
+            id: 'adherente', titulo: 'Adherentes', icono: 'users',
+            num: adherentes.filter((r) => (r.ESTATUS || 'ACTIVO') === 'ACTIVO').length,
+            contenido: pestanaFicha('users', 'Adherentes', [
+              { t: 'Fecha', r: (r) => formatearFecha(r.FECHA) },
+              { t: 'Adherente', r: (r) => escaparHtml(r.ADHERENTE || '—') },
+              { t: 'Departamento', r: (r) => escaparHtml(r.DEPARTAMENTO || '—') },
+              { t: 'Estatus', r: (r) => '<span class="badge-estado ' + ((r.ESTATUS || 'ACTIVO') === 'ACTIVO' ? 'activo' : 'baja') + '">' + (r.ESTATUS || 'ACTIVO') + '</span>' },
+              { t: 'Firma', r: (r) => badgeEstadoFirma(r, 'adherente') },
+              { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
+              { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
+                // Dar de baja / reactivar escribe: solo con edición (antes se veía y el servidor lo negaba)
+                estatus: puedeEditarModulo('vehiculos.adherente') ? r.ESTATUS || 'ACTIVO' : null,
+                eliminar: puedeEditarModulo('vehiculos.adherente'),
+                copiarLiga: r.TOKEN_FIRMA || null,
+                copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
+                regenerarLiga: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA || !!r.FIRMADO_POR),
+                regenerarLigaJefe: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE' && (!!r.TOKEN_FIRMA_JEFE || !!r.FIRMADO_POR_JEFE),
+              }) },
+            ], adherentes, 'Sin adherentes registrados para este vehículo.',
+            puedeEditarModulo('vehiculos.adherente') ? { tipo: 'adherente', texto: 'Generar nuevo adherente' } : null),
+          },
+        ].filter(Boolean));
+
+        detalle.innerHTML = html;
+        wireMigasVehiculo();
+        // Lo que se lee de Drive (Documentos, fotos de Inspecciones) se pide ya, en segundo plano: al abrir su pestaña
+        // normalmente ya llegó
+        const nuccoFicha = vResumen.NUCCO || completo['NUCCO'];
+        DocumentosVehiculo.precargar(nuccoFicha);
+        if (inspecciones) InspeccionesFicha.precargar(nuccoFicha);
+        if (pestanaInicial) mostrarPestanaFichaVehiculo(pestanaInicial);
+        const btnEditar = document.getElementById('veh-btn-editar-ficha');
+        if (btnEditar) btnEditar.addEventListener('click', () => abrirEditarVehiculo(vResumen));
+        detalle.querySelectorAll('[data-agregar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tipo = btn.dataset.agregar;
+            if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+            else if (tipo === 'sensor') abrirAgregarSensor(vResumen);
+            else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
+            else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
+            else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, hologramas || []);
+            else if (tipo === 'responsiva') abrirAgregarResponsivaVehicular(vResumen, completo);
+            else if (tipo === 'adherente') abrirAgregarAdherenteVehicular(vResumen, completo);
+            else if (tipo === 'adquisicion') buscarExpedienteAdquisicionFicha(vResumen, completo);
+          });
+        });
+        // Ver completo/Editar/Eliminar por fila: el registro completo (para Editar) ya
+        // está en memoria en los arreglos que se acaban de pedir -- se indexa por ID una
+        // vez, sin volver a pedirlo al servidor (Ver completo sí pide el suyo aparte,
+        // porque necesita TODAS las columnas, no solo las de este resumen curado).
+        const porIdFicha = {
+          verificacion: Object.fromEntries((verificaciones || []).map((v) => [v.ID, v])),
+          sensor: Object.fromEntries((sensores || []).map((s) => [s.ID, s])),
+          holograma: Object.fromEntries((hologramas || []).map((h) => [h.ID, h])),
+          incidencia: Object.fromEntries((incidencias || []).map((i) => [i.ID, i])),
+        };
+        detalle.querySelectorAll('[data-ficha-ver]').forEach((btn) => {
+          btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id));
+        });
+        detalle.querySelectorAll('[data-ficha-editar]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const tipo = btn.dataset.fichaEditar;
+            const registro = porIdFicha[tipo] && porIdFicha[tipo][btn.dataset.id];
+            if (!registro) return;
+            if (tipo === 'verificacion') abrirEditarVerificacionFicha(registro, vResumen);
+            else if (tipo === 'sensor') abrirEditarSensorFicha(registro, vResumen);
+            else if (tipo === 'holograma') abrirEditarHologramaFicha(registro, vResumen);
+            else if (tipo === 'incidencia') abrirEditarIncidenciaFicha(registro, vResumen);
+          });
+        });
+        detalle.querySelectorAll('[data-ficha-eliminar]').forEach((btn) => {
+          btn.addEventListener('click', () => eliminarRegistroFicha(btn.dataset.fichaEliminar, btn.dataset.id, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-estatus]').forEach((btn) => {
+          btn.addEventListener('click', () => cambiarEstatusFicha(btn.dataset.fichaEstatus, btn.dataset.id, btn.dataset.estatusDestino, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-copiar-liga]').forEach((btn) => {
+          btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLiga, 'principal', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-copiar-liga-jefe]').forEach((btn) => {
+          btn.addEventListener('click', () => copiarLigaFicha_(btn.dataset.fichaCopiarLigaJefe, 'jefe', btn.dataset.token));
+        });
+        detalle.querySelectorAll('[data-ficha-regenerar-liga]').forEach((btn) => {
+          btn.addEventListener('click', () => regenerarLigaFicha_(btn.dataset.fichaRegenerarLiga, 'principal', btn.dataset.id, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-regenerar-liga-jefe]').forEach((btn) => {
+          btn.addEventListener('click', () => regenerarLigaFicha_(btn.dataset.fichaRegenerarLigaJefe, 'jefe', btn.dataset.id, vResumen));
+        });
+        detalle.querySelectorAll('[data-ficha-devolver-prestamo]').forEach((btn) => {
+          btn.addEventListener('click', () => devolverPrestamoFicha(btn.dataset.id, vResumen));
+        });
+        refreshIcons();
+      } catch (err) {
+        if (detalle.hidden || !document.body.contains(detalle)) return;
+        detalle.innerHTML = migasVehiculo() + '<p class="error-msg">No se pudo cargar: ' + escaparHtml(err.message) + '</p>';
+        wireMigasVehiculo();
+      }
+    }
+
+    return {
+      abrirFichaVehiculo: abrirFichaVehiculo, alAbrirPestanaVehiculo: alAbrirPestanaVehiculo,
+      cerrarFichaVehiculo: cerrarFichaVehiculo, mostrarPestanaFichaVehiculo: mostrarPestanaFichaVehiculo,
+    };
+  });
+</script>
