@@ -2755,8 +2755,14 @@ test('Pestaña General (usuario, 13-oct): Línea, Cuenta, Plan con su vida y Fac
   // Ficha de la línea: las cuatro tarjetas del proveedor, sin «Números de esta línea»; ficha del equipo: la línea resumida
   // Facturación, con su sección lineas-telefonicas.facturacion (permisos en árbol, 14-oct)
   // Plan y Facturación, los dos con la sección (un CLIENT no la tiene, 14-oct)
-  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*\(veSeccion\('facturacion'\) \? tarjetaPlan\(l, false, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, false\) : ''\)/);
-  assert.match(html, /\(l && veSeccion\('facturacion'\) \? tarjetaPlan\(l, true, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas, true\) : ''\)/);
+  assert.match(html, /tarjetaCuenta\(l, r\.corte\) \+\s*\(veSeccion\('facturacion'\) \? tarjetaPlan\(l, false, r\.facturas\) \+ tarjetaFacturacion\(l, r\.facturas\) : ''\)/);
+  // Ficha del equipo (usuario, 22-oct): sin Facturación; la tarjeta Línea trae la SIM y la cuenta
+  assert.match(html, /\(l && veSeccion\('facturacion'\) \? tarjetaPlan\(l, true, r\.facturas\) : ''\)/);
+  const equipo = html.slice(html.indexOf('      function pintarEquipo('), html.indexOf('      function pintarLinea('));
+  assert.doesNotMatch(equipo, /tarjetaFacturacion/);
+  assert.match(equipo, /\['SIM', l\.sim \?/);
+  assert.match(equipo, /\['Cuenta padre', l\.cuentaPadre \?/);
+  assert.match(equipo, /l\.cuenta \? \['Cuenta', /);
   assert.match(html, /function vidaPlan\(l\)/);
   assert.match(html, /'Vencido hace ' \+ n/);
   // Los periodos se nombran por mes (usuario, 13-oct) y la diferencia dice cuánto
@@ -2837,7 +2843,7 @@ test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra 
   assert.strictEqual(habitual([m(1), m(2), m(3), m(1)]), 1, 'solo los 3 meses anteriores');
   assert.match(repo, /f\.habitual = cobroHabitual\(todas\.slice\(i \+ 1\)\);/);
   const cliente = read('src/html/js/lineas.html');
-  assert.match(cliente, /resumen \|\| !conHabitual\(f\) \? null : \['Habitual', dinero\(f\.habitual, true\)\],/);
+  assert.match(cliente, /conHabitual\(f\) \? \['Habitual', dinero\(f\.habitual, true\)\] : null,/);
   assert.doesNotMatch(cliente.slice(cliente.indexOf('      function tarjetaFacturacion('), cliente.indexOf('      function tarjetaResponsable(')), /f\.renta/);
 });
 

@@ -3332,10 +3332,10 @@
           ['Renta', dinero(l.costoPlan)], ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
         ]) + vidaPlan(l) + (resumen ? '' : pieOrigen(origenPlan(l), !!l.origenPlan)));
       }
-      function tarjetaFacturacion(l, facturas, resumen) {
+      function tarjetaFacturacion(l, facturas) {
         const lista = facturas || [];
         const f = lista[0];
-        const titulo = icono('receipt') + (resumen ? ' Facturación de la línea' : ' Facturación') +
+        const titulo = icono('receipt') + ' Facturación' +
           (f ? '<span class="ln-card-titulo-dato">' + esc(mesDe(f.corte)) + '</span>' : '');
         if (!f) return tarjeta(titulo, '<p class="empty-state">Sin facturas cargadas.</p>');
         // La diferencia es contra el cobro habitual de la línea (usuario, 14-oct; pendiente 1.17); la renta del adendum
@@ -3346,15 +3346,15 @@
           (sinUso(x) ? ' <span class="ln-chip ambar">Sin uso</span>' : '') + '</span></div>').join('');
         return tarjeta(titulo, campos([
           ['Cobrado', dinero(f.cobrado, true)],
-          resumen || !conHabitual(f) ? null : ['Habitual', dinero(f.habitual, true)],
+          conHabitual(f) ? ['Habitual', dinero(f.habitual, true)] : null,
           conHabitual(f) ? ['Diferencia', diferenciaTexto(f.diferencia), true] : null,
-          resumen ? null : ['Uso', usoTexto(f), true],
+          ['Uso', usoTexto(f), true],
           // Parcialidad del equipo que viene en la factura (usuario, 14-oct): ya está dentro de lo cobrado
           f.equipo ? ['Equipo', esc('Parcialidad ' + f.equipo.parcialidad + ' · ' + f.equipo.nombre + ' · ' + dinero(f.equipo.cargo, true)), true] : null,
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
-        ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
+        ]) + '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
           icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
-          'Diferencia</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
+          'Diferencia</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true));
       }
 
       function tarjetaResponsable(r, titulo, clase) {
@@ -3456,12 +3456,16 @@
                 l ? ['PIN WhatsApp', e.pinWhatsapp] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
-              // La línea, resumida en las mismas tarjetas que su ficha (usuario, 13-oct): Línea, Plan y Facturación
+              // La línea, resumida en las mismas tarjetas que su ficha (usuario, 13-oct): Línea y Plan. Sin Facturación y con
+              // la SIM y la cuenta (usuario, 22-oct): lo cobrado se ve en la ficha de la línea
               tarjeta(icono('card-sim') + ' Línea', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['Razón social', l.razonSocial],
+                ['Compañía', l.compania], ['SIM', l.sim ? '<span class="ln-mono">' + esc(l.sim) + '</span>' : '', true], ['Estatus', chip(l.estatus), true],
+                ['Razón social', l.razonSocial],
+                ['Cuenta padre', l.cuentaPadre ? '<span class="ln-mono">' + esc(l.cuentaPadre) + '</span>' : '', true],
+                l.cuenta ? ['Cuenta', '<span class="ln-mono">' + esc(l.cuenta) + '</span>', true] : null,
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
-              (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) + tarjetaFacturacion(l, r.facturas, true) : '') +
+              (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           // Dirección General a quien no es ADMIN: sin documentos ni historial (el servidor tampoco los da)
@@ -3503,7 +3507,7 @@
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
               tarjetaCuenta(l, r.corte) +
-              (veSeccion('facturacion') ? tarjetaPlan(l, false, r.facturas) + tarjetaFacturacion(l, r.facturas, false) : '') +
+              (veSeccion('facturacion') ? tarjetaPlan(l, false, r.facturas) + tarjetaFacturacion(l, r.facturas) : '') +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
