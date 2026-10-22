@@ -797,7 +797,8 @@ const LineasResguardos = (function () {
     return actualizar_(ids, (r) => {
       const actual = txt(r['CANCELACION']);
       if (!actual) return { omitir: 'Su línea no va a cancelación' };
-      if (EN_CURSO.indexOf(actual) < 0) return { omitir: 'Ya está ' + actual.toLowerCase() };
+      // La fase solo avanza (se puede brincar hacia adelante; usuario, 22-oct)
+      if (EN_CURSO.indexOf(actual) < 0 || EN_CURSO.indexOf(actual) >= EN_CURSO.indexOf(f)) return { omitir: 'Ya está ' + actual.toLowerCase() };
       const cambios = { 'CANCELACION': f };
       if (txt(d.asesor)) cambios['ASESOR'] = may(d.asesor);
       if (txt(d.asunto)) cambios['CANCELACION_ASUNTO'] = txt(d.asunto);

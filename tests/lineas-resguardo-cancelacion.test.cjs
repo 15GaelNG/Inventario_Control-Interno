@@ -577,7 +577,30 @@ test('Panel de Pau: Donado y Desechado como Vendido; ya no hay «Quitados»', ()
   assert.match(html, /etiqueta: 'Donados', filtros: \{ ESTADO: \{ valores: \['DONADO'\] \} \}/);
   assert.match(html, /etiqueta: 'Desechados', filtros: \{ ESTADO: \{ valores: \['DESECHADO'\] \} \}/);
   assert.match(html, /const recibidos = \(filas\) => filas\.every\(\(f\) => f\.ESTADO === 'EN RESGUARDO'\);/);
-  assert.equal((html.match(/minimo: 1, visible: recibidos,/g) || []).length, 3, 'Vendido, Donado y Desechado solo con todo recibido (usuario, 22-oct)');
+  assert.equal((html.match(/minimo: 1, visible: recibidos,/g) || []).length, 4, 'Entregar a líneas, Vendido, Donado y Desechado solo con todo recibido (usuario, 22-oct)');
   assert.doesNotMatch(html, /etiqueta: 'Quitados'/);
   assert.doesNotMatch(html, /titulo: 'Quitado'/);
+});
+
+// Usuario, 22-oct: cada botón del panel sale solo cuando todo lo seleccionado está en su estado o fase, y la fase de una
+// cancelación solo avanza (se puede brincar hacia adelante, no regresar)
+test('Panel de Pau: Recibir solo lo por recibir; las fases de Cancelaciones solo avanzan', () => {
+  const html = read('src/html/js/lineas.html');
+  assert.match(html, /texto: 'Recibir', titulo: '[^']*', minimo: 1, visible: porRecibir,/);
+  assert.match(html, /texto: 'Entregar a líneas', titulo: '[^']*', minimo: 1, visible: recibidos,/);
+  assert.match(html, /texto: 'Carta firmada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR'\]\),/);
+  assert.match(html, /texto: 'Carta enviada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR', 'CARTA FIRMADA'\]\),/);
+  assert.match(html, /texto: 'Confirmar cancelada', titulo: '[^']*', minimo: 1, peligro: true, visible: enFase\(EN_CURSO\),/);
+  assert.match(html, /texto: 'Retirar cancelación', titulo: '[^']*', minimo: 1, visible: enFase\(EN_CURSO\),/);
+
+  const t = cargar([], [
+    { 'ID': 'RSG-1', 'NUMERO': '4420000001', 'CANCELACION': 'CARTA ENVIADA' },
+    { 'ID': 'RSG-2', 'NUMERO': '4420000002', 'CANCELACION': 'POR FIRMAR' },
+    { 'ID': 'RSG-3', 'NUMERO': '4420000003', 'CANCELACION': 'CARTA FIRMADA' }]);
+  const firmada = t.R.faseCancelacion(['RSG-1', 'RSG-3'], 'CARTA FIRMADA', {}, pau);
+  assert.deepEqual(firmada.hechos, []);
+  assert.deepEqual(firmada.omitidos.map((o) => o.motivo), ['Ya está carta enviada', 'Ya está carta firmada']);
+  const enviada = t.R.faseCancelacion(['RSG-2'], 'CARTA ENVIADA', {}, pau);
+  assert.deepEqual(enviada.hechos.map((h) => h.id), ['RSG-2']);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.CANCELACION), ['CARTA ENVIADA', 'CARTA ENVIADA', 'CARTA FIRMADA']);
 });

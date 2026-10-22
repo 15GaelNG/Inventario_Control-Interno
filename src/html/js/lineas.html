@@ -7248,15 +7248,20 @@
         cargar();
       }
 
-      // Vendido, Donado y Desechado: solo cuando todo lo seleccionado ya se recibió (usuario, 22-oct)
+      // Cada botón sale solo cuando todo lo seleccionado está en su estado (usuario, 22-oct): Recibir, lo por recibir;
+      // Entregar a líneas, Vendido, Donado y Desechado, lo ya recibido
       const recibidos = (filas) => filas.every((f) => f.ESTADO === 'EN RESGUARDO');
+      const porRecibir = (filas) => filas.every((f) => f.ESTADO === 'PENDIENTE DE RECEPCION');
+      // Cancelaciones: la fase solo avanza, y se puede brincar hacia adelante (usuario, 22-oct)
+      const enFase = (fases) => (filas) => filas.every((f) => fases.indexOf(f.CANCELACION) >= 0);
+      const EN_CURSO = ['POR FIRMAR', 'CARTA FIRMADA', 'CARTA ENVIADA'];
       const ACCIONES = {
         RESGUARDOS: [
-          { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1,
+          { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1, visible: porRecibir,
             alHacer: (filas) => paso('RECIBIR', filas, { titulo: '¿Confirmas que recibiste ' + miles(filas.length) + ' equipo(s)?',
               mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos', espera: 'Recibiendo ' + miles(filas.length) + ' equipo(s)' }) },
           // Textos en oración (usuario, 20-oct; pendiente 3.12)
-          { icono: 'hand-helping', texto: 'Entregar a líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1,
+          { icono: 'hand-helping', texto: 'Entregar a líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
               campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
               boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
@@ -7272,19 +7277,19 @@
               campos: [{ clave: 'asunto', etiqueta: 'Referencia del desecho (opcional)' }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
         ],
         CANCELACIONES: [
-          { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1,
+          { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1, visible: enFase(['POR FIRMAR']),
             alHacer: (filas) => paso('CARTA_FIRMADA', filas, { titulo: 'Carta firmada', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA FIRMADA.',
               campos: [{ clave: 'asesor', etiqueta: 'Asesor', valor: filas[0].ASESOR || '', opciones: ['KARLA', 'WILBERTO', 'ALFREDO'].indexOf(filas[0].ASESOR) >= 0 || !filas[0].ASESOR ? ['KARLA', 'WILBERTO', 'ALFREDO'] : null }],
               boton: 'Guardar', hecho: 'Cartas firmadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) firmada(s)' }) },
-          { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1,
+          { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1, visible: enFase(['POR FIRMAR', 'CARTA FIRMADA']),
             alHacer: (filas) => paso('CARTA_ENVIADA', filas, { titulo: 'Carta enviada al proveedor', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA ENVIADA.',
               campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) enviada(s)' }) },
-          { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true,
+          { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true, visible: enFase(EN_CURSO),
             alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
               mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
               peligro: true, hecho: 'Canceladas', inventario: true, espera: 'Cancelando ' + miles(filas.length) + ' línea(s)' }) },
           // Solo Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): la línea vuelve a como estaba antes (3.14, 21-oct)
-          { icono: 'undo-2', texto: 'Retirar cancelación', titulo: 'Ya no se cancela: sale de Cancelaciones (queda en el historial) y la línea vuelve a como estaba', minimo: 1,
+          { icono: 'undo-2', texto: 'Retirar cancelación', titulo: 'Ya no se cancela: sale de Cancelaciones (queda en el historial) y la línea vuelve a como estaba', minimo: 1, visible: enFase(EN_CURSO),
             alHacer: (filas) => paso('RETIRAR_CANCELACION', filas, { titulo: 'Retirar cancelación', mensaje: '', cuerpo: vistaRetiro(filas.map((f) => f.ID)),
               campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Retirar cancelación', hecho: 'Retiradas', inventario: true,
               espera: 'Retirando ' + miles(filas.length) + ' cancelación(es)' }) },
