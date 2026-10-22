@@ -525,7 +525,11 @@ const LineasDatos = (function () {
   function valorCelda_(v, nombreTabla) {
     if (v === null || v === undefined) return '';
     if (v instanceof Date) return aHoraHoja(v);
-    if (typeof v === 'string' && /^\d+$/.test(v) && (v.length >= 11 || /^0\d/.test(v)) && !HOJAS_EN_TEXTO.test(nombreTabla || '')) return "'" + v;
+    if (typeof v === 'string' && !HOJAS_EN_TEXTO.test(nombreTabla || '')) {
+      if (/^\d+$/.test(v) && (v.length >= 11 || /^0\d/.test(v))) return "'" + v;
+      // Un patrón (puntos 1 a 9 con guiones, «1-9-7»): Sheets lo tomaba como fecha, 1-sep-2007 (pendiente 2.47)
+      if (/^[1-9](-[1-9])+$/.test(v)) return "'" + v;
+    }
     return v;
   }
   const HOJAS_EN_TEXTO = /^(APP_.*|LINEAS|EQUIPOS|ASIGNACIONES|ADENDUMS|FACTURAS|CUENTAS|CATALOGOS)$/;
