@@ -224,6 +224,49 @@ test('confirmar y retirar la cancelación siguen a la línea esté donde esté (
   assert.equal(t.R.cancelacionDe(linea2), null, 'retirada ya no está en curso');
 });
 
+// Revisión del espejo (usuario, 22-oct: «un equipo que se manda con línea y la línea está en proceso de cancelación, cuando
+// se cancela no se actualiza el estatus»)
+test('espejo: el renglón viejo que junta resguardo y cancelación muestra el estatus de hoy de su línea', () => {
+  const linea = { 'ID': 'LIN-1', 'ID LINEA': 'LIN-1', 'TIPO': 'LINEA', 'NUMERO TELEFONO': '4421090805', 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' };
+  const t = cargar([equipo('EQU-1', '0012', 'RESGUARDO'), linea], [{ 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'NUMERO': '4421090805',
+    'ESTADO': 'EN RESGUARDO', 'ESTATUS_LINEA': 'EN PROCESO DE CANCELACION', 'CANCELACION': 'CARTA ENVIADA' }]);
+  t.R.confirmarCancelacion(['RSG-1'], {}, pau);
+  const r = t.R.bandeja({ puedeAprobar: true }).filas[0];
+  assert.equal(r.ESTATUS_LINEA, 'CANCELADA');
+  assert.equal(r.NUMERO, '4421090805');
+});
+
+test('espejo: al cerrar se guarda lo que se veía; cerrado sigue a su línea (por su ID) y la cancelación confirmada guarda su número de hoy', () => {
+  const eq = equipo('EQU-5', '0050', 'USO', { 'TIPO': 'EQUIPO + SIM', 'ID LINEA': 'LIN-5', 'NUMERO TELEFONO': '4420000005', 'ESTATUS LINEA': 'USO',
+    'COMPAÑIA': 'TELCEL', 'FIN PLAN': '01/01/2030', 'IMEI': '111' });
+  const t = cargar([eq], []);
+  t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: { 'EQU-5': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  const fila = t.tablas.APP_RESGUARDOS[0];
+  assert.equal(fila.ID_LINEA_AL_MANDAR, 'LIN-5');
+  assert.equal(fila.ID_LINEA, undefined, 'ID_LINEA es de las cancelaciones');
+  fila.ID = fila.ID || 'RSG-5'; // la prueba no simula Ids
+  t.R.recibir([fila.ID], pau);
+  eq['IMEI'] = '999'; // corregido mientras estaba en el panel
+  t.R.entregar([fila.ID], { recibe: 'JUAN' }, pau);
+  assert.equal(fila.IMEI, '999', 'lo que se veía al entregar');
+  // Después le corrigen el número y se cancela: el renglón cerrado lo sigue
+  Object.assign(eq, { 'NUMERO TELEFONO': '4420000006', 'ESTATUS LINEA': 'CANCELADA' });
+  const r = t.R.bandeja({ puedeAprobar: true }).filas[0];
+  assert.deepEqual([r.NUMERO, r.ESTATUS_LINEA, r.IMEI], ['4420000006', 'CANCELADA', '999']);
+
+  const linea = { 'ID': 'LIN-9', 'ID LINEA': 'LIN-9', 'TIPO': 'LINEA', 'NUMERO TELEFONO': '4420000010', 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' };
+  const t2 = cargar([linea], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'LIN-9', 'ID_LINEA': 'LIN-9', 'NUMERO': '4420000009', 'ESTADO': '', 'CANCELACION': 'POR FIRMAR' }]);
+  t2.R.confirmarCancelacion(['RSG-9'], {}, pau);
+  assert.equal(t2.tablas.APP_RESGUARDOS[0].NUMERO, '4420000010');
+  assert.equal(linea['ESTATUS LINEA'], 'CANCELADA');
+});
+
+test('un equipo en el panel no cambia de línea ni pasa la suya a otro NUCO, como con la Responsiva (usuario, 22-oct)', () => {
+  const acciones = read('src/services/lineas/LineasAcciones.gs');
+  assert.match(acciones, /if \(LineasResguardos\.enPanel\(fE\)\) throw new Error\(nombre \+ ' está en Resguardos y cancelaciones\.'\);/);
+  assert.match(acciones, /if \(LineasResguardos\.enPanel\(lineaFila\)\) throw new Error\(desde \+ ' está en Resguardos y cancelaciones/);
+});
+
 test('Quitar del panel: solo lo pendiente; regresa lo que nadie tocó y respeta lo que cambió después', () => {
   const t = cargar([equipo('EQU-1', '0012', 'USO', { 'RESPONSABLE': 'ANA', 'PUESTO': 'VENTAS', 'PIN EQUIPO': '1234' })], []);
   t.R.mandar(['EQU-1'], { comentario: 'renuncia', inspecciones: { 'EQU-1': 'INS-1' }, porEquipo: { 'EQU-1': pedido('RESGUARDO') } }, usuario);
@@ -269,7 +312,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   t2.R.mandarCancelacion(['LIN-1'], { comentario: 'se cambió de línea' }, usuario, { motivoDelAdendum: true });
   assert.equal(t2.tablas.APP_RESGUARDOS[1].MOTIVO_CANCELACION, 'CANCELACION ANTICIPADA');
   // La hoja que ya existía recibe la columna nueva
-  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO']]);
+  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario,\s+\{ motivoDelAdendum: true, nucos:/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
   const cliente = read('src/html/js/lineas.html');

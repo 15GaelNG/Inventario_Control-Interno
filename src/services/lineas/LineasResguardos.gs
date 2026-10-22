@@ -45,9 +45,12 @@ const LineasResguardos = (function () {
     'ESTATUS_EQUIPO', 'ESTATUS_LINEA', 'DEPARTAMENTO', 'SEDE', 'OFICINA', 'COMENTARIO', 'MOTIVO', 'SOLICITO_CORREO', 'SOLICITO_NOMBRE',
     'ESTADO', 'RECIBIDO_EN', 'RECIBIO', 'ENTREGADO_EN', 'ENTREGADO_A', 'ENTREGA_ASUNTO',
     'CANCELACION', 'ASESOR', 'CARTA_FIRMADA_EN', 'CARTA_ENVIADA_EN', 'CANCELACION_ASUNTO', 'CANCELADA_EN', 'CANCELO', 'ACTUALIZADO_EN',
-    'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO'];
-  /** Las que llegaron después a una hoja que ya existía (13 y 20-oct). */
-  const COLUMNAS_NUEVAS = ['MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO'];
+    'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO',
+    'ID_LINEA_AL_MANDAR'];
+  /** Las que llegaron después a una hoja que ya existía (13, 20 y 22-oct). ID_LINEA_AL_MANDAR: la línea con que se mandó el
+   *  equipo, por su ID (el número puede corregirse); no es ID_LINEA, que dice que el renglón es una cancelación. */
+  const COLUMNAS_NUEVAS = ['MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO',
+    'ID_LINEA_AL_MANDAR'];
 
   // RETIRADA: Pau retiró la cancelación (pendiente 3.12). Lo que Líneas quita antes de que Pau lo reciba ya no queda: se
   // borra (Quitar del panel; usuario, 22-oct)
@@ -242,6 +245,18 @@ const LineasResguardos = (function () {
     const n = LineasUtil.digitos(s['NUMERO']);
     const f = ix.porId[txt(s['REGISTRO_ID'])];
     if (f && LineasUtil.digitos(LineasUtil.col(f, 'NUMERO TELEFONO')) === n) return f;
+    return (n && ix.porNumero[n]) || null;
+  }
+
+  /**
+   * La línea de un renglón de Resguardos: la de su cancelación en los viejos que juntan las dos cosas; si no, con la que se
+   * mandó el equipo, por su ID o, en los de antes del 22-oct, por su número.
+   */
+  function lineaDelRenglon_(r, ix) {
+    if (txt(r['CANCELACION'])) return registroDeLinea_(r, ix);
+    const id = txt(r['ID_LINEA_AL_MANDAR']);
+    if (id && (ix.porLinea[id] || ix.porId[id])) return ix.porLinea[id] || ix.porId[id];
+    const n = LineasUtil.digitos(r['LINEA_AL_MANDAR']);
     return (n && ix.porNumero[n]) || null;
   }
 
@@ -485,6 +500,7 @@ const LineasResguardos = (function () {
         // lo recibe (usuario, 13-oct; antes uno ya guardado no entraba a la bandeja)
         nuevos.push(Object.assign({
           'FECHA': ahora, 'REGISTRO_ID': txt(f['ID']), 'NUCO': nuco, 'NUMERO': numero, 'LINEA_AL_MANDAR': numero,
+          'ID_LINEA_AL_MANDAR': tieneLinea ? idLinea || txt(LineasUtil.col(f0, 'ID LINEA')) : '',
           'TIPO': may(LineasUtil.col(f, 'TIPO')) || tipo, 'MODELO': txt(LineasUtil.col(f, 'EQUIPO')), 'IMEI': txt(LineasUtil.col(f, 'IMEI')),
           'COMPANIA': lineaQueda ? txt(LineasUtil.col(f, 'COMPAÑIA')) : '', 'ACCESORIOS': txt(LineasUtil.col(f, 'ACCESORIOS')),
           'RAZON_SOCIAL': lineaQueda ? txt(LineasUtil.col(f, 'RAZON SOCIAL')) : '', 'FIN_PLAN': lineaQueda ? vigencia_(LineasUtil.col(f, 'FIN PLAN'), hoy).fin : '',
@@ -664,7 +680,12 @@ const LineasResguardos = (function () {
    * las dos cosas conserva el número de su cancelación si el equipo ya tiene otra línea.
    */
   function espejo_(r, ix, hoy) {
-    if (!abierto_(r)) return r;
+    if (!abierto_(r)) {
+      // Cerrado (entregado, vendido…): lo que se guardó al cerrarlo, con la línea de hoy, p. ej. CANCELADA si se confirmó
+      // después (usuario, 22-oct: «que siga a la línea»). Las cancelaciones cerradas se quedan como quedaron
+      const fl = txt(r['ESTADO']) && (txt(r['LINEA_AL_MANDAR']) || txt(r['CANCELACION'])) ? lineaDelRenglon_(r, ix) : null;
+      return fl ? Object.assign({}, r, { 'NUMERO': txt(LineasUtil.col(fl, 'NUMERO TELEFONO')) || r['NUMERO'], 'ESTATUS_LINEA': txt(LineasUtil.col(fl, 'ESTATUS LINEA')) }) : r;
+    }
     const deLinea = (f, o) => {
       o['NUMERO'] = txt(LineasUtil.col(f, 'NUMERO TELEFONO')) || o['NUMERO'];
       o['COMPANIA'] = txt(LineasUtil.col(f, 'COMPAÑIA'));
@@ -689,13 +710,18 @@ const LineasResguardos = (function () {
       'ESTATUS_EQUIPO': estatusEquipoHoy && may(estatusEquipoHoy) !== POR_RECIBIR ? estatusEquipoHoy : r['ESTATUS_EQUIPO'],
     });
     const mismaLinea = LineasUtil.digitos(numero) === LineasUtil.digitos(r['NUMERO']);
-    if (r['CANCELACION'] && !mismaLinea) return o;
-    // Sin línea hoy, «Línea» sigue diciendo la que tenía al mandarlo, con su estatus de hoy (Líneas, 20-oct: «así les
-    // funciona»; p. ej. EN PROCESO DE CANCELACION si se fue a Cancelaciones)
-    if (!r['CANCELACION']) {
+    if (r['CANCELACION']) {
+      // Renglón viejo que junta resguardo y cancelación: el estatus de su línea esté donde esté (antes se quedaba EN PROCESO
+      // DE CANCELACION aunque se confirmara o se retirara; revisión del 22-oct)
+      const fc = registroDeLinea_(r, ix);
+      if (fc) o['ESTATUS_LINEA'] = txt(LineasUtil.col(fc, 'ESTATUS LINEA'));
+      if (!mismaLinea) return o;
+    } else {
+      // Sin línea hoy, «Línea» sigue diciendo la que tenía al mandarlo, con su estatus de hoy (Líneas, 20-oct: «así les
+      // funciona»; p. ej. EN PROCESO DE CANCELACION si se fue a Cancelaciones), y su número de hoy si se corrigió
       const alMandar = txt(r['LINEA_AL_MANDAR']);
-      const fl = !tieneLinea && alMandar ? ix.porNumero[LineasUtil.digitos(alMandar)] : null;
-      o['NUMERO'] = tieneLinea ? numero : alMandar;
+      const fl = !tieneLinea && alMandar ? lineaDelRenglon_(r, ix) : null;
+      o['NUMERO'] = tieneLinea ? numero : (fl && txt(LineasUtil.col(fl, 'NUMERO TELEFONO'))) || alMandar;
       o['ESTATUS_LINEA'] = tieneLinea ? txt(LineasUtil.col(f, 'ESTATUS LINEA')) : (fl ? txt(LineasUtil.col(fl, 'ESTATUS LINEA')) : '');
     }
     return tieneLinea ? deLinea(f, o) : o;
@@ -704,7 +730,8 @@ const LineasResguardos = (function () {
   /** Todos los renglones de la bandeja, del más reciente al más antiguo, y lo que la persona puede hacer. */
   function bandeja(usuario) {
     let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
-    if (filas.some((r) => abierto_(r) || r['CANCELACION'])) {
+    // Lo cerrado de Resguardos también se lee: sigue a su línea (espejo_)
+    if (filas.some((r) => abierto_(r) || r['CANCELACION'] || r['LINEA_AL_MANDAR'])) {
       const ix = indices_();
       const hoy = dia(new Date());
       // Cancelaciones (usuario, 22-oct, como en el correo al asesor): la cuenta padre de la línea, también ya cancelada, y
@@ -765,13 +792,27 @@ const LineasResguardos = (function () {
     return refrescarEquipos_(r);
   }
 
+  /**
+   * Al cerrar un renglón se guarda lo que el panel mostraba de él (lo de hoy del inventario): cerrado ya no lo sigue,
+   * salvo la línea (espejo_). Antes volvía a lo del día que se mandó (usuario, 22-oct).
+   */
+  const FOTO = ['NUCO', 'TIPO', 'MODELO', 'IMEI', 'ACCESORIOS', 'ESTATUS_EQUIPO', 'NUMERO', 'ESTATUS_LINEA', 'COMPANIA', 'RAZON_SOCIAL', 'FIN_PLAN'];
+  function foto_(x, ix, hoy) {
+    const o = espejo_(fila_(x), ix, hoy);
+    const cambios = {};
+    FOTO.forEach((c) => { if (txt(o[c]) !== txt(x[c])) cambios[c] = o[c]; });
+    return cambios;
+  }
+  const paraFoto_ = () => ({ ix: indices_(), hoy: dia(new Date()) });
+
   /** Pau entrega a Líneas un equipo guardado (datos = { recibe, asunto }). */
   function entregar(ids, datos, usuario) {
     exigirAprobador_(usuario);
     const recibe = txt((datos || {}).recibe).toUpperCase();
     if (!recibe) throw new Error('Escribe quién de Líneas recibe el equipo.');
+    const p = paraFoto_();
     return refrescarEquipos_(actualizar_(ids, (r) => (txt(r['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
-      : { 'ESTADO': ESTADO.ENTREGADO, 'ENTREGADO_EN': new Date(), 'ENTREGADO_A': recibe, 'ENTREGA_ASUNTO': txt((datos || {}).asunto) })));
+      : Object.assign(foto_(r, p.ix, p.hoy), { 'ESTADO': ESTADO.ENTREGADO, 'ENTREGADO_EN': new Date(), 'ENTREGADO_A': recibe, 'ENTREGA_ASUNTO': txt((datos || {}).asunto) }))));
   }
 
   /**
@@ -790,8 +831,9 @@ const LineasResguardos = (function () {
     const c = CIERRES[estatus];
     const comentario = txt((datos || {}).comentario);
     if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial del equipo).');
+    const p = paraFoto_();
     const r = actualizar_(ids, (x) => (txt(x['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
-      : { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': comentario }));
+      : Object.assign(foto_(x, p.ix, p.hoy), { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': comentario })));
     espejar_(r.hechos, () => ({ 'ESTATUS EQUIPO': estatus }), c.motivo + ' (bandeja de resguardos): ' + comentario, c.movimiento, usuario);
     return r;
   }
@@ -827,12 +869,18 @@ const LineasResguardos = (function () {
     exigirAprobador_(usuario);
     const asunto = txt((datos || {}).asunto);
     const porId = {};
+    const ix = indices_();
     const r = actualizar_(ids, (x) => {
       const actual = txt(x['CANCELACION']);
       if (!actual) return { omitir: 'Su línea no va a cancelación' };
       if (EN_CURSO.indexOf(actual) < 0) return { omitir: 'Ya estaba ' + actual.toLowerCase() };
       porId[txt(x['ID'])] = x;
-      return Object.assign({ 'CANCELACION': FASE.CANCELADA, 'CANCELADA_EN': new Date(), 'CANCELO': usuario.nombre }, asunto ? { 'CANCELACION_ASUNTO': asunto } : {});
+      // Cerrada ya no sigue a la línea: se queda con su número de hoy (si se corrigió después de mandarla; revisión del 22-oct)
+      const fl = registroDeLinea_(x, ix);
+      const numeroHoy = fl ? txt(LineasUtil.col(fl, 'NUMERO TELEFONO')) : '';
+      return Object.assign({ 'CANCELACION': FASE.CANCELADA, 'CANCELADA_EN': new Date(), 'CANCELO': usuario.nombre },
+        LineasUtil.digitos(numeroHoy) && LineasUtil.digitos(numeroHoy) !== LineasUtil.digitos(x['NUMERO']) ? { 'NUMERO': numeroHoy } : {},
+        asunto ? { 'CANCELACION_ASUNTO': asunto } : {});
     });
     espejar_(r.hechos, (f) => {
       const tipo = may(LineasUtil.col(f, 'TIPO'));
