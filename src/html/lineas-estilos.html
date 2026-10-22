@@ -152,6 +152,9 @@
   [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha { grid-column: 1 / -1; }
   [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
   .ln-card-titulo-dato { margin-left: auto; font-size: var(--texto-s); font-weight: 500; color: var(--color-text-muted); }
+  /* Copiar la tarjeta (usuario, 22-oct): a la derecha del título, después del mes de Facturación */
+  .ln-card h3 .ln-copiar-tarjeta { margin-left: auto; min-height: 26px; padding: 3px 7px; }
+  .ln-card h3 .ln-card-titulo-dato + .ln-copiar-tarjeta { margin-left: 0; }
   [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-card-pie { margin: auto 0 0; padding: 8px 16px; border-top: 1px solid var(--color-border);
     display: flex; align-items: center; gap: 6px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .ln-card-pie .ln-icon { width: 14px; height: 14px; }

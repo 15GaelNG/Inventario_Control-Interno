@@ -665,7 +665,7 @@
     function vistaPatron(valor) {
       const v = String(valor === null || valor === undefined ? '' : valor).trim();
       if (!v) return vacio;
-      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta">' + svgPatron(v) + '</div>';   // el dibujo ya marca inicio, orden y dirección
+      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta" data-ln-texto="' + esc(v) + '">' + svgPatron(v) + '</div>';   // el dibujo ya marca inicio, orden y dirección
       const ruta = rutaPatronAppSheet(v);
       if (!ruta) return esRutaArchivo(v) ? botonArchivo(v, 'Ver patrón') : esc(v); // "••••" (oculto para el rol)
       return '<div class="ln-patron-consulta" data-ln-patron-appsheet="' + esc(ruta) + '"><span class="ln-tenue"><span class="ln-spinner"></span> Patrón de AppSheet…</span></div>';
@@ -2569,6 +2569,12 @@
         if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
         const copiar = ev.target.closest('[data-ln-copiar-detalles]');
         if (copiar) { copiarDetalles(copiar); return; }
+        const copiarCard = ev.target.closest('[data-ln-copiar-tarjeta]');
+        if (copiarCard) {
+          const card = copiarCard.closest('.ln-card');
+          copiarConAviso(copiarCard, textoTarjeta(card), 'Copiado: ' + textoTarjeta(card).split('\n')[0]);
+          return;
+        }
         if (ev.target.closest('[data-ln-volver]')) { ev.preventDefault(); volver(); return; }
         if (ev.target.closest('[data-ln-lista]')) { ev.preventDefault(); cerrarDetalle(); return; }
         const miga = ev.target.closest('[data-ln-miga]');
@@ -3469,6 +3475,7 @@
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
           // Dirección General a quien no es ADMIN: sin documentos ni historial (el servidor tampoco los da)
+          ponerCopiarTarjetas(detalle);
           if (e._dgOculto) return;
           cargarPatronesAppSheet(detalle);
           cargarEvidencias(id);
@@ -3515,6 +3522,7 @@
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
             '</div>', tarjetaDetallesCopiar(r.detalles), true);
+          ponerCopiarTarjetas(detalle);
           // Toda línea tiene Documentos: las de cuando estuvo suelta y las que firmó dentro de un equipo (pendiente 2.45)
           if (l._dgOculto) return;
           cargarEvidencias(id);
@@ -3642,14 +3650,54 @@
             ['Estatus actual de la línea', entrada('estatus', d.estatusLinea, 'Escribe el estatus'), true],
           ]) + '</div>';
       }
-      function copiarDetalles(boton) {
-        copiarTexto(textoDetalles()).then((ok) => {
+      function copiarConAviso(boton, texto, mensaje) {
+        copiarTexto(texto).then((ok) => {
           if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
-          aviso('Detalles copiados: pégalos en el ticket o correo.', 4000);
+          aviso(esc(mensaje), 4000);
           const original = boton.innerHTML;
-          boton.innerHTML = icono('check') + ' Copiado';
+          boton.innerHTML = icono('check') + (boton.textContent.trim() ? ' Copiado' : '');
           setTimeout(() => { if (document.body.contains(boton)) boton.innerHTML = original; }, 1800);
         });
+      }
+      function copiarDetalles(boton) {
+        copiarConAviso(boton, textoDetalles(), 'Detalles copiados: pégalos en el ticket o correo.');
+      }
+
+      // Copiar cada tarjeta de la pestaña General de las fichas (usuario, 22-oct): el botón va en su título y copia
+      // «Etiqueta: valor», un renglón por dato con valor, como se ve en pantalla
+      function ponerCopiarTarjetas(detalle) {
+        detalle.querySelectorAll('[data-tab-panel="general"] .ln-grid-2 > .ln-card > h3').forEach((h3) => {
+          if (!h3.parentNode.querySelector('.ln-campos')) return;
+          h3.insertAdjacentHTML('beforeend', '<button type="button" class="secondary ln-btn-chico ln-copiar-tarjeta" data-ln-copiar-tarjeta title="Copiar" aria-label="Copiar">' + icono('copy') + '</button>');
+        });
+      }
+      function textoTarjeta(card) {
+        // El patrón se ve como dibujo: se copian sus puntos (data-ln-texto)
+        const texto = (el) => {
+          const propio = el.querySelector('[data-ln-texto]');
+          return (propio ? propio.dataset.lnTexto : el.innerText).replace(/\s*\n\s*/g, ', ').replace(/\s+/g, ' ').trim();
+        };
+        const titulo = Array.from(card.querySelector('h3').childNodes).map((n) => (n.nodeType === 3 ? n.textContent
+          : (n.classList && n.classList.contains('ln-card-titulo-dato') ? ' · ' + n.textContent : ''))).join('').trim();
+        const renglones = [titulo];
+        Array.from(card.children).forEach((el) => {
+          if (el.matches('.ln-campos')) {
+            el.querySelectorAll(':scope > dt').forEach((dt) => {
+              const v = dt.nextElementSibling ? texto(dt.nextElementSibling) : '';
+              if (v && v !== '—') renglones.push(texto(dt) + ': ' + v);
+            });
+          } else if (el.matches('.ln-subtitulo')) {
+            renglones.push('', texto(el));
+          } else if (el.matches('.ln-vida')) {
+            renglones.push(Array.from(el.querySelectorAll('.ln-vida-texto > span')).map(texto).join(' · '));
+          } else if (el.matches('.ln-meses')) {
+            el.querySelectorAll('.ln-meses-fila:not(.ln-meses-encabezado)').forEach((fila) => {
+              const c = Array.from(fila.children).map(texto).filter(Boolean);
+              renglones.push(c[0] + ': ' + c.slice(1).join(' · '));
+            });
+          }
+        });
+        return renglones.join('\n');
       }
 
       function cargarEvidencias(id) {
