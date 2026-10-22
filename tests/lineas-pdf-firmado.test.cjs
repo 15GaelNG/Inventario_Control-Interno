@@ -5,12 +5,13 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('el servidor solo acepta el PDF que Documentos le muestra al registro', () => {
-  const api = read('src/ClientApi.gs');
+  const api = API;
   assert.match(api, /function apiLineasSubirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64, vista\) \{\r?\n  return TelefoniaService\.subirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64, vista\);/);
   const servicio = read('src/services/TelefoniaService.gs');
   const fn = servicio.slice(servicio.indexOf('function subirPdfFirmado('), servicio.indexOf('/** Panorama de Líneas'));

@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const read = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 const cliente = LINEAS;
@@ -97,7 +98,7 @@ test('servidor: la imagen del patrón solo la piden ADMIN y el área de Líneas,
   assert.throws(() => correr(true, 'Files/RESPONSIVA1.pdf'), /No es un patrón/);
   // Rol CLIENT: una ruta suelta no dice de qué registro es
   assert.throws(() => correr(true, RUTA, ['POST VENTA']), /No tienes acceso/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasPatronAppSheet\(token, ruta\) \{\s+return TelefoniaService\.patronAppSheet\(token, ruta\);/);
+  assert.match(API, /function apiLineasPatronAppSheet\(token, ruta\) \{\s+return TelefoniaService\.patronAppSheet\(token, ruta\);/);
 });
 
 test('servidor: el archivo del AppSheet se busca en la carpeta de la app, en la de solo lectura y por su nombre', () => {

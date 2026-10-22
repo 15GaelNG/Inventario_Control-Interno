@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const LINEAS = require('./lineas-fuente');
 const APP = require('./app-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -101,7 +102,7 @@ test('Reactivación, Solicitud, Reasignaciones y Desechos se retiraron con sus p
   assert.doesNotMatch(repo, /VISTAS_OPERATIVAS|function vistaOperativa/);
   assert.ok(!fs.existsSync(path.join(root, 'src/services/lineas/LineasOperativas.gs')));
   assert.ok(!fs.existsSync(path.join(root, 'src/html/views/lineas/lineas-operativa.html')));
-  assert.doesNotMatch(read('src/ClientApi.gs') + read('src/services/TelefoniaService.gs'), /VistaOperativa|FormularioOperativa|LineasOperativas/);
+  assert.doesNotMatch(API + read('src/services/TelefoniaService.gs'), /VistaOperativa|FormularioOperativa|LineasOperativas/);
   assert.doesNotMatch(LINEAS, /POST_VENTA|initPostVenta|initOperativa|abrirAltaAppSheet|initReactivacion|initDesechos/);
   // Ya no se escribe HISTORIAL_REASIGNACIONES; lo migrado se lee de APP_MOVIMIENTOS (TIPO HISTORICO)
   assert.doesNotMatch(repo, /LineasDatos\.agregarFilas\(TAB\.REASIG/);
@@ -208,14 +209,14 @@ test('no se descargan CSV y los botones usan los mismos nombres y medidas', () =
 });
 
 test('las capturas canceladas tienen un flujo completo de limpieza', () => {
-  assert.match(read('src/ClientApi.gs'), /apiLineasCancelarEvidencia/);
+  assert.match(API, /apiLineasCancelarEvidencia/);
   assert.match(read('src/services/TelefoniaService.gs'), /cancelarEvidencia/);
   assert.match(read('src/services/lineas/LineasEvidencias.gs'), /cancelarCarpetaEvidencia/);
   assert.match(LINEAS, /apiLineasCancelarEvidencia/);
 });
 
 test('el alta y edición de LINEAS TELEFONICAS sigue LINEAS TELEFONICAS_Form del AppSheet', () => {
-  const api = read('src/ClientApi.gs');
+  const api = API;
   const reg = read('src/services/lineas/LineasRegistros.gs');
   assert.match(api, /apiLineasFormularioRegistro/);
   assert.match(api, /apiLineasCrearRegistro/);
@@ -442,7 +443,8 @@ test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo 
   // (lineas-telefonicas-<parte>.html) es (T) => {…}: lo del arranque sale de T, lo de otra parte de T.de('parte') y un let
   // que usan varias lo publica su dueña con get/set en T. Una parte no declara lo que otra ya tiene.
   const tel = read('src/html/js/lineas-telefonicas.html');
-  assert.match(tel, /const T = contextoTelefonicas\(\);/);
+  assert.match(tel, /Lineas\.telefonicas = Object\.assign\(Partes\.crear\('Líneas Telefónicas'\), \{/, 'el mecanismo es el componente Partes');
+  assert.match(tel, /const T = Lineas\.telefonicas\.contexto\(\);/);
   assert.match(tel, /\n      T\.montar\(\{/);
   assert.ok(tel.indexOf('T.montar({') < tel.indexOf('Tabs.iniciar('), 'se monta antes del cableado de eventos');
   const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/lineas-telefonicas-(\w+)'\)/g)].map((m) => m[1]);
@@ -460,6 +462,89 @@ test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo 
     // Un let que usan varias partes lo publica su dueña: las demás lo leen con T.
     [...js.matchAll(/Object\.defineProperty\(T, '(\w+)'/g)].forEach((m) => assert.match(js, new RegExp('\\n      let ' + m[1] + ' = '), p + ': ' + m[1] + ' es suyo'));
   });
+});
+
+test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con T.de, la otra lo publica (fase 6.1b)', () => {
+  // initVehiculos era una función de 2,044 líneas; tools/app/partir-vehiculos.js la abrió (22-oct) con el motor de
+  // tools/partir/en-partes.js. Cada parte (app-vehiculos-<parte>.html) es Vehiculos.registrar('parte', (T) => {…}).
+  const veh = read('src/html/js/app-vehiculos.html').replace(/\r\n/g, '\n');
+  assert.match(veh, /\n  const Vehiculos = Partes\.crear\('Vehículos'\);/);
+  const init = veh.slice(veh.indexOf('async function initVehiculos('));
+  assert.match(init, /^async function initVehiculos\(\) \{\n(    \/\/[^\n]*\n)?    const T = Vehiculos\.contexto\(\);/, 'el contexto es lo primero');
+  assert.ok(init.indexOf('T.montar({') > 0 && init.indexOf('T.montar({') < init.indexOf("getElementById('veh-detalle').addEventListener("),
+    'se monta antes del cableado de eventos');
+  const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/app-vehiculos-(\w+)'\)/g)].map((m) => m[1]);
+  assert.deepEqual(partes.slice(0, 4), ['ficha', 'registros', 'capturas', 'documentos']);
+  const declarados = {};
+  const publica = {};
+  const pedidos = [];
+  partes.forEach((p) => {
+    const js = read('src/html/js/app-vehiculos-' + p + '.html').replace(/\r\n/g, '\n');
+    assert.match(js, new RegExp("\\n  Vehiculos\\.registrar\\('" + p + "', \\(T\\) => \\{\\n"), p + ': se registra con Vehiculos.registrar');
+    assert.doesNotMatch(js, /T\.de\('[a-z]+'\)\./, p + ': de otra parte se toman nombres, no el objeto');
+    [...js.matchAll(/^    (?:async )?function (\w+)\(|^    (?:const|let) (\w+) =/gm)].forEach((m) => {
+      const n = m[1] || m[2];
+      assert.ok(!declarados[n], n + ' está en ' + declarados[n] + ' y en ' + p);
+      declarados[n] = p;
+    });
+    publica[p] = [...(/\n    return \{\n([\s\S]*?)\n    \};\n  \}\);/.exec(js) || ['', ''])[1].matchAll(/(\w+): \1/g)].map((m) => m[1]);
+    [...js.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push([p, m[2], n.trim()])));
+  });
+  [...veh.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push(['principal', m[2], n.trim()])));
+  assert.ok(pedidos.length > 30, pedidos.length + ' nombres pedidos con T.de');
+  const faltan = pedidos.filter(([, de, n]) => de !== 'principal' && !(publica[de] || []).includes(n)).map(([p, de, n]) => p + ' pide ' + n + ' de ' + de);
+  assert.deepEqual(faltan, [], 'lo que una parte pide con T.de, la otra lo publica');
+  // El mecanismo (T.de con Proxy) vive solo en el componente: ninguna pantalla lleva otra copia
+  const conProxy = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html') && /new Proxy\(/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(conProxy, ['src/html/js/componentes/partes.html']);
+});
+
+test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con su nombre; la base es ClientApi.gs (fase 6.3)', () => {
+  // tools/api/partir.js partió ClientApi.gs (22-oct): solo movió. Una api… nueva va en el archivo de su módulo (módulo
+  // nuevo = archivo nuevo) y lleva el nombre del módulo: así se encuentra sin buscar y nadie edita el archivo de otro.
+  const acorn = require('acorn');
+  const gs = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs')).map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  const donde = {};
+  gs.forEach((f) => [...read(f).matchAll(/^function (api[A-Z]\w*)\(/gm)].forEach((m) => {
+    assert.ok(!donde[m[1]], m[1] + ' está en ' + donde[m[1]] + ' y en ' + f);
+    donde[m[1]] = f;
+  }));
+  // Correcciones de Líneas trae sus api… a propósito: aislado para poder borrarlo entero
+  const fuera = Object.entries(donde).filter(([, f]) => f !== 'src/ClientApi.gs' && !f.startsWith('src/api/') &&
+    f !== 'src/services/lineas/LineasCorrecciones.gs').map(([n, f]) => n + ' (' + f + ')');
+  assert.deepEqual(fuera, [], 'toda api… vive en ClientApi.gs o src/api/');
+  assert.ok(Object.keys(donde).length >= 250, Object.keys(donde).length + ' api…');
+  // En src/api/ solo funciones y literales de primer nivel: así no hay orden de carga entre archivos
+  const PALABRA = {
+    Vehiculos: /Vehicul/, Uber: /Uber/, Tickets: /Ticket/, Helpdesk: /Helpdesk/, CajaChica: /CajaChica|CajasChicas/,
+    CambiosMonto: /CambiosMonto|CambioMonto/, Reasignaciones: /Reasignacion/, Responsiva: /Responsiva/, Adquisicion: /Adquisicion/,
+    SolicitudCompra: /SolicitudCompra|SolicitudesCompra/, Adherente: /Adherente/, FirmaRemota: /FirmaRemota/, Arqueos: /Arqueo/,
+    Listas: /^apiListar/, Lineas: /^apiLineas/, Incidencias: /Incidencia/, Verificaciones: /Verificacion/, Sensores: /Sensor|Geotab/,
+    Hologramas: /Holograma/, Permisos: /Permisos/, Inspecciones: /Inspecci/, Relaciones: /DatosConectados|Relaciones|Salud/,
+    CapitalHumano: /CapitalHumano|Colaboradores/, Temporada: /Temporada|Ofrenda/, Accesorios: /Accesorio/,
+  };
+  // Los de antes de la regla que no llevan su módulo (solo puede encoger)
+  const CONGELADOS = ['apiDevolverPrestamoVehicular', 'apiListarAuditItems'];
+  const sinModulo = [];
+  gs.filter((f) => f.startsWith('src/api/')).forEach((f) => {
+    const modulo = path.basename(f, '.gs');
+    acorn.parse(read(f), { ecmaVersion: 2022 }).body.forEach((st) => {
+      const ok = st.type === 'FunctionDeclaration' || (st.type === 'VariableDeclaration' && st.declarations.every((d) =>
+        d.init && /^(Literal|ArrayExpression|ObjectExpression|ArrowFunctionExpression|FunctionExpression)$/.test(d.init.type)));
+      assert.ok(ok, f + ': solo funciones y literales de primer nivel');
+    });
+    // Un módulo nuevo: api<Módulo>…
+    const palabra = PALABRA[modulo] || new RegExp('^api' + modulo);
+    [...read(f).matchAll(/^function (api\w+)\(/gm)].forEach((m) => { if (!palabra.test(m[1]) && !CONGELADOS.includes(m[1])) sinModulo.push(m[1] + ' (' + f + ')'); });
+  });
+  assert.deepEqual(sinModulo, [], 'una api… nueva lleva el nombre de su módulo (api<Módulo><Qué>)');
+  // La base: solo lo de todos
+  const base = read('src/ClientApi.gs');
+  ['apiFichaVehiculo', 'apiLineasPanorama', 'apiArqueosPorIdCch', 'apiVerificacionesPorFolio', 'apiOfrenda', 'apiListarSedes']
+    .forEach((n) => assert.doesNotMatch(base, new RegExp('^function ' + n + '\\(', 'm'), n + ' vive en su módulo, no en la base'));
+  ['apiPing', 'apiListaConHuella', 'apiResumenInicio', 'apiLogin', 'apiNotificaciones', 'apiQueImpideBorrar', 'partesDeFicha_']
+    .forEach((n) => assert.match(base, new RegExp('^function ' + n + '\\(', 'm'), n + ' es de todos: en la base'));
 });
 
 test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
@@ -599,7 +684,7 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
     }));
   assert.deepEqual(fuera, [], 'Usa Ficha.migas / Ficha.encabezado (componentes/ficha.html)');
   const usa = (archivo, n) => assert.ok((read(archivo).match(/Ficha\.encabezado\(/g) || []).length >= n, archivo + ' usa Ficha.encabezado');
-  usa('src/html/js/app-vehiculos.html', 1);
+  usa('src/html/js/app-vehiculos-ficha.html', 1);
   usa('src/html/js/app-cajachica.html', 1);
   usa('src/html/js/app-permisos.html', 3);
   usa('src/html/js/lineas-telefonicas-ficha.html', 1);
@@ -733,7 +818,7 @@ test('el JS de los .html no tiene "//" dentro de strings (Apps Script lo corta c
 
 test('las tablas de Líneas usan el DataTable del sistema con KPIs que filtran', () => {
   const cliente = LINEAS;
-  const api = read('src/ClientApi.gs');
+  const api = API;
   assert.match(cliente, /DataTable\.crear\(contenedor/);
   assert.equal((cliente.match(/tablaLineas\(\$\('#(ln-tabla-' \+ modulo|lac-tabla|ln-bit-tabla)'?/g) || []).length >= 3, true);
   assert.doesNotMatch(cliente, /class="ln-tabla"><thead id=/);
@@ -948,7 +1033,7 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   // Sin «¿Qué pasó?» ni «Cambiar estatus» (usuario, 4-oct): los estatus se cambian en Editar
   assert.doesNotMatch(lineas, /abrirQuePaso|abrirCambioEstatus|texto: 'Cambiar estatus'/);
   assert.doesNotMatch(read('src/services/lineas/LineasRegistros.gs'), /function cambiarEstatus\(/);
-  assert.doesNotMatch(read('src/ClientApi.gs'), /apiLineasCambiarEstatus/);
+  assert.doesNotMatch(API, /apiLineasCambiarEstatus/);
   // Velocidad: sin esperas fijas largas y con datos en memoria
   assert.match(app, /\}, 180\);/);
   assert.doesNotMatch(app, /\}, 2500\);/);
@@ -980,7 +1065,7 @@ test('Exportar a Excel descarga la base completa del módulo, no solo lo que se 
   assert.match(dt, /if \(typeof cfg\.exportar\.descargar === 'function'\) return exportarConDescarga\(boton\);/);
   const xl = read('src/html/js/componentes/exportar-excel.html');
   assert.match(xl, /return \{ descargar, descargarLibro[,\s\w]*\};/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasExportarBase\(token, modulo, comprimir\)/);
+  assert.match(API, /function apiLineasExportarBase\(token, modulo, comprimir\)/);
 
   // Servidor: todas las filas y columnas, tipos para Excel y secretos ocultos si no es ADMIN
   const fecha = (s) => new Date(s);
@@ -1111,7 +1196,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(ev, /carpetaUnica_\(LineasArchivos\.carpetaDeApp\(CARPETA_FOTOS\), 'FOTOS ' \+ id\)/);
   assert.match(ev, /if \(!carpetaId \|\| !cache\.get\(claveBorrador_\(correo, carpetaId\)\)\) return \{ ok: false \};/);
   assert.match(read('src/services/lineas/LineasUtil.gs'), /try \{ return LineasArchivos\.carpetasNucos\(\); \}/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasArchivo\(token, ruta\)/);
+  assert.match(API, /function apiLineasArchivo\(token, ruta\)/);
 
   // Cliente: Última responsiva / inspección de NUCOS solo en el ⋮ de la ficha (usuario, 30-sep). El patrón volvió a
   // General el 5-oct, dibujado o con la imagen del AppSheet, no como archivo (lineas-patron-consulta.test.cjs)
@@ -1212,7 +1297,7 @@ test('la tabla de Líneas Telefónicas tiene las columnas de siempre y agrega la
   // Se pide antes del clic y se guarda 9 min (30-sep): el clic usa la misma promesa
   assert.match(lineas, /const promesa = llamar\('apiLineasUltimoDocumentoNuco', id, tipo\);/);
   assert.match(lineas, /const r = await ultimoNucos\(boton\.dataset\.id, boton\.dataset\.lnUltimo\);/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasUltimoDocumentoNuco\(token, id, tipo\)/);
+  assert.match(API, /function apiLineasUltimoDocumentoNuco\(token, id, tipo\)/);
   assert.match(read('src/services/TelefoniaService.gs'), /posiciones\.forEach\(\(i\) => \{ if \(copia\[i\]\) copia\[i\] = '••••'; \}\);/);
   assert.match(repo, /if \(c === 'FOLIO'\) return legado\.folio \|\| null;/);
 });
@@ -1430,7 +1515,7 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.equal(Ntf.DIAS_AVISO, 7);
   // Enganches: API, alta que pide revisar, campana en el shell y vista
   // La campana pide todos los módulos en una llamada; Líneas es una fuente de NotificacionesService (fase 5.5)
-  assert.match(read('src/ClientApi.gs'), /function apiNotificaciones\(token, limite\) \{\s+return NotificacionesService\.campana\(token, limite\);/);
+  assert.match(API, /function apiNotificaciones\(token, limite\) \{\s+return NotificacionesService\.campana\(token, limite\);/);
   assert.match(read('src/services/NotificacionesService.gs'), /lineas: \(token, limite\) => TelefoniaService\.notificaciones\(token, limite\)/);
   assert.doesNotMatch(read('src/html/notificaciones.html'), /apiLineasNotificaciones|apiNotificacionesPendientes/);
   // Sus avisos dan huella (el vigía ve un aviso nuevo o uno marcado como leído)
@@ -1518,7 +1603,7 @@ test('Acciones masivas de equipos: reasignar deja en USO; la línea solo pasa a 
   assert.match(cliente, /clave: 'RESGUARDO', texto: 'Mandar a resguardo', icono: 'archive', minimo: 1, propia: true/);
   assert.match(cliente, /llamar\('apiLineasAccionMasiva', accion\.clave, ids, datos\)/);
   assert.match(read('src/html/js/componentes/datatable.html'), /b\.hidden = nSel < \(\(accionesSeleccion\[Number\(b\.dataset\.accionSel\)\] \|\| \{\}\)\.minimo \|\| 1\)/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasAccionMasiva\(token, accion, ids, datos\)/);
+  assert.match(API, /function apiLineasAccionMasiva\(token, accion, ids, datos\)/);
 });
 
 test('Reasignar uno por uno: cada equipo con su responsable; los que no cambian no se tocan', () => {
@@ -1629,7 +1714,7 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.doesNotMatch(app, /'reactivacion-lineas'/);
   assert.match(app, /plantilla: 'tpl-lineas-panorama', init: \(\) => Lineas\.initPanorama\(\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasPanorama\(token, forzar\)/);
+  assert.match(API, /function apiLineasPanorama\(token, forzar\)/);
 });
 
 test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo de la inspección', () => {
@@ -2056,7 +2141,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   // Mandar a cancelación: cliente, API y servidor; la pestaña Resguardos solo muestra renglones con equipo
   assert.match(lineas, /llamar\('apiLineasMandarCancelacion', conNumero\.map\(\(x\) => x\.id\)/);
   assert.match(lineas, /vista === 'RESGUARDOS' \? todas\.filter\(\(f\) => f\.ESTADO\)/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasMandarCancelacion\(token, ids, datos\)/);
+  assert.match(API, /function apiLineasMandarCancelacion\(token, ids, datos\)/);
   const resg = read('src/services/lineas/LineasResguardos.gs');
   assert.match(resg, /function mandarCancelacion\(ids, datos, usuario, opciones\)/);
   assert.match(resg, /'SOLICITO_CORREO': usuario\.correo, 'SOLICITO_NOMBRE': usuario\.nombre, 'ESTADO': '',/);
@@ -2159,7 +2244,7 @@ test('Correcciones de Líneas (módulo temporal, 30-sep): cargas que conservan, 
   // Aislado para poder borrarlo: API en su archivo, semilla fuera de git, una línea en cada lugar compartido
   assert.match(read('.gitignore'), /src\/services\/lineas\/LineasCorreccionesSemilla\.gs/);
   assert.match(read('src/services/lineas/LineasCorrecciones.gs'), /function apiLineasCorreccionesMarcar\(token, accion, ids, comentario\)/);
-  assert.doesNotMatch(read('src/ClientApi.gs'), /Correcciones/);
+  assert.doesNotMatch(API, /Correcciones/);
   assert.match(APP, /vista: 'correcciones-lineas'[^\n]*plantilla: 'tpl-lineas-correcciones', init: \(\) => LineasCorrecciones\.init\(\)/);
   assert.match(read('src/config/Entidades.gs'), /'APP_CORRECCIONES': \{ prefijo: 'COR'/);
   assert.match(read('package.json'), /"correcciones:semilla": "node tools\/correcciones-semilla\.cjs"/);
@@ -2506,10 +2591,10 @@ test('las fichas van en una llamada y piden lo de otro módulo solo si la person
   // que la deja en null sin permiso (su pestaña no aparece), y la anota en FICHAS_GUARDADAS para
   // que un guardado borre su copia.
   const FICHAS = [
-    { archivo: 'src/html/js/app-vehiculos.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
+    { archivo: 'src/html/js/app-vehiculos-ficha.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
     { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', servidor: 'apiFichaCajaChica' },
   ];
-  const api = read('src/ClientApi.gs');
+  const api = API;
   const guardadas = /const FICHAS_GUARDADAS = \[([^\]]*)\]/.exec(read('src/html/js/api.html'))[1];
   FICHAS.forEach((f) => {
     const i = api.indexOf('function ' + f.servidor + '(');
@@ -2641,7 +2726,7 @@ test('las carpetas de los servicios se buscan por nombre en la raíz, no con un 
 
 test('una vista que se puede apagar por proyecto (MODULOS_APAGADOS) se apaga también en el servidor', () => {
   // El menú solo esconde: si una llamada del módulo no revisa Config.exigirEncendido, se usa desde la consola
-  const api = read('src/ClientApi.gs');
+  const api = API;
   const llamadas = [...api.matchAll(/function (apiHelpdesk\w+)\([^)]*\) \{([^}]*)\}/g)];
   assert.ok(llamadas.length >= 9, 'encontró las llamadas de Help Desk (' + llamadas.length + ')');
   const sinRevisar = llamadas
@@ -2730,7 +2815,7 @@ test('los botones de una celda (Ver, PDF, Fotos, Carpeta) salen de TablaFicha.bo
 
 test('la ficha y las altas de Vehículos ligan por el ID del vehículo, nunca por folio', () => {
   // 12-oct-2026: "serie o NUCO, jamás folio" (el folio se reasigna; 152 verificaciones quedaron en otro vehículo).
-  const api = read('src/ClientApi.gs');
+  const api = API;
   const i = api.indexOf('function apiFichaVehiculo(');
   const ficha = api.slice(i, api.indexOf('\n}', i));
   assert.match(ficha, /VehiculosService\.buscar\(token/, 'la ficha busca el vehículo por su ID');

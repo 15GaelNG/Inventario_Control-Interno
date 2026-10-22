@@ -7,6 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8').replace(/\r/g, '');
@@ -285,7 +286,7 @@ test('paso 3 en la pantalla: busca al cambiar el responsable, pregunta «¿Es co
   tiene(pantalla, 'if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;', 'una respuesta vieja no pinta a otra persona');
   tiene(estilos, '.ln-ine [hidden] { display: none !important; }', 'los botones (display: grid) sí se ocultan');
   tiene(pantalla, "if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);", 'sin contestar no se guarda: lleva a la pregunta');
-  tiene(read('src/ClientApi.gs'), 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
+  tiene(API, 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
   tiene(read('src/services/TelefoniaService.gs'), 'function identificacionesRegistradas(token, personas) {\n    operar_(token);', 'con permiso de operar Líneas');
 });
 

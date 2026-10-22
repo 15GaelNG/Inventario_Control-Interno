@@ -80,6 +80,14 @@ sale de `T`; lo de otra parte se pide arriba como un import, `const { abrirResgu
 llamar, así no importa el orden); un `let` que usan varias partes vive en su dueña, que lo publica con get/set en `T`, y
 las demás lo leen como `T.captura`. Una función nueva que otra parte necesite va en el `return` de su parte.
 
+**Vehículos, por partes** (22-oct, fase 6.1b): igual que Telefónicas. `initVehiculos` (en `app-vehiculos.html`) es el
+arranque y la lista; la ficha, las acciones sobre sus registros, las capturas desde la ficha y la responsiva/adherente
+viven en `app-vehiculos-ficha|registros|capturas|documentos.html`, cada una `Vehiculos.registrar('parte', (T) => {…})`.
+El mecanismo (`registrar`, `T.de`, `T.montar` y el aviso "la parte X no publica Y") es **un solo componente,
+`componentes/partes.html`** (`Partes.crear('Vehículos')`), que también usa Telefónicas. Para abrir otra pantalla grande:
+una config como `tools/app/partir-vehiculos.js` sobre el motor `tools/partir/en-partes.js` (corta por nombres, así que
+cada rama lo corre sobre su archivo y lo suyo viaja con su región).
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
@@ -89,6 +97,12 @@ panoramas, Sistemas y Encuestas dejaron de colgar de otro permiso o de no pedir 
 comparten `requiere` y `libre` solo queda en Help Desk (contrato). Si su pantalla lee la lista de otro
 módulo, esa definición lo declara en `leenTambien` (HojaServicio); un módulo de solo enlaces lleva
 `soloEnlaces: true` en `Modulos.gs` (no cuenta como familia).
+
+**Una llamada nueva del servidor** (`api…`, lo que la pantalla pide con `google.script.run`) va en
+`src/api/<Módulo>.gs`, el del módulo dueño (el servicio al que llama / el permiso que pide), como wrapper delgado
+hacia su Service, y se llama `api<Módulo><Qué>`. Módulo nuevo = archivo nuevo. `src/ClientApi.gs` es solo la base (lo
+de todos: medir, listas con huella, Inicio, sesión, campanita, qué impide borrar, fichas en una llamada). Desde la fase
+6.3 (22-oct, `tools/api/partir.js`); `source-contracts` lo revisa y las pruebas leen todo con `tests/api-fuente.js`.
 
 ## Componentes (`src/html/js/componentes/`)
 
