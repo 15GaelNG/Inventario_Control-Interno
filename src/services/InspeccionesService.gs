@@ -1044,19 +1044,51 @@ const InspeccionesService = (function () {
   // captura>/<SECCIÓN>); al guardar se mueven a la de la inspección. Cada sección del tipo necesita al menos una.
 
   /** Una carpeta temporal de esta captura, solo si de verdad está en TEMP/FOTOS DE INSPECCION (la manda el cliente) */
+  // Lo que ya se buscó en Drive se recuerda 6 h (subir 100 fotos no debe buscar las mismas carpetas 100 veces)
+  const cache_ = () => CacheService.getScriptCache();
   function temporalValida_(carpetaId) {
-    const raiz = carpetaTemporalRaiz_().getId();
+    const id = String(carpetaId || '');
     let carpeta;
-    try { carpeta = DriveApp.getFolderById(String(carpetaId || '')); } catch (e) { throw new Error('No se encontró la carpeta de las fotos.'); }
+    try { carpeta = DriveApp.getFolderById(id); } catch (e) { throw new Error('No se encontró la carpeta de las fotos.'); }
+    if (cache_().get('insfoto_ok_' + id)) return carpeta;
     const padres = carpeta.getParents();
-    if (!padres.hasNext() || padres.next().getId() !== raiz) throw new Error('Esa carpeta no es de fotos de inspección.');
+    if (!padres.hasNext() || padres.next().getId() !== carpetaTemporalRaiz_().getId()) throw new Error('Esa carpeta no es de fotos de inspección.');
+    try { cache_().put('insfoto_ok_' + id, '1', 6 * 60 * 60); } catch (e) { /* sin caché: se revisa la próxima vez */ }
     return carpeta;
   }
   function carpetaTemporalRaiz_() {
+    const guardada = cache_().get('insfoto_raiz_v1');
+    if (guardada) {
+      try { return DriveApp.getFolderById(guardada); } catch (e) { /* se borró: se vuelve a buscar */ }
+    }
     let c = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
     TEMP_FOTOS.forEach((n) => { c = ExpedienteNuco.subcarpeta(c, n); });
+    try { cache_().put('insfoto_raiz_v1', c.getId(), 6 * 60 * 60); } catch (e) { /* sin caché */ }
     return c;
   }
+  /** Crea la foto ya con su descripción ("Subido por…") en UNA llamada a Drive (Drive v3); si no hay, como antes */
+  function crearFoto_(carpeta, blob, nombre) {
+    if (typeof Drive !== 'undefined' && Drive.Files && Drive.Files.create) {
+      let quien = '';
+      try { quien = Session.getActiveUser().getEmail(); } catch (e) { /* sin correo */ }
+      const descripcion = quien ? 'Subido por ' + quien + ' desde Control Interno, el ' +
+        Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : '';
+      const r = Drive.Files.create({ name: nombre, parents: [carpeta.getId()], description: descripcion },
+        blob.setName(nombre), { supportsAllDrives: true, fields: 'id,name' });
+      return { id: r.id, nombre: r.name };
+    }
+    const f = DriveUtils.marcarAutor(carpeta.createFile(blob.setName(nombre)));
+    return { id: f.getId(), nombre: f.getName() };
+  }
+  /** Fotos que ya tiene la carpeta de una sección (para el máximo) */
+  function contarFotos_(carpetaSeccion) {
+    const archivos = carpetaSeccion.getFiles();
+    let n = 0;
+    while (archivos.hasNext()) { const a = archivos.next(); if (!a.isTrashed || !a.isTrashed()) n++; }
+    return n;
+  }
+  const nombreTemporal_ = (foto) => foto.seccion + ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss') + ' ' +
+    Utilities.getUuid().slice(0, 6) + foto.extension;
   /** La foto que llega del cliente ({ nombre, mime, base64 }), revisada: imagen y hasta 10 MB */
   function blobDeFoto_(archivo, seccion) {
     const mime = String((archivo && archivo.mime) || '').toLowerCase();
@@ -1071,10 +1103,7 @@ const InspeccionesService = (function () {
   /** La subcarpeta de una sección, reconociendo la que ya existe aunque varíe en acentos o espacios */
   /** Que la sección no pase del máximo antes de agregarle una */
   function revisarMaximo_(carpetaSeccion) {
-    const archivos = carpetaSeccion.getFiles();
-    let n = 0;
-    while (archivos.hasNext()) { const a = archivos.next(); if (!a.isTrashed || !a.isTrashed()) n++; }
-    if (n >= MAX_FOTOS_SECCION) throw new Error('Máximo ' + MAX_FOTOS_SECCION + ' fotos por sección.');
+    if (contarFotos_(carpetaSeccion) >= MAX_FOTOS_SECCION) throw new Error('Máximo ' + MAX_FOTOS_SECCION + ' fotos por sección.');
   }
   function carpetaSeccion_(carpeta, seccion) {
     const buscado = SheetUtils.normalizarEncabezado_(seccion);
@@ -1114,10 +1143,34 @@ const InspeccionesService = (function () {
     const foto = blobDeFoto_(archivo, seccion);
     const carpeta = carpetaSeccion_(temporalValida_(carpetaId), foto.seccion);
     revisarMaximo_(carpeta);
-    const nombre = foto.seccion + ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss') + ' ' +
-      Utilities.getUuid().slice(0, 4) + foto.extension;
-    const f = DriveUtils.marcarAutor(carpeta.createFile(foto.blob.setName(nombre)));
-    return { id: f.getId(), nombre: nombre, miniatura: null };
+    const f = crearFoto_(carpeta, foto.blob, nombreTemporal_(foto));
+    return { id: f.id, nombre: f.nombre, miniatura: null };
+  }
+  /**
+   * Varias fotos en UNA llamada (hasta 10): la carpeta se revisa una vez y cada sección se busca y se cuenta una vez.
+   * Cada foto regresa lo suyo: { id, nombre } o { error } (una mala no tira a las demás).
+   */
+  function fotosSubirVarias(token, carpetaId, lote) {
+    Permisos.puedeEditar(token, MODULO);
+    if (!Array.isArray(lote) || !lote.length || lote.length > 10) throw new Error('Lote de fotos inválido.');
+    const temporal = temporalValida_(carpetaId);
+    const secciones = {};   // SECCIÓN → { carpeta, n }
+    return lote.map((x) => {
+      try {
+        const foto = blobDeFoto_(x && x.archivo, x && x.seccion);
+        if (!secciones[foto.seccion]) {
+          const carpeta = carpetaSeccion_(temporal, foto.seccion);
+          secciones[foto.seccion] = { carpeta, n: contarFotos_(carpeta) };
+        }
+        const s = secciones[foto.seccion];
+        if (s.n >= MAX_FOTOS_SECCION) throw new Error('Máximo ' + MAX_FOTOS_SECCION + ' fotos por sección.');
+        const f = crearFoto_(s.carpeta, foto.blob, nombreTemporal_(foto));
+        s.n++;
+        return { id: f.id, nombre: f.nombre, miniatura: null };
+      } catch (err) {
+        return { error: err.message };
+      }
+    });
   }
   /** Lo que ya subió una captura (al recuperar su borrador) → { SECCIÓN: [{ id, nombre, miniatura }] } */
   function fotosTemporal(token, carpetaId) {
@@ -1257,7 +1310,7 @@ const InspeccionesService = (function () {
     detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     // Fotos por sección (22-oct): de una captura (carpeta temporal) y de una inspección ya guardada
-    fotosPreparar, fotosSubir, fotosTemporal, fotosQuitarTemporal, fotosCancelar, limpiarFotosTemporales,
+    fotosPreparar, fotosSubir, fotosSubirVarias, fotosTemporal, fotosQuitarTemporal, fotosCancelar, limpiarFotosTemporales,
     fotosDe, fotosAgregar, fotosQuitar,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_, seccionesFotos_,   // expuestas para las pruebas

@@ -45,6 +45,7 @@ const pdf = archivo('INSPECCION-0025 2026-10-22.pdf', inspeccion);
 const subcarpeta = (padre, nombre) => hijos(padre).find((x) => x.tipo === 'carpeta' && x.nombre === nombre) || carpeta(nombre, padre);
 
 let fila = null;
+const cacheFalsa = {};
 const ESTRUCTURA = {
   tipo: 'HONDA 150XR', plantillaId: 'doc', carpeta: 'INSPECCIONES HONDA 150XR',
   secciones: [{ titulo: 'Cristalería', peso: 100, campos: [{ campo: 'PARABRISAS', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] }],
@@ -54,7 +55,10 @@ const ESTRUCTURA = {
 const contexto = vm.createContext({
   Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'libro' }, DRIVE_FOLDERS: { RAIZ: () => raiz.id, REPORTES: () => 'formatos', MODELOS: () => 'm' } },
   Permisos: { puedeEditar: () => ({ nombre: 'INSPECTOR' }), puedeLeer: () => ({}) },
-  CacheService: { getScriptCache: () => ({ get: () => JSON.stringify(ESTRUCTURA), put: () => {}, remove: () => {} }) },
+  // La estructura del tipo viene de la caché; lo demás (carpetas ya revisadas) se guarda de verdad
+  CacheService: { getScriptCache: () => ({
+    get: (k) => (/^inspeccion_tipo/.test(k) ? JSON.stringify(ESTRUCTURA) : cacheFalsa[k] || null),
+    put: (k, v) => { cacheFalsa[k] = v; }, remove: (k) => { delete cacheFalsa[k]; } }) },
   PropertiesService: { getScriptProperties: () => ({ getProperty: () => null, setProperty: () => {} }) },
   Session: { getScriptTimeZone: () => 'America/Mexico_City' },
   Utilities: { formatDate: () => '2026-10-22', getUuid: () => 'abcd1234-0000' },
@@ -154,6 +158,18 @@ const llena = S.fotosPreparar('t').carpetaId;
 for (let i = 0; i < 20; i++) S.fotosSubir('t', llena, 'NEUMATICOS', foto);
 ok(truena(() => S.fotosSubir('t', llena, 'NEUMATICOS', foto), /Máximo 20/), 'la foto 21 de una sección se rechaza');
 ok(!!S.fotosSubir('t', llena, 'INTERIORES', foto), 'otra sección sigue aceptando');
+
+console.log('5c. Varias fotos en una llamada');
+const lote = S.fotosPreparar('t').carpetaId;
+const pdfFalso = { nombre: 'x.pdf', mime: 'application/pdf', base64: 'eA==' };
+const rs = S.fotosSubirVarias('t', lote, [{ seccion: 'NEUMATICOS', archivo: foto }, { seccion: 'NEUMATICOS', archivo: pdfFalso }, { seccion: 'INTERIORES', archivo: foto }]);
+ok(rs.length === 3 && rs[0].id && rs[1].error && rs[2].id, 'cada foto regresa lo suyo: la mala no tira a las demás');
+ok(nodos[nodos[rs[2].id].padre].nombre === 'INTERIORES', 'y cada una va a su sección');
+const muchas = Array.from({ length: 10 }, () => ({ seccion: 'NEUMATICOS', archivo: foto }));
+S.fotosSubirVarias('t', lote, muchas);
+const tope = S.fotosSubirVarias('t', lote, muchas);
+ok(tope.filter((r) => r.id).length === 9 && tope.filter((r) => /Máximo 20/.test(r.error || '')).length === 1, 'el máximo de 20 se cuenta dentro del lote (1+10+9 = 20)');
+ok(truena(() => S.fotosSubirVarias('t', lote, muchas.concat(muchas)), /Lote/), 'más de 10 por llamada no');
 
 console.log('6. Cancelar una captura');
 const otra = S.fotosPreparar('t').carpetaId;

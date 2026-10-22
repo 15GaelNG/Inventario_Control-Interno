@@ -1000,6 +1000,8 @@
           iniciales: iniciales || {},
           maximo: estructura.maxFotos || 20,
           subir: async (seccion, archivo) => callServer('apiInspeccionesFotosSubir', state.token, await carpetaFotos_(), seccion, archivo),
+          // En lotes: varias fotos por llamada (subir 100 tardaba; usuario, 22-oct)
+          subirVarias: async (lote) => callServer('apiInspeccionesFotosSubirVarias', state.token, await carpetaFotos_(), lote),
           quitar: (f) => callServer('apiInspeccionesFotosQuitarTemporal', state.token, fotosCarpetaId, f.id),
           alCambiar: () => { errorGeneral(null); actualizarPasos(); programarGuardarBorrador_(); },
         });

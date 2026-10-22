@@ -95,6 +95,27 @@ function elegir(caja, seccion, archivos) {
   ok(!caja3.querySelector('.sf-seccion').classList.contains('sf-llena') && caja3.querySelector('.sf-aviso').hidden, 'al quitar una, se puede agregar otra y se va el aviso');
   f3.destruir();
 
+  console.log('4c. En lotes: varias fotos por llamada');
+  const caja4 = document.createElement('div');
+  document.body.appendChild(caja4);
+  const lotes = [];
+  const f4 = SubirFotos.crear(caja4, {
+    secciones: [{ id: 'A', titulo: 'A' }, { id: 'B', titulo: 'B' }], maximo: 20, aLaVez: 2,
+    preparar: (x) => Promise.resolve({ nombre: x.name, mime: 'image/jpeg', base64: 'eA==' }),
+    subir: () => Promise.reject(new Error('no se usa con lotes')),
+    subirVarias: (lote) => {
+      lotes.push(lote.length);
+      return Promise.resolve(lote.map((x) => (x.archivo.nombre === 'mala.jpg' ? { error: 'Solo se aceptan imágenes' } : { id: 'id-' + x.archivo.nombre, nombre: x.archivo.nombre })));
+    },
+  });
+  elegir(caja4, 'A', Array.from({ length: 9 }, (_, i) => archivo('a' + i + '.jpg')));
+  elegir(caja4, 'B', [archivo('b1.jpg'), archivo('mala.jpg'), archivo('b2.jpg')]);
+  await new Promise((r) => setTimeout(r, 1500));   // la ventana para juntar lotes es de 0.6 s
+  ok(f4.fotos().A.length === 9 && f4.fotos().B.length === 2, 'las 11 buenas subieron, cada una a su sección');
+  ok(lotes.every((n) => n <= 5) && lotes.length < 12, 'en ' + lotes.length + ' llamadas de hasta 5 (' + lotes.join(', ') + '), no 12');
+  ok(f4.conError() === 1 && !f4.subiendo(), 'la que el servidor rechazó dentro del lote queda marcada; las demás no');
+  f4.destruir();
+
   console.log('5. Lo que ya estaba (editar / borrador)');
   const caja2 = document.createElement('div');
   document.body.appendChild(caja2);

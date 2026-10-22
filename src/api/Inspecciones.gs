@@ -71,6 +71,10 @@ function apiInspeccionesFotosPreparar(token) {
 function apiInspeccionesFotosSubir(token, carpetaId, seccion, archivo) {
   return InspeccionesService.fotosSubir(token, carpetaId, seccion, archivo);
 }
+// Varias en una llamada (hasta 10): cada llamada a Apps Script cuesta ~1-2 s aunque no haga nada
+function apiInspeccionesFotosSubirVarias(token, carpetaId, lote) {
+  return InspeccionesService.fotosSubirVarias(token, carpetaId, lote);
+}
 function apiInspeccionesFotosTemporal(token, carpetaId) {
   return InspeccionesService.fotosTemporal(token, carpetaId);
 }

@@ -89,6 +89,7 @@ window.callServer = (fn, token, ...args) => {
     apiRegistrarInspeccion: { puntaje: 90, pdf: '' },
     apiInspeccionesFotosPreparar: { carpetaId: 'TMP1' },
     apiInspeccionesFotosSubir: { id: 'F1', nombre: 'NEUMATICOS 1.jpg', miniatura: null },
+    apiInspeccionesFotosSubirVarias: (Array.isArray(args[1]) ? args[1] : []).map((x, i) => ({ id: 'F' + i, nombre: x.archivo.nombre })),
   };
   return Promise.resolve(respuestas[fn]);
 };
@@ -267,7 +268,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Fotos|Ci
   evento(inputFoto, 'change');
   await esperar(40);
   window.Image = ImagenDeVerdad;
-  ok(llamadas.includes('apiInspeccionesFotosPreparar') && llamadas.includes('apiInspeccionesFotosSubir'),
+  ok(llamadas.includes('apiInspeccionesFotosPreparar') && llamadas.includes('apiInspeccionesFotosSubirVarias'),
     'la primera foto crea la carpeta temporal y sube');
   ok($('.form-paso-chip.activo') && $$('#ins-fotos .sf-falta:not([hidden])').length === 0, 'ya no falta ninguna sección');
 

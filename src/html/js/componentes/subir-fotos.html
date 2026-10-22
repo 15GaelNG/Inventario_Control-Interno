@@ -45,6 +45,7 @@
    *   const fotos = SubirFotos.crear(contenedor, {
    *     secciones: [{ id: 'NEUMATICOS', titulo: 'Neumáticos' }, …],
    *     subir: (seccion, { nombre, mime, base64 }) => Promise<{ id, nombre, miniatura }>,   // al servidor
+   *     subirVarias: ([{ seccion, archivo }]) => Promise<[{ id, nombre } | { error }]>,   // opcional: en lotes (más rápido)
    *     quitar: (foto) => Promise,                                // { id, seccion }: la manda a la papelera
    *     iniciales: { NEUMATICOS: [{ id, nombre, miniatura }] },  // lo que ya está (editar o un borrador)
    *     puedeQuitar: (seccion, cuantas) => true,                 // p. ej. no dejar una sección vacía
@@ -153,29 +154,94 @@
         aviso.hidden = !aviso.textContent;
       }
 
+      // La tubería: preparar (Imagen, de una en una) → listas para mandar → mandar. Con subirVarias, en lotes de hasta
+      // LOTE fotos (o LOTE_BYTES) por llamada: cada llamada a Apps Script cuesta ~1-2 s aunque no haga nada, así que 100
+      // fotos en ~20 llamadas en vez de 100. Sin subirVarias, de una en una (como antes).
+      const LOTE = 5;
+      const LOTE_BYTES = 3 * 1024 * 1024;
+      const ADELANTE = 12;   // preparadas esperando como máximo (cada una ~0.5 MB en memoria: el celular)
+      const aLaVez = opciones.aLaVez ||
+        (typeof Pantalla !== 'undefined' && Pantalla.esTactil && Pantalla.esTactil() ? A_LA_VEZ : 5);
+      const paraMandar = [];   // { f, datos }
+      let enVuelo = 0;         // fotos dentro de llamadas que no han regresado
+      let preparando = false;
+      let juntandoDesde = 0;   // con lotes: cuándo empezó a esperar la primera foto lista
+      let reloj = null;
+      const JUNTAR_MS = 600;
+
       function siguiente() {
-        while (vivo && activas < A_LA_VEZ && cola.length) {
-          const f = cola.shift();
+        prepararSiguientes();
+        mandar();
+      }
+
+      async function prepararSiguientes() {
+        if (preparando) return;
+        preparando = true;
+        try {
+          while (vivo && cola.length && paraMandar.length + enVuelo < ADELANTE) {
+            const f = cola.shift();
+            try {
+              const listo = await prepararArchivo(f.archivo);
+              if (!vivo) return;
+              if (listo.miniatura && !f.miniatura) { f.miniatura = listo.miniatura; pintar(f.seccion); }
+              paraMandar.push({ f, datos: { nombre: listo.nombre, mime: listo.mime, base64: listo.base64 } });
+              mandar();
+            } catch (err) {
+              terminar(f, null, err);
+            }
+          }
+        } finally {
+          preparando = false;
+        }
+      }
+
+      function mandar() {
+        while (vivo && activas < aLaVez && paraMandar.length) {
+          const maxLote = opciones.subirVarias ? LOTE : 1;
+          // Con lotes: si todavía se están preparando más, se juntan hasta LOTE o hasta JUNTAR_MS antes de mandar
+          const vienenMas = cola.length > 0;   // quedan fotos por preparar (la que se está preparando ya salió de la cola)
+          if (maxLote > 1 && paraMandar.length < maxLote && vienenMas) {
+            if (!juntandoDesde) juntandoDesde = Date.now();
+            const falta = JUNTAR_MS - (Date.now() - juntandoDesde);
+            if (falta > 0) {
+              if (!reloj) reloj = setTimeout(() => { reloj = null; mandar(); }, falta);
+              return;
+            }
+          }
+          juntandoDesde = 0;
+          const lote = [];
+          let bytes = 0;
+          while (paraMandar.length && lote.length < maxLote && (!lote.length || bytes + paraMandar[0].datos.base64.length <= LOTE_BYTES)) {
+            const x = paraMandar.shift();
+            bytes += x.datos.base64.length;
+            lote.push(x);
+          }
           activas++;
-          prepararArchivo(f.archivo)
-            .then((listo) => {
-              if (listo.miniatura && !f.miniatura) { f.miniatura = listo.miniatura; if (vivo) pintar(f.seccion); }
-              const datos = { nombre: listo.nombre, mime: listo.mime, base64: listo.base64 };
-              return opciones.subir(f.seccion, datos);
-            })
-            .then((r) => {
-              // La miniatura chica de aquí se queda si el servidor no manda la suya (Drive tarda en hacerla)
-              Object.assign(f, { estado: 'lista', id: r.id, nombre: r.nombre || f.nombre, miniatura: r.miniatura || f.miniatura, archivo: null, error: '' });
-            })
-            .catch((err) => Object.assign(f, { estado: 'error', error: err && err.message ? err.message : String(err) }))
+          enVuelo += lote.length;
+          const llamada = opciones.subirVarias
+            ? opciones.subirVarias(lote.map((x) => ({ seccion: x.f.seccion, archivo: x.datos })))
+            : Promise.resolve(opciones.subir(lote[0].f.seccion, lote[0].datos)).then((r) => [r]);
+          Promise.resolve(llamada)
+            .then((rs) => lote.forEach((x, k) => {
+              const r = rs && rs[k];
+              terminar(x.f, r, !r ? new Error('El servidor no contestó por esta foto') : r.error ? new Error(r.error) : null);
+            }))
+            .catch((err) => lote.forEach((x) => terminar(x.f, null, err)))
             .then(() => {
               activas--;
-              if (!vivo) return;
-              pintar(f.seccion);
-              avisar();
-              siguiente();
+              enVuelo -= lote.length;
+              if (vivo) siguiente();
             });
         }
+      }
+
+      function terminar(f, r, err) {
+        if (err) Object.assign(f, { estado: 'error', error: err && err.message ? err.message : String(err) });
+        // La miniatura chica de aquí se queda si el servidor no manda la suya (Drive tarda en hacerla)
+        else Object.assign(f, { estado: 'lista', id: r.id, nombre: r.nombre || f.nombre, miniatura: r.miniatura || f.miniatura, archivo: null, error: '' });
+        if (!vivo) return;
+        pintar(f.seccion);
+        avisar();
       }
 
       function agregar(seccion, archivos) {
@@ -240,6 +306,7 @@
         fotos: () => secciones.reduce((o, s) => { o[s.id] = listas(s.id).map((f) => ({ id: f.id, nombre: f.nombre })); return o; }, {}),
         destruir: () => {
           vivo = false;
+          if (reloj) clearTimeout(reloj);
           contenedor.removeEventListener('change', alCambiarArchivo);
           contenedor.removeEventListener('click', alClic);
           contenedor.innerHTML = '';
