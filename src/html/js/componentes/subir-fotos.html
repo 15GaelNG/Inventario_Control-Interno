@@ -1,0 +1,240 @@
+<style>
+  /* SubirFotos: una tarjeta por sección con sus botones (cámara / elegir) y la rejilla de miniaturas */
+  .sf-secciones { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .sf-seccion { border: 1px solid var(--color-border); border-radius: var(--radio-l); padding: 12px; background: var(--color-surface); }
+  .sf-seccion.sf-incompleta { border-color: var(--color-warning, #d69e2e); }
+  .sf-cabeza { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .sf-cabeza h4 { margin: 0; flex: 1; font-size: var(--texto-m); }
+  .sf-cuenta { font-size: var(--texto-xs); color: var(--color-text-muted); white-space: nowrap; }
+  .sf-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+  .sf-boton {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px dashed var(--color-border);
+    border-radius: var(--radio-m); cursor: pointer; font-size: var(--texto-s); color: var(--color-text);
+  }
+  .sf-boton:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .sf-boton input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .sf-boton:focus-within { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  @media (hover: hover) and (pointer: fine) { .sf-solo-tactil { display: none !important; } }
+  .sf-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px; margin-top: 10px; }
+  .sf-rejilla:empty { display: none; }
+  .sf-foto {
+    position: relative; aspect-ratio: 1 / 1; border: 1px solid var(--color-border); border-radius: var(--radio-m);
+    overflow: hidden; background: var(--color-bg); display: flex; align-items: center; justify-content: center;
+  }
+  .sf-foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sf-foto.sf-subiendo img { opacity: .45; }
+  .sf-foto.sf-error { border-color: var(--color-danger); }
+  .sf-estado { position: absolute; inset: auto 0 0 0; padding: 2px 4px; font-size: var(--texto-xs); background: rgba(0,0,0,.6); color: #fff; text-align: center; }
+  .sf-quitar, .sf-reintentar {
+    position: absolute; top: 3px; right: 3px; width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 0;
+    background: rgba(0,0,0,.65); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .sf-reintentar { right: 30px; }
+  .sf-quitar:disabled { opacity: .35; cursor: not-allowed; }
+  .sf-quitar svg, .sf-reintentar svg { width: 14px; height: 14px; }
+  .sf-falta { margin: 8px 0 0; font-size: var(--texto-xs); color: var(--color-warning-text, #975a16); }
+</style>
+
+<script>
+  /**
+   * SubirFotos — fotos por sección: tomarlas con la cámara del celular o elegir varias de la galería o la computadora.
+   * Una sola copia para todo el sistema (empezó con la inspección vehicular, 22-oct).
+   *
+   *   const fotos = SubirFotos.crear(contenedor, {
+   *     secciones: [{ id: 'NEUMATICOS', titulo: 'Neumáticos' }, …],
+   *     subir: (seccion, { nombre, mime, base64 }) => Promise<{ id, nombre, miniatura }>,   // al servidor
+   *     quitar: (foto) => Promise,                                // { id, seccion }: la manda a la papelera
+   *     iniciales: { NEUMATICOS: [{ id, nombre, miniatura }] },  // lo que ya está (editar o un borrador)
+   *     puedeQuitar: (seccion, cuantas) => true,                 // p. ej. no dejar una sección vacía
+   *     alCambiar: () => {},                                     // cada vez que algo cambia
+   *   });
+   *   fotos.faltan()     // títulos de las secciones sin ninguna foto lista
+   *   fotos.subiendo()   // true mientras alguna sube
+   *   fotos.fotos()      // { NEUMATICOS: [{ id, nombre }] } (solo las ya subidas)
+   *   fotos.destruir()
+   *
+   * Cada foto sube en cuanto se elige (hasta 3 a la vez), así guardar no manda todo de golpe y si se va la señal solo se
+   * reintenta la que falló. Antes de subirla se reduce en el navegador (2000 px por lado, JPEG .85: de ~4 MB a ~400 KB;
+   * el navegador ya la endereza). Si el navegador no la sabe leer (HEIC en una PC), sube el archivo tal cual si pesa
+   * menos de 15 MB. "Tomar foto" solo aparece en pantallas táctiles. Prueba: tests/subir-fotos.test.js.
+   */
+  const SubirFotos = (function () {
+    const LADO = 2000;
+    const CALIDAD = 0.85;
+    const MAX_CRUDO = 15 * 1024 * 1024;
+    const A_LA_VEZ = 3;
+
+    function leerDataUrl(archivo) {
+      return new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onload = () => resolve(String(lector.result));
+        lector.onerror = () => reject(new Error(archivo.name + ': no se pudo leer el archivo.'));
+        lector.readAsDataURL(archivo);
+      });
+    }
+
+    /** El archivo listo para subir: JPEG reducido, o tal cual si el navegador no lo sabe dibujar */
+    function preparar(archivo) {
+      const nombreJpg = String(archivo.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
+      return new Promise((resolve) => {
+        const url = URL.createObjectURL(archivo);
+        const img = new Image();
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+        img.onload = () => {
+          const k = Math.min(1, LADO / Math.max(img.naturalWidth, img.naturalHeight));
+          const lienzo = document.createElement('canvas');
+          lienzo.width = Math.max(1, Math.round(img.naturalWidth * k));
+          lienzo.height = Math.max(1, Math.round(img.naturalHeight * k));
+          const g = lienzo.getContext('2d');
+          g.fillStyle = '#ffffff';
+          g.fillRect(0, 0, lienzo.width, lienzo.height);
+          g.drawImage(img, 0, 0, lienzo.width, lienzo.height);
+          URL.revokeObjectURL(url);
+          resolve({ nombre: nombreJpg, mime: 'image/jpeg', base64: lienzo.toDataURL('image/jpeg', CALIDAD).split(',')[1] });
+        };
+        img.src = url;
+      }).then((listo) => {
+        if (listo) return listo;
+        if (archivo.size > MAX_CRUDO) throw new Error(archivo.name + ': el navegador no puede leer esta imagen y pesa más de 15 MB.');
+        return leerDataUrl(archivo).then((d) => ({ nombre: archivo.name, mime: archivo.type || 'application/octet-stream', base64: d.split(',')[1] }));
+      });
+    }
+
+    function crear(contenedor, opciones) {
+      const secciones = opciones.secciones || [];
+      const prepararArchivo = opciones.preparar || preparar;   // las pruebas lo cambian (jsdom no dibuja)
+      const puedeQuitar = opciones.puedeQuitar || (() => true);
+      const avisar = () => { if (opciones.alCambiar) opciones.alCambiar(); };
+      const esc = Formato.esc;
+      let n = 0;
+      let activas = 0;
+      const cola = [];
+      const fotos = [];   // { clave, seccion, estado: 'subiendo'|'lista'|'error', id, nombre, miniatura, archivo, error, local }
+      let vivo = true;
+
+      Object.keys(opciones.iniciales || {}).forEach((s) => (opciones.iniciales[s] || []).forEach((f) => {
+        fotos.push({ clave: 'f' + (++n), seccion: s, estado: 'lista', id: f.id, nombre: f.nombre, miniatura: f.miniatura || '' });
+      }));
+
+      contenedor.innerHTML = '<div class="sf-secciones">' + secciones.map((s) => `
+        <div class="sf-seccion" data-seccion="${esc(s.id)}">
+          <div class="sf-cabeza"><h4>${esc(s.titulo)}</h4><span class="sf-cuenta"></span></div>
+          <div class="sf-botones">
+            <label class="sf-boton sf-solo-tactil">${Iconos.svg('camera')} Tomar foto
+              <input type="file" accept="image\/*" capture="environment" multiple /></label>
+            <label class="sf-boton">${Iconos.svg('images')} Elegir fotos
+              <input type="file" accept="image\/*" multiple /></label>
+          </div>
+          <div class="sf-rejilla"></div>
+          <p class="sf-falta" hidden>Falta al menos una foto</p>
+        </div>`).join('') + '</div>';
+
+      const cajaDe = (s) => Array.from(contenedor.querySelectorAll('.sf-seccion')).find((c) => c.dataset.seccion === s);
+      const listas = (s) => fotos.filter((f) => f.seccion === s && f.estado === 'lista');
+
+      function pintar(s) {
+        const caja = cajaDe(s);
+        if (!caja) return;
+        const mias = fotos.filter((f) => f.seccion === s);
+        const nListas = listas(s).length;
+        caja.querySelector('.sf-rejilla').innerHTML = mias.map((f) => `
+          <div class="sf-foto${f.estado === 'subiendo' ? ' sf-subiendo' : ''}${f.estado === 'error' ? ' sf-error' : ''}" data-clave="${f.clave}"
+            title="${esc(f.error || f.nombre || '')}">
+            ${f.miniatura ? `<img src="${esc(f.miniatura)}" alt="${esc(f.nombre || 'Foto')}" loading="lazy" />` : Iconos.svg('image')}
+            ${f.estado === 'subiendo' ? '<span class="sf-estado">Subiendo…</span>' : ''}
+            ${f.estado === 'error' ? `<span class="sf-estado">No subió</span>
+              <button type="button" class="sf-reintentar" data-reintentar aria-label="Reintentar">${Iconos.svg('restablecer')}</button>` : ''}
+            <button type="button" class="sf-quitar" data-quitar aria-label="Quitar foto"
+              ${f.estado === 'subiendo' || (f.estado === 'lista' && !puedeQuitar(s, nListas)) ? 'disabled' : ''}>${Iconos.svg('cancelar')}</button>
+          </div>`).join('');
+        const subiendo = mias.filter((f) => f.estado === 'subiendo').length;
+        caja.querySelector('.sf-cuenta').textContent = (nListas === 1 ? '1 foto' : nListas + ' fotos') + (subiendo ? ' · subiendo ' + subiendo : '');
+        caja.querySelector('.sf-falta').hidden = nListas > 0 || subiendo > 0;
+        caja.classList.toggle('sf-incompleta', nListas === 0 && !subiendo);
+      }
+
+      function siguiente() {
+        while (vivo && activas < A_LA_VEZ && cola.length) {
+          const f = cola.shift();
+          activas++;
+          prepararArchivo(f.archivo)
+            .then((listo) => opciones.subir(f.seccion, listo))
+            .then((r) => {
+              if (f.local) { try { URL.revokeObjectURL(f.local); } catch (e) { /* ya no está */ } }
+              Object.assign(f, { estado: 'lista', id: r.id, nombre: r.nombre || f.nombre, miniatura: r.miniatura || f.miniatura, archivo: null, error: '' });
+            })
+            .catch((err) => Object.assign(f, { estado: 'error', error: err && err.message ? err.message : String(err) }))
+            .then(() => {
+              activas--;
+              if (!vivo) return;
+              pintar(f.seccion);
+              avisar();
+              siguiente();
+            });
+        }
+      }
+
+      function agregar(seccion, archivos) {
+        Array.from(archivos || []).forEach((archivo) => {
+          let local = '';
+          try { local = URL.createObjectURL(archivo); } catch (e) { /* sin vista previa local */ }
+          const f = { clave: 'f' + (++n), seccion, estado: 'subiendo', nombre: archivo.name, miniatura: local, local, archivo };
+          fotos.push(f);
+          cola.push(f);
+        });
+        pintar(seccion);
+        avisar();
+        siguiente();
+      }
+
+      function alCambiarArchivo(ev) {
+        const input = ev.target;
+        if (!input.matches || !input.matches('input[type="file"]')) return;
+        const caja = input.closest('.sf-seccion');
+        if (caja) agregar(caja.dataset.seccion, input.files);
+        input.value = '';   // poder elegir la misma foto otra vez
+      }
+
+      function alClic(ev) {
+        const boton = ev.target.closest('[data-quitar], [data-reintentar]');
+        if (!boton || boton.disabled) return;
+        const f = fotos.find((x) => x.clave === boton.closest('.sf-foto').dataset.clave);
+        if (!f) return;
+        if (boton.hasAttribute('data-reintentar')) {
+          f.estado = 'subiendo';
+          f.error = '';
+          cola.push(f);
+          pintar(f.seccion);
+          siguiente();
+          return;
+        }
+        const sacar = () => { fotos.splice(fotos.indexOf(f), 1); pintar(f.seccion); avisar(); };
+        if (f.estado !== 'lista') { sacar(); return; }
+        boton.disabled = true;
+        Promise.resolve(opciones.quitar ? opciones.quitar({ id: f.id, seccion: f.seccion }) : null)
+          .then(sacar)
+          .catch((err) => { f.error = err && err.message ? err.message : String(err); boton.disabled = false; pintar(f.seccion); avisar(); });
+      }
+
+      contenedor.addEventListener('change', alCambiarArchivo);
+      contenedor.addEventListener('click', alClic);
+      secciones.forEach((s) => pintar(s.id));
+
+      return {
+        faltan: () => secciones.filter((s) => !listas(s.id).length).map((s) => s.titulo),
+        subiendo: () => fotos.some((f) => f.estado === 'subiendo'),
+        conError: () => fotos.filter((f) => f.estado === 'error').length,
+        fotos: () => secciones.reduce((o, s) => { o[s.id] = listas(s.id).map((f) => ({ id: f.id, nombre: f.nombre })); return o; }, {}),
+        destruir: () => {
+          vivo = false;
+          contenedor.removeEventListener('change', alCambiarArchivo);
+          contenedor.removeEventListener('click', alClic);
+          fotos.forEach((f) => { if (f.local) { try { URL.revokeObjectURL(f.local); } catch (e) { /* ya no está */ } } });
+          contenedor.innerHTML = '';
+        },
+      };
+    }
+
+    return { crear: crear, preparar: preparar };
+  })();
+</script>
