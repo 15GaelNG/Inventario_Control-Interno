@@ -7159,6 +7159,82 @@
       });
     }
 
+    /**
+     * Excel de Cancelaciones (usuario, 22-oct): la hoja BASE PRINCIPAL con lo exportado (todas las columnas, como antes)
+     * y una hoja por compañía y asesor («TELCEL - ALFREDO», «ATT - KARLA») con las POR FIRMAR, en la tabla que Pau pega
+     * en la carta y el correo al asesor: REGIÓN, CUENTA (la cuenta padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y
+     * ASESOR. Igual para Telcel y AT&T. Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, solo la base.
+     */
+    const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
+    function hojasDeCancelaciones(filas, columnas) {
+      const base = { nombre: 'BASE PRINCIPAL', titulos: columnas.map((c) => c.titulo), fechas: columnas.map((c) => c.tipo === 'lnFechaHora'),
+        filas: filas.map((f) => columnas.map((c) => f[c.campo])) };
+      const grupos = {};
+      filas.filter((f) => f.CANCELACION === 'POR FIRMAR').forEach((f) => {
+        const compania = String(f.COMPANIA || 'SIN COMPAÑÍA').toUpperCase().replace(/&/g, '');
+        const nombre = compania + ' - ' + (String(f.ASESOR || '').toUpperCase() || 'SIN ASESOR');
+        (grupos[nombre] = grupos[nombre] || []).push(COLUMNAS_ASESOR.map((c) => String(f[c[0]] || '')));
+      });
+      // Telcel primero, luego AT&T y lo demás; dentro, por asesor
+      const orden = (n) => (/^TELCEL/.test(n) ? 0 : /^ATT/.test(n) ? 1 : 2);
+      const asesores = Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b))
+        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_ASESOR.map((c) => c[1]), filas: grupos[n], tablaCorreo: true }));
+      return [base].concat(asesores);
+    }
+
+    // xlsx-js-style: SheetJS con estilos de celda (el de ExportarExcel no los escribe). Se carga solo para este Excel y
+    // deja window.XLSX como estaba
+    let xlsxConEstilos = null;
+    function cargarXlsxConEstilos() {
+      if (!xlsxConEstilos) {
+        xlsxConEstilos = new Promise((resolve, reject) => {
+          const previo = window.XLSX;
+          const script = document.createElement('script');
+          script.src = 'https:\/\/cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+          script.onload = () => { const lib = window.XLSX; if (previo) window.XLSX = previo; resolve(lib); };
+          script.onerror = () => { xlsxConEstilos = null; reject(new Error('No se pudo cargar el generador de Excel. Revisa tu conexión e intenta de nuevo.')); };
+          document.head.appendChild(script);
+        });
+      }
+      return xlsxConEstilos;
+    }
+
+    /** Descarga el Excel de hojasDeCancelaciones; la tabla del asesor con el formato del correo (encabezado azul). */
+    async function descargarCancelaciones(filas, columnas) {
+      if (!filas.length) throw new Error('No hay registros para exportar con los filtros actuales');
+      const XLSX = await cargarXlsxConEstilos();
+      const libro = XLSX.utils.book_new();
+      const borde = { style: 'thin', color: { rgb: '000000' } };
+      const bordes = { top: borde, bottom: borde, left: borde, right: borde };
+      // Fecha y hora de reloj como serie de Excel (sin zona horaria: la que se ve en el panel)
+      const serie = (v) => {
+        const d = v instanceof Date ? v : new Date(v);
+        if (v === '' || v === null || v === undefined || isNaN(d)) return '';
+        return (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()) - Date.UTC(1899, 11, 30)) / 86400000;
+      };
+      hojasDeCancelaciones(filas, columnas).forEach((h) => {
+        const cuerpo = h.filas.map((f) => f.map((v, i) => (h.fechas && h.fechas[i] ? serie(v) : (v === null || v === undefined ? '' : String(v)))));
+        const hoja = XLSX.utils.aoa_to_sheet([h.titulos].concat(cuerpo));
+        h.titulos.forEach((t, c) => {
+          for (let r = 0; r <= cuerpo.length; r++) {
+            const celda = hoja[XLSX.utils.encode_cell({ r: r, c: c })];
+            if (!celda) continue;
+            if (r && h.fechas && h.fechas[c] && celda.t === 'n') celda.z = 'dd/mm/yyyy hh:mm';
+            if (h.tablaCorreo) {
+              celda.s = r ? { alignment: { horizontal: 'center', vertical: 'center' }, border: bordes }
+                : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '002060' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: bordes };
+            } else if (!r) celda.s = { font: { bold: true } };
+          }
+        });
+        hoja['!cols'] = h.titulos.map((t, c) => ({ wch: Math.min(50, Math.max(8, String(t).length, ...cuerpo.slice(0, 500).map((f) => (h.fechas && h.fechas[c] ? 16 : String(f[c]).length))) + 2) }));
+        if (!h.tablaCorreo && cuerpo.length) hoja['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: cuerpo.length, c: h.titulos.length - 1 } }) };
+        XLSX.utils.book_append_sheet(libro, hoja, h.nombre);
+      });
+      const f = new Date();
+      XLSX.writeFile(libro, 'Cancelaciones de lineas_' + Formato.dia(f) + '_' + Formato.hora(f).replace(':', '') + '.xlsx', { compression: true });
+      return filas.length;
+    }
+
     function initResguardos() {
       const n = ++montaje;
       const raiz = document.getElementById('ln-resguardos');
@@ -7345,7 +7421,9 @@
           columnas: COLUMNAS[vista],
           ordenInicial: { campo: 'FECHA', dir: 'desc' },
           textoVacio: vista === 'RESGUARDOS' ? 'Todavía no se ha mandado nada a resguardo' : 'No hay líneas en cancelación',
-          exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
+          // Cancelaciones: además de la base, una hoja por compañía y asesor con la tabla del correo (descargarCancelaciones)
+          exportar: vista === 'RESGUARDOS' ? { nombreArchivo: 'Resguardos' }
+            : { nombreArchivo: 'Cancelaciones de lineas', descargar: () => descargarCancelaciones(tabla.getFiltradas(), COLUMNAS.CANCELACIONES) },
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
           accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
