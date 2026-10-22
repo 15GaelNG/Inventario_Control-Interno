@@ -88,7 +88,8 @@
   .dt.dt-drive tbody tr[data-id] { user-select: none; }
   .dt.dt-drive .dt-scroll table { margin-bottom: 56px; }
   /* La barra se pone ENCIMA de la barra de herramientas (como en Drive): la tabla no se mueve al seleccionar, así el
-     segundo clic de un doble clic cae en la misma fila. Si no cabe, se desplaza de lado en vez de crecer. */
+     segundo clic de un doble clic cae en la misma fila. Lo que no cabe pasa al ⋮ (pintarBarraSeleccion); si aun así no
+     cabe, se desplaza de lado en vez de crecer. */
   .dt-barra-sel { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 6px;
     flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; border-radius: var(--radio-l); background: var(--color-primary-soft);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent); }
@@ -1327,20 +1328,31 @@
         const n = filas.length;
         return accionesSeleccion.filter((a) => n >= (a.minimo || 1) && n <= (a.maximo || Infinity) && (!a.visible || a.visible(filas)));
       }
+      /** Las acciones que se ven en la barra: las enBarra que caben (pintarBarraSeleccion); las demás van en el ⋮ */
+      let accionesEnBarra = [];
       function pintarBarraSeleccion() {
         const barra = $('.dt-barra-sel');
         if (!barra) return;
         const filas = seleccionadas();
         barra.hidden = !filas.length;
-        if (!filas.length) { barra.innerHTML = ''; return; }
+        if (!filas.length) { barra.innerHTML = ''; accionesEnBarra = []; return; }
         barra.style.minHeight = $('.dt-toolbar').offsetHeight + 'px';   // mismo alto que lo que tapa
         const aplican = accionesAplicables(filas);
-        const enBarra = aplican.filter((a) => a.enBarra);
         const cuenta = `${filas.length} ${plural(filas.length, 'seleccionado')}`;
-        barra.innerHTML = botonIcono('secondary dt-sel-icono', 'x', 'Quitar la selección (Esc)', 'data-sel-quitar') +
-          `<span class="dt-sel-cuenta">${esc(cuenta)}</span>` +
-          enBarra.map((a) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'}${a.activo && a.activo() ? ' activo' : ''}" data-accion-sel="${accionesSeleccion.indexOf(a)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`).join('') +
-          (aplican.length > enBarra.length ? botonIcono('secondary dt-sel-icono', 'ellipsis-vertical', 'Más opciones', 'data-sel-mas') : '');
+        const pintar = (visibles) => {
+          barra.innerHTML = botonIcono('secondary dt-sel-icono', 'x', 'Quitar la selección (Esc)', 'data-sel-quitar') +
+            `<span class="dt-sel-cuenta">${esc(cuenta)}</span>` +
+            visibles.map((a) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'}${a.activo && a.activo() ? ' activo' : ''}" data-accion-sel="${accionesSeleccion.indexOf(a)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`).join('') +
+            (aplican.length > visibles.length ? botonIcono('secondary dt-sel-icono', 'ellipsis-vertical', 'Más opciones', 'data-sel-mas') : '');
+        };
+        // Lo que no cabe pasa al ⋮, de la última a la primera, como en Drive (rama emmanuel, 22-oct: con la pantalla
+        // angosta los botones se salían por la derecha y había que deslizar la barra)
+        accionesEnBarra = aplican.filter((a) => a.enBarra);
+        pintar(accionesEnBarra);
+        while (accionesEnBarra.length && barra.scrollWidth > barra.clientWidth + 1) {
+          accionesEnBarra = accionesEnBarra.slice(0, -1);
+          pintar(accionesEnBarra);
+        }
       }
       /** Ejecuta la acción `i` sobre la selección actual (desde la barra, el ⋮ o el menú contextual) */
       function ejecutarAccion(i, boton) {
@@ -1354,7 +1366,7 @@
       }
       /** Menú de acciones bajo un botón (⋮) o en el punto del clic derecho; soloMenu = sin las que ya están en la barra */
       function abrirMenuAcciones(posicion, soloMenu) {
-        const lista = accionesAplicables(seleccionadas()).filter((a) => !soloMenu || !a.enBarra);
+        const lista = accionesAplicables(seleccionadas()).filter((a) => !soloMenu || accionesEnBarra.indexOf(a) < 0);
         if (!lista.length) return;
         let grupo;
         const html = lista.map((a, n) => {
@@ -2297,6 +2309,15 @@
         if (boton) ejecutarAccion(Number(boton.dataset.accionSel), boton);
       });
       if ($('.dt-barra-sel')) {
+        // Si cambia el ancho (girar la tableta, abrir un panel), se vuelve a ver qué cabe
+        if (typeof ResizeObserver !== 'undefined') {
+          let ancho = 0;
+          new ResizeObserver((e) => {
+            const w = Math.round(e[0].contentRect.width);
+            if (w !== ancho && !$('.dt-barra-sel').hidden) pintarBarraSeleccion();
+            ancho = w;
+          }).observe($('.dt-barra-sel'));
+        }
         $('.dt-barra-sel').addEventListener('click', (ev) => {
           if (ev.target.closest('[data-sel-quitar]')) { limpiarSeleccion(); if (st.modoSeleccion) setModoSeleccion(false); return; }
           const mas = ev.target.closest('[data-sel-mas]');

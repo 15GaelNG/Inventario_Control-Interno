@@ -1940,7 +1940,7 @@ test('Selección como en Google Drive y "Mandar a cancelación" (usuario, 30-sep
   assert.match(dt, /function pintarSeleccion\(\)/);
   // Barra con lo más usado y ⋮ con el resto; clic derecho y ⋮ de la fila con todas
   assert.match(dt, /<div class="dt-barra-sel" role="toolbar"/);
-  assert.match(dt, /const enBarra = aplican\.filter\(\(a\) => a\.enBarra\);/);
+  assert.match(dt, /accionesEnBarra = aplican\.filter\(\(a\) => a\.enBarra\);/);
   assert.match(dt, /tbody\.addEventListener\('contextmenu'/);
   assert.match(dt, /celdaMas\(botonIcono\('dt-btn-mas', 'ellipsis-vertical'/);
   // El cuadro solo empieza fuera de las filas, y queda espacio vacío abajo para arrastrarlo
