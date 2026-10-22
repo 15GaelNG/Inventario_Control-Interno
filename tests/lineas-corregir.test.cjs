@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -70,7 +71,7 @@ test('el equipo que sale del inventario: su línea en USO queda DISPONIBLE o, co
   assert.match(reg, /lineaAlPanel: lineaSale && lineaSale\.alPanel \? texto_\(base\['ID LINEA'\]\) : null/);
   assert.match(reg, /LineasResguardos\.mandarCancelacion\(\[resultado\.lineaAlPanel\], \{ comentario: resultado\.motivo, ticket: texto_\(datos && datos\.ticket\) \}, usuario, \{ motivoDelAdendum: true \}\);/);
   // La pantalla lo pregunta en la ventana del comentario
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const lineaACancelar = form\.lineaVencida && cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL\);/);
   assert.match(cliente, /clave: 'cancelacionLinea', etiqueta: 'Línea · adendum vencido', opciones: CANCELACION_LINEA\.map\(\(x\) => x\.texto\), elegir: true, requerido: true/);
 });
@@ -82,7 +83,7 @@ test('Mandar a resguardo con el adendum vencido: se elige el panel o CANCELADA s
   // Sin panel no abre el camino de cancelación en la bandeja; Pau sigue recibiendo el equipo
   assert.match(resg, /const cancela = tieneLinea && pedido\['ESTATUS LINEA'\] === LINEA_CANCELACION &&/);
   assert.match(resg, /'MOTIVO_CANCELACION': cancela \? motivoCancelacion : '',/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // CANCELADA directo queda en el historial como cancelación (usuario, 16-oct), también desde Corregir
   assert.match(resg, /if \(vencida && pedido\.directa\) registrarCancelacionDirecta\(f, txt\(LineasUtil\.col\(f, 'ID LINEA'\)\), pedido\.COMENTARIO \|\| motivo, ticket, usuario, ahora\);/);
   assert.match(resg, /LineasRepo\.registrarMovimiento\('CANCELACION_LINEA', \{ motivo: motivo, ticket: ticket \}, usuario, ahora, \{\s+refs: \[idLinea, txt\(f\['ID'\]\)\]/);
@@ -124,7 +125,7 @@ test('responsable en blanco en el equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-R
 });
 
 test('pantalla: «Corregir» e «Inspección», Responsiva primero', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /'Editar línea'|'Editar equipo'|Nueva inspección/);
   assert.match(cliente, /textContent = tipo === 'INSPECCION' \? 'Inspección' : 'Responsiva';/);
   const botones = cliente.slice(cliente.indexOf('function botonesFicha('), cliente.indexOf('function abrirMenuFicha('));

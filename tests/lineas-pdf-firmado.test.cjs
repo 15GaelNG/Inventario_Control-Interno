@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -70,7 +71,7 @@ test('solo PDF: el contenido debe empezar con %PDF- y pesar 15 MB o menos; queda
 });
 
 test('la pantalla: «Subir PDF firmado» en Documentos, solo con permiso de operar y solo PDF', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // Del sistema con su PDF; del AppSheet y de NUCOS siempre (usuario, 5-oct)
   assert.match(cliente, /doc\('file-up', 'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA'\),\s*\(d\) => \(d\.registroId \? subirPdfFirmado\(d\.registroId, d\) : subirPdfFirmado\(id, d, vista\)\)\)/);
   const fn = cliente.slice(cliente.indexOf('function subirPdfFirmado('), cliente.indexOf('function soltarDocumentos('));

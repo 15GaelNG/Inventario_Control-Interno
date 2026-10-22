@@ -1,0 +1,284 @@
+<script>
+  /**
+   * lineas-telefonicas-historial.html — Líneas Telefónicas: el historial del registro y sus asignaciones número ↔ NUCO.
+   * Parte de initTelefonicas (fase 6.2b, tools/lineas/partir-telefonicas.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  (function () {
+    'use strict';
+    const { $, chip, contarPor, esc, fecha, fechaTabla, formatoAppSheet, ico, icono, llamar, memoria, mensajeError,
+      miles, pintarIconos, tablaLineas, vacio, veHistorial } = Lineas.comun;
+    Lineas.telefonicas.registrar('historial', (T) => {
+      const { pila, raiz, vigente } = T;
+      const { abrir, contarEnPestana, tarjeta } = T.de('ficha');
+
+      let tablaHistorial = null; // DataTable del historial de la ficha abierta
+      let nombreHistorial = ''; // para el nombre del Excel del historial
+      let vistaHistorial = 'equipo'; // 'equipo' o 'linea': qué asignaciones muestra el historial
+      let asignaciones = null; // números del NUCO o NUCOs del número de la ficha abierta (null mientras carga)
+      let tablaAsignaciones = null; // DataTable de esas asignaciones
+      let ocultarSinAsignar = false; // oculta los periodos "Sin línea" / "Sin equipo" (suelen ser transiciones)
+
+      // ---- Historial: todos los movimientos del registro, filtrables y exportables a Excel ----
+      const ICONO_MOVIMIENTO = {
+        'Alta de registro': 'circle-plus', 'Reasignación': 'arrow-left-right', 'Cambio de estatus': 'toggle-right',
+        'Cambio de línea': 'card-sim', 'Cambio de plan': 'receipt-text', 'Cambio de equipo': 'smartphone',
+        'Cambio de área o ubicación': 'map-pin', 'Cambio de accesos': 'key-round', 'Otros cambios': 'file-pen-line',
+        'Inspección': 'clipboard-check', 'Responsiva': 'signature', 'Reactivación': 'refresh-cw', 'Desecho': 'trash-2',
+        // Acciones con nombre (etapa 3, paso 2)
+        'Entrega': 'hand-helping', 'Cierre': 'flag', 'Nota': 'message-square', 'Resguardo': 'archive', 'Cancelación de línea': 'phone-off', 'Venta': 'badge-dollar-sign',
+        'Edición': 'file-pen-line', 'Comentario anterior': 'message-square-text', 'PDF firmado': 'file-up', 'PDF regenerado': 'refresh-ccw',
+      };
+      const COLOR_ORIGEN = { 'Nuevo sistema': 'verde', AppSheet: 'azul', Drive: 'neutro', 'Migración': 'neutro' };
+
+      /** Botón visible dentro de una tabla que abre la ficha de una línea o un equipo (delegación data-ln-ir). */
+      function botonIr(tipo, id, texto) {
+        return '<a href="#" class="ln-ir-chip" data-ln-ir="' + tipo + '" data-id="' + esc(id) + '" title="Abrir ' +
+          (tipo === 'linea' ? 'la línea' : 'el equipo') + '">' + ico(tipo === 'linea' ? 'card-sim' : 'smartphone') + '<span>' + esc(texto) + '</span>' +
+          ico('chevron-right') + '</a>';
+      }
+
+      /**
+       * A quién pertenece hoy un número, NUCO o IMEI (índice del inventario), para los cambios de línea y de equipo
+       * del historial. Se arma una vez por historial.
+       */
+      function destinosInventario() {
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const d = { numero: {}, nuco: {}, imei: {} };
+        const digitos = (v) => String(v || '').replace(/\D/g, '');
+        const nuco4 = (v) => { const t = String(v || '').trim(); return /^\d+$/.test(t) ? t.padStart(4, '0') : t.toUpperCase(); };
+        ix.lineas.forEach((l) => { const n = digitos(l.numero); if (n && !(n in d.numero)) d.numero[n] = l.id; });
+        ix.equipos.forEach((e) => {
+          const n = nuco4(e.nuco); if (n && !(n in d.nuco)) d.nuco[n] = e.id;
+          const i = digitos(e.imei); if (i && !(i in d.imei)) d.imei[i] = e.id;
+        });
+        return {
+          /** { tipo, id } del registro que hoy tiene ese valor, o null. */
+          de: (campo, valor) => {
+            const c = String(campo || '').toUpperCase().trim();
+            if (c === 'NUMERO TELEFONO') { const id = d.numero[digitos(valor)]; return id ? { tipo: 'linea', id: id } : null; }
+            if (c === 'NUCO') { const id = d.nuco[nuco4(valor)]; return id ? { tipo: 'equipo', id: id } : null; }
+            if (c === 'IMEI') { const id = d.imei[digitos(valor)]; return id ? { tipo: 'equipo', id: id } : null; }
+            return null;
+          },
+        };
+      }
+
+      /** Opción del filtro Movimiento que cambia la tabla por la de asignaciones número ↔ NUCO. */
+      const MOV_ASIGNACIONES = '__asignaciones';
+      const TITULO_ASIGNACIONES = { equipo: 'Números que ha tenido', linea: 'Equipos en los que ha estado' };
+
+      /** Las DataTable del historial escuchan eventos del documento: se destruyen al salir de la ficha. */
+      function soltarHistorial() {
+        if (tablaHistorial) tablaHistorial.destruir();
+        if (tablaAsignaciones) tablaAsignaciones.destruir();
+        tablaHistorial = null;
+        tablaAsignaciones = null;
+      }
+
+      function cargarHistorial(id, nombre, vista) {
+        if (!veHistorial()) return;
+        if (nombre) nombreHistorial = nombre; else nombre = nombreHistorial;
+        if (vista) vistaHistorial = vista; else vista = vistaHistorial;
+        const abierta = pila[pila.length - 1];
+        const sigue = () => vigente() && pila[pila.length - 1] === abierta;
+        asignaciones = null;
+        llamar('apiLineasHistorial', id).then((h) => {
+          const cont = $('#ln-historial', raiz);
+          if (!sigue() || !cont) return;
+          pintarHistorial(cont, h.eventos || [], nombre);
+        }).catch((e) => {
+          const cont = $('#ln-historial', raiz);
+          if (cont) cont.innerHTML = tarjeta(icono('history') + ' Historial', '<p class="error-msg">' + mensajeError(e) + '</p>');
+        });
+        // En paralelo: se reconstruye aparte porque recorre la bitácora de otras filas
+        llamar('apiLineasAsignaciones', id, vista).catch((e) => ({ error: mensajeError(e) })).then((r) => {
+          if (!sigue()) return;
+          asignaciones = r;
+          const cont = $('#ln-historial', raiz);
+          if (!cont) return;
+          const opcion = cont.querySelector('option[value="' + MOV_ASIGNACIONES + '"]');
+          if (opcion) opcion.textContent = textoOpcionAsignaciones();
+          const panel = $('#ln-asignaciones', cont);
+          if (panel && !panel.hidden) pintarAsignaciones(panel);
+        });
+      }
+
+      function textoOpcionAsignaciones() {
+        const a = asignaciones;
+        const n = !a ? ' (cargando…)' : (a.error ? '' : ' (' + miles((a.periodos || []).length) + ')');
+        return TITULO_ASIGNACIONES[vistaHistorial] + n;
+      }
+
+      /** Grupos del filtro Movimiento, en orden fijo (lo que no esté aquí va a "Otros"). */
+      const GRUPOS_MOVIMIENTO = [
+        ['Responsable y ubicación', ['Entrega', 'Reasignación', 'Cambio de área o ubicación']],
+        ['Equipo y línea', ['Edición', 'Cambio de equipo', 'Cambio de línea', 'Cambio de plan', 'Cambio de estatus', 'Cambio de accesos']],
+        ['Documentos', ['Inspección', 'Responsiva', 'PDF firmado', 'PDF regenerado']],
+        ['Resguardo, cancelación y bajas', ['Resguardo', 'Cancelación de línea', 'Venta', 'Cierre']],
+        ['Notas', ['Nota', 'Comentario anterior']],
+        ['Alta, reactivación y desecho', ['Alta de registro', 'Reactivación', 'Desecho']],
+      ];
+
+      /** Opciones del filtro: asignaciones arriba y luego cada grupo con sus movimientos presentes. */
+      function opcionesMovimiento(conteo) {
+        const opcion = (m) => '<option value="' + esc(m) + '">' + esc(m) + ' (' + miles(conteo[m]) + ')</option>';
+        const agrupados = [].concat.apply([], GRUPOS_MOVIMIENTO.map((g) => g[1]));
+        const otros = Object.keys(conteo).filter((m) => agrupados.indexOf(m) < 0).sort((a, b) => (a === 'Otros cambios') - (b === 'Otros cambios') || a.localeCompare(b));
+        return '<optgroup label="Historial de asignaciones"><option value="' + MOV_ASIGNACIONES + '">' + esc(textoOpcionAsignaciones()) + '</option></optgroup>' +
+          GRUPOS_MOVIMIENTO.concat([['Otros', otros]]).map((g) => {
+            const presentes = g[1].filter((m) => conteo[m]);
+            return presentes.length ? '<optgroup label="' + esc(g[0]) + '">' + presentes.map(opcion).join('') + '</optgroup>' : '';
+          }).join('');
+      }
+
+      function pintarHistorial(cont, eventos, nombre) {
+        contarEnPestana('historial', eventos.length);
+        const conteo = contarPor(eventos, 'movimiento');
+        cont.innerHTML = '<div class="card ln-card ln-historial">' +
+          '<div class="ln-historial-cabecera"><h3>' + icono('history') + ' Historial (' + miles(eventos.length) + ')</h3></div>' +
+          // Barra de filtros propia del historial: qué movimiento ver y, en asignaciones, ocultar las transiciones
+          '<div class="ln-historial-filtros">' +
+          '<label class="ln-historial-filtro">' + icono('list-filter') + '<span>Movimiento</span><select id="ln-historial-mov">' +
+            '<option value="">Todos los movimientos (' + miles(eventos.length) + ')</option>' + opcionesMovimiento(conteo) +
+          '</select></label>' +
+          '<label class="ln-historial-check" id="ln-asig-ocultar" hidden><input type="checkbox" id="ln-asig-ocultar-check"' + (ocultarSinAsignar ? ' checked' : '') + ' />' +
+            '<span>Ocultar «' + (vistaHistorial === 'equipo' ? 'Sin línea' : 'Sin equipo') + '»</span></label></div>' +
+          '<div id="ln-historial-tabla">' + (eventos.length ? '' : '<p class="empty-state">Sin movimientos registrados.</p>') + '</div>' +
+          '<div id="ln-asignaciones" hidden></div></div>';
+        const select = $('#ln-historial-mov', cont);
+        const principal = $('#ln-historial-tabla', cont);
+        const panel = $('#ln-asignaciones', cont);
+        const ocultar = $('#ln-asig-ocultar', cont);
+        soltarHistorial();
+        let tabla = null;
+        const destinos = destinosInventario();
+        const valorCambio = (columna) => (v, m) => {
+          const destino = v ? destinos.de(m.campo, v) : null;
+          return destino ? botonIr(destino.tipo, destino.id, v) : (formatoAppSheet('CAMBIOS', columna, v) || vacio);
+        };
+        // Un renglón por acción (paso 3, §5.5): cada cambio en su línea, CAMPO antes → después
+        const cambiosHtml = (v, m) => (m.cambios && m.cambios.length ? '<div class="ln-cambios">' + m.cambios.map((c) =>
+          '<div><span class="ln-cambio-campo">' + esc(c.campo) + '</span> ' + valorCambio('ANTES')(c.antes, c) + ' → ' + valorCambio('DESPUES')(c.despues, c) + '</div>').join('') + '</div>' : vacio);
+        const textoLargo = (v) => (v ? '<span class="ln-texto-largo">' + esc(v) + '</span>' : vacio);
+        $('#ln-asig-ocultar-check', cont).addEventListener('change', (ev) => {
+          ocultarSinAsignar = ev.target.checked;
+          if (tablaAsignaciones && asignaciones) tablaAsignaciones.setDatos(periodosVisibles(asignaciones));
+        });
+        select.addEventListener('change', () => {
+          const verAsignaciones = select.value === MOV_ASIGNACIONES;
+          principal.hidden = verAsignaciones;
+          panel.hidden = !verAsignaciones;
+          ocultar.hidden = !verAsignaciones;
+          if (verAsignaciones) { if (!tablaAsignaciones) pintarAsignaciones(panel); else tablaAsignaciones.ajustarAlto(); return; }
+          if (tabla) { tabla.setFiltro('movimiento', select.value ? { valores: [select.value] } : null); tabla.ajustarAlto(); }
+        });
+        if (!eventos.length) return;
+        tabla = tablaHistorial = tablaLineas(principal, {
+          idCampo: 'id',
+          idTabla: 'lineas-historial-v2',
+          tamanoPagina: 25,
+          // Seleccionable (30-sep): Ver detalle, Ver inspección y Ver PDF van en la barra y el clic derecho.
+          // Una fila a la vez: no hay acciones masivas
+          seleccionUnica: true,
+          ordenInicial: { campo: 'fecha', dir: 'desc' },
+          textoVacio: 'Sin movimientos con esos filtros',
+          exportar: { nombreArchivo: 'Historial ' + nombre, nombreHoja: 'Historial' },
+          etiquetaFila: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha),
+          detalle: { titulo: (m) => m.movimiento + ' · ' + fechaTabla(m.fecha) },
+          accionesFila: [
+            { icono: 'clipboard-check', titulo: 'Ver inspección', visible: (m) => m.refTipo === 'inspeccion' && !!m.refId, alHacer: (m) => abrir('inspeccion', m.refId) },
+            { icono: 'signature', titulo: 'Ver responsiva', visible: (m) => m.refTipo === 'responsiva' && !!m.refId, alHacer: (m) => abrir('responsiva', m.refId) },
+            { icono: 'file-text', titulo: 'Ver PDF', visible: (m) => !!m.pdfId, alHacer: (m) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(m.pdfId) + '/view', '_blank', 'noopener') },
+          ],
+          alCambiarFiltros: (f) => {
+            if (select.value === MOV_ASIGNACIONES) return;
+            const valores = f && f.movimiento && f.movimiento.valores;
+            select.value = valores && valores.length === 1 ? valores[0] : '';
+          },
+          columnas: [
+            { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 140 },
+            { campo: 'movimiento', titulo: 'Movimiento', tipo: 'lista', ancho: 200, render: (v) => '<span class="ln-movimiento">' + ico(ICONO_MOVIMIENTO[v] || 'dot') + ' ' + esc(v) + '</span>' },
+            { campo: 'comentario', titulo: 'Comentario', tipo: 'texto', ancho: 260, render: textoLargo },
+            { campo: 'cambiosTexto', titulo: 'Cambios', tipo: 'texto', ancho: 340, render: cambiosHtml },
+            { campo: 'responsable', titulo: 'Responsable', tipo: 'lista', ancho: 200 },
+            { campo: 'estatusEquipo', titulo: 'Estatus equipo', tipo: 'lista', ancho: 140 },
+            { campo: 'estatusLinea', titulo: 'Estatus línea', tipo: 'lista', ancho: 150 },
+            { campo: 'ticket', titulo: 'Ticket', tipo: 'texto', ancho: 120 },
+            { campo: 'detalle', titulo: 'Detalle', tipo: 'texto', ancho: 200, render: textoLargo },
+            { campo: 'usuario', titulo: 'Usuario', tipo: 'lista', ancho: 190 },
+            { campo: 'origen', titulo: 'Origen', tipo: 'lista', ancho: 130, render: (v) => chip(v, COLOR_ORIGEN[v] || 'neutro') },
+          ],
+        });
+        tabla.setDatos(eventos);
+      }
+
+      /**
+       * Movimiento "Números que ha tenido" / "Equipos en los que ha estado": un periodo por fila (desde, hasta y
+       * por qué), reconstruido de la bitácora, con el botón para abrir el número o el NUCO de cada periodo.
+       */
+      function pintarAsignaciones(panel) {
+        const a = asignaciones;
+        if (tablaAsignaciones) { tablaAsignaciones.destruir(); tablaAsignaciones = null; }
+        if (!a) { panel.innerHTML = '<p class="ln-tenue"><span class="ln-spinner"></span> Reconstruyendo los periodos desde la bitácora…</p>'; return; }
+        if (a.error) { panel.innerHTML = '<p class="error-msg">' + a.error + '</p>'; return; }
+        const porNuco = a.vista === 'equipo';
+        if (!a.clave) {
+          panel.innerHTML = '<p class="empty-state">' + (porNuco ? 'Este registro no tiene NUCO' : 'Esta línea no tiene número') + ': no hay periodos que reconstruir.</p>';
+          return;
+        }
+        panel.innerHTML = (a.incompleto ? '<div class="ln-nota">' + icono('info') + ' Se muestran los primeros 25 registros relacionados.</div>' : '') +
+          '<div class="ln-asignaciones-tabla"></div>';
+        // La columna principal (el otro lado de la asignación) es un botón que abre su ficha si sigue en el inventario
+        const numeroTexto = (v, p) => (!v ? '<span class="ln-tenue">' + (porNuco ? 'Sin línea' : 'Sin número') + '</span>'
+          : (porNuco && p.irId ? botonIr('linea', p.irId, v) : '<span class="ln-mono">' + esc(v) + '</span>'));
+        const nucoTexto = (v, p) => (!v ? '<span class="ln-tenue">Sin equipo (suelta)</span>'
+          : (!porNuco && p.irId ? botonIr('equipo', p.irId, v) : '<span class="ln-mono">' + esc(v) + '</span>'));
+        const columnaNumero = { campo: 'numero', titulo: 'Número', tipo: 'texto', ancho: 150, render: numeroTexto };
+        const columnaNuco = { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', ancho: 150, render: nucoTexto };
+        const principal = porNuco ? columnaNumero : columnaNuco;
+        principal.fijada = true;
+        tablaAsignaciones = tablaLineas($('.ln-asignaciones-tabla', panel), {
+          idCampo: 'id',
+          idTabla: 'lineas-asignaciones-v1',
+          tamanoPagina: 25,
+          // Seleccionable para que "Ir al número / Ir al NUCO" salga en la barra y el clic derecho (sin columna, 30-sep)
+          textoVacio: porNuco ? 'La bitácora no registra números para este NUCO' : 'La bitácora no registra equipos para este número',
+          exportar: { nombreArchivo: (porNuco ? 'Números del NUCO ' : 'Equipos de la línea ') + a.clave, nombreHoja: 'Asignaciones' },
+          etiquetaFila: (p) => (porNuco ? 'Número ' + (p.numero || 'sin línea') : 'NUCO ' + (p.nuco || 'sin equipo')),
+          accionesFila: [
+            { icono: porNuco ? 'card-sim' : 'smartphone', titulo: porNuco ? 'Ir al número' : 'Ir al NUCO', visible: (p) => !!p.irId,
+              alHacer: (p) => abrir(porNuco ? 'linea' : 'equipo', p.irId) },
+          ],
+          columnas: [
+            principal,
+            porNuco ? columnaNuco : columnaNumero,
+            { campo: 'desde', titulo: 'Desde', tipo: 'lnFechaHora', ancho: 150,
+              render: (v, p) => esc(v ? fechaTabla(v) : (p.hasta ? 'Antes del ' + fecha(p.hasta) : 'Sin fecha')) },
+            { campo: 'hasta', titulo: 'Hasta', tipo: 'lnFechaHora', ancho: 150,
+              render: (v, p) => (p.vigente ? chip('Actual', 'verde') : (v ? esc(fechaTabla(v)) : '<span class="ln-tenue">' + (p.registroExiste ? 'Sin fecha' : 'Registro eliminado') + '</span>')) },
+            { campo: 'motivo', titulo: 'Motivo', tipo: 'texto', ancho: 280, render: (v) => (v ? esc(v) : '<span class="ln-tenue">Sin motivo registrado</span>') },
+            { campo: 'usuario', titulo: 'Usuario', tipo: 'lista', ancho: 190 },
+            { campo: 'origen', titulo: 'Origen', tipo: 'lista', ancho: 130, render: (v) => (v ? chip(v, COLOR_ORIGEN[v] || 'neutro') : vacio) },
+          ],
+        });
+        tablaAsignaciones.setDatos(periodosVisibles(a));
+        pintarIconos(panel);
+      }
+
+      /** Periodos a mostrar: sin los "Sin línea" / "Sin equipo" si se pidió ocultarlos (no se borran). */
+      function periodosVisibles(a) {
+        const campo = a.vista === 'equipo' ? 'numero' : 'nuco';
+        return (a.periodos || []).filter((p) => !ocultarSinAsignar || p[campo]);
+      }
+
+      // Lo que también usan otras partes (T.tablaHistorial, T.tablaAsignaciones)
+      Object.defineProperty(T, 'tablaHistorial', { get: () => tablaHistorial, set: (v) => { tablaHistorial = v; } });
+      Object.defineProperty(T, 'tablaAsignaciones', { get: () => tablaAsignaciones, set: (v) => { tablaAsignaciones = v; } });
+
+      return {
+        cargarHistorial: cargarHistorial, soltarHistorial: soltarHistorial,
+      };
+    });
+  })();
+</script>

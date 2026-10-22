@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Desde el 12-oct-2026 Líneas toma a las personas de CapitalHumano (src/services/CapitalHumano.gs), como todos los módulos:
 // la misma lista de activos de COLABORADORES ACTUALIZADO, con su ID PERSONA. Ya no tiene su propia lectura de CH ni cae a
@@ -45,20 +46,20 @@ test('Capital Humano en Líneas: una asignación con persona calcula su ID PERSO
 });
 
 test('Etiqueta AUTO en Líneas: solo en lo que el formulario llena solo, no en lo que solo se muestra (usuario, 4-oct)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /const autoDe = \(e\) => !!\(e\.formula \|\| e\.deriva \|\| e\.auto\);/);
   assert.doesNotMatch(cliente, /e\.soloLectura \|\| e\.deriva \? ' data-auto'/);
   assert.doesNotMatch(cliente, /<div data-auto class="ln-af-calculado/);
 });
 
 test('La ventana de captura se abre sin la marca de guardado de la anterior (firma en Reasignar, 4-oct)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /function mostrarModalCaptura\(\) \{\s*const modal = \$\('#ln-modal-captura', raiz\);\s*modal\.removeAttribute\('aria-busy'\);/);
   assert.doesNotMatch(cliente, /\$\('#ln-modal-captura', raiz\)\.hidden = false;/);
 });
 
 test('Después de Reasignar se vuelve a pintar la ficha abierta (producción, 4-oct)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   const reasignar = cliente.slice(cliente.indexOf('function abrirResponsiva(tipo, fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   assert.match(reasignar, /if \(vigente\(\) && actual && actual\.id === fila\.id\) abrir\(actual\.tipo, actual\.id, true\);/);
 });

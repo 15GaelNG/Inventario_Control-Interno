@@ -1,0 +1,187 @@
+<script>
+  /**
+   * lineas-telefonicas-paginas.html — Líneas Telefónicas: la página de una inspección o una responsiva.
+   * Parte de initTelefonicas (fase 6.2b, tools/lineas/partir-telefonicas.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  (function () {
+    'use strict';
+    const { aviso, chip, enlaceDrive, esc, fecha, icono, llamar, mensajeError, menuFlotante, miles, pedirDatos,
+      pedirFotoGrande, porcentaje, verFotos } = Lineas.comun;
+    Lineas.telefonicas.registrar('paginas', (T) => {
+      const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pila, vigente } = T;
+      const { abrir, campos, encabezado, migas, pedirDocumento, tarjeta } = T.de('ficha');
+      const { generarPdfPendiente, regenerarPdf, subirPdfFirmado } = T.de('documentos');
+      const { htmlSubirFotos, manejarSubidaArchivo } = T.de('captura');
+
+      // ---- Inspección y responsiva: su página ----
+      /**
+       * Botones de la página de una inspección o responsiva (usuario, 6-oct): a la vista Ver PDF y Subir PDF firmado; en ⋮
+       * Ver equipo, Ver carpeta en Drive y, si aplica, Generar PDF o Regenerar PDF. Las mismas reglas que en Documentos.
+       */
+      function datosDocumento(tipoPdf, d, r) {
+        const pdfs = r.pdfs || [];
+        return { documento: tipoPdf === 'INSPECCION' ? 'Inspección' : 'Responsiva', tipoPdf: tipoPdf, id: d._id, origen: d.origen,
+          fecha: d.fecha, pdfId: pdfs.length ? pdfs[0].id : null, carpetaId: d.drive ? d.drive.carpetaId : null,
+          responsable: (d.snapshot && d.snapshot.responsable) || null, registroId: d.registroId || (r.equipo && r.equipo._id) || null };
+      }
+      function opcionesDocumento(x, r) {
+        const operar = !!r.puedeOperar;
+        return [
+          r.equipo ? { icono: 'smartphone', texto: 'Ver equipo', alHacer: () => abrir('equipo', r.equipo._id) } : null,
+          x.carpetaId ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
+            alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
+          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
+            alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
+          operar && x.registroId && x.tipoPdf === 'RESPONSIVA' && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
+            alHacer: () => regenerarPdf(x, x.registroId) } : null,
+        ].filter(Boolean);
+      }
+      function botonesDocumento(tipoPdf, d, r) {
+        const x = datosDocumento(tipoPdf, d, r);
+        const pdfs = r.pdfs || [];
+        // Identificación de cada responsable (usuario, 9-oct): «Ver INE», o con el nombre si son varios
+        const ids = r.identificaciones || [];
+        return pdfs.map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('') +
+          ids.map((x) => enlaceDrive(x.id, 'Ver ' + (x.tipo || 'identificación') + (ids.length > 1 ? ' · ' + x.persona : ''), true)).join('') +
+          (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA')
+            ? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>' + icono('file-up') + ' Subir PDF firmado</button>' : '') +
+          (opcionesDocumento(x, r).length
+            ? '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-doc-mas title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>' : '');
+      }
+      function activarBotonesDocumento(detalle, tipoPdf, d, r) {
+        const x = datosDocumento(tipoPdf, d, r);
+        const subir = detalle.querySelector('[data-ln-doc-subir]');
+        if (subir) subir.addEventListener('click', () => subirPdfFirmado(x.registroId, x));
+        const mas = detalle.querySelector('[data-ln-doc-mas]');
+        if (mas) mas.addEventListener('click', () => menuFlotante(mas, opcionesDocumento(x, r)));
+      }
+
+      /** Responsiva (usuario, 6-oct): su propia página, como la inspección; lo que dice la responsiva de ese día. */
+      function pintarResponsiva(detalle, id) {
+        return pedirDocumento('responsiva', id).then((r) => {
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'responsiva' || pila[pila.length - 1].id !== id) return;
+          const d = r.responsiva;
+          const e = r.equipo;
+          const s = d.snapshot || {};
+          const deDrive = d.origen === 'DRIVE';
+          const accesorios = String(d.accesorios || '').split(',').map((a) => a.trim()).filter(Boolean);
+          pila[pila.length - 1].etiqueta = 'Responsiva' + (fecha(d.fecha) ? ' ' + fecha(d.fecha) : '');
+          detalle.innerHTML = migas() +
+            encabezado('signature', 'Responsiva ' + esc(fecha(d.fecha) || ''),
+              chip(ORIGEN_DOCUMENTO[d.origen] || d.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[d.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
+              botonesDocumento('RESPONSIVA', d, r),
+              deDrive
+                ? [['NUCO', d.nuco || (e && e.nuco)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
+                : [['Responsable', s.responsable], ['Control Interno', d.responsableCI], ['Identificación', s.identificacion]]) +
+            (deDrive
+              ? ''
+              : '<div class="ln-grid-2">' +
+                tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['No. de empleado', s.noEmpleado], ['Puesto', s.puesto],
+                  ['Departamento', s.departamento], ['Área', s.area], ['Sede', s.sede], ['Oficina o desarrollo', s.oficina], ['Director', s.director], ['Correo', s.correo]])) +
+                tarjeta(icono('smartphone') + ' Equipo y línea', campos([['NUCO', d.nuco || (e && e.nuco)], ['Modelo', s.modelo], ['IMEI', s.imei], ['Color', s.color],
+                  ['Número', s.numero], ['SIM', s.sim], ['Compañía', s.compania], ['Razón social', s.razonSocial]])) +
+                '</div>' +
+                tarjeta(icono('package') + ' Accesorios entregados', accesorios.length
+                  ? '<div class="ln-chips">' + accesorios.map((a) => chip(a, 'neutro')).join('') + '</div>'
+                  : '<p class="ln-tenue">Sin accesorios registrados.</p>') +
+                tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(d.comentario || 'Sin comentario registrado.') + '</p>'));
+          activarBotonesDocumento(detalle, 'RESPONSIVA', d, r);
+        });
+      }
+
+      // ---- Inspección ----
+      function pintarInspeccion(detalle, id) {
+        return pedirDocumento('inspeccion', id).then((r) => {
+          if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'inspeccion' || pila[pila.length - 1].id !== id) return;
+          const i = r.inspeccion;
+          const e = r.equipo;
+          const s = i.snapshot || {};
+          const fotos = r.fotos || [];
+          const firmas = r.firmas || [];
+          // Clic = el visor (ampliar, pasar entre fotos y quitar la enviada por error, usuario 13-oct); un video o una
+          // foto sin vista previa se abre en Drive como antes
+          const enVisor = (f) => !!f.miniatura && !f.video;
+          const galeria = (lista) => '<div class="ln-galeria">' + lista.map((f, n) =>
+            '<a class="ln-evidencia" target="_blank" rel="noopener" href="' + esc(f.enlace) + '" title="' + esc(f.nombre || '') + '"' + (enVisor(f) ? ' data-foto="' + n + '"' : '') + '>' +
+            '<span class="ln-foto">' +
+            (f.miniatura ? '<img loading="lazy" referrerpolicy="no-referrer" src="' + esc(f.miniatura) + '" alt="' + esc(f.nombre) + '">' : icono(f.video ? 'video' : 'image')) +
+            // Solo la foto, sin el nombre (usuario, 13-oct: como antes; el nombre queda al pasar el cursor y en el visor). Lo
+            // que va a Drive (video o sin vista previa) sí lo dice
+            '</span>' + (enVisor(f) ? '' : '<span class="ln-evidencia-nombre">' + esc(f.nombre || 'Evidencia') +
+            '<small>' + icono('external-link') + ' Abrir en Drive</small></span>') + '</a>').join('') + '</div>';
+          const deDrive = i.origen === 'DRIVE';
+          pila[pila.length - 1].etiqueta = 'Inspección' + (fecha(i.fecha) ? ' ' + fecha(i.fecha) : '');
+          detalle.innerHTML = migas() +
+            encabezado('clipboard-check', 'Inspección ' + esc(fecha(i.fecha) || ''),
+              chip(ORIGEN_DOCUMENTO[i.origen] || i.origen, COLOR_ORIGEN_DOCUMENTO[ORIGEN_DOCUMENTO[i.origen]] || 'neutro') + (e ? chip('NUCO ' + (e.nuco || '—'), 'neutro') : ''),
+              botonesDocumento('INSPECCION', i, r),
+              deDrive
+                ? [['NUCO', i.nuco || (e && e.nuco)], ['Fotos', miles(fotos.length)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
+                : [['Responsable', s.responsable], ['Inspector', i.inspector], ['Calificación', porcentaje(i.calificacion)], ['Fotos', miles(fotos.length)], ['Ticket', i.ticket]]) +
+            (deDrive
+              ? ''
+              : '<div class="ln-grid-2">' +
+                tarjeta(icono('user') + ' Responsable', campos([['Nombre', s.responsable], ['Departamento', s.departamento], ['Sede', s.sede], ['Puesto', s.puesto]])) +
+                tarjeta(icono('smartphone') + ' Activo revisado', campos([['Número', s.numero], ['IMEI', s.imei], ['Modelo', s.modelo], ['Compañía', s.compania]])) +
+                '</div>' +
+                tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin comentario registrado.') + '</p>')) +
+            tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
+              (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
+              (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
+                htmlSubirFotos('insp-fotos') + '</div>' : ''));
+          activarBotonesDocumento(detalle, 'INSPECCION', i, r);
+          const enGaleria = fotos.filter(enVisor);
+          // Quitar una foto: a la papelera de Drive y al historial, sin comentario ni detalle (usuario, 13-oct); la página se
+          // vuelve a pintar
+          const alQuitar = (f) => pedirDatos('¿Quitar foto?', '', [], 'Quitar foto', {
+              peligro: true, encima: true, espera: 'Quitando la foto',
+              alConfirmar: () => llamar('apiLineasQuitarFotoInspeccion', id, f.id, ''),
+            }).then((res) => {
+              if (!res) return false;
+              aviso(icono('circle-check') + ' Foto quitada: ' + esc(res.nombre) + (res.quedo === 'PAPELERA' ? ' (en la papelera de Drive)' : ' (en FOTOS QUITADAS)') + '.', 6000);
+              if (vigente() && pila.length && pila[pila.length - 1].id === id) abrir('inspeccion', id, true);
+              return true;
+            });
+          const ampliar = (f) => verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
+          detalle.querySelectorAll('[data-foto]').forEach((a) => {
+            const f = fotos[Number(a.dataset.foto)];
+            a.addEventListener('mouseenter', () => pedirFotoGrande(f), { once: true });
+            a.addEventListener('click', (ev) => {
+              if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
+              ev.preventDefault();
+              ampliar(f);
+            });
+            // Clic derecho: Ampliar, Abrir en Drive y Quitar foto (usuario, 13-oct)
+            a.addEventListener('contextmenu', (ev) => {
+              ev.preventDefault();
+              menuFlotante(a, [
+                { icono: 'zoom-in', texto: 'Ampliar', alHacer: () => ampliar(f) },
+                { icono: 'external-link', texto: 'Abrir en Drive', alHacer: () => window.open(f.enlace, '_blank', 'noopener') },
+                r.puedeOperar ? { icono: 'trash-2', texto: 'Quitar foto', peligro: true, separador: true, alHacer: () => alQuitar(f) } : null,
+              ].filter(Boolean), { x: ev.clientX, y: ev.clientY });
+            });
+          });
+          if (r.puedeOperar) {
+            // Mejora: subir fotos a una inspección ya registrada (la carpeta se prepara al elegir la primera). Las de NUCOS
+            // (solo lectura) van a una carpeta de la app ligada a la inspección (LineasCaptura.fotosInspeccion)
+            let carpeta = null;
+            const obtener = () => (carpeta = carpeta || llamar('apiLineasFotosInspeccion', id, 'preparar').then((c) => c.fotosCarpetaId));
+            const terminar = () => llamar('apiLineasFotosInspeccion', id, 'actualizar').then(() => {
+              aviso('Fotos agregadas a la inspección.', 4000);
+              if (vigente() && pila.length && pila[pila.length - 1].id === id) abrir('inspeccion', id, true);
+            }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 8000));
+            ['insp-fotos', 'insp-fotos-camara'].forEach((inputId) => manejarSubidaArchivo(inputId, 'insp-fotos-lista', obtener, true, () => {}, terminar, true));
+          }
+          detalle.querySelectorAll('.ln-evidencia img').forEach((img) => img.addEventListener('error', () => {
+            img.parentElement.innerHTML = icono('image-off') + '<span>Vista previa no disponible</span>';
+          }, { once: true }));
+        });
+      }
+
+      return {
+        pintarInspeccion: pintarInspeccion, pintarResponsiva: pintarResponsiva,
+      };
+    });
+  })();
+</script>

@@ -1,0 +1,211 @@
+<script>
+  /**
+   * app-tickets.html — Tickets (bitácora general de atención): sus campos (CAMPOS_TICKET, que usa también Help Desk), la pantalla
+   * (initTickets) y su ayuda.
+   * Era parte de app.html (fase 6.1, tools/app/partir.js). Comparte el espacio global: usa los ayudantes de app.html,
+   * que carga antes (Index.html lo incluye justo después de app; los que vienen después ya lo ven).
+   */
+
+  // ---------- Tickets (bitácora general de atención) ----------
+  // Los campos de un ticket: el módulo Tickets y "Registrar en Tickets" de Help Desk
+  // (app-helpdesk.html) usan esta misma lista. Departamento y Solicitante: se puede escribir uno
+  // que todavía no está en la lista (se llenan en cargarCatalogosTickets). FECHA DE REGISTRO la
+  // pone el servidor al crear.
+  const CAMPOS_TICKET = [
+    { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text', placeholder: 'Ej. 4021' },
+    { clave: 'FECHA DE REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
+    { clave: 'FECHA', etiqueta: 'Fecha', tipo: 'date' },
+    { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true },
+    { clave: 'SOLICITANTE', etiqueta: 'Solicitante', tipo: 'select', catalogo: true, placeholder: 'Escribe o elige un nombre' },
+    // Los de tarjeta de combustible van para EOX y para EDENRED (EDENRED agregado el 05/10/2026)
+    { clave: 'TIPO ATENCION', etiqueta: 'Tipo de atención', tipo: 'select', requerido: true, opciones: [
+      'ACTUALIZACION DE INFORMACION UBER', 'ALTA DE HOLOGRAMA EDENRED', 'ALTA DE HOLOGRAMA EOX', 'ALTA DE USUARIO UBER',
+      'BAJA DE USUARIO UBER', 'CONSULTA DE INFORMACION UBER',
+      'INCREMENTO DE COMBUSTIBLE EDENRED INDETERMINADO', 'INCREMENTO DE COMBUSTIBLE EDENRED PERMANENTE',
+      'INCREMENTO DE COMBUSTIBLE EDENRED TEMPORAL', 'INCREMENTO DE COMBUSTIBLE EOX INDETERMINADO',
+      'INCREMENTO DE COMBUSTIBLE EOX PERMANENTE', 'INCREMENTO DE COMBUSTIBLE EOX TEMPORAL',
+      'INFORMACION GENERAL - EDENRED', 'INFORMACION GENERAL - EOX', 'NIP EDENRED', 'NIP EOX',
+      'REEMBOLSO DE COMBUSTIBLE EDENRED', 'REEMBOLSO DE COMBUSTIBLE EOX',
+      'REEMPLAZO DE HOLOGRAMA EDENRED', 'REEMPLAZO DE HOLOGRAMA EOX',
+      'REPORTE DE CONSUMO DE COMBUSTIBLE EDENRED', 'REPORTE DE CONSUMO DE COMBUSTIBLE EOX',
+    ] },
+    { clave: 'PLACA', etiqueta: 'Placa', tipo: 'text' },
+    { clave: 'QUIEN ATENDIO', etiqueta: 'Quién atendió', tipo: 'select', opciones: [
+      'ABIGAIL LEDESMA CORONA', 'DAVID MOISES MALDONADO HERNANDEZ', 'GIOVANNI JAVIER ORDUÑA DE LA PEÑA', 'JORGE LUIS AVECILLA RIVERA',
+    ] },
+    { clave: 'COMENTARIO', etiqueta: 'Comentario', tipo: 'text', renglonCompleto: true },
+  ];
+
+  async function initTickets() {
+    Tabs.iniciar(document.getElementById('view-container'));
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('tickets');
+    if (!puedeEditar) document.querySelector('#tickets-tabs .tab-btn[data-tab="registrar"]').remove();
+    const modalEditar = document.getElementById('modal-editar-ticket');
+    let todosLosTickets = [];
+
+    document.getElementById('campos-form-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'ticket' });
+    document.getElementById('campos-form-editar-ticket').innerHTML = CamposHoja.html(CAMPOS_TICKET, { prefijo: 'editar-ticket', esEdicion: true });
+
+    document.getElementById('ticket-fecha-de-registro').value = Formato.fecha(new Date());
+    document.getElementById('ticket-fecha').value = hoyISO();
+
+    // Departamentos (hoja "LISTAS VEHICULOS") y Solicitantes (sugerencias =
+    // UNIQUE(SORT(TICKETS[SOLICITANTE])) de AppSheet, no lista cerrada) — los
+    // dos catálogos van juntos y en paralelo (uno no depende del otro), y
+    // esta función completa corre en paralelo con cargar() más abajo.
+    async function cargarCatalogosTickets() {
+      try {
+        const [departamentos, solicitantes] = await Promise.all([
+          callServerCacheado('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarSolicitantesTickets', state.token),
+        ]);
+        ['ticket', 'editar-ticket'].forEach((prefijo) => {
+          CamposHoja.llenarOpciones(prefijo + '-departamento', departamentos);
+          CamposHoja.llenarOpciones(prefijo + '-solicitante', solicitantes);
+        });
+      } catch (err) {
+        console.error('No se pudieron cargar los catálogos de Departamento/Solicitante:', err);
+      }
+    }
+
+    const tabla = DataTable.crear(document.getElementById('tickets-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'tickets',
+      ordenInicial: { campo: 'FECHA', dir: 'desc' },
+      buscarColumna: [{ campo: 'PLACA', placeholder: 'Buscar por Placa…' }],
+      textoVacio: 'Todavía no hay tickets registrados',
+      alCambiarFiltros: () => actualizarKpis(tabla.getFiltradas()),
+      exportar: {
+        nombreArchivo: 'Tickets',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Tickets', filas: JSON.parse(await callServer('apiTicketsCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiTicketsCompleto', state.token)) },
+      etiquetaFila: (t) => t['TICKET'],
+      detalle: { titulo: (t) => 'Ticket: ' + (t['TICKET'] || '') },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (t) => tabla.abrirDetalle(String(t.ID)),
+      alTocarFila: (t) => tabla.abrirDetalle(String(t.ID)),
+      columnas: [
+        { campo: 'TICKET', titulo: 'Ticket', tipo: 'texto', fijada: true },
+        { campo: 'FECHA', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'SOLICITANTE', titulo: 'Solicitante', tipo: 'lista' },
+        { campo: 'TIPO ATENCION', titulo: 'Tipo de atención', tipo: 'lista' },
+        { campo: 'QUIEN ATENDIO', titulo: 'Atendió', tipo: 'lista' },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', fijada: true },
+        { campo: 'COMENTARIO', titulo: 'Comentario', tipo: 'texto', visible: false },
+        { campo: 'FECHA DE REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false },
+      ],
+      accionesFila: puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (t) => abrirEditarTicket(t) }] : [],
+      seleccionable: true,
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarTicket', state.token, f.ID)));
+        invalidarCacheLista('apiListarTicketsResumen', state.token);
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    /** El resumen ya trae las 10 columnas completas — no hace falta pedir el
+     *  registro completo aparte para poblar el modal de edición. */
+    function abrirEditarTicket(t) {
+      if (!t) return;
+      document.getElementById('editar-ticket-id').value = t.ID;
+      document.getElementById('editar-ticket-label').textContent = 'Ticket: ' + (t['TICKET'] || t.ID);
+      document.getElementById('editar-ticket-error').hidden = true;
+      CamposHoja.poblar(CAMPOS_TICKET, 'editar-ticket', t);
+      modalEditar.hidden = false;
+    }
+    function cerrarEditarTicket() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-ticket').reset();
+      document.getElementById('editar-ticket-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar-ticket').addEventListener('click', cerrarEditarTicket);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarTicket(); });
+
+    document.getElementById('form-editar-ticket').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-ticket-error');
+      errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        await callServer('apiActualizarTicket', state.token, document.getElementById('editar-ticket-id').value, CamposHoja.recolectar(CAMPOS_TICKET, 'editar-ticket'));
+        cerrarEditarTicket();
+        invalidarCacheLista('apiListarTicketsResumen', state.token);
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    function actualizarKpis(filas) {
+      document.getElementById('tickets-stat-total').textContent = filas.length;
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        todosLosTickets = (await callServerListaCacheada('apiListarTicketsResumen', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el historial: ' + err.message);
+        return;
+      }
+      actualizarKpis(todosLosTickets);
+      tabla.setDatos(todosLosTickets);
+    }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarTicketsResumen', cargar, document.getElementById('view-container').firstElementChild);
+
+    document.getElementById('form-ticket').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('ticket-error');
+      errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
+      toastCargando('Registrando…');
+      try {
+        await callServer('apiCrearTicket', state.token, CamposHoja.recolectar(CAMPOS_TICKET, 'ticket'));
+        ev.target.reset();
+        document.getElementById('ticket-fecha-de-registro').value = Formato.fecha(new Date());
+        document.getElementById('ticket-fecha').value = hoyISO();
+        invalidarCacheLista('apiListarTicketsResumen', state.token);
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await Promise.all([cargarCatalogosTickets(), cargar()]);
+  }
+
+  const AYUDA_TICKETS = [
+    { pregunta: '¿Qué se registra aquí?', respuesta: 'Cualquier atención o solicitud general -- Uber, tarjeta de combustible (EOX/EDENRED), hologramas, consultas, etc.' },
+    { pregunta: '¿Cómo registro un ticket?', respuesta: 'Pestaña "Registrar": elige el tipo de atención y llena los datos que pida (varían según el tipo).' },
+    { pregunta: '¿Qué relación tiene con Help Desk?', respuesta: 'Desde el detalle de un ticket del helpdesk de TI se puede "Registrar en Tickets" directo, sin volver a capturar los datos.' },
+    { pregunta: '¿Puedo editar un ticket ya registrado?', respuesta: 'Sí, con "Editar" se corrige cualquier campo.' },
+  ];
+</script>
