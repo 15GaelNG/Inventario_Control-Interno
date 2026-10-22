@@ -4671,6 +4671,11 @@
           }
         });
         activarCombosEn(cuerpo, captura.contexto.formulario);
+        // Lo que el servidor propone y se puede cambiar (el NUCO de Agregar equipo, 2.59): «auto» hasta que lo escriban
+        captura.contexto.formulario.forEach((e) => {
+          const el = e.sugerido && e.valor && cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
+          if (el) CampoAuto.llenar(el, e.valor);
+        });
         activarAdicionales(cuerpo);
         activarBloqueo(cuerpo);
         cuerpo.addEventListener('input', (ev) => { if (ev.target.matches('[data-columna]')) actualizarFormularioAppSheet(); });

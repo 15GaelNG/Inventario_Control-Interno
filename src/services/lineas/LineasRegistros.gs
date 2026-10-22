@@ -183,7 +183,8 @@ const LineasRegistros = (function () {
     // Una línea sola no tiene NUCO (si trae uno viejo, para sus documentos, se muestra)
     const identificacion = [
       fijo('FOLIO', 'Folio', v('FOLIO'), { formula: 'FOLIO' }),
-      conEquipo && nuevo ? ed('NUCO', 'NUCO', 'numero', { valor: '', requerido: 'SIEMPRE', valida: 'NUCO' })
+      // El NUCO se propone (pendiente 2.59) y se puede cambiar: «auto» hasta que lo escriban
+      conEquipo && nuevo ? ed('NUCO', 'NUCO', 'numero', { valor: (ctx && ctx.nucoSiguiente) || '', sugerido: !!(ctx && ctx.nucoSiguiente), requerido: 'SIEMPRE', valida: 'NUCO' })
         : (conEquipo || LineasUtil.nucoVisible(v('NUCO')) ? fijo('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || '') : null),
       fijo('TIPO', 'Tipo', tipoFijo ? tipoActual : (nuevo ? '' : tipoActual), tipoFijo ? {} : { formula: 'TIPO_' + parte }),
       lineaEnEquipo ? fijo('_RESPONSABLE_EQUIPO', 'Responsable (del equipo)', v('RESPONSABLE') || '—') : null,
@@ -338,6 +339,19 @@ const LineasRegistros = (function () {
    * Equipos sin línea (o con su línea CANCELADA) en USO o RESGUARDO: los que se pueden elegir en «¿Se vincula a un
    * equipo?». Regresa [{ id, nuco, fila }].
    */
+  /**
+   * El NUCO que se propone en Agregar equipo (usuario, 21-oct; pendiente 2.59): el más alto de la serie normal (hasta 4
+   * dígitos) + 1, sin rellenar huecos. Los bloques de 5 dígitos (10001-10100 y 11001-11011, Dirección General) no
+   * cuentan. Al guardar se revisa que no esté repetido, como siempre.
+   */
+  function nucoSiguiente_(filas) {
+    const alto = filas.reduce((m, f) => {
+      const n = texto_(LineasUtil.col(f, 'NUCO'));
+      return /^\d{1,4}$/.test(n) ? Math.max(m, Number(n)) : m;
+    }, 0);
+    return alto < 9999 ? LineasUtil.nuco4(alto + 1) : '';
+  }
+
   function equiposSinLinea_(filas) {
     return (filas || LineasDatos.leerTabla(LineasRepo.TAB.LINEAS)).filter((f) => {
       if (!LineasRepo.TIPOS_CON_EQUIPO[texto_(LineasUtil.col(f, 'TIPO')).toUpperCase()]) return false;
@@ -439,7 +453,11 @@ const LineasRegistros = (function () {
     // Agregar línea: los NUCO a los que se le puede vincular (se leen solo aquí; al guardar se revisan otra vez)
     if (!fila && parteDe_(ctx, '') === 'LINEA') ctx.equiposSinLinea = equiposSinLinea_().map((x) => x.nuco);
     // Agregar equipo: las líneas sueltas DISPONIBLE que se le pueden vincular (al guardar se revisan otra vez)
-    if (!fila && parteDe_(ctx, '') === 'EQUIPO') ctx.lineasSueltas = lineasSueltas_().map((x) => x.numero);
+    if (!fila && parteDe_(ctx, '') === 'EQUIPO') {
+      const filas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
+      ctx.lineasSueltas = lineasSueltas_(filas).map((x) => x.numero);
+      ctx.nucoSiguiente = nucoSiguiente_(filas);
+    }
     const tipo = texto_(base['TIPO']).toUpperCase();
     // La línea en USO del equipo con el adendum vencido: si el equipo sale del inventario, se pregunta cómo se cancela
     const lineaVencida = !!fila && !ctx.parte && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO' && LineasResguardos.lineaVencida(fila);
