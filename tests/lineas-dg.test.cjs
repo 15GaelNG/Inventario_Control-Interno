@@ -54,3 +54,36 @@ test('DG: el servidor oculta y rechaza; la pantalla no pide lo que no ve', () =>
   assert.match(cliente, /const operar = \(f\) => puedeOperar\(\) && !\(f \|\| \[\]\)\.some\(bloqueadoDG\);/);
   assert.match(cliente, /if \(e\._dgOculto\) return;/);
 });
+
+// Usuario, 22-oct: todo el responsable en blanco salvo AREA = DIRECCION GENERAL; solo la lista fija; ADMIN sí modifica
+test('DG: solo queda el área; el índice la pone en departamento, la vista y la ficha en AREA', () => {
+  // Vista del AppSheet con DEPARTAMENTO, AREA y SEDE: DEPARTAMENTO y SEDE en blanco
+  const vcols = ['NUMERO TELEFONO', 'NUCO', 'RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE', 'ESTATUS LINEA'];
+  const vfila = ['E1', '4422798678', '11002', '', '', 'DIRECCION GENERAL', '', 'USO'];
+  assert.deepEqual(DG.ocultarRenglon(vcols, vfila, 1), ['E1', '', '11002', 'DG', '', 'DIRECCION GENERAL', '', 'USO']);
+  // Índice: departamento = DIRECCION GENERAL en los renglones de DG, para todos; sobre copias
+  const ix = { generadoEn: 1, vista: { columnas: [], filas: [] },
+    equipos: { columnas: ['id', 'responsable', 'departamento', 'dg'], filas: [['E1', 'DG', null, true], ['E2', 'JUAN', 'TI', false]] },
+    lineas: { columnas: ['id', 'departamento', 'dg'], filas: [['L1', '', true]] } };
+  const r = DG.conArea(ix);
+  assert.deepEqual(r.equipos.filas, [['E1', 'DG', 'DIRECCION GENERAL', true], ['E2', 'JUAN', 'TI', false]]);
+  assert.deepEqual(r.lineas.filas, [['L1', 'DIRECCION GENERAL', true]]);
+  assert.equal(ix.equipos.filas[0][2], null);
+  assert.equal(r.generadoEn, 1);
+  const ficha = DG.fichaOculta({ _id: 'E1', nuco: '11002', estatus: 'USO' }, true);
+  assert.deepEqual(ficha.responsable, { nombre: 'DG', departamento: '', area: 'DIRECCION GENERAL' });
+  // Un registro con área DIRECCION GENERAL fuera de la lista no es DG
+  assert.ok(!DG.esRegistro({ nuco: '1667' }, { numero: '4424949487' }));
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /filtrarIndice_\(LineasDG\.conArea\(LineasRepo\.indice\(\)\), sesion\.alcance\)/);
+  assert.match(tel, /LineasDG\.esRegistro\(r\.equipo, r\.linea\) \? LineasDG\.AREA/);
+});
+
+test('DG: limpiar-dg.js deja en blanco todo el responsable y solo pone AREA', () => {
+  const js = read('tools/lineas-datos/limpiar-dg.js');
+  const limpiar = js.match(/const LIMPIAR = (\[[^\]]*\])/)[1];
+  ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO', 'DIRECTOR', 'CUENTA GOOGLE']
+    .forEach((k) => assert.ok(limpiar.indexOf("'" + k + "'") >= 0, k));
+  assert.match(js, /const AREA = \['AREA'\];/);
+  assert.ok(limpiar.indexOf("'AREA'") < 0);
+});

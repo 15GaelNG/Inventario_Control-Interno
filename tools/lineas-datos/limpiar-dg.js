@@ -2,10 +2,11 @@
 /**
  * tools/lineas-datos/limpiar-dg.js — pendiente 8.16 (usuario, 21-oct, después de preguntar a Líneas; L28): en las
  * asignaciones vigentes de Dirección General (sus 12 líneas y los NUCO 11001 a 11011: la lista de LineasDG.gs) se limpia
- * el responsable (ID PERSONA, NO EMPLEADO, RESPONSABLE, PUESTO, JEFE DIRECTO, DIRECTOR con su «USO», CUENTA GOOGLE y
- * los responsables adicionales) y queda el área DIRECCION GENERAL (DEPARTAMENTO y AREA). Lo demás (estatus, sede,
- * oficina, fechas) no se toca (usuario, 21-oct: «solo cambia los datos de responsable»). Cada asignación deja un
- * movimiento EDICION. Lo de la lista que no está en el libro se reporta. Reglas de estos programas: comun.js.
+ * todo el responsable (ID PERSONA, NO EMPLEADO, RESPONSABLE, PUESTO, DEPARTAMENTO, SEDE, OFICINA / DESARROLLO, DIRECTOR
+ * con su «USO», CUENTA GOOGLE, JEFE DIRECTO y los responsables adicionales) y solo queda AREA = DIRECCION GENERAL
+ * (usuario, 22-oct: «solo Área se quedaría como DIRECCION GENERAL, todo lo demás en blanco»). Los estatus y las fechas
+ * no se tocan. Cada asignación deja un movimiento EDICION. Lo de la lista que no está en el libro se reporta. Reglas de
+ * estos programas: comun.js.
  *
  * Uso:   node tools/lineas-datos/limpiar-dg.js [--produccion] [--ensayo]
  */
@@ -15,10 +16,11 @@ const path = require('node:path');
 const vm = require('node:vm');
 const c = require('./comun.js');
 
-const COMENTARIO = 'DIRECCION GENERAL: SE LIMPIA EL RESPONSABLE Y QUEDA EL AREA (PENDIENTE 8.16, L28)';
-const LIMPIAR = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'JEFE DIRECTO', 'DIRECTOR', 'CUENTA GOOGLE']
+const COMENTARIO = 'DIRECCION GENERAL: SE LIMPIA EL RESPONSABLE Y SOLO QUEDA EL AREA (PENDIENTE 8.16, L28)';
+const LIMPIAR = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO',
+  'DIRECTOR', 'CUENTA GOOGLE']
   .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []));
-const AREA = ['DEPARTAMENTO', 'AREA'];
+const AREA = ['AREA'];
 
 /** La lista de LineasDG.gs (la misma que usa la app; nada corre al cargar). */
 function dg() {
