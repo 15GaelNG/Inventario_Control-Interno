@@ -7248,6 +7248,8 @@
         cargar();
       }
 
+      // Vendido, Donado y Desechado: solo cuando todo lo seleccionado ya se recibió (usuario, 22-oct)
+      const recibidos = (filas) => filas.every((f) => f.ESTADO === 'EN RESGUARDO');
       const ACCIONES = {
         RESGUARDOS: [
           { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1,
@@ -7258,14 +7260,14 @@
             alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
               campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
               boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
-          { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1,
+          { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
               campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
           // Donado y Desechado, como Vendido: solo lo ya recibido (pendiente 3.16, usuario 22-oct)
-          { icono: 'gift', texto: 'Donado', titulo: 'El equipo se donó: también cambia su estatus en el inventario', minimo: 1,
+          { icono: 'gift', texto: 'Donado', titulo: 'El equipo se donó: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('DONADO', filas, { titulo: 'Marcar como donado', mensaje: miles(filas.length) + ' equipo(s) pasan a DONADO aquí y en el inventario.',
               campos: [{ clave: 'asunto', etiqueta: 'Referencia de la donación (opcional)' }], boton: 'Marcar donado', hecho: 'Donados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como donados' }) },
-          { icono: 'trash-2', texto: 'Desechado', titulo: 'El equipo se desechó: también cambia su estatus en el inventario', minimo: 1,
+          { icono: 'trash-2', texto: 'Desechado', titulo: 'El equipo se desechó: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('DESECHADO', filas, { titulo: 'Marcar como desechado', mensaje: miles(filas.length) + ' equipo(s) pasan a DESECHADO aquí y en el inventario.',
               campos: [{ clave: 'asunto', etiqueta: 'Referencia del desecho (opcional)' }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
         ],

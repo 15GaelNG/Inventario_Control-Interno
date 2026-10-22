@@ -576,6 +576,8 @@ test('Panel de Pau: Donado y Desechado como Vendido; ya no hay «Quitados»', ()
   assert.match(html, /alHacer: \(filas\) => paso\('DESECHADO', filas,/);
   assert.match(html, /etiqueta: 'Donados', filtros: \{ ESTADO: \{ valores: \['DONADO'\] \} \}/);
   assert.match(html, /etiqueta: 'Desechados', filtros: \{ ESTADO: \{ valores: \['DESECHADO'\] \} \}/);
+  assert.match(html, /const recibidos = \(filas\) => filas\.every\(\(f\) => f\.ESTADO === 'EN RESGUARDO'\);/);
+  assert.equal((html.match(/minimo: 1, visible: recibidos,/g) || []).length, 3, 'Vendido, Donado y Desechado solo con todo recibido (usuario, 22-oct)');
   assert.doesNotMatch(html, /etiqueta: 'Quitados'/);
   assert.doesNotMatch(html, /titulo: 'Quitado'/);
 });
