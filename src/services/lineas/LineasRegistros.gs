@@ -342,14 +342,16 @@ const LineasRegistros = (function () {
   /**
    * El NUCO que se propone en Agregar equipo (usuario, 21-oct; pendiente 2.59): el más alto de la serie normal (hasta 4
    * dígitos) + 1, sin rellenar huecos. Los bloques de 5 dígitos (10001-10100 y 11001-11011, Dirección General) no
-   * cuentan. Al guardar se revisa que no esté repetido, como siempre.
+   * cuentan, ni los 9000-9999: son los equipos de prueba del DEV (9043, 9251, 9713) y proponían 9714 en vez del
+   * siguiente de la serie (usuario, 22-oct; en producción el más alto es 1712). Al guardar se revisa que no esté
+   * repetido, como siempre.
    */
   function nucoSiguiente_(filas) {
     const alto = filas.reduce((m, f) => {
       const n = texto_(LineasUtil.col(f, 'NUCO'));
-      return /^\d{1,4}$/.test(n) ? Math.max(m, Number(n)) : m;
+      return /^\d{1,4}$/.test(n) && Number(n) < 9000 ? Math.max(m, Number(n)) : m;
     }, 0);
-    return alto < 9999 ? LineasUtil.nuco4(alto + 1) : '';
+    return alto < 8999 ? LineasUtil.nuco4(alto + 1) : '';
   }
 
   function equiposSinLinea_(filas) {

@@ -21,7 +21,10 @@ test('NUCO del alta: el más alto de la serie normal + 1, a 4 dígitos (2.59)', 
   assert.equal(nucoSiguiente(['0179', 1712, '0005', '10100', '11011', 'NO APLICA', '']), '1713');
   assert.equal(nucoSiguiente(['0001', '0003']), '0004', 'los huecos no se rellenan');
   assert.equal(nucoSiguiente([]), '0001');
-  assert.equal(nucoSiguiente(['9999']), '', 'sin lugar en la serie, no propone');
+  assert.equal(nucoSiguiente(['8999']), '', 'sin lugar en la serie, no propone');
+  // Los 9000-9999 son los equipos de prueba del DEV: no cuentan (usuario, 22-oct; proponía 9714 en vez de 17xx)
+  assert.equal(nucoSiguiente(['1712', '9043', '9251', '9713']), '1713');
+  assert.equal(nucoSiguiente(['9999']), '0001');
 });
 
 test('NUCO del alta: se propone solo en Agregar equipo y la pantalla lo marca «auto» hasta que lo cambien (2.59)', () => {
