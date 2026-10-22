@@ -461,15 +461,21 @@ const HelpdeskApi = (function () {
       if (!r || !Array.isArray(r.tickets)) throw new Error('El helpdesk cambió la forma de su lista. Avisa a sistemas.');
       total = Number(r.totalTickets);
     } else {
-      // La misma forma que manda su página al filtrar y al pasar de página (medida el 07/10/2026)
+      // La misma forma que manda su página al filtrar y al pasar de página (medida el 07/10/2026;
+      // el helpdesk renombró este objeto el 22-oct-2026 -- de idAgent/idBranch/idForm/idArea/
+      // idPriority/idStatus/idDepartmentCustomer a agents/branches/forms/areas/priority/status/
+      // departmentCustomers, y agregó customer y finishLoad. Lo confirmado sale de una petición sin
+      // filtros; dateCreation/dateCreationEnd (fechas) se mandan con el nombre de antes por si lo
+      // sigue leyendo, pero no está verificado -- si alguien filtra por fecha y vuelve a tronar,
+      // revisar esos dos nombres primero. nextPageLastIdTicket (página 2 en adelante) tampoco se
+      // alcanzó a verificar.
       const paginacion = { rowsPerPage: POR_PAGINA };
       if (f.despuesDe) paginacion.nextPageLastIdTicket = f.despuesDe;
       r = llamar_(yo.correo, yo.token, '/tickets/list', {
         filters: {
-          idHeadquarter: [], idAgent: f.agentes, idArea: [], idBranch: f.grupos, idForm: f.formularios, toIdDepartment: [],
-          idPriority: f.prioridades, idStatus: f.estatus, dateCreation: f.desde, dateCreationEnd: f.hasta, idUser: [], idCrea: [],
-          idTicket: [], headC: [], firstAnswer: null, nextAnswer: null, idProyecto: null, idCondominio: null, idLote: null,
-          myTickets: null, departamento: [], area: [], idDepartmentCustomer: f.departamentos,
+          agents: f.agentes, branches: f.grupos, forms: f.formularios, areas: [], department: [], customer: [],
+          departmentCustomers: f.departamentos, priority: f.prioridades, status: f.estatus,
+          dateCreation: f.desde, dateCreationEnd: f.hasta, idTicket: [], finishLoad: false,
         },
         pagination: paginacion,
       });
