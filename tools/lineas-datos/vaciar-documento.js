@@ -3,16 +3,18 @@
  * tools/lineas-datos/vaciar-documento.js — lineas-revisor, 22-oct: los movimientos EDICION de cable-cubo.js llevaban en
  * DOCUMENTO el ID de la responsiva (RLI-) o del resguardo (RSG-) del renglón. El historial de la ficha toma un movimiento
  * con DOCUMENTO como el de ese documento: con RLI- tapa la responsiva original (su fecha y su PDF) y con RSG- muestra «Ver
- * inspección» hacia una que no existe. Vacía DOCUMENTO en los movimientos de ese script (por su COMENTARIO); lo demás del
- * movimiento no cambia. Con permiso del usuario (22-oct). Reglas de estos programas: comun.js.
+ * inspección» hacia una que no existe. Vacía DOCUMENTO en los movimientos de ese script y de corregir-color.js (por su
+ * COMENTARIO); lo demás del movimiento no cambia. Con permiso del usuario (22-oct). Reglas de estos programas: comun.js.
  *
  * Uso:   node tools/lineas-datos/vaciar-documento.js [--produccion] [--ensayo]
  */
 'use strict';
 const c = require('./comun.js');
 const cableCubo = require('./cable-cubo.js');
+const corregirColor = require('./corregir-color.js');
 
-const COMENTARIOS = [cableCubo.COMENTARIO];
+// También el de corregir-color.js: con DOCUMENTO ILI- tapaba la inspección del AppSheet del NUCO 0976 (lineas-revisor)
+const COMENTARIOS = [cableCubo.COMENTARIO, corregirColor.COMENTARIO];
 
 /** Los movimientos de esos scripts que traen DOCUMENTO. */
 function porVaciar(mov) {

@@ -39,7 +39,7 @@ test('CARGADOR ya no es opción en ninguna lista de accesorios', () => {
 });
 
 // lineas-revisor, 22-oct: con DOCUMENTO, el historial tomaba el movimiento por el de la responsiva (RLI-) y la tapaba
-test('cable-cubo.js y corregir-color.js no ponen DOCUMENTO; vaciar-documento.js solo toca los de cable-cubo con DOCUMENTO', () => {
+test('cable-cubo.js y corregir-color.js no ponen DOCUMENTO; vaciar-documento.js solo toca los de esos dos con DOCUMENTO', () => {
   ['tools/lineas-datos/cable-cubo.js', 'tools/lineas-datos/corregir-color.js'].forEach((f) => assert.doesNotMatch(read(f), /documento:/, f));
   const { porVaciar } = require('../tools/lineas-datos/vaciar-documento.js');
   const { COMENTARIO } = require('../tools/lineas-datos/cable-cubo.js');
@@ -48,6 +48,7 @@ test('cable-cubo.js y corregir-color.js no ponen DOCUMENTO; vaciar-documento.js 
     { _n: 3, COMENTARIO: COMENTARIO, DOCUMENTO: '' },
     { _n: 4, COMENTARIO: 'OTRO', DOCUMENTO: 'RLI-2' },
     { _n: 5, COMENTARIO: COMENTARIO, DOCUMENTO: 'RSG-3' },
+    { _n: 6, COMENTARIO: require('../tools/lineas-datos/corregir-color.js').COMENTARIO, DOCUMENTO: 'ILI-4' },
   ];
-  assert.deepEqual(porVaciar({ filas }).map((f) => f._n), [2, 5]);
+  assert.deepEqual(porVaciar({ filas }).map((f) => f._n), [2, 5, 6]);
 });
