@@ -11,7 +11,7 @@ const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
 function cargar(inventario, bandeja, movimientos) {
   const tablas = { 'LINEAS TELEFONICAS': inventario, APP_RESGUARDOS: bandeja, MOVIMIENTOS: movimientos || [] };
-  const escritas = { actualizadas: [], agregadas: [], movimientos: [], columnas: [], registros: [] };
+  const escritas = { actualizadas: [], agregadas: [], eliminadas: [], movimientos: [], columnas: [], registros: [] };
   // El inventario se lee con los mismos objetos: lo que se guarda se ve al volver a leerlo (como LineasLectura)
   const LineasDatos = {
     ZONA_APP: 'America/Mexico_City', normCol: (c) => String(c).toUpperCase().trim(),
@@ -21,6 +21,7 @@ function cargar(inventario, bandeja, movimientos) {
     idsDeFila: (f) => [String(f['ID'])],
     actualizarFila: (n, fila, cambios) => { escritas.actualizadas.push({ hoja: n, fila: fila, cambios: cambios }); Object.assign(tablas[n][fila - 2], cambios); },
     agregarFilas: (n, filas) => { filas.forEach((f) => { escritas.agregadas.push({ hoja: n, fila: f }); tablas[n].push(f); }); },
+    eliminarFilas: (n, filas) => { filas.slice().sort((a, b) => b - a).forEach((f) => { escritas.eliminadas.push({ hoja: n, fila: f }); tablas[n].splice(f - 2, 1); }); },
     buscarFilas: (n, c, v, parcial) => (tablas[n] || []).map((f, i) => (parcial ? String(f[c] || '').indexOf(v) >= 0 : String(f[c]) === String(v)) ? i + 2 : 0).filter(Boolean),
     buscarFilasVarios: (n, c, vs, parcial) => vs.reduce((a, v) => a.concat(LineasDatos.buscarFilas(n, c, v, parcial)), []),
     leerFilas: (ps) => ps.map((p) => p.filas.map((x) => tablas[p.tabla][x - 2])),
@@ -238,7 +239,7 @@ test('Quitar del panel: solo lo pendiente; regresa lo que nadie tocó y respeta 
   assert.throws(() => t.R.quitarDelPanel(['EQU-1'], { comentario: '' }, usuario), /Escribe el comentario/);
   const r = t.R.quitarDelPanel(['EQU-1'], { comentario: 'mandado por error' }, usuario);
   assert.equal(r.hechos.length, 1);
-  assert.equal(t.tablas.APP_RESGUARDOS[0].ESTADO, 'RETIRADO');
+  assert.equal(t.tablas.APP_RESGUARDOS.length, 0, 'el renglón se borra (usuario, 22-oct), no queda RETIRADO');
   assert.deepEqual([eq['ESTATUS EQUIPO'], eq['RESPONSABLE'], eq['PUESTO'], eq['PIN EQUIPO'], eq['SEDE'], eq['DEPARTAMENTO']], ['USO', 'ANA', 'VENTAS', '1234', 'LEON', 'VENTAS']);
   assert.equal(t.escritas.movimientos.slice(-1)[0].tipo, 'QUITAR_PANEL');
   // Lo que Pau ya recibió no se quita: lo saca con «Entregar a líneas»
@@ -386,8 +387,7 @@ test('Quitar del panel regresa la línea que se fue a Cancelaciones si sigue POR
   assert.deepEqual(vista.regresa.filter((x) => x.campo === 'NUMERO TELEFONO')[0], { campo: 'NUMERO TELEFONO', de: '', a: '4420050' });
   assert.ok(vista.regresa.some((x) => x.campo === 'ESTATUS LINEA' && x.a === 'USO'), 'con su estatus de antes');
   t.R.quitarDelPanel(['EQU-5'], { comentario: 'mandado por error' }, usuario);
-  const canc = t.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0];
-  assert.equal(canc.CANCELACION, 'RETIRADA');
+  assert.equal(t.tablas.APP_RESGUARDOS.length, 0, 'también se borra el renglón de la cancelación que salió con el envío');
   assert.deepEqual([eq['NUMERO TELEFONO'], eq['ESTATUS LINEA'], eq['ESTATUS EQUIPO'], eq['RESPONSABLE']], ['4420050', 'USO', 'USO', 'ANA']);
   // Si Pau ya avanzó la cancelación, la línea se queda
   const t2 = cargar([conLinea('EQU-6', '0060', '01/01/2025')], []);
@@ -524,4 +524,17 @@ test('POR RECIBIR: Quitar del panel lo regresa a como estaba; un renglón de ant
   // No se elige a mano: no está en las listas de Mandar a resguardo
   assert.ok(viejo.R.ESTATUS_EQUIPO_RESGUARDO.indexOf('POR RECIBIR') < 0);
   assert.match(read('src/services/lineas/LineasEstructura.gs'), /'POR RECIBIR': 'RESGUARDO'/);
+});
+
+// Usuario, 22-oct: Quitar del panel borra el renglón (no queda RETIRADO); con varios a la vez, borra los suyos y nada más
+test('Quitar del panel con varios: borra sus renglones, de abajo hacia arriba, y deja los demás', () => {
+  const t = cargar([equipo('EQU-1', '0012', 'USO'), equipo('EQU-2', '0013', 'USO'), equipo('EQU-3', '0014', 'USO')], []);
+  ['EQU-1', 'EQU-2', 'EQU-3'].forEach((id) => t.R.mandar([id], { comentario: 'renuncia', inspecciones: { [id]: 'INS-' + id }, porEquipo: { [id]: pedido('RESGUARDO') } }, usuario));
+  assert.equal(t.tablas.APP_RESGUARDOS.length, 3);
+  const r = t.R.quitarDelPanel(['EQU-1', 'EQU-3'], { comentario: 'mandados por error' }, usuario);
+  assert.equal(r.hechos.length, 2);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((x) => x.REGISTRO_ID), ['EQU-2']);
+  assert.deepEqual(t.escritas.eliminadas.map((x) => x.fila), [4, 2]);
+  assert.equal(t.escritas.movimientos.filter((m) => m.tipo === 'QUITAR_PANEL').length, 2, 'lo que pasó queda en el historial');
+  assert.match(read('src/services/lineas/LineasDatos.gs'), /if \(lote_\) \{ vaciarLote_\(\); lote_ = \{ datos: \{\}, hojas: \{\}, respaldo: \[\] \}; \}/);
 });

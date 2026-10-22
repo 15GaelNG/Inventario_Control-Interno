@@ -616,6 +616,22 @@ const LineasDatos = (function () {
     return filas.map((_, i) => inicio + i);
   }
 
+  /**
+   * Borra filas de la pestaña, de abajo hacia arriba (Quitar del panel, pendiente 3.12: usuario, 22-oct). Dentro de
+   * conCandado, primero se escribe el lote: sus celdas apuntan a números de fila que el borrado recorre. Después de
+   * borrar, los números de fila leídos antes ya no sirven: va al final.
+   */
+  function eliminarFilas(nombre, filas) {
+    const lista = (filas || []).filter((f) => f > 1).sort((a, b) => b - a).filter((f, i, a) => a.indexOf(f) === i);
+    if (!lista.length) return 0;
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    if (lote_) { vaciarLote_(); lote_ = { datos: {}, hojas: {}, respaldo: [] }; }
+    const t = tablaFresca(nombre);
+    lista.forEach((f) => t.hoja.deleteRow(f));
+    CacheHojas.tocar(id(), nombre);
+    return lista.length;
+  }
+
   // Rapidez (etapa 3, paso 2): dentro de conCandado, las celdas que cambia actualizarFila se juntan y van en una sola
   // llamada a la API de Sheets al final (cada llamada tardaba ~0.7 s; un cambio de equipo hacía cuatro o más). Las filas
   // que se agregan siguen al momento. La hoja se marca como cambiada (CacheHojas.tocar) hasta que ya se escribió, para
@@ -756,7 +772,7 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo, medirPasos, pasos,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
+    actualizarFila, agregarFilas, eliminarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
   };
 })();
