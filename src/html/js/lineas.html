@@ -7266,14 +7266,14 @@
               boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
           { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
-              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
           // Donado y Desechado, como Vendido: solo lo ya recibido (pendiente 3.16, usuario 22-oct)
           { icono: 'gift', texto: 'Donado', titulo: 'El equipo se donó: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('DONADO', filas, { titulo: 'Marcar como donado', mensaje: miles(filas.length) + ' equipo(s) pasan a DONADO aquí y en el inventario.',
-              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la donación (opcional)' }], boton: 'Marcar donado', hecho: 'Donados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como donados' }) },
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar donado', hecho: 'Donados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como donados' }) },
           { icono: 'trash-2', texto: 'Desechado', titulo: 'El equipo se desechó: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
             alHacer: (filas) => paso('DESECHADO', filas, { titulo: 'Marcar como desechado', mensaje: miles(filas.length) + ' equipo(s) pasan a DESECHADO aquí y en el inventario.',
-              campos: [{ clave: 'asunto', etiqueta: 'Referencia del desecho (opcional)' }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
         ],
         CANCELACIONES: [
           { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1, visible: enFase(['POR FIRMAR']),

@@ -777,7 +777,8 @@ const LineasResguardos = (function () {
   /**
    * Pau cierra un equipo ya recibido (EN RESGUARDO): VENDIDO, DONADO o DESECHADO, en el panel y en ESTATUS EQUIPO del
    * inventario (DONADO y DESECHADO: pendiente 3.16, usuario 22-oct: «solo con la regla que sean los que ya están
-   * recibidos»). datos = { asunto } (referencia opcional).
+   * recibidos»). datos = { comentario } (obligatorio; usuario, 22-oct: en lugar de la referencia opcional). El equipo
+   * queda sin accesorios ni bloqueo (LineasEscritura, SE_LIMPIA_AL_CERRAR).
    */
   const CIERRES = {
     VENDIDO: { motivo: 'Vendido', movimiento: 'VENTA' },
@@ -787,10 +788,11 @@ const LineasResguardos = (function () {
   function cerrar_(ids, estatus, datos, usuario) {
     exigirAprobador_(usuario);
     const c = CIERRES[estatus];
-    const asunto = txt((datos || {}).asunto);
+    const comentario = txt((datos || {}).comentario);
+    if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial del equipo).');
     const r = actualizar_(ids, (x) => (txt(x['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
-      : { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': asunto }));
-    espejar_(r.hechos, () => ({ 'ESTATUS EQUIPO': estatus }), c.motivo + ' (bandeja de resguardos)' + (asunto ? ': ' + asunto : ''), c.movimiento, usuario);
+      : { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': comentario }));
+    espejar_(r.hechos, () => ({ 'ESTATUS EQUIPO': estatus }), c.motivo + ' (bandeja de resguardos): ' + comentario, c.movimiento, usuario);
     return r;
   }
   const vendido = (ids, datos, usuario) => cerrar_(ids, 'VENDIDO', datos, usuario);

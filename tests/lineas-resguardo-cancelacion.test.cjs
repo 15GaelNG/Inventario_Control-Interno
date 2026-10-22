@@ -557,15 +557,19 @@ test('Donado y Desechado: solo lo recibido; el panel y el inventario quedan con 
     { 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' },
     { 'ID': 'RSG-2', 'REGISTRO_ID': 'EQU-2', 'NUCO': '0013', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'PARA DESECHO' },
     { 'ID': 'RSG-3', 'REGISTRO_ID': 'EQU-3', 'NUCO': '0014', 'ESTADO': 'PENDIENTE DE RECEPCION', 'ESTATUS_EQUIPO': 'RESGUARDO' }]);
-  assert.throws(() => t.R.donado(['RSG-1'], {}, usuario));
-  const d = t.R.donado(['RSG-1', 'RSG-3'], { asunto: 'FUNDACION' }, pau);
+  assert.throws(() => t.R.donado(['RSG-1'], { comentario: 'FUNDACION' }, usuario));
+  // El comentario es obligatorio (usuario, 22-oct: en lugar de la referencia opcional)
+  assert.throws(() => t.R.donado(['RSG-1'], { asunto: 'FUNDACION' }, pau), /Escribe el comentario/);
+  assert.throws(() => t.R.vendido(['RSG-1'], { comentario: 'ok' }, pau), /Escribe el comentario/);
+  const d = t.R.donado(['RSG-1', 'RSG-3'], { comentario: 'FUNDACION' }, pau);
   assert.deepEqual(d.hechos.map((h) => h.id), ['RSG-1']);
   assert.match(d.omitidos[0].motivo, /No está en resguardo/);
-  t.R.desechado(['RSG-2'], {}, pau);
+  t.R.desechado(['RSG-2'], { comentario: 'PANTALLA ROTA' }, pau);
   const inv = t.tablas['LINEAS TELEFONICAS'];
   assert.deepEqual(inv.map((f) => f['ESTATUS EQUIPO']), ['DONADO', 'DESECHADO', 'POR RECIBIR']);
   assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.ESTADO), ['DONADO', 'DESECHADO', 'PENDIENTE DE RECEPCION']);
   assert.deepEqual(t.escritas.movimientos.slice(-2).map((m) => m.tipo), ['CIERRE', 'DESECHO']);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.slice(0, 2).map((r) => r.ENTREGA_ASUNTO), ['FUNDACION', 'PANTALLA ROTA']);
   assert.match(read('src/services/TelefoniaService.gs'), /DONADO: \(\) => R\.donado\(ids, d, u\)/);
 });
 
@@ -574,6 +578,8 @@ test('Panel de Pau: Donado y Desechado como Vendido; ya no hay «Quitados»', ()
   const html = read('src/html/js/lineas.html');
   assert.match(html, /alHacer: \(filas\) => paso\('DONADO', filas,/);
   assert.match(html, /alHacer: \(filas\) => paso\('DESECHADO', filas,/);
+  assert.equal((html.match(/campos: \[\{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 \}\], boton: 'Marcar (vendido|donado|desechado)'/g) || []).length, 3,
+    'Vendido, Donado y Desechado piden comentario obligatorio (usuario, 22-oct)');
   assert.match(html, /etiqueta: 'Donados', filtros: \{ ESTADO: \{ valores: \['DONADO'\] \} \}/);
   assert.match(html, /etiqueta: 'Desechados', filtros: \{ ESTADO: \{ valores: \['DESECHADO'\] \} \}/);
   assert.match(html, /const recibidos = \(filas\) => filas\.every\(\(f\) => f\.ESTADO === 'EN RESGUARDO'\);/);
