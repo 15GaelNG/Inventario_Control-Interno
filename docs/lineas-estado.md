@@ -326,6 +326,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   permisos individuales. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) sí trae LECTURA para el área
   LINEAS y EDICION para `paulina.bustamante@ciudadmaderas.com`.
   Ya no existe la lista `LINEAS_APROBADORES_RESGUARDO` (12-oct, `585d1c6`).
+  **Vista Cancelaciones** (22-oct, `962dd92`): después de «Compañía», dos columnas calculadas que no se guardan en APP_RESGUARDOS; `LineasResguardos.bandeja` las agrega a cada renglón (REGION, CUENTA_PADRE). **Región:** por la lada del número (`LineasUtil.regionDeNumero`, tabla `LADAS_POR_REGION`, regiones 1 a 9 por estado); una lada que no está en la tabla (427 y las de Querétaro Sur, pregunta L30) queda vacía. **Cuenta padre:** de la columna CUENTA PADRE de la línea, también con la cancelación ya CANCELADA. Resguardos no las muestra.
 - **Mandar a resguardo y Mandar a cancelación** (13-oct, `aff5615`; `LineasResguardos.gs`, `abrirResguardo` y
   `abrirCancelacion` en `lineas.html`):
   - **Ubicación:** el formulario llena solo, aunque se puede cambiar, DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA
