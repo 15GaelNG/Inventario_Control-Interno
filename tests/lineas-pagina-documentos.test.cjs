@@ -45,7 +45,8 @@ test('las dos páginas: Ver PDF y Subir PDF firmado a la vista; lo demás en ⋮
   assert.match(lineas, /r\.puedeOperar && x\.registroId && \(x\.pdfId \|\| x\.origen !== 'SISTEMA'\)/);
   const opciones = lineas.slice(lineas.indexOf('function opcionesDocumento('), lineas.indexOf('function botonesDocumento('));
   ['Ver equipo', 'Ver carpeta en Drive', 'Generar PDF', 'Regenerar PDF'].forEach((t) => assert.match(opciones, new RegExp("texto: '" + t + "'")));
-  assert.match(opciones, /x\.tipoPdf === 'RESPONSIVA' && x\.origen === 'SISTEMA' && x\.pdfId/);
+  // Regenerar: inspección y responsiva del sistema con PDF (la inspección desde el 22-oct)
+  assert.match(opciones, /operar && x\.registroId && x\.origen === 'SISTEMA' && x\.pdfId \? \{ icono: 'refresh-ccw'/);
   // Desde la página, el registro va explícito (arriba de la pila está el documento) y la página se pinta de nuevo
   assert.match(lineas, /regenerarPdf\(x, x\.registroId\)/);
   assert.match(lineas, /else if \(arriba && arriba\.id === nuevoId && ETIQUETA_DOCUMENTO\[arriba\.tipo\]\) abrir\(arriba\.tipo, arriba\.id, true, true\);/);

@@ -3673,14 +3673,15 @@
       }
 
       /**
-       * Regenerar PDF (usuario, 5-oct): la responsiva se vuelve a hacer con la plantilla y lo que ya está guardado, sin
-       * llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
+       * Regenerar PDF (usuario, 5-oct; la inspección desde el 22-oct): se vuelve a hacer con la plantilla y lo que ya está
+       * guardado, sin llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
        */
       function regenerarPdf(d, registroId) {
         captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
         mostrarModalCaptura();
-        $('#ln-captura-icono', raiz).innerHTML = icono('signature');
-        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        const esInspeccion = d.tipoPdf === 'INSPECCION';
+        $('#ln-captura-icono', raiz).innerHTML = icono(esInspeccion ? 'clipboard-check' : 'signature');
+        $('#ln-captura-tipo', raiz).textContent = esInspeccion ? 'Inspección de telefonía' : 'Responsiva de entrega';
         $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
         $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
@@ -3836,7 +3837,8 @@
             // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
             doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),
               (d) => (d.registroId ? subirPdfFirmado(d.registroId, d) : subirPdfFirmado(id, d, vista))),
-            doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
+            // Inspecciones también (usuario, 22-oct: el PDF del NUCO 0820 salió sin el patrón)
+            doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.origen === 'SISTEMA' && !!d.pdfId,
               (d) => regenerarPdf(d)),
             doc('folder-open', 'Ver carpeta en Drive', 'drive', false, (d) => !!d.carpetaId,
               (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener')),
@@ -5553,7 +5555,7 @@
             alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
           operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId && !pdfsEnCurso[x.id] ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
             alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
-          operar && x.registroId && x.tipoPdf === 'RESPONSIVA' && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
+          operar && x.registroId && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
             alHacer: () => regenerarPdf(x, x.registroId) } : null,
         ].filter(Boolean);
       }
