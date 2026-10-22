@@ -231,6 +231,85 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   ok(($('tbody mark') || {}).textContent === 'VEHÍCULO Ñandú', 'la coincidencia se resalta con <mark> conservando acentos');
   buscar.value = ''; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
 
+  console.log('12b. El buscador general también encuentra lo que está en una columna OCULTA (usuario, 21-oct)');
+  tabla.ocultarColumna('ESTADO');
+  buscar.value = 'vencida'; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
+  ok($$('tbody tr[data-id]').length > 0, 'con ESTADO oculta, buscar "vencida" igual encuentra esas filas');
+  buscar.value = ''; buscar.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tabla.mostrarColumna('ESTADO');
+
+  console.log('12c. La columna oculta por la que empató se revela sola; si ya la explica una visible, no hace falta (usuario, 21-oct)');
+  let cajaRevela = null;
+  const tRevela = window.DataTable.crear((cajaRevela = doc.body.appendChild(doc.createElement('div'))), {
+    idCampo: 'ID',
+    columnas: [
+      { campo: 'FOLIO', titulo: 'Folio' },
+      { campo: 'ESTADO', titulo: 'Estado', visible: false },
+      { campo: 'NOTA', titulo: 'Nota', visible: false },
+    ],
+  });
+  tRevela.setDatos([
+    { ID: 1, FOLIO: 'F001', ESTADO: 'VENCIDA', NOTA: 'x' },
+    { ID: 2, FOLIO: 'VENCIDA-ESPECIAL', ESTADO: 'VIGENTE', NOTA: 'x' },
+  ]);
+  const buscarRevela = cajaRevela.querySelector('.dt-buscar');
+  buscarRevela.value = 'vencida'; buscarRevela.dispatchEvent(new window.Event('input', { bubbles: true }));
+  ok(cajaRevela.querySelectorAll('tbody tr[data-id]').length === 2, 'match por FOLIO (fila 2, visible) y por ESTADO oculta (fila 1)');
+  ok(!tRevela.getVista().ocultas.includes('ESTADO'), 'ESTADO se revela: a la fila 1 ninguna columna visible la explicaba');
+  ok(tRevela.getVista().ocultas.includes('NOTA'), 'NOTA sigue oculta: nunca coincidió con nada, revelar solo lo que hace falta');
+  buscarRevela.value = ''; buscarRevela.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tRevela.destruir();
+
+  console.log('12d-pre. columnasCompletas NO se trae sola con solo tener datos (es pesada: traerla para todos en cada carga hacía la app más lenta; usuario, 21-oct)');
+  let cajaPre = null;
+  let vecesCargada = 0;
+  const tPre = window.DataTable.crear((cajaPre = doc.body.appendChild(doc.createElement('div'))), {
+    idCampo: 'ID',
+    columnas: [{ campo: 'FOLIO', titulo: 'Folio' }],
+    columnasCompletas: { idHoja: 'ID', cargar: async () => { vecesCargada++; return [{ ID: 1, FOLIO: 'F001', RESPONSABLE: 'FULGENCIO PEREZ' }]; } },
+  });
+  tPre.setDatos([{ ID: 1, FOLIO: 'F001' }]);
+  await new Promise((r) => setTimeout(r, 0));
+  ok(vecesCargada === 0, 'setDatos solo no dispara la carga pesada');
+  ok(!tPre.getVista().ocultas.includes('RESPONSABLE'), 'RESPONSABLE todavía no existe como columna');
+
+  console.log('12d-bis. Buscar y abrir "Vista" casi al mismo tiempo no duplica la carga, y el menú se actualiza solo al terminar');
+  const buscarPre = cajaPre.querySelector('.dt-buscar');
+  buscarPre.value = 'fulgencio'; buscarPre.dispatchEvent(new window.Event('input', { bubbles: true }));
+  ok(!cajaPre.querySelector('.dt-barra-carga').hidden, 'la barra de carga se ve desde que arranca la carga en segundo plano (colchón visible, usuario 21-oct)');
+  ok(cajaPre.querySelector('.dt-vacio').textContent === 'Buscando en todas las columnas…',
+    'mientras carga, NO dice "ningún registro coincide" (sería mentira: todavía no se sabe)');
+  click(cajaPre.querySelector('.dt-btn-columnas'));   // casi a la vez que el buscador, antes de que termine de cargar
+  ok(doc.body.querySelector('.dt-popover').textContent.includes('Cargando'), 'el menú Vista refleja "Cargando…" aunque la carga la haya disparado el buscador, no él');
+  await new Promise((r) => setTimeout(r, 0));
+  ok(vecesCargada === 1, 'una sola llamada real al servidor, aunque dos cosas la hayan pedido');
+  ok(doc.body.querySelector('.dt-popover').textContent.includes('Responsable'), 'el menú Vista ya muestra la columna nueva al terminar, sin tener que cerrarlo y abrirlo');
+  ok(cajaPre.querySelector('.dt-barra-carga').hidden, 'y la barra de carga se quita sola al terminar');
+  buscarPre.value = ''; buscarPre.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tPre.destruir();
+
+  console.log('12d. Buscar también trae columnasCompletas sola (antes solo pasaba al abrir "Vista"; usuario, 21-oct: "34 columnas más disponibles" era el aviso de que faltaban)');
+  let cajaCompletas = null;
+  const tCompletas = window.DataTable.crear((cajaCompletas = doc.body.appendChild(doc.createElement('div'))), {
+    idCampo: 'ID',
+    columnas: [{ campo: 'FOLIO', titulo: 'Folio' }],
+    columnasCompletas: {
+      idHoja: 'ID',
+      cargar: async () => [
+        { ID: 1, FOLIO: 'F001', RESPONSABLE: 'FULGENCIO PEREZ' },
+        { ID: 2, FOLIO: 'F002', RESPONSABLE: 'OTRA PERSONA' },
+      ],
+    },
+  });
+  tCompletas.setDatos([{ ID: 1, FOLIO: 'F001' }, { ID: 2, FOLIO: 'F002' }]);
+  const buscarCompletas = cajaCompletas.querySelector('.dt-buscar');
+  buscarCompletas.value = 'fulgencio'; buscarCompletas.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 0));
+  ok(cajaCompletas.querySelectorAll('tbody tr[data-id]').length === 1, 'tras cargar columnasCompletas, buscar por RESPONSABLE encuentra la fila 1');
+  ok(!tCompletas.getVista().ocultas.includes('RESPONSABLE'), 'RESPONSABLE se revela sola: fue la única que explicó el match');
+  buscarCompletas.value = ''; buscarCompletas.dispatchEvent(new window.Event('input', { bubbles: true }));
+  tCompletas.destruir();
+
   console.log('13. Atajos de fecha y "solo este valor"');
   click($('.dt-btn-filtro[data-campo="FECHA"]'));
   ok($$('.dt-popover [data-preset]').length === 6, 'filtro de fecha ofrece 6 atajos');

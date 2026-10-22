@@ -19,18 +19,27 @@ const CALENTADOR_HORARIO = { desde: 6, hasta: 22 };   // hora local; fuera de es
 function pasosCalentador_() {
   return [
     ['Vehículos', () => VehiculosService.calentar()],
+    // Las 41 columnas completas (usuario, 21-oct: que "Vista" no tenga que esperar a leerlas)
+    ['Vehículos (todas las columnas)', () => VehiculosService.calentarCompleto()],
     ['Inspecciones', () => InspeccionesService.calentar()],
     ['Verificaciones', () => VerificacionesService.calentar()],
     ['Tickets', () => TicketsService.calentar()],
+    ['Tickets (todas las columnas)', () => TicketsService.calentarCompleto()],
     ['Incidencias', () => IncidenciasService.calentar()],
     ['Cajas chicas', () => CajasChicasService.calentar()],
+    ['Cajas chicas (todas las columnas)', () => CajasChicasService.calentarCompleto()],
     ['Arqueos', () => ArqueosService.calentar()],
+    ['Arqueos (todas las columnas)', () => ArqueosService.calentarCompleto()],
     ['Cambios de monto CCH', () => CambiosMontoCCHService.calentar()],
+    ['Cambios de monto CCH (todas las columnas)', () => CambiosMontoCCHService.calentarCompleto()],
     ['Cambios de vehículos', () => CambiosVehiculosService.calentar()],
+    ['Cambios de vehículos (todas las columnas)', () => CambiosVehiculosService.calentarCompleto()],
     ['Reasignaciones', () => ReasignacionesVehicularesService.calentar()],
+    ['Reasignaciones (todas las columnas)', () => ReasignacionesVehicularesService.calentarCompleto()],
     ['Sensores', () => SensoresService.calentar()],
     ['Hologramas', () => HologramasService.calentar()],
     ['Uber', () => UberService.calentar()],
+    ['Uber (todas las columnas)', () => UberService.calentarCompleto()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
     ['Líneas (índice)', () => LineasRepo.indice(true)],
     // Las fotos de perfil del directorio: se rehacen cada 3 h (casi nunca cambian)

@@ -504,6 +504,8 @@ const VehiculosService = (function () {
     calentar: () => [BASICO, RESUMEN, SEGURO].forEach(HojaServicio.calentar),
     /** Todas las columnas de TODOS los vehículos (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(VEHICULOS, token),
+    /** Para el activador: que nadie pague la primera lectura de las 41 columnas al abrir "Vista" */
+    calentarCompleto: () => HojaServicio.calentarCompleto(VEHICULOS),
     buscarPorId, buscar, buscarPorFolio, previsualizarFolio, previsualizarNucco,
     /** ¿Este NUCO es de un vehículo que la persona puede ver? (sus documentos en Drive van por NUCO) */
     nuccoEnAlcance: (token, nucco) => !!buscarPor_(token, 'NUCCO', nucco),
