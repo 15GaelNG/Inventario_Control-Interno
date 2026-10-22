@@ -172,8 +172,10 @@ test('vendido: el equipo sale de toda asignación y la línea disponible se qued
   assert.strictEqual(linea['TIPO'], 'RESGUARDO');
   assert.strictEqual(linea['SEDE'], 'MERIDA');
   const f = t.registro('EQU-2');
-  assert.strictEqual(f['DEPARTAMENTO'], 'N/A');
-  assert.strictEqual(f['SEDE'], 'MERIDA'); // muestra su última asignación cerrada
+  // Estatus final: sin ubicación aunque su última asignación la tenga (usuario, 22-oct)
+  assert.strictEqual(f['DEPARTAMENTO'], '');
+  assert.strictEqual(f['SEDE'], '');
+  assert.strictEqual(f['OFICINA / DESARROLLO'], '');
 });
 
 // Usuario, 22-oct: «limpiar estatus finales toda la información, no solo responsables»

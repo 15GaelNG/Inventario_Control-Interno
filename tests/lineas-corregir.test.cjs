@@ -160,7 +160,8 @@ test('responsable en blanco en el equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-R
   const por = (id) => L.filas().filter((f) => f.ID === id)[0];
   assert.equal(por('EQU-V').RESPONSABLE, '');
   assert.equal(por('EQU-V')['NO EMPLEADO'], '');
-  assert.equal(por('EQU-V').SEDE, 'QUERETARO'); // la ubicación se queda
+  // Tampoco la ubicación (usuario, 22-oct: «aún queda oficina y sede»)
+  assert.deepEqual(['SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO', 'AREA'].map((c) => por('EQU-V')[c] || ''), ['', '', '', '']);
   assert.equal(por('LIN-C').RESPONSABLE, '');
   // Guardado no es final: sigue mostrando con quién estuvo
   assert.equal(por('EQU-R').RESPONSABLE, 'PEPE');

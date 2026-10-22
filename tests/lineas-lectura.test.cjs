@@ -67,12 +67,12 @@ test('un renglón por equipo y uno por línea sin equipo, con las columnas de la
   assert.strictEqual(r3['NUCO'], '1500'); // la línea sin equipo: su NUCO ANTERIOR, para sus documentos
 });
 
-test('sin asignación vigente ni asignación cerrada: sin persona y vendido con N/A', () => {
+test('sin asignación vigente ni asignación cerrada: sin persona; vendido sin departamento (antes N/A; usuario, 22-oct)', () => {
   const L = cargar(HOJAS);
   const r2 = L.filas().find((x) => x['ID'] === 'EQU-2');
   assert.strictEqual(r2['RESPONSABLE'], '');
   assert.strictEqual(r2['NOMBRE QUIEN USA'], undefined, '«quien lo usa» se quitó (6-oct)');
-  assert.strictEqual(r2['DEPARTAMENTO'], 'N/A');
+  assert.strictEqual(r2['DEPARTAMENTO'], '');
   assert.strictEqual(r2['TIPO'], 'EQUIPO');
 });
 
