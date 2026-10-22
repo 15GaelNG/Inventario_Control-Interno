@@ -154,6 +154,11 @@
   .dt tbody td.dt-fija, .dt tfoot td.dt-fija { background: var(--color-surface); }
   .dt thead th.dt-fija { z-index: 4; }
   .dt .dt-fija-ultima { box-shadow: 3px 0 4px -2px rgba(6,38,58,.15); }
+  /* Al desplazar de lado, la tabla se acomoda para que la siguiente columna empiece justo después de las fijas, como en
+     Google Sheets: antes una columna quedaba a medias debajo de la fijada, con el título escondido y el texto cortado
+     (usuario, 22-oct, panel de resguardos de Líneas). scroll-padding-left = ancho de las fijas (aplicarFijadas) */
+  .dt .dt-scroll { scroll-snap-type: x proximity; }
+  .dt thead th { scroll-snap-align: start; }
 
   /* Densidad */
   .dt.dt-densidad-compacta tbody td, .dt.dt-densidad-compacta tfoot td { padding-top: 3px; padding-bottom: 3px; }
@@ -1464,6 +1469,8 @@
           izquierda += th.offsetWidth;
           ultima = i;
         }
+        // Las columnas se acomodan después de las fijas al desplazar de lado (ver .dt-scroll en los estilos)
+        $('.dt-scroll').style.scrollPaddingLeft = izquierda + 'px';
         // La sombra solo tiene sentido si el usuario fijó columnas de datos
         if (ultima >= 0 && st.fijadas.size) {
           filasTabla.forEach((tr) => { const c = tr.cells[ultima]; if (c && c.classList.contains('dt-fija')) c.classList.add('dt-fija-ultima'); });

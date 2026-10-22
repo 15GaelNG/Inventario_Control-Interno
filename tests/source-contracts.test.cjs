@@ -716,7 +716,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   // Responsiva: una sola fecha como la inspección (usuario, 4-oct); DIA, MES y AÑO ya no se capturan
   assert.equal(control(resp, 'FECHA RESPONSIVA'), 'fechaHora', 'responsiva FECHA RESPONSIVA');
   ['DIA', 'MES', 'AÑO'].forEach((c) => assert.equal(control(resp, c), undefined, 'responsiva sin ' + c));
-  assert.match(repo, /catalogos_telefonia_v8/);
+  assert.match(repo, /catalogos_telefonia_v9/);
   // Reestructura (§3): los datos del responsable salen solo de Capital Humano (personas activas)
   ['sedes', 'areas', 'oficinas', 'puestos', 'jefes', 'directores'].forEach((k) => assert.match(repo, new RegExp(k + ": unicos\\(ch, '")));
   assert.match(repo, /CapitalHumano\.conBajasRecientes\(\)/);

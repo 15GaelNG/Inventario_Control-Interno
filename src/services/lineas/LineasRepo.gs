@@ -1420,6 +1420,19 @@ const LineasRepo = (function () {
   // ---------------- Catálogos y colaboradores ----------------
 
   /**
+   * Colores que se sugieren al capturar (usuario, 22-oct): los de los equipos y los de inspecciones y responsivas que se
+   * repiten. Un error de captura que salió una sola vez («NEGO», de una inspección del AppSheet) ya no se ofrece, ni lo
+   * que no es color. La lista sigue abierta: un color nuevo se escribe.
+   */
+  const NO_SON_COLOR = ['NA', 'N/A', 'NO APLICA'];
+  function coloresSugeridos(deEquipos, capturados) {
+    const veces = {};
+    capturados.forEach((v) => { veces[v] = (veces[v] || 0) + 1; });
+    return deEquipos.concat(Object.keys(veces).filter((v) => veces[v] > 1))
+      .filter((v, i, a) => v && a.indexOf(v) === i && NO_SON_COLOR.indexOf(v) < 0).sort();
+  }
+
+  /**
    * Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO,
    * y sugerencias (valores ya capturados) para los campos que en AppSheet eran texto libre: así se elige de
    * una lista en vez de escribir (personas, puestos y números se completan en el navegador con COLABORADORES
@@ -1431,7 +1444,7 @@ const LineasRepo = (function () {
    * "Agregar 'x'" se queda en su registro y no entra a estas listas.
    */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v8'); // v8: sedes con QUERETARO en vez de QRO (13-oct)
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v9'); // v9: colores sin los capturados una sola vez (22-oct)
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -1443,6 +1456,9 @@ const LineasRepo = (function () {
     const lineas = LineasDatos.leerTabla(TAB.LINEAS);
     const inspecciones = LineasDatos.leerTabla(TAB.INSP);
     const responsivas = LineasDatos.leerTabla(TAB.RESP);
+    // Un valor por renglón (no únicos): coloresSugeridos cuenta cuántas veces salió cada uno
+    const porRenglon = (filas, columna) => filas.map((f) => txt(col(f, columna)))
+      .filter((v) => v && !(v instanceof Date)).map((v) => String(v).trim().toUpperCase());
     const juntar = function () {
       return Array.prototype.concat.apply([], arguments).filter((v, i, a) => a.indexOf(v) === i).sort();
     };
@@ -1469,14 +1485,14 @@ const LineasRepo = (function () {
       estadosDesecho: unicos(desechos, 'ESTADO'),
       // Sugerencias (lo que ya se ha capturado)
       motivosDesecho: unicos(desechos, 'MOTIVO'),
-      colores: juntar(unicos(lineas, 'COLOR'), unicos(inspecciones, 'COLOR'), unicos(responsivas, 'COLOR')),
+      colores: coloresSugeridos(unicos(lineas, 'COLOR'), porRenglon(inspecciones, 'COLOR').concat(porRenglon(responsivas, 'COLOR'))),
       puestos: unicos(ch, 'PUESTO'),
       jefes: unicos(ch, 'JEFE DIRECTO'),
       directores: unicos(ch, 'DIRECTOR'),
       otrasApps: unicos(inspecciones, 'OTRA'),
       identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v8', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v9', c, 21600);
     return c;
   }
 
@@ -1506,7 +1522,7 @@ const LineasRepo = (function () {
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
     ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6', 'indice_colaboradores_v7',
-      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8',
+      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8', 'catalogos_telefonia_v9',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
     equivalencias_ = null;
   }
@@ -1520,6 +1536,6 @@ const LineasRepo = (function () {
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, responsivasEntregadas, COL_LINEA_ENTREGADA, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, cobroHabitual, diaDeCorte,
-    catalogos, indiceColaboradores, borrarCaches,
+    catalogos, coloresSugeridos, indiceColaboradores, borrarCaches,
   };
 })();
