@@ -242,6 +242,29 @@ console.log('referencia: un catálogo que lee toda la familia del módulo');
   ok(log.permisos[log.permisos.length - 1] === 'leer:cosas', 'una lista normal, el del módulo');
 }
 
+console.log('completo: se guarda igual que listar (usuario, 21-oct: "Vista" tardaba porque leía la hoja completa cada vez)');
+{
+  const { H, e } = entorno();
+  const SheetUtils = e.global('SheetUtils');
+  const getAllOriginal = SheetUtils.getAll;
+  let veces = 0;
+  SheetUtils.getAll = (...args) => { veces++; return getAllOriginal(...args); };
+  try {
+    H.completo(COSAS, 'tok');
+    H.completo(COSAS, 'tok');
+    ok(veces === 1, 'segunda llamada a completo() no vuelve a leer la hoja: quedó en caché');
+    H.calentarCompleto(COSAS);
+    ok(veces === 2, 'calentarCompleto siempre la rearma (igual que calentar()), para el activador de 10 min');
+    H.completo(COSAS, 'tok');
+    ok(veces === 2, 'y completo() después usa lo que calentarCompleto ya dejó listo, sin leer otra vez');
+    SheetUtils.insert('libro', 'COSAS', { NOMBRE: 'Épsilon' });
+    H.completo(COSAS, 'tok');
+    ok(veces === 3, 'si la hoja cambió, completo() sí vuelve a leerla (la caché se invalida sola)');
+  } finally {
+    SheetUtils.getAll = getAllOriginal;
+  }
+}
+
 console.log('alcance: un rol CLIENT solo ve los renglones de sus departamentos');
 {
   const { H } = entorno();

@@ -99,6 +99,7 @@ const CambiosVehiculosService = (function () {
      * mostrar/exportar cualquier columna. La hoja tiene miles de filas — se pide solo bajo demanda.
      */
     completo: (token) => HojaServicio.completo(CAMBIOS, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(CAMBIOS),
     /** Historial de UN vehículo (detalle de Vehículos): en toda la hoja, no solo en los 500 */
     listarPorFolio: (token, folio) => HojaServicio.listarPor(CAMBIOS, token, 'FOLIO', folio, { maximo: MAXIMO_POR_VEHICULO }),
     listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(CAMBIOS, token, id, { maximo: MAXIMO_POR_VEHICULO }),
