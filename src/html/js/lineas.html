@@ -2409,6 +2409,7 @@
     const TABLAS_INVENTARIO = {
       equipos: {
         detalle: 'equipo', textoVacio: 'Sin equipos',
+        buscarPrimero: ['nuco'], // al buscar, primero lo que coincide por NUCO (usuario, 21-oct; pendiente 2.60)
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
         columnas: [
           { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
@@ -2426,6 +2427,7 @@
       },
       lineas: {
         detalle: 'linea', textoVacio: 'Sin líneas',
+        buscarPrimero: ['numero'], // al buscar, primero lo que coincide por número (usuario, 21-oct; pendiente 2.60)
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
           // La búsqueda encuentra la línea por un número que tuvo (8-oct); en la celda solo se ve el actual y los anteriores
@@ -2830,6 +2832,7 @@
           idTabla: 'lineas-' + modulo + '-v4',
           columnas: cfg.columnas,
           textoVacio: cfg.textoVacio,
+          buscarPrimero: cfg.buscarPrimero,
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
