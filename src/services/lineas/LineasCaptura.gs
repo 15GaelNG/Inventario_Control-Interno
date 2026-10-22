@@ -42,8 +42,11 @@ const LineasCaptura = (function () {
     INSPECCION: { carpeta: 'INSPECCIONES_Files_', nombre: (id) => 'INSPECCION - ' + id + '.pdf', columna: 'FORMATO INSPECCIONES LINEAS' },
     RESPONSIVA: { carpeta: 'Files', nombre: (id) => 'RESPONSIVA' + id + '.pdf', columna: 'FORMATO RESPONSIVA' },
   };
+  /** La firma de la pantalla: PNG, o JPEG si era una foto que se achicó para caber en la caché (usuario, 22-oct). */
   function blobBase64_(base64, nombre) {
-    return base64 ? Utilities.newBlob(Utilities.base64Decode(String(base64)), 'image/png', nombre || 'firma.png') : null;
+    if (!base64) return null;
+    const jpeg = String(base64).indexOf('/9j/') === 0; // los bytes FF D8 FF de un JPEG en base64
+    return Utilities.newBlob(Utilities.base64Decode(String(base64)), jpeg ? 'image/jpeg' : 'image/png', nombre || 'firma.png');
   }
 
   function firmasCache_(tipo, id, nuevas) {
@@ -642,7 +645,9 @@ const LineasCaptura = (function () {
       return { obj: obj, calificacion: calificacion };
     });
 
-    firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null, patron: datos.patronBase64 || null });
+    // sinResponsable: no firmó al capturar; al generar el PDF después no se le pide (usuario, 22-oct)
+    firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null, patron: datos.patronBase64 || null,
+      sinResponsable: !datos.firmaResponsableBase64 });
     const t2 = Date.now();
     const filas = opciones && opciones.sinIndice ? null : LineasRepo.refrescarIndice([res.obj.reg.id]);
     marca_('inspección · refrescar el índice', t2);
@@ -687,7 +692,8 @@ const LineasCaptura = (function () {
       throw e;
     }
 
-    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null });
+    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null,
+      sinResponsable: !datos.firmaResponsableBase64 });
     const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
     return { id: id, pdfPendiente: true, filas: filas, hecho: res.hecho, registroId: res.obj.reg.id,
       identificaciones: escritos ? escritos.archivos.length : 0 };
@@ -917,7 +923,7 @@ const LineasCaptura = (function () {
    * vuelve a hacer con la plantilla y los datos de la hoja, sin capturar de nuevo, y queda como versión nueva del MISMO
    * archivo (mismo enlace; la anterior se conserva en el historial de versiones de Drive, como Subir PDF firmado).
    * Firmas: las de la captura (caché 6 h) o `firmasNuevas`. Sin ellas regresa { faltanFirmas, nombres } y se vuelven a
-   * firmar (no se guardan como archivos, acuerdo del 18-sep). El patrón, si ya no está su imagen, se dibuja con sus puntos.
+   * firmar (no se guardan como archivos, acuerdo del 18-sep); sin la del responsable, { faltanFirmas, soloResponsable }. El patrón, si ya no está su imagen, se dibuja con sus puntos.
    */
   function generarPdf(tipo, id, forzar, usuario, firmasNuevas) {
     const esInspeccion = tipo === 'INSPECCION';
@@ -949,6 +955,11 @@ const LineasCaptura = (function () {
       return { faltanFirmas: true, nombres: esInspeccion
         ? { inspector: col('NOMBRE INSPECTOR') || '', responsable: col('RESPONSABLE') || '' }
         : { ci: col('NOMBRE CI') || '', responsable: col('RESPONSABLE') || '' } };
+    }
+    // La del responsable se perdió (caché vencida, o no cupo, como una foto de la firma; usuario, 22-oct): se pide solo esa
+    // en vez de sacar el recuadro vacío. No con firmas nuevas (las de la captura, o ya se pidió) ni si al capturar no firmó
+    if (!firmasNuevas && firmas && firmas[rolCI] && !firmas.responsable && !firmas.sinResponsable && col('RESPONSABLE') && !col('FIRMA RESPONSABLE')) {
+      return { faltanFirmas: true, soloResponsable: true, nombres: { responsable: col('RESPONSABLE') || '' } };
     }
     // Firmas: las de la captura o las nuevas; si la fila trae una ruta de imagen (AppSheet), se busca en la carpeta de la app
     const archivo = (c) => LineasArchivos.blob(col(c));
