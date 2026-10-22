@@ -97,6 +97,7 @@ const CambiosMontoCCHService = (function () {
     calentar: () => HojaServicio.calentar(INCREMENTOS),
     /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(INCREMENTOS, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(INCREMENTOS),
     /** Cambios de monto de una sola caja chica (ficha de Caja Chica) */
     listarPorIdCch: (token, idCch) => HojaServicio.listarPor(INCREMENTOS, token, 'ID_CCH', idCch),
     /** Registro completo (todas las columnas) por ID -- "Ver completo" desde la ficha de Caja Chica */

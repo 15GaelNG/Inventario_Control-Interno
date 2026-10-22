@@ -119,6 +119,7 @@ const ReasignacionesVehicularesService = (function () {
     calentar: () => HojaServicio.calentar(REASIGNACIONES),
     /** Todas las columnas de la hoja (para "Vista": mostrar/exportar cualquier columna) */
     completo: (token) => HojaServicio.completo(REASIGNACIONES, token),
+    calentarCompleto: () => HojaServicio.calentarCompleto(REASIGNACIONES),
     crear,
     eliminar: (token, id) => HojaServicio.eliminar(REASIGNACIONES, token, id),
     /** Historial de reasignaciones de UN vehículo (para enlazarlo desde el detalle de Vehículos) */
