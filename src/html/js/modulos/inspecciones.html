@@ -604,12 +604,13 @@
       await catalogos;
       campoFolio.value = guardado.folio;
       if (guardado.nucco) campoNucco.value = guardado.nucco;
+      // El tipo se llena ANTES de buscar el vehículo: buscarVehiculo() sugiere y dispara su
+      // propio cargarChecklist() por su cuenta cuando ve el tipo vacío (sin esperarlo), y si
+      // ese quedara corriendo a la par del de aquí abajo, el que terminara al final volvería
+      // a armar el checklist desde cero y borraría las respuestas recién restauradas.
+      if (guardado.tipo) campoTipo.value = guardado.tipo;
       await buscarVehiculo();
-      if (guardado.tipo) {
-        pintarOpcionesTipo(guardado.folio);
-        campoTipo.value = guardado.tipo;
-        await cargarChecklist();
-      }
+      if (guardado.tipo) await cargarChecklist();
       if (estructura) {
         Object.keys(guardado.respuestas || {}).forEach((campo) => {
           const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(campo)}"][value="${CSS.escape(guardado.respuestas[campo])}"]`);
@@ -1319,7 +1320,7 @@
     });
 
     armarPasos();
-    if (usaBorrador) restaurarBorrador_();
+    if (usaBorrador) restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
     return { catalogos };
   }
 
