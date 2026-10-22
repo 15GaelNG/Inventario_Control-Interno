@@ -37,3 +37,17 @@ test('CARGADOR ya no es opción en ninguna lista de accesorios', () => {
   // La ficha también
   assert.match(read('src/services/lineas/LineasRepo.gs'), /accesorios: \(txt\(LineasUtil\.sinCargador\(col\(f, 'ACCESORIOS'\)\)\) \|\| ''\)/);
 });
+
+// lineas-revisor, 22-oct: con DOCUMENTO, el historial tomaba el movimiento por el de la responsiva (RLI-) y la tapaba
+test('cable-cubo.js y corregir-color.js no ponen DOCUMENTO; vaciar-documento.js solo toca los de cable-cubo con DOCUMENTO', () => {
+  ['tools/lineas-datos/cable-cubo.js', 'tools/lineas-datos/corregir-color.js'].forEach((f) => assert.doesNotMatch(read(f), /documento:/, f));
+  const { porVaciar } = require('../tools/lineas-datos/vaciar-documento.js');
+  const { COMENTARIO } = require('../tools/lineas-datos/cable-cubo.js');
+  const filas = [
+    { _n: 2, COMENTARIO: COMENTARIO, DOCUMENTO: 'RLI-1' },
+    { _n: 3, COMENTARIO: COMENTARIO, DOCUMENTO: '' },
+    { _n: 4, COMENTARIO: 'OTRO', DOCUMENTO: 'RLI-2' },
+    { _n: 5, COMENTARIO: COMENTARIO, DOCUMENTO: 'RSG-3' },
+  ];
+  assert.deepEqual(porVaciar({ filas }).map((f) => f._n), [2, 5]);
+});
