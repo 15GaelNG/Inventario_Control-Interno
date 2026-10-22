@@ -196,6 +196,19 @@ test('estatus final: el equipo queda sin accesorios, PIN, patrón ni contraseña
   assert.strictEqual(t2.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CAJA, CABLE');
 });
 
+// Usuario, 22-oct: CARGADOR ya no es accesorio; se guarda como CABLE y CUBO
+test('accesorios: CARGADOR se guarda como CABLE y CUBO, también si el registro ya lo traía', () => {
+  const base = JSON.parse(JSON.stringify(BASE));
+  Object.assign(base.EQUIPOS.find((e) => e.ID === 'EQU-2'), { 'ACCESORIOS': 'CAJA, CARGADOR' });
+  const t = cargar(base);
+  t.guardar('EQU-1', { 'ACCESORIOS': 'CARGADOR, FUNDA' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-1')['ACCESORIOS'], 'CABLE, CUBO, FUNDA');
+  // Se guarda sin tocarlo: lo de antes cuenta tal cual y queda en el historial
+  const r = t.guardar('EQU-2', { 'ACCESORIOS': 'CAJA, CARGADOR' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CAJA, CABLE, CUBO');
+  assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'CAJA, CARGADOR' && c.despues === 'CAJA, CABLE, CUBO'));
+});
+
 test('de resguardo a uso con su persona (reasignar): abre la asignación con persona y deja DISPONIBLE fuera', () => {
   const t = cargar(BASE);
   t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'ESTATUS LINEA': 'USO', 'RESPONSABLE': 'ANA', 'PUESTO': 'GERENTE' });

@@ -76,7 +76,9 @@ const LineasEscritura = (function () {
   /** Como limpio_, salvo PIN EQUIPO «NO APLICA»: es el bloqueo SIN BLOQUEO y se guarda tal cual (usuario, 21-oct;
    *  pendiente 2.53: en blanco, Corregir equipo abría la lista de bloqueo en «Selecciona…»). */
   function limpioDe_(columna, v) {
-    return LineasDatos.normCol(columna) === 'PIN EQUIPO' && sinAcentos(v) === 'NO APLICA' ? 'NO APLICA' : limpio_(v);
+    const c = LineasDatos.normCol(columna);
+    if (c === 'ACCESORIOS') return limpio_(LineasUtil.sinCargador(v));
+    return c === 'PIN EQUIPO' && sinAcentos(v) === 'NO APLICA' ? 'NO APLICA' : limpio_(v);
   }
 
   function igual_(a, b) {
@@ -261,7 +263,7 @@ const LineasEscritura = (function () {
     Object.keys(cambios).forEach((columna) => {
       const c = LineasDatos.normCol(columna);
       const despues = limpioDe_(columna, cambios[columna]);
-      const antes = limpioDe_(columna, LineasUtil.col(f, columna));
+      const antes = c === 'ACCESORIOS' ? limpio_(LineasUtil.col(f, columna)) : limpioDe_(columna, LineasUtil.col(f, columna));
       if (c === 'NUCO' ? (LineasUtil.nucoVisible(antes) || '') === (LineasUtil.nucoVisible(despues) || '') : igual_(antes, despues)) return;
       if (c === 'TIPO') { tipoNuevo = may(despues); return; }
       if (c in A_EQUIPO) {
@@ -476,7 +478,7 @@ const LineasEscritura = (function () {
     const refs = [];
     const e = conEquipo ? agregar_('EQUIPOS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUCO': LineasUtil.nucoVisible(v('NUCO')) || '', 'TIPO DE EQUIPO': ESTRUCTURA_TIPO_EQUIPO[tipo],
-      'MODELO': v('EQUIPO'), 'COLOR': v('COLOR'), 'IMEI': v('IMEI'), 'ACCESORIOS': v('ACCESORIOS'), 'PIN EQUIPO': limpioDe_('PIN EQUIPO', LineasUtil.col(datos, 'PIN EQUIPO')), 'PATRON': v('PATRON'),
+      'MODELO': v('EQUIPO'), 'COLOR': v('COLOR'), 'IMEI': v('IMEI'), 'ACCESORIOS': limpioDe_('ACCESORIOS', LineasUtil.col(datos, 'ACCESORIOS')), 'PIN EQUIPO': limpioDe_('PIN EQUIPO', LineasUtil.col(datos, 'PIN EQUIPO')), 'PATRON': v('PATRON'),
       'CONTRASEÑA MODEM': v('CONTRASEÑA MODEM'), 'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
       'PIN WHATSAPP': conLinea ? v('PIN WHATSAPP') : '',
     }) : null;

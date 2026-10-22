@@ -14,7 +14,8 @@
 const LineasRegistros = (function () {
   const ZONA = 'America/Mexico_City';
   const NO_APLICA = 'NO APLICA';
-  // "TARJETA SD" en lugar de "SD" (usuario, 4-oct); SD y CARGADOR de antes siguen siendo válidos (no se cambian)
+  // "TARJETA SD" en lugar de "SD" (usuario, 4-oct); SD de antes sigue siendo válido. CARGADOR ya no se ofrece: si llega,
+  // se guarda como CABLE y CUBO (usuario, 22-oct; LineasUtil.sinCargador)
   const ACCESORIOS = ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'];
   const ACCESORIOS_VALIDOS = ['CAJA', 'CARGADOR', 'FUNDA', 'MICA', 'CABLE', 'CUBO', 'TARJETA SD', 'SD', 'NINGUNO'];
   /** Ya no se asignan (usuario, 4-oct): los registros que los tienen se quedan así. */

@@ -120,7 +120,7 @@ function captura(registro) {
     LineasDG: { esFila: () => false, esRegistro: () => false, exigirAdmin: () => {} },
     LineasUtil: {
       col: (f, c) => (c in f ? f[c] : null), digitos: (v) => String(v || '').replace(/\D/g, ''),
-      nucoVisible: (v) => (v ? String(v) : null),
+      nucoVisible: (v) => (v ? String(v) : null), sinCargador: (v) => v,
     },
   });
   vm.runInContext(read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
