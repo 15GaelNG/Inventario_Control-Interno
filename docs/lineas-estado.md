@@ -93,7 +93,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `estructura_virtual_v7`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea, pero leyendo toda su historia para calcular el habitual de cada mes: `LineasRepo.cobroHabitual` toma lo que más veces cobraron los 3 meses anteriores completos —sin meses parciales ni notas de crédito—, y si ninguno se repite, el del mes anterior; un mes sin meses anteriores no muestra Habitual ni Diferencia, y con pocos meses de historia un mes raro se puede marcar también en el siguiente; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
   «Consumido» del resumen; la de los SIM básicos está en producción desde el 14-oct y, con la actualización del mismo día, solo con llamadas hechas (pendiente 1.15);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
-  enlace a la línea), Plan de la línea, Facturación de la línea (sin habitual, uso ni meses) y Responsable a todo el ancho. Cada
+  enlace a la línea; con Compañía, SIM, Estatus, Razón social, Cuenta padre y, si la línea la tiene, Cuenta, la cuenta hija), Plan de la línea
+  y Responsable a todo el ancho; sin tarjeta de Facturación (la ficha de la línea sí la lleva completa; 22-oct, `8741a21`). Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
 - **Corregir línea y Corregir equipo** (8-oct como «Editar línea» y «Editar equipo»; «Editar información» hasta el 13-oct; «Corregir» desde el 16-oct, `a6c8398`, publicado en la v124; usuario: «Editar» confundía, y solo se corrige un dato mal capturado, siempre con su comentario): la línea se corrige aparte (⋮ de la línea
   y la tabla de líneas; el equipo no la trae desde el 12-oct; `apiLineasFormularioRegistro(id, 'LINEA')`,
