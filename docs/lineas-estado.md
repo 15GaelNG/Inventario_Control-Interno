@@ -33,6 +33,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   | Vincular… | Historial (el botón «Ver equipo» de la cabecera sigue). En Documentos la barra al seleccionar trae
   Ver inspección o Ver responsiva, Ver PDF, Generar PDF y Subir PDF firmado; Regenerar PDF y Ver carpeta en Drive solo
   en el ⋮ y el clic derecho (son `accionesSeleccion` de la tabla, no `accionesFila`).
+- **Entrada, buscador, ventanas y PDF** (22-oct, `31f10ad`, `1af7a2d`): quien tiene AREA = LINEAS en USUARIOS (`sesion.departamento`) abre directo Líneas Telefónicas en vez del Inicio si tiene su permiso (`app.html`, `vistaInicial_` con `INICIO_POR_AREA`; sin permisos guardados abre el Inicio y pasa a Líneas cuando llegan los de verdad). Al entrar a un buscador de las tablas («Buscar en la tabla…» y los de columna) lo que ya tiene queda seleccionado. Con la ventana de captura abierta (`#ln-modal-captura`) el panel lateral (Detalles o vista rápida) y su fondo bajan a z-index 490, por debajo de ella (los avisos, 600, y el visor de fotos, 700, siguen encima); Escape cierra la ventana aunque el foco esté fuera de ella (`escapeVentana`) y el panel deja pasar la tecla. Mientras se genera el PDF de un documento tras una acción (`pdfsEnCurso`), «Generar PDF» no se ofrece y, al terminar, se vuelven a pintar los Documentos de la ficha abierta (o la página del documento).
 - **Sin textos de ayuda** (12-oct, `4d07afa`): ni el párrafo de Documentos, ni el de Reasignar varios, ni
   las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
   Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
@@ -296,6 +297,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `_cargar` quita la firma de quien no esté en la carpeta, y `lineasFirmasGuardadas_agregar` guarda las de la carpeta
   sin quitar a nadie.
 - **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
+  Los renglones nuevos de INSPECCIONES LINEAS y RESPONSIVAS LINEAS escriben un patrón con apóstrofo (`LineasDatos.valorCelda_`, hojas fuera de
+  `HOJAS_EN_TEXTO`) para que Sheets no lo tome por fecha (22-oct, pendiente 2.47).
   General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
   con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Corregir, al
   trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
@@ -545,7 +548,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasCaptura.gs`, `LineasChecklist.gs`, `LineasPdf.gs`, `LineasPatronPng.gs`, `LineasEvidencias.gs`, `LineasArchivos.gs` | Inspección y responsiva: checklist, firmas, fotos, PDF (y la imagen del patrón) y Drive |
 | `lineas/LineasIdentificaciones.gs` | Identificación de cada responsable en la responsiva (Drive y APP_IDENTIFICACIONES) |
 | `lineas/LineasIneNucos.gs` | INE que ya estaban en NUCOS (9-oct): inventario de solo lectura de NUCOS de producción en la pestaña «INE NUCOS» del libro del DEV (`lineasIneNucos_inventario`, desde el editor de un DEV) |
-| `lineas/LineasDG.gs`, `tools/lineas-datos/` (`por-recibir.js`, `limpiar-dg.js`, `comun.js`) | Dirección General (21-oct): lista fija y ocultamiento; programas de datos que se corren desde la computadora con `--ensayo` y, en producción, con permiso |
+| `lineas/LineasDG.gs`, `tools/lineas-datos/` (`por-recibir.js`, `limpiar-dg.js`, `patron-texto.js`, `movimientos-vacios.js`, `comun.js`) | Dirección General (21-oct): lista fija y ocultamiento; programas de datos que se corren desde la computadora con `--ensayo` y, en producción, con permiso (`patron-texto.js` regresa a texto los patrones guardados como fecha; `movimientos-vacios.js` borra los renglones vacíos de en medio de MOVIMIENTOS) |
 | `lineas/LineasAcciones.gs`, `LineasResguardos.gs` | Responsiva (renovar o reasignar), Vincular, Mandar a resguardo y bandeja de Pau |
 | `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel (el inventario: una hoja LINEAS TELEFONICAS como el panel, con ID del AppSheet y las columnas de la vista del AppSheet, sin ESTATUS GENERAL desde el 21-oct, `LineasRepo.vistaCompleta`; Cambios y Accesorios, sus pestañas tal cual) |
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
