@@ -1252,7 +1252,7 @@
         });
       }
       return cargarColaboradores().then((r) => {
-        // Personas activas de Capital Humano con los datos que se llenan al elegirlas (autollenar)
+        // Personas de Capital Humano (activas y bajas de los últimos 12 meses, 2.58) con los datos que se llenan al elegirlas
         const gente = filasComoObjetos(r).map((c) => ({
           nombre: mayusSinAcentos(c.nombre), noEmpleado: c.noEmpleado ? String(c.noEmpleado).trim().toUpperCase() : '',
           puesto: mayusSinAcentos(c.puesto), departamento: mayusSinAcentos(c.departamento),
@@ -1260,8 +1260,9 @@
           correo: c.correo ? String(c.correo).trim().toLowerCase() : '',
           baja: c.estatus && String(c.estatus).toUpperCase() !== 'ACTIVO',
         })).filter((c) => c.nombre);
-        const distintos = (campo) => gente.map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
-        const etiquetaDe = (partes, c) => partes.filter(Boolean).join(' · ') + (c.baja ? ' · BAJA' : '');
+        const distintos = (campo) => gente.filter((c) => !c.baja).map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
+        // BAJA primero, junto al nombre: al final la cortaba el «…» de la lista (DEV, 22-oct; 2.58)
+        const etiquetaDe = (partes, c) => (c.baja ? ['BAJA'] : []).concat(partes).filter(Boolean).join(' · ');
         if (tipo === 'PUESTOS') return distintos('puesto');
         if (tipo === 'DEPARTAMENTOS') return distintos('departamento');
         if (tipo === 'NO_EMPLEADO') {
@@ -2311,11 +2312,13 @@
      * instante y lo fresco por detrás. forzar (o CATALOGOS_LINEAS.forEach(olvidar…)) pide lo nuevo.
      */
     const CATALOGOS_LINEAS = ['apiLineasCatalogos', 'apiLineasColaboradores', 'apiLineasAccesoriosIndice'];
-    function catalogoLineas_(fn, forzar) {
-      if (forzar) invalidarCacheCatalogo(fn, state.token);
-      return callServerCacheado(fn, state.token);
+    function catalogoLineas_(fn, forzar, ...version) {
+      if (forzar) invalidarCacheCatalogo(fn, state.token, ...version);
+      return callServerCacheado(fn, state.token, ...version);
     }
-    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar);
+    // 'bajas': otra copia en el navegador desde que la lista trae las bajas recientes (2.58); la de antes, sin ellas,
+    // se enseñaba la primera vez mientras llegaba la nueva. El servidor no lo lee
+    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar, 'bajas');
     const cargarAccesorios = (forzar) => catalogoLineas_('apiLineasAccesoriosIndice', forzar);
     const cargarCatalogos = (forzar) => catalogoLineas_('apiLineasCatalogos', forzar);
 
@@ -2409,6 +2412,7 @@
     const TABLAS_INVENTARIO = {
       equipos: {
         detalle: 'equipo', textoVacio: 'Sin equipos',
+        buscarPrimero: ['nuco'], // al buscar, primero lo que coincide por NUCO (usuario, 21-oct; pendiente 2.60)
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
         columnas: [
           { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
@@ -2426,6 +2430,7 @@
       },
       lineas: {
         detalle: 'linea', textoVacio: 'Sin líneas',
+        buscarPrimero: ['numero'], // al buscar, primero lo que coincide por número (usuario, 21-oct; pendiente 2.60)
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
           // La búsqueda encuentra la línea por un número que tuvo (8-oct); en la celda solo se ve el actual y los anteriores
@@ -2830,6 +2835,7 @@
           idTabla: 'lineas-' + modulo + '-v4',
           columnas: cfg.columnas,
           textoVacio: cfg.textoVacio,
+          buscarPrimero: cfg.buscarPrimero,
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
@@ -4322,7 +4328,16 @@
               Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
               if (vigente()) { pintarIndicadores(); pintarListado(); }
               aviso(icono('circle-check') + ' ' + titulo + ' · NUCO ' + (equipo.nuco || '—'), 6000);
-              if (vigente() && pila.length) abrir('equipo', equipo.id, true);
+              // La ficha que estaba abierta, la del equipo o la de la línea (2.61: se pintaba la del equipo con la de la línea
+              // arriba en la pila, pintarEquipo no la reconocía y la página se quedaba en «Cargando…»)
+              const arriba = pila[pila.length - 1];
+              // La línea cambia de registro al vincularla (pasa a ser la del equipo) o al desvincularla (vuelve a ser
+              // suelta): su ficha se busca otra vez por su número (DEV, 22-oct: «No existe la línea LIN-…»)
+              const numero = String((arriba && arriba.tipo === 'linea' && (fila.numero || numeroActual)) || '');
+              const conNumero = numero ? memoria.indice.lineas.filter((l) => String(l.numero) === numero) : [];
+              const laLinea = conNumero.filter((l) => may(l.estatus) !== 'CANCELADA')[0] || conNumero[0];
+              if (laLinea) arriba.id = laLinea.id;
+              if (vigente() && arriba) abrir(arriba.tipo, arriba.id, true);
             });
           };
           if (captura !== sesion) return;
@@ -4415,6 +4430,11 @@
             htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' ' + agregar) + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
+          // Lo que el servidor propone y se puede cambiar (el NUCO de Agregar equipo, 2.59): «auto» hasta que lo escriban
+          elementos.forEach((e) => {
+            const el = e.sugerido && e.valor && cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
+            if (el) CampoAuto.llenar(el, e.valor);
+          });
           activarAdicionales(cuerpo);
           activarBloqueo(cuerpo);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
@@ -6599,7 +6619,8 @@
         suma(hologramas, 'RESPONSABLE');
         suma(uber, 'NOMBRE_COMPLETO');
         suma(cajasChicas, 'RESPONSABLE');
-        colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
+        // Solo activos: las bajas recientes (2.58) son para las listas de los formularios
+        colaboradores = filasComoObjetos(r).filter((c) => c.estatus !== 'BAJA').map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
         aplicarFiltros();
       }).catch((e) => {
         if (!vigente()) return;

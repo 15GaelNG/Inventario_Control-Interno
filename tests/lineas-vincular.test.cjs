@@ -70,6 +70,6 @@ test('el clic derecho de la lista trae las mismas acciones que el ⋮ de la fich
     .forEach(([t]) => assert.ok(fn.includes('vinculo(' + t), t));
   // Sin Editar línea en el equipo (usuario, 13-oct): en los dos, el editar de su tipo
   assert.doesNotMatch(fn, /abrirEditor\(f\[0\]\.lineaId, 'LINEA'\)/);
-  // Desde la lista no abre la ficha al terminar (como Reasignar)
-  assert.match(html, /if \(vigente\(\) && pila\.length\) abrir\('equipo', equipo\.id, true\);/);
+  // Desde la lista no abre la ficha al terminar (como Reasignar): solo vuelve a pintar la que estaba abierta (2.61)
+  assert.match(html, /if \(vigente\(\) && arriba\) abrir\(arriba\.tipo, arriba\.id, true\);/);
 });

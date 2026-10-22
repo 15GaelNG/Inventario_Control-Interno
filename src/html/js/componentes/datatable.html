@@ -475,6 +475,10 @@
    *       // varios buscadores más en la misma barra (o un arreglo: [{ campo, placeholder }, …]),
    *       // que solo filtran esa columna (op "contiene") -- para cuando el buscador general (que
    *       // ya busca en todas las columnas filtrables, estén ocultas o no) mezcla demasiado.
+   *     buscarPrimero: ['NUCO'],                // opcional: con algo en el buscador general, primero las filas en
+   *       // que esas columnas son igual a lo buscado (sin los ceros de la izquierda: «12» = «0012»), luego en las que
+   *       // empiezan con ello, luego en las que lo contienen y al final las que coinciden por otra columna; dentro de
+   *       // cada grupo, el orden de siempre. Sin la opción la búsqueda no cambia (Líneas, 21-oct).
    *   });
    *
    * ─── MODO TARJETAS (celular y tableta) ────────────────────────────────────────────
@@ -957,6 +961,17 @@
         return true;
       }
 
+      /** cfg.buscarPrimero: 0 = igual a lo buscado, 1 = empieza con ello, 2 = lo contiene, 3 = coincide por otra columna */
+      const sinCerosIzq_ = (t) => t.replace(/^0+(?=\d)/, '');
+      function grupoBusqueda_(fila, q, prioritarias) {
+        return prioritarias.reduce((mejor, col) => {
+          const t = normalizar(textoVisible(col, fila));
+          const g = t === q || sinCerosIzq_(t) === sinCerosIzq_(q) ? 0
+            : t.startsWith(q) || sinCerosIzq_(t).startsWith(sinCerosIzq_(q)) ? 1 : t.includes(q) ? 2 : 3;
+          return Math.min(mejor, g);
+        }, 3);
+      }
+
       function filasFiltradas() {
         const q = normalizar(st.busqueda.trim());
         const buscables = columnasBuscables();
@@ -965,7 +980,11 @@
         const criterios = st.orden
           .map((o) => ({ col: colPorCampo(o.campo), signo: o.dir === 'desc' ? -1 : 1 }))
           .filter((c) => c.col);
-        return criterios.length ? filas.sort(compararFilas(criterios)) : filas;
+        const prioritarias = q && cfg.buscarPrimero ? cfg.buscarPrimero.map(colPorCampo).filter(Boolean) : [];
+        if (!prioritarias.length) return criterios.length ? filas.sort(compararFilas(criterios)) : filas;
+        const grupo = new Map(filas.map((f) => [f, grupoBusqueda_(f, q, prioritarias)]));
+        const porOrden = criterios.length ? compararFilas(criterios) : () => 0;
+        return filas.sort((a, b) => grupo.get(a) - grupo.get(b) || porOrden(a, b));
       }
 
       /** Ids de las filas de la página actual */
