@@ -1261,7 +1261,8 @@
           baja: c.estatus && String(c.estatus).toUpperCase() !== 'ACTIVO',
         })).filter((c) => c.nombre);
         const distintos = (campo) => gente.filter((c) => !c.baja).map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
-        const etiquetaDe = (partes, c) => partes.filter(Boolean).join(' · ') + (c.baja ? ' · BAJA' : '');
+        // BAJA primero, junto al nombre: al final la cortaba el «…» de la lista (DEV, 22-oct; 2.58)
+        const etiquetaDe = (partes, c) => (c.baja ? ['BAJA'] : []).concat(partes).filter(Boolean).join(' · ');
         if (tipo === 'PUESTOS') return distintos('puesto');
         if (tipo === 'DEPARTAMENTOS') return distintos('departamento');
         if (tipo === 'NO_EMPLEADO') {

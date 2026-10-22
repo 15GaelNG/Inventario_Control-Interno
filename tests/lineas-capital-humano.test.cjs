@@ -97,7 +97,7 @@ test('Capital Humano: conBajasRecientes trae los activos y las bajas de los últ
 test('Capital Humano en Líneas: la lista marca a las bajas y Gestión de activos sigue solo con activos (2.58)', () => {
   const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
   assert.match(cliente, /baja: c\.estatus && String\(c\.estatus\)\.toUpperCase\(\) !== 'ACTIVO',/);
-  assert.match(cliente, /\(c\.baja \? ' · BAJA' : ''\)/);
+  assert.match(cliente, /const etiquetaDe = \(partes, c\) => \(c\.baja \? \['BAJA'\] : \[\]\)\.concat\(partes\)\.filter\(Boolean\)\.join\(' · '\);/);
   assert.match(cliente, /const distintos = \(campo\) => gente\.filter\(\(c\) => !c\.baja\)/);
   assert.match(cliente, /colaboradores = filasComoObjetos\(r\)\.filter\(\(c\) => c\.estatus !== 'BAJA'\)/);
   // Otra copia en el navegador: la de antes (sin bajas) no se enseña mientras llega la nueva
