@@ -124,4 +124,41 @@ async function idDeHoja(idLibro, hoja) {
   return h.properties.sheetId;
 }
 
-module.exports = { PRODUCCION, ENSAYO, REPO, libro, tabla, tablaSinFormato, idDeHoja, celda, escribirCeldas, agregarMovimientos, txt, may, api, SHEETS };
+/** Las columnas que le falten a la tabla, al final del encabezado (en negritas, como LineasDatos.asegurarColumnas). */
+async function asegurarColumnas(idLibro, t, columnas) {
+  const faltan = columnas.filter((k) => t.enc.indexOf(k) < 0);
+  if (!faltan.length) return [];
+  const meta = await api('GET', SHEETS + idLibro + '?fields=sheets.properties(title,sheetId,gridProperties)');
+  const p = meta.sheets.filter((s) => s.properties.title === t.hoja)[0].properties;
+  const requests = [];
+  const sobran = t.enc.length + faltan.length - p.gridProperties.columnCount;
+  if (sobran > 0) requests.push({ appendDimension: { sheetId: p.sheetId, dimension: 'COLUMNS', length: sobran } });
+  requests.push({ repeatCell: { range: { sheetId: p.sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: t.enc.length, endColumnIndex: t.enc.length + faltan.length },
+    cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: 'userEnteredFormat.textFormat.bold' } });
+  await api('POST', SHEETS + idLibro + ':batchUpdate', { requests });
+  await escribirCeldas(idLibro, [{ range: "'" + t.hoja + "'!" + letra(t.enc.length) + '1', values: [faltan] }]);
+  faltan.forEach((k) => t.enc.push(k));
+  return faltan;
+}
+
+/**
+ * Agrega renglones (objetos por columna) al final de la tabla, cada uno con el formato del renglón `formatoDe[i]` (su
+ * número en la hoja): así una fecha escrita como número de serie se ve como fecha.
+ */
+async function agregarFilas(idLibro, t, objetos, formatoDe) {
+  if (!objetos.length) return;
+  const ultimo = (await valores(idLibro, t.hoja, 'A1:ZZ')).length;
+  const r = await api('POST', SHEETS + idLibro + '/values/' + rango(t.hoja, 'A' + Math.max(1, ultimo)) + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS',
+    { values: objetos.map((o) => t.enc.map((h) => (h in o ? o[h] : ''))) });
+  const m = r.updates.updatedRange.match(/![A-Z]+(\d+):[A-Z]+(\d+)$/);
+  if (!m) return;
+  const hoja = await idDeHoja(idLibro, t.hoja);
+  await api('POST', SHEETS + idLibro + ':batchUpdate', { requests: objetos.map((o, i) => ({ copyPaste: {
+    source: { sheetId: hoja, startRowIndex: formatoDe[i] - 1, endRowIndex: formatoDe[i], startColumnIndex: 0, endColumnIndex: t.enc.length },
+    destination: { sheetId: hoja, startRowIndex: +m[1] - 1 + i, endRowIndex: +m[1] + i, startColumnIndex: 0, endColumnIndex: t.enc.length },
+    pasteType: 'PASTE_FORMAT' } })) });
+  console.log(t.hoja + ': ' + objetos.length + ' renglones nuevos (' + r.updates.updatedRange + ')');
+}
+
+module.exports = { PRODUCCION, ENSAYO, REPO, libro, tabla, tablaSinFormato, idDeHoja, celda, escribirCeldas, agregarMovimientos, asegurarColumnas,
+  agregarFilas, serieAhora, idsGs, txt, may, api, SHEETS };
