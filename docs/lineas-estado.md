@@ -125,6 +125,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   fija (ref.lineaNueva) y la persona fija también (No. de empleado y nombre: firma quien ya lo tiene; para cambiarla, primero la Responsiva; usuario, 16-oct) y su comentario; si no, el comentario va en otra ventana. Movimientos ASIGNAR_LINEA («Vincular
   línea»), CAMBIO_LINEA, CAMBIO_EQUIPO y RETIRAR_LINEA («Desvincular línea»). La línea se separa con
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
+  **Equipo en el panel** (22-oct, `b3269f6`; `LineasAcciones.aplicarVinculo_`): un equipo por recibir o en resguardo
+  (`LineasResguardos.enPanel`) no se vincula, no cambia de línea ni se desvincula («NUCO 0035 está en Resguardos y
+  cancelaciones.»), y la línea de un equipo en el panel no pasa a otro NUCO; igual que la Responsiva (usuario, 22-oct: «Bloquear»).
 - **Vínculos** (8-oct; `lineas-vinculos.html`): **una idea del usuario que se queda así**, apagada en producción como Help
   Desk (`vinculos-lineas` en `MODULOS_APAGADOS` del bloque de producción de `Entornos.gs`: sin botón ni espacio); en
   los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas telefónicas junto a
@@ -375,13 +378,23 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     RECEPCION, EN RESGUARDO o con su cancelación en curso) muestra al leer lo de hoy del registro: NUCO, TIPO, MODELO, IMEI y
     ACCESORIOS y, si el renglón no va a cancelación o el registro sigue con el mismo número, NUMERO (solo sin cancelación),
     COMPANIA, RAZON_SOCIAL y FIN_PLAN. Una cancelación es de su número: si el equipo ya tiene otra línea, el renglón conserva
-    lo de la línea que se cancela. La hoja sigue guardando lo de cuando se mandó. No siguen al inventario los datos que se
+    lo de la línea que se cancela. La hoja sigue guardando lo de cuando se mandó. Un renglón viejo que junta resguardo y
+    cancelación muestra el estatus de hoy de su línea (`registroDeLinea_`). No siguen al inventario los datos que se
     llenan al mandar: estatus del equipo y de la línea, departamento, sede, oficina y comentario (mandar otra vez un equipo
     abierto con otro estatus sí actualiza estatus, departamento, sede y oficina; el comentario no se actualiza, usuario,
-    13-oct). Lo cerrado (entregado, vendido, cancelado) se queda como quedó.
+    13-oct). **Lo cerrado** (22-oct, `b3269f6`; usuario: «que siga a la línea»): los renglones ENTREGADO A LINEAS, VENDIDO,
+    DONADO y DESECHADO muestran el número y el estatus de hoy de la línea con que se mandó el equipo
+    (`lineaDelRenglon_`: por ID_LINEA_AL_MANDAR; los renglones de antes, por número); `bandeja` también lee lo cerrado.
+    **Foto al cerrar:** al Entregar y al cerrar (Vendido, Donado, Desechado) el renglón guarda lo que el panel mostraba
+    (`FOTO`: NUCO, TIPO, MODELO, IMEI, ACCESORIOS, ESTATUS_EQUIPO, NUMERO, ESTATUS_LINEA, COMPANIA, RAZON_SOCIAL,
+    FIN_PLAN); antes volvía a lo del día que se mandó. **Confirmar cancelada** guarda en el renglón el número de hoy de la
+    línea si se corrigió. Una cancelación CANCELADA se queda como quedó.
   - **Accesorios:** columna ACCESORIOS al final de APP_RESGUARDOS (`asegurarBandeja_` la agrega a la hoja que ya existe;
     caché `ln_resguardos_esquema_v2`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
     mandar a cancelación; la pestaña Resguardos tiene la columna «Accesorios» después de IMEI.
+  - **Comentario** (22-oct, `ebcd218`; usuario: «para homologar»): en Resguardos, la columna MOTIVO se titula «Comentario»
+    y la oculta COMENTARIO, «Comentario por equipo»; Cancelaciones trae MOTIVO como «Comentario», oculta. El «Motivo» de
+    Cancelaciones (MOTIVO_CANCELACION: LINEA VENCIDA o CANCELACION ANTICIPADA) no cambia.
 - **Panel de Pau: resguardo y cancelación separados, Corregir resguardo, Quitar del panel y Retirar cancelación**
   (20-oct, `6cbb7c5`, `36e0947`, `484de50`; reestructura del panel de Pau; sin publicar; `LineasResguardos.gs`, `LineasEscritura.gs`,
   `LineasAcciones.gs`, `LineasRegistros.gs`):
@@ -501,7 +514,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct). Desde el 19-oct (sin publicar) INSPECCIONES LINEAS suma `No EMPLEADO` y `DIRECTOR`, y RESPONSIVAS LINEAS `JEFE DIRECTO`. RESPONSIVAS LINEAS lleva ID LINEA (el registro: el equipo o la línea sin equipo) e **ID LINEA ENTREGADA** (la línea de ese día; columna AR en producción, creada el 15-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
-| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario; desde el 20-oct ID_LINEA, LINEA_AL_MANDAR, MOVIMIENTO_ID, RETIRADO_EN, RETIRO y RETIRO_MOTIVO y fase RETIRADA de las cancelaciones), avisos, fotos y correcciones |
+| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario; desde el 20-oct ID_LINEA, LINEA_AL_MANDAR (el número con que se mandó), MOVIMIENTO_ID, RETIRADO_EN, RETIRO y RETIRO_MOTIVO y fase RETIRADA de las cancelaciones; desde el 22-oct ID_LINEA_AL_MANDAR, la línea con que se mandó el equipo por su ID, que no es ID_LINEA —ese marca una cancelación— y se agrega sola, `COLUMNAS_NUEVAS`), avisos, fotos y correcciones |
 | APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
