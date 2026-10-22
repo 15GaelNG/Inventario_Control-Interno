@@ -464,21 +464,21 @@ const HelpdeskApi = (function () {
       // La misma forma que manda su página al filtrar y al pasar de página (medida el 07/10/2026;
       // el helpdesk renombró este objeto el 22-oct-2026 -- de idAgent/idBranch/idForm/idArea/
       // idPriority/idStatus/idDepartmentCustomer a agents/branches/forms/areas/priority/status/
-      // departmentCustomers, y agregó customer y finishLoad. Lo confirmado sale de una petición sin
-      // filtros; dateCreation/dateCreationEnd (fechas) se mandan con el nombre de antes por si lo
-      // sigue leyendo, pero no está verificado -- si alguien filtra por fecha y vuelve a tronar,
-      // revisar esos dos nombres primero. nextPageLastIdTicket (página 2 en adelante) tampoco se
-      // alcanzó a verificar.
+      // departmentCustomers, y agregó customer y finishLoad. Confirmado con un "copy as fetch" de
+      // su propia página (22-oct-2026): sin fecha filtrada, su petición NO manda dateCreation ni
+      // dateCreationEnd -- los omite por completo, no los manda vacíos. Por eso aquí también se
+      // omiten salvo que la persona sí esté filtrando por fecha. nextPageLastIdTicket (página 2 en
+      // adelante) tampoco se alcanzó a verificar.
       const paginacion = { rowsPerPage: POR_PAGINA };
       if (f.despuesDe) paginacion.nextPageLastIdTicket = f.despuesDe;
-      r = llamar_(yo.correo, yo.token, '/tickets/list', {
-        filters: {
-          agents: f.agentes, branches: f.grupos, forms: f.formularios, areas: [], department: [], customer: [],
-          departmentCustomers: f.departamentos, priority: f.prioridades, status: f.estatus,
-          dateCreation: f.desde, dateCreationEnd: f.hasta, idTicket: [], finishLoad: false,
-        },
-        pagination: paginacion,
-      });
+      const filtrosHD = {
+        agents: f.agentes, branches: f.grupos, forms: f.formularios, areas: [], department: [], customer: [],
+        departmentCustomers: f.departamentos, priority: f.prioridades, status: f.estatus,
+        idTicket: [], finishLoad: false,
+      };
+      if (f.desde) filtrosHD.dateCreation = f.desde;
+      if (f.hasta) filtrosHD.dateCreationEnd = f.hasta;
+      r = llamar_(yo.correo, yo.token, '/tickets/list', { filters: filtrosHD, pagination: paginacion });
       if (!r || !Array.isArray(r.tickets)) throw new Error('El helpdesk cambió la forma de su lista. Avisa a sistemas.');
       total = Number(r.cantTotalTickets);
     }
