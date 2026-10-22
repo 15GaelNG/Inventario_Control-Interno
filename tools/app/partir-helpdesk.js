@@ -1,5 +1,5 @@
 /**
- * partir-helpdesk.js — abre initHelpdesk (app-helpdesk.html) en partes (homologación, fase 6.3; 22-oct).
+ * partir-helpdesk.js — abre initHelpdesk (app-helpdesk.html) en partes (homologación, fase 6.1c; 22-oct).
  *
  *   node tools/app/partir-helpdesk.js            revisa y escribe
  *   node tools/app/partir-helpdesk.js --revisar  solo revisa y dice qué haría
@@ -20,7 +20,7 @@ partir({
   funcion: 'initHelpdesk',
   pantalla: 'Help Desk',
   registro: 'Helpdesk',
-  fase: 'fase 6.3',
+  fase: 'fase 6.1c',
   script: 'tools/app/partir-helpdesk.js',
   sangria: 4,
   // La región de cada sentencia es la del último ancla visto (su primer nombre)

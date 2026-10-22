@@ -88,6 +88,17 @@ El mecanismo (`registrar`, `T.de`, `T.montar` y el aviso "la parte X no publica 
 una config como `tools/app/partir-vehiculos.js` sobre el motor `tools/partir/en-partes.js` (corta por nombres, así que
 cada rama lo corre sobre su archivo y lo suyo viaja con su región).
 
+**Cuándo partir** (22-oct, fase 6.1c): Partes es para una **función de arranque grande**, no para todo módulo; uno
+chico se queda como su `initX` (su cierre ya encapsula su estado). Ninguna función de primer nivel de `src/html/js/`
+(fuera de `componentes/`) pasa de **700 líneas**: si crece, se abre en partes (contrato en `source-contracts`, con su
+lista de pendientes: hoy `prepararCaptura` de Inspecciones y, después, Caja Chica, esperando la rama de Jorge). Ya
+en partes: Vehículos, Líneas Telefónicas, Usuarios y permisos (`app-permisos-ficha|ventana|matriz`; las reglas se
+quedan en `app-permisos.html` porque `permisos-pantalla.test.cjs` las lee de ahí) y Help Desk
+(`app-helpdesk-ticket|registro`). El contrato de cada una es `pantallaEnPartes(…)` en `source-contracts`. Si el
+motor dice "decidir a mano", se mueve la declaración (un `let`, un `const` de la pantalla) junto a quien más la usa
+antes de partir, sin cambiar código. Las bibliotecas compartidas (`Lineas`, `LineasVinculos`) son espacios de
+nombres y no se parten así.
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen

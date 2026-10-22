@@ -509,7 +509,7 @@ test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con
   assert.deepEqual(conProxy, ['src/html/js/componentes/partes.html']);
 });
 
-test('Usuarios y permisos: initPermisosAdmin monta sus partes con Partes (fase 6.3)', () => {
+test('Usuarios y permisos: initPermisosAdmin monta sus partes con Partes (fase 6.1c)', () => {
   // initPermisosAdmin era una función de 1,294 líneas; tools/app/partir-permisos.js la abrió (22-oct). Las reglas se
   // quedan en app-permisos.html: tests/permisos-pantalla.test.cjs las lee de ahí.
   pantallaEnPartes({ archivo: 'app-permisos', funcion: 'initPermisosAdmin', registro: 'PermisosAdmin', pantalla: 'Usuarios y permisos',
@@ -518,10 +518,34 @@ test('Usuarios y permisos: initPermisosAdmin monta sus partes con Partes (fase 6
     'las reglas siguen en app-permisos.html');
 });
 
-test('Help Desk: initHelpdesk monta sus partes con Partes (fase 6.3)', () => {
+test('Help Desk: initHelpdesk monta sus partes con Partes (fase 6.1c)', () => {
   // initHelpdesk era una función de 747 líneas; tools/app/partir-helpdesk.js la abrió (22-oct)
   pantallaEnPartes({ archivo: 'app-helpdesk', funcion: 'initHelpdesk', registro: 'Helpdesk', pantalla: 'Help Desk',
     partes: ['ticket', 'registro'], cableado: "$('hd-bandejas').addEventListener(", minPedidos: 2 });
+});
+
+test('ninguna función de primer nivel de la pantalla pasa de 700 líneas: si crece, se abre en partes (fase 6.1c)', () => {
+  // initVehiculos llegó a 2,044 líneas e initPermisosAdmin a 1,294 antes de abrirlas con tools/partir/en-partes.js.
+  // Un módulo chico no se parte: Partes es para una función de arranque grande. Las bibliotecas (Lineas,
+  // LineasVinculos) son espacios de nombres, no funciones de arranque, y no cuentan.
+  const LIMITE = 700;
+  const PENDIENTES = {
+    'modulos/inspecciones.html prepararCaptura': 'se parte cuando la rama de Jorge (inspecciones) entre a master',
+  };
+  const acorn = require('acorn');
+  const js = path.join(root, 'src', 'html', 'js');
+  const grandes = filesBelow(js).filter((f) => f.endsWith('.html') && !f.replace(/\\/g, '/').includes('/componentes/')).flatMap((f) => {
+    const rel = path.relative(js, f).replace(/\\/g, '/');
+    return [...fs.readFileSync(f, 'utf8').matchAll(/<script>([\s\S]*?)<\/script>/g)].flatMap((m) => acorn.parse(m[1], { ecmaVersion: 2022, locations: true }).body
+      .filter((n) => n.type === 'FunctionDeclaration' && n.loc.end.line - n.loc.start.line + 1 > LIMITE)
+      .map((n) => rel + ' ' + n.id.name))
+      .filter((k) => !PENDIENTES[k]);
+  });
+  assert.deepEqual(grandes, [], 'más de ' + LIMITE + ' líneas: ábrela en partes (tools/app/partir-vehiculos.js de ejemplo)');
+  Object.keys(PENDIENTES).forEach((k) => {
+    const [archivo, nombre] = k.split(' ');
+    assert.match(read('src/html/js/' + archivo), new RegExp('function ' + nombre + '\\('), k + ': ya no existe, quítala de pendientes');
+  });
 });
 
 test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con su nombre; la base es ClientApi.gs (fase 6.3)', () => {

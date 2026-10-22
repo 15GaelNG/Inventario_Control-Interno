@@ -1,5 +1,5 @@
 /**
- * partir-permisos.js — abre initPermisosAdmin (app-permisos.html) en partes (homologación, fase 6.3; 22-oct).
+ * partir-permisos.js — abre initPermisosAdmin (app-permisos.html) en partes (homologación, fase 6.1c; 22-oct).
  *
  *   node tools/app/partir-permisos.js            revisa y escribe
  *   node tools/app/partir-permisos.js --revisar  solo revisa y dice qué haría
@@ -20,7 +20,7 @@ partir({
   funcion: 'initPermisosAdmin',
   pantalla: 'Usuarios y permisos',
   registro: 'PermisosAdmin',
-  fase: 'fase 6.3',
+  fase: 'fase 6.1c',
   script: 'tools/app/partir-permisos.js',
   sangria: 4,
   // La región de cada sentencia es la del último ancla visto (su primer nombre)
