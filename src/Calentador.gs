@@ -51,6 +51,8 @@ function pasosCalentador_() {
     // Una vez al día revisa adendums y seguimientos (solo agrega avisos; no manda correos): así
     // no le toca a la primera persona que abre la campana en la mañana
     ['Líneas (revisión diaria de avisos)', () => LineasNotificaciones.revisar(false)],
+    // Una vez al día: a la papelera las fotos de inspecciones que nadie terminó de capturar (más de 3 días)
+    ['Inspecciones (fotos temporales)', () => InspeccionesService.limpiarFotosTemporales()],
   ];
 }
 

@@ -456,7 +456,33 @@ const ExpedienteNuco = (function () {
   /** El ID de Drive dentro de una liga (o null): el mismo de DriveUtils */
   const idDeLiga = (liga) => DriveUtils.idDeLiga(liga);
 
+  /**
+   * Las fotos por sección de una carpeta (la de una inspección, o la temporal de una que se está capturando), sin copia:
+   * para el formulario que las edita (22-oct, fotos por sección). Las carpetas hijas son las secciones.
+   * → { 'NEUMATICOS': [{ id, nombre, miniatura }] }
+   */
+  function fotosPorSeccion(carpetaId) {
+    const seccionDe = {};
+    const out = {};
+    hijosDrive_([carpetaId]).forEach((f) => {
+      if (f.mimeType !== CARPETA_MIME) return;
+      seccionDe[f.id] = f.name.trim();
+      out[f.name.trim()] = out[f.name.trim()] || [];
+    });
+    const ids = Object.keys(seccionDe);
+    if (ids.length) {
+      hijosDrive_(ids).forEach((f) => {
+        if (f.mimeType !== CARPETA_MIME) out[seccionDe[f.parents[0]]].push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null });
+      });
+    }
+    return out;
+  }
+  /** Borra la copia de fotosInspeccion de una carpeta (después de agregar o quitar fotos) */
+  function olvidarFotos(carpetaId) {
+    try { CacheService.getScriptCache().remove('exp_fotos_v1_' + carpetaId); } catch (e) { /* no-op */ }
+  }
+
   return { DOCUMENTOS, PRESTAMOS, ADHERENTES, SENSORES, FIRMAS, FIRMAS_Y_DIAGRAMAS, listar, inspecciones, fotosInspeccion,
     olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga, tieneNuco, periodoInspeccion, semestreVerificacion,
-    carpetaInspeccion, carpetaVerificacion, nombreConFecha, guardar, subcarpeta: subcarpeta_ };
+    carpetaInspeccion, carpetaVerificacion, nombreConFecha, guardar, subcarpeta: subcarpeta_, fotosPorSeccion, olvidarFotos };
 })();

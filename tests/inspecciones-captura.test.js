@@ -61,6 +61,8 @@ const ESTRUCTURA = {
     { campo: 'INS FRONTAL', etiqueta: 'Frontal', ruta: 'MODELOS INSPECCION/L200/FRONTAL.png' },
     { campo: 'INS IZQUIERDA', etiqueta: 'Izquierda', ruta: 'MODELOS INSPECCION/L200/IZQUIERDA.png' },
   ],
+  // Fotos por sección (22-oct): este tipo pide una sola
+  fotos: [{ id: 'NEUMATICOS', titulo: 'Neumáticos' }],
 };
 ESTRUCTURA.piezas = ESTRUCTURA.secciones.reduce((s, x) => s + x.campos.length, 0);
 
@@ -85,6 +87,8 @@ window.callServer = (fn, token, ...args) => {
       : null,
     apiEstructuraInspeccion: ESTRUCTURA,
     apiRegistrarInspeccion: { puntaje: 90, pdf: '' },
+    apiInspeccionesFotosPreparar: { carpetaId: 'TMP1' },
+    apiInspeccionesFotosSubir: { id: 'F1', nombre: 'NEUMATICOS 1.jpg', miniatura: null },
   };
   return Promise.resolve(respuestas[fn]);
 };
@@ -93,7 +97,7 @@ window.callServer = (fn, token, ...args) => {
 window.callServerCacheado = (fn, ...args) => window.callServer(fn, 't', ...args);
 let confirmar = true;
 window.eval(['componentes/formato.html', 'componentes/iconos.html', 'componentes/notificar.html', 'componentes/combobox.html', 'componentes/campo-auto.html',
-  'componentes/folio-nucco.html', 'componentes/lienzo.html', 'componentes/firma.html'].map(scriptDe).join('\n') + `
+  'componentes/folio-nucco.html', 'componentes/lienzo.html', 'componentes/firma.html', 'componentes/subir-fotos.html'].map(scriptDe).join('\n') + `
   var state = { token: 't', sesion: { nombre: 'AYRTON SEPULVEDA' } };
   var Confirmar = { pedir: () => Promise.resolve(window.__confirmar()) };
   function escaparHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';'); }
@@ -106,6 +110,8 @@ window.eval(['componentes/formato.html', 'componentes/iconos.html', 'componentes
   window.Firma = Firma;
 `);
 window.__confirmar = () => confirmar;
+window.URL.createObjectURL = () => 'blob:prueba';
+window.URL.revokeObjectURL = () => {};
 
 const doc = window.document;
 const $ = (s) => doc.querySelector(s);
@@ -128,7 +134,7 @@ const trazar = (canvas) => {
   const ev = (tipo, x, y) => canvas.dispatchEvent(new window.MouseEvent(tipo, { clientX: x, clientY: y, bubbles: true }));
   ev('pointerdown', 50, 50); ev('pointermove', 80, 60); ev('pointermove', 120, 90); ev('pointermove', 160, 70); ev('pointerup', 160, 70);
 };
-const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|Firmar';
+const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Fotos|Cierre|Firmar';
 
 (async () => {
   let tabMostrada = null;
@@ -145,7 +151,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   ok(!$('#ins-pasos').hidden && chips().join('|') === PASOS,
     'los pasos se ven desde el inicio, antes de elegir el tipo: ' + chips().join(' → '));
   ok($$('.form-paso-chip').slice(1).every((c) => c.disabled), 'pero no se puede saltar a ellos todavía');
-  ok($('#ins-cuenta').textContent === 'Paso 1 de 8', 'dice en qué paso va');
+  ok($('#ins-cuenta').textContent === 'Paso 1 de 9', 'dice en qué paso va');
   ok(!$('#ins-siguiente').hidden && $('#ins-guardar').hidden, 'hay "Siguiente" y todavía no "Guardar"');
   ok($$('#ins-tipo option[disabled]').length === 1, 'los tipos sin formato aparecen deshabilitados');
 
@@ -228,6 +234,11 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   trazar(canvasFrontal);
   const pedidasAntes = llamadas.filter((l) => l === 'apiPrevisualizarImagenInspeccion').length;
 
+  console.log('8b. Fotos por sección, después de Daños');
+  await siguiente();
+  ok(tituloPaso() === 'Fotos' && $$('#ins-fotos .sf-seccion').length === 1, 'después de Daños, el paso Fotos con las secciones del tipo');
+  ok(!llamadas.includes('apiInspeccionesFotosPreparar'), 'entrar al paso no crea nada en Drive todavía');
+
   console.log('9. Revisión y guardado');
   for (let i = 0; i < 2; i++) await siguiente();
   ok(tituloPaso() === 'Revisar y firmar', 'llega al último paso');
@@ -244,6 +255,23 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
 
   $('#ins-voltaje').value = '12.6';
   $('#ins-conductor').value = 'JUAN PEREZ';
+
+  console.log('9b. Las fotos son obligatorias');
+  $('#ins-guardar').click();
+  await esperar(20);
+  ok(!registrado && tituloPaso() === 'Fotos' && /Neumáticos/.test($('#ins-error').textContent),
+    'sin fotos no se guarda: lleva al paso y dice qué sección falta');
+  const inputFoto = $('#ins-fotos input[type="file"]:not([capture])');
+  Object.defineProperty(inputFoto, 'files', { configurable: true, value: [new window.File(['x'], 'llanta.jpg', { type: 'image/jpeg' })] });
+  // jsdom no dibuja imágenes: la foto "no se puede leer" y SubirFotos la sube tal cual (su camino para HEIC)
+  const ImagenDeVerdad = window.Image;
+  window.Image = class { set src(v) { setTimeout(() => this.onerror && this.onerror(), 0); } };
+  evento(inputFoto, 'change');
+  await esperar(40);
+  window.Image = ImagenDeVerdad;
+  ok(llamadas.includes('apiInspeccionesFotosPreparar') && llamadas.includes('apiInspeccionesFotosSubir'),
+    'la primera foto crea la carpeta temporal y sube');
+  ok($('.form-paso-chip.activo') && $$('#ins-fotos .sf-falta:not([hidden])').length === 0, 'ya no falta ninguna sección');
 
   console.log('10. Firmas');
   $('#ins-guardar').click();
@@ -272,6 +300,7 @@ const PASOS = 'Vehículo|Exterior|Neumáticos|Interior|Mecánica|Daños|Cierre|F
   $('#ins-guardar').click();
   await esperar(30);
   ok(registrado && registrado.FOLIO === 'CTA0100' && registrado.TIPO === 'L200', 'manda folio y tipo');
+  ok(registrado && registrado.fotosCarpetaId === 'TMP1', 'manda la carpeta temporal de las fotos (el servidor las mueve)');
   ok(registrado && registrado.checklist.POLIZA === 'MALO' && registrado.checklist.SULFATADA === 'NO', 'manda las respuestas');
   ok(registrado && registrado.VOLTAJE === '12.6' && registrado.CONDUCTOR === 'JUAN PEREZ', 'manda los datos de los otros pasos');
   ok(imagenesMandadas && imagenesMandadas['INS FRONTAL'] && imagenesMandadas['INS FRONTAL'].base64 === 'TRAZO',

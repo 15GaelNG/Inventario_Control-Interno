@@ -377,7 +377,13 @@
         { campo: 'INS TRASERA', etiqueta: 'Trasera', ruta: 'MODELOS INSPECCION/BEAT/TRASERA.png' },
       ],
       piezas: 17,
+      // Fotos por sección (22-oct): las 8 del expediente
+      fotos: [['CRISTALERIA', 'Cristalería'], ['DOCUMENTACION', 'Documentación'], ['INTERIORES', 'Interiores'],
+        ['LATONERIA Y PINTURA', 'Latonería y pintura'], ['NEUMATICOS', 'Neumáticos'], ['OTROS ELEMENTOS', 'Otros elementos'],
+        ['SISTEMA ELECTRICO', 'Sistema eléctrico'], ['SISTEMA MECANICO', 'Sistema mecánico']].map(([id, titulo]) => ({ id, titulo })),
     },
+    apiInspeccionesFotosPreparar: { carpetaId: 'TMP-PRUEBA' },
+    apiInspeccionesFotosSubir: (t, carpeta, seccion, archivo) => ({ id: 'F-' + Math.random().toString(36).slice(2, 8), nombre: archivo.nombre, miniatura: null }),
     apiDetalleInspeccion: {
       ID: '2026_24_292', FOLIO: 'AUT0024', PUNTAJE: 84.5, piezasRevisadas: 95,
       conProblema: [{ pieza: 'COFRE', estado: 'REGULAR' }, { pieza: 'FRENOS TRASEROS', estado: 'MALO' }],
@@ -940,6 +946,26 @@
     'inspecciones-danos': async () => {
       await iniciarInspeccion();
       for (let i = 0; i < 5; i++) { $('#ins-siguiente').click(); await esperar(300); }
+    },
+    'inspecciones-fotos': async () => {
+      await iniciarInspeccion();
+      for (let i = 0; i < 12 && !$('.form-paso:not([hidden]) #ins-fotos'); i++) { $('#ins-siguiente').click(); await esperar(300); }
+      // Dos secciones con fotos (una foto de color hecha aquí mismo) y las demás pendientes
+      const foto = (color) => new Promise((r) => {
+        const c = document.createElement('canvas'); c.width = 320; c.height = 240;
+        const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 320, 240);
+        c.toBlob((b) => r(new File([b], 'foto.jpg', { type: 'image/jpeg' })), 'image/jpeg', 0.8);
+      });
+      const subir = async (seccion, colores) => {
+        const input = $('#ins-fotos .sf-seccion[data-seccion="' + seccion + '"] input[type="file"]:not([capture])');
+        const dt = new DataTransfer();
+        for (const c of colores) dt.items.add(await foto(c));
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      };
+      await subir('LATONERIA Y PINTURA', ['#4a7bd0', '#c0392b', '#7f8c8d']);
+      await subir('NEUMATICOS', ['#2c3e50']);
+      await esperar(1500);
     },
     'inspecciones-firmas': async () => {
       await iniciarInspeccion();

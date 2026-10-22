@@ -56,12 +56,12 @@
    * Cada foto sube en cuanto se elige (hasta 3 a la vez), así guardar no manda todo de golpe y si se va la señal solo se
    * reintenta la que falló. Antes de subirla se reduce en el navegador (2000 px por lado, JPEG .85: de ~4 MB a ~400 KB;
    * el navegador ya la endereza). Si el navegador no la sabe leer (HEIC en una PC), sube el archivo tal cual si pesa
-   * menos de 15 MB. "Tomar foto" solo aparece en pantallas táctiles. Prueba: tests/subir-fotos.test.js.
+   * menos de 10 MB. "Tomar foto" solo aparece en pantallas táctiles. Prueba: tests/subir-fotos.test.js.
    */
   const SubirFotos = (function () {
     const LADO = 2000;
     const CALIDAD = 0.85;
-    const MAX_CRUDO = 15 * 1024 * 1024;
+    const MAX_CRUDO = 10 * 1024 * 1024;   // el servidor acepta hasta 10 MB (DriveUtils.blobRevisado)
     const A_LA_VEZ = 3;
 
     function leerDataUrl(archivo) {
@@ -95,7 +95,7 @@
         img.src = url;
       }).then((listo) => {
         if (listo) return listo;
-        if (archivo.size > MAX_CRUDO) throw new Error(archivo.name + ': el navegador no puede leer esta imagen y pesa más de 15 MB.');
+        if (archivo.size > MAX_CRUDO) throw new Error(archivo.name + ': el navegador no puede leer esta imagen y pesa más de 10 MB.');
         return leerDataUrl(archivo).then((d) => ({ nombre: archivo.name, mime: archivo.type || 'application/octet-stream', base64: d.split(',')[1] }));
       });
     }
@@ -160,7 +160,8 @@
           prepararArchivo(f.archivo)
             .then((listo) => opciones.subir(f.seccion, listo))
             .then((r) => {
-              if (f.local) { try { URL.revokeObjectURL(f.local); } catch (e) { /* ya no está */ } }
+              // La vista previa local se queda mientras el servidor no mande miniatura (Drive tarda en hacerla)
+              if (r.miniatura && f.local) { try { URL.revokeObjectURL(f.local); } catch (e) { /* ya no está */ } f.local = ''; }
               Object.assign(f, { estado: 'lista', id: r.id, nombre: r.nombre || f.nombre, miniatura: r.miniatura || f.miniatura, archivo: null, error: '' });
             })
             .catch((err) => Object.assign(f, { estado: 'error', error: err && err.message ? err.message : String(err) }))
@@ -208,7 +209,12 @@
           siguiente();
           return;
         }
-        const sacar = () => { fotos.splice(fotos.indexOf(f), 1); pintar(f.seccion); avisar(); };
+        const sacar = () => {
+          if (f.local) { try { URL.revokeObjectURL(f.local); } catch (e) { /* ya no está */ } }
+          fotos.splice(fotos.indexOf(f), 1);
+          pintar(f.seccion);
+          avisar();
+        };
         if (f.estado !== 'lista') { sacar(); return; }
         boton.disabled = true;
         Promise.resolve(opciones.quitar ? opciones.quitar({ id: f.id, seccion: f.seccion }) : null)

@@ -164,11 +164,22 @@
               style="display:flex; flex-direction:column; gap:4px; padding:8px; height:auto">
               ${Iconos.svg('imagen')} <span style="font-size:var(--texto-xs)">${escaparHtml(img.etiqueta)}</span>
             </button>`).join('') + '</div>') +
-        (d.OBSERVACIONES ? seccion('Observaciones', `<p style="margin:0">${escaparHtml(d.OBSERVACIONES)}</p>`) : '');
+        (d.OBSERVACIONES ? seccion('Observaciones', `<p style="margin:0">${escaparHtml(d.OBSERVACIONES)}</p>`) : '') +
+        // Fotos por sección (22-oct): se editan aquí mismo, sin otra ventana
+        (puedeEditarModulo('inspeccion-vehicular') ? seccion('Fotos',
+          `<button type="button" class="secondary" data-editar-fotos>${Iconos.svg('images')} Ver y editar fotos</button>
+          <div data-fotos-inspeccion style="margin-top:10px"></div>`) : '');
 
       contenedor.querySelectorAll('.btn-ver-imagen').forEach((btn) => {
         btn.addEventListener('click', () => mostrarImagen(btn, btn.dataset.ruta));
       });
+      const botonFotos = contenedor.querySelector('[data-editar-fotos]');
+      if (botonFotos) {
+        botonFotos.addEventListener('click', () => {
+          botonFotos.hidden = true;
+          editarFotosInspeccion(contenedor.querySelector('[data-fotos-inspeccion]'), inspeccion.ID);
+        });
+      }
     }
 
     /** Muestra la imagen debajo del botón (un link de Drive no se puede incrustar) */
@@ -326,6 +337,9 @@
   const PASOS_FINALES = [
     { id: 'danos', titulo: 'Daños',
       descripcion: 'Marca con el dedo o el mouse dónde está cada golpe o rayón. Si no hay daños, sigue sin marcar nada.' },
+    // Fotos por sección (22-oct): las carpetas del expediente del NUCO; cada sección del tipo lleva al menos una
+    { id: 'fotos', titulo: 'Fotos',
+      descripcion: 'Al menos una foto de cada sección: tómala con la cámara o elige varias de la galería. Cada foto sube en cuanto la eliges.' },
     { id: 'cierre', titulo: 'Cierre', descripcion: 'Quién maneja la unidad y lo que haya que anotar' },
     { id: 'revisar', titulo: 'Revisar y firmar', chip: 'Firmar',
       descripcion: 'Confirma el puntaje y lo que salió mal; al final firman el responsable y el inspector' },
@@ -380,6 +394,10 @@
     let vistos = {};
     let lienzos = {};    // 'INS FRONTAL' → Lienzo con las marcas de daños
     let firmas = {};     // 'FIRMA INSPECTOR' → Firma
+    let fotosCaptura = null;    // SubirFotos del paso Fotos
+    let fotosCarpetaId = '';    // la carpeta temporal de esta captura (se crea con la primera foto)
+    let preparandoCarpeta = null;
+    let vueltaFotos = 0;        // para no pintar fotos que llegan de un armado anterior
 
     contenedor.innerHTML = `
       <form class="form-medio form-doble" novalidate>
@@ -559,6 +577,8 @@
         localStorage.setItem(claveBorrador, JSON.stringify({
           ts: Date.now(), folio: campoFolio.value, nucco: campoNucco.value, tipo: campoTipo.value,
           respuestas: respuestas(), llantas, campos, correosExtra, ticketsExtra,
+          // Las fotos sí se recuperan: ya están en su carpeta temporal en Drive
+          fotosCarpetaId,
         }));
       } catch (e) { /* localStorage lleno o bloqueado: no se guarda, no truena la captura */ }
     }
@@ -597,11 +617,17 @@
           textoConfirmar: 'Continuar',
           textoCancelar: 'Empezar de nuevo',
         });
-        if (!ok) limpiarBorrador_();
+        if (!ok) {
+          limpiarBorrador_();
+          // Sus fotos ya no se van a usar: la temporal a la papelera
+          if (guardado.fotosCarpetaId) callServer('apiInspeccionesFotosCancelar', state.token, guardado.fotosCarpetaId).catch(() => {});
+        }
       }
 
       if (ok) {
         if (opciones.tabs) opciones.tabs.mostrar('nueva');
+        // Antes de armar el checklist: prepararFotos pinta lo que ya subió esa captura
+        fotosCarpetaId = guardado.fotosCarpetaId || '';
         await catalogos;
         campoFolio.value = guardado.folio;
         if (guardado.nucco) campoNucco.value = guardado.nucco;
@@ -756,7 +782,7 @@
           .filter((g) => g.secciones.length || (g.llantas && estructura.llantas.length))
           .forEach((g) => pasos.push(Object.assign({ id: 'checklist' }, g)));
         PASOS_FINALES
-          .filter((p) => p.id !== 'danos' || estructura.diagramas.length)
+          .filter((p) => (p.id !== 'danos' || estructura.diagramas.length) && (p.id !== 'fotos' || (estructura.fotos || []).length))
           .forEach((p) => pasos.push(Object.assign({}, p)));
 
         cajaPasos.innerHTML = pasos.slice(1).map((p, k) => `
@@ -768,6 +794,7 @@
         conectarChecklist();
         prepararDiagramas();
         prepararFirmas();
+        prepararFotos();
         // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
         // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
         // seguir editando; no viene con soloLectura porque puede no ser el conductor real),
@@ -865,6 +892,7 @@
               <textarea id="ins-observaciones" rows="7"></textarea></div>
           </div>`;
       }
+      if (p.id === 'fotos') return '<div id="ins-fotos"></div>';
       if (p.id === 'danos') {
         return `<div class="ins-diagramas">${estructura.diagramas.map((d) => `
           <div class="ins-diagrama" data-diagrama="${escaparHtml(d.campo)}">
@@ -952,6 +980,49 @@
           alCambiar: () => errorGeneral(null),
         });
       });
+    }
+
+    /**
+     * Paso Fotos: el componente SubirFotos con las secciones del tipo. Cada foto sube a la carpeta temporal de esta
+     * captura (se crea con la primera); al guardar, el servidor revisa que no falte ninguna sección y las mueve a la
+     * carpeta de la inspección. Si ya había carpeta (borrador o cambio de tipo), se pinta lo que ya subió.
+     */
+    function prepararFotos() {
+      const vuelta = ++vueltaFotos;
+      if (fotosCaptura) fotosCaptura.destruir();
+      fotosCaptura = null;
+      const caja = $('#ins-fotos');
+      if (!caja || !estructura || !(estructura.fotos || []).length) return;
+      const crear = (iniciales) => {
+        if (fotosCaptura) fotosCaptura.destruir();
+        fotosCaptura = SubirFotos.crear(caja, {
+          secciones: estructura.fotos,
+          iniciales: iniciales || {},
+          subir: async (seccion, archivo) => callServer('apiInspeccionesFotosSubir', state.token, await carpetaFotos_(), seccion, archivo),
+          quitar: (f) => callServer('apiInspeccionesFotosQuitarTemporal', state.token, fotosCarpetaId, f.id),
+          alCambiar: () => { errorGeneral(null); actualizarPasos(); programarGuardarBorrador_(); },
+        });
+      };
+      crear({});
+      if (fotosCarpetaId) {
+        callServer('apiInspeccionesFotosTemporal', state.token, fotosCarpetaId)
+          .then((ya) => { if (vuelta === vueltaFotos) { crear(ya); actualizarPasos(); } })
+          .catch(() => { fotosCarpetaId = ''; });   // la temporal ya no existe (se limpió): se empieza otra
+      }
+    }
+    function carpetaFotos_() {
+      if (fotosCarpetaId) return Promise.resolve(fotosCarpetaId);
+      preparandoCarpeta = preparandoCarpeta || callServer('apiInspeccionesFotosPreparar', state.token)
+        .then((r) => { fotosCarpetaId = r.carpetaId; programarGuardarBorrador_(); return fotosCarpetaId; })
+        .finally(() => { preparandoCarpeta = null; });
+      return preparandoCarpeta;
+    }
+    /** null si las fotos están completas; si no, qué decir */
+    function faltaEnFotos_() {
+      if (!fotosCaptura) return null;
+      if (fotosCaptura.subiendo()) return 'Espera a que terminen de subir las fotos';
+      const faltan = fotosCaptura.faltan();
+      return faltan.length ? 'Falta al menos una foto de: ' + faltan.join(', ') : null;
     }
 
     const marcados = () => Object.keys(lienzos).filter((campo) => !lienzos[campo].vacio());
@@ -1106,6 +1177,7 @@
       if (p.id === 'checklist') {
         return !!r && p.secciones.every((s) => r.porSeccion[s].contestadas === r.porSeccion[s].total);
       }
+      if (p.id === 'fotos') return !faltaEnFotos_();
       return p.id === 'cierre' || p.id === 'danos';
     }
 
@@ -1202,6 +1274,13 @@
             <div class="form-resumen-valor">${marcados().length
               ? escaparHtml(estructura.diagramas.filter((d) => marcados().indexOf(d.campo) !== -1).map((d) => d.etiqueta).join(', '))
               : 'Ninguno'}</div></div>` : ''}
+          ${fotosCaptura ? `<div class="form-resumen-dato"><div class="form-resumen-etiqueta">Fotos</div>
+            <div class="form-resumen-valor">${(() => {
+              const porSeccion = fotosCaptura.fotos();
+              const total = Object.keys(porSeccion).reduce((k, s) => k + porSeccion[s].length, 0);
+              const falta = faltaEnFotos_();
+              return escaparHtml(total + (total === 1 ? ' foto' : ' fotos') + ' en ' + estructura.fotos.length + ' secciones' + (falta ? ' · ' + falta : ''));
+            })()}</div></div>` : ''}
         </div>
         ${faltantes.length ? `
           <div class="form-aviso form-aviso-alerta">${Iconos.svg('alerta')}
@@ -1229,6 +1308,13 @@
       if (!(await validarUnidad())) { mostrarPaso(0); return; }
       const r = calcular();
       if (!Object.keys(r.dadas).length) { errorGeneral('Responde al menos una pieza del checklist'); return; }
+      // Fotos: obligatorias, al menos una por sección (el servidor lo vuelve a revisar)
+      const faltaFoto = faltaEnFotos_();
+      if (faltaFoto) {
+        mostrarPaso(pasos.findIndex((p) => p.id === 'fotos'));
+        errorGeneral(faltaFoto);
+        return;
+      }
       const faltan = estructura.piezas - r.respondidas;
       if (faltan > 0) {
         const ok = await Confirmar.pedir({
@@ -1292,7 +1378,11 @@
           VOLTAJE: valorDe('ins-voltaje'),
           ULTIMO_SERVICIO: valorDe('ins-servicio'),
           OBSERVACIONES: valorDe('ins-observaciones'),
+          fotosCarpetaId: fotosCaptura ? fotosCarpetaId : '',
         }, imagenes);
+        // Las fotos ya pasaron a la carpeta de la inspección: la siguiente captura empieza otra temporal
+        fotosCarpetaId = '';
+        if (fotosCaptura) { fotosCaptura.destruir(); fotosCaptura = null; }
 
         if (res.aviso) Notificar.error(res.aviso);
         else Notificar.exito(`Inspección guardada · puntaje ${res.puntaje}%`, {
@@ -1331,6 +1421,31 @@
     armarPasos();
     restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
     return { catalogos };
+  }
+
+  /**
+   * Editar las fotos de una inspección ya guardada (22-oct): el mismo SubirFotos sobre su carpeta del expediente.
+   * Agregar sube directo a su sección; quitar la manda a la papelera y nunca la última de una sección. Lo usan el
+   * detalle de la inspección y las fotos de la inspección en la ficha del vehículo. → la instancia de SubirFotos o null
+   */
+  async function editarFotosInspeccion(caja, idInspeccion, alCambiar) {
+    caja.innerHTML = '<p class="form-panel-vacio"><span class="spinner"></span> Cargando las fotos…</p>';
+    let r;
+    try {
+      r = await callServer('apiInspeccionesFotosDe', state.token, idInspeccion);
+    } catch (err) {
+      caja.innerHTML = `<p class="error-msg">${Iconos.svg('alerta')} ${escaparHtml(err.message)}</p>`;
+      return null;
+    }
+    if (!document.body.contains(caja)) return null;
+    return SubirFotos.crear(caja, {
+      secciones: r.secciones,
+      iniciales: r.fotos,
+      subir: (seccion, archivo) => callServer('apiInspeccionesFotosAgregar', state.token, idInspeccion, seccion, archivo),
+      quitar: (f) => callServer('apiInspeccionesFotosQuitar', state.token, idInspeccion, f.id),
+      puedeQuitar: (seccion, cuantas) => cuantas > 1,
+      alCambiar: alCambiar,
+    });
   }
 
   const AYUDA_INSPECCIONES = [

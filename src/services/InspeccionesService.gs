@@ -73,6 +73,30 @@ const InspeccionesService = (function () {
   const COL_PLANTILLA = 'PLANTILLA';
   const COL_CARPETA = 'CARPETA';
   const DIAGRAMAS = ['FRONTAL', 'TRASERA', 'IZQUIERDA', 'DERECHA'];
+  /**
+   * Fotos por sección (22-oct): las carpetas del expediente del NUCO. Un tipo que no las lleva todas escribe las suyas
+   * en la columna SECCIONES FOTOS de MODELOS INSPECCION (separadas por comas); vacía, las 8.
+   */
+  const SECCIONES_FOTOS = [
+    ['CRISTALERIA', 'Cristalería'], ['DOCUMENTACION', 'Documentación'], ['INTERIORES', 'Interiores'],
+    ['LATONERIA Y PINTURA', 'Latonería y pintura'], ['NEUMATICOS', 'Neumáticos'], ['OTROS ELEMENTOS', 'Otros elementos'],
+    ['SISTEMA ELECTRICO', 'Sistema eléctrico'], ['SISTEMA MECANICO', 'Sistema mecánico'],
+  ];
+  const COL_SECCIONES_FOTOS = 'SECCIONES FOTOS';
+  const TIPOS_FOTO = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif' };
+  const TEMP_FOTOS = ['TEMP', 'FOTOS DE INSPECCION'];
+
+  /** Las secciones de fotos de un tipo: las de su columna SECCIONES FOTOS o, si está vacía, las 8 */
+  function seccionesFotos_(configuracion) {
+    const escrita = limpiar_((configuracion || {})[COL_SECCIONES_FOTOS]);
+    if (!escrita) return SECCIONES_FOTOS.map(([id, titulo]) => ({ id, titulo }));
+    return escrita.split(',').map((s) => s.trim()).filter(Boolean).map((nombre) => {
+      const conocida = SECCIONES_FOTOS.find(([id]) => SheetUtils.normalizarEncabezado_(id) === SheetUtils.normalizarEncabezado_(nombre));
+      if (conocida) return { id: conocida[0], titulo: conocida[1] };
+      const id = SheetUtils.normalizarEncabezado_(nombre);
+      return { id, titulo: id.charAt(0) + id.slice(1).toLowerCase() };
+    });
+  }
 
   /**
    * El nombre del formato no siempre coincide con el del tipo: hay motos que en la
@@ -321,6 +345,14 @@ const InspeccionesService = (function () {
     if (!vehiculo) throw new Error('No existe el vehículo ' + folio);
 
     const estructura = estructuraDeTipo(token, p.TIPO);
+    // Fotos por sección (22-oct): cada sección del tipo con al menos una, ya subidas a la temporal de la captura.
+    // Se revisa antes de escribir nada.
+    const seccionesFoto = estructura.fotos || [];
+    if (seccionesFoto.length) {
+      if (!p.fotosCarpetaId) throw new Error('Faltan las fotos de la inspección.');
+      const faltan = seccionesSinFoto_(seccionesFoto, fotosDeCarpeta_(temporalValida_(p.fotosCarpetaId).getId(), seccionesFoto));
+      if (faltan.length) throw new Error('Falta al menos una foto de: ' + faltan.join(', ') + '.');
+    }
     const checklist = p.checklist || {};
     // El voltaje de la batería cuenta en el puntaje como una pieza más de la sección
     // "Batería" -- seccionesParaPuntaje/checklistParaPuntaje son copias SOLO para esta
@@ -449,6 +481,20 @@ const InspeccionesService = (function () {
       throw err;
     }
 
+    // ---- las fotos: de la temporal a <carpeta de la inspección>/<SECCIÓN>/ (no van en el PDF) ----
+    // La fila ya quedó: si mover falla, las fotos siguen en su temporal y se dice, no se pierde la captura
+    let avisoFotos = '';
+    if (seccionesFoto.length) {
+      try {
+        const destino = enNuco ? carpetaInspeccion_()
+          : ExpedienteNuco.subcarpeta(ExpedienteNuco.subcarpeta(DriveApp.getFolderById(Config.DRIVE_FOLDERS.REPORTES()), estructura.carpeta), 'FOTOS ' + id);
+        moverFotos_(p.fotosCarpetaId, destino, enNuco ? nucco : null, ahora, id);
+        if (enNuco) ExpedienteNuco.olvidar(nucco);
+      } catch (err) {
+        avisoFotos = 'Las fotos no se pudieron pasar a la carpeta de la inspección (' + err.message + '); siguen en TEMP/FOTOS DE INSPECCION.';
+      }
+    }
+
     // ---- el PDF del formato ----
     let pdf = null;
     try {
@@ -480,16 +526,16 @@ const InspeccionesService = (function () {
         ID: id,
         puntaje: puntaje.final,
         pdf: null,
-        aviso: 'La inspección se guardó, pero no se pudo generar el PDF: ' + err.message,
+        aviso: 'La inspección se guardó, pero no se pudo generar el PDF: ' + err.message + (avisoFotos ? ' ' + avisoFotos : ''),
       };
     }
 
     return {
       ID: id, puntaje: puntaje.final, pdf: pdf.url, sinResolver: pdf.sinResolver,
-      advertencia: sinDibujo.length
+      advertencia: [sinDibujo.length
         ? 'El PDF salió sin estos dibujos porque no están en Drive: ' + sinDibujo.join(', ') +
           '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
-        : '',
+        : '', avisoFotos].filter(Boolean).join(' '),
     };
   }
 
@@ -922,7 +968,8 @@ const InspeccionesService = (function () {
 
   function estructuraDeTipo(token, tipo) {
     Permisos.puedeLeer(token, MODULO);
-    const clave = 'inspeccion_tipo_' + SheetUtils.normalizarEncabezado_(tipo);
+    // v2 (22-oct): la estructura trae las secciones de fotos; una copia vieja no las tendría
+    const clave = 'inspeccion_tipo_v2_' + SheetUtils.normalizarEncabezado_(tipo);
     const guardado = CacheService.getScriptCache().get(clave);
     if (guardado) {
       try { return JSON.parse(guardado); } catch (e) { /* recalcular */ }
@@ -958,6 +1005,8 @@ const InspeccionesService = (function () {
       diagramas: DIAGRAMAS
         .filter((d) => limpiar_(configuracion[d]))
         .map((d) => ({ campo: 'INS ' + d, etiqueta: d.charAt(0) + d.slice(1).toLowerCase(), ruta: configuracion[d] })),
+      // Las secciones de fotos del tipo (cada una lleva al menos una foto)
+      fotos: seccionesFotos_(configuracion),
     };
     estructura.piezas = estructura.secciones.reduce((n, s) => n + s.campos.length, 0);
 
@@ -970,7 +1019,7 @@ const InspeccionesService = (function () {
   /** Olvida lo cacheado de un tipo (al editar su plantilla, para verlo de inmediato) */
   function olvidarTipo(token, tipo) {
     Permisos.puedeEditar(token, MODULO);
-    CacheService.getScriptCache().remove('inspeccion_tipo_' + SheetUtils.normalizarEncabezado_(tipo));
+    CacheService.getScriptCache().remove('inspeccion_tipo_v2_' + SheetUtils.normalizarEncabezado_(tipo));
     return 'Listo: se volverá a leer la plantilla de "' + tipo + '".';
   }
 
@@ -984,6 +1033,195 @@ const InspeccionesService = (function () {
         listo: !!limpiar_(f[COL_PLANTILLA]),
       }))
       .sort((a, b) => a.tipo.localeCompare(b.tipo));
+  }
+
+  // ---------- fotos por sección (22-oct) ----------
+  // Las mismas carpetas que tiene el expediente del NUCO (tools/nucos/homologar_insp.py): la ficha del vehículo ya las
+  // lee por sección. Mientras se captura, las fotos suben a una carpeta temporal (TEMP/FOTOS DE INSPECCION/<una por
+  // captura>/<SECCIÓN>); al guardar se mueven a la de la inspección. Cada sección del tipo necesita al menos una.
+
+  /** Una carpeta temporal de esta captura, solo si de verdad está en TEMP/FOTOS DE INSPECCION (la manda el cliente) */
+  function temporalValida_(carpetaId) {
+    const raiz = carpetaTemporalRaiz_().getId();
+    let carpeta;
+    try { carpeta = DriveApp.getFolderById(String(carpetaId || '')); } catch (e) { throw new Error('No se encontró la carpeta de las fotos.'); }
+    const padres = carpeta.getParents();
+    if (!padres.hasNext() || padres.next().getId() !== raiz) throw new Error('Esa carpeta no es de fotos de inspección.');
+    return carpeta;
+  }
+  function carpetaTemporalRaiz_() {
+    let c = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
+    TEMP_FOTOS.forEach((n) => { c = ExpedienteNuco.subcarpeta(c, n); });
+    return c;
+  }
+  /** La foto que llega del cliente ({ nombre, mime, base64 }), revisada: imagen y hasta 10 MB */
+  function blobDeFoto_(archivo, seccion) {
+    const mime = String((archivo && archivo.mime) || '').toLowerCase();
+    const revisado = DriveUtils.blobRevisado({ base64: archivo && archivo.base64, mimeType: mime }, Object.keys(TIPOS_FOTO), 'la foto');
+    return { blob: revisado.blob, extension: TIPOS_FOTO[mime], seccion: seccionValida_(seccion) };
+  }
+  function seccionValida_(seccion) {
+    const s = limpiar_(seccion).toUpperCase();
+    if (!s || /[\/\\]/.test(s)) throw new Error('Sección de fotos inválida.');
+    return s;
+  }
+  /** La subcarpeta de una sección, reconociendo la que ya existe aunque varíe en acentos o espacios */
+  function carpetaSeccion_(carpeta, seccion) {
+    const buscado = SheetUtils.normalizarEncabezado_(seccion);
+    const hijas = carpeta.getFolders();
+    while (hijas.hasNext()) {
+      const h = hijas.next();
+      if (SheetUtils.normalizarEncabezado_(h.getName()) === buscado) return h;
+    }
+    return carpeta.createFolder(seccion);
+  }
+  /** Fotos por sección de una carpeta, con la sección normalizada a la del tipo ('NEUMÁTICOS ' → 'NEUMATICOS') */
+  function fotosDeCarpeta_(carpetaId, secciones) {
+    const crudas = ExpedienteNuco.fotosPorSeccion(carpetaId);
+    const out = {};
+    Object.keys(crudas).forEach((nombre) => {
+      const s = (secciones || []).find((x) => SheetUtils.normalizarEncabezado_(x.id) === SheetUtils.normalizarEncabezado_(nombre));
+      const clave = s ? s.id : nombre;
+      out[clave] = (out[clave] || []).concat(crudas[nombre]);
+    });
+    return out;
+  }
+  /** Qué secciones del tipo no tienen ninguna foto (los títulos, para el mensaje) */
+  function seccionesSinFoto_(secciones, fotos) {
+    return (secciones || []).filter((s) => !(fotos[s.id] || []).length).map((s) => s.titulo);
+  }
+
+  /** Empieza las fotos de una captura: su carpeta temporal → { carpetaId } */
+  function fotosPreparar(token) {
+    Permisos.puedeEditar(token, MODULO);
+    const carpeta = carpetaTemporalRaiz_().createFolder('CAPTURA ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmmss') +
+      ' ' + Utilities.getUuid().slice(0, 8));
+    return { carpetaId: carpeta.getId() };
+  }
+  /** Sube una foto a la temporal de la captura → { id, nombre, miniatura } */
+  function fotosSubir(token, carpetaId, seccion, archivo) {
+    Permisos.puedeEditar(token, MODULO);
+    const foto = blobDeFoto_(archivo, seccion);
+    const carpeta = carpetaSeccion_(temporalValida_(carpetaId), foto.seccion);
+    const nombre = foto.seccion + ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss') + ' ' +
+      Utilities.getUuid().slice(0, 4) + foto.extension;
+    const f = DriveUtils.marcarAutor(carpeta.createFile(foto.blob.setName(nombre)));
+    return { id: f.getId(), nombre: nombre, miniatura: null };
+  }
+  /** Lo que ya subió una captura (al recuperar su borrador) → { SECCIÓN: [{ id, nombre, miniatura }] } */
+  function fotosTemporal(token, carpetaId) {
+    Permisos.puedeEditar(token, MODULO);
+    return fotosDeCarpeta_(temporalValida_(carpetaId).getId(), null);
+  }
+  /** ¿El archivo está en una sección (carpeta hija) de esa carpeta? */
+  function enCarpeta_(archivo, carpetaId) {
+    const padres = archivo.getParents();
+    if (!padres.hasNext()) return false;
+    const abuelos = padres.next().getParents();
+    return abuelos.hasNext() && abuelos.next().getId() === carpetaId;
+  }
+  /** Quita una foto de la temporal (antes de guardar) */
+  function fotosQuitarTemporal(token, carpetaId, archivoId) {
+    Permisos.puedeEditar(token, MODULO);
+    const raiz = temporalValida_(carpetaId).getId();
+    const archivo = DriveApp.getFileById(String(archivoId || ''));
+    if (!enCarpeta_(archivo, raiz)) throw new Error('Esa foto no es de esta captura.');
+    archivo.setTrashed(true);
+    return true;
+  }
+  /** Se canceló la captura: la temporal a la papelera */
+  function fotosCancelar(token, carpetaId) {
+    Permisos.puedeEditar(token, MODULO);
+    temporalValida_(carpetaId).setTrashed(true);
+    return true;
+  }
+  /** El Calentador, una vez al día: a la papelera las temporales de más de 3 días (capturas que nadie terminó) */
+  function limpiarFotosTemporales() {
+    const props = PropertiesService.getScriptProperties();
+    const hoy = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    if (props.getProperty('FOTOS_INSPECCION_LIMPIEZA') === hoy) return 0;   // ya corrió hoy
+    props.setProperty('FOTOS_INSPECCION_LIMPIEZA', hoy);
+    const limite = Date.now() - 3 * 24 * 60 * 60 * 1000;
+    const hijas = carpetaTemporalRaiz_().getFolders();
+    let n = 0;
+    while (hijas.hasNext()) {
+      const c = hijas.next();
+      if (c.getLastUpdated().getTime() < limite) { c.setTrashed(true); n++; }
+    }
+    return n;
+  }
+
+  /**
+   * Al guardar (registrar): mueve las fotos de la temporal a <carpeta de la inspección>/<SECCIÓN>/ con su nombre
+   * (NEUMATICOS-0088 2026-10-22 (2).jpg) y tira la temporal. Mover conserva el ID del archivo.
+   */
+  function moverFotos_(carpetaId, destino, nucco, ahora, idInspeccion) {
+    const temporal = temporalValida_(carpetaId);
+    const fotos = fotosDeCarpeta_(temporal.getId(), null);
+    Object.keys(fotos).forEach((seccion) => {
+      const carpeta = carpetaSeccion_(destino, seccion);
+      fotos[seccion].forEach((f) => {
+        const archivo = DriveApp.getFileById(f.id);
+        const ext = (/\.[a-z0-9]+$/i.exec(archivo.getName()) || ['.jpg'])[0].toLowerCase();
+        const nombre = nucco ? ExpedienteNuco.nombreConFecha(carpeta, seccion, nucco, ext, ahora)
+          : seccion + '-' + idInspeccion + ' ' + f.id.slice(-4) + ext;
+        archivo.moveTo(carpeta);
+        archivo.setName(nombre);
+      });
+    });
+    temporal.setTrashed(true);
+    ExpedienteNuco.olvidarFotos(destino.getId());
+  }
+
+  // ---- editar las fotos de una inspección ya guardada ----
+  /** La inspección y su carpeta (la del PDF, en el expediente del NUCO), revisando permiso y alcance */
+  function inspeccionConCarpeta_(token, id, editar) {
+    const sesion = editar ? Permisos.puedeEditar(token, MODULO) : Permisos.puedeLeer(token, MODULO);
+    const encontrada = SheetUtils.findById(ssId(), hoja_().getName(), limpiar_(id), COL_ID);
+    if (!encontrada) throw new Error('No existe la inspección ' + id);
+    const fila = encontrada.data;
+    const nucco = fila['NUCO'];
+    if (sesion.alcance && !VehiculosService.nuccoEnAlcance(token, nucco)) throw new Error('No tienes acceso a esta inspección.');
+    const pdfId = ExpedienteNuco.idDeLiga(fila[COL_PDF]);
+    if (!pdfId || !ExpedienteNuco.tieneNuco(nucco)) {
+      throw new Error('Esta inspección no está en el expediente de un NUCO: sus fotos no se pueden editar desde la app.');
+    }
+    const padres = DriveApp.getFileById(pdfId).getParents();
+    if (!padres.hasNext()) throw new Error('No se encontró la carpeta de la inspección.');
+    let secciones;
+    try { secciones = estructuraDeTipo(token, fila['TIPO']).fotos || []; } catch (e) { secciones = seccionesFotos_(null); }
+    return { fila, nucco, carpeta: padres.next(), secciones };
+  }
+  /** Las fotos de una inspección guardada, por sección → { secciones: [{ id, titulo }], fotos: { SECCIÓN: […] } } */
+  function fotosDe(token, id) {
+    const x = inspeccionConCarpeta_(token, id, false);
+    const fotos = fotosDeCarpeta_(x.carpeta.getId(), x.secciones);
+    // Una carpeta de sección que el tipo ya no pide (inspecciones viejas) también se ve, al final
+    const extra = Object.keys(fotos).filter((k) => fotos[k].length && !x.secciones.some((s) => s.id === k) && k !== ExpedienteNuco.FIRMAS_Y_DIAGRAMAS)
+      .map((k) => ({ id: k, titulo: k.charAt(0) + k.slice(1).toLowerCase() }));
+    return { secciones: x.secciones.concat(extra), fotos };
+  }
+  /** Agrega una foto a una sección de una inspección guardada → { id, nombre, miniatura } */
+  function fotosAgregar(token, id, seccion, archivo) {
+    const x = inspeccionConCarpeta_(token, id, true);
+    const foto = blobDeFoto_(archivo, seccion);
+    const carpeta = carpetaSeccion_(x.carpeta, foto.seccion);
+    const f = ExpedienteNuco.guardar(foto.blob, carpeta, foto.seccion, x.nucco, x.fila['FECHA'] || new Date(), foto.extension);
+    ExpedienteNuco.olvidarFotos(x.carpeta.getId());
+    return { id: f.getId(), nombre: f.getName(), miniatura: null };
+  }
+  /** Quita una foto de una inspección guardada; nunca la última de su sección (cada sección lleva al menos una) */
+  function fotosQuitar(token, id, archivoId) {
+    const x = inspeccionConCarpeta_(token, id, true);
+    const archivo = DriveApp.getFileById(String(archivoId || ''));
+    if (!enCarpeta_(archivo, x.carpeta.getId())) throw new Error('Esa foto no es de esta inspección.');
+    const fotos = fotosDeCarpeta_(x.carpeta.getId(), x.secciones);
+    const clave = Object.keys(fotos).find((k) => fotos[k].some((f) => f.id === archivo.getId()));
+    if ((fotos[clave] || []).length <= 1) throw new Error('Debe quedar al menos una foto de ' + clave.toLowerCase() + '.');
+    archivo.setTrashed(true);
+    ExpedienteNuco.olvidarFotos(x.carpeta.getId());
+    ExpedienteNuco.olvidar(x.nucco);
+    return true;
   }
 
   /** La plantilla de cada tipo (revisarEntorno: la cuenta que despliega tiene que poder copiarlas) */
@@ -1006,7 +1244,10 @@ const InspeccionesService = (function () {
     completo: (token) => HojaServicio.completo(INSPECCIONES, token),
     detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
+    // Fotos por sección (22-oct): de una captura (carpeta temporal) y de una inspección ya guardada
+    fotosPreparar, fotosSubir, fotosTemporal, fotosQuitarTemporal, fotosCancelar, limpiarFotosTemporales,
+    fotosDe, fotosAgregar, fotosQuitar,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
-    calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas
+    calcularPuntaje_, valorDeRespuesta_, seccionesFotos_,   // expuestas para las pruebas
   };
 })();

@@ -140,14 +140,31 @@
       contenedor.innerHTML = '<div class="card ln-card"><div class="insp-fotos-cabecera"><h2>Inspección ' + escaparHtml(d.nombre + ' ' + d.anio) + '</h2>' +
         '<div class="insp-fotos-botones">' +
         d.pdfs.map((p) => TablaFicha.boton({ texto: p.nombre, icono: 'file-text', href: p.url })).join('') +
-        (d.url && puede('vehiculos.carpetas') ? TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) : '') + '</div>' +
+        (d.url && puede('vehiculos.carpetas') ? TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) : '') +
+        // Fotos por sección (22-oct): una inspección de la app se puede editar (modulos/inspecciones.html)
+        (app && app.ID && puedeEditarModulo('inspeccion-vehicular')
+          ? '<button type="button" class="secondary" data-editar-fotos>' + Iconos.svg('images') + ' Editar fotos</button>' : '') + '</div>' +
         '<div class="insp-fotos-datos">' + datos.map((x) => '<span>' + escaparHtml(x) + '</span>').join('') + '</div></div></div>' +
         '<div class="card ln-card" data-insp-galeria><p class="ln-tenue"><span class="spinner"></span> Cargando ' + d.fotos + ' fotos…</p></div>';
       const caja = contenedor.querySelector('[data-insp-galeria]');
+      const editar = contenedor.querySelector('[data-editar-fotos]');
+      if (editar) {
+        editar.addEventListener('click', async () => {
+          // Editar: el mismo SubirFotos; "Listo" vuelve a la galería con lo nuevo (sin la copia de antes)
+          editar.hidden = true;
+          await editarFotosInspeccion(caja, app.ID);
+          caja.insertAdjacentHTML('beforeend', '<p style="margin-top:12px"><button type="button" class="primary" data-fotos-listo>Listo</button></p>');
+          caja.querySelector('[data-fotos-listo]').addEventListener('click', () => {
+            delete fotosDe[d.id];
+            olvidar(nucco);
+            pintarFotos(contenedor, d, app, nucco);
+          });
+        });
+      }
       try {
         const r = await pedirFotos(nucco, d.id);
         const grupos = r.secciones.map((s) => ({ titulo: s.nombre, fotos: s.fotos }));
-        if (!document.body.contains(caja)) return;
+        if (!document.body.contains(caja) || (editar && editar.hidden)) return;   // ya se está editando
         caja.innerHTML = grupos.length ? Galeria.html(grupos) : '<p class="empty-state">Sin fotos.</p>';
         Galeria.ligar(caja, grupos, { titulo: 'Inspección ' + d.nombre + ' ' + d.anio });
       } catch (err) {

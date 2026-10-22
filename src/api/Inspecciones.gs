@@ -62,3 +62,31 @@ function apiInspeccionesPorFolio(token, folio) {
 function apiBuscarInspeccionPorId(token, id) {
   return InspeccionesService.buscarPorId(token, id);
 }
+
+// --- Fotos por sección (22-oct) ---
+// Mientras se captura: una carpeta temporal por captura, cada foto sube en cuanto se toma
+function apiInspeccionesFotosPreparar(token) {
+  return InspeccionesService.fotosPreparar(token);
+}
+function apiInspeccionesFotosSubir(token, carpetaId, seccion, archivo) {
+  return InspeccionesService.fotosSubir(token, carpetaId, seccion, archivo);
+}
+function apiInspeccionesFotosTemporal(token, carpetaId) {
+  return InspeccionesService.fotosTemporal(token, carpetaId);
+}
+function apiInspeccionesFotosQuitarTemporal(token, carpetaId, archivoId) {
+  return InspeccionesService.fotosQuitarTemporal(token, carpetaId, archivoId);
+}
+function apiInspeccionesFotosCancelar(token, carpetaId) {
+  return InspeccionesService.fotosCancelar(token, carpetaId);
+}
+// Una inspección ya guardada: ver, agregar y quitar (nunca la última de una sección)
+function apiInspeccionesFotosDe(token, id) {
+  return InspeccionesService.fotosDe(token, id);
+}
+function apiInspeccionesFotosAgregar(token, id, seccion, archivo) {
+  return InspeccionesService.fotosAgregar(token, id, seccion, archivo);
+}
+function apiInspeccionesFotosQuitar(token, id, archivoId) {
+  return InspeccionesService.fotosQuitar(token, id, archivoId);
+}
