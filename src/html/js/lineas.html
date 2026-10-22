@@ -2319,8 +2319,8 @@
      */
     const puedeOperar = () => puedeEditarModulo('lineas-telefonicas');
     /**
-     * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.detalles,
-     * .documentos, .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
+     * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.documentos,
+     * .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
      * servidor pide la misma sección (TelefoniaService.leerSeccion_); esto solo no pinta lo que no va a abrir.
      * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado. Documentos e Historial no respetan el
      * alcance (Modulos.gs), así que a quien está limitado el servidor ya se las resuelve Sin acceso (Permisos.resolver_)
@@ -2492,7 +2492,6 @@
       const filtrosActuales = { equipos: {}, lineas: {} };
       const PASO_TARJETAS = 48; // vista de tarjetas: cuántas se agregan con "Mostrar más"
       const tarjetasVisibles = { equipos: PASO_TARJETAS, lineas: PASO_TARJETAS };
-      let detallesFicha = null; // datos de la tarjeta "Detalles" de la ficha abierta
       let tablaHistorial = null; // DataTable del historial de la ficha abierta
       let tablaDocumentos = null; // DataTable de Documentos (inspecciones y responsivas) de la ficha abierta
       let nombreHistorial = ''; // para el nombre del Excel del historial
@@ -2567,8 +2566,6 @@
         if (masFicha) { ev.preventDefault(); abrirMenuFicha(masFicha); return; }
         const mas = ev.target.closest('[data-ln-mas-tarjetas]');
         if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
-        const copiar = ev.target.closest('[data-ln-copiar-detalles]');
-        if (copiar) { copiarDetalles(copiar); return; }
         const copiarCard = ev.target.closest('[data-ln-copiar-tarjeta]');
         if (copiarCard) {
           const card = copiarCard.closest('.ln-card');
@@ -2628,7 +2625,6 @@
         tabla.asegurarSeleccionada(tarjeta.dataset.id);
         tabla.abrirMenu(ev.clientX, ev.clientY);
       });
-      raiz.addEventListener('input', (ev) => { if (ev.target.closest('[data-ln-copiar]')) pintarTextoDetalles(); });
       // Al entrar al buscador de una tabla, lo que ya tiene queda seleccionado: se escribe encima (usuario, 22-oct: buscar 0001
       // y luego 0002 sin borrar todo). El mouseup del mismo clic quitaba la selección: ese se ignora
       let buscadorRecien = null;
@@ -3398,19 +3394,18 @@
       }
 
       /**
-       * Ficha en pestañas: General (datos), Detalles (texto para copiar), Documentos (inspecciones y
-       * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
+       * Ficha en pestañas: General (datos), Documentos (inspecciones y responsivas) e Historial. Lo esencial queda
+       * arriba y el resto a un toque, en vez de una página larguísima. La pestaña Detalles (el texto del AppSheet para
+       * copiar) se quitó el 22-oct (usuario): cada tarjeta de General tiene su botón de copiar
        */
-      function pestanasFicha(general, detalles, conDocumentos) {
+      function pestanasFicha(general, conDocumentos) {
         // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion)
-        const conDetalles = veSeccion('detalles');
         const pasado = veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
         const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
         return Tabs.html([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
-          conDetalles && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           conDocumentos && { id: 'documentos', titulo: 'Documentos', icono: 'folder-check', contenido: '<div id="ln-evidencias">' + cargando + '</div>' },
           pasado && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: '<div id="ln-historial">' + cargando + '</div>' },
         ], { activa: (pila[pila.length - 1] || {}).pestana });
@@ -3473,7 +3468,7 @@
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
-            '</div>', tarjetaDetallesCopiar(r.detalles), true);
+            '</div>', true);
           // Dirección General a quien no es ADMIN: sin documentos ni historial (el servidor tampoco los da)
           ponerCopiarTarjetas(detalle);
           if (e._dgOculto) return;
@@ -3521,7 +3516,7 @@
                 ['PIN WhatsApp', e.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
-            '</div>', tarjetaDetallesCopiar(r.detalles), true);
+            '</div>', true);
           ponerCopiarTarjetas(detalle);
           // Toda línea tiene Documentos: las de cuando estuvo suelta y las que firmó dentro de un equipo (pendiente 2.45)
           if (l._dgOculto) return;
@@ -3600,67 +3595,14 @@
         menuFlotante(boton, items.filter(Boolean));
       }
 
-      // ---- Detalles: la columna DETALLES LINEAS TELEFONICAS del AppSheet, con botón para copiarla ----
-      // Mismo texto y orden que copiaban del módulo "Detalles Líneas Telefónicas". AppSheet deja en blanco
-      // motivo, ticket y estatus actual para llenarlos al pegar; aquí se escriben antes de copiar (no se guardan)
-      // y el estatus actual se propone con ESTATUS LINEA.
-      function textoDetalles() {
-        const d = detallesFicha || {};
-        const caja = $('[data-ln-copiar]', raiz);
-        const escrito = (campo) => (caja ? caja.querySelector('[data-ln-copiar-campo="' + campo + '"]').value.trim() : '');
-        const valor = (v) => (v === null || v === undefined ? '' : (esFechaIso(v) ? fechaTabla(v) : String(v)));
-        return 'NUCO ' + valor(d.nuco) + '\n-------------------------------------------------------\n' +
-          'Motivo de resguardo: ' + escrito('motivo') + '\n' +
-          'Ticket / Asunto: ' + escrito('ticket') + '\n' +
-          'Código de resguardo: ' + valor(d.responsable) + '\n' +
-          'IMEI: ' + valor(d.imei) + '\n' +
-          'SIM: ' + valor(d.sim) + '\n' +
-          'Número: ' + valor(d.numero) + '\n' +
-          'Modelo: ' + valor(d.modelo) + '\n' +
-          'Compañía: ' + valor(d.compania) + '\n' +
-          'Razón Social: ' + valor(d.razonSocial) + '\n' +
-          'Estatus de adendum: ' + valor(d.finPlan) + '\n' +
-          'Estatus actual de la línea: ' + escrito('estatus');
-      }
-      function pintarTextoDetalles() {
-        const pre = $('[data-ln-copiar-texto]', raiz);
-        if (pre) pre.textContent = textoDetalles();
-      }
-      function tarjetaDetallesCopiar(d) {
-        detallesFicha = d || null;
-        if (!d) return '';
-        const valor = (v) => (v === null || v === undefined ? '' : (esFechaIso(v) ? fechaTabla(v) : String(v)));
-        const entrada = (clave, v, ayuda) => '<input type="text" class="ln-detalle-entrada" data-ln-copiar-campo="' + clave + '" value="' + esc(v || '') + '" autocomplete="off" placeholder="' + esc(ayuda) + '">';
-        // Mismo diseño que General (etiqueta · valor); al copiar sale el texto del AppSheet (textoDetalles)
-        return '<div class="card ln-card ln-copiar" data-ln-copiar data-respetar-texto>' +
-          '<div class="ln-copiar-cabecera"><h3>' + icono('clipboard-list') + ' Detalles</h3>' +
-          '<button type="button" class="ln-btn-icono" data-ln-copiar-detalles>' + icono('copy') + ' Copiar detalles</button></div>' +
-          campos([
-            ['NUCO', valor(d.nuco)],
-            ['Motivo de resguardo', entrada('motivo', '', 'Escribe el motivo'), true],
-            ['Ticket / Asunto', entrada('ticket', '', 'Escribe el ticket o asunto'), true],
-            ['Código de resguardo', valor(d.responsable)],
-            ['IMEI', valor(d.imei)],
-            ['SIM', valor(d.sim)],
-            ['Número', valor(d.numero)],
-            ['Modelo', valor(d.modelo)],
-            ['Compañía', valor(d.compania)],
-            ['Razón Social', valor(d.razonSocial)],
-            ['Estatus de adendum', valor(d.finPlan)],
-            ['Estatus actual de la línea', entrada('estatus', d.estatusLinea, 'Escribe el estatus'), true],
-          ]) + '</div>';
-      }
       function copiarConAviso(boton, texto, mensaje) {
         copiarTexto(texto).then((ok) => {
           if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
           aviso(esc(mensaje), 4000);
           const original = boton.innerHTML;
-          boton.innerHTML = icono('check') + (boton.textContent.trim() ? ' Copiado' : '');
+          boton.innerHTML = icono('check');
           setTimeout(() => { if (document.body.contains(boton)) boton.innerHTML = original; }, 1800);
         });
-      }
-      function copiarDetalles(boton) {
-        copiarConAviso(boton, textoDetalles(), 'Detalles copiados: pégalos en el ticket o correo.');
       }
 
       // Copiar cada tarjeta de la pestaña General de las fichas (usuario, 22-oct): el botón va en su título y copia
