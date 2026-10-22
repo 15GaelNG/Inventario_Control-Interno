@@ -704,10 +704,19 @@ const LineasResguardos = (function () {
   /** Todos los renglones de la bandeja, del más reciente al más antiguo, y lo que la persona puede hacer. */
   function bandeja(usuario) {
     let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
-    if (filas.some(abierto_)) {
+    if (filas.some((r) => abierto_(r) || r['CANCELACION'])) {
       const ix = indices_();
       const hoy = dia(new Date());
-      filas = filas.map((r) => espejo_(r, ix, hoy));
+      // Cancelaciones (usuario, 22-oct, como en el correo al asesor): la cuenta padre de la línea, también ya cancelada, y
+      // la región por la lada. No se guardan: se leen del inventario
+      filas = filas.map((r) => {
+        const o = espejo_(r, ix, hoy);
+        if (!o['CANCELACION']) return o;
+        const fl = registroDeLinea_(o, ix);
+        return Object.assign(o === r ? Object.assign({}, r) : o, {
+          'CUENTA_PADRE': fl ? txt(LineasUtil.col(fl, 'CUENTA PADRE')) : '', 'REGION': LineasUtil.regionDeNumero(o['NUMERO']),
+        });
+      });
     }
     filas.sort((a, b) => (b.FECHA instanceof Date ? b.FECHA.getTime() : 0) - (a.FECHA instanceof Date ? a.FECHA.getTime() : 0));
     // puedeOperar: los de Líneas (Corregir resguardo y Quitar del panel; pendiente 3.12); operaPanel: quién las ve en el
