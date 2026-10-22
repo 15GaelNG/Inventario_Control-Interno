@@ -442,7 +442,8 @@ test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo 
   // (lineas-telefonicas-<parte>.html) es (T) => {…}: lo del arranque sale de T, lo de otra parte de T.de('parte') y un let
   // que usan varias lo publica su dueña con get/set en T. Una parte no declara lo que otra ya tiene.
   const tel = read('src/html/js/lineas-telefonicas.html');
-  assert.match(tel, /const T = contextoTelefonicas\(\);/);
+  assert.match(tel, /Lineas\.telefonicas = Object\.assign\(Partes\.crear\('Líneas Telefónicas'\), \{/, 'el mecanismo es el componente Partes');
+  assert.match(tel, /const T = Lineas\.telefonicas\.contexto\(\);/);
   assert.match(tel, /\n      T\.montar\(\{/);
   assert.ok(tel.indexOf('T.montar({') < tel.indexOf('Tabs.iniciar('), 'se monta antes del cableado de eventos');
   const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/lineas-telefonicas-(\w+)'\)/g)].map((m) => m[1]);
@@ -460,6 +461,42 @@ test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo 
     // Un let que usan varias partes lo publica su dueña: las demás lo leen con T.
     [...js.matchAll(/Object\.defineProperty\(T, '(\w+)'/g)].forEach((m) => assert.match(js, new RegExp('\\n      let ' + m[1] + ' = '), p + ': ' + m[1] + ' es suyo'));
   });
+});
+
+test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con T.de, la otra lo publica (fase 6.1b)', () => {
+  // initVehiculos era una función de 2,044 líneas; tools/app/partir-vehiculos.js la abrió (22-oct) con el motor de
+  // tools/partir/en-partes.js. Cada parte (app-vehiculos-<parte>.html) es Vehiculos.registrar('parte', (T) => {…}).
+  const veh = read('src/html/js/app-vehiculos.html').replace(/\r\n/g, '\n');
+  assert.match(veh, /\n  const Vehiculos = Partes\.crear\('Vehículos'\);/);
+  const init = veh.slice(veh.indexOf('async function initVehiculos('));
+  assert.match(init, /^async function initVehiculos\(\) \{\n(    \/\/[^\n]*\n)?    const T = Vehiculos\.contexto\(\);/, 'el contexto es lo primero');
+  assert.ok(init.indexOf('T.montar({') > 0 && init.indexOf('T.montar({') < init.indexOf("getElementById('veh-detalle').addEventListener("),
+    'se monta antes del cableado de eventos');
+  const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/app-vehiculos-(\w+)'\)/g)].map((m) => m[1]);
+  assert.deepEqual(partes.slice(0, 4), ['ficha', 'registros', 'capturas', 'documentos']);
+  const declarados = {};
+  const publica = {};
+  const pedidos = [];
+  partes.forEach((p) => {
+    const js = read('src/html/js/app-vehiculos-' + p + '.html').replace(/\r\n/g, '\n');
+    assert.match(js, new RegExp("\\n  Vehiculos\\.registrar\\('" + p + "', \\(T\\) => \\{\\n"), p + ': se registra con Vehiculos.registrar');
+    assert.doesNotMatch(js, /T\.de\('[a-z]+'\)\./, p + ': de otra parte se toman nombres, no el objeto');
+    [...js.matchAll(/^    (?:async )?function (\w+)\(|^    (?:const|let) (\w+) =/gm)].forEach((m) => {
+      const n = m[1] || m[2];
+      assert.ok(!declarados[n], n + ' está en ' + declarados[n] + ' y en ' + p);
+      declarados[n] = p;
+    });
+    publica[p] = [...(/\n    return \{\n([\s\S]*?)\n    \};\n  \}\);/.exec(js) || ['', ''])[1].matchAll(/(\w+): \1/g)].map((m) => m[1]);
+    [...js.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push([p, m[2], n.trim()])));
+  });
+  [...veh.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push(['principal', m[2], n.trim()])));
+  assert.ok(pedidos.length > 30, pedidos.length + ' nombres pedidos con T.de');
+  const faltan = pedidos.filter(([, de, n]) => de !== 'principal' && !(publica[de] || []).includes(n)).map(([p, de, n]) => p + ' pide ' + n + ' de ' + de);
+  assert.deepEqual(faltan, [], 'lo que una parte pide con T.de, la otra lo publica');
+  // El mecanismo (T.de con Proxy) vive solo en el componente: ninguna pantalla lleva otra copia
+  const conProxy = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html') && /new Proxy\(/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(conProxy, ['src/html/js/componentes/partes.html']);
 });
 
 test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
@@ -599,7 +636,7 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
     }));
   assert.deepEqual(fuera, [], 'Usa Ficha.migas / Ficha.encabezado (componentes/ficha.html)');
   const usa = (archivo, n) => assert.ok((read(archivo).match(/Ficha\.encabezado\(/g) || []).length >= n, archivo + ' usa Ficha.encabezado');
-  usa('src/html/js/app-vehiculos.html', 1);
+  usa('src/html/js/app-vehiculos-ficha.html', 1);
   usa('src/html/js/app-cajachica.html', 1);
   usa('src/html/js/app-permisos.html', 3);
   usa('src/html/js/lineas-telefonicas-ficha.html', 1);
@@ -2506,7 +2543,7 @@ test('las fichas van en una llamada y piden lo de otro módulo solo si la person
   // que la deja en null sin permiso (su pestaña no aparece), y la anota en FICHAS_GUARDADAS para
   // que un guardado borre su copia.
   const FICHAS = [
-    { archivo: 'src/html/js/app-vehiculos.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
+    { archivo: 'src/html/js/app-vehiculos-ficha.html', funcion: 'abrirFichaVehiculo', servidor: 'apiFichaVehiculo' },
     { archivo: 'src/html/js/app-cajachica.html', funcion: 'abrirFichaCajaChica', servidor: 'apiFichaCajaChica' },
   ];
   const api = read('src/ClientApi.gs');

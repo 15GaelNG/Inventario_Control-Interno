@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVOS = ['app', 'app-vehiculos', 'app-incidencias', 'app-uber', 'app-tickets'];
+const ARCHIVOS = ['app', 'app-vehiculos', 'app-vehiculos-ficha', 'app-vehiculos-registros', 'app-vehiculos-capturas', 'app-vehiculos-documentos', 'app-vehiculos-accesorios', 'app-incidencias', 'app-uber', 'app-tickets'];
 
 // Con \n (en Windows el archivo se baja con CRLF)
 module.exports = ARCHIVOS.map((a) => fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', a + '.html'), 'utf8'))

@@ -213,7 +213,14 @@ acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin
       la de Jorge: la base sale idéntica y lo de cada rama viaja con su pantalla). `slugCampo` y `leerArchivoBase64`
       se quedan en la base (las usan otros). Contrato nuevo y permanente del **orden de carga**
       (`tests/orden-de-carga.js`): nada que corre al cargar usa algo de un archivo posterior.
-- [ ] 6.1b Abrir `initVehiculos` (2,044 líneas, una sola función) como la 6.2b. Con su propio plan.
+- [x] 6.1b `initVehiculos` (2,044 líneas, una sola función) en partes (22-oct), con `tools/app/partir-vehiculos.js`
+      sobre el motor genérico `tools/partir/en-partes.js`. Queda el arranque + la lista (`app-vehiculos.html`, 1,167
+      líneas) y cuatro partes: `-ficha` (377), `-registros` (231), `-capturas` (379), `-documentos` (482). El
+      mecanismo de la 6.2b pasó a ser un componente, `componentes/partes.html` (`Partes.crear`), y Telefónicas lo usa
+      también (sin su copia). Salió muy limpio: un solo `let` compartido (`fichaVehiculoAbierta`, 3 lecturas como
+      `T.x`), nada perezoso, se monta antes del cableado. Anclas por nombre: en `ayrton` sale también `-accesorios`; en
+      la rama de Jorge, editar responsiva/adherente cae en `-documentos` (probado con `--raiz`). Vista previa: las 106
+      escenas, todas las de Vehículos y Líneas idénticas, sin errores nuevos.
 - [x] 6.2 `lineas.html` por pantallas (19-oct), con `tools/lineas/partir.js`: el archivo era **una sola función**
       (`const Lineas = (function () { … })()`), así que no bastaba con mover. Queda la base (`lineas.html`, 2,394
       líneas: utilidades, formularios, estado) y una pantalla por archivo (`lineas-telefonicas`, `-panorama`,
