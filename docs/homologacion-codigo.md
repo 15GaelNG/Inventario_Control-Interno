@@ -259,6 +259,13 @@ acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin
       No se sacaron `Migracion*` del build de prod: con el candado no hacen falta fuera, y quitarlos rompería
       `revisarEntorno` y lo que los llama.
 
+- [x] 6.5 Reducir fotos: `componentes/imagen.html` (22-oct). Había 5 copias (Firma, Líneas ×2, Arqueos y la de la
+      inspección vehicular en `ayrton`); en el celular abrir fotos de cámara completas, y varias a la vez, dejaba la
+      pantalla en blanco. `Imagen.reducir` abre con `createImageBitmap` reducido o `<img>` con URL del archivo (nunca
+      como texto), de una en una en toda la app, fondo blanco, nunca agranda. Firma y Líneas la usan con sus mismos
+      tamaños y calidades. **Falta Arqueos**: se pasa al integrar la rama de Jorge (él cambió esa función: aviso HEIC).
+      Contrato: ninguna copia nueva fuera de la lista que solo encoge.
+
 ## Fase 7 — Pruebas que no estorben
 
 - [x] Clasificar las aserciones de `source-contracts` (15-oct, `node tools/pruebas/clasificar-contratos.js

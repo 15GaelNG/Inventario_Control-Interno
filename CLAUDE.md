@@ -118,6 +118,10 @@ encabezado de una ficha), `FiltroTipo` (el filtro rápido por tipo/estatus) y `P
 por pasos: `Pasos.htmlChips` + `Pasos.navegar`; `libre`, `guardarAlFinal`). El error de un campo, fuera de un
 `Formulario`: `Formulario.marcarError(caja, mensaje)`. Cada uno tiene su contrato: una copia nueva hace fallar las pruebas.
 
+También `Partes` (una pantalla grande abierta en archivos, 6.1b) e `Imagen` (22-oct): **reducir una foto antes de
+subirla** es `Imagen.reducir(archivo, { lado | ancho, calidad })`, nunca otra copia con `new Image()` + lienzo — la abre
+con poca memoria y de una en una (en el celular, abrir fotos de cámara completas dejaba la pantalla en blanco).
+
 - **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
   su perfil de Google, del directorio del dominio (`FotosDirectorio.gs`, People API, guardada en
   caché y rehecha por el Calentador). No pintes iniciales a mano.

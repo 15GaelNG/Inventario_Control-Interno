@@ -360,29 +360,21 @@
       contenedor.querySelector('.firma-borrar').addEventListener('click', limpiar);
 
       // ---------- plan B: foto de la firma ----------
-      /** Reduce la foto a 1200 px de ancho (JPEG); si el navegador no puede, va la original */
-      function reducir(dataUrl, mimeType) {
-        const original = { base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mimeType: mimeType };
-        const prueba = document.createElement('canvas');
-        if (!(prueba.getContext && prueba.getContext('2d'))) return Promise.resolve(original);
-        return new Promise((resolver) => {
-          const img = new Image();
-          img.onload = () => {
-            const escala = Math.min(1, 1200 / (img.naturalWidth || 1200));
-            if (escala === 1 && mimeType === 'image/png') { resolver(original); return; }
-            const c = document.createElement('canvas');
-            c.width = Math.round(img.naturalWidth * escala);
-            c.height = Math.round(img.naturalHeight * escala);
-            const x = c.getContext('2d');
-            x.fillStyle = '#ffffff';   // JPEG no tiene transparencia: fondo blanco de papel
-            x.fillRect(0, 0, c.width, c.height);
-            x.drawImage(img, 0, 0, c.width, c.height);
-            const url = c.toDataURL('image/jpeg', 0.85);
-            resolver({ base64: url.slice(url.indexOf(',') + 1), mimeType: 'image/jpeg' });
-          };
-          img.onerror = () => resolver(original);
-          img.src = dataUrl;
+      /**
+       * Reduce la foto a 1200 px de ancho (JPEG, con Imagen: componentes/imagen.html); un PNG que ya cabe, o una que el
+       * navegador no sabe leer, va la original (se lee entera solo en ese caso)
+       */
+      function reducir(elegido) {
+        const original = () => new Promise((resolver, rechazar) => {
+          const lector = new FileReader();
+          lector.onload = () => { const d = String(lector.result); resolver({ base64: d.slice(d.indexOf(',') + 1), mimeType: elegido.type }); };
+          lector.onerror = () => rechazar(new Error('No se pudo leer la imagen'));
+          lector.readAsDataURL(elegido);
         });
+        if (typeof Imagen === 'undefined') return original();
+        return Imagen.reducir(elegido, { ancho: 1200, calidad: 0.85 })
+          .then((r) => (!r || (r.cabia && elegido.type === 'image/png') ? original() : { base64: r.base64, mimeType: 'image/jpeg' }))
+          .catch(original);
       }
 
       /** Mete una foto ya lista (subida por la persona, o precargada por el módulo) */
@@ -414,9 +406,9 @@
             if (typeof Notificar !== 'undefined') Notificar.error('La imagen pesa más de ' + cfg.maxMB + ' MB');
             return;
           }
-          const lector = new FileReader();
-          lector.onload = async () => ponerFoto(await reducir(String(lector.result), elegido.type));
-          lector.readAsDataURL(elegido);
+          reducir(elegido).then(ponerFoto).catch((err) => {
+            if (typeof Notificar !== 'undefined') Notificar.error(err.message);
+          });
         });
       }
       // Cualquier cambio de ancho del recuadro (girar el teléfono, abrir el menú, mostrarse el

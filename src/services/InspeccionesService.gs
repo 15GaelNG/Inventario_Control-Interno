@@ -83,6 +83,8 @@ const InspeccionesService = (function () {
     ['SISTEMA ELECTRICO', 'Sistema eléctrico'], ['SISTEMA MECANICO', 'Sistema mecánico'],
   ];
   const COL_SECCIONES_FOTOS = 'SECCIONES FOTOS';
+  /** Fotos por sección como máximo (usuario, 22-oct); la pantalla usa el mismo número (estructura.maxFotos) */
+  const MAX_FOTOS_SECCION = 20;
   const TIPOS_FOTO = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif' };
   const TEMP_FOTOS = ['TEMP', 'FOTOS DE INSPECCION'];
 
@@ -1007,6 +1009,7 @@ const InspeccionesService = (function () {
         .map((d) => ({ campo: 'INS ' + d, etiqueta: d.charAt(0) + d.slice(1).toLowerCase(), ruta: configuracion[d] })),
       // Las secciones de fotos del tipo (cada una lleva al menos una foto)
       fotos: seccionesFotos_(configuracion),
+      maxFotos: MAX_FOTOS_SECCION,
     };
     estructura.piezas = estructura.secciones.reduce((n, s) => n + s.campos.length, 0);
 
@@ -1066,6 +1069,13 @@ const InspeccionesService = (function () {
     return s;
   }
   /** La subcarpeta de una sección, reconociendo la que ya existe aunque varíe en acentos o espacios */
+  /** Que la sección no pase del máximo antes de agregarle una */
+  function revisarMaximo_(carpetaSeccion) {
+    const archivos = carpetaSeccion.getFiles();
+    let n = 0;
+    while (archivos.hasNext()) { const a = archivos.next(); if (!a.isTrashed || !a.isTrashed()) n++; }
+    if (n >= MAX_FOTOS_SECCION) throw new Error('Máximo ' + MAX_FOTOS_SECCION + ' fotos por sección.');
+  }
   function carpetaSeccion_(carpeta, seccion) {
     const buscado = SheetUtils.normalizarEncabezado_(seccion);
     const hijas = carpeta.getFolders();
@@ -1103,6 +1113,7 @@ const InspeccionesService = (function () {
     Permisos.puedeEditar(token, MODULO);
     const foto = blobDeFoto_(archivo, seccion);
     const carpeta = carpetaSeccion_(temporalValida_(carpetaId), foto.seccion);
+    revisarMaximo_(carpeta);
     const nombre = foto.seccion + ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HHmmss') + ' ' +
       Utilities.getUuid().slice(0, 4) + foto.extension;
     const f = DriveUtils.marcarAutor(carpeta.createFile(foto.blob.setName(nombre)));
@@ -1199,13 +1210,14 @@ const InspeccionesService = (function () {
     // Una carpeta de sección que el tipo ya no pide (inspecciones viejas) también se ve, al final
     const extra = Object.keys(fotos).filter((k) => fotos[k].length && !x.secciones.some((s) => s.id === k) && k !== ExpedienteNuco.FIRMAS_Y_DIAGRAMAS)
       .map((k) => ({ id: k, titulo: k.charAt(0) + k.slice(1).toLowerCase() }));
-    return { secciones: x.secciones.concat(extra), fotos };
+    return { secciones: x.secciones.concat(extra), fotos, maxFotos: MAX_FOTOS_SECCION };
   }
   /** Agrega una foto a una sección de una inspección guardada → { id, nombre, miniatura } */
   function fotosAgregar(token, id, seccion, archivo) {
     const x = inspeccionConCarpeta_(token, id, true);
     const foto = blobDeFoto_(archivo, seccion);
     const carpeta = carpetaSeccion_(x.carpeta, foto.seccion);
+    revisarMaximo_(carpeta);
     const f = ExpedienteNuco.guardar(foto.blob, carpeta, foto.seccion, x.nucco, x.fila['FECHA'] || new Date(), foto.extension);
     ExpedienteNuco.olvidarFotos(x.carpeta.getId());
     return { id: f.getId(), nombre: f.getName(), miniatura: null };

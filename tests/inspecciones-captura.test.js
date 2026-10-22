@@ -97,7 +97,7 @@ window.callServer = (fn, token, ...args) => {
 window.callServerCacheado = (fn, ...args) => window.callServer(fn, 't', ...args);
 let confirmar = true;
 window.eval(['componentes/formato.html', 'componentes/iconos.html', 'componentes/notificar.html', 'componentes/combobox.html', 'componentes/campo-auto.html',
-  'componentes/folio-nucco.html', 'componentes/lienzo.html', 'componentes/firma.html', 'componentes/subir-fotos.html'].map(scriptDe).join('\n') + `
+  'componentes/folio-nucco.html', 'componentes/lienzo.html', 'componentes/imagen.html', 'componentes/firma.html', 'componentes/subir-fotos.html'].map(scriptDe).join('\n') + `
   var state = { token: 't', sesion: { nombre: 'AYRTON SEPULVEDA' } };
   var Confirmar = { pedir: () => Promise.resolve(window.__confirmar()) };
   function escaparHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';'); }
@@ -110,8 +110,6 @@ window.eval(['componentes/formato.html', 'componentes/iconos.html', 'componentes
   window.Firma = Firma;
 `);
 window.__confirmar = () => confirmar;
-window.URL.createObjectURL = () => 'blob:prueba';
-window.URL.revokeObjectURL = () => {};
 
 const doc = window.document;
 const $ = (s) => doc.querySelector(s);

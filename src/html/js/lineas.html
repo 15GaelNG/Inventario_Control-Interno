@@ -1465,28 +1465,11 @@
       return Promise.all(lectores).then((pares) => pares.reduce((o, [k, v]) => { o[k] = v; return o; }, {}));
     }
 
-    /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82). */
+    /** Redimensiona una imagen en el navegador antes de subirla (máx. `maxDim` px, JPEG calidad .82): Imagen.reducir. */
     function redimensionarImagen(archivo, maxDim) {
-      return new Promise((resolve, reject) => {
-        const lector = new FileReader();
-        lector.onerror = () => reject(new Error('No se pudo leer el archivo.'));
-        lector.onload = () => {
-          const img = new Image();
-          img.onerror = () => reject(new Error('Archivo de imagen inválido.'));
-          img.onload = () => {
-            let w = img.width, h = img.height;
-            if (w > maxDim || h > maxDim) {
-              const factor = maxDim / Math.max(w, h);
-              w = Math.round(w * factor); h = Math.round(h * factor);
-            }
-            const lienzo = document.createElement('canvas');
-            lienzo.width = w; lienzo.height = h;
-            lienzo.getContext('2d').drawImage(img, 0, 0, w, h);
-            resolve({ mime: 'image/jpeg', base64: lienzo.toDataURL('image/jpeg', 0.82).split(',')[1] });
-          };
-          img.src = lector.result;
-        };
-        lector.readAsDataURL(archivo);
+      return Imagen.reducir(archivo, { lado: maxDim, calidad: 0.82 }).then((r) => {
+        if (!r) throw new Error('Archivo de imagen inválido.');
+        return { mime: 'image/jpeg', base64: r.base64 };
       });
     }
 
@@ -1982,26 +1965,9 @@
     }
 
     function jpegDeFoto(archivo, maxDim, calidad) {
-      return new Promise((resolve, reject) => {
-        const url = URL.createObjectURL(archivo);
-        const img = new Image();
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error(archivo.name + ': no se pudo leer la imagen.')); };
-        img.onload = () => {
-          const k = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
-          const w = Math.max(1, Math.round(img.naturalWidth * k));
-          const h = Math.max(1, Math.round(img.naturalHeight * k));
-          const lienzo = document.createElement('canvas');
-          lienzo.width = w; lienzo.height = h;
-          const g = lienzo.getContext('2d');
-          g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
-          g.drawImage(img, 0, 0, w, h);
-          URL.revokeObjectURL(url);
-          const bin = atob(lienzo.toDataURL('image/jpeg', calidad).split(',')[1]);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          resolve({ ancho: w, alto: h, bytes: bytes });
-        };
-        img.src = url;
+      return Imagen.reducir(archivo, { lado: maxDim, calidad: calidad }).then((r) => {
+        if (!r) throw new Error(archivo.name + ': no se pudo leer la imagen.');
+        return { ancho: r.ancho, alto: r.alto, bytes: Imagen.bytes(r.base64) };
       });
     }
 

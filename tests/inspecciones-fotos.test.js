@@ -18,6 +18,7 @@ function carpeta(nombre, padre) {
     getId: () => c.id, getName: () => c.nombre, getLastUpdated: () => new Date(c.act),
     getParents: () => iter(c.padre ? [nodos[c.padre]] : []),
     getFolders: () => iter(Object.values(nodos).filter((x) => x.tipo === 'carpeta' && x.padre === c.id && !x.papelera)),
+    getFiles: () => iter(Object.values(nodos).filter((x) => x.tipo === 'archivo' && x.padre === c.id && !x.papelera)),
     createFolder: (nom) => carpeta(nom, c),
     createFile: (blob) => archivo(blob.nombre, c),
     setTrashed: (v) => { c.papelera = v; },
@@ -30,6 +31,7 @@ function archivo(nombre, padre) {
   Object.assign(a, {
     getId: () => a.id, getName: () => a.nombre, setName: (x) => { a.nombre = x; return a; },
     getParents: () => iter([nodos[a.padre]]), moveTo: (c) => { a.padre = c.id; }, setTrashed: (v) => { a.papelera = v; },
+    isTrashed: () => a.papelera,
     getUrl: () => 'https:' + '/' + '/drive.google.com/file/d/' + a.id + '/view',
   });
   nodos[a.id] = a;
@@ -146,6 +148,12 @@ ok(!vivo(nodos[nueva.id]), 'quitar la manda a la papelera');
 const ultima = hijos(subcarpeta(inspeccion, 'LATONERIA Y PINTURA'))[0];
 ok(truena(() => S.fotosQuitar('t', 'INS-1', ultima.id), /al menos una/) && vivo(ultima), 'la última de una sección no se puede quitar');
 ok(truena(() => S.fotosQuitar('t', 'INS-1', pdf.id), /no es de esta inspección/), 'ni algo que no es una foto de sus secciones');
+
+console.log('5b. Máximo 20 fotos por sección');
+const llena = S.fotosPreparar('t').carpetaId;
+for (let i = 0; i < 20; i++) S.fotosSubir('t', llena, 'NEUMATICOS', foto);
+ok(truena(() => S.fotosSubir('t', llena, 'NEUMATICOS', foto), /Máximo 20/), 'la foto 21 de una sección se rechaza');
+ok(!!S.fotosSubir('t', llena, 'INTERIORES', foto), 'otra sección sigue aceptando');
 
 console.log('6. Cancelar una captura');
 const otra = S.fotosPreparar('t').carpetaId;

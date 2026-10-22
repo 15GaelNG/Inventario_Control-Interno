@@ -33,6 +33,8 @@
   .sf-quitar:disabled { opacity: .35; cursor: not-allowed; }
   .sf-quitar svg, .sf-reintentar svg { width: 14px; height: 14px; }
   .sf-falta { margin: 8px 0 0; font-size: var(--texto-xs); color: var(--color-warning-text, #975a16); }
+  .sf-aviso { margin: 8px 0 0; font-size: var(--texto-xs); color: var(--color-danger); }
+  .sf-llena .sf-botones { display: none; }
 </style>
 
 <script>
@@ -46,6 +48,7 @@
    *     quitar: (foto) => Promise,                                // { id, seccion }: la manda a la papelera
    *     iniciales: { NEUMATICOS: [{ id, nombre, miniatura }] },  // lo que ya está (editar o un borrador)
    *     puedeQuitar: (seccion, cuantas) => true,                 // p. ej. no dejar una sección vacía
+   *     maximo: 20,                                              // fotos por sección (sin él, sin límite)
    *     alCambiar: () => {},                                     // cada vez que algo cambia
    *   });
    *   fotos.faltan()     // títulos de las secciones sin ninguna foto lista
@@ -53,7 +56,7 @@
    *   fotos.fotos()      // { NEUMATICOS: [{ id, nombre }] } (solo las ya subidas)
    *   fotos.destruir()
    *
-   * Cada foto sube en cuanto se elige (hasta 3 a la vez; se abren y reducen de una en una, por la memoria del celular), así guardar no manda todo de golpe y si se va la señal solo se
+   * Cada foto sube en cuanto se elige (hasta 3 a la vez; Imagen las abre de una en una, por la memoria del celular), así guardar no manda todo de golpe y si se va la señal solo se
    * reintenta la que falló. Antes de subirla se reduce en el navegador (2000 px por lado, JPEG .85: de ~4 MB a ~400 KB;
    * el navegador ya la endereza). Si el navegador no la sabe leer (HEIC en una PC), sube el archivo tal cual si pesa
    * menos de 10 MB. "Tomar foto" solo aparece en pantallas táctiles. Prueba: tests/subir-fotos.test.js.
@@ -74,59 +77,13 @@
     }
 
     /**
-     * La foto abierta, ya reducida. En el celular la memoria es lo que manda (22-oct, pantalla en blanco al subir fotos
-     * de la cámara): una foto de 12-50 MP abierta completa ocupa 50-200 MB, así que se le pide al navegador que la
-     * decodifique directo al ancho de LADO (createImageBitmap con resizeWidth); si no sabe, con <img> como antes.
-     * → { fuente (algo que drawImage acepta), ancho, alto, soltar() } o null si no la sabe leer
-     */
-    async function abrir(archivo) {
-      if (typeof createImageBitmap === 'function') {
-        try {
-          // Una foto chica (< 1.5 MB, captura de pantalla, foto ya reducida) se abre tal cual: no se agranda
-          const b = await createImageBitmap(archivo, archivo.size > 1.5 * 1024 * 1024
-            ? { resizeWidth: LADO, resizeQuality: 'high', imageOrientation: 'from-image' } : { imageOrientation: 'from-image' });
-          return { fuente: b, ancho: b.width, alto: b.height, soltar: () => { if (b.close) b.close(); } };
-        } catch (e) { /* este navegador no reduce al abrir (o no la sabe leer): con <img> */ }
-      }
-      return new Promise((resolve) => {
-        const url = URL.createObjectURL(archivo);
-        const img = new Image();
-        const soltar = () => { img.src = ''; URL.revokeObjectURL(url); };
-        img.onerror = () => { soltar(); resolve(null); };
-        img.onload = () => resolve({ fuente: img, ancho: img.naturalWidth, alto: img.naturalHeight, soltar });
-        img.src = url;
-      });
-    }
-    /** Dibuja la foto con su lado más largo en `lado` px → JPEG en data URL; el lienzo se suelta al terminar */
-    function jpeg(abierta, lado, calidad) {
-      const k = Math.min(1, lado / Math.max(abierta.ancho, abierta.alto));
-      const lienzo = document.createElement('canvas');
-      lienzo.width = Math.max(1, Math.round(abierta.ancho * k));
-      lienzo.height = Math.max(1, Math.round(abierta.alto * k));
-      const g = lienzo.getContext('2d');
-      g.fillStyle = '#ffffff';
-      g.fillRect(0, 0, lienzo.width, lienzo.height);
-      g.drawImage(abierta.fuente, 0, 0, lienzo.width, lienzo.height);
-      const url = lienzo.toDataURL('image/jpeg', calidad);
-      lienzo.width = 0;
-      lienzo.height = 0;
-      return url;
-    }
-
-    /**
-     * El archivo listo para subir: JPEG reducido y su miniatura chica (~240 px: la rejilla nunca muestra la foto
-     * original), o tal cual si el navegador no lo sabe dibujar. → { nombre, mime, base64, miniatura }
+     * El archivo listo para subir: JPEG reducido (Imagen.reducir: poca memoria, de una en una) y su miniatura chica
+     * (240 px: la rejilla nunca muestra la foto original), o tal cual si el navegador no lo sabe dibujar (HEIC en una PC).
+     * → { nombre, mime, base64, miniatura }
      */
     async function preparar(archivo) {
-      const nombreJpg = String(archivo.name || 'foto').replace(/\.[^.]+$/, '') + '.jpg';
-      const abierta = await abrir(archivo);
-      if (abierta) {
-        try {
-          return { nombre: nombreJpg, mime: 'image/jpeg', base64: jpeg(abierta, LADO, CALIDAD).split(',')[1], miniatura: jpeg(abierta, 240, 0.7) };
-        } finally {
-          abierta.soltar();
-        }
-      }
+      const r = await Imagen.reducir(archivo, { lado: LADO, calidad: CALIDAD, miniatura: 240 });
+      if (r) return { nombre: String(archivo.name || 'foto').replace(/.[^.]+$/, '') + '.jpg', mime: 'image/jpeg', base64: r.base64, miniatura: r.miniatura };
       if (archivo.size > MAX_CRUDO) throw new Error(archivo.name + ': el navegador no puede leer esta imagen y pesa más de 10 MB.');
       const d = await leerDataUrl(archivo);
       return { nombre: archivo.name, mime: archivo.type || 'application/octet-stream', base64: d.split(',')[1], miniatura: '' };
@@ -136,6 +93,8 @@
       const secciones = opciones.secciones || [];
       const prepararArchivo = opciones.preparar || preparar;   // las pruebas lo cambian (jsdom no dibuja)
       const puedeQuitar = opciones.puedeQuitar || (() => true);
+      const maximo = opciones.maximo || Infinity;
+      const avisos = {};   // sección → 'Máximo 20 fotos por sección…' (al elegir de más)
       const avisar = () => { if (opciones.alCambiar) opciones.alCambiar(); };
       const esc = Formato.esc;
       let n = 0;
@@ -159,6 +118,7 @@
           </div>
           <div class="sf-rejilla"></div>
           <p class="sf-falta" hidden>Falta al menos una foto</p>
+          <p class="sf-aviso" hidden></p>
         </div>`).join('') + '</div>';
 
       const cajaDe = (s) => Array.from(contenedor.querySelectorAll('.sf-seccion')).find((c) => c.dataset.seccion === s);
@@ -183,17 +143,21 @@
         caja.querySelector('.sf-cuenta').textContent = (nListas === 1 ? '1 foto' : nListas + ' fotos') + (subiendo ? ' · subiendo ' + subiendo : '');
         caja.querySelector('.sf-falta').hidden = nListas > 0 || subiendo > 0;
         caja.classList.toggle('sf-incompleta', nListas === 0 && !subiendo);
+        // El límite: con la sección llena se esconden los botones; el aviso se va al quitar alguna
+        const llena = mias.length >= maximo;
+        caja.classList.toggle('sf-llena', llena);
+        if (!llena && !avisos[s + '!']) delete avisos[s];
+        delete avisos[s + '!'];
+        const aviso = caja.querySelector('.sf-aviso');
+        aviso.textContent = avisos[s] || (llena ? 'Llegaste al máximo de ' + maximo + ' fotos de esta sección.' : '');
+        aviso.hidden = !aviso.textContent;
       }
-
-      // Abrir y reducir, de UNA en una (es lo que pide memoria); subir, varias a la vez (ya pesan ~400 KB)
-      let turnoPreparar = Promise.resolve();
-      const enTurno = (fn) => { const p = turnoPreparar.then(fn); turnoPreparar = p.catch(() => {}); return p; };
 
       function siguiente() {
         while (vivo && activas < A_LA_VEZ && cola.length) {
           const f = cola.shift();
           activas++;
-          enTurno(() => prepararArchivo(f.archivo))
+          prepararArchivo(f.archivo)
             .then((listo) => {
               if (listo.miniatura && !f.miniatura) { f.miniatura = listo.miniatura; if (vivo) pintar(f.seccion); }
               const datos = { nombre: listo.nombre, mime: listo.mime, base64: listo.base64 };
@@ -215,7 +179,13 @@
       }
 
       function agregar(seccion, archivos) {
-        Array.from(archivos || []).forEach((archivo) => {
+        const elegidos = Array.from(archivos || []);
+        const caben = Math.max(0, maximo - fotos.filter((f) => f.seccion === seccion).length);
+        if (elegidos.length > caben) {
+          avisos[seccion] = 'Máximo ' + maximo + ' fotos por sección' + (caben ? ': se agregaron ' + caben + ' de las ' + elegidos.length + ' que elegiste.' : '.');
+          avisos[seccion + '!'] = true;   // que el primer pintado no lo borre
+        }
+        elegidos.slice(0, caben).forEach((archivo) => {
           // Sin vista previa de la foto original (pesaría lo mismo que abrirla completa): la miniatura chica llega al prepararla
           const f = { clave: 'f' + (++n), seccion, estado: 'subiendo', nombre: archivo.name, miniatura: '', archivo };
           fotos.push(f);

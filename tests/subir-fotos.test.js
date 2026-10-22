@@ -77,6 +77,24 @@ function elegir(caja, seccion, archivos) {
   ok(fotos.fotos().NEUMATICOS.length === 1, 'se quitó una de Neumáticos');
   ok(quitarDe('NEUMATICOS')[0].disabled, 'y la que queda ya no se puede quitar');
 
+  console.log('4b. Máximo por sección');
+  const caja3 = document.createElement('div');
+  document.body.appendChild(caja3);
+  const f3 = SubirFotos.crear(caja3, {
+    secciones: [{ id: 'OTROS', titulo: 'Otros' }], maximo: 3,
+    preparar: (a) => Promise.resolve({ nombre: a.name, mime: 'image/jpeg', base64: 'eA==' }),
+    subir: (s, f) => Promise.resolve({ id: f.nombre, nombre: f.nombre }),
+  });
+  elegir(caja3, 'OTROS', [archivo('1.jpg'), archivo('2.jpg'), archivo('3.jpg'), archivo('4.jpg'), archivo('5.jpg')]);
+  await espera(); await espera(); await espera();
+  ok(f3.fotos().OTROS.length === 3, 'de 5 elegidas solo entran 3 (el máximo)');
+  ok(/se agregaron 3 de las 5/.test(caja3.querySelector('.sf-aviso').textContent) && !caja3.querySelector('.sf-aviso').hidden, 'y dice cuántas entraron');
+  ok(caja3.querySelector('.sf-seccion').classList.contains('sf-llena'), 'con la sección llena se esconden los botones');
+  caja3.querySelector('[data-quitar]').click();
+  await espera(); await espera();
+  ok(!caja3.querySelector('.sf-seccion').classList.contains('sf-llena') && caja3.querySelector('.sf-aviso').hidden, 'al quitar una, se puede agregar otra y se va el aviso');
+  f3.destruir();
+
   console.log('5. Lo que ya estaba (editar / borrador)');
   const caja2 = document.createElement('div');
   document.body.appendChild(caja2);

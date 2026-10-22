@@ -998,6 +998,7 @@
         fotosCaptura = SubirFotos.crear(caja, {
           secciones: estructura.fotos,
           iniciales: iniciales || {},
+          maximo: estructura.maxFotos || 20,
           subir: async (seccion, archivo) => callServer('apiInspeccionesFotosSubir', state.token, await carpetaFotos_(), seccion, archivo),
           quitar: (f) => callServer('apiInspeccionesFotosQuitarTemporal', state.token, fotosCarpetaId, f.id),
           alCambiar: () => { errorGeneral(null); actualizarPasos(); programarGuardarBorrador_(); },
@@ -1441,6 +1442,7 @@
     return SubirFotos.crear(caja, {
       secciones: r.secciones,
       iniciales: r.fotos,
+      maximo: r.maxFotos || 20,
       subir: (seccion, archivo) => callServer('apiInspeccionesFotosAgregar', state.token, idInspeccion, seccion, archivo),
       quitar: (f) => callServer('apiInspeccionesFotosQuitar', state.token, idInspeccion, f.id),
       puedeQuitar: (seccion, cuantas) => cuantas > 1,
