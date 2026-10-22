@@ -7409,7 +7409,7 @@
           columnas: COLUMNAS[vista],
           ordenInicial: { campo: 'FECHA', dir: 'desc' },
           textoVacio: vista === 'RESGUARDOS' ? 'Todavía no se ha mandado nada a resguardo' : 'No hay líneas en cancelación',
-          // La base; el Excel por asesor es otro botón (#lnr-excel-asesores, usuario, 22-oct)
+          // La base; «Base cancelaciones» (por asesor) va a su lado (botonBaseCancelaciones, usuario, 22-oct)
           exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
@@ -7419,8 +7419,39 @@
         });
         tabla.setDatos(filasVista());
         $('#lnr-solo-lectura', raiz).hidden = puede || opera;
-        // Excel por asesor: solo en Cancelaciones y con el permiso de exportar, como el botón de la tabla
-        $('#lnr-excel-asesores', raiz).hidden = vista !== 'CANCELACIONES' || (typeof puedeExportarAqui === 'function' && !puedeExportarAqui());
+        if (vista === 'CANCELACIONES') botonBaseCancelaciones();
+      }
+
+      /**
+       * «Base cancelaciones» (usuario, 22-oct): al lado de «Exportar a Excel» de la tabla (que da la base), el Excel por
+       * asesor (descargarPorAsesor). La barra de la tabla se arma una vez al crearla; sin el botón de la tabla (sin permiso
+       * de exportar) tampoco sale este.
+       */
+      function botonBaseCancelaciones() {
+        const excel = $('#lnr-tabla .dt-btn-excel', raiz);
+        if (!excel) return;
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'btn-excel';
+        boton.id = 'lnr-base-cancelaciones';
+        boton.title = 'Las líneas POR FIRMAR, una hoja por compañía y asesor, con la tabla de la carta y el correo; respeta los filtros y la búsqueda';
+        boton.innerHTML = icono('file-spreadsheet') + ' Base cancelaciones';
+        excel.insertAdjacentElement('afterend', boton);
+        boton.addEventListener('click', async () => {
+          if (!tabla || boton.disabled) return;
+          const original = boton.innerHTML;
+          boton.disabled = true;
+          boton.innerHTML = '<span class="ln-spinner"></span> Exportando…';
+          try {
+            const n = await descargarPorAsesor(tabla.getFiltradas());
+            Notificar.exito(n + (n === 1 ? ' línea POR FIRMAR exportada' : ' líneas POR FIRMAR exportadas'));
+          } catch (e) {
+            Notificar.error(mensajeError(e));
+          } finally {
+            boton.disabled = false;
+            boton.innerHTML = original;
+          }
+        });
       }
 
       function cargar() {
@@ -7449,22 +7480,6 @@
         if (datos) { crearTabla(); pintarKpis(); }
       });
       $('#lnr-actualizar', raiz).addEventListener('click', cargar);
-      $('#lnr-excel-asesores', raiz).addEventListener('click', async (ev) => {
-        const boton = ev.currentTarget;
-        if (!tabla || boton.disabled) return;
-        const original = boton.innerHTML;
-        boton.disabled = true;
-        boton.innerHTML = '<span class="ln-spinner"></span> Exportando…';
-        try {
-          const n = await descargarPorAsesor(tabla.getFiltradas());
-          Notificar.exito(n + (n === 1 ? ' línea POR FIRMAR exportada' : ' líneas POR FIRMAR exportadas'));
-        } catch (e) {
-          Notificar.error(mensajeError(e));
-        } finally {
-          boton.disabled = false;
-          boton.innerHTML = original;
-        }
-      });
       cargar();
     }
 

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Panel de Pau, Cancelaciones (usuario, 22-oct): dos botones. «Exportar a Excel» de la tabla da la base, como siempre;
-// «Excel por asesor» da una hoja por compañía y asesor con las POR FIRMAR, en la tabla del correo al asesor (REGIÓN,
+// a su lado, «Base cancelaciones» da una hoja por compañía y asesor con las POR FIRMAR, en la tabla del correo al asesor (REGIÓN,
 // CUENTA, NÚMERO, RAZÓN SOCIAL, ASESOR)
 const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
 const vista = fs.readFileSync(path.join(__dirname, '../src/html/views/lineas/lineas-resguardos.html'), 'utf8');
@@ -38,11 +38,14 @@ test('sin POR FIRMAR no hay hojas; sin asesor o sin compañía, su propia hoja',
   assert.match(cliente, /if \(!hojas\.length\) throw new Error\('No hay líneas POR FIRMAR con los filtros actuales'\);/);
 });
 
-test('dos botones: la tabla exporta la base y «Excel por asesor» (solo en Cancelaciones) las hojas del asesor', () => {
+test('dos botones: «Exportar a Excel» da la base y, a su lado, «Base cancelaciones» las hojas del asesor', () => {
   assert.match(cliente, /exportar: \{ nombreArchivo: vista === 'RESGUARDOS' \? 'Resguardos' : 'Cancelaciones de lineas' \},/);
-  assert.doesNotMatch(cliente, /descargarCancelaciones|BASE PRINCIPAL/);
-  assert.match(vista, /<button type="button" class="btn-excel" id="lnr-excel-asesores" title="[^"]+" hidden><i data-lucide="file-spreadsheet" class="ico"><\/i> Excel por asesor<\/button>/);
-  assert.match(cliente, /\$\('#lnr-excel-asesores', raiz\)\.hidden = vista !== 'CANCELACIONES' \|\| \(typeof puedeExportarAqui === 'function' && !puedeExportarAqui\(\)\);/);
+  assert.doesNotMatch(cliente, /descargarCancelaciones|BASE PRINCIPAL|lnr-excel-asesores/);
+  assert.doesNotMatch(vista, /lnr-excel-asesores|Excel por asesor/, 'ya no va en el encabezado del panel');
+  // Solo en Cancelaciones, justo después del botón de la tabla (si no hay botón de la tabla, sin permiso, tampoco este)
+  assert.match(cliente, /if \(vista === 'CANCELACIONES'\) botonBaseCancelaciones\(\);/);
+  assert.match(cliente, /const excel = \$\('#lnr-tabla \.dt-btn-excel', raiz\);\n\s+if \(!excel\) return;/);
+  assert.match(cliente, /boton\.innerHTML = icono\('file-spreadsheet'\) \+ ' Base cancelaciones';\n\s+excel\.insertAdjacentElement\('afterend', boton\);/);
   assert.match(cliente, /const n = await descargarPorAsesor\(tabla\.getFiltradas\(\)\);/);
   assert.match(cliente, /boton\.innerHTML = '<span class="ln-spinner"><\/span> Exportando…';/);
   // En un .html de Apps Script la dirección va con «:\/\/» (CLAUDE.md del repo)
