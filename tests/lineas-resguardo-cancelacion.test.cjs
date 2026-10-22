@@ -538,3 +538,15 @@ test('Quitar del panel con varios: borra sus renglones, de abajo hacia arriba, y
   assert.equal(t.escritas.movimientos.filter((m) => m.tipo === 'QUITAR_PANEL').length, 2, 'lo que pasó queda en el historial');
   assert.match(read('src/services/lineas/LineasDatos.gs'), /if \(lote_\) \{ vaciarLote_\(\); lote_ = \{ datos: \{\}, hojas: \{\}, respaldo: \[\] \}; \}/);
 });
+
+// DEV, 22-oct (NUCO 0013): un envío que no cambió el estatus no lo trae en su movimiento; al quitarlo no puede quedar
+// POR RECIBIR sin renglón: vuelve al elegido en su renglón
+test('Quitar del panel: un POR RECIBIR sin el estatus en su envío vuelve al elegido en su renglón', () => {
+  const t = cargar([equipo('EQU-9', '0090', 'POR RECIBIR')], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'EQU-9', 'NUCO': '0090', 'ESTADO': 'PENDIENTE DE RECEPCION',
+    'ESTATUS_EQUIPO': 'PARA VENTA CON DETALLE' }]);
+  const vista = t.R.vistaQuitar(['RSG-9']).filas[0];
+  assert.deepEqual(vista.regresa, [{ campo: 'ESTATUS EQUIPO', de: 'POR RECIBIR', a: 'PARA VENTA CON DETALLE', nota: 'Sale del panel: deja de estar POR RECIBIR' }]);
+  t.R.quitarDelPanel(['RSG-9'], { comentario: 'por error' }, usuario);
+  assert.equal(t.tablas['LINEAS TELEFONICAS'][0]['ESTATUS EQUIPO'], 'PARA VENTA CON DETALLE');
+  assert.equal(t.tablas.APP_RESGUARDOS.length, 0);
+});

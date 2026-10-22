@@ -935,6 +935,12 @@ const LineasResguardos = (function () {
       if (sinTocar || (DE_LA_LINEA.indexOf(K) >= 0 && !numeroHoy)) regresa.push({ campo: k, de: hoy, a: txt(c.antes) });
       else seQueda.push({ campo: k, valor: hoy, motivo: 'Cambió después' });
     });
+    // POR RECIBIR sin renglón no puede quedar (DEV, 22-oct: un envío que no cambió el estatus, como RESGUARDO a
+    // RESGUARDO, no lo trae en su movimiento): vuelve al elegido en su renglón, que es el que tenía antes de mandarlo
+    if (may(LineasUtil.col(f, 'ESTATUS EQUIPO')) === POR_RECIBIR && !regresa.some((x) => LineasDatos.normCol(x.campo) === 'ESTATUS EQUIPO')) {
+      seQueda.splice(0, seQueda.length, ...seQueda.filter((x) => LineasDatos.normCol(x.campo) !== 'ESTATUS EQUIPO'));
+      regresa.push({ campo: 'ESTATUS EQUIPO', de: POR_RECIBIR, a: txt(r['ESTATUS_EQUIPO']) || 'RESGUARDO', nota: 'Sale del panel: deja de estar POR RECIBIR' });
+    }
     // Sin USO el equipo sigue guardado: la persona no regresa (y su línea no vuelve a USO)
     const estatus = regresa.filter((x) => LineasDatos.normCol(x.campo) === 'ESTATUS EQUIPO')[0];
     const final = may(estatus ? estatus.a : LineasUtil.col(f, 'ESTATUS EQUIPO'));
