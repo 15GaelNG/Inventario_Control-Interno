@@ -98,6 +98,12 @@ comparten `requiere` y `libre` solo queda en Help Desk (contrato). Si su pantall
 módulo, esa definición lo declara en `leenTambien` (HojaServicio); un módulo de solo enlaces lleva
 `soloEnlaces: true` en `Modulos.gs` (no cuenta como familia).
 
+**Una llamada nueva del servidor** (`api…`, lo que la pantalla pide con `google.script.run`) va en
+`src/api/<Módulo>.gs`, el del módulo dueño (el servicio al que llama / el permiso que pide), como wrapper delgado
+hacia su Service, y se llama `api<Módulo><Qué>`. Módulo nuevo = archivo nuevo. `src/ClientApi.gs` es solo la base (lo
+de todos: medir, listas con huella, Inicio, sesión, campanita, qué impide borrar, fichas en una llamada). Desde la fase
+6.3 (22-oct, `tools/api/partir.js`); `source-contracts` lo revisa y las pruebas leen todo con `tests/api-fuente.js`.
+
 ## Componentes (`src/html/js/componentes/`)
 
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de

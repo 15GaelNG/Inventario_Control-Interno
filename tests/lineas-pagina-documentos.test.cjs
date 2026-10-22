@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
@@ -14,7 +15,7 @@ test('la responsiva se abre en su página desde Documentos, el doble clic y el H
   assert.match(lineas, /doc\('eye', 'Ver responsiva', 'ver', true, \(d\) => d\.documento === 'Responsiva', \(d\) => abrir\('responsiva', d\.id\)\)/);
   assert.match(lineas, /abrir\(d\.documento === 'Inspección' \? 'inspeccion' : 'responsiva', d\.id\);/);
   assert.match(lineas, /titulo: 'Ver responsiva', visible: \(m\) => m\.refTipo === 'responsiva' && !!m\.refId/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasResponsiva\(token, id\) \{\s+return TelefoniaService\.responsiva\(token, id\);/);
+  assert.match(API, /function apiLineasResponsiva\(token, id\) \{\s+return TelefoniaService\.responsiva\(token, id\);/);
 });
 
 test('la página de la responsiva muestra lo de ese día: responsable con director, equipo y línea, accesorios y comentario', () => {

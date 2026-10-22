@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -17,7 +18,7 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   assert.match(acciones, /may\(LineasCaptura\.datoDeInspeccion\(inspeccionId, 'RESPONSABLE'\)\) === nuevo \? LineasCaptura\.datoDeInspeccion\(inspeccionId, 'JEFE DIRECTO'\) : ''/);
   assert.doesNotMatch(acciones, /function (reglas|permite|hayCamino|cerrar|cambiar)\(/);
   assert.match(read('src/services/TelefoniaService.gs'), /function catalogos\(token\) \{\r?\n    leer_\(token\);\r?\n    return LineasRepo\.catalogos\(\);/);
-  const api = read('src/ClientApi.gs');
+  const api = API;
   assert.doesNotMatch(api, /apiLineasCerrarEquipos|apiLineasCambiar\(|apiLineasAgregarNota|apiLineasCambiarEstatus/);
   // El servidor ya no rechaza por estatus (resguardo, cancelación, acciones masivas)
   ['LineasResguardos', 'LineasRegistros'].forEach((m) => assert.doesNotMatch(read('src/services/lineas/' + m + '.gs'), /LineasAcciones\.(permite|hayCamino|motivoSinCamino|accion)\(/, m));
