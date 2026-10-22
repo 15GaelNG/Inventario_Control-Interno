@@ -713,7 +713,7 @@ const CapitalHumano = (function () {
   /**
    * Los ACTIVOS de la lista, para autocompletar "Responsable", "Nombre completo"… en cualquier módulo: al elegir a
    * alguien se sugieren sus datos. Uno por nombre + departamento. Sin Razón social (es del contrato, no de la persona)
-   * ni nada sensible. Líneas usa esta misma lista (LineasRepo.indiceColaboradores).
+   * ni nada sensible. Líneas usa esta lista con las bajas recientes (conBajasRecientes).
    */
   function listarColaboradores(token) {
     const sesion = Auth.validarSesion(token);
@@ -722,24 +722,39 @@ const CapitalHumano = (function () {
     return colaboradores_(false);
   }
   const activos = () => colaboradores_(false);
+  /**
+   * Los activos y las bajas con FECHA DE BAJA de los últimos 12 meses, con ESTATUS 'BAJA' (Líneas, 21-oct-2026, pendiente
+   * 2.58: quien se fue hace poco todavía puede tener equipo o línea; todas las bajas son ~12 mil). Una baja con el
+   * nombre de alguien activo no sale.
+   */
+  const conBajasRecientes = () => CacheHojas.recordar('colaboradores_bajas_v1', [[Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_CH]],
+    () => armarColaboradores_(true));
+  /** FECHA DE BAJA (dd/mm/aaaa, como la manda CH) en `desde` o después; sin fecha legible no cuenta. */
+  const bajaDesde_ = (f, desde) => {
+    const m = String(f['FECHA DE BAJA'] || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return !!m && new Date(+m[3], +m[2] - 1, +m[1]) >= desde;
+  };
 
   function colaboradores_(rehacer) {
     return CacheHojas.recordar('colaboradores_v2', [[Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_CH]], armarColaboradores_,
       rehacer ? 25 * 60 : undefined, rehacer);
   }
 
-  function armarColaboradores_() {
+  function armarColaboradores_(conBajas) {
     const hoja = libro_().getSheetByName(HOJA_CH);
     if (!hoja) return [];
+    const filas = leer_(hoja).filas;
     const vistos = new Set();
+    const nombresActivos = new Set();
     const resultado = [];
-    leer_(hoja).filas.forEach((f) => {
+    const agregar = (f, estatus) => {
       const nombre = String(f['NOMBRE COMPLETO'] || '').trim();
-      if (!nombre || !esActivo(f)) return;
+      if (!nombre) return;
       const departamento = String(f['DEPARTAMENTO'] || '').trim();
       const clave = nombre.toUpperCase() + '|' + departamento.toUpperCase();
-      if (vistos.has(clave)) return;
+      if (vistos.has(clave) || (estatus !== 'ACTIVO' && nombresActivos.has(nombre.toUpperCase()))) return;
       vistos.add(clave);
+      if (estatus === 'ACTIVO') nombresActivos.add(nombre.toUpperCase());
       resultado.push({
         ID_PERSONA: norm(f[COLUMNA]),
         NOMBRE: nombre,
@@ -752,15 +767,22 @@ const CapitalHumano = (function () {
         JEFE_DIRECTO: String(f['JEFE DIRECTO'] || '').trim(),
         DIRECTOR: String(f['DIRECTOR'] || '').trim(),
         CORREO: String(f['CORREO EMPRESARIAL'] || '').trim(),
-        ESTATUS: 'ACTIVO',
+        ESTATUS: estatus,
       });
-    });
-    return resultado.sort((a, b) => a.NOMBRE.localeCompare(b.NOMBRE));
+    };
+    filas.filter(esActivo).forEach((f) => agregar(f, 'ACTIVO'));
+    if (conBajas) {
+      const desde = new Date();
+      desde.setFullYear(desde.getFullYear() - 1);
+      filas.filter((f) => !esActivo(f) && bajaDesde_(f, desde)).forEach((f) => agregar(f, 'BAJA'));
+    }
+    // Por nombre; con el mismo nombre, el activo primero
+    return resultado.sort((a, b) => a.NOMBRE.localeCompare(b.NOMBRE) || (a.ESTATUS === b.ESTATUS ? 0 : a.ESTATUS === 'ACTIVO' ? -1 : 1));
   }
 
   return {
     identificar, cargar, historial, resumen, revisarLigas, idPara, conPersona, columnasDePersona, columnaPara, describirLigas,
-    personaDe, nombreComparable, listarColaboradores, activos, calentarColaboradores: () => colaboradores_(true), filasCH,
+    personaDe, nombreComparable, listarColaboradores, activos, conBajasRecientes, calentarColaboradores: () => colaboradores_(true), filasCH,
     idsPorEmpleo, HOJA_CH, HOJA_PERSONAS, claveEmpleo, COLUMNA, PERMITIDAS, OBLIGATORIAS,
   };
 })();

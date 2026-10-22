@@ -8,11 +8,13 @@ const path = require('path');
 // COLABORADORES (la vieja, que se retira). docs/personas-unificar.md
 const repo = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasRepo.gs'), 'utf8');
 
-test('Capital Humano en Líneas: la lista de personas sale de CapitalHumano.activos (solo activos, en mayúsculas)', () => {
+test('Capital Humano en Líneas: la lista de personas sale de CapitalHumano.conBajasRecientes (activos y bajas de 12 meses, en mayúsculas)', () => {
   const ix = repo.slice(repo.indexOf('function indiceColaboradores()'), repo.indexOf('/** Vacía las cachés del módulo'));
-  assert.match(ix, /CapitalHumano\.activos\(\)\.map\(/);
-  assert.match(ix, /'ACTIVO'/);
-  assert.match(ix, /indice_colaboradores_v6/);
+  assert.match(ix, /CapitalHumano\.conBajasRecientes\(\)\.map\(/);
+  assert.match(ix, /p\.ESTATUS === 'BAJA' \? 'BAJA' : 'ACTIVO'/);
+  assert.match(ix, /indice_colaboradores_v7/);
+  // Los catálogos (puestos, jefes, sedes…) solo con activos (2.58)
+  assert.match(repo, /const ch = ix\.filas\.filter\(\(f\) => f\[iEstatus\] !== 'BAJA'\)\.map\(/);
   // Sede, área y oficina como las muestra el sistema: QRO → QUERETARO (usuario, 13-oct)
   assert.match(ix, /comoSeMuestra\('AREA', p\.AREA\), comoSeMuestra\('SEDE', p\.SEDE\), comoSeMuestra\('OFICINA\/DESARROLLO', p\.OFICINA\)/);
   assert.match(ix, /const comoSeMuestra = \(c, v\) => \{ const t = may\(v\); return t && LineasUtil\.mostrarCH\(c, t\); \};/);
@@ -70,4 +72,32 @@ test('JEFE DIRECTO y los responsables adicionales: al agregar los encabezados se
   assert.match(a, /delete bd\.tablas\[nombre\];/);
   assert.match(a, /cacheBorrar\('enc_' \+ nombre\);/);
   assert.doesNotMatch(a, /setNumberFormat/, 'sin tocar formatos');
+});
+
+test('Capital Humano: conBajasRecientes trae los activos y las bajas de los últimos 12 meses, sin repetir a un activo (2.58)', () => {
+  const hoy = new Date();
+  const fecha = (meses) => { const d = new Date(hoy.getFullYear(), hoy.getMonth() - meses, 15); return [d.getDate(), d.getMonth() + 1, d.getFullYear()].map((n) => String(n).padStart(2, '0')).join('/'); };
+  const enc = ['ID PERSONA', 'No EMPLEADO', 'NOMBRE COMPLETO', 'STATUS', 'FECHA DE BAJA', 'DEPARTAMENTO'];
+  const valores = [enc,
+    ['PER-1', '1', 'ZOE ACTIVA', 'ACTIVO', '', 'VENTAS'],
+    ['PER-2', '2', 'ANA RECIENTE', 'BAJA', fecha(2), 'VENTAS'],
+    ['PER-3', '3', 'BETO VIEJO', 'BAJA', fecha(14), 'VENTAS'],
+    ['PER-4', '4', 'CARLA SIN FECHA', 'BAJA', '', 'VENTAS'],
+    ['PER-5', '5', 'ZOE ACTIVA', 'BAJA', fecha(1), 'COMPRAS'],
+  ];
+  const hoja = { getLastRow: () => valores.length, getLastColumn: () => enc.length, getRange: () => ({ getDisplayValues: () => valores }) };
+  const CH = new Function('SpreadsheetApp', 'CacheHojas', 'Config', fs.readFileSync(path.join(__dirname, '../src/services/CapitalHumano.gs'), 'utf8') +
+    '\nreturn CapitalHumano;')({ openById: () => ({ getSheetByName: () => hoja }) }, { recordar: (k, h, armar) => armar() },
+    { SPREADSHEET_IDS: { VEHICULOS: () => 'libro' } });
+  const lista = CH.conBajasRecientes().map((p) => p.NOMBRE + ' ' + p.ESTATUS);
+  assert.deepEqual(lista, ['ANA RECIENTE BAJA', 'ZOE ACTIVA ACTIVO']);
+  assert.deepEqual(CH.activos().map((p) => p.NOMBRE), ['ZOE ACTIVA'], 'los demás módulos siguen solo con activos');
+});
+
+test('Capital Humano en Líneas: la lista marca a las bajas y Gestión de activos sigue solo con activos (2.58)', () => {
+  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  assert.match(cliente, /baja: c\.estatus && String\(c\.estatus\)\.toUpperCase\(\) !== 'ACTIVO',/);
+  assert.match(cliente, /\(c\.baja \? ' · BAJA' : ''\)/);
+  assert.match(cliente, /const distintos = \(campo\) => gente\.filter\(\(c\) => !c\.baja\)/);
+  assert.match(cliente, /colaboradores = filasComoObjetos\(r\)\.filter\(\(c\) => c\.estatus !== 'BAJA'\)/);
 });

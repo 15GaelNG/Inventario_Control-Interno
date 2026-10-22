@@ -1460,7 +1460,8 @@ const LineasRepo = (function () {
     // Lo de Capital Humano sale del índice de colaboradores (caché 6 h), no de leer otra vez la base (usuario, 9-oct: la
     // inspección pedía catálogos y colaboradores y las dos leían las 15 mil filas de CH sin caché)
     const ix = indiceColaboradores();
-    const ch = ix.filas.map((f) => {
+    const iEstatus = ix.columnas.indexOf('estatus');
+    const ch = ix.filas.filter((f) => f[iEstatus] !== 'BAJA').map((f) => {
       const o = {};
       [['puesto', 'PUESTO'], ['departamento', 'DEPARTAMENTO'], ['area', 'AREA'], ['sede', 'SEDE'], ['oficina', 'OFICINA/DESARROLLO'],
         ['director', 'DIRECTOR'], ['jefe', 'JEFE DIRECTO']].forEach(([k, c]) => { o[c] = f[ix.columnas.indexOf(k)]; });
@@ -1492,29 +1493,30 @@ const LineasRepo = (function () {
 
   /** Personas activas de CH para elegir al responsable: al elegir una se llenan sus datos (autollenar). */
   function indiceColaboradores() {
-    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v6');
+    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v7');
     if (enCache) return enCache;
-    // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (CapitalHumano.activos, 12-oct-2026).
+    // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (12-oct-2026), más las bajas de los últimos
+    // 12 meses con estatus BAJA (usuario, 21-oct; pendiente 2.58: la lista las marca y los catálogos no las toman).
     // Líneas los guarda en mayúsculas y el correo en minúsculas, como siempre.
     const may = (v) => { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase(); return t || null; };
     // Sede, área y oficina como las muestra el sistema («QRO» → «QUERETARO»; LineasUtil.mostrarCH). Al leer la base de CH
     // con leerTabla ya salían así; con CapitalHumano.activos (12-oct) la lista de Sede ofrecía QRO (usuario, 13-oct). Al
     // guardar se escribe como en CH (guardarCH)
     const comoSeMuestra = (c, v) => { const t = may(v); return t && LineasUtil.mostrarCH(c, t); };
-    const filas = CapitalHumano.activos().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
-      comoSeMuestra('AREA', p.AREA), comoSeMuestra('SEDE', p.SEDE), comoSeMuestra('OFICINA/DESARROLLO', p.OFICINA), 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
+    const filas = CapitalHumano.conBajasRecientes().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
+      comoSeMuestra('AREA', p.AREA), comoSeMuestra('SEDE', p.SEDE), comoSeMuestra('OFICINA/DESARROLLO', p.OFICINA), p.ESTATUS === 'BAJA' ? 'BAJA' : 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
       String(p.CORREO || '').trim().toLowerCase() || null]).filter((c) => c[1]);
     const ix = LineasUtil.paraCliente({
       columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo'],
       filas: filas, generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_colaboradores_v6', ix, 21600);
+    LineasDatos.cacheGuardar('indice_colaboradores_v7', ix, 21600);
     return ix;
   }
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6',
+    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6', 'indice_colaboradores_v7',
       'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
     equivalencias_ = null;

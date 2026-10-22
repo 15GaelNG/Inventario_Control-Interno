@@ -1252,7 +1252,7 @@
         });
       }
       return cargarColaboradores().then((r) => {
-        // Personas activas de Capital Humano con los datos que se llenan al elegirlas (autollenar)
+        // Personas de Capital Humano (activas y bajas de los últimos 12 meses, 2.58) con los datos que se llenan al elegirlas
         const gente = filasComoObjetos(r).map((c) => ({
           nombre: mayusSinAcentos(c.nombre), noEmpleado: c.noEmpleado ? String(c.noEmpleado).trim().toUpperCase() : '',
           puesto: mayusSinAcentos(c.puesto), departamento: mayusSinAcentos(c.departamento),
@@ -1260,7 +1260,7 @@
           correo: c.correo ? String(c.correo).trim().toLowerCase() : '',
           baja: c.estatus && String(c.estatus).toUpperCase() !== 'ACTIVO',
         })).filter((c) => c.nombre);
-        const distintos = (campo) => gente.map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
+        const distintos = (campo) => gente.filter((c) => !c.baja).map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
         const etiquetaDe = (partes, c) => partes.filter(Boolean).join(' · ') + (c.baja ? ' · BAJA' : '');
         if (tipo === 'PUESTOS') return distintos('puesto');
         if (tipo === 'DEPARTAMENTOS') return distintos('departamento');
@@ -6599,7 +6599,8 @@
         suma(hologramas, 'RESPONSABLE');
         suma(uber, 'NOMBRE_COMPLETO');
         suma(cajasChicas, 'RESPONSABLE');
-        colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
+        // Solo activos: las bajas recientes (2.58) son para las listas de los formularios
+        colaboradores = filasComoObjetos(r).filter((c) => c.estatus !== 'BAJA').map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
         aplicarFiltros();
       }).catch((e) => {
         if (!vigente()) return;
