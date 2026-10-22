@@ -54,8 +54,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   escritura y el movimiento de «Vincular línea» (`LineasAcciones.aplicarVinculo`, ASIGNAR_LINEA), con el comentario del alta.
   La línea sigue al equipo (USO si está en uso, DISPONIBLE si está guardado). En el historial quedan «Alta de registro» y
   «Vincular línea»; no genera responsiva.
-- **Estatus en Corregir equipo** (8-oct; «Editar información» hasta el 13-oct y «Editar equipo» hasta el 16-oct): directo. RESGUARDO, PARA VENTA, PARA VENTA
-  CON DETALLE (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO del equipo, y EN PROCESO DE
+- **Estatus en Corregir equipo** (8-oct; «Editar información» hasta el 13-oct y «Editar equipo» hasta el 16-oct): directo. Desde el 21-oct (`f1b7af5`, usuario) el equipo
+  solo ofrece USO, RESGUARDO y los finales VENDIDO, DONADO, DESECHADO y EXTRAVIO-ROBO, más el que ya tiene
+  (`LineasRegistros.ESTATUS_EQUIPO_CORREGIR`; el servidor valida con la misma lista); PARA VENTA, PARA VENTA CON DETALLE
+  (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO salen solo con «Mandar a
+  resguardo» (el alta conserva todos). De la línea, EN PROCESO DE
   CANCELACION y CANCELADA de la línea, con un aviso «no se agregará en el panel de Resguardos y cancelaciones, pero se
   quedará en el historial» (Confirmar o Cancelar; el servidor los acepta solo con `datos.sinPanel`). El equipo que pasa
   a uno de esos estatus deja DISPONIBLE su línea en uso (el aviso lo dice). **USO** (usuario, 21-oct, `57850c3`; sustituye la regla del 16-oct): sí se ofrece. Con responsable vigente (TIPO ASIGNACION = PERSONA y RESPONSABLE; `formulario` manda `conResponsable`) se guarda directo. Sin él, `LineasRegistros.editar` guarda las demás correcciones sin el estatus y responde `responsiva: true`; la pantalla abre la Responsiva obligatoria (`desdeCorregir`), que acepta el estatus final (`exigirEstatusParaResponsiva(f, esEquipo, desdeCorregir)`, solo equipos), con su Inspección, y es la que pasa a USO con su línea; si solo cambió el estatus, abre la Responsiva de una vez sin pedir comentario; si se cierra sin guardar, el estatus no cambia. La CANCELADA de una línea se reactiva con Corregir a DISPONIBLE, sin responsiva. Al panel de Pau se llega con «Mandar a resguardo» y «Mandar a cancelación».
@@ -394,7 +397,19 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     (`operaPanel` de `TelefoniaService.usuarioResguardo_`: EDICION de `lineas-telefonicas` y rol que no sea ADMIN ni SUPER),
     no a Pau ni a administradores; `LineasResguardos.bandeja` lo regresa. En Líneas telefónicas siguen saliendo a quien
     edita Líneas telefónicas, administradores incluidos. El servidor las acepta con `puedeOperar`.
-  - **Quitar del panel** (EDICION de `lineas-telefonicas`; solo renglones PENDIENTE DE RECEPCION; en el inventario y en el
+  - **POR RECIBIR y el equipo en el panel** (21-oct, `83a0744`, `80faf58`; pendiente 3.15; sin publicar): «Mandar a resguardo»
+    deja el equipo con ESTATUS EQUIPO = POR RECIBIR (guardado en EQUIPOS; `LineasResguardos.POR_RECIBIR`, fuera de
+    `LineasRepo.CATALOGO.estatusEquipo` y de las listas; clase RESGUARDO en `ESTRUCTURA_CLASE`; colores, Panorama y la zona
+    resguardo de Vínculos lo cuentan) y el estatus elegido va al renglón (columna ESTATUS_EQUIPO de APP_RESGUARDOS); el panel
+    muestra el elegido. «Recibir» de Pau pone el elegido en el equipo, con el movimiento RECEPCION («Recepción en resguardo»).
+    «Corregir resguardo» de uno por recibir cambia el renglón y deja POR RECIBIR (la ubicación del equipo sí se corrige); de
+    uno ya recibido le pone el elegido. «Quitar del panel» lo regresa (POR RECIBIR cuenta como sin tocar). Con renglón abierto
+    (por recibir o recibido, `LineasResguardos.enPanel`): sin Responsiva ni Inspección (ficha, menú y Vínculos,
+    `conDocumentos` con `panel`) y Corregir con el estatus fijo; el servidor lo rechaza (`exigirEstatusParaResponsiva`,
+    `exigirEquipoParaInspeccion_` y `LineasRegistros.editar`). `reporte_lineas/scripts/conciliacion.py` cuenta POR RECIBIR como
+    RESGUARDO. Datos: `tools/lineas-datos/por-recibir.js` (`--ensayo`; `--produccion` solo con permiso) pasa a POR RECIBIR los
+    equipos con renglón PENDIENTE DE RECEPCION. Abierto: DONADO o DESECHADO de uno ya recibido (pendiente 3.16).
+  - **Quitar del panel** (EDICION de `lineas-telefonicas`; solo renglones PENDIENTE DE RECEPCION (equipo POR RECIBIR); en el inventario y en el
     panel; `vistaQuitar` y `quitarDelPanel`): ventana con tabla Campo | Hoy | Queda. Regresa campo por campo lo que el
     envío cambió y nadie tocó después (lo demás: «Se queda: cambió después»), con el movimiento del envío (MOVIMIENTO_ID
     o, en renglones viejos, por equipo y hora). La persona solo regresa si el equipo vuelve a USO. La línea que se fue a
@@ -438,6 +453,13 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
   (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
   `#asistente-flotante`). En los demás módulos sigue igual.
+- **Dirección General** (21-oct, `41dda43`; pendiente 8.16; sin publicar): `lineas/LineasDG.gs` guarda la lista fija de las 12
+  líneas de DG y los NUCO 11001 a 11011. El índice trae la columna `dg` (caché `indice_telefonia_v12`) y DG en el responsable.
+  Quien no es ADMIN (`usuario.esAdmin` de `TelefoniaService.usuarioOperacion_`) ve DG, su estatus y el área DIRECCION GENERAL
+  en la lista, la ficha (`fichaOculta`) y Exportar; sin historial, documentos ni facturas y sin acciones; el servidor rechaza
+  escribir (`LineasRepo.guardarCambiosRegistro` y las capturas). ADMIN ve todo con el chip DG. No cubre el módulo del proveedor
+  ni Control de Cambios (pendiente 8.19). Datos: `tools/lineas-datos/limpiar-dg.js` limpia el responsable de las asignaciones
+  vigentes y pone DEPARTAMENTO y AREA = DIRECCION GENERAL (`--ensayo`; `--produccion` solo con permiso; pendiente 8.18).
 - **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
   y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
   `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
@@ -510,6 +532,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasCaptura.gs`, `LineasChecklist.gs`, `LineasPdf.gs`, `LineasPatronPng.gs`, `LineasEvidencias.gs`, `LineasArchivos.gs` | Inspección y responsiva: checklist, firmas, fotos, PDF (y la imagen del patrón) y Drive |
 | `lineas/LineasIdentificaciones.gs` | Identificación de cada responsable en la responsiva (Drive y APP_IDENTIFICACIONES) |
 | `lineas/LineasIneNucos.gs` | INE que ya estaban en NUCOS (9-oct): inventario de solo lectura de NUCOS de producción en la pestaña «INE NUCOS» del libro del DEV (`lineasIneNucos_inventario`, desde el editor de un DEV) |
+| `lineas/LineasDG.gs`, `tools/lineas-datos/` (`por-recibir.js`, `limpiar-dg.js`, `comun.js`) | Dirección General (21-oct): lista fija y ocultamiento; programas de datos que se corren desde la computadora con `--ensayo` y, en producción, con permiso |
 | `lineas/LineasAcciones.gs`, `LineasResguardos.gs` | Responsiva (renovar o reasignar), Vincular, Mandar a resguardo y bandeja de Pau |
 | `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel (el inventario: una hoja LINEAS TELEFONICAS como el panel, con ID del AppSheet y las columnas de la vista del AppSheet, sin ESTATUS GENERAL desde el 21-oct, `LineasRepo.vistaCompleta`; Cambios y Accesorios, sus pestañas tal cual) |
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
