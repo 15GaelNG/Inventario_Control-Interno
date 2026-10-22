@@ -952,7 +952,7 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasResguardos.vistaRetirar(ids, puedeVerSecretos_(sesion)));
   }
 
-  /** accion: RECIBIR | ENTREGAR | VENDIDO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA | RETIRAR_CANCELACION. */
+  /** accion: RECIBIR | ENTREGAR | VENDIDO | DONADO | DESECHADO | CARTA_FIRMADA | CARTA_ENVIADA | CANCELADA | RETIRAR_CANCELACION. */
   function accionBandejaResguardo(token, accion, ids, datos) {
     // Cada paso además exige ser aprobador (LineasResguardos.exigirAprobador_); un CLIENT nunca
     const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
@@ -963,6 +963,8 @@ const TelefoniaService = (function () {
       RECIBIR: () => R.recibir(ids, u),
       ENTREGAR: () => R.entregar(ids, d, u),
       VENDIDO: () => R.vendido(ids, d, u),
+      DONADO: () => R.donado(ids, d, u), // pendiente 3.16: solo los ya recibidos
+      DESECHADO: () => R.desechado(ids, d, u),
       CARTA_FIRMADA: () => R.faseCancelacion(ids, R.FASE.FIRMADA, d, u),
       CARTA_ENVIADA: () => R.faseCancelacion(ids, R.FASE.ENVIADA, d, u),
       CANCELADA: () => R.confirmarCancelacion(ids, d, u),

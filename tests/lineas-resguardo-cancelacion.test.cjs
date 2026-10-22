@@ -338,7 +338,7 @@ test('cada paso de la bandeja espera en su ventana hasta que contesta el servido
   assert.match(paso, /alConfirmar: \(extra\) => llamar\('apiLineasAccionBandejaResguardo'/);
   assert.doesNotMatch(paso, /Confirmar\.pedir/);
   const acciones = html.slice(html.indexOf('const ACCIONES = {'), html.indexOf('function filasVista()'));
-  assert.equal((acciones.match(/espera: '/g) || []).length, 7, 'las siete acciones dicen qué están haciendo');
+  assert.equal((acciones.match(/espera: '/g) || []).length, 9, 'las nueve acciones dicen qué están haciendo (Donado y Desechado: 3.16)');
   // Textos en oración y lo nuevo del 3.12: Retirar cancelación (Pau) y, para Líneas, Corregir resguardo y Quitar del panel
   assert.match(acciones, /texto: 'Entregar a líneas'/);
   assert.doesNotMatch(html, /Entregar a Líneas|Entregados a Líneas/);
@@ -549,4 +549,33 @@ test('Quitar del panel: un POR RECIBIR sin el estatus en su envío vuelve al ele
   t.R.quitarDelPanel(['RSG-9'], { comentario: 'por error' }, usuario);
   assert.equal(t.tablas['LINEAS TELEFONICAS'][0]['ESTATUS EQUIPO'], 'PARA VENTA CON DETALLE');
   assert.equal(t.tablas.APP_RESGUARDOS.length, 0);
+});
+
+// Pendiente 3.16 (usuario, 22-oct): Pau marca DONADO o DESECHADO, como Vendido, solo los ya recibidos (EN RESGUARDO)
+test('Donado y Desechado: solo lo recibido; el panel y el inventario quedan con el cierre y su movimiento', () => {
+  const t = cargar([equipo('EQU-1', '0012', 'RESGUARDO'), equipo('EQU-2', '0013', 'PARA DESECHO'), equipo('EQU-3', '0014', 'POR RECIBIR')], [
+    { 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' },
+    { 'ID': 'RSG-2', 'REGISTRO_ID': 'EQU-2', 'NUCO': '0013', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'PARA DESECHO' },
+    { 'ID': 'RSG-3', 'REGISTRO_ID': 'EQU-3', 'NUCO': '0014', 'ESTADO': 'PENDIENTE DE RECEPCION', 'ESTATUS_EQUIPO': 'RESGUARDO' }]);
+  assert.throws(() => t.R.donado(['RSG-1'], {}, usuario));
+  const d = t.R.donado(['RSG-1', 'RSG-3'], { asunto: 'FUNDACION' }, pau);
+  assert.deepEqual(d.hechos.map((h) => h.id), ['RSG-1']);
+  assert.match(d.omitidos[0].motivo, /No está en resguardo/);
+  t.R.desechado(['RSG-2'], {}, pau);
+  const inv = t.tablas['LINEAS TELEFONICAS'];
+  assert.deepEqual(inv.map((f) => f['ESTATUS EQUIPO']), ['DONADO', 'DESECHADO', 'POR RECIBIR']);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.ESTADO), ['DONADO', 'DESECHADO', 'PENDIENTE DE RECEPCION']);
+  assert.deepEqual(t.escritas.movimientos.slice(-2).map((m) => m.tipo), ['CIERRE', 'DESECHO']);
+  assert.match(read('src/services/TelefoniaService.gs'), /DONADO: \(\) => R\.donado\(ids, d, u\)/);
+});
+
+// La pantalla del 3.16 y el 3.18 (usuario, 22-oct): botones Donado y Desechado junto a Vendido; sin el contador Quitados
+test('Panel de Pau: Donado y Desechado como Vendido; ya no hay «Quitados»', () => {
+  const html = read('src/html/js/lineas.html');
+  assert.match(html, /alHacer: \(filas\) => paso\('DONADO', filas,/);
+  assert.match(html, /alHacer: \(filas\) => paso\('DESECHADO', filas,/);
+  assert.match(html, /etiqueta: 'Donados', filtros: \{ ESTADO: \{ valores: \['DONADO'\] \} \}/);
+  assert.match(html, /etiqueta: 'Desechados', filtros: \{ ESTADO: \{ valores: \['DESECHADO'\] \} \}/);
+  assert.doesNotMatch(html, /etiqueta: 'Quitados'/);
+  assert.doesNotMatch(html, /titulo: 'Quitado'/);
 });

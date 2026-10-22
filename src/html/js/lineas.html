@@ -7199,7 +7199,6 @@
           { campo: 'ENTREGA_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto', visible: false },
           { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', visible: false },
           { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', visible: false },
-          { campo: 'RETIRADO_EN', titulo: 'Quitado', tipo: 'lnFechaHora', visible: false },
           { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se quitó', tipo: 'texto', visible: false },
         ],
         CANCELACIONES: [
@@ -7262,6 +7261,13 @@
           { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1,
             alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
               campos: [{ clave: 'asunto', etiqueta: 'Referencia de la venta (opcional)' }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
+          // Donado y Desechado, como Vendido: solo lo ya recibido (pendiente 3.16, usuario 22-oct)
+          { icono: 'gift', texto: 'Donado', titulo: 'El equipo se donó: también cambia su estatus en el inventario', minimo: 1,
+            alHacer: (filas) => paso('DONADO', filas, { titulo: 'Marcar como donado', mensaje: miles(filas.length) + ' equipo(s) pasan a DONADO aquí y en el inventario.',
+              campos: [{ clave: 'asunto', etiqueta: 'Referencia de la donación (opcional)' }], boton: 'Marcar donado', hecho: 'Donados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como donados' }) },
+          { icono: 'trash-2', texto: 'Desechado', titulo: 'El equipo se desechó: también cambia su estatus en el inventario', minimo: 1,
+            alHacer: (filas) => paso('DESECHADO', filas, { titulo: 'Marcar como desechado', mensaje: miles(filas.length) + ' equipo(s) pasan a DESECHADO aquí y en el inventario.',
+              campos: [{ clave: 'asunto', etiqueta: 'Referencia del desecho (opcional)' }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
         ],
         CANCELACIONES: [
           { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1,
@@ -7308,7 +7314,8 @@
           { icono: 'package-check', valor: miles(cuenta('ESTADO', 'EN RESGUARDO')), etiqueta: 'En resguardo', filtros: { ESTADO: { valores: ['EN RESGUARDO'] } } },
           { icono: 'hand-helping', valor: miles(cuenta('ESTADO', 'ENTREGADO A LINEAS')), etiqueta: 'Entregados a líneas', clase: 'stat-tile-ok', filtros: { ESTADO: { valores: ['ENTREGADO A LINEAS'] } } },
           { icono: 'badge-dollar-sign', valor: miles(cuenta('ESTADO', 'VENDIDO')), etiqueta: 'Vendidos', filtros: { ESTADO: { valores: ['VENDIDO'] } } },
-          { icono: 'archive-x', valor: miles(cuenta('ESTADO', 'RETIRADO')), etiqueta: 'Quitados', filtros: { ESTADO: { valores: ['RETIRADO'] } } },
+          { icono: 'gift', valor: miles(cuenta('ESTADO', 'DONADO')), etiqueta: 'Donados', filtros: { ESTADO: { valores: ['DONADO'] } } },
+          { icono: 'trash-2', valor: miles(cuenta('ESTADO', 'DESECHADO')), etiqueta: 'Desechados', filtros: { ESTADO: { valores: ['DESECHADO'] } } },
         ] : [
           { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Líneas a cancelar' },
           { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] } } },
