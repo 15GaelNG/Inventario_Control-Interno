@@ -15,7 +15,7 @@
  * que citan al registro las inspecciones, responsivas, bitácora y APP_*. ID APPSHEET: el del AppSheet.
  *
  * Cuando el registro no tiene asignación vigente (vendido, extraviado, fuera de inventario…), los datos de la última
- * persona salen de su última asignación cerrada. En lo vendido o desechado, con el departamento N/A (D-I3).
+ * persona salen de su última asignación cerrada. En los estatus finales, todo en blanco (ESTATUS_FINAL).
  *
  * La hoja vieja se retiró el 4-oct (paso 4, §I.6.7): las rutas del AppSheet y el NUCO de la línea sola están en EQUIPOS
  * y LINEAS, y el comentario viejo en MOVIMIENTOS. El interruptor LINEAS_LECTURA y la lectura de la hoja vieja se quitaron
@@ -26,7 +26,7 @@
 const LineasLectura = (function () {
   const HOJA_VIEJA = 'LINEAS TELEFONICAS';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v7'; // v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v8'; // v8: sin ubicación en estatus finales (22-oct). v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
   /** Responsables adicionales (6-oct): número de empleado y nombre del segundo al quinto. */
@@ -48,10 +48,13 @@ const LineasLectura = (function () {
   /**
    * Responsable en blanco en los estatus finales (usuario, 16-oct; pendiente 2.50): el equipo VENDIDO, DONADO, DESECHADO o
    * EXTRAVIO-ROBO (y sus nombres viejos) y la línea sin equipo CANCELADA ya no son de nadie. No se borra nada: las
-   * asignaciones cerradas siguen en su pestaña; aquí solo no se muestran como su responsable. La ubicación se queda.
+   * asignaciones cerradas siguen en su pestaña; aquí solo no se muestran como su responsable. Tampoco la ubicación
+   * (área, departamento, sede, oficina; usuario, 22-oct: «aún queda oficina y sede»); antes, VENDIDO y DESECHADO sin
+   * asignación mostraban el departamento N/A (D-I3).
    */
   const ESTATUS_FINAL = { equipo: ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'], linea: ['CANCELADA'] };
-  const PERSONA_FINAL = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA'].concat(ADICIONALES);
+  const PERSONA_FINAL = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE', 'ID PERSONA',
+    'AREA', 'DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'].concat(ADICIONALES);
   function esFinal_(e, l) {
     const may = (x) => String(x === undefined || x === null ? '' : x).trim().toUpperCase();
     return e ? ESTATUS_FINAL.equipo.indexOf(may(e['ESTATUS EQUIPO'])) >= 0 : ESTATUS_FINAL.linea.indexOf(may(l && l['ESTATUS LINEA'])) >= 0;
@@ -211,7 +214,6 @@ const LineasLectura = (function () {
         // Ya pasó por el sistema nuevo: la última asignación (ya cerrada) es su historia
         PERSONA_SIN_ASIGNACION.forEach((c) => { o[c] = v(ultima, c); });
       }
-      if (!a && ['VENDIDO', 'DESECHADO'].indexOf(String(o['ESTATUS EQUIPO']).toUpperCase()) >= 0) o['DEPARTAMENTO'] = 'N/A';
       if (esFinal_(e, l)) PERSONA_FINAL.forEach((c) => { o[c] = ''; });
       return o;
     };
