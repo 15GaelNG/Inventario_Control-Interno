@@ -464,23 +464,26 @@ test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo 
   });
 });
 
-test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con T.de, la otra lo publica (fase 6.1b)', () => {
-  // initVehiculos era una función de 2,044 líneas; tools/app/partir-vehiculos.js la abrió (22-oct) con el motor de
-  // tools/partir/en-partes.js. Cada parte (app-vehiculos-<parte>.html) es Vehiculos.registrar('parte', (T) => {…}).
-  const veh = read('src/html/js/app-vehiculos.html').replace(/\r\n/g, '\n');
-  assert.match(veh, /\n  const Vehiculos = Partes\.crear\('Vehículos'\);/);
-  const init = veh.slice(veh.indexOf('async function initVehiculos('));
-  assert.match(init, /^async function initVehiculos\(\) \{\n(    \/\/[^\n]*\n)?    const T = Vehiculos\.contexto\(\);/, 'el contexto es lo primero');
-  assert.ok(init.indexOf('T.montar({') > 0 && init.indexOf('T.montar({') < init.indexOf("getElementById('veh-detalle').addEventListener("),
-    'se monta antes del cableado de eventos');
-  const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/app-vehiculos-(\w+)'\)/g)].map((m) => m[1]);
-  assert.deepEqual(partes.slice(0, 4), ['ficha', 'registros', 'capturas', 'documentos']);
+/**
+ * Una pantalla abierta en partes con tools/partir/en-partes.js (componentes/partes.html): el registro se crea en su
+ * archivo, el contexto es lo primero de la función de arranque, se monta antes del cableado de eventos, los include van
+ * en orden y lo que una parte pide con T.de, otra lo publica. Cada parte es Registro.registrar('parte', (T) => {…}).
+ */
+function pantallaEnPartes({ archivo, funcion, registro, pantalla, partes: esperadas, cableado, minPedidos }) {
+  const principal = read('src/html/js/' + archivo + '.html').replace(/\r\n/g, '\n');
+  assert.ok(principal.includes('\n  const ' + registro + " = Partes.crear('" + pantalla + "');"), archivo + ': crea su registro con Partes.crear');
+  const init = principal.slice(principal.indexOf('async function ' + funcion + '('));
+  assert.match(init, new RegExp('^async function ' + funcion + '\\(\\) \\{\\n(    \\/\\/[^\\n]*\\n)?    const T = ' + registro + '\\.contexto\\(\\);'),
+    funcion + ': el contexto es lo primero');
+  assert.ok(init.indexOf('T.montar({') > 0 && init.indexOf('T.montar({') < init.indexOf(cableado), funcion + ': se monta antes del cableado de eventos');
+  const partes = [...read('src/html/Index.html').matchAll(new RegExp("include\\('html\\/js\\/" + archivo + "-(\\w+)'\\)", 'g'))].map((m) => m[1]);
+  assert.deepEqual(partes.slice(0, esperadas.length), esperadas);
   const declarados = {};
   const publica = {};
   const pedidos = [];
   partes.forEach((p) => {
-    const js = read('src/html/js/app-vehiculos-' + p + '.html').replace(/\r\n/g, '\n');
-    assert.match(js, new RegExp("\\n  Vehiculos\\.registrar\\('" + p + "', \\(T\\) => \\{\\n"), p + ': se registra con Vehiculos.registrar');
+    const js = read('src/html/js/' + archivo + '-' + p + '.html').replace(/\r\n/g, '\n');
+    assert.ok(js.includes('\n  ' + registro + ".registrar('" + p + "', (T) => {\n"), p + ': se registra con ' + registro + '.registrar');
     assert.doesNotMatch(js, /T\.de\('[a-z]+'\)\./, p + ': de otra parte se toman nombres, no el objeto');
     [...js.matchAll(/^    (?:async )?function (\w+)\(|^    (?:const|let) (\w+) =/gm)].forEach((m) => {
       const n = m[1] || m[2];
@@ -490,14 +493,29 @@ test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con
     publica[p] = [...(/\n    return \{\n([\s\S]*?)\n    \};\n  \}\);/.exec(js) || ['', ''])[1].matchAll(/(\w+): \1/g)].map((m) => m[1]);
     [...js.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push([p, m[2], n.trim()])));
   });
-  [...veh.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push(['principal', m[2], n.trim()])));
-  assert.ok(pedidos.length > 30, pedidos.length + ' nombres pedidos con T.de');
+  [...principal.matchAll(/const \{ ([^}]+) \} = T\.de\('(\w+)'\);/g)].forEach((m) => m[1].split(',').forEach((n) => pedidos.push(['principal', m[2], n.trim()])));
+  assert.ok(pedidos.length >= minPedidos, pantalla + ': ' + pedidos.length + ' nombres pedidos con T.de');
   const faltan = pedidos.filter(([, de, n]) => de !== 'principal' && !(publica[de] || []).includes(n)).map(([p, de, n]) => p + ' pide ' + n + ' de ' + de);
-  assert.deepEqual(faltan, [], 'lo que una parte pide con T.de, la otra lo publica');
+  assert.deepEqual(faltan, [], pantalla + ': lo que una parte pide con T.de, la otra lo publica');
+}
+
+test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con T.de, la otra lo publica (fase 6.1b)', () => {
+  // initVehiculos era una función de 2,044 líneas; tools/app/partir-vehiculos.js la abrió (22-oct)
+  pantallaEnPartes({ archivo: 'app-vehiculos', funcion: 'initVehiculos', registro: 'Vehiculos', pantalla: 'Vehículos',
+    partes: ['ficha', 'registros', 'capturas', 'documentos'], cableado: "getElementById('veh-detalle').addEventListener(", minPedidos: 31 });
   // El mecanismo (T.de con Proxy) vive solo en el componente: ninguna pantalla lleva otra copia
   const conProxy = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html') && /new Proxy\(/.test(fs.readFileSync(f, 'utf8')))
     .map((f) => path.relative(root, f).replace(/\\/g, '/'));
   assert.deepEqual(conProxy, ['src/html/js/componentes/partes.html']);
+});
+
+test('Usuarios y permisos: initPermisosAdmin monta sus partes con Partes (fase 6.3)', () => {
+  // initPermisosAdmin era una función de 1,294 líneas; tools/app/partir-permisos.js la abrió (22-oct). Las reglas se
+  // quedan en app-permisos.html: tests/permisos-pantalla.test.cjs las lee de ahí.
+  pantallaEnPartes({ archivo: 'app-permisos', funcion: 'initPermisosAdmin', registro: 'PermisosAdmin', pantalla: 'Usuarios y permisos',
+    partes: ['ficha', 'ventana', 'matriz'], cableado: "$('usr-detalle').addEventListener(", minPedidos: 5 });
+  assert.ok(read('src/html/js/app-permisos.html').includes('// ---------------------------------------------------------------- reglas'),
+    'las reglas siguen en app-permisos.html');
 });
 
 test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con su nombre; la base es ClientApi.gs (fase 6.3)', () => {
@@ -703,7 +721,7 @@ test('la página de un registro se arma con Ficha (migas y encabezado) y Tabs, e
   const usa = (archivo, n) => assert.ok((read(archivo).match(/Ficha\.encabezado\(/g) || []).length >= n, archivo + ' usa Ficha.encabezado');
   usa('src/html/js/app-vehiculos-ficha.html', 1);
   usa('src/html/js/app-cajachica.html', 1);
-  usa('src/html/js/app-permisos.html', 3);
+  usa('src/html/js/app-permisos-ficha.html', 3);
   usa('src/html/js/lineas-telefonicas-ficha.html', 1);
   assert.match(read('package.json'), /node tests\/ficha\.test\.js/);
   const index = read('src/html/Index.html');

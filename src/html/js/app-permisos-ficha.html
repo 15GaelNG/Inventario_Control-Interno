@@ -1,0 +1,271 @@
+<script>
+  /**
+   * app-permisos-ficha.html — Usuarios y permisos: la ficha de una persona, un área o un perfil.
+   * Parte de initPermisosAdmin (fase 6.3, tools/app/partir-permisos.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  PermisosAdmin.registrar('ficha', (T) => {
+    const { $, alcanceCliente, area, badgeActivo, badgeRol, conAcceso, deArea, dePerfil, delArea, efectivo,
+      estaLimitado, etiquetaNodo, excepcionesDe, ico, iconoModulo, implicaciones, modulos, nivel, normal, padreDe,
+      perfil, perfilLimita, perfilesDe, perfilesQueDan, persona, pestanaHistorial, plural, quienPerfil, regla,
+      reglaPerfil, seccionesDe, tablaActiva, tarjetaImplicaciones, tieneTotal } = T;
+
+    function renglon(m, valor, origen, excepcion) {
+      return '<div class="usr-permiso' + (excepcion ? ' excepcion' : '') + (padreDe(m.id) ? ' usr-seccion' : '') + '">' +
+        '<span class="usr-permiso-ico">' + ico(iconoModulo(m.id)) + '</span>' +
+        '<div class="usr-permiso-nombre">' + escaparHtml(m.etiqueta) + (origen ? '<div class="usr-permiso-origen">' + origen + '</div>' : '') + '</div>' +
+        nivel(valor) + '</div>';
+    }
+
+    /**
+     * Los módulos por grupo, una tarjeta por grupo. `mostrar(m)` decide qué renglón va arriba;
+     * el resto se junta al final en "Sin acceso a N módulos", plegado.
+     */
+    function listaDePermisos(mostrar, pintarRenglon, nivelDe, conRegla) {
+      let html = '';
+      const ocultos = [];
+      // Debajo de cada módulo, solo las secciones que se apartan de él (las que heredan van implícitas)
+      const conSecciones = (m) => pintarRenglon(m) + seccionesDe(m)
+        .filter((s) => nivelDe(s.id) !== nivelDe(m.id) || conRegla(s.id))
+        .map((s) => pintarRenglon(Object.assign({ padre: m.id }, s))).join('');
+      T.datos.grupos.forEach((g) => {
+        const visibles = g.modulos.filter((m) => { const si = mostrar(m); if (!si) ocultos.push(m); return si; });
+        if (!visibles.length) return;
+        html += '<div class="card ln-card"><h3>' + ico(g.icono) + ' ' + escaparHtml(g.etiqueta) + '</h3>' +
+          visibles.map(conSecciones).join('') + '</div>';
+      });
+      if (!html) html = '<div class="card ln-card"><p class="empty-state">No tiene acceso a ningún módulo.</p></div>';
+      if (ocultos.length) {
+        html += '<div class="card ln-card"><details class="usr-plegado"><summary>Sin acceso a ' + plural(ocultos.length, 'módulo', 'módulos') + '</summary>' +
+          ocultos.map(pintarRenglon).join('') + '</details></div>';
+      }
+      return html;
+    }
+
+    function migas() {
+      const anterior = pila.length ? pila[pila.length - 1] : null;
+      const texto = anterior ? (anterior.tipo === 'persona' ? ((persona(anterior.id) || {}).nombre || anterior.id) : anterior.id) : 'Usuarios y permisos';
+      return Ficha.migas({ volver: { atributos: 'data-usr-volver' }, ruta: [{ texto: texto, atributos: 'data-usr-volver' }] });
+    }
+
+    // ---------------------------------------------------------------- ficha de persona
+    function fichaPersona(p) {
+      const total = tieneTotal(p);
+      let aviso = '';
+      if (!p.activo) aviso = ['user-x', 'Está inactivo en USUARIOS: no puede entrar a la app. Abajo está lo que tendría si se reactiva.'];
+      else if (total) aviso = ['shield-check', 'Su rol ' + p.rol + ' le da acceso total' + (p.rol === 'SUPER' ? ', menos Usuarios y permisos' : '') + '. Para quitárselo hay que cambiar su ROL en USUARIOS.'];
+      else if (p.rol === 'VIEWER') aviso = ['eye', 'Su rol VIEWER solo deja consultar: aunque tenga Editar, no podrá modificar nada.'];
+      else if (p.rol === 'CLIENT') {
+        const dptos = alcanceCliente(p);
+        aviso = ['eye', 'Su rol CLIENT solo deja consultar, y en Vehículos y Líneas solo ve lo de ' +
+          (dptos.length ? dptos.join(', ') : 'ningún departamento (no tiene área ni DPTOS PERMITIDOS)') + '.'];
+      }
+      else if (estaLimitado(p)) {
+        const limitan = perfilesDe(p.area).filter(perfilLimita).map((k) => T.perfilesPorClave[k].nombre);
+        aviso = ['map-pin', 'Su perfil ' + limitan.join(', ') + ' la limita a lo de su área (' + (alcanceCliente(p).join(', ') || 'ningún departamento') +
+          '): solo tiene lo que respeta ese límite, y ahí solo ve sus renglones.'];
+      }
+      else if (!p.area) aviso = ['info', 'No tiene área en USUARIOS: solo tiene las excepciones que se le den aquí.'];
+
+      const resumen = [['Correo', p.correo], ['Área', p.area], ['Coordinación', p.coordinacion], ['Sede', [p.oficina, p.sede].filter(Boolean).join(' · ')]]
+        .filter((d) => d[1]);
+      let html = migas() + Ficha.encabezado({
+        iconoHtml: Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }), titulo: p.nombre || p.correo,
+        chips: badgeRol(p.rol) + badgeActivo(p.activo) +
+          (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
+        botones: total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        resumen: resumen,
+      });
+
+      // En una línea: cuánto le viene de su área (y sus perfiles) y cuánto es solo suyo
+      const porSuArea = modulos().filter((m) => regla(p.correo, m.id) === undefined && deArea(p.area, m.id) !== 'NINGUNO').length;
+      const excepciones = excepcionesDe(p).length;
+      const susPerfiles = perfilesDe(p.area).map((k) => T.perfilesPorClave[k].nombre);
+      const herencia = total ? '' : '<p class="usr-herencia">' + ico('users') + '<span>' +
+        (p.area ? 'Su área <b>' + escaparHtml(p.area) + '</b>' + (susPerfiles.length ? ' (perfiles: ' + susPerfiles.map((n) =>
+          '<button type="button" class="usr-enlace" data-usr-perfil="' + escaparHtml(n) + '">' + escaparHtml(n) + '</button>').join(', ') + ')' : '') +
+          ' le da ' + plural(porSuArea, 'módulo', 'módulos') : 'Sin área en USUARIOS') +
+        (excepciones ? ' · más ' + plural(excepciones, 'excepción propia', 'excepciones propias') : ' · sin excepciones') + '</span></p>';
+
+      const permisos = (aviso ? '<div class="usr-aviso">' + ico(aviso[0]) + '<div>' + aviso[1] + '</div></div>' : '') + herencia +
+        listaDePermisos(
+          (m) => efectivo(p, m.id) !== 'NINGUNO' || regla(p.correo, m.id) !== undefined,
+          (m) => {
+            const propio = total ? undefined : regla(p.correo, m.id);
+            const reglaArea = p.area ? regla(p.area, m.id) : undefined;
+            const porPerfil = perfilesQueDan(perfilesDe(p.area), m.id);
+            let origen;
+            if (total) origen = '<span class="usr-origen rol">' + ico('shield-check') + ' Por su rol ' + escaparHtml(p.rol) + '</span>';
+            else if (propio !== undefined) {
+              origen = '<span class="usr-origen excepcion">' + ico('sparkles') + ' Excepción</span>' +
+                (p.area ? '<span>su área: ' + PERM_TEXTO[deArea(p.area, m.id)] + '</span>' : '');
+            } else if (reglaArea !== undefined) origen = '<span class="usr-origen area">' + ico('users') + ' Por su área</span>';
+            else if (porPerfil.length) origen = '<span class="usr-origen area">' + ico('layers') + ' Por su perfil ' + escaparHtml(porPerfil.join(', ')) + '</span>';
+            else if (m.padre) {
+              origen = '<span class="usr-origen area">' + ico('corner-down-right') + ' ' + (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>';
+            }
+            return renglon(m, efectivo(p, m.id), origen, propio !== undefined);
+          },
+          (id) => efectivo(p, id),
+          (id) => !total && (regla(p.correo, id) !== undefined || (!!p.area && regla(p.area, id) !== undefined) ||
+            perfilesDe(p.area).some((k) => reglaPerfil(k, id) !== undefined))) +
+        tarjetaImplicaciones(implicaciones((id) => efectivo(p, id)));
+
+      const datosHoja = '<div class="card ln-card"><h3>' + ico('id-card') + ' Datos en USUARIOS</h3><div class="info-grid">' +
+        [['Nombre', p.nombre], ['Correo', p.correo], ['No. de empleado', p.noEmpleado], ['Rol', p.rol], ['Estatus', p.activo ? 'Activo' : 'Inactivo'],
+          ['Área', p.area], ['Coordinación', p.coordinacion], ['Oficina', p.oficina], ['Sede', p.sede], ['Departamentos permitidos', p.dptosPermitidos]]
+          .map((d) => itemInfo(d[0], d[1] || '—')).join('') +
+        '</div><p class="ln-tenue" style="margin:10px 0 0; font-size:var(--texto-s)">Estos datos se cambian en la hoja USUARIOS.</p></div>';
+
+      return html + Tabs.html([
+        { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: conAcceso(p) },
+        { id: 'datos', titulo: 'Datos', icono: 'id-card', contenido: datosHoja },
+        pestanaHistorial(p.correo),
+      ]);
+    }
+
+    // ---------------------------------------------------------------- ficha de área
+    function fichaArea(a) {
+      const gente = delArea(a.nombre);
+      const activas = gente.filter((p) => p.activo);
+      const cuenta = (v) => modulos().filter((m) => deArea(a.nombre, m.id) === v).length;
+      const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
+        ['Con excepciones', plural(activas.filter((p) => excepcionesDe(p).length).length, 'persona', 'personas')]];
+      let html = migas() + Ficha.encabezado({
+        icono: 'users', titulo: a.nombre,
+        chips: '<span class="badge-estado pendiente">Área</span><span class="badge-estado activo">' + plural(activas.length, 'persona activa', 'personas activas') + '</span>',
+        botones: '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        resumen: resumen,
+      });
+
+      const susPerfiles = perfilesDe(a.nombre).map((k) => T.perfilesPorClave[k].nombre);
+      const tarjetaPerfiles = '<div class="card ln-card usr-perfiles-area"><h3>' + ico('layers') + ' Perfiles' +
+        '<button type="button" class="secondary usr-btn-chico" data-usr-asignar>' + ico('pencil') + ' Asignar perfiles</button></h3>' +
+        (susPerfiles.length ? '<div class="usr-chips-perfil">' + susPerfiles.map((n) => '<button type="button" class="usr-chip-perfil" data-usr-perfil="' +
+          escaparHtml(n) + '">' + ico('layers') + ' ' + escaparHtml(n) + '</button>').join('') + '</div>'
+          : '<p class="ln-tenue" style="margin:0">Sin perfiles: solo sus reglas propias.</p>') + '</div>';
+      const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo que tenga el área (sus perfiles y sus reglas propias, que mandan sobre los perfiles) lo reciben todas sus personas, salvo quien tenga una excepción en ese módulo. ADMIN y SUPER tienen todo por su rol.</div></div>' +
+        tarjetaPerfiles +
+        listaDePermisos(
+          (m) => deArea(a.nombre, m.id) !== 'NINGUNO',
+          (m) => {
+            const conExc = activas.filter((p) => !tieneTotal(p) && regla(p.correo, m.id) !== undefined);
+            const origen = conExc.length
+              ? '<button type="button" class="usr-enlace" data-usr-persona="' + escaparHtml(conExc[0].correo) + '" title="' +
+                escaparHtml(conExc.map((p) => (p.nombre || p.correo) + ': ' + PERM_TEXTO[regla(p.correo, m.id)]).join('\n')) + '">' +
+                ico('sparkles') + ' ' + (conExc.length === 1 ? escaparHtml(conExc[0].nombre || conExc[0].correo) + ' tiene una excepción' : conExc.length + ' personas con excepción') + '</button>'
+              : regla(a.nombre, m.id) !== undefined ? (susPerfiles.length ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' Regla del área</span>' : '')
+                : perfilesQueDan(perfilesDe(a.nombre), m.id).length
+                  ? '<span class="usr-origen area">' + ico('layers') + ' Por su perfil ' + escaparHtml(perfilesQueDan(perfilesDe(a.nombre), m.id).join(', ')) + '</span>'
+                  : (m.padre ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
+                    (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>' : '');
+            return renglon(m, deArea(a.nombre, m.id), origen, false);
+          },
+          (id) => deArea(a.nombre, id),
+          (id) => regla(a.nombre, id) !== undefined || perfilesDe(a.nombre).some((k) => reglaPerfil(k, id) !== undefined) ||
+            activas.some((p) => !tieneTotal(p) && regla(p.correo, id) !== undefined)) +
+        tarjetaImplicaciones(implicaciones((id) => deArea(a.nombre, id)));
+
+      const personas = '<div class="card ln-card"><h3>' + ico('users') + ' Personas del área</h3>' + (gente.length
+        ? tablaFicha([
+          { t: 'Nombre', r: (p) => '<button type="button" class="usr-enlace" data-usr-persona="' + escaparHtml(p.correo) + '">' + escaparHtml(p.nombre || p.correo) + '</button>' },
+          { t: 'Rol', r: (p) => escaparHtml(p.rol) },
+          { t: 'Estatus', r: (p) => badgeActivo(p.activo) },
+          { t: 'Excepciones', r: (p) => { const n = excepcionesDe(p).length; return n ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' ' + n + '</span>' : '—'; } },
+        ], gente.slice().sort((x, y) => (y.activo - x.activo) || String(x.nombre).localeCompare(String(y.nombre))))
+        : '<p class="empty-state">Nadie tiene esta área.</p>') + '</div>';
+
+      return html + Tabs.html([
+        { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
+        { id: 'personas', titulo: 'Personas', icono: 'users', contenido: personas, num: gente.length },
+        pestanaHistorial(a.nombre),
+      ]);
+    }
+
+    // ---------------------------------------------------------------- ficha de perfil
+    function fichaPerfil(pf) {
+      const k = normal(pf.nombre);
+      const areas = pf.areas.map((n) => area(n) || { nombre: n });
+      const gente = T.datos.personas.filter((p) => p.activo && pf.areas.some((a) => normal(a) === normal(p.area)));
+      const cuenta = (v) => modulos().filter((m) => dePerfil(k, m.id) === v).length;
+      const resumen = [['Edita', plural(cuenta('EDICION'), 'módulo', 'módulos')], ['Solo ve', plural(cuenta('LECTURA'), 'módulo', 'módulos')],
+        ['Lo reciben', plural(gente.length, 'persona activa', 'personas activas')]];
+      let html = migas() + Ficha.encabezado({
+        icono: 'layers', titulo: pf.nombre,
+        chips: '<span class="badge-estado pendiente">Perfil</span><span class="badge-estado activo">' + plural(areas.length, 'área', 'áreas') + '</span>' +
+          (pf.alcance === 'AREA' ? '<span class="badge-estado pendiente">' + ico('map-pin') + ' Solo lo de su área</span>' : ''),
+        botones: '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>' +
+          '<button type="button" class="secondary" data-usr-asignar>' + ico('users') + ' Áreas</button>' +
+          '<button type="button" class="secondary" data-usr-eliminar-perfil title="Eliminar el perfil">' + ico('trash-2') + '</button>',
+        resumen: resumen,
+      });
+
+      const permisos = '<div class="usr-aviso">' + ico('info') + '<div>Lo reciben todas las áreas que tienen este perfil (y sus personas). Si un área tiene varios perfiles, gana el más alto; lo que el área o la persona tengan como regla propia manda sobre el perfil.</div></div>' +
+        (pf.alcance === 'AREA' ? '<div class="usr-aviso">' + ico('map-pin') + '<div><b>Solo lo de su área.</b> Quien tenga este perfil (aunque sea USER) solo ve los renglones de su área (DPTOS PERMITIDOS o su AREA), y solo en lo que respeta ese límite (Vehículos y Líneas Telefónicas, sin el pasado de la ficha); lo demás se le cierra.</div></div>' : '') +
+        listaDePermisos(
+          (m) => dePerfil(k, m.id) !== 'NINGUNO',
+          (m) => renglon(m, dePerfil(k, m.id), m.padre && reglaPerfil(k, m.id) === undefined ? '<span class="usr-origen area">' + ico('corner-down-right') + ' ' +
+            (m.hereda === false ? 'No hereda: se da aparte' : 'Hereda de ' + escaparHtml(etiquetaNodo(m.padre))) + '</span>' : '', false),
+          (id) => dePerfil(k, id),
+          (id) => reglaPerfil(k, id) !== undefined) +
+        tarjetaImplicaciones(implicaciones((id) => dePerfil(k, id)));
+
+      const listaAreas = '<div class="card ln-card"><h3>' + ico('users') + ' Áreas con este perfil' +
+        '<button type="button" class="secondary usr-btn-chico" data-usr-asignar>' + ico('pencil') + ' Cambiar</button></h3>' + (areas.length
+        ? tablaFicha([
+          { t: 'Área', r: (a) => '<button type="button" class="usr-enlace" data-usr-area="' + escaparHtml(a.nombre) + '">' + escaparHtml(a.nombre) + '</button>' },
+          { t: 'Personas activas', r: (a) => String(delArea(a.nombre).filter((p) => p.activo).length) },
+          { t: 'Otros perfiles', r: (a) => escaparHtml(perfilesDe(a.nombre).filter((x) => x !== k).map((x) => T.perfilesPorClave[x].nombre).join(', ') || '—') },
+        ], areas)
+        : '<p class="empty-state">Ninguna área tiene este perfil todavía.</p>') + '</div>';
+
+      return html + Tabs.html([
+        { id: 'permisos', titulo: 'Permisos', icono: 'shield-check', contenido: permisos, num: cuenta('EDICION') + cuenta('LECTURA') },
+        { id: 'areas', titulo: 'Áreas', icono: 'users', contenido: listaAreas, num: areas.length },
+        pestanaHistorial(quienPerfil(pf.nombre)),
+      ]);
+    }
+
+    // ---------------------------------------------------------------- abrir / cerrar fichas
+    let pila = [];         // fichas abiertas antes de la actual: "Volver" regresa a la anterior
+    let fichaActual = null;   // { tipo: 'persona' | 'area' | 'perfil', id, pestana }
+    function pintarFicha() {
+      const detalle = $('usr-detalle');
+      if (!fichaActual) {
+        detalle.hidden = true;
+        detalle.innerHTML = '';
+        $('usr-listado').hidden = false;
+        tablaActiva().ajustarAlto();
+        return;
+      }
+      if (fichaActual.tipo === 'perfil' && !perfil(fichaActual.id)) { fichaActual = pila.pop() || null; pintarFicha(); return; }   // se eliminó
+      const html = fichaActual.tipo === 'area' ? fichaArea(area(fichaActual.id) || { nombre: fichaActual.id, personas: 0 })
+        : fichaActual.tipo === 'perfil' ? fichaPerfil(perfil(fichaActual.id)) : fichaPersona(persona(fichaActual.id));
+      $('usr-listado').hidden = true;
+      detalle.hidden = false;
+      detalle.innerHTML = html;
+      if (fichaActual.pestana) Tabs.mostrar(detalle, fichaActual.pestana);
+      refreshIcons();
+      document.getElementById('view-container').scrollTop = 0;
+    }
+    function abrirFicha(tipo, id, desdeOtraFicha) {
+      if (tipo === 'persona' && !persona(id)) return;
+      if (desdeOtraFicha && fichaActual) pila.push(fichaActual);
+      else pila = [];
+      fichaActual = { tipo: tipo, id: id, pestana: 'permisos' };
+      pintarFicha();
+    }
+    function volver() {
+      fichaActual = pila.pop() || null;
+      pintarFicha();
+    }
+
+    // Lo que también usan otras partes (T.pila, T.fichaActual)
+    Object.defineProperty(T, 'pila', { get: () => pila, set: (v) => { pila = v; } });
+    Object.defineProperty(T, 'fichaActual', { get: () => fichaActual, set: (v) => { fichaActual = v; } });
+
+    return {
+      abrirFicha: abrirFicha, pintarFicha: pintarFicha, volver: volver,
+    };
+  });
+</script>

@@ -1,0 +1,165 @@
+<script>
+  /**
+   * app-permisos-matriz.html — Usuarios y permisos: la matriz por área o por perfil: sus celdas y guardarla.
+   * Parte de initPermisosAdmin (fase 6.3, tools/app/partir-permisos.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  PermisosAdmin.registrar('matriz', (T) => {
+    const { $, delArea, etiquetaNodo, iconoModulo, nodo, normal, padreDe, perfilLimita, perfilesDe, plural,
+      quienPerfil, regla, reglaPerfil, resolvedor, seccionesDe, tieneTotal } = T;
+    const { abrirFicha } = T.de('ficha');
+    const { guardarCambios } = T.de('ventana');
+
+    // ---------------------------------------------------------------- matriz por área / por perfil
+    /**
+     * Módulos y secciones (renglones, por grupo) contra áreas o perfiles (columnas; "Por área" / "Por perfil"). Un
+     * clic en una celda pasa al siguiente nivel; nada se guarda hasta "Guardar", que manda todos los cambios juntos
+     * (también los del otro modo). En una sección, o en un área que tiene perfiles, el ciclo pasa además por Hereda
+     * (sin regla propia: lo de sus perfiles o de su módulo); en lo demás, Sin acceso es no tener regla. Las
+     * excepciones de cada persona se respetan (la celda de un área lleva un punto dorado si alguien tiene una).
+     */
+    const ICONO_CELDA = { NINGUNO: 'minus', LECTURA: 'eye', EDICION: 'pencil' };
+    const SIGUIENTE_NIVEL = { NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'NINGUNO' };
+    const SIGUIENTE_CON_HEREDA = { HEREDA: 'NINGUNO', NINGUNO: 'LECTURA', LECTURA: 'EDICION', EDICION: 'HEREDA' };
+    let pendientesMatriz = {};   // 'quien|nodo' → nivel elegido ('HEREDA' = sin regla); quien = área o 'perfil:Nombre'
+    let modoMatriz = 'areas';        // 'areas' | 'perfiles'
+    const llaveCelda = (quien, modulo) => quien + '|' + modulo;
+    const esQuienPerfil = (quien) => /^perfil:/i.test(quien);
+    const nombreDeQuien = (quien) => String(quien).replace(/^perfil:/i, '');
+    /** La regla que tiene en la hoja ese renglón (área o perfil) en ese nodo */
+    const reglaDe = (quien, id) => (esQuienPerfil(quien) ? reglaPerfil(normal(nombreDeQuien(quien)), id) : regla(quien, id));
+    const perfilesDeColumna = (quien) => (esQuienPerfil(quien) ? [] : perfilesDe(quien));
+    /** ¿La celda tiene el estado Hereda? En una sección siempre; en un módulo, si el área tiene perfiles */
+    const conHereda = (quien, id) => !!padreDe(id) || perfilesDeColumna(quien).length > 0;
+    /** Lo que dice la hoja para la celda: la regla, HEREDA (sin regla, si la celda lo tiene) o NINGUNO */
+    const enHoja = (quien, id) => reglaDe(quien, id) || (conHereda(quien, id) ? 'HEREDA' : 'NINGUNO');
+    const nivelEnMatriz = (quien, modulo) => {
+      const k = llaveCelda(quien, modulo);
+      return k in pendientesMatriz ? pendientesMatriz[k] : enHoja(quien, modulo);
+    };
+    /** Con lo que hay en la matriz, el nivel que de verdad queda (con sus perfiles y la herencia de su módulo) */
+    function nivelResueltoEnMatriz(quien, id) {
+      const propia = (x) => {
+        const v = nivelEnMatriz(quien, x);
+        return v === 'HEREDA' ? undefined : v;
+      };
+      return resolvedor([propia], perfilesDeColumna(quien), false, !esQuienPerfil(quien) && perfilesDe(quien).some(perfilLimita))(id);
+    }
+    const columnasMatriz = () => (modoMatriz === 'perfiles'
+      ? T.datos.perfiles.map((pf) => ({ quien: quienPerfil(pf.nombre), etiqueta: pf.nombre,
+        titulo: 'Perfil ' + pf.nombre + ' · ' + plural(pf.areas.length, 'área', 'áreas') + '. Clic para abrir el perfil', abrir: 'data-usr-perfil' }))
+      : T.datos.areas.map((a) => ({ quien: a.nombre, etiqueta: a.nombre,
+        titulo: a.nombre + ' · ' + plural(delArea(a.nombre).filter((p) => p.activo).length, 'persona activa', 'personas activas') + '. Clic para abrir el área',
+        abrir: 'data-usr-area' })));
+
+    function celdaMatriz(col, m) {
+      const quien = col.quien;
+      const n = nivelEnMatriz(quien, m.id);
+      const antes = enHoja(quien, m.id);
+      const resuelto = nivelResueltoEnMatriz(quien, m.id);
+      const conExc = esQuienPerfil(quien) ? [] : delArea(quien).filter((p) => p.activo && !tieneTotal(p) && regla(p.correo, m.id) !== undefined);
+      const titulo = col.etiqueta + ' · ' + etiquetaNodo(m.id) + ': ' + (n === 'HEREDA' ? 'Hereda (' + PERM_TEXTO[resuelto] + ')' : PERM_TEXTO[n]) +
+        (n !== antes ? ' (antes: ' + PERM_TEXTO[antes] + ')' : '') +
+        (conExc.length ? '\nCon excepción: ' + conExc.map((p) => (p.nombre || p.correo) + ' (' + PERM_TEXTO[regla(p.correo, m.id)] + ')').join(', ') : '') +
+        '\nClic para cambiar';
+      return '<button type="button" class="usr-celda ' + resuelto + (n === 'HEREDA' ? ' heredada' : '') + (n !== antes ? ' cambiada' : '') + (conExc.length ? ' con-excepcion' : '') + '"' +
+        ' data-celda-area="' + escaparHtml(quien) + '" data-celda-modulo="' + m.id + '"' +
+        ' title="' + escaparHtml(titulo) + '" aria-label="' + escaparHtml(titulo) + '">' + Iconos.svg(ICONO_CELDA[resuelto]) + '</button>';
+    }
+
+    function cambiosDeLaMatriz() {
+      return Object.keys(pendientesMatriz).map((k) => {
+        const i = k.lastIndexOf('|');
+        return { quien: k.slice(0, i), modulo: k.slice(i + 1), nivel: pendientesMatriz[k] };
+      })
+        .filter((c) => c.nivel !== enHoja(c.quien, c.modulo))
+        .map((c) => ({ quien: c.quien, modulo: c.modulo,
+          permiso: c.nivel === 'HEREDA' || (c.nivel === 'NINGUNO' && !conHereda(c.quien, c.modulo)) ? null : c.nivel }));
+    }
+
+    function pintarCuentaMatriz() {
+      const n = cambiosDeLaMatriz().length;
+      const cuenta = $('usr-matriz-cuenta');
+      cuenta.textContent = n ? plural(n, 'cambio sin guardar', 'cambios sin guardar') : 'Clic en una celda para cambiarla';
+      cuenta.classList.toggle('con-cambios', !!n);
+      $('usr-matriz-guardar').disabled = !n;
+      $('usr-matriz-descartar').hidden = !n;
+    }
+
+    function pintarMatriz() {
+      const caja = $('usr-matriz');
+      $('usr-matriz-modo').querySelectorAll('[data-modo]').forEach((b) => {
+        b.classList.toggle('activa', b.dataset.modo === modoMatriz);
+        b.setAttribute('aria-pressed', String(b.dataset.modo === modoMatriz));
+      });
+      const cols = columnasMatriz();
+      if (!cols.length) {
+        caja.innerHTML = '<p class="empty-state">' + (modoMatriz === 'perfiles' ? 'Todavía no hay perfiles: créalos en la pestaña Perfiles.' : 'Nadie tiene área en USUARIOS.') + '</p>';
+        pintarCuentaMatriz();
+        return;
+      }
+      const arriba = caja.scrollTop;
+      const izquierda = caja.scrollLeft;
+      // Una sección con alguna regla (o un cambio sin guardar) siempre se ve; las demás, con el botón
+      const conRegla = (id) => cols.some((c) => reglaDe(c.quien, id) !== undefined || llaveCelda(c.quien, id) in pendientesMatriz);
+      caja.innerHTML = '<table class="usr-matriz' + (T.todasLasSecciones ? '' : ' solo-con-regla') + '"><thead><tr><th class="usr-matriz-mod">Módulo</th>' +
+        cols.map((c) => '<th><button type="button" class="usr-matriz-area" ' + c.abrir + '="' + escaparHtml(c.abrir === 'data-usr-perfil' ? c.etiqueta : c.quien) + '"' +
+          ' title="' + escaparHtml(c.titulo) + '">' + escaparHtml(c.etiqueta) + '</button></th>').join('') + '</tr></thead><tbody>' +
+        T.datos.grupos.map((g) => '<tr class="usr-matriz-grupo"><th class="usr-matriz-mod">' + escaparHtml(g.etiqueta) + '</th><td colspan="' + cols.length + '"></td></tr>' +
+          g.modulos.map((m) => [m].concat(seccionesDe(m).map((s) => Object.assign({ padre: m.id }, s))).map((n) =>
+            '<tr' + (n.padre ? ' class="usr-matriz-seccion' + (conRegla(n.id) ? ' con-regla' : '') + '"' : '') + '><th class="usr-matriz-mod">' + Iconos.svg(iconoModulo(n.id)) + escaparHtml(n.etiqueta) + '</th>' +
+            cols.map((c) => '<td>' + celdaMatriz(c, n) + '</td>').join('') + '</tr>').join('')).join('')).join('') +
+        '</tbody></table>';
+      caja.scrollTop = arriba;
+      caja.scrollLeft = izquierda;
+      pintarCuentaMatriz();
+    }
+
+    function alClicMatriz(ev) {
+      const celda = ev.target.closest('[data-celda-modulo]');
+      if (celda) {
+        const quien = celda.dataset.celdaArea;
+        const col = columnasMatriz().find((c) => c.quien === quien);
+        const m = nodo(celda.dataset.celdaModulo);
+        if (!col || !m) return;
+        const k = llaveCelda(quien, m.id);
+        const nuevo = (conHereda(quien, m.id) ? SIGUIENTE_CON_HEREDA : SIGUIENTE_NIVEL)[nivelEnMatriz(quien, m.id)];
+        if (nuevo === enHoja(quien, m.id)) delete pendientesMatriz[k];
+        else pendientesMatriz[k] = nuevo;
+        const selector = '[data-celda-area="' + CSS.escape(quien) + '"][data-celda-modulo="' + m.id + '"]';
+        // Un módulo cambia lo que heredan sus secciones: se repinta la tabla; una sección, solo su celda
+        if (!m.padre) { pintarMatriz(); const el = $('usr-matriz').querySelector(selector); if (el) el.focus(); return; }
+        celda.parentNode.innerHTML = celdaMatriz(col, m);   // solo esa celda: la tabla no salta
+        const otra = $('usr-matriz').querySelector(selector);
+        if (otra) otra.focus();
+        pintarCuentaMatriz();
+        return;
+      }
+      const encabezadoArea = ev.target.closest('[data-usr-area]');
+      if (encabezadoArea) { abrirFicha('area', encabezadoArea.dataset.usrArea); return; }
+      const dePerfilBtn = ev.target.closest('[data-usr-perfil]');
+      if (dePerfilBtn) abrirFicha('perfil', dePerfilBtn.dataset.usrPerfil);
+    }
+
+    async function guardarMatriz() {
+      const cambios = cambiosDeLaMatriz();
+      if (!cambios.length) return;
+      const boton = $('usr-matriz-guardar');
+      boton.disabled = true;
+      try {
+        await guardarCambios(cambios, () => { pendientesMatriz = {}; });
+      } catch (err) {
+        toastError('No se guardaron: ' + err.message);
+        boton.disabled = false;
+      }
+    }
+
+    // Lo que también usan otras partes (T.pendientesMatriz, T.modoMatriz)
+    Object.defineProperty(T, 'pendientesMatriz', { get: () => pendientesMatriz, set: (v) => { pendientesMatriz = v; } });
+    Object.defineProperty(T, 'modoMatriz', { get: () => modoMatriz, set: (v) => { modoMatriz = v; } });
+
+    return {
+      alClicMatriz: alClicMatriz, guardarMatriz: guardarMatriz, pintarMatriz: pintarMatriz,
+    };
+  });
+</script>
