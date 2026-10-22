@@ -53,6 +53,8 @@ const LineasEscritura = (function () {
   const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE'].concat(ADICIONALES);
   /** Dónde está (con persona o guardado). */
   const UBICACION = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
+  /** Del equipo, en blanco al pasar a un estatus final (usuario, 22-oct). */
+  const SE_LIMPIA_AL_CERRAR = ['ACCESORIOS', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'];
   // Los "no aplica" se guardan en blanco, como en la migración (LineasEstructura)
   const NO_APLICA = ['', 'N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'];
   // Tipos viejos que llevan línea sí o sí (MODEM, BANDA ANCHA y CAMARA la llevan solo si tienen número)
@@ -283,6 +285,18 @@ const LineasEscritura = (function () {
       if (c === 'COMENTARIOS') campos.push({ campo: columna, antes: texto_(antes), despues: texto_(despues) });
       // Lo demás ya no se guarda (FECHA INSPECCION, responsables 2 a 5…)
     });
+
+    // El equipo que pasa a un estatus final (VENDIDO, DONADO, DESECHADO, EXTRAVIO-ROBO…) se queda sin accesorios ni
+    // bloqueo (usuario, 22-oct: «limpiar toda la información, no solo responsables»); la persona, la ubicación y la
+    // línea ya salen al cerrarse su asignación. MODELO, COLOR, IMEI y NUCO se conservan
+    const nuevoEstatusEquipo = (anotados.filter((x) => x.hoja === 'E' && x.columna === 'ESTATUS EQUIPO')[0] || {}).despues;
+    if (e && clase_('equipo', nuevoEstatusEquipo) === 'NINGUNA') {
+      for (let i = anotados.length - 1; i >= 0; i--) if (anotados[i].hoja === 'E' && SE_LIMPIA_AL_CERRAR.indexOf(anotados[i].columna) >= 0) anotados.splice(i, 1);
+      SE_LIMPIA_AL_CERRAR.forEach((c) => {
+        const antes = limpioDe_(c, e[c]);
+        if (antes !== '') anotados.push({ hoja: 'E', columna: c, campo: c, antes: antes, despues: '' });
+      });
+    }
 
     const nuevoEstatusLinea = (anotados.filter((x) => x.hoja === 'L' && x.columna === 'ESTATUS LINEA')[0] || {}).despues;
     const seCancela = !!l && may(nuevoEstatusLinea) === 'CANCELADA';

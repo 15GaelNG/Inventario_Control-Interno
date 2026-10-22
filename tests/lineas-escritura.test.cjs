@@ -176,6 +176,24 @@ test('vendido: el equipo sale de toda asignación y la línea disponible se qued
   assert.strictEqual(f['SEDE'], 'MERIDA'); // muestra su última asignación cerrada
 });
 
+// Usuario, 22-oct: «limpiar estatus finales toda la información, no solo responsables»
+test('estatus final: el equipo queda sin accesorios, PIN, patrón ni contraseña; modelo, IMEI y NUCO se conservan', () => {
+  const base = JSON.parse(JSON.stringify(BASE));
+  Object.assign(base.EQUIPOS.find((e) => e.ID === 'EQU-2'), { 'ACCESORIOS': 'CAJA, CABLE', 'PIN EQUIPO': '1234', 'PATRON': 'L', 'CONTRASEÑA MODEM': 'X1' });
+  const t = cargar(base);
+  // Lo que la pantalla manda de esos campos no cuenta: el estatus final los deja en blanco
+  const r = t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'DONADO', 'ACCESORIOS': 'CAJA' });
+  const e = t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2');
+  assert.deepStrictEqual([e['ACCESORIOS'], e['PIN EQUIPO'], e['PATRON'], e['CONTRASEÑA MODEM']], ['', '', '', '']);
+  assert.deepStrictEqual([e['MODELO'], e['IMEI'], e['NUCO'], e['ESTATUS EQUIPO']], ['MOTO', '222', '0020', 'DONADO']);
+  assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'CAJA, CABLE' && c.despues === ''), 'queda en el historial');
+  assert.ok(!t.vigentes().some((a) => a['ID EQUIPO'] === 'EQU-2'));
+  // Fuera de un estatus final no se limpia
+  const t2 = cargar(base);
+  t2.guardar('EQU-2', { 'ESTATUS EQUIPO': 'PARA VENTA' });
+  assert.strictEqual(t2.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CAJA, CABLE');
+});
+
 test('de resguardo a uso con su persona (reasignar): abre la asignación con persona y deja DISPONIBLE fuera', () => {
   const t = cargar(BASE);
   t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'ESTATUS LINEA': 'USO', 'RESPONSABLE': 'ANA', 'PUESTO': 'GERENTE' });
