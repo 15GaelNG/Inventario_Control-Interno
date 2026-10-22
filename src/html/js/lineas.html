@@ -1007,6 +1007,27 @@
       return Formato.normal(s).replace(/\s+/g, ' ').trim().toUpperCase();
     }
 
+    // Tope de cada firma en base64 (usuario, 22-oct): el servidor guarda las de la captura 6 h en una caché que acepta
+    // hasta 100 KB por documento, con la de Control Interno y el patrón. Una foto de la firma pasada a PNG pesaba megas,
+    // no cabía y al generar el PDF después el recuadro del responsable salía vacío
+    const TOPE_FIRMA = 40000;
+
+    /** La firma como JPEG más chico hasta que quepa en TOPE_FIRMA (en el PDF ocupa 160 × 70). */
+    function firmaAchicada(img, fondo) {
+      let ancho = Math.min(img.naturalWidth || 600, 600), calidad = 0.8, salida = '';
+      for (let i = 0; i < 10; i++) {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(ancho));
+        c.height = Math.max(1, Math.round((img.naturalHeight || 1) * c.width / (img.naturalWidth || c.width)));
+        const g = c.getContext('2d');
+        g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        salida = c.toDataURL('image/jpeg', calidad).split(',')[1];
+        if (salida.length <= TOPE_FIRMA) break;
+        if (calidad > 0.55) calidad -= 0.15; else ancho *= 0.75;
+      }
+      return salida;
+    }
+
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
     function crearFirma(contenedor, nombre) {
       if (!contenedor || typeof Firma === 'undefined') return null;
@@ -1016,7 +1037,7 @@
         limpiar: () => f.limpiar(),
         ajustar: () => f.ajustar(),
         setNombre: (n) => f.setNombre(n || ''),
-        /** PNG con el color de la celda del PDF (la firma llega recortada al trazo). */
+        /** PNG con el color de la celda del PDF (la firma llega recortada al trazo); JPEG más chico si pasa del tope (una foto). */
         base64: (fondo) => {
           const x = f.exportar();
           if (!x) return Promise.resolve(null);
@@ -1027,7 +1048,8 @@
               c.width = img.naturalWidth; c.height = img.naturalHeight;
               const g = c.getContext('2d');
               g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0);
-              resolve(c.toDataURL('image/png').split(',')[1]);
+              const png = c.toDataURL('image/png').split(',')[1];
+              resolve(png.length <= TOPE_FIRMA ? png : firmaAchicada(img, fondo));
             };
             img.onerror = () => resolve(x.base64);
             img.src = 'data:' + x.mimeType + ';base64,' + x.base64;
@@ -3639,24 +3661,26 @@
       /**
        * Las firmas de la captura ya no están (el servidor las guarda 6 h; no se guardan como archivos, acuerdo del
        * 18-sep): se vuelven a firmar aquí y se genera el PDF. Control Interno es obligatoria; el patrón lo dibuja el servidor.
+       * `soloResponsable` (usuario, 22-oct): la de Control Interno sí está y solo falta la del responsable.
        */
-      function pedirFirmasPdf(sesion, tipo, nombres, continuar) {
+      function pedirFirmasPdf(sesion, tipo, nombres, continuar, soloResponsable) {
         const esInspeccion = tipo === 'INSPECCION';
         const fondo = esInspeccion ? '#ddebf7' : '#ffffff';
         ocultarEspera();
         $('#ln-captura-cuerpo', raiz).innerHTML =
-          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Las firmas de la captura ya no están disponibles.</div>' +
-          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + htmlFirma('ci', 'pdf-firma-ci') + '</div>' +
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + (soloResponsable ? ' La firma del responsable ya no está disponible.' : ' Las firmas de la captura ya no están disponibles.') + '</div>' +
+          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + (soloResponsable ? '' : htmlFirma('ci', 'pdf-firma-ci')) + '</div>' +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
           '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Generar PDF</button></div>';
         const responsable = crearFirma(document.getElementById('pdf-firma-responsable'), nombres.responsable);
-        const ci = crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
+        const ci = soloResponsable ? null : crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
         $('#cap-guardar', raiz).addEventListener('click', () => {
-          if (ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
+          if (ci && ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
           $('#cap-error', raiz).hidden = true;
           mostrarEspera('Generando tu PDF');
-          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci.base64(fondo)]).then(([r, c]) => {
+          // Sin la de Control Interno (soloResponsable) el servidor usa la que ya tiene
+          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci ? ci.base64(fondo) : null]).then(([r, c]) => {
             sesion.pdfFirmas = esInspeccion ? { inspector: c, responsable: r, patron: null } : { ci: c, responsable: r, patron: null };
             continuar();
           });
@@ -4982,7 +5006,7 @@
             .then((pdf) => Promise.resolve(otroPdf ? otroPdf.promesa : null).catch(() => null).then((otro) => [pdf, otro])).then(([pdf, otro]) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
-            if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
+            if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar, !!pdf.soloResponsable); return; }
             const conOtro = !!(otro && otro.id);
             mostrarEspera(conOtro ? 'Tus PDF están listos' : 'Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, tipo === 'INSPECCION' ? 'Ver PDF de la inspección' : 'Ver PDF de la responsiva', true) +

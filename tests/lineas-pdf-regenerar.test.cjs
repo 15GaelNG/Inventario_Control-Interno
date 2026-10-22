@@ -162,9 +162,58 @@ test('la pantalla: «Regenerar PDF» solo en responsivas del sistema con PDF y c
   assert.match(cliente, /doc\('refresh-ccw', 'Regenerar PDF', 'pdf', false, \(d\) => operar && d\.tipoPdf === 'RESPONSIVA' && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+\(d\) => regenerarPdf\(d\)\)/);
   assert.match(cliente, /refrescarDespuesDeCaptura\(registroId \|\| pila\[pila\.length - 1\]\.id, d\.tipoPdf, d\.id, true\);/);
   assert.match(cliente, /llamar\('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura\.pdfFirmas \|\| null\)/);
-  assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar\); return; \}/);
+  assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar, !!pdf\.soloResponsable\); return; \}/);
   const fn = cliente.slice(cliente.indexOf('function pedirFirmasPdf('), cliente.indexOf('/** `regenerar`'));
-  assert.match(fn, /if \(ci\.estaVacia\(\)\) \{ mostrarErrorCaptura\('Falta la firma de Control Interno\.'\); return; \}/);
+  assert.match(fn, /if \(ci && ci\.estaVacia\(\)\) \{ mostrarErrorCaptura\('Falta la firma de Control Interno\.'\); return; \}/);
   assert.match(fn, /patron: null/);
   assert.match(cliente, /'PDF regenerado': 'refresh-ccw'/);
+});
+
+// Usuario, 22-oct: con la firma del responsable puesta con «Usar foto» (PNG de megas) la caché no la guardaba y al pulsar
+// «Generar PDF» después el recuadro del responsable salía vacío sin avisar
+test('sin la firma del responsable en caché (y sí la de Control Interno): pide solo esa, no saca el recuadro vacío', () => {
+  const { C, hechos } = captura(Object.assign({}, FILA));
+  const firma = Buffer.from('png').toString('base64');
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: firma, responsable: null, patron: null }); // la caché solo con la de CI
+  const r = C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(r)), { faltanFirmas: true, soloResponsable: true, nombres: { responsable: 'ANA PEREZ' } });
+  assert.equal(hechos.generados.length, 1, 'solo el del primer llamado');
+  // Lo que regresa la ventana (aunque la deje vacía) ya no se vuelve a pedir
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: null, responsable: null, patron: null });
+  assert.equal(hechos.generados.length, 2);
+  assert.equal(hechos.generados[1].imagenes['FIRMA CI'].nombre, 'firma-ci.png', 'la de Control Interno de la caché');
+});
+
+test('si al capturar el responsable no firmó (sinResponsable en caché) no se le pide', () => {
+  const { C, hechos } = captura(Object.assign({}, FILA));
+  const firma = Buffer.from('png').toString('base64');
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: firma, responsable: null, patron: null, sinResponsable: true });
+  const r = C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, null);
+  assert.equal(r.faltanFirmas, undefined);
+  assert.equal(hechos.generados.length, 2);
+  assert.equal(hechos.generados[1].imagenes['FIRMA RESPONSABLE'], null);
+  const fuente = read('src/services/lineas/LineasCaptura.gs');
+  assert.equal((fuente.match(/sinResponsable: !datos\.firmaResponsableBase64/g) || []).length, 2, 'inspección y responsiva lo marcan al guardar');
+});
+
+test('una firma que llega como JPEG (foto achicada en la pantalla) va al PDF como JPEG', () => {
+  const { C, hechos } = captura(Object.assign({}, FILA));
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+  const png = Buffer.from('png').toString('base64');
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: png, responsable: jpeg, patron: null });
+  const img = hechos.generados[0].imagenes;
+  assert.equal(img['FIRMA RESPONSABLE'].mime, 'image/jpeg');
+  assert.equal(img['FIRMA CI'].mime, 'image/png');
+});
+
+test('la pantalla: la firma que pasa del tope (una foto) se manda como JPEG más chico', () => {
+  const cliente = read('src/html/js/lineas.html');
+  assert.match(cliente, /const TOPE_FIRMA = 40000;/);
+  const fn = cliente.slice(cliente.indexOf('function crearFirma('), cliente.indexOf('function crearFirma(') + 1600);
+  assert.match(fn, /resolve\(png\.length <= TOPE_FIRMA \? png : firmaAchicada\(img, fondo\)\);/);
+  const achicar = cliente.slice(cliente.indexOf('function firmaAchicada('), cliente.indexOf('function crearFirma('));
+  assert.match(achicar, /toDataURL\('image\/jpeg', calidad\)/);
+  assert.match(achicar, /if \(salida\.length <= TOPE_FIRMA\) break;/);
+  const pedir = cliente.slice(cliente.indexOf('function pedirFirmasPdf('), cliente.indexOf('/** `regenerar`'));
+  assert.match(pedir, /const ci = soloResponsable \? null : crearFirma/);
 });
