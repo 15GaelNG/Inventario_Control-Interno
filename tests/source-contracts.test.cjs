@@ -547,6 +547,23 @@ test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con
     .forEach((n) => assert.match(base, new RegExp('^function ' + n + '\\(', 'm'), n + ' es de todos: en la base'));
 });
 
+test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin otra copia', () => {
+  // 22-oct: había 5 copias; en el celular abrir fotos de cámara completas (y varias a la vez) dejaba la pantalla en
+  // blanco. Imagen las abre con poca memoria y de una en una. Una copia nueva no tendría eso.
+  const QUEDAN = {
+    'src/html/js/app-arqueos.html': 'Evidencias: se pasa a Imagen al integrar la rama de Jorge (él la cambió: aviso HEIC)',
+    'src/html/js/lineas.html': 'una PÁGINA de PDF dibujada con pdf.js (no es reducir una foto)',
+  };
+  const con = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/html/js/componentes/imagen.html' && /toDataURL\('image\/jpeg'|createImageBitmap/.test(read(f)));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [], 'usar Imagen.reducir');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'esta ya no tiene copia: quitarla de QUEDAN');
+  assert.equal((read('src/html/js/lineas.html').match(/toDataURL\('image\/jpeg'/g) || []).length, 1, 'en lineas.html solo la página del PDF');
+  assert.match(read('src/html/js/componentes/firma.html'), /Imagen\.reducir\(elegido, \{ ancho: 1200, calidad: 0\.85 \}\)/);
+  assert.match(read('src/html/js/lineas.html'), /Imagen\.reducir\(archivo, \{ lado: maxDim, calidad: 0\.82 \}\)/);
+});
+
 test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
   // Leer/escribir una hoja con su permiso, caché, fechas y archivos: src/utils/HojaServicio.gs.
   // Líneas (services/lineas/) todavía tiene su propia capa (LineasDatos) y queda fuera.
