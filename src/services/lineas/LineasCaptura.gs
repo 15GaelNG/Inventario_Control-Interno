@@ -385,9 +385,9 @@ const LineasCaptura = (function () {
     // La línea, fija (usuario, 16-oct: lo que pasa a la ficha es de la persona y del equipo): se cambia con Vincular o
     // Cambiar línea y un dato mal capturado se corrige con Editar línea
     const deLinea = (columna, etiqueta, valor) => ro(columna, etiqueta, valor);
-    // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma) y lo que
-    // ya traiga el equipo fuera de la lista, para no perderlo
-    const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
+    // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma), CARGADOR
+    // como CABLE y CUBO (usuario, 22-oct) y lo que ya traiga el equipo fuera de la lista, para no perderlo
+    const accesorios = String(LineasUtil.sinCargador(acceso('ACCESORIOS')) || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
     // La línea sin equipo (pendiente 2.45): solo la línea, fija (es la responsiva de esa línea; un dato mal capturado se
     // corrige con Editar línea), sin equipo ni accesorios y accesos
     const datos = sinEquipo ? [

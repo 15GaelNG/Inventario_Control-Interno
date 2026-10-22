@@ -200,5 +200,21 @@ const LineasUtil = (function () {
     return r ? 'Región ' + r : '';
   }
 
-  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo, bloqueoSinPatron, patronVigente, regionDeNumero };
+  /**
+   * CARGADOR ya no es accesorio: se guarda como CABLE y CUBO, en su lugar, sin repetirlos y con el separador que ya
+   * traía («A , B» o «A,B»; usuario, 22-oct). Sin CARGADOR regresa el valor tal cual.
+   */
+  function sinCargador(v) {
+    const texto = String(v === null || v === undefined ? '' : v);
+    const separador = (texto.match(/\s*,\s*/) || [' , '])[0];
+    const lista = texto.split(',').map((x) => x.trim()).filter(Boolean);
+    if (!lista.some((x) => x.toUpperCase() === 'CARGADOR')) return v;
+    const queda = [];
+    lista.forEach((x) => (x.toUpperCase() === 'CARGADOR' ? ['CABLE', 'CUBO'] : [x]).forEach((y) => {
+      if (!queda.some((q) => q.toUpperCase() === y.toUpperCase())) queda.push(y);
+    }));
+    return queda.join(separador);
+  }
+
+  return { txt, digitos, nuco4, nucoVisible, fecha, numero, col, mesNumero, paraCliente, carpetasNucos, ABREVIATURAS_CH, PALABRAS_CH, mostrarCH, guardarCH, exigirPinEquipo, bloqueoSinPatron, patronVigente, regionDeNumero, sinCargador };
 })();

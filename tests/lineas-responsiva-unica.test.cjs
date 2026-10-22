@@ -126,7 +126,8 @@ test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la p
     LineasRegistros: { camposAdicionales: () => [] },
     LineasRepo: { CATALOGO: { accesorios: ['CUBO'] }, TAB: { INSP: 'INSP', RESP: 'RESP' }, catalogos: () => ({}) },
     LineasDatos: { nuevoId: () => 'RES-1' }, LineasFirmas: { tiene: () => false }, LineasChecklist: { CONDICIONES: [] },
-    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null) },
+    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null),
+      sinCargador: new Function(read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')().sinCargador },
   });
   vm.runInContext(read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
   const fila = { ID: 'EQU-1', NUCO: '12', EQUIPO: 'MOTO G', IMEI: '35', 'ESTATUS EQUIPO': 'USO', RESPONSABLE: 'ANA', 'NUMERO TELEFONO': '442' };
@@ -144,6 +145,10 @@ test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la p
   const v = campos(fila, 'LINEA');
   assert.equal(v['RESPONSABLE'].soloLectura, true);
   assert.equal(v['No EMPLEADO'].soloLectura, true);
+  // CARGADOR de antes llega como CABLE y CUBO y ya no es opción (usuario, 22-oct)
+  const a = campos(Object.assign({}, fila, { ACCESORIOS: 'CAJA, CARGADOR, CUBO' }), 'RESPONSIVA')['ACCESORIOS'];
+  assert.equal(a.valor, 'CAJA , CABLE , CUBO');
+  assert.deepEqual(Array.from(a.opciones), ['CUBO', 'CAJA', 'CABLE']);
 });
 
 test('pantalla: un botón «Responsiva»; inspección solo si otra persona recibe el equipo; luego se guarda con las dos', () => {

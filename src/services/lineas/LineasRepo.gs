@@ -60,7 +60,8 @@ const LineasRepo = (function () {
     // Un registro sin línea deja ESTATUS LINEA en blanco (antes "SIN LINEA").
     estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
     companias: ['TELCEL', 'AT&T', 'BAIT'],
-    // Una sola lista (D5.5); "TARJETA SD" en lugar de "SD" (usuario, 4-oct). CARGADOR y SD de antes se quedan como están
+    // Una sola lista (D5.5); "TARJETA SD" en lugar de "SD" (usuario, 4-oct). SD de antes se queda como está; CARGADOR
+    // se muestra y se guarda como CABLE y CUBO (usuario, 22-oct)
     accesorios: ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'],
   };
   /** Valores viejos que hoy significan "sin estatus": el formulario los muestra en blanco. */
@@ -166,7 +167,7 @@ const LineasRepo = (function () {
     const equipo = tieneEquipo ? {
       _id: id, nuco: nuco, tipo: TIPOS_CON_EQUIPO[tipo], modelo: txt(col(f, 'EQUIPO')), imei: digitos(col(f, 'IMEI')),
       simResidual: tipo === 'EQUIPO' ? sim : null,
-      accesorios: (txt(col(f, 'ACCESORIOS')) || '').split(',').map((s) => s.trim()).filter(Boolean),
+      accesorios: (txt(LineasUtil.sinCargador(col(f, 'ACCESORIOS'))) || '').split(',').map((s) => s.trim()).filter(Boolean),
       // Con un PIN o una contraseña, el patrón que quedó de antes no se muestra (usuario, 9-oct). «NO APLICA» es el
       // bloqueo SIN BLOQUEO (2.53): la ficha lo dice así y no «—» (usuario, 21-oct; pendiente 2.56)
       pinEquipo: sinAcentos_(col(f, 'PIN EQUIPO')) === 'NO APLICA' ? 'SIN BLOQUEO' : texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,

@@ -18,7 +18,7 @@ function captura() {
     LineasRegistros: { camposAdicionales: () => [] },
     LineasRepo: { CATALOGO: { accesorios: ['CUBO'] }, TAB: { INSP: 'INSP', RESP: 'RESP' }, catalogos: () => ({}) },
     LineasDatos: { nuevoId: () => 'X-1' }, LineasFirmas: { tiene: () => false },
-    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null) },
+    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null), sinCargador: (v) => v },
   });
   vm.runInContext(read('src/services/lineas/LineasChecklist.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
   return ctx.C;
