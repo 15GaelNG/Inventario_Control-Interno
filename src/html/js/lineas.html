@@ -7160,15 +7160,13 @@
     }
 
     /**
-     * Excel de Cancelaciones (usuario, 22-oct): la hoja BASE PRINCIPAL con lo exportado (todas las columnas, como antes)
-     * y una hoja por compañía y asesor («TELCEL - ALFREDO», «ATT - KARLA») con las POR FIRMAR, en la tabla que Pau pega
-     * en la carta y el correo al asesor: REGIÓN, CUENTA (la cuenta padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y
-     * ASESOR. Igual para Telcel y AT&T. Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, solo la base.
+     * Excel por asesor (usuario, 22-oct; botón aparte del «Exportar a Excel» de la tabla, que da la base): una hoja por
+     * compañía y asesor («TELCEL - ALFREDO», «ATT - KARLA») con las POR FIRMAR, en la tabla que Pau pega en la carta y
+     * el correo al asesor: REGIÓN, CUENTA (la cuenta padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y ASESOR. Igual para
+     * Telcel y AT&T. Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
      */
     const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
-    function hojasDeCancelaciones(filas, columnas) {
-      const base = { nombre: 'BASE PRINCIPAL', titulos: columnas.map((c) => c.titulo), fechas: columnas.map((c) => c.tipo === 'lnFechaHora'),
-        filas: filas.map((f) => columnas.map((c) => f[c.campo])) };
+    function hojasPorAsesor(filas) {
       const grupos = {};
       filas.filter((f) => f.CANCELACION === 'POR FIRMAR').forEach((f) => {
         const compania = String(f.COMPANIA || 'SIN COMPAÑÍA').toUpperCase().replace(/&/g, '');
@@ -7177,9 +7175,8 @@
       });
       // Telcel primero, luego AT&T y lo demás; dentro, por asesor
       const orden = (n) => (/^TELCEL/.test(n) ? 0 : /^ATT/.test(n) ? 1 : 2);
-      const asesores = Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b))
-        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_ASESOR.map((c) => c[1]), filas: grupos[n], tablaCorreo: true }));
-      return [base].concat(asesores);
+      return Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b))
+        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_ASESOR.map((c) => c[1]), filas: grupos[n] }));
     }
 
     // xlsx-js-style: SheetJS con estilos de celda (el de ExportarExcel no los escribe). Se carga solo para este Excel y
@@ -7199,40 +7196,31 @@
       return xlsxConEstilos;
     }
 
-    /** Descarga el Excel de hojasDeCancelaciones; la tabla del asesor con el formato del correo (encabezado azul). */
-    async function descargarCancelaciones(filas, columnas) {
-      if (!filas.length) throw new Error('No hay registros para exportar con los filtros actuales');
+    /** Descarga el Excel de hojasPorAsesor con el formato del correo (encabezado azul, bordes). Regresa cuántas líneas. */
+    async function descargarPorAsesor(filas) {
+      const hojas = hojasPorAsesor(filas);
+      if (!hojas.length) throw new Error('No hay líneas POR FIRMAR con los filtros actuales');
       const XLSX = await cargarXlsxConEstilos();
       const libro = XLSX.utils.book_new();
       const borde = { style: 'thin', color: { rgb: '000000' } };
       const bordes = { top: borde, bottom: borde, left: borde, right: borde };
-      // Fecha y hora de reloj como serie de Excel (sin zona horaria: la que se ve en el panel)
-      const serie = (v) => {
-        const d = v instanceof Date ? v : new Date(v);
-        if (v === '' || v === null || v === undefined || isNaN(d)) return '';
-        return (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes()) - Date.UTC(1899, 11, 30)) / 86400000;
-      };
-      hojasDeCancelaciones(filas, columnas).forEach((h) => {
-        const cuerpo = h.filas.map((f) => f.map((v, i) => (h.fechas && h.fechas[i] ? serie(v) : (v === null || v === undefined ? '' : String(v)))));
-        const hoja = XLSX.utils.aoa_to_sheet([h.titulos].concat(cuerpo));
+      const centro = { horizontal: 'center', vertical: 'center' };
+      hojas.forEach((h) => {
+        const hoja = XLSX.utils.aoa_to_sheet([h.titulos].concat(h.filas));
         h.titulos.forEach((t, c) => {
-          for (let r = 0; r <= cuerpo.length; r++) {
+          for (let r = 0; r <= h.filas.length; r++) {
             const celda = hoja[XLSX.utils.encode_cell({ r: r, c: c })];
             if (!celda) continue;
-            if (r && h.fechas && h.fechas[c] && celda.t === 'n') celda.z = 'dd/mm/yyyy hh:mm';
-            if (h.tablaCorreo) {
-              celda.s = r ? { alignment: { horizontal: 'center', vertical: 'center' }, border: bordes }
-                : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '002060' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: bordes };
-            } else if (!r) celda.s = { font: { bold: true } };
+            celda.s = r ? { alignment: centro, border: bordes }
+              : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '002060' } }, alignment: centro, border: bordes };
           }
         });
-        hoja['!cols'] = h.titulos.map((t, c) => ({ wch: Math.min(50, Math.max(8, String(t).length, ...cuerpo.slice(0, 500).map((f) => (h.fechas && h.fechas[c] ? 16 : String(f[c]).length))) + 2) }));
-        if (!h.tablaCorreo && cuerpo.length) hoja['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: cuerpo.length, c: h.titulos.length - 1 } }) };
+        hoja['!cols'] = h.titulos.map((t, c) => ({ wch: Math.max(String(t).length, ...h.filas.map((f) => f[c].length)) + 2 }));
         XLSX.utils.book_append_sheet(libro, hoja, h.nombre);
       });
       const f = new Date();
-      XLSX.writeFile(libro, 'Cancelaciones de lineas_' + Formato.dia(f) + '_' + Formato.hora(f).replace(':', '') + '.xlsx', { compression: true });
-      return filas.length;
+      XLSX.writeFile(libro, 'Cancelaciones por asesor_' + Formato.dia(f) + '_' + Formato.hora(f).replace(':', '') + '.xlsx', { compression: true });
+      return hojas.reduce((n, h) => n + h.filas.length, 0);
     }
 
     function initResguardos() {
@@ -7421,9 +7409,8 @@
           columnas: COLUMNAS[vista],
           ordenInicial: { campo: 'FECHA', dir: 'desc' },
           textoVacio: vista === 'RESGUARDOS' ? 'Todavía no se ha mandado nada a resguardo' : 'No hay líneas en cancelación',
-          // Cancelaciones: además de la base, una hoja por compañía y asesor con la tabla del correo (descargarCancelaciones)
-          exportar: vista === 'RESGUARDOS' ? { nombreArchivo: 'Resguardos' }
-            : { nombreArchivo: 'Cancelaciones de lineas', descargar: () => descargarCancelaciones(tabla.getFiltradas(), COLUMNAS.CANCELACIONES) },
+          // La base; el Excel por asesor es otro botón (#lnr-excel-asesores, usuario, 22-oct)
+          exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
           accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
@@ -7432,6 +7419,8 @@
         });
         tabla.setDatos(filasVista());
         $('#lnr-solo-lectura', raiz).hidden = puede || opera;
+        // Excel por asesor: solo en Cancelaciones y con el permiso de exportar, como el botón de la tabla
+        $('#lnr-excel-asesores', raiz).hidden = vista !== 'CANCELACIONES' || (typeof puedeExportarAqui === 'function' && !puedeExportarAqui());
       }
 
       function cargar() {
@@ -7460,6 +7449,22 @@
         if (datos) { crearTabla(); pintarKpis(); }
       });
       $('#lnr-actualizar', raiz).addEventListener('click', cargar);
+      $('#lnr-excel-asesores', raiz).addEventListener('click', async (ev) => {
+        const boton = ev.currentTarget;
+        if (!tabla || boton.disabled) return;
+        const original = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="ln-spinner"></span> Exportando…';
+        try {
+          const n = await descargarPorAsesor(tabla.getFiltradas());
+          Notificar.exito(n + (n === 1 ? ' línea POR FIRMAR exportada' : ' líneas POR FIRMAR exportadas'));
+        } catch (e) {
+          Notificar.error(mensajeError(e));
+        } finally {
+          boton.disabled = false;
+          boton.innerHTML = original;
+        }
+      });
       cargar();
     }
 
