@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -34,7 +35,7 @@ test('vincular: solo líneas DISPONIBLE, equipos en USO o RESGUARDO, y responsiv
   assert.match(acc, /lineaFila \? \(desde \? 'CAMBIO_EQUIPO' : \(tieneLinea \? 'CAMBIO_LINEA' : 'ASIGNAR_LINEA'\)\) : 'RETIRAR_LINEA'/);
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /ASIGNAR_LINEA: 'Vincular línea', RETIRAR_LINEA: 'Desvincular línea', CAMBIO_EQUIPO: 'Cambio de equipo'/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasVincular\(token, datos\) \{\r?\n  return TelefoniaService\.vincular\(token, datos\);/);
+  assert.match(API, /function apiLineasVincular\(token, datos\) \{\r?\n  return TelefoniaService\.vincular\(token, datos\);/);
 });
 
 test('la responsiva enseña fija la línea que se pone', () => {

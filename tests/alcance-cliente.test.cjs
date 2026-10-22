@@ -7,6 +7,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 const LINEAS = require('./lineas-fuente');
 const APP = require('./app-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const leer = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8').replace(/\r/g, '');
 const telefonia = leer('src/services/TelefoniaService.gs');
@@ -120,7 +121,7 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   });
   assert.match(v, /function buscarPor_\(token, columna, valor\) \{[\s\S]*?Permisos\.dentroDeAlcance\(sesion\.alcance/);
   // Lo que se lee de la carpeta de un NUCO (documentos, inspecciones y sus fotos): solo de un vehículo suyo
-  const api = leer('src/ClientApi.gs');
+  const api = API;
   ['apiDocumentosVehiculo', 'apiInspeccionesExpediente', 'apiFotosInspeccion'].forEach((f) =>
     assert.match(api, new RegExp('function ' + f + '\\(token, nucco[^)]*\\) \\{\\s+(const sesion = Permisos\\.puedeLeer\\([^;]+;\\s+exigirNuccoEnAlcance_\\(sesion|exigirNuccoEnAlcance_\\()'), f));
   assert.match(api, /function exigirNuccoEnAlcance_\(sesion, token, nucco\) \{\s+if \(sesion\.alcance && !VehiculosService\.nuccoEnAlcance\(token, nucco\)\)/);
