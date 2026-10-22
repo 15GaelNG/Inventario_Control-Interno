@@ -4322,7 +4322,10 @@
               Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
               if (vigente()) { pintarIndicadores(); pintarListado(); }
               aviso(icono('circle-check') + ' ' + titulo + ' · NUCO ' + (equipo.nuco || '—'), 6000);
-              if (vigente() && pila.length) abrir('equipo', equipo.id, true);
+              // La ficha que estaba abierta, la del equipo o la de la línea (2.61: se pintaba la del equipo con la de la línea
+              // arriba en la pila, pintarEquipo no la reconocía y la página se quedaba en «Cargando…»)
+              const arriba = pila[pila.length - 1];
+              if (vigente() && arriba) abrir(arriba.tipo, arriba.id, true);
             });
           };
           if (captura !== sesion) return;
