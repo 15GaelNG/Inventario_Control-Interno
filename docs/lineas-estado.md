@@ -397,7 +397,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     (`operaPanel` de `TelefoniaService.usuarioResguardo_`: EDICION de `lineas-telefonicas` y rol que no sea ADMIN ni SUPER),
     no a Pau ni a administradores; `LineasResguardos.bandeja` lo regresa. En Líneas telefónicas siguen saliendo a quien
     edita Líneas telefónicas, administradores incluidos. El servidor las acepta con `puedeOperar`.
-  - **POR RECIBIR y el equipo en el panel** (21-oct, `83a0744`, `80faf58`; pendiente 3.15; sin publicar): «Mandar a resguardo»
+  - **POR RECIBIR y el equipo en el panel** (21-oct, `83a0744`, `80faf58`; sin publicar): «Mandar a resguardo»
     deja el equipo con ESTATUS EQUIPO = POR RECIBIR (guardado en EQUIPOS; `LineasResguardos.POR_RECIBIR`, fuera de
     `LineasRepo.CATALOGO.estatusEquipo` y de las listas; clase RESGUARDO en `ESTRUCTURA_CLASE`; colores, Panorama y la zona
     resguardo de Vínculos lo cuentan) y el estatus elegido va al renglón (columna ESTATUS_EQUIPO de APP_RESGUARDOS); el panel
@@ -453,7 +453,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
   (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
   `#asistente-flotante`). En los demás módulos sigue igual.
-- **Dirección General** (21-oct, `41dda43`; pendiente 8.16; sin publicar): `lineas/LineasDG.gs` guarda la lista fija de las 12
+- **Dirección General** (21-oct, `41dda43`; sin publicar): `lineas/LineasDG.gs` guarda la lista fija de las 12
   líneas de DG y los NUCO 11001 a 11011. El índice trae la columna `dg` (caché `indice_telefonia_v12`) y DG en el responsable.
   Quien no es ADMIN (`usuario.esAdmin` de `TelefoniaService.usuarioOperacion_`) ve DG, su estatus y el área DIRECCION GENERAL
   en la lista, la ficha (`fichaOculta`) y Exportar; sin historial, documentos ni facturas y sin acciones; el servidor rechaza
