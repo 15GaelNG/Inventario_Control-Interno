@@ -442,7 +442,8 @@ test('Líneas Telefónicas: initTelefonicas monta sus partes; entre partes solo 
   // (lineas-telefonicas-<parte>.html) es (T) => {…}: lo del arranque sale de T, lo de otra parte de T.de('parte') y un let
   // que usan varias lo publica su dueña con get/set en T. Una parte no declara lo que otra ya tiene.
   const tel = read('src/html/js/lineas-telefonicas.html');
-  assert.match(tel, /const T = contextoTelefonicas\(\);/);
+  assert.match(tel, /Lineas\.telefonicas = Object\.assign\(Partes\.crear\('Líneas Telefónicas'\), \{/, 'el mecanismo es el componente Partes');
+  assert.match(tel, /const T = Lineas\.telefonicas\.contexto\(\);/);
   assert.match(tel, /\n      T\.montar\(\{/);
   assert.ok(tel.indexOf('T.montar({') < tel.indexOf('Tabs.iniciar('), 'se monta antes del cableado de eventos');
   const partes = [...read('src/html/Index.html').matchAll(/include\('html\/js\/lineas-telefonicas-(\w+)'\)/g)].map((m) => m[1]);
@@ -492,6 +493,10 @@ test('Vehículos: initVehiculos monta sus partes con Partes; lo que una pide con
   assert.ok(pedidos.length > 30, pedidos.length + ' nombres pedidos con T.de');
   const faltan = pedidos.filter(([, de, n]) => de !== 'principal' && !(publica[de] || []).includes(n)).map(([p, de, n]) => p + ' pide ' + n + ' de ' + de);
   assert.deepEqual(faltan, [], 'lo que una parte pide con T.de, la otra lo publica');
+  // El mecanismo (T.de con Proxy) vive solo en el componente: ninguna pantalla lleva otra copia
+  const conProxy = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html') && /new Proxy\(/.test(fs.readFileSync(f, 'utf8')))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'));
+  assert.deepEqual(conProxy, ['src/html/js/componentes/partes.html']);
 });
 
 test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {

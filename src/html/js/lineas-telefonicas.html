@@ -125,35 +125,11 @@
     // lineas-telefonicas-<parte>.html. Cada una es (T) => { …; return { lo que usan las demás } }: lo del arranque
     // (raiz, pila…) sale de T, lo de otra parte de T.de('parte') (se busca al llamar, así no importa el orden) y un let
     // que usan varias lo publica su dueña con get/set en T (T.captura). Al montar se revisa que exista todo lo pedido.
-    const PARTES_TELEFONICAS = {};
-    function contextoTelefonicas() {
-      const exportados = {};
-      const pedidos = [];
-      const de = (parte) => (typeof exportados[parte] === 'function' ? (exportados[parte] = exportados[parte]()) : exportados[parte] || {});
-      const T = {
-        de: (parte) => new Proxy({}, {
-          get: (_, nombre) => {
-            if (typeof nombre === 'string') pedidos.push([parte, nombre]);
-            return (...args) => de(parte)[nombre](...args);
-          },
-        }),
-        // datos: lo del arranque; principal: lo de la lista que piden las partes (perezoso: sus const van más abajo)
-        montar: (datos, principal) => {
-          Object.assign(T, datos);
-          exportados.principal = principal;
-          Object.keys(PARTES_TELEFONICAS).forEach((p) => { exportados[p] = PARTES_TELEFONICAS[p](T); });
-          pedidos.filter(([p]) => p !== 'principal').forEach(([p, nombre]) => {
-            if (typeof de(p)[nombre] !== 'function') console.error('Líneas Telefónicas: la parte ' + p + ' no publica ' + nombre);
-          });
-        },
-      };
-      return T;
-    }
-    Lineas.telefonicas = {
-      registrar: (nombre, fabrica) => { PARTES_TELEFONICAS[nombre] = fabrica; },
+    // El mecanismo es el componente Partes (componentes/partes.html), el mismo de Vehículos.
+    Lineas.telefonicas = Object.assign(Partes.crear('Líneas Telefónicas'), {
       // Lo de esta pantalla que usan las partes
       comun: { tieneNuco: tieneNuco },
-    };
+    });
 
     function initTelefonicas() {
       const n = ++montaje.n;
@@ -161,7 +137,7 @@
       const vigente = () => n === montaje.n && document.body.contains(raiz);
       const pila = []; // navegación dentro del detalle: [{ tipo, id }]
       // Las partes (lineas-telefonicas-*.html): se montan abajo, cuando ya está lo que piden del arranque
-      const T = contextoTelefonicas();
+      const T = Lineas.telefonicas.contexto();
       const { abrir, abrirMenuFicha, abrirRegistro, alAbrirPestanaFicha, cerrarDetalle, volver } = T.de('ficha');
       const { copiarDetalles, pintarTextoDetalles } = T.de('documentos');
       const { abrirCancelacion, abrirResguardo, abrirResponsiva, abrirVinculo, filaDelIndice } = T.de('acciones');
