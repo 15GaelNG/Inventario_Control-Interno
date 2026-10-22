@@ -529,24 +529,12 @@
       }).catch((err) => Notificar.error('No se pudieron cargar los tipos: ' + err.message)),
     ]);
 
-    // Folio ya conocido (ficha de Vehículos): hasta que el combobox y los tipos estén
-    // listos, para que el filtro por prefijo y la ficha del vehículo salgan bien.
-    if (opciones.folioFijo) {
-      catalogos.then(() => {
-        CampoAuto.llenar(campoFolio, opciones.folioFijo);
-        const v = vehiculoPorClave[opciones.folioFijo];
-        if (v && v.NUCO) CampoAuto.llenar(campoNucco, v.NUCO);
-        buscarVehiculo();
-      });
-    }
-
     // ----- borrador (autosave en este navegador) -----
-    // Si se recarga la página a medio capturar, no se pierde lo avanzado. Solo en el
-    // flujo normal de "Nueva inspección" (no en el capturado embebido en la ficha de
-    // Vehículos, que ya trae su propio folio fijo y su propio cierre). Las firmas y los
-    // diagramas de daños NO se guardan aquí: son imágenes pesadas para el localStorage
-    // del navegador y, si se recupera un borrador, hay que rehacerlas.
-    const usaBorrador = !opciones.alGuardado && !opciones.folioFijo;
+    // Si se recarga la página (o se cierra el modal) a medio capturar, no se pierde lo
+    // avanzado: aplica tanto a "Nueva inspección" como al capturado embebido en la ficha
+    // de Vehículos. Las firmas y los diagramas de daños NO se guardan aquí: son imágenes
+    // pesadas para el localStorage del navegador y, si se recupera un borrador, hay que
+    // rehacerlas.
     const claveBorrador = 'ins-borrador:' + String((state.sesion && state.sesion.correo) || '').toLowerCase();
     let borradorTimer = null;
     const CAMPOS_BORRADOR = ['ins-conductor', 'ins-jefe', 'ins-holograma', 'ins-servicio', 'ins-voltaje',
@@ -580,52 +568,73 @@
       borradorTimer = setTimeout(guardarBorrador_, 800);
     }
 
-    if (usaBorrador) {
-      ['input', 'change', 'click'].forEach((ev) => contenedor.addEventListener(ev, programarGuardarBorrador_));
-    }
+    ['input', 'change', 'click'].forEach((ev) => contenedor.addEventListener(ev, programarGuardarBorrador_));
 
-    /** Si hay un borrador de esta persona sin terminar, ofrece continuarlo. */
+    /**
+     * Si hay un borrador de esta persona sin terminar, ofrece continuarlo -- y si se acepta,
+     * cambia a la pestaña "Nueva inspección" para que se vea de una vez (si viene embebido en
+     * la ficha de Vehículos no hay pestañas: el formulario ya es lo único que se ve).
+     * En el modal con folio fijo (ficha de Vehículos), si NO hay borrador que ofrecer (o es de
+     * otro folio), hace el precargado de siempre con ese folio.
+     */
     async function restaurarBorrador_() {
       let guardado = null;
       try { guardado = JSON.parse(localStorage.getItem(claveBorrador) || 'null'); } catch (e) { guardado = null; }
-      if (!guardado || !guardado.folio) return;
       const DOS_DIAS_MS = 2 * 24 * 60 * 60 * 1000;
-      if (!guardado.ts || Date.now() - guardado.ts > DOS_DIAS_MS) { limpiarBorrador_(); return; }
-
-      const ok = await Confirmar.pedir({
-        titulo: 'Tienes una inspección sin terminar',
-        mensaje: `Folio ${guardado.folio}${guardado.tipo ? ' · ' + guardado.tipo : ''}. ` +
-          '¿Continuar donde quedaste? Las firmas y los diagramas de daños no se guardaron: hay que rehacerlos.',
-        textoConfirmar: 'Continuar',
-        textoCancelar: 'Empezar de nuevo',
-      });
-      if (!ok) { limpiarBorrador_(); return; }
-
-      await catalogos;
-      campoFolio.value = guardado.folio;
-      if (guardado.nucco) campoNucco.value = guardado.nucco;
-      // El tipo se llena ANTES de buscar el vehículo: buscarVehiculo() sugiere y dispara su
-      // propio cargarChecklist() por su cuenta cuando ve el tipo vacío (sin esperarlo), y si
-      // ese quedara corriendo a la par del de aquí abajo, el que terminara al final volvería
-      // a armar el checklist desde cero y borraría las respuestas recién restauradas.
-      if (guardado.tipo) campoTipo.value = guardado.tipo;
-      await buscarVehiculo();
-      if (guardado.tipo) await cargarChecklist();
-      if (estructura) {
-        Object.keys(guardado.respuestas || {}).forEach((campo) => {
-          const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(campo)}"][value="${CSS.escape(guardado.respuestas[campo])}"]`);
-          if (radio) radio.checked = true;
-        });
-        Object.keys(guardado.llantas || {}).forEach((campo) => {
-          const el = cajaPasos.querySelector(`[data-llanta="${CSS.escape(campo)}"]`);
-          if (el) el.value = guardado.llantas[campo];
-        });
-        Object.keys(guardado.campos || {}).forEach((id) => { const el = $('#' + id); if (el) el.value = guardado.campos[id]; });
-        (guardado.correosExtra || []).forEach((valor) => agregarCorreoExtra(valor));
-        (guardado.ticketsExtra || []).forEach((t) => agregarTicketExtra(t));
-        actualizarAvance();
+      if (guardado && (!guardado.folio || !guardado.ts || Date.now() - guardado.ts > DOS_DIAS_MS)) {
+        limpiarBorrador_();
+        guardado = null;
       }
-      Notificar.info('Se recuperó tu borrador. Revisa las firmas y los diagramas de daños, no quedaron guardados.', { duracion: 10000 });
+      // Un borrador de OTRO vehículo no aplica en el modal de folio fijo
+      if (guardado && opciones.folioFijo && guardado.folio !== opciones.folioFijo) guardado = null;
+
+      let ok = false;
+      if (guardado) {
+        ok = await Confirmar.pedir({
+          titulo: 'Tienes una inspección sin terminar',
+          mensaje: `Folio ${guardado.folio}${guardado.tipo ? ' · ' + guardado.tipo : ''}. ` +
+            '¿Continuar donde quedaste? Las firmas y los diagramas de daños no se guardaron: hay que rehacerlos.',
+          textoConfirmar: 'Continuar',
+          textoCancelar: 'Empezar de nuevo',
+        });
+        if (!ok) limpiarBorrador_();
+      }
+
+      if (ok) {
+        if (opciones.tabs) opciones.tabs.mostrar('nueva');
+        await catalogos;
+        campoFolio.value = guardado.folio;
+        if (guardado.nucco) campoNucco.value = guardado.nucco;
+        // El tipo se llena ANTES de buscar el vehículo: buscarVehiculo() sugiere y dispara su
+        // propio cargarChecklist() por su cuenta cuando ve el tipo vacío (sin esperarlo), y si
+        // ese quedara corriendo a la par del de aquí abajo, el que terminara al final volvería
+        // a armar el checklist desde cero y borraría las respuestas recién restauradas.
+        if (guardado.tipo) campoTipo.value = guardado.tipo;
+        await buscarVehiculo();
+        if (guardado.tipo) await cargarChecklist();
+        if (estructura) {
+          Object.keys(guardado.respuestas || {}).forEach((campo) => {
+            const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(campo)}"][value="${CSS.escape(guardado.respuestas[campo])}"]`);
+            if (radio) radio.checked = true;
+          });
+          Object.keys(guardado.llantas || {}).forEach((campo) => {
+            const el = cajaPasos.querySelector(`[data-llanta="${CSS.escape(campo)}"]`);
+            if (el) el.value = guardado.llantas[campo];
+          });
+          Object.keys(guardado.campos || {}).forEach((id) => { const el = $('#' + id); if (el) el.value = guardado.campos[id]; });
+          (guardado.correosExtra || []).forEach((valor) => agregarCorreoExtra(valor));
+          (guardado.ticketsExtra || []).forEach((t) => agregarTicketExtra(t));
+          actualizarAvance();
+        }
+        Notificar.info('Se recuperó tu borrador. Revisa las firmas y los diagramas de daños, no quedaron guardados.', { duracion: 10000 });
+      } else if (opciones.folioFijo) {
+        // Folio ya conocido (ficha de Vehículos), sin borrador que ofrecer: el precargado de siempre
+        await catalogos;
+        CampoAuto.llenar(campoFolio, opciones.folioFijo);
+        const v = vehiculoPorClave[opciones.folioFijo];
+        if (v && v.NUCO) CampoAuto.llenar(campoNucco, v.NUCO);
+        buscarVehiculo();
+      }
     }
 
     // ----- vehículo -----
@@ -1320,7 +1329,7 @@
     });
 
     armarPasos();
-    if (usaBorrador) restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
+    restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
     return { catalogos };
   }
 
