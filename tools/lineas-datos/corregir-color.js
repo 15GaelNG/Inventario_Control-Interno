@@ -41,11 +41,12 @@ async function main() {
   console.log('\nEscrito: ' + cambios.length + ' celdas');
   await c.agregarMovimientos(libro, mov, cambios.map((x) => {
     const esLinea = /^LIN-/i.test(x.registro);
-    return { accion: 'EDICION', equipo: esLinea ? '' : x.registro, linea: esLinea ? x.registro : '',
-      documento: x.hoja === 'EQUIPOS' ? '' : c.txt(x.f['ID']), comentario: COMENTARIO,
+    // Sin DOCUMENTO: el historial toma un movimiento con DOCUMENTO RLI- o ILI- como el de ese documento y tapa la
+    // responsiva o la inspección original (lineas-revisor, 22-oct; vaciar-documento.js)
+    return { accion: 'EDICION', equipo: esLinea ? '' : x.registro, linea: esLinea ? x.registro : '', comentario: COMENTARIO,
       cambios: [{ campo: x.hoja + ' · COLOR', antes: x.antes, despues: x.nuevo }] };
   }));
 }
 
 if (require.main === module) main().catch((e) => { console.error('\n' + (e.message || e)); process.exitCode = 1; });
-module.exports = { colorCorregido, CORRECCIONES };
+module.exports = { colorCorregido, CORRECCIONES, COMENTARIO };
