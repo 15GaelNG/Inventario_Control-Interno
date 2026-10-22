@@ -80,6 +80,14 @@ sale de `T`; lo de otra parte se pide arriba como un import, `const { abrirResgu
 llamar, así no importa el orden); un `let` que usan varias partes vive en su dueña, que lo publica con get/set en `T`, y
 las demás lo leen como `T.captura`. Una función nueva que otra parte necesite va en el `return` de su parte.
 
+**Vehículos, por partes** (22-oct, fase 6.1b): igual que Telefónicas. `initVehiculos` (en `app-vehiculos.html`) es el
+arranque y la lista; la ficha, las acciones sobre sus registros, las capturas desde la ficha y la responsiva/adherente
+viven en `app-vehiculos-ficha|registros|capturas|documentos.html`, cada una `Vehiculos.registrar('parte', (T) => {…})`.
+El mecanismo (`registrar`, `T.de`, `T.montar` y el aviso "la parte X no publica Y") es **un solo componente,
+`componentes/partes.html`** (`Partes.crear('Vehículos')`), que también usa Telefónicas. Para abrir otra pantalla grande:
+una config como `tools/app/partir-vehiculos.js` sobre el motor `tools/partir/en-partes.js` (corta por nombres, así que
+cada rama lo corre sobre su archivo y lo suyo viaja con su región).
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
