@@ -413,8 +413,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     panel; `vistaQuitar` y `quitarDelPanel`): ventana con tabla Campo | Hoy | Queda. Regresa campo por campo lo que el
     envío cambió y nadie tocó después (lo demás: «Se queda: cambió después»), con el movimiento del envío (MOVIMIENTO_ID
     o, en renglones viejos, por equipo y hora). La persona solo regresa si el equipo vuelve a USO. La línea que se fue a
-    Cancelaciones con ese envío también regresa si su cancelación sigue POR FIRMAR (su renglón queda RETIRADA). PIN y
-    patrón con su valor para ADMIN y el área de Líneas. Renglón RETIRADO; movimiento QUITAR_PANEL («Quitado del panel»).
+    Cancelaciones con ese envío también regresa si su cancelación sigue POR FIRMAR. PIN y patrón con su valor para ADMIN
+    y el área de Líneas. Borra el renglón de APP_RESGUARDOS y el de esa cancelación (`LineasDatos.eliminarFilas`; desde el
+    22-oct, `1f8f60c`; ya no existe ESTADO RETIRADO); lo que pasó queda en el movimiento QUITAR_PANEL («Quitado del panel»).
+    Si el equipo está POR RECIBIR y el movimiento del envío no trae el estatus (RESGUARDO a RESGUARDO o datos viejos), vuelve
+    al estatus elegido en el renglón (ESTATUS_EQUIPO; `99447e6`) para no dejar POR RECIBIR sin renglón.
   - **Retirar cancelación** (solo aprobadores; pestaña Cancelaciones; comentario obligatorio; `retirarCancelacion`):
     fase RETIRADA (se puede en POR FIRMAR, CARTA FIRMADA o CARTA ENVIADA). La línea vuelve a como estaba antes de mandarla
     a cancelar, campo por campo, y lo que cambió después no se regresa («Cambió después»). Lo anterior sale del
@@ -432,7 +435,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   - **Nota de CANCELADA:** bajo el estatus, «No entra al panel de Resguardos y cancelaciones; queda en el historial.», al
     elegir CANCELADA en Mandar/Corregir resguardo y en Corregir con RESGUARDO, PARA VENTA, PARA DESECHO o EN PROCESO DE
     CANCELACION; ya no sale la ventana «Cambio de estatus».
-  - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Quitados» y «Retiradas». El
+  - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Retiradas» (cancelaciones; el «Quitados» ya siempre da 0 y se quita con el pendiente 3.18). El
     índice del cliente trae la columna `panel` (`CLAVE_INDICE`, caché del índice; huella con APP_RESGUARDOS).
 - **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
   sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
@@ -456,10 +459,16 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Dirección General** (21-oct, `41dda43`; sin publicar): `lineas/LineasDG.gs` guarda la lista fija de las 12
   líneas de DG y los NUCO 11001 a 11011. El índice trae la columna `dg` (caché `indice_telefonia_v12`) y DG en el responsable.
   Quien no es ADMIN (`usuario.esAdmin` de `TelefoniaService.usuarioOperacion_`) ve DG, su estatus y el área DIRECCION GENERAL
-  en la lista, la ficha (`fichaOculta`) y Exportar; sin historial, documentos ni facturas y sin acciones; el servidor rechaza
-  escribir (`LineasRepo.guardarCambiosRegistro` y las capturas). ADMIN ve todo con el chip DG. No cubre el módulo del proveedor
-  ni Control de Cambios (pendiente 8.19). Datos: `tools/lineas-datos/limpiar-dg.js` limpia el responsable de las asignaciones
-  vigentes y pone DEPARTAMENTO y AREA = DIRECCION GENERAL (`--ensayo`; `--produccion` solo con permiso; pendiente 8.18).
+  en la lista, la ficha (`fichaOculta`: departamento vacío y área DIRECCION GENERAL) y Exportar (DEPARTAMENTO en blanco y
+  AREA = DIRECCION GENERAL); sin historial, documentos ni facturas y sin acciones; el servidor rechaza escribir
+  (`LineasRepo.guardarCambiosRegistro` y las capturas). ADMIN ve todo con el chip DG y sí puede editarlos. Corrección del
+  22-oct (`24f42a3`): `LineasDG.conArea` pone DIRECCION GENERAL en la columna departamento del índice (sus tablas no tienen
+  área) para los renglones de DG, también para ADMIN y antes del filtro por alcance (`TelefoniaService.indice`);
+  `TelefoniaService.deptoDeRegistro_` da DIRECCION GENERAL para DG. Solo cuenta la lista fija: los registros con área
+  DIRECCION GENERAL fuera de ella (NUCO 1667, 0457 y 0686) no son DG. No cubre el módulo del proveedor ni Control de Cambios
+  (pendiente 8.19). Datos: `tools/lineas-datos/limpiar-dg.js` deja en blanco ID PERSONA, NO EMPLEADO, RESPONSABLE, PUESTO,
+  DEPARTAMENTO, SEDE, OFICINA / DESARROLLO, JEFE DIRECTO, DIRECTOR, CUENTA GOOGLE y los adicionales de las asignaciones
+  vigentes, y pone solo AREA = DIRECCION GENERAL (`--ensayo`; `--produccion` solo con permiso; pendiente 8.18).
 - **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
   y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
   `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
@@ -476,7 +485,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct). Desde el 19-oct (sin publicar) INSPECCIONES LINEAS suma `No EMPLEADO` y `DIRECTOR`, y RESPONSIVAS LINEAS `JEFE DIRECTO`. RESPONSIVAS LINEAS lleva ID LINEA (el registro: el equipo o la línea sin equipo) e **ID LINEA ENTREGADA** (la línea de ese día; columna AR en producción, creada el 15-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
-| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario; desde el 20-oct ID_LINEA, LINEA_AL_MANDAR, MOVIMIENTO_ID, RETIRADO_EN, RETIRO y RETIRO_MOTIVO, ESTADO RETIRADO y fase RETIRADA), avisos, fotos y correcciones |
+| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario; desde el 20-oct ID_LINEA, LINEA_AL_MANDAR, MOVIMIENTO_ID, RETIRADO_EN, RETIRO y RETIRO_MOTIVO y fase RETIRADA de las cancelaciones), avisos, fotos y correcciones |
 | APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
