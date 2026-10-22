@@ -188,7 +188,7 @@
       'PARA VENTA': 'Buen estado; se ofrece en venta', 'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta',
       'PARA DESECHO': 'Apartado para desecharse', 'POR RECIBIR': 'Mandado a resguardo; Pau aún no lo recibe', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
       'DESECHADO': 'Ya se desechó', 'EXTRAVIO-ROBO': 'Extraviado o robado',
-      'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Pasa a la bandeja de cancelaciones; se pide al proveedor',
+      'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Se pide su cancelación al proveedor; falta confirmarla',
       'CANCELADA': 'Cancelada; confirmada con el proveedor',
     };
     const significado = (estatus) => SIGNIFICADO_ESTATUS[String(estatus || '').trim().toUpperCase()] || '';
@@ -337,7 +337,7 @@
       if (panelAbierto) panelAbierto.cerrar();
       const focoPrevio = document.activeElement;
       const fondo = document.createElement('div');
-      fondo.className = 'dt-panel-fondo';
+      fondo.className = 'dt-panel-fondo ln-panel-fondo';
       const elemento = document.createElement('aside');
       elemento.className = 'dt-panel ln-panel' + (o.noModal ? ' ln-panel-nomodal' : '');
       elemento.setAttribute('role', 'dialog');
@@ -348,7 +348,13 @@
         '<div class="dt-panel-cuerpo"></div>';
       // Sin fondo en el modo no modal: la tabla sigue a la mano para elegir otra fila
       if (o.noModal) document.body.append(elemento); else document.body.append(fondo, elemento);
-      const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
+      // Con una ventana abierta encima (#ln-modal-captura), Escape es de la ventana: el panel se queda detrás (pendiente 2.37;
+      // antes se lo quedaba y la ventana no cerraba)
+      const alTecla = (ev) => {
+        if (ev.key !== 'Escape' || document.querySelector('#ln-modal-captura:not([hidden])')) return;
+        ev.stopPropagation();
+        cerrar();
+      };
       const api = { elemento: elemento, cuerpo: elemento.querySelector('.dt-panel-cuerpo'), cerrar: cerrar, alCerrar: null, noModal: !!o.noModal };
       function cerrar() {
         if (panelAbierto !== api) return;
@@ -2617,6 +2623,20 @@
         tabla.abrirMenu(ev.clientX, ev.clientY);
       });
       raiz.addEventListener('input', (ev) => { if (ev.target.closest('[data-ln-copiar]')) pintarTextoDetalles(); });
+      // Al entrar al buscador de una tabla, lo que ya tiene queda seleccionado: se escribe encima (usuario, 22-oct: buscar 0001
+      // y luego 0002 sin borrar todo). El mouseup del mismo clic quitaba la selección: ese se ignora
+      let buscadorRecien = null;
+      raiz.addEventListener('focusin', (ev) => {
+        const b = ev.target.closest && ev.target.closest('.dt-buscar, .dt-buscar-col');
+        if (!b || !b.value) return;
+        b.select();
+        buscadorRecien = b;
+      });
+      raiz.addEventListener('mouseup', (ev) => {
+        if (buscadorRecien && ev.target === buscadorRecien) ev.preventDefault();
+        buscadorRecien = null;
+      });
+      raiz.addEventListener('focusout', () => { buscadorRecien = null; });
       raiz.addEventListener('keydown', (ev) => {
         if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][tabindex="0"]')) {
           ev.preventDefault();
@@ -2626,6 +2646,15 @@
         // Tarjetas: el foco queda en la tarjeta (no en la tabla), así que Esc quita la selección desde aquí
         else if (ev.key === 'Escape' && ev.target.closest && ev.target.closest('#ln-listado .ln-cuadro') && tablas[memoria.modulo]) tablas[memoria.modulo].limpiarSeleccion();
       });
+      // Escape también con el foco fuera de la ventana (en la página, tras un clic en su encabezado o con el panel Detalles
+      // abierto; pendiente 2.37): el keydown de la raíz solo lo oye con el foco dentro
+      // (se quita sola cuando la pantalla ya no está: al volver a Líneas se pone otra)
+      const escapeVentana = (ev) => {
+        if (!document.body.contains(raiz)) { document.removeEventListener('keydown', escapeVentana); return; }
+        if (ev.key !== 'Escape' || raiz.contains(ev.target) || $('#ln-modal-captura', raiz).hidden) return;
+        cerrarCaptura();
+      };
+      document.addEventListener('keydown', escapeVentana);
       $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
         if (ev.target.closest('[data-espera-volver]')) { ocultarEspera(); return; }
         // Un clic afuera no cierra la ventana (usuario, 4-oct): solo la X, Cancelar o Cerrar
@@ -3802,7 +3831,7 @@
             doc('eye', 'Ver responsiva', 'ver', true, (d) => d.documento === 'Responsiva', (d) => abrir('responsiva', d.id)),
             doc('file-text', 'Ver PDF', 'ver', true, (d) => !!d.pdfId,
               (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
-            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
+            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente && !pdfsEnCurso[d.id], (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
             // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
             doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),
@@ -3937,6 +3966,8 @@
       const inspeccionesDelDia = {};
       const hoyLocal = () => new Date().toDateString();
       const inspeccionHecha = (id) => (inspeccionesDelDia[id] && inspeccionesDelDia[id].dia === hoyLocal() ? inspeccionesDelDia[id].id : null);
+      // Documentos guardados dentro de una acción cuyo PDF se está generando (terminarFlujo; pendiente 2.63)
+      const pdfsEnCurso = {};
 
       /**
        * Pide en orden la inspección de cada equipo que todavía no la tiene. Regresa { idRegistro: idInspeccion } o null
@@ -5178,6 +5209,18 @@
         // La promesa del PDF viaja con el resultado (Reasignar lo ofrece al terminar); si falla, regresa null
         const pdf = sesion.flujo.sinPdf ? null : llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
           .catch((e) => { aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000); return null; });
+        // La acción vuelve a pintar la ficha antes de que el PDF esté (Mandar a resguardo; pendiente 2.63): mientras, Documentos
+        // no ofrece «Generar PDF» y al terminar se pinta de nuevo con su PDF
+        if (pdf) {
+          pdfsEnCurso[r.id] = true;
+          pdf.then(() => {
+            delete pdfsEnCurso[r.id];
+            const arriba = pila[pila.length - 1];
+            if (!vigente() || !arriba) return;
+            if (arriba.tipo === 'equipo' || arriba.tipo === 'linea') cargarEvidencias(arriba.id);
+            else if (arriba.id === r.id && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true);
+          });
+        }
         const flujo = sesion.flujo;
         if (captura === sesion) cerrarCaptura(true);
         flujo.resolver(Object.assign({}, r, { pdfPromesa: pdf }));
@@ -5508,7 +5551,7 @@
           r.equipo ? { icono: 'smartphone', texto: 'Ver equipo', alHacer: () => abrir('equipo', r.equipo._id) } : null,
           x.carpetaId ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
             alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
-          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
+          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId && !pdfsEnCurso[x.id] ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
             alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
           operar && x.registroId && x.tipoPdf === 'RESPONSIVA' && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
             alHacer: () => regenerarPdf(x, x.registroId) } : null,

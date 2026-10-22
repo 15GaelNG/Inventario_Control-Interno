@@ -88,11 +88,14 @@ async function agregarMovimientos(idLibro, mov, lista) {
   const fecha = serieAhora();
   const filas = lista.map((m) => {
     const o = { 'ID': Ids.nuevo('MVT'), 'FECHA': fecha, 'ACCION': m.accion, 'ID EQUIPO': m.equipo || '', 'ID LINEA': m.linea || '',
-      'ID ASIGNACION': m.asignacion || '', 'COMENTARIO': m.comentario, 'TICKET': '', 'DOCUMENTO': '', 'CAMBIOS': JSON.stringify(m.cambios),
+      'ID ASIGNACION': m.asignacion || '', 'COMENTARIO': m.comentario, 'TICKET': '', 'DOCUMENTO': m.documento || '', 'CAMBIOS': JSON.stringify(m.cambios),
       'QUIEN': QUIEN, 'ORIGEN': ORIGEN };
     return mov.enc.map((h) => (h in o ? o[h] : ''));
   });
-  const r = await api('POST', SHEETS + idLibro + '/values/' + rango('MOVIMIENTOS', 'A1') + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', { values: filas });
+  // Desde el último renglón con datos (pendiente 7.12): desde A1, el append toma la tabla hasta el primer renglón vacío y
+  // con uno a la mitad de la hoja metía los nuevos ahí, no al final
+  const ultimo = (await valores(idLibro, 'MOVIMIENTOS', 'A1:ZZ')).length;
+  const r = await api('POST', SHEETS + idLibro + '/values/' + rango('MOVIMIENTOS', 'A' + Math.max(1, ultimo)) + ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS', { values: filas });
   const m = r.updates.updatedRange.match(/![A-Z]+(\d+):[A-Z]+(\d+)$/);
   const meta = await api('GET', SHEETS + idLibro + '?fields=sheets.properties(title,sheetId)');
   const hoja = meta.sheets.filter((s) => s.properties.title === 'MOVIMIENTOS')[0].properties.sheetId;
@@ -105,4 +108,20 @@ async function agregarMovimientos(idLibro, mov, lista) {
   console.log('MOVIMIENTOS: ' + filas.length + ' renglones (' + r.updates.updatedRange + '). Falta «Recargar datos» en la app.');
 }
 
-module.exports = { PRODUCCION, ENSAYO, REPO, libro, tabla, celda, escribirCeldas, agregarMovimientos, txt, may };
+/** Como `tabla`, con los valores sin formato: una fecha llega como su número de serie (pendiente 2.47). */
+async function tablaSinFormato(idLibro, hoja) {
+  const j = await api('GET', SHEETS + idLibro + '/values/' + rango(hoja, 'A1:ZZ') + '?valueRenderOption=UNFORMATTED_VALUE');
+  const v = j.values || [];
+  const enc = (v[0] || []).map((c) => may(c));
+  return { hoja, enc, filas: v.slice(1).map((f, i) => { const o = { _n: i + 2 }; enc.forEach((c, j2) => { o[c] = f[j2] === undefined ? '' : f[j2]; }); return o; }) };
+}
+
+/** El sheetId de una pestaña (para borrar renglones). */
+async function idDeHoja(idLibro, hoja) {
+  const meta = await api('GET', SHEETS + idLibro + '?fields=sheets.properties(title,sheetId)');
+  const h = meta.sheets.filter((s) => s.properties.title === hoja)[0];
+  if (!h) throw new Error('El libro no tiene la pestaña ' + hoja);
+  return h.properties.sheetId;
+}
+
+module.exports = { PRODUCCION, ENSAYO, REPO, libro, tabla, tablaSinFormato, idDeHoja, celda, escribirCeldas, agregarMovimientos, txt, may, api, SHEETS };

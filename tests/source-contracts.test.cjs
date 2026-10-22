@@ -1036,7 +1036,8 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(lineas, /contarEnPestana\('documentos', filas\.length\);/);
   assert.match(lineas, /etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',\s+filtros: \{ documento: \{ valores: \['Inspección'\] \} \}/);
   // Solo con edición (operar): antes se veía y el servidor lo negaba (permisos en árbol, 14-oct)
-  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => operar && !!d\.pdfPendiente,/);
+  // (y no mientras su PDF se está generando, pendiente 2.63)
+  assert.match(lineas, /doc\('file-plus', 'Generar PDF', 'pdf', true, \(d\) => operar && !!d\.pdfPendiente && !pdfsEnCurso\[d\.id\],/);
   // Sin Excel; doble clic abre la inspección (o el PDF de la responsiva)
   assert.match(lineas, /idTabla: 'lineas-documentos-v1',\s+exportar: false,/);
   assert.match(lineas, /\$\('\.ln-docs-tabla', cont\)\.addEventListener\('dblclick'/);
