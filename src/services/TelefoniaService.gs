@@ -53,8 +53,8 @@ const TelefoniaService = (function () {
    * documentos: puede ser de cuando era de otro departamento; usuario, 14-oct). Toda función pública que llama leer_
    * pasa por exigirAlcance_, filtrarIndice_ o sinAlcance_ (tests/alcance-cliente.test.cjs).
    */
-  const deptoDeRegistro_ = (r) =>
-    ((r && r.equipo && r.equipo.responsable) || (r && r.linea && r.linea.responsable) || {}).departamento || '';
+  const deptoDeRegistro_ = (r) => (r && LineasDG.esRegistro(r.equipo, r.linea) ? LineasDG.AREA // DEPARTAMENTO en blanco (8.16)
+    : ((r && r.equipo && r.equipo.responsable) || (r && r.linea && r.linea.responsable) || {}).departamento || '');
 
   function exigirAlcance_(sesion, r) {
     if (sesion.alcance && !Permisos.dentroDeAlcance(sesion.alcance, deptoDeRegistro_(r))) {
@@ -114,7 +114,7 @@ const TelefoniaService = (function () {
   /** Índices de equipos y líneas para los listados, con las columnas de la vista del AppSheet (caché 30 min). */
   function indice(token) {
     const sesion = leer_(token);
-    const ix = filtrarIndice_(LineasRepo.indice(), sesion.alcance);
+    const ix = filtrarIndice_(LineasDG.conArea(LineasRepo.indice()), sesion.alcance); // DG: el área en departamento (8.16)
     let vista = ix.vista || { columnas: [], secretas: [], filas: [] };
     // PIN WHATSAPP / PIN EQUIPO: solo ADMIN (la caché es la misma para todos: se copia antes de ocultar)
     if (!puedeVerSecretos_(sesion)) {

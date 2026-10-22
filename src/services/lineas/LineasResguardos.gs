@@ -49,8 +49,9 @@ const LineasResguardos = (function () {
   /** Las que llegaron después a una hoja que ya existía (13 y 20-oct). */
   const COLUMNAS_NUEVAS = ['MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO'];
 
-  // RETIRADO: Líneas lo quitó antes de que Pau lo recibiera; RETIRADA: Pau retiró la cancelación (pendiente 3.12)
-  const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO', RETIRADO: 'RETIRADO' };
+  // RETIRADA: Pau retiró la cancelación (pendiente 3.12). Lo que Líneas quita antes de que Pau lo reciba ya no queda: se
+  // borra (Quitar del panel; usuario, 22-oct)
+  const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO' };
   const FASE = { POR_FIRMAR: 'POR FIRMAR', FIRMADA: 'CARTA FIRMADA', ENVIADA: 'CARTA ENVIADA', CANCELADA: 'CANCELADA', RETIRADA: 'RETIRADA' };
   const ABIERTOS = [ESTADO.PENDIENTE, ESTADO.RESGUARDO];
   const EN_CURSO = [FASE.POR_FIRMAR, FASE.FIRMADA, FASE.ENVIADA];
@@ -855,8 +856,10 @@ const LineasResguardos = (function () {
 
   // ---------------- Quitar del panel (pendiente 3.12) ----------------
   //
-  // Para un equipo mandado por error que Pau aún no recibe (PENDIENTE DE RECEPCION); solo los de Líneas. El renglón queda
-  // RETIRADO y el equipo vuelve a como estaba antes de mandarlo, campo por campo, con lo que guardó el movimiento del envío:
+  // Para un equipo mandado por error que Pau aún no recibe (PENDIENTE DE RECEPCION); solo los de Líneas. El renglón se
+  // borra del panel, y también el de la cancelación de su línea si salió con el envío (usuario, 22-oct: «lo ideal es que
+  // se elimine directamente, no se quede guardado el registro»; antes quedaba RETIRADO); lo que pasó queda en el
+  // movimiento QUITAR_PANEL. El equipo vuelve a como estaba antes de mandarlo, campo por campo, con lo que guardó el movimiento del envío:
   // solo regresa el campo que sigue con el valor que dejó el envío; lo que alguien cambió después se queda (usuario,
   // 20-oct). La línea que se fue con el envío también regresa si su cancelación sigue POR FIRMAR (usuario, 20-oct). Los
   // datos de la persona solo vuelven si el equipo vuelve a USO.
@@ -932,6 +935,12 @@ const LineasResguardos = (function () {
       if (sinTocar || (DE_LA_LINEA.indexOf(K) >= 0 && !numeroHoy)) regresa.push({ campo: k, de: hoy, a: txt(c.antes) });
       else seQueda.push({ campo: k, valor: hoy, motivo: 'Cambió después' });
     });
+    // POR RECIBIR sin renglón no puede quedar (DEV, 22-oct: un envío que no cambió el estatus, como RESGUARDO a
+    // RESGUARDO, no lo trae en su movimiento): vuelve al elegido en su renglón, que es el que tenía antes de mandarlo
+    if (may(LineasUtil.col(f, 'ESTATUS EQUIPO')) === POR_RECIBIR && !regresa.some((x) => LineasDatos.normCol(x.campo) === 'ESTATUS EQUIPO')) {
+      seQueda.splice(0, seQueda.length, ...seQueda.filter((x) => LineasDatos.normCol(x.campo) !== 'ESTATUS EQUIPO'));
+      regresa.push({ campo: 'ESTATUS EQUIPO', de: POR_RECIBIR, a: txt(r['ESTATUS_EQUIPO']) || 'RESGUARDO', nota: 'Sale del panel: deja de estar POR RECIBIR' });
+    }
     // Sin USO el equipo sigue guardado: la persona no regresa (y su línea no vuelve a USO)
     const estatus = regresa.filter((x) => LineasDatos.normCol(x.campo) === 'ESTATUS EQUIPO')[0];
     const final = may(estatus ? estatus.a : LineasUtil.col(f, 'ESTATUS EQUIPO'));
@@ -997,6 +1006,7 @@ const LineasResguardos = (function () {
     const hechos = [];
     const omitidos = [];
     const registros = [];
+    const borrar = [];
     LineasDatos.conCandado(() => {
       asegurarBandeja_();
       renglonesParaQuitar_(ids).forEach((q) => {
@@ -1010,10 +1020,7 @@ const LineasResguardos = (function () {
         const vuelve = p.regresa.filter((x) => x.linea)[0];
         if (vuelve) {
           const L = vuelve.linea;
-          if (L.renglon) {
-            LineasDatos.actualizarFila(TAB, L.renglon._fila, { 'CANCELACION': FASE.RETIRADA, 'RETIRADO_EN': ahora, 'RETIRO': usuario.nombre,
-              'RETIRO_MOTIVO': comentario, 'ACTUALIZADO_EN': ahora });
-          }
+          if (L.renglon) borrar.push(L.renglon._fila);
           const fl = LineasRepo.leerRegistroObligatorio(L.id, 'la línea');
           const antesLinea = txt(LineasUtil.col(fl, 'ESTATUS LINEA'));
           if (may(antesLinea) !== LINEA_DISPONIBLE) {
@@ -1043,11 +1050,12 @@ const LineasResguardos = (function () {
           antes: { estatus: txt(LineasUtil.col(q.f, 'ESTATUS EQUIPO')) }, despues: { estatus: txt(cambios['ESTATUS EQUIPO'] || LineasUtil.col(f, 'ESTATUS EQUIPO')) },
           detalle: { idsCambios: [], idsReasignacion: [], cambios: campos, resguardo: txt(q.r['ID']) },
         });
-        LineasDatos.actualizarFila(TAB, q.r._fila, { 'ESTADO': ESTADO.RETIRADO, 'RETIRADO_EN': ahora, 'RETIRO': usuario.nombre, 'RETIRO_MOTIVO': comentario, 'ACTUALIZADO_EN': ahora });
+        borrar.push(q.r._fila);
         registros.push(txt(f['ID']));
         if (vuelve) registros.push(vuelve.linea.id);
         hechos.push({ id: txt(q.r['ID']), nuco: q.nuco });
       });
+      LineasDatos.eliminarFilas(TAB, borrar); // al final: recorre los números de fila
     });
     return { hechos: hechos, omitidos: omitidos, indice: registros.length ? LineasRepo.refrescarIndice(registros) : null };
   }

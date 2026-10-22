@@ -17,6 +17,7 @@ function ayudantes(registros) {
   assert.ok(ini > 0 && fin > ini, 'ayudantes de alcance en TelefoniaService');
   const ctx = vm.createContext({
     LineasRepo: { leerRegistroPorId: (id) => registros[id] || null, convertirRegistro: (f) => f },
+    LineasDG: { AREA: 'DIRECCION GENERAL', esRegistro: (e) => !!(e && e.nuco === '11001') }, // Dirección General (8.16)
   });
   vm.runInContext(permisos + '\n' + telefonia.slice(ini, fin) +
     '\nthis.r = { deptoDeRegistro_, exigirAlcance_, sinAlcance_, filtrarIndice_ };', ctx);
@@ -53,6 +54,7 @@ test('la ficha y sus documentos: solo de un registro de su departamento', () => 
   };
   const a = ayudantes(regs);
   assert.equal(a.deptoDeRegistro_(regs.R5), 'POST VENTA', 'una línea suelta: el de su responsable');
+  assert.equal(a.deptoDeRegistro_({ equipo: { nuco: '11001', responsable: { departamento: '' } } }), 'DIRECCION GENERAL', 'DG: su área (8.16)');
   assert.doesNotThrow(() => a.exigirAlcance_(CLIENTE, regs.R1));
   assert.doesNotThrow(() => a.exigirAlcance_(CLIENTE, regs.R5));
   assert.throws(() => a.exigirAlcance_(CLIENTE, regs.R2), /No tienes acceso a este registro/);
