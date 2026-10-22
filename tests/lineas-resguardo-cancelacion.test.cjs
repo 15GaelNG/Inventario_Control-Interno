@@ -550,3 +550,21 @@ test('Quitar del panel: un POR RECIBIR sin el estatus en su envío vuelve al ele
   assert.equal(t.tablas['LINEAS TELEFONICAS'][0]['ESTATUS EQUIPO'], 'PARA VENTA CON DETALLE');
   assert.equal(t.tablas.APP_RESGUARDOS.length, 0);
 });
+
+// Pendiente 3.16 (usuario, 22-oct): Pau marca DONADO o DESECHADO, como Vendido, solo los ya recibidos (EN RESGUARDO)
+test('Donado y Desechado: solo lo recibido; el panel y el inventario quedan con el cierre y su movimiento', () => {
+  const t = cargar([equipo('EQU-1', '0012', 'RESGUARDO'), equipo('EQU-2', '0013', 'PARA DESECHO'), equipo('EQU-3', '0014', 'POR RECIBIR')], [
+    { 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' },
+    { 'ID': 'RSG-2', 'REGISTRO_ID': 'EQU-2', 'NUCO': '0013', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'PARA DESECHO' },
+    { 'ID': 'RSG-3', 'REGISTRO_ID': 'EQU-3', 'NUCO': '0014', 'ESTADO': 'PENDIENTE DE RECEPCION', 'ESTATUS_EQUIPO': 'RESGUARDO' }]);
+  assert.throws(() => t.R.donado(['RSG-1'], {}, usuario));
+  const d = t.R.donado(['RSG-1', 'RSG-3'], { asunto: 'FUNDACION' }, pau);
+  assert.deepEqual(d.hechos.map((h) => h.id), ['RSG-1']);
+  assert.match(d.omitidos[0].motivo, /No está en resguardo/);
+  t.R.desechado(['RSG-2'], {}, pau);
+  const inv = t.tablas['LINEAS TELEFONICAS'];
+  assert.deepEqual(inv.map((f) => f['ESTATUS EQUIPO']), ['DONADO', 'DESECHADO', 'POR RECIBIR']);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.ESTADO), ['DONADO', 'DESECHADO', 'PENDIENTE DE RECEPCION']);
+  assert.deepEqual(t.escritas.movimientos.slice(-2).map((m) => m.tipo), ['CIERRE', 'DESECHO']);
+  assert.match(read('src/services/TelefoniaService.gs'), /DONADO: \(\) => R\.donado\(ids, d, u\)/);
+});

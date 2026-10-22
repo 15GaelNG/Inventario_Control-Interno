@@ -13,7 +13,7 @@
  *   propone con FIN PLAN y quien manda lo confirma.
  * - El estatus cambia al mandar ("ya deben venir con el estatus", Gio). Al mismo tiempo se crea el renglón de la
  *   bandeja de Pau en APP_RESGUARDOS, que sigue su propio camino, igual que la hoja de Bren:
- *     recepción:    PENDIENTE DE RECEPCION → EN RESGUARDO → ENTREGADO A LINEAS | VENDIDO
+ *     recepción:    PENDIENTE DE RECEPCION → EN RESGUARDO → ENTREGADO A LINEAS | VENDIDO | DONADO | DESECHADO
  *     cancelación:  POR FIRMAR → CARTA FIRMADA → CARTA ENVIADA → CANCELADA (solo si la línea va a cancelación)
  * - Al confirmar la cancelación, la línea queda CANCELADA y el NUCO pasa de EQUIPO + SIM a EQUIPO; el número queda en la
  *   bitácora (lo que hoy hacen a mano).
@@ -51,7 +51,8 @@ const LineasResguardos = (function () {
 
   // RETIRADA: Pau retiró la cancelación (pendiente 3.12). Lo que Líneas quita antes de que Pau lo reciba ya no queda: se
   // borra (Quitar del panel; usuario, 22-oct)
-  const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO' };
+  const ESTADO = { PENDIENTE: 'PENDIENTE DE RECEPCION', RESGUARDO: 'EN RESGUARDO', ENTREGADO: 'ENTREGADO A LINEAS', VENDIDO: 'VENDIDO',
+    DONADO: 'DONADO', DESECHADO: 'DESECHADO' };
   const FASE = { POR_FIRMAR: 'POR FIRMAR', FIRMADA: 'CARTA FIRMADA', ENVIADA: 'CARTA ENVIADA', CANCELADA: 'CANCELADA', RETIRADA: 'RETIRADA' };
   const ABIERTOS = [ESTADO.PENDIENTE, ESTADO.RESGUARDO];
   const EN_CURSO = [FASE.POR_FIRMAR, FASE.FIRMADA, FASE.ENVIADA];
@@ -764,15 +765,28 @@ const LineasResguardos = (function () {
       : { 'ESTADO': ESTADO.ENTREGADO, 'ENTREGADO_EN': new Date(), 'ENTREGADO_A': recibe, 'ENTREGA_ASUNTO': txt((datos || {}).asunto) })));
   }
 
-  /** Pau marca como vendido un equipo guardado; también cambia ESTATUS EQUIPO a VENDIDO en el inventario. */
-  function vendido(ids, datos, usuario) {
+  /**
+   * Pau cierra un equipo ya recibido (EN RESGUARDO): VENDIDO, DONADO o DESECHADO, en el panel y en ESTATUS EQUIPO del
+   * inventario (DONADO y DESECHADO: pendiente 3.16, usuario 22-oct: «solo con la regla que sean los que ya están
+   * recibidos»). datos = { asunto } (referencia opcional).
+   */
+  const CIERRES = {
+    VENDIDO: { motivo: 'Vendido', movimiento: 'VENTA' },
+    DONADO: { motivo: 'Donado', movimiento: 'CIERRE' },
+    DESECHADO: { motivo: 'Desechado', movimiento: 'DESECHO' },
+  };
+  function cerrar_(ids, estatus, datos, usuario) {
     exigirAprobador_(usuario);
+    const c = CIERRES[estatus];
     const asunto = txt((datos || {}).asunto);
     const r = actualizar_(ids, (x) => (txt(x['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
-      : { 'ESTADO': ESTADO.VENDIDO, 'ESTATUS_EQUIPO': 'VENDIDO', 'ENTREGA_ASUNTO': asunto }));
-    espejar_(r.hechos, (f) => ({ 'ESTATUS EQUIPO': 'VENDIDO' }), 'Vendido (bandeja de resguardos)' + (asunto ? ': ' + asunto : ''), 'VENTA', usuario);
+      : { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': asunto }));
+    espejar_(r.hechos, () => ({ 'ESTATUS EQUIPO': estatus }), c.motivo + ' (bandeja de resguardos)' + (asunto ? ': ' + asunto : ''), c.movimiento, usuario);
     return r;
   }
+  const vendido = (ids, datos, usuario) => cerrar_(ids, 'VENDIDO', datos, usuario);
+  const donado = (ids, datos, usuario) => cerrar_(ids, 'DONADO', datos, usuario);
+  const desechado = (ids, datos, usuario) => cerrar_(ids, 'DESECHADO', datos, usuario);
 
   /** Avance de la cancelación: fase FIRMADA o ENVIADA (datos = { asesor, asunto }). */
   function faseCancelacion(ids, fase, datos, usuario) {
@@ -1229,7 +1243,7 @@ const LineasResguardos = (function () {
   }
 
   return {
-    formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, faseCancelacion, confirmarCancelacion,
+    formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, donado, desechado, faseCancelacion, confirmarCancelacion,
     retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
