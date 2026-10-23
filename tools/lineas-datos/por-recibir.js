@@ -14,7 +14,8 @@ const c = require('./comun.js');
 
 const POR_RECIBIR = 'POR RECIBIR';
 const PENDIENTE = 'PENDIENTE DE RECEPCION';
-const COMENTARIO = 'POR RECIBIR: SIGUE PENDIENTE DE RECEPCION EN RESGUARDOS Y CANCELACIONES (PENDIENTE 3.15)';
+// Solo la acción que se hizo (usuario, 22-oct: antes llevaba «(PENDIENTE 3.15)»; textos-movimientos.js)
+const COMENTARIO = 'POR RECIBIR: SIGUE PENDIENTE DE RECEPCION EN RESGUARDOS Y CANCELACIONES';
 
 async function main() {
   const libro = c.libro();

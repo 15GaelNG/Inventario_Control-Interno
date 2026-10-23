@@ -30,7 +30,8 @@ const DE_LINEA = ['COMPANIA', 'RAZON_SOCIAL', 'FIN_PLAN', 'ESTATUS_LINEA'];
 const ADICIONALES = ['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []);
 const UBICACION = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
 const PIN_VACIO = ['', 'N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'];
-const COMENTARIO = 'RESGUARDO Y CANCELACION SEPARADOS: LA LINEA SE DESVINCULA DEL EQUIPO Y SIGUE EN CANCELACIONES (PENDIENTE 3.13)';
+// Solo la acción que se hizo (usuario, 22-oct: antes llevaba «(PENDIENTE 3.13)»; textos-movimientos.js)
+const COMENTARIO = 'RESGUARDO Y CANCELACION SEPARADOS: LA LINEA SE DESVINCULA DEL EQUIPO Y SIGUE EN CANCELACIONES';
 
 const digitos = (v) => c.txt(v).replace(/\D/g, '').slice(-10);
 
