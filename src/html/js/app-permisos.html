@@ -479,6 +479,9 @@
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(T.fichaActual.tipo, T.fichaActual.id); return; }
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(T.fichaActual.tipo, T.fichaActual.id); return; }
       if (el.hasAttribute('data-usr-eliminar-perfil')) { eliminarPerfil(T.fichaActual.id); return; }
+      // data-usr-contrasena, no data-usr-restablecer: ese ya es el ↺ de la ventana de editar permisos
+      if (el.hasAttribute('data-usr-contrasena')) { const p = persona(T.fichaActual.id); Seguridad.restablecer(p.correo, p.nombre); return; }
+      if (el.hasAttribute('data-usr-olvidar')) { const p = persona(T.fichaActual.id); Seguridad.olvidarDispositivos(p.correo, p.nombre); return; }
       if (el.dataset.usrPerfil) { abrirFicha('perfil', el.dataset.usrPerfil, true); return; }
       if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
       if (el.dataset.usrPersona) abrirFicha('persona', el.dataset.usrPersona, true);

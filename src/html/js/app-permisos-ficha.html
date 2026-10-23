@@ -73,7 +73,10 @@
         iconoHtml: Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }), titulo: p.nombre || p.correo,
         chips: badgeRol(p.rol) + badgeActivo(p.activo) +
           (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
-        botones: total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        // Restablecer contraseña / olvidar dispositivos: Seguridad (js/app-seguridad.html; 23-oct)
+        botones: (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') +
+          '<button type="button" class="secondary" data-usr-contrasena>' + ico('key-round') + ' Restablecer contraseña</button>' +
+          '<button type="button" class="secondary" data-usr-olvidar>' + ico('monitor-x') + ' Olvidar sus dispositivos</button>',
         resumen: resumen,
       });
 

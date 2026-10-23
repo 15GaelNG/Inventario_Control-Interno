@@ -14,35 +14,9 @@ const Auth = (function () {
     return SheetUtils.getSheet(Config.SPREADSHEET_IDS.USUARIOS(), NOMBRE_HOJA_USUARIOS);
   }
 
-  function hashPassword_(password, salt) {
-    const digest = Utilities.computeHmacSha256Signature(password, salt);
-    return digest.map((b) => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-  }
-
-  /** Se usa una sola vez al crear/resetear un usuario (esquema propio con hash) */
+  /** Al crear un usuario a mano (SetupInicial): la huella v2 va completa en PASSWORD_HASH (Credenciales.gs) */
   function crearHashParaUsuario(password) {
-    const salt = Utilities.getUuid();
-    return { salt: salt, hash: hashPassword_(password, salt) };
-  }
-
-  function compararSeguro_(a, b) {
-    a = String(a || '');
-    b = String(b || '');
-    let diferencia = a.length ^ b.length;
-    const longitud = Math.max(a.length, b.length);
-    for (let i = 0; i < longitud; i++) diferencia |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-    return diferencia === 0;
-  }
-
-  /** Acepta el esquema nuevo con hash y mantiene compatibilidad con la hoja histórica. */
-  function passwordValido_(found, password) {
-    if (found.SALT && found.PASSWORD_HASH) {
-      return compararSeguro_(hashPassword_(String(password), String(found.SALT)), found.PASSWORD_HASH);
-    }
-    if (found['CONTRASEÑA'] !== undefined && found['CONTRASEÑA'] !== '') {
-      return compararSeguro_(found['CONTRASEÑA'], password);
-    }
-    return false;
+    return { salt: '', hash: Credenciales.crear(password) };
   }
 
   /** El spreadsheet original solo distingue ADMIN / USER; todo lo que no sea ADMIN opera como OPERADOR */
@@ -97,17 +71,86 @@ const Auth = (function () {
     CacheService.getScriptCache().put(claveFallos_(correo), String(fallosDe_(correo) + 1), SEG_BLOQUEO);
   }
 
-  function login(correo, password) {
+  /**
+   * Lo que falta antes de la sesión (23-oct). Con una contraseña temporal (DEBE CAMBIAR CONTRASEÑA, la que puso un
+   * admin) no hay sesión todavía: se regresa { pendiente: 'cambiar', reto } y la pantalla pide una nueva. El reto vive
+   * 10 min en CacheService y solo sirve para ese correo y ese paso.
+   */
+  const SEG_RETO = 10 * 60;
+  function nuevoReto_(datos) {
+    const id = Utilities.getUuid();
+    CacheService.getScriptCache().put('login_reto_' + id, JSON.stringify(datos), SEG_RETO);
+    return id;
+  }
+  function leerReto_(id, paso) {
+    const raw = id ? CacheService.getScriptCache().get('login_reto_' + String(id)) : null;
+    const r = raw ? JSON.parse(raw) : null;
+    if (!r || r.paso !== paso) throw new Error('Ese paso ya venció. Vuelve a iniciar sesión.');
+    return r;
+  }
+  /**
+   * En orden: el código por correo si el dispositivo es nuevo o algo se ve raro (Verificacion.gs), la contraseña nueva
+   * si entró con una temporal, y la sesión. verificado: ya pasó el código (no se vuelve a preguntar).
+   */
+  // La bitácora de entradas (Accesos.gs): nunca truena ni impide entrar
+  function anotar_(correo, metodo, resultado, dispositivo) {
+    if (typeof Accesos !== 'undefined') Accesos.anotar(correo, metodo, resultado, dispositivo && dispositivo.nombre);
+  }
+
+  function continuar_(found, metodo, dispositivo, verificado) {
+    if (!verificado) {
+      const paso = Verificacion.decidir(found, metodo, dispositivo);
+      if (paso) return paso;
+    }
+    if (metodo === 'contrasena' && String(found['DEBE CAMBIAR CONTRASEÑA'] || '').toUpperCase() === 'TRUE') {
+      return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO };
+    }
+    anotar_(found.CORREO, metodo, 'entro', dispositivo);
+    return construirSesion_(found);
+  }
+
+  /** La contraseña nueva en lugar de la temporal; con eso, la sesión */
+  function cambiarContrasenaInicial(reto, nueva) {
+    const r = leerReto_(reto, 'cambiar');
+    const found = buscarUsuarioPorCorreo_(r.correo);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    if (Credenciales.verificar(found, nueva).ok) throw new Error('La contraseña nueva debe ser distinta de la temporal.');
+    Credenciales.revisarNueva(nueva, { correo: found.CORREO, nombre: found.NOMBRE });
+    Credenciales.guardar(found.CORREO, nueva, { debeCambiar: false });
+    CacheService.getScriptCache().remove('login_reto_' + String(reto));
+    return construirSesion_(found);
+  }
+
+  /**
+   * El código del correo. Bueno → lo que sigue (contraseña nueva o la sesión), con la llave del dispositivo si se pidió
+   * recordarlo: { …, dispositivo: { llave } } (la pantalla la guarda en el navegador; el servidor solo su huella).
+   */
+  function verificarCodigo(reto, codigo, recordar) {
+    const v = Verificacion.verificarCodigo(reto, codigo, recordar);
+    const found = buscarUsuarioPorCorreo_(v.correo);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    const siguiente = continuar_(found, v.metodo, null, true);
+    return v.llave ? Object.assign({}, siguiente, { dispositivo: { correo: found.CORREO, llave: v.llave } }) : siguiente;
+  }
+
+  function login(correo, password, dispositivo) {
     if (fallosDe_(correo) >= MAX_FALLOS) {
+      anotar_(correo, 'contrasena', 'bloqueado', dispositivo);
       throw new Error('Demasiados intentos con este correo. Espera 15 minutos o pide a un administrador que revise tu contraseña.');
     }
     const found = buscarUsuarioPorCorreo_(correo);
     // Un correo que no existe cuenta igual que una contraseña mala: el mensaje no dice cuál de las dos fue
-    if (!found) { anotarFallo_(correo); throw new Error('Usuario o contraseña incorrectos'); }
+    if (!found) { anotarFallo_(correo); anotar_(correo, 'contrasena', 'correo-desconocido', dispositivo); throw new Error('Usuario o contraseña incorrectos'); }
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
-    if (!passwordValido_(found, password)) { anotarFallo_(correo); throw new Error('Usuario o contraseña incorrectos'); }
+    const revisada = Credenciales.verificar(found, password);
+    if (!revisada.ok) { anotarFallo_(correo); anotar_(correo, 'contrasena', 'contrasena-mala', dispositivo); throw new Error('Usuario o contraseña incorrectos'); }
     CacheService.getScriptCache().remove(claveFallos_(correo));
-    return construirSesion_(found);
+    // Entró con la de texto plano o una huella vieja: se guarda la nueva y se borra CONTRASEÑA. Si escribir falla, entra
+    // igual (se intenta otra vez la siguiente)
+    if (revisada.migrar) {
+      try { Credenciales.guardar(found.CORREO, password); } catch (e) { console.warn('login, pasar a hash: ' + e.message); }
+    }
+    return continuar_(found, 'contrasena', dispositivo);
   }
 
   /**
@@ -130,7 +173,7 @@ const Auth = (function () {
     return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE, foto: foto };
   }
 
-  function loginConGoogle() {
+  function loginConGoogle(dispositivo) {
     const correoDetectado = Session.getActiveUser().getEmail();
     if (!correoDetectado) throw new Error('No se pudo detectar tu cuenta de Google en esta sesión.');
 
@@ -138,7 +181,7 @@ const Auth = (function () {
     if (!found) throw new Error('Tu cuenta (' + correoDetectado + ') no está registrada en el sistema.');
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
 
-    return construirSesion_(found);
+    return continuar_(found, 'google', dispositivo);
   }
 
   function validarSesion(token) {
@@ -175,5 +218,5 @@ const Auth = (function () {
     CacheService.getScriptCache().remove('sesion_' + token);
   }
 
-  return { login, identidadGoogle, loginConGoogle, validarSesion, requiereRol, logout, crearHashParaUsuario };
+  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout, crearHashParaUsuario };
 })();

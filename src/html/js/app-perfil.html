@@ -73,8 +73,10 @@
         `<div class="perfil-chip" style="--perfil-chip:var(--color-success)"><i data-lucide="shield-check" class="ico"></i><div><small>Cuenta</small><b>${cargando ? '…' : (p.activo ? 'Activa' : 'Inactiva')}</b></div></div>` +
         `<div class="perfil-chip"><i data-lucide="layout-grid" class="ico"></i><div><small>Módulos</small><b>${cargando ? '…' : totalModulos}</b></div></div>` +
       '</div>' +
-      '<button type="button" class="secondary perfil-apariencia" data-perfil-apariencia><i data-lucide="settings" class="ico"></i>Apariencia</button>';
+      '<button type="button" class="secondary perfil-apariencia" data-perfil-apariencia><i data-lucide="settings" class="ico"></i>Apariencia</button>' +
+      '<button type="button" class="secondary perfil-apariencia" data-perfil-seguridad><i data-lucide="lock-keyhole" class="ico"></i>Contraseña y seguridad</button>';
     tarjeta.querySelector('[data-perfil-apariencia]').addEventListener('click', () => Apariencia.abrir());
+    tarjeta.querySelector('[data-perfil-seguridad]').addEventListener('click', () => Seguridad.abrirMiCuenta());
 
     let h = '<div class="perfil-modulos-cabeza"><div><h3>Mis módulos</h3><p>Lo que puedes ver y editar en el sistema.</p></div></div>';
     if (cargando) h += '<p class="perfil-cargando">Cargando…</p>';

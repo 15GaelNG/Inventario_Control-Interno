@@ -946,9 +946,8 @@
       const chip = document.getElementById('google-account-chip');
       if (chip) chip.disabled = true;
       try {
-        const resultado = await callServer('apiLogin', correo, password);
-        guardarSesion(resultado);
-        mostrarPantallaCarga(() => render());
+        // La sesión, o el paso que falta (contraseña nueva, código): Seguridad (js/app-seguridad.html)
+        Seguridad.entrar(await callServer('apiLogin', correo, password, Seguridad.dispositivo(correo)));
         // A propósito NO se reactivan los botones en éxito: ya se está
         // navegando a la pantalla de carga, no debería poder volver a
         // usarse este formulario.
@@ -993,9 +992,7 @@
         const btnLogin = document.getElementById('btn-login');
         if (btnLogin) btnLogin.disabled = true;
         try {
-          const resultado = await callServer('apiLoginConGoogle');
-          guardarSesion(resultado);
-          mostrarPantallaCarga(() => render());
+          Seguridad.entrar(await callServer('apiLoginConGoogle', Seguridad.dispositivo(identidad.correo)));
           // Tampoco se reactiva en éxito — ver comentario en form-login.
         } catch (err) {
           errorBox.textContent = err.message;

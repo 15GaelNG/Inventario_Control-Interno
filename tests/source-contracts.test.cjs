@@ -52,10 +52,14 @@ test('la versión de Lucide contiene card-sim', () => {
 });
 
 test('el login acepta hash y conserva compatibilidad con la hoja histórica', () => {
+  // Desde el 23-oct la contraseña la revisa Credenciales.gs (huella v2; acepta texto plano y v1 y los pasa a v2 al
+  // entrar). El comportamiento lo prueba tests/credenciales.test.cjs.
   const auth = read('src/Auth.gs');
-  assert.match(auth, /found\.SALT && found\.PASSWORD_HASH/);
-  assert.match(auth, /found\['CONTRASEÑA'\]/);
-  assert.match(auth, /hashPassword_\(String\(password\)/);
+  assert.match(auth, /Credenciales\.verificar\(found, password\)/);
+  assert.match(auth, /if \(revisada\.migrar\)/);
+  const cred = read('src/services/Credenciales.gs');
+  assert.match(cred, /PLANA: 'CONTRASEÑA'/);
+  assert.match(cred, /fila\[COL\.SAL\]/, 'v1: SALT + PASSWORD_HASH');
 });
 
 test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera del grupo', () => {
