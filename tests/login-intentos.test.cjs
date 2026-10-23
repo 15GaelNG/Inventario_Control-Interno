@@ -13,6 +13,7 @@ const Credenciales = {
   guardar: (correo, clave) => { guardadas.push(correo + ':' + clave); },
   revisarNueva: (clave) => { if (clave.length < 10) throw new Error('al menos 10'); },
   avisar_: () => {},
+  bloqueado: (f) => !!(f && f['BLOQUEO SEGURIDAD']),
   MINIMO: 10,
 };
 let usuarios = [];
@@ -45,7 +46,9 @@ function cargar(debeCambiar) {
     CacheService: { getScriptCache: () => ({
       get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
     Utilities: { getUuid: (() => { let n = 0; return () => 'uuid-' + (++n); })() },
-    Session: {},
+    // La cuenta de Google con la que se abrió la app ("Continuar como…")
+    Session: { getActiveUser: () => ({ getEmail: () => 'ana@gph.com' }) },
+    FotosDirectorio: { de: () => '' },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'Auth.gs'), 'utf8') + '\nthis.Auth = Auth;', ctx);
   return ctx.Auth;
@@ -109,4 +112,13 @@ test('dispositivo nuevo: primero el código, después la contraseña nueva (si e
   const s = A.cambiarContrasenaInicial(despues.reto, 'Una frase larga 1');
   assert.ok(s.token);
   pedirCodigo = false;
+});
+
+test('bloqueada por seguridad: "Continuar como…" no aparece y entrar con Google se rechaza; con la temporal sí', () => {
+  const A = cargar(true);
+  assert.equal(A.identidadGoogle().coincide, true, 'sin bloqueo, el chip aparece');
+  usuarios[0]['BLOQUEO SEGURIDAD'] = '2026-10-23 10:40 | admin@x.com | correo tomado';
+  assert.equal(A.identidadGoogle().coincide, false, 'con bloqueo, no');
+  assert.throws(() => A.loginConGoogle({}), /revisión de seguridad/);
+  assert.equal(A.login('ana@gph.com', 'buena').pendiente, 'cambiar', 'con la contraseña que dio el admin sí entra (y cambia la suya)');
 });

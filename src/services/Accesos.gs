@@ -55,7 +55,7 @@ const Accesos = (function () {
     cache_().put('accesos_fallos', JSON.stringify(recientes), VENTANA_SEG);
     if (Object.keys(recientes).length >= UMBRAL && !enAlerta()) {
       cache_().put('accesos_alerta', '1', SEG_ALERTA);
-      avisarAdmins_(Object.keys(recientes).length);
+      avisarSpraying_(Object.keys(recientes).length);
     }
   }
 
@@ -63,12 +63,20 @@ const Accesos = (function () {
     return cache_().get('accesos_alerta') === '1';
   }
 
-  function avisarAdmins_(n) {
-    const admins = SheetUtils.getAll(Config.SPREADSHEET_IDS.USUARIOS(), 'USUARIOS')
-      .filter((u) => String(u.ROL).trim().toUpperCase() === 'ADMIN' && String(u.ACTIVO).toUpperCase() === 'TRUE' && u.CORREO)
-      .map((u) => String(u.CORREO).trim());
-    if (!admins.length) return;
-    MailApp.sendEmail(Correos.mensaje(admins.join(','), 'Control Interno: muchos inicios de sesión fallidos', {
+  /** Un correo (Correos.mensaje) a los ADMIN activos; nunca truena: una alerta no debe tirar lo que la causó */
+  function alertarAdmins(asunto, contenido) {
+    try {
+      const admins = SheetUtils.getAll(Config.SPREADSHEET_IDS.USUARIOS(), 'USUARIOS')
+        .filter((u) => String(u.ROL).trim().toUpperCase() === 'ADMIN' && String(u.ACTIVO).toUpperCase() === 'TRUE' && u.CORREO)
+        .map((u) => String(u.CORREO).trim());
+      if (admins.length) MailApp.sendEmail(Correos.mensaje(admins.join(','), asunto, contenido));
+    } catch (e) {
+      console.warn('alerta a los admins: ' + e.message);
+    }
+  }
+
+  function avisarSpraying_(n) {
+    alertarAdmins('Control Interno: muchos inicios de sesión fallidos', {
       preencabezado: n + ' correos distintos fallaron en ' + (VENTANA_SEG / 60) + ' minutos.',
       etiqueta: 'Alerta de seguridad',
       titulo: 'Muchos inicios de sesión fallidos',
@@ -78,7 +86,7 @@ const Accesos = (function () {
       detalle: [['Correos distintos', String(n)], ['Ventana', (VENTANA_SEG / 60) + ' minutos'],
         ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')]],
       aviso: 'El detalle de cada intento está en la hoja <b>ACCESOS</b> del libro de usuarios.',
-    }));
+    });
   }
 
   /** Mi perfil → Actividad: lo último de quien pregunta (de los últimos 3000 renglones; la hoja crece) */
@@ -99,5 +107,5 @@ const Accesos = (function () {
       }));
   }
 
-  return { anotar, enAlerta, mios, HOJA };
+  return { anotar, enAlerta, mios, alertarAdmins, HOJA };
 })();

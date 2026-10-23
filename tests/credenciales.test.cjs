@@ -239,3 +239,34 @@ test('temporales para todos: en producción no corre sin la confirmación', () =
   assert.throws(() => ctx.temporalesParaTodos(), /PRODUCCIÓN/);
   assert.equal(comoObjetos(hoja)[0].PASSWORD_HASH, undefined, 'nada cambió');
 });
+
+test('bloqueo por seguridad: al restablecer con la casilla, pide motivo, bloquea y no manda nada a ese correo', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'ACTIVO'], [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ACTIVO: 'TRUE' }]);
+  const ctx = cargar(hoja, { correo: 'ana@gph.com' });
+  assert.throws(() => ctx.C.restablecer('admin', 'ana@gph.com', { bloquear: true, motivo: '  ' }), /motivo/);
+  assert.equal(comoObjetos(hoja)[0]['BLOQUEO SEGURIDAD'], undefined, 'sin motivo no cambia nada');
+  const r = ctx.C.restablecer('admin', 'ana@gph.com', { bloquear: true, motivo: 'le hackearon el correo | ver ticket' });
+  assert.equal(r.bloqueada, true);
+  const ana = comoObjetos(hoja)[0];
+  assert.match(ana['BLOQUEO SEGURIDAD'], / \| admin@x\.com \| le hackearon el correo ver ticket$/, 'fecha | quién | motivo (sin "|" del motivo)');
+  assert.equal(ctx.C.bloqueado(ana), true);
+  assert.equal(ctx.correos.length, 0, 'ni el aviso de "restablecieron tu contraseña"');
+  assert.deepEqual(ctx.cerradas.map((c) => c.correo), ['ana@gph.com'], 'sus sesiones se cierran igual');
+  // Mientras está bloqueada, cambiar la suya tampoco avisa a ese correo
+  const otra = cargar(hoja, { correo: 'ana@gph.com' });
+  otra.C.cambiarMia('t', r.temporal, 'Nuev4 clave!');
+  assert.equal(otra.correos.length, 0);
+});
+
+test('quitar el bloqueo: solo un admin, limpia la columna y ahora sí avisa; restablecer sin casilla sigue igual que antes', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'ACTIVO', 'BLOQUEO SEGURIDAD'],
+    [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ACTIVO: 'TRUE', 'BLOQUEO SEGURIDAD': '2026-10-23 10:40 | admin@x.com | correo tomado' }]);
+  const ctx = cargar(hoja);
+  assert.throws(() => ctx.C.desbloquear('otro', 'ana@gph.com'), /Sin permiso/);
+  assert.equal(ctx.C.desbloquear('admin', 'ana@gph.com').bloqueada, false);
+  assert.equal(comoObjetos(hoja)[0]['BLOQUEO SEGURIDAD'], '');
+  assert.match(ctx.correos[0].subject, /Se quitó el bloqueo/);
+  const r = ctx.C.restablecer('admin', 'ana@gph.com');
+  assert.equal(r.bloqueada, false);
+  assert.match(ctx.correos[1].subject, /restableció/, 'sin la casilla, el aviso de siempre');
+});

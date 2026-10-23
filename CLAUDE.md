@@ -257,6 +257,14 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   anula el anterior, 3 por correo por hora. Al cambiarla se cierran sus sesiones, se avisa y se vuelve al login (no
   entra solo). La pantalla lee el parámetro con `google.script.url.getLocation` (`Seguridad.conectarLogin`). El
   "Restablecer contraseña" del admin sigue para quien no puede entrar a su correo.
+- **Bloqueo por seguridad** (columna `BLOQUEO SEGURIDAD` de USUARIOS: `fecha | quién | motivo`, vacía = sin bloqueo): se
+  pone con la casilla "Sospecho que tomaron su correo…" del Restablecer del admin. Mientras dure, nada pasa por ese
+  correo: la recuperación responde igual pero no manda enlace y alerta a los admins (`Accesos.alertarAdmins`), Google
+  no entra (`identidadGoogle`/`loginConGoogle`) y no salen avisos informativos (`Credenciales.avisar_`,
+  `Verificacion`); el código del login sí se manda (sin la contraseña no sirve). Se entra solo con la temporal que el
+  admin da por teléfono. "Quitar bloqueo" (aviso en la ficha de la persona, `Seguridad.avisoBloqueo`) la limpia y ahí sí
+  avisa. Pregunta siempre con `Credenciales.bloqueado(fila)` / `bloqueadoCorreo(correo)`; un aviso nuevo a la persona
+  también lo respeta.
 - **Pendiente:** sacar las huellas, DISPOSITIVOS y ACCESOS del libro compartido de USUARIOS a uno restringido (decidido
   para después, 23-oct).
 - Pruebas: `credenciales.test.cjs`, `verificacion.test.cjs`, `accesos.test.cjs`, `login-intentos.test.cjs`; vista previa:

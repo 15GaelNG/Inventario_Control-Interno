@@ -45,6 +45,7 @@ function cargar(opciones) {
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
     MailApp: { getRemainingDailyQuota: () => o.cuota, sendEmail: (m) => correos.push(m) },
     Candado: { con: (fn) => fn() },
+    Credenciales: { bloqueado: (fila) => !!(fila && fila['BLOQUEO SEGURIDAD']), bloqueadoCorreo: () => false },
     Auth: { validarSesion: () => ({ correo: 'ana@gph.com' }), cerrarSesiones: (correo, op) => { cerradas.push({ correo, conservar: op && op.conservar }); return op && op.conservar ? { token: 'token-nuevo' } : null; } },
     Permisos: { puedeEditar: (token) => { if (token !== 'admin') throw new Error('Sin permiso'); return { correo: 'admin@x.com' }; } },
     console: { warn: () => {} },
@@ -170,4 +171,14 @@ test('quitar un dispositivo o cerrar en los demás cierra las sesiones abiertas 
   assert.deepEqual(cerradas.map((c) => ({ ...c })), [
     { correo: 'ana@gph.com', conservar: 'mi-token' }, { correo: 'ana@gph.com', conservar: 'mi-token' }, { correo: 'ana@gph.com', conservar: undefined }]);
   assert.match(correos[correos.length - 1].subject, /Se cerraron tus sesiones/);
+});
+
+test('cuenta bloqueada por seguridad: el código sí se manda (sin la contraseña no sirve), el aviso de dispositivo nuevo no', () => {
+  const { V, correos } = cargar();
+  const bloqueada = { CORREO: 'ana@gph.com', NOMBRE: 'Ana', 'BLOQUEO SEGURIDAD': '2026-10-23 | admin@x.com | correo tomado' };
+  const paso = V.decidir(bloqueada, 'contrasena', CHROME);
+  assert.equal(correos.length, 1);
+  assert.match(correos[0].subject, /es tu código/);
+  V.verificarCodigo(paso.reto, codigoDe(correos[0]), true);
+  assert.equal(correos.length, 1, 'sin "Nuevo dispositivo"');
 });

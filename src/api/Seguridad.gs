@@ -21,9 +21,14 @@ function apiSeguridadEstado(token) {
 function apiSeguridadCambiarMia(token, actual, nueva) {
   return Credenciales.cambiarMia(token, actual, nueva);
 }
-// Usuarios y permisos (EDICIÓN): una temporal para alguien; se muestra una sola vez
-function apiSeguridadRestablecer(token, correo) {
-  return Credenciales.restablecer(token, correo);
+// Usuarios y permisos (EDICIÓN): una temporal para alguien; se muestra una sola vez. opciones: { bloquear, motivo }
+// (bloqueo por seguridad: se sospecha que tomaron su correo)
+function apiSeguridadRestablecer(token, correo, opciones) {
+  return Credenciales.restablecer(token, correo, opciones);
+}
+// Usuarios y permisos (EDICIÓN): quitar el bloqueo por seguridad cuando la persona ya recuperó su correo
+function apiSeguridadDesbloquear(token, correo) {
+  return Credenciales.desbloquear(token, correo);
 }
 
 // --- El código por correo (Verificacion.gs): parte del login, sin token ---

@@ -525,24 +525,54 @@
       }
     }
 
-    async function restablecer(correo, nombre) {
-      const ok = await Confirmar.pedir({
-        titulo: '¿Restablecer la contraseña de ' + (nombre || correo) + '?',
-        mensaje: 'Se crea una contraseña temporal que verás una sola vez. Al entrar con ella tendrá que poner una nueva, ' +
-          'y los dispositivos que tenía recordados se olvidan.',
-        textoConfirmar: 'Restablecer',
-        peligro: true,
+    /**
+     * Restablecer (admin). Con la casilla "Sospecho que tomaron su correo o su cuenta de Google" queda además BLOQUEADA
+     * por seguridad (Credenciales.gs): sin enlace de recuperación, sin "Continuar como…" y sin avisos a ese correo; solo
+     * entra con la temporal que el admin le da en persona o por teléfono.
+     */
+    function restablecer(correo, nombre, alTerminar) {
+      const v = ventana_('Restablecer contraseña', nombre ? nombre + ' · ' + correo : correo,
+        '<p>Se crea una contraseña temporal que verás <b>una sola vez</b>. Al entrar con ella tendrá que poner una nueva; ' +
+          'sus sesiones abiertas y sus dispositivos recordados se cierran.</p>' +
+        '<label class="seg-casilla"><input type="checkbox" data-bloquear /> <span><b>Sospecho que tomaron su correo o su cuenta de Google</b><br>' +
+          '<small>Bloqueo por seguridad: no podrá recuperarla por correo ni entrar con Google, y no le llegará ningún aviso a ese correo ' +
+          'hasta que lo quites. Comunícate con la persona por teléfono.</small></span></label>' +
+        '<div class="field" data-motivo hidden><label>Motivo (qué se sospecha)</label><textarea rows="2" maxlength="200" ' +
+          'placeholder="Ej. le llegaron correos de cambio que no pidió"></textarea></div>' +
+        '<div class="error-msg" data-error hidden></div>' +
+        '<div class="form-actions"><button type="button" class="secondary" data-cancelar>Cancelar</button>' +
+          '<button type="button" class="danger" data-restablecer><i data-lucide="key-round" class="ico"></i> Restablecer</button></div>');
+      const $v = (sel) => v.el.querySelector(sel);
+      $v('[data-bloquear]').addEventListener('change', (ev) => { $v('[data-motivo]').hidden = !ev.target.checked; });
+      $v('[data-cancelar]').addEventListener('click', v.cerrar);
+      $v('[data-restablecer]').addEventListener('click', async () => {
+        const bloquear = $v('[data-bloquear]').checked;
+        const motivo = $v('[data-motivo] textarea').value.trim();
+        const caja = $v('[data-error]');
+        if (bloquear && !motivo) { caja.textContent = 'Escribe el motivo del bloqueo.'; caja.hidden = false; return; }
+        const boton = $v('[data-restablecer]');
+        boton.disabled = true;
+        let r;
+        try {
+          r = await callServer('apiSeguridadRestablecer', state.token, correo, { bloquear, motivo });
+        } catch (err) {
+          caja.textContent = (err && err.message) || String(err);
+          caja.hidden = false;
+          boton.disabled = false;
+          return;
+        }
+        v.cerrar();
+        mostrarTemporal_(r);
+        if (bloquear && alTerminar) alTerminar();   // la ficha muestra el aviso de bloqueo
       });
-      if (!ok) return;
-      let r;
-      try {
-        r = await callServer('apiSeguridadRestablecer', state.token, correo);
-      } catch (err) {
-        Notificar.error((err && err.message) || String(err));
-        return;
-      }
+    }
+
+    function mostrarTemporal_(r) {
       const v = ventana_('Contraseña temporal', r.correo,
-        '<p>Dásela a la persona por un medio seguro (en persona o por teléfono). <b>No se volverá a mostrar.</b></p>' +
+        (r.bloqueada
+          ? '<p class="seg-alerta"><b>Cuenta bloqueada por seguridad.</b> No le mandamos ningún correo: dásela en persona o por teléfono ' +
+            '(no por correo ni por chat). <b>No se volverá a mostrar.</b></p>'
+          : '<p>Dásela a la persona por un medio seguro (en persona o por teléfono). <b>No se volverá a mostrar.</b></p>') +
         '<p class="seg-temporal" style="font-family:monospace;font-size:var(--texto-xl);letter-spacing:.08em;text-align:center;' +
           'padding:12px;border:1px dashed var(--color-border);border-radius:var(--radio-l);user-select:all">' + esc(r.temporal) + '</p>' +
         '<div class="form-actions"><button type="button" data-copiar><i data-lucide="copy" class="ico"></i> Copiar</button></div>');
@@ -557,6 +587,34 @@
       });
     }
 
-    return { entrar, conectarLogin, dispositivo, llaveDe, pestana, restablecer, olvidarDispositivos };
+    /** El aviso de la ficha de una persona bloqueada por seguridad (p.bloqueo: 'fecha | quién | motivo'), o '' */
+    function avisoBloqueo(p) {
+      if (!p || !p.bloqueo) return '';
+      const [cuando, quien, motivo] = String(p.bloqueo).split('|').map((x) => x.trim());
+      return '<div class="seg-bloqueo" role="alert"><span class="seg-fila-ico seg-mal"><i data-lucide="shield-alert" class="ico"></i></span>' +
+        '<div><b>Bloqueada por seguridad</b><small>Desde ' + esc(cuando || '—') + (quien ? ' · por ' + esc(quien) : '') +
+          (motivo ? ' · ' + esc(motivo) : '') + '. No puede recuperar su contraseña por correo ni entrar con Google, ' +
+          'y no le llegan avisos a ese correo.</small></div>' +
+        '<button type="button" class="secondary" data-usr-desbloquear>Quitar bloqueo</button></div>';
+    }
+
+    async function desbloquear(correo, nombre, alTerminar) {
+      const ok = await Confirmar.pedir({
+        titulo: '¿Quitar el bloqueo de ' + (nombre || correo) + '?',
+        mensaje: 'Hazlo solo si la persona ya recuperó su correo y le cambió la contraseña. Volverá a poder recuperar la suya por ' +
+          'correo y a entrar con Google, y le avisaremos a ese correo.',
+        textoConfirmar: 'Quitar bloqueo',
+      });
+      if (!ok) return;
+      try {
+        await callServer('apiSeguridadDesbloquear', state.token, correo);
+        Notificar.exito('Bloqueo quitado. Le avisamos por correo.');
+        if (alTerminar) alTerminar();
+      } catch (err) {
+        Notificar.error((err && err.message) || String(err));
+      }
+    }
+
+    return { entrar, conectarLogin, dispositivo, llaveDe, pestana, restablecer, olvidarDispositivos, avisoBloqueo, desbloquear };
   })();
 </script>

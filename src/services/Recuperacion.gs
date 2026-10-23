@@ -35,6 +35,23 @@ const Recuperacion = (function () {
     cache_().put('recuperar_n_' + c, String(n + 1), 3600);
     const fila = activo_(c);
     if (!fila) { anotar_(c, 'recuperar-desconocido'); return RESPUESTA; }
+    // Bloqueada por seguridad: nada a ese buzón (quizá lo tiene alguien más); la respuesta es la misma y se avisa a los admins
+    if (Credenciales.bloqueado(fila)) {
+      anotar_(c, 'recuperar-bloqueado');
+      if (typeof Accesos !== 'undefined') {
+        Accesos.alertarAdmins('Control Interno: pidieron recuperar una cuenta bloqueada', {
+          preencabezado: 'Puede ser quien tomó el correo de ' + fila.CORREO + '.',
+          etiqueta: 'Alerta de seguridad',
+          titulo: 'Pidieron recuperar una cuenta bloqueada',
+          parrafos: ['Alguien pidió el enlace de "¿Olvidaste tu contraseña?" para <b>' + Correos.esc(fila.CORREO) + '</b>, que está bloqueada por ' +
+            'seguridad. No se mandó nada a ese correo. Si no fue la persona, es una señal de que quien tomó su correo sigue intentando.'],
+          detalle: [['Cuenta', fila.CORREO], ['Bloqueo', String(fila['BLOQUEO SEGURIDAD'] || '')],
+            ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')]],
+          aviso: 'Llama a la persona para confirmar. El detalle está en la hoja <b>ACCESOS</b>.',
+        });
+      }
+      return RESPUESTA;
+    }
 
     const enlace = huella_('rec:' + Utilities.getUuid() + Utilities.getUuid());   // 64 hex, aleatorio
     const h = huella_(enlace);
