@@ -5,7 +5,8 @@
    *
    *   Seguridad.entrar(resultado)          después de apiLogin / apiLoginConGoogle: la sesión, o el paso que falta
    *   Seguridad.abrirMiCuenta()            Mi perfil → "Contraseña y seguridad"
-   *   Seguridad.restablecer(correo, nombre)   Usuarios y permisos, ficha de una persona (EDICIÓN en usuarios)
+   *   Seguridad.dispositivo(correo)        lo que va con apiLogin / apiLoginConGoogle (la llave de este navegador)
+ *   Seguridad.restablecer(correo, nombre) / olvidarDispositivos(correo, nombre)   Usuarios y permisos (EDICIÓN)
    *
    * Los pasos del login se pintan en #login-paso (views/login.html), en lugar del formulario. Nada corre al cargar.
    */
@@ -13,8 +14,43 @@
     const esc = (t) => Formato.esc(t);
     const $ = (id) => document.getElementById(id);
 
+    // ---------------------------------------------------------------- el dispositivo
+    // La llave que da el servidor al pasar el código, por correo (varias personas pueden usar el mismo navegador).
+    // Sin almacenamiento (ventana privada, bloqueado) no pasa nada: se pide el código cada vez.
+    const ALMACEN = 'ci_dispositivos';
+    function llaves_() {
+      try { return JSON.parse(localStorage.getItem(ALMACEN) || '{}') || {}; } catch (e) { return {}; }
+    }
+    function llaveDe(correo) {
+      return llaves_()[String(correo || '').trim().toLowerCase()] || '';
+    }
+    function guardarLlave_(correo, llave) {
+      try {
+        const todas = llaves_();
+        const c = String(correo || '').trim().toLowerCase();
+        if (llave) todas[c] = llave; else delete todas[c];
+        localStorage.setItem(ALMACEN, JSON.stringify(todas));
+      } catch (e) { /* sin almacenamiento: se pedirá el código otra vez */ }
+    }
+    /** Lo que se manda al entrar: la llave de este navegador para ese correo y cómo se llama (solo la llave cuenta) */
+    function dispositivo(correo) {
+      const ua = navigator.userAgent || '';
+      // indexOf y no una regex: escapar la diagonal dejaría dos seguidas, que Apps Script corta como comentario (CLAUDE.md)
+      const tiene = (x) => ua.indexOf(x) !== -1;
+      const navegador = tiene('Edg/') ? 'Edge' : tiene('OPR/') ? 'Opera' : tiene('Firefox/') ? 'Firefox'
+        : tiene('Chrome/') ? 'Chrome' : tiene('Safari/') ? 'Safari' : 'Otro navegador';
+      const sistema = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iPhone o iPad' : /Windows/.test(ua) ? 'Windows'
+        : /CrOS/.test(ua) ? 'ChromeOS' : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : 'otro sistema';
+      return { llave: llaveDe(correo), navegador, sistema, nombre: navegador + ' en ' + sistema };
+    }
+
     // ---------------------------------------------------------------- login
     function entrar(resultado) {
+      if (resultado && resultado.dispositivo) {
+        guardarLlave_(resultado.dispositivo.correo, resultado.dispositivo.llave);
+        resultado = Object.assign({}, resultado);
+        delete resultado.dispositivo;
+      }
       if (resultado && resultado.pendiente) { mostrarPaso(resultado); return; }
       guardarSesion(resultado);
       mostrarPantallaCarga(() => render());
@@ -37,20 +73,73 @@
       $('login-error').hidden = true;
       paso.hidden = false;
       if (r.pendiente === 'cambiar') pasoCambiar_(paso, r);
+      if (r.pendiente === 'codigo') pasoCodigo_(paso, r);
       refreshIcons();
+    }
+
+    const POR_QUE = {
+      nuevo: 'Es la primera vez que entras desde este dispositivo.',
+      vencido: 'Hace tiempo que no confirmamos este dispositivo.',
+      cambio: 'Algo cambió en este navegador desde la última vez.',
+      fallos: 'Hubo intentos fallidos con tu correo hace poco.',
+      alerta: 'Por seguridad, hoy se lo pedimos a todos.',
+    };
+
+    /** El código que llegó por correo; "equipo compartido" = no recordar este dispositivo */
+    function pasoCodigo_(paso, r) {
+      paso.innerHTML =
+        '<div class="login-icon-badge"><i data-lucide="mail-check" class="ico"></i></div>' +
+        '<h2>Verificación</h2><p class="login-system-name">Revisa tu correo</p>' +
+        '<p class="login-sub">Te mandamos un código de 6 dígitos a <b>' + esc(r.correoOculto) + '</b>. ' + esc(POR_QUE[r.motivo] || '') + '</p>' +
+        '<div class="login-divider"></div>' +
+        '<div class="field"><label class="icon-label" for="seg-codigo">Código</label>' +
+          '<input id="seg-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000" ' +
+          'style="font-size:var(--texto-xl);letter-spacing:.3em;text-align:center" /></div>' +
+        '<label style="display:flex;gap:8px;align-items:center;margin:4px 0 12px;font-size:var(--texto-s)">' +
+          '<input type="checkbox" id="seg-compartido" style="width:auto;margin:0" /> Es un equipo compartido: no recordarlo</label>' +
+        '<button type="submit" id="seg-verificar">Entrar</button>' +
+        '<div style="display:flex;gap:8px;margin-top:8px">' +
+          '<button type="button" class="secondary" id="seg-volver" style="flex:1">Volver</button>' +
+          '<button type="button" class="secondary" id="seg-reenviar" style="flex:1">Mandar otro</button></div>' +
+        '<div class="error-msg" id="seg-error" hidden></div>';
+      $('seg-volver').addEventListener('click', volverAlFormulario);
+      const reenviar = $('seg-reenviar');
+      // Un minuto entre códigos (el servidor también lo revisa)
+      const esperar = () => {
+        let s = 60;
+        reenviar.disabled = true;
+        const t = setInterval(() => {
+          if (!reenviar.isConnected) return clearInterval(t);
+          s--;
+          reenviar.textContent = s > 0 ? 'Mandar otro (' + s + ')' : 'Mandar otro';
+          if (s <= 0) { clearInterval(t); reenviar.disabled = false; }
+        }, 1000);
+      };
+      esperar();
+      reenviar.addEventListener('click', () => conBoton_(reenviar, 'Mandando…', async () => {
+        await callServer('apiSeguridadReenviarCodigo', r.reto);
+        Notificar.info('Te mandamos otro código.');
+        setTimeout(esperar, 0);
+      }, 'seg-error'));
+      const verificar = () => conBoton_($('seg-verificar'), 'Revisando…', async () => {
+        entrar(await callServer('apiSeguridadVerificarCodigo', r.reto, $('seg-codigo').value, !$('seg-compartido').checked));
+      }, 'seg-error');
+      $('seg-verificar').addEventListener('click', verificar);
+      $('seg-codigo').addEventListener('input', (ev) => { if (ev.target.value.replace(/\D/g, '').length === 6) verificar(); });
+      $('seg-codigo').focus();
     }
 
     /** Entró con una contraseña temporal: pone una nueva y con eso entra */
     function pasoCambiar_(paso, r) {
       paso.innerHTML =
         '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
-        '<h2>Pon tu contraseña nueva</h2>' +
+        '<h2>Seguridad</h2><p class="login-system-name">Pon tu contraseña nueva</p>' +
         '<p class="login-sub">Entraste con una contraseña temporal. Elige una de al menos ' + esc(r.minimo) +
           ' caracteres que solo tú sepas: una frase de varias palabras es fácil de recordar y difícil de adivinar.</p>' +
         '<div class="login-divider"></div>' +
         campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +
         campoClave_('seg-nueva2', 'Repítela', 'new-password') +
-        '<button type="button" id="seg-guardar">Guardar y entrar</button>' +
+        '<button type="submit" id="seg-guardar">Guardar y entrar</button>' +
         '<button type="button" class="secondary" id="seg-volver" style="margin-top:8px;width:100%">Volver</button>' +
         '<div class="error-msg" id="seg-error" hidden></div>';
       conectarOjos_(paso);
@@ -138,9 +227,13 @@
         campoClave_('seg-mia', 'Contraseña nueva', 'new-password') +
         campoClave_('seg-mia2', 'Repítela', 'new-password') +
         '<div class="error-msg" id="seg-mia-error" hidden></div>' +
-        '<div class="form-actions"><button type="button" id="seg-mia-guardar"><i data-lucide="save" class="ico"></i> Guardar</button></div>';
+        '<div class="form-actions"><button type="button" id="seg-mia-guardar"><i data-lucide="save" class="ico"></i> Guardar</button></div>' +
+        '<h4 style="margin:20px 0 4px">Mis dispositivos</h4>' +
+        '<p class="modal-subtitle" style="margin-bottom:8px">Desde estos no se te pide código por un tiempo. Quita el que no reconozcas.</p>' +
+        '<div id="seg-dispositivos"><p class="perfil-cargando">Cargando…</p></div>';
       conectarOjos_(v.cuerpo);
       refreshIcons();
+      pintarDispositivos_();
       $('seg-mia-guardar').addEventListener('click', () => {
         const nueva = $('seg-mia').value;
         if (nueva !== $('seg-mia2').value) return error_('seg-mia-error', 'Las dos contraseñas no coinciden.');
@@ -152,7 +245,50 @@
       });
     }
 
+    async function pintarDispositivos_() {
+      const caja = $('seg-dispositivos');
+      if (!caja) return;
+      const correo = state.sesion && state.sesion.correo;
+      let lista;
+      try {
+        lista = await callServer('apiSeguridadMisDispositivos', state.token, llaveDe(correo));
+      } catch (err) {
+        caja.innerHTML = '<p class="error-msg">' + esc((err && err.message) || String(err)) + '</p>';
+        return;
+      }
+      if (!caja.isConnected) return;
+      caja.innerHTML = lista.length ? lista.map((d) =>
+        '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--color-border)">' +
+          '<i data-lucide="monitor-smartphone" class="ico"></i>' +
+          '<div style="flex:1;min-width:0"><b>' + esc(d.nombre) + '</b>' + (d.esEste ? ' <span class="badge-estado completo">Este</span>' : '') +
+            '<br><small style="color:var(--color-text-muted)">Desde ' + esc(d.creado) + ' · último uso ' + esc(d.ultimoUso) + '</small></div>' +
+          '<button type="button" class="secondary" data-quitar="' + esc(d.id) + '" data-este="' + (d.esEste ? '1' : '') + '">Quitar</button>' +
+        '</div>').join('')
+        : '<p class="modal-subtitle">Ninguno: cada vez que entres desde un dispositivo nuevo te mandaremos un código.</p>';
+      refreshIcons();
+      caja.querySelectorAll('[data-quitar]').forEach((b) => b.addEventListener('click', () => conBoton_(b, 'Quitando…', async () => {
+        await callServer('apiSeguridadQuitarDispositivo', state.token, b.dataset.quitar);
+        if (b.dataset.este) guardarLlave_(correo, '');
+        await pintarDispositivos_();
+      }, null)));
+    }
+
     // ---------------------------------------------------------------- Usuarios y permisos
+    async function olvidarDispositivos(correo, nombre) {
+      const ok = await Confirmar.pedir({
+        titulo: '¿Olvidar los dispositivos de ' + (nombre || correo) + '?',
+        mensaje: 'La próxima vez que entre, desde donde sea, le pediremos el código que le llega por correo. Su contraseña no cambia.',
+        textoConfirmar: 'Olvidar',
+      });
+      if (!ok) return;
+      try {
+        const n = await callServer('apiSeguridadOlvidarDispositivos', state.token, correo);
+        Notificar.exito(n === 1 ? '1 dispositivo olvidado.' : n + ' dispositivos olvidados.');
+      } catch (err) {
+        Notificar.error((err && err.message) || String(err));
+      }
+    }
+
     async function restablecer(correo, nombre) {
       const ok = await Confirmar.pedir({
         titulo: '¿Restablecer la contraseña de ' + (nombre || correo) + '?',
@@ -185,6 +321,6 @@
       });
     }
 
-    return { entrar, abrirMiCuenta, restablecer };
+    return { entrar, dispositivo, llaveDe, abrirMiCuenta, restablecer, olvidarDispositivos };
   })();
 </script>

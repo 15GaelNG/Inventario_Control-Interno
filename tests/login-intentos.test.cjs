@@ -15,13 +15,24 @@ const Credenciales = {
   MINIMO: 10,
 };
 let usuarios = [];
+// Verificacion simulado: pedirCodigo decide si el dispositivo necesita el código (Verificacion.gs tiene su prueba)
+let pedirCodigo = false;
+const Verificacion = {
+  decidir: (fila, metodo) => (pedirCodigo ? { pendiente: 'codigo', reto: 'r-codigo', metodo } : null),
+  verificarCodigo: (reto, codigo, recordar) => {
+    if (reto !== 'r-codigo' || codigo !== '123456') throw new Error('Ese código no es correcto.');
+    return { correo: 'ana@gph.com', metodo: 'contrasena', llave: recordar ? 'llave-1' : '' };
+  },
+};
 
 function cargar(debeCambiar) {
   usuarios = [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ROL: 'CLIENT', ACTIVO: 'TRUE', 'CONTRASEÑA': 'buena',
     'DEBE CAMBIAR CONTRASEÑA': debeCambiar ? 'TRUE' : '' }];
   const cache = {};
+  pedirCodigo = false;
   const ctx = vm.createContext({
     Credenciales,
+    Verificacion,
     console: { warn: () => {} },
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' }, ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR', LECTURA: 'LECTURA', CLIENTE: 'CLIENTE' },
       SESION_DURACION_HORAS: 8 },
@@ -81,4 +92,19 @@ test('con una contraseña temporal no hay sesión: pide la nueva con un reto de 
   const s = A.cambiarContrasenaInicial(r.reto, 'Una frase larga 1');
   assert.ok(s.token && s.correo === 'ana@gph.com', 'ahora sí, la sesión');
   assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'Otra frase larga 2'), /venció/, 'el reto ya se usó');
+});
+
+test('dispositivo nuevo: primero el código, después la contraseña nueva (si es temporal), y la llave viaja con la respuesta', () => {
+  const A = cargar(true);
+  pedirCodigo = true;
+  const r = A.login('ana@gph.com', 'buena', { navegador: 'Chrome' });
+  assert.equal(r.pendiente, 'codigo');
+  assert.ok(!r.token);
+  assert.throws(() => A.verificarCodigo('r-codigo', '000000', true), /no es correcto/);
+  const despues = A.verificarCodigo('r-codigo', '123456', true);
+  assert.equal(despues.pendiente, 'cambiar', 'el código no se salta la contraseña temporal');
+  assert.deepEqual({ ...despues.dispositivo }, { correo: 'ana@gph.com', llave: 'llave-1' });
+  const s = A.cambiarContrasenaInicial(despues.reto, 'Una frase larga 1');
+  assert.ok(s.token);
+  pedirCodigo = false;
 });

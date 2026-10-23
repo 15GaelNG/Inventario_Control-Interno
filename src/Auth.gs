@@ -88,7 +88,15 @@ const Auth = (function () {
     if (!r || r.paso !== paso) throw new Error('Ese paso ya venció. Vuelve a iniciar sesión.');
     return r;
   }
-  function continuar_(found, metodo) {
+  /**
+   * En orden: el código por correo si el dispositivo es nuevo o algo se ve raro (Verificacion.gs), la contraseña nueva
+   * si entró con una temporal, y la sesión. verificado: ya pasó el código (no se vuelve a preguntar).
+   */
+  function continuar_(found, metodo, dispositivo, verificado) {
+    if (!verificado) {
+      const paso = Verificacion.decidir(found, metodo, dispositivo);
+      if (paso) return paso;
+    }
     if (metodo === 'contrasena' && String(found['DEBE CAMBIAR CONTRASEÑA'] || '').toUpperCase() === 'TRUE') {
       return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO };
     }
@@ -107,7 +115,19 @@ const Auth = (function () {
     return construirSesion_(found);
   }
 
-  function login(correo, password) {
+  /**
+   * El código del correo. Bueno → lo que sigue (contraseña nueva o la sesión), con la llave del dispositivo si se pidió
+   * recordarlo: { …, dispositivo: { llave } } (la pantalla la guarda en el navegador; el servidor solo su huella).
+   */
+  function verificarCodigo(reto, codigo, recordar) {
+    const v = Verificacion.verificarCodigo(reto, codigo, recordar);
+    const found = buscarUsuarioPorCorreo_(v.correo);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    const siguiente = continuar_(found, v.metodo, null, true);
+    return v.llave ? Object.assign({}, siguiente, { dispositivo: { correo: found.CORREO, llave: v.llave } }) : siguiente;
+  }
+
+  function login(correo, password, dispositivo) {
     if (fallosDe_(correo) >= MAX_FALLOS) {
       throw new Error('Demasiados intentos con este correo. Espera 15 minutos o pide a un administrador que revise tu contraseña.');
     }
@@ -123,7 +143,7 @@ const Auth = (function () {
     if (revisada.migrar) {
       try { Credenciales.guardar(found.CORREO, password); } catch (e) { console.warn('login, pasar a hash: ' + e.message); }
     }
-    return continuar_(found, 'contrasena');
+    return continuar_(found, 'contrasena', dispositivo);
   }
 
   /**
@@ -146,7 +166,7 @@ const Auth = (function () {
     return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE, foto: foto };
   }
 
-  function loginConGoogle() {
+  function loginConGoogle(dispositivo) {
     const correoDetectado = Session.getActiveUser().getEmail();
     if (!correoDetectado) throw new Error('No se pudo detectar tu cuenta de Google en esta sesión.');
 
@@ -154,7 +174,7 @@ const Auth = (function () {
     if (!found) throw new Error('Tu cuenta (' + correoDetectado + ') no está registrada en el sistema.');
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
 
-    return continuar_(found, 'google');
+    return continuar_(found, 'google', dispositivo);
   }
 
   function validarSesion(token) {
@@ -191,5 +211,5 @@ const Auth = (function () {
     CacheService.getScriptCache().remove('sesion_' + token);
   }
 
-  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, validarSesion, requiereRol, logout, crearHashParaUsuario };
+  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout, crearHashParaUsuario };
 })();

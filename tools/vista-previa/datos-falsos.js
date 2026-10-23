@@ -675,6 +675,32 @@
     'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('[data-dm-global]'); await esperar(400); },
     // Mi perfil (el usuario al pie del menú) y el menú abierto con el usuario abajo
     'mi-perfil': async () => { Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo'); await esperar(400); },
+    // Seguridad (js/app-seguridad.html, 23-oct): los pasos del login y "Contraseña y seguridad" de Mi perfil
+    'login-codigo': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiLogin = () => ({ pendiente: 'codigo', reto: 'r', correoOculto: 'a•••a@gph.com', motivo: 'nuevo' });
+      (await hasta('#login-correo')).value = 'ana@gph.com';
+      document.getElementById('login-password').value = 'x';
+      document.getElementById('btn-login').click();
+      await hasta('#seg-codigo'); await esperar(400);
+    },
+    'login-contrasena-nueva': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 10 });
+      (await hasta('#login-correo')).value = 'ana@gph.com';
+      document.getElementById('login-password').value = 'x';
+      document.getElementById('btn-login').click();
+      await hasta('#seg-nueva'); await esperar(400);
+    },
+    'perfil-seguridad': async () => {
+      respuestas.apiSeguridadEstado = { tieneContrasena: true, minimo: 10 };
+      respuestas.apiSeguridadMisDispositivos = [
+        { id: 'a', nombre: 'Chrome en Windows', creado: '01/10/2026 09:12', ultimoUso: '23/10/2026 08:40', esEste: true },
+        { id: 'b', nombre: 'Safari en iPhone o iPad', creado: '12/09/2026 18:03', ultimoUso: '20/10/2026 21:15', esEste: false },
+      ];
+      Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo');
+      (await hasta('[data-perfil-seguridad]')).click(); await hasta('[data-quitar]'); await esperar(400);
+    },
     'menu-usuario': async () => {
       Temporada.aplicar(''); await abrir('dashboard');
       if (Pantalla.esAngosta()) (await hasta('.shell-menu-btn')).click();

@@ -20,3 +20,22 @@ function apiSeguridadCambiarMia(token, actual, nueva) {
 function apiSeguridadRestablecer(token, correo) {
   return Credenciales.restablecer(token, correo);
 }
+
+// --- El código por correo (Verificacion.gs): parte del login, sin token ---
+function apiSeguridadVerificarCodigo(reto, codigo, recordar) {
+  return Auth.verificarCodigo(reto, codigo, recordar);
+}
+function apiSeguridadReenviarCodigo(reto) {
+  return Verificacion.reenviar(reto);
+}
+// Mi perfil: mis dispositivos recordados (llave: la de este navegador, para marcarlo) y quitar uno
+function apiSeguridadMisDispositivos(token, llave) {
+  return Verificacion.misDispositivos(token, llave);
+}
+function apiSeguridadQuitarDispositivo(token, id) {
+  return Verificacion.quitar(token, id);
+}
+// Usuarios y permisos (EDICIÓN): que ninguno de sus dispositivos se salte el código
+function apiSeguridadOlvidarDispositivos(token, correo) {
+  return Verificacion.olvidarDe(token, correo);
+}

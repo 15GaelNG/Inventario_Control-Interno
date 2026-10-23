@@ -45,8 +45,9 @@ function apiResumenInicio(token) {
 }
 
 // --- Auth ---
-function apiLogin(correo, password) {
-  return Auth.login(correo, password);
+// dispositivo: { llave, navegador, sistema, nombre } (Verificacion.gs decide si pide el código por correo)
+function apiLogin(correo, password, dispositivo) {
+  return Auth.login(correo, password, dispositivo);
 }
 // Las fotos de perfil del directorio ({ correo: url }), para el componente Avatar
 function apiFotosPerfil(token) {
@@ -59,8 +60,8 @@ function apiMiPerfil(token) {
 function apiIdentidadGoogle() {
   return Auth.identidadGoogle();
 }
-function apiLoginConGoogle() {
-  return Auth.loginConGoogle();
+function apiLoginConGoogle(dispositivo) {
+  return Auth.loginConGoogle(dispositivo);
 }
 // Temporal, para el arreglo retroactivo de archivos sin compartir (ver
 // compartirArchivosExistentes en SetupInicial.gs) — hay que correrla como

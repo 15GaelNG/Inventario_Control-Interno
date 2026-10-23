@@ -29,6 +29,10 @@ const ENTORNOS = {
     // Correcciones de líneas (no está terminado) y Sistemas de Líneas (no tiene enlaces): apagados (12-oct-2026).
     MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas',
 
+    // El código por correo al entrar desde un dispositivo nuevo (Verificacion.gs, 23-oct-2026): apagado aquí hasta avisar
+    // al equipo; en los DEV, encendido (sin esta clave). Encenderlo es quitar esta línea.
+    VERIFICACION_DOS_PASOS: 'APAGADA',
+
     // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
     SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
     SS_ID_VEHICULOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
