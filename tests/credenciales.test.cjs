@@ -37,11 +37,19 @@ const comoObjetos = (hoja) => hoja.datos.slice(1).map((f) => Object.fromEntries(
 function cargar(hoja, sesion) {
   const cache = {};
   const permisos = [];
+  const cerradas = [];
+  const correos = [];
   const ctx = vm.createContext({
     Utilities,
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
-    Auth: { validarSesion: () => { if (!sesion) throw new Error('Sesión expirada'); return sesion; } },
+    Auth: {
+      validarSesion: () => { if (!sesion) throw new Error('Sesión expirada'); return sesion; },
+      // Lo que cerró cada llamada: { correo, conservar }
+      cerrarSesiones: (correo, o) => { cerradas.push({ correo, conservar: o && o.conservar }); return o && o.conservar ? { token: 'token-nuevo' } : null; },
+    },
+    MailApp: { sendEmail: (m) => correos.push(m) },
+    console: { warn: () => {} },
     Permisos: { puedeEditar: (token, modulo) => { permisos.push(modulo); if (token !== 'admin') throw new Error('Sin permiso'); return { correo: 'admin@x.com' }; } },
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' } },
     SheetUtils: {
@@ -55,6 +63,9 @@ function cargar(hoja, sesion) {
     soloEditor_: () => {},
   });
   ctx.permisos = permisos;
+  ctx.cerradas = cerradas;
+  ctx.correos = correos;
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Credenciales.gs'), 'utf8') +
     '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;', ctx);
   return ctx;
@@ -123,13 +134,17 @@ test('contrasenasAHash: revisar solo cuenta; aplicar pasa todas las de texto pla
 test('reglas de una contraseña nueva (NIST 800-63B): largo, comunes, correo, nombre y distinta de la actual', () => {
   const { C } = cargar(hojaFalsa(['CORREO'], []));
   const motivo = (p, c) => { try { C.revisarNueva(p, c); return 'ok'; } catch (e) { return e.message; } };
-  assert.match(motivo('corta12'), /al menos 10/);
-  assert.match(motivo('aaaaaaaaaaaa'), /repetido/);
-  assert.match(motivo('Ciudadmaderas'), /más usadas/);
-  assert.match(motivo('ana.lopez2026!', { correo: 'ana.lopez@gph.com' }), /tu correo/);
-  assert.match(motivo('soyGuadalupe99', { nombre: 'Maria Guadalupe Perez' }), /tu nombre/);
-  assert.match(motivo('misma clave larga', { actual: 'misma clave larga' }), /distinta/);
-  assert.equal(motivo('Tres palabras al azar 7', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok');
+  assert.match(motivo('Ay05n!'), /al menos 8/);
+  // Como "Ayrt05n!": mayúscula, minúscula, número y símbolo (el espacio no es símbolo)
+  assert.match(motivo('ayrt05n!x'), /falta: una mayúscula/);
+  assert.match(motivo('AYRT05N!X'), /falta: una minúscula/);
+  assert.match(motivo('Ayrtonx!y'), /falta: un número/);
+  assert.match(motivo('Ayrt05n x'), /falta: un símbolo/);
+  assert.match(motivo('Password123!'), /más usadas/, 'las comunes que sí cumplen la forma también se rechazan');
+  assert.match(motivo('Ana.lopez26!', { correo: 'ana.lopez@gph.com' }), /tu correo/);
+  assert.match(motivo('Guadalupe9!', { nombre: 'Maria Guadalupe Perez' }), /tu nombre/);
+  assert.match(motivo('Misma1!clave', { actual: 'Misma1!clave' }), /distinta/);
+  assert.equal(motivo('Ayrt05n!', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok', 'el ejemplo del área');
 });
 
 test('restablecer: solo con EDICIÓN en usuarios; la temporal sirve, la de antes no, y queda "debe cambiar"', () => {
@@ -151,13 +166,15 @@ test('cambiar la mía: pide la actual (5 errores y espera), revisa las reglas y 
   const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'CONTRASEÑA', 'DEBE CAMBIAR CONTRASEÑA'],
     [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', 'CONTRASEÑA': 'actual 12345', 'DEBE CAMBIAR CONTRASEÑA': 'TRUE' }]);
   const { C } = cargar(hoja, { correo: 'ana@gph.com' });
-  assert.throws(() => C.cambiarMia('t', 'actual 12345', 'corta'), /al menos 10/);
-  for (let i = 0; i < 5; i++) assert.throws(() => C.cambiarMia('t', 'mala', 'Una frase nueva 7'), /actual no es correcta/);
-  assert.throws(() => C.cambiarMia('t', 'actual 12345', 'Una frase nueva 7'), /Demasiados intentos/);
+  assert.throws(() => C.cambiarMia('t', 'actual 12345', 'corta'), /al menos 8/);
+  for (let i = 0; i < 5; i++) assert.throws(() => C.cambiarMia('t', 'mala', 'Nuev4 clave!'), /actual no es correcta/);
+  assert.throws(() => C.cambiarMia('t', 'actual 12345', 'Nuev4 clave!'), /Demasiados intentos/);
   const otra = cargar(hoja, { correo: 'ana@gph.com' }).C;   // otra ejecución, sin la cuenta de errores
-  assert.equal(otra.cambiarMia('t', 'actual 12345', 'Una frase nueva 7'), true);
+  const r = otra.cambiarMia('t', 'actual 12345', 'Nuev4 clave!');
+  assert.equal(r.ok, true);
+  assert.equal(r.sesion.token, 'token-nuevo', 'quien la cambió sigue, con un token nuevo');
   const ana = comoObjetos(hoja)[0];
-  assert.equal(otra.verificar(ana, 'Una frase nueva 7').ok, true);
+  assert.equal(otra.verificar(ana, 'Nuev4 clave!').ok, true);
   assert.equal(ana['DEBE CAMBIAR CONTRASEÑA'], '');
   assert.equal(ana['CONTRASEÑA'], '');
 });
@@ -169,8 +186,25 @@ test('quien solo entraba con Google crea su contraseña sin "actual"; sin sesió
   assert.equal(antes.tieneContrasena, false);
   assert.equal(antes.minimo, C.MINIMO);
   assert.equal(antes.cambiada, '', 'nunca la ha cambiado');
-  assert.equal(C.cambiarMia('t', '', 'Mi frase segura 42'), true);
+  assert.equal(C.cambiarMia('t', '', 'Segur4!clave').ok, true);
   assert.equal(C.estado('t').tieneContrasena, true);
   assert.match(C.estado('t').cambiada, /^\d{4}-\d{2}-\d{2}$/, 'y ya sabe cuándo la cambió');
-  assert.throws(() => cargar(hoja, null).C.cambiarMia('t', '', 'Mi frase segura 42'), /Sesión expirada/);
+  assert.throws(() => cargar(hoja, null).C.cambiarMia('t', '', 'Segur4!clave'), /Sesión expirada/);
+});
+
+test('restablecer y cambiar la mía cierran sesiones y avisan por correo (sin la temporal)', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'CONTRASEÑA'], [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', 'CONTRASEÑA': 'actual 12345' }]);
+  const ctx = cargar(hoja, { correo: 'ana@gph.com' });
+  const r = ctx.C.restablecer('admin', 'ana@gph.com');
+  assert.deepEqual(ctx.cerradas.map((c) => ({ ...c })), [{ correo: 'ana@gph.com', conservar: undefined }], 'todas las de ella, sin conservar ninguna');
+  const aviso = ctx.correos[0];
+  assert.equal(aviso.to, 'ana@gph.com');
+  assert.match(aviso.subject, /restableció/);
+  assert.ok(!aviso.htmlBody.includes(r.temporal) && !aviso.body.includes(r.temporal), 'el correo nunca trae la temporal');
+  assert.ok(aviso.htmlBody.includes('admin@x.com'), 'dice quién lo hizo');
+
+  const otra = cargar(hoja, { correo: 'ana@gph.com' });
+  otra.C.cambiarMia('mi-token', r.temporal, 'Nuev4 clave!');
+  assert.deepEqual(otra.cerradas.map((c) => ({ ...c })), [{ correo: 'ana@gph.com', conservar: 'mi-token' }], 'las demás; la suya se conserva');
+  assert.match(otra.correos[0].subject, /se cambió/);
 });

@@ -112,7 +112,9 @@ const Config = (function () {
       if (Config.apagado(id)) throw new Error('Este módulo no está disponible todavía.');
     },
 
+    // La sesión: lo más que dura aunque se use (horas) y lo que aguanta sin usar la app (minutos). Auth.gs, 23-oct
     SESION_DURACION_HORAS: 8,
+    SESION_INACTIVIDAD_MIN: 60,
 
     ROLES: {
       ADMIN: 'ADMIN',

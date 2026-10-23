@@ -141,7 +141,7 @@
         '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
         '<h2>Seguridad</h2><p class="login-system-name">Pon tu contraseña nueva</p>' +
         '<p class="login-sub">Entraste con una contraseña temporal. Elige una de al menos ' + esc(r.minimo) +
-          ' caracteres que solo tú sepas: una frase de varias palabras es fácil de recordar y difícil de adivinar.</p>' +
+          ' caracteres con mayúscula, minúscula, número y símbolo, por ejemplo <b>Ayrt05n!</b>, que solo tú sepas.</p>' +
         '<div class="login-divider"></div>' +
         campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +
         campoClave_('seg-nueva2', 'Repítela', 'new-password') +
@@ -252,6 +252,10 @@
           campoClave_('seg-mia2', 'Repítela', 'new-password') +
           '<ul class="seg-requisitos">' +
             '<li data-req="largo">Al menos ' + esc(e.minimo) + ' caracteres</li>' +
+            '<li data-req="mayuscula">Una mayúscula</li>' +
+            '<li data-req="minuscula">Una minúscula</li>' +
+            '<li data-req="numero">Un número</li>' +
+            '<li data-req="simbolo">Un símbolo (como ! # $ . -)</li>' +
             '<li data-req="correo">Sin tu correo</li>' +
             '<li data-req="igual">Las dos coinciden</li>' +
           '</ul>' +
@@ -266,19 +270,24 @@
         const n = $('seg-mia').value;
         const marcas = {
           largo: n.length >= e.minimo,
+          // Las mismas que Credenciales.revisarNueva (TIPOS), como "Ayrt05n!"
+          mayuscula: /[A-ZÁÉÍÓÚÑ]/.test(n),
+          minuscula: /[a-záéíóúñ]/.test(n),
+          numero: /\d/.test(n),
+          simbolo: /[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s]/.test(n),
           correo: !!n && !(usuario.length >= 4 && n.toLowerCase().indexOf(usuario) !== -1),
           igual: !!n && n === $('seg-mia2').value,
         };
         caja.querySelectorAll('[data-req]').forEach((li) => li.classList.toggle('ok', marcas[li.dataset.req]));
-        return marcas.largo && marcas.correo && marcas.igual;
+        return Object.keys(marcas).every((k) => marcas[k]);
       };
       $('seg-mia').addEventListener('input', revisar);
       $('seg-mia2').addEventListener('input', revisar);
       $('seg-mia-guardar').addEventListener('click', () => {
         if (!revisar()) return error_('seg-mia-error', 'Revisa los requisitos de la contraseña nueva.');
         conBoton_($('seg-mia-guardar'), 'Guardando…', async () => {
-          await callServer('apiSeguridadCambiarMia', state.token, e.tieneContrasena ? $('seg-actual').value : '', $('seg-mia').value);
-          Notificar.exito('Listo: tu contraseña quedó guardada.');
+          seguirCon_(await callServer('apiSeguridadCambiarMia', state.token, e.tieneContrasena ? $('seg-actual').value : '', $('seg-mia').value));
+          Notificar.exito('Listo: tu contraseña quedó guardada y se cerraron tus otras sesiones.');
           pintarContrasena_(caja);
         }, 'seg-mia-error');
       });
@@ -312,7 +321,7 @@
           'Cerrar en todos los demás (' + otros + ')</button></div>' : '');
       refreshIcons();
       caja.querySelectorAll('[data-quitar]').forEach((b) => b.addEventListener('click', () => conBoton_(b, 'Quitando…', async () => {
-        await callServer('apiSeguridadQuitarDispositivo', state.token, b.dataset.quitar);
+        seguirCon_(await callServer('apiSeguridadQuitarDispositivo', state.token, b.dataset.quitar));
         if (b.dataset.este) guardarLlave_(correo, '');
         pintarDispositivos_(caja);
       }, null)));
@@ -321,13 +330,14 @@
         const ok = await Confirmar.pedir({
           titulo: '¿Cerrar en todos los demás?',
           mensaje: 'Los otros ' + (otros === 1 ? 'dispositivo dejará' : otros + ' dispositivos dejarán') + ' de estar recordados: ' +
-            'desde ahí te pediremos el código otra vez. Este se queda.',
+            'desde ahí te pediremos el código otra vez, y las sesiones abiertas en ellos se cierran. Este se queda.',
           textoConfirmar: 'Cerrar en los demás',
         });
         if (!ok) return;
         conBoton_(todos, 'Cerrando…', async () => {
-          const n = await callServer('apiSeguridadQuitarOtros', state.token, llaveDe(correo));
-          Notificar.exito(n === 1 ? '1 dispositivo cerrado.' : n + ' dispositivos cerrados.');
+          const r = await callServer('apiSeguridadQuitarOtros', state.token, llaveDe(correo));
+          seguirCon_(r);
+          Notificar.exito((r.cerrados === 1 ? '1 dispositivo cerrado' : r.cerrados + ' dispositivos cerrados') + ', y tus otras sesiones también.');
           pintarDispositivos_(caja);
         }, null);
       });
@@ -358,6 +368,66 @@
         }).join('') : '<p class="seg-vacio">Todavía no hay actividad registrada.</p>');
       refreshIcons();
     }
+
+    /** Cerrar sesiones conserva la de quien lo hizo con un token nuevo ({ sesion }): se guarda y sigue trabajando */
+    function seguirCon_(r) {
+      if (r && r.sesion && r.sesion.token) guardarSesion(r.sesion);
+    }
+
+    // ---------------------------------------------------------------- inactividad
+    // El servidor cierra la sesión a los 60 min sin uso (Auth.gs, Config.SESION_INACTIVIDAD_MIN). Aquí se ve venir:
+    //   - con actividad real (clic, teclas, toque, scroll) se le avisa al servidor a lo más cada 10 min (apiSeguridadSigo),
+    //     para que quien llena un formulario largo sin guardar no se quede sin sesión al final;
+    //   - a los 59 min sin nada, "¿Sigues ahí?" con cuenta regresiva; a los 60, se cierra y el login lo dice.
+    const INACTIVIDAD_MIN = 60;
+    const AVISAR_SERVIDOR_MIN = 10;
+    let ultimaActividad = Date.now();
+    let ultimoAvisoAlServidor = Date.now();
+    let preguntando = null;
+    function hubo_() {
+      ultimaActividad = Date.now();
+      if (state.token && !preguntando && Date.now() - ultimoAvisoAlServidor > AVISAR_SERVIDOR_MIN * 60000) {
+        ultimoAvisoAlServidor = Date.now();
+        callServer('apiSeguridadSigo', state.token).catch(() => { /* si ya venció, la siguiente llamada lo dice */ });
+      }
+    }
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => document.addEventListener(ev, hubo_, { passive: true, capture: true }));
+
+    function cerrarPorInactividad_() {
+      if (preguntando) { preguntando.cerrar(); preguntando = null; }
+      cerrarSesion();
+      const caja = document.getElementById('login-error');
+      if (caja) { caja.textContent = 'Se cerró tu sesión por inactividad. Vuelve a entrar.'; caja.hidden = false; }
+    }
+    function preguntar_() {
+      let quedan = 60;
+      preguntando = ventana_('¿Sigues ahí?', '', '<p>Por seguridad, tu sesión se cerrará en <b data-quedan>60</b> segundos por inactividad.</p>' +
+        '<div class="form-actions"><button type="button" class="secondary" data-salir>Cerrar sesión</button>' +
+        '<button type="button" data-seguir>Seguir trabajando</button></div>');
+      const v = preguntando;
+      const t = setInterval(() => {
+        if (!v.el.isConnected) return clearInterval(t);
+        quedan--;
+        const n = v.el.querySelector('[data-quedan]');
+        if (n) n.textContent = quedan;
+        if (quedan <= 0) { clearInterval(t); cerrarPorInactividad_(); }
+      }, 1000);
+      v.el.querySelector('[data-salir]').addEventListener('click', () => { clearInterval(t); cerrarPorInactividad_(); });
+      v.el.querySelector('[data-seguir]').addEventListener('click', () => {
+        clearInterval(t);
+        v.cerrar();
+        preguntando = null;
+        ultimaActividad = Date.now();
+        ultimoAvisoAlServidor = Date.now();
+        callServer('apiSeguridadSigo', state.token).catch(() => { /* manejarSesionExpirada lo atiende */ });
+      });
+    }
+    setInterval(() => {
+      if (!state.token || preguntando) return;
+      const sin = Date.now() - ultimaActividad;
+      if (sin >= INACTIVIDAD_MIN * 60000) cerrarPorInactividad_();
+      else if (sin >= (INACTIVIDAD_MIN - 1) * 60000) preguntar_();
+    }, 15000);
 
     // ---------------------------------------------------------------- Usuarios y permisos
     async function olvidarDispositivos(correo, nombre) {

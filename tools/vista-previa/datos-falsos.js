@@ -645,7 +645,7 @@
 
   /** Lo que contestan las api… de Seguridad en las escenas de Mi perfil */
   function seguridadDeEjemplo() {
-    respuestas.apiSeguridadEstado = { tieneContrasena: true, minimo: 10, cambiada: '02/10/2026', dosPasos: true };
+    respuestas.apiSeguridadEstado = { tieneContrasena: true, minimo: 8, cambiada: '02/10/2026', dosPasos: true };
     respuestas.apiSeguridadMisDispositivos = [
       { id: 'a', nombre: 'Chrome en Windows', creado: '01/10/2026 09:12', ultimoUso: '23/10/2026 08:40', esEste: true },
       { id: 'b', nombre: 'Safari en iPhone o iPad', creado: '12/09/2026 18:03', ultimoUso: '20/10/2026 21:15', esEste: false },
@@ -706,7 +706,7 @@
     },
     'login-contrasena-nueva': async () => {
       Temporada.aplicar(''); state.token = null; render();
-      respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 10 });
+      respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 8 });
       (await hasta('#login-correo')).value = 'ana@gph.com';
       document.getElementById('login-password').value = 'x';
       document.getElementById('btn-login').click();

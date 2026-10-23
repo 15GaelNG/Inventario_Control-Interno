@@ -39,24 +39,79 @@ const Auth = (function () {
       .find((u) => String(u.CORREO).toLowerCase().trim() === String(correo).toLowerCase().trim());
   }
 
+  // ---------------------------------------------------------------- la sesión (23-oct)
+  // Vive en CacheService con su token. Vence a los Config.SESION_INACTIVIDAD_MIN sin usar la app (cada llamada de la
+  // persona la renueva, a lo más cada RENOVAR_CADA_MIN) y nunca pasa de Config.SESION_DURACION_HORAS desde que se creó.
+  // Las llamadas automáticas (el vigía, la campanita, sensores en vivo) llaman Auth.automatica() antes: validan sin
+  // renovar; si no, una pestaña abierta nunca se cerraría.
+  // Cada persona tiene una VERSIÓN de sesión (ScriptProperties, copiada en caché): cerrarSesiones la sube y las sesiones
+  // con la vieja dejan de servir aunque sigan en la caché (cambiar o restablecer la contraseña, quitar dispositivos).
+  const RENOVAR_CADA_MIN = 5;
+  const SEG_VERSION_EN_CACHE = 21600;   // 6 h, lo más que guarda CacheService; la de verdad está en ScriptProperties
+  const claveVersion_ = (correo) => 'sesion_version_' + String(correo || '').trim().toLowerCase();
+  const maximoMs_ = () => Config.SESION_DURACION_HORAS * 3600000;
+  const inactividadSeg_ = () => Math.max(60, Math.round((Config.SESION_INACTIVIDAD_MIN || 60) * 60));
+
+  function versionDe_(correo) {
+    const k = claveVersion_(correo);
+    const cache = CacheService.getScriptCache();
+    const guardada = cache.get(k);
+    if (guardada !== null) return Number(guardada);
+    const v = Number(PropertiesService.getScriptProperties().getProperty(k) || 0);
+    cache.put(k, String(v), SEG_VERSION_EN_CACHE);
+    return v;
+  }
+
+  /** La guarda con lo que le queda: lo menor entre la inactividad y lo que falta para el máximo absoluto */
+  function guardarSesion_(token, sesion) {
+    const restanteSeg = Math.floor((maximoMs_() - (Date.now() - sesion.creada)) / 1000);
+    const seg = Math.min(inactividadSeg_(), restanteSeg);
+    if (seg < 1) return false;
+    CacheService.getScriptCache().put('sesion_' + token, JSON.stringify(sesion), seg);
+    return true;
+  }
+
+  // Global por ejecución: cada llamada de google.script.run empieza sin marca
+  let automatica_ = false;
+  /** Esta llamada la hizo un temporizador de la pantalla, no la persona: valida la sesión sin renovarla */
+  function automatica() { automatica_ = true; }
+
   /** Crea el token de sesión a partir de una fila de usuario ya validada (login manual o con Google) */
   function construirSesion_(found) {
     const token = Utilities.getUuid();
+    const ahora = Date.now();
     const sesion = {
       correo: found.CORREO,
       nombre: found.NOMBRE,
       rol: mapearRol_(found.ROL),
       departamento: found.AREA || found.COORDINACION || '',
       dptosPermitidos: found['DPTOS PERMITIDOS'] || '',
+      v: versionDe_(found.CORREO),
+      creada: ahora,
+      renovada: ahora,
     };
-
-    CacheService.getScriptCache().put(
-      'sesion_' + token,
-      JSON.stringify(sesion),
-      Config.SESION_DURACION_HORAS * 60 * 60
-    );
-
+    guardarSesion_(token, sesion);
     return Object.assign({ token: token }, sesion);
+  }
+
+  /**
+   * Cierra todas las sesiones de un correo (sube su versión). conservar: el token de quien lo hizo, que sigue
+   * trabajando con uno nuevo → regresa esa sesión ({ token, … }, para la pantalla); sin conservar → null.
+   */
+  function cerrarSesiones(correo, opciones) {
+    const o = opciones || {};
+    const k = claveVersion_(correo);
+    const nueva = versionDe_(correo) + 1;
+    PropertiesService.getScriptProperties().setProperty(k, String(nueva));
+    CacheService.getScriptCache().put(k, String(nueva), SEG_VERSION_EN_CACHE);
+    if (!o.conservar) return null;
+    const raw = leerSesion_(o.conservar);
+    logout(o.conservar);
+    if (!raw) return null;
+    const sesion = Object.assign(JSON.parse(raw), { v: nueva, renovada: Date.now() });
+    if (!sesion.creada) sesion.creada = Date.now();
+    const token = Utilities.getUuid();
+    return guardarSesion_(token, sesion) ? Object.assign({ token: token }, sesion) : null;
   }
 
   // Intentos fallidos por correo (23-oct): con la web app abierta a cualquier cuenta de Google (POST VENTA, de gph), que
@@ -117,6 +172,7 @@ const Auth = (function () {
     if (Credenciales.verificar(found, nueva).ok) throw new Error('La contraseña nueva debe ser distinta de la temporal.');
     Credenciales.revisarNueva(nueva, { correo: found.CORREO, nombre: found.NOMBRE });
     Credenciales.guardar(found.CORREO, nueva, { debeCambiar: false });
+    Credenciales.avisar_(found, 'cambiada');
     CacheService.getScriptCache().remove('login_reto_' + String(reto));
     return construirSesion_(found);
   }
@@ -187,7 +243,23 @@ const Auth = (function () {
   function validarSesion(token) {
     const raw = leerSesion_(token);
     if (!raw) throw new Error('Sesión expirada, inicia sesión de nuevo');
-    return JSON.parse(raw);
+    const sesion = JSON.parse(raw);
+    const ahora = Date.now();
+    // Las de antes del 23-oct no traen creada ni v: cuentan desde ahora y como versión 0 (nadie sale al desplegar)
+    if (sesion.creada && ahora - sesion.creada > maximoMs_()) {
+      logout(token);
+      throw new Error('Sesión expirada, inicia sesión de nuevo');
+    }
+    if ((sesion.v || 0) !== versionDe_(sesion.correo)) {
+      logout(token);
+      throw new Error('Sesión expirada: se cerró desde otro dispositivo o cambió tu contraseña. Inicia sesión de nuevo.');
+    }
+    if (!automatica_ && (!sesion.renovada || ahora - sesion.renovada > RENOVAR_CADA_MIN * 60000)) {
+      sesion.renovada = ahora;
+      if (!sesion.creada) sesion.creada = ahora;
+      try { guardarSesion_(token, sesion); } catch (e) { /* sin renovar: vence a su hora, no truena la llamada */ }
+    }
+    return sesion;
   }
 
   /**
@@ -218,5 +290,6 @@ const Auth = (function () {
     CacheService.getScriptCache().remove('sesion_' + token);
   }
 
-  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout, crearHashParaUsuario };
+  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout,
+    crearHashParaUsuario, cerrarSesiones, automatica };
 })();

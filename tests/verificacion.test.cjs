@@ -30,6 +30,7 @@ function cargar(opciones) {
   const cache = o.cache || {};
   const hoja = o.hoja || hojaFalsa();
   const correos = [];
+  const cerradas = [];
   const ctx = vm.createContext({
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' } },
     leerConfig_: (k) => (k in o.config ? o.config[k] : null),
@@ -44,13 +45,13 @@ function cargar(opciones) {
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
     MailApp: { getRemainingDailyQuota: () => o.cuota, sendEmail: (m) => correos.push(m) },
     Candado: { con: (fn) => fn() },
-    Auth: { validarSesion: () => ({ correo: 'ana@gph.com' }) },
+    Auth: { validarSesion: () => ({ correo: 'ana@gph.com' }), cerrarSesiones: (correo, op) => { cerradas.push({ correo, conservar: op && op.conservar }); return op && op.conservar ? { token: 'token-nuevo' } : null; } },
     Permisos: { puedeEditar: (token) => { if (token !== 'admin') throw new Error('Sin permiso'); return { correo: 'admin@x.com' }; } },
     console: { warn: () => {} },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Verificacion.gs'), 'utf8') + '\nthis.V = Verificacion;', ctx);
-  return { V: ctx.V, correos, cache, hoja };
+  return { V: ctx.V, correos, cache, hoja, cerradas };
 }
 const ANA = { CORREO: 'ana@gph.com', NOMBRE: 'Ana' };
 const CHROME = { navegador: 'Chrome', sistema: 'Windows', nombre: 'Chrome en Windows' };
@@ -154,4 +155,19 @@ test('el correo del código usa la plantilla: 6 casillas, el código en una lín
   assert.match(m.body, new RegExp('Código: ' + codigo), 'la versión en texto también lo trae');
   assert.ok(!m.htmlBody.includes('<script>') && m.htmlBody.includes('Ana &lt;script&gt;'), 'el nombre va escapado');
   assert.ok(m.htmlBody.length < 20000, 'lejos de los 102 KB en que Gmail corta: ' + m.htmlBody.length);
+});
+
+test('quitar un dispositivo o cerrar en los demás cierra las sesiones abiertas y conserva la de quien lo hizo; el admin, todas', () => {
+  const { V, correos, cerradas } = cargar();
+  const llave = recordar(V, correos, CHROME);
+  recordar(V, correos, { navegador: 'Safari', sistema: 'iPhone o iPad', nombre: 'Safari en iPhone o iPad' });
+  const r = V.quitarOtros('mi-token', llave);
+  assert.equal(r.cerrados, 1);
+  assert.equal(r.sesion.token, 'token-nuevo');
+  const otro = V.misDispositivos('t', llave)[0];
+  assert.equal(V.quitar('mi-token', otro.id).sesion.token, 'token-nuevo');
+  V.olvidarDe('admin', 'ana@gph.com');
+  assert.deepEqual(cerradas.map((c) => ({ ...c })), [
+    { correo: 'ana@gph.com', conservar: 'mi-token' }, { correo: 'ana@gph.com', conservar: 'mi-token' }, { correo: 'ana@gph.com', conservar: undefined }]);
+  assert.match(correos[correos.length - 1].subject, /Se cerraron tus sesiones/);
 });

@@ -249,7 +249,8 @@ const Verificacion = (function () {
       if (!d) throw new Error('Ese dispositivo ya no está.');
       poner_(hoja, d.fila, 'ACTIVO', 'FALSE');
       poner_(hoja, d.fila, 'NOTA', 'quitado por la persona');
-      return true;
+      // Lo que esté abierto se cierra (no se sabe en qué dispositivo); quien lo quitó sigue con un token nuevo
+      return { sesion: Auth.cerrarSesiones(sesion.correo, { conservar: token }) };
     });
   }
 
@@ -261,7 +262,8 @@ const Verificacion = (function () {
       const hoja = hoja_();
       const otros = deCorreo_(hoja, sesion.correo).filter((x) => activo_(x) && x.HUELLA !== este);
       otros.forEach((d) => { poner_(hoja, d.fila, 'ACTIVO', 'FALSE'); poner_(hoja, d.fila, 'NOTA', 'cerrado desde otro dispositivo'); });
-      return otros.length;
+      // Y las sesiones abiertas en esos dispositivos: todas menos la de quien lo hizo (sigue con un token nuevo)
+      return { cerrados: otros.length, sesion: Auth.cerrarSesiones(sesion.correo, { conservar: token }) };
     });
   }
 
@@ -278,7 +280,22 @@ const Verificacion = (function () {
   /** Un admin (EDICIÓN en Usuarios y permisos) le olvida todos los dispositivos a alguien */
   function olvidarDe(token, correo) {
     const sesion = Permisos.puedeEditar(token, 'usuarios');
-    return olvidarDispositivos(correo, 'olvidados por ' + sesion.correo);
+    const n = olvidarDispositivos(correo, 'olvidados por ' + sesion.correo);
+    Auth.cerrarSesiones(correo);
+    try {
+      MailApp.sendEmail(Correos.mensaje(correo, 'Se cerraron tus sesiones de Control Interno', {
+        preencabezado: 'La próxima vez que entres te pediremos un código.',
+        etiqueta: 'Seguridad de tu cuenta',
+        titulo: 'Se cerraron tus sesiones',
+        parrafos: ['Un administrador cerró tus sesiones abiertas y olvidó tus dispositivos recordados. La próxima vez que entres, ' +
+          'desde donde sea, te mandaremos un código a este correo. Tu contraseña no cambió.'],
+        detalle: [['Cuenta', correo], ['Fecha', ahora_()], ['Lo hizo', sesion.correo]],
+        aviso: '<b>¿No sabías de esto?</b> Pregunta a Control Interno.',
+      }));
+    } catch (e) {
+      console.warn('aviso de sesiones cerradas: ' + e.message);
+    }
+    return n;
   }
 
   return { encendida, decidir, verificarCodigo, reenviar, misDispositivos, quitar, quitarOtros, olvidarDispositivos, olvidarDe, oculto_, HOJA };
