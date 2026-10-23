@@ -146,6 +146,7 @@
        * (apiLineasFormularioMasivo) y aplica el cambio equipo por equipo con su bitácora (apiLineasAccionMasiva).
        * Reasignar deja el equipo en USO; su línea solo cambia si estaba DISPONIBLE (pasa a USO con él).
        */
+      // eslint-disable-next-line no-unused-vars -- sin acciones masivas por ahora (usuario, 3-oct): se queda para cuando regresen
       async function abrirMasiva(accion, filas) {
         if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         const ids = filas.map((r) => r.id);

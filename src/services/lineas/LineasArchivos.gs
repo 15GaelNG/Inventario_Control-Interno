@@ -77,7 +77,7 @@ const LineasArchivos = (function () {
     if (enlace) {
       try { v = decodeURIComponent(enlace[1].replace(/\+/g, ' ')).trim(); } catch (e) { return null; }
     }
-    return /^https?:/i.test(v) ? v : v.replace(/^[^\/]*::/, '').trim();
+    return /^https?:/i.test(v) ? v : v.replace(/^[^/]*::/, '').trim();
   }
 
   /**

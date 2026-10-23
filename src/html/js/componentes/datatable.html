@@ -654,7 +654,7 @@
       exportarComo: 'texto',
       aControl: (v) => (vacio(v) ? '' : String(v)),
       deControl: (texto) => texto,
-      crearControl(valor, col) {
+      crearControl(valor) {
         const control = document.createElement('input');
         control.type = this.input;
         if (this.input === 'number') control.step = 'any';

@@ -588,7 +588,7 @@ const LineasResguardos = (function () {
     const asunto = txt((datos || {}).asunto);
     const r = actualizar_(ids, (x) => (txt(x['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
       : { 'ESTADO': ESTADO.VENDIDO, 'ESTATUS_EQUIPO': 'VENDIDO', 'ENTREGA_ASUNTO': asunto }));
-    espejar_(r.hechos, (f) => ({ 'ESTATUS EQUIPO': 'VENDIDO' }), 'Vendido (bandeja de resguardos)' + (asunto ? ': ' + asunto : ''), 'VENTA', usuario);
+    espejar_(r.hechos, () => ({ 'ESTATUS EQUIPO': 'VENDIDO' }), 'Vendido (bandeja de resguardos)' + (asunto ? ': ' + asunto : ''), 'VENTA', usuario);
     return r;
   }
 

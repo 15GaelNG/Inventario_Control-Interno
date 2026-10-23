@@ -772,10 +772,8 @@ const MAPA = {
           (c, i, arr) => c && arr.indexOf(c) === i);
 
     let encontrado = null;
-    let columnaBusqueda = candidatas[0];
     for (let i = 0; i < candidatas.length && !encontrado; i++) {
       encontrado = SheetUtils.findById(ssId, origenDef.hoja, valorClave, candidatas[i]);
-      if (encontrado) columnaBusqueda = candidatas[i];
     }
     if (!encontrado) {
       throw new Error('No existe en ' + origenNombre + ' ningún renglón con "' + valorClave +

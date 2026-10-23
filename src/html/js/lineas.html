@@ -1253,17 +1253,10 @@
      * Listas desplegables con búsqueda (Combobox) para las listas abiertas y referencias del formulario.
      * `e.sugerencias` agrega opciones de COLABORADORES o del índice; `e.autollenar` ({ COLUMNA: dato })
      * copia datos de la persona elegida en otros campos editables del mismo formulario.
-     */
-    /**
      * Datos del responsable que salen de Capital Humano: se elige de la lista y, si no está, hay que seleccionar
      * "Agregar 'x'" (lo que solo se teclea no se guarda). Lo agregado se queda en ese registro y no entra a la lista
-     * de nadie más (PLAN_REESTRUCTURA_LINEAS.md §3.6). En las acciones masivas la columna llega como "id|COLUMNA".
+     * de nadie más (PLAN_REESTRUCTURA_LINEAS.md §3.6).
      */
-    const COLUMNAS_CH = ['RESPONSABLE', 'NO EMPLEADO', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO',
-      'DIRECTOR', 'JEFE DIRECTO']
-      .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NOMBRE ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE']), []));
-    const esColumnaCH = (columna) => COLUMNAS_CH.indexOf(String(columna || '').split('|').pop().toUpperCase().replace(/\s+/g, ' ').trim()) >= 0;
-
     function activarCombosEn(cuerpo, elementos) {
       if (typeof Combobox === 'undefined') return;
       (elementos || []).forEach((e) => {
@@ -1309,20 +1302,6 @@
             });
           }).catch(() => { /* quedan las del servidor */ });
         }
-      });
-    }
-
-    /** Campos derivados de una referencia (p. ej. LINEA SUSPENDIDA = [IMEI].[NUMERO TELEFONO]) y fórmulas. */
-    function actualizarDerivadosEn(cuerpo, elementos) {
-      const valores = leerFormularioEn(cuerpo, elementos);
-      cuerpo.querySelectorAll('[data-deriva-de]').forEach((el) => {
-        const def = (elementos || []).filter((e) => e.columna === el.dataset.derivaDe)[0];
-        const op = def && (def.opciones || []).filter((o) => o.id === valores[el.dataset.derivaDe])[0];
-        el.value = op ? (op.datos[el.dataset.derivaDato] || '') : '';
-      });
-      cuerpo.querySelectorAll('[data-formula="NO_ASIGNACION"]').forEach((el) => {
-        const a = valores['ASIGNACION'];
-        el.textContent = a === 'TRUE' ? 'No' : (a === 'FALSE' ? 'Sí' : '—');
       });
     }
 
@@ -2070,7 +2049,6 @@
 
     // ---------------- Estado del módulo ----------------
     // Se conserva entre navegaciones (los catálogos viven en callServerCacheado, api.html).
-    const POR_PAGINA = 50;
     const VIGENCIA_INDICE_MS = 15 * 60 * 1000;
     const memoria = {
       indice: null,
@@ -2245,7 +2223,6 @@
       filas.forEach((f) => { const k = f[campo] || ''; m[k] = (m[k] || 0) + 1; });
       return m;
     }
-    const unicos = (filas, campo) => Object.keys(contarPor(filas, campo)).filter(Boolean).sort();
 
     // ---------------- De las pantallas, para varias (partir.js, fase 6.2) ----------------
     const dinero = (n) => Formato.moneda(n || 0, { centavos: false });

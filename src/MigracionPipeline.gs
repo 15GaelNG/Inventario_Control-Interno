@@ -392,7 +392,7 @@ function pipeMedir_(ss) {
     siempre: true,
     hojas: [],
   };
-  let conId = 0, completas = 0, alInicio = 0, conRespaldo = 0, total = 0;
+  let completas = 0, alInicio = 0, conRespaldo = 0, total = 0;
 
   Entidades.migrables().forEach((h) => {
     const sheet = ss.getSheetByName(h.hoja);
@@ -403,7 +403,6 @@ function pipeMedir_(ss) {
     const pos = migColumna_(enc, Entidades.COLUMNA_ID);
     const vacias = filas ? migFilasVacias_(sheet, filas) : [];
     const lista = pos && filas ? migYaMigrada_(sheet, h.prefijo, filas, vacias) : false;
-    if (pos) conId++;
     if (lista) completas++;
     if (pos === 1) alInicio++;
     if (migColumna_(enc, Entidades.COLUMNA_ID_ANTERIOR)) conRespaldo++;
@@ -416,7 +415,6 @@ function pipeMedir_(ss) {
   // El respaldo solo debe quedar en las 8 que se pisaron; más que eso, falta limpiar
   m.respaldosLimpios = conRespaldo <= Entidades.migrables().filter((e) => e.pisaLlaveAnterior).length;
   // Las referencias: se dan por hechas cuando existen las columnas destino
-  const destinos = ['ID VEHICULO', 'ID ACCESORIO', 'ID CAJA CHICA'];
   let destinosPuestos = 0, destinosEsperados = 0;
   [['VERIFICACIONES', 'ID VEHICULO'], ['ARQUEOS', 'ID CAJA CHICA'],
    ['MOVIMIENTOS_ACCESORIOS', 'ID ACCESORIO']].forEach((par) => {

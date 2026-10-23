@@ -1097,7 +1097,7 @@ const InspeccionesService = (function () {
   }
   function seccionValida_(seccion) {
     const s = limpiar_(seccion).toUpperCase();
-    if (!s || /[\/\\]/.test(s)) throw new Error('Sección de fotos inválida.');
+    if (!s || /[/\\]/.test(s)) throw new Error('Sección de fotos inválida.');
     return s;
   }
   /** La subcarpeta de una sección, reconociendo la que ya existe aunque varíe en acentos o espacios */

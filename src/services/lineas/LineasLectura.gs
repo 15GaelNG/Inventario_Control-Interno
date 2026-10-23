@@ -109,7 +109,6 @@ const LineasLectura = (function () {
     anotar_(m, (ids || []).map(String).filter(Boolean), fecha);
     LineasDatos.cacheGuardar(CLAVE_ALTAS, m, SEG_ALTAS);
   }
-  let porId_ = null;
 
   /** El interruptor y la fecha de retiro: los de Entornos.gs para este proyecto (DEV, 5-oct) o la Script Property. */
   const config_ = (clave) => (typeof leerConfig_ === 'function' ? leerConfig_(clave) : PropertiesService.getScriptProperties().getProperty(clave));

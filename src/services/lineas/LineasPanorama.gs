@@ -76,7 +76,7 @@ const LineasPanorama = (function () {
    * regs: [{ ids: [id, idAppSheet], actual, alta (ms|null) }] · eventos: { id: [{ t, antes }] } · meses: ['yyyy-MM']
    * · ahora (ms). Regresa { estatus: [conteo por mes] }. El último mes cierra "ahora" (coincide con hoy).
    */
-  function historico(regs, eventos, meses, ahora) {
+  function historico(regs, eventos, meses) {
     const serie = {};
     const cierres = cierresDe(meses);
     regs.forEach((r) => {
@@ -232,7 +232,7 @@ const LineasPanorama = (function () {
     const bloque = (tipo) => ({
       total: regs[tipo].length,
       actual: contar(regs[tipo].map((r) => r.actual)),
-      historico: historico(regs[tipo], eventos[tipo], meses, ahora),
+      historico: historico(regs[tipo], eventos[tipo], meses),
     });
     const salida = {
       generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses,

@@ -230,7 +230,6 @@
       : id === '@alcance' ? 'Alcance (solo lo de su área)' : etiquetaNodo(id));
     const esDePersona = (h) => h.quien.indexOf('@') !== -1;
     const esDePerfil = (h) => /^perfil:/i.test(h.quien);
-    const esAsignacion = (h) => /^perfil:/i.test(h.modulo);
     /** '' en el historial = sin regla: la persona tiene lo de su área; el área, sin acceso (en una sección: hereda;
      *  en una asignación de perfil: sin asignar) */
     const textoHistorial = (valor, dePersona, modulo) => (valor ? PERM_TEXTO[valor]

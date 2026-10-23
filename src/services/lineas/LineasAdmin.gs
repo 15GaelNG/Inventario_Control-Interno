@@ -185,7 +185,7 @@ function respaldarHojasRetiradas_(libro) {
     if (respaldo.getSheets().length > 1) respaldo.deleteSheet(h);
   });
   SpreadsheetApp.flush();
-  const xlsx = UrlFetchApp.fetch('https:\/\/docs.google.com/spreadsheets/d/' + respaldo.getId() + '/export?format=xlsx', {
+  const xlsx = UrlFetchApp.fetch('https://docs.google.com/spreadsheets/d/' + respaldo.getId() + '/export?format=xlsx', {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
   });
   const archivoXlsx = xlsx.getResponseCode() === 200 ? DriveApp.createFile(xlsx.getBlob().setName(respaldo.getName() + '.xlsx')) : null;
@@ -442,7 +442,7 @@ function firmasGuardadas_(aplicar) {
   const archivos = carpeta.getFiles();
   while (archivos.hasNext()) {
     const f = archivos.next();
-    const m = /^([^\s\/]+@ciudadmaderas\.com)\.png$/i.exec(f.getName());
+    const m = /^([^\s/]+@ciudadmaderas\.com)\.png$/i.exec(f.getName());
     if (!m) { salida.errores.push(f.getName() + ': el nombre debe ser el correo + .png'); continue; }
     const correo = m[1].toLowerCase();
     const u = usuarios[correo];

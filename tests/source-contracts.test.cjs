@@ -2831,7 +2831,7 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   }
   assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
   assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
-  assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
+  assert.match(veh, /alActualizar: \(cambios\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
 });
 
 test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {

@@ -558,7 +558,7 @@ const TelefoniaService = (function () {
   function patronAppSheet(token, ruta) {
     const sesion = sinAlcance_(leer_(token));
     if (!puedeVerSecretos_(sesion)) throw new Error('El patrón solo lo ven administradores y el área de Líneas.');
-    if (!/\.PATRON\.[^\/]*$/i.test(LineasArchivos.rutaAppSheet(ruta) || '')) throw new Error('No es un patrón del AppSheet.');
+    if (!/\.PATRON\.[^/]*$/i.test(LineasArchivos.rutaAppSheet(ruta) || '')) throw new Error('No es un patrón del AppSheet.');
     const f = LineasArchivos.resolver(ruta, true);
     if (!f || !f.id) throw new Error('No se encontró el patrón en la carpeta del AppSheet.');
     const b = DriveApp.getFileById(f.id).getBlob();

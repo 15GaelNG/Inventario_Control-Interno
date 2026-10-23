@@ -676,6 +676,7 @@ const LineasDatos = (function () {
           // También si fn falló: lo que alcanzó a cambiar se escribe, igual que cuando cada celda iba al momento
           if (propio) vaciarLote_();
         } catch (e) {
+          // eslint-disable-next-line no-unsafe-finally -- a propósito: si fn ya falló, gana su error; si no, el de escribir el lote
           if (!fallo) throw e;
           console.warn('conCandado: no se pudo escribir el lote después de un error: ' + e.message);
         } finally {

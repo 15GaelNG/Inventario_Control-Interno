@@ -447,7 +447,7 @@ const LineasPdf = (function () {
         continue;
       }
       let valor = '';
-      const esColumnaSimple = /^[^\[\]"()&*+<>=]+$/.test(interior) && !/^[\d.]+$/.test(interior);
+      const esColumnaSimple = /^[^[\]"()&*+<>=]+$/.test(interior) && !/^[\d.]+$/.test(interior);
       // `registro._fijas` { COLUMNA: texto }: la etiqueta que usa esa columna sale con ese texto aunque sea una fórmula
       // (la responsiva de la línea sin equipo: «NO APLICA» en RIGHT("000" & [NUCO], 4), no «000»; pendiente 2.45)
       const usadas = esColumnaSimple ? [interior] : (interior.match(/\[[^\]]+\]/g) || []).map((c) => c.slice(1, -1));

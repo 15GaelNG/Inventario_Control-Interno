@@ -77,7 +77,7 @@
     };
 
     /** Escribe en la hoja los datos del catálogo (para que AppSheet también los vea) */
-    async function sincronizar(filas, boton) {
+    async function sincronizar(filas) {
       const pendientes = filas.filter((h) => h.EN_CATALOGO && h.DESACTUALIZADOS.length);
       if (!pendientes.length) {
         Notificar.info('Esos hologramas ya están al día con el catálogo');

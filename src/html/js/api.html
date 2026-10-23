@@ -96,8 +96,7 @@
             manejarSesionExpirada();
           }
           reject(new Error(mensaje));
-        })
-        [fnName](...args);
+        })[fnName](...args);
     });
   }
 

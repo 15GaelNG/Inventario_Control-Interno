@@ -32,7 +32,6 @@ const Geotab = (function () {
   const DIAS_RESUMEN = 30;
 
   const cache = () => CacheService.getScriptCache();
-  const props = () => PropertiesService.getScriptProperties();
 
   // Usuario, base y servidor pueden ir en config/Entornos.gs; la contraseña, solo en Script Properties
   function config_() {
