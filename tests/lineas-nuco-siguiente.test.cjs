@@ -2,11 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Agregar equipo propone el NUCO (usuario, 21-oct; pendiente 2.59): el más alto de la serie normal (hasta 4 dígitos) + 1,
 // sin rellenar huecos; los bloques de 5 dígitos (10001-10100 y 11001-11011, Dirección General) no cuentan. Se puede cambiar.
 const registros = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasRegistros.gs'), 'utf8');
-const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+const cliente = LINEAS;
 
 function nucoSiguiente(nucos) {
   const util = new Function('LineasDatos', 'LineasArchivos', fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasUtil.gs'), 'utf8') +

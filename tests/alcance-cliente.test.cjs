@@ -5,6 +5,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
+const APP = require('./app-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const leer = (p) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8').replace(/\r/g, '');
 const telefonia = leer('src/services/TelefoniaService.gs');
@@ -85,7 +88,7 @@ test('toda lectura de Líneas pasa por el alcance', () => {
     assert.ok(f && /sinAlcance_\(/.test(f.cuerpo), n + ' se le niega al rol CLIENT');
   });
   // Y la pantalla no pinta las pestañas ni los botones que no va a poder abrir
-  const lineas = leer('src/html/js/lineas.html');
+  const lineas = LINEAS;
   // Documentos e Historial: su sección (permisos en árbol). Nunca para un CLIENT: no respetan el alcance, así que al
   // limitado se le resuelven Sin acceso (lo revisa abajo «Modulos: Documentos e Historial sin alcance»)
   assert.match(lineas, /const veDocumentos = \(\) => veSeccion\('documentos'\);/);
@@ -120,7 +123,7 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   });
   assert.match(v, /function buscarPor_\(token, columna, valor\) \{[\s\S]*?Permisos\.dentroDeAlcance\(sesion\.alcance/);
   // Lo que se lee de la carpeta de un NUCO (documentos, inspecciones y sus fotos): solo de un vehículo suyo
-  const api = leer('src/ClientApi.gs');
+  const api = API;
   ['apiDocumentosVehiculo', 'apiInspeccionesExpediente', 'apiFotosInspeccion'].forEach((f) =>
     assert.match(api, new RegExp('function ' + f + '\\(token, nucco[^)]*\\) \\{\\s+(const sesion = Permisos\\.puedeLeer\\([^;]+;\\s+exigirNuccoEnAlcance_\\(sesion|exigirNuccoEnAlcance_\\()'), f));
   assert.match(api, /function exigirNuccoEnAlcance_\(sesion, token, nucco\) \{\s+if \(sesion\.alcance && !VehiculosService\.nuccoEnAlcance\(token, nucco\)\)/);
@@ -130,7 +133,7 @@ test('Vehículos: todas sus listas llevan el alcance, y la búsqueda a mano tamb
   const adq = leer('src/services/AdquisicionVehicularService.gs');
   assert.match(adq, /function buscar\(token, serie\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
   assert.match(adq, /function archivos\(token, liga\) \{\s+const sesion = Permisos\.puedeLeer\(token, 'adquisicion-vehicular'\);/);
-  assert.match(leer('src/html/js/app.html'), /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
+  assert.match(APP, /permisoDe\('adquisicion-vehicular'\) && \{ id: 'adquisicion', titulo: 'Adquisición'/);
   assert.match(adq, /function buscar\(token, serie\) \{[\s\S]*?sesion\.alcance && !VehiculosService\.serieEnAlcance/);
   assert.match(adq, /function archivos\(token, liga\) \{[\s\S]*?if \(sesion\.alcance\) \{[\s\S]*?serieEnAlcance/);
 });

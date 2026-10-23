@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -26,5 +27,5 @@ test('SIM BASICO (antes LINEA BASICA, 12-oct) muestra los mismos puntos que LINE
 });
 
 test('el formulario en el navegador usa la misma equivalencia', () => {
-  assert.match(read('src/html/js/lineas.html'), /CONDICIONES_APPSHEET\[cond\]\(t === 'SIM BASICO' \|\| t === 'LINEA BASICA' \? 'LINEA' : t\.replace\(\/ BASIC\[OA\]\$\/, ''\)\)/);
+  assert.match(LINEAS, /CONDICIONES_APPSHEET\[cond\]\(t === 'SIM BASICO' \|\| t === 'LINEA BASICA' \? 'LINEA' : t\.replace\(\/ BASIC\[OA\]\$\/, ''\)\)/);
 });

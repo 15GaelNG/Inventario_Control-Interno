@@ -3,10 +3,11 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
+const LINEAS = require('./lineas-fuente');
 
 // Fichas de equipo y de línea (usuario, 22-oct): cada tarjeta de la pestaña General lleva un botón para copiarla,
 // «Etiqueta: valor» un renglón por dato con valor
-const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+const cliente = LINEAS;
 const css = fs.readFileSync(path.join(__dirname, '../src/html/lineas-estilos.html'), 'utf8');
 
 function preparar(html) {

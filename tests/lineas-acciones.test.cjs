@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -16,14 +18,14 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   assert.doesNotMatch(acciones, /datoDeCH_|datoDeInspeccion/);
   assert.doesNotMatch(acciones, /function (reglas|permite|hayCamino|cerrar|cambiar)\(/);
   assert.match(read('src/services/TelefoniaService.gs'), /function catalogos\(token\) \{\r?\n    leer_\(token\);\r?\n    return LineasRepo\.catalogos\(\);/);
-  const api = read('src/ClientApi.gs');
+  const api = API;
   assert.doesNotMatch(api, /apiLineasCerrarEquipos|apiLineasCambiar\(|apiLineasAgregarNota|apiLineasCambiarEstatus/);
   // El servidor ya no rechaza por estatus (resguardo, cancelación, acciones masivas)
   ['LineasResguardos', 'LineasRegistros'].forEach((m) => assert.doesNotMatch(read('src/services/lineas/' + m + '.gs'), /LineasAcciones\.(permite|hayCamino|motivoSinCamino|accion)\(/, m));
   assert.doesNotMatch(read('src/services/lineas/LineasEscritura.gs'), /function cambiar(Equipo|Linea)\(/);
   assert.doesNotMatch(read('src/services/lineas/LineasCaptura.gs'), /filaDelCambio_|ref\.cambio|'CAMBIO'/);
   // La pantalla: el botón «Cambiar estatus» y todas las acciones sin depender del estatus
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /texto: '¿Qué pasó\?'|function (abrirQuePaso|accionesPosibles|permiteAccion|abrirCierre|abrirCambio)\(|ACCION_ENTREGAR|estatusPosibles/);
   assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: \(f\) => operar\(f\) && !f\.some\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f\)/);
   // Ya en el panel de Pau: Corregir resguardo y, si aún no lo recibe, Quitar del panel (pendiente 3.12)
@@ -47,7 +49,7 @@ test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel d
   assert.match(reg, /const aUso = 'ESTATUS EQUIPO' in cambios && estatusEquipo === 'USO';/);
   assert.match(reg, /if \(aUso && lineaConEquipo && !\('ESTATUS LINEA' in cambios\) && \['DISPONIBLE', 'RESGUARDO'\]\.indexOf\(texto_\(base\['ESTATUS LINEA'\]\)\.toUpperCase\(\)\) >= 0\) \{\s+cambios\['ESTATUS LINEA'\] = 'USO';/);
   assert.match(reg, /guardarCambiosRegistro\(fila, cambios, usuario, new Date\(\), \{ corregir: true \}\)/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /abrirCambioEstatus|fichaDeFila|texto: 'Cambiar estatus'/);
   const editar = cliente.slice(cliente.indexOf('function abrirEditor('), cliente.indexOf('// ---- Captura: inspección y responsiva nuevas'));
   // Ya no abre Mandar a resguardo ni Mandar a cancelación: la nota bajo el estatus avisa y se guarda con sinPanel (sin la
@@ -73,7 +75,7 @@ test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel d
 });
 
 test('Mandar a resguardo: la inspección se captura dentro de la acción (usuario, 3-oct)', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /function capturarEnFlujo\(tipo, ref, opciones\)/);
   assert.match(cliente, /if \(borrador && borrador\.flujo && !borrador\.guardada\) borrador\.flujo\.resolver\(null\);/);
   // La última inspección se guarda con el resguardo, en la misma llamada (rapidez, 13-oct)
@@ -101,7 +103,7 @@ test('inspección: el equipo y la línea vienen del registro y no se cambian; el
   assert.match(cuerpo, /campo_\('COLOR', 'Color', 'listaAbierta', \{ valor: deResp\('COLOR', v\('COLOR'\)\)/);
   // El responsable, con los mismos campos que la responsiva (19-oct, pendiente 2.54; lineas-responsable-homologado.test.cjs)
   assert.match(cuerpo, /camposResponsable_\(catalogos, persona, \{ soloProcesos: !!enAccion \}\)/);
-  const pantalla = leer('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   assert.doesNotMatch(pantalla, /Opcional\. Se guardan en Drive/);
   assert.match(pantalla, /desde: 'titulo:EQUIPO'/);
   assert.match(pantalla, /ln-segmento/);
@@ -110,7 +112,7 @@ test('inspección: el equipo y la línea vienen del registro y no se cambian; el
 test('sin acciones masivas por ahora: las acciones de la barra son de un registro a la vez', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const pantalla = fs.readFileSync(path.join(__dirname, '..', 'src/html/js/lineas.html'), 'utf8');
+  const pantalla = LINEAS;
   const barra = pantalla.slice(pantalla.indexOf('function accionesSeleccionDe'), pantalla.indexOf('let detallesAbiertos'));
   assert.doesNotMatch(barra, /minimo: 2/);
   ["texto: 'Mandar a resguardo'", "texto: 'Responsiva'", "texto: 'Mandar a cancelación'"].forEach((t) => {
@@ -119,7 +121,7 @@ test('sin acciones masivas por ahora: las acciones de la barra son de un registr
 });
 
 test('patrón con orden y dirección, y pantalla de espera al guardar (usuario, 4-oct)', () => {
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   assert.match(pantalla, /function flechasPatron\(/);
   assert.match(pantalla, /ln-patron-flecha/);
   assert.match(pantalla, /fillText\(String\(i \+ 1\)/); // el PDF lleva el número de cada punto
@@ -132,7 +134,7 @@ test('patrón con orden y dirección, y pantalla de espera al guardar (usuario, 
 test('paso de firmas en tres partes; el resultado y los errores usan la pantalla de espera (usuario, 4-oct)', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   ["titulo_('DATOS DE LA INSPECCIÓN'", "titulo_('COMENTARIO'", "titulo_('FIRMAS'"].forEach((t) => assert.ok(captura.includes(t), t));
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   assert.match(pantalla, /desde: 'titulo:DATOS DE LA INSPECCIÓN'/);
   assert.match(pantalla, /desde: 'titulo:DATOS DE LA RESPONSIVA'/);
   // Un clic afuera no cierra las ventanas (usuario, 4-oct)
@@ -146,7 +148,7 @@ test('paso de firmas en tres partes; el resultado y los errores usan la pantalla
 });
 
 test('accesorios: NINGUNO quita los demás y elegir otro quita NINGUNO', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const i = cliente.indexOf('function alternarMulti(boton)');
   const fuente = cliente.slice(i, cliente.indexOf('\n    }', i) + 6);
   const alternarMulti = new Function(fuente + '; return alternarMulti;')();
@@ -164,7 +166,7 @@ test('accesorios: NINGUNO quita los demás y elegir otro quita NINGUNO', () => {
 
 
 test('opciones separadas: el equipo no trae lo de la línea (usuario, 4-oct)', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const barra = cliente.slice(cliente.indexOf('function accionesSeleccionDe'), cliente.indexOf('let detallesAbiertos'));
   const equipo = barra.slice(barra.indexOf("if (modulo === 'equipos')"), barra.indexOf('historial];') + 11);
   assert.doesNotMatch(equipo, /abrirCancelacion|Mandar línea a cancelación/);
@@ -181,7 +183,7 @@ test('opciones separadas: el equipo no trae lo de la línea (usuario, 4-oct)', (
 });
 
 test('orden de las opciones (usuario, 12-oct; pendiente 2.34): clic derecho y ⋮ de la ficha', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const barra = cliente.slice(cliente.indexOf('function accionesSeleccionDe'), cliente.indexOf('let detallesAbiertos'));
   const equipo = barra.slice(barra.indexOf("if (modulo === 'equipos')"), barra.indexOf('historial];') + 11);
   const linea = barra.slice(barra.indexOf('historial];') + 11);
@@ -221,7 +223,7 @@ test('POSIBLE VENTA-DAÑO ya no existe y PARA VENTA CON DETALLE sí: 9 estatus d
   const estructura = read('src/services/lineas/LineasEstructura.gs');
   assert.doesNotMatch(estructura, /'POSIBLE VENTA': 'POSIBLE VENTA-DAÑO'|'POSIBLE VENTA-DAÑO'/);
   assert.match(estructura, /'POSIBLE VENTA': 'RESGUARDO'/); // sigue guardado mientras Líneas lo corrige
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /POSIBLE VENTA-DAÑO/);
+  assert.doesNotMatch(LINEAS, /POSIBLE VENTA-DAÑO/);
 });
 
 // Pendiente 2.39 (13-oct): el error del pie de las capturas flotaba sin fondo y se pintaba encima del Comentario de

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Desde el 12-oct-2026 Líneas toma a las personas de CapitalHumano (src/services/CapitalHumano.gs), como todos los módulos:
 // la misma lista de activos de COLABORADORES ACTUALIZADO, con su ID PERSONA. Ya no tiene su propia lectura de CH ni cae a
@@ -45,20 +46,20 @@ test('Capital Humano en Líneas: una asignación con persona calcula su ID PERSO
 });
 
 test('Etiqueta AUTO en Líneas: solo en lo que el formulario llena solo, no en lo que solo se muestra (usuario, 4-oct)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /const autoDe = \(e\) => !!\(e\.formula \|\| e\.deriva \|\| e\.auto\);/);
   assert.doesNotMatch(cliente, /e\.soloLectura \|\| e\.deriva \? ' data-auto'/);
   assert.doesNotMatch(cliente, /<div data-auto class="ln-af-calculado/);
 });
 
 test('La ventana de captura se abre sin la marca de guardado de la anterior (firma en Reasignar, 4-oct)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /function mostrarModalCaptura\(\) \{\s*const modal = \$\('#ln-modal-captura', raiz\);\s*modal\.removeAttribute\('aria-busy'\);/);
   assert.doesNotMatch(cliente, /\$\('#ln-modal-captura', raiz\)\.hidden = false;/);
 });
 
 test('La X de la ventana se prende al abrirla: un guardado que cerró la ventana la dejaba apagada (usuario, 22-oct, 2.64)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   const inicio = cliente.indexOf('function mostrarModalCaptura()');
   const fuente = cliente.slice(inicio, cliente.indexOf('function cerrarCaptura(', inicio));
   // La ventana como la dejó un Corregir guardado: X y Cancelar apagados, con la marca de guardado y escondida
@@ -77,7 +78,7 @@ test('La X de la ventana se prende al abrirla: un guardado que cerró la ventana
 });
 
 test('Después de Reasignar se vuelve a pintar la ficha abierta (producción, 4-oct)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   const reasignar = cliente.slice(cliente.indexOf('function abrirResponsiva(tipo, fila, para, opciones)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   assert.match(reasignar, /if \(vigente\(\) && actual && actual\.id === fila\.id\) abrir\(actual\.tipo, actual\.id, true\);/);
 });
@@ -114,7 +115,7 @@ test('Capital Humano: conBajasRecientes trae los activos y las bajas de los últ
 });
 
 test('Capital Humano en Líneas: la lista marca a las bajas y Gestión de activos sigue solo con activos (2.58)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /baja: c\.estatus && String\(c\.estatus\)\.toUpperCase\(\) !== 'ACTIVO',/);
   assert.match(cliente, /const etiquetaDe = \(partes, c\) => \(c\.baja \? \['BAJA'\] : \[\]\)\.concat\(partes\)\.filter\(Boolean\)\.join\(' · '\);/);
   assert.match(cliente, /const distintos = \(campo\) => gente\.filter\(\(c\) => !c\.baja\)/);

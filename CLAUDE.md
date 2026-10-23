@@ -57,6 +57,37 @@ dividir es seguro mientras el orden de `<?!= include(...) ?>` en
 `src/html/Index.html` mantenga los archivos "base" (api, app) antes de los
 que dependen de sus helpers.
 
+Desde el 19-oct (fase 6.1, `tools/app/partir.js`) `app.html` es solo la base (shell, login, inicio, `NAV_GRUPOS`,
+ayudantes, tabla interactiva, ficha genérica); Vehículos, Incidencias, Uber y Tickets viven en `app-vehiculos.html`,
+`app-incidencias.html`, `app-uber.html` y `app-tickets.html`, incluidos justo después de `app` (otros archivos usan
+`CAMPOS_VEHICULO` y `CAMPOS_TICKET` al cargar). Lo que usan varios módulos se queda en la base. **Contrato del orden de
+carga** (`tests/orden-de-carga.js`): nada que corre al cargar (fuera de funciones, o en una IIFE) usa algo declarado en
+un archivo que carga después; si falla, se mueve la declaración a un archivo anterior o se usa dentro de una función.
+
+**Líneas es distinto** (19-oct, fase 6.2): todo vive dentro de `const Lineas = (function () { … })()`, así que sus
+partes no comparten el espacio global. `lineas.html` es la base (utilidades, formularios, estado) y cada pantalla
+(`lineas-telefonicas.html`, `-panorama`, `-activos`, `-accesorios`, `-resguardos`, `-bitacora`) es su propia
+función: toma lo que usa con `const { … } = Lineas.comun;` y se publica con `Object.assign(Lineas, { init… })`.
+Algo nuevo de la base que use una pantalla va en `Lineas.comun`. Un `let` de la base nunca se toma así (se
+copiaría su valor al cargar): se lee con una función (`panelActual()`) o va dentro de un objeto (`montaje.n`).
+Las pruebas leen todo Líneas con `tests/lineas-fuente.js`; un contrato revisa la forma y el orden en `Index.html`.
+
+**Líneas Telefónicas, por partes** (19-oct, fase 6.2b): `initTelefonicas` (en `lineas-telefonicas.html`) es el
+arranque y la lista; la ficha, documentos, acciones, captura, historial y páginas viven en
+`lineas-telefonicas-<parte>.html`, cada una `Lineas.telefonicas.registrar('parte', (T) => { …; return { … } })`, y
+`initTelefonicas` las monta con `T.montar(…)` antes de cablear los eventos. Lo del arranque (`raiz`, `pila`, `vigente`…)
+sale de `T`; lo de otra parte se pide arriba como un import, `const { abrirResguardo } = T.de('acciones');` (se busca al
+llamar, así no importa el orden); un `let` que usan varias partes vive en su dueña, que lo publica con get/set en `T`, y
+las demás lo leen como `T.captura`. Una función nueva que otra parte necesite va en el `return` de su parte.
+
+**Vehículos, por partes** (22-oct, fase 6.1b): igual que Telefónicas. `initVehiculos` (en `app-vehiculos.html`) es el
+arranque y la lista; la ficha, las acciones sobre sus registros, las capturas desde la ficha y la responsiva/adherente
+viven en `app-vehiculos-ficha|registros|capturas|documentos.html`, cada una `Vehiculos.registrar('parte', (T) => {…})`.
+El mecanismo (`registrar`, `T.de`, `T.montar` y el aviso "la parte X no publica Y") es **un solo componente,
+`componentes/partes.html`** (`Partes.crear('Vehículos')`), que también usa Telefónicas. Para abrir otra pantalla grande:
+una config como `tools/app/partir-vehiculos.js` sobre el motor `tools/partir/en-partes.js` (corta por nombres, así que
+cada rama lo corre sobre su archivo y lo suyo viaja con su región).
+
 **Una vista nueva** es una entrada en `NAV_GRUPOS` de `app.html` (o en `VISTAS_FUERA_DEL_MENU`
 si no va en el menú), con `plantilla`, `init` y `requiere`. Además lleva su módulo en
 `config/Modulos.gs` y sus `include` en `Index.html`. `navegarA`, el permiso y los íconos salen
@@ -66,6 +97,12 @@ panoramas, Sistemas y Encuestas dejaron de colgar de otro permiso o de no pedir 
 comparten `requiere` y `libre` solo queda en Help Desk (contrato). Si su pantalla lee la lista de otro
 módulo, esa definición lo declara en `leenTambien` (HojaServicio); un módulo de solo enlaces lleva
 `soloEnlaces: true` en `Modulos.gs` (no cuenta como familia).
+
+**Una llamada nueva del servidor** (`api…`, lo que la pantalla pide con `google.script.run`) va en
+`src/api/<Módulo>.gs`, el del módulo dueño (el servicio al que llama / el permiso que pide), como wrapper delgado
+hacia su Service, y se llama `api<Módulo><Qué>`. Módulo nuevo = archivo nuevo. `src/ClientApi.gs` es solo la base (lo
+de todos: medir, listas con huella, Inicio, sesión, campanita, qué impide borrar, fichas en una llamada). Desde la fase
+6.3 (22-oct, `tools/api/partir.js`); `source-contracts` lo revisa y las pruebas leen todo con `tests/api-fuente.js`.
 
 ## Componentes (`src/html/js/componentes/`)
 

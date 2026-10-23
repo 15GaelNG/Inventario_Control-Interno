@@ -1,0 +1,386 @@
+<script>
+  /**
+   * lineas-resguardos.html — Resguardos y cancelaciones: la bandeja de quien recibe los equipos.
+   * Era parte de lineas.html (fase 6.2, tools/lineas/partir.js): lo de la base sale de Lineas.comun.
+   */
+  (function () {
+    'use strict';
+    const { $, aplicarCambiosIndice, aviso, chip, elegirPastilla, esc, fechaTabla, formularioResguardo, guion, icono,
+      llamar, memoria, mensajeError, miles, montaje, pedirDatos, quitarDelPanel, tablaLineas, tablaRegreso, tilesKpi } = Lineas.comun;
+    const { irARegistro } = Lineas;
+
+    /** Retirar cancelación (pendiente 3.14): la línea vuelve a como estaba antes de mandarla a cancelar. */
+    function vistaRetiro(ids) {
+      return llamar('apiLineasVistaRetirarCancelacion', ids).then((v) => v.filas.map((q) => '<div class="ln-quitar"><p class="ln-fuerte">Línea ' + esc(q.numero || '—') +
+        (q.nuco ? ' · NUCO ' + esc(q.nuco) : '') + '</p>' + tablaRegreso(q, 'La línea vuelve a como estaba antes de mandarla a cancelar:', 'Sin cambios que regresar: solo sale de Cancelaciones.') +
+        '</div>').join(''));
+    }
+
+    /**
+     * Corregir resguardo desde el panel, sin salir de él (usuario, 21-oct; antes abría el equipo en Líneas telefónicas): el
+     * mismo formulario de abrirResguardo, en una ventana encima del panel. `dentro`: la raíz del panel (sus estilos).
+     */
+    function corregirEnPanel(fila, dentro, alTerminar) {
+      let fr = null;
+      const cuerpo = llamar('apiLineasFormularioResguardo', [fila.REGISTRO_ID], { corregir: true }).then((form) => {
+        if (!(form.equipos || []).length) throw new Error((form.omitidos || []).map((o) => (o.nuco ? 'NUCO ' + o.nuco + ': ' : '') + o.motivo).join(' · ') || 'No se encontró el equipo.');
+        fr = formularioResguardo(form, { corregir: true });
+        return fr.html;
+      });
+      const subtitulo = ['NUCO ' + (fila.NUCO || '—'), fila.MODELO].filter(Boolean).join(' · ');
+      return pedirDatos('Corregir resguardo', subtitulo, [], 'Corregir resguardo', {
+        ancho: { tipo: 'RESGUARDO', icono: 'archive' }, dentro: dentro, cuerpo: cuerpo, espera: 'Corrigiendo 1 resguardo(s)',
+        alCuerpo: (div) => {
+          fr.activar(div);
+          // Los botones de estatus: en Líneas telefónicas los atiende su pantalla; aquí, la ventana
+          div.addEventListener('click', (ev) => { const p = ev.target.closest('.ln-pastilla'); if (p && !p.disabled) elegirPastilla(p); });
+        },
+        leer: (div) => fr.leer(div),
+        // Si el servidor no lo corrigió (p. ej. Pau ya lo entregó), el motivo sale en la ventana y «Volver» regresa a lo capturado
+        alConfirmar: (d) => llamar('apiLineasMandarResguardo', fr.equipos.map((q) => q.id),
+          { comentario: d.valores._MOTIVO, ticket: d.valores._TICKET, porEquipo: d.porEquipo, corregir: true }).then((r) => {
+          if (!(r.hechos || []).length) throw new Error((r.omitidos || []).map((x) => x.motivo).join(' · ') || 'No se corrigió.');
+          return r;
+        }),
+      }).then((r) => {
+        if (!r) return null;
+        aviso(icono('circle-check') + ' Resguardo corregido · NUCO ' + esc(fila.NUCO || '—') + '.', 8000);
+        // El inventario ya cargado se pone al día con lo que cambió; si no se ha abierto, lo lee completo al entrar
+        if (memoria.indice && r.indice) aplicarCambiosIndice(r.indice);
+        else memoria.cargadoEn = 0;
+        return alTerminar ? alTerminar(r) : r;
+      });
+    }
+
+    /**
+     * Excel por asesor (usuario, 22-oct; botón aparte del «Exportar a Excel» de la tabla, que da la base): una hoja por
+     * compañía y asesor («TELCEL - ALFREDO», «ATT - KARLA») con las POR FIRMAR, en la tabla que Pau pega en la carta y
+     * el correo al asesor: REGIÓN, CUENTA (la cuenta padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y ASESOR. Igual para
+     * Telcel y AT&T. Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
+     */
+    const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
+    function hojasPorAsesor(filas) {
+      const grupos = {};
+      filas.filter((f) => f.CANCELACION === 'POR FIRMAR').forEach((f) => {
+        const compania = String(f.COMPANIA || 'SIN COMPAÑÍA').toUpperCase().replace(/&/g, '');
+        const nombre = compania + ' - ' + (String(f.ASESOR || '').toUpperCase() || 'SIN ASESOR');
+        (grupos[nombre] = grupos[nombre] || []).push(COLUMNAS_ASESOR.map((c) => String(f[c[0]] || '')));
+      });
+      // Telcel primero, luego AT&T y lo demás; dentro, por asesor
+      const orden = (n) => (/^TELCEL/.test(n) ? 0 : /^ATT/.test(n) ? 1 : 2);
+      return Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b))
+        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_ASESOR.map((c) => c[1]), filas: grupos[n] }));
+    }
+
+    // xlsx-js-style: SheetJS con estilos de celda (el de ExportarExcel no los escribe). Se carga solo para este Excel y
+    // deja window.XLSX como estaba
+    let xlsxConEstilos = null;
+    function cargarXlsxConEstilos() {
+      if (!xlsxConEstilos) {
+        xlsxConEstilos = new Promise((resolve, reject) => {
+          const previo = window.XLSX;
+          const script = document.createElement('script');
+          script.src = 'https:\/\/cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+          script.onload = () => { const lib = window.XLSX; if (previo) window.XLSX = previo; resolve(lib); };
+          script.onerror = () => { xlsxConEstilos = null; reject(new Error('No se pudo cargar el generador de Excel. Revisa tu conexión e intenta de nuevo.')); };
+          document.head.appendChild(script);
+        });
+      }
+      return xlsxConEstilos;
+    }
+
+    /** Descarga el Excel de hojasPorAsesor con el formato del correo (encabezado azul, bordes). Regresa cuántas líneas. */
+    async function descargarPorAsesor(filas) {
+      const hojas = hojasPorAsesor(filas);
+      if (!hojas.length) throw new Error('No hay líneas POR FIRMAR con los filtros actuales');
+      const XLSX = await cargarXlsxConEstilos();
+      const libro = XLSX.utils.book_new();
+      const borde = { style: 'thin', color: { rgb: '000000' } };
+      const bordes = { top: borde, bottom: borde, left: borde, right: borde };
+      const centro = { horizontal: 'center', vertical: 'center' };
+      hojas.forEach((h) => {
+        const hoja = XLSX.utils.aoa_to_sheet([h.titulos].concat(h.filas));
+        h.titulos.forEach((t, c) => {
+          for (let r = 0; r <= h.filas.length; r++) {
+            const celda = hoja[XLSX.utils.encode_cell({ r: r, c: c })];
+            if (!celda) continue;
+            celda.s = r ? { alignment: centro, border: bordes }
+              : { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '002060' } }, alignment: centro, border: bordes };
+          }
+        });
+        hoja['!cols'] = h.titulos.map((t, c) => ({ wch: Math.max(String(t).length, ...h.filas.map((f) => f[c].length)) + 2 }));
+        XLSX.utils.book_append_sheet(libro, hoja, h.nombre);
+      });
+      const f = new Date();
+      XLSX.writeFile(libro, 'Cancelaciones por asesor_' + Formato.dia(f) + '_' + Formato.hora(f).replace(':', '') + '.xlsx', { compression: true });
+      return hojas.reduce((n, h) => n + h.filas.length, 0);
+    }
+
+    function initResguardos() {
+      const n = ++montaje.n;
+      const raiz = document.getElementById('ln-resguardos');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      let vista = 'RESGUARDOS';
+      let datos = null;
+      let tabla = null;
+      let marcarKpi = null;
+      let filtros = {};
+      refreshIcons();
+
+      const fechaCorta = (v) => (v ? fechaTabla(v) : '');
+      const COLUMNAS = {
+        RESGUARDOS: [
+          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
+          { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'MODELO', titulo: 'Modelo', tipo: 'texto' },
+          { campo: 'IMEI', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          // Lo que se mandó con el equipo (usuario, 13-oct); mientras sigue abierto, lo de hoy del inventario
+          { campo: 'ACCESORIOS', titulo: 'Accesorios', tipo: 'texto', render: (v) => guion(String(v || '').split(',').map((x) => x.trim()).filter(Boolean).join(', ')) },
+          { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
+          { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
+          { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
+          { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },
+          // El comentario de la acción se guarda en MOTIVO; se titula «Comentario», como lo pide la ventana (usuario, 22-oct).
+          // COMENTARIO es el de cada equipo de antes (la ventana ya no lo pide; al corregir lleva el mismo texto)
+          { campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto' },
+          { campo: 'COMENTARIO', titulo: 'Comentario por equipo', tipo: 'texto', visible: false },
+          { campo: 'RECIBIDO_EN', titulo: 'Recibido', tipo: 'lnFechaHora' },
+          { campo: 'RECIBIO', titulo: 'Recibió', tipo: 'lista', visible: false },
+          { campo: 'ENTREGADO_EN', titulo: 'Entregado', tipo: 'lnFechaHora', visible: false },
+          { campo: 'ENTREGADO_A', titulo: 'Entregado a', tipo: 'lista', visible: false },
+          { campo: 'ENTREGA_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto', visible: false },
+          { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', visible: false },
+          { campo: 'TIPO', titulo: 'Tipo', tipo: 'lista', visible: false },
+          { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se quitó', tipo: 'texto', visible: false },
+        ],
+        CANCELACIONES: [
+          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
+          { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
+          { campo: 'CANCELACION', titulo: 'Cancelación', tipo: 'lista', render: (v) => chip(v) },
+          // LINEA VENCIDA o CANCELACION ANTICIPADA (usuario, 13-oct)
+          { campo: 'MOTIVO_CANCELACION', titulo: 'Motivo', tipo: 'lista' },
+          { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista' },
+          // Como en el correo al asesor (usuario, 22-oct): la región sale de la lada (LineasUtil.regionDeNumero)
+          { campo: 'REGION', titulo: 'Región', tipo: 'lista' },
+          { campo: 'CUENTA_PADRE', titulo: 'Cuenta padre', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
+          { campo: 'FIN_PLAN', titulo: 'Fin del adendum', tipo: 'texto' },
+          { campo: 'ASESOR', titulo: 'Asesor', tipo: 'lista' },
+          { campo: 'CARTA_FIRMADA_EN', titulo: 'Carta firmada', tipo: 'lnFechaHora' },
+          { campo: 'CARTA_ENVIADA_EN', titulo: 'Carta enviada', tipo: 'lnFechaHora' },
+          { campo: 'CANCELADA_EN', titulo: 'Cancelada', tipo: 'lnFechaHora' },
+          { campo: 'CANCELACION_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto' },
+          { campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto', visible: false },
+          { campo: 'ESTADO', titulo: 'Equipo (resguardo)', tipo: 'lista', render: (v) => chip(v), visible: false },
+          { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista', visible: false },
+          { campo: 'CANCELO', titulo: 'Confirmó', tipo: 'lista', visible: false },
+          { campo: 'RETIRADO_EN', titulo: 'Retirada', tipo: 'lnFechaHora', visible: false },
+          { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se retiró', tipo: 'texto', visible: false },
+        ],
+      };
+
+      /**
+       * Paso de la bandeja: pide lo necesario (o solo confirma) y llama al servidor. La ventana se queda con la pantalla
+       * de espera desde el clic hasta que contesta, y un error se ve ahí mismo (usuario, 13-oct: antes no se sabía si
+       * estaba en proceso hasta el aviso del final).
+       */
+      async function paso(accion, filas, opciones) {
+        const o = opciones || {};
+        const detalle = filas.map((f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + (f.ESTADO || f.CANCELACION || ''));
+        // o.cuerpo (Retirar cancelación): la ventana ya dice qué pasa con cada una, sin la lista
+        const r = await pedirDatos(o.titulo, o.mensaje, o.campos || [], o.boton, {
+          detalle: o.cuerpo ? [] : detalle, cuerpo: o.cuerpo, peligro: !!o.peligro, espera: o.espera || (o.hecho + '…'),
+          alConfirmar: (extra) => llamar('apiLineasAccionBandejaResguardo', accion, filas.map((f) => f.ID), extra),
+        });
+        if (!r) return;
+        const omitidos = r.omitidos || [];
+        const avisos = (r.hechos || []).filter((h) => h.aviso);
+        aviso(icono('circle-check') + ' ' + o.hecho + ': ' + miles((r.hechos || []).length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
+          omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
+        avisos.forEach((h) => aviso(icono('triangle-alert', 'ln-alerta') + ' NUCO ' + h.nuco + ': ' + h.aviso, 10000));
+        if (tabla) tabla.limpiarSeleccion();
+        if (o.inventario) memoria.cargadoEn = 0; // el inventario cambió: que Líneas Telefónicas lo vuelva a pedir
+        cargar();
+      }
+
+      // Cada botón sale solo cuando todo lo seleccionado está en su estado (usuario, 22-oct): Recibir, lo por recibir;
+      // Entregar a líneas, Vendido, Donado y Desechado, lo ya recibido
+      const recibidos = (filas) => filas.every((f) => f.ESTADO === 'EN RESGUARDO');
+      const porRecibir = (filas) => filas.every((f) => f.ESTADO === 'PENDIENTE DE RECEPCION');
+      // Cancelaciones: la fase solo avanza, y se puede brincar hacia adelante (usuario, 22-oct)
+      const enFase = (fases) => (filas) => filas.every((f) => fases.indexOf(f.CANCELACION) >= 0);
+      const EN_CURSO = ['POR FIRMAR', 'CARTA FIRMADA', 'CARTA ENVIADA'];
+      const ACCIONES = {
+        RESGUARDOS: [
+          { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1, visible: porRecibir,
+            alHacer: (filas) => paso('RECIBIR', filas, { titulo: '¿Confirmas que recibiste ' + miles(filas.length) + ' equipo(s)?',
+              mensaje: 'Pasan a EN RESGUARDO con la fecha de hoy.', boton: 'Recibí los equipos', hecho: 'Recibidos', espera: 'Recibiendo ' + miles(filas.length) + ' equipo(s)' }) },
+          // Textos en oración (usuario, 20-oct; pendiente 3.12)
+          { icono: 'hand-helping', texto: 'Entregar a líneas', titulo: 'Un equipo guardado se entrega a Líneas para asignarlo', minimo: 1, visible: recibidos,
+            alHacer: (filas) => paso('ENTREGAR', filas, { titulo: 'Entregar a líneas', mensaje: miles(filas.length) + ' equipo(s) pasan a ENTREGADO A LINEAS.',
+              campos: [{ clave: 'recibe', etiqueta: 'Quién de Líneas lo recibe', requerido: true }, { clave: 'asunto', etiqueta: 'Asunto del correo o ticket (opcional)' }],
+              boton: 'Entregar', hecho: 'Entregados', espera: 'Entregando ' + miles(filas.length) + ' equipo(s) a Líneas' }) },
+          { icono: 'badge-dollar-sign', texto: 'Vendido', titulo: 'El equipo se vendió: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
+            alHacer: (filas) => paso('VENDIDO', filas, { titulo: 'Marcar como vendido', mensaje: miles(filas.length) + ' equipo(s) pasan a VENDIDO aquí y en el inventario.',
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar vendido', hecho: 'Vendidos', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como vendidos' }) },
+          // Donado y Desechado, como Vendido: solo lo ya recibido (pendiente 3.16, usuario 22-oct)
+          { icono: 'gift', texto: 'Donado', titulo: 'El equipo se donó: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
+            alHacer: (filas) => paso('DONADO', filas, { titulo: 'Marcar como donado', mensaje: miles(filas.length) + ' equipo(s) pasan a DONADO aquí y en el inventario.',
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar donado', hecho: 'Donados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como donados' }) },
+          { icono: 'trash-2', texto: 'Desechado', titulo: 'El equipo se desechó: también cambia su estatus en el inventario', minimo: 1, visible: recibidos,
+            alHacer: (filas) => paso('DESECHADO', filas, { titulo: 'Marcar como desechado', mensaje: miles(filas.length) + ' equipo(s) pasan a DESECHADO aquí y en el inventario.',
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
+        ],
+        CANCELACIONES: [
+          { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1, visible: enFase(['POR FIRMAR']),
+            alHacer: (filas) => paso('CARTA_FIRMADA', filas, { titulo: 'Carta firmada', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA FIRMADA.',
+              campos: [{ clave: 'asesor', etiqueta: 'Asesor', valor: filas[0].ASESOR || '', opciones: ['KARLA', 'WILBERTO', 'ALFREDO'].indexOf(filas[0].ASESOR) >= 0 || !filas[0].ASESOR ? ['KARLA', 'WILBERTO', 'ALFREDO'] : null }],
+              boton: 'Guardar', hecho: 'Cartas firmadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) firmada(s)' }) },
+          { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1, visible: enFase(['POR FIRMAR', 'CARTA FIRMADA']),
+            alHacer: (filas) => paso('CARTA_ENVIADA', filas, { titulo: 'Carta enviada al proveedor', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA ENVIADA.',
+              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) enviada(s)' }) },
+          { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true, visible: enFase(EN_CURSO),
+            alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
+              mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
+              peligro: true, hecho: 'Canceladas', inventario: true, espera: 'Cancelando ' + miles(filas.length) + ' línea(s)' }) },
+          // Solo Pau retira una cancelación (usuario, 20-oct; pendiente 3.12): la línea vuelve a como estaba antes (3.14, 21-oct)
+          { icono: 'undo-2', texto: 'Retirar cancelación', titulo: 'Ya no se cancela: sale de Cancelaciones (queda en el historial) y la línea vuelve a como estaba', minimo: 1, visible: enFase(EN_CURSO),
+            alHacer: (filas) => paso('RETIRAR_CANCELACION', filas, { titulo: 'Retirar cancelación', mensaje: '', cuerpo: vistaRetiro(filas.map((f) => f.ID)),
+              campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Retirar cancelación', hecho: 'Retiradas', inventario: true,
+              espera: 'Retirando ' + miles(filas.length) + ' cancelación(es)' }) },
+        ],
+      };
+      // Los de Líneas, en lo que mandaron (pendiente 3.12): corregirlo y, si Pau aún no lo recibe, quitarlo
+      const ACCIONES_LINEAS = [
+        // Se corrige aquí mismo, sin ir a Líneas telefónicas (usuario, 21-oct)
+        { icono: 'archive-restore', texto: 'Corregir resguardo', titulo: 'Destino, estatus y comentario de su renglón', maximo: 1,
+          visible: (filas) => filas.length === 1 && ['PENDIENTE DE RECEPCION', 'EN RESGUARDO'].indexOf(filas[0].ESTADO) >= 0,
+          alHacer: (filas) => corregirEnPanel(filas[0], raiz, () => { if (tabla) tabla.limpiarSeleccion(); cargar(); }) },
+        { icono: 'archive-x', texto: 'Quitar del panel', titulo: 'Mandado por error: vuelve a como estaba antes de mandarlo', minimo: 1,
+          visible: (filas) => filas.every((f) => f.ESTADO === 'PENDIENTE DE RECEPCION'),
+          alHacer: (filas) => quitarDelPanel(filas.map((f) => f.ID), () => { if (tabla) tabla.limpiarSeleccion(); memoria.cargadoEn = 0; cargar(); }) },
+      ];
+
+      function filasVista() {
+        const todas = (datos && datos.filas) || [];
+        // Las líneas mandadas a cancelación sin resguardo no tienen recepción (ESTADO vacío): solo salen en Cancelaciones
+        return vista === 'RESGUARDOS' ? todas.filter((f) => f.ESTADO) : todas.filter((f) => f.CANCELACION);
+      }
+
+      function pintarKpis() {
+        const filas = filasVista();
+        const cuenta = (campo, valor) => filas.filter((f) => f[campo] === valor).length;
+        const defs = vista === 'RESGUARDOS' ? [
+          { icono: 'archive', valor: miles(filas.length), etiqueta: 'Mandados a resguardo' },
+          { icono: 'clock', valor: miles(cuenta('ESTADO', 'PENDIENTE DE RECEPCION')), etiqueta: 'Por recibir', clase: 'stat-tile-warn', filtros: { ESTADO: { valores: ['PENDIENTE DE RECEPCION'] } } },
+          { icono: 'package-check', valor: miles(cuenta('ESTADO', 'EN RESGUARDO')), etiqueta: 'En resguardo', filtros: { ESTADO: { valores: ['EN RESGUARDO'] } } },
+          { icono: 'hand-helping', valor: miles(cuenta('ESTADO', 'ENTREGADO A LINEAS')), etiqueta: 'Entregados a líneas', clase: 'stat-tile-ok', filtros: { ESTADO: { valores: ['ENTREGADO A LINEAS'] } } },
+          { icono: 'badge-dollar-sign', valor: miles(cuenta('ESTADO', 'VENDIDO')), etiqueta: 'Vendidos', filtros: { ESTADO: { valores: ['VENDIDO'] } } },
+          { icono: 'gift', valor: miles(cuenta('ESTADO', 'DONADO')), etiqueta: 'Donados', filtros: { ESTADO: { valores: ['DONADO'] } } },
+          { icono: 'trash-2', valor: miles(cuenta('ESTADO', 'DESECHADO')), etiqueta: 'Desechados', filtros: { ESTADO: { valores: ['DESECHADO'] } } },
+        ] : [
+          { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Líneas a cancelar' },
+          { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] } } },
+          { icono: 'signature', valor: miles(cuenta('CANCELACION', 'CARTA FIRMADA')), etiqueta: 'Carta firmada', filtros: { CANCELACION: { valores: ['CARTA FIRMADA'] } } },
+          { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
+          { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
+          { icono: 'undo-2', valor: miles(cuenta('CANCELACION', 'RETIRADA')), etiqueta: 'Retiradas', filtros: { CANCELACION: { valores: ['RETIRADA'] } } },
+        ];
+        marcarKpi = tilesKpi($('#lnr-kpis', raiz), defs, () => tabla);
+        marcarKpi(filtros);
+      }
+
+      function crearTabla() {
+        const puede = !!(datos && datos.puedeAprobar);
+        // Corregir resguardo y Quitar del panel, aquí solo para los de Líneas: ni Pau ni administradores (usuario, 21-oct)
+        const opera = !!(datos && datos.operaPanel);
+        $('#lnr-tabla', raiz).innerHTML = '';
+        tabla = tablaLineas($('#lnr-tabla', raiz), {
+          idCampo: 'ID',
+          idTabla: 'lineas-resguardos-' + vista.toLowerCase() + '-v1',
+          columnas: COLUMNAS[vista],
+          ordenInicial: { campo: 'FECHA', dir: 'desc' },
+          textoVacio: vista === 'RESGUARDOS' ? 'Todavía no se ha mandado nada a resguardo' : 'No hay líneas en cancelación',
+          // La base; «Cancelaciones» (Excel por asesor) va a su lado (botonBaseCancelaciones, usuario, 22-oct)
+          exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
+          etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
+          detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
+          accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
+          accionesSeleccion: (puede ? ACCIONES[vista] : []).concat(opera && vista === 'RESGUARDOS' ? ACCIONES_LINEAS : []),
+          alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
+        });
+        tabla.setDatos(filasVista());
+        $('#lnr-solo-lectura', raiz).hidden = puede || opera;
+        if (vista === 'CANCELACIONES') botonBaseCancelaciones();
+      }
+
+      /**
+       * «Cancelaciones» (usuario, 22-oct; primero «Base cancelaciones»): al lado de «Exportar a Excel» de la tabla (que da la base), el Excel por
+       * asesor (descargarPorAsesor). La barra de la tabla se arma una vez al crearla; sin el botón de la tabla (sin permiso
+       * de exportar) tampoco sale este.
+       */
+      function botonBaseCancelaciones() {
+        const excel = $('#lnr-tabla .dt-btn-excel', raiz);
+        if (!excel) return;
+        const boton = document.createElement('button');
+        boton.type = 'button';
+        boton.className = 'btn-excel';
+        boton.id = 'lnr-base-cancelaciones';
+        boton.title = 'Las líneas POR FIRMAR, una hoja por compañía y asesor, con la tabla de la carta y el correo; respeta los filtros y la búsqueda';
+        boton.innerHTML = icono('file-spreadsheet') + ' Cancelaciones';
+        excel.insertAdjacentElement('afterend', boton);
+        boton.addEventListener('click', async () => {
+          if (!tabla || boton.disabled) return;
+          const original = boton.innerHTML;
+          boton.disabled = true;
+          boton.innerHTML = '<span class="ln-spinner"></span> Exportando…';
+          try {
+            const n = await descargarPorAsesor(tabla.getFiltradas());
+            Notificar.exito(n + (n === 1 ? ' línea POR FIRMAR exportada' : ' líneas POR FIRMAR exportadas'));
+          } catch (e) {
+            Notificar.error(mensajeError(e));
+          } finally {
+            boton.disabled = false;
+            boton.innerHTML = original;
+          }
+        });
+      }
+
+      function cargar() {
+        if (tabla) tabla.setCargando(true);
+        llamar('apiLineasBandejaResguardos').then((texto) => {
+          if (!vigente()) return;
+          datos = JSON.parse(texto);
+          crearTabla();
+          pintarKpis();
+        }).catch((e) => {
+          if (!vigente()) return;
+          if (!tabla) tabla = tablaLineas($('#lnr-tabla', raiz), { idCampo: 'ID', columnas: [{ campo: 'ID', titulo: 'ID' }], detalle: false, exportar: false });
+          tabla.setError('No se pudo cargar la bandeja: ' + mensajeError(e));
+        });
+      }
+
+      raiz.querySelector('.lnr-pestanas').addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-lnr-vista]');
+        if (!b || b.dataset.lnrVista === vista) return;
+        vista = b.dataset.lnrVista;
+        filtros = {};
+        raiz.querySelectorAll('[data-lnr-vista]').forEach((x) => {
+          x.classList.toggle('activo', x === b);
+          x.setAttribute('aria-selected', String(x === b));
+        });
+        if (datos) { crearTabla(); pintarKpis(); }
+      });
+      $('#lnr-actualizar', raiz).addEventListener('click', cargar);
+      cargar();
+    }
+
+    Object.assign(Lineas, {
+      initResguardos: initResguardos,
+    });
+  })();
+</script>

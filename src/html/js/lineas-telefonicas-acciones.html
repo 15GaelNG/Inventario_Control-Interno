@@ -1,0 +1,606 @@
+<script>
+  /**
+   * lineas-telefonicas-acciones.html — Líneas Telefónicas: las acciones sobre equipos y líneas: responsiva, masiva, resguardo, vínculo y cancelación.
+   * Parte de initTelefonicas (fase 6.2b, tools/lineas/partir-telefonicas.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  (function () {
+    'use strict';
+    const { $, activarCombosEn, aplicarCambiosIndice, aviso, erroresFormularioEn, esc, formularioResguardo,
+      htmlElementoFormulario, htmlFormularioAppSheet, icono, leerFormularioEn, llamar, marcarErroresEn, memoria,
+      mensajeError, miles, pedirDatos, pintarIconos, puedeOperar } = Lineas.comun;
+    Lineas.telefonicas.registrar('acciones', (T) => {
+      const { MOTIVOS_CANCELACION, pdfsEnCurso, pila, pintarIndicadores, pintarListado, raiz, tablas, vigente } = T;
+      const { abrir } = T.de('ficha');
+      const { capturarEnFlujo, cerrarCaptura, errorAlGuardar, estadoGuardado, mostrarErrorCaptura, mostrarEspera,
+        mostrarModalCaptura, refrescarDespuesDeCaptura } = T.de('captura');
+
+      /**
+       * Responsiva (pendiente 2.49, usuario 16-oct: «una reasignación es lo mismo que una responsiva»), del equipo o de la
+       * línea sin equipo; reemplaza a Reasignar. Equipo y línea van fijos; la persona se elige en la responsiva y su
+       * comentario es el de la acción. Si firma la misma persona que lo tiene, es renovación: se guarda con su PDF y lo de
+       * la responsiva pasa a la ficha. Si firma otra persona, o estaba en resguardo o DISPONIBLE, es reasignación; en un
+       * equipo la inspección es obligatoria (usuario, 5-oct y 16-oct), en este orden: 1) la responsiva se llena y se revisa
+       * (aún no se guarda), 2) la inspección se captura y se guarda, 3) se guarda la responsiva con las dos (el servidor
+       * exige la inspección) y se genera su PDF. Cerrar cualquiera sin guardar no cambia nada; si falla, la inspección del
+       * día ya no se vuelve a pedir. La línea sin equipo no lleva inspección.
+       */
+      async function abrirResponsiva(tipo, fila, para, opciones) {
+        if (!fila) return;
+        const esEquipo = tipo === 'equipo';
+        const nombre = esEquipo ? 'NUCO ' + (fila.nuco || '—') : 'Línea ' + (fila.numero || '—');
+        const subtitulo = [nombre, esEquipo ? fila.modelo : fila.compania, fila.responsable].filter(Boolean).join(' · ');
+        // desdeCorregir: la que abre Corregir equipo al pasarlo a USO; el servidor acepta el estatus final (pendiente 2.55)
+        const desdeCorregir = !!(esEquipo && opciones && opciones.desdeCorregir);
+        const ref = Object.assign(esEquipo ? { equipoId: fila.id } : { lineaId: fila.id }, { modo: 'RESPONSIVA' }, desdeCorregir ? { desdeCorregir: true } : {});
+        const reasigna = (valores) => esEquipo && !mismaPersonaResponsiva(fila, valores);
+        const listo = (r) => aplicarCambiosIndice(r && r.filas).then(() => {
+          Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+          if (vigente()) { pintarIndicadores(); pintarListado(); }
+        }).catch(() => {});
+        const resp = await capturarEnFlujo('RESPONSIVA', ref, {
+          titulo: 'Responsiva', subtitulo: subtitulo, sinPdf: true,
+          // Desde Vínculos, soltado sobre una persona: a quién va (la persona se elige en la responsiva, como siempre)
+          aviso: para ? 'Para ' + para.nombre + (para.noEmpleado ? ' · No. ' + para.noEmpleado : '') : undefined,
+          // Otra persona en un equipo sigue a la inspección; si no, se guarda aquí y su PDF sale en la misma ventana
+          botonSegun: (valores) => (reasigna(valores) ? 'Seguir a la inspección' : null),
+          pdfAqui: (r) => !r.reasignar,
+          despues: listo,
+          guardar: (datos) => (reasigna(datos.valores) ? Promise.resolve({ reasignar: true, datos: datos }) : llamar('apiLineasGuardarResponsiva', datos)),
+        });
+        if (!resp || !resp.reasignar) return;
+        let inspeccionId = inspeccionHecha(fila.id);
+        let pdfInspeccion = null;
+        if (!inspeccionId) {
+          // Empieza con lo capturado en la responsiva y no cambia a la persona del inventario: eso lo hace la responsiva
+          const r = await capturarEnFlujo('INSPECCION', Object.assign({ equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+            desdeCorregir ? { desdeCorregir: true } : {}),
+            { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y responsiva' });
+          if (!r) return;
+          inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
+          inspeccionId = r.id;
+          pdfInspeccion = r.pdfPromesa || null;
+        }
+        const d = resp.datos;
+        const sesion = T.captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '',
+          pdfFirmas: { responsable: d.firmaResponsableBase64 || null, ci: d.firmaCiBase64, patron: d.patronBase64 || null } };
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono('signature');
+        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        $('#ln-captura-titulo', raiz).textContent = 'Responsiva';
+        $('#ln-captura-subtitulo', raiz).textContent = subtitulo;
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        const modal = $('#ln-modal-captura', raiz);
+        modal.setAttribute('aria-busy', 'true');
+        modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+        mostrarEspera('Guardando la responsiva');
+        llamar('apiLineasGuardarResponsiva', Object.assign({}, d, { inspeccionId: inspeccionId })).then((r) => {
+          if (!vigente() || T.captura !== sesion) return;
+          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id, false, pdfInspeccion ? { promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' } : null);
+          listo(r).then(() => {
+            // La ficha abierta se vuelve a pintar con la persona y los estatus nuevos (como Mandar a resguardo, 4-oct)
+            const actual = pila[pila.length - 1];
+            if (vigente() && actual && actual.id === fila.id) abrir(actual.tipo, actual.id, true);
+          });
+        }).catch((e) => {
+          if (!vigente() || T.captura !== sesion) return;
+          sesion.guardando = false;
+          modal.removeAttribute('aria-busy');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          mostrarEspera('No se pudo guardar la responsiva', { tono: 'error', icono: 'triangle-alert', texto: 'La inspección sí quedó guardada.', detalle: mensajeError(e),
+            acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+        });
+      }
+
+      /**
+       * ¿Firma la misma persona que lo tiene hoy? Solo en USO y con el mismo nombre (sin acentos); lo mismo que pregunta el
+       * servidor (LineasAcciones.esRenovacion). Si no, la responsiva reasigna y el equipo pide su inspección.
+       */
+      function mismaPersonaResponsiva(fila, valores) {
+        const nombre = (x) => Formato.normal(x).replace(/\s+/g, ' ').trim();
+        const antes = nombre(fila.responsable);
+        return String(fila.estatus || '').trim().toUpperCase() === 'USO' && !!antes && antes === nombre((valores || {}).RESPONSABLE);
+      }
+
+      /** La fila del índice de un equipo o una línea (para abrir la Responsiva desde un botón que solo trae el id). */
+      function filaDelIndice(tipo, id) {
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        return (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
+      }
+
+      /**
+       * Inspección capturada dentro de una acción (mandar a resguardo, reasignar). Si
+       * la acción no se completó, al reintentarla el mismo día no se vuelve a pedir: se guarda aquí por registro.
+       */
+      const inspeccionesDelDia = {};
+      const hoyLocal = () => new Date().toDateString();
+      const inspeccionHecha = (id) => (inspeccionesDelDia[id] && inspeccionesDelDia[id].dia === hoyLocal() ? inspeccionesDelDia[id].id : null);
+      // Documentos guardados dentro de una acción cuyo PDF se está generando (terminarFlujo; pendiente 2.63)
+
+      /**
+       * Pide en orden la inspección de cada equipo que todavía no la tiene. Regresa { idRegistro: idInspeccion } o null
+       * si se cerró alguna sin guardar (la acción no sigue).
+       */
+      async function inspeccionesEnFlujo(equipos, para, ultima) {
+        const ids = {};
+        let deLaUltima = null;
+        for (let i = 0; i < equipos.length; i++) {
+          const q = equipos[i];
+          const hecha = inspeccionHecha(q.id);
+          if (hecha) { ids[q.id] = hecha; continue; }
+          // ultima = { espera, guardar(datos, idsDeLasAnteriores) }: la última se guarda con la acción (Mandar a
+          // resguardo, 13-oct) y lo que contesta (con el id de la inspección) regresa en ultima
+          const conLaAccion = !!ultima && i === equipos.length - 1;
+          // enAccion = dentro de Mandar a resguardo: el comentario ya lo pidió la acción y el responsable es quien recibe
+          // (las personas de procesos, usuario 4-oct)
+          const r = await capturarEnFlujo('INSPECCION', { equipoId: q.id, enAccion: true }, Object.assign({
+            aviso: 'Inspección · NUCO ' + (q.nuco || '—') + (equipos.length > 1 ? ' · ' + (i + 1) + ' de ' + equipos.length : ''),
+            boton: i + 1 < equipos.length ? 'Guardar inspección y seguir' : 'Guardar inspección y terminar',
+          }, conLaAccion ? { espera: ultima.espera, guardar: (datos) => ultima.guardar(datos, Object.assign({}, ids)) } : {}));
+          if (!r) return null;
+          inspeccionesDelDia[q.id] = { id: r.id, dia: hoyLocal() };
+          ids[q.id] = r.id;
+          if (conLaAccion) deLaUltima = r;
+        }
+        return { ids: ids, ultima: deLaUltima };
+      }
+
+      /**
+       * Acción masiva sobre los equipos seleccionados (2 o más): el servidor arma el formulario
+       * (apiLineasFormularioMasivo) y aplica el cambio equipo por equipo con su bitácora (apiLineasAccionMasiva).
+       * Reasignar deja el equipo en USO; su línea solo cambia si estaba DISPONIBLE (pasa a USO con él).
+       */
+      async function abrirMasiva(accion, filas) {
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        const ids = filas.map((r) => r.id);
+        // Entregar una línea suelta usa el mismo formulario: solo cambian los textos (línea en vez de equipo)
+        const esLinea = accion.parte === 'linea';
+        const unidad = esLinea ? 'líneas' : 'equipos';
+        const nombreDe = (r) => (esLinea ? 'Línea ' + (r.numero || '—') : 'NUCO ' + (r.nuco || '—'));
+        const etiqueta = (r) => nombreDe(r) + ' · ' + (esLinea ? (r.compania || 'Sin compañía') : (r.modelo || 'Sin modelo')) + ' · ' + (r.responsable || 'Sin responsable') + ' · ' + (r.estatus || 'Sin estatus');
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono(accion.icono);
+        $('#ln-captura-tipo', raiz).textContent = 'ACCIÓN MASIVA';
+        $('#ln-captura-titulo', raiz).textContent = accion.texto;
+        $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + ' ' + unidad + ' seleccionados · cada cambio queda en su historial';
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        const sesion = T.captura = { tipo: 'MASIVA', firmas: {} };
+        let form;
+        try {
+          form = await llamar('apiLineasFormularioMasivo', accion.clave);
+        } catch (e) {
+          if (T.captura === sesion) cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
+          return;
+        }
+        if (T.captura !== sesion) return;
+        const elementos = form.elementos;
+        T.captura.contexto = { formulario: elementos };
+        const excede = filas.length > form.maximo;
+
+        // Reasignar "uno por uno": por cada equipo, sus datos de responsable (precargados con los actuales para
+        // editarlos rápido). Las columnas llevan prefijo "FILA|<id>|" para que cada campo sea único.
+        const colsResp = form.columnasResponsable || [];
+        const esReasignar = colsResp.length > 0;
+        const columnaFila = (id, c) => 'FILA|' + id + '|' + c;
+        const actualDe = (r) => ({ 'NO EMPLEADO': r['NO EMPLEADO'], RESPONSABLE: r.RESPONSABLE || r.responsable, PUESTO: r.PUESTO, DEPARTAMENTO: r.DEPARTAMENTO || r.departamento });
+        const elementosFila = {};
+        if (esReasignar) {
+          filas.forEach((r) => {
+            const actual = actualDe(r);
+            elementosFila[r.id] = colsResp.map((c) => {
+              const base = elementos.filter((e) => e.columna === c)[0];
+              const autollenar = base.autollenar ? Object.fromEntries(Object.entries(base.autollenar).map(([k, v]) => [columnaFila(r.id, k), v])) : undefined;
+              return Object.assign({}, base, { columna: columnaFila(r.id, c), valor: actual[c] || '', requerido: 'NUNCA', autollenar: autollenar });
+            });
+          });
+        }
+        const htmlIndividual = !esReasignar ? '' : '<div class="ln-masiva-individual" hidden>' +
+          filas.map((r) => '<section class="ln-af-seccion ln-masiva-fila" data-masiva-fila="' + esc(r.id) + '"><h4 class="ln-af-titulo">' + icono(esLinea ? 'card-sim' : 'smartphone') + ' ' +
+            esc(nombreDe(r)) + ' · ' + esc(esLinea ? (r.compania || 'Sin compañía') : (r.modelo || 'Sin modelo')) + '</h4><div class="ln-af-grid">' + elementosFila[r.id].map(htmlElementoFormulario).join('') + '</div></section>').join('') +
+          '</div>';
+        const htmlModo = !esReasignar ? '' : '<div class="ln-segmentado ln-masiva-modo" role="group" aria-label="Cómo reasignar">' +
+          '<button type="button" class="secondary activo" data-modo="TODOS" aria-pressed="true">' + icono('users') + ' Mismo responsable para todos</button>' +
+          '<button type="button" class="secondary" data-modo="INDIVIDUAL" aria-pressed="false">' + icono('list') + ' Uno por uno</button></div>';
+
+        cuerpo.innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' <span class="ln-masiva-efecto">' + esc(accion.efecto) + '</span></div>' +
+          (excede ? '<div class="error-msg">Son ' + miles(filas.length) + ' equipos; el máximo por operación es ' + form.maximo + '. Quita algunos de la selección.</div>' : '') +
+          htmlModo +
+          '<details class="ln-masiva-lista"><summary>' + icono('list') + ' Ver los ' + miles(filas.length) + ' ' + unidad + ' seleccionados</summary><ul>' +
+            filas.map((r) => '<li>' + esc(etiqueta(r)) + '</li>').join('') + '</ul></details>' +
+          htmlIndividual +
+          htmlFormularioAppSheet(elementos) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="' + (accion.peligro ? 'danger' : 'primary') + ' ln-btn-icono" id="cap-guardar"' + (excede ? ' disabled' : '') + '>' +
+            icono(accion.icono) + ' ' + esc(accion.boton) + ' (' + miles(filas.length) + ')</button></div>';
+        pintarIconos(cuerpo);
+        activarCombosEn(cuerpo, elementos);
+        const ctx = { nuevo: false, tipoInicial: '' };
+
+        let modo = 'TODOS';
+        if (esReasignar) {
+          const cambiarModo = (nuevo) => {
+            modo = nuevo;
+            cuerpo.querySelectorAll('.ln-masiva-modo [data-modo]').forEach((b) => {
+              b.classList.toggle('activo', b.dataset.modo === modo);
+              b.setAttribute('aria-pressed', String(b.dataset.modo === modo));
+            });
+            $('.ln-masiva-individual', cuerpo).hidden = modo !== 'INDIVIDUAL';
+            $('.ln-masiva-efecto', cuerpo).textContent = modo === 'INDIVIDUAL'
+              ? 'Cada equipo pasa al responsable que le pongas y queda en USO (su línea también, si estaba DISPONIBLE); los que dejes igual no se modifican.' : accion.efecto;
+            $('.ln-masiva-lista', cuerpo).hidden = modo === 'INDIVIDUAL';
+            colsResp.forEach((c) => {
+              const campo = cuerpo.querySelector('.ln-af-campo[data-af-columna="' + CSS.escape(c) + '"]');
+              if (campo) campo.classList.toggle('ln-oculto', modo === 'INDIVIDUAL');
+            });
+            marcarErroresEn(cuerpo, []);
+          };
+          cuerpo.querySelector('.ln-masiva-modo').addEventListener('click', (ev) => {
+            const b = ev.target.closest('[data-modo]');
+            if (b) cambiarModo(b.dataset.modo);
+          });
+          // Las listas de colaboradores de cada equipo se activan al entrar a su sección (con 150 equipos serían cientos)
+          cuerpo.addEventListener('focusin', (ev) => {
+            const sec = ev.target.closest && ev.target.closest('[data-masiva-fila]');
+            if (!sec || sec.dataset.combos) return;
+            sec.dataset.combos = '1';
+            activarCombosEn(sec, elementosFila[sec.dataset.masivaFila]);
+          });
+        }
+        /** Lo que se valida y se lee según el modo: en "uno por uno", los campos de cada equipo en vez de los comunes. */
+        const elementosActivos = () => (modo !== 'INDIVIDUAL' ? elementos
+          : elementos.filter((e) => e.tipo !== 'campo' || colsResp.indexOf(e.columna) < 0)
+            .concat(filas.reduce((todos, r) => todos.concat(elementosFila[r.id]), [])));
+        const nucoDeColumna = (columna) => {
+          const partes = String(columna).split('|');
+          const r = partes[0] === 'FILA' ? filas.filter((x) => x.id === partes[1])[0] : null;
+          return r ? nombreDe(r) + ' · ' : '';
+        };
+
+        $('#cap-guardar', raiz).addEventListener('click', async () => {
+          $('#cap-error', raiz).hidden = true;
+          const activos = elementosActivos();
+          const valores = leerFormularioEn(cuerpo, activos);
+          const datos = { valores: valores };
+          let detalle = filas.slice(0, 12).map(etiqueta).concat(filas.length > 12 ? ['… y ' + (filas.length - 12) + ' más'] : []);
+          let cuantos = filas.length;
+          // Uno por uno: solo cuentan (y se validan) los campos que se cambiaron; un equipo sin cambios no se toca
+          const cambiadas = {};
+          if (modo === 'INDIVIDUAL') {
+            datos.modo = 'INDIVIDUAL';
+            datos.porEquipo = {};
+            const resumen = [];
+            filas.forEach((r) => {
+              const actual = actualDe(r);
+              const nuevo = (c) => String(valores[columnaFila(r.id, c)] || '').trim();
+              const campos = colsResp.filter((c) => nuevo(c) && nuevo(c) !== String(actual[c] || '').trim());
+              if (!campos.length) return;
+              campos.forEach((c) => { cambiadas[columnaFila(r.id, c)] = true; });
+              const v = { _ETIQUETA: nombreDe(r), RESPONSABLE: nuevo('RESPONSABLE') };
+              campos.forEach((c) => { v[c] = nuevo(c); });
+              datos.porEquipo[r.id] = v;
+              resumen.push(nombreDe(r) + ': ' + (campos.indexOf('RESPONSABLE') >= 0 ? (actual.RESPONSABLE || 'Sin responsable') + ' → ' + v.RESPONSABLE
+                : v.RESPONSABLE + ' (' + campos.map((c) => c.toLowerCase()).join(', ') + ')'));
+            });
+            if (!resumen.length) { mostrarErrorCaptura('No cambiaste los datos de ' + (esLinea ? 'ninguna línea.' : 'ningún equipo.')); return; }
+            cuantos = resumen.length;
+            detalle = resumen.slice(0, 12).concat(resumen.length > 12 ? ['… y ' + (resumen.length - 12) + ' más'] : []);
+          }
+          const errores = erroresFormularioEn(cuerpo, activos, '', ctx)
+            .filter((x) => modo !== 'INDIVIDUAL' || String(x.columna).indexOf('FILA|') !== 0 || cambiadas[x.columna]);
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+          if (errores.length) { mostrarErrorCaptura(errores.map((x) => nucoDeColumna(x.columna) + x.msg).slice(0, 4).join(' · ')); return; }
+          const ok = await Confirmar.pedir({
+            titulo: '¿' + accion.boton + ' ' + miles(cuantos) + ' ' + unidad + '?',
+            mensaje: (modo === 'INDIVIDUAL' ? 'Cada uno pasa al responsable que le pusiste.' : accion.efecto) +
+              (modo !== 'INDIVIDUAL' && valores.RESPONSABLE ? ' Nuevo responsable: ' + valores.RESPONSABLE + '.' : '') + ' Cada uno deja su historial.',
+            detalle: detalle,
+            textoConfirmar: accion.boton, peligro: !!accion.peligro,
+            palabraClave: accion.peligro && filas.length >= 10 ? 'CANCELAR' : undefined,
+          });
+          if (!ok || T.captura !== sesion) return;
+          estadoGuardado('Aplicando a ' + miles(cuantos) + ' ' + unidad);
+          try {
+            const r = await llamar('apiLineasAccionMasiva', accion.clave, ids, datos);
+            await aplicarCambiosIndice(r.indice);
+            cerrarCaptura(true);
+            Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+            if (vigente()) { pintarIndicadores(); pintarListado(); }
+            const omitidos = r.omitidos || [];
+            aviso(icono('circle-check') + ' ' + accion.texto + ': ' + miles(r.hechos.length) + ' ' + unidad + ' actualizados' +
+              (omitidos.length ? ' · ' + omitidos.length + ' sin cambio' : '') + '.', 8000);
+            if (omitidos.length) {
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => (o.numero ? 'Línea ' + o.numero : 'NUCO ' + (o.nuco || o.id)) + ' (' + o.motivo + ')').join(' · ') +
+                (omitidos.length > 6 ? ' · …' : ''), 12000);
+            }
+            // Desde la ficha: que muestre lo guardado (igual que Mandar a resguardo)
+            const actual = pila[pila.length - 1];
+            if (actual && ids.indexOf(actual.id) >= 0) abrir(actual.tipo, actual.id, true);
+          } catch (e) {
+            errorAlGuardar(e);
+          }
+        });
+      }
+
+      /**
+       * Mandar a resguardo (reunión con Líneas, 30-sep): uno o varios equipos, cada NUCO con sus datos
+       * (departamento, sede, oficina, estatus del equipo y de la línea, comentario). Los datos de la persona pasan a
+       * N/A en el servidor; la línea se propone DISPONIBLE o EN PROCESO DE CANCELACION según su FIN PLAN.
+       * Al guardar se crea el renglón de la bandeja de Pau (Resguardos y cancelaciones).
+       * opciones.estatus: estatus del equipo ya elegido (desde "Cambiar estatus": PARA VENTA, PARA DESECHO…).
+       * opciones.corregir (Corregir resguardo, pendiente 3.12): el equipo ya está en el panel; el formulario llega lleno con
+       * lo de su renglón, sin restricciones de estatus, sin inspección y sin renglón nuevo.
+       */
+      async function abrirResguardo(filas, opciones) {
+        const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
+        const corregir = !!(opciones && opciones.corregir);
+        const accionTexto = corregir ? 'Corregir resguardo' : (estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial);
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono('archive');
+        $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
+        $('#ln-captura-titulo', raiz).textContent = accionTexto;
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        const sesion = T.captura = { tipo: 'RESGUARDO', firmas: {} };
+        let form;
+        try {
+          form = await llamar('apiLineasFormularioResguardo', filas.map((r) => r.id), { corregir: corregir });
+        } catch (e) {
+          if (T.captura === sesion) cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
+          return;
+        }
+        if (T.captura !== sesion) return;
+        if (!(form.equipos || []).length) {
+          cuerpo.innerHTML = '<p class="error-msg">' + esc((form.omitidos || []).map((o) => (o.nuco ? 'NUCO ' + o.nuco + ': ' : '') + o.motivo).join(' · ')) + '</p>';
+          return;
+        }
+        // El formulario lo arma formularioResguardo (también lo abre el panel de Pau; usuario, 21-oct)
+        const fr = formularioResguardo(form, { corregir: corregir, estatus: estatusInicial });
+        const equipos = fr.equipos;
+        $('#ln-captura-subtitulo', raiz).textContent = fr.subtitulo;
+        cuerpo.innerHTML = fr.html +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('archive') + ' ' + esc(accionTexto) + (equipos.length > 1 ? ' (' + miles(equipos.length) + ')' : '') + '</button></div>';
+        fr.activar(cuerpo);
+        $('#cap-guardar', raiz).addEventListener('click', async () => {
+          $('#cap-error', raiz).hidden = true;
+          const leido = fr.leer(cuerpo);
+          if (leido.error) { mostrarErrorCaptura(leido.error); return; }
+          const valores = leido.valores;
+          const porEquipo = leido.porEquipo;
+          if (T.captura !== sesion) return; // sin ventana de confirmación (usuario, 4-oct)
+          // La inspección es obligatoria al mandar a resguardo (pendiente 2.6) y se captura dentro de la acción (decisión
+          // del usuario, 3-oct): una por cada equipo que viene de una persona. Si se cierra una sin guardar, no se manda
+          // ninguno; las que ya se guardaron no se vuelven a pedir hoy
+          const deUnaPersona = corregir ? [] : equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
+          const textoEspera = corregir ? 'Corrigiendo ' + miles(equipos.length) + ' resguardo(s)' : estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
+          const enviar = (extra) => llamar('apiLineasMandarResguardo', equipos.map((q) => q.id),
+            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo, corregir: corregir }, extra));
+          // La espera también después de la inspección (usuario, 13-oct): antes solo salía un aviso en la esquina y no se
+          // sabía si se estaba mandando. Igual que Reasignar: la ventana vuelve con la pantalla de espera
+          const ventanaEspera = () => {
+            const v = T.captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '' };
+            mostrarModalCaptura();
+            $('#ln-captura-icono', raiz).innerHTML = icono('archive');
+            $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
+            $('#ln-captura-titulo', raiz).textContent = accionTexto;
+            $('#ln-captura-subtitulo', raiz).textContent = equipos.length === 1
+              ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ') : miles(equipos.length) + ' equipos';
+            $('#ln-captura-cuerpo', raiz).innerHTML = '';
+            $('#ln-modal-captura', raiz).setAttribute('aria-busy', 'true');
+            $('#ln-modal-captura', raiz).querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+            mostrarEspera(textoEspera);
+            return v;
+          };
+          const errorEnVentana = (v, mensaje) => {
+            if (T.captura !== v) return;
+            v.guardando = false;
+            $('#ln-modal-captura', raiz).removeAttribute('aria-busy');
+            $('#ln-modal-captura', raiz).querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+            mostrarEspera('No se mandó a resguardo', { tono: 'error', icono: 'triangle-alert', texto: 'Las inspecciones quedaron guardadas: vuelve a mandarlo y no se piden otra vez.',
+              detalle: mensaje, acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          };
+          let r = null; // lo que contestó el resguardo
+          let espera = sesion; // la ventana que muestra la espera hasta que el servidor contesta
+          let inspecciones = {};
+          if (deUnaPersona.length) {
+            cerrarCaptura(true);
+            // La última inspección se guarda con el resguardo, en la misma llamada (rapidez, 13-oct; su PDF se pide al
+            // terminar: TelefoniaService.mandarResguardo). Mientras, la ventana de la inspección dice «Mandando…»
+            const hechas = await inspeccionesEnFlujo(deUnaPersona, 'al mandarlo a resguardo', {
+              espera: textoEspera, guardar: (datos, previas) => enviar({ inspecciones: previas, inspeccion: datos }),
+            });
+            if (!hechas) {
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin mandar a resguardo · falta la inspección', 8000);
+              return;
+            }
+            inspecciones = hechas.ids;
+            if (hechas.ultima && hechas.ultima.error) { errorEnVentana(ventanaEspera(), esc(hechas.ultima.error)); return; }
+            if (hechas.ultima) { r = hechas.ultima.resguardo; espera = null; } // ya se mandó: la ventana de la inspección se cerró
+            else espera = ventanaEspera(); // la del día ya estaba: solo falta mandarlo
+          } else estadoGuardado(textoEspera);
+          const enModal = espera === sesion;
+          try {
+            if (!r) r = await enviar({ inspecciones: inspecciones });
+            await aplicarCambiosIndice(r.indice);
+            if (T.captura === espera) cerrarCaptura(true);
+            if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+            if (vigente()) { pintarIndicadores(); pintarListado(); }
+            const omitidos = r.omitidos || [];
+            const porRecibir = r.hechos.filter((h) => h.porRecibir).length;
+            aviso(icono('circle-check') + ' ' + miles(r.hechos.length) + ' equipo(s) actualizados' + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio' : '') +
+              (porRecibir ? '. ' + miles(porRecibir) + ' por recibir en Resguardos y cancelaciones.' : '. Ya estaban en Resguardos y cancelaciones: se actualizó su renglón.'), 8000);
+            if (omitidos.length) {
+              aviso(icono('triangle-alert', 'ln-alerta') + ' Sin cambio: ' + omitidos.slice(0, 6).map((o) => 'NUCO ' + (o.nuco || o.id) + ' (' + o.motivo + ')').join(' · '), 12000);
+            }
+            const actual = pila[pila.length - 1];
+            if (actual && equipos.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
+          } catch (e) {
+            if (!enModal) {
+              if (espera) errorEnVentana(espera, mensajeError(e));
+              else aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+              return;
+            }
+            errorAlGuardar(e);
+          }
+        });
+      }
+
+      /** Después de Quitar del panel: el índice y la ficha abierta con lo que regresó (pendiente 3.12). */
+      function trasQuitar(r) {
+        return (r && r.indice ? aplicarCambiosIndice(r.indice) : Promise.resolve()).then(() => {
+          if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+          if (vigente()) { pintarIndicadores(); pintarListado(); }
+          const actual = pila[pila.length - 1];
+          if (actual) abrir(actual.tipo, actual.id, true);
+        });
+      }
+
+      /**
+       * Vincular, cambiar y desvincular línea y equipo (etapa 3, usuario 8-oct; LineasAcciones.vincular). `modo`:
+       * VINCULAR_LINEA y CAMBIAR_LINEA (desde el equipo: se elige una línea suelta DISPONIBLE), VINCULAR_EQUIPO y
+       * CAMBIAR_EQUIPO (desde la línea: se elige un NUCO en USO o RESGUARDO sin línea) y DESVINCULAR. La línea que deja
+       * el equipo queda DISPONIBLE o va a la bandeja de cancelaciones. Si el equipo queda en USO con otra línea, la
+       * responsiva es obligatoria y su comentario es el de la acción; si no, el comentario va en otra ventana.
+       * `pre` (Vínculos, al soltar): la línea o el NUCO ya elegidos ({ linea, nuco }); la ventana se confirma igual.
+       */
+      async function abrirVinculo(modo, fila, pre) {
+        const elegido = pre || {};
+        const ix = memoria.indice || { equipos: [], lineas: [] };
+        const desdeEquipo = ['VINCULAR_LINEA', 'CAMBIAR_LINEA'].indexOf(modo) >= 0 || (modo === 'DESVINCULAR' && !fila.equipoId);
+        const equipoActual = ix.equipos.filter((e) => e.id === (desdeEquipo ? fila.id : fila.equipoId))[0] || null;
+        const numeroActual = desdeEquipo ? (equipoActual && equipoActual.numero) || fila.numero : fila.numero;
+        const TITULOS = { VINCULAR_LINEA: 'Vincular línea', CAMBIAR_LINEA: 'Cambiar línea', DESVINCULAR: 'Desvincular línea',
+          VINCULAR_EQUIPO: 'Vincular a equipo', CAMBIAR_EQUIPO: 'Cambiar de equipo' };
+        const titulo = TITULOS[modo];
+        const subtitulo = equipoActual ? ['NUCO ' + (equipoActual.nuco || '—'), equipoActual.modelo, numeroActual].filter(Boolean).join(' · ')
+          : 'Línea ' + (fila.numero || '—');
+        const may = (x) => String(x || '').trim().toUpperCase();
+        const lineasLibres = ix.lineas.filter((l) => l.suelta && may(l.estatus) === 'DISPONIBLE' && l.numero);
+        const equiposLibres = ix.equipos.filter((e) => e.nuco && !e.lineaId && ['USO', 'RESGUARDO'].indexOf(may(e.estatus)) >= 0 && e.id !== fila.equipoId);
+        const campo = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control,
+          requerido: 'SIEMPRE', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false, valor: '' }, extra || {});
+        const elementos = [{ tipo: 'titulo', texto: titulo.toUpperCase(), icono: modo === 'DESVINCULAR' ? 'unlink' : 'link' }];
+        if (modo === 'VINCULAR_LINEA' || modo === 'CAMBIAR_LINEA') {
+          elementos.push(campo('_LINEA', 'Línea', 'listaAbierta', { opciones: lineasLibres.map((l) => String(l.numero)), soloLista: true,
+            sugerencias: 'LINEAS_DISPONIBLES', mensaje: 'ELIGE UNA LÍNEA DISPONIBLE', valor: elegido.linea || '' }));
+        }
+        if (modo === 'VINCULAR_EQUIPO' || modo === 'CAMBIAR_EQUIPO') {
+          elementos.push(campo('_NUCO', 'NUCO', 'listaAbierta', { opciones: equiposLibres.map((e) => String(e.nuco)), soloLista: true,
+            sugerencias: 'EQUIPOS_SIN_LINEA', mensaje: 'ELIGE UN NUCO SIN LÍNEA', valor: elegido.nuco || '' }));
+        }
+        // La que deja el equipo (en Cambiar de equipo se va con la línea: no se pregunta)
+        if (modo === 'CAMBIAR_LINEA' || modo === 'DESVINCULAR') {
+          elementos.push(campo('_ANTERIOR', 'La línea ' + (numeroActual || '') + ' queda', 'lista', { opciones: ['DISPONIBLE', 'MANDAR A CANCELACIÓN'], valor: 'DISPONIBLE' }));
+        }
+        mostrarModalCaptura();
+        $('#ln-captura-icono', raiz).innerHTML = icono(modo === 'DESVINCULAR' ? 'unlink' : (modo.indexOf('CAMBIAR') === 0 ? 'arrow-left-right' : 'link'));
+        $('#ln-captura-tipo', raiz).textContent = 'LINEAS TELEFONICAS';
+        $('#ln-captura-titulo', raiz).textContent = titulo;
+        $('#ln-captura-subtitulo', raiz).textContent = subtitulo;
+        const sesion = T.captura = { tipo: 'VINCULO', firmas: {} };
+        const cuerpo = $('#ln-captura-cuerpo', raiz);
+        cuerpo.innerHTML = htmlFormularioAppSheet(elementos, { acomodar: true }) +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' ' + esc(titulo) + '</button></div>';
+        pintarIconos(cuerpo);
+        activarCombosEn(cuerpo, elementos);
+        $('#cap-guardar', raiz).addEventListener('click', async () => {
+          $('#cap-error', raiz).hidden = true;
+          const errores = erroresFormularioEn(cuerpo, elementos, '', { nuevo: false });
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+          if (errores.length) { mostrarErrorCaptura(errores.map((x) => x.msg).slice(0, 3).join(' · ')); return; }
+          const v = leerFormularioEn(cuerpo, elementos);
+          const linea = v._LINEA ? lineasLibres.filter((l) => String(l.numero) === v._LINEA)[0] : null;
+          const nuco = v._NUCO ? ('0000' + v._NUCO).slice(-4) : '';
+          const equipoNuevo = nuco ? equiposLibres.filter((e) => String(e.nuco) === nuco)[0] : null;
+          const equipo = desdeEquipo || modo === 'DESVINCULAR' ? equipoActual : equipoNuevo;
+          if (!equipo) { mostrarErrorCaptura('Elige el equipo.'); return; }
+          const datos = {
+            equipoId: equipo.id,
+            // Desde la línea: la línea suelta es su registro; la de un equipo, el del equipo (el servidor la separa)
+            lineaId: linea ? linea.id : (modo === 'VINCULAR_EQUIPO' || modo === 'CAMBIAR_EQUIPO' ? fila.id : ''),
+            anterior: v._ANTERIOR === 'MANDAR A CANCELACIÓN' ? 'CANCELACION' : 'DISPONIBLE',
+          };
+          const conResponsiva = !!datos.lineaId && may(equipo.estatus) === 'USO';
+          const listo = (r) => {
+            if (!r) return null;
+            return aplicarCambiosIndice(r.filas).then(() => {
+              Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+              if (vigente()) { pintarIndicadores(); pintarListado(); }
+              aviso(icono('circle-check') + ' ' + titulo + ' · NUCO ' + (equipo.nuco || '—'), 6000);
+              // La ficha que estaba abierta, la del equipo o la de la línea (2.61: se pintaba la del equipo con la de la línea
+              // arriba en la pila, pintarEquipo no la reconocía y la página se quedaba en «Cargando…»)
+              const arriba = pila[pila.length - 1];
+              // La línea cambia de registro al vincularla (pasa a ser la del equipo) o al desvincularla (vuelve a ser
+              // suelta): su ficha se busca otra vez por su número (DEV, 22-oct: «No existe la línea LIN-…»)
+              const numero = String((arriba && arriba.tipo === 'linea' && (fila.numero || numeroActual)) || '');
+              const conNumero = numero ? memoria.indice.lineas.filter((l) => String(l.numero) === numero) : [];
+              const laLinea = conNumero.filter((l) => may(l.estatus) !== 'CANCELADA')[0] || conNumero[0];
+              if (laLinea) arriba.id = laLinea.id;
+              if (vigente() && arriba) abrir(arriba.tipo, arriba.id, true);
+            });
+          };
+          if (T.captura !== sesion) return;
+          cerrarCaptura(true);
+          if (conResponsiva) {
+            // La responsiva con la línea nueva, fija; el equipo se queda con su responsable
+            const r = await capturarEnFlujo('RESPONSIVA', { equipoId: equipo.id, lineaNueva: datos.lineaId, modo: 'LINEA' }, {
+              titulo: titulo, subtitulo: 'NUCO ' + (equipo.nuco || '—') + ' · responsiva con la línea nueva', boton: 'Guardar responsiva y ' + titulo.toLowerCase(),
+              espera: titulo,
+              guardar: (resp) => llamar('apiLineasVincular', Object.assign({}, datos, { responsiva: resp })),
+            });
+            Promise.resolve(listo(r)).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000));
+            return;
+          }
+          pedirDatos('Comentario', 'NUCO ' + (equipo.nuco || '—') + ' · ' + titulo,
+            [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+            titulo, { espera: titulo, alConfirmar: (nota) => llamar('apiLineasVincular', Object.assign({}, datos, { comentario: nota.comentario, ticket: nota.ticket })) })
+            .then(listo).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000));
+        });
+      }
+
+      /**
+       * "Mandar a cancelación" (30-sep): una o varias líneas pasan a la pestaña Cancelaciones de la bandeja (carta
+       * firmada → enviada → cancelada), sin mandar el equipo a resguardo. La línea queda EN PROCESO DE CANCELACION.
+       * Con su motivo (usuario, 13-oct): LINEA VENCIDA o CANCELACION ANTICIPADA, obligatorio, además del comentario.
+       */
+      async function abrirCancelacion(filas) {
+        if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar líneas.', 6000); return; }
+        const conNumero = filas.filter((r) => r.numero);
+        if (!conNumero.length) { aviso(icono('triangle-alert', 'ln-alerta') + ' Ninguno de los seleccionados tiene línea.', 6000); return; }
+        // Textos técnicos y espera desde el clic (usuario, 4-oct)
+        const lista = conNumero.slice(0, 6).map((r) => r.numero).join(' · ') + (conNumero.length > 6 ? ' …' : '');
+        const subtitulo = (conNumero.length > 1 ? miles(conNumero.length) + ' líneas · ' : '') + lista;
+        try {
+          const r = await pedirDatos('Mandar a cancelación', subtitulo,
+            [{ clave: 'motivo', etiqueta: 'Motivo', requerido: true, opciones: MOTIVOS_CANCELACION, elegir: true },
+              { clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+            'Mandar a cancelación', {
+              espera: 'Mandando a cancelación',
+              alConfirmar: (datos) => llamar('apiLineasMandarCancelacion', conNumero.map((x) => x.id),
+                { motivoCancelacion: datos.motivo, comentario: datos.comentario, ticket: datos.ticket }),
+            });
+          if (!r) return;
+          await aplicarCambiosIndice(r.indice);
+          Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
+          if (vigente()) { pintarIndicadores(); pintarListado(); }
+          const omitidos = r.omitidos || [];
+          aviso(icono('circle-check') + ' ' + miles(r.hechos.length) + ' línea(s) en la bandeja de cancelaciones' + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio: ' +
+            omitidos.slice(0, 4).map((o) => (o.numero || (o.nuco ? 'NUCO ' + o.nuco : o.id)) + ' (' + o.motivo + ')').join(' · ') : '') + '.', 9000);
+          const actual = pila[pila.length - 1];
+          if (actual && conNumero.some((q) => q.id === actual.id)) abrir(actual.tipo, actual.id, true);
+        } catch (e) {
+          aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 10000);
+        }
+      }
+
+      return {
+        abrirCancelacion: abrirCancelacion, abrirResguardo: abrirResguardo, abrirResponsiva: abrirResponsiva,
+        abrirVinculo: abrirVinculo, filaDelIndice: filaDelIndice, trasQuitar: trasQuitar,
+      };
+    });
+  })();
+</script>

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -63,7 +64,7 @@ test('Corregir equipo ofrece USO: con responsable vigente se guarda directo; sin
   assert.match(reg, /return \{ id: id, cambios: resultado\.guardado\.campos, responsiva: !!resultado\.responsiva,/);
   assert.match(reg, /conResponsable: !!fila && responsableVigente_\(base\)/);
   // La pantalla abre la Responsiva obligatoria: ya, si solo cambió el estatus; si no, después de guardar lo demás
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const aResponsiva = form\.parte !== 'LINEA' && !form\.conResponsable && cambiaA\('ESTATUS EQUIPO', \['USO'\]\);/);
   assert.match(cliente, /const responsivaDeCorregir = \(\) => abrirResponsiva\('equipo', filaDelIndice\('equipo', id\), null, \{ desdeCorregir: true \}\);/);
   assert.match(cliente, /abrirRegistro\(id \|\| r\.id\);\s+if \(r\.responsiva\) responsivaDeCorregir\(\);/);
@@ -86,7 +87,7 @@ test('estatus finales: sin Responsiva ni Inspección, salvo la Responsiva que ab
   assert.match(captura, /const obj = exigirEquipoParaInspeccion_\(objetivoCaptura_\(ref\), ref\);/);
   assert.match(captura, /const obj = exigirEquipoParaInspeccion_\(objetivoCaptura_\(ref\), datos\);/);
   // La pantalla no muestra los botones (ficha y menú de la lista), sin mensaje
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const SIN_DOCUMENTOS = \{ equipo: ESTATUS_EQUIPO_FINAL\.concat\(\['EXTRAVIADO', 'ROBADO', 'ROBO'\]\), linea: ESTATUS_LINEA_PANEL \};/);
   assert.match(cliente, /botonesFicha\('data-linea-id', id, 'linea', puedeOperarLinea && !e && conDocumentos\('linea', l\.estatus\),/);
   assert.equal((cliente.match(/conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\)/g) || []).length, 2);
@@ -115,7 +116,7 @@ test('el equipo que sale del inventario: su línea en USO queda DISPONIBLE o, co
   assert.match(reg, /lineaAlPanel: lineaSale && lineaSale\.alPanel \? texto_\(base\['ID LINEA'\]\) : null/);
   assert.match(reg, /LineasResguardos\.mandarCancelacion\(\[resultado\.lineaAlPanel\], \{ comentario: resultado\.motivo, ticket: texto_\(datos && datos\.ticket\) \}, usuario,\s+\{ motivoDelAdendum: true, nucos: \{ \[resultado\.lineaAlPanel\]: resultado\.nuco \} \}\);/);
   // La pantalla lo pregunta en la ventana del comentario
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const lineaACancelar = form\.lineaVencida && cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL\);/);
   assert.match(cliente, /clave: 'cancelacionLinea', etiqueta: 'Línea · adendum vencido', opciones: CANCELACION_LINEA\.map\(\(x\) => x\.texto\), elegir: true, requerido: true/);
 });
@@ -126,7 +127,7 @@ test('Mandar a resguardo con el adendum vencido: se elige el panel o CANCELADA s
   assert.match(resg, /directa: may\(p\.cancelacionLinea\) === CANCELACION_DIRECTA/);
   // La línea se separa: al panel entra sola a Cancelaciones; sin panel queda CANCELADA suelta (pendiente 3.12)
   assert.match(resg, /const sale = !tieneLinea \? '' : \(enCurso \? \(corregir \? '' : 'SIGUE'\) : \(\{ \[LINEA_CANCELACION\]: 'PANEL', \[LINEA_SIN_PANEL\]: 'DIRECTA' \}\)/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // CANCELADA directo queda en el historial como cancelación (usuario, 16-oct), también desde Corregir
   assert.match(resg, /registrarCancelacionDirecta\(f0, idLinea, pedido\.COMENTARIO \|\| motivo, ticket, usuario, ahora\);/);
   assert.match(resg, /LineasRepo\.registrarMovimiento\('CANCELACION_LINEA', \{ motivo: motivo, ticket: ticket \}, usuario, ahora, \{\s+refs: \[idLinea, txt\(f\['ID'\]\)\]/);
@@ -168,7 +169,7 @@ test('responsable en blanco en el equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-R
 });
 
 test('pantalla: «Corregir» e «Inspección», Responsiva primero', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /'Editar línea'|'Editar equipo'|Nueva inspección/);
   assert.match(cliente, /textContent = tipo === 'INSPECCION' \? 'Inspección' : 'Responsiva';/);
   const botones = cliente.slice(cliente.indexOf('function botonesFicha('), cliente.indexOf('function abrirMenuFicha('));

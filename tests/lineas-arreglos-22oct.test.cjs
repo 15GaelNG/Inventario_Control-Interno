@@ -2,10 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Fallas y mejoras que pidió el usuario el 22-oct (pendientes 2.37, 2.47, 2.63, 3.10 y 7.12; abrir en Líneas y el buscador)
 const leer = (r) => fs.readFileSync(path.join(__dirname, '..', r), 'utf8').replace(/\r/g, '');
-const cliente = leer('src/html/js/lineas.html');
+const cliente = LINEAS;
 
 test('2.47: un patrón («1-9-7») se escribe como texto en las hojas que no están en formato de texto', () => {
   const fuente = leer('src/services/lineas/LineasDatos.gs');
@@ -56,8 +57,10 @@ test('2.63: el PDF de un documento guardado dentro de una acción se espera; mie
   assert.match(flujo, /if \(arriba\.tipo === 'equipo' \|\| arriba\.tipo === 'linea'\) cargarEvidencias\(arriba\.id\);/);
   // Al terminar el PDF se olvida lo que la ficha guardó mientras (2 min): si no, Documentos volvía sin el PDF (NUCO 1010)
   const alTerminar = flujo.slice(flujo.indexOf('pdf.then('), flujo.indexOf('cargarEvidencias(arriba.id)'));
-  assert.match(alTerminar, /delete pdfsEnCurso\[r\.id\];[\s\S]*fichaEnMemoria = \{\};[\s\S]*const arriba = pila\[pila\.length - 1\];/);
+  assert.match(alTerminar, /delete pdfsEnCurso\[r\.id\];[\s\S]*olvidarFicha\(\);[\s\S]*const arriba = pila\[pila\.length - 1\];/);
   assert.match(cliente, /const pdfsEnCurso = \{\};/);
+  // La ficha vive en otro archivo que la base (fase 6.2): vacía la memoria con olvidarFicha, no asigna el let
+  assert.match(cliente, /function olvidarFicha\(\) \{\n\s+fichaEnMemoria = \{\};\n\s+\}/);
   assert.match(cliente, /'Generar PDF', 'pdf', true, \(d\) => operar && !!d\.pdfPendiente && !pdfsEnCurso\[d\.id\]/);
   assert.match(cliente, /x\.origen === 'SISTEMA' && !x\.pdfId && !pdfsEnCurso\[x\.id\] \? \{ icono: 'file-plus', texto: 'Generar PDF'/);
 });

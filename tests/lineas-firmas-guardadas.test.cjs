@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const LINEAS = require('./lineas-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
@@ -91,7 +92,7 @@ test('la imagen solo la usa el servidor, con el correo de la sesión; la pantall
   assert.match(cap, /nombreCI === String\(usuario\.nombre \|\| ''\)\.trim\(\)\.toUpperCase\(\)/);
   // La caché junta lo nuevo con lo que ya había (la pantalla no manda la firma guardada)
   assert.match(cap, /Object\.keys\(nuevas\)\.forEach\(\(k\) => \{ if \(nuevas\[k\]\) juntas\[k\] = nuevas\[k\]; \}\);/);
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /function firmaGuardadaEn\(contenedor, nombre, alFirmarAMano\)/);
   assert.match(lineas, /base64: \(\) => Promise\.resolve\(null\) \}/);
   assert.match(lineas, /usarFirmaGuardada: !!firmaInspector\.guardada,/);
@@ -107,7 +108,7 @@ test('la imagen solo la usa el servidor, con el correo de la sesión; la pantall
 });
 
 test('al terminar Reasignar se ofrecen los dos PDF, cada uno con su nombre', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /flujo\.resolver\(Object\.assign\(\{\}, r, \{ pdfPromesa: pdf \}\)\);/);
   assert.match(lineas, /pdfInspeccion = r\.pdfPromesa \|\| null;/);
   assert.match(lineas, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id, false, pdfInspeccion \? \{ promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' \} : null\);/);
@@ -117,7 +118,7 @@ test('al terminar Reasignar se ofrecen los dos PDF, cada uno con su nombre', () 
 
 test('la firma guardada también va como FIRMA RESPONSABLE si el responsable es quien captura (19-oct)', () => {
   const cap = read('src/services/lineas/LineasCaptura.gs');
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   // El servidor y la pantalla comparan el nombre igual
   const servidor = vm.runInNewContext('(' + cap.match(/function nombreDeFirma_\(s\) \{[\s\S]*?\r?\n  \}/)[0] + ')');
   const Formato = vm.runInNewContext(read('src/html/js/componentes/formato.html').replace(/<\/?script>/g, '') + '; Formato');

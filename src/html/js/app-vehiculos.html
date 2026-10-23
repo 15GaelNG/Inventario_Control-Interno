@@ -1,0 +1,1166 @@
+<script>
+  /**
+   * app-vehiculos.html — Vehículos: los campos del formulario (CAMPOS_VEHICULO y sus ayudantes, que usan también Arqueos, Caja
+   * Chica, Panorama y Reasignaciones), las ayudas de firma de responsiva y adherente, la pantalla (initVehiculos: lista,
+   * ficha, captura, responsiva y adherente) y su tour y ayuda.
+   * Era parte de app.html (fase 6.1, tools/app/partir.js). Comparte el espacio global: usa los ayudantes de app.html,
+   * que carga antes (Index.html lo incluye justo después de app; los que vienen después ya lo ven).
+   */
+
+  /**
+   * Las 40 columnas reales de la hoja VEHICULOS (todo menos ID_VEHICULO),
+   * agrupadas para que los formularios de Registrar/Editar no sean una
+   * lista plana interminable. "clave" es el nombre EXACTO de columna en la
+   * hoja — se usa tal cual como llave al mandar los datos al servidor
+   * (VehiculosService.crear/actualizar ya esperan las claves reales).
+   */
+  // La sección "Accesorios y sensor" es de Instalación de Sensores: se ve en la ficha, pero solo la
+  // edita quien tiene EDICIÓN ahí (CamposHoja editaModulo; el servidor revisa lo mismo,
+  // VehiculosService.COLUMNAS_DE_SENSORES)
+  const DE_SENSORES = { editaModulo: 'instalacion-sensores', etiquetaModulo: 'Sensores' };
+  const CAMPOS_VEHICULO = [
+    { grupo: 'Vehículo', clave: 'MARCA', etiqueta: 'Marca', tipo: 'select', catalogo: true },
+    {
+      grupo: 'Vehículo', clave: 'CLASE', etiqueta: 'Clase', tipo: 'select',
+      opciones: ['AUTOMOVIL', 'CAMION', 'CAMIONETA', 'MOTOCICLETA', 'REMOLQUE', 'MAQUINARIA MENOR', 'CUATRIMOTO', 'NUCO SIN INFORMACION', 'MOTOCARRO'],
+    },
+    { grupo: 'Vehículo', clave: 'LINEA VEHICULO', etiqueta: 'Línea', tipo: 'text' },
+    { grupo: 'Vehículo', clave: 'MODELO', etiqueta: 'Año', tipo: 'number' },
+    { grupo: 'Vehículo', clave: 'COLOR', etiqueta: 'Color', tipo: 'text' },
+    {
+      // catalogo: true — antes era un <select> cerrado a solo estas 2
+      // opciones, así que no había forma de capturar una placa real (y
+      // cualquier vehículo con placa real que se editara aquí la perdía,
+      // quedaba forzado a una de las 2). Ahora es texto libre con estas 2
+      // como sugerencias — se puede escribir la placa real o elegir una.
+      grupo: 'Vehículo', clave: 'PLACA', etiqueta: 'Placa', tipo: 'select', catalogo: true,
+      opciones: ['SIN PLACA', 'BAJA DE PLACA'],
+    },
+    {
+      grupo: 'Vehículo', clave: 'TIPO DE COMBUSTIBLE', etiqueta: 'Tipo de combustible', tipo: 'select',
+      opciones: ['GASOLINA', 'ELECTRICO', 'DIESEL', 'HIBRIDO', 'N/A', 'NUCO SIN INFORMACION', 'NO UTILIZA'],
+    },
+    { grupo: 'Vehículo', clave: 'CAPACIDAD COMBUSTIBLE (LTS)', etiqueta: 'Capacidad de combustible (L)', tipo: 'number' },
+    {
+      grupo: 'Vehículo', clave: 'ESTATUS', etiqueta: 'Estatus', tipo: 'select',
+      opciones: ['BAJA VEHICULAR', 'PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'],
+    },
+
+    {
+      grupo: 'Identificación', clave: 'FOLIO', etiqueta: 'Folio', tipo: 'text',
+      soloLectura: true, placeholder: 'Se genera solo, según la Clase',
+    },
+    {
+      // catalogo: true — sugerencias de Capital Humano (apiListarColaboradores). Va antes que
+      // Departamento/No. de empleado a propósito: al elegir uno (o escribir un nombre que
+      // coincide exacto) se autollenan esos dos (ver wireResponsableVehiculo) -- si no está en
+      // la lista (alguien que CH todavía no cargó), se deja escribir libre y se capturan a mano.
+      grupo: 'Identificación', clave: 'RESPONSABLE VEHICULO', etiqueta: 'Responsable del vehículo', tipo: 'select', catalogo: true,
+    },
+    { grupo: 'Identificación', clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'select', catalogo: true, autoCondicional: true },
+    { grupo: 'Identificación', clave: 'NO EMPLEADO', etiqueta: 'No. de empleado', tipo: 'text', autoCondicional: true },
+    { grupo: 'Identificación', clave: 'SERIE VEHICULO', etiqueta: 'Serie del vehículo', tipo: 'text' },
+    {
+      grupo: 'Identificación', clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'text',
+      soloLectura: true, placeholder: 'Se genera solo (consecutivo)',
+    },
+    // La llena guardarExpedienteAdquisicion (botón "Buscar expediente de adquisición" en la
+    // ficha, ver abrirFichaVehiculo) -- nunca se escribe a mano aquí.
+    {
+      grupo: 'Identificación', clave: 'FOLIO ADQUISICION', etiqueta: 'Folio de adquisición', tipo: 'text',
+      soloLectura: true, placeholder: 'Se llena al buscar el expediente',
+    },
+
+    { grupo: 'Documentación y seguro', clave: 'ADJUNTAR FACTURA', etiqueta: 'Factura', tipo: 'file' },
+    { grupo: 'Documentación y seguro', clave: 'TARJETA CIRCULACION', etiqueta: 'Tarjeta de circulación', tipo: 'file' },
+    { grupo: 'Documentación y seguro', clave: 'ALTA PLACAS', etiqueta: 'Alta de placas', tipo: 'file' },
+    { grupo: 'Documentación y seguro', clave: 'RESPONSIVA', etiqueta: 'Responsiva', tipo: 'file' },
+    { grupo: 'Documentación y seguro', clave: 'DOCUMENTO BAJA', etiqueta: 'Documento de baja', tipo: 'file', soloEdicion: true },
+    {
+      grupo: 'Documentación y seguro', clave: 'VERIFICACION (SI / NO)', etiqueta: 'Verificación', tipo: 'select',
+      opciones: ['VERIFICADO', 'VENCIDO', 'NO APLICA'],
+    },
+    {
+      grupo: 'Documentación y seguro', clave: 'PEDIDO DE VERIFICACIÓN', etiqueta: 'Periodo de verificación', tipo: 'select',
+      opciones: [
+        'Enero - Febrero (Terminación 5 y 6)', 'Febrero - Marzo (Terminación 7 y 8)',
+        'Marzo - Abril (Terminación 3 y 4)', 'Abril - Mayo (Terminación 1 y 2)',
+        'Mayo - Junio (Terminación 9 y 0)', 'Julio - Agosto (Terminación 5 y 6)',
+        'Agosto - Septiembre (Terminación 7 y 8)', 'Septiembre - Octubre (Terminación 3 y 4)',
+        'Octubre - Noviembre (Terminación 1 y 2)', 'Noviembre - Diciembre (Terminación 9 y 0)',
+      ],
+    },
+    {
+      grupo: 'Documentación y seguro', clave: 'SEGURO (SI / NO)', etiqueta: 'Seguro', tipo: 'select',
+      opciones: ['VIGENTE', 'VENCIDO', 'NO APLICA'],
+    },
+    { grupo: 'Documentación y seguro', clave: 'FECHA VENCIMIENTO SEGURO', etiqueta: 'Fecha de vencimiento del seguro', tipo: 'date' },
+    { grupo: 'Documentación y seguro', clave: 'POLIZA SEGURO', etiqueta: 'Póliza de seguro', tipo: 'file' },
+    {
+      grupo: 'Documentación y seguro', clave: 'TENENCIA (SI / NO)', etiqueta: 'Tenencia', tipo: 'select',
+      opciones: ['PAGADA', 'NO PAGADA', 'NO APLICA'],
+    },
+    { grupo: 'Documentación y seguro', clave: 'ARCHIVO TENENCIA', etiqueta: 'Archivo de tenencia', tipo: 'file' },
+
+    // vacioEnFicha: en la ficha, vacío no se esconde: dice que no hay nada (usuario, 15-oct)
+    { grupo: 'Accesorios y sensor', clave: 'ACCESORIOS', etiqueta: 'Accesorios', tipo: 'text', vacioEnFicha: 'Sin accesorios registrados', ...DE_SENSORES },
+    { grupo: 'Accesorios y sensor', clave: 'ADITAMENTOS', etiqueta: 'Aditamentos', tipo: 'text', ...DE_SENSORES },
+    // SENSOR y SERIE SENSOR los manda Instalación de Sensores (Relaciones.gs): se ven aquí
+    // pero se cambian allá. El servidor tampoco las acepta desde este formulario.
+    {
+      grupo: 'Accesorios y sensor', clave: 'SENSOR', etiqueta: 'Sensor', tipo: 'text',
+      soloLectura: true, placeholder: 'Lo pone Instalación de Sensores',
+    },
+    { grupo: 'Accesorios y sensor', clave: 'SERIE SENSOR', etiqueta: 'Serie del sensor', tipo: 'text',
+      soloLectura: true, placeholder: 'La pone Instalación de Sensores' },
+    { grupo: 'Accesorios y sensor', clave: 'ACTIVADOR', etiqueta: 'Activador', tipo: 'text', ...DE_SENSORES },
+    { grupo: 'Accesorios y sensor', clave: '$ Costo del Sensor', etiqueta: 'Costo del sensor', tipo: 'number', moneda: true, ...DE_SENSORES },
+    {
+      grupo: 'Accesorios y sensor', clave: 'LLAVE DUPLICADA', etiqueta: 'Llave duplicada', tipo: 'select',
+      opciones: ['SI', 'NO'], ...DE_SENSORES,
+    },
+
+    { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
+    // La columna se llamaba UBICACION; se homologó al nombre que usa el resto de la base
+    // (limpieza #23). La etiqueta para la gente sigue siendo "Ubicación".
+    { grupo: 'Ubicación y registro', clave: 'OFICINA / DESARROLLO', etiqueta: 'Ubicación', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación y registro', clave: 'RAZON SOCIAL', etiqueta: 'Razón social', tipo: 'select', catalogo: true },
+    { grupo: 'Ubicación y registro', clave: 'FECHA COMPRA', etiqueta: 'Fecha de compra', tipo: 'date' },
+    {
+      grupo: 'Ubicación y registro', clave: 'FECHA REGISTRO SISTEMA CI', etiqueta: 'Fecha de registro en el sistema', tipo: 'date',
+      soloLectura: true, placeholder: 'Se pone sola, la fecha de hoy',
+    },
+    { grupo: 'Ubicación y registro', clave: 'RESPONSABLE CI', etiqueta: 'Responsable (Control Interno)', tipo: 'text' },
+  ];
+
+  // "Un tema a la vez" (usuario, 6-oct): mismo lenguaje visual que los pasos de
+  // Responsiva/Adherente Vehicular (form-pasos/form-paso-chip/form-paso/
+  // form-acciones-pasos, de componentes/formulario.html) -- un paso por cada grupo que
+  // ya tenía CAMPOS_VEHICULO, en su mismo orden, así que la ficha de solo lectura
+  // (seccionesFichaVehiculo, que usa esos mismos grupos) no cambia. Sin candado entre
+  // pasos (igual que Responsiva/Adherente): se puede ir y venir libremente.
+  const VEH_GRUPOS_PASO = ['Vehículo', 'Identificación', 'Documentación y seguro', 'Accesorios y sensor', 'Ubicación y registro'];
+
+  /** Los campos del formulario de vehículo (componente CamposHoja), repartidos en los
+   * pasos de VEH_GRUPOS_PASO con el `soloGrupos` que CamposHoja.html ya trae para esto --
+   * así el único título que se ve por paso es el que CamposHoja imprime
+   * (info-section-title), sin duplicarlo con uno propio. esEdicion=true en Editar muestra
+   * los "soloEdicion" (ej. Documento de baja: no tiene sentido pedirlo al DAR DE ALTA).
+   * Departamento/No. de empleado (autoCondicional) se sugieren al elegir Responsable, con
+   * "auto" (ver wireResponsableVehiculo). `columnas` es el ancho de la rejilla de cada
+   * paso (3 en Registrar, 2 en el modal de Editar, que es más angosto). */
+  function renderCamposVehiculo(prefijo, esEdicion, columnas) {
+    return Pasos.htmlChips(VEH_GRUPOS_PASO.map(escaparHtml)) +
+      VEH_GRUPOS_PASO.map((g, i) =>
+        '<section class="form-paso" data-paso="' + i + '"' + (i === 0 ? '' : ' hidden') + '>' +
+          '<div class="form-rejilla" data-columnas="' + (columnas || 3) + '">' +
+            CamposHoja.html(CAMPOS_VEHICULO, { prefijo, esEdicion, soloGrupos: [g] }) +
+          '</div>' +
+        '</section>').join('');
+  }
+
+  /** Cablea Atrás/Siguiente/Guardar y las pastillas de arriba para un formulario de
+   * Vehículo ya pintado con renderCamposVehiculo -- lo usan tanto Registrar como Editar,
+   * cada uno con su propio contenedor y botones. Regresa { ir } para volver al paso 1
+   * después de guardar o cerrar. */
+  function wirePasosVehiculo(contenedor, ids) {
+    // La navegación es el componente Pasos: libre, sin validar, Guardar en el último
+    const nav = Pasos.navegar({
+      secciones: Array.from(contenedor.querySelectorAll('.form-paso')),
+      chips: Array.from(contenedor.querySelectorAll('.form-paso-chip')),
+      atras: document.getElementById(ids.atras), siguiente: document.getElementById(ids.siguiente),
+      guardar: document.getElementById(ids.guardar), cuenta: document.getElementById(ids.cuenta),
+      libre: true, guardarAlFinal: true,
+    });
+    nav.ir(0);
+    return { ir: nav.ir };
+  }
+
+  /** {columna real: valor}. Los "file" se suben aparte (subirArchivosVehiculo). */
+  function recolectarDatosVehiculo(prefijo) {
+    return CamposHoja.recolectar(CAMPOS_VEHICULO, prefijo);
+  }
+
+  // Sede + Ubicación son un par dependiente: Sede se llena desde la
+  // columna "SEDE 2" de "LISTAS VEHICULOS" y Ubicación desde "OFICINA /
+  // DESARROLLO 2" de la MISMA fila (ej. Sede "AGUASCALIENTES" → Ubicación
+  // CDMAGS / AGS COWORKING / AGUASCALIENTES; Sede "CANCUN" → CMCROO /
+  // PLAZA AMERICAS). mapaUbicacionesPorSede llega una sola vez desde el
+  // servidor como {SEDE 2: [ubicaciones]} (cargarCatalogosVehiculo, dentro
+  // de initVehiculos, la llena) y se filtra aquí en el cliente. A nivel de
+  // módulo (no dentro de initVehiculos) porque poblarFormularioVehiculo
+  // también la necesita y se define antes de que initVehiculos exista.
+  let mapaUbicacionesPorSede = {};
+  function llenarUbicacionesSegunSede(prefijo) {
+    const sedeEl = document.getElementById(prefijo + '-sede');
+    const ubicacionDatalist = document.getElementById(prefijo + '-' + slugCampo('OFICINA / DESARROLLO') + '-lista');
+    if (!sedeEl || !ubicacionDatalist) return;
+    const opciones = mapaUbicacionesPorSede[sedeEl.value] || [];
+    ubicacionDatalist.innerHTML = opciones.map((v) => `<option value="${v}"></option>`).join('');
+  }
+
+  /** Llena el formulario con un objeto {columna real: valor} (ej. de buscarPorFolio).
+   * Ubicación depende de la Sede: SEDE va antes en CAMPOS_VEHICULO, así que al llegar a
+   * Ubicación la Sede ya tiene su valor y se repueblan las sugerencias para ESA sede. */
+  function poblarFormularioVehiculo(prefijo, datos) {
+    CamposHoja.poblar(CAMPOS_VEHICULO, prefijo, datos, {
+      antes: { 'OFICINA / DESARROLLO': llenarUbicacionesSegunSede },
+    });
+  }
+
+  /**
+   * Sube (si el usuario eligió) los archivos de los campos tipo "file" del
+   * formulario y regresa {columna real: url}. Los campos sin archivo nuevo
+   * seleccionado simplemente no aparecen en el resultado — así crear()/
+   * actualizar() no les tocan el valor que ya tenían.
+   */
+  async function subirArchivosVehiculo(prefijo) {
+    const resultado = {};
+    const camposArchivo = CAMPOS_VEHICULO.filter((c) => c.tipo === 'file');
+    for (const campo of camposArchivo) {
+      const input = document.getElementById(prefijo + '-' + slugCampo(campo.clave));
+      const file = input && input.files && input.files[0];
+      if (!file) continue;
+      const base64 = await leerArchivoBase64(file);
+      const subido = await callServer('apiSubirArchivoVehiculo', state.token, file.name, file.type, base64);
+      resultado[campo.clave] = subido.url;
+      // No es una columna real: solo viaja para que el servidor pueda renombrar el
+      // archivo a "<ID>_<ETIQUETA>_<fecha>" una vez que sabe el ID real del vehículo.
+      resultado[campo.clave + '_FILE_ID'] = subido.id;
+    }
+    return resultado;
+  }
+
+  /** Badge "Pendiente de firma"/"Firmado" de Responsiva/Adherente Vehicular, pero diciendo CUÁL
+   *  de las dos ligas ya se firmó (TOKEN_FIRMA/TOKEN_FIRMA_JEFE vacío = esa ya se firmó o nunca
+   *  se diferió) en vez de solo "Pendiente" -- así no hay que adivinarlo por qué botón de copiar
+   *  liga sigue apareciendo en la fila. `principal` es como se le dice al firmante que no es el
+   *  jefe (p. ej. "responsable" o "adherente"). */
+  function badgeEstadoFirma(r, principal) {
+    const pendiente = (r.ESTADO_FIRMA || 'FIRMADO') === 'PENDIENTE';
+    if (!pendiente) return '<span class="badge-estado activo">Firmado</span>';
+    const faltaPrincipal = !!r.TOKEN_FIRMA;
+    const faltaJefe = !!r.TOKEN_FIRMA_JEFE;
+    let texto = 'Pendiente';
+    if (faltaPrincipal && faltaJefe) texto = 'Pendiente: falta ' + principal + ' y jefe';
+    else if (faltaPrincipal) texto = 'Ya firmó el jefe, falta ' + principal;
+    else if (faltaJefe) texto = 'Ya firmó ' + (principal === 'adherente' ? 'el adherente' : 'el responsable') + ', falta el jefe';
+    return '<span class="badge-estado pendiente">' + escaparHtml(texto) + '</span>';
+  }
+
+  /** Badge de Préstamo Vehicular en la pestaña Responsiva: en blanco para una definitiva
+   *  (no hay nada que avisar), y para un préstamo dice si sigue en curso (con su fecha), ya
+   *  venció (rojo) o ya se devolvió. */
+  function badgePrestamo(r) {
+    if ((r.TIPO_RESPONSIVA || 'DEFINITIVA') !== 'PRESTAMO') return '—';
+    if (r.ESTATUS_PRESTAMO === 'DEVUELTO') return '<span class="badge-estado activo">Préstamo devuelto</span>';
+    const vencido = r.FECHA_FIN_PRESTAMO && new Date(r.FECHA_FIN_PRESTAMO) < new Date();
+    if (vencido) return '<span class="badge-estado pendiente">Préstamo vencido</span>';
+    const fecha = r.FECHA_FIN_PRESTAMO ? ' (vence ' + formatearFecha(r.FECHA_FIN_PRESTAMO) + ')' : '';
+    return '<span class="badge-estado activo">En préstamo' + escaparHtml(fecha) + '</span>';
+  }
+
+  /** Mismo patrón que copiarEnlace_ en app-sistemas.html: la API moderna primero, y si el
+   *  marco de Apps Script la bloquea, el truco clásico del textarea oculto + execCommand. */
+  async function copiarTexto_(texto) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(texto); return true; }
+    } catch (e) { /* cae al método clásico */ }
+    const area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    let copiado = false;
+    try { copiado = document.execCommand('copy'); } catch (e) { /* no-op */ }
+    area.remove();
+    return copiado;
+  }
+
+  /** Modal chico con la(s) liga(s) de firma a distancia y un botón para copiar cada una -- se
+   *  usa tanto al generarlas (abrirAgregarResponsivaVehicular/AdherenteVehicular, que puede
+   *  generar una o dos de un jalón si ni el responsable/adherente ni el jefe estaban
+   *  presentes) como al "Copiar liga de nuevo" desde la pestaña (data-ficha-copiar-liga/
+   *  -jefe), que siempre manda una sola. Mismo patrón que Confirmar.pedir (.modal-backdrop,
+   *  Esc, clic fuera) pero sin promesa -- no hay nada que confirmar.
+   *
+   *  @param {string|Array<{titulo?:string, liga:string}>} ligas  una liga, o varias con su
+   *    etiqueta (p. ej. [{titulo:'Responsable', liga:a}, {titulo:'Jefe directo', liga:b}]).
+   */
+  function mostrarLigaFirma_(ligas) {
+    const lista = Array.isArray(ligas) ? ligas : [{ titulo: null, liga: ligas }];
+    const fondo = document.createElement('div');
+    fondo.className = 'modal-backdrop';
+    const campos = lista.map((item, i) =>
+      (item.titulo ? '<label style="margin-top:' + (i ? '12px' : '0') + '">' + escaparHtml(item.titulo) + '</label>' : '') +
+      '<div style="display:flex;gap:8px;margin-top:' + (item.titulo ? '6px' : (i ? '12px' : '0')) + '">' +
+        '<input type="text" readonly value="' + escaparHtml(item.liga) + '" id="liga-firma-' + i + '" ' +
+          'style="flex:1;min-width:0;padding:9px 10px;border:1px solid var(--color-border);border-radius:var(--radio-m);background:var(--color-bg);color:var(--color-text);font-size:var(--texto-s)">' +
+        '<button type="button" class="secondary" data-copiar="liga-firma-' + i + '" title="Copiar liga"><i data-lucide="copy" class="ico"></i></button>' +
+      '</div>'
+    ).join('');
+    fondo.innerHTML =
+      '<div class="modal-card">' +
+        '<h3><i data-lucide="link" class="ico"></i> Liga' + (lista.length > 1 ? 's' : '') + ' para firmar a distancia</h3>' +
+        '<p style="margin:4px 0 14px;color:var(--color-text-muted);font-size:var(--texto-s)">' +
+          'Mánda' + (lista.length > 1 ? 'selas' : 'sela') + ' a la persona (WhatsApp, correo…) para que la abra y firme desde su celular.</p>' +
+        campos +
+        '<div class="form-acciones" style="margin-top:14px">' +
+          '<button type="button" class="secondary" data-accion="cerrar">Cerrar</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(fondo);
+    refreshIcons();
+
+    const focoPrevio = document.activeElement;
+    const terminar = () => {
+      document.removeEventListener('keydown', alTecla, true);
+      fondo.remove();
+      if (focoPrevio && focoPrevio.focus) focoPrevio.focus();
+    };
+    const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); terminar(); } };
+    fondo.querySelector('[data-accion="cerrar"]').addEventListener('click', terminar);
+    fondo.addEventListener('mousedown', (ev) => { if (ev.target === fondo) terminar(); });
+    document.addEventListener('keydown', alTecla, true);
+    fondo.querySelectorAll('[data-copiar]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const ok = await copiarTexto_(document.getElementById(btn.dataset.copiar).value);
+        if (ok) Notificar.exito('Liga copiada'); else Notificar.error('El navegador no permitió copiar la liga');
+      });
+    });
+  }
+
+  // ---------- Vehículos ----------
+  // Vehículos en partes (fase 6.1b): initVehiculos es el arranque y la lista; ficha, registros, capturas, documentos
+  // viven en app-vehiculos-<parte>.html y se registran aquí (componentes/partes.html).
+  const Vehiculos = Partes.crear('Vehículos');
+
+  async function initVehiculos() {
+    // Las partes (app-vehiculos-*.html, componentes/partes.html): se montan abajo, con lo del arranque
+    const T = Vehiculos.contexto();
+    const { abrirFichaVehiculo, alAbrirPestanaVehiculo, cerrarFichaVehiculo, mostrarPestanaFichaVehiculo } = T.de('ficha');
+    const { cerrarVerRegistroFicha } = T.de('registros');
+    const { abrirAgregarHolograma, abrirAgregarIncidencia, abrirAgregarInspeccion, abrirAgregarSensor,
+      abrirAgregarVerificacion, abrirCapturaVehiculo, cerrarCapturaVehiculo } = T.de('capturas');
+    Tabs.iniciar(document.getElementById('view-container'));
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('vehiculos');
+    if (!puedeEditar) document.querySelector('#veh-tabs .tab-btn[data-tab="registrar"]').remove();
+    const modalEditar = document.getElementById('modal-editar-vehiculo');
+    let vehiculosPorId = {};
+    let todosLosVehiculos = [];
+    /** La ficha abierta: si su copia guardada llega distinta del servidor, se vuelve a pintar */
+    let fichaVehiculoAbierta = null;
+    /** Series (normalizadas) con expediente de Adquisición Vehicular ya encontrado en el índice
+     *  (apiAdquisicionVehicularLista) -- para la columna "Adquisición" del catálogo, se llena en
+     *  cargar(). No es lo mismo que FOLIO ADQUISICION en la ficha (eso solo queda cuando alguien
+     *  le dio clic a "Buscar expediente" en ESE vehículo); esto refleja el índice completo. */
+    let adquisicionEncontrada = new Set();
+
+    document.getElementById('campos-form-vehiculo').innerHTML = renderCamposVehiculo('veh');
+    document.getElementById('campos-form-editar-vehiculo').innerHTML = renderCamposVehiculo('editar-vehiculo', true, 2);
+    const pasosAltaVeh = wirePasosVehiculo(document.getElementById('campos-form-vehiculo'), {
+      atras: 'veh-paso-atras', siguiente: 'veh-paso-siguiente', guardar: 'btn-guardar-vehiculo', cuenta: 'veh-paso-cuenta',
+    });
+    const pasosEditarVeh = wirePasosVehiculo(document.getElementById('campos-form-editar-vehiculo'), {
+      atras: 'editar-vehiculo-paso-atras', siguiente: 'editar-vehiculo-paso-siguiente', guardar: 'btn-guardar-editar-vehiculo', cuenta: 'editar-vehiculo-paso-cuenta',
+    });
+
+    // Fecha de registro en el sistema: siempre "hoy", no se edita (el
+    // servidor fija el valor real al crear, esto es solo para que se vea
+    // algo ahí — igual que FECHA DE REGISTRO en Tickets). Solo en
+    // Registrar: en Editar la pisa poblarFormularioVehiculo con la fecha
+    // real ya guardada.
+    document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
+
+    // Marca / Departamento / Sede / Razón social: catálogos planos (hoja
+    // "LISTAS VEHICULOS"), mismas opciones en Registrar y Editar. Estos ya
+    // son <input list="..."> (campo.catalogo: true) — se puede escribir una
+    // opción nueva que todavía no esté en la lista.
+    function llenarSelect(id, valores) { CamposHoja.llenarOpciones(id, valores); }
+
+    // El filtrado de Ubicación según Sede (mapaUbicacionesPorSede,
+    // llenarUbicacionesSegunSede) vive a nivel de módulo, junto a
+    // poblarFormularioVehiculo — ver comentario ahí.
+    ['veh-sede', 'editar-vehiculo-sede'].forEach((id) => {
+      // 'input' (no solo 'change'): Sede ahora es un <input list="..."> —
+      // 'input' dispara al escribir Y al elegir una sugerencia del
+      // datalist, así Ubicación se actualiza al momento en ambos casos.
+      document.getElementById(id).addEventListener('input', () => {
+        llenarUbicacionesSegunSede(id.replace('-sede', ''));
+      });
+    });
+
+    // En su propia función (en vez de un await suelto aquí) para poder
+    // correrla EN PARALELO con cargar() más abajo — antes se esperaba a que
+    // terminaran los 5 catálogos antes de ni siquiera empezar a pedir la
+    // lista de vehículos, cuando ninguno depende del otro.
+    async function cargarCatalogosVehiculo() {
+      try {
+        const [marcas, departamentos, sedes, razones, mapaUbicaciones, colaboradores] = await Promise.all([
+          callServerCacheado('apiListarMarcas', state.token),
+          callServerCacheado('apiListarDepartamentos', state.token),
+          callServerCacheado('apiListarSedesVehiculo', state.token),
+          callServerCacheado('apiListarRazonesSociales', state.token),
+          callServerCacheado('apiListarUbicacionesPorSede', state.token),
+          callServerCacheado('apiListarColaboradores', state.token),
+        ]);
+        ['veh-marca', 'editar-vehiculo-marca'].forEach((id) => llenarSelect(id, marcas));
+        ['veh-departamento', 'editar-vehiculo-departamento'].forEach((id) => llenarSelect(id, departamentos));
+        ['veh-sede', 'editar-vehiculo-sede'].forEach((id) => llenarSelect(id, sedes));
+        ['veh-razon-social', 'editar-vehiculo-razon-social'].forEach((id) => llenarSelect(id, razones));
+        mapaUbicacionesPorSede = mapaUbicaciones || {};
+        // Al cargar los catálogos ya puede haber una Sede elegida (ej. al
+        // reabrir Editar antes de que termine esta llamada) — refresca la
+        // Ubicación por si acaso.
+        llenarUbicacionesSegunSede('veh');
+        llenarUbicacionesSegunSede('editar-vehiculo');
+        const nombresColaboradores = Array.from(new Set((colaboradores || []).map((c) => c.NOMBRE)));
+        ['veh-responsable-vehiculo', 'editar-vehiculo-responsable-vehiculo'].forEach((id) => llenarSelect(id, nombresColaboradores));
+        wireResponsableVehiculo('veh', colaboradores || []);
+        wireResponsableVehiculo('editar-vehiculo', colaboradores || []);
+      } catch (err) {
+        console.error('No se pudieron cargar los catálogos de Marca/Departamento/Sede/Razón social/Ubicación/Colaboradores:', err);
+      }
+    }
+
+    /** Al elegir (o escribir exacto) un nombre de Capital Humano en "Responsable del
+     *  vehículo", sugiere su Departamento y No. de empleado -- no bloquea los campos
+     *  (el usuario los puede corregir): si hay más de un colaborador con ese nombre
+     *  exacto (recontratación, nombre repetido), se usa el primero que haya en la
+     *  lista. Si el nombre no coincide con nadie, no hace nada -- se deja capturar
+     *  a mano, como ya era antes de tener este catálogo. */
+    function wireResponsableVehiculo(prefijo, colaboradores) {
+      const porNombre = {};
+      colaboradores.forEach((c) => { if (!porNombre[c.NOMBRE.toUpperCase()]) porNombre[c.NOMBRE.toUpperCase()] = c; });
+      const idResponsable = prefijo + '-responsable-vehiculo';
+      const input = document.getElementById(idResponsable);
+      if (!input || input.dataset.wireado) return; // una sola vez por campo, aunque se recarguen catálogos
+      input.dataset.wireado = '1';
+      input.addEventListener('input', () => {
+        const colaborador = porNombre[input.value.trim().toUpperCase()];
+        const depto = document.getElementById(prefijo + '-departamento');
+        const noEmpleado = document.getElementById(prefijo + '-no-empleado');
+        if (!colaborador) { if (depto) CampoAuto.quitar(depto); if (noEmpleado) CampoAuto.quitar(noEmpleado); return; }
+        if (depto && colaborador.DEPARTAMENTO) CampoAuto.llenar(depto, colaborador.DEPARTAMENTO);
+        if (noEmpleado && colaborador.NO_EMPLEADO) CampoAuto.llenar(noEmpleado, colaborador.NO_EMPLEADO);
+      });
+    }
+
+    // Folio: se ve en su campo (deshabilitado, no se puede escribir) desde que
+    // se elige la Clase en Registrar — es solo vista previa, el que de verdad
+    // queda asignado se recalcula al guardar (por si alguien más registró un
+    // vehículo de esa misma Clase mientras tanto).
+    const campoFolioVeh = document.getElementById('veh-folio');
+    document.getElementById('veh-clase').addEventListener('change', async (ev) => {
+      const clase = ev.target.value;
+      if (!clase) { campoFolioVeh.value = ''; return; }
+      try {
+        campoFolioVeh.value = await callServer('apiPrevisualizarFolioVehiculo', state.token, clase);
+      } catch (err) {
+        console.error('No se pudo previsualizar el folio:', err);
+      }
+    });
+
+    // NUCCO: consecutivo simple, no depende de ningún otro campo — se
+    // previsualiza una sola vez al entrar a Registrar (igual que el Folio,
+    // NO reserva nada: el valor real se recalcula al guardar).
+    async function previsualizarNuccoVeh() {
+      try {
+        document.getElementById('veh-nucco').value = await callServer('apiPrevisualizarNuccoVehiculo', state.token);
+      } catch (err) {
+        console.error('No se pudo previsualizar el NUCCO:', err);
+      }
+    }
+    previsualizarNuccoVeh();
+
+    function badgeEstatus(estatus) {
+      const esBaja = String(estatus || '').toUpperCase().includes('BAJA');
+      return `<span class="badge-estado ${esBaja ? 'baja' : 'activo'}"><i data-lucide="${esBaja ? 'ban' : 'circle-check'}" class="ico"></i> ${esBaja ? 'De baja' : 'Activo'}</span>`;
+    }
+
+    // Color + ícono por clase, tal cual se veían en AppSheet.
+    const CLASE_ESTILO = {
+      'AUTOMOVIL': { icono: 'car', color: 'var(--tono-azul)' },
+      // var(--color-neutro-fuerte) en vez de un negro fijo: se pierde contra
+      // el fondo del modo oscuro si no se adapta con el tema.
+      'CAMION': { icono: 'truck', color: 'var(--color-neutro-fuerte)' },
+      'CAMIONETA': { icono: 'car-front', color: 'var(--tono-naranja)' },
+      'CUATRIMOTO': { icono: 'tractor', color: 'var(--tono-amarillo)' },
+      'MOTOCARRO': { icono: 'bike', color: 'var(--tono-morado)' },
+      'MOTOCICLETA': { icono: 'bike', color: 'var(--color-neutro-fuerte)' },
+      'NUCO SIN INFORMACION': { icono: 'triangle-alert', color: 'var(--tono-rojo)' },
+      'REMOLQUE': { icono: 'container', color: 'var(--tono-verde)' },
+      'MAQUINARIA MENOR': { icono: 'wrench', color: 'var(--tono-pizarra)' },
+    };
+    function etiquetaClase(clase) {
+      if (!clase) return '—';
+      const e = CLASE_ESTILO[String(clase).toUpperCase()] || { icono: 'circle', color: 'var(--color-text-muted)' };
+      return `<span style="display:inline-flex; align-items:center; gap:5px; color:${e.color}; font-weight:700; font-style:italic">` +
+        `${Iconos.svg(e.icono)} ${escaparHtml(clase)}</span>`;
+    }
+
+    // Mismo orden que las opciones de CLASE en CAMPOS_VEHICULO; etiquetas legibles para el
+    // filtro por Clase (pintarClasesVeh) -- "Nuco sin información" igual que en Panorama.
+    const ORDEN_CLASES_VEH = ['AUTOMOVIL', 'CAMION', 'CAMIONETA', 'MOTOCICLETA', 'REMOLQUE', 'MAQUINARIA MENOR', 'CUATRIMOTO', 'NUCO SIN INFORMACION', 'MOTOCARRO'];
+    const NOMBRE_CLASE_VEH = {
+      'AUTOMOVIL': 'Automóvil', 'CAMION': 'Camión', 'CAMIONETA': 'Camioneta', 'MOTOCICLETA': 'Motocicleta',
+      'REMOLQUE': 'Remolque', 'MAQUINARIA MENOR': 'Maquinaria menor', 'CUATRIMOTO': 'Cuatrimoto',
+      'NUCO SIN INFORMACION': 'Nuco sin información', 'MOTOCARRO': 'Motocarro',
+    };
+
+    /**
+     * Ficha de un vehículo: pantalla propia dentro del módulo (oculta la lista,
+     * muestra esto), mismo patrón que la ficha de equipo/línea en Líneas
+     * Telefónicas — migas para volver, encabezado con ícono/estatus/acciones,
+     * y el registro completo (41 columnas) + los dos historiales enlazados.
+     */
+    function migasVehiculo() {
+      return Ficha.migas({ volver: { atributos: 'id="veh-btn-volver"' }, ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }] });
+    }
+
+    function wireMigasVehiculo() {
+      const volver = document.getElementById('veh-btn-volver');
+      const enlace = document.getElementById('veh-enlace-lista');
+      if (volver) volver.addEventListener('click', cerrarFichaVehiculo);
+      if (enlace) enlace.addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
+    }
+
+    /** Las fotos de una inspección (de la app o solo del expediente): Vehículos › NUCO › Inspección */
+    function abrirFotosInspeccionVehiculo(vResumen, d, app) {
+      const detalle = document.getElementById('veh-detalle');
+      detalle.innerHTML = Ficha.migas({
+        volver: { atributos: 'id="veh-btn-volver-ficha"' },
+        ruta: [{ texto: 'Vehículos', atributos: 'id="veh-enlace-lista"' }, { texto: 'Nucco ' + (vResumen.NUCCO || ''), atributos: 'id="veh-enlace-ficha"' }],
+        actual: 'Inspección ' + d.nombre + ' ' + d.anio,
+      }) + '<div id="veh-insp-fotos"></div>';
+      const aLaFicha = (ev) => { if (ev) ev.preventDefault(); abrirFichaVehiculo(vResumen, 'inspecciones'); };
+      document.getElementById('veh-btn-volver-ficha').addEventListener('click', aLaFicha);
+      document.getElementById('veh-enlace-ficha').addEventListener('click', aLaFicha);
+      document.getElementById('veh-enlace-lista').addEventListener('click', (ev) => { ev.preventDefault(); cerrarFichaVehiculo(); });
+      InspeccionesFicha.pintarFotos(document.getElementById('veh-insp-fotos'), d, app, vResumen.NUCCO);
+      document.getElementById('view-container').scrollTop = 0;
+      window.scrollTo(0, 0);
+    }
+
+    // ---------- Menú contextual (clic derecho en la tabla) ----------
+    // Mismos 5 formularios de captura que ya usan los botones "Agregar" de la ficha
+    // (abrirAgregarVerificacion/Sensor/Holograma/Incidencia/Inspeccion), pero como
+    // acceso directo desde la tabla sin entrar primero a la ficha -- trae lo que
+    // haga falta (completo, y hologramas para Inspección) antes de abrir el formulario.
+    async function abrirCapturaRapidaVehiculo(vResumen, tipo) {
+      try {
+        const necesitaCompleto = tipo === 'holograma' || tipo === 'incidencia' || tipo === 'inspeccion';
+        const [completo, hologramasTexto] = await Promise.all([
+          necesitaCompleto ? callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO) : Promise.resolve(null),
+          tipo === 'inspeccion' ? callServer('apiHologramasPorFolio', state.token, vResumen.FOLIO).catch(() => '[]') : Promise.resolve('[]'),
+        ]);
+        if (tipo === 'verificacion') abrirAgregarVerificacion(vResumen);
+        else if (tipo === 'sensor') abrirAgregarSensor(vResumen);
+        else if (tipo === 'holograma') abrirAgregarHolograma(vResumen, completo);
+        else if (tipo === 'incidencia') abrirAgregarIncidencia(vResumen, completo);
+        else if (tipo === 'inspeccion') abrirAgregarInspeccion(vResumen, completo, JSON.parse(hologramasTexto || '[]'));
+      } catch (err) {
+        toastError('No se pudo preparar la captura: ' + err.message);
+      }
+    }
+
+    /** Acceso rápido: cambia solo ESTATUS entre los 5 valores operativos (sin abrir el
+     *  formulario completo de Editar). "BAJA VEHICULAR" NO es una opción aquí a propósito:
+     *  tiene su propio botón (darDeBajaVehiculo) para que dar de baja sea siempre esa acción
+     *  de un clic y nunca el formulario completo -- ver el comentario de ahí por qué. Sirve
+     *  también para "Reactivar" un vehículo en baja: se le pide elegir a cuál de los 5 vuelve. */
+    function cambiarEstatusRapidoVehiculo(v) {
+      const cuerpo = abrirCapturaVehiculo('toggle-right', 'ESTATUS', 'Cambiar estatus', 'Folio ' + v.FOLIO);
+      const form = Formulario.crear(cuerpo, {
+        ancho: 'uno', columnas: 1,
+        campos: [{ id: 'ESTATUS', etiqueta: 'Nuevo estatus', tipo: 'lista', requerido: true }],
+        textoGuardar: 'Guardar estatus', iconoGuardar: 'save',
+        alGuardar: async (valores) => {
+          await callServer('apiActualizarVehiculo', state.token, v.ID_VEHICULO, { ESTATUS: valores.ESTATUS });
+          invalidarCacheLista('apiListarVehiculosResumen', state.token);
+          invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        },
+        textoExito: () => 'Estatus actualizado',
+        alGuardado: () => { cerrarCapturaVehiculo(); cargar(); },
+      });
+      form.setOpciones('ESTATUS',
+        ['PRESTAMO', 'UTILITARIO', 'NO UTILITARIO', 'NUCO SIN INFORMACION', 'FUERA DE SERVICIO'], v.ESTATUS);
+    }
+
+    /** Dar de baja: sin modal, y solo toca ESTATUS -- nunca Placa, Departamento ni Responsable
+     *  del vehículo. Antes la única forma de marcar una baja era el formulario completo de
+     *  Editar, y ahí la costumbre (heredada del AppSheet) era escribir también "BAJA VEHICULAR"
+     *  en esas otras columnas para que "se viera" la baja -- de ahí salen los centinelas que
+     *  Relaciones.gs tiene que filtrar al propagar. Con esta acción separada ya no hace falta
+     *  pasar por ese formulario solo para dar de baja. Funciona con una o varias filas
+     *  seleccionadas a la vez (las que ya estén de baja se saltan solas). Reversible con
+     *  "Reactivar" (cambiarEstatusRapidoVehiculo) -- por eso sin confirmación. */
+    async function darDeBajaVehiculo(filas) {
+      const aDarDeBaja = filas.filter((v) => String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR');
+      if (!aDarDeBaja.length) return;
+      try {
+        await Promise.all(aDarDeBaja.map((v) =>
+          callServer('apiActualizarVehiculo', state.token, v.ID_VEHICULO, { ESTATUS: 'BAJA VEHICULAR' })));
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        toastExito(aDarDeBaja.length === 1 ? 'Vehículo dado de baja' : aDarDeBaja.length + ' vehículos dados de baja');
+        cargar();
+      } catch (err) {
+        toastError('No se pudo dar de baja: ' + err.message);
+      }
+    }
+
+    /** Eliminar directo desde el menú contextual -- mismo apiEliminarVehiculo y limpieza
+     *  de caché que el botón "Eliminar" masivo de la tabla, pero para una sola fila. */
+    const tabla = DataTable.crear(document.getElementById('veh-tabla'), {
+      idCampo: 'ID_VEHICULO',
+      idTabla: 'vehiculos',
+      tarjetasAncho: true,   // el botón Tabla/Tarjetas también en escritorio (usuario, 7-oct)
+      buscarColumna: [   // (usuario, 7-oct)
+        { campo: 'NUCCO', placeholder: 'Buscar por Nucco…' },
+        { campo: 'SERIE_VEHICULO', placeholder: 'Buscar por Serie…' },
+      ],
+      textoVacio: 'Todavía no hay vehículos registrados',
+      exportar: {
+        nombreArchivo: 'Vehículos',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Vehículos', filas: JSON.parse(await callServer('apiVehiculosCompleto', state.token)) }),
+      },
+      columnasCompletas: { idHoja: 'ID', cargar: async () => JSON.parse(await callServer('apiVehiculosCompleto', state.token)) },
+      etiquetaFila: (v) => v.FOLIO,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      // false (no panel lateral): la ficha completa es su propia pantalla —
+      // se abre con doble clic en la fila o el ícono de "ojo" (ver más abajo),
+      // mismo patrón que equipos/líneas en el módulo de Líneas Telefónicas.
+      detalle: false,
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona la fila, Ctrl/Cmd+clic y Shift+clic como en Drive, doble clic =
+      // abre la ficha (alAbrirFila), cuadro con el mouse, Ctrl/Cmd+A. El ⋮ de cada fila y el
+      // clic derecho muestran las mismas acciones (accionesFila + accionesSeleccion de abajo).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (v) => abrirFichaVehiculo(v),
+      alTocarFila: (v) => abrirFichaVehiculo(v),
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true, enDetalle: false },
+        { campo: 'NUCCO', titulo: 'Nucco', tipo: 'texto', enDetalle: false },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista', enDetalle: false },
+        { campo: 'CLASE', titulo: 'Clase', tipo: 'lista', render: (v) => etiquetaClase(v), renderFiltro: (v) => etiquetaClase(v), enDetalle: false },
+        { campo: 'MARCA', titulo: 'Marca', tipo: 'lista', enDetalle: false },
+        { campo: 'LINEA_VEHICULO', titulo: 'Línea', tipo: 'lista', enDetalle: false },
+        { campo: 'MODELO', titulo: 'Año', tipo: 'texto', enDetalle: false },
+        { campo: 'PLACA', titulo: 'Placa', tipo: 'texto', enDetalle: false },
+        // Visible por defecto (no 'visible:false' como NO_ECONOMICO/COLOR/SEDE de abajo): si
+        // se escondiera, el buscador de la tabla no la encontraría (filasFiltradas() solo busca
+        // en columnas visibles) -- el usuario busca vehículos por serie seguido (usuario, 7-oct).
+        // campo SERIE_VEHICULO (con guion bajo), no SERIE: "Vista" > columnas completas compara
+        // normalizando "_"->" " contra el encabezado real de la hoja ("SERIE VEHICULO") -- con
+        // otra clave no la reconoce como la misma y agrega una segunda columna duplicada.
+        { campo: 'SERIE_VEHICULO', titulo: 'Serie Vehículo', tipo: 'texto', enDetalle: false },
+        {
+          // Computada (apiAdquisicionVehicularLista, cargar()): si el índice de Adquisición
+          // Vehicular ya tiene carpeta para esta serie -- no depende de que alguien le haya
+          // dado clic a "Buscar expediente" en la ficha de ESTE vehículo (ver adquisicionEncontrada).
+          campo: 'ADQUISICION', titulo: 'Adquisición', tipo: 'lista', enDetalle: false,
+          valor: (v) => (adquisicionEncontrada.has(serieNormalizada(v.SERIE_VEHICULO)) ? 'Encontrada' : ''),
+          render: (val) => (val
+            ? '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Encontrada</span>'
+            : '<span style="color:var(--color-text-muted)">—</span>'),
+        },
+        // 'texto' (no 'lista'): ESTATUS trae varias razones de baja distintas
+        // ("BAJA VEHICULAR", etc.) — contiene/no contiene "BAJA" cubre todas
+        // sin tener que enumerarlas, igual que hacía el filtro de KPI de antes.
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'texto', render: (v) => badgeEstatus(v), enDetalle: false },
+        { campo: 'NO_ECONOMICO', titulo: 'No. económico', tipo: 'texto', visible: false, enDetalle: false },
+        { campo: 'COLOR', titulo: 'Color', tipo: 'lista', visible: false, enDetalle: false },
+        { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false, enDetalle: false },
+        { campo: 'FECHA_REGISTRO', titulo: 'Fecha de registro', tipo: 'fecha', visible: false, enDetalle: false },
+      ],
+      accionesFila: [
+        { icono: 'eye', titulo: 'Ver ficha', alHacer: (v) => abrirFichaVehiculo(v) },
+      ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (v) => abrirEditarVehiculo(v) }] : []),
+      // Antes vivían en menuContextual (antes de seleccionDrive, ver arriba) --
+      // ahora el ⋮/clic derecho sale solo de accionesFila + accionesSeleccion.
+      // enBarra:false: quedan en el ⋮ (no en la barra, son demasiadas para caber ahí).
+      // maximo:1 en casi todas (solo aplican con una fila seleccionada) -- "Dar de
+      // baja" es la excepción, acepta varias a la vez. "Eliminar" NO se repite
+      // aquí: ya la agrega cfg.alEliminar, con el chequeo de integridad
+      // (apiQueImpideBorrar) que la vieja eliminarVehiculoRapido no tenía.
+      // Cambiar el vehículo, con edición de Vehículos; capturar algo de otro módulo, con edición de ESE módulo
+      // (antes todo colgaba de Vehículos y el servidor negaba lo que no tocaba)
+      accionesSeleccion: [
+        puedeEditar && {
+          icono: 'ban', texto: 'Dar de baja', enBarra: false, grupo: 'estado',
+          visible: (filas) => filas.some((f) => String(f.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR'),
+          alHacer: (filas) => darDeBajaVehiculo(filas),
+        },
+        puedeEditar && {
+          icono: 'toggle-right', texto: 'Cambiar estatus', maximo: 1, enBarra: false, grupo: 'estado',
+          alHacer: (filas) => cambiarEstatusRapidoVehiculo(filas[0]),
+        },
+        puedeEditarModulo('verificaciones') && { icono: 'clipboard-check', texto: 'Nueva verificación', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'verificacion') },
+        puedeEditarModulo('inspeccion-vehicular') && { icono: 'clipboard-list', texto: 'Nueva inspección', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'inspeccion') },
+        puedeEditarModulo('instalacion-sensores') && { icono: 'radio', texto: 'Nuevo sensor', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'sensor') },
+        puedeEditarModulo('hologramas') && { icono: 'credit-card', texto: 'Nuevo holograma', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'holograma') },
+        puedeEditarModulo('incidencias') && { icono: 'wrench', texto: 'Nueva incidencia', maximo: 1, enBarra: false, grupo: 'captura', tituloGrupo: 'Capturar', alHacer: (filas) => abrirCapturaRapidaVehiculo(filas[0], 'incidencia') },
+      ].filter(Boolean),
+      alEliminar: puedeEditar ? async (filas) => {
+        // Primero se pregunta por todos: si alguno tiene historial, no se borra ninguno
+        const imp = await callServer('apiQueImpideBorrar', state.token, 'VEHICULOS', filas.map((f) => f.ID_VEHICULO));
+        if (imp.mensaje) throw new Error(imp.mensaje);
+        await Promise.all(filas.map((f) => callServer('apiEliminarVehiculo', state.token, f.ID_VEHICULO)));
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    // Clic en una pestaña de la ficha, o en "Ver" de un archivo de otro módulo
+    // (comprobante, formato, responsiva, solicitud — cada uno abre igual que en su propio módulo).
+    const ABRIR_ARCHIVO_FICHA = {
+      verificacion: abrirComprobanteVerificacion, inspeccion: abrirFormatoInspeccion,
+      sensor: abrirResponsivaSensor, holograma: abrirSolicitudHolograma,
+    };
+    // Lo que también usan otras partes (T.fichaVehiculoAbierta)
+    Object.defineProperty(T, 'fichaVehiculoAbierta', { get: () => fichaVehiculoAbierta, set: (v) => { fichaVehiculoAbierta = v; } });
+    T.montar({
+      CLASE_ESTILO, abrirEditarVehiculo, abrirFotosInspeccionVehiculo, badgeEstatus, migasVehiculo, puedeEditar,
+      wireMigasVehiculo,
+    });
+    document.getElementById('veh-detalle').addEventListener('click', (ev) => {
+      const ir = ev.target.closest('[data-ir-pestana]');
+      if (ir) { ev.preventDefault(); mostrarPestanaFichaVehiculo(ir.dataset.irPestana); return; }
+      const archivo = ev.target.closest('[data-archivo]');
+      if (archivo) ABRIR_ARCHIVO_FICHA[archivo.dataset.archivo](archivo.dataset.ruta);
+    });
+    document.getElementById('veh-detalle').addEventListener('tabs-cambio', (ev) => alAbrirPestanaVehiculo(ev.detail.nombre));
+    // La ficha salió de su copia guardada y del servidor llegó algo distinto: se repinta en la
+    // misma pestaña (sin "Cargando…" ni volver arriba)
+    escucharLista('apiFichaVehiculo', () => {
+      const detalle = document.getElementById('veh-detalle');
+      if (!fichaVehiculoAbierta || detalle.hidden) return;
+      abrirFichaVehiculo(fichaVehiculoAbierta, Tabs.actual(detalle) || undefined, true);
+    }, document.getElementById('veh-detalle'));
+
+    // Modal de captura (verificación/sensor/holograma/incidencia): cerrar con la X o clic afuera.
+    const modalCaptura = document.getElementById('veh-modal-captura');
+    document.getElementById('veh-captura-cerrar').addEventListener('click', cerrarCapturaVehiculo);
+    modalCaptura.addEventListener('click', (ev) => { if (ev.target === modalCaptura) cerrarCapturaVehiculo(); });
+
+    // Modal "Ver completo" (Verificaciones/Inspecciones/Sensor/Hologramas/Incidencias
+    // desde la ficha): cerrar con la X o clic afuera.
+    const modalVerRegistro = document.getElementById('veh-modal-ver-registro');
+    document.getElementById('veh-ver-registro-cerrar').addEventListener('click', cerrarVerRegistroFicha);
+    modalVerRegistro.addEventListener('click', (ev) => { if (ev.target === modalVerRegistro) cerrarVerRegistroFicha(); });
+
+    // ---- Filtro rápido por Clase (FiltroTipo), con el ícono y color de CLASE_ESTILO (usuario, 6-oct). ----
+    let filtrosActualesVeh = {};
+    const panelClasesVeh = FiltroTipo.crear(document.getElementById('veh-clases'), {
+      titulo: 'Clase', todos: 'Todas', campo: 'CLASE', orden: ORDEN_CLASES_VEH, estilos: CLASE_ESTILO,
+      nombre: (c) => NOMBRE_CLASE_VEH[c] || c,
+      alElegir: (valor) => tabla.setFiltro('CLASE', valor ? { valores: [valor] } : null),
+    });
+    function marcarClasesVeh() { panelClasesVeh.marcar(filtrosActualesVeh.CLASE); }
+    function pintarClasesVeh(filas) { panelClasesVeh.pintar(filas); }
+
+    // Binario de antes (Activos = no es baja / Inactivos = es baja), más un KPI clickeable
+    // por cada uno de los 6 valores reales de ESTATUS (ver CAMPOS_VEHICULO). "Baja de placa"
+    // es la excepción: no es un ESTATUS nuevo -- es el valor que YA vive en la columna PLACA
+    // (ver CENTINELAS.PLACA en Relaciones.gs y la opción "BAJA DE PLACA" del campo Placa en
+    // CAMPOS_VEHICULO), así que ese tile trae su propio `campo` en vez de asumir ESTATUS.
+    const KPI_AGREGADO_VEHICULOS = { 'veh-stat-activos': 'no_contiene', 'veh-stat-inactivos': 'contiene' };
+    const KPI_FILTRO_VEHICULOS = {
+      'veh-stat-utilitario': { campo: 'ESTATUS', valor: 'UTILITARIO' },
+      'veh-stat-no-utilitario': { campo: 'ESTATUS', valor: 'NO UTILITARIO' },
+      'veh-stat-prestamo': { campo: 'ESTATUS', valor: 'PRESTAMO' },
+      'veh-stat-fuera-servicio': { campo: 'ESTATUS', valor: 'FUERA DE SERVICIO' },
+      'veh-stat-nuco-sin-info': { campo: 'ESTATUS', valor: 'NUCO SIN INFORMACION' },
+      'veh-stat-baja': { campo: 'ESTATUS', valor: 'BAJA VEHICULAR' },
+      'veh-stat-baja-placa': { campo: 'PLACA', valor: 'BAJA DE PLACA' },
+    };
+    const tileTotalVeh = document.getElementById('veh-stat-total').closest('.stat-tile');
+    tileTotalVeh.classList.add('stat-tile-clickable');
+    tileTotalVeh.addEventListener('click', () => tabla.setFiltro('ESTATUS', null));
+    Object.keys(KPI_AGREGADO_VEHICULOS).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro('ESTATUS', yaActivo ? null : { op: KPI_AGREGADO_VEHICULOS[id], v1: 'BAJA' });
+      });
+    });
+    Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      const cfg = KPI_FILTRO_VEHICULOS[id];
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const yaActivo = tile.classList.contains('stat-tile-activo');
+        tabla.setFiltro(cfg.campo, yaActivo ? null : { op: 'igual', v1: cfg.valor });
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      filtrosActualesVeh = filtros || {};
+      marcarClasesVeh();
+      const f = filtros.ESTATUS;
+      tileTotalVeh.classList.toggle('stat-tile-activo', !f);
+      Object.keys(KPI_AGREGADO_VEHICULOS).forEach((id) => {
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(f && f.op === KPI_AGREGADO_VEHICULOS[id] && f.v1 === 'BAJA')
+        );
+      });
+      Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+        const cfg = KPI_FILTRO_VEHICULOS[id];
+        const fc = filtros[cfg.campo];
+        document.getElementById(id).closest('.stat-tile').classList.toggle(
+          'stat-tile-activo', !!(fc && fc.op === 'igual' && fc.v1 === cfg.valor)
+        );
+      });
+      // Los KPIs reflejan lo que hay bajo los filtros activos (los de columna, búsqueda,
+      // etc.), no siempre el catálogo completo — igual que el pie de "N de M" de la tabla.
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      document.getElementById('veh-stat-total').textContent = filas.length;
+      document.getElementById('veh-stat-activos').textContent =
+        filas.filter((v) => !String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      document.getElementById('veh-stat-inactivos').textContent =
+        filas.filter((v) => String(v.ESTATUS || '').toUpperCase().includes('BAJA')).length;
+      Object.keys(KPI_FILTRO_VEHICULOS).forEach((id) => {
+        const cfg = KPI_FILTRO_VEHICULOS[id];
+        document.getElementById(id).textContent =
+          filas.filter((v) => String(v[cfg.campo] || '').toUpperCase() === cfg.valor).length;
+      });
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        const [texto, textoAdq] = await Promise.all([
+          callServerListaCacheada('apiListarVehiculosResumen', state.token),
+          callServerCacheado('apiAdquisicionVehicularLista', state.token).catch(() => '[]'),
+        ]);
+        todosLosVehiculos = texto ? JSON.parse(texto) : [];
+        adquisicionEncontrada = new Set(
+          (JSON.parse(textoAdq || '[]') || []).filter((f) => f.liga).map((f) => serieNormalizada(f.serie))
+        );
+      } catch (err) {
+        tabla.setError('No se pudo cargar el catálogo de vehículos: ' + err.message);
+        return;
+      }
+      // Si mientras tanto se navegó a otra vista, el router ya destruyó este
+      // DOM (montarVista hace container.innerHTML = '') — escribir aquí
+      // tronaría con "Cannot set properties of null".
+      if (!document.body.contains(modalEditar)) return;
+
+      vehiculosPorId = {};
+      todosLosVehiculos.forEach((v) => { vehiculosPorId[v.ID_VEHICULO] = v; });
+
+      actualizarKpis(todosLosVehiculos);
+      pintarClasesVeh(todosLosVehiculos);
+      tabla.setDatos(todosLosVehiculos);
+    }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarVehiculosResumen', cargar, document.getElementById('view-container').firstElementChild);
+
+    async function abrirEditarVehiculo(vResumen) {
+      if (!vResumen) return;
+      document.getElementById('editar-vehiculo-id').value = vResumen.ID_VEHICULO;
+      document.getElementById('editar-vehiculo-folio-label').textContent = 'Folio: ' + vResumen.FOLIO;
+      document.getElementById('editar-vehiculo-error').hidden = true;
+      // El resumen (tabla) solo trae 12 columnas — para editar TODO se necesita
+      // el registro completo, se pide igual que en "Detalle completo".
+      poblarFormularioVehiculo('editar-vehiculo', vResumen);
+      modalEditar.hidden = false;
+      try {
+        const completo = await callServer('apiBuscarVehiculoPorFolio', state.token, vResumen.FOLIO);
+        if (completo) poblarFormularioVehiculo('editar-vehiculo', completo);
+      } catch (err) {
+        console.error('No se pudo cargar el registro completo para editar:', err);
+        const errorBox = document.getElementById('editar-vehiculo-error');
+        errorBox.textContent = 'No se pudieron cargar todos los campos: ' + err.message;
+        errorBox.hidden = false;
+      }
+    }
+    function cerrarEditarVehiculo() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-vehiculo').reset();
+      document.getElementById('editar-vehiculo-error').hidden = true;
+      pasosEditarVeh.ir(0);
+    }
+    document.getElementById('btn-cancelar-editar-vehiculo').addEventListener('click', cerrarEditarVehiculo);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarEditarVehiculo(); });
+
+    document.getElementById('form-editar-vehiculo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-vehiculo-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-editar-vehiculo');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        const archivos = await subirArchivosVehiculo('editar-vehiculo');
+        const datos = Object.assign(recolectarDatosVehiculo('editar-vehiculo'), archivos);
+        await callServer('apiActualizarVehiculo', state.token, document.getElementById('editar-vehiculo-id').value, datos);
+        // Un documento subido cambia la carpeta del NUCO: la pestaña Documentos se vuelve a leer
+        if (Object.keys(archivos).length && fichaVehiculoAbierta) DocumentosVehiculo.olvidar(fichaVehiculoAbierta.NUCCO);
+        cerrarEditarVehiculo();
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('form-vehiculo').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('veh-error');
+      errorBox.hidden = true;
+      const btn = document.getElementById('btn-guardar-vehiculo');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Subiendo archivos y guardando…';
+      toastCargando('Registrando…');
+      try {
+        const archivos = await subirArchivosVehiculo('veh');
+        const datos = Object.assign(recolectarDatosVehiculo('veh'), archivos);
+        // "FOLIO ADQUISICION" es soloLectura -- CamposHoja.recolectar no lo manda; viene de la
+        // solicitud de compra pendiente, no de lo que se ve en el formulario.
+        const pendienteSolicitud = solicitudCompraPendienteVehiculo;
+        if (pendienteSolicitud) {
+          datos['FOLIO ADQUISICION'] = pendienteSolicitud.FOLIO;
+          datos['LIGA EXPEDIENTE ADQUISICION'] = pendienteSolicitud.LIGA_CARPETA;
+        }
+        const creado = await callServer('apiCrearVehiculo', state.token, datos);
+        if (pendienteSolicitud) {
+          solicitudCompraPendienteVehiculo = null;
+          try {
+            await callServer('apiSolicitudCompraMarcarConvertida', state.token, pendienteSolicitud.ID, creado.NUCCO);
+          } catch (err) {
+            console.error('El vehículo se creó, pero no se pudo marcar la solicitud de compra como convertida:', err);
+          }
+        }
+        ev.target.reset();
+        pasosAltaVeh.ir(0);
+        document.getElementById('veh-fecha-registro-sistema-ci').value = hoyISO();
+        previsualizarNuccoVeh();
+        invalidarCacheLista('apiListarVehiculosResumen', state.token);
+        invalidarCacheCatalogo('apiListarVehiculosBasico', state.token);
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    // El reporte de Looker Studio, con su sección (vehiculos.reporte): un CLIENT no la tiene
+    document.getElementById('btn-ver-reporte-vehiculos').hidden = !puede('vehiculos.reporte');
+    document.getElementById('btn-ver-reporte-vehiculos').addEventListener('click', () => {
+      // "\/\/" (no "//"): Apps Script le borra a los .html todo lo que
+      // encuentre después de "//" pensando que es un comentario — incluso
+      // dentro de un string — y eso rompía justo esta línea. "\/" en un
+      // string de JS es simplemente "/", así que el resultado es idéntico.
+      window.open('https:\/\/datastudio.google.com/u/0/reporting/40272bf8-ecac-4d37-8cca-01f4c4c32841/page/1jHvF', '_blank', 'noopener');
+    });
+
+    // En paralelo, no uno tras otro — los catálogos no dependen de la lista
+    // de vehículos ni viceversa.
+    await Promise.all([cargarCatalogosVehiculo(), cargar()]);
+
+    // Se llegó aquí desde "Ver vehículo" en otra tabla (verFichaVehiculoDesdeOtroModulo):
+    // abre esa ficha directo, sin que el usuario tenga que buscar el folio a mano.
+    if (folioFichaVehiculoPendiente) {
+      const folio = folioFichaVehiculoPendiente;
+      folioFichaVehiculoPendiente = null;
+      const v = todosLosVehiculos.find((x) => x.FOLIO === folio);
+      if (v) abrirFichaVehiculo(v);
+      else toastError('No se encontró el vehículo con folio ' + folio);
+    }
+
+    // Se llegó aquí desde "Ya crear vehículo" (modulos/solicitud-compra.html,
+    // crearVehiculoDesdeSolicitudCompra): abre la pestaña Registrar con el folio de
+    // adquisición ya puesto (soloLectura en CAMPOS_VEHICULO). Se queda en
+    // solicitudCompraPendienteVehiculo (no se limpia aquí) para que el submit más abajo
+    // mande también la liga y, si sale bien, marque la solicitud como convertida.
+    if (solicitudCompraPendienteVehiculo && puedeEditar) {
+      const btnRegistrar = document.querySelector('#veh-tabs [data-tab="registrar"]');
+      if (btnRegistrar) btnRegistrar.click();
+      poblarFormularioVehiculo('veh', { 'FOLIO ADQUISICION': solicitudCompraPendienteVehiculo.FOLIO });
+    }
+  }
+
+  // Tour guiado de Vehículos (usuario, 7-oct): a propósito FUERA de initVehiculos (de verdad
+  // afuera, no solo con la misma sangría -- initVehiculos ya estaba cerrada arriba) para que
+  // lo pueda lanzar el asistente flotante (NAV_GRUPOS → tour) sin esperar a que el módulo esté
+  // montado. El propio Tour navega a la pestaña correcta si hace falta (paso 0, `antes`).
+  // Ver componentes/tour.html.
+  function iniciarTourVehiculos() {
+    Tour.iniciar([
+      {
+        selector: '#veh-listado .stat-row',
+        titulo: 'Totales y KPIs',
+        texto: 'Cuántos vehículos hay en cada estatus. Haz clic en cualquiera de estos números para filtrar la lista por ese valor -- otro clic lo quita.',
+        antes: () => { const t = document.querySelector('#veh-tabs [data-tab="lista"]'); if (t) t.click(); },
+      },
+      {
+        selector: '#veh-clases',
+        titulo: 'Filtro por Clase',
+        texto: 'Un ícono por cada clase de vehículo (automóvil, camioneta, camión…) con cuántos hay de cada una. Clic en uno para filtrar la tabla.',
+      },
+      {
+        selector: '#veh-tabla .dt-buscar',
+        titulo: 'Buscar en la tabla',
+        texto: 'Escribe cualquier dato -- folio, marca, departamento, nucco -- y filtra la lista al instante.',
+      },
+      {
+        selector: '#veh-tabla .dt-buscar-col',
+        titulo: 'Buscar por Nucco o por Serie',
+        texto: 'Si ya sabes el Nucco o la serie exacta, estos dos cuadros buscan solo ahí, sin mezclarse con los demás datos.',
+      },
+      {
+        selector: '#veh-tabla .dt-modo',
+        titulo: 'Tabla o Tarjetas',
+        texto: 'Cambia cómo se ve la lista: tabla clásica o tarjetas, lo que se te acomode mejor.',
+      },
+      {
+        selector: '#veh-tabla .dt-btn-excel',
+        titulo: 'Exportar a Excel',
+        texto: 'Descarga la base completa -- todas las columnas y filas -- sin importar los filtros que tengas activos.',
+      },
+      {
+        selector: '#veh-tabs [data-tab="registrar"]',
+        titulo: 'Registrar',
+        texto: 'Da de alta un vehículo nuevo. El formulario va paso a paso: Vehículo, Identificación, Documentación y seguro, Accesorios y sensor, Ubicación y registro.',
+      },
+      {
+        selector: '#veh-tabla tbody tr[data-id]',
+        titulo: 'Cada vehículo',
+        texto: 'Doble clic (o toca) una fila para ver su ficha completa. El ⋮ o clic derecho trae más acciones: editar, dar de baja (una o varias a la vez) y más.',
+      },
+    ]);
+  }
+
+  // Tour de la ficha de un vehículo (distinto al de la lista, usuario 9-oct): el asistente
+  // flotante elige uno u otro según si la ficha ya está abierta cuando lo pican -- ver el
+  // dispatcher en iniciarTourVehiculos más abajo.
+  function iniciarTourFichaVehiculo() {
+    Tour.iniciar([
+      {
+        selector: '.ficha-encabezado',
+        titulo: 'La ficha de un vehículo',
+        texto: 'Nucco, estatus, departamento, responsable y placa de un vistazo. "Volver" (arriba) regresa a la lista; "Editar" corrige cualquier dato del vehículo.',
+      },
+      {
+        selector: '.ficha-pestanas .tabs-lista',
+        titulo: 'El desglose por pestañas',
+        texto: 'Debajo, la ficha se reparte en pestañas: General, Detalles, Historial, Verificaciones, Inspecciones, Sensor, Hologramas, Incidencias, Responsiva… cada una con lo que le toca a ese vehículo.',
+      },
+      {
+        selector: '.ficha-pestanas .tabs-lista',
+        titulo: 'Si llegaste desde otro lado',
+        texto: 'Al abrir la ficha desde una Incidencia, una Responsiva u otro módulo, arranca directo en esa pestaña en vez de en General -- no es un error, solo cambia por dónde empieza: las demás siguen aquí mismo, a un clic.',
+      },
+    ]);
+  }
+
+  /** Decide qué tour mostrar para la vista Vehículos: el de la ficha si ya está abierta
+   *  (detalle visible), el de la lista si no. Es lo que llama el asistente flotante -- la
+   *  vista sigue siendo una sola ('vehiculos'), por eso el dispatcher va aquí y no en NAV_GRUPOS. */
+  function iniciarTourVehiculosSegunPantalla() {
+    const detalle = document.getElementById('veh-detalle');
+    if (detalle && !detalle.hidden) { iniciarTourFichaVehiculo(); return; }
+    iniciarTourVehiculos();
+  }
+
+  // Preguntas frecuentes de Vehículos (usuario, 7-oct): igual que iniciarTourVehiculos, a
+  // propósito a nivel superior (fuera de initVehiculos) para que el asistente flotante la pueda
+  // leer sin que el módulo esté montado. Ver componentes/ayuda.html.
+  const AYUDA_VEHICULOS = [
+    {
+      pregunta: '¿Cómo busco un vehículo por su número de serie?',
+      respuesta: 'En la pestaña Catálogo, usa el cuadro "Buscar por Serie…" junto al buscador general -- busca solo en esa columna, sin mezclarse con folio, marca, etc.',
+    },
+    {
+      pregunta: '¿Cómo busco por Nucco?',
+      respuesta: 'Igual que la serie: hay un cuadro dedicado "Buscar por Nucco…" junto al buscador general de la tabla.',
+    },
+    {
+      pregunta: '¿Cómo doy de baja uno o varios vehículos a la vez?',
+      respuesta: 'Selecciona uno o varios (clic, Shift+clic o Ctrl/Cmd+clic) y usa "Dar de baja" en la barra de acciones o el ⋮ de una fila.',
+    },
+    {
+      pregunta: '¿Cómo exporto la tabla completa a Excel?',
+      respuesta: 'El botón "Exportar a Excel" descarga TODAS las columnas y filas de la base, sin importar los filtros o la búsqueda que tengas activos en ese momento.',
+    },
+    {
+      pregunta: '¿Dónde veo el historial de cambios de un vehículo?',
+      respuesta: 'Abre su ficha (doble clic o "Ver ficha" en la tabla) -- ahí tiene pestañas con sus verificaciones, inspecciones, sensores, hologramas, incidencias y cambios.',
+    },
+    {
+      pregunta: '¿Tabla o tarjetas, cuál uso?',
+      respuesta: 'Es lo mismo, solo cambia cómo se ve: el botón junto al buscador alterna entre tabla clásica y tarjetas -- en celular se acomoda solo.',
+    },
+  ];
+
+  // Responsiva y Adherente Vehicular no tienen pantalla propia en el menú (viven como pestaña
+  // en la ficha de Vehículos, enFicha en Modulos.gs) -- por eso su ayuda no está en NAV_GRUPOS
+  // como la de un módulo normal, sino en AYUDA_SUELTA (ver todaLaAyuda_, 14-oct-2026) para que el
+  // buscador general del asistente flotante igual las encuentre.
+  const AYUDA_RESPONSIVA_VEHICULAR = [
+    {
+      pregunta: '¿Dónde registro o veo la responsiva de un vehículo?',
+      respuesta: 'No tiene pantalla propia: es la pestaña "Responsiva" dentro de la ficha del vehículo (Vehículos → abre la ficha de la unidad).',
+    },
+    {
+      pregunta: '¿Qué diferencia hay entre una responsiva Definitiva y un Préstamo?',
+      respuesta: 'Al generarla, el Tipo puede quedar en Definitiva (como siempre) o Préstamo, con su fecha de fin. Mientras está en préstamo, el badge avisa si va en curso, si ya venció o si ya se devolvió -- "Devolver préstamo" lo cierra.',
+    },
+    {
+      pregunta: '¿Cómo se firma a distancia, sin que la persona esté presente?',
+      respuesta: 'Al registrar la responsiva, si el responsable o el jefe directo no están ahí para firmar en el momento, "Enviar liga(s) para firmar a distancia" genera un link por cada quien falte -- lo firman desde su celular, sin necesidad de entrar a la app.',
+    },
+    {
+      pregunta: 'Mandé la liga de firma pero se perdió o ya venció. ¿Ahora qué?',
+      respuesta: '"Generar nueva liga" (junto a "Copiar liga", en la fila de la responsiva) crea un token nuevo sobre el mismo registro y la liga anterior deja de servir sola -- no hace falta dar de baja ni volver a capturar nada. Las ligas duran 5 días.',
+    },
+    {
+      pregunta: '¿Puedo volver a mandar una liga que ya envié, sin generar una nueva?',
+      respuesta: 'Sí: "Copiar liga" / "Copiar liga jefe" la vuelve a mostrar tal cual, útil si se perdió el mensaje. Si ya venció, en vez de eso usa "Generar nueva liga".',
+    },
+  ];
+
+  const AYUDA_ADHERENTE_VEHICULAR = [
+    {
+      pregunta: '¿Qué es un Adherente Vehicular?',
+      respuesta: 'Quien usa el vehículo además del responsable (p. ej. un familiar o compañero autorizado). Se registra en la pestaña "Adherentes" de la ficha del vehículo -- tampoco tiene pantalla propia en el menú.',
+    },
+    {
+      pregunta: '¿El adherente también firma?',
+      respuesta: 'Sí, igual que en Responsiva: si no está presente al capturarlo, se le puede mandar una liga para firmar a distancia desde su celular ("Enviar liga(s) para firmar a distancia").',
+    },
+    {
+      pregunta: 'Se venció o se perdió la liga de firma del adherente, ¿cómo mando una nueva?',
+      respuesta: '"Generar nueva liga" crea un token nuevo sobre el mismo registro -- la liga anterior deja de funcionar sola. "Copiar liga" nomás repite la que ya existe, sin generar una nueva.',
+    },
+    {
+      pregunta: '¿Cómo doy de baja a un adherente sin borrar su historial?',
+      respuesta: 'El botón de estatus lo manda a "Baja" (y se puede "Reactivar" después) -- es distinto de "Eliminar", que sí quita el registro.',
+    },
+  ];
+</script>

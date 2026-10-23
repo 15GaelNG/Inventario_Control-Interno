@@ -206,12 +206,51 @@ captura más simple (cancelación o vincular) → una por una, probando cada una
 Jorge, Emmanuel y Ayrton cambien en esos archivos mientras tanto (un conflicto por cada cambio suyo). Se hacen en un día
 acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin cambiar código) para que se revise fácil.
 
-- [ ] 6.1 Vehículos sale de `app.html` a `app-vehiculos.html` (como Arqueos y Caja Chica); Uber y Tickets también.
-      `app.html` queda como la base: menú, sesión, inicio, ayudantes.
-- [ ] 6.2 `lineas.html` en archivos por pantalla (telefónicas, gestión de activos, resguardos, cambios) sobre un
-      `lineas-base.html`.
-- [ ] 6.3 `ClientApi.gs`: una forma de nombrar (`api<Módulo><Qué>`). **Sin renombrar de golpe**: los nombres viejos
-      quedan como alias hasta que nadie los llame; agrupar por módulo en el archivo.
+- [x] 6.1 `app.html` por pantallas (19-oct), con `tools/app/partir.js`: 5,038 → 1,596 líneas; `app-vehiculos`
+      (2,539), `app-incidencias` (384), `app-uber` (343) y `app-tickets` (212), justo después de `app` en Index.
+      Solo mueve: `app.html` no está encerrado en una función. **Corta por nombres, no por renglones**, para que cada
+      rama lo corra sobre su propio `app.html` antes de traer master (probado en `ayrton`, que trae 285 líneas más, y en
+      la de Jorge: la base sale idéntica y lo de cada rama viaja con su pantalla). `slugCampo` y `leerArchivoBase64`
+      se quedan en la base (las usan otros). Contrato nuevo y permanente del **orden de carga**
+      (`tests/orden-de-carga.js`): nada que corre al cargar usa algo de un archivo posterior.
+- [x] 6.1b `initVehiculos` (2,044 líneas, una sola función) en partes (22-oct), con `tools/app/partir-vehiculos.js`
+      sobre el motor genérico `tools/partir/en-partes.js`. Queda el arranque + la lista (`app-vehiculos.html`, 1,167
+      líneas) y cuatro partes: `-ficha` (377), `-registros` (231), `-capturas` (379), `-documentos` (482). El
+      mecanismo de la 6.2b pasó a ser un componente, `componentes/partes.html` (`Partes.crear`), y Telefónicas lo usa
+      también (sin su copia). Salió muy limpio: un solo `let` compartido (`fichaVehiculoAbierta`, 3 lecturas como
+      `T.x`), nada perezoso, se monta antes del cableado. Anclas por nombre: en `ayrton` sale también `-accesorios`; en
+      la rama de Jorge, editar responsiva/adherente cae en `-documentos` (probado con `--raiz`). Vista previa: las 106
+      escenas, todas las de Vehículos y Líneas idénticas, sin errores nuevos.
+- [x] 6.2 `lineas.html` por pantallas (19-oct), con `tools/lineas/partir.js`: el archivo era **una sola función**
+      (`const Lineas = (function () { … })()`), así que no bastaba con mover. Queda la base (`lineas.html`, 2,394
+      líneas: utilidades, formularios, estado) y una pantalla por archivo (`lineas-telefonicas`, `-panorama`,
+      `-activos`, `-accesorios`, `-resguardos`, `-bitacora`). Cada pantalla toma lo que usa de `Lineas.comun` y se
+      publica con `Object.assign(Lineas, …)`. Cambios de código, los mínimos: `montaje` pasa a `{ n }` (lo reasignan
+      todas), las pantallas leen `panelAbierto` con `panelActual()` (una copia se quedaría vieja), `dinero` y
+      `pedirDatos` suben a la base. El script revisa que cada sentencia quede una vez y que deshaciendo esos cambios
+      salga el original; las pruebas leen todo con `tests/lineas-fuente.js`. Vista previa: las 8 escenas de Líneas
+      (5 nuevas, una por pantalla) idénticas antes y después, sin errores.
+- [x] 6.2b `initTelefonicas` (3,161 líneas, 177 declaraciones) en partes (19-oct), con
+      `tools/lineas/partir-telefonicas.js` y `eslint-scope` (dependencia de desarrollo: los ámbitos de verdad, sin
+      confundir una variable local que se llama igual). Queda el arranque + la lista (`lineas-telefonicas.html`, 814
+      líneas) y seis partes: `-ficha`, `-documentos`, `-acciones`, `-captura`, `-historial`, `-paginas` (188 a 808).
+      El cuerpo de las funciones no cambia: lo de otra parte se pide arriba con `T.de('parte')` (como un import, 185
+      llamadas), lo del arranque sale de `T`, y de los 12 `let` 8 pasan enteros a su parte; los 4 que se comparten
+      (`captura` y las tres tablas de la ficha) los publica su dueña con get/set y las demás dicen `T.captura` (las
+      únicas 32 reescrituras). Cuatro literales que compartían ficha y documentos suben al arranque. El script revisa
+      que cada sentencia quede una vez y que los archivos nuevos no dejen ningún nombre sin resolver que el original
+      resolvía (así se cacharon dos olvidos antes de escribir). Vista previa: 10 escenas de Líneas (2 nuevas: la ficha
+      y el clic derecho) sin errores y como antes.
+- [x] 6.3 `ClientApi.gs` por módulo (22-oct), con `tools/api/partir.js`: 1,078 → 115 líneas (la base: medir,
+      listas con huella, Inicio, sesión, campanita, qué impide borrar, fichas en una llamada) + **24 archivos en
+      `src/api/`, uno por módulo** (usuario: "uno por módulo"; Líneas 157, Relaciones 131, Vehículos 107, el resto de
+      19 a 65). **Sin renombrar** (usuario): los 249 nombres los llama la pantalla. Cada `api…` va al archivo de su
+      módulo dueño: 29 estaban en la sección de otro (los `…PorFolio` / `apiBuscar…PorId` de la ficha de Vehículos,
+      Temporada en Permisos, Capital Humano en Listas…). Solo movió: las 253 funciones `api…` de `src/` iguales antes y
+      después; cambian solo la cabecera y los títulos con "(rama `ayrton`)". Contrato nuevo: toda `api…` en la base o
+      `src/api/` (salvo Correcciones de Líneas, aislado a propósito), sin repetidas, solo funciones y literales en
+      `src/api/`, y lo nuevo con el nombre de su módulo (2 viejos congelados). Probado con `--raiz` en `ayrton` (sale
+      `Accesorios.gs`) y en la rama de Jorge.
 - [x] 6.4 Lo del editor, detrás del candado (15-oct): `candado-editor.test.js` ya no revisa una lista fija de 11
       archivos sino **todo `src/`** (130 funciones). Faltaban 9: `_continuar` / `_estado` / `_detener` de los procesos
       largos (índice de Adquisición, lectura e inventario de INE), que cualquiera podía arrancar o detener desde la
@@ -252,6 +291,9 @@ juntan por primera vez.
 
 | Fecha | Fase | Qué | Pasó a master |
 |---|---|---|---|
+| 19-oct | 6.1 | `app.html` en la base + Vehículos, Incidencias, Uber y Tickets, con `tools/app/partir.js` (cada rama lo corre sobre su `app.html`); contrato del orden de carga | pendiente |
+| 19-oct | 6.2b | `initTelefonicas` en el arranque + 6 partes (`T`, `T.de`), con `tools/lineas/partir-telefonicas.js` y `eslint-scope`; contrato y 2 escenas | pendiente |
+| 19-oct | 6.2 | `lineas.html` (7,132 líneas) en la base + 6 pantallas sobre `Lineas.comun`, con `tools/lineas/partir.js`; `tests/lineas-fuente.js`, contrato y 5 escenas | pendiente |
 | 15-oct | — | Rama `common` desde `master` (46b73b0) y este plan | — |
 | 15-oct | 0 | DEV propio (`Inventario DEV - common`, copia del libro de prod, carpeta DEV COMMON); la Action sube `common` | — |
 | 15-oct | 1 | `Candado` reentrante en todo el servidor; `SheetUtils.update`/`remove` bajo candado y escribiendo solo lo que cambia | pendiente: probar en DEV |

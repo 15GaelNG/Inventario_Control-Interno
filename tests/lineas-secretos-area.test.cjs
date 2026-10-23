@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const fuente = fs.readFileSync(path.join(__dirname, '../src/services/TelefoniaService.gs'), 'utf8');
 
@@ -27,7 +28,7 @@ test('ADMIN y el área LINEAS ven los secretos; las demás áreas no', () => {
 });
 
 test('los avisos dicen quién los ve', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /Los PIN, patrones y contraseñas solo los ven administradores y el área de Líneas\./);
   assert.doesNotMatch(cliente, /ocultos para tu rol/);
 });

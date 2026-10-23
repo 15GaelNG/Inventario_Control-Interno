@@ -6,9 +6,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
-const cliente = read('src/html/js/lineas.html');
+const cliente = LINEAS;
 const tramo = (desde, hasta) => {
   const i = cliente.indexOf(desde);
   const f = cliente.indexOf(hasta, i);
@@ -73,7 +74,7 @@ test('tipo de bloqueo obligatorio siempre que se ve (usuario, 9-oct): la lista y
   assert.throws(() => LineasUtil.exigirPinEquipo({ bloqueo: '', valores: {} }), /TIPO DE BLOQUEO DEL EQUIPO es obligatorio/);
   assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: null, valores: {} }), 'sin la lista (o oculta) no llega');
   assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: 'SIN BLOQUEO', valores: { 'PIN EQUIPO': 'N/A' } }));
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin\.mostrar, requerido: pin\.mostrar, virtual: true/);
   assert.match(cliente, /const v = \(e\.columna === '_BLOQUEO' \? bloqueoElegido\(cuerpo\) : valores\[e\.columna\]\) \|\| '';/, 'Editar y Agregar');
   assert.match(cliente, /if \(e\.columna === '_BLOQUEO' && bloqueoElegido\(cuerpo\) === null\) return;/,

@@ -9,6 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 // Vínculos (usuario, 8-oct): el grafo con todo, el cajón y el lienzo donde soltar abre la acción que ya existe
 
 const fuente = require('./formato-fuente') + read('src/html/js/lineas-vinculos.html').replace(/^\s*<script>/, '').replace(/<\/script>\s*$/, '');
+const LINEAS = require('./lineas-fuente');
 const cargar = (dom) => {
   const w = dom ? dom.window : {};
   return new Function('window', 'document', 'getComputedStyle', 'localStorage', 'requestAnimationFrame', 'performance', fuente + '; return LineasVinculos;')(
@@ -189,7 +190,7 @@ test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas
   assert.match(vista, /data-modo="vinculos"[^>]*>.*Vínculos<\/button>/);
   assert.match(vista, /<div class="vn" id="ln-vinculos" hidden><\/div>/);
   assert.match(read('src/html/Index.html'), /include\('html\/js\/lineas-vinculos'\); \?>\r?\n\s*<\?!= include\('html\/js\/lineas'\)/);
-  const js = read('src/html/js/lineas.html');
+  const js = LINEAS;
   assert.match(js, /\['tabla', 'tarjetas', 'vinculos'\]\.indexOf\(guardado\)/);
   assert.match(js, /if \(a\.tipo === 'vinculo'\) abrirVinculo\(a\.modo, a\.fila, a\.pre\);/);
   assert.match(js, /else if \(a\.tipo === 'cancelacion'\) abrirCancelacion\(\[a\.fila\]\);/);
@@ -210,7 +211,7 @@ test('Vínculos es una idea que no sale a producción: apagada ahí como Help De
   const prod = entornos.slice(entornos.indexOf("'1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'"), entornos.indexOf('},', entornos.indexOf("'1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'")));
   assert.match(prod, /MODULOS_APAGADOS: '[^']*vinculos-lineas[^']*'/);
   assert.equal((entornos.match(/vinculos-lineas/g) || []).length, 2, 'solo en el bloque de producción (y su comentario)');
-  const js = read('src/html/js/lineas.html');
+  const js = LINEAS;
   assert.match(js, /JSON\.parse\(document\.body\.dataset\.apagados \|\| '\[\]'\)\.indexOf\('vinculos-lineas'\) >= 0/);
   assert.match(js, /if \(boton\) boton\.remove\(\);/);
   assert.match(js, /const espacioVinculos = vinculosApagado \? \{ pintar: \(\) => \{\} \} : LineasVinculos\.montar\(/);

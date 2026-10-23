@@ -6,6 +6,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8').replace(/\r/g, '');
@@ -159,7 +161,7 @@ test('la responsiva: la identificación se escribe antes y se descarta si la res
 });
 
 test('pantalla: fotos o PDF por responsable, se ven antes de guardar y viajan con la responsiva', () => {
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   assert.match(pantalla, /\} else if \(e\.control === 'identificacion'\) \{\n\s+control = htmlIdentificacion\(e, id\);/);
   assert.match(pantalla, /accept="image\/\*,application\/pdf" multiple data-ine-archivo/);
   assert.match(pantalla, /if \(pdfs\.length && fotos\.length\) return error\('Elige fotos o un PDF, no los dos\.'\);/);
@@ -172,7 +174,7 @@ test('pantalla: fotos o PDF por responsable, se ven antes de guardar y viajan co
 
 /** armarPdfDeJpeg de la pantalla, en Node. */
 function armarPdf() {
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   const inicio = pantalla.indexOf('    function armarPdfDeJpeg(fotos) {');
   const fin = pantalla.indexOf('\n    }\n', inicio) + 6;
   const ctx = vm.createContext({ TextEncoder, Uint8Array });
@@ -218,7 +220,7 @@ test('el campo de archivos se queda dentro de su botón (cuadro blanco al regres
 });
 
 test('fotos de la inspección: miniatura desde que se eligen, espera encima, clic en grande y X para quitar (usuario, 9-oct)', () => {
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   const fn = pantalla.slice(pantalla.indexOf('      function subirImagenCaptura('), pantalla.indexOf('      function manejarSubidaArchivo('));
   assert.match(fn, /caja\.className = 'ln-miniatura ln-foto-subiendo';/, 'guardar sigue esperando a .ln-foto-subiendo');
   assert.match(fn, /<img src="' \+ esc\(url\) \+ '" alt="' \+ esc\(archivo\.name\) \+ '" data-ver-foto \/>/);
@@ -274,7 +276,7 @@ test('paso 3: «Sí» copia la registrada a la carpeta de la responsiva nueva, s
 });
 
 test('paso 3 en la pantalla: busca al cambiar el responsable, pide elegir «Usar la registrada» o «Subir otra» y manda reutilizar', () => {
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   const estilos = read('src/html/lineas-estilos.html');
   const tiene = (texto, trozo, porque) => assert.ok(texto.includes(trozo), porque || trozo);
   tiene(pantalla, "llamar('apiLineasIdentificacionesRegistradas', ");
@@ -283,7 +285,7 @@ test('paso 3 en la pantalla: busca al cambiar el responsable, pide elegir «Usar
   tiene(pantalla, 'if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;', 'una respuesta vieja no pinta a otra persona');
   tiene(estilos, '.ln-ine [hidden] { display: none !important; }', 'los botones (display: grid) sí se ocultan');
   tiene(pantalla, "if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);", 'sin contestar no se guarda: lleva a la pregunta');
-  tiene(read('src/ClientApi.gs'), 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
+  tiene(API, 'function apiLineasIdentificacionesRegistradas(token, personas) {\n  return TelefoniaService.identificacionesRegistradas(token, personas);');
   tiene(read('src/services/TelefoniaService.gs'), 'function identificacionesRegistradas(token, personas) {\n    operar_(token);', 'con permiso de operar Líneas');
 });
 
@@ -312,7 +314,7 @@ test('la registrada sin ID PERSONA se usa si es el mismo nombre y número (prod 
 });
 
 test('INE registrada (usuario, 20-oct): dos tarjetas, la usada en verde con Cambiar, llena el tipo y va debajo de él', () => {
-  const pantalla = read('src/html/js/lineas.html');
+  const pantalla = LINEAS;
   const estilos = read('src/html/lineas-estilos.html');
   const tiene = (texto, trozo, porque) => assert.ok(texto.includes(trozo), porque || trozo);
   // Las dos opciones son radios (el teclado elige) y «Ver» queda dentro de la de usarla

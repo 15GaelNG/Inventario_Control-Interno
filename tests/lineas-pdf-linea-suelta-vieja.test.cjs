@@ -7,7 +7,8 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const fuente = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasCaptura.gs'), 'utf8');
+// Con \n: en Windows el archivo se baja con CRLF y los cortes de abajo buscan '\n  /**'
+const fuente = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasCaptura.gs'), 'utf8').replace(/\r\n/g, '\n');
 const trozo = (desde, hasta) => { const i = fuente.indexOf(desde); assert.ok(i >= 0, desde); return fuente.slice(i, fuente.indexOf(hasta, i)); };
 
 function preparar({ fila, ev, enLineas }) {

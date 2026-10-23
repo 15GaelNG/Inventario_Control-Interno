@@ -2,11 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Panel de Pau, Cancelaciones (usuario, 22-oct): dos botones. «Exportar a Excel» de la tabla da la base, como siempre;
 // a su lado, «Cancelaciones» da una hoja por compañía y asesor con las POR FIRMAR, en la tabla del correo al asesor (REGIÓN,
 // CUENTA, NÚMERO, RAZÓN SOCIAL, ASESOR)
-const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+const cliente = LINEAS;
 const vista = fs.readFileSync(path.join(__dirname, '../src/html/views/lineas/lineas-resguardos.html'), 'utf8');
 const ini = cliente.indexOf('    const COLUMNAS_ASESOR = ');
 const fuente = cliente.slice(ini, cliente.indexOf('    // xlsx-js-style:', ini));

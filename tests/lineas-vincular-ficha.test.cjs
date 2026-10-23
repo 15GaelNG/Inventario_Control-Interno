@@ -2,11 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Pendiente 2.61 (usuario, 21-oct): después de Vincular a equipo o Desvincular desde la ficha de una LÍNEA, la página se
 // quedaba en «Cargando…» (se pintaba la ficha del equipo con la de la línea arriba en la pila). Ahora vuelve a pintar la
 // ficha que estaba abierta, como las demás acciones.
-const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+const cliente = LINEAS;
 
 test('Vincular / desvincular vuelve a pintar la ficha abierta, sea del equipo o de la línea (2.61)', () => {
   const vinculo = cliente.slice(cliente.indexOf('async function abrirVinculo(modo, fila, pre)'), cliente.indexOf('"Mandar a cancelación" (30-sep)'));

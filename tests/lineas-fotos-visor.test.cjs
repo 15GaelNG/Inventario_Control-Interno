@@ -2,11 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 // Fotos de la inspección (usuario, 13-oct; pendiente 2.41): clic = visor en la misma pantalla (ampliar, pasar entre
 // fotos, acercar) en vez de Drive, y quitar una foto enviada por error (a la papelera, con comentario en el historial).
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8').replace(/\r/g, '');
-const lineas = read('src/html/js/lineas.html');
+const lineas = LINEAS;
 const servicio = read('src/services/TelefoniaService.gs');
 const cuerpo = (texto, inicio, fin) => texto.slice(texto.indexOf(inicio), texto.indexOf(fin, texto.indexOf(inicio)));
 
@@ -40,7 +42,7 @@ test('el visor: flechas, Escape, acercar con clic y la foto grande de Drive; la 
 });
 
 test('el servidor solo quita una foto de esa inspección, con permiso de operar, y lo anota', () => {
-  assert.match(read('src/ClientApi.gs'), /function apiLineasQuitarFotoInspeccion\(token, id, archivoId, comentario\) \{\s+return TelefoniaService\.quitarFotoInspeccion\(token, id, archivoId, comentario\);/);
+  assert.match(API, /function apiLineasQuitarFotoInspeccion\(token, id, archivoId, comentario\) \{\s+return TelefoniaService\.quitarFotoInspeccion\(token, id, archivoId, comentario\);/);
   const quitar = cuerpo(servicio, 'function quitarFotoInspeccion(token, id, archivoId, comentario)', '  /**\n   * Abre un archivo');
   assert.match(quitar, /const sesion = operar_\(token\);/);
   assert.doesNotMatch(quitar, /motivo\.length/, 'el comentario no es obligatorio');

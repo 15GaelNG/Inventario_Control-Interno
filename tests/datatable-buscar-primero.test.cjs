@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
+const LINEAS = require('./lineas-fuente');
 
 // DataTable con buscarPrimero (Líneas, 21-oct; pendiente 2.60): al buscar, primero lo que coincide por esas columnas
 // (igual, empieza con, contiene) y al final lo que coincide por otra. Sin la opción, la búsqueda no cambia.
@@ -51,7 +52,7 @@ test('Sin buscarPrimero la búsqueda deja el orden de los datos (2.60)', () => {
 });
 
 test('Líneas pide primero el NUCO en Equipos y el número en Líneas (2.60)', () => {
-  const cliente = fs.readFileSync(path.join(__dirname, '../src/html/js/lineas.html'), 'utf8');
+  const cliente = LINEAS;
   assert.match(cliente, /detalle: 'equipo', textoVacio: 'Sin equipos',\s*buscarPrimero: \['nuco'\]/);
   assert.match(cliente, /detalle: 'linea', textoVacio: 'Sin líneas',\s*buscarPrimero: \['numero'\]/);
   assert.match(cliente, /buscarPrimero: cfg\.buscarPrimero,/);

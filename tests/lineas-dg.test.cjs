@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -49,7 +50,7 @@ test('DG: el servidor oculta y rechaza; la pantalla no pide lo que no ve', () =>
   assert.match(tel, /LineasExportar\.baseCompleta\(modulo, puedeVerSecretos_\(sesion\), sesion\.alcance, !esAdmin_\(sesion\)\)/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /LineasDG\.exigirAdmin\(f, usuario\); \/\/ Dirección General: solo ADMIN/);
   assert.equal((read('src/services/lineas/LineasCaptura.gs').match(/LineasDG\.exigirAdmin\(obj\.fila, usuario\)/g) || []).length, 3);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const bloqueadoDG = \(r\) => !!\(r && \(r\.dg \|\| r\._dgOculto\)\) && !esAdmin\(\);/);
   assert.match(cliente, /const operar = \(f\) => puedeOperar\(\) && !\(f \|\| \[\]\)\.some\(bloqueadoDG\);/);
   assert.match(cliente, /if \(e\._dgOculto\) return;/);

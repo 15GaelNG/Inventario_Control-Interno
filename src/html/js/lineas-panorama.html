@@ -1,0 +1,615 @@
+<script>
+  /**
+   * lineas-panorama.html — Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes.
+   * Era parte de lineas.html (fase 6.2, tools/lineas/partir.js): lo de la base sale de Lineas.comun.
+   */
+  (function () {
+    'use strict';
+    const { $, dinero, esc, fecha, fechaHora, ico, icono, llamar, mensajeError, miles, montaje, tablaLineas, tilesKpi } = Lineas.comun;
+    const { irConEstatus } = Lineas;
+
+    // ======================================================================
+    // Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes (apiLineasPanorama)
+    // ======================================================================
+    const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const mesCorto = (ym) => MESES_CORTOS[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(2, 4);
+    const mesLargo = (ym) => MESES_CORTOS[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4);
+    const SERIES_PANORAMA = 7; // colores fijos (--lnp-s1…s7); el resto se junta en "OTROS"
+
+    /** Techo "redondo" del eje y (1, 2, 2.5, 5 × 10^n) y sus marcas. */
+    function ejeRedondo(maximo) {
+      const max = Math.max(1, maximo);
+      const bruto = max / 4;
+      const pot = Math.pow(10, Math.floor(Math.log10(bruto)));
+      const paso = [1, 2, 2.5, 5, 10].map((m) => m * pot).find((p) => p >= bruto);
+      const techo = Math.ceil(max / paso) * paso;
+      const marcas = [];
+      for (let v = 0; v <= techo + 1e-9; v += paso) marcas.push(Math.round(v * 100) / 100);
+      return { techo: techo, marcas: marcas };
+    }
+
+    // Grupos de estatus del Panorama (estatus del 30-sep; los valores viejos caen donde los manda la conversión)
+    const GRUPO_LINEA = {
+      'USO': 'uso', 'USO TEMPORAL': 'uso', 'RENOVADA': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
+      'DISPONIBLE': 'disponible', 'RESGUARDO': 'disponible',
+      'EN PROCESO DE CANCELACION': 'cancelacion',
+      'CANCELADA': 'cancelada', 'CANCELADO': 'cancelada',
+      'SIN LINEA': 'sin', 'SIN ESTATUS': 'sin', '': 'sin',
+    }; // el resto (SUSPENDIDA, ESPERA DE EQUIPO…) = 'revisar'
+    const COMPOSICION_LINEAS = [
+      { clave: 'uso', nombre: 'En uso', color: 'var(--lnp-s1)', estatus: 'USO' },
+      { clave: 'disponible', nombre: 'Disponibles', color: 'var(--lnp-s2)', estatus: 'DISPONIBLE' },
+      { clave: 'cancelacion', nombre: 'En cancelación', color: 'var(--lnp-s3)', estatus: 'EN PROCESO DE CANCELACION' },
+      { clave: 'revisar', nombre: 'Por revisar', color: 'var(--lnp-s4)', estatus: '' },
+    ];
+    const GRUPO_EQUIPO = {
+      'USO': 'uso', 'EN ENVIO': 'uso', 'ESPERA DE RESPONSIVA': 'uso',
+      'RESGUARDO': 'guardado', 'PARA VENTA': 'guardado', 'PARA VENTA CON DETALLE': 'guardado', 'VENTA': 'guardado', 'POSIBLE VENTA': 'guardado',
+      'PARA DESECHO': 'guardado', 'DESECHO': 'guardado', 'POR RECIBIR': 'guardado',
+      'VENDIDO': 'baja', 'DONADO': 'baja', 'DESECHADO': 'baja', 'EXTRAVIO-ROBO': 'baja', 'EXTRAVIADO': 'baja', 'ROBADO': 'baja', 'ROBO': 'baja',
+    }; // el resto (FUERA DE INVENTARIO, CANCELADO, N/A…) = 'revisar'
+    const CUENTAS = [
+      { clave: 'TELCEL FRO', nombre: 'Telcel · FRO' }, { clave: 'TELCEL GPH', nombre: 'Telcel · GPH' }, { clave: 'AT&T', nombre: 'AT&T' },
+      { clave: 'TELCEL', nombre: 'Telcel · sin razón social' }, { clave: '', nombre: 'Sin compañía' },
+    ];
+    const dineroCorto = (n) => (Math.abs(n) >= 1e6 ? '$' + Formato.miles(n / 1e6, { decimales: 2 }) + ' M'
+      : Math.abs(n) >= 1e4 ? '$' + Formato.miles(n / 1e3, { decimales: 1 }) + ' mil' : dinero(n));
+
+    /**
+     * El servidor manda los registros en columnas y el estatus de cada mes en corridas (LineasPanorama → registros):
+     * aquí se regresan a un objeto por registro con su estatus por mes, que es lo que usa calcularResumen.
+     */
+    function expandirRegistros(R) {
+      if (Array.isArray(R.lineas)) return R; // formato anterior (caché del servidor de antes del 1-oct)
+      const meses = (s, n) => {
+        if (typeof s === 'number') return new Array(n).fill(s);
+        const salida = [];
+        for (let i = 0; i < s.length; i += 2) for (let j = 0; j < s[i + 1]; j++) salida.push(s[i]);
+        return salida;
+      };
+      const n = R.mesesTotal;
+      const L = R.lineas;
+      const E = R.equipos;
+      return {
+        dic: R.dic, deps: R.deps,
+        lineas: L.s.map((s, i) => ({ c: R.cuentas[L.c[i]], b: L.b[i], d: L.d[i], p: L.p[i], f: R.fechas[L.f[i]], s: meses(s, n) })),
+        equipos: E.s.map((s, i) => ({ d: E.d[i], s: meses(s, n) })),
+      };
+    }
+    // Última respuesta del Panorama: al volver a entrar se pinta al instante y se actualiza por detrás. Se guarda
+    // también en este navegador (solo conteos, departamentos y costos; sin nombres ni números) para la primera vez.
+    const COPIA_PANORAMA = 'lineas.panorama.v3';
+    let copiaPanorama = null;
+    function leerCopiaPanorama() {
+      if (copiaPanorama) return copiaPanorama;
+      try { copiaPanorama = JSON.parse(localStorage.getItem(COPIA_PANORAMA) || 'null'); } catch (e) { copiaPanorama = null; }
+      return copiaPanorama && copiaPanorama.meses && copiaPanorama.registros ? copiaPanorama : null;
+    }
+    function guardarCopiaPanorama(r) {
+      copiaPanorama = r;
+      try { localStorage.setItem(COPIA_PANORAMA, JSON.stringify(r)); } catch (e) { /* sin espacio o bloqueado: solo en memoria */ }
+    }
+
+    function initPanorama() {
+      const n = ++montaje.n;
+      const raiz = document.getElementById('ln-panorama');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      const est = {
+        conjunto: 'equipos', rango: 12, forma: 'grafica', seleccion: { equipos: null, lineas: null }, datos: null,
+        k: 0, medida: 'lineas', rangoTendencia: 12, deptosTodos: false, resumenes: null, series: {},
+      };
+      let tabla = null;
+
+      const pct = (v, total) => (total ? Formato.miles(v / total * 100, { decimales: 1 }) + '%' : '—');
+      const esHoy = () => est.k === est.datos.meses.length - 1;
+      const ymd = Formato.dia;
+      /** Fecha de corte del mes k ('yyyy-mm-dd'): hoy, o el último día del mes. */
+      function corte(k) {
+        if (k === est.datos.meses.length - 1) return ymd(new Date());
+        const ym = est.datos.meses[k];
+        return ymd(new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0));
+      }
+      const sumarDias = (txt, dias) => ymd(new Date(Number(txt.slice(0, 4)), Number(txt.slice(5, 7)) - 1, Number(txt.slice(8, 10)) + dias));
+
+      /** Todo lo de la portada para el mes k, calculado con los registros (estatus de cada uno al cierre de ese mes). */
+      function calcularResumen(k) {
+        const R = est.datos.registros;
+        const dic = R.dic;
+        const r = {
+          activas: 0, planes: 0, basicos: 0, renta: 0, grupos: { uso: 0, disponible: 0, cancelacion: 0, revisar: 0 },
+          porCuenta: {}, porDepto: {}, vig: { vencido: 0, pronto: 0, vigente: 0, sinFecha: 0 },
+          equipos: { total: 0, uso: 0, guardado: 0, baja: 0, revisar: 0 },
+        };
+        const hoy = corte(k);
+        const en30 = sumarDias(hoy, 30);
+        R.lineas.forEach((l) => {
+          const s = l.s[k];
+          if (s < 0) return;
+          const g = GRUPO_LINEA[dic[s]] || 'revisar';
+          if (g === 'cancelada' || g === 'sin') return;
+          r.activas++;
+          r.grupos[g]++;
+          const dep = R.deps[l.d];
+          const d = r.porDepto[dep] = r.porDepto[dep] || { lineas: 0, renta: 0 };
+          d.lineas++;
+          if (l.b) { r.basicos++; return; } // los SIM básicos no tienen adendum y su costo real sale de la factura
+          r.planes++;
+          r.renta += l.p || 0;
+          d.renta += l.p || 0;
+          const c = r.porCuenta[l.c] = r.porCuenta[l.c] || { lineas: 0, renta: 0, vencidas: 0 };
+          c.lineas++;
+          c.renta += l.p || 0;
+          if (!l.f) r.vig.sinFecha++;
+          else if (l.f < hoy) { r.vig.vencido++; c.vencidas++; }
+          else if (l.f <= en30) r.vig.pronto++;
+          else r.vig.vigente++;
+        });
+        R.equipos.forEach((e) => {
+          const s = e.s[k];
+          if (s < 0) return;
+          r.equipos.total++;
+          r.equipos[GRUPO_EQUIPO[dic[s]] || 'revisar']++;
+        });
+        return r;
+      }
+      const resumen = (k) => {
+        if (!est.resumenes) est.resumenes = {};
+        return est.resumenes[k] || (est.resumenes[k] = calcularResumen(k));
+      };
+
+      // ---------------- Filtro de mes ----------------
+
+      function pintarSelectorMes() {
+        const meses = est.datos.meses;
+        const sel = $('#lnp-mes', raiz);
+        sel.innerHTML = meses.map((ym, k) => k).reverse().map((k) =>
+          '<option value="' + k + '"' + (k === est.k ? ' selected' : '') + '>' + esc(k === meses.length - 1 ? 'Hoy' : mesLargo(meses[k])) + '</option>').join('');
+        sel.disabled = false;
+        $('#lnp-filtro-nota', raiz).textContent = esHoy() ? '' : 'Estás viendo el cierre de ' + mesLargo(meses[est.k]) + '. El departamento, la cuenta y el costo de cada línea son los de hoy.';
+      }
+
+      function elegirMes(k) {
+        if (!est.datos || k === est.k) return;
+        est.k = Math.max(0, Math.min(est.datos.meses.length - 1, k));
+        pintarTodo();
+      }
+
+      // ---------------- Portada ----------------
+
+      function pintarPortada() {
+        const r = resumen(est.k);
+        const previo = est.k > 0 ? resumen(est.k - 1) : null;
+        $('#lnp-activas', raiz).textContent = miles(r.activas);
+        $('#lnp-activas-sub', raiz).innerHTML = '<strong>' + miles(r.planes) + '</strong> con plan · <strong>' + miles(r.basicos) + '</strong> SIM básicos';
+        const delta = $('#lnp-delta', raiz);
+        if (previo) {
+          const dif = r.activas - previo.activas;
+          delta.innerHTML = (dif ? ico(dif > 0 ? 'trending-up' : 'trending-down') + ' ' + (dif > 0 ? '+' : '−') + miles(Math.abs(dif)) : 'Sin cambio') +
+            '<span> vs cierre de ' + esc(mesLargo(est.datos.meses[est.k - 1])) + '</span>';
+        } else delta.innerHTML = '';
+
+        // Composición: una barra apilada (parte del todo) + leyenda con número y porcentaje, que es la que se lee
+        const grupos = COMPOSICION_LINEAS.filter((g) => r.grupos[g.clave] || g.clave !== 'revisar');
+        $('#lnp-composicion', raiz).innerHTML =
+          '<div class="lnp-pila" role="img" aria-label="' + esc(grupos.map((g) => g.nombre + ' ' + r.grupos[g.clave]).join(', ')) + '">' +
+            grupos.filter((g) => r.grupos[g.clave]).map((g) => '<span class="lnp-pila-seg" style="flex-grow:' + r.grupos[g.clave] + ';background:' + g.color + '" title="' +
+              esc(g.nombre + ': ' + miles(r.grupos[g.clave]) + ' (' + pct(r.grupos[g.clave], r.activas) + ')') + '"></span>').join('') +
+          '</div><div class="lnp-leyenda">' +
+            grupos.map((g) => '<button type="button" class="lnp-leyenda-item"' + (g.estatus && esHoy() ? ' data-lnp-ir="lineas" data-estatus="' + esc(g.estatus) + '" title="Ver en Líneas Telefónicas"' : ' disabled') + '>' +
+              '<span class="lnp-leyenda-marca" style="background:' + g.color + '"></span><span class="lnp-leyenda-nombre">' + esc(g.nombre) + '</span>' +
+              '<strong>' + miles(r.grupos[g.clave]) + '</strong><span class="lnp-leyenda-pct">' + pct(r.grupos[g.clave], r.activas) + '</span></button>').join('') +
+          '</div>' + (r.grupos.revisar ? '<p class="lnp-nota">"Por revisar": estatus que ya no existen (por ejemplo SUSPENDIDA). Líneas los corrige en Correcciones de líneas.</p>' : '');
+
+        // Dinero por cuenta: lo que más pregunta dirección. Los SIM básicos van aparte, solo con su número.
+        $('#lnp-renta', raiz).textContent = dinero(r.renta);
+        $('#lnp-renta-sub', raiz).textContent = miles(r.planes) + ' planes activos · con el costo de plan del inventario (el del adendum)';
+        const filas = CUENTAS.filter((c) => r.porCuenta[c.clave]).map((c) => {
+          const x = r.porCuenta[c.clave];
+          return '<tr><th scope="row">' + esc(c.nombre) + '</th><td>' + miles(x.lineas) + '</td><td>' + dinero(x.renta) + '</td>' +
+            '<td>' + (x.vencidas ? '<span class="lnp-vencidas">' + miles(x.vencidas) + '</span>' : '<span class="ln-tenue">0</span>') + '</td></tr>';
+        });
+        $('#lnp-cuentas', raiz).innerHTML = '<table class="lnp-tabla-cuentas"><thead><tr><th scope="col">Cuenta</th><th scope="col">Líneas</th><th scope="col">Renta</th>' +
+          '<th scope="col" title="Planes activos con el adendum vencido">Vencidas</th></tr></thead><tbody>' + filas.join('') +
+          '<tr class="lnp-fila-basicos"><th scope="row">SIM básicos</th><td>' + miles(r.basicos) + '</td><td colspan="2" class="ln-tenue">Sin adendum; su costo sale de la factura</td></tr>' +
+          '</tbody></table>';
+
+        // Vigencia de los adendums de los planes activos
+        const v = r.vig;
+        const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase, filtros: false, titulo: titulo });
+        tilesKpi($('#lnp-vigencia', raiz), [
+          tile('circle-alert', v.vencido, 'Con el adendum vencido · ' + pct(v.vencido, r.planes), 'stat-tile-warn'),
+          tile('clock', v.pronto, 'Vencen en los siguientes 30 días'),
+          tile('circle-check', v.vigente, 'Vigentes', 'stat-tile-ok'),
+          tile('circle-help', v.sinFecha, 'Sin fecha de fin de adendum'),
+        ], () => null);
+
+        // Departamentos: líneas activas y renta de sus planes
+        const deps = Object.keys(r.porDepto).map((d) => [d, r.porDepto[d]]).sort((a, b) => b[1].lineas - a[1].lineas || a[0].localeCompare(b[0]));
+        const visibles = est.deptosTodos ? deps : deps.slice(0, 10);
+        const max = deps.length ? deps[0][1].lineas : 1;
+        $('#lnp-deptos-total', raiz).textContent = miles(deps.length) + ' departamentos';
+        $('#lnp-deptos', raiz).innerHTML = (visibles.length ? '<div class="lnp-depto lnp-depto-cabeza"><span>Departamento</span><span></span><span>Líneas</span><span>Renta</span></div>' : '') +
+          (visibles.map(([d, x]) =>
+            '<div class="lnp-depto"><span class="lnp-barra-nombre" title="' + esc(d) + '">' + esc(d) + '</span>' +
+              '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (x.lineas / max) * 100) + '%"></span></span>' +
+              '<span class="lnp-barra-num">' + miles(x.lineas) + '</span><span class="lnp-barra-pct">' + esc(dineroCorto(x.renta)) + '</span></div>').join('') ||
+          '<p class="ln-tenue">Sin líneas activas.</p>');
+        const mas = $('#lnp-deptos-mas', raiz);
+        mas.hidden = deps.length <= 10;
+        mas.textContent = est.deptosTodos ? 'Ver solo los 10 primeros' : 'Ver los ' + miles(deps.length);
+
+        // Equipos
+        const e = r.equipos;
+        tilesKpi($('#lnp-kpis-equipos', raiz), [
+          tile('smartphone', e.total, 'Equipos registrados'),
+          tile('circle-check', e.uso, 'En uso · ' + pct(e.uso, e.total), 'stat-tile-ok'),
+          tile('archive', e.guardado, 'Guardados', '', 'Resguardo, para venta, posible venta-daño o para desecho'),
+          tile('package-x', e.baja, 'Ya no están', '', 'Vendidos, donados, extraviados o robados y desechados'),
+          tile('circle-help', e.revisar, 'Por revisar', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de líneas'),
+        ], () => null);
+      }
+
+      // ---------------- Tendencia ----------------
+
+      /** Serie de la tendencia: líneas activas o renta de los planes al cierre de cada mes (se calcula una vez). */
+      function serieTendencia() {
+        if (!est.series[est.medida]) est.series[est.medida] = est.datos.meses.map((_, k) => (est.medida === 'renta' ? resumen(k).renta : resumen(k).activas));
+        return est.series[est.medida];
+      }
+
+      /** Una sola serie con su área, el mes elegido marcado y clic para elegir otro mes. */
+      function pintarTendencia() {
+        const cont = $('#lnp-tendencia', raiz);
+        const todos = est.datos.meses;
+        const desde = est.rangoTendencia ? Math.max(0, todos.length - est.rangoTendencia) : 0;
+        const meses = todos.slice(desde);
+        const valores = serieTendencia().slice(desde);
+        const esRenta = est.medida === 'renta';
+        $('#lnp-tendencia-titulo', raiz).innerHTML = ico('chart-line') + ' ' + (esRenta ? 'Renta mensual de los planes' : 'Líneas activas') + ' al cierre de cada mes';
+        const fmt = esRenta ? dineroCorto : miles;
+        const ancho = Math.max(280, cont.clientWidth || 520);
+        const angosto = ancho < 480;
+        const m = { arriba: 24, derecha: 18, abajo: 30, izquierda: esRenta ? 70 : 46 };
+        const alto = 250;
+        const w = ancho - m.izquierda - m.derecha;
+        const h = alto - m.arriba - m.abajo;
+        const eje = ejeRedondo(Math.max(1, ...valores));
+        const x = (k) => m.izquierda + (meses.length === 1 ? w / 2 : (k * w) / (meses.length - 1));
+        const y = (v) => m.arriba + h - (v / eje.techo) * h;
+        const cadaCuanto = Math.max(1, Math.ceil(meses.length / (angosto ? 4 : 7)));
+        const sel = est.k - desde;
+        let svg = '<svg class="lnp-svg" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" tabindex="0" aria-label="' +
+          esc((esRenta ? 'Renta mensual' : 'Líneas activas') + ' al cierre de cada mes. Flechas para recorrer y Enter para ver ese mes.') + '">';
+        eje.marcas.forEach((v) => {
+          svg += '<line class="lnp-rejilla" x1="' + m.izquierda + '" x2="' + (m.izquierda + w) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
+            '<text class="lnp-eje" x="' + (m.izquierda - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmt(v)) + '</text>';
+        });
+        meses.forEach((ym, k) => {
+          const ultimo = meses.length - 1;
+          if (k !== ultimo && (k % cadaCuanto || ultimo - k < Math.max(2, cadaCuanto))) return;
+          svg += '<text class="lnp-eje" x="' + x(k) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(k === ultimo ? 'Hoy' : mesCorto(ym)) + '</text>';
+        });
+        const puntos = valores.map((v, k) => x(k).toFixed(1) + ' ' + y(v).toFixed(1));
+        svg += '<path class="lnp-area" d="M' + puntos.join(' L') + ' L' + x(valores.length - 1).toFixed(1) + ' ' + y(0) + ' L' + x(0).toFixed(1) + ' ' + y(0) + ' Z"></path>';
+        svg += '<path class="lnp-linea" d="M' + puntos.join(' L') + '" style="stroke:var(--lnp-s1)"></path>';
+        if (sel >= 0 && sel < valores.length) {
+          svg += '<line class="lnp-marca-mes" x1="' + x(sel) + '" x2="' + x(sel) + '" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '"></line>' +
+            '<circle class="lnp-punto" cx="' + x(sel) + '" cy="' + y(valores[sel]) + '" r="5" style="fill:var(--lnp-s1)"></circle>' +
+            '<text class="lnp-etiqueta" x="' + Math.min(Math.max(x(sel), m.izquierda + 34), m.izquierda + w - 34) + '" y="' + Math.max(14, y(valores[sel]) - 12) + '" text-anchor="middle">' +
+              '<tspan class="lnp-etiqueta-valor">' + esc(fmt(valores[sel])) + '</tspan></text>';
+        }
+        svg += '<line class="lnp-cruz" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '" hidden></line>';
+        svg += '<rect class="lnp-captura lnp-captura-clic" x="' + m.izquierda + '" y="' + m.arriba + '" width="' + w + '" height="' + h + '"></rect></svg>';
+        cont.innerHTML = svg + '<div class="lnp-tooltip" hidden></div>';
+
+        const lienzo = cont.querySelector('svg');
+        const cruz = cont.querySelector('.lnp-cruz');
+        const tip = cont.querySelector('.lnp-tooltip');
+        let actual = -1;
+        const mostrar = (k) => {
+          actual = k;
+          cruz.setAttribute('x1', x(k)); cruz.setAttribute('x2', x(k)); cruz.removeAttribute('hidden');
+          tip.innerHTML = '<div class="lnp-tooltip-mes">' + esc(k === meses.length - 1 ? 'Hoy' : 'Cierre de ' + mesLargo(meses[k])) + '</div>' +
+            '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:var(--lnp-s1)"></span><strong>' + esc(esRenta ? dinero(valores[k]) : miles(valores[k])) + '</strong>' +
+            '<span>' + (esRenta ? 'de renta' : 'líneas activas') + '</span></div><div class="lnp-tooltip-pie">Clic para ver ese mes</div>';
+          tip.hidden = false;
+          const escala = lienzo.getBoundingClientRect().width / ancho;
+          const px = x(k) * escala;
+          tip.style.left = Math.min(Math.max(0, px + 12), cont.clientWidth - tip.offsetWidth) + 'px';
+          if (px + 12 + tip.offsetWidth > cont.clientWidth) tip.style.left = Math.max(0, px - tip.offsetWidth - 12) + 'px';
+          tip.style.top = '6px';
+        };
+        const ocultar = () => { actual = -1; cruz.setAttribute('hidden', ''); tip.hidden = true; };
+        const cercano = (ev) => {
+          const r = lienzo.getBoundingClientRect();
+          const px = ((ev.clientX - r.left) / r.width) * ancho;
+          return Math.max(0, Math.min(meses.length - 1, Math.round(((px - m.izquierda) / (w || 1)) * (meses.length - 1))));
+        };
+        lienzo.addEventListener('pointermove', (ev) => mostrar(cercano(ev)));
+        lienzo.addEventListener('pointerleave', ocultar);
+        lienzo.addEventListener('click', (ev) => elegirMes(desde + cercano(ev)));
+        lienzo.addEventListener('focus', () => mostrar(Math.max(0, sel)));
+        lienzo.addEventListener('blur', ocultar);
+        lienzo.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' && actual >= 0) { ev.preventDefault(); elegirMes(desde + actual); return; }
+          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+          ev.preventDefault();
+          mostrar(Math.max(0, Math.min(meses.length - 1, (actual < 0 ? meses.length - 1 : actual) + (ev.key === 'ArrowLeft' ? -1 : 1))));
+        });
+      }
+
+      // ---------------- Equipos y líneas por estatus (al cierre del mes elegido) ----------------
+
+      /** Una barra por estatus (un solo color: se compara cantidad). Clic = ver esos registros (solo con "Hoy"). */
+      function pintarBarras(conjunto) {
+        const b = est.datos[conjunto];
+        const filas = Object.keys(b.historico).map((s) => [s, (b.historico[s] || [])[est.k] || 0]).filter((f) => f[1])
+          .sort((a, c) => c[1] - a[1] || a[0].localeCompare(c[0]));
+        const total = filas.reduce((t, f) => t + f[1], 0);
+        const max = filas.length ? filas[0][1] : 1;
+        const clic = esHoy();
+        $('#lnp-total-' + conjunto, raiz).textContent = miles(total) + ' en total';
+        $('#lnp-barras-' + conjunto, raiz).innerHTML = filas.length ? filas.map(([s, v]) =>
+          '<button type="button" class="lnp-barra"' + (clic ? ' data-lnp-ir="' + conjunto + '" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas telefónicas"' : ' disabled') + '>' +
+            '<span class="lnp-barra-nombre">' + esc(s) + '</span>' +
+            '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%"></span></span>' +
+            '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, total) + '</span></button>').join('')
+          : '<p class="ln-tenue">Sin registros.</p>';
+      }
+
+      // ---------------- Detalle por estatus, mes a mes ----------------
+
+      /** Estatus del conjunto en orden fijo (más registros hoy primero); los 7 primeros tienen color, el resto va a OTROS. */
+      function seriesDe(conjunto) {
+        const b = est.datos[conjunto];
+        const nombres = Object.keys(Object.assign({}, b.historico, b.actual));
+        const ultimo = (s) => (b.historico[s] || []).reduce((m, v) => Math.max(m, v), 0);
+        nombres.sort((a, c) => ((b.actual[c] || 0) - (b.actual[a] || 0)) || (ultimo(c) - ultimo(a)) || a.localeCompare(c));
+        const conColor = nombres.slice(0, SERIES_PANORAMA);
+        const resto = nombres.slice(SERIES_PANORAMA);
+        const series = conColor.map((s, i) => ({ clave: s, nombre: s, color: 'var(--lnp-s' + (i + 1) + ')', valores: b.historico[s] || est.datos.meses.map(() => 0) }));
+        if (resto.length) {
+          series.push({
+            clave: '__OTROS', nombre: 'OTROS (' + resto.length + ')', color: 'var(--lnp-otros)', detalle: resto,
+            valores: est.datos.meses.map((_, k) => resto.reduce((s, x) => s + ((b.historico[x] || [])[k] || 0), 0)),
+          });
+        }
+        return series;
+      }
+
+      function mesesVisibles() {
+        const todos = est.datos.meses;
+        const desde = est.rango ? Math.max(0, todos.length - est.rango) : 0;
+        return { desde: desde, meses: todos.slice(desde) };
+      }
+
+      function pintarChips(series) {
+        const sel = est.seleccion[est.conjunto];
+        $('#lnp-chips', raiz).innerHTML = series.map((s) =>
+          '<button type="button" class="lnp-chip' + (sel.indexOf(s.clave) >= 0 ? ' activo' : '') + '" data-serie="' + esc(s.clave) + '" aria-pressed="' + (sel.indexOf(s.clave) >= 0) + '"' +
+            (s.detalle ? ' title="' + esc(s.detalle.join(', ')) + '"' : '') + '>' +
+            '<span class="lnp-chip-marca" style="background:' + s.color + '"></span>' + esc(s.nombre) + '</button>').join('');
+      }
+
+      /** Líneas por estatus al cierre de cada mes, con cruz que sigue al puntero y etiqueta al final de cada línea. */
+      function pintarGrafica(series) {
+        const cont = $('#lnp-grafica', raiz);
+        const { desde, meses } = mesesVisibles();
+        const visibles = series.filter((s) => est.seleccion[est.conjunto].indexOf(s.clave) >= 0).map((s) => Object.assign({}, s, { valores: s.valores.slice(desde) }));
+        if (!visibles.length) { cont.innerHTML = '<p class="ln-tenue lnp-vacio">Elige al menos un estatus arriba.</p>'; return; }
+        const ancho = Math.max(300, cont.clientWidth || 700);
+        const angosto = ancho < 560;
+        const m = { arriba: 14, derecha: angosto ? 12 : 150, abajo: 30, izquierda: 44 };
+        const alto = 300;
+        const w = ancho - m.izquierda - m.derecha;
+        const h = alto - m.arriba - m.abajo;
+        const eje = ejeRedondo(visibles.reduce((mx, s) => Math.max(mx, ...s.valores), 0));
+        const x = (k) => m.izquierda + (meses.length === 1 ? w / 2 : (k * w) / (meses.length - 1));
+        const y = (v) => m.arriba + h - (v / eje.techo) * h;
+        const cadaCuanto = Math.max(1, Math.ceil(meses.length / (angosto ? 4 : 8)));
+
+        let svg = '<svg class="lnp-svg" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" aria-label="' +
+          esc((est.conjunto === 'equipos' ? 'Equipos' : 'Líneas') + ' por estatus al cierre de cada mes') + '" tabindex="0">';
+        eje.marcas.forEach((v) => {
+          svg += '<line class="lnp-rejilla" x1="' + m.izquierda + '" x2="' + (m.izquierda + w) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
+            '<text class="lnp-eje" x="' + (m.izquierda - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + miles(v) + '</text>';
+        });
+        meses.forEach((ym, k) => {
+          const ultimo = meses.length - 1;
+          if (k !== ultimo && (k % cadaCuanto || ultimo - k < Math.max(2, cadaCuanto))) return; // sin encimarse con "Hoy"
+          svg += '<text class="lnp-eje" x="' + x(k) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(k === meses.length - 1 ? 'Hoy' : mesCorto(ym)) + '</text>';
+        });
+        visibles.forEach((s) => {
+          const d = s.valores.map((v, k) => (k ? 'L' : 'M') + x(k).toFixed(1) + ' ' + y(v).toFixed(1)).join(' ');
+          svg += '<path class="lnp-linea" d="' + d + '" style="stroke:' + s.color + '"></path>';
+          const u = s.valores.length - 1;
+          svg += '<circle class="lnp-punto" cx="' + x(u) + '" cy="' + y(s.valores[u]) + '" r="4" style="fill:' + s.color + '"></circle>';
+        });
+        // Etiquetas al final: las de más valor primero; si chocan, la otra se queda en la leyenda y el tooltip
+        if (!angosto) {
+          const puestas = [];
+          visibles.slice().sort((a, b) => b.valores[b.valores.length - 1] - a.valores[a.valores.length - 1]).forEach((s) => {
+            const v = s.valores[s.valores.length - 1];
+            const yy = y(v);
+            if (puestas.some((p) => Math.abs(p - yy) < 15)) return;
+            puestas.push(yy);
+            svg += '<text class="lnp-etiqueta" x="' + (m.izquierda + w + 10) + '" y="' + (yy + 4) + '"><tspan class="lnp-etiqueta-valor">' + miles(v) + '</tspan> ' +
+              esc(s.nombre.length > 16 ? s.nombre.slice(0, 15) + '…' : s.nombre) + '</text>';
+          });
+        }
+        svg += '<line class="lnp-cruz" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '" hidden></line>';
+        svg += '<rect class="lnp-captura" x="' + m.izquierda + '" y="' + m.arriba + '" width="' + w + '" height="' + h + '"></rect></svg>';
+        cont.innerHTML = svg + '<div class="lnp-tooltip" hidden></div>';
+
+        // Tooltip: el mes más cercano al puntero y el valor de todas las series visibles
+        const lienzo = cont.querySelector('svg');
+        const cruz = cont.querySelector('.lnp-cruz');
+        const tip = cont.querySelector('.lnp-tooltip');
+        let actual = -1;
+        const mostrar = (k) => {
+          actual = k;
+          cruz.setAttribute('x1', x(k)); cruz.setAttribute('x2', x(k)); cruz.removeAttribute('hidden');
+          const filas = visibles.map((s) => [s, s.valores[k]]).sort((a, b) => b[1] - a[1]);
+          tip.innerHTML = '<div class="lnp-tooltip-mes">' + esc(k === meses.length - 1 ? 'Hoy' : 'Cierre de ' + mesLargo(meses[k])) + '</div>' +
+            filas.map(([s, v]) => '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:' + s.color + '"></span><strong>' + miles(v) + '</strong><span>' + esc(s.nombre) + '</span></div>').join('');
+          tip.hidden = false;
+          const escala = lienzo.getBoundingClientRect().width / ancho;
+          const px = x(k) * escala;
+          tip.style.left = Math.min(Math.max(0, px + 12), cont.clientWidth - tip.offsetWidth) + 'px';
+          if (px + 12 + tip.offsetWidth > cont.clientWidth) tip.style.left = Math.max(0, px - tip.offsetWidth - 12) + 'px';
+          tip.style.top = '8px';
+        };
+        const ocultar = () => { actual = -1; cruz.setAttribute('hidden', ''); tip.hidden = true; };
+        const cercano = (ev) => {
+          const r = lienzo.getBoundingClientRect();
+          const px = ((ev.clientX - r.left) / r.width) * ancho;
+          return Math.max(0, Math.min(meses.length - 1, Math.round(((px - m.izquierda) / (w || 1)) * (meses.length - 1))));
+        };
+        lienzo.addEventListener('pointermove', (ev) => mostrar(cercano(ev)));
+        lienzo.addEventListener('pointerleave', ocultar);
+        lienzo.addEventListener('focus', () => mostrar(meses.length - 1));
+        lienzo.addEventListener('blur', ocultar);
+        lienzo.addEventListener('keydown', (ev) => {
+          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
+          ev.preventDefault();
+          mostrar(Math.max(0, Math.min(meses.length - 1, (actual < 0 ? meses.length - 1 : actual) + (ev.key === 'ArrowLeft' ? -1 : 1))));
+        });
+      }
+
+      /** Tabla: un renglón por mes y una columna por estatus (todos, no solo los elegidos). Exportable a Excel. */
+      function pintarTabla(series) {
+        const cont = $('#lnp-tabla', raiz);
+        if (tabla) { tabla.destruir(); tabla = null; }
+        cont.innerHTML = '<div></div>';
+        const { desde, meses } = mesesVisibles();
+        const b = est.datos[est.conjunto];
+        const nombres = series.reduce((l, s) => l.concat(s.detalle || [s.clave]), []);
+        const filas = meses.map((ym, k) => {
+          const f = { _id: ym, mes: k === meses.length - 1 ? 'Hoy (' + mesLargo(ym) + ')' : mesLargo(ym), orden: ym };
+          let total = 0;
+          nombres.forEach((s) => { const v = (b.historico[s] || [])[desde + k] || 0; f[s] = v; total += v; });
+          f._total = total;
+          return f;
+        });
+        tabla = tablaLineas(cont.firstChild, {
+          idCampo: '_id', idTabla: 'lineas-panorama-' + est.conjunto + '-v1', seleccionable: false, detalle: false,
+          columnas: [{ campo: 'orden', titulo: 'Mes', tipo: 'texto', fijada: true, render: (v, f) => esc(f.mes), valorExportar: (f) => f.mes }]
+            .concat(nombres.map((s) => ({ campo: s, titulo: s, tipo: 'numero' })))
+            .concat([{ campo: '_total', titulo: 'Total', tipo: 'numero' }]),
+          ordenInicial: { campo: 'orden', dir: 'desc' },
+          exportar: { nombreArchivo: 'Panorama ' + (est.conjunto === 'equipos' ? 'equipos' : 'lineas') + ' por estatus', nombreHoja: 'Por mes' },
+          textoVacio: 'Sin datos',
+        });
+        tabla.setDatos(filas);
+      }
+
+      function pintarEvolucion() {
+        const series = seriesDe(est.conjunto);
+        if (!est.seleccion[est.conjunto]) est.seleccion[est.conjunto] = series.slice(0, 4).map((s) => s.clave);
+        pintarChips(series);
+        $('#lnp-grafica', raiz).hidden = est.forma !== 'grafica';
+        $('#lnp-chips', raiz).hidden = est.forma !== 'grafica';
+        $('#lnp-tabla', raiz).hidden = est.forma !== 'tabla';
+        if (est.forma === 'grafica') pintarGrafica(series); else pintarTabla(series);
+        const d = est.datos;
+        $('#lnp-nota', raiz).textContent = d.desde
+          ? 'Al cierre de cada mes, reconstruido con la bitácora de cambios de estatus (' + miles(d.cambiosDeEstatus) + ' cambios desde ' + fecha(d.desde) +
+            '). Antes de su primer cambio registrado, cada registro conserva el estatus que tenía; cuenta desde su fecha de registro. El último punto es hoy.'
+          : 'La bitácora no tiene cambios de estatus: solo se muestra el estatus de hoy.';
+      }
+
+      function pintarTodo() {
+        pintarSelectorMes();
+        pintarPortada();
+        pintarTendencia();
+        pintarBarras('equipos');
+        pintarBarras('lineas');
+        pintarEvolucion();
+        $('#lnp-generado', raiz).textContent = 'Datos de la hoja al ' + fechaHora(est.datos.generadoEn) + ' (se guardan 30 min; "Actualizar" los vuelve a calcular).';
+        refreshIcons();
+      }
+
+      /** Pinta una respuesta del servidor; si es la misma serie de meses, se queda en el mes que se estaba viendo. */
+      function mostrar(r) {
+        const mismosMeses = est.datos && est.datos.meses.join() === r.meses.join();
+        est.datos = Object.assign({}, r, { registros: expandirRegistros(Object.assign({ mesesTotal: r.meses.length }, r.registros)) });
+        if (!mismosMeses) est.k = r.meses.length - 1;
+        est.resumenes = null;
+        est.series = {};
+        pintarTodo();
+      }
+
+      async function cargar(forzar) {
+        const boton = $('#lnp-actualizar', raiz);
+        boton.disabled = true;
+        const copia = !forzar && !est.datos ? leerCopiaPanorama() : null;
+        if (copia) {
+          mostrar(copia);
+          raiz.classList.add('lnp-refrescando');
+          $('#lnp-generado', raiz).textContent = 'Datos al ' + fechaHora(copia.generadoEn) + ' · actualizando…';
+        } else {
+          raiz.classList.add('lnp-cargando');
+        }
+        try {
+          const r = await llamar('apiLineasPanorama', !!forzar);
+          if (!vigente()) return;
+          guardarCopiaPanorama(r);
+          mostrar(r);
+        } catch (e) {
+          if (!vigente()) return;
+          if (est.datos) Notificar.error('No se pudo actualizar el panorama: ' + mensajeError(e));
+          else $('#lnp-activas', raiz).innerHTML = '<span class="error-msg">No se pudo cargar el panorama: ' + esc(mensajeError(e)) + '</span>';
+        } finally {
+          boton.disabled = false;
+          raiz.classList.remove('lnp-cargando', 'lnp-refrescando');
+        }
+      }
+
+      const segmentado = (id, alElegir, repintar) => $(id, raiz).addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-valor]');
+        if (!b || !est.datos) return;
+        $(id, raiz).querySelectorAll('[data-valor]').forEach((x) => { x.classList.toggle('activo', x === b); x.setAttribute('aria-pressed', String(x === b)); });
+        alElegir(b.dataset.valor);
+        repintar();
+      });
+      segmentado('#lnp-medida', (v) => { est.medida = v; }, pintarTendencia);
+      segmentado('#lnp-rango-tendencia', (v) => { est.rangoTendencia = Number(v); }, pintarTendencia);
+      segmentado('#lnp-conjunto', (v) => { est.conjunto = v; }, pintarEvolucion);
+      segmentado('#lnp-rango', (v) => { est.rango = Number(v); }, pintarEvolucion);
+      segmentado('#lnp-forma', (v) => { est.forma = v; }, pintarEvolucion);
+      $('#lnp-mes', raiz).addEventListener('change', (ev) => elegirMes(Number(ev.target.value)));
+      $('#lnp-deptos-mas', raiz).addEventListener('click', () => { est.deptosTodos = !est.deptosTodos; pintarPortada(); refreshIcons(); });
+      $('#lnp-chips', raiz).addEventListener('click', (ev) => {
+        const b = ev.target.closest('[data-serie]');
+        if (!b) return;
+        const sel = est.seleccion[est.conjunto];
+        const i = sel.indexOf(b.dataset.serie);
+        if (i >= 0) sel.splice(i, 1); else sel.push(b.dataset.serie);
+        pintarEvolucion();
+      });
+      const ir = (ev) => {
+        const b = ev.target.closest('[data-lnp-ir]');
+        if (b && !b.disabled) irConEstatus(b.dataset.lnpIr, b.dataset.estatus);
+      };
+      raiz.addEventListener('click', ir);
+      raiz.addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.stat-tile[data-lnp-ir]')) { ev.preventDefault(); ir(ev); } });
+      $('#lnp-actualizar', raiz).addEventListener('click', () => cargar(true));
+      let espera = null;
+      const alRedimensionar = () => {
+        if (!vigente()) { window.removeEventListener('resize', alRedimensionar); return; }
+        clearTimeout(espera);
+        espera = setTimeout(() => {
+          if (!est.datos) return;
+          pintarTendencia();
+          if (est.forma === 'grafica') pintarGrafica(seriesDe(est.conjunto));
+        }, 150);
+      };
+      window.addEventListener('resize', alRedimensionar);
+      cargar(false);
+    }
+
+    Object.assign(Lineas, {
+      initPanorama: initPanorama,
+    });
+  })();
+</script>

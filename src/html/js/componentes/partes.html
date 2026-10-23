@@ -1,0 +1,58 @@
+<script>
+  /**
+   * Partes — una pantalla grande abierta en archivos, sin cambiar el cuerpo de sus funciones. Una sola copia para
+   * todas (Vehículos, Líneas Telefónicas).
+   *
+   *   const Vehiculos = Partes.crear('Vehículos');      // en el archivo de la pantalla, antes que sus partes
+   *   Vehiculos.registrar('ficha', (T) => {            // en cada parte (app-vehiculos-ficha.html)
+   *     const { puedeEditar } = T;                     // lo del arranque
+   *     const { abrirAgregarSensor } = T.de('capturas');   // lo de otra parte, como un import
+   *     function abrirFichaVehiculo(v) { … }
+   *     return { abrirFichaVehiculo };                 // lo que usan las demás
+   *   });
+   *   // en la función de arranque (initVehiculos), cada vez que se abre:
+   *   const T = Vehiculos.contexto();
+   *   const { abrirFichaVehiculo } = T.de('ficha');
+   *   …
+   *   T.montar({ puedeEditar, … }, () => ({ … }));    // datos del arranque; lo de la principal, perezoso
+   *
+   * T.de('parte') regresa intermediarios que buscan la función al llamarla, así que no importa en qué orden se
+   * montan las partes. Un let que usan varias lo publica su dueña con Object.defineProperty(T, 'x', { get, set }) y
+   * las demás dicen T.x. Al montar se revisa que cada nombre pedido con T.de exista: si no, un console.error con la
+   * parte y el nombre. Las genera tools/partir/en-partes.js. Prueba: tests/partes.test.js.
+   */
+  const Partes = (function () {
+    function crear(pantalla) {
+      const fabricas = {};
+      function contexto() {
+        const exportados = {};
+        const pedidos = [];
+        const de = (parte) => (typeof exportados[parte] === 'function' ? (exportados[parte] = exportados[parte]()) : exportados[parte] || {});
+        const T = {
+          de: (parte) => new Proxy({}, {
+            get: (_, nombre) => {
+              if (typeof nombre === 'string') pedidos.push([parte, nombre]);
+              return (...args) => de(parte)[nombre](...args);
+            },
+          }),
+          // datos: lo del arranque; principal: lo de la pantalla que piden las partes (perezoso: puede ir más abajo)
+          montar: (datos, principal) => {
+            Object.assign(T, datos);
+            exportados.principal = principal || (() => ({}));
+            Object.keys(fabricas).forEach((p) => { exportados[p] = fabricas[p](T); });
+            pedidos.filter(([p]) => p !== 'principal').forEach(([p, nombre]) => {
+              if (typeof de(p)[nombre] !== 'function') console.error(pantalla + ': la parte ' + p + ' no publica ' + nombre);
+            });
+          },
+        };
+        return T;
+      }
+      return {
+        registrar: (parte, fabrica) => { fabricas[parte] = fabrica; },
+        contexto: contexto,
+        partes: () => Object.keys(fabricas),
+      };
+    }
+    return { crear: crear };
+  })();
+</script>

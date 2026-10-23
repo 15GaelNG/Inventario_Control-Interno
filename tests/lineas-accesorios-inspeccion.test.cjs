@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -99,7 +100,7 @@ test('Reasignar: la responsiva se guarda con los accesorios de la inspección qu
   const candado = cap.slice(cap.indexOf('function guardarResponsivaEnCandado_'), cap.indexOf('LineasDatos.agregarFilas(LineasRepo.TAB.RESP'));
   assert.match(candado, /const deInspeccion = sinEquipo \? null : accesoriosDeInspeccion_\(datos\.inspeccionId, obj\.reg\.id\);\n\s+if \(deInspeccion !== null\) valores\['ACCESORIOS'\] = deInspeccion;/);
   // La pantalla manda la inspección con la responsiva en Reasignar
-  assert.match(read('src/html/js/lineas.html'), /llamar\('apiLineasGuardarResponsiva', Object\.assign\(\{\}, d, \{ inspeccionId: inspeccionId \}\)\)/);
+  assert.match(LINEAS, /llamar\('apiLineasGuardarResponsiva', Object\.assign\(\{\}, d, \{ inspeccionId: inspeccionId \}\)\)/);
 });
 
 test('los accesorios no cuentan en la calificación; los puntos quedan para leer las inspecciones de antes', () => {

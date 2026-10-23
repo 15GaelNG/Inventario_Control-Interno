@@ -7,6 +7,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -48,7 +50,7 @@ test('servidor: la responsiva es la acción; Reasignar ya no existe', () => {
   assert.match(cuerpo, /registrarMovimiento\('REASIGNACION', \{ motivo: comentario, ticket: txt\(valores\['TICKET'\]\) \}/);
   assert.match(acciones, /\['DIRECTOR', 'DIRECTOR'\]/); // la responsiva lleva al director (usuario, 6-oct)
   assert.doesNotMatch(acciones, /function reasignar\(/);
-  assert.doesNotMatch(read('src/ClientApi.gs'), /apiLineasReasignar/);
+  assert.doesNotMatch(API, /apiLineasReasignar/);
   assert.match(read('src/services/TelefoniaService.gs'), /LineasAcciones\.responsiva\(datos \|\| \{\}, usuarioOperacion_\(sesion\), puedeVerSecretos_\(sesion\)\)/);
 });
 
@@ -152,7 +154,7 @@ test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la p
 });
 
 test('pantalla: un botón «Responsiva»; inspección solo si otra persona recibe el equipo; luego se guarda con las dos', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /abrirReasignar|apiLineasReasignar|texto: 'Reasignar', alHacer|Nueva responsiva<\/button>/);
   assert.match(cliente, /icono\('signature'\) \+ ' Responsiva<\/button>'/);
   assert.match(cliente, /if \(btnCaptura\.dataset\.lnCaptura === 'RESPONSIVA'\) abrirResponsiva\(/);

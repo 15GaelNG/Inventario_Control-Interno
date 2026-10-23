@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -126,7 +127,7 @@ test('al guardar: la inspección pasa también número y director a la ficha; la
 
 test('al elegir a otra persona, lo que Capital Humano no tiene de ella queda vacío, no lo de la anterior (19-oct)', () => {
   // Caso del 19-oct: de EMMANUEL (con correo) a ABED (sin CORREO EMPRESARIAL en CH); el correo de Emmanuel se quedaba
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   const inicio = cliente.indexOf('alElegir: (opcion) => {') + 'alElegir: (opcion) => {'.length;
   const cuerpoFn = cliente.slice(inicio, cliente.indexOf('\n          },\n', inicio));
   const alElegir = new Function('e', 'cuerpo', 'input', 'CampoAuto', 'CSS', 'Event', 'opcion', cuerpoFn);

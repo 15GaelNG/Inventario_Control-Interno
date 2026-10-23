@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 // Mandar a resguardo y Mandar a cancelación (usuario, 13-oct): ubicación DISPONIBLE · QUERETARO · JARDINES DE LA
 // HACIENDA, PARA VENTA CON DETALLE, un equipo ya en la bandeja no se vuelve a mandar con el mismo estatus, uno guardado
@@ -93,7 +94,7 @@ test('la ubicación sale DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA, no 
   assert.deepEqual(f.equipos[0].opcionesEstatus, f.estatusEquipo);
   assert.equal(f.equipos[0].actual, null);
   // La pantalla toma el valor del servidor, no la sede ni la oficina del equipo
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.doesNotMatch(cliente, /const actual = \{ DEPARTAMENTO: 'DISPONIBLE', SEDE: q\.sede/);
   assert.match(cliente, /const valor = \(corregir && q\.actual && q\.actual\[c\]\) \|\| \(b && b\.valor\);/);
 });
@@ -315,7 +316,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario,\s+\{ motivoDelAdendum: true, nucos:/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /\{ clave: 'motivo', etiqueta: 'Motivo', requerido: true, opciones: MOTIVOS_CANCELACION, elegir: true \}/);
   assert.match(cliente, /const MOTIVOS_CANCELACION = \['LINEA VENCIDA', 'CANCELACION ANTICIPADA'\];/);
   assert.match(cliente, /\{ motivoCancelacion: datos\.motivo, comentario: datos\.comentario, ticket: datos\.ticket \}/);
@@ -328,7 +329,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
 
 test('PARA VENTA CON DETALLE vive en resguardo y se ve como los otros de venta', () => {
   assert.match(read('src/services/lineas/LineasEstructura.gs'), /'PARA VENTA CON DETALLE': 'RESGUARDO'/);
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /const ESTATUS_EQUIPO_RESGUARDO = \['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'\];/);
   assert.match(cliente, /'PARA VENTA CON DETALLE': 'ambar'/);
   assert.match(cliente, /'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta'/);
@@ -378,7 +379,7 @@ test('al mandar a resguardo se guardan los accesorios del equipo en la bandeja',
 });
 
 test('cada paso de la bandeja espera en su ventana hasta que contesta el servidor', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const paso = html.slice(html.indexOf('async function paso(accion, filas, opciones)'), html.indexOf('const ACCIONES = {'));
   assert.match(paso, /pedirDatos\(o\.titulo, o\.mensaje, o\.campos \|\| \[\], o\.boton, \{/);
   assert.match(paso, /alConfirmar: \(extra\) => llamar\('apiLineasAccionBandejaResguardo'/);
@@ -497,16 +498,16 @@ test('Retirar cancelación: la mandada sin resguardo regresa a USO con su equipo
   t.R.retirarCancelacion(['RSG-7'], { comentario: 'siempre no' }, pau);
   assert.deepEqual([eq['ESTATUS LINEA'], eq['NUMERO TELEFONO']], ['USO', '4420070']);
   // La pantalla: la ventana de Pau con la misma tabla de Quitar del panel
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   assert.match(html, /cuerpo: vistaRetiro\(filas\.map\(\(f\) => f\.ID\)\)/);
   assert.match(html, /llamar\('apiLineasVistaRetirarCancelacion', ids\)/);
-  assert.match(read('src/ClientApi.gs'), /function apiLineasVistaRetirarCancelacion\(token, ids\)/);
+  assert.match(require('./api-fuente'), /function apiLineasVistaRetirarCancelacion\(token, ids\)/);
 });
 
 // Usuario, 21-oct: Corregir resguardo se hace encima del panel (antes llevaba al equipo en Líneas telefónicas) y, en el
 // panel, Corregir resguardo y Quitar del panel solo salen a los de Líneas: ni Pau ni administradores
 test('el panel corrige sin salir de él y sus opciones de Líneas no salen a administradores', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   const lineas = html.slice(html.indexOf('const ACCIONES_LINEAS = ['), html.indexOf('function filasVista()'));
   assert.match(lineas, /alHacer: \(filas\) => corregirEnPanel\(filas\[0\], raiz, \(\) => \{ if \(tabla\) tabla\.limpiarSeleccion\(\); cargar\(\); \}\) \},/);
   assert.doesNotMatch(html, /irARegistro\(filas\[0\]\.REGISTRO_ID\)|corregirAlEntrar/);
@@ -621,7 +622,7 @@ test('Donado y Desechado: solo lo recibido; el panel y el inventario quedan con 
 
 // La pantalla del 3.16 y el 3.18 (usuario, 22-oct): botones Donado y Desechado junto a Vendido; sin el contador Quitados
 test('Panel de Pau: Donado y Desechado como Vendido; ya no hay «Quitados»', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   assert.match(html, /alHacer: \(filas\) => paso\('DONADO', filas,/);
   assert.match(html, /alHacer: \(filas\) => paso\('DESECHADO', filas,/);
   assert.equal((html.match(/campos: \[\{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 \}\], boton: 'Marcar (vendido|donado|desechado)'/g) || []).length, 3,
@@ -637,7 +638,7 @@ test('Panel de Pau: Donado y Desechado como Vendido; ya no hay «Quitados»', ()
 // Usuario, 22-oct: cada botón del panel sale solo cuando todo lo seleccionado está en su estado o fase, y la fase de una
 // cancelación solo avanza (se puede brincar hacia adelante, no regresar)
 test('Panel de Pau: Recibir solo lo por recibir; las fases de Cancelaciones solo avanzan', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   assert.match(html, /texto: 'Recibir', titulo: '[^']*', minimo: 1, visible: porRecibir,/);
   assert.match(html, /texto: 'Entregar a líneas', titulo: '[^']*', minimo: 1, visible: recibidos,/);
   assert.match(html, /texto: 'Carta firmada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR'\]\),/);
@@ -683,6 +684,6 @@ test('Cancelaciones: región por la lada y cuenta padre de la línea, también y
   const U = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
   assert.deepEqual(['3312345678', '8112345678', '9991234567', '9981234567', '4771234567', '4441234567', '6641234567', '6561234567', '2221234567', '7221234567', '561234567', ''].map(U.regionDeNumero),
     ['Región 5', 'Región 4', 'Región 8', 'Región 8', 'Región 6', 'Región 6', 'Región 1', 'Región 3', 'Región 7', 'Región 9', '', '']);
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   assert.match(html, /\{ campo: 'REGION', titulo: 'Región', tipo: 'lista' \},\n\s+\{ campo: 'CUENTA_PADRE', titulo: 'Cuenta padre'/);
 });
