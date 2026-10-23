@@ -67,7 +67,8 @@ function cargar(hoja, sesion) {
   ctx.correos = correos;
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Credenciales.gs'), 'utf8') +
-    '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;', ctx);
+    '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;' +
+    ' this.temporalesRevisar = contrasenasTemporalesRevisar; this.temporalesParaTodos = contrasenasTemporalesParaTodos;', ctx);
   return ctx;
 }
 
@@ -154,7 +155,7 @@ test('restablecer: solo con EDICIÓN en usuarios; la temporal sirve, la de antes
   assert.deepEqual([...ctx.permisos], ['usuarios']);
   const r = ctx.C.restablecer('admin', 'ANA@gph.com');
   assert.equal(r.correo, 'ana@gph.com');
-  assert.match(r.temporal, /^[A-HJ-NP-Za-km-np-z2-9]{12}$/, '12 caracteres sin los que se confunden');
+  assert.match(r.temporal, /^[A-HJ-NP-Za-km-np-z2-9]{10}$/, '10 caracteres sin los que se confunden');
   const ana = comoObjetos(hoja)[0];
   assert.equal(ctx.C.verificar(ana, r.temporal).ok, true);
   assert.equal(ctx.C.verificar(ana, 'la de antes 123').ok, false);
@@ -207,4 +208,34 @@ test('restablecer y cambiar la mía cierran sesiones y avisan por correo (sin la
   otra.C.cambiarMia('mi-token', r.temporal, 'Nuev4 clave!');
   assert.deepEqual(otra.cerradas.map((c) => ({ ...c })), [{ correo: 'ana@gph.com', conservar: 'mi-token' }], 'las demás; la suya se conserva');
   assert.match(otra.correos[0].subject, /se cambió/);
+});
+
+test('temporales para todos: solo a los activos, 10 caracteres, debe cambiar, sin tocar lo demás del renglón y cerrando sesiones', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'ROL', 'ACTIVO', 'AREA', 'CONTRASEÑA'], [
+    { CORREO: 'ana@gph.com', NOMBRE: 'Ana', ROL: 'CLIENT', ACTIVO: 'TRUE', AREA: 'POST VENTA', 'CONTRASEÑA': 'vieja' },
+    { CORREO: 'beto@x.com', NOMBRE: 'Beto', ROL: 'USER', ACTIVO: 'FALSE', AREA: 'TI', 'CONTRASEÑA': 'otra' },
+    { CORREO: 'caro@x.com', NOMBRE: 'Caro', ROL: 'ADMIN', ACTIVO: 'TRUE', AREA: 'TI' },
+  ]);
+  const ctx = cargar(hoja);
+  assert.equal(ctx.C.temporalesParaActivos(false).activos, 2, 'revisar solo cuenta');
+  assert.equal(comoObjetos(hoja)[0]['CONTRASEÑA'], 'vieja', 'y no cambia nada');
+  const r = ctx.C.temporalesParaActivos(true);
+  assert.equal(r.asignadas, 2);
+  const filas = comoObjetos(hoja);
+  r.lista.forEach((x) => assert.match(x.temporal, /^[A-HJ-NP-Za-km-np-z2-9]{10}$/));
+  assert.equal(ctx.C.verificar(filas[0], r.lista[0].temporal).ok, true, 'la de la lista sirve');
+  assert.equal(ctx.C.verificar(filas[0], 'vieja').ok, false, 'la de antes ya no');
+  assert.equal(filas[0]['DEBE CAMBIAR CONTRASEÑA'], 'TRUE');
+  assert.equal(filas[0].ROL, 'CLIENT', 'lo demás del renglón no se toca');
+  assert.equal(filas[1]['CONTRASEÑA'], 'otra', 'al inactivo no se le asigna');
+  assert.deepEqual([...r.lista.map((x) => x.correo)], ['ana@gph.com', 'caro@x.com']);
+  assert.deepEqual([...ctx.cerradas.map((c) => c.correo)], ['ana@gph.com', 'caro@x.com'], 'sus sesiones se cierran');
+});
+
+test('temporales para todos: en producción no corre sin la confirmación', () => {
+  const hoja = hojaFalsa(['CORREO', 'ACTIVO'], [{ CORREO: 'ana@gph.com', ACTIVO: 'TRUE' }]);
+  const ctx = cargar(hoja);
+  ctx.leerConfig_ = () => 'PROD';
+  assert.throws(() => ctx.temporalesParaTodos(), /PRODUCCIÓN/);
+  assert.equal(comoObjetos(hoja)[0].PASSWORD_HASH, undefined, 'nada cambió');
 });

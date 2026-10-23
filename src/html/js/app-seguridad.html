@@ -145,14 +145,19 @@
         '<div class="login-divider"></div>' +
         campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +
         campoClave_('seg-nueva2', 'Repítela', 'new-password') +
+        '<div id="seg-medidor"></div>' +
         '<button type="submit" id="seg-guardar">Guardar y entrar</button>' +
         '<button type="button" class="secondary" id="seg-volver" style="margin-top:8px;width:100%">Volver</button>' +
         '<div class="error-msg" id="seg-error" hidden></div>';
       conectarOjos_(paso);
       $('seg-volver').addEventListener('click', volverAlFormulario);
+      // El correo, del formulario de entrada (sigue en la página, oculto)
+      const medidor = MedidorContrasena.crear($('seg-medidor'), {
+        nueva: $('seg-nueva'), repetida: $('seg-nueva2'), minimo: r.minimo, correo: ($('login-correo') || {}).value,
+      });
       const guardar = async () => {
         const nueva = $('seg-nueva').value;
-        if (nueva !== $('seg-nueva2').value) return error_('seg-error', 'Las dos contraseñas no coinciden.');
+        if (!medidor.cumple()) return error_('seg-error', 'A tu contraseña nueva le falta algo de la lista.');
         await conBoton_($('seg-guardar'), 'Guardando…', async () => {
           entrar(await callServer('apiSeguridadCambiarInicial', r.reto, nueva));
         }, 'seg-error');
@@ -250,41 +255,16 @@
           (e.tieneContrasena ? campoClave_('seg-actual', 'Contraseña actual', 'current-password') : '') +
           campoClave_('seg-mia', 'Contraseña nueva', 'new-password') +
           campoClave_('seg-mia2', 'Repítela', 'new-password') +
-          '<ul class="seg-requisitos">' +
-            '<li data-req="largo">Al menos ' + esc(e.minimo) + ' caracteres</li>' +
-            '<li data-req="mayuscula">Una mayúscula</li>' +
-            '<li data-req="minuscula">Una minúscula</li>' +
-            '<li data-req="numero">Un número</li>' +
-            '<li data-req="simbolo">Un símbolo (como ! # $ . -)</li>' +
-            '<li data-req="correo">Sin tu correo</li>' +
-            '<li data-req="igual">Las dos coinciden</li>' +
-          '</ul>' +
+          '<div id="seg-mia-medidor"></div>' +
           '<div class="error-msg" id="seg-mia-error" hidden></div>' +
           '<div class="form-actions"><button type="button" id="seg-mia-guardar"><i data-lucide="save" class="ico"></i> Guardar contraseña</button></div>' +
         '</div>';
       conectarOjos_(caja);
       refreshIcons();
-      // Lo que se puede revisar aquí se marca mientras escribe; lo demás (las comunes, el nombre) lo dice el servidor
-      const usuario = correo.split('@')[0];
-      const revisar = () => {
-        const n = $('seg-mia').value;
-        const marcas = {
-          largo: n.length >= e.minimo,
-          // Las mismas que Credenciales.revisarNueva (TIPOS), como "Ayrt05n!"
-          mayuscula: /[A-ZÁÉÍÓÚÑ]/.test(n),
-          minuscula: /[a-záéíóúñ]/.test(n),
-          numero: /\d/.test(n),
-          simbolo: /[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s]/.test(n),
-          correo: !!n && !(usuario.length >= 4 && n.toLowerCase().indexOf(usuario) !== -1),
-          igual: !!n && n === $('seg-mia2').value,
-        };
-        caja.querySelectorAll('[data-req]').forEach((li) => li.classList.toggle('ok', marcas[li.dataset.req]));
-        return Object.keys(marcas).every((k) => marcas[k]);
-      };
-      $('seg-mia').addEventListener('input', revisar);
-      $('seg-mia2').addEventListener('input', revisar);
+      // Lo que se puede revisar aquí se marca mientras escribe (MedidorContrasena); lo demás lo dice el servidor
+      const medidor = MedidorContrasena.crear($('seg-mia-medidor'), { nueva: $('seg-mia'), repetida: $('seg-mia2'), minimo: e.minimo, correo });
       $('seg-mia-guardar').addEventListener('click', () => {
-        if (!revisar()) return error_('seg-mia-error', 'Revisa los requisitos de la contraseña nueva.');
+        if (!medidor.cumple()) return error_('seg-mia-error', 'A tu contraseña nueva le falta algo de la lista.');
         conBoton_($('seg-mia-guardar'), 'Guardando…', async () => {
           seguirCon_(await callServer('apiSeguridadCambiarMia', state.token, e.tieneContrasena ? $('seg-actual').value : '', $('seg-mia').value));
           Notificar.exito('Listo: tu contraseña quedó guardada y se cerraron tus otras sesiones.');

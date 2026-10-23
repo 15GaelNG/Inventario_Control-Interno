@@ -120,8 +120,9 @@ de todos: medir, listas con huella, Inicio, sesión, campanita, qué impide borr
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
 escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
 validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
-`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar`, `Apariencia` y `CampoCodigo`
-(un código de verificación en recuadros: pegarlo como venga lo reparte). Cada
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar`, `Apariencia`, `CampoCodigo`
+(un código de verificación en recuadros: pegarlo como venga lo reparte) y `MedidorContrasena` (la barra y la lista de
+requisitos de una contraseña nueva, los mismos que `Credenciales.TIPOS`). Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
 De la homologación (rama `common`, docs/homologacion-codigo.md), también: `Formato` (esc, fechas, moneda, miles: nunca
@@ -237,7 +238,10 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   y obliga a cambiarla; "Contraseña y seguridad" (Mi perfil) cambia la propia. Reglas de una nueva en
   `Credenciales.revisarNueva`. USUARIOS no tiene ID: se escribe por CORREO (`Credenciales.escribirPorCorreo_`).
   Desde el editor: `contrasenasAHashRevisar()`, `contrasenasAHash()`, `medirHashContrasena()` (subir `ITERACIONES`
-  no rompe las que ya están: se rehacen al entrar).
+  no rompe las que ya están: se rehacen al entrar). **Temporales para todos** (lo pidió el área, 23-oct):
+  `contrasenasTemporalesRevisar()` cuenta y `contrasenasTemporalesParaTodos()` le pone una de 10 a cada usuario activo
+  (debe cambiarla al entrar; sesiones y dispositivos cerrados) y deja la lista en una hoja nueva y privada en el Drive de
+  quien la corre, para repartirla en persona y borrarla. En PROD no corre sin `contrasenasTemporalesParaTodos('SI, EN PROD')`.
 - **El código por correo → `Verificacion.gs`.** Solo si el dispositivo es nuevo o algo se ve raro: la señal es una llave
   aleatoria que guarda el navegador (`localStorage`, `Seguridad.dispositivo`) y de la que el servidor guarda solo su huella
   en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
