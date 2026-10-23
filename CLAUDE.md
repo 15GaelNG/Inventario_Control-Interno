@@ -185,6 +185,11 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
 - **Toda función de nivel superior** (sin `_` al final, que no sea `api…`) empieza con `soloEditor_()`: cualquiera la puede
   llamar desde la consola del navegador. `tests/candado-editor.test.js` revisa todo `src/`. Un activador de edición no
   puede llevarlo (ahí el usuario activo es quien editó): lleva su guarda, como `alEditarLibro`.
+  **Un activador de tiempo recibe su evento y se lo pasa:** `function calentarCaches(e) { soloEditor_(e); … }`. Desde el
+  23-oct la web app está abierta a cualquier cuenta de Google (`"access": "ANYONE"`, para POST VENTA de gph) y alguien de
+  fuera del dominio llega SIN correo, igual que un activador: sin correo, el candado solo deja pasar un `triggerUid` que
+  sea de un activador del proyecto. Lo que esa ejecución llame después ya pasa. Lo que no pide token (el login, la firma
+  a distancia) se cuida aparte: el login limita los intentos por correo (`Auth.login`, 5 fallos → 15 min).
 - **Un documento de un vehículo va a su expediente: `ExpedienteNuco`** (`src/utils/ExpedienteNuco.gs`). La carpeta
   NUCOS VEHICULOS tiene una carpeta por NUCO con `1.-DOCUMENTACIÓN/1.-FACTURA … 6.-TENENCIA` (docs/nucos-expediente.md).
   `ExpedienteNuco.archivar(archivo, nucco, 'SEGURO')` lo mueve ahí, le pone su nombre (`SEGURO-0088.pdf`) y pasa el

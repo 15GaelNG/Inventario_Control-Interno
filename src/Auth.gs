@@ -85,11 +85,28 @@ const Auth = (function () {
     return Object.assign({ token: token }, sesion);
   }
 
+  // Intentos fallidos por correo (23-oct): con la web app abierta a cualquier cuenta de Google (POST VENTA, de gph), que
+  // nadie pruebe contraseñas sin fin. 5 fallos seguidos bloquean ese correo 15 min; entrar bien borra la cuenta.
+  const MAX_FALLOS = 5;
+  const SEG_BLOQUEO = 15 * 60;
+  const claveFallos_ = (correo) => 'login_fallos_' + String(correo || '').trim().toLowerCase();
+  function fallosDe_(correo) {
+    return Number(CacheService.getScriptCache().get(claveFallos_(correo)) || 0);
+  }
+  function anotarFallo_(correo) {
+    CacheService.getScriptCache().put(claveFallos_(correo), String(fallosDe_(correo) + 1), SEG_BLOQUEO);
+  }
+
   function login(correo, password) {
+    if (fallosDe_(correo) >= MAX_FALLOS) {
+      throw new Error('Demasiados intentos con este correo. Espera 15 minutos o pide a un administrador que revise tu contraseña.');
+    }
     const found = buscarUsuarioPorCorreo_(correo);
-    if (!found) throw new Error('Usuario o contraseña incorrectos');
+    // Un correo que no existe cuenta igual que una contraseña mala: el mensaje no dice cuál de las dos fue
+    if (!found) { anotarFallo_(correo); throw new Error('Usuario o contraseña incorrectos'); }
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
-    if (!passwordValido_(found, password)) throw new Error('Usuario o contraseña incorrectos');
+    if (!passwordValido_(found, password)) { anotarFallo_(correo); throw new Error('Usuario o contraseña incorrectos'); }
+    CacheService.getScriptCache().remove(claveFallos_(correo));
     return construirSesion_(found);
   }
 
