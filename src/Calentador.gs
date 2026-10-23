@@ -57,8 +57,8 @@ function pasosCalentador_() {
 }
 
 /** Lo que corre el activador. También se puede correr a mano desde el editor para ver los tiempos */
-function calentarCaches() {
-  soloEditor_();
+function calentarCaches(e) {
+  soloEditor_(e);
   if (PropertiesService.getScriptProperties().getProperty('CALENTADOR_APAGADO') === '1') return 'apagado';
   const hora = Number(Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'H'));
   if (hora < CALENTADOR_HORARIO.desde || hora >= CALENTADOR_HORARIO.hasta) return 'fuera de horario';

@@ -38,8 +38,8 @@ function lineasIneNucos_inventario() {
 }
 
 /** Una tanda (lo llama el activador; también se puede correr a mano). */
-function lineasIneNucos_continuar() {
-  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
+function lineasIneNucos_continuar(e) {
+  soloEditor_(e);   // el activador de tiempo pasa con su evento (triggerUid); desde el navegador, nadie
   ineNucosBorrarActivadores_();
   ineNucosExigirDev_();
   const st = ineNucosLeer_();

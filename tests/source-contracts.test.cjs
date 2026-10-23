@@ -2637,7 +2637,7 @@ test('el calentador (Calentador.gs) solo llama lo que cada servicio expone', () 
   }).map((x) => x.join('.'));
   assert.deepEqual(faltan, []);
   // Es una función de nivel superior: con candado, para que nadie la dispare desde el navegador
-  assert.match(calentador, /function calentarCaches\(\) \{\s*soloEditor_\(\);/);
+  assert.match(calentador, /function calentarCaches\(e\) \{\s*soloEditor_\(e\);/);   // con su evento: el candado revisa el triggerUid (23-oct)
 });
 
 test('la sección de sensor de Vehículos: la pantalla y el servidor bloquean los mismos campos', () => {
