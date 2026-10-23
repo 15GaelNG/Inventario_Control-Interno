@@ -352,7 +352,7 @@ const InspeccionesService = (function () {
     const seccionesFoto = estructura.fotos || [];
     if (seccionesFoto.length) {
       if (!p.fotosCarpetaId) throw new Error('Faltan las fotos de la inspección.');
-      const faltan = seccionesSinFoto_(seccionesFoto, fotosDeCarpeta_(temporalValida_(p.fotosCarpetaId).getId(), seccionesFoto));
+      const faltan = seccionesSinFoto_(seccionesFoto, soloLasDePantalla_(fotosDeCarpeta_(temporalValida_(p.fotosCarpetaId).getId(), seccionesFoto), p.fotosIds));
       if (faltan.length) throw new Error('Falta al menos una foto de: ' + faltan.join(', ') + '.');
     }
     const checklist = p.checklist || {};
@@ -490,7 +490,7 @@ const InspeccionesService = (function () {
       try {
         const destino = enNuco ? carpetaInspeccion_()
           : ExpedienteNuco.subcarpeta(ExpedienteNuco.subcarpeta(DriveApp.getFolderById(Config.DRIVE_FOLDERS.REPORTES()), estructura.carpeta), 'FOTOS ' + id);
-        moverFotos_(p.fotosCarpetaId, destino, enNuco ? nucco : null, ahora, id);
+        moverFotos_(p.fotosCarpetaId, destino, enNuco ? nucco : null, ahora, id, p.fotosIds);
         if (enNuco) ExpedienteNuco.olvidar(nucco);
       } catch (err) {
         avisoFotos = 'Las fotos no se pudieron pasar a la carpeta de la inspección (' + err.message + '); siguen en TEMP/FOTOS DE INSPECCION.';
@@ -1125,6 +1125,19 @@ const InspeccionesService = (function () {
     });
     return out;
   }
+  /**
+   * Solo las fotos que la persona tiene en pantalla (ids, las ya subidas; 23-oct). Si una llamada sí llegó a Drive pero
+   * la respuesta se perdió (se fue la señal), la pantalla la marca "No subió" y al reintentar se sube otra vez: la que
+   * llegó sin respuesta se queda en la temporal y se va con ella a la papelera, no al expediente. Sin la lista (una
+   * pantalla de antes del cambio, todavía abierta), todas.
+   */
+  function soloLasDePantalla_(fotos, ids) {
+    if (!Array.isArray(ids)) return fotos;
+    const quedan = new Set(ids.map(String));
+    const out = {};
+    Object.keys(fotos).forEach((s) => { out[s] = fotos[s].filter((f) => quedan.has(f.id)); });
+    return out;
+  }
   /** Qué secciones del tipo no tienen ninguna foto (los títulos, para el mensaje) */
   function seccionesSinFoto_(secciones, fotos) {
     return (secciones || []).filter((s) => !(fotos[s.id] || []).length).map((s) => s.titulo);
@@ -1215,22 +1228,33 @@ const InspeccionesService = (function () {
     return n;
   }
 
+  /** Mueve y renombra una foto en UNA llamada a Drive (v3); sin el servicio avanzado, como antes (tres llamadas) */
+  function moverYNombrar_(foto, carpeta, nombre) {
+    if (typeof Drive !== 'undefined' && Drive.Files && Drive.Files.update && foto.carpeta) {
+      Drive.Files.update({ name: nombre }, foto.id, null,
+        { addParents: carpeta.getId(), removeParents: foto.carpeta, supportsAllDrives: true, fields: 'id' });
+      return;
+    }
+    const archivo = DriveApp.getFileById(foto.id);
+    archivo.moveTo(carpeta);
+    archivo.setName(nombre);
+  }
+
   /**
    * Al guardar (registrar): mueve las fotos de la temporal a <carpeta de la inspección>/<SECCIÓN>/ con su nombre
    * (NEUMATICOS-0088 2026-10-22 (2).jpg) y tira la temporal. Mover conserva el ID del archivo.
+   * Cada sección lee sus nombres una vez (ExpedienteNuco.numerador) y cada foto es una sola llamada: antes eran tres
+   * más una búsqueda por cada nombre ya usado, y 160 fotos pasaban de los 6 minutos (23-oct).
    */
-  function moverFotos_(carpetaId, destino, nucco, ahora, idInspeccion) {
+  function moverFotos_(carpetaId, destino, nucco, ahora, idInspeccion, idsDePantalla) {
     const temporal = temporalValida_(carpetaId);
-    const fotos = fotosDeCarpeta_(temporal.getId(), null);
+    const fotos = soloLasDePantalla_(fotosDeCarpeta_(temporal.getId(), null), idsDePantalla);
     Object.keys(fotos).forEach((seccion) => {
       const carpeta = carpetaSeccion_(destino, seccion);
+      const siguiente = nucco ? ExpedienteNuco.numerador(carpeta, seccion, nucco, ahora) : null;
       fotos[seccion].forEach((f) => {
-        const archivo = DriveApp.getFileById(f.id);
-        const ext = (/\.[a-z0-9]+$/i.exec(archivo.getName()) || ['.jpg'])[0].toLowerCase();
-        const nombre = nucco ? ExpedienteNuco.nombreConFecha(carpeta, seccion, nucco, ext, ahora)
-          : seccion + '-' + idInspeccion + ' ' + f.id.slice(-4) + ext;
-        archivo.moveTo(carpeta);
-        archivo.setName(nombre);
+        const ext = (/\.[a-z0-9]+$/i.exec(f.nombre || '') || ['.jpg'])[0].toLowerCase();
+        moverYNombrar_(f, carpeta, siguiente ? siguiente(ext) : seccion + '-' + idInspeccion + ' ' + f.id.slice(-4) + ext);
       });
     });
     temporal.setTrashed(true);

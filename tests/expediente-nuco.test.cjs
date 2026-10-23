@@ -51,6 +51,7 @@ function cargar(drive, opciones) {
     DriveApp: { getFolderById: (id) => drive.porId[id] },
     // La API de Drive (avanzada): solo lo que usa inspecciones() — "'a' in parents or 'b' in parents"
     Drive: { Files: { list: (p) => {
+      if (op.alListar) op.alListar(p);
       const padres = [...p.q.matchAll(/'([^']+)' in parents/g)].map((m) => m[1]);
       return { files: Object.values(drive.porId).filter((x) => padres.indexOf(x.padre) !== -1).map((x) => ({
         id: x.id, name: x.nombre, parents: [x.padre], mimeType: x.tipo === CARPETA ? 'application/vnd.google-apps.folder' : (x.tipo === 'pdf' ? 'application/pdf' : 'image/jpeg'),
@@ -331,4 +332,20 @@ test('tieneNuco: sin número no hay expediente (quien guarda usa su carpeta de a
   assert.equal(E.tieneNuco('0024'), true);
   assert.equal(E.tieneNuco(''), false);
   assert.equal(E.tieneNuco('S/N'), false);
+});
+
+test('numerador: lee los nombres de la carpeta UNA vez y numera en memoria, sin repetir (fotos de una sección, 23-oct)', () => {
+  const drive = driveFalso();
+  const listados = [];
+  const { E } = cargar(drive, { alListar: (p) => listados.push(p.q) });
+  const seccion = drive.nodo('NEUMATICOS', null, CARPETA);
+  drive.nodo('NEUMATICOS-0088 2026-10-08.jpg', seccion, 'jpg');
+  drive.nodo('NEUMATICOS-0088 2026-10-08 (2).jpg', seccion, 'jpg');
+  drive.nodo('OTRA COSA.jpg', seccion, 'jpg');
+  const siguiente = E.numerador(seccion, 'NEUMATICOS', '0088', new Date('2026-10-08T12:00:00Z'));
+  const nombres = [siguiente('.jpg'), siguiente('.jpg'), siguiente('.png'), siguiente('.jpg')];
+  assert.deepEqual(nombres, ['NEUMATICOS-0088 2026-10-08 (3).jpg', 'NEUMATICOS-0088 2026-10-08 (4).jpg',
+    'NEUMATICOS-0088 2026-10-08.png', 'NEUMATICOS-0088 2026-10-08 (5).jpg']);
+  assert.equal(listados.length, 1, 'una sola lectura de la carpeta, no una búsqueda por nombre');
+  assert.equal(drive.hijos(seccion).length, 3, 'numerar no crea nada');
 });

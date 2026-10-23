@@ -45,6 +45,8 @@ const pdf = archivo('INSPECCION-0025 2026-10-22.pdf', inspeccion);
 const subcarpeta = (padre, nombre) => hijos(padre).find((x) => x.tipo === 'carpeta' && x.nombre === nombre) || carpeta(nombre, padre);
 
 let fila = null;
+// Lo que cuesta guardar: llamadas a Drive.Files.update, archivos abiertos uno por uno y secciones numeradas
+const costo = { update: [], abiertos: 0, numerados: [] };
 const cacheFalsa = {};
 const ESTRUCTURA = {
   tipo: 'HONDA 150XR', plantillaId: 'doc', carpeta: 'INSPECCIONES HONDA 150XR',
@@ -64,8 +66,16 @@ const contexto = vm.createContext({
   Utilities: { formatDate: () => '2026-10-22', getUuid: () => 'abcd1234-0000' },
   DriveApp: {
     getFolderById: (id) => { if (!nodos[id] || nodos[id].tipo !== 'carpeta') throw new Error('no existe'); return nodos[id]; },
-    getFileById: (id) => nodos[id],
+    getFileById: (id) => { costo.abiertos++; return nodos[id]; },
   },
+  // Drive v3: mover y renombrar en una llamada (moverFotos_). Sin Files.create, crearFoto_ usa createFile
+  Drive: { Files: { update: (cambio, id, media, op) => {
+    const a = nodos[id];
+    if (op.removeParents !== a.padre) throw new Error('removeParents no es la carpeta de la foto');
+    costo.update.push(id);
+    a.padre = op.addParents; a.nombre = cambio.name;
+    return { id };
+  } } },
   SheetUtils: {
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
     getSheetByColumns: () => ({ getName: () => 'INSPECCION VEHICULAR' }),
@@ -82,10 +92,21 @@ const contexto = vm.createContext({
     carpetaInspeccion: () => inspeccion,
     subcarpeta: subcarpeta,
     nombreConFecha: (c, prefijo) => prefijo + '-0025 2026-10-22 (' + (hijos(c).length + 1) + ').jpg',
+    // Como el de verdad: lee la carpeta una vez y numera en memoria
+    numerador: (c, prefijo) => {
+      costo.numerados.push(prefijo);
+      const usados = new Set(hijos(c).map((a) => a.nombre));
+      return (ext) => {
+        let nom = prefijo + '-0025 2026-10-22' + ext;
+        for (let i = 2; usados.has(nom); i++) nom = prefijo + '-0025 2026-10-22 (' + i + ')' + ext;
+        usados.add(nom);
+        return nom;
+      };
+    },
     guardar: (blob, c, prefijo) => archivo(prefijo + '-0025 2026-10-22.jpg', c),
     fotosPorSeccion: (id) => {
       const out = {};
-      hijos(nodos[id]).filter((x) => x.tipo === 'carpeta').forEach((s) => { out[s.nombre] = hijos(s).map((a) => ({ id: a.id, nombre: a.nombre })); });
+      hijos(nodos[id]).filter((x) => x.tipo === 'carpeta').forEach((s) => { out[s.nombre] = hijos(s).map((a) => ({ id: a.id, nombre: a.nombre, carpeta: s.id })); });
       return out;
     },
     idDeLiga: (liga) => (/\/d\/([^/]+)/.exec(liga) || [])[1] || null,
@@ -135,12 +156,17 @@ ok(truena(() => S.registrar('t', datos(null), {}), /Faltan las fotos/), 'sin car
 console.log('4. Completa: se guarda y las fotos pasan a la carpeta de la inspección');
 S.fotosSubir('t', carpetaId, 'LATONERIA Y PINTURA', foto);
 S.fotosSubir('t', carpetaId, 'NEUMATICOS', foto);
+Object.assign(costo, { update: [], abiertos: 0, numerados: [] });
 const r = S.registrar('t', datos(carpetaId), {});
 ok(fila !== null && !r.advertencia, 'la fila se escribió sin avisos');
 const secs = hijos(inspeccion).filter((x) => x.tipo === 'carpeta').map((c) => c.nombre + ':' + hijos(c).length).sort();
 ok(secs.join() === 'LATONERIA Y PINTURA:1,NEUMATICOS:2', 'en <inspección>/<SECCIÓN>/: 2 de neumáticos y 1 de latonería');
 ok(hijos(subcarpeta(inspeccion, 'NEUMATICOS')).every((a) => /^NEUMATICOS-0025 2026-10-22/.test(a.nombre)), 'con su nombre: NEUMATICOS-0025 2026-10-22 (n)');
 ok(!vivo(temporal), 'la carpeta temporal se fue a la papelera');
+ok(costo.update.length === 3 && costo.abiertos === 0, 'cada foto es UNA llamada a Drive (mover y renombrar), sin abrirlas una por una');
+ok(costo.numerados.sort().join() === 'LATONERIA Y PINTURA,NEUMATICOS', 'cada sección lee sus nombres una sola vez');
+ok(hijos(subcarpeta(inspeccion, 'NEUMATICOS')).map((a) => a.nombre).sort().join() === 'NEUMATICOS-0025 2026-10-22 (2).jpg,NEUMATICOS-0025 2026-10-22.jpg',
+  'dos fotos de la misma sección no repiten nombre');
 
 console.log('5. Editar una inspección guardada');
 const de = S.fotosDe('t', 'INS-1');
@@ -152,6 +178,21 @@ ok(!vivo(nodos[nueva.id]), 'quitar la manda a la papelera');
 const ultima = hijos(subcarpeta(inspeccion, 'LATONERIA Y PINTURA'))[0];
 ok(truena(() => S.fotosQuitar('t', 'INS-1', ultima.id), /al menos una/) && vivo(ultima), 'la última de una sección no se puede quitar');
 ok(truena(() => S.fotosQuitar('t', 'INS-1', pdf.id), /no es de esta inspección/), 'ni algo que no es una foto de sus secciones');
+
+console.log('5a. Solo pasan las fotos que la pantalla tiene (fotosIds)');
+// Una foto llegó a Drive pero la respuesta se perdió: la pantalla la marcó "No subió" y la volvió a subir
+const cap = S.fotosPreparar('t').carpetaId;
+const buena = S.fotosSubir('t', cap, 'NEUMATICOS', foto);
+const colada = S.fotosSubir('t', cap, 'NEUMATICOS', foto);
+const sola = S.fotosSubir('t', cap, 'LATONERIA Y PINTURA', foto);
+const antes = hijos(subcarpeta(inspeccion, 'NEUMATICOS')).length;
+ok(truena(() => S.registrar('t', Object.assign(datos(cap), { fotosIds: [buena.id, colada.id] }), {}), /Latonería y pintura/),
+  'una sección cuenta solo con las de la pantalla: la que está en Drive pero no en pantalla no la completa');
+S.registrar('t', Object.assign(datos(cap), { fotosIds: [buena.id, sola.id] }), {});
+ok(hijos(subcarpeta(inspeccion, 'NEUMATICOS')).length === antes + 1 && nodos[nodos[buena.id].padre].nombre === 'NEUMATICOS' &&
+  nodos[nodos[buena.id].padre].padre === inspeccion.id, 'pasa la de la pantalla');
+ok(nodos[colada.id].padre !== subcarpeta(inspeccion, 'NEUMATICOS').id && !vivo(nodos[colada.id]),
+  'la que se coló no llega al expediente: se va a la papelera con la temporal');
 
 console.log('5b. Máximo 20 fotos por sección');
 const llena = S.fotosPreparar('t').carpetaId;

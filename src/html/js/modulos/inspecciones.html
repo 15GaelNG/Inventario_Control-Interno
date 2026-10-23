@@ -1349,6 +1349,16 @@
         });
         if (!ok) { irAFirmas(); return; }
       }
+      // Una foto en "No subió" no se guarda: que se sepa antes, no después (23-oct)
+      const sinSubir = fotosCaptura ? fotosCaptura.conError() : 0;
+      if (sinSubir) {
+        const ok = await Confirmar.pedir({
+          titulo: sinSubir === 1 ? '1 foto no subió' : sinSubir + ' fotos no subieron',
+          mensaje: 'Puedes volver a intentarlo desde el paso Fotos. ¿Guardar sin ' + (sinSubir === 1 ? 'ella' : 'ellas') + '?',
+          textoConfirmar: 'Guardar sin ' + (sinSubir === 1 ? 'ella' : 'ellas'),
+        });
+        if (!ok) return;
+      }
 
       const llantas = {};
       cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => {
@@ -1382,6 +1392,8 @@
           ULTIMO_SERVICIO: valorDe('ins-servicio'),
           OBSERVACIONES: valorDe('ins-observaciones'),
           fotosCarpetaId: fotosCaptura ? fotosCarpetaId : '',
+          // Las que se ven en pantalla (ya subidas): solo esas pasan al expediente, no lo que se haya colado en la temporal
+          fotosIds: fotosCaptura ? Object.values(fotosCaptura.fotos()).flat().map((f) => f.id) : [],
         }, imagenes);
         // Las fotos ya pasaron a la carpeta de la inspección: la siguiente captura empieza otra temporal
         fotosCarpetaId = '';

@@ -138,13 +138,31 @@ const ExpedienteNuco = (function () {
     return carpetaDePeriodo_(nucco, OTRAS[1], fecha, semestreVerificacion(fecha));
   }
 
+  const baseConFecha_ = (prefijo, nucco, fecha) => prefijo + '-' + ('0000' + nombreNuco_(nucco)).slice(-4) + ' ' + fecha_(fecha, 'yyyy-MM-dd');
+
   /** PREFIJO-0088 2026-06-11.ext; si ya existe, (2), (3)… Para lo que se acumula por fecha (inspecciones, verificaciones) */
   function nombreConFecha(carpetaDrive, prefijo, nucco, ext, fecha) {
-    const base = prefijo + '-' + ('0000' + nombreNuco_(nucco)).slice(-4) + ' ' + fecha_(fecha, 'yyyy-MM-dd');
+    const base = baseConFecha_(prefijo, nucco, fecha);
     if (!existe_(carpetaDrive, base + ext)) return base + ext;
     let n = 2;
     while (existe_(carpetaDrive, base + ' (' + n + ')' + ext)) n++;
     return base + ' (' + n + ')' + ext;
+  }
+
+  /**
+   * nombreConFecha para muchos archivos en la misma carpeta (las fotos de una sección): lee sus nombres en UNA llamada
+   * y numera en memoria → (ext) => 'PREFIJO-0088 2026-06-11 (n).ext'. nombreConFecha pregunta a Drive nombre por nombre:
+   * la foto 20 hacía 20 búsquedas y 160 fotos pasaban de los 6 minutos (23-oct).
+   */
+  function numerador(carpetaDrive, prefijo, nucco, fecha) {
+    const base = baseConFecha_(prefijo, nucco, fecha);
+    const usados = new Set(hijosDrive_([carpetaDrive.getId()], 'nextPageToken,files(name)').map((f) => f.name));
+    return (ext) => {
+      let nombre = base + ext;
+      for (let n = 2; usados.has(nombre); n++) nombre = base + ' (' + n + ')' + ext;
+      usados.add(nombre);
+      return nombre;
+    };
   }
 
   /**
@@ -472,7 +490,8 @@ const ExpedienteNuco = (function () {
     const ids = Object.keys(seccionDe);
     if (ids.length) {
       hijosDrive_(ids).forEach((f) => {
-        if (f.mimeType !== CARPETA_MIME) out[seccionDe[f.parents[0]]].push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null });
+        // carpeta: la de su sección (para moverla en una sola llamada, InspeccionesService.moverFotos_)
+        if (f.mimeType !== CARPETA_MIME) out[seccionDe[f.parents[0]]].push({ id: f.id, nombre: f.name, miniatura: f.thumbnailLink || null, carpeta: f.parents[0] });
       });
     }
     return out;
@@ -484,5 +503,5 @@ const ExpedienteNuco = (function () {
 
   return { DOCUMENTOS, PRESTAMOS, ADHERENTES, SENSORES, FIRMAS, FIRMAS_Y_DIAGRAMAS, listar, inspecciones, fotosInspeccion,
     olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga, tieneNuco, periodoInspeccion, semestreVerificacion,
-    carpetaInspeccion, carpetaVerificacion, nombreConFecha, guardar, subcarpeta: subcarpeta_, fotosPorSeccion, olvidarFotos };
+    carpetaInspeccion, carpetaVerificacion, nombreConFecha, numerador, guardar, subcarpeta: subcarpeta_, fotosPorSeccion, olvidarFotos };
 })();
