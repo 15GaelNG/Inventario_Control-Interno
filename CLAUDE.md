@@ -208,6 +208,33 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   editado a mano. Solo lo que va AL REVÉS (un registro nuevo que actualiza a su dueño) se escribe en el servicio, y se
   anota en `DatosConectados.AL_REVES` para que la pantalla lo muestre.
 
+## Acceso: contraseñas, código por correo y bitácora (23-oct, rama `seguridad`)
+
+La web app está abierta a cualquier cuenta de Google (`"access": "ANYONE"`, por POST VENTA de gph): lo que protege es
+el login de la app, en capas. El orden de un inicio de sesión (`Auth.continuar_`): credenciales → código por correo si
+hace falta → contraseña nueva si es temporal → sesión. Cada paso que falta regresa `{ pendiente, reto }` (un UUID de 10
+min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Seguridad.entrar`, `js/app-seguridad.html`).
+
+- **Contraseñas → `Credenciales.gs`.** Solo la huella en `PASSWORD_HASH`: `v2$<iteraciones>$<sal>$<hash>` (PBKDF2-HMAC-
+  SHA256). La de texto plano (`CONTRASEÑA`, de AppSheet) y el v1 se aceptan y al entrar pasan a v2 y la celda se borra.
+  Nadie escribe contraseñas en la hoja: "Restablecer contraseña" (Usuarios y permisos) da una temporal que se ve una vez
+  y obliga a cambiarla; "Contraseña y seguridad" (Mi perfil) cambia la propia. Reglas de una nueva en
+  `Credenciales.revisarNueva`. USUARIOS no tiene ID: se escribe por CORREO (`Credenciales.escribirPorCorreo_`).
+  Desde el editor: `contrasenasAHashRevisar()`, `contrasenasAHash()`, `medirHashContrasena()` (subir `ITERACIONES`
+  no rompe las que ya están: se rehacen al entrar).
+- **El código por correo → `Verificacion.gs`.** Solo si el dispositivo es nuevo o algo se ve raro: la señal es una llave
+  aleatoria que guarda el navegador (`localStorage`, `Seguridad.dispositivo`) y de la que el servidor guarda solo su huella
+  en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
+  recientes o en alerta. La IP NO sirve (Apps Script no la da y la del navegador se inventa). Sin cuota de correo, no se
+  entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; en prod hasta avisar al equipo).
+- **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
+  impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
+- Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se
+  cuida con su reto o su token propio y sus límites; todo lo demás pide sesión. Una `api…` nueva sin token necesita lo
+  mismo. Ninguna respuesta al cliente lleva `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave.
+- Pruebas: `credenciales.test.cjs`, `verificacion.test.cjs`, `accesos.test.cjs`, `login-intentos.test.cjs`; vista previa:
+  `login-codigo`, `login-contrasena-nueva`, `perfil-seguridad`.
+
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 
 El modelo, en capas (como Salesforce u Odoo: objeto → campo → registro):
