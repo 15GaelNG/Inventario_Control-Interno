@@ -19,6 +19,10 @@ const Router = (function () {
     const template = HtmlService.createTemplateFromFile('html/Index');
     template.apagados = JSON.stringify(Config.apagados());
     template.temporada = TemporadaService.actual();
+    // El enlace de "¿Olvidaste tu contraseña?" (?recuperar=<64 hex>, Recuperacion.gs): se lo da el servidor a la pantalla,
+    // que así no depende de google.script.url.getLocation (en /dev no lo veía, 23-oct). Solo si tiene la forma exacta.
+    const recuperar = String((e && e.parameter && e.parameter.recuperar) || '');
+    template.recuperar = /^[0-9a-f]{64}$/.test(recuperar) ? recuperar : '';
     return template
       .evaluate()
       .setTitle('Control Interno — Ciudad Maderas')
