@@ -1,0 +1,78 @@
+<script>
+  /**
+   * CampoCodigo — un código de verificación en recuadros, uno por dígito, como en otros sistemas (23-oct).
+   *
+   *   const campo = CampoCodigo.crear(contenedor, { largo: 6, alCompletar: (codigo) => … });
+   *   campo.valor()     // '482915': solo dígitos
+   *   campo.limpiar()   // vacía y enfoca el primero (después de un código malo)
+   *   campo.enfocar()
+   *
+   * Pegar en CUALQUIER recuadro reparte el código desde el primero, venga como '482915', '4 8 2 9 1 5', '482-915' o con
+   * los tabuladores que deja copiar las casillas de un correo: se quedan solo los dígitos. Escribir avanza al siguiente,
+   * borrar regresa al anterior y las flechas se mueven. El primero lleva autocomplete="one-time-code": el autollenado del
+   * celular (que pone el código entero en una casilla) también se reparte. alCompletar se llama una vez por código
+   * completo. Para lectores de pantalla, un grupo "Código de 6 dígitos" con "Dígito 1 de 6"… Prueba:
+   * tests/campo-codigo.test.cjs.
+   */
+  const CampoCodigo = (function () {
+    function crear(contenedor, opciones) {
+      const o = Object.assign({ largo: 6, alCompletar: null }, opciones);
+      contenedor.classList.add('campo-codigo');
+      contenedor.setAttribute('role', 'group');
+      contenedor.setAttribute('aria-label', 'Código de ' + o.largo + ' dígitos');
+      // Sin maxlength: el autollenado del celular pone los 6 en el primero y aquí se reparten
+      contenedor.innerHTML = Array.from({ length: o.largo }, (_, i) =>
+        '<input type="text" inputmode="numeric" pattern="[0-9]*" aria-label="Dígito ' + (i + 1) + ' de ' + o.largo + '"' +
+        (i === 0 ? ' autocomplete="one-time-code"' : ' autocomplete="off"') + ' />').join('');
+      const cajas = Array.from(contenedor.querySelectorAll('input'));
+      const valor = () => cajas.map((c) => c.value).join('');
+
+      let avisado = '';
+      function revisar() {
+        const v = valor();
+        if (v.length < o.largo) { avisado = ''; return; }
+        if (v !== avisado) { avisado = v; if (o.alCompletar) o.alCompletar(v); }
+      }
+
+      /** Varios dígitos de golpe (pegar o autollenado): un código completo va desde el primero; si no, desde ahí */
+      function repartir(texto, desde) {
+        const d = String(texto || '').replace(/\D/g, '').slice(0, o.largo);
+        if (!d) return;
+        const inicio = d.length === o.largo ? 0 : Math.min(desde, o.largo - d.length);
+        d.split('').forEach((x, k) => { cajas[inicio + k].value = x; });
+        cajas[Math.min(inicio + d.length, o.largo - 1)].focus();
+        revisar();
+      }
+
+      cajas.forEach((caja, i) => {
+        caja.addEventListener('paste', (ev) => {
+          ev.preventDefault();
+          const datos = ev.clipboardData || window.clipboardData;
+          repartir(datos ? datos.getData('text') : '', i);
+        });
+        caja.addEventListener('input', () => {
+          const digitos = caja.value.replace(/\D/g, '');
+          // Tres o más de golpe: autollenado o algo pegado sin pasar por 'paste'. Dos: escribió sobre uno lleno (el último)
+          if (digitos.length >= 3) { caja.value = ''; repartir(digitos, i); return; }
+          caja.value = digitos.slice(-1);
+          if (caja.value && i < o.largo - 1) cajas[i + 1].focus();
+          revisar();
+        });
+        caja.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Backspace' && !caja.value && i > 0) { ev.preventDefault(); cajas[i - 1].value = ''; cajas[i - 1].focus(); }
+          else if (ev.key === 'ArrowLeft' && i > 0) { ev.preventDefault(); cajas[i - 1].focus(); }
+          else if (ev.key === 'ArrowRight' && i < o.largo - 1) { ev.preventDefault(); cajas[i + 1].focus(); }
+        });
+        // Al entrar a un recuadro lleno, escribir lo reemplaza
+        caja.addEventListener('focus', () => caja.select());
+      });
+
+      return {
+        valor,
+        limpiar: () => { cajas.forEach((c) => { c.value = ''; }); avisado = ''; cajas[0].focus(); },
+        enfocar: () => cajas[0].focus(),
+      };
+    }
+    return { crear };
+  })();
+</script>

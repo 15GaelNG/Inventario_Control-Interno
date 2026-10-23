@@ -109,7 +109,8 @@ de todos: medir, listas con huella, Inicio, sesión, campanita, qué impide borr
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
 escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
 validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
-`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar` y `Apariencia`. Cada
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar`, `Apariencia` y `CampoCodigo`
+(un código de verificación en recuadros: pegarlo como venga lo reparte). Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
 De la homologación (rama `common`, docs/homologacion-codigo.md), también: `Formato` (esc, fechas, moneda, miles: nunca
