@@ -318,7 +318,7 @@
           (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
         // Restablecer: una contraseña temporal (Seguridad, js/app-seguridad.html; 23-oct)
         botones: (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') +
-          '<button type="button" class="secondary" data-usr-restablecer>' + ico('key-round') + ' Restablecer contraseña</button>' +
+          '<button type="button" class="secondary" data-usr-contrasena>' + ico('key-round') + ' Restablecer contraseña</button>' +
           '<button type="button" class="secondary" data-usr-olvidar>' + ico('monitor-x') + ' Olvidar sus dispositivos</button>',
         resumen: resumen,
       });
@@ -1273,7 +1273,8 @@
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-eliminar-perfil')) { eliminarPerfil(fichaActual.id); return; }
-      if (el.hasAttribute('data-usr-restablecer')) { const p = persona(fichaActual.id); Seguridad.restablecer(p.correo, p.nombre); return; }
+      // data-usr-contrasena, no data-usr-restablecer: ese ya es el ↺ de la ventana de editar permisos
+      if (el.hasAttribute('data-usr-contrasena')) { const p = persona(fichaActual.id); Seguridad.restablecer(p.correo, p.nombre); return; }
       if (el.hasAttribute('data-usr-olvidar')) { const p = persona(fichaActual.id); Seguridad.olvidarDispositivos(p.correo, p.nombre); return; }
       if (el.dataset.usrPerfil) { abrirFicha('perfil', el.dataset.usrPerfil, true); return; }
       if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
