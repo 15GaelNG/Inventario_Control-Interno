@@ -249,6 +249,11 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   mismo. Ninguna respuesta al cliente lleva `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave.
 - Pruebas: `credenciales.test.cjs`, `verificacion.test.cjs`, `accesos.test.cjs`, `login-intentos.test.cjs`; vista previa:
   `login-codigo`, `login-contrasena-nueva`, `perfil-seguridad`.
+- **Todo correo que mande el sistema → `Correos.mensaje(para, asunto, { etiqueta, titulo, parrafos, codigo, detalle,
+  boton, aviso })`** (`src/utils/Correos.gs`): la misma cara que la app (barra marino con el logo, tarjeta, dorado),
+  tablas con estilos en línea para Gmail y Outlook, modo oscuro y su versión en texto. No se arma otro HTML de correo a
+  mano. Los `parrafos` y el `aviso` son HTML: lo que venga de una persona va con `Correos.esc`. Vista previa:
+  `node tools/correos/vista.js` (capturas en escritorio, celular y oscuro).
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 

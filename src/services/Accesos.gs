@@ -67,15 +67,17 @@ const Accesos = (function () {
       .filter((u) => String(u.ROL).trim().toUpperCase() === 'ADMIN' && String(u.ACTIVO).toUpperCase() === 'TRUE' && u.CORREO)
       .map((u) => String(u.CORREO).trim());
     if (!admins.length) return;
-    MailApp.sendEmail({
-      to: admins.join(','),
-      subject: 'Control Interno: muchos inicios de sesión fallidos',
-      name: 'Control Interno',
-      htmlBody: '<p>En los últimos ' + (VENTANA_SEG / 60) + ' minutos fallaron ' + n + ' correos distintos al iniciar sesión. ' +
-        'Puede ser alguien probando contraseñas comunes en muchas cuentas.</p>' +
-        '<p>Durante la siguiente hora se le pide el código por correo a todos, aunque entren desde un dispositivo conocido. ' +
-        'El detalle está en la hoja ACCESOS del libro de usuarios.</p>',
-    });
+    MailApp.sendEmail(Correos.mensaje(admins.join(','), 'Control Interno: muchos inicios de sesión fallidos', {
+      preencabezado: n + ' correos distintos fallaron en ' + (VENTANA_SEG / 60) + ' minutos.',
+      etiqueta: 'Alerta de seguridad',
+      titulo: 'Muchos inicios de sesión fallidos',
+      parrafos: ['En los últimos ' + (VENTANA_SEG / 60) + ' minutos fallaron <b>' + n + ' correos distintos</b> al iniciar sesión. ' +
+        'Puede ser alguien probando contraseñas comunes en muchas cuentas.',
+        'Durante la siguiente hora se le pide el código por correo a todos, aunque entren desde un dispositivo conocido.'],
+      detalle: [['Correos distintos', String(n)], ['Ventana', (VENTANA_SEG / 60) + ' minutos'],
+        ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')]],
+      aviso: 'El detalle de cada intento está en la hoja <b>ACCESOS</b> del libro de usuarios.',
+    }));
   }
 
   return { anotar, enAlerta, HOJA };

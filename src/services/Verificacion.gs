@@ -31,8 +31,6 @@ const Verificacion = (function () {
   const hex_ = (bytes) => bytes.map((b) => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
   const huella_ = (texto) => hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(texto)));
   const cache_ = () => CacheService.getScriptCache();
-  /** Texto seguro en el HTML de los correos (Formato.esc es de la pantalla; aquí, en el servidor) */
-  const escHtmlCorreo_ = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const corto_ = (t, n) => String(t == null ? '' : t).replace(/[<>]/g, '').trim().slice(0, n || 40);
 
   function encendida() {
@@ -139,17 +137,7 @@ const Verificacion = (function () {
     const codigo = nuevoCodigo_();
     // Sin cuota de correo, no se entra: el paso no se salta (falla cerrado)
     if (MailApp.getRemainingDailyQuota() < 1) throw new Error('Hoy ya no se pueden mandar códigos. Intenta mañana o entra con tu cuenta de Google.');
-    MailApp.sendEmail({
-      to: r.correo,
-      subject: codigo + ' es tu código para entrar a Control Interno',
-      name: 'Control Interno',
-      htmlBody: '<p>Hola' + (r.nombre ? ' ' + escHtmlCorreo_(r.nombre) : '') + ':</p>' +
-        '<p>Tu código para entrar a Control Interno es:</p>' +
-        '<p style="font-size:28px;font-weight:700;letter-spacing:6px">' + codigo + '</p>' +
-        '<p>Vence en 10 minutos. Lo pediste desde <b>' + escHtmlCorreo_(r.dispositivo.nombre) + '</b>.</p>' +
-        '<p style="color:#666">Si no fuiste tú, alguien tiene tu contraseña: cámbiala en Mi perfil o pide a Control Interno que la restablezca. ' +
-        'Nadie de Control Interno te va a pedir este código.</p>',
-    });
+    MailApp.sendEmail(correoCodigo_(r, codigo));
     r.codigo = huella_(reto + ':' + codigo);
     r.envios++;
     r.ultimoEnvio = Date.now();
@@ -205,18 +193,38 @@ const Verificacion = (function () {
 
   function avisarNuevo_(r) {
     try {
-      MailApp.sendEmail({
-        to: r.correo,
-        subject: 'Nuevo dispositivo en Control Interno: ' + r.dispositivo.nombre,
-        name: 'Control Interno',
-        htmlBody: '<p>Se recordó un dispositivo nuevo para tu cuenta: <b>' + escHtmlCorreo_(r.dispositivo.nombre) + '</b>, el ' +
-          Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') + '.</p>' +
-          '<p>Desde ahí ya no se te pedirá código por un tiempo. Puedes ver y quitar tus dispositivos en Mi perfil → Contraseña y seguridad.</p>' +
-          '<p style="color:#666">Si no fuiste tú, cambia tu contraseña y avisa a Control Interno.</p>',
-      });
+      MailApp.sendEmail(correoDispositivo_(r));
     } catch (e) {
       console.warn('aviso de dispositivo nuevo: ' + e.message);   // el aviso no debe impedir entrar
     }
+  }
+
+  // ---------------------------------------------------------------- los correos (la plantilla: Correos.gs)
+  const ahora_ = () => Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+
+  function correoCodigo_(r, codigo) {
+    return Correos.mensaje(r.correo, codigo + ' es tu código para entrar a Control Interno', {
+      preencabezado: 'Vence en 10 minutos. Nadie de Control Interno te lo va a pedir.',
+      etiqueta: 'Verificación',
+      titulo: 'Tu código para entrar',
+      parrafos: [(r.nombre ? 'Hola, ' + Correos.esc(r.nombre) + '. ' : '') + 'Escribe este código en Control Interno para terminar de iniciar sesión.'],
+      codigo,
+      detalle: [['Dispositivo', r.dispositivo.nombre], ['Solicitado', ahora_()], ['Vence', 'En 10 minutos']],
+      aviso: '<b>¿No fuiste tú?</b> Alguien tiene tu contraseña: cámbiala en Mi perfil o pide a Control Interno que la ' +
+        'restablezca. Nadie de Control Interno te va a pedir este código.',
+    });
+  }
+
+  function correoDispositivo_(r) {
+    return Correos.mensaje(r.correo, 'Nuevo dispositivo en Control Interno: ' + r.dispositivo.nombre, {
+      preencabezado: 'Se recordó ' + r.dispositivo.nombre + ' para tu cuenta.',
+      etiqueta: 'Seguridad de tu cuenta',
+      titulo: 'Se recordó un dispositivo nuevo',
+      parrafos: ['Desde este dispositivo ya no se te pedirá código por un tiempo. Puedes verlo y quitarlo en ' +
+        '<b>Mi perfil → Contraseña y seguridad</b>.'],
+      detalle: [['Dispositivo', r.dispositivo.nombre], ['Fecha', ahora_()], ['Cuenta', r.correo]],
+      aviso: '<b>¿No fuiste tú?</b> Cambia tu contraseña y avisa a Control Interno.',
+    });
   }
 
   // ---------------------------------------------------------------- Mi perfil y administración
