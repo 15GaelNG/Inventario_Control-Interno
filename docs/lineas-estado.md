@@ -381,9 +381,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     COMPANIA, RAZON_SOCIAL y FIN_PLAN. Una cancelación es de su número: si el equipo ya tiene otra línea, el renglón conserva
     lo de la línea que se cancela. La hoja sigue guardando lo de cuando se mandó. Un renglón viejo que junta resguardo y
     cancelación muestra el estatus de hoy de su línea (`registroDeLinea_`). No siguen al inventario los datos que se
-    llenan al mandar: estatus del equipo y de la línea, departamento, sede, oficina y comentario (mandar otra vez un equipo
-    abierto con otro estatus sí actualiza estatus, departamento, sede y oficina; el comentario no se actualiza, usuario,
-    13-oct). **Lo cerrado** (22-oct, `b3269f6`; usuario: «que siga a la línea»): los renglones ENTREGADO A LINEAS, VENDIDO,
+    llenan al mandar: estatus del equipo y de la línea, departamento, sede, oficina y comentario (un equipo que ya está en el panel no se
+    vuelve a mandar: se rechaza con «usa Corregir resguardo»). **Lo cerrado** (22-oct, `b3269f6`; usuario: «que siga a la línea»): los renglones ENTREGADO A LINEAS, VENDIDO,
     DONADO y DESECHADO muestran el número y el estatus de hoy de la línea con que se mandó el equipo
     (`lineaDelRenglon_`: por ID_LINEA_AL_MANDAR; los renglones de antes, por número); `bandeja` también lee lo cerrado.
     **Foto al cerrar:** al Entregar y al cerrar (Vendido, Donado, Desechado) el renglón guarda lo que el panel mostraba
@@ -391,7 +390,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     FIN_PLAN); antes volvía a lo del día que se mandó. **Confirmar cancelada** guarda en el renglón el número de hoy de la
     línea si se corrigió. Una cancelación CANCELADA se queda como quedó.
   - **Accesorios:** columna ACCESORIOS al final de APP_RESGUARDOS (`asegurarBandeja_` la agrega a la hoja que ya existe;
-    caché `ln_resguardos_esquema_v2`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
+    caché `ln_resguardos_esquema_v3`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
     mandar a cancelación; la pestaña Resguardos tiene la columna «Accesorios» después de IMEI.
   - **Comentario** (22-oct, `ebcd218`; usuario: «para homologar»): en Resguardos, la columna MOTIVO se titula «Comentario»
     y la oculta COMENTARIO, «Comentario por equipo»; Cancelaciones trae MOTIVO como «Comentario», oculta. El «Motivo» de
@@ -445,7 +444,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     a cancelar, campo por campo, y lo que cambió después no se regresa («Cambió después»). Lo anterior sale del
     movimiento de resguardo del envío (`envioDeCancelacion_`) o, si no hay, del CANCELACION_LINEA de la línea; sin envío
     encontrado, la regla vieja (DISPONIBLE). La línea separada vuelve a su equipo, con su PIN de WhatsApp, si el equipo
-    no tiene otra línea y está en USO, RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE o PARA DESECHO; si no, se queda
+    no tiene otra línea y está en USO, POR RECIBIR, RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE o PARA DESECHO; si no, se queda
     suelta («Se queda: el NUCO X ya tiene la línea N» / «está en <estatus>»). El estatus es el de antes; si era USO y el
     equipo no está en USO (o la línea queda sin equipo), queda DISPONIBLE con la nota «Antes USO: …». Si ya no está EN
     PROCESO DE CANCELACION, se queda. La ventana (`vistaRetirarCancelacion`, `planRetirar_`) muestra la tabla Campo | Hoy
