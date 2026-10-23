@@ -92,9 +92,8 @@
         '<h2>Verificación</h2><p class="login-system-name">Revisa tu correo</p>' +
         '<p class="login-sub">Te mandamos un código de 6 dígitos a <b>' + esc(r.correoOculto) + '</b>. ' + esc(POR_QUE[r.motivo] || '') + '</p>' +
         '<div class="login-divider"></div>' +
-        '<div class="field"><label class="icon-label" for="seg-codigo">Código</label>' +
-          '<input id="seg-codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="000000" ' +
-          'style="font-size:var(--texto-xl);letter-spacing:.3em;text-align:center" /></div>' +
+        // Los 6 recuadros (CampoCodigo): pegar el código como venga del correo los llena todos
+        '<div id="seg-codigo"></div>' +
         '<label style="display:flex;gap:8px;align-items:center;margin:4px 0 12px;font-size:var(--texto-s)">' +
           '<input type="checkbox" id="seg-compartido" style="width:auto;margin:0" /> Es un equipo compartido: no recordarlo</label>' +
         '<button type="submit" id="seg-verificar">Entrar</button>' +
@@ -121,12 +120,19 @@
         Notificar.info('Te mandamos otro código.');
         setTimeout(esperar, 0);
       }, 'seg-error'));
+      let campo = null;
       const verificar = () => conBoton_($('seg-verificar'), 'Revisando…', async () => {
-        entrar(await callServer('apiSeguridadVerificarCodigo', r.reto, $('seg-codigo').value, !$('seg-compartido').checked));
+        if (campo.valor().length < 6) throw new Error('Escribe los 6 dígitos del código.');
+        try {
+          entrar(await callServer('apiSeguridadVerificarCodigo', r.reto, campo.valor(), !$('seg-compartido').checked));
+        } catch (err) {
+          campo.limpiar();   // un código malo: los recuadros vacíos para escribirlo otra vez
+          throw err;
+        }
       }, 'seg-error');
+      campo = CampoCodigo.crear($('seg-codigo'), { largo: 6, alCompletar: verificar });
       $('seg-verificar').addEventListener('click', verificar);
-      $('seg-codigo').addEventListener('input', (ev) => { if (ev.target.value.replace(/\D/g, '').length === 6) verificar(); });
-      $('seg-codigo').focus();
+      campo.enfocar();
     }
 
     /** Entró con una contraseña temporal: pone una nueva y con eso entra */
