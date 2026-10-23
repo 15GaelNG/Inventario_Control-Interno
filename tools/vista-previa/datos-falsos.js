@@ -643,6 +643,26 @@
     Temporada.aplicar('muertos');
   }
 
+  /** Lo que contestan las api… de Seguridad en las escenas de Mi perfil */
+  function seguridadDeEjemplo() {
+    respuestas.apiSeguridadEstado = { tieneContrasena: true, minimo: 10, cambiada: '02/10/2026', dosPasos: true };
+    respuestas.apiSeguridadMisDispositivos = [
+      { id: 'a', nombre: 'Chrome en Windows', creado: '01/10/2026 09:12', ultimoUso: '23/10/2026 08:40', esEste: true },
+      { id: 'b', nombre: 'Safari en iPhone o iPad', creado: '12/09/2026 18:03', ultimoUso: '20/10/2026 21:15', esEste: false },
+      { id: 'c', nombre: 'Edge en Windows', creado: '30/08/2026 10:20', ultimoUso: '02/10/2026 17:51', esEste: false },
+    ];
+    respuestas.apiSeguridadActividad = [
+      { fecha: '23/10/2026 08:40', metodo: 'google', resultado: 'entro', dispositivo: 'Chrome en Windows' },
+      { fecha: '22/10/2026 19:02', metodo: 'contrasena', resultado: 'codigo-bueno', dispositivo: 'Safari en iPhone o iPad' },
+      { fecha: '22/10/2026 19:01', metodo: 'contrasena', resultado: 'codigo-enviado', dispositivo: 'Safari en iPhone o iPad' },
+      { fecha: '21/10/2026 23:14', metodo: 'contrasena', resultado: 'contrasena-mala', dispositivo: 'Firefox en Linux' },
+      { fecha: '20/10/2026 21:15', metodo: 'contrasena', resultado: 'entro', dispositivo: 'Safari en iPhone o iPad' },
+    ];
+  }
+  async function abrirPerfil() {
+    Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo');
+  }
+
   const ESCENAS = {
     'muertos-inicio': async () => { temporada(); await abrir('dashboard'); await hasta('.dm-banner'); await esperar(400); },
     'muertos-login': async () => { temporada(); state.token = null; render(); await hasta('.dm-login'); await esperar(900); },
@@ -692,14 +712,24 @@
       document.getElementById('btn-login').click();
       await hasta('#seg-nueva'); await esperar(400);
     },
-    'perfil-seguridad': async () => {
-      respuestas.apiSeguridadEstado = { tieneContrasena: true, minimo: 10 };
-      respuestas.apiSeguridadMisDispositivos = [
-        { id: 'a', nombre: 'Chrome en Windows', creado: '01/10/2026 09:12', ultimoUso: '23/10/2026 08:40', esEste: true },
-        { id: 'b', nombre: 'Safari en iPhone o iPad', creado: '12/09/2026 18:03', ultimoUso: '20/10/2026 21:15', esEste: false },
-      ];
-      Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo');
-      (await hasta('[data-perfil-seguridad]')).click(); await hasta('[data-quitar]'); await esperar(400);
+    // Mi perfil, pestañas de la cuenta (23-oct): Contraseña, Dispositivos y Actividad
+    'perfil-contrasena': async () => {
+      seguridadDeEjemplo();
+      await abrirPerfil();
+      (await hasta('[data-perfil-seguridad]')).click(); await hasta('#seg-mia');
+      document.getElementById('seg-mia').value = 'Una frase larga';
+      document.getElementById('seg-mia').dispatchEvent(new Event('input'));
+      await esperar(400);
+    },
+    'perfil-dispositivos': async () => {
+      seguridadDeEjemplo();
+      await abrirPerfil();
+      (await hasta('.tab-btn[data-tab="dispositivos"]')).click(); await hasta('[data-quitar]'); await esperar(400);
+    },
+    'perfil-actividad': async () => {
+      seguridadDeEjemplo();
+      await abrirPerfil();
+      (await hasta('.tab-btn[data-tab="actividad"]')).click(); await hasta('[data-seg="actividad"] .seg-fila'); await esperar(400);
     },
     'menu-usuario': async () => {
       Temporada.aplicar(''); await abrir('dashboard');
