@@ -42,6 +42,14 @@ const EJEMPLOS = {
     detalle: [['Dispositivo', 'Safari en iPhone o iPad'], ['Fecha', '23/10/2026 10:43'], ['Cuenta', 'ana.lopez@gph.com']],
     aviso: '<b>¿No fuiste tú?</b> Cambia tu contraseña y avisa a Control Interno.',
   },
+  recuperar: {
+    preencabezado: 'El enlace vence en 30 minutos y sirve una sola vez.',
+    etiqueta: 'Seguridad de tu cuenta', titulo: 'Crea tu contraseña nueva',
+    parrafos: ['Hola, Ana. Pediste recuperar el acceso a Control Interno. Con este botón pones una contraseña nueva.'],
+    boton: { texto: 'Crear contraseña nueva', url: 'https:' + '/' + '/script.google.com/macros/s/EJEMPLO/exec?recuperar=' + 'a'.repeat(64) },
+    detalle: [['Cuenta', 'ana.lopez@gph.com'], ['Vence', 'En 30 minutos'], ['Solicitado', '23/10/2026 10:42']],
+    aviso: '<b>¿No lo pediste?</b> Ignora este correo: tu contraseña no cambia. Si te llegan varios sin pedirlos, avisa a Control Interno.',
+  },
   alerta: {
     preencabezado: '17 correos distintos fallaron en 10 minutos.',
     etiqueta: 'Alerta de seguridad', titulo: 'Muchos inicios de sesión fallidos',

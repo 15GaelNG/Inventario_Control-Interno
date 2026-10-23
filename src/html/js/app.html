@@ -922,6 +922,8 @@
     });
 
     initGoogleQuickLogin();
+    // "¿Olvidaste tu contraseña?" y el enlace que llega por correo (?recuperar=…): Seguridad (js/app-seguridad.html)
+    Seguridad.conectarLogin();
 
     document.getElementById('form-login').addEventListener('submit', async (ev) => {
       ev.preventDefault();

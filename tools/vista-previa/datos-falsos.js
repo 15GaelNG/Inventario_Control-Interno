@@ -731,6 +731,26 @@
       document.getElementById('btn-login').click();
       await hasta('#seg-codigo'); await esperar(400);
     },
+    'login': async () => { Temporada.aplicar(''); state.token = null; render(); await hasta('#login-olvide'); await esperar(400); },
+    // "¿Olvidaste tu contraseña?" (23-oct): pedir el enlace, y llegar desde el correo (?recuperar=…)
+    'login-olvide': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiSeguridadRecuperarPedir = { ok: true, mensaje: 'Si el correo está registrado, te mandamos un enlace para crear una contraseña nueva. Revisa tu bandeja (y el spam).' };
+      (await hasta('#login-olvide')).click();
+      (await hasta('#seg-olvide-correo')).value = 'ana.lopez@gph.com';
+      document.getElementById('seg-olvide-mandar').click();
+      await esperar(600);
+    },
+    'login-recuperar': async () => {
+      Temporada.aplicar('');
+      window.google.script.url = { getLocation: (cb) => cb({ parameter: { recuperar: 'a'.repeat(64) } }) };
+      window.google.script.history = { replace: () => {} };
+      respuestas.apiSeguridadRecuperarEstado = { correo: 'ana.lopez@gph.com', minimo: 8 };
+      state.token = null; render();
+      (await hasta('#seg-nueva')).value = 'Ayrt05n';
+      document.getElementById('seg-nueva').dispatchEvent(new Event('input'));
+      await esperar(400);
+    },
     'login-contrasena-nueva': async () => {
       Temporada.aplicar(''); state.token = null; render();
       respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 8 });

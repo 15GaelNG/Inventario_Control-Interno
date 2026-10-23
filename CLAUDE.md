@@ -265,6 +265,13 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   `Auth.cerrarSesiones(correo, { conservar: token })` saca a todas sus sesiones abiertas (cambiar o restablecer la
   contraseña, quitar dispositivos, el admin) y a quien lo hizo le regresa un token nuevo (`{ sesion }`, la pantalla lo
   guarda con `guardarSesion`). Prueba: `sesion.test.cjs`.
+- **"¿Olvidaste tu contraseña?" → `Recuperacion.gs`** (guía de OWASP): la respuesta es la misma exista o no el correo;
+  el enlace es la app de siempre con `?recuperar=<64 hex>` (`Config.urlApp`: `URL_APP` de Entornos.gs, en prod el link
+  del equipo en su forma general `/macros/s/…`, que no pide cuenta del dominio; la app ya está abierta, no hace falta
+  otro despliegue como el de la firma). Del enlace se guarda solo su huella en CacheService: 30 min, un uso, pedir otro
+  anula el anterior, 3 por correo por hora. Al cambiarla se cierran sus sesiones, se avisa y se vuelve al login (no
+  entra solo). La pantalla lee el parámetro con `google.script.url.getLocation` (`Seguridad.conectarLogin`). El
+  "Restablecer contraseña" del admin sigue para quien no puede entrar a su correo.
 - **Pendiente:** sacar las huellas, DISPOSITIVOS y ACCESOS del libro compartido de USUARIOS a uno restringido (decidido
   para después, 23-oct).
 - Pruebas: `credenciales.test.cjs`, `verificacion.test.cjs`, `accesos.test.cjs`, `login-intentos.test.cjs`; vista previa:

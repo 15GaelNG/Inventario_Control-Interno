@@ -15,7 +15,8 @@
 const Accesos = (function () {
   const HOJA = 'ACCESOS';
   const COLUMNAS = ['FECHA', 'CORREO', 'METODO', 'RESULTADO', 'DISPOSITIVO', 'DETALLE'];
-  const FALLOS = ['contrasena-mala', 'correo-desconocido', 'bloqueado', 'codigo-malo'];
+  // recuperar-desconocido: pedir enlaces para muchos correos que no existen también es tantear (Recuperacion.gs)
+  const FALLOS = ['contrasena-mala', 'correo-desconocido', 'bloqueado', 'codigo-malo', 'recuperar-desconocido'];
   const VENTANA_SEG = 10 * 60;
   const UMBRAL = 15;
   const SEG_ALERTA = 60 * 60;

@@ -52,3 +52,13 @@ function apiSeguridadQuitarOtros(token, llave) {
 function apiSeguridadActividad(token) {
   return Accesos.mios(token, 15);
 }
+// --- "¿Olvidaste tu contraseña?" (Recuperacion.gs): sin sesión, las cuida el enlace (huella, 30 min, un uso) ---
+function apiSeguridadRecuperarPedir(correo) {
+  return Recuperacion.pedir(correo);
+}
+function apiSeguridadRecuperarEstado(enlace) {
+  return Recuperacion.estado(enlace);
+}
+function apiSeguridadRecuperarCambiar(enlace, nueva) {
+  return Recuperacion.cambiar(enlace, nueva);
+}

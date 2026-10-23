@@ -74,6 +74,8 @@
       paso.hidden = false;
       if (r.pendiente === 'cambiar') pasoCambiar_(paso, r);
       if (r.pendiente === 'codigo') pasoCodigo_(paso, r);
+      if (r.pendiente === 'olvide') pasoOlvide_(paso);
+      if (r.pendiente === 'recuperar') pasoRecuperar_(paso, r);
       refreshIcons();
     }
 
@@ -165,6 +167,104 @@
       $('seg-guardar').addEventListener('click', guardar);
       $('seg-nueva2').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') guardar(); });
       $('seg-nueva').focus();
+    }
+
+    // ---------------------------------------------------------------- "¿Olvidaste tu contraseña?" (Recuperacion.gs)
+    /** Lo llama initLogin: el enlace del formulario y, si se llegó desde el correo (?recuperar=…), ese paso */
+    function conectarLogin() {
+      const olvide = $('login-olvide');
+      if (olvide) olvide.addEventListener('click', () => { mostrarPaso({ pendiente: 'olvide' }); });
+      try {
+        google.script.url.getLocation((loc) => {
+          const enlace = loc && loc.parameter && loc.parameter.recuperar;
+          if (enlace) mostrarPaso({ pendiente: 'recuperar', enlace: String(enlace) });
+        });
+      } catch (e) { /* fuera de Apps Script (vista previa local) */ }
+    }
+
+    /** Pide el enlace: la respuesta es la misma exista o no el correo */
+    function pasoOlvide_(paso) {
+      paso.innerHTML =
+        '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
+        '<h2>Recuperar acceso</h2><p class="login-system-name">¿Olvidaste tu contraseña?</p>' +
+        '<p class="login-sub">Escribe tu correo y te mandamos un enlace para crear una nueva. Vence en 30 minutos.</p>' +
+        '<div class="login-divider"></div>' +
+        '<div class="field"><label class="icon-label" for="seg-olvide-correo">Correo electrónico</label>' +
+          '<input type="email" id="seg-olvide-correo" autocomplete="username" placeholder="correo@empresa.com" /></div>' +
+        '<button type="submit" id="seg-olvide-mandar">Mandar enlace</button>' +
+        '<button type="button" class="secondary" id="seg-volver" style="margin-top:8px;width:100%">Volver</button>' +
+        '<div class="error-msg" id="seg-error" hidden></div>';
+      $('seg-volver').addEventListener('click', volverAlFormulario);
+      const correo = $('seg-olvide-correo');
+      correo.value = ($('login-correo') || {}).value || '';
+      const mandar = () => {
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.value.trim())) return error_('seg-error', 'Escribe tu correo completo.');
+        conBoton_($('seg-olvide-mandar'), 'Mandando…', async () => {
+          const r = await callServer('apiSeguridadRecuperarPedir', correo.value.trim());
+          paso.querySelector('.login-sub').textContent = r.mensaje;
+          $('seg-olvide-mandar').hidden = true;
+          correo.closest('.field').hidden = true;
+        }, 'seg-error');
+      };
+      $('seg-olvide-mandar').addEventListener('click', mandar);
+      correo.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') mandar(); });
+      correo.focus();
+    }
+
+    /** Llegó desde el enlace del correo: pone una nueva y vuelve al login (no entra solo) */
+    async function pasoRecuperar_(paso, r) {
+      paso.innerHTML = '<p class="login-sub">Revisando el enlace…</p>';
+      let e;
+      try {
+        e = await callServer('apiSeguridadRecuperarEstado', r.enlace);
+      } catch (err) {
+        paso.innerHTML =
+          '<div class="login-icon-badge"><i data-lucide="link-2-off" class="ico"></i></div>' +
+          '<h2>Recuperar acceso</h2><p class="login-system-name">El enlace ya no sirve</p>' +
+          '<p class="login-sub">' + esc((err && err.message) || String(err)) + '</p>' +
+          '<button type="submit" id="seg-otro">Pedir otro enlace</button>' +
+          '<button type="button" class="secondary" id="seg-volver" style="margin-top:8px;width:100%">Volver</button>';
+        $('seg-otro').addEventListener('click', () => mostrarPaso({ pendiente: 'olvide' }));
+        $('seg-volver').addEventListener('click', volverAlFormulario);
+        quitarEnlaceDeLaUrl_();
+        refreshIcons();
+        return;
+      }
+      paso.innerHTML =
+        '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
+        '<h2>Recuperar acceso</h2><p class="login-system-name">Crea tu contraseña nueva</p>' +
+        '<p class="login-sub">Para <b>' + esc(e.correo) + '</b>. Al menos ' + esc(e.minimo) +
+          ' caracteres con mayúscula, minúscula, número y símbolo, por ejemplo <b>Ayrt05n!</b>.</p>' +
+        '<div class="login-divider"></div>' +
+        campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +
+        campoClave_('seg-nueva2', 'Repítela', 'new-password') +
+        '<div id="seg-medidor"></div>' +
+        '<button type="submit" id="seg-guardar">Guardar contraseña</button>' +
+        '<button type="button" class="secondary" id="seg-volver" style="margin-top:8px;width:100%">Cancelar</button>' +
+        '<div class="error-msg" id="seg-error" hidden></div>';
+      conectarOjos_(paso);
+      refreshIcons();
+      $('seg-volver').addEventListener('click', () => { quitarEnlaceDeLaUrl_(); volverAlFormulario(); });
+      const medidor = MedidorContrasena.crear($('seg-medidor'), { nueva: $('seg-nueva'), repetida: $('seg-nueva2'), minimo: e.minimo, correo: e.correo });
+      $('seg-guardar').addEventListener('click', () => {
+        if (!medidor.cumple()) return error_('seg-error', 'A tu contraseña nueva le falta algo de la lista.');
+        conBoton_($('seg-guardar'), 'Guardando…', async () => {
+          await callServer('apiSeguridadRecuperarCambiar', r.enlace, $('seg-nueva').value);
+          quitarEnlaceDeLaUrl_();
+          volverAlFormulario();
+          // De vuelta al login con su correo puesto: entra con la nueva (como recomienda OWASP, no se entra solo)
+          $('login-correo').value = e.correo;
+          $('login-password').value = '';
+          $('login-password').focus();
+          Notificar.exito('Listo: tu contraseña quedó guardada. Entra con ella.');
+        }, 'seg-error');
+      });
+      $('seg-nueva').focus();
+    }
+
+    /** Que recargar la página no vuelva a abrir el enlace (ya se usó) */
+    function quitarEnlaceDeLaUrl_() {
+      try { google.script.history.replace(null, {}, ''); } catch (e) { /* fuera de Apps Script */ }
     }
 
     // ---------------------------------------------------------------- piezas
@@ -457,6 +557,6 @@
       });
     }
 
-    return { entrar, dispositivo, llaveDe, pestana, restablecer, olvidarDispositivos };
+    return { entrar, conectarLogin, dispositivo, llaveDe, pestana, restablecer, olvidarDispositivos };
   })();
 </script>
