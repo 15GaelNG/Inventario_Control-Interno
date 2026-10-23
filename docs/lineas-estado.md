@@ -564,7 +564,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 
 | Archivo | Qué hace |
 |---|---|
-| `src/services/TelefoniaService.gs` + `apiLineas*` en `ClientApi.gs` | Entrada del cliente |
+| `src/services/TelefoniaService.gs` + `apiLineas*` en `src/api/Lineas.gs` | Entrada del cliente (desde el 22-oct, homologación 6.3 de Ayrton; antes en `ClientApi.gs`) |
 | `lineas/LineasLectura.gs`, `LineasEscritura.gs` | Leen y escriben las hojas nuevas |
 | `lineas/LineasRepo.gs`, `LineasDatos.gs`, `LineasUtil.gs` | Acceso a datos, IDs, normalización (NUCO a 4 dígitos) |
 | `lineas/LineasRegistros.gs` | Formulario de alta y edición (reglas del AppSheet) |
@@ -579,7 +579,7 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 | `lineas/LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | **Vacíos a propósito** (`6cb342a`, 21-oct): eran herramientas de editor de la reestructura, ya corridas; `subir.js` conserva en Apps Script lo borrado de git, así que se dejan con una nota, como `LineasProveedor.gs` |
 | `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor (las firmas guardadas, `lineasFirmasGuardadas_*`; desde el 21-oct sin el retiro de pestañas, las pruebas del 4-oct ni pintar pestañas) |
 | `lineas/LineasProveedor.gs`, `html/js/lineas-proveedor.html`, `html/views/lineas/lineas-proveedor.html` | **Vacíos** (`35d0fb2`, 14-oct): `subir.js` conserva en Apps Script los archivos que ya no están en git y estos sobrescriben a los de la primera versión del Proveedor (7-oct); se borran cuando el módulo nuevo (pendiente 1.10) los reemplace o `subir.js` sepa retirar archivos |
-| `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
+| `html/js/lineas.html` (la base: utilidades, formularios y `Lineas.comun`), `lineas-telefonicas.html` (arranque y lista) con sus partes `lineas-telefonicas-<parte>.html` (ficha, documentos, acciones, captura, historial y paginas), `lineas-panorama.html`, `lineas-activos.html`, `lineas-accesorios.html`, `lineas-resguardos.html` (panel de Pau), `lineas-bitacora.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas. Desde el 22-oct (unión de `master`, homologación 6.2 y 6.2b de Ayrton) lo que este documento cita «en `lineas.html`» vive en la base o en una de esas partes: `grep -n` de la función en `src/html/js/lineas*.html`. Las pruebas leen todo con `tests/lineas-fuente.js` |
 | `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Desde el 13-oct, en un DEV, guardar una inspección, generar un PDF, Mandar a resguardo y Mandar a cancelación anotan sus pasos dentro del servidor (`TelefoniaService.conPasosEnDev_`, con `LineasDatos.tiempo` «@a los ms») y el medidor los pide con `apiLineasPasosServidor` y los escribe como «SERVIDOR …»; en producción no hacen nada. Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
 
