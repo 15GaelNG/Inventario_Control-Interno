@@ -104,7 +104,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
   o CANCELADA. **Corregir equipo, con línea, trae el equipo y Accesorios y accesos (ya no la línea ni el adendum) y, desde el 16-oct, ya no trae la pestaña Responsable**: la persona
   del equipo y su ubicación solo cambian con la Responsiva o con Mandar a resguardo; el servidor rechaza otra persona (`LineasRegistros.exigirSinPersona_`: «…: la persona se cambia con «Responsiva».»). Agregar equipo sí
-  trae Responsable. La línea sola con
+  trae Responsable. **Corregir línea de un equipo que está en el panel** (23-oct, `cc92886`): el estatus de la línea queda fijo y el
+  servidor lo rechaza («el estatus de su línea lo cambia el panel»; `equipoEnPanel_` ya no excluye la parte LINEA). La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige. Ni Corregir equipo ni Corregir línea muestran «Fecha de alta» (ver «La fecha de alta»).
   Un SIM BASICO no enseña el adendum al agregar. Al corregir, cambiar el Tipo de línea a SIM BASICO esconde el adendum y
   al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, `a23f9ec`,
@@ -337,6 +338,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `abrirCancelacion` en `lineas.html`):
   - **Ubicación:** el formulario llena solo, aunque se puede cambiar, DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA
     (`UBICACION_RESGUARDO`, valor de `camposUbicacion_`), sin importar la sede ni la oficina que traiga el equipo.
+  - **Estatus finales** (23-oct, `cc92886`; usuario: «que se bloquee, solo permitir corregir estatus pero tiene que pasar por
+    todo el proceso»): un equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-ROBO (y los viejos EXTRAVIADO, ROBADO, ROBO) no se manda
+    a resguardo: la lista y la ficha no ofrecen «Mandar a resguardo» (`mandaResguardo` en `lineas-telefonicas.html`) y el
+    servidor lo omite («Está VENDIDO: primero se corrige su estatus («Corregir»)»; `ESTATUS_EQUIPO_FINAL` en `LineasResguardos`).
   - **Estatus:** `ESTATUS_EQUIPO_RESGUARDO` = RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE (estatus nuevo; ámbar, «Tiene
     un detalle; se ofrece en venta», `GRUPO_EQUIPO` del Panorama y `VENTA` de Vínculos) y PARA DESECHO.
   - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): no se vuelve a
@@ -439,6 +444,15 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     22-oct, `1f8f60c`; ya no existe ESTADO RETIRADO); lo que pasó queda en el movimiento QUITAR_PANEL («Quitado del panel»).
     Si el equipo está POR RECIBIR y el movimiento del envío no trae el estatus (RESGUARDO a RESGUARDO o datos viejos), vuelve
     al estatus elegido en el renglón (ESTATUS_EQUIPO; `99447e6`) para no dejar POR RECIBIR sin renglón.
+    **Arreglos de la auditoría del 23-oct** (`cc92886`; sin publicar): (1) un renglón viejo que junta resguardo y cancelación
+    (`renglonesParaQuitar_`) solo se quita con su cancelación POR FIRMAR o RETIRADA; con CARTA FIRMADA o CARTA ENVIADA se omite
+    con el aviso de la fase («Pau tiene que retirarla») y con CANCELADA, «Su línea ya se canceló: Pau lo recibe»; el panel
+    (`lineas-resguardos.html`) no ofrece «Quitar del panel» en esos renglones, la lista y la ficha sí y la ventana dice por qué
+    se omite. (2) Quitar del panel y Retirar cancelación buscan la línea por ID_LINEA_AL_MANDAR (los renglones de antes del
+    22-oct, por número): la línea regresa con su número de hoy y lo que no puede regresar sale en «Se queda» con su motivo
+    («El equipo ya tiene otra línea», «La línea ya no está en el equipo», «La línea cambió de número después de salir del NUCO X»).
+    (3) Regresa también lo corregido con «Corregir resguardo» (usuario, 23-oct: es parte del resguardo; solo se queda lo
+    cambiado después): `cambiosDelEnvio_` junta el movimiento RESGUARDO con los CORREGIR_RESGUARDO de ese equipo desde el envío.
   - **Retirar cancelación** (solo aprobadores; pestaña Cancelaciones; comentario obligatorio; `retirarCancelacion`):
     fase RETIRADA (se puede en POR FIRMAR, CARTA FIRMADA o CARTA ENVIADA). La línea vuelve a como estaba antes de mandarla
     a cancelar, campo por campo, y lo que cambió después no se regresa («Cambió después»). Lo anterior sale del
@@ -498,6 +512,12 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (pendiente 8.19). Datos: `tools/lineas-datos/limpiar-dg.js` deja en blanco ID PERSONA, NO EMPLEADO, RESPONSABLE, PUESTO,
   DEPARTAMENTO, SEDE, OFICINA / DESARROLLO, JEFE DIRECTO, DIRECTOR, CUENTA GOOGLE y los adicionales de las asignaciones
   vigentes, y pone solo AREA = DIRECCION GENERAL (`--ensayo`; `--produccion` solo con permiso; pendiente 8.18).
+  **El servidor también pide ser ADMIN** (23-oct, `cc92886`): `formularioRegistro`, `documento_` (inspección y responsiva),
+  `quitarFotoInspeccion`, `fotosInspeccion`, `generarPdf` y `prepararEvidencia` (`TelefoniaService`: `sinDG_` y `sinDGDocumento_`), y
+  el formulario de resguardo, Mandar a resguardo, Mandar a cancelación y Quitar del panel (`LineasResguardos`, se omite con
+  «Es de Dirección General: solo ADMIN lo modifica.»). El panel de Pau (`bandeja`) muestra a quien no es ADMIN los renglones de
+  DG con NUCO, estados, número «DG» y DEPARTAMENTO DIRECCION GENERAL, y lo demás en blanco (`LineasDG.esRenglonPanel` y
+  `ocultarRenglonPanel`).
 - **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
   y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
   `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
