@@ -6,9 +6,18 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
+// Credenciales simulado: la huella real la prueba credenciales.test.cjs; aquí solo importa qué decide el login
+const guardadas = [];
+const Credenciales = {
+  verificar: (fila, clave) => ({ ok: fila['CONTRASEÑA'] === clave, migrar: fila['CONTRASEÑA'] === clave }),
+  guardar: (correo, clave) => { guardadas.push(correo + ':' + clave); },
+};
+
 function cargar() {
   const cache = {};
   const ctx = vm.createContext({
+    Credenciales,
+    console: { warn: () => {} },
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' }, ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR', LECTURA: 'LECTURA', CLIENTE: 'CLIENTE' },
       SESION_DURACION_HORAS: 8 },
     SheetUtils: {
@@ -45,4 +54,13 @@ test('un correo que no existe cuenta igual, con el mismo mensaje', () => {
   for (let i = 0; i < 5; i++) assert.equal(intento(A, 'nadie@gmail.com', 'x'), 'Usuario o contraseña incorrectos');
   assert.match(intento(A, 'nadie@gmail.com', 'x'), /Demasiados intentos/);
   assert.equal(intento(A, 'ana@gph.com', 'buena'), 'entró', 'y no bloquea a los demás correos');
+});
+
+test('entrar con la contraseña en texto plano la pasa a huella (Credenciales.guardar); fallar no guarda nada', () => {
+  const A = cargar();
+  guardadas.length = 0;
+  intento(A, 'ana@gph.com', 'mala');
+  assert.deepEqual(guardadas, []);
+  assert.equal(intento(A, 'ana@gph.com', 'buena'), 'entró');
+  assert.deepEqual(guardadas, ['ana@gph.com:buena']);
 });

@@ -1,0 +1,125 @@
+// Credenciales (src/services/Credenciales.gs, 23-oct): la huella v2 (PBKDF2-HMAC-SHA256), la migración desde la
+// CONTRASEÑA en texto plano y el v1, las reglas de una contraseña nueva y la escritura por CORREO en USUARIOS.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+
+// Utilities de Apps Script con crypto de Node: los bytes van con signo (-128..127), como en Apps Script
+const conSigno = (buf) => Array.from(buf, (b) => (b > 127 ? b - 256 : b));
+const aBuffer = (v) => (typeof v === 'string' ? Buffer.from(v, 'utf8') : Buffer.from(v.map((b) => (b + 256) % 256)));
+const Utilities = {
+  computeHmacSha256Signature: (valor, llave) => conSigno(crypto.createHmac('sha256', aBuffer(llave)).update(aBuffer(valor)).digest()),
+  newBlob: (texto) => ({ getBytes: () => conSigno(Buffer.from(String(texto), 'utf8')) }),
+  getUuid: () => crypto.randomUUID(),
+};
+
+/** USUARIOS en memoria: encabezados + renglones, con lo que usa Credenciales de una hoja */
+function hojaFalsa(encabezados, filas) {
+  const datos = [encabezados.slice()].concat(filas.map((f) => encabezados.map((h) => (f[h] === undefined ? '' : f[h]))));
+  const hoja = {
+    datos,
+    getLastRow: () => datos.length,
+    getLastColumn: () => datos[0].length,
+    getRange: (r, c, nr, nc) => ({
+      getValues: () => datos.slice(r - 1, r - 1 + (nr || 1)).map((fila) => fila.slice(c - 1, c - 1 + (nc || 1)).map((x) => (x === undefined ? '' : x))),
+      setValues: (v) => v.forEach((fila, i) => fila.forEach((x, j) => { (datos[r - 1 + i] = datos[r - 1 + i] || [])[c - 1 + j] = x; })),
+      setValue: (x) => { datos[r - 1][c - 1] = x; },
+    }),
+  };
+  return hoja;
+}
+const comoObjetos = (hoja) => hoja.datos.slice(1).map((f) => Object.fromEntries(hoja.datos[0].map((h, i) => [h, f[i] === undefined ? '' : f[i]])));
+
+function cargar(hoja) {
+  const ctx = vm.createContext({
+    Utilities,
+    Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' } },
+    SheetUtils: {
+      getSheet: () => hoja,
+      getAll: () => comoObjetos(hoja),
+      indiceDeColumnas: (enc, nombres) => Object.fromEntries(nombres.map((n) => [n, enc.map((e) => String(e).trim().toUpperCase()).indexOf(n.toUpperCase())])),
+    },
+    Candado: { con: (fn) => fn() },
+    CacheHojas: { tocarHoja: () => {} },
+    Logger: { log: () => {} },
+    soloEditor_: () => {},
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Credenciales.gs'), 'utf8') +
+    '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;', ctx);
+  return ctx;
+}
+
+test('la huella v2 es PBKDF2-HMAC-SHA256 de verdad (igual que crypto.pbkdf2Sync) y cada una lleva su sal', () => {
+  const { C } = cargar(hojaFalsa(['CORREO'], []));
+  const h = C.crear('Una contraseña larga');
+  const [version, iter, sal, hash] = h.split('$');
+  assert.equal(version, 'v2');
+  assert.equal(Number(iter), C.ITERACIONES);
+  assert.equal(hash, crypto.pbkdf2Sync('Una contraseña larga', sal, Number(iter), 32, 'sha256').toString('hex'));
+  assert.notEqual(C.crear('Una contraseña larga'), h, 'otra sal, otra huella');
+  assert.deepEqual({ ...C.verificar({ PASSWORD_HASH: h }, 'Una contraseña larga') }, { ok: true, migrar: false });
+  assert.equal(C.verificar({ PASSWORD_HASH: h }, 'otra').ok, false);
+});
+
+test('texto plano y v1 se aceptan y piden pasar a v2; una v2 con menos iteraciones también', () => {
+  const { C } = cargar(hojaFalsa(['CORREO'], []));
+  assert.deepEqual({ ...C.verificar({ 'CONTRASEÑA': 'vieja123' }, 'vieja123') }, { ok: true, migrar: true });
+  assert.equal(C.verificar({ 'CONTRASEÑA': 'vieja123' }, 'otra').ok, false);
+  const v1 = Buffer.from(Utilities.computeHmacSha256Signature('clave v1', 'sal-v1').map((b) => (b + 256) % 256)).toString('hex');
+  assert.deepEqual({ ...C.verificar({ SALT: 'sal-v1', PASSWORD_HASH: v1 }, 'clave v1') }, { ok: true, migrar: true });
+  const debil = 'v2$10$abc$' + crypto.pbkdf2Sync('x1234567890', 'abc', 10, 32, 'sha256').toString('hex');
+  assert.deepEqual({ ...C.verificar({ PASSWORD_HASH: debil }, 'x1234567890') }, { ok: true, migrar: true });
+  // Un admin escribió una nueva en la hoja a alguien que ya tenía huella: sirve (y se migra)
+  assert.deepEqual({ ...C.verificar({ PASSWORD_HASH: C.crear('la de antes 1'), 'CONTRASEÑA': 'la que puso el admin' }, 'la que puso el admin') },
+    { ok: true, migrar: true });
+  assert.equal(C.verificar({}, '').ok, false, 'sin nada guardado no entra nadie, ni con contraseña vacía');
+});
+
+test('guardar escribe la huella por CORREO, borra CONTRASEÑA y crea las columnas que falten', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'CONTRASEÑA'], [
+    { CORREO: 'otra@x.com', NOMBRE: 'Otra', 'CONTRASEÑA': 'no tocar' },
+    { CORREO: 'Ana@GPH.com ', NOMBRE: 'Ana', 'CONTRASEÑA': 'plana' },
+  ]);
+  const { C } = cargar(hoja);
+  C.guardar('ana@gph.com', 'Nueva contraseña 9', { debeCambiar: true });
+  const ana = comoObjetos(hoja)[1];
+  assert.equal(ana['CONTRASEÑA'], '', 'la de texto plano se borra');
+  assert.match(String(ana.PASSWORD_HASH), /^v2\$/);
+  assert.equal(ana['DEBE CAMBIAR CONTRASEÑA'], 'TRUE');
+  assert.equal(C.verificar(ana, 'Nueva contraseña 9').ok, true);
+  assert.equal(comoObjetos(hoja)[0]['CONTRASEÑA'], 'no tocar', 'los demás renglones quedan igual');
+  assert.throws(() => C.guardar('nadie@x.com', 'algo largo 123'), /No existe el usuario/);
+});
+
+test('contrasenasAHash: revisar solo cuenta; aplicar pasa todas las de texto plano y no deja ninguna', () => {
+  const hoja = hojaFalsa(['CORREO', 'CONTRASEÑA', 'PASSWORD_HASH', 'SALT'], [
+    { CORREO: 'a@x.com', 'CONTRASEÑA': 'uno-uno-uno' },
+    { CORREO: 'b@x.com', 'CONTRASEÑA': 'dos-dos-dos' },
+    { CORREO: 'c@x.com' },
+  ]);
+  const ctx = cargar(hoja);
+  const antes = ctx.revisar();
+  assert.equal(antes.planas, 2);
+  assert.equal(antes.sinContrasena, 1);
+  assert.equal(comoObjetos(hoja)[0]['CONTRASEÑA'], 'uno-uno-uno', 'revisar no cambia nada');
+  const r = ctx.pasar();
+  assert.equal(r.pasadas, 2);
+  const despues = comoObjetos(hoja);
+  assert.ok(despues.every((f) => f['CONTRASEÑA'] === ''), 'ninguna en texto plano');
+  assert.equal(ctx.C.verificar(despues[1], 'dos-dos-dos').ok, true, 'y la misma contraseña sigue sirviendo');
+});
+
+test('reglas de una contraseña nueva (NIST 800-63B): largo, comunes, correo, nombre y distinta de la actual', () => {
+  const { C } = cargar(hojaFalsa(['CORREO'], []));
+  const motivo = (p, c) => { try { C.revisarNueva(p, c); return 'ok'; } catch (e) { return e.message; } };
+  assert.match(motivo('corta12'), /al menos 10/);
+  assert.match(motivo('aaaaaaaaaaaa'), /repetido/);
+  assert.match(motivo('Ciudadmaderas'), /más usadas/);
+  assert.match(motivo('ana.lopez2026!', { correo: 'ana.lopez@gph.com' }), /tu correo/);
+  assert.match(motivo('soyGuadalupe99', { nombre: 'Maria Guadalupe Perez' }), /tu nombre/);
+  assert.match(motivo('misma clave larga', { actual: 'misma clave larga' }), /distinta/);
+  assert.equal(motivo('Tres palabras al azar 7', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok');
+});
