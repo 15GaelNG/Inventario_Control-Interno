@@ -21,8 +21,11 @@ function cargar(opciones) {
       { CORREO: 'usuario@ciudadmaderas.com', ROL: 'USER', ACTIVO: 'TRUE' },
     ] },
     MailApp: { sendEmail: (m) => correos.push(m) },
+    Utilities: { formatDate: (d) => d.toISOString() },
+    Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     console: { warn: () => {} },
   });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Accesos.gs'), 'utf8') + '\nthis.A = Accesos;', ctx);
   return { A: ctx.A, filas, correos };
 }

@@ -48,6 +48,7 @@ function cargar(opciones) {
     Permisos: { puedeEditar: (token) => { if (token !== 'admin') throw new Error('Sin permiso'); return { correo: 'admin@x.com' }; } },
     console: { warn: () => {} },
   });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Verificacion.gs'), 'utf8') + '\nthis.V = Verificacion;', ctx);
   return { V: ctx.V, correos, cache, hoja };
 }
@@ -140,4 +141,17 @@ test('mis dispositivos, quitar uno y que un admin olvide todos', () => {
   assert.throws(() => V.olvidarDe('otro', 'ana@gph.com'), /Sin permiso/);
   assert.equal(V.olvidarDe('admin', 'ana@gph.com'), 1);
   assert.equal(V.decidir(ANA, 'contrasena', Object.assign({ llave: enChrome }, CHROME)).motivo, 'nuevo');
+});
+
+test('el correo del código usa la plantilla: 6 casillas, el código en una línea, versión en texto y nada sin escapar', () => {
+  const { V, correos } = cargar();
+  V.decidir({ CORREO: 'ana@gph.com', NOMBRE: 'Ana <script>' }, 'contrasena', CHROME);
+  const m = correos[0];
+  const codigo = codigoDe(m);
+  assert.equal((m.htmlBody.match(/class="ci-casilla">\d</g) || []).length, 6, 'seis casillas');
+  assert.ok(m.htmlBody.includes('aria-label="Código: ' + codigo.split('').join(' ') + '"'), 'con etiqueta para lectores de pantalla');
+  assert.ok(m.htmlBody.includes('>' + codigo + '</span>'), 'y el código en una línea para copiarlo');
+  assert.match(m.body, new RegExp('Código: ' + codigo), 'la versión en texto también lo trae');
+  assert.ok(!m.htmlBody.includes('<script>') && m.htmlBody.includes('Ana &lt;script&gt;'), 'el nombre va escapado');
+  assert.ok(m.htmlBody.length < 20000, 'lejos de los 102 KB en que Gmail corta: ' + m.htmlBody.length);
 });
