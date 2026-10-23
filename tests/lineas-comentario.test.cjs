@@ -78,11 +78,13 @@ test('las plantillas del AppSheet quedan aparte de las del sistema', () => {
   assert.equal(P.PLANTILLAS_APPSHEET.RESPONSIVA_CELULAR, '1EfSbZaQwl6c3ylQ1Z60gxjOeIXAqZ7g1_IN-qfw-pMc');
   // El sistema usa copias de las «(SISTEMA)» (6-oct) con los datos del responsable iguales en las dos (19-oct, pendiente
   // 2.54), y el ajuste de impresión de la responsiva va con la copia
-  assert.equal(P.PLANTILLAS.INSPECCION_CELULAR, '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA');
+  // La inspección, con los accesorios en lista (usuario, 22-oct); la del 19-oct queda para las inspecciones de antes
+  assert.equal(P.PLANTILLAS.INSPECCION_CELULAR, '101CtfZbTXpgu_4vB0vCV-USfHSWP-O3G-2VGLuR3saU');
+  assert.equal(P.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST, '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA');
   assert.equal(P.PLANTILLAS.RESPONSIVA_CELULAR, '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ');
   assert.match(read('src/services/lineas/LineasPdf.gs'), /\[PLANTILLAS\.RESPONSIVA_CELULAR\]: \{ altoFuente/);
   // Las funciones de una sola vez (renombrar columnas, copiar plantillas) ya se corrieron y se quitaron (7-oct)
   const admin = read('src/services/lineas/LineasAdmin.gs');
   assert.doesNotMatch(admin, /lineasRenombrarColumnasDocumentos|lineasPlantillasComentario/);
-  assert.deepEqual(Object.keys(P).sort(), ['PLANTILLAS', 'PLANTILLAS_APPSHEET', 'generarPdfDesdePlantilla']);
+  assert.deepEqual(Object.keys(P).sort(), ['PLANTILLAS', 'PLANTILLAS_APPSHEET', 'generarPdfDesdePlantilla', 'plantillaInspeccion']);
 });

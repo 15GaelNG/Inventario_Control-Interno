@@ -322,15 +322,19 @@ test('el checklist replica Show_If, orden de secciones y la CALIFICACION del App
     'ESTADO FÍSICO GENERAL', 'DESEMPEÑO', 'APPS INSTALADAS']);
   const visibles = (tipo) => Checklist.seccionesVisibles(tipo).reduce((l, s) => l.concat(s.puntos.map((p) => p.columna)), []);
   assert.deepEqual(visibles('LINEA'), ['IDENTIFICACION', 'RED MOVIL', 'USO DATOS', 'LINEA DE VOZ']);
-  assert.deepEqual(visibles('MODEM'), ['IDENTIFICACION', 'CUBO', 'CABLE', 'RED MOVIL', 'USO DATOS', 'BOTON ENCENDIDO', 'CUERPO EQUIPO',
+  // Sin CUBO, CABLE, FUNDA ni MICA (usuario, 22-oct): los accesorios van en la lista ACCESORIOS (LineasCaptura)
+  assert.deepEqual(visibles('MODEM'), ['IDENTIFICACION', 'RED MOVIL', 'USO DATOS', 'BOTON ENCENDIDO', 'CUERPO EQUIPO',
     'PUERTO CARGA', 'TEMPERATURA', 'DESEMPEÑO']);
   assert.equal(visibles('EQUIPO').indexOf('RED MOVIL'), -1);
-  assert.equal(visibles('EQUIPO + SIM').length, 36);
-  assert.ok(!visibles('EQUIPO + SIM').includes('CUBO 2'));
-  // Fórmula: SI de 15 puntos + BUENO/REGULAR/MALO, entre los contestados (N/A y conectividad no cuentan)
+  assert.equal(visibles('EQUIPO + SIM').length, 32);
+  ['CUBO', 'CABLE', 'FUNDA', 'MICA', 'CUBO 2', 'CABLE 2'].forEach((c) => assert.ok(!visibles('EQUIPO + SIM').includes(c), c));
+  // Fórmula: SI de 11 puntos + BUENO/REGULAR/MALO, entre los contestados (N/A, conectividad y accesorios no cuentan)
   assert.equal(Checklist.calificacion({}), 0);
-  assert.equal(Checklist.calificacion({ IDENTIFICACION: 'N/A', CUBO: 'SI', WIFI: 'NO', SO: 'NO' }), 1);
-  assert.equal(Checklist.calificacion({ CUBO: 'SI', CABLE: 'NO', 'DURACION BATERIA': 'REGULAR', TEMPERATURA: 'MALO' }), 1.5 / 4);
+  assert.equal(Checklist.calificacion({ IDENTIFICACION: 'N/A', PANTALLA: 'SI', WIFI: 'NO', SO: 'NO' }), 1);
+  assert.equal(Checklist.calificacion({ PANTALLA: 'SI', CAMARA: 'NO', 'DURACION BATERIA': 'REGULAR', TEMPERATURA: 'MALO' }), 1.5 / 4);
+  assert.equal(Checklist.calificacion({ PANTALLA: 'SI', CUBO: 'NO', CABLE: 'NO', FUNDA: 'NO', MICA: 'NO' }), 1);
+  // La de la pantalla (en vivo) es la misma
+  assert.match(read('src/html/js/lineas.html'), /const CALIFICACION_SI = \['IDENTIFICACION', 'PANTALLA', 'BOTONES VOLUMEN',/);
   assert.equal(Checklist.calificacionTexto(0.9444444), '94.44%');
 });
 
@@ -1549,7 +1553,7 @@ test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación
   // El responsable, fijo solo en Vincular o Cambiar línea (camposResponsable_, personaFija)
   assert.match(captura, /const noEmpleado = o\.personaFija \? fijo\('No EMPLEADO', 'No\. de empleado'\)/);
   assert.match(captura, /const nombre = o\.personaFija \? fijo\('RESPONSABLE', 'Nombre'\)/);
-  assert.match(resp, /ed\('ACCESORIOS', 'Accesorios entregados', 'multi'/);
+  assert.match(resp, /campo_\('ACCESORIOS', 'Accesorios entregados', 'multi', listaAccesorios_\(acceso\('ACCESORIOS'\)\)\)/);
   const cliente = read('src/html/js/lineas.html');
   // Sin columna de Acciones (30-sep): clic = vista rápida, doble clic = ficha; la vista rápida trae "Abrir ficha completa"
   assert.doesNotMatch(cliente, /titulo: 'Vista rápida', alHacer/);

@@ -33,7 +33,8 @@ test('CARGADOR ya no es opción en ninguna lista de accesorios', () => {
   assert.match(read('src/services/lineas/LineasRepo.gs'), /accesorios: \['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'\],/);
   assert.match(read('src/services/lineas/LineasRegistros.gs'), /const ACCESORIOS = \['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'\];/);
   // La responsiva y Corregir equipo muestran CABLE y CUBO en lugar del CARGADOR de antes
-  assert.match(read('src/services/lineas/LineasCaptura.gs'), /const accesorios = String\(LineasUtil\.sinCargador\(acceso\('ACCESORIOS'\)\) \|\| ''\)/);
+  // (y la inspección desde el 22-oct: listaAccesorios_ es de las dos)
+  assert.match(read('src/services/lineas/LineasCaptura.gs'), /const accesorios = String\(LineasUtil\.sinCargador\(texto\) \|\| ''\)/);
   // La ficha también
   assert.match(read('src/services/lineas/LineasRepo.gs'), /accesorios: \(txt\(LineasUtil\.sinCargador\(col\(f, 'ACCESORIOS'\)\)\) \|\| ''\)/);
 });

@@ -101,6 +101,7 @@ function captura(fila, opciones) {
     },
     LineasPdf: {
       PLANTILLAS: { RESPONSIVA_CELULAR: 'R', INSPECCION_CELULAR: 'I' },
+      plantillaInspeccion: (registro) => (registro.CUBO ? 'I-CHECKLIST' : 'I'),
       generarPdfDesdePlantilla: (plantilla, registro, imagenes, carpeta, nombre) => {
         hechos.generados.push({ plantilla, imagenes, nombre });
         return { id: 'NUEVO', nombre, url: 'url-nuevo', avisos: [] };

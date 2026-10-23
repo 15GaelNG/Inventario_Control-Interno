@@ -117,7 +117,7 @@ test('al guardar: la inspección pasa también número y director a la ficha; la
   const cap = read('src/services/lineas/LineasCaptura.gs');
   const copia = cap.slice(cap.indexOf('const COPIA_INSPECCION_A_LINEA'), cap.indexOf('const ACCESOS_INSPECCION'));
   assert.match(copia, /\['NO EMPLEADO', 'No EMPLEADO'\], \['DIRECTOR', 'DIRECTOR'\]/);
-  assert.match(cap, /const COLUMNAS_NUEVAS = \{ INSPECCION: \['No EMPLEADO', 'DIRECTOR'\], RESPONSIVA: \['JEFE DIRECTO'\] \};/);
+  assert.match(cap, /const COLUMNAS_NUEVAS = \{ INSPECCION: \['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'\], RESPONSIVA: \['JEFE DIRECTO'\] \};/);
   assert.match(cap, /const nuevas = COLUMNAS_NUEVAS\.INSPECCION\.filter\(\(c\) => fila\[c\]\);\s+if \(nuevas\.length\) LineasDatos\.asegurarColumnas\(LineasRepo\.TAB\.INSP, nuevas\);\s+LineasDatos\.agregarFilas\(LineasRepo\.TAB\.INSP/);
   assert.match(cap, /const nuevas = COLUMNAS_NUEVAS\.RESPONSIVA\.filter\(\(c\) => fila\[c\]\);\s+if \(nuevas\.length\) LineasDatos\.asegurarColumnas\(LineasRepo\.TAB\.RESP, nuevas\);\s+LineasDatos\.agregarFilas\(LineasRepo\.TAB\.RESP/);
   // La responsiva guarda el jefe directo en la ficha, como lo demás de la persona (renovación y reasignación)

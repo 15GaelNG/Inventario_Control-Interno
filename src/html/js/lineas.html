@@ -744,8 +744,8 @@
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
 
-    // CALIFICACION: misma AppFormula del AppSheet (ver LineasChecklist.calificacion)
-    const CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
+    // CALIFICACION: la misma de LineasChecklist.calificacion (sin los accesorios desde el 22-oct)
+    const CALIFICACION_SI = ['IDENTIFICACION', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
       'CUERPO EQUIPO', 'CAMARA', 'PUERTO CARGA', 'ALTAVOZ', 'BOCINAS', 'MICROFONO', 'LINEA DE VOZ'];
     const CALIFICACION_DESEMPENO = { 'DURACION BATERIA': 1, 'TEMPERATURA': 1, 'DESEMPEÑO': 1 };
     function calificacionAppSheet(valores) {

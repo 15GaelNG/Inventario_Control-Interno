@@ -23,11 +23,20 @@ const LineasPdf = (function () {
    * Desde el 19-oct (pendiente 2.54), sus copias «- PRUEBA RESPONSABLE 19-oct» con los mismos datos del responsable en
    * las dos: la responsiva agrega JEFE DIRECTO y la inspección No. empleado y Director de Dpto. Las «(SISTEMA)» de
    * antes (inspección 11l9vL9K…, responsiva 13qeTsLm…) siguen como estaban: las usa producción hasta que salga este cambio.
+   * Desde el 22-oct (usuario), la inspección pide los accesorios con la lista de la responsiva: su copia «- ACCESORIOS
+   * 22-oct» cambia los renglones Cubo, Cable, Funda y Mica (SI/NO/N/A) por «Accesorios: <<ACCESORIOS>>». La del 19-oct
+   * queda para volver a hacer el PDF de una inspección de antes (plantillaInspeccion).
    */
   const PLANTILLAS = {
-    INSPECCION_CELULAR: '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',
+    INSPECCION_CELULAR: '101CtfZbTXpgu_4vB0vCV-USfHSWP-O3G-2VGLuR3saU',
+    INSPECCION_CELULAR_CHECKLIST: '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',
     RESPONSIVA_CELULAR: '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ',
   };
+  /** La plantilla de una inspección: la de antes si se capturó con CUBO, CABLE, FUNDA o MICA (SI/NO/N/A). */
+  function plantillaInspeccion(registro) {
+    const conPuntos = ['CUBO', 'CABLE', 'FUNDA', 'MICA'].some((c) => String((registro || {})[c] === null || (registro || {})[c] === undefined ? '' : registro[c]).trim());
+    return conPuntos ? PLANTILLAS.INSPECCION_CELULAR_CHECKLIST : PLANTILLAS.INSPECCION_CELULAR;
+  }
 
   // Cómo imprime el AppSheet ("Task for GENERAR PDF": carta, márgenes de la tarea en 0): convierte el Doc a HTML y lo
   // imprime con Chromium. Los márgenes del Doc (responsiva: 14.2 pt arriba y a los lados, 0 abajo) se respetan, y el
@@ -482,5 +491,5 @@ const LineasPdf = (function () {
     }
   }
 
-  return { PLANTILLAS, PLANTILLAS_APPSHEET, generarPdfDesdePlantilla };
+  return { PLANTILLAS, PLANTILLAS_APPSHEET, plantillaInspeccion, generarPdfDesdePlantilla };
 })();

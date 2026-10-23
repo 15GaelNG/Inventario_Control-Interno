@@ -226,8 +226,23 @@ const LineasCaptura = (function () {
   /** Columna del inventario de cada dato del responsable que en los documentos se llama distinto. */
   const COLUMNA_FICHA = { 'No EMPLEADO': 'NO EMPLEADO', 'CORREO': 'CUENTA GOOGLE' };
   const columnaFicha_ = (c) => COLUMNA_FICHA[c] || c;
-  /** Lo que cada hoja del AppSheet no tenía: la inspección no pedía número ni director y la responsiva, jefe directo. */
-  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR'], RESPONSIVA: ['JEFE DIRECTO'] };
+  /**
+   * Lo que cada hoja del AppSheet no tenía: la inspección no pedía número ni director y la responsiva, jefe directo. La
+   * inspección pide los accesorios con la lista de la responsiva desde el 22-oct (usuario).
+   */
+  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'], RESPONSIVA: ['JEFE DIRECTO'] };
+  /**
+   * Valor y opciones del campo ACCESORIOS, el mismo en la responsiva y la inspección (usuario, 22-oct): la lista única
+   * (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma), CARGADOR como CABLE y CUBO (usuario,
+   * 22-oct) y lo que ya traiga el equipo fuera de la lista, para no perderlo.
+   */
+  function listaAccesorios_(texto) {
+    const accesorios = String(LineasUtil.sinCargador(texto) || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
+    return {
+      valor: accesorios.join(' , '),
+      opciones: LineasRepo.CATALOGO.accesorios.concat(accesorios.filter((x) => LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
+    };
+  }
   function camposResponsable_(catalogos, valor, opciones) {
     const o = opciones || {};
     const req = { requerido: 'SIEMPRE' };
@@ -296,6 +311,9 @@ const LineasCaptura = (function () {
       s.puntos.filter((p) => p.mostrar !== 'NUNCA').forEach((p) => elementos.push(campo_(p.columna, ETIQUETAS_INSPECCION[p.columna] || p.etiqueta, 'escala', {
         escala: p.escala, opciones: LineasChecklist.ESCALAS[p.escala].valores, mostrar: p.mostrar, requerido: p.requerido, valor: '', checklist: true,
       })));
+      // Los accesorios, con la lista de la responsiva en lugar de CUBO, CABLE, FUNDA y MICA SI/NO (usuario, 22-oct): los
+      // del equipo (en Reasignar, los de la responsiva) y pasan a la ficha. Donde antes iban CUBO y CABLE: todo menos la línea
+      if (nombre === 'DOCUMENTACIÓN / ACCESORIOS') elementos.push(campo_('ACCESORIOS', 'Accesorios', 'multi', Object.assign(listaAccesorios_(deResp('ACCESORIOS', v('ACCESORIOS'))), { mostrar: 'NO_LINEA' })));
     };
     ['DOCUMENTACIÓN / ACCESORIOS', 'SISTEMA', 'CONECTIVIDAD', 'ESTADO FÍSICO GENERAL', 'DESEMPEÑO'].forEach(agregarSeccion);
     elementos.push(
@@ -385,9 +403,6 @@ const LineasCaptura = (function () {
     // La línea, fija (usuario, 16-oct: lo que pasa a la ficha es de la persona y del equipo): se cambia con Vincular o
     // Cambiar línea y un dato mal capturado se corrige con Editar línea
     const deLinea = (columna, etiqueta, valor) => ro(columna, etiqueta, valor);
-    // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma), CARGADOR
-    // como CABLE y CUBO (usuario, 22-oct) y lo que ya traiga el equipo fuera de la lista, para no perderlo
-    const accesorios = String(LineasUtil.sinCargador(acceso('ACCESORIOS')) || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
     // La línea sin equipo (pendiente 2.45): solo la línea, fija (es la responsiva de esa línea; un dato mal capturado se
     // corrige con Editar línea), sin equipo ni accesorios y accesos
     const datos = sinEquipo ? [
@@ -417,9 +432,7 @@ const LineasCaptura = (function () {
     ];
     const accesos = sinEquipo ? [] : [
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
-      ed('ACCESORIOS', 'Accesorios entregados', 'multi', accesorios.join(' , '), {
-        opciones: LineasRepo.CATALOGO.accesorios.concat(accesorios.filter((x) => LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
-      }),
+      campo_('ACCESORIOS', 'Accesorios entregados', 'multi', listaAccesorios_(acceso('ACCESORIOS'))),
       campo_('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valor: acceso('PIN WHATSAPP'), literal: true, secreto: true }),
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: acceso('PIN EQUIPO'), literal: true, secreto: true }),
       campo_('CONTRASEÑA', 'Patrón', 'patron', { valor: acceso('PATRON'), secreto: true }),
@@ -623,6 +636,8 @@ const LineasCaptura = (function () {
       else if (!datos.enAccion) COPIA_INSPECCION_A_LINEA.concat(ADICIONALES.map((c) => [c, c])).forEach(copiar);
       // El color es del aparato (EQUIPOS): la inspección lo actualiza si trae uno (decisión del usuario, 3-oct)
       if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
+      // Los accesorios también (usuario, 22-oct), como en la responsiva: lo que quedó marcado, aunque sea nada
+      if (LineasChecklist.cumple('NO_LINEA', valores['TIPO'] || '')) copia['ACCESORIOS'] = valores['ACCESORIOS'] || '';
       // tolerante: lo que no tiene dónde guardarse en las hojas nuevas (p. ej. la persona de un equipo guardado) se ignora
       const t1 = Date.now();
       const g = LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true });
@@ -984,7 +999,7 @@ const LineasCaptura = (function () {
     try {
       const tp = Date.now();
       const pdf = LineasPdf.generarPdfDesdePlantilla(
-        esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
+        esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos);
       marca_('pdf · copiar la plantilla y convertir', tp);
       if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
