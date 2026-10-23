@@ -46,8 +46,8 @@ function adquisicionVehicularIndice_todo() {
   return adquisicionVehicularIndice_continuar();
 }
 
-function adquisicionVehicularIndice_continuar() {
-  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
+function adquisicionVehicularIndice_continuar(e) {
+  soloEditor_(e);   // el activador de tiempo pasa con su evento (triggerUid); desde el navegador, nadie
   indiceAdqBorrarActivadores_();
   const st = indiceAdqLeer_();
   if (!st || st.fase !== 'OCR') return indiceAdqInforme_(st);

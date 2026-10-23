@@ -299,7 +299,9 @@ function carpetaDeProduccion_(clave) {
 function revisionEntorno_() {
   const activo = String(Session.getActiveUser().getEmail() || '').toLowerCase();
   const efectivo = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
-  if (activo && efectivo && activo !== efectivo) return { error: 'Solo para quien desplegó la app.' };
+  // Con correo y el mismo que corre: el editor o el /dev de subir.js (corre con la cuenta de quien sube). Sin correo es
+  // alguien de fuera del dominio con la web app abierta a cualquier cuenta de Google (23-oct): no ve los IDs del entorno
+  if (!activo || activo !== efectivo) return { error: 'Solo para quien desplegó la app.' };
 
   const entorno = (leerConfig_('ENTORNO') || '').trim().toUpperCase();
   const esProd = entorno === 'PROD';
