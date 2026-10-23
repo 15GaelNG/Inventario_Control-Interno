@@ -67,6 +67,8 @@ const Config = (function () {
     // Ver la nota larga de arriba (URL_FIRMA_PUBLICA). Vacío = no hay despliegue público
     // configurado todavía; las ligas de firma usan el despliegue normal, como siempre.
     urlFirmaPublica: () => leerConfig_('URL_FIRMA_PUBLICA') || '',
+    // La app de siempre (el enlace de "¿Olvidaste tu contraseña?"): en prod, el link del equipo; si no, el de este despliegue
+    urlApp: () => leerConfig_('URL_APP') || ScriptApp.getService().getUrl(),
 
     SPREADSHEET_IDS: {
       USUARIOS: () => required('SS_ID_USUARIOS'),

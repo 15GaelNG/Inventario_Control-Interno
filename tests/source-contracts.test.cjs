@@ -3075,6 +3075,9 @@ test('ninguna api… nueva corre sin sesión: las que no piden token son una lis
     apiSeguridadCambiarInicial: 'el reto del login (UUID de 10 min, de un solo correo y paso)',
     apiSeguridadVerificarCodigo: 'el reto del código (5 intentos)',
     apiSeguridadReenviarCodigo: 'el reto del código (3 reenvíos, 60 s entre cada uno)',
+    apiSeguridadRecuperarPedir: 'siempre la misma respuesta; 3 por correo por hora (Recuperacion.gs)',
+    apiSeguridadRecuperarEstado: 'el enlace del correo (huella, 30 min, un uso)',
+    apiSeguridadRecuperarCambiar: 'el enlace del correo (huella, 30 min, un uso)',
   };
   const gs = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs')).map((f) => path.relative(root, f).replace(/\\/g, '/'))
     .filter((f) => f === 'src/ClientApi.gs' || f.startsWith('src/api/'));
