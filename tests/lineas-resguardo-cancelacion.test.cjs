@@ -10,7 +10,7 @@ const LINEAS = require('./lineas-fuente');
 // bandeja y el inventario en memoria.
 const read = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
-function cargar(inventario, bandeja, movimientos) {
+function cargar(inventario, bandeja, movimientos, conDG) {
   const tablas = { 'LINEAS TELEFONICAS': inventario, APP_RESGUARDOS: bandeja, MOVIMIENTOS: movimientos || [] };
   const escritas = { actualizadas: [], agregadas: [], eliminadas: [], movimientos: [], columnas: [], registros: [] };
   // El inventario se lee con los mismos objetos: lo que se guarda se ve al volver a leerlo (como LineasLectura)
@@ -73,8 +73,10 @@ function cargar(inventario, bandeja, movimientos) {
   };
   const Utilities = { formatDate: () => '2026-10-13' };
   const LineasCaptura = { exigirInspeccion: (id) => { if (!id) throw new Error('Falta la inspección'); } };
-  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'Utilities', 'LineasCaptura', 'LineasEscritura',
-    read('src/services/lineas/LineasResguardos.gs') + '\nreturn LineasResguardos;')(LineasUtil, Notif, LineasDatos, LineasRepo, LineasRegistros, Utilities, LineasCaptura, LineasEscritura);
+  // LineasDG solo en las pruebas de Dirección General (sin él, LineasResguardos no la revisa)
+  const LineasDG = conDG ? new Function('LineasUtil', read('src/services/lineas/LineasDG.gs') + '\nreturn LineasDG;')(LineasUtil) : undefined;
+  const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'Utilities', 'LineasCaptura', 'LineasEscritura', 'LineasDG',
+    read('src/services/lineas/LineasResguardos.gs') + '\nreturn LineasResguardos;')(LineasUtil, Notif, LineasDatos, LineasRepo, LineasRegistros, Utilities, LineasCaptura, LineasEscritura, LineasDG);
   return { R, tablas, escritas };
 }
 
@@ -686,4 +688,123 @@ test('Cancelaciones: región por la lada y cuenta padre de la línea, también y
     ['Región 5', 'Región 4', 'Región 8', 'Región 8', 'Región 6', 'Región 6', 'Región 1', 'Región 3', 'Región 7', 'Región 9', '', '']);
   const html = LINEAS;
   assert.match(html, /\{ campo: 'REGION', titulo: 'Región', tipo: 'lista' \},\n\s+\{ campo: 'CUENTA_PADRE', titulo: 'Cuenta padre'/);
+});
+
+// ---------------- Auditoría del 23-oct (lineas-revisor) ----------------
+
+// Un renglón viejo que junta resguardo y cancelación: la línea sigue en el equipo, EN PROCESO DE CANCELACION
+function renglonViejo(cancelacion) {
+  const fecha = new Date(2026, 9, 1, 10, 0, 0);
+  const eq = equipo('EQU-1', '0012', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'ID LINEA': 'LIN-0012', 'NUMERO TELEFONO': '4420012', 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' });
+  const mov = { 'ID': 'MVT-0', 'ACCION': 'RESGUARDO', 'FECHA': fecha, 'ID EQUIPO': 'EQU-1', 'CAMBIOS': JSON.stringify([
+    { campo: 'ESTATUS EQUIPO', antes: 'USO', despues: 'RESGUARDO' }, { campo: 'ESTATUS LINEA', antes: 'USO', despues: 'EN PROCESO DE CANCELACION' },
+    { campo: 'RESPONSABLE', antes: 'ANA', despues: '' }]) };
+  const renglon = { 'ID': 'RSG-1', 'FECHA': fecha, 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'NUMERO': '4420012', 'ESTADO': 'PENDIENTE DE RECEPCION',
+    'ESTATUS_EQUIPO': 'RESGUARDO', 'CANCELACION': cancelacion };
+  return { t: cargar([eq], [renglon], [mov]), eq: eq };
+}
+
+test('Quitar del panel: un renglón viejo con la carta ya enviada no se quita; POR FIRMAR sí, y la línea vuelve a USO', () => {
+  const { t, eq } = renglonViejo('CARTA ENVIADA');
+  assert.equal(t.R.vistaQuitar(['RSG-1']).filas[0].omitir, 'Línea 4420012: está en CARTA ENVIADA en Cancelaciones; Pau tiene que retirarla.');
+  const r = t.R.quitarDelPanel(['RSG-1'], { comentario: 'por error' }, usuario);
+  assert.deepEqual([r.hechos.length, r.omitidos.length], [0, 1]);
+  assert.equal(t.tablas.APP_RESGUARDOS.length, 1, 'el renglón y su cancelación se quedan');
+  assert.equal(eq['ESTATUS LINEA'], 'EN PROCESO DE CANCELACION');
+  assert.match(renglonViejo('CANCELADA').t.R.vistaQuitar(['RSG-1']).filas[0].omitir, /Su línea ya se canceló/);
+  const p = renglonViejo('POR FIRMAR');
+  p.t.R.quitarDelPanel(['RSG-1'], { comentario: 'por error' }, usuario);
+  assert.equal(p.t.tablas.APP_RESGUARDOS.length, 0);
+  assert.deepEqual([p.eq['ESTATUS LINEA'], p.eq['ESTATUS EQUIPO'], p.eq['RESPONSABLE']], ['USO', 'USO', 'ANA']);
+  // La pantalla del panel tampoco lo ofrece
+  assert.match(LINEAS, /visible: \(filas\) => filas\.every\(\(f\) => f\.ESTADO === 'PENDIENTE DE RECEPCION' && \['', 'POR FIRMAR', 'RETIRADA'\]\.indexOf\(f\.CANCELACION \|\| ''\) >= 0\),/);
+});
+
+test('Quitar del panel busca la línea por su ID: la que se fue a Cancelaciones regresa con su número corregido', () => {
+  const t = cargar([conLinea('EQU-5', '0050', '01/01/2025', { 'RESPONSABLE': 'ANA' })], []);
+  t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: { 'EQU-5': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  const linea = t.tablas['LINEAS TELEFONICAS'].filter((x) => x.ID === 'LIN-0050')[0];
+  linea['NUMERO TELEFONO'] = '4429990050'; // corregido después de mandarlo
+  const vista = t.R.vistaQuitar(['EQU-5'], true).filas[0];
+  assert.deepEqual(vista.regresa.filter((x) => x.campo === 'NUMERO TELEFONO')[0], { campo: 'NUMERO TELEFONO', de: '', a: '4429990050' });
+  t.R.quitarDelPanel(['EQU-5'], { comentario: 'mandado por error' }, usuario);
+  assert.deepEqual([eq['NUMERO TELEFONO'], eq['ESTATUS LINEA'], t.tablas.APP_RESGUARDOS.length], ['4429990050', 'USO', 0]);
+});
+
+test('Quitar del panel: la línea que se quedó en el equipo se reconoce por su ID; si el equipo tiene otra, se queda con su motivo', () => {
+  const t = cargar([conLinea('EQU-6', '0060', '01/01/2027')], []);
+  t.R.mandar(['EQU-6'], { comentario: 'renuncia', inspecciones: { 'EQU-6': 'INS-6' }, porEquipo: { 'EQU-6': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  assert.equal(t.tablas.APP_RESGUARDOS[0].ID_LINEA_AL_MANDAR, 'LIN-0060');
+  eq['NUMERO TELEFONO'] = '4428880060'; // la misma línea, con el número corregido
+  assert.deepEqual(t.R.vistaQuitar(['EQU-6']).filas[0].regresa.filter((x) => x.campo === 'ESTATUS LINEA')[0], { campo: 'ESTATUS LINEA', de: 'DISPONIBLE', a: 'USO' });
+  Object.assign(eq, { 'ID LINEA': 'LIN-OTRA', 'NUMERO TELEFONO': '4427770000' }); // otra línea
+  const vista = t.R.vistaQuitar(['EQU-6']).filas[0];
+  assert.equal(vista.regresa.filter((x) => x.campo === 'ESTATUS LINEA').length, 0);
+  assert.deepEqual(vista.seQueda.filter((x) => x.campo === 'ESTATUS LINEA')[0], { campo: 'ESTATUS LINEA', valor: 'DISPONIBLE', motivo: 'El equipo ya tiene otra línea' });
+});
+
+test('Retirar cancelación busca el equipo por el ID de la línea; sin él y con el número cambiado, se queda con su motivo', () => {
+  const armar = () => {
+    const t = cargar([conLinea('EQU-5', '0050', '01/01/2025')], []);
+    t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: { 'EQU-5': pedido('RESGUARDO', { 'ESTATUS LINEA': 'DISPONIBLE' }) } }, usuario);
+    t.tablas.APP_RESGUARDOS.filter((x) => x.ID_LINEA)[0].ID = 'RSG-C';
+    t.tablas['LINEAS TELEFONICAS'].filter((x) => x.ID === 'LIN-0050')[0]['NUMERO TELEFONO'] = '4429990050';
+    return t;
+  };
+  const t = armar();
+  assert.deepEqual(t.R.vistaRetirar(['RSG-C']).filas[0].regresa[0], { campo: 'NUCO', de: '', a: '0050' });
+  t.R.retirarCancelacion(['RSG-C'], { comentario: 'se queda con ella' }, pau);
+  assert.equal(t.tablas['LINEAS TELEFONICAS'][0]['NUMERO TELEFONO'], '4429990050');
+  // Renglón de antes del 22-oct (sin ID_LINEA_AL_MANDAR): por su número, que ya no es el mismo
+  const t2 = armar();
+  delete t2.tablas.APP_RESGUARDOS.filter((x) => x.ESTADO)[0].ID_LINEA_AL_MANDAR;
+  const vista = t2.R.vistaRetirar(['RSG-C']).filas[0];
+  assert.deepEqual(vista.seQueda, [{ campo: 'NUCO', valor: '', motivo: 'La línea cambió de número después de salir del NUCO 0050' }]);
+  assert.equal(vista.regresa.filter((x) => x.campo === 'NUCO').length, 0);
+});
+
+// Usuario, 23-oct: «al quitar el panel regresa a la información del equipo o línea antes de mandar a resguardo, los únicos
+// cambios que no regresan son los que se realizaron después, como la corrección es algo dentro del resguardo no cuenta»
+test('Quitar del panel regresa también lo corregido con Corregir resguardo (solo de ese equipo)', () => {
+  const t = cargar([equipo('EQU-1', '0012', 'USO', { 'RESPONSABLE': 'ANA' }), equipo('EQU-10', '0100', 'USO')], []);
+  ['EQU-1', 'EQU-10'].forEach((id) => t.R.mandar([id], { comentario: 'renuncia', inspecciones: { [id]: 'INS' }, porEquipo: { [id]: pedido('RESGUARDO') } }, usuario));
+  t.R.mandar(['EQU-1'], { corregir: true, comentario: 'era leon', porEquipo: { 'EQU-1': pedido('RESGUARDO', { SEDE: 'LEON', 'OFICINA / DESARROLLO': 'BODEGA' }) } }, usuario);
+  t.R.mandar(['EQU-10'], { corregir: true, comentario: 'tijuana', porEquipo: { 'EQU-10': pedido('RESGUARDO', { SEDE: 'TIJUANA' }) } }, usuario);
+  const eq = t.tablas['LINEAS TELEFONICAS'][0];
+  assert.deepEqual([eq['SEDE'], eq['OFICINA / DESARROLLO']], ['LEON', 'BODEGA']);
+  const vista = t.R.vistaQuitar(['EQU-1']).filas[0];
+  assert.deepEqual(vista.regresa.filter((x) => x.campo === 'SEDE')[0], { campo: 'SEDE', de: 'LEON', a: 'MERIDA' });
+  assert.deepEqual(vista.seQueda, [], 'la corrección no es «Cambió después»');
+  t.R.quitarDelPanel(['EQU-1'], { comentario: 'por error' }, usuario);
+  assert.deepEqual([eq['SEDE'], eq['OFICINA / DESARROLLO'], eq['DEPARTAMENTO'], eq['ESTATUS EQUIPO'], eq['RESPONSABLE']], ['MERIDA', 'ALMACEN', 'VENTAS', 'USO', 'ANA']);
+  assert.equal(t.tablas['LINEAS TELEFONICAS'][1]['SEDE'], 'TIJUANA', 'el otro equipo no se toca');
+});
+
+// Usuario, 23-oct: «Que se bloquee, solo permitir corregir estatus pero tiene que pasar por todo el proceso»
+test('Mandar a resguardo no acepta equipos vendidos, donados, desechados ni robados; la pantalla no lo ofrece', () => {
+  const t = cargar(['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'].map((e, i) => equipo('EQU-' + i, '00' + i, e)), []);
+  const f = t.R.formulario(['EQU-0', 'EQU-1', 'EQU-2', 'EQU-3'], usuario);
+  assert.deepEqual(f.equipos, []);
+  assert.deepEqual(f.omitidos.map((o) => o.motivo), ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'].map((e) => 'Está ' + e + ': primero se corrige su estatus («Corregir»)'));
+  const r = t.R.mandar(['EQU-0'], { comentario: 'se guarda', porEquipo: { 'EQU-0': pedido('RESGUARDO') } }, usuario);
+  assert.deepEqual([r.hechos.length, t.tablas.APP_RESGUARDOS.length, t.tablas['LINEAS TELEFONICAS'][0]['ESTATUS EQUIPO']], [0, 0, 'VENDIDO']);
+  assert.match(LINEAS, /const mandaResguardo = \(r\) => !r\.panel && SIN_DOCUMENTOS\.equipo\.indexOf\(String\(r\.estatus \|\| ''\)\.trim\(\)\.toUpperCase\(\)\) < 0;/);
+  assert.match(LINEAS, /: \(mandaResguardo\(r\) \? \{ icono: 'archive', texto: 'Mandar a resguardo', alHacer: \(\) => abrirResguardo\(\[r\]\) \} : null\),/);
+});
+
+test('Dirección General en el panel: quien no es ADMIN no la manda, no la quita y la ve oculta', () => {
+  const dg = equipo('EQU-1', '11002', 'USO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4422798678', 'EQUIPO': 'IPHONE' });
+  const t = cargar([dg], [{ 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '11002', 'NUMERO': '4422798678', 'MODELO': 'IPHONE', 'SEDE': 'QUERETARO',
+    'ESTADO': 'PENDIENTE DE RECEPCION', 'ESTATUS_EQUIPO': 'RESGUARDO' }], [], true);
+  const admin = Object.assign({ esAdmin: true }, usuario);
+  assert.equal(t.R.formulario(['EQU-1'], usuario, { corregir: true }).omitidos[0].motivo, 'Es de Dirección General: solo ADMIN lo modifica.');
+  assert.equal(t.R.formulario(['EQU-1'], admin, { corregir: true }).equipos.length, 1);
+  assert.equal(t.R.vistaQuitar(['RSG-1'], true, usuario).filas[0].omitir, 'Es de Dirección General: solo ADMIN lo modifica.');
+  assert.equal(t.R.quitarDelPanel(['RSG-1'], { comentario: 'por error' }, usuario).omitidos.length, 1);
+  const oculto = t.R.bandeja(usuario).filas[0];
+  assert.deepEqual([oculto.NUCO, oculto.NUMERO, oculto.MODELO, oculto.SEDE, oculto.DEPARTAMENTO, oculto.ESTADO, oculto.dg],
+    ['11002', 'DG', '', '', 'DIRECCION GENERAL', 'PENDIENTE DE RECEPCION', true]);
+  assert.equal(t.R.bandeja(admin).filas[0].MODELO, 'IPHONE');
 });

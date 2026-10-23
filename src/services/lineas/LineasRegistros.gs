@@ -272,8 +272,9 @@ const LineasRegistros = (function () {
       // elige en el alta: se hace en Editar o con «Mandar a cancelación». El servidor hace la misma cuenta (estatusAltaLinea_)
       campo_('ESTATUS LINEA', 'Estatus de la línea', 'calculado', { valor: '', soloLectura: true, formula: 'ESTATUS_LINEA_ALTA' }),
     ] : [
-      // La línea de un equipo sigue al equipo (USO o DISPONIBLE); aquí solo se manda a cancelación o se cancela
-      ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'),
+      // La línea de un equipo sigue al equipo (USO o DISPONIBLE); aquí solo se manda a cancelación o se cancela. Con el
+      // equipo en el panel de Pau, no (auditoría del 23-oct; ver equipoEnPanel_)
+      lineaEnEquipo && ctx && ctx.enPanel ? fijo('ESTATUS LINEA', 'Estatus de la línea', v('ESTATUS LINEA')) : ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'),
         opciones: lineaEnEquipo ? [enBlanco('ESTATUS LINEA')].concat(ESTATUS_LINEA_PANEL).filter((x, i, a) => x && a.indexOf(x) === i)
           : LineasRepo.CATALOGO.estatusLinea,
         requerido: lineaReq, valida: 'LISTA', validaSiCambia: true }),
@@ -442,9 +443,13 @@ const LineasRegistros = (function () {
     return { nuevo: false, parte: soloLinea ? 'LINEA' : null, lineaEnEquipo: soloLinea && deEquipo, base: base, enPanel: !!enPanel };
   }
 
-  /** Corregir equipo de un equipo con su renglón abierto en el panel de Pau (pendiente 3.15); Corregir línea, no aplica. */
-  function equipoEnPanel_(fila, base, parte) {
-    if (String(parte || '').toUpperCase() === 'LINEA' || !LineasRepo.TIPOS_CON_EQUIPO[texto_(base['TIPO']).toUpperCase()]) return false;
+  /**
+   * Corregir equipo o Corregir línea de un equipo con su renglón abierto en el panel de Pau (pendiente 3.15): su estatus lo
+   * cambia el panel. Corregir línea también (auditoría del 23-oct: la línea del equipo en el panel se mandaba a cancelación
+   * por fuera del panel), como Vincular, Cambiar y Desvincular (cambio 39).
+   */
+  function equipoEnPanel_(fila, base) {
+    if (!LineasRepo.TIPOS_CON_EQUIPO[texto_(base['TIPO']).toUpperCase()]) return false;
     return LineasResguardos.enPanel(fila);
   }
 
@@ -452,7 +457,7 @@ const LineasRegistros = (function () {
   function formulario(id, usuario, puedeVerSecretos, parte) {
     const fila = id ? LineasRepo.leerRegistroObligatorio(id, 'el registro') : null;
     const base = fila ? baseDeFila_(fila) : baseNueva_();
-    const ctx = fila ? contextoEdicion_(base, parte, equipoEnPanel_(fila, base, parte)) : { nuevo: true, parte: parte };
+    const ctx = fila ? contextoEdicion_(base, parte, equipoEnPanel_(fila, base)) : { nuevo: true, parte: parte };
     // Agregar línea: los NUCO a los que se le puede vincular (se leen solo aquí; al guardar se revisan otra vez)
     if (!fila && parteDe_(ctx, '') === 'LINEA') ctx.equiposSinLinea = equiposSinLinea_().map((x) => x.nuco);
     // Agregar equipo: las líneas sueltas DISPONIBLE que se le pueden vincular (al guardar se revisan otra vez)
@@ -712,12 +717,17 @@ const LineasRegistros = (function () {
       const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
       const base = baseDeFila_(fila);
       // Editar línea (datos.parte = 'LINEA') o lo que es el registro
-      const edicion = contextoEdicion_(base, datos && datos.parte, equipoEnPanel_(fila, base, datos && datos.parte));
+      const edicion = contextoEdicion_(base, datos && datos.parte, equipoEnPanel_(fila, base));
       const parte = parteDe_(edicion, base['TIPO']);
       // En el panel de Pau el estatus no se corrige aquí (pendiente 3.15); los demás datos sí
       if (edicion.enPanel && Object.prototype.hasOwnProperty.call(enviados, 'ESTATUS EQUIPO') &&
         texto_(enviados['ESTATUS EQUIPO']).toUpperCase() !== texto_(base['ESTATUS EQUIPO']).toUpperCase()) {
         throw new Error('NUCO ' + (LineasUtil.nucoVisible(base['NUCO']) || '') + ' está en Resguardos y cancelaciones: su estatus lo cambia el panel.');
+      }
+      // Ni el de su línea (Corregir línea; auditoría del 23-oct)
+      if (edicion.enPanel && Object.prototype.hasOwnProperty.call(enviados, 'ESTATUS LINEA') &&
+        texto_(enviados['ESTATUS LINEA']).toUpperCase() !== texto_(base['ESTATUS LINEA']).toUpperCase()) {
+        throw new Error('NUCO ' + (LineasUtil.nucoVisible(base['NUCO']) || '') + ' está en Resguardos y cancelaciones: el estatus de su línea lo cambia el panel.');
       }
       // A USO sin responsable: se guardan las demás correcciones y el estatus se queda (lo cambia la Responsiva)
       const pideResponsiva = parte === 'EQUIPO' && exigirSinPersona_(base, enviados);

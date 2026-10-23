@@ -261,7 +261,8 @@
           visible: (filas) => filas.length === 1 && ['PENDIENTE DE RECEPCION', 'EN RESGUARDO'].indexOf(filas[0].ESTADO) >= 0,
           alHacer: (filas) => corregirEnPanel(filas[0], raiz, () => { if (tabla) tabla.limpiarSeleccion(); cargar(); }) },
         { icono: 'archive-x', texto: 'Quitar del panel', titulo: 'Mandado por error: vuelve a como estaba antes de mandarlo', minimo: 1,
-          visible: (filas) => filas.every((f) => f.ESTADO === 'PENDIENTE DE RECEPCION'),
+          // Un renglón viejo con su cancelación ya avanzada, no (auditoría del 23-oct; LineasResguardos.renglonesParaQuitar_)
+          visible: (filas) => filas.every((f) => f.ESTADO === 'PENDIENTE DE RECEPCION' && ['', 'POR FIRMAR', 'RETIRADA'].indexOf(f.CANCELACION || '') >= 0),
           alHacer: (filas) => quitarDelPanel(filas.map((f) => f.ID), () => { if (tabla) tabla.limpiarSeleccion(); memoria.cargadoEn = 0; cargar(); }) },
       ];
 

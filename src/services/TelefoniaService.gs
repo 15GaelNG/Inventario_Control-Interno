@@ -96,6 +96,12 @@ const TelefoniaService = (function () {
     if (!esAdmin_(sesion) && LineasDG.esFila(LineasRepo.leerRegistroPorId(id))) throw new Error('Es de Dirección General: solo ADMIN ve su información.');
     return sesion;
   }
+  /** sinDG_ de una inspección o responsiva, por el registro al que pertenece (auditoría del 23-oct). Sin leerla si es ADMIN. */
+  function sinDGDocumento_(sesion, leer) {
+    if (esAdmin_(sesion)) return sesion;
+    const doc = leer();
+    return doc && doc.registroId ? sinDG_(sesion, doc.registroId) : sesion;
+  }
   function puedeVerSecretos_(sesion) {
     const area = String(sesion.departamento || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
     return sesion.rol === Config.ROLES.ADMIN || area === AREA_SECRETOS;
@@ -459,6 +465,7 @@ const TelefoniaService = (function () {
       (/^drive_/.test(id) ? documentoNucos_(id.slice(6), tipo) : null);
     LineasDatos.tiempo('documento: leído', t0);
     if (!doc) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
+    sinDGDocumento_(sesion, () => doc); // Dirección General: solo ADMIN (8.16)
     // PIN, patrón y firmas solo para ADMIN (igual que en la ficha)
     if (esInspeccion && !puedeVerSecretos_(sesion)) {
       doc.pinEquipo = doc.pinEquipo ? '••••' : null;
@@ -531,6 +538,7 @@ const TelefoniaService = (function () {
     const motivo = String(comentario || '').trim();
     const doc = LineasRepo.leerInspeccion(id) || (/^drive_/.test(String(id)) ? documentoNucos_(String(id).slice(6), 'INSPECCION') : null);
     if (!doc) throw new Error('No existe la inspección ' + id);
+    sinDGDocumento_(sesion, () => doc); // Dirección General: solo ADMIN (8.16)
     if (!doc.drive && doc.registroId && doc.fecha) {
       const n = evidenciasNucos_(doc.registroId, sesion).filter((x) => x.tipo === 'INSPECCION' && dia_(x.doc.fecha) === dia_(doc.fecha))[0];
       if (n) doc.drive = n.doc.drive;
@@ -635,6 +643,7 @@ const TelefoniaService = (function () {
   /** parte (alta): EQUIPO o LINEA, según el botón (Agregar equipo / Agregar línea). */
   function formularioRegistro(token, id, parte) {
     const sesion = operar_(token);
+    if (id) sinDG_(sesion, id); // Dirección General: solo ADMIN (8.16; auditoría del 23-oct)
     return LineasUtil.paraCliente(LineasRegistros.formulario(id || null, usuarioOperacion_(sesion), puedeVerSecretos_(sesion), parte));
   }
 
@@ -661,6 +670,7 @@ const TelefoniaService = (function () {
     // Inspección de la carpeta NUCOS: se valida que la carpeta sea de NUCOS y se pasa armada (las fotos van a su FOTOS)
     const externa = /^drive_/.test(String(id)) ? inspeccionNucos_(String(id).slice(6)) : null;
     if (/^drive_/.test(String(id)) && !externa) throw new Error('No existe la inspección ' + id);
+    sinDGDocumento_(sesion, () => externa || LineasRepo.leerInspeccion(id)); // Dirección General: solo ADMIN (8.16)
     return LineasUtil.paraCliente(LineasCaptura.fotosInspeccion(id, accion, sesion.correo, externa));
   }
 
@@ -698,6 +708,7 @@ const TelefoniaService = (function () {
     const sesion = operar_(token);
     if (tipo !== 'INSPECCION' && tipo !== 'RESPONSIVA') throw new Error('Tipo de evidencia inválido.');
     const obj = LineasCaptura.objetivo(ref); // valida que el equipo o la línea existan
+    LineasDG.exigirAdmin(obj.fila, usuarioOperacion_(sesion)); // Dirección General: solo ADMIN (8.16)
     if (tipo === 'INSPECCION' && !obj.equipo) throw new Error('La línea sin equipo no lleva inspección: solo responsiva.');
     return LineasUtil.paraCliente(LineasEvidencias.prepararCarpetaEvidencia(tipo, idRegistro, sesion.correo, obj.reg.nuco, new Date()));
   }
@@ -820,6 +831,7 @@ const TelefoniaService = (function () {
   /** Genera (o regenera) el PDF de una inspección/responsiva capturada en el sistema. */
   function generarPdf(token, tipo, id, forzar, firmas) {
     const sesion = operar_(token);
+    sinDGDocumento_(sesion, () => (tipo === 'INSPECCION' ? LineasRepo.leerInspeccion(id) : LineasRepo.leerResponsiva(id))); // DG: solo ADMIN (8.16)
     return conPasosEnDev_('apiLineasGenerarPdf', () =>
       LineasUtil.paraCliente(LineasCaptura.generarPdf(tipo, id, !!forzar, usuarioOperacion_(sesion), firmas || null)));
   }
@@ -897,7 +909,7 @@ const TelefoniaService = (function () {
   /** Quitar del panel (pendiente 3.12): solo los de Líneas. La vista dice qué regresa y qué se queda de cada equipo. */
   function vistaQuitarPanel(token, ids) {
     const sesion = operar_(token);
-    return LineasUtil.paraCliente(LineasResguardos.vistaQuitar(ids, puedeVerSecretos_(sesion)));
+    return LineasUtil.paraCliente(LineasResguardos.vistaQuitar(ids, puedeVerSecretos_(sesion), usuarioOperacion_(sesion)));
   }
 
   function quitarDelPanel(token, ids, datos) {
@@ -937,7 +949,7 @@ const TelefoniaService = (function () {
     return conPasosEnDev_('apiLineasMandarCancelacion', () => LineasUtil.paraCliente(LineasResguardos.mandarCancelacion(ids, datos || {}, usuarioResguardo_(sesion))));
   }
 
-  /** Bandeja de resguardos y cancelaciones: la ve todo el módulo; los pasos solo quien aprueba. */
+  /** Bandeja de resguardos y cancelaciones: la ve todo el módulo (los renglones de DG, ocultos si no es ADMIN); los pasos solo quien aprueba. */
   function bandejaResguardos(token) {
     const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
     return JSON.stringify(LineasUtil.paraCliente(LineasResguardos.bandeja(usuarioResguardo_(sesion))));

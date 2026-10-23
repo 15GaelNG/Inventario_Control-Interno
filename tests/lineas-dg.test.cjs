@@ -88,3 +88,27 @@ test('DG: limpiar-dg.js deja en blanco todo el responsable y solo pone AREA', ()
   assert.match(js, /const AREA = \['AREA'\];/);
   assert.ok(limpiar.indexOf("'AREA'") < 0);
 });
+
+// Auditoría del 23-oct (lineas-revisor): llamadas del servidor que dejaban ver o escribir a quien no es ADMIN
+test('DG: formulario, documentos, fotos, PDF, evidencia y panel también piden ser ADMIN', () => {
+  const tel = read('src/services/TelefoniaService.gs');
+  const fn = (nombre) => tel.slice(tel.indexOf('function ' + nombre + '('), tel.indexOf('\n  }\n', tel.indexOf('function ' + nombre + '(')));
+  assert.match(fn('formularioRegistro'), /if \(id\) sinDG_\(sesion, id\);/);
+  assert.match(fn('documento_'), /sinDGDocumento_\(sesion, \(\) => doc\);/);
+  assert.match(fn('quitarFotoInspeccion'), /sinDGDocumento_\(sesion, \(\) => doc\);/);
+  assert.match(fn('fotosInspeccion'), /sinDGDocumento_\(sesion, \(\) => externa \|\| LineasRepo\.leerInspeccion\(id\)\);/);
+  assert.match(fn('generarPdf'), /sinDGDocumento_\(sesion, \(\) => \(tipo === 'INSPECCION' \? LineasRepo\.leerInspeccion\(id\) : LineasRepo\.leerResponsiva\(id\)\)\);/);
+  assert.match(fn('prepararEvidencia'), /LineasDG\.exigirAdmin\(obj\.fila, usuarioOperacion_\(sesion\)\);/);
+  assert.match(fn('vistaQuitarPanel'), /LineasResguardos\.vistaQuitar\(ids, puedeVerSecretos_\(sesion\), usuarioOperacion_\(sesion\)\)/);
+  // El panel (formularioResguardo, quitarDelPanel, bandejaResguardos) lleva esAdmin en usuarioResguardo_
+  assert.match(tel, /return Object\.assign\(usuarioOperacion_\(sesion\), \{ puedeAprobar:/);
+  // sinDGDocumento_: ADMIN no lee el documento; los demás, por el registro al que pertenece
+  const sin = tel.slice(tel.indexOf('function sinDGDocumento_('), tel.indexOf('function puedeVerSecretos_('));
+  assert.match(sin, /if \(esAdmin_\(sesion\)\) return sesion;/);
+  assert.match(sin, /return doc && doc\.registroId \? sinDG_\(sesion, doc\.registroId\) : sesion;/);
+  // El renglón del panel: DG, sus estados y el área
+  const o = DG.ocultarRenglonPanel({ ID: 'R1', NUCO: '11002', NUMERO: '4422798678', LINEA_AL_MANDAR: '4422798678', MODELO: 'IPHONE', ESTADO: 'EN RESGUARDO', COMENTARIO: 'X' });
+  assert.deepEqual(o, { dg: true, ID: 'R1', NUCO: '11002', NUMERO: 'DG', LINEA_AL_MANDAR: 'DG', MODELO: '', ESTADO: 'EN RESGUARDO', COMENTARIO: '', DEPARTAMENTO: 'DIRECCION GENERAL' });
+  assert.ok(DG.esRenglonPanel({ NUMERO: '', LINEA_AL_MANDAR: '4461399325' }));
+  assert.ok(!DG.esRenglonPanel({ NUCO: '0012', NUMERO: '4421090805' }));
+});

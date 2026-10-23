@@ -7,7 +7,7 @@
  * tienen columna de área, la columna departamento dice DIRECCION GENERAL (conArea). Solo ADMIN ve su información y la
  * modifica (usuario, 22-oct: ADMIN sí; los registros con área DIRECCION GENERAL fuera de la lista, no son DG):
  *   - Leer: los demás ven el registro con DG, su estatus y el área DIRECCION GENERAL (TelefoniaService: índice, ficha,
- *     Exportar); su historial, documentos y facturas, no.
+ *     Exportar; LineasResguardos: el panel de Pau); su historial, documentos, fotos, PDF y facturas, no.
  *   - Escribir: LineasRepo.guardarCambiosRegistro y las capturas (LineasCaptura) lo rechazan si no es ADMIN
  *     (usuario.esAdmin, de TelefoniaService.usuarioOperacion_).
  */
@@ -87,6 +87,25 @@ const LineasDG = (function () {
     return esNuco(v('NUCO')) || esNumero(v('NUMERO TELEFONO'));
   }
 
+  /**
+   * El panel de Pau (APP_RESGUARDOS, ya con lo de hoy del inventario): ¿es de DG el renglón? Por su NUCO, su número o la
+   * línea con que se mandó el equipo.
+   */
+  function esRenglonPanel(o) {
+    return !!o && (esNuco(o['NUCO']) || esNumero(o['NUMERO']) || esNumero(o['LINEA_AL_MANDAR']));
+  }
+
+  /** Lo que ve quien no es ADMIN de un renglón del panel de DG (auditoría del 23-oct): sus estados, DG y el área. */
+  const VISIBLES_PANEL = ['ID', 'FECHA', 'REGISTRO_ID', 'NUCO', 'ESTADO', 'CANCELACION', 'ESTATUS_EQUIPO', 'ESTATUS_LINEA', 'ID_LINEA', 'ACTUALIZADO_EN', '_fila'];
+  function ocultarRenglonPanel(o) {
+    const r = { dg: true };
+    Object.keys(o).forEach((k) => { r[k] = VISIBLES_PANEL.indexOf(k) >= 0 ? o[k] : ''; });
+    if (o['NUMERO']) r['NUMERO'] = ETIQUETA;
+    if (o['LINEA_AL_MANDAR']) r['LINEA_AL_MANDAR'] = ETIQUETA;
+    r['DEPARTAMENTO'] = AREA;
+    return r;
+  }
+
   /** La ficha para quien no es ADMIN: el registro con DG, su estatus y el área (`_dgOculto`: la pantalla no pide lo demás). */
   function fichaOculta(o, esEquipo) {
     if (!o) return o;
@@ -95,5 +114,6 @@ const LineasDG = (function () {
     return r;
   }
 
-  return { NUMEROS, NUCOS, AREA, ETIQUETA, MENSAJE, esNumero, esNuco, esRegistro, esFila, exigirAdmin, ocultarRenglon, conArea, esRenglonVista, fichaOculta };
+  return { NUMEROS, NUCOS, AREA, ETIQUETA, MENSAJE, esNumero, esNuco, esRegistro, esFila, exigirAdmin, ocultarRenglon, conArea, esRenglonVista, fichaOculta,
+    esRenglonPanel, ocultarRenglonPanel };
 })();

@@ -11,7 +11,7 @@
       precargarUltimosNucos, puedeOperar, quitarDelPanel, vacio, veDocumentos, veHistorial, veSeccion, vistaPatron } = Lineas.comun;
     const { tieneNuco } = Lineas.telefonicas.comun;
     Lineas.telefonicas.registrar('ficha', (T) => {
-      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, conDocumentos, pasoHistorial, pila,
+      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, conDocumentos, mandaResguardo, pasoHistorial, pila,
         pintarIndicadores, pintarListado, raiz, resumenDocumentos, vigente } = T;
       const { pilaParaHistorial } = T.de('principal');
       const { cargarEvidencias, ponerCopiarTarjetas, soltarDocumentos } = T.de('documentos');
@@ -468,7 +468,7 @@
         const items = tipo === 'equipo'
           ? (operar ? [
             r.panel ? { icono: 'archive-restore', texto: 'Corregir resguardo', alHacer: () => abrirResguardo([r], { corregir: true }) }
-              : { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
+              : (mandaResguardo(r) ? { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) } : null),
             r.panel === 'PENDIENTE DE RECEPCION' ? { icono: 'archive-x', texto: 'Quitar del panel', alHacer: () => quitarDelPanel([r.id], trasQuitar) } : null,
           ] : []).concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)
           // La línea sin equipo: su carpeta en LINEAS, si ya tiene responsiva (pendiente 2.45)

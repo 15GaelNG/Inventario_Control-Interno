@@ -183,10 +183,23 @@ test('en el panel de Pau: Corregir no cambia el estatus y no hay Responsiva ni I
   assert.equal(enPanel.valor, 'RESGUARDO');
   assert.ok(!campo(Reg._elementos(guardado, {}, usuario, Reg._contextoEdicion(guardado, null, false)), 'ESTATUS EQUIPO').soloLectura);
   const reg = read('src/services/lineas/LineasRegistros.gs');
-  assert.match(reg, /const edicion = contextoEdicion_\(base, datos && datos\.parte, equipoEnPanel_\(fila, base, datos && datos\.parte\)\);/);
+  assert.match(reg, /const edicion = contextoEdicion_\(base, datos && datos\.parte, equipoEnPanel_\(fila, base\)\);/);
   assert.match(reg, /está en Resguardos y cancelaciones: su estatus lo cambia el panel\./);
   const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')({}, {});
   const Acc = new Function('LineasRepo', 'LineasDatos', 'LineasUtil', 'LineasResguardos', read('src/services/lineas/LineasAcciones.gs') + '; return LineasAcciones;')({}, {}, LineasUtil, { enPanel: (f) => !!f._enPanel });
   assert.throws(() => Acc.exigirEstatusParaResponsiva({ NUCO: '15', 'ESTATUS EQUIPO': 'POR RECIBIR', _enPanel: true }, true), /NUCO 0015 está en Resguardos y cancelaciones\./);
   assert.match(read('src/services/lineas/LineasCaptura.gs'), /if \(LineasResguardos\.enPanel\(obj\.fila\)\) throw new Error/);
+});
+
+// Auditoría del 23-oct (lineas-revisor): Corregir línea de la línea de un equipo en el panel tampoco cambia su estatus
+test('en el panel de Pau: Corregir línea no cambia el estatus de la línea del equipo', () => {
+  const Reg = cargar();
+  const estatus = (enPanel) => campo(Reg._elementos(enUso, {}, usuario, Reg._contextoEdicion(enUso, 'LINEA', enPanel)), 'ESTATUS LINEA');
+  assert.ok(estatus(true).soloLectura);
+  assert.equal(estatus(true).valor, 'USO');
+  assert.ok(!estatus(false).soloLectura);
+  const reg = read('src/services/lineas/LineasRegistros.gs');
+  const enPanel = reg.slice(reg.indexOf('function equipoEnPanel_('), reg.indexOf('function formulario('));
+  assert.doesNotMatch(enPanel, /LINEA/);
+  assert.match(reg, /está en Resguardos y cancelaciones: el estatus de su línea lo cambia el panel\./);
 });

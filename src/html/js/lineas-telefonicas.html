@@ -165,6 +165,9 @@
       // por recibir o recibido; pendiente 3.15): sale con Quitar del panel o, ya recibido, con Entregar a líneas
       const SIN_DOCUMENTOS = { equipo: ESTATUS_EQUIPO_FINAL.concat(['EXTRAVIADO', 'ROBADO', 'ROBO']), linea: ESTATUS_LINEA_PANEL };
       const conDocumentos = (tipo, estatus, panel) => !panel && SIN_DOCUMENTOS[tipo].indexOf(String(estatus || '').trim().toUpperCase()) < 0;
+      // «Mandar a resguardo»: ni el que ya está en el panel ni el que salió del inventario (usuario, 23-oct: «Que se bloquee, solo
+      // permitir corregir estatus pero tiene que pasar por todo el proceso»; LineasResguardos.ESTATUS_EQUIPO_FINAL)
+      const mandaResguardo = (r) => !r.panel && SIN_DOCUMENTOS.equipo.indexOf(String(r.estatus || '').trim().toUpperCase()) < 0;
       // La línea con el adendum vencido que se manda sola a cancelación: quien captura elige (LineasRegistros.CANCELACION_PANEL
       // y CANCELACION_DIRECTA; usuario, 16-oct, pendiente 2.50)
       const CANCELACION_LINEA = [{ valor: 'PANEL', texto: 'PANEL DE RESGUARDOS Y CANCELACIONES' }, { valor: 'DIRECTO', texto: 'CANCELADA SIN PANEL' }];
@@ -176,7 +179,7 @@
       const pdfsEnCurso = {}; // de acciones; lo usan otras partes
       T.montar({
         CANCELACION_LINEA, COLOR_ORIGEN_DOCUMENTO, ESTATUS_EQUIPO_FINAL, ESTATUS_EQUIPO_RESGUARDO,
-        ESTATUS_LINEA_PANEL, ETIQUETA_DOCUMENTO, MOTIVOS_CANCELACION, ORIGEN_DOCUMENTO, conDocumentos, pasoHistorial,
+        ESTATUS_LINEA_PANEL, ETIQUETA_DOCUMENTO, MOTIVOS_CANCELACION, ORIGEN_DOCUMENTO, conDocumentos, mandaResguardo, pasoHistorial,
         pdfsEnCurso, pila, pintarIndicadores, pintarListado, raiz, resumenDocumentos, tablas, vigente,
       }, () => ({
         pilaParaHistorial,
@@ -488,7 +491,7 @@
               visible: (f) => operar(f) && conDocumentos('equipo', f[0].estatus, f[0].panel), alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
             // Ya en el panel de Pau: se corrige y, si aún no lo recibe, se quita (usuario, 20-oct; pendiente 3.12)
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
-              visible: (f) => operar(f) && !f.some((r) => r.panel), alHacer: (f) => abrirResguardo(f) },
+              visible: (f) => operar(f) && f.every(mandaResguardo), alHacer: (f) => abrirResguardo(f) },
             { icono: 'archive-restore', texto: 'Corregir resguardo', titulo: 'Destino, estatus y comentario de su renglón en Resguardos y cancelaciones', maximo: UNO, grupo: 'mover',
               visible: (f) => operar(f) && f.every((r) => r.panel), alHacer: (f) => abrirResguardo(f, { corregir: true }) },
             { icono: 'archive-x', texto: 'Quitar del panel', titulo: 'Mandado por error: vuelve a como estaba antes de mandarlo', maximo: UNO, grupo: 'mover',
