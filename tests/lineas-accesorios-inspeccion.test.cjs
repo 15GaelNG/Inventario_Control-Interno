@@ -12,12 +12,21 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 const plano = (x) => JSON.parse(JSON.stringify(x));
 
 const CATALOGO = ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'];
+// Inspecciones guardadas que lee accesoriosDeInspeccion_ (por ID)
+const INSPECCIONES = {
+  'ILI-NUEVA': { ID: 'ILI-NUEVA', 'ID LINEA': 'EQU-1', ACCESORIOS: 'CABLE , CUBO', CUBO: '', CABLE: '', FUNDA: '', MICA: '' },
+  'ILI-SIN-NADA': { ID: 'ILI-SIN-NADA', 'ID LINEA': 'EQU-1', ACCESORIOS: '' },
+  'ILI-VIEJA': { ID: 'ILI-VIEJA', 'ID LINEA': 'EQU-1', CUBO: 'SI', CABLE: 'NO', FUNDA: 'SI', MICA: 'N/A' },
+  'ILI-OTRO': { ID: 'ILI-OTRO', 'ID LINEA': 'EQU-9', ACCESORIOS: 'CAJA' },
+};
 function captura() {
   const ctx = vm.createContext({
     console, Utilities: { formatDate: () => '2026-10-22T12:00' },
     LineasRegistros: { camposAdicionales: () => [] },
     LineasRepo: { CATALOGO: { accesorios: CATALOGO }, TAB: { INSP: 'INSP', RESP: 'RESP' }, catalogos: () => ({}) },
-    LineasDatos: { nuevoId: () => 'X-1' }, LineasFirmas: { tiene: () => false },
+    LineasDatos: { nuevoId: () => 'X-1', buscarFilasPorId: (tabla, id) => (tabla === 'INSP' && INSPECCIONES[id] ? [id] : []),
+      leerFilas: (pedidos) => [[INSPECCIONES[pedidos[0].filas[0]]]] },
+    LineasFirmas: { tiene: () => false },
     LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null),
       sinCargador: (v) => String(v || '').replace(/CARGADOR/g, 'CABLE , CUBO') },
   });
@@ -76,6 +85,23 @@ test('al guardar: los accesorios quedan en la inspección (columna nueva) y pasa
   assert.equal(Checklist.cumple('NO_LINEA', 'MODEM'), true);
 });
 
+test('Reasignar: la responsiva se guarda con los accesorios de la inspección que se acaba de guardar (manda la inspección)', () => {
+  assert.equal(C._accesoriosDeInspeccion('ILI-NUEVA', 'EQU-1'), 'CABLE , CUBO');
+  // Sin nada marcado también manda (la ficha queda sin accesorios, como lo dijo la inspección)
+  assert.equal(C._accesoriosDeInspeccion('ILI-SIN-NADA', 'EQU-1'), '');
+  // Sin inspección, de otro registro o con los puntos de antes: la responsiva se queda con lo suyo
+  assert.equal(C._accesoriosDeInspeccion('', 'EQU-1'), null);
+  assert.equal(C._accesoriosDeInspeccion('ILI-NO-EXISTE', 'EQU-1'), null);
+  assert.equal(C._accesoriosDeInspeccion('ILI-OTRO', 'EQU-1'), null);
+  assert.equal(C._accesoriosDeInspeccion('ILI-VIEJA', 'EQU-1'), null);
+  // Va antes de guardar la fila de la responsiva y de pasar lo suyo a la ficha; la línea sin equipo no lleva
+  const cap = read('src/services/lineas/LineasCaptura.gs');
+  const candado = cap.slice(cap.indexOf('function guardarResponsivaEnCandado_'), cap.indexOf('LineasDatos.agregarFilas(LineasRepo.TAB.RESP'));
+  assert.match(candado, /const deInspeccion = sinEquipo \? null : accesoriosDeInspeccion_\(datos\.inspeccionId, obj\.reg\.id\);\n\s+if \(deInspeccion !== null\) valores\['ACCESORIOS'\] = deInspeccion;/);
+  // La pantalla manda la inspección con la responsiva en Reasignar
+  assert.match(read('src/html/js/lineas.html'), /llamar\('apiLineasGuardarResponsiva', Object\.assign\(\{\}, d, \{ inspeccionId: inspeccionId \}\)\)/);
+});
+
 test('los accesorios no cuentan en la calificación; los puntos quedan para leer las inspecciones de antes', () => {
   const Checklist = new Function(read('src/services/lineas/LineasChecklist.gs') + '; return LineasChecklist;')();
   assert.equal(Checklist.calificacion({ PANTALLA: 'SI', CUBO: 'NO', CABLE: 'NO', FUNDA: 'NO', MICA: 'NO', ACCESORIOS: 'NINGUNO' }), 1);
@@ -89,9 +115,12 @@ test('PDF: la plantilla nueva para las inspecciones con la lista; la del 19-oct 
   vm.runInContext(read('src/services/lineas/LineasPdf.gs') + '\nthis.P = LineasPdf;', ctx);
   const P = ctx.P;
   assert.equal(P.plantillaInspeccion({ ACCESORIOS: 'CABLE , CUBO', CUBO: '', CABLE: '' }), P.PLANTILLAS.INSPECCION_CELULAR);
-  assert.equal(P.plantillaInspeccion({ TIPO: 'LINEA' }), P.PLANTILLAS.INSPECCION_CELULAR);
   assert.equal(P.plantillaInspeccion({ CUBO: 'SI' }), P.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST);
   assert.equal(P.plantillaInspeccion({ MICA: 'N/A' }), P.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST);
+  // La línea sola no llevaba esos puntos y ya no se inspecciona: las suyas son de antes (lineas-revisor, 22-oct)
+  ['LINEA', 'SIM BASICO', 'LINEA BASICA', 'linea'].forEach((tipo) => assert.equal(P.plantillaInspeccion({ TIPO: tipo }), P.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST, tipo));
+  assert.equal(P.plantillaInspeccion({ TIPO: 'EQUIPO + SIM', ACCESORIOS: '' }), P.PLANTILLAS.INSPECCION_CELULAR);
+  assert.equal(P.plantillaInspeccion({ TIPO: 'EQUIPO + SIM BASICO', ACCESORIOS: 'CAJA' }), P.PLANTILLAS.INSPECCION_CELULAR);
   assert.notEqual(P.PLANTILLAS.INSPECCION_CELULAR, P.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST);
   assert.match(read('src/services/lineas/LineasCaptura.gs'), /esInspeccion \? LineasPdf\.plantillaInspeccion\(fila\) : LineasPdf\.PLANTILLAS\.RESPONSIVA_CELULAR/);
   // Las dos las revisa revisarEntorno (todas las de LineasPdf.PLANTILLAS)

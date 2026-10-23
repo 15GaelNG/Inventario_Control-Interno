@@ -194,7 +194,7 @@ const LineasCaptura = (function () {
   const PERSONAS_PROCESOS = ['DAFNE DONIS GARCIA', 'GAMALIEL JAIR MORA GONZALEZ', 'YOVANNI NAVA PERALTA'];
 
   const ETIQUETAS_INSPECCION = {
-    'IDENTIFICACION': 'Identificación', 'CUBO': 'Cubo (cargador)', 'CABLE': 'Cable', 'FUNDA': 'Funda', 'MICA': 'Mica',
+    'IDENTIFICACION': 'Identificación',
     'SO': 'Sistema operativo', 'ACTUALIZACIONES': 'Actualizaciones', 'PANTALLA TACTIL': 'Pantalla táctil', 'MULTITAREA': 'Multitarea',
     'WIFI': 'Wi-Fi', 'RED MOVIL': 'Red móvil', 'GPS': 'GPS', 'USO DATOS': 'Uso de datos',
     'PANTALLA': 'Pantalla', 'BOTONES VOLUMEN': 'Botones de volumen', 'BOTON ENCENDIDO': 'Botón de encendido', 'CUERPO EQUIPO': 'Cuerpo del equipo',
@@ -740,6 +740,10 @@ const LineasCaptura = (function () {
       // Bot MAYUSCULAS
       valores['IDENTIFICACION'] = String(valores['IDENTIFICACION'] || '').toUpperCase();
       valores['COMENTARIO'] = String(valores['COMENTARIO'] || '').toUpperCase();
+      // Con otra persona, los accesorios son los de la inspección que se acaba de guardar (usuario, 22-oct: manda la
+      // inspección, que revisa el equipo en la mano; la responsiva se capturó antes y si no, la ficha volvía a lo de ella)
+      const deInspeccion = sinEquipo ? null : accesoriosDeInspeccion_(datos.inspeccionId, obj.reg.id);
+      if (deInspeccion !== null) valores['ACCESORIOS'] = deInspeccion;
       // La responsiva está completa: ahora sí la acción, y la responsiva queda en el registro
       const hecho = accion ? accion.aplicar(ahora, valores) : null;
       if (hecho) obj = objetivoCaptura_(ref);
@@ -814,6 +818,18 @@ const LineasCaptura = (function () {
     const dia = (d) => Utilities.formatDate(d, ZONA, 'yyyy-MM-dd');
     if (!(fecha instanceof Date) || dia(fecha) !== dia(new Date())) throw new Error(nombre + ': la inspección ' + id + ' no es de hoy.');
     return id;
+  }
+
+  /**
+   * ACCESORIOS de la inspección `inspeccionId` del registro `idRegistro`, o null si no hay, es de otro registro o se
+   * capturó con CUBO, CABLE, FUNDA y MICA (antes del 22-oct).
+   */
+  function accesoriosDeInspeccion_(inspeccionId, idRegistro) {
+    const id = String(inspeccionId || '').trim();
+    const fila = id ? leerFilaPorId_(LineasRepo.TAB.INSP, id) : null;
+    if (!fila || String(LineasUtil.col(fila, 'ID LINEA') || '') !== String(idRegistro || '')) return null;
+    if (['CUBO', 'CABLE', 'FUNDA', 'MICA'].some((c) => String(LineasUtil.col(fila, c) || '').trim())) return null;
+    return String(LineasUtil.col(fila, 'ACCESORIOS') || '').trim();
   }
 
   // ======================================================================
@@ -1172,5 +1188,6 @@ const LineasCaptura = (function () {
     contextoResponsiva: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoResponsiva(ref, usuario, puedeVerSecretos)),
     // Para pruebas: las definiciones de los formularios
     _formularioInspeccion: formularioInspeccion_, _formularioResponsiva: formularioResponsiva_, _validar: validarFormulario_,
+    _accesoriosDeInspeccion: accesoriosDeInspeccion_,
   };
 })();

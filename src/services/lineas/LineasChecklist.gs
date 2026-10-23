@@ -1,9 +1,11 @@
 /**
  * LineasChecklist.gs
- * Checklist de INSPECCIONES LINEAS, réplica exacta del AppSheet (v1.001924):
- * mismo orden del formulario (INSPECCIONES LINEAS_Form), mismos títulos de sección,
- * mismas etiquetas (nombre de columna o su "display name"), mismas opciones en el
- * mismo orden, y los Show_If / Required_If evaluados sobre el texto de [TIPO].
+ * Checklist de INSPECCIONES LINEAS, como el del AppSheet (v1.001924): mismo orden del
+ * formulario (INSPECCIONES LINEAS_Form), mismos títulos de sección, mismas etiquetas
+ * (nombre de columna o su "display name"), mismas opciones en el mismo orden, y los
+ * Show_If / Required_If evaluados sobre el texto de [TIPO]. Se aparta en los accesorios
+ * (usuario, 22-oct): CUBO, CABLE, FUNDA y MICA ya no se piden ni cuentan en la
+ * calificación; van en la lista ACCESORIOS de la responsiva (LineasCaptura).
  *
  * Cada punto: [columna, clave interna, etiqueta del AppSheet, escala, mostrar, requerido]
  * `mostrar` y `requerido` son códigos de CONDICIONES (abajo); un punto oculto no se

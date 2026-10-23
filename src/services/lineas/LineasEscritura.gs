@@ -88,6 +88,12 @@ const LineasEscritura = (function () {
 
   const vacio_ = (v) => v === '' || v === 0 || v === '0';
 
+  /** Los mismos accesorios aunque cambie el orden: la pantalla los regresa en el de la lista (lineas-revisor, 22-oct). */
+  function mismosAccesorios_(a, b) {
+    const k = (v) => may(v).split(',').map((x) => x.trim()).filter((x, i, l) => x && l.indexOf(x) === i).sort().join(',');
+    return k(a) === k(b);
+  }
+
   function texto_(v) {
     if (v instanceof Date) return Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy');
     return v === null || v === undefined ? '' : String(v);
@@ -264,7 +270,8 @@ const LineasEscritura = (function () {
       const c = LineasDatos.normCol(columna);
       const despues = limpioDe_(columna, cambios[columna]);
       const antes = c === 'ACCESORIOS' ? limpio_(LineasUtil.col(f, columna)) : limpioDe_(columna, LineasUtil.col(f, columna));
-      if (c === 'NUCO' ? (LineasUtil.nucoVisible(antes) || '') === (LineasUtil.nucoVisible(despues) || '') : igual_(antes, despues)) return;
+      if (c === 'NUCO' ? (LineasUtil.nucoVisible(antes) || '') === (LineasUtil.nucoVisible(despues) || '')
+        : c === 'ACCESORIOS' ? mismosAccesorios_(antes, despues) : igual_(antes, despues)) return;
       if (c === 'TIPO') { tipoNuevo = may(despues); return; }
       if (c in A_EQUIPO) {
         if (!e) { if (despues !== '') sinLugar(c === 'NUCO' ? 'el NUCO es del aparato y esta línea no tiene equipo.' : c + ' es del aparato y esta línea no tiene equipo.'); return; }

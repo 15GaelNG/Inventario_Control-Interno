@@ -32,10 +32,14 @@ const LineasPdf = (function () {
     INSPECCION_CELULAR_CHECKLIST: '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',
     RESPONSIVA_CELULAR: '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ',
   };
-  /** La plantilla de una inspección: la de antes si se capturó con CUBO, CABLE, FUNDA o MICA (SI/NO/N/A). */
+  /**
+   * La plantilla de una inspección: la de antes si se capturó con CUBO, CABLE, FUNDA o MICA (SI/NO/N/A) o es de una línea
+   * sola (no llevaba esos puntos y ya no se inspecciona: todas son de antes; lineas-revisor, 22-oct).
+   */
   function plantillaInspeccion(registro) {
-    const conPuntos = ['CUBO', 'CABLE', 'FUNDA', 'MICA'].some((c) => String((registro || {})[c] === null || (registro || {})[c] === undefined ? '' : registro[c]).trim());
-    return conPuntos ? PLANTILLAS.INSPECCION_CELULAR_CHECKLIST : PLANTILLAS.INSPECCION_CELULAR;
+    const v = (c) => String((registro || {})[c] === null || (registro || {})[c] === undefined ? '' : registro[c]).trim().toUpperCase();
+    const deAntes = ['CUBO', 'CABLE', 'FUNDA', 'MICA'].some((c) => v(c)) || /^(LINEA|LINEA BASICA|SIM BASICO)$/.test(v('TIPO'));
+    return deAntes ? PLANTILLAS.INSPECCION_CELULAR_CHECKLIST : PLANTILLAS.INSPECCION_CELULAR;
   }
 
   // Cómo imprime el AppSheet ("Task for GENERAR PDF": carta, márgenes de la tarea en 0): convierte el Doc a HTML y lo

@@ -209,6 +209,21 @@ test('accesorios: CARGADOR se guarda como CABLE y CUBO, también si el registro 
   assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'CAJA, CARGADOR' && c.despues === 'CAJA, CABLE, CUBO'));
 });
 
+// lineas-revisor, 22-oct: la pantalla regresa los accesorios en el orden de la lista; los mismos en otro orden no son cambio
+test('accesorios: los mismos en otro orden no se escriben ni van al historial; uno de más o de menos sí', () => {
+  const base = JSON.parse(JSON.stringify(BASE));
+  Object.assign(base.EQUIPOS.find((e) => e.ID === 'EQU-2'), { 'ACCESORIOS': 'FUNDA , MICA , CUBO , CABLE' });
+  const t = cargar(base);
+  let r = t.guardar('EQU-2', { 'ACCESORIOS': 'CABLE , CUBO , FUNDA , MICA' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'FUNDA , MICA , CUBO , CABLE');
+  assert.ok(!r.campos.some((c) => c.campo === 'ACCESORIOS'));
+  r = t.guardar('EQU-2', { 'ACCESORIOS': 'cable,cubo , funda, mica, CABLE' });
+  assert.ok(!r.campos.some((c) => c.campo === 'ACCESORIOS'));
+  r = t.guardar('EQU-2', { 'ACCESORIOS': 'CABLE , CUBO , FUNDA' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CABLE , CUBO , FUNDA');
+  assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'FUNDA , MICA , CUBO , CABLE' && c.despues === 'CABLE , CUBO , FUNDA'));
+});
+
 test('de resguardo a uso con su persona (reasignar): abre la asignación con persona y deja DISPONIBLE fuera', () => {
   const t = cargar(BASE);
   t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'USO', 'ESTATUS LINEA': 'USO', 'RESPONSABLE': 'ANA', 'PUESTO': 'GERENTE' });
