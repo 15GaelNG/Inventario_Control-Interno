@@ -11,9 +11,14 @@ const guardadas = [];
 const Credenciales = {
   verificar: (fila, clave) => ({ ok: fila['CONTRASEÑA'] === clave, migrar: fila['CONTRASEÑA'] === clave }),
   guardar: (correo, clave) => { guardadas.push(correo + ':' + clave); },
+  revisarNueva: (clave) => { if (clave.length < 10) throw new Error('al menos 10'); },
+  MINIMO: 10,
 };
+let usuarios = [];
 
-function cargar() {
+function cargar(debeCambiar) {
+  usuarios = [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ROL: 'CLIENT', ACTIVO: 'TRUE', 'CONTRASEÑA': 'buena',
+    'DEBE CAMBIAR CONTRASEÑA': debeCambiar ? 'TRUE' : '' }];
   const cache = {};
   const ctx = vm.createContext({
     Credenciales,
@@ -22,11 +27,11 @@ function cargar() {
       SESION_DURACION_HORAS: 8 },
     SheetUtils: {
       getSheet: () => ({ getName: () => 'USUARIOS' }),
-      getAll: () => [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ROL: 'CLIENT', ACTIVO: 'TRUE', 'CONTRASEÑA': 'buena' }],
+      getAll: () => usuarios,
     },
     CacheService: { getScriptCache: () => ({
       get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
-    Utilities: { getUuid: () => 'token-1' },
+    Utilities: { getUuid: (() => { let n = 0; return () => 'uuid-' + (++n); })() },
     Session: {},
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'Auth.gs'), 'utf8') + '\nthis.Auth = Auth;', ctx);
@@ -63,4 +68,17 @@ test('entrar con la contraseña en texto plano la pasa a huella (Credenciales.gu
   assert.deepEqual(guardadas, []);
   assert.equal(intento(A, 'ana@gph.com', 'buena'), 'entró');
   assert.deepEqual(guardadas, ['ana@gph.com:buena']);
+});
+
+test('con una contraseña temporal no hay sesión: pide la nueva con un reto de un solo uso', () => {
+  const A = cargar(true);
+  const r = A.login('ana@gph.com', 'buena');
+  assert.equal(r.pendiente, 'cambiar');
+  assert.ok(r.reto && !r.token, 'sin token todavía');
+  assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'corta'), /al menos 10/);
+  assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'buena'), /distinta de la temporal/);
+  assert.throws(() => A.cambiarContrasenaInicial('inventado', 'Una frase larga 1'), /venció/);
+  const s = A.cambiarContrasenaInicial(r.reto, 'Una frase larga 1');
+  assert.ok(s.token && s.correo === 'ana@gph.com', 'ahora sí, la sesión');
+  assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'Otra frase larga 2'), /venció/, 'el reto ya se usó');
 });

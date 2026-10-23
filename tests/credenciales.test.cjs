@@ -33,9 +33,14 @@ function hojaFalsa(encabezados, filas) {
 }
 const comoObjetos = (hoja) => hoja.datos.slice(1).map((f) => Object.fromEntries(hoja.datos[0].map((h, i) => [h, f[i] === undefined ? '' : f[i]])));
 
-function cargar(hoja) {
+function cargar(hoja, sesion) {
+  const cache = {};
+  const permisos = [];
   const ctx = vm.createContext({
     Utilities,
+    CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
+    Auth: { validarSesion: () => { if (!sesion) throw new Error('Sesión expirada'); return sesion; } },
+    Permisos: { puedeEditar: (token, modulo) => { permisos.push(modulo); if (token !== 'admin') throw new Error('Sin permiso'); return { correo: 'admin@x.com' }; } },
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' } },
     SheetUtils: {
       getSheet: () => hoja,
@@ -47,6 +52,7 @@ function cargar(hoja) {
     Logger: { log: () => {} },
     soloEditor_: () => {},
   });
+  ctx.permisos = permisos;
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Credenciales.gs'), 'utf8') +
     '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;', ctx);
   return ctx;
@@ -122,4 +128,43 @@ test('reglas de una contraseña nueva (NIST 800-63B): largo, comunes, correo, no
   assert.match(motivo('soyGuadalupe99', { nombre: 'Maria Guadalupe Perez' }), /tu nombre/);
   assert.match(motivo('misma clave larga', { actual: 'misma clave larga' }), /distinta/);
   assert.equal(motivo('Tres palabras al azar 7', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok');
+});
+
+test('restablecer: solo con EDICIÓN en usuarios; la temporal sirve, la de antes no, y queda "debe cambiar"', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'CONTRASEÑA'], [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', 'CONTRASEÑA': 'la de antes 123' }]);
+  const ctx = cargar(hoja);
+  assert.throws(() => ctx.C.restablecer('otro', 'ana@gph.com'), /Sin permiso/);
+  assert.deepEqual([...ctx.permisos], ['usuarios']);
+  const r = ctx.C.restablecer('admin', 'ANA@gph.com');
+  assert.equal(r.correo, 'ana@gph.com');
+  assert.match(r.temporal, /^[A-HJ-NP-Za-km-np-z2-9]{12}$/, '12 caracteres sin los que se confunden');
+  const ana = comoObjetos(hoja)[0];
+  assert.equal(ctx.C.verificar(ana, r.temporal).ok, true);
+  assert.equal(ctx.C.verificar(ana, 'la de antes 123').ok, false);
+  assert.equal(ana['DEBE CAMBIAR CONTRASEÑA'], 'TRUE');
+  assert.notEqual(ctx.C.restablecer('admin', 'ana@gph.com').temporal, r.temporal, 'cada una distinta');
+});
+
+test('cambiar la mía: pide la actual (5 errores y espera), revisa las reglas y quita el "debe cambiar"', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'CONTRASEÑA', 'DEBE CAMBIAR CONTRASEÑA'],
+    [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', 'CONTRASEÑA': 'actual 12345', 'DEBE CAMBIAR CONTRASEÑA': 'TRUE' }]);
+  const { C } = cargar(hoja, { correo: 'ana@gph.com' });
+  assert.throws(() => C.cambiarMia('t', 'actual 12345', 'corta'), /al menos 10/);
+  for (let i = 0; i < 5; i++) assert.throws(() => C.cambiarMia('t', 'mala', 'Una frase nueva 7'), /actual no es correcta/);
+  assert.throws(() => C.cambiarMia('t', 'actual 12345', 'Una frase nueva 7'), /Demasiados intentos/);
+  const otra = cargar(hoja, { correo: 'ana@gph.com' }).C;   // otra ejecución, sin la cuenta de errores
+  assert.equal(otra.cambiarMia('t', 'actual 12345', 'Una frase nueva 7'), true);
+  const ana = comoObjetos(hoja)[0];
+  assert.equal(otra.verificar(ana, 'Una frase nueva 7').ok, true);
+  assert.equal(ana['DEBE CAMBIAR CONTRASEÑA'], '');
+  assert.equal(ana['CONTRASEÑA'], '');
+});
+
+test('quien solo entraba con Google crea su contraseña sin "actual"; sin sesión, nada', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE'], [{ CORREO: 'beto@ciudadmaderas.com', NOMBRE: 'Beto' }]);
+  const { C } = cargar(hoja, { correo: 'beto@ciudadmaderas.com' });
+  assert.deepEqual({ ...C.estado('t') }, { tieneContrasena: false, minimo: C.MINIMO });
+  assert.equal(C.cambiarMia('t', '', 'Mi frase segura 42'), true);
+  assert.equal(C.estado('t').tieneContrasena, true);
+  assert.throws(() => cargar(hoja, null).C.cambiarMia('t', '', 'Mi frase segura 42'), /Sesión expirada/);
 });

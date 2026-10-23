@@ -316,7 +316,9 @@
         iconoHtml: Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }), titulo: p.nombre || p.correo,
         chips: badgeRol(p.rol) + badgeActivo(p.activo) +
           (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
-        botones: total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        // Restablecer: una contraseña temporal (Seguridad, js/app-seguridad.html; 23-oct)
+        botones: (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') +
+          '<button type="button" class="secondary" data-usr-restablecer>' + ico('key-round') + ' Restablecer contraseña</button>',
         resumen: resumen,
       });
 
@@ -1270,6 +1272,7 @@
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-eliminar-perfil')) { eliminarPerfil(fichaActual.id); return; }
+      if (el.hasAttribute('data-usr-restablecer')) { const p = persona(fichaActual.id); Seguridad.restablecer(p.correo, p.nombre); return; }
       if (el.dataset.usrPerfil) { abrirFicha('perfil', el.dataset.usrPerfil, true); return; }
       if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
       if (el.dataset.usrPersona) abrirFicha('persona', el.dataset.usrPersona, true);

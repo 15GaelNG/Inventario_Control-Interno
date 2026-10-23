@@ -1,0 +1,190 @@
+<script>
+  /**
+   * Seguridad — los pasos del inicio de sesión y la contraseña (23-oct; servidor: Credenciales.gs, Auth.gs,
+   * api/Seguridad.gs).
+   *
+   *   Seguridad.entrar(resultado)          después de apiLogin / apiLoginConGoogle: la sesión, o el paso que falta
+   *   Seguridad.abrirMiCuenta()            Mi perfil → "Contraseña y seguridad"
+   *   Seguridad.restablecer(correo, nombre)   Usuarios y permisos, ficha de una persona (EDICIÓN en usuarios)
+   *
+   * Los pasos del login se pintan en #login-paso (views/login.html), en lugar del formulario. Nada corre al cargar.
+   */
+  const Seguridad = (function () {
+    const esc = (t) => Formato.esc(t);
+    const $ = (id) => document.getElementById(id);
+
+    // ---------------------------------------------------------------- login
+    function entrar(resultado) {
+      if (resultado && resultado.pendiente) { mostrarPaso(resultado); return; }
+      guardarSesion(resultado);
+      mostrarPantallaCarga(() => render());
+    }
+
+    /** De vuelta al formulario de correo y contraseña (los botones se habían quedado apagados) */
+    function volverAlFormulario() {
+      $('login-paso').hidden = true;
+      $('login-paso').innerHTML = '';
+      $('form-login').hidden = false;
+      const btn = $('btn-login');
+      if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+      const chip = $('google-account-chip');
+      if (chip) chip.disabled = false;
+    }
+
+    function mostrarPaso(r) {
+      const paso = $('login-paso');
+      $('form-login').hidden = true;
+      $('login-error').hidden = true;
+      paso.hidden = false;
+      if (r.pendiente === 'cambiar') pasoCambiar_(paso, r);
+      refreshIcons();
+    }
+
+    /** Entró con una contraseña temporal: pone una nueva y con eso entra */
+    function pasoCambiar_(paso, r) {
+      paso.innerHTML =
+        '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
+        '<h2>Pon tu contraseña nueva</h2>' +
+        '<p class="login-sub">Entraste con una contraseña temporal. Elige una de al menos ' + esc(r.minimo) +
+          ' caracteres que solo tú sepas: una frase de varias palabras es fácil de recordar y difícil de adivinar.</p>' +
+        '<div class="login-divider"></div>' +
+        campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +
+        campoClave_('seg-nueva2', 'Repítela', 'new-password') +
+        '<button type="button" id="seg-guardar">Guardar y entrar</button>' +
+        '<button type="button" class="secondary" id="seg-volver" style="margin-top:8px;width:100%">Volver</button>' +
+        '<div class="error-msg" id="seg-error" hidden></div>';
+      conectarOjos_(paso);
+      $('seg-volver').addEventListener('click', volverAlFormulario);
+      const guardar = async () => {
+        const nueva = $('seg-nueva').value;
+        if (nueva !== $('seg-nueva2').value) return error_('seg-error', 'Las dos contraseñas no coinciden.');
+        await conBoton_($('seg-guardar'), 'Guardando…', async () => {
+          entrar(await callServer('apiSeguridadCambiarInicial', r.reto, nueva));
+        }, 'seg-error');
+      };
+      $('seg-guardar').addEventListener('click', guardar);
+      $('seg-nueva2').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') guardar(); });
+      $('seg-nueva').focus();
+    }
+
+    // ---------------------------------------------------------------- piezas
+    function campoClave_(id, etiqueta, autocomplete) {
+      return '<div class="field"><label class="icon-label" for="' + id + '">' + esc(etiqueta) + '</label>' +
+        '<div class="field-icon-wrap"><input type="password" id="' + id + '" autocomplete="' + autocomplete + '" />' +
+        '<button type="button" class="toggle-password" data-ojo="' + id + '" title="Mostrar/ocultar"><i data-lucide="eye-off" class="ico"></i></button></div></div>';
+    }
+    function conectarOjos_(caja) {
+      caja.querySelectorAll('[data-ojo]').forEach((b) => b.addEventListener('click', () => {
+        const input = document.getElementById(b.dataset.ojo);
+        input.type = input.type === 'password' ? 'text' : 'password';
+      }));
+    }
+    function error_(id, mensaje) {
+      const caja = $(id);
+      if (!caja) return;
+      caja.textContent = mensaje || '';
+      caja.hidden = !mensaje;
+    }
+    /** El botón con su spinner mientras corre fn; si truena, el mensaje en la caja de error */
+    async function conBoton_(boton, texto, fn, idError) {
+      if (boton.disabled) return;
+      const antes = boton.innerHTML;
+      boton.disabled = true;
+      boton.innerHTML = '<span class="spinner"></span> ' + esc(texto);
+      error_(idError, '');
+      try {
+        await fn();
+      } catch (err) {
+        error_(idError, (err && err.message) || String(err));
+      } finally {
+        if (boton.isConnected) { boton.disabled = false; boton.innerHTML = antes; refreshIcons(); }
+      }
+    }
+
+    /** Una ventana sencilla (modal-backdrop + modal-card); se cierra con la X, Escape o el fondo */
+    function ventana_(titulo, subtitulo, cuerpo) {
+      const fondo = document.createElement('div');
+      fondo.className = 'modal-backdrop';
+      fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true">' +
+        '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' +
+        (subtitulo ? '<p class="modal-subtitle">' + esc(subtitulo) + '</p>' : '') + '</div>' +
+        '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar"><i data-lucide="x" class="ico"></i></button></div>' +
+        '<div class="modal-form-scroll" data-cuerpo>' + cuerpo + '</div></div>';
+      document.body.appendChild(fondo);
+      const cerrar = () => { document.removeEventListener('keydown', alTeclear); fondo.remove(); };
+      const alTeclear = (ev) => { if (ev.key === 'Escape') cerrar(); };
+      document.addEventListener('keydown', alTeclear);
+      fondo.addEventListener('click', (ev) => { if (ev.target === fondo || ev.target.closest('[data-cerrar]')) cerrar(); });
+      refreshIcons();
+      return { el: fondo, cuerpo: fondo.querySelector('[data-cuerpo]'), cerrar };
+    }
+
+    // ---------------------------------------------------------------- Mi perfil
+    async function abrirMiCuenta() {
+      const v = ventana_('Contraseña y seguridad', state.sesion && state.sesion.correo, '<p class="perfil-cargando">Cargando…</p>');
+      let estado;
+      try {
+        estado = await callServer('apiSeguridadEstado', state.token);
+      } catch (err) {
+        v.cuerpo.innerHTML = '<p class="error-msg">' + esc((err && err.message) || String(err)) + '</p>';
+        return;
+      }
+      v.cuerpo.innerHTML =
+        '<h4 style="margin:0 0 4px">' + (estado.tieneContrasena ? 'Cambiar mi contraseña' : 'Crear una contraseña') + '</h4>' +
+        '<p class="modal-subtitle" style="margin-bottom:12px">' + (estado.tieneContrasena
+          ? 'Al menos ' + esc(estado.minimo) + ' caracteres. No uses la misma que en otros sitios.'
+          : 'Hoy entras con tu cuenta de Google. Con una contraseña también puedes entrar con tu correo.') + '</p>' +
+        (estado.tieneContrasena ? campoClave_('seg-actual', 'Contraseña actual', 'current-password') : '') +
+        campoClave_('seg-mia', 'Contraseña nueva', 'new-password') +
+        campoClave_('seg-mia2', 'Repítela', 'new-password') +
+        '<div class="error-msg" id="seg-mia-error" hidden></div>' +
+        '<div class="form-actions"><button type="button" id="seg-mia-guardar"><i data-lucide="save" class="ico"></i> Guardar</button></div>';
+      conectarOjos_(v.cuerpo);
+      refreshIcons();
+      $('seg-mia-guardar').addEventListener('click', () => {
+        const nueva = $('seg-mia').value;
+        if (nueva !== $('seg-mia2').value) return error_('seg-mia-error', 'Las dos contraseñas no coinciden.');
+        conBoton_($('seg-mia-guardar'), 'Guardando…', async () => {
+          await callServer('apiSeguridadCambiarMia', state.token, estado.tieneContrasena ? $('seg-actual').value : '', nueva);
+          v.cerrar();
+          Notificar.exito('Listo: tu contraseña quedó cambiada.');
+        }, 'seg-mia-error');
+      });
+    }
+
+    // ---------------------------------------------------------------- Usuarios y permisos
+    async function restablecer(correo, nombre) {
+      const ok = await Confirmar.pedir({
+        titulo: '¿Restablecer la contraseña de ' + (nombre || correo) + '?',
+        mensaje: 'Se crea una contraseña temporal que verás una sola vez. Al entrar con ella tendrá que poner una nueva, ' +
+          'y los dispositivos que tenía recordados se olvidan.',
+        textoConfirmar: 'Restablecer',
+        peligro: true,
+      });
+      if (!ok) return;
+      let r;
+      try {
+        r = await callServer('apiSeguridadRestablecer', state.token, correo);
+      } catch (err) {
+        Notificar.error((err && err.message) || String(err));
+        return;
+      }
+      const v = ventana_('Contraseña temporal', r.correo,
+        '<p>Dásela a la persona por un medio seguro (en persona o por teléfono). <b>No se volverá a mostrar.</b></p>' +
+        '<p class="seg-temporal" style="font-family:monospace;font-size:var(--texto-xl);letter-spacing:.08em;text-align:center;' +
+          'padding:12px;border:1px dashed var(--color-border);border-radius:var(--radio-l);user-select:all">' + esc(r.temporal) + '</p>' +
+        '<div class="form-actions"><button type="button" data-copiar><i data-lucide="copy" class="ico"></i> Copiar</button></div>');
+      refreshIcons();
+      v.el.querySelector('[data-copiar]').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(r.temporal);
+          Notificar.exito('Copiada.');
+        } catch (e) {
+          Notificar.info('Selecciónala y cópiala a mano.');
+        }
+      });
+    }
+
+    return { entrar, abrirMiCuenta, restablecer };
+  })();
+</script>

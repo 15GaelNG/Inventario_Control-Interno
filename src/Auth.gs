@@ -71,6 +71,42 @@ const Auth = (function () {
     CacheService.getScriptCache().put(claveFallos_(correo), String(fallosDe_(correo) + 1), SEG_BLOQUEO);
   }
 
+  /**
+   * Lo que falta antes de la sesión (23-oct). Con una contraseña temporal (DEBE CAMBIAR CONTRASEÑA, la que puso un
+   * admin) no hay sesión todavía: se regresa { pendiente: 'cambiar', reto } y la pantalla pide una nueva. El reto vive
+   * 10 min en CacheService y solo sirve para ese correo y ese paso.
+   */
+  const SEG_RETO = 10 * 60;
+  function nuevoReto_(datos) {
+    const id = Utilities.getUuid();
+    CacheService.getScriptCache().put('login_reto_' + id, JSON.stringify(datos), SEG_RETO);
+    return id;
+  }
+  function leerReto_(id, paso) {
+    const raw = id ? CacheService.getScriptCache().get('login_reto_' + String(id)) : null;
+    const r = raw ? JSON.parse(raw) : null;
+    if (!r || r.paso !== paso) throw new Error('Ese paso ya venció. Vuelve a iniciar sesión.');
+    return r;
+  }
+  function continuar_(found, metodo) {
+    if (metodo === 'contrasena' && String(found['DEBE CAMBIAR CONTRASEÑA'] || '').toUpperCase() === 'TRUE') {
+      return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO };
+    }
+    return construirSesion_(found);
+  }
+
+  /** La contraseña nueva en lugar de la temporal; con eso, la sesión */
+  function cambiarContrasenaInicial(reto, nueva) {
+    const r = leerReto_(reto, 'cambiar');
+    const found = buscarUsuarioPorCorreo_(r.correo);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    if (Credenciales.verificar(found, nueva).ok) throw new Error('La contraseña nueva debe ser distinta de la temporal.');
+    Credenciales.revisarNueva(nueva, { correo: found.CORREO, nombre: found.NOMBRE });
+    Credenciales.guardar(found.CORREO, nueva, { debeCambiar: false });
+    CacheService.getScriptCache().remove('login_reto_' + String(reto));
+    return construirSesion_(found);
+  }
+
   function login(correo, password) {
     if (fallosDe_(correo) >= MAX_FALLOS) {
       throw new Error('Demasiados intentos con este correo. Espera 15 minutos o pide a un administrador que revise tu contraseña.');
@@ -87,7 +123,7 @@ const Auth = (function () {
     if (revisada.migrar) {
       try { Credenciales.guardar(found.CORREO, password); } catch (e) { console.warn('login, pasar a hash: ' + e.message); }
     }
-    return construirSesion_(found);
+    return continuar_(found, 'contrasena');
   }
 
   /**
@@ -118,7 +154,7 @@ const Auth = (function () {
     if (!found) throw new Error('Tu cuenta (' + correoDetectado + ') no está registrada en el sistema.');
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
 
-    return construirSesion_(found);
+    return continuar_(found, 'google');
   }
 
   function validarSesion(token) {
@@ -155,5 +191,5 @@ const Auth = (function () {
     CacheService.getScriptCache().remove('sesion_' + token);
   }
 
-  return { login, identidadGoogle, loginConGoogle, validarSesion, requiereRol, logout, crearHashParaUsuario };
+  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, validarSesion, requiereRol, logout, crearHashParaUsuario };
 })();

@@ -167,7 +167,62 @@ const Credenciales = (function () {
     return r;
   }
 
-  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, escribirPorCorreo_, ITERACIONES, MINIMO, COL };
+  const fila_ = (correo) => SheetUtils.getAll(ssId(), HOJA).find((f) => clave_(f.CORREO) === clave_(correo)) || null;
+  const tieneContrasena_ = (fila) => !!(String(fila[COL.HASH] || '') || String(fila[COL.PLANA] == null ? '' : fila[COL.PLANA]));
+
+  /** 12 caracteres sin los que se confunden (0/O, 1/l/I), de dos UUID aleatorios (Utilities.getUuid es v4) */
+  function temporal_() {
+    const abc = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const hex = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
+    let t = '';
+    for (let i = 0; t.length < 12; i += 2) t += abc[parseInt(hex.substr(i, 2), 16) % abc.length];
+    return t;
+  }
+
+  /**
+   * Un admin (EDICIÓN en Usuarios y permisos) le pone una contraseña temporal: se muestra UNA vez, al entrar con ella se
+   * pide una nueva, y sus dispositivos recordados se olvidan (quien la tenía ya no entra sin el código).
+   */
+  function restablecer(token, correo) {
+    const sesion = Permisos.puedeEditar(token, 'usuarios');
+    const fila = fila_(correo);
+    if (!fila) throw new Error('No existe el usuario ' + correo + '.');
+    const temporal = temporal_();
+    guardar(fila.CORREO, temporal, { debeCambiar: true });
+    if (typeof Verificacion !== 'undefined') Verificacion.olvidarDispositivos(fila.CORREO, 'restablecida por ' + sesion.correo);
+    return { correo: fila.CORREO, temporal };
+  }
+
+  // Intentos de "cambiar mi contraseña" con la actual mal: 5 cada 15 min (que una sesión robada no la adivine)
+  const claveCambio_ = (correo) => 'cambio_fallos_' + clave_(correo);
+
+  /** Cada quien la suya (Mi perfil). Sin contraseña todavía (solo entraba con Google), la crea sin pedir la actual */
+  function cambiarMia(token, actual, nueva) {
+    const sesion = Auth.validarSesion(token);
+    const fila = fila_(sesion.correo);
+    if (!fila) throw new Error('Tu usuario ya no existe.');
+    const cache = CacheService.getScriptCache();
+    const fallos = Number(cache.get(claveCambio_(fila.CORREO)) || 0);
+    if (fallos >= 5) throw new Error('Demasiados intentos. Espera 15 minutos.');
+    if (tieneContrasena_(fila) && !verificar(fila, actual).ok) {
+      cache.put(claveCambio_(fila.CORREO), String(fallos + 1), 15 * 60);
+      throw new Error('La contraseña actual no es correcta.');
+    }
+    revisarNueva(nueva, { correo: fila.CORREO, nombre: fila.NOMBRE, actual: tieneContrasena_(fila) ? actual : undefined });
+    guardar(fila.CORREO, nueva, { debeCambiar: false });
+    cache.remove(claveCambio_(fila.CORREO));
+    return true;
+  }
+
+  /** Lo de Mi perfil: si ya tiene contraseña (para pedir la actual) */
+  function estado(token) {
+    const sesion = Auth.validarSesion(token);
+    const fila = fila_(sesion.correo);
+    return { tieneContrasena: !!fila && tieneContrasena_(fila), minimo: MINIMO };
+  }
+
+  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, restablecer, cambiarMia, estado, escribirPorCorreo_,
+    ITERACIONES, MINIMO, COL };
 })();
 
 /** Desde el editor: cuántas contraseñas siguen en texto plano (no cambia nada) */
