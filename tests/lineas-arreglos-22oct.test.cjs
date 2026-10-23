@@ -54,6 +54,9 @@ test('2.63: el PDF de un documento guardado dentro de una acción se espera; mie
   assert.match(flujo, /pdfsEnCurso\[r\.id\] = true;/);
   assert.match(flujo, /delete pdfsEnCurso\[r\.id\];/);
   assert.match(flujo, /if \(arriba\.tipo === 'equipo' \|\| arriba\.tipo === 'linea'\) cargarEvidencias\(arriba\.id\);/);
+  // Al terminar el PDF se olvida lo que la ficha guardó mientras (2 min): si no, Documentos volvía sin el PDF (NUCO 1010)
+  const alTerminar = flujo.slice(flujo.indexOf('pdf.then('), flujo.indexOf('cargarEvidencias(arriba.id)'));
+  assert.match(alTerminar, /delete pdfsEnCurso\[r\.id\];[\s\S]*fichaEnMemoria = \{\};[\s\S]*const arriba = pila\[pila\.length - 1\];/);
   assert.match(cliente, /const pdfsEnCurso = \{\};/);
   assert.match(cliente, /'Generar PDF', 'pdf', true, \(d\) => operar && !!d\.pdfPendiente && !pdfsEnCurso\[d\.id\]/);
   assert.match(cliente, /x\.origen === 'SISTEMA' && !x\.pdfId && !pdfsEnCurso\[x\.id\] \? \{ icono: 'file-plus', texto: 'Generar PDF'/);

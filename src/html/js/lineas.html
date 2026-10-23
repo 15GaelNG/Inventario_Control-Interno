@@ -5211,6 +5211,9 @@
           pdfsEnCurso[r.id] = true;
           pdf.then(() => {
             delete pdfsEnCurso[r.id];
+            // Lo que la ficha pidió mientras se generaba ya es de antes del PDF: sin esto, Documentos volvía con la copia
+            // guardada (FICHA_MEMORIA_MS) y ofrecía «Generar PDF» (prueba del 22-oct, NUCO 1010; pendiente 2.63)
+            fichaEnMemoria = {};
             const arriba = pila[pila.length - 1];
             if (!vigente() || !arriba) return;
             if (arriba.tipo === 'equipo' || arriba.tipo === 'linea') cargarEvidencias(arriba.id);
