@@ -467,7 +467,8 @@
     }),
     apiHelpdeskArchivo: { tipo: 'image/png', base64: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==' },
     // De los de NIP, el primero y el tercero ya están en Tickets
-    apiHelpdeskRegistrados: (token, ids) => Object.fromEntries((ids || []).filter((id, i) => i % 2 === 0).map((id) => [id, 'TCK-' + id])),
+    // Por el ID, no por su lugar en la lista: el ticket abierto se pregunta solo ([id]) y el primero (103700) queda sin registrar
+    apiHelpdeskRegistrados: (token, ids) => Object.fromEntries((ids || []).filter((id) => Number(id) % 2 === 1).map((id) => [id, 'TCK-' + id])),
     apiHelpdeskFormulario: { FORMULARIO: 'Incidencia | Solicitud - Sensores', CAMPOS: [
       { ID: 1083, ETIQUETA: 'Departamento Solicitante', TIPO: 'select', VALOR: 'POST VENTA' },
       { ID: 1084, ETIQUETA: 'Oficina / Desarrollo', TIPO: 'select', VALOR: 'JARDINES' },
