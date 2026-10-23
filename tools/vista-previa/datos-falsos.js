@@ -188,6 +188,8 @@
     personas: PERSONAS.concat(['ROBERTO SÁNCHEZ', 'LUCÍA HERNÁNDEZ']).map((nombre, i) => ({
       correo: 'persona' + i + '@ciudadmaderas.com', nombre, area: de(AREAS, i), rol: de(['USER', 'USER', 'VIEWER', 'ADMIN'], i),
       activo: i !== 4, coordinacion: 'OPERACIONES', oficina: 'CORPORATIVO', sede: de(SEDES, i), noEmpleado: 'CI0' + (100 + i),
+      // Una bloqueada por seguridad (Credenciales.gs): el aviso de su ficha y la insignia de la lista
+      bloqueo: i === 2 ? '2026-10-23 10:40 | admin@ciudadmaderas.com | le llegaron correos de cambio que no pidió' : '',
     })),
     reglas: [
       { quien: 'TI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'TI', modulo: 'verificaciones', permiso: 'LECTURA' },
@@ -643,6 +645,26 @@
     Temporada.aplicar('muertos');
   }
 
+  /** Lo que contestan las api… de Seguridad en las escenas de Mi perfil */
+  function seguridadDeEjemplo() {
+    respuestas.apiSeguridadEstado = { tieneContrasena: true, minimo: 8, cambiada: '02/10/2026', dosPasos: true };
+    respuestas.apiSeguridadMisDispositivos = [
+      { id: 'a', nombre: 'Chrome en Windows', creado: '01/10/2026 09:12', ultimoUso: '23/10/2026 08:40', esEste: true },
+      { id: 'b', nombre: 'Safari en iPhone o iPad', creado: '12/09/2026 18:03', ultimoUso: '20/10/2026 21:15', esEste: false },
+      { id: 'c', nombre: 'Edge en Windows', creado: '30/08/2026 10:20', ultimoUso: '02/10/2026 17:51', esEste: false },
+    ];
+    respuestas.apiSeguridadActividad = [
+      { fecha: '23/10/2026 08:40', metodo: 'google', resultado: 'entro', dispositivo: 'Chrome en Windows' },
+      { fecha: '22/10/2026 19:02', metodo: 'contrasena', resultado: 'codigo-bueno', dispositivo: 'Safari en iPhone o iPad' },
+      { fecha: '22/10/2026 19:01', metodo: 'contrasena', resultado: 'codigo-enviado', dispositivo: 'Safari en iPhone o iPad' },
+      { fecha: '21/10/2026 23:14', metodo: 'contrasena', resultado: 'contrasena-mala', dispositivo: 'Firefox en Linux' },
+      { fecha: '20/10/2026 21:15', metodo: 'contrasena', resultado: 'entro', dispositivo: 'Safari en iPhone o iPad' },
+    ];
+  }
+  async function abrirPerfil() {
+    Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo');
+  }
+
   const ESCENAS = {
     'muertos-inicio': async () => { temporada(); await abrir('dashboard'); await hasta('.dm-banner'); await esperar(400); },
     'muertos-login': async () => { temporada(); state.token = null; render(); await hasta('.dm-login'); await esperar(900); },
@@ -675,6 +697,62 @@
     'muertos-panel-admin': async () => { temporada(); await abrir('dashboard'); (await hasta('.ap-boton')).click(); await hasta('[data-dm-global]'); await esperar(400); },
     // Mi perfil (el usuario al pie del menú) y el menú abierto con el usuario abajo
     'mi-perfil': async () => { Temporada.aplicar(''); await abrir('dashboard'); (await hasta('.sidebar-usuario-tarjeta')).click(); await hasta('.perfil-grupo'); await esperar(400); },
+    // Seguridad (js/app-seguridad.html, 23-oct): los pasos del login y "Contraseña y seguridad" de Mi perfil
+    'login-codigo': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiLogin = () => ({ pendiente: 'codigo', reto: 'r', correoOculto: 'a•••a@gph.com', motivo: 'nuevo' });
+      (await hasta('#login-correo')).value = 'ana@gph.com';
+      document.getElementById('login-password').value = 'x';
+      document.getElementById('btn-login').click();
+      await hasta('#seg-codigo'); await esperar(400);
+    },
+    'login': async () => { Temporada.aplicar(''); state.token = null; render(); await hasta('#login-olvide'); await esperar(400); },
+    // "¿Olvidaste tu contraseña?" (23-oct): pedir el enlace, y llegar desde el correo (?recuperar=…)
+    'login-olvide': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiSeguridadRecuperarPedir = { ok: true, mensaje: 'Si el correo está registrado, te mandamos un enlace para crear una contraseña nueva. Revisa tu bandeja (y el spam).' };
+      (await hasta('#login-olvide')).click();
+      (await hasta('#seg-olvide-correo')).value = 'ana.lopez@gph.com';
+      document.getElementById('seg-olvide-mandar').click();
+      await esperar(600);
+    },
+    'login-recuperar': async () => {
+      Temporada.aplicar('');
+      window.google.script.url = { getLocation: (cb) => cb({ parameter: { recuperar: 'a'.repeat(64) } }) };
+      window.google.script.history = { replace: () => {} };
+      respuestas.apiSeguridadRecuperarEstado = { correo: 'ana.lopez@gph.com', minimo: 8 };
+      state.token = null; render();
+      (await hasta('#seg-nueva')).value = 'Ayrt05n';
+      document.getElementById('seg-nueva').dispatchEvent(new Event('input'));
+      await esperar(400);
+    },
+    'login-contrasena-nueva': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 8 });
+      (await hasta('#login-correo')).value = 'ana@gph.com';
+      document.getElementById('login-password').value = 'x';
+      document.getElementById('btn-login').click();
+      await hasta('#seg-nueva'); await esperar(400);
+    },
+    // Mi perfil, pestañas de la cuenta (23-oct): Contraseña, Dispositivos y Actividad
+    'perfil-contrasena': async () => {
+      seguridadDeEjemplo();
+      await abrirPerfil();
+      (await hasta('[data-perfil-seguridad]')).click(); await hasta('#seg-mia');
+      document.getElementById('seg-mia').value = 'Una frase larga';
+      document.getElementById('seg-mia').dispatchEvent(new Event('input'));
+      await esperar(400);
+    },
+    'perfil-dispositivos': async () => {
+      seguridadDeEjemplo();
+      await abrirPerfil();
+      (await hasta('.tab-btn[data-tab="dispositivos"]')).click(); await hasta('[data-quitar]'); await esperar(400);
+    },
+    'perfil-actividad': async () => {
+      seguridadDeEjemplo();
+      await abrirPerfil();
+      (await hasta('.tab-btn[data-tab="actividad"]')).click(); await hasta('[data-seg="actividad"] .seg-fila'); await esperar(400);
+    },
     'menu-usuario': async () => {
       Temporada.aplicar(''); await abrir('dashboard');
       if (Pantalla.esAngosta()) (await hasta('.shell-menu-btn')).click();
@@ -841,6 +919,20 @@
       await esperar(300);
     },
     'usuarios-historial': () => abrir('usuarios', 'historial'),
+    // Bloqueo por seguridad: la ficha con su aviso y la ventana de Restablecer con la casilla marcada
+    'usuarios-ficha-bloqueada': async () => {
+      await abrir('usuarios'); await hasta('.dt tbody tr[data-id] .seg-insignia');
+      document.querySelector('.dt tbody tr[data-id] .seg-insignia').closest('tr').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await hasta('.seg-bloqueo'); await esperar(300);
+    },
+    'usuarios-restablecer': async () => {
+      await abrir('usuarios'); await abrirPrimeraFila();
+      (await hasta('[data-usr-contrasena]')).click();
+      const casilla = await hasta('[data-bloquear]');
+      casilla.click();
+      document.querySelector('[data-motivo] textarea').value = 'Le llegaron correos de cambio que no pidió';
+      await esperar(300);
+    },
     // Perfiles (fase 2): la lista y la ficha de uno
     'usuarios-perfiles': async () => { await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]'); },
     'usuarios-perfil-ficha': async () => {

@@ -31,6 +31,7 @@ function apiGeotabDisponible(token) {
   return SensoresService.geotabDisponible(token);
 }
 function apiEstadoEnVivoSensores(token) {
+  Auth.automatica();   // el estado en vivo se refresca solo: no cuenta como actividad
   return SensoresService.estadoEnVivo(token);
 }
 function apiResumenGeotabSensor(token, id, dias) {

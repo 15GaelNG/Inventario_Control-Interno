@@ -73,8 +73,14 @@
         `<div class="perfil-chip" style="--perfil-chip:var(--color-success)"><i data-lucide="shield-check" class="ico"></i><div><small>Cuenta</small><b>${cargando ? '…' : (p.activo ? 'Activa' : 'Inactiva')}</b></div></div>` +
         `<div class="perfil-chip"><i data-lucide="layout-grid" class="ico"></i><div><small>Módulos</small><b>${cargando ? '…' : totalModulos}</b></div></div>` +
       '</div>' +
-      '<button type="button" class="secondary perfil-apariencia" data-perfil-apariencia><i data-lucide="settings" class="ico"></i>Apariencia</button>';
+      '<button type="button" class="secondary perfil-apariencia" data-perfil-apariencia><i data-lucide="settings" class="ico"></i>Apariencia</button>' +
+      '<button type="button" class="secondary perfil-apariencia" data-perfil-seguridad><i data-lucide="lock-keyhole" class="ico"></i>Contraseña y seguridad</button>';
     tarjeta.querySelector('[data-perfil-apariencia]').addEventListener('click', () => Apariencia.abrir());
+    // A la pestaña Contraseña de la derecha (en celular, que se vea)
+    tarjeta.querySelector('[data-perfil-seguridad]').addEventListener('click', () => {
+      Tabs.mostrar(modulos.querySelector('[data-tabs]'), 'contrasena');
+      modulos.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
 
     let h = '<div class="perfil-modulos-cabeza"><div><h3>Mis módulos</h3><p>Lo que puedes ver y editar en el sistema.</p></div></div>';
     if (cargando) h += '<p class="perfil-cargando">Cargando…</p>';
@@ -88,7 +94,21 @@
           '</div></div>';
       });
     }
-    modulos.innerHTML = h;
+    // La derecha en pestañas (23-oct): Mis módulos y lo de la cuenta (Contraseña, Dispositivos, Actividad), que pinta
+    // Seguridad (js/app-seguridad.html) al abrir cada una. Al repintar (llega el perfil) se queda en la que estaba.
+    const grupo = modulos.querySelector('[data-tabs]');
+    const abierta = (grupo && Tabs.actual(grupo)) || 'modulos';
+    modulos.innerHTML = Tabs.html([
+      { id: 'modulos', titulo: 'Mis módulos', icono: 'layout-grid', contenido: h },
+      { id: 'contrasena', titulo: 'Contraseña', icono: 'key-round', contenido: '<div data-seg="contrasena"></div>' },
+      { id: 'dispositivos', titulo: 'Dispositivos', icono: 'monitor-smartphone', contenido: '<div data-seg="dispositivos"></div>' },
+      { id: 'actividad', titulo: 'Actividad', icono: 'history', contenido: '<div data-seg="actividad"></div>' },
+    ], { activa: abierta });
+    if (!modulos.dataset.conPestanas) {
+      modulos.dataset.conPestanas = '1';
+      modulos.addEventListener('tabs-cambio', (ev) => Seguridad.pestana(ev.detail.nombre, modulos.querySelector('[data-seg="' + ev.detail.nombre + '"]')));
+    }
+    if (abierta !== 'modulos') Seguridad.pestana(abierta, modulos.querySelector('[data-seg="' + abierta + '"]'));
     refreshIcons();
   }
 

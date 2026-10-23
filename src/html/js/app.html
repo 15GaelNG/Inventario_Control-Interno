@@ -936,6 +936,8 @@
     });
 
     initGoogleQuickLogin();
+    // "¿Olvidaste tu contraseña?" y el enlace que llega por correo (?recuperar=…): Seguridad (js/app-seguridad.html)
+    Seguridad.conectarLogin();
 
     document.getElementById('form-login').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -960,9 +962,8 @@
       const chip = document.getElementById('google-account-chip');
       if (chip) chip.disabled = true;
       try {
-        const resultado = await callServer('apiLogin', correo, password);
-        guardarSesion(resultado);
-        mostrarPantallaCarga(() => render());
+        // La sesión, o el paso que falta (contraseña nueva, código): Seguridad (js/app-seguridad.html)
+        Seguridad.entrar(await callServer('apiLogin', correo, password, Seguridad.dispositivo(correo)));
         // A propósito NO se reactivan los botones en éxito: ya se está
         // navegando a la pantalla de carga, no debería poder volver a
         // usarse este formulario.
@@ -1007,9 +1008,7 @@
         const btnLogin = document.getElementById('btn-login');
         if (btnLogin) btnLogin.disabled = true;
         try {
-          const resultado = await callServer('apiLoginConGoogle');
-          guardarSesion(resultado);
-          mostrarPantallaCarga(() => render());
+          Seguridad.entrar(await callServer('apiLoginConGoogle', Seguridad.dispositivo(identidad.correo)));
           // Tampoco se reactiva en éxito — ver comentario en form-login.
         } catch (err) {
           errorBox.textContent = err.message;
@@ -1605,5 +1604,9 @@
   });
 
   renderNavGrupos();
-  render();
+  // El primer render espera a que carguen TODOS los <script> de Index.html: el login usa Seguridad
+  // (app-seguridad.html, que carga después). Corrido aquí, initLogin tronaba en Seguridad.conectarLogin
+  // y el botón de "¿Olvidaste tu contraseña?" y el formulario de entrar se quedaban sin conectar (23-oct).
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render, { once: true });
+  else setTimeout(render, 0);
 </script>
