@@ -3088,3 +3088,14 @@ test('ninguna api… nueva corre sin sesión: las que no piden token son una lis
   assert.deepEqual(sinToken.filter((n) => !SIN_TOKEN[n]), [], 'sin token y sin razón en la lista');
   assert.deepEqual(Object.keys(SIN_TOKEN).filter((n) => !sinToken.includes(n)), [], 'en la lista pero ya no existe (o ya pide token): quitarla');
 });
+
+test('el primer render espera a que cargue toda la página: el login usa Seguridad, que carga después de app (23-oct)', () => {
+  const app = read('src/html/js/app.html');
+  const sinComentarios = app.replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/^ {2}render\(\);/m.test(sinComentarios),   // nivel superior del <script> (dos espacios)
+    'app.html llama render() directo al cargar: initLogin usaría Seguridad (app-seguridad.html) antes de que exista');
+  assert.match(app, /addEventListener\('DOMContentLoaded', render/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/app-seguridad')") > index.indexOf("include('html/js/app')"),
+    'si app-seguridad pasa antes que app, este contrato ya no hace falta: revísalo');
+});

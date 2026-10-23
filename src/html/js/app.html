@@ -1590,5 +1590,9 @@
   });
 
   renderNavGrupos();
-  render();
+  // El primer render espera a que carguen TODOS los <script> de Index.html: el login usa Seguridad
+  // (app-seguridad.html, que carga después). Corrido aquí, initLogin tronaba en Seguridad.conectarLogin
+  // y el botón de "¿Olvidaste tu contraseña?" y el formulario de entrar se quedaban sin conectar (23-oct).
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render, { once: true });
+  else setTimeout(render, 0);
 </script>
