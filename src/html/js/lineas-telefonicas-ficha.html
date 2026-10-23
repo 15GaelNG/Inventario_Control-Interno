@@ -281,8 +281,9 @@
        * copiar) se quitó el 22-oct (usuario): cada tarjeta de General tiene su botón de copiar
        */
       function pestanasFicha(general, conDocumentos) {
-        // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion)
-        const pasado = veHistorial();
+        // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion). conDocumentos = false:
+        // Dirección General a quien no es ADMIN, solo General (pendiente 8.20; el servidor tampoco da documentos ni historial)
+        const pasado = conDocumentos && veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
         const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
@@ -315,7 +316,7 @@
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
           fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: null, carpetaDriveId: e.carpetaDriveId || null };
-          if (e.nuco) precargarUltimosNucos(id);
+          if (e.nuco && !e._dgOculto) precargarUltimosNucos(id);
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
               chip(e.estatus) + (e.dg ? chip('DG', 'neutro') : '') + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
@@ -350,7 +351,7 @@
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
               (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
-            '</div>', true);
+            '</div>', !e._dgOculto);
           // Dirección General a quien no es ADMIN: sin documentos ni historial (el servidor tampoco los da)
           ponerCopiarTarjetas(detalle);
           if (e._dgOculto) return;
@@ -398,7 +399,7 @@
                 ['PIN WhatsApp', e.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
-            '</div>', true);
+            '</div>', !l._dgOculto);
           ponerCopiarTarjetas(detalle);
           // Toda línea tiene Documentos: las de cuando estuvo suelta y las que firmó dentro de un equipo (pendiente 2.45)
           if (l._dgOculto) return;

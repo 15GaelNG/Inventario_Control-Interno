@@ -199,8 +199,8 @@ test('la ficha de la línea ve las responsivas que firmó dentro de un equipo (I
   assert.match(tel, /if \(!enEquipo\) nucos = evidenciasNucos_\(id, sesion\);/);
   assert.match(tel, /enNuco: d\.enEquipo \? \(d\.nuco \|\| '—'\) : null, registroId: d\.enEquipo \? d\.registroId \|\| null : null,/);
   const html = LINEAS;
-  // Toda línea tiene Documentos, y la columna Equipo dice en qué NUCO la firmó
-  assert.match(html, /'<\/div>', true\);\s*ponerCopiarTarjetas\(detalle\);\s*\/\/[^\n]*\n\s*if \(l\._dgOculto\) return;\n\s*cargarEvidencias\(id\);/);
+  // Toda línea tiene Documentos (salvo DG a quien no es ADMIN, 8.20), y la columna Equipo dice en qué NUCO la firmó
+  assert.match(html, /'<\/div>', !l\._dgOculto\);\s*ponerCopiarTarjetas\(detalle\);\s*\/\/[^\n]*\n\s*if \(l\._dgOculto\) return;\n\s*cargarEvidencias\(id\);/);
   assert.match(html, /const vista = arriba && arriba\.tipo === 'linea' && arriba\.id === id \? 'linea' : '';/);
   assert.match(html, /vista === 'linea' \? \{ campo: 'enNuco', titulo: 'Equipo'/);
 });

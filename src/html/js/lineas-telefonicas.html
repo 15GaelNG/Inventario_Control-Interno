@@ -42,6 +42,8 @@
         icono('file-text') + ' Ver</button>';
     }
     const tieneNuco = (r) => !!(r.NUCO || r.nuco || r.nucoEquipo);
+    // «Última responsiva / inspección»: no para Dirección General a quien no es ADMIN (pendiente 8.20; el servidor tampoco los da)
+    const conUltimo = (r) => tieneNuco(r) && !bloqueadoDG(r);
     /**
      * Columnas de la vista del AppSheet que la tabla aún no tiene (`sinEstas`): ocultas, salvo "Última responsiva" y
      * "Última inspección", que van al final.
@@ -59,8 +61,8 @@
           const tipo = campo === 'RESPONSIVA' ? 'RESPONSIVA' : 'INSPECCION';
           c.visible = true;
           c.tipo = 'lista';
-          c.valor = (r) => (tieneNuco(r) ? titulo : '');
-          c.render = (v, r) => (tieneNuco(r) ? botonUltimoNucos(tipo, r.id) : vacio);
+          c.valor = (r) => (conUltimo(r) ? titulo : '');
+          c.render = (v, r) => (conUltimo(r) ? botonUltimoNucos(tipo, r.id) : vacio);
         }
         if (clase === 'correo') c.render = (v) => (v ? '<a class="ln-enlace" href="mailto:' + esc(v) + '">' + icono('mail') + ' ' + esc(v) + '</a>' : vacio);
         return c;
@@ -598,7 +600,7 @@
         const sub = tipo === 'equipo' ? [r.modelo || v('EQUIPO'), r.numero ? 'Línea ' + r.numero : 'Sin línea'].filter(Boolean).join(' · ')
           : [r.compania || v('COMPAÑIA'), nuco ? 'NUCO ' + nuco : 'Suelta'].filter(Boolean).join(' · ');
         const panel = abrirPanelLateral(titulo, sub, opciones);
-        if (tieneNuco(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
+        if (conUltimo(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
         const campo = (t, valor, html) => '<div class="dt-campo"><div class="dt-campo-titulo">' + esc(t) + '</div><div class="dt-campo-valor">' +
           (html ? (valor || vacio) : guion(valor)) + '</div></div>';
         const seccion = (icono, t, filas) => '<section class="ln-vr-seccion"><h4>' + ico(icono) + ' ' + esc(t) + '</h4>' + filas.join('') + '</section>';
@@ -619,7 +621,7 @@
             (formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || (r.tipoHoja ? chip(r.tipoHoja) : '')) +
           '</div><div class="ln-vr-acciones">' +
             '<button type="button" class="ln-btn-icono" data-vr-ficha>' + icono('maximize-2') + ' Abrir ficha completa</button>' +
-            (tieneNuco(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
+            (conUltimo(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
               botonUltimoNucos('INSPECCION', r.id).replace(' Ver</button>', ' Última inspección</button>') : '') +
           '</div></div>' +
           seccion('user', 'Responsable', [

@@ -56,6 +56,30 @@ test('DG: el servidor oculta y rechaza; la pantalla no pide lo que no ve', () =>
   assert.match(cliente, /if \(e\._dgOculto\) return;/);
 });
 
+// Pendiente 8.20 (usuario, 23-oct: «Sí, quítalos para DG»): a quien no es ADMIN, la ficha de DG solo con General y sin
+// «Última responsiva / inspección» (salían y se quedaban en «Cargando…»: el servidor los rechaza con sinDG_)
+test('DG: sin Documentos, Historial ni «Última responsiva / inspección» a quien no es ADMIN', () => {
+  const cliente = LINEAS;
+  assert.match(cliente, /function pestanasFicha\(general, conDocumentos\) \{[\s\S]*?const pasado = conDocumentos && veHistorial\(\);\s*conDocumentos = conDocumentos && veDocumentos\(\);/);
+  assert.match(cliente, /'<\/div>', !e\._dgOculto\);/);
+  assert.match(cliente, /'<\/div>', !l\._dgOculto\);/);
+  assert.doesNotMatch(cliente, /pestanasFicha\([\s\S]{0,6000}?'<\/div>', true\);/);
+  assert.match(cliente, /if \(e\.nuco && !e\._dgOculto\) precargarUltimosNucos\(id\);/);
+  assert.match(cliente, /const conUltimo = \(r\) => tieneNuco\(r\) && !bloqueadoDG\(r\);/);
+  assert.match(cliente, /c\.valor = \(r\) => \(conUltimo\(r\) \? titulo : ''\);/);
+  assert.match(cliente, /c\.render = \(v, r\) => \(conUltimo\(r\) \? botonUltimoNucos\(tipo, r\.id\) : vacio\);/);
+  assert.match(cliente, /if \(conUltimo\(r\)\) precargarUltimosNucos\(r\.id\);/);
+  assert.match(cliente, /\(conUltimo\(r\) \? botonUltimoNucos\('RESPONSIVA', r\.id\)/);
+  assert.doesNotMatch(cliente, /tieneNuco\(r\) \? botonUltimoNucos|if \(tieneNuco\(r\)\) precargarUltimosNucos/);
+
+  // Las pestañas, armadas como en la ficha: ADMIN (o registro que no es DG) las tres; DG oculto, solo General
+  const fuente = cliente.match(/function pestanasFicha\(general, conDocumentos\) \{[\s\S]*?\n {6}\}/)[0];
+  const armar = new Function('veHistorial', 'veDocumentos', 'Tabs', 'pila', fuente + '; return pestanasFicha;');
+  const pestanas = (con) => armar(() => true, () => true, { html: (t) => t.filter(Boolean).map((p) => p.id) }, [])('g', con);
+  assert.deepEqual(pestanas(true), ['general', 'documentos', 'historial']);
+  assert.deepEqual(pestanas(false), ['general']);
+});
+
 // Usuario, 22-oct: todo el responsable en blanco salvo AREA = DIRECCION GENERAL; solo la lista fija; ADMIN sí modifica
 test('DG: solo queda el área; el índice la pone en departamento, la vista y la ficha en AREA', () => {
   // Vista del AppSheet con DEPARTAMENTO, AREA y SEDE: DEPARTAMENTO y SEDE en blanco
