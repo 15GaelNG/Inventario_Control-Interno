@@ -517,7 +517,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   el formulario de resguardo, Mandar a resguardo, Mandar a cancelación y Quitar del panel (`LineasResguardos`, se omite con
   «Es de Dirección General: solo ADMIN lo modifica.»). El panel de Pau (`bandeja`) muestra a quien no es ADMIN los renglones de
   DG con NUCO, estados, número «DG» y DEPARTAMENTO DIRECCION GENERAL, y lo demás en blanco (`LineasDG.esRenglonPanel` y
-  `ocultarRenglonPanel`). **La pantalla no ofrece lo que el servidor niega** (23-oct, `14f3f69`, pendiente 8.20): a quien no
+  `ocultarRenglonPanel`). **La pantalla no ofrece lo que el servidor niega** (23-oct, `14f3f69`, pendiente 8.20; v136): a quien no
   es ADMIN la ficha del equipo y de la línea de DG solo tiene la pestaña General (`pestanasFicha` con `!_dgOculto` en
   `lineas-telefonicas-ficha.html`), y la lista y el panel Detalles no pintan ni precargan «Última responsiva / inspección»
   (`conUltimo` en `lineas-telefonicas.html`).
