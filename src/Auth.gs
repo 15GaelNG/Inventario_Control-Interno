@@ -92,6 +92,11 @@ const Auth = (function () {
    * En orden: el código por correo si el dispositivo es nuevo o algo se ve raro (Verificacion.gs), la contraseña nueva
    * si entró con una temporal, y la sesión. verificado: ya pasó el código (no se vuelve a preguntar).
    */
+  // La bitácora de entradas (Accesos.gs): nunca truena ni impide entrar
+  function anotar_(correo, metodo, resultado, dispositivo) {
+    if (typeof Accesos !== 'undefined') Accesos.anotar(correo, metodo, resultado, dispositivo && dispositivo.nombre);
+  }
+
   function continuar_(found, metodo, dispositivo, verificado) {
     if (!verificado) {
       const paso = Verificacion.decidir(found, metodo, dispositivo);
@@ -100,6 +105,7 @@ const Auth = (function () {
     if (metodo === 'contrasena' && String(found['DEBE CAMBIAR CONTRASEÑA'] || '').toUpperCase() === 'TRUE') {
       return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO };
     }
+    anotar_(found.CORREO, metodo, 'entro', dispositivo);
     return construirSesion_(found);
   }
 
@@ -129,14 +135,15 @@ const Auth = (function () {
 
   function login(correo, password, dispositivo) {
     if (fallosDe_(correo) >= MAX_FALLOS) {
+      anotar_(correo, 'contrasena', 'bloqueado', dispositivo);
       throw new Error('Demasiados intentos con este correo. Espera 15 minutos o pide a un administrador que revise tu contraseña.');
     }
     const found = buscarUsuarioPorCorreo_(correo);
     // Un correo que no existe cuenta igual que una contraseña mala: el mensaje no dice cuál de las dos fue
-    if (!found) { anotarFallo_(correo); throw new Error('Usuario o contraseña incorrectos'); }
+    if (!found) { anotarFallo_(correo); anotar_(correo, 'contrasena', 'correo-desconocido', dispositivo); throw new Error('Usuario o contraseña incorrectos'); }
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
     const revisada = Credenciales.verificar(found, password);
-    if (!revisada.ok) { anotarFallo_(correo); throw new Error('Usuario o contraseña incorrectos'); }
+    if (!revisada.ok) { anotarFallo_(correo); anotar_(correo, 'contrasena', 'contrasena-mala', dispositivo); throw new Error('Usuario o contraseña incorrectos'); }
     CacheService.getScriptCache().remove(claveFallos_(correo));
     // Entró con la de texto plano o una huella vieja: se guarda la nueva y se borra CONTRASEÑA. Si escribir falla, entra
     // igual (se intenta otra vez la siguiente)

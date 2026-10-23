@@ -107,6 +107,7 @@ const Verificacion = (function () {
     const reto = Utilities.getUuid();
     const r = { correo: fila.CORREO, nombre: fila.NOMBRE || '', metodo, motivo, dispositivo: d, intentos: 0, envios: 0 };
     mandar_(reto, r);
+    if (typeof Accesos !== 'undefined') Accesos.anotar(fila.CORREO, metodo, 'codigo-enviado', d.nombre, motivo);
     return { pendiente: 'codigo', reto, correoOculto: oculto_(fila.CORREO), motivo };
   }
 
