@@ -246,8 +246,23 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
 - **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
   impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
 - Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se
-  cuida con su reto o su token propio y sus límites; todo lo demás pide sesión. Una `api…` nueva sin token necesita lo
-  mismo. Ninguna respuesta al cliente lleva `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave.
+  cuida con su reto o su token propio y sus límites; todo lo demás pide sesión. Ninguna respuesta al cliente lleva
+  `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave. **Las `api…` sin token son una lista
+  cerrada** (`source-contracts`: "ninguna api… nueva corre sin sesión"): agregar una exige anotar qué la protege.
+- **Regla de una contraseña nueva** (lo pidió el área): 8+ caracteres con mayúscula, minúscula, número y símbolo, como
+  `Ayrt05n!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
+  `COMUNES`; la pantalla repite la lista para palomearla). La regla es para ELEGIRLA: guardarla con huella no cambia nada
+  para la persona y no se quita.
+- **La sesión** (`Auth.gs`): vence a los 60 min sin uso (`Config.SESION_INACTIVIDAD_MIN`; cada llamada la renueva, a lo
+  más cada 5 min) y nunca pasa de 8 h. **Una `api…` que llama un temporizador de la pantalla empieza con
+  `Auth.automatica()`** (el vigía, la campanita, sensores en vivo): valida sin renovar, o la pestaña abierta nunca
+  cerraría. La pantalla avisa a los 59 min ("¿Sigues ahí?") y, con actividad sin llamadas (un formulario largo), avisa al
+  servidor cada 10 min (`apiSeguridadSigo`). Cada persona tiene una versión de sesión (ScriptProperties):
+  `Auth.cerrarSesiones(correo, { conservar: token })` saca a todas sus sesiones abiertas (cambiar o restablecer la
+  contraseña, quitar dispositivos, el admin) y a quien lo hizo le regresa un token nuevo (`{ sesion }`, la pantalla lo
+  guarda con `guardarSesion`). Prueba: `sesion.test.cjs`.
+- **Pendiente:** sacar las huellas, DISPOSITIVOS y ACCESOS del libro compartido de USUARIOS a uno restringido (decidido
+  para después, 23-oct).
 - Pruebas: `credenciales.test.cjs`, `verificacion.test.cjs`, `accesos.test.cjs`, `login-intentos.test.cjs`; vista previa:
   `login-codigo`, `login-contrasena-nueva`, `perfil-seguridad`.
 - **Todo correo que mande el sistema → `Correos.mensaje(para, asunto, { etiqueta, titulo, parrafos, codigo, detalle,

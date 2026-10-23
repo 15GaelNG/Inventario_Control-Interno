@@ -24,13 +24,23 @@ const Credenciales = (function () {
   // Lo que aguanta Apps Script en ~300 ms por login (medirHashContrasena). PBKDF2 en un servidor normal usa cientos
   // de miles; aquí cada vuelta es una llamada a Utilities. Lo compensan el límite de intentos y el código por correo.
   const ITERACIONES = 3000;
-  const MINIMO = 10;
+  const MINIMO = 8;
+  // Lo que debe traer una contraseña nueva, como "Ayrt05n!" (la pantalla repite la misma lista para palomearla)
+  const TIPOS = {
+    'una mayúscula': /[A-ZÁÉÍÓÚÑ]/,
+    'una minúscula': /[a-záéíóúñ]/,
+    'un número': /\d/,
+    'un símbolo': /[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s]/,
+  };
   const COL = { HASH: 'PASSWORD_HASH', SAL: 'SALT', PLANA: 'CONTRASEÑA', CAMBIAR: 'DEBE CAMBIAR CONTRASEÑA', CAMBIADA: 'CONTRASEÑA CAMBIADA' };
   // Las que se prueban primero (y las de aquí): no se aceptan como contraseña nueva
   const COMUNES = ['12345678', '123456789', '1234567890', '0123456789', '1234512345', 'qwertyuiop', 'contraseña',
     'contrasena', 'password', 'password1', 'password123', 'ciudadmaderas', 'ciudad maderas', 'maderas', 'controlinterno',
     'control interno', 'postventa', 'post venta', 'bienvenido', 'bienvenida', 'administrador', 'iloveyou', 'aaaaaaaaaa',
-    'abcdefghij', 'abc1234567', 'mexico1234', 'queretaro', 'mérida2026', 'merida2026', 'cancun2026'];
+    'abcdefghij', 'abc1234567', 'mexico1234', 'queretaro', 'mérida2026', 'merida2026', 'cancun2026',
+    // Las comunes que sí traen mayúscula, número y símbolo: justo las que alguien elige para "pasar" la regla
+    'password1!', 'password123!', 'qwerty123!', 'contraseña1!', 'contrasena1!', 'ciudadmaderas1!', 'ciudadmaderas2026!',
+    'maderas123!', 'bienvenido1!', 'bienvenida1!', 'mexico123!', 'admin123!', 'abc123456!', 'controlinterno1!'];
 
   const ssId = () => Config.SPREADSHEET_IDS.USUARIOS();
   const clave_ = (correo) => String(correo == null ? '' : correo).trim().toLowerCase();
@@ -92,6 +102,9 @@ const Credenciales = (function () {
     const p = String(contrasena || '');
     const minus = p.toLowerCase();
     if (p.length < MINIMO) throw new Error('La contraseña debe tener al menos ' + MINIMO + ' caracteres.');
+    // Como "Ayrt05n!": mayúscula, minúscula, número y símbolo (lo pidió el área, 23-oct; el espacio no cuenta como símbolo)
+    const falta = Object.keys(TIPOS).filter((k) => !TIPOS[k].test(p));
+    if (falta.length) throw new Error('A la contraseña le falta: ' + falta.join(', ') + '.');
     if (/^(.)\1+$/.test(p)) throw new Error('La contraseña no puede ser un solo carácter repetido.');
     if (COMUNES.indexOf(minus) !== -1) throw new Error('Esa contraseña es de las más usadas: elige otra.');
     const usuario = clave_(c.correo).split('@')[0];
@@ -190,7 +203,34 @@ const Credenciales = (function () {
     const temporal = temporal_();
     guardar(fila.CORREO, temporal, { debeCambiar: true });
     if (typeof Verificacion !== 'undefined') Verificacion.olvidarDispositivos(fila.CORREO, 'restablecida por ' + sesion.correo);
+    Auth.cerrarSesiones(fila.CORREO);   // quien estaba adentro (o quien se la robó) sale
+    avisar_(fila, 'restablecida', sesion);
     return { correo: fila.CORREO, temporal };
+  }
+
+  /**
+   * El correo de "tu contraseña cambió" (Correos.gs). motivo: 'cambiada' (la persona, en Mi perfil o al entrar con la
+   * temporal) o 'restablecida' (un admin; nunca lleva la temporal, que se entrega por otro medio). Nunca truena.
+   */
+  function avisar_(fila, motivo, quien) {
+    try {
+      const cuando = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
+      const restablecida = motivo === 'restablecida';
+      MailApp.sendEmail(Correos.mensaje(fila.CORREO, restablecida ? 'Un administrador restableció tu contraseña de Control Interno'
+        : 'Tu contraseña de Control Interno se cambió', {
+        preencabezado: restablecida ? 'Te darán una contraseña temporal por otro medio.' : 'Si no fuiste tú, avisa a Control Interno.',
+        etiqueta: 'Seguridad de tu cuenta',
+        titulo: restablecida ? 'Tu contraseña se restableció' : 'Tu contraseña se cambió',
+        parrafos: [restablecida
+          ? 'Un administrador te puso una contraseña temporal. Te la darán en persona o por teléfono; al entrar con ella te pediremos una nueva. ' +
+            'Tus sesiones abiertas y tus dispositivos recordados se cerraron.'
+          : 'La contraseña de tu cuenta se cambió. Las demás sesiones que tenías abiertas se cerraron.'],
+        detalle: [['Cuenta', fila.CORREO], ['Fecha', cuando]].concat(restablecida && quien ? [['Lo hizo', quien.correo]] : []),
+        aviso: '<b>¿No fuiste tú?</b> Avisa a Control Interno de inmediato para que restablezcan tu contraseña.',
+      }));
+    } catch (e) {
+      console.warn('aviso de contraseña: ' + e.message);
+    }
   }
 
   // Intentos de "cambiar mi contraseña" con la actual mal: 5 cada 15 min (que una sesión robada no la adivine)
@@ -211,7 +251,9 @@ const Credenciales = (function () {
     revisarNueva(nueva, { correo: fila.CORREO, nombre: fila.NOMBRE, actual: tieneContrasena_(fila) ? actual : undefined });
     guardar(fila.CORREO, nueva, { debeCambiar: false });
     cache.remove(claveCambio_(fila.CORREO));
-    return true;
+    avisar_(fila, 'cambiada');
+    // Las demás sesiones se cierran; esta sigue con un token nuevo (la pantalla lo guarda)
+    return { ok: true, sesion: Auth.cerrarSesiones(fila.CORREO, { conservar: token }) };
   }
 
   /** Lo de Mi perfil: si ya tiene contraseña (para pedir la actual), cuándo la cambió y si hay código por correo */
@@ -226,7 +268,7 @@ const Credenciales = (function () {
     };
   }
 
-  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, restablecer, cambiarMia, estado, escribirPorCorreo_,
+  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, restablecer, cambiarMia, estado, escribirPorCorreo_, avisar_,
     ITERACIONES, MINIMO, COL };
 })();
 

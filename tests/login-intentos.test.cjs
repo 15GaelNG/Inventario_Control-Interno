@@ -12,6 +12,7 @@ const Credenciales = {
   verificar: (fila, clave) => ({ ok: fila['CONTRASEÑA'] === clave, migrar: fila['CONTRASEÑA'] === clave }),
   guardar: (correo, clave) => { guardadas.push(correo + ':' + clave); },
   revisarNueva: (clave) => { if (clave.length < 10) throw new Error('al menos 10'); },
+  avisar_: () => {},
   MINIMO: 10,
 };
 let usuarios = [];
@@ -33,6 +34,7 @@ function cargar(debeCambiar) {
   const ctx = vm.createContext({
     Credenciales,
     Verificacion,
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => null, setProperty: () => {} }) },
     console: { warn: () => {} },
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' }, ROLES: { ADMIN: 'ADMIN', OPERADOR: 'OPERADOR', LECTURA: 'LECTURA', CLIENTE: 'CLIENTE' },
       SESION_DURACION_HORAS: 8 },

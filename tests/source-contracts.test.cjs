@@ -1584,7 +1584,8 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.equal(Ntf.DIAS_AVISO, 7);
   // Enganches: API, alta que pide revisar, campana en el shell y vista
   // La campana pide todos los módulos en una llamada; Líneas es una fuente de NotificacionesService (fase 5.5)
-  assert.match(API, /function apiNotificaciones\(token, limite\) \{\s+return NotificacionesService\.campana\(token, limite\);/);
+  // Auth.automatica(): la campanita se revisa sola y no cuenta como actividad de la sesión (23-oct)
+  assert.match(API, /function apiNotificaciones\(token, limite\) \{\s+(Auth\.automatica\(\);[^\n]*\s+)?return NotificacionesService\.campana\(token, limite\);/);
   assert.match(read('src/services/NotificacionesService.gs'), /lineas: \(token, limite\) => TelefoniaService\.notificaciones\(token, limite\)/);
   assert.doesNotMatch(read('src/html/notificaciones.html'), /apiLineasNotificaciones|apiNotificacionesPendientes/);
   // Sus avisos dan huella (el vigía ve un aviso nuevo o uno marcado como leído)
@@ -3123,4 +3124,29 @@ test('Exportar es la sección exportar del módulo de la pantalla', () => {
   assert.match(dt, /if \(cfg\.exportar && typeof puedeExportarAqui === 'function' && !puedeExportarAqui\(\)\) cfg\.exportar = false;/);
   const app = APP;
   assert.match(app, /function puedeExportarAqui\(\) \{[\s\S]*?return !modulo \|\| puede\(modulo \+ '\.exportar'\);/);
+});
+
+test('ninguna api… nueva corre sin sesión: las que no piden token son una lista cerrada, cada una con su razón (23-oct)', () => {
+  // La web app está abierta a cualquier cuenta de Google ("access": "ANYONE"): una api… sin token la puede llamar
+  // cualquiera desde la consola. Agregar una aquí exige decir qué la protege en lugar de la sesión.
+  const SIN_TOKEN = {
+    apiPing: 'solo regresa la hora (medir el piso de Apps Script)',
+    apiLogin: 'el login; límite de 5 intentos por correo (Auth.login)',
+    apiIdentidadGoogle: 'solo dice si la cuenta de Google del dominio existe; fuera del dominio no hay correo',
+    apiLoginConGoogle: 'Session.getActiveUser del dominio; luego el código por correo (Verificacion)',
+    apiFirmaRemotaObtener: 'el token de la liga de firma (UUID, vence, un solo uso)',
+    apiFirmaRemotaVistaPrevia: 'el token de la liga de firma',
+    apiFirmaRemotaCompletar: 'el token de la liga de firma',
+    apiSeguridadCambiarInicial: 'el reto del login (UUID de 10 min, de un solo correo y paso)',
+    apiSeguridadVerificarCodigo: 'el reto del código (5 intentos)',
+    apiSeguridadReenviarCodigo: 'el reto del código (3 reenvíos, 60 s entre cada uno)',
+  };
+  const gs = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs')).map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f === 'src/ClientApi.gs' || f.startsWith('src/api/'));
+  const sinToken = [];
+  gs.forEach((f) => [...read(f).matchAll(/^function (api\w+)\(([^)]*)\)/gm)].forEach((m) => {
+    if (m[2].split(',')[0].trim() !== 'token') sinToken.push(m[1]);
+  }));
+  assert.deepEqual(sinToken.filter((n) => !SIN_TOKEN[n]), [], 'sin token y sin razón en la lista');
+  assert.deepEqual(Object.keys(SIN_TOKEN).filter((n) => !sinToken.includes(n)), [], 'en la lista pero ya no existe (o ya pide token): quitarla');
 });
