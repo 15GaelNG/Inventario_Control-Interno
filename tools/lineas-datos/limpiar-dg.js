@@ -16,7 +16,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const c = require('./comun.js');
 
-const COMENTARIO = 'DIRECCION GENERAL: SE LIMPIA EL RESPONSABLE Y SOLO QUEDA EL AREA (PENDIENTE 8.16, L28)';
+// Solo la acción que se hizo (usuario, 22-oct: antes llevaba «(PENDIENTE 8.16, L28)»; textos-movimientos.js)
+const COMENTARIO = 'DIRECCION GENERAL: SE LIMPIA EL RESPONSABLE Y SOLO QUEDA EL AREA';
 const LIMPIAR = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO',
   'DIRECTOR', 'CUENTA GOOGLE']
   .concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []));

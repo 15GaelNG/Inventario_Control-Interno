@@ -52,3 +52,30 @@ test('cable-cubo.js y corregir-color.js no ponen DOCUMENTO; vaciar-documento.js 
   ];
   assert.deepEqual(porVaciar({ filas }).map((f) => f._n), [2, 5, 6]);
 });
+
+// Usuario, 22-oct: el comentario, solo la acción; y de qué documento es cada movimiento, con su fecha
+test('textos-movimientos.js: comentario sin paréntesis y el documento con su fecha, en el orden en que se escribieron', () => {
+  const { plan } = require('../tools/lineas-datos/textos-movimientos.js');
+  const c = require('../tools/lineas-datos/comun.js');
+  const viejo = 'ACCESORIOS: CARGADOR SE SEPARA EN CABLE Y CUBO (USUARIO, 22-OCT)';
+  const m = (n, campo) => ({ _n: n, COMENTARIO: viejo, QUIEN: 'AUTOMATIZACIÓN', 'ID EQUIPO': 'EQU-1',
+    CAMBIOS: JSON.stringify([{ campo, antes: 'CARGADOR', despues: 'CABLE,CUBO' }]) });
+  const mov = { filas: [m(2, 'EQUIPOS · ACCESORIOS'), m(3, 'RESPONSIVAS LINEAS · ACCESORIOS'), m(4, 'RESPONSIVAS LINEAS · ACCESORIOS'),
+    { _n: 5, COMENTARIO: 'PATRON GUARDADO COMO FECHA: SE REGRESA A TEXTO (PENDIENTE 2.47)', QUIEN: 'AUTOMATIZACIÓN', CAMBIOS: '[]' },
+    { _n: 6, COMENTARIO: 'OTRO (A MANO)', QUIEN: 'ANA', CAMBIOS: '[]' }] };
+  const tablas = { 'EQUIPOS': { filas: [] }, 'INSPECCIONES LINEAS': { filas: [] }, 'APP_RESGUARDOS': { filas: [] },
+    'RESPONSIVAS LINEAS': { filas: [
+      { ID: 'RLI-A', 'ID LINEA': 'EQU-1', ACCESORIOS: 'CABLE,CUBO', 'FECHA RESPONSIVA': '', DIA: '29', MES: 'MAYO', 'AÑO': '2026' },
+      { ID: 'RLI-B', 'ID LINEA': 'EQU-1', ACCESORIOS: 'CABLE,CUBO', 'FECHA RESPONSIVA': '7/9/2026 10:00:00' }] } };
+  const p = plan(mov, tablas);
+  assert.deepEqual(p.map((x) => x.f._n), [2, 3, 4, 5]);
+  assert.ok(p.slice(0, 3).every((x) => x.comentario === 'ACCESORIOS: CARGADOR SE SEPARA EN CABLE Y CUBO'));
+  assert.deepEqual(p.slice(0, 3).map((x) => JSON.parse(x.cambios)[0].campo),
+    ['ACCESORIOS', 'RESPONSIVA DEL 29/05/2026 · ACCESORIOS', 'RESPONSIVA DEL 07/09/2026 · ACCESORIOS']);
+  assert.equal(p[3].comentario, 'PATRON GUARDADO COMO FECHA: SE REGRESA A TEXTO');
+  assert.equal(p[3].cambios, undefined);
+  assert.equal(c.campoDe('APP_RESGUARDOS', { FECHA: '22/10/2026 15:01:00' }, 'ACCESORIOS'), 'RESGUARDO DEL 22/10/2026 · ACCESORIOS');
+  // Ningún programa vuelve a poner paréntesis en su comentario
+  ['cable-cubo', 'corregir-color', 'limpiar-dg', 'por-recibir', 'separar-cancelaciones']
+    .forEach((n) => assert.doesNotMatch(read('tools/lineas-datos/' + n + '.js'), /const COMENTARIO = '[^']*\(/, n));
+});

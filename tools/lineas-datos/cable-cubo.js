@@ -14,7 +14,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const c = require('./comun.js');
 
-const COMENTARIO = 'ACCESORIOS: CARGADOR SE SEPARA EN CABLE Y CUBO (USUARIO, 22-OCT)';
+// Solo la acción que se hizo (usuario, 22-oct: antes llevaba «(USUARIO, 22-OCT)»; textos-movimientos.js)
+const COMENTARIO = 'ACCESORIOS: CARGADOR SE SEPARA EN CABLE Y CUBO';
 // El registro del renglón: en EQUIPOS su ID; en inspecciones y responsivas, ID LINEA (equipo o línea suelta); en el panel
 // de Pau, REGISTRO_ID; en la hoja vieja, su ID
 const HOJAS = [{ hoja: 'EQUIPOS', registro: 'ID' }, { hoja: 'INSPECCIONES LINEAS', registro: 'ID LINEA' },
@@ -62,7 +63,7 @@ async function main() {
     // Sin DOCUMENTO: el historial toma un movimiento con DOCUMENTO RLI- o ILI- como el de ese documento y tapa la
     // responsiva o la inspección original (lineas-revisor, 22-oct; vaciar-documento.js)
     return { accion: 'EDICION', equipo: esLinea ? '' : x.registro, linea: esLinea ? x.registro : '', comentario: COMENTARIO,
-      cambios: [{ campo: x.hoja + ' · ACCESORIOS', antes: x.antes, despues: x.nuevo }] };
+      cambios: [{ campo: c.campoDe(x.hoja, x.f, 'ACCESORIOS'), antes: x.antes, despues: x.nuevo }] };
   }));
 }
 

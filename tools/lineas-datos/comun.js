@@ -64,6 +64,35 @@ async function escribirCeldas(idLibro, datos) {
   }
 }
 
+const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+/** De qué documento es cada hoja y en qué columna trae su fecha (la de la ficha: LineasRepo, *DesdeFila). */
+const DOCUMENTOS = { 'RESPONSIVAS LINEAS': { nombre: 'RESPONSIVA', fecha: 'FECHA RESPONSIVA' },
+  'INSPECCIONES LINEAS': { nombre: 'INSPECCION', fecha: 'FECHA DE REGISTRO' }, 'APP_RESGUARDOS': { nombre: 'RESGUARDO', fecha: 'FECHA' } };
+
+/** La fecha dd/mm/aaaa del documento de un renglón de `tabla` ('' si no la trae); la responsiva del AppSheet, de DIA, MES y
+ * AÑO. */
+function fechaDocumento(hoja, f) {
+  const d = DOCUMENTOS[hoja];
+  if (!d) return '';
+  const m = txt(f[d.fecha]).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return m[1].padStart(2, '0') + '/' + m[2].padStart(2, '0') + '/' + m[3];
+  const mes = MESES.indexOf(may(f['MES'])) + 1 || Number(f['MES']) || 0;
+  if (hoja !== 'RESPONSIVAS LINEAS' || !Number(f['DIA']) || !mes || !Number(f['AÑO'])) return '';
+  return String(Number(f['DIA'])).padStart(2, '0') + '/' + String(mes).padStart(2, '0') + '/' + Number(f['AÑO']);
+}
+
+/**
+ * El campo de un movimiento que corrige `columna` en un renglón de `hoja`: en el registro (EQUIPOS, LINEAS) la columna,
+ * como los de la app; en un documento, cuál es y su fecha («RESPONSIVA DEL 29/05/2026 · ACCESORIOS»), para distinguir los
+ * de un mismo equipo (usuario, 22-oct). Sin DOCUMENTO en el movimiento: vaciar-documento.js.
+ */
+function campoDe(hoja, f, columna) {
+  const d = DOCUMENTOS[hoja];
+  if (!d) return columna;
+  const fch = fechaDocumento(hoja, f);
+  return d.nombre + (fch ? ' DEL ' + fch : '') + ' · ' + columna;
+}
+
 /** Fecha de hoy como número de serie de Sheets (hora local), como la escribe aplicar.js. */
 function serieAhora() {
   const d = new Date();
@@ -161,4 +190,4 @@ async function agregarFilas(idLibro, t, objetos, formatoDe) {
 }
 
 module.exports = { PRODUCCION, ENSAYO, REPO, libro, tabla, tablaSinFormato, idDeHoja, celda, escribirCeldas, agregarMovimientos, asegurarColumnas,
-  agregarFilas, serieAhora, idsGs, txt, may, api, SHEETS };
+  agregarFilas, serieAhora, idsGs, txt, may, api, SHEETS, fechaDocumento, campoDe };
