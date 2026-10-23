@@ -11,7 +11,8 @@
 'use strict';
 const c = require('./comun.js');
 
-const COMENTARIO = 'PATRON GUARDADO COMO FECHA: SE REGRESA A TEXTO (PENDIENTE 2.47)';
+// Solo la acción que se hizo (usuario, 22-oct; textos-movimientos.js corrigió los ya escritos)
+const COMENTARIO = 'PATRON GUARDADO COMO FECHA: SE REGRESA A TEXTO';
 const HOJAS = [{ hoja: 'INSPECCIONES LINEAS', columna: 'PATRON' }, { hoja: 'RESPONSIVAS LINEAS', columna: 'CONTRASEÑA' }];
 
 /** El patrón de una fecha de Sheets (número de serie): «1-9-7» quedó como 1-sep-2007. null si no sale de un patrón. */
@@ -49,10 +50,12 @@ async function main() {
   await c.agregarMovimientos(libro, mov, cambios.map((x) => {
     const reg = c.txt(x.f['ID LINEA']);
     const esLinea = /^LIN-/i.test(reg);
-    return { accion: 'EDICION', equipo: esLinea ? '' : reg, linea: esLinea ? reg : '', documento: c.txt(x.f['ID']), comentario: COMENTARIO,
-      cambios: [{ campo: x.hoja + ' · ' + x.columna, antes: String(x.serie), despues: x.patron }] };
+    // Sin DOCUMENTO: el historial toma un movimiento con DOCUMENTO RLI- o ILI- como el de ese documento y tapa la
+    // responsiva o la inspección original (lineas-revisor, 22-oct; vaciar-documento.js limpia los ya escritos)
+    return { accion: 'EDICION', equipo: esLinea ? '' : reg, linea: esLinea ? reg : '', comentario: COMENTARIO,
+      cambios: [{ campo: c.campoDe(x.hoja, x.f, x.columna), antes: String(x.serie), despues: x.patron }] };
   }));
 }
 
 if (require.main === module) main().catch((e) => { console.error('\n' + (e.message || e)); process.exitCode = 1; });
-module.exports = { patronDeSerie };
+module.exports = { patronDeSerie, COMENTARIO };

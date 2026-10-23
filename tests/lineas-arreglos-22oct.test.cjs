@@ -28,6 +28,14 @@ test('2.47: patron-texto.js regresa la fecha a su patrón (1-sep-2007 → «1-9-
   assert.strictEqual(patronDeSerie(46317), null); // 22-oct-2026: no es un patrón
 });
 
+test('2.47: patron-texto.js deja sus movimientos como cable-cubo.js: sin DOCUMENTO, campo con el documento y su fecha', () => {
+  const { COMENTARIO } = require('../tools/lineas-datos/patron-texto.js');
+  assert.strictEqual(COMENTARIO, 'PATRON GUARDADO COMO FECHA: SE REGRESA A TEXTO', 'sin «(PENDIENTE 2.47)»');
+  const fuente = leer('tools/lineas-datos/patron-texto.js');
+  assert.doesNotMatch(fuente, /documento:/, 'un movimiento con DOCUMENTO tapa la inspección o la responsiva en el historial');
+  assert.match(fuente, /campo: c\.campoDe\(x\.hoja, x\.f, x\.columna\)/);
+});
+
 test('7.12: los renglones nuevos se agregan desde el último con datos y movimientos-vacios.js quita los de en medio', () => {
   const { vacios } = require('../tools/lineas-datos/movimientos-vacios.js');
   assert.deepStrictEqual(vacios({ enc: ['ID', 'FECHA'], filas: [{ _n: 2, ID: 'a', FECHA: 'x' }, { _n: 3, ID: '', FECHA: '' }, { _n: 4, ID: 'b', FECHA: '' }] }), [3]);
