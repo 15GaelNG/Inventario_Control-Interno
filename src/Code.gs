@@ -24,7 +24,7 @@ function doGet(e) {
       .setTitle('Firmar documento — Control Interno')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
-  return Router.renderShell();
+  return Router.renderShell(e);
 }
 
 /**

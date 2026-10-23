@@ -15,7 +15,7 @@ const Router = (function () {
   // HtmlService.createHtmlOutputFromFile('html/Index').getContent() — esa
   // función escapa cualquier cosa que parezca un scriptlet, "<?...?>" sale
   // como "&lt;?...?&gt;", así que un reemplazo así nunca encuentra nada.)
-  function renderShell() {
+  function renderShell(e) {
     const template = HtmlService.createTemplateFromFile('html/Index');
     template.apagados = JSON.stringify(Config.apagados());
     template.temporada = TemporadaService.actual();
