@@ -207,6 +207,8 @@
     personas: PERSONAS.concat(['ROBERTO SÁNCHEZ', 'LUCÍA HERNÁNDEZ']).map((nombre, i) => ({
       correo: 'persona' + i + '@ciudadmaderas.com', nombre, area: de(AREAS, i), rol: de(['USER', 'USER', 'VIEWER', 'ADMIN'], i),
       activo: i !== 4, coordinacion: 'OPERACIONES', oficina: 'CORPORATIVO', sede: de(SEDES, i), noEmpleado: 'CI0' + (100 + i),
+      // Una bloqueada por seguridad (Credenciales.gs): el aviso de su ficha y la insignia de la lista
+      bloqueo: i === 2 ? '2026-10-23 10:40 | admin@ciudadmaderas.com | le llegaron correos de cambio que no pidió' : '',
     })),
     reglas: [
       { quien: 'TI', modulo: 'vehiculos', permiso: 'EDICION' }, { quien: 'TI', modulo: 'verificaciones', permiso: 'LECTURA' },
@@ -955,6 +957,20 @@
       await esperar(300);
     },
     'usuarios-historial': () => abrir('usuarios', 'historial'),
+    // Bloqueo por seguridad: la ficha con su aviso y la ventana de Restablecer con la casilla marcada
+    'usuarios-ficha-bloqueada': async () => {
+      await abrir('usuarios'); await hasta('.dt tbody tr[data-id] .seg-insignia');
+      document.querySelector('.dt tbody tr[data-id] .seg-insignia').closest('tr').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await hasta('.seg-bloqueo'); await esperar(300);
+    },
+    'usuarios-restablecer': async () => {
+      await abrir('usuarios'); await abrirPrimeraFila();
+      (await hasta('[data-usr-contrasena]')).click();
+      const casilla = await hasta('[data-bloquear]');
+      casilla.click();
+      document.querySelector('[data-motivo] textarea').value = 'Le llegaron correos de cambio que no pidió';
+      await esperar(300);
+    },
     // Perfiles (fase 2): la lista y la ficha de uno
     'usuarios-perfiles': async () => { await abrir('usuarios', 'perfiles'); await hasta('#usr-tabla-perfiles .dt tbody tr[data-id]'); },
     'usuarios-perfil-ficha': async () => {

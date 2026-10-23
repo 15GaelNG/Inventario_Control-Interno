@@ -79,6 +79,7 @@
           '<button type="button" class="secondary" data-usr-olvidar>' + ico('monitor-x') + ' Olvidar sus dispositivos</button>',
         resumen: resumen,
       });
+      html += Seguridad.avisoBloqueo(p);   // bloqueada por seguridad (js/app-seguridad.html)
 
       // En una línea: cuánto le viene de su área (y sus perfiles) y cuánto es solo suyo
       const porSuArea = modulos().filter((m) => regla(p.correo, m.id) === undefined && deArea(p.area, m.id) !== 'NINGUNO').length;

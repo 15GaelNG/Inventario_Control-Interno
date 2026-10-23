@@ -97,6 +97,32 @@
   .seg-insignia.seg-ok { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
   .seg-insignia.seg-neutro { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
   .seg-insignia.seg-info { background: var(--color-primary-soft); color: var(--color-primary); }
+  .seg-insignia.seg-mal { background: color-mix(in srgb, var(--color-danger) 14%, transparent); color: var(--color-danger); }
+
+  /* Bloqueo por seguridad (Usuarios y permisos): el aviso de la ficha, la casilla de Restablecer y la nota de la temporal */
+  .seg-bloqueo {
+    display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radio-l);
+    border: 1px solid color-mix(in srgb, var(--color-danger) 40%, transparent);
+    background: color-mix(in srgb, var(--color-danger) 8%, transparent);
+  }
+  .seg-bloqueo > div { flex: 1; min-width: 0; }
+  .seg-bloqueo b { display: block; color: var(--color-danger); }
+  .seg-bloqueo small { display: block; margin-top: 2px; color: var(--color-text-muted); font-size: var(--texto-xs); }
+  .seg-casilla {
+    display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; padding: 10px 12px; cursor: pointer;
+    border: 1px solid var(--color-border); border-radius: var(--radio-l);
+  }
+  .seg-casilla input { width: auto; min-width: 0; height: auto; margin: 3px 0 0; flex: none; }
+  .seg-casilla > span { flex: 1; min-width: 0; }
+  .seg-casilla small { color: var(--color-text-muted); font-size: var(--texto-xs); }
+  .seg-alerta {
+    padding: 10px 12px; border-radius: var(--radio-l); color: var(--color-text);
+    background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  }
+  @media (max-width: 640px) {
+    .seg-bloqueo { flex-wrap: wrap; }
+    .seg-bloqueo button { width: 100%; }
+  }
   .seg-form {
     max-width: 480px; margin-top: 18px; padding: 18px 20px; border: 1px solid var(--color-border);
     border-radius: var(--radio-xl); background: var(--color-bg);

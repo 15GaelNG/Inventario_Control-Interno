@@ -223,6 +223,8 @@ const Auth = (function () {
     if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') {
       return { coincide: false, correo: correoDetectado };
     }
+    // Bloqueada por seguridad (se sospecha que tomaron su cuenta de Google): sin "Continuar como…"
+    if (Credenciales.bloqueado(found)) return { coincide: false, correo: correoDetectado };
     // La foto, solo si ya está guardada (FotosDirectorio.de no llama a Google: la entrada no espera)
     let foto = '';
     try { foto = FotosDirectorio.de(correoDetectado); } catch (e) { /* sin foto: iniciales */ }
@@ -236,6 +238,10 @@ const Auth = (function () {
     const found = buscarUsuarioPorCorreo_(correoDetectado);
     if (!found) throw new Error('Tu cuenta (' + correoDetectado + ') no está registrada en el sistema.');
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    if (Credenciales.bloqueado(found)) {
+      anotar_(found.CORREO, 'google', 'google-bloqueado', dispositivo);
+      throw new Error('Tu cuenta está en revisión de seguridad: entra con tu correo y la contraseña que te dio Control Interno.');
+    }
 
     return continuar_(found, 'google', dispositivo);
   }

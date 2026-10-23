@@ -33,7 +33,7 @@
   async function initPermisosAdmin() {
     // Las partes (app-permisos-*.html, componentes/partes.html): se montan abajo, con lo del arranque
     const T = PermisosAdmin.contexto();
-    const { abrirFicha, volver } = T.de('ficha');
+    const { abrirFicha, pintarFicha, volver } = T.de('ficha');
     const { abrirAsignar, abrirEditar, alClicVentana, cerrarEditar, eliminarPerfil, guardarEdicion, pintarPieVentana } = T.de('ventana');
     const { alClicMatriz, guardarMatriz, pintarMatriz } = T.de('matriz');
     const $ = (id) => document.getElementById(id);
@@ -263,7 +263,7 @@
     // ---------------------------------------------------------------- listado: tablas y KPIs
     const filaPersona = (p) => ({
       ID: p.correo, NOMBRE: p.nombre || p.correo, CORREO: p.correo, AREA: p.area || 'Sin área', ROL: p.rol,
-      ESTATUS: p.activo ? 'Activo' : 'Inactivo', MODULOS: conAcceso(p), EXCEPCIONES: excepcionesDe(p).length,
+      ESTATUS: p.activo ? 'Activo' : 'Inactivo', BLOQUEO: p.bloqueo ? 'Bloqueada' : '', MODULOS: conAcceso(p), EXCEPCIONES: excepcionesDe(p).length,
       COORDINACION: p.coordinacion, OFICINA: p.oficina, SEDE: p.sede, NO_EMPLEADO: p.noEmpleado,
     });
     const filaArea = (a) => {
@@ -295,7 +295,8 @@
           render: (v, f) => '<span class="usr-nombre">' + Avatar.html(f.CORREO, v, { tam: 26 }) + escaparHtml(v) + '</span>' },
         { campo: 'AREA', titulo: 'Área', tipo: 'lista' },
         { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => badgeRol(v) || escaparHtml(v) },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeActivo(v === 'Activo') },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v, f) => badgeActivo(v === 'Activo') +
+          (f.BLOQUEO ? ' <span class="seg-insignia seg-mal" title="Bloqueada por seguridad">Bloqueada</span>' : '') },
         { campo: 'MODULOS', titulo: 'Módulos', tipo: 'numero', render: (v) => conteo(v, 'Ninguno') },
         { campo: 'EXCEPCIONES', titulo: 'Excepciones', tipo: 'numero',
           render: (v) => (v ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' ' + v + '</span>' : '—') },
@@ -470,6 +471,13 @@
       tarjetaImplicaciones, tieneTotal,
     });
 
+    /** Después de bloquear o desbloquear a alguien (Seguridad): los datos de nuevo, la lista y la ficha */
+    async function recargarPanel() {
+      cargar(await callServer('apiPermisosPanel', state.token));
+      refrescarListado();
+      pintarFicha();
+    }
+
     $('usr-detalle').addEventListener('click', (ev) => {
       const el = ev.target.closest('button');
       if (!el) return;
@@ -480,8 +488,9 @@
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(T.fichaActual.tipo, T.fichaActual.id); return; }
       if (el.hasAttribute('data-usr-eliminar-perfil')) { eliminarPerfil(T.fichaActual.id); return; }
       // data-usr-contrasena, no data-usr-restablecer: ese ya es el ↺ de la ventana de editar permisos
-      if (el.hasAttribute('data-usr-contrasena')) { const p = persona(T.fichaActual.id); Seguridad.restablecer(p.correo, p.nombre); return; }
+      if (el.hasAttribute('data-usr-contrasena')) { const p = persona(T.fichaActual.id); Seguridad.restablecer(p.correo, p.nombre, recargarPanel); return; }
       if (el.hasAttribute('data-usr-olvidar')) { const p = persona(T.fichaActual.id); Seguridad.olvidarDispositivos(p.correo, p.nombre); return; }
+      if (el.hasAttribute('data-usr-desbloquear')) { const p = persona(T.fichaActual.id); Seguridad.desbloquear(p.correo, p.nombre, recargarPanel); return; }
       if (el.dataset.usrPerfil) { abrirFicha('perfil', el.dataset.usrPerfil, true); return; }
       if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
       if (el.dataset.usrPersona) abrirFicha('persona', el.dataset.usrPersona, true);

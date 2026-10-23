@@ -103,7 +103,8 @@ const Verificacion = (function () {
     const motivo = motivo_(fila.CORREO, d);
     if (!motivo) return null;
     const reto = Utilities.getUuid();
-    const r = { correo: fila.CORREO, nombre: fila.NOMBRE || '', metodo, motivo, dispositivo: d, intentos: 0, envios: 0 };
+    const r = { correo: fila.CORREO, nombre: fila.NOMBRE || '', metodo, motivo, dispositivo: d, intentos: 0, envios: 0,
+      bloqueado: typeof Credenciales !== 'undefined' && Credenciales.bloqueado(fila) };
     mandar_(reto, r);
     if (typeof Accesos !== 'undefined') Accesos.anotar(fila.CORREO, metodo, 'codigo-enviado', d.nombre, motivo);
     return { pendiente: 'codigo', reto, correoOculto: oculto_(fila.CORREO), motivo };
@@ -192,6 +193,7 @@ const Verificacion = (function () {
   }
 
   function avisarNuevo_(r) {
+    if (r.bloqueado) return;   // bloqueada por seguridad: nada informativo a ese correo (el código sí se manda)
     try {
       MailApp.sendEmail(correoDispositivo_(r));
     } catch (e) {
@@ -302,6 +304,7 @@ const Verificacion = (function () {
     const sesion = Permisos.puedeEditar(token, 'usuarios');
     const n = olvidarDispositivos(correo, 'olvidados por ' + sesion.correo);
     Auth.cerrarSesiones(correo);
+    if (typeof Credenciales !== 'undefined' && Credenciales.bloqueadoCorreo(correo)) return n;   // bloqueada: sin aviso
     try {
       MailApp.sendEmail(Correos.mensaje(correo, 'Se cerraron tus sesiones de Control Interno', {
         preencabezado: 'La próxima vez que entres te pediremos un código.',

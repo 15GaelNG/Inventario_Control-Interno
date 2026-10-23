@@ -16,6 +16,7 @@ function cargar() {
   const cerradas = [];
   const avisos = [];
   const bitacora = [];
+  const alertas = [];
   const ctx = vm.createContext({
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' }, urlApp: () => 'https://app.ejemplo/exec' },
     CacheService: { getScriptCache: () => ({
@@ -26,6 +27,7 @@ function cargar() {
     SheetUtils: { getAll: () => [
       { CORREO: 'Ana@gph.com', NOMBRE: 'Ana', ACTIVO: 'TRUE' },
       { CORREO: 'beto@x.com', NOMBRE: 'Beto', ACTIVO: 'FALSE' },
+      { CORREO: 'caro@gph.com', NOMBRE: 'Caro', ACTIVO: 'TRUE', 'BLOQUEO SEGURIDAD': '2026-10-23 10:40 | admin@x.com | correo tomado' },
     ] },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' },
@@ -37,18 +39,19 @@ function cargar() {
     MailApp: { sendEmail: (m) => correos.push(m) },
     Credenciales: {
       MINIMO: 8,
+      bloqueado: (f) => !!(f && f['BLOQUEO SEGURIDAD']),
       revisarNueva: (n) => { if (String(n).length < 8) throw new Error('al menos 8'); },
       guardar: (correo, n, o) => guardadas.push([correo, n, o.debeCambiar]),
       avisar_: (fila, motivo) => avisos.push([fila.CORREO, motivo]),
     },
     Auth: { cerrarSesiones: (c) => cerradas.push(c) },
-    Accesos: { anotar: (correo, metodo, resultado) => bitacora.push(resultado) },
+    Accesos: { anotar: (correo, metodo, resultado) => bitacora.push(resultado), alertarAdmins: (asunto, c) => alertas.push(asunto + ' · ' + c.parrafos.join(' ')) },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Recuperacion.gs'), 'utf8') + '\nthis.R = Recuperacion;', ctx);
   const enlaceDe = (m) => /recuperar=([0-9a-f]{64})/.exec(m.htmlBody)[1];
   const minutos = (n) => { reloj.ahora += n * 60000; };
-  return { R: ctx.R, correos, guardadas, cerradas, avisos, bitacora, enlaceDe, minutos };
+  return { R: ctx.R, correos, guardadas, cerradas, avisos, bitacora, alertas, enlaceDe, minutos };
 }
 
 test('la respuesta es la misma exista o no el correo (no se averigua quién está)', () => {
@@ -112,4 +115,16 @@ test('al cambiarla: revisa la regla, guarda sin "debe cambiar", cierra sus sesio
   assert.deepEqual([...cerradas], ['Ana@gph.com']);
   assert.deepEqual(avisos.map((a) => [...a]), [['Ana@gph.com', 'cambiada']]);
   assert.ok(bitacora.includes('contrasena-recuperada'));
+});
+
+test('cuenta bloqueada por seguridad: la misma respuesta, nada a su correo y alerta a los admins', () => {
+  const { R, correos, bitacora, alertas } = cargar();
+  const normal = R.pedir('ana@gph.com');
+  const r = R.pedir('caro@gph.com');
+  assert.equal(JSON.stringify(r), JSON.stringify(normal), 'quien pregunta no puede saber que está bloqueada');
+  assert.equal(correos.filter((m) => m.to === 'caro@gph.com').length, 0, 'ningún enlace a ese buzón');
+  assert.ok(bitacora.includes('recuperar-bloqueado'));
+  assert.equal(alertas.length, 1);
+  assert.match(alertas[0], /cuenta bloqueada/);
+  assert.match(alertas[0], /caro@gph.com/);
 });

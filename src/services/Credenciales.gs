@@ -32,7 +32,16 @@ const Credenciales = (function () {
     'un número': /\d/,
     'un símbolo': /[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s]/,
   };
-  const COL = { HASH: 'PASSWORD_HASH', SAL: 'SALT', PLANA: 'CONTRASEÑA', CAMBIAR: 'DEBE CAMBIAR CONTRASEÑA', CAMBIADA: 'CONTRASEÑA CAMBIADA' };
+  const COL = { HASH: 'PASSWORD_HASH', SAL: 'SALT', PLANA: 'CONTRASEÑA', CAMBIAR: 'DEBE CAMBIAR CONTRASEÑA', CAMBIADA: 'CONTRASEÑA CAMBIADA',
+    BLOQUEO: 'BLOQUEO SEGURIDAD' };
+
+  /**
+   * Bloqueo por seguridad (23-oct): un admin sospecha que tomaron el correo (o la cuenta de Google) de alguien. Mientras
+   * dure, nada pasa por ese correo: sin enlace de recuperación (Recuperacion.gs), sin "Continuar como…" (Auth.gs) y sin
+   * avisos informativos (avisar_, Verificacion). Solo se entra con la temporal que el admin da en persona o por teléfono.
+   * La columna guarda un texto legible: '2026-10-23 10:40 | admin@… | motivo'; vacía = sin bloqueo.
+   */
+  const bloqueado = (fila) => !!(fila && String(fila[COL.BLOQUEO] == null ? '' : fila[COL.BLOQUEO]).trim());
   // Las que se prueban primero (y las de aquí): no se aceptan como contraseña nueva
   const COMUNES = ['12345678', '123456789', '1234567890', '0123456789', '1234512345', 'qwertyuiop', 'contraseña',
     'contrasena', 'password', 'password1', 'password123', 'ciudadmaderas', 'ciudad maderas', 'maderas', 'controlinterno',
@@ -237,16 +246,50 @@ const Credenciales = (function () {
    * Un admin (EDICIÓN en Usuarios y permisos) le pone una contraseña temporal: se muestra UNA vez, al entrar con ella se
    * pide una nueva, y sus dispositivos recordados se olvidan (quien la tenía ya no entra sin el código).
    */
-  function restablecer(token, correo) {
+  function restablecer(token, correo, opciones) {
+    const sesion = Permisos.puedeEditar(token, 'usuarios');
+    const o = opciones || {};
+    const fila = fila_(correo);
+    if (!fila) throw new Error('No existe el usuario ' + correo + '.');
+    // El "|" separa fecha, quién y motivo en la columna: no puede ir dentro del motivo
+    const motivo = String(o.motivo || '').replace(/[|\r\n]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (o.bloquear && !motivo) throw new Error('Escribe el motivo del bloqueo (qué se sospecha).');
+    const temporal = temporal_();
+    guardar(fila.CORREO, temporal, { debeCambiar: true });
+    if (o.bloquear) {
+      const cuando = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm');
+      escribirPorCorreo_(fila.CORREO, { [COL.BLOQUEO]: [cuando, sesion.correo, motivo].join(' | ') });
+      if (typeof Accesos !== 'undefined') Accesos.anotar(fila.CORREO, 'admin', 'bloqueo-seguridad', '', 'por ' + sesion.correo + ': ' + motivo);
+    }
+    if (typeof Verificacion !== 'undefined') Verificacion.olvidarDispositivos(fila.CORREO, 'restablecida por ' + sesion.correo);
+    Auth.cerrarSesiones(fila.CORREO);   // quien estaba adentro (o quien se la robó) sale
+    // Con bloqueo, nada a ese correo: quien lo tomó se enteraría de que ya lo detectaron (el admin llama por teléfono)
+    if (!o.bloquear) avisar_(fila, 'restablecida', sesion);
+    return { correo: fila.CORREO, temporal, bloqueada: !!o.bloquear || bloqueado(fila) };
+  }
+
+  /** Quita el bloqueo (admin), cuando la persona ya recuperó su correo; ahora sí se le avisa */
+  function desbloquear(token, correo) {
     const sesion = Permisos.puedeEditar(token, 'usuarios');
     const fila = fila_(correo);
     if (!fila) throw new Error('No existe el usuario ' + correo + '.');
-    const temporal = temporal_();
-    guardar(fila.CORREO, temporal, { debeCambiar: true });
-    if (typeof Verificacion !== 'undefined') Verificacion.olvidarDispositivos(fila.CORREO, 'restablecida por ' + sesion.correo);
-    Auth.cerrarSesiones(fila.CORREO);   // quien estaba adentro (o quien se la robó) sale
-    avisar_(fila, 'restablecida', sesion);
-    return { correo: fila.CORREO, temporal };
+    if (!bloqueado(fila)) return { correo: fila.CORREO, bloqueada: false };
+    escribirPorCorreo_(fila.CORREO, { [COL.BLOQUEO]: '' });
+    if (typeof Accesos !== 'undefined') Accesos.anotar(fila.CORREO, 'admin', 'desbloqueo-seguridad', '', 'por ' + sesion.correo);
+    try {
+      MailApp.sendEmail(Correos.mensaje(fila.CORREO, 'Se quitó el bloqueo de seguridad de tu cuenta de Control Interno', {
+        preencabezado: 'Ya puedes volver a recuperar tu contraseña por correo.',
+        etiqueta: 'Seguridad de tu cuenta',
+        titulo: 'Se quitó el bloqueo de seguridad',
+        parrafos: ['Tu cuenta estuvo en revisión de seguridad. Ya se quitó: puedes entrar como siempre y, si olvidas tu contraseña, ' +
+          'recuperarla desde "¿Olvidaste tu contraseña?".'],
+        detalle: [['Cuenta', fila.CORREO], ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')], ['Lo hizo', sesion.correo]],
+        aviso: 'Te recomendamos activar la verificación en dos pasos de tu correo y no usar ahí la misma contraseña que en Control Interno.',
+      }));
+    } catch (e) {
+      console.warn('aviso de desbloqueo: ' + e.message);
+    }
+    return { correo: fila.CORREO, bloqueada: false };
   }
 
   /**
@@ -254,6 +297,7 @@ const Credenciales = (function () {
    * temporal) o 'restablecida' (un admin; nunca lleva la temporal, que se entrega por otro medio). Nunca truena.
    */
   function avisar_(fila, motivo, quien) {
+    if (bloqueado(fila)) return;   // bloqueada por seguridad: nada a ese correo
     try {
       const cuando = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
       const restablecida = motivo === 'restablecida';
@@ -309,7 +353,8 @@ const Credenciales = (function () {
     };
   }
 
-  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, temporalesParaActivos, restablecer, cambiarMia, estado, escribirPorCorreo_, avisar_,
+  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, temporalesParaActivos, restablecer, desbloquear, bloqueado, cambiarMia, estado,
+    bloqueadoCorreo: (correo) => bloqueado(fila_(correo)), escribirPorCorreo_, avisar_,
     ITERACIONES, MINIMO, COL };
 })();
 
