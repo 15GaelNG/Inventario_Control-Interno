@@ -183,13 +183,54 @@ const Credenciales = (function () {
   const fila_ = (correo) => SheetUtils.getAll(ssId(), HOJA).find((f) => clave_(f.CORREO) === clave_(correo)) || null;
   const tieneContrasena_ = (fila) => !!(String(fila[COL.HASH] || '') || String(fila[COL.PLANA] == null ? '' : fila[COL.PLANA]));
 
-  /** 12 caracteres sin los que se confunden (0/O, 1/l/I), de dos UUID aleatorios (Utilities.getUuid es v4) */
+  /** 10 caracteres sin los que se confunden (0/O, 1/l/I), de dos UUID aleatorios (Utilities.getUuid es v4) */
+  const LARGO_TEMPORAL = 10;
   function temporal_() {
     const abc = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
     const hex = (Utilities.getUuid() + Utilities.getUuid()).replace(/-/g, '');
     let t = '';
-    for (let i = 0; t.length < 12; i += 2) t += abc[parseInt(hex.substr(i, 2), 16) % abc.length];
+    for (let i = 0; t.length < LARGO_TEMPORAL; i += 2) t += abc[parseInt(hex.substr(i, 2), 16) % abc.length];
     return t;
+  }
+
+  /**
+   * Una temporal para CADA usuario activo (23-oct, lo pidió el área): la cambia al entrar (DEBE CAMBIAR), sus sesiones y
+   * dispositivos recordados se cierran. Se lee USUARIOS una vez y se escribe columna por columna (uno por uno, con
+   * cientos de usuarios, pasaría de los 6 min). aplicar = false solo cuenta. → { activos, asignadas, lista }
+   */
+  function temporalesParaActivos(aplicar) {
+    const r = Candado.con(() => {
+      const hoja = SheetUtils.getSheet(ssId(), HOJA);
+      const columnas = [COL.HASH, COL.SAL, COL.PLANA, COL.CAMBIAR, COL.CAMBIADA];
+      const encabezados = aplicar ? asegurarColumnas_(hoja, columnas) : hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+      const idx = SheetUtils.indiceDeColumnas(encabezados, ['CORREO', 'NOMBRE', 'ACTIVO', 'AREA'].concat(columnas));
+      const ultima = hoja.getLastRow();
+      const datos = ultima < 2 ? [] : hoja.getRange(2, 1, ultima - 1, encabezados.length).getValues();
+      const activos = datos.map((f, i) => ({ f, i })).filter(({ f }) =>
+        String(idx.ACTIVO >= 0 ? f[idx.ACTIVO] : '').toUpperCase() === 'TRUE' && String(f[idx.CORREO] || '').trim());
+      if (!aplicar) return { activos: activos.length, asignadas: 0, lista: [] };
+      const ahora = new Date();
+      const lista = [];
+      activos.forEach(({ f }) => {
+        const temporal = temporal_();
+        f[idx[COL.HASH]] = crear(temporal);
+        f[idx[COL.SAL]] = '';
+        f[idx[COL.PLANA]] = '';
+        f[idx[COL.CAMBIAR]] = 'TRUE';
+        f[idx[COL.CAMBIADA]] = ahora;
+        lista.push({ correo: String(f[idx.CORREO]).trim(), nombre: idx.NOMBRE >= 0 ? f[idx.NOMBRE] : '', area: idx.AREA >= 0 ? f[idx.AREA] : '', temporal });
+      });
+      // Solo las columnas de la contraseña, de un jalón cada una: lo demás del renglón no se toca
+      columnas.forEach((c) => hoja.getRange(2, idx[c] + 1, datos.length, 1).setValues(datos.map((f) => [f[idx[c]]])));
+      CacheHojas.tocarHoja(hoja);
+      return { activos: activos.length, asignadas: lista.length, lista };
+    });
+    if (aplicar && r.lista.length) {
+      const correos = r.lista.map((x) => x.correo);
+      if (typeof Verificacion !== 'undefined') Verificacion.olvidarDispositivosDe(correos, 'temporal para todos');
+      correos.forEach((c) => Auth.cerrarSesiones(c));
+    }
+    return r;
   }
 
   /**
@@ -268,7 +309,7 @@ const Credenciales = (function () {
     };
   }
 
-  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, restablecer, cambiarMia, estado, escribirPorCorreo_, avisar_,
+  return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, temporalesParaActivos, restablecer, cambiarMia, estado, escribirPorCorreo_, avisar_,
     ITERACIONES, MINIMO, COL };
 })();
 
@@ -279,6 +320,36 @@ function contrasenasAHashRevisar() {
   Logger.log('USUARIOS: ' + r.total + ' · en texto plano: ' + r.planas + ' · v1: ' + r.v1 + ' · v2: ' + r.v2 +
     ' · sin contraseña: ' + r.sinContrasena);
   return r;
+}
+
+/** Desde el editor: a cuántos usuarios activos se les pondría una contraseña temporal (no cambia nada) */
+function contrasenasTemporalesRevisar() {
+  soloEditor_();
+  const r = Credenciales.temporalesParaActivos(false);
+  Logger.log('Usuarios activos a los que se les pondría una temporal: ' + r.activos + ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor: una temporal de 10 para CADA usuario activo, que la cambia al entrar; sus sesiones y dispositivos se
+ * cierran. La lista (correo, nombre, área, temporal) queda en una hoja NUEVA y privada en tu Drive para repartirla en
+ * persona; bórrala al terminar. En producción no corre sin la confirmación: contrasenasTemporalesParaTodos('SI, EN PROD').
+ */
+function contrasenasTemporalesParaTodos(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error('Esto es PRODUCCIÓN: cambia la contraseña de todos. Si de verdad es aquí, corre contrasenasTemporalesParaTodos(\'SI, EN PROD\').');
+  }
+  const r = Credenciales.temporalesParaActivos(true);
+  const libro = SpreadsheetApp.create('CONTRASEÑAS TEMPORALES ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH.mm') +
+    ' (' + (leerConfig_('ENTORNO') || '?') + ') - BORRAR AL REPARTIR');
+  const h = libro.getSheets()[0];
+  h.getRange(1, 1, 1, 4).setValues([['CORREO', 'NOMBRE', 'AREA', 'CONTRASEÑA TEMPORAL']]);
+  if (r.lista.length) h.getRange(2, 1, r.lista.length, 4).setValues(r.lista.map((x) => [x.correo, x.nombre, x.area, x.temporal]));
+  h.setFrozenRows(1);
+  h.autoResizeColumns(1, 4);
+  Logger.log('Temporales asignadas: ' + r.asignadas + '. La lista (privada, solo tuya): ' + libro.getUrl() + ' — bórrala al terminar de repartir.');
+  return { asignadas: r.asignadas, lista: libro.getUrl() };
 }
 
 /** Desde el editor: pasa a hash todas las de texto plano y borra la celda CONTRASEÑA (correr antes contrasenasAHashRevisar) */

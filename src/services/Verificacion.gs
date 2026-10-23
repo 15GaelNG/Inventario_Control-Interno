@@ -277,6 +277,26 @@ const Verificacion = (function () {
     });
   }
 
+  /** Los de varios correos de una vez (temporales para todos): DISPOSITIVOS se lee una vez */
+  function olvidarDispositivosDe(correos, nota) {
+    const buscados = new Set((correos || []).map(clave_));
+    return Candado.con(() => {
+      const hoja = hoja_();
+      const ultima = hoja.getLastRow();
+      if (ultima < 2) return 0;
+      const valores = hoja.getRange(2, 1, ultima - 1, COLUMNAS.length).getValues();
+      const iCorreo = COLUMNAS.indexOf('CORREO');
+      const iActivo = COLUMNAS.indexOf('ACTIVO');
+      const iNota = COLUMNAS.indexOf('NOTA');
+      let n = 0;
+      valores.forEach((v) => {
+        if (buscados.has(clave_(v[iCorreo])) && String(v[iActivo]).toUpperCase() === 'TRUE') { v[iActivo] = 'FALSE'; v[iNota] = nota || 'olvidado'; n++; }
+      });
+      if (n) hoja.getRange(2, 1, valores.length, COLUMNAS.length).setValues(valores);
+      return n;
+    });
+  }
+
   /** Un admin (EDICIÓN en Usuarios y permisos) le olvida todos los dispositivos a alguien */
   function olvidarDe(token, correo) {
     const sesion = Permisos.puedeEditar(token, 'usuarios');
@@ -298,6 +318,7 @@ const Verificacion = (function () {
     return n;
   }
 
-  return { encendida, decidir, verificarCodigo, reenviar, misDispositivos, quitar, quitarOtros, olvidarDispositivos, olvidarDe, oculto_, HOJA };
+  return { encendida, decidir, verificarCodigo, reenviar, misDispositivos, quitar, quitarOtros, olvidarDispositivos, olvidarDispositivosDe, olvidarDe,
+    oculto_, HOJA };
 })();
 

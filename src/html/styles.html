@@ -1250,6 +1250,20 @@
   .campo-codigo input:focus { background: var(--color-surface); border-color: var(--color-accent); }
   @media (max-width: 640px) { .campo-codigo { gap: 6px; } .campo-codigo input { width: 40px; height: 50px; } }
 
+  /* MedidorContrasena (componentes/medidor-contrasena.html): la barra se llena con cada requisito y la lista se palomea */
+  .medidor-contrasena { margin: 2px 0 12px; }
+  .medidor-barra { height: 6px; border-radius: 999px; background: var(--color-border); overflow: hidden; }
+  .medidor-relleno { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--color-danger); transition: width .25s ease, background .25s ease; }
+  .medidor-barra[data-nivel="casi"] .medidor-relleno { background: var(--color-accent); }
+  .medidor-barra[data-nivel="lista"] .medidor-relleno { background: var(--color-success); }
+  .medidor-texto { margin: 4px 0 6px; min-height: 1em; font-size: var(--texto-xs); font-weight: 600; color: var(--color-text-muted); }
+  .medidor-lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 12px;
+    font-size: var(--texto-xs); color: var(--color-text-muted); text-align: left; }
+  .medidor-lista li::before { content: '○'; display: inline-block; width: 16px; }
+  .medidor-lista li.ok { color: var(--color-success); }
+  .medidor-lista li.ok::before { content: '✓'; }
+  @media (max-width: 640px) { .medidor-lista { grid-template-columns: minmax(0, 1fr); } }
+
   .login-form-card button[type="submit"] {
     width: 100%; padding: 12px; font-size: var(--texto-m); margin-top: 8px; border-radius: var(--radio-l);
   }
