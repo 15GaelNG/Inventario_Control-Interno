@@ -25,7 +25,7 @@ const Credenciales = (function () {
   // de miles; aquí cada vuelta es una llamada a Utilities. Lo compensan el límite de intentos y el código por correo.
   const ITERACIONES = 3000;
   const MINIMO = 10;
-  const COL = { HASH: 'PASSWORD_HASH', SAL: 'SALT', PLANA: 'CONTRASEÑA', CAMBIAR: 'DEBE CAMBIAR CONTRASEÑA' };
+  const COL = { HASH: 'PASSWORD_HASH', SAL: 'SALT', PLANA: 'CONTRASEÑA', CAMBIAR: 'DEBE CAMBIAR CONTRASEÑA', CAMBIADA: 'CONTRASEÑA CAMBIADA' };
   // Las que se prueban primero (y las de aquí): no se aceptan como contraseña nueva
   const COMUNES = ['12345678', '123456789', '1234567890', '0123456789', '1234512345', 'qwertyuiop', 'contraseña',
     'contrasena', 'password', 'password1', 'password123', 'ciudadmaderas', 'ciudad maderas', 'maderas', 'controlinterno',
@@ -134,7 +134,7 @@ const Credenciales = (function () {
   /** Guarda la contraseña de un correo (su huella v2) y borra la de texto plano. debeCambiar: la temporal de un admin */
   function guardar(correo, contrasena, opciones) {
     const o = opciones || {};
-    const cambios = { [COL.HASH]: crear(contrasena), [COL.SAL]: '', [COL.PLANA]: '' };
+    const cambios = { [COL.HASH]: crear(contrasena), [COL.SAL]: '', [COL.PLANA]: '', [COL.CAMBIADA]: new Date() };
     if (o.debeCambiar !== undefined) cambios[COL.CAMBIAR] = o.debeCambiar ? 'TRUE' : '';
     return escribirPorCorreo_(correo, cambios);
   }
@@ -214,11 +214,16 @@ const Credenciales = (function () {
     return true;
   }
 
-  /** Lo de Mi perfil: si ya tiene contraseña (para pedir la actual) */
+  /** Lo de Mi perfil: si ya tiene contraseña (para pedir la actual), cuándo la cambió y si hay código por correo */
   function estado(token) {
     const sesion = Auth.validarSesion(token);
     const fila = fila_(sesion.correo);
-    return { tieneContrasena: !!fila && tieneContrasena_(fila), minimo: MINIMO };
+    const cambiada = fila && fila[COL.CAMBIADA] instanceof Date
+      ? Utilities.formatDate(fila[COL.CAMBIADA], Session.getScriptTimeZone(), 'dd/MM/yyyy') : '';
+    return {
+      tieneContrasena: !!fila && tieneContrasena_(fila), minimo: MINIMO, cambiada,
+      dosPasos: typeof Verificacion !== 'undefined' && Verificacion.encendida(),
+    };
   }
 
   return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, restablecer, cambiarMia, estado, escribirPorCorreo_,

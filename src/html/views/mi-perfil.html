@@ -72,6 +72,42 @@
   .perfil-vacio .ico { width: 36px; height: 36px; margin-bottom: 8px; color: var(--color-primary); }
   .perfil-cargando { color: var(--color-text-muted); }
 
+  /* ============ Pestañas de la cuenta: Contraseña, Dispositivos, Actividad (js/app-seguridad.html) ============
+     Como las cuentas de Google o Microsoft: un encabezado por pestaña y renglones de ajuste (ícono, qué es, su estado
+     y la acción a la derecha). */
+  .seg-cabeza { padding-bottom: 14px; margin-bottom: 4px; border-bottom: 1px solid var(--color-border); }
+  .seg-cabeza h3 { margin: 0; font-size: var(--texto-l); }
+  .seg-cabeza p { margin: 4px 0 0; color: var(--color-text-muted); font-size: var(--texto-s); max-width: 640px; }
+  .seg-subtitulo { margin: 22px 0 2px; font-size: var(--texto-m); }
+  .seg-fila { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--color-border); }
+  .seg-fila-ico {
+    flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--color-bg); border: 1px solid var(--color-border); color: var(--color-text-muted);
+  }
+  .seg-fila-ico .ico { width: 18px; height: 18px; }
+  .seg-fila-ico.seg-ok { color: var(--color-success); }
+  .seg-fila-ico.seg-mal { color: var(--color-danger); }
+  .seg-fila-texto { flex: 1; min-width: 0; }
+  .seg-fila-texto b { display: block; font-size: var(--texto-s); font-weight: 600; }
+  .seg-fila-texto small { display: block; margin-top: 2px; color: var(--color-text-muted); font-size: var(--texto-xs); }
+  .seg-insignia {
+    display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 600;
+    white-space: nowrap; vertical-align: middle;
+  }
+  .seg-insignia.seg-ok { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
+  .seg-insignia.seg-neutro { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .seg-insignia.seg-info { background: var(--color-primary-soft); color: var(--color-primary); }
+  .seg-form {
+    max-width: 480px; margin-top: 18px; padding: 18px 20px; border: 1px solid var(--color-border);
+    border-radius: var(--radio-xl); background: var(--color-bg);
+  }
+  .seg-form h4 { margin: 0 0 12px; font-size: var(--texto-m); }
+  .seg-requisitos { list-style: none; margin: 4px 0 12px; padding: 0; display: grid; gap: 4px; font-size: var(--texto-xs); color: var(--color-text-muted); }
+  .seg-requisitos li::before { content: '○'; display: inline-block; width: 18px; }
+  .seg-requisitos li.ok { color: var(--color-success); }
+  .seg-requisitos li.ok::before { content: '✓'; }
+  .seg-vacio { margin: 16px 0 0; color: var(--color-text-muted); font-size: var(--texto-s); }
+
   @media (max-width: 1024px) {
     .perfil-rejilla { grid-template-columns: minmax(0, 1fr); }
   }

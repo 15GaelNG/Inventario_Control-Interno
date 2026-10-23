@@ -80,5 +80,23 @@ const Accesos = (function () {
     }));
   }
 
-  return { anotar, enAlerta, HOJA };
+  /** Mi perfil → Actividad: lo último de quien pregunta (de los últimos 3000 renglones; la hoja crece) */
+  function mios(token, cuantos) {
+    const sesion = Auth.validarSesion(token);
+    const h = hoja_();
+    const ultima = h.getLastRow();
+    if (ultima < 2) return [];
+    const desde = Math.max(2, ultima - 2999);
+    const yo = clave_(sesion.correo);
+    const zona = Session.getScriptTimeZone();
+    return h.getRange(desde, 1, ultima - desde + 1, COLUMNAS.length).getValues()
+      .filter((f) => clave_(f[1]) === yo)
+      .slice(-(cuantos || 15)).reverse()
+      .map((f) => ({
+        fecha: f[0] instanceof Date ? Utilities.formatDate(f[0], zona, 'dd/MM/yyyy HH:mm') : String(f[0]),
+        metodo: f[2], resultado: f[3], dispositivo: f[4],
+      }));
+  }
+
+  return { anotar, enAlerta, mios, HOJA };
 })();

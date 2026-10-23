@@ -4,7 +4,7 @@
    * api/Seguridad.gs).
    *
    *   Seguridad.entrar(resultado)          después de apiLogin / apiLoginConGoogle: la sesión, o el paso que falta
-   *   Seguridad.abrirMiCuenta()            Mi perfil → "Contraseña y seguridad"
+   *   Seguridad.pestana(nombre, caja)      Mi perfil: pinta la pestaña contrasena / dispositivos / actividad
    *   Seguridad.dispositivo(correo)        lo que va con apiLogin / apiLoginConGoogle (la llave de este navegador)
  *   Seguridad.restablecer(correo, nombre) / olvidarDispositivos(correo, nombre)   Usuarios y permisos (EDICIÓN)
    *
@@ -208,69 +208,149 @@
       return { el: fondo, cuerpo: fondo.querySelector('[data-cuerpo]'), cerrar };
     }
 
-    // ---------------------------------------------------------------- Mi perfil
-    async function abrirMiCuenta() {
-      const v = ventana_('Contraseña y seguridad', state.sesion && state.sesion.correo, '<p class="perfil-cargando">Cargando…</p>');
-      let estado;
-      try {
-        estado = await callServer('apiSeguridadEstado', state.token);
-      } catch (err) {
-        v.cuerpo.innerHTML = '<p class="error-msg">' + esc((err && err.message) || String(err)) + '</p>';
-        return;
-      }
-      v.cuerpo.innerHTML =
-        '<h4 style="margin:0 0 4px">' + (estado.tieneContrasena ? 'Cambiar mi contraseña' : 'Crear una contraseña') + '</h4>' +
-        '<p class="modal-subtitle" style="margin-bottom:12px">' + (estado.tieneContrasena
-          ? 'Al menos ' + esc(estado.minimo) + ' caracteres. No uses la misma que en otros sitios.'
-          : 'Hoy entras con tu cuenta de Google. Con una contraseña también puedes entrar con tu correo.') + '</p>' +
-        (estado.tieneContrasena ? campoClave_('seg-actual', 'Contraseña actual', 'current-password') : '') +
-        campoClave_('seg-mia', 'Contraseña nueva', 'new-password') +
-        campoClave_('seg-mia2', 'Repítela', 'new-password') +
-        '<div class="error-msg" id="seg-mia-error" hidden></div>' +
-        '<div class="form-actions"><button type="button" id="seg-mia-guardar"><i data-lucide="save" class="ico"></i> Guardar</button></div>' +
-        '<h4 style="margin:20px 0 4px">Mis dispositivos</h4>' +
-        '<p class="modal-subtitle" style="margin-bottom:8px">Desde estos no se te pide código por un tiempo. Quita el que no reconozcas.</p>' +
-        '<div id="seg-dispositivos"><p class="perfil-cargando">Cargando…</p></div>';
-      conectarOjos_(v.cuerpo);
+    // ---------------------------------------------------------------- Mi perfil: las pestañas Contraseña, Dispositivos y Actividad
+    // Como las cuentas de Google o Microsoft: cada pestaña con su encabezado y renglones de ajuste (ícono, qué es, su
+    // estado y la acción). Seguridad.pestana(nombre, caja) la pinta; la pide app-perfil.html al cambiar de pestaña.
+    const CARGANDO = '<p class="perfil-cargando">Cargando…</p>';
+    const fallo_ = (err) => '<p class="error-msg">' + esc((err && err.message) || String(err)) + '</p>';
+    const encabezado_ = (titulo, texto) => '<div class="seg-cabeza"><h3>' + esc(titulo) + '</h3><p>' + texto + '</p></div>';
+    function fila_(icono, titulo, detalle, accion, tono) {
+      return '<div class="seg-fila">' +
+        '<span class="seg-fila-ico' + (tono ? ' seg-' + tono : '') + '"><i data-lucide="' + icono + '" class="ico"></i></span>' +
+        '<div class="seg-fila-texto"><b>' + titulo + '</b><small>' + detalle + '</small></div>' + (accion || '') + '</div>';
+    }
+    const insignia_ = (texto, tono) => '<span class="seg-insignia seg-' + tono + '">' + esc(texto) + '</span>';
+
+    function pestana(nombre, caja) {
+      if (!caja) return;
+      if (nombre === 'contrasena') pintarContrasena_(caja);
+      if (nombre === 'dispositivos') pintarDispositivos_(caja);
+      if (nombre === 'actividad') pintarActividad_(caja);
+    }
+
+    async function pintarContrasena_(caja) {
+      caja.innerHTML = CARGANDO;
+      let e;
+      try { e = await callServer('apiSeguridadEstado', state.token); } catch (err) { caja.innerHTML = fallo_(err); return; }
+      if (!caja.isConnected) return;
+      const correo = String((state.sesion && state.sesion.correo) || '').toLowerCase();
+      caja.innerHTML =
+        encabezado_('Contraseña', 'Con tu correo y tu contraseña también entras sin tu cuenta de Google. Úsala solo aquí.') +
+        fila_('key-round', 'Contraseña', e.tieneContrasena
+          ? (e.cambiada ? 'Último cambio: ' + esc(e.cambiada) : 'Sin fecha de último cambio')
+          : 'Todavía no tienes: hoy entras con tu cuenta de Google', insignia_(e.tieneContrasena ? 'Configurada' : 'Sin contraseña', e.tieneContrasena ? 'ok' : 'neutro'), 'neutro') +
+        '<div class="seg-form">' +
+          '<h4>' + (e.tieneContrasena ? 'Cambiar mi contraseña' : 'Crear una contraseña') + '</h4>' +
+          (e.tieneContrasena ? campoClave_('seg-actual', 'Contraseña actual', 'current-password') : '') +
+          campoClave_('seg-mia', 'Contraseña nueva', 'new-password') +
+          campoClave_('seg-mia2', 'Repítela', 'new-password') +
+          '<ul class="seg-requisitos">' +
+            '<li data-req="largo">Al menos ' + esc(e.minimo) + ' caracteres</li>' +
+            '<li data-req="correo">Sin tu correo</li>' +
+            '<li data-req="igual">Las dos coinciden</li>' +
+          '</ul>' +
+          '<div class="error-msg" id="seg-mia-error" hidden></div>' +
+          '<div class="form-actions"><button type="button" id="seg-mia-guardar"><i data-lucide="save" class="ico"></i> Guardar contraseña</button></div>' +
+        '</div>';
+      conectarOjos_(caja);
       refreshIcons();
-      pintarDispositivos_();
+      // Lo que se puede revisar aquí se marca mientras escribe; lo demás (las comunes, el nombre) lo dice el servidor
+      const usuario = correo.split('@')[0];
+      const revisar = () => {
+        const n = $('seg-mia').value;
+        const marcas = {
+          largo: n.length >= e.minimo,
+          correo: !!n && !(usuario.length >= 4 && n.toLowerCase().indexOf(usuario) !== -1),
+          igual: !!n && n === $('seg-mia2').value,
+        };
+        caja.querySelectorAll('[data-req]').forEach((li) => li.classList.toggle('ok', marcas[li.dataset.req]));
+        return marcas.largo && marcas.correo && marcas.igual;
+      };
+      $('seg-mia').addEventListener('input', revisar);
+      $('seg-mia2').addEventListener('input', revisar);
       $('seg-mia-guardar').addEventListener('click', () => {
-        const nueva = $('seg-mia').value;
-        if (nueva !== $('seg-mia2').value) return error_('seg-mia-error', 'Las dos contraseñas no coinciden.');
+        if (!revisar()) return error_('seg-mia-error', 'Revisa los requisitos de la contraseña nueva.');
         conBoton_($('seg-mia-guardar'), 'Guardando…', async () => {
-          await callServer('apiSeguridadCambiarMia', state.token, estado.tieneContrasena ? $('seg-actual').value : '', nueva);
-          v.cerrar();
-          Notificar.exito('Listo: tu contraseña quedó cambiada.');
+          await callServer('apiSeguridadCambiarMia', state.token, e.tieneContrasena ? $('seg-actual').value : '', $('seg-mia').value);
+          Notificar.exito('Listo: tu contraseña quedó guardada.');
+          pintarContrasena_(caja);
         }, 'seg-mia-error');
       });
     }
 
-    async function pintarDispositivos_() {
-      const caja = $('seg-dispositivos');
-      if (!caja) return;
+    async function pintarDispositivos_(caja) {
+      caja.innerHTML = CARGANDO;
       const correo = state.sesion && state.sesion.correo;
+      let e;
       let lista;
       try {
-        lista = await callServer('apiSeguridadMisDispositivos', state.token, llaveDe(correo));
-      } catch (err) {
-        caja.innerHTML = '<p class="error-msg">' + esc((err && err.message) || String(err)) + '</p>';
-        return;
-      }
+        [e, lista] = await Promise.all([
+          callServer('apiSeguridadEstado', state.token),
+          callServer('apiSeguridadMisDispositivos', state.token, llaveDe(correo)),
+        ]);
+      } catch (err) { caja.innerHTML = fallo_(err); return; }
       if (!caja.isConnected) return;
-      caja.innerHTML = lista.length ? lista.map((d) =>
-        '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--color-border)">' +
-          '<i data-lucide="monitor-smartphone" class="ico"></i>' +
-          '<div style="flex:1;min-width:0"><b>' + esc(d.nombre) + '</b>' + (d.esEste ? ' <span class="badge-estado completo">Este</span>' : '') +
-            '<br><small style="color:var(--color-text-muted)">Desde ' + esc(d.creado) + ' · último uso ' + esc(d.ultimoUso) + '</small></div>' +
-          '<button type="button" class="secondary" data-quitar="' + esc(d.id) + '" data-este="' + (d.esEste ? '1' : '') + '">Quitar</button>' +
-        '</div>').join('')
-        : '<p class="modal-subtitle">Ninguno: cada vez que entres desde un dispositivo nuevo te mandaremos un código.</p>';
+      const otros = lista.filter((d) => !d.esEste).length;
+      caja.innerHTML =
+        encabezado_('Dispositivos', 'Desde estos no se te pide el código por un tiempo. Si ves uno que no reconoces, quítalo y cambia tu contraseña.') +
+        fila_('shield-check', 'Verificación en dos pasos', e.dosPasos
+          ? 'Te mandamos un código a tu correo cuando entras desde un dispositivo nuevo.'
+          : 'Por ahora el sistema no la pide.', insignia_(e.dosPasos ? 'Activa' : 'Apagada', e.dosPasos ? 'ok' : 'neutro'), e.dosPasos ? 'ok' : 'neutro') +
+        '<h4 class="seg-subtitulo">Dispositivos recordados</h4>' +
+        (lista.length ? lista.map((d) => fila_(/Android|iPhone/.test(d.nombre) ? 'smartphone' : 'monitor', esc(d.nombre) +
+            (d.esEste ? ' ' + insignia_('Este dispositivo', 'info') : ''),
+            'Recordado el ' + esc(d.creado) + ' · último uso ' + esc(d.ultimoUso),
+            '<button type="button" class="secondary" data-quitar="' + esc(d.id) + '" data-este="' + (d.esEste ? '1' : '') + '">Quitar</button>')).join('')
+          : '<p class="seg-vacio">Ninguno todavía: cada vez que entres desde un dispositivo nuevo te mandaremos un código.</p>') +
+        (otros ? '<div class="form-actions"><button type="button" class="secondary" data-quitar-otros><i data-lucide="log-out" class="ico"></i> ' +
+          'Cerrar en todos los demás (' + otros + ')</button></div>' : '');
       refreshIcons();
       caja.querySelectorAll('[data-quitar]').forEach((b) => b.addEventListener('click', () => conBoton_(b, 'Quitando…', async () => {
         await callServer('apiSeguridadQuitarDispositivo', state.token, b.dataset.quitar);
         if (b.dataset.este) guardarLlave_(correo, '');
-        await pintarDispositivos_();
+        pintarDispositivos_(caja);
       }, null)));
+      const todos = caja.querySelector('[data-quitar-otros]');
+      if (todos) todos.addEventListener('click', async () => {
+        const ok = await Confirmar.pedir({
+          titulo: '¿Cerrar en todos los demás?',
+          mensaje: 'Los otros ' + (otros === 1 ? 'dispositivo dejará' : otros + ' dispositivos dejarán') + ' de estar recordados: ' +
+            'desde ahí te pediremos el código otra vez. Este se queda.',
+          textoConfirmar: 'Cerrar en los demás',
+        });
+        if (!ok) return;
+        conBoton_(todos, 'Cerrando…', async () => {
+          const n = await callServer('apiSeguridadQuitarOtros', state.token, llaveDe(correo));
+          Notificar.exito(n === 1 ? '1 dispositivo cerrado.' : n + ' dispositivos cerrados.');
+          pintarDispositivos_(caja);
+        }, null);
+      });
+    }
+
+    // Lo que guarda la hoja ACCESOS, dicho para la persona
+    const EVENTOS = {
+      'entro': ['log-in', 'Iniciaste sesión', 'ok'],
+      'contrasena-mala': ['circle-x', 'Contraseña incorrecta', 'mal'],
+      'bloqueado': ['lock', 'Bloqueado por intentos fallidos', 'mal'],
+      'codigo-enviado': ['mail', 'Te mandamos un código', 'neutro'],
+      'codigo-reenviado': ['mail', 'Te mandamos otro código', 'neutro'],
+      'codigo-bueno': ['badge-check', 'Código correcto', 'ok'],
+      'codigo-malo': ['circle-x', 'Código incorrecto', 'mal'],
+    };
+
+    async function pintarActividad_(caja) {
+      caja.innerHTML = CARGANDO;
+      let lista;
+      try { lista = await callServer('apiSeguridadActividad', state.token); } catch (err) { caja.innerHTML = fallo_(err); return; }
+      if (!caja.isConnected) return;
+      caja.innerHTML =
+        encabezado_('Actividad reciente', 'Tus últimos inicios de sesión. Si ves algo que no fuiste tú, cambia tu contraseña y avisa a Control Interno.') +
+        (lista.length ? lista.map((a) => {
+          const ev = EVENTOS[a.resultado] || ['info', a.resultado, 'neutro'];
+          const como = a.metodo === 'google' ? 'con Google' : a.metodo === 'contrasena' ? 'con contraseña' : '';
+          return fila_(ev[0], esc(ev[1]), esc([a.fecha, a.dispositivo, como].filter(Boolean).join(' · ')), '', ev[2]);
+        }).join('') : '<p class="seg-vacio">Todavía no hay actividad registrada.</p>');
+      refreshIcons();
     }
 
     // ---------------------------------------------------------------- Usuarios y permisos
@@ -321,6 +401,6 @@
       });
     }
 
-    return { entrar, dispositivo, llaveDe, abrirMiCuenta, restablecer, olvidarDispositivos };
+    return { entrar, dispositivo, llaveDe, pestana, restablecer, olvidarDispositivos };
   })();
 </script>

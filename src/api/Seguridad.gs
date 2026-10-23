@@ -39,3 +39,11 @@ function apiSeguridadQuitarDispositivo(token, id) {
 function apiSeguridadOlvidarDispositivos(token, correo) {
   return Verificacion.olvidarDe(token, correo);
 }
+// Mi perfil → Dispositivos: "Cerrar en todos los demás" (llave: la de este navegador, que se queda)
+function apiSeguridadQuitarOtros(token, llave) {
+  return Verificacion.quitarOtros(token, llave);
+}
+// Mi perfil → Actividad: mis últimos inicios de sesión (hoja ACCESOS)
+function apiSeguridadActividad(token) {
+  return Accesos.mios(token, 15);
+}

@@ -14,6 +14,7 @@ const Utilities = {
   computeHmacSha256Signature: (valor, llave) => conSigno(crypto.createHmac('sha256', aBuffer(llave)).update(aBuffer(valor)).digest()),
   newBlob: (texto) => ({ getBytes: () => conSigno(Buffer.from(String(texto), 'utf8')) }),
   getUuid: () => crypto.randomUUID(),
+  formatDate: (d) => d.toISOString().slice(0, 10),
 };
 
 /** USUARIOS en memoria: encabezados + renglones, con lo que usa Credenciales de una hoja */
@@ -38,6 +39,7 @@ function cargar(hoja, sesion) {
   const permisos = [];
   const ctx = vm.createContext({
     Utilities,
+    Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; }, remove: (k) => { delete cache[k]; } }) },
     Auth: { validarSesion: () => { if (!sesion) throw new Error('Sesión expirada'); return sesion; } },
     Permisos: { puedeEditar: (token, modulo) => { permisos.push(modulo); if (token !== 'admin') throw new Error('Sin permiso'); return { correo: 'admin@x.com' }; } },
@@ -163,8 +165,12 @@ test('cambiar la mía: pide la actual (5 errores y espera), revisa las reglas y 
 test('quien solo entraba con Google crea su contraseña sin "actual"; sin sesión, nada', () => {
   const hoja = hojaFalsa(['CORREO', 'NOMBRE'], [{ CORREO: 'beto@ciudadmaderas.com', NOMBRE: 'Beto' }]);
   const { C } = cargar(hoja, { correo: 'beto@ciudadmaderas.com' });
-  assert.deepEqual({ ...C.estado('t') }, { tieneContrasena: false, minimo: C.MINIMO });
+  const antes = C.estado('t');
+  assert.equal(antes.tieneContrasena, false);
+  assert.equal(antes.minimo, C.MINIMO);
+  assert.equal(antes.cambiada, '', 'nunca la ha cambiado');
   assert.equal(C.cambiarMia('t', '', 'Mi frase segura 42'), true);
   assert.equal(C.estado('t').tieneContrasena, true);
+  assert.match(C.estado('t').cambiada, /^\d{4}-\d{2}-\d{2}$/, 'y ya sabe cuándo la cambió');
   assert.throws(() => cargar(hoja, null).C.cambiarMia('t', '', 'Mi frase segura 42'), /Sesión expirada/);
 });

@@ -253,6 +253,18 @@ const Verificacion = (function () {
     });
   }
 
+  /** Mi perfil: "Cerrar en todos los demás": se quedan sin llave todos menos este navegador */
+  function quitarOtros(token, llave) {
+    const sesion = Auth.validarSesion(token);
+    const este = limpiar_({ llave }).llave ? huella_(llave) : '';
+    return Candado.con(() => {
+      const hoja = hoja_();
+      const otros = deCorreo_(hoja, sesion.correo).filter((x) => activo_(x) && x.HUELLA !== este);
+      otros.forEach((d) => { poner_(hoja, d.fila, 'ACTIVO', 'FALSE'); poner_(hoja, d.fila, 'NOTA', 'cerrado desde otro dispositivo'); });
+      return otros.length;
+    });
+  }
+
   /** Todos los de un correo dejan de servir (restablecer la contraseña, o un admin) */
   function olvidarDispositivos(correo, nota) {
     return Candado.con(() => {
@@ -269,6 +281,6 @@ const Verificacion = (function () {
     return olvidarDispositivos(correo, 'olvidados por ' + sesion.correo);
   }
 
-  return { encendida, decidir, verificarCodigo, reenviar, misDispositivos, quitar, olvidarDispositivos, olvidarDe, oculto_, HOJA };
+  return { encendida, decidir, verificarCodigo, reenviar, misDispositivos, quitar, quitarOtros, olvidarDispositivos, olvidarDe, oculto_, HOJA };
 })();
 
