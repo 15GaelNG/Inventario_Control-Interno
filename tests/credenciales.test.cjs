@@ -68,7 +68,8 @@ function cargar(hoja, sesion) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Credenciales.gs'), 'utf8') +
     '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;' +
-    ' this.temporalesRevisar = contrasenasTemporalesRevisar; this.temporalesParaTodos = contrasenasTemporalesParaTodos;', ctx);
+    ' this.temporalesRevisar = contrasenasTemporalesRevisar; this.temporalesParaTodos = contrasenasTemporalesParaTodos;' +
+    ' this.pedirCambioRevisar = contrasenasPedirCambioRevisar; this.pedirCambioATodos = contrasenasPedirCambioATodos;', ctx);
   return ctx;
 }
 
@@ -135,17 +136,17 @@ test('contrasenasAHash: revisar solo cuenta; aplicar pasa todas las de texto pla
 test('reglas de una contraseña nueva (NIST 800-63B): largo, comunes, correo, nombre y distinta de la actual', () => {
   const { C } = cargar(hojaFalsa(['CORREO'], []));
   const motivo = (p, c) => { try { C.revisarNueva(p, c); return 'ok'; } catch (e) { return e.message; } };
-  assert.match(motivo('Ay05n!'), /al menos 8/);
-  // Como "Ayrt05n!": mayúscula, minúscula, número y símbolo (el espacio no es símbolo)
-  assert.match(motivo('ayrt05n!x'), /falta: una mayúscula/);
-  assert.match(motivo('AYRT05N!X'), /falta: una minúscula/);
-  assert.match(motivo('Ayrtonx!y'), /falta: un número/);
-  assert.match(motivo('Ayrt05n x'), /falta: un símbolo/);
+  assert.match(motivo('Ma1po!'), /al menos 8/);
+  // Como "Mar1posa!": mayúscula, minúscula, número y símbolo (el espacio no es símbolo)
+  assert.match(motivo('mar1posa!x'), /falta: una mayúscula/);
+  assert.match(motivo('MAR1POSA!X'), /falta: una minúscula/);
+  assert.match(motivo('Mariposa!y'), /falta: un número/);
+  assert.match(motivo('Mar1posa x'), /falta: un símbolo/);
   assert.match(motivo('Password123!'), /más usadas/, 'las comunes que sí cumplen la forma también se rechazan');
   assert.match(motivo('Ana.lopez26!', { correo: 'ana.lopez@gph.com' }), /tu correo/);
   assert.match(motivo('Guadalupe9!', { nombre: 'Maria Guadalupe Perez' }), /tu nombre/);
   assert.match(motivo('Misma1!clave', { actual: 'Misma1!clave' }), /distinta/);
-  assert.equal(motivo('Ayrt05n!', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok', 'el ejemplo del área');
+  assert.equal(motivo('Mar1posa!', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok', 'el ejemplo del área');
 });
 
 test('restablecer: solo con EDICIÓN en usuarios; la temporal sirve, la de antes no, y queda "debe cambiar"', () => {
@@ -269,4 +270,40 @@ test('quitar el bloqueo: solo un admin, limpia la columna y ahora sí avisa; res
   const r = ctx.C.restablecer('admin', 'ana@gph.com');
   assert.equal(r.bloqueada, false);
   assert.match(ctx.correos[1].subject, /restableció/, 'sin la casilla, el aviso de siempre');
+});
+
+test('pedir cambio a todos (26-oct): marca VIEJA a los activos sin tocar su contraseña ni pisar una temporal', () => {
+  const hoja = hojaFalsa(['CORREO', 'NOMBRE', 'ROL', 'ACTIVO', 'CONTRASEÑA', 'PASSWORD_HASH', 'DEBE CAMBIAR CONTRASEÑA'], [
+    { CORREO: 'ana@gph.com', ROL: 'CLIENT', ACTIVO: 'TRUE', 'CONTRASEÑA': 'vieja' },
+    { CORREO: 'beto@x.com', ACTIVO: 'FALSE', 'CONTRASEÑA': 'otra' },
+    { CORREO: 'caro@x.com', ACTIVO: 'TRUE', PASSWORD_HASH: 'v2$1$a$b', 'DEBE CAMBIAR CONTRASEÑA': 'TRUE' },
+    { CORREO: 'dani@x.com', ACTIVO: 'TRUE' },
+    { CORREO: '', ACTIVO: 'TRUE' },
+  ]);
+  const ctx = cargar(hoja);
+  ctx.leerConfig_ = () => 'DEV';
+  const cuenta = ctx.pedirCambioRevisar();
+  assert.deepEqual({ ...cuenta }, { activos: 3, marcados: 2, yaTemporal: 1, yaMarcados: 0, sinContrasena: 1 });
+  assert.equal(comoObjetos(hoja)[0]['DEBE CAMBIAR CONTRASEÑA'], '', 'revisar no cambia nada');
+  const r = ctx.pedirCambioATodos();
+  assert.equal(r.marcados, 2);
+  const filas = comoObjetos(hoja);
+  assert.deepEqual(filas.map((x) => x['DEBE CAMBIAR CONTRASEÑA']), ['VIEJA', '', 'TRUE', 'VIEJA', '']);
+  assert.equal(filas[0]['CONTRASEÑA'], 'vieja', 'su contraseña sigue igual: con ella entra a cambiarla');
+  assert.equal(filas[0].ROL, 'CLIENT', 'lo demás del renglón no se toca');
+  assert.equal(filas[2].PASSWORD_HASH, 'v2$1$a$b');
+  assert.equal(ctx.cerradas.length, 0, 'no cierra sesiones');
+  assert.equal(ctx.correos.length, 0, 'ni manda correos');
+  assert.equal(ctx.pedirCambioATodos().marcados, 0, 'correrla otra vez no hace nada');
+});
+
+test('pedir cambio a todos: en producción no corre sin la confirmación; la crea si falta la columna', () => {
+  const hoja = hojaFalsa(['CORREO', 'ACTIVO'], [{ CORREO: 'ana@gph.com', ACTIVO: 'TRUE' }]);
+  const ctx = cargar(hoja);
+  ctx.leerConfig_ = () => 'PROD';
+  assert.throws(() => ctx.pedirCambioATodos(), /PRODUCCIÓN/);
+  assert.throws(() => ctx.pedirCambioATodos('si'), /PRODUCCIÓN/);
+  assert.deepEqual([...hoja.datos[0]], ['CORREO', 'ACTIVO'], 'nada cambió');
+  assert.equal(ctx.pedirCambioATodos('SI, EN PROD').marcados, 1);
+  assert.equal(comoObjetos(hoja)[0]['DEBE CAMBIAR CONTRASEÑA'], 'VIEJA');
 });

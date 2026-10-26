@@ -95,7 +95,7 @@ test('sirve una vez, pedir otro anula el anterior, y vence a los 30 min', () => 
   R.pedir('ana@gph.com');
   const segundo = enlaceDe(correos[1]);
   assert.throws(() => R.estado(primero), /venció o ya se usó/, 'el anterior ya no');
-  assert.equal(R.cambiar(segundo, 'Ayrt05n!').ok, true);
+  assert.equal(R.cambiar(segundo, 'Mar1posa!').ok, true);
   assert.throws(() => R.cambiar(segundo, 'Otra1!clave'), /venció o ya se usó/, 'una sola vez');
   R.pedir('ana@gph.com');
   const tercero = enlaceDe(correos[2]);
@@ -110,8 +110,8 @@ test('al cambiarla: revisa la regla, guarda sin "debe cambiar", cierra sus sesio
   const enlace = enlaceDe(correos[0]);
   assert.throws(() => R.cambiar(enlace, 'corta'), /al menos 8/);
   assert.equal(R.estado(enlace).correo, 'Ana@gph.com', 'una contraseña mala no gasta el enlace');
-  R.cambiar(enlace, 'Ayrt05n!');
-  assert.deepEqual(guardadas.map((g) => [...g]), [['Ana@gph.com', 'Ayrt05n!', false]]);
+  R.cambiar(enlace, 'Mar1posa!');
+  assert.deepEqual(guardadas.map((g) => [...g]), [['Ana@gph.com', 'Mar1posa!', false]]);
   assert.deepEqual([...cerradas], ['Ana@gph.com']);
   assert.deepEqual(avisos.map((a) => [...a]), [['Ana@gph.com', 'cambiada']]);
   assert.ok(bitacora.includes('contrasena-recuperada'));

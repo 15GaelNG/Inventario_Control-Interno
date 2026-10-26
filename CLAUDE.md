@@ -227,11 +227,17 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   `contrasenasTemporalesRevisar()` cuenta y `contrasenasTemporalesParaTodos()` le pone una de 10 a cada usuario activo
   (debe cambiarla al entrar; sesiones y dispositivos cerrados) y deja la lista en una hoja nueva y privada en el Drive de
   quien la corre, para repartirla en persona y borrarla. En PROD no corre sin `contrasenasTemporalesParaTodos('SI, EN PROD')`.
+  **Pedir cambio a todos, sin lista** (26-oct, la otra opción): `contrasenasPedirCambioRevisar()` cuenta y
+  `contrasenasPedirCambioATodos('SI, EN PROD')` solo pone `DEBE CAMBIAR CONTRASEÑA = 'VIEJA'` a los activos (no toca la
+  contraseña, no cierra sesiones, no pisa una temporal). Cada quien entra con la de siempre, **confirma con el código por
+  correo aunque la verificación esté apagada** (esa contraseña pudo verse en la hoja de AppSheet; `Verificacion.decidir(…,
+  { confirmar })`, y apagada no recuerda el dispositivo) y elige la nueva. Con Google, cualquier marca (`TRUE` o `VIEJA`)
+  pide elegir la nueva sin código. Quien no recibe correo en su CORREO: "Restablecer contraseña" (temporal, sin código).
 - **El código por correo → `Verificacion.gs`.** Solo si el dispositivo es nuevo o algo se ve raro: la señal es una llave
   aleatoria que guarda el navegador (`localStorage`, `Seguridad.dispositivo`) y de la que el servidor guarda solo su huella
   en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
   recientes o en alerta. La IP NO sirve (Apps Script no la da y la del navegador se inventa). Sin cuota de correo, no se
-  entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; en prod hasta avisar al equipo).
+  entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; encendido en prod desde el 26-oct).
 - **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
   impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
 - Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se
@@ -239,7 +245,7 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave. **Las `api…` sin token son una lista
   cerrada** (`source-contracts`: "ninguna api… nueva corre sin sesión"): agregar una exige anotar qué la protege.
 - **Regla de una contraseña nueva** (lo pidió el área): 8+ caracteres con mayúscula, minúscula, número y símbolo, como
-  `Ayrt05n!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
+  `Mar1posa!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
   `COMUNES`; la pantalla repite la lista para palomearla). La regla es para ELEGIRLA: guardarla con huella no cambia nada
   para la persona y no se quita.
 - **La sesión** (`Auth.gs`): vence a los 60 min sin uso (`Config.SESION_INACTIVIDAD_MIN`; cada llamada la renueva, a lo
