@@ -243,6 +243,42 @@ const Credenciales = (function () {
   }
 
   /**
+   * Que cada activo cambie SU contraseña la próxima vez que entre, sin repartir temporales (26-oct): solo la columna
+   * DEBE CAMBIAR CONTRASEÑA = 'VIEJA'. Con contraseña, antes de elegir la nueva confirma con el código por correo (la vieja
+   * pudo verse en la hoja de AppSheet); con Google, elige la nueva directo (Auth.continuar_). No toca la contraseña, ni
+   * cierra sesiones, ni pisa una temporal pendiente ('TRUE'). aplicar = false solo cuenta.
+   */
+  function pedirCambioATodos(aplicar) {
+    return Candado.con(() => {
+      const hoja = SheetUtils.getSheet(ssId(), HOJA);
+      const encabezados = aplicar ? asegurarColumnas_(hoja, [COL.CAMBIAR]) : hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+      const idx = SheetUtils.indiceDeColumnas(encabezados, ['CORREO', 'ACTIVO', COL.HASH, COL.PLANA, COL.CAMBIAR]);
+      const ultima = hoja.getLastRow();
+      const datos = ultima < 2 ? [] : hoja.getRange(2, 1, ultima - 1, encabezados.length).getValues();
+      const cuenta = { activos: 0, marcados: 0, yaTemporal: 0, yaMarcados: 0, sinContrasena: 0 };
+      const columna = datos.map((f) => {
+        const actual = idx[COL.CAMBIAR] >= 0 ? f[idx[COL.CAMBIAR]] : '';
+        const activo = String(idx.ACTIVO >= 0 ? f[idx.ACTIVO] : '').toUpperCase() === 'TRUE' && String(f[idx.CORREO] || '').trim();
+        if (!activo) return [actual];
+        cuenta.activos++;
+        // Sin ninguna contraseña: solo entra con Google, que le pedirá elegir una
+        if (!String(idx[COL.HASH] >= 0 ? f[idx[COL.HASH]] : '').trim() && !String(idx[COL.PLANA] >= 0 ? f[idx[COL.PLANA]] : '').trim()) cuenta.sinContrasena++;
+        const v = String(actual || '').trim().toUpperCase();
+        if (v === 'TRUE') { cuenta.yaTemporal++; return [actual]; }
+        if (v === 'VIEJA') { cuenta.yaMarcados++; return [actual]; }
+        cuenta.marcados++;
+        return ['VIEJA'];
+      });
+      if (aplicar && datos.length && cuenta.marcados) {
+        // Solo esa columna, de un jalón: lo demás del renglón no se toca
+        hoja.getRange(2, idx[COL.CAMBIAR] + 1, datos.length, 1).setValues(columna);
+        CacheHojas.tocarHoja(hoja);
+      }
+      return cuenta;
+    });
+  }
+
+  /**
    * Un admin (EDICIÓN en Usuarios y permisos) le pone una contraseña temporal: se muestra UNA vez, al entrar con ella se
    * pide una nueva, y sus dispositivos recordados se olvidan (quien la tenía ya no entra sin el código).
    */
@@ -354,7 +390,7 @@ const Credenciales = (function () {
   }
 
   return { crear, verificar, revisarNueva, guardar, pasarTodasAHash, temporalesParaActivos, restablecer, desbloquear, bloqueado, cambiarMia, estado,
-    bloqueadoCorreo: (correo) => bloqueado(fila_(correo)), escribirPorCorreo_, avisar_,
+    bloqueadoCorreo: (correo) => bloqueado(fila_(correo)), pedirCambioATodos, escribirPorCorreo_, avisar_,
     ITERACIONES, MINIMO, COL };
 })();
 
@@ -395,6 +431,34 @@ function contrasenasTemporalesParaTodos(confirmacion) {
   h.autoResizeColumns(1, 4);
   Logger.log('Temporales asignadas: ' + r.asignadas + '. La lista (privada, solo tuya): ' + libro.getUrl() + ' — bórrala al terminar de repartir.');
   return { asignadas: r.asignadas, lista: libro.getUrl() };
+}
+
+/**
+ * Desde el editor (26-oct): cuántos activos quedarían marcados para cambiar su contraseña la próxima vez que entren
+ * (Credenciales.pedirCambioATodos). No cambia nada.
+ */
+function contrasenasPedirCambioRevisar() {
+  soloEditor_();
+  const r = Credenciales.pedirCambioATodos(false);
+  Logger.log('Activos: ' + r.activos + ' · se marcarían: ' + r.marcados + ' · ya tienen temporal: ' + r.yaTemporal +
+    ' · ya marcados: ' + r.yaMarcados + ' · sin contraseña (solo Google): ' + r.sinContrasena + ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor (26-oct): cada activo cambia su contraseña la próxima vez que entre, sin repartir temporales. Con su
+ * contraseña de siempre confirma con el código por correo y elige la nueva; con Google, elige la nueva. No cierra
+ * sesiones. En PROD no corre sin contrasenasPedirCambioATodos('SI, EN PROD').
+ */
+function contrasenasPedirCambioATodos(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error("Esto es PRODUCCIÓN: a todos se les pedirá cambiar su contraseña. Si de verdad es aquí, corre contrasenasPedirCambioATodos('SI, EN PROD').");
+  }
+  const r = Credenciales.pedirCambioATodos(true);
+  Logger.log('Marcados para cambiar su contraseña: ' + r.marcados + ' de ' + r.activos + ' activos (ya tenían temporal: ' + r.yaTemporal +
+    ', ya marcados: ' + r.yaMarcados + ').');
+  return r;
 }
 
 /** Desde el editor: pasa a hash todas las de texto plano y borra la celda CONTRASEÑA (correr antes contrasenasAHashRevisar) */

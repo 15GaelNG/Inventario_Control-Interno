@@ -726,6 +726,23 @@
       document.getElementById('seg-nueva').dispatchEvent(new Event('input'));
       await esperar(400);
     },
+    // Pedir cambio a todos (26-oct): con la contraseña vieja, primero el código (sin recordar el dispositivo) y luego la nueva
+    'login-confirmar': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiLogin = () => ({ pendiente: 'codigo', reto: 'r', correoOculto: 'a•••a@gph.com', motivo: 'confirmar', recordable: false });
+      (await hasta('#login-correo')).value = 'ana@gph.com';
+      document.getElementById('login-password').value = 'x';
+      document.getElementById('btn-login').click();
+      await hasta('#seg-codigo'); await esperar(400);
+    },
+    'login-contrasena-vieja': async () => {
+      Temporada.aplicar(''); state.token = null; render();
+      respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 8, motivo: 'vieja' });
+      (await hasta('#login-correo')).value = 'ana@gph.com';
+      document.getElementById('login-password').value = 'x';
+      document.getElementById('btn-login').click();
+      await hasta('#seg-nueva'); await esperar(400);
+    },
     'login-contrasena-nueva': async () => {
       Temporada.aplicar(''); state.token = null; render();
       respuestas.apiLogin = () => ({ pendiente: 'cambiar', reto: 'r', minimo: 8 });

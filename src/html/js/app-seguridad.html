@@ -85,6 +85,7 @@
       cambio: 'Algo cambió en este navegador desde la última vez.',
       fallos: 'Hubo intentos fallidos con tu correo hace poco.',
       alerta: 'Por seguridad, hoy se lo pedimos a todos.',
+      confirmar: 'Antes de cambiar tu contraseña confirmamos que eres tú.',
     };
 
     /** El código que llegó por correo; "equipo compartido" = no recordar este dispositivo */
@@ -96,8 +97,10 @@
         '<div class="login-divider"></div>' +
         // Los 6 recuadros (CampoCodigo): pegar el código como venga del correo los llena todos
         '<div id="seg-codigo"></div>' +
-        '<label style="display:flex;gap:8px;align-items:center;margin:4px 0 12px;font-size:var(--texto-s)">' +
-          '<input type="checkbox" id="seg-compartido" style="width:auto;margin:0" /> Es un equipo compartido: no recordarlo</label>' +
+        // Sin la casilla cuando el servidor no va a recordar el dispositivo (el código solo confirma un cambio)
+        (r.recordable === false ? '<div style="margin-bottom:12px"></div>' :
+          '<label style="display:flex;gap:8px;align-items:center;margin:4px 0 12px;font-size:var(--texto-s)">' +
+          '<input type="checkbox" id="seg-compartido" style="width:auto;margin:0" /> Es un equipo compartido: no recordarlo</label>') +
         '<button type="submit" id="seg-verificar">Entrar</button>' +
         '<div style="display:flex;gap:8px;margin-top:8px">' +
           '<button type="button" class="secondary" id="seg-volver" style="flex:1">Volver</button>' +
@@ -126,7 +129,8 @@
       const verificar = () => conBoton_($('seg-verificar'), 'Revisando…', async () => {
         if (campo.valor().length < 6) throw new Error('Escribe los 6 dígitos del código.');
         try {
-          entrar(await callServer('apiSeguridadVerificarCodigo', r.reto, campo.valor(), !$('seg-compartido').checked));
+          const compartido = $('seg-compartido');
+          entrar(await callServer('apiSeguridadVerificarCodigo', r.reto, campo.valor(), !!compartido && !compartido.checked));
         } catch (err) {
           campo.limpiar();   // un código malo: los recuadros vacíos para escribirlo otra vez
           throw err;
@@ -137,12 +141,19 @@
       campo.enfocar();
     }
 
-    /** Entró con una contraseña temporal: pone una nueva y con eso entra */
+    /** Por qué se le pide la contraseña nueva (r.motivo de Auth.continuar_) */
+    const POR_QUE_CAMBIAR = {
+      temporal: 'Entraste con una contraseña temporal.',
+      vieja: 'Por seguridad, cambia la contraseña que usabas.',
+      google: 'Por seguridad, elige una contraseña para Control Interno; te servirá para entrar con tu correo.',
+    };
+
+    /** Entró con una contraseña temporal (o la vieja, o con Google sin haber elegido una): pone una nueva y con eso entra */
     function pasoCambiar_(paso, r) {
       paso.innerHTML =
         '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
         '<h2>Seguridad</h2><p class="login-system-name">Pon tu contraseña nueva</p>' +
-        '<p class="login-sub">Entraste con una contraseña temporal. Elige una de al menos ' + esc(r.minimo) +
+        '<p class="login-sub">' + esc(POR_QUE_CAMBIAR[r.motivo] || POR_QUE_CAMBIAR.temporal) + ' Elige una de al menos ' + esc(r.minimo) +
           ' caracteres con mayúscula, minúscula, número y símbolo, por ejemplo <b>Ayrt05n!</b>, que solo tú sepas.</p>' +
         '<div class="login-divider"></div>' +
         campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +
