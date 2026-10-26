@@ -260,7 +260,7 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave. **Las `api…` sin token son una lista
   cerrada** (`source-contracts`: "ninguna api… nueva corre sin sesión"): agregar una exige anotar qué la protege.
 - **Regla de una contraseña nueva** (lo pidió el área): 8+ caracteres con mayúscula, minúscula, número y símbolo, como
-  `Ayrt05n!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
+  `Mar1posa!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
   `COMUNES`; la pantalla repite la lista para palomearla). La regla es para ELEGIRLA: guardarla con huella no cambia nada
   para la persona y no se quita.
 - **La sesión** (`Auth.gs`): vence a los 60 min sin uso (`Config.SESION_INACTIVIDAD_MIN`; cada llamada la renueva, a lo
