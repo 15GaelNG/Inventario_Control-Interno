@@ -151,7 +151,7 @@
       });
       if (!ok) return;
       try {
-        const res = await callServer('apiEnviarRecordatorioPendiente', state.token, p.ID);
+        const res = await callServer('apiInspeccionEnviarRecordatorioPendiente', state.token, p.ID);
         Notificar.exito('Recordatorio enviado a ' + res.correo);
         await cargar();
       } catch (err) {
@@ -188,7 +188,7 @@
       const boton = formVincular.querySelector('button[type="submit"]');
       boton.disabled = true;
       try {
-        await callServer('apiVincularTicketHelpdesk', state.token, pendienteAVincular.ID, campoTicket.value);
+        await callServer('apiInspeccionVincularTicketHelpdesk', state.token, pendienteAVincular.ID, campoTicket.value);
         Notificar.exito('Pendiente vinculado al ticket de Help Desk');
         cerrarVincular();
         await cargar();

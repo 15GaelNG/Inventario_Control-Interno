@@ -375,8 +375,8 @@
         ASUNTO: '2026_24_190 - Fuga de aceite en el motor', 'FAMILIA O GRUPO A REPORTAR': 'MECANICA', PRIORIDAD: 'URGENTE',
         ESTATUS: 'CARGADO EN HELPDESK', 'ID TICKET HELPDESK': 61790, 'ESTATUS HELPDESK': 'Resuelto', 'FECHA CARGADO': hace(23), 'ULTIMO RECORDATORIO': '' },
     ],
-    apiEnviarRecordatorioPendiente: { enviado: true, correo: 'juan.fulgencio@ejemplo.com' },
-    apiVincularTicketHelpdesk: { vinculado: true, idTicketHelpdesk: 61850, estatusHelpdesk: 'Abierto' },
+    apiInspeccionEnviarRecordatorioPendiente: { enviado: true, correo: 'juan.fulgencio@ejemplo.com' },
+    apiInspeccionVincularTicketHelpdesk: { vinculado: true, idTicketHelpdesk: 61850, estatusHelpdesk: 'Abierto' },
     // Un folio AUT… solo ofrece KWID y AUTOS (TIPOS_POR_PREFIJO_FOLIO en modulos/inspecciones.html)
     apiTiposInspeccion: [{ tipo: 'AUTOS', listo: true }, { tipo: 'KWID', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'PIPA', listo: true }],
     apiEstructuraInspeccion: {

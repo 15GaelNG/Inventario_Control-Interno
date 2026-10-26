@@ -2779,7 +2779,7 @@ test('cada grupo de CAMPOS_VEHICULO está en VEH_GRUPOS_PASO (si no, ese campo n
   // 15-oct-2026: "Accesorios del vehículo" se agregó a CAMPOS_VEHICULO pero no a VEH_GRUPOS_PASO
   // (renderCamposVehiculo solo pinta los pasos de esa lista) -- la sección quedó invisible en el
   // formulario aunque sí existiera en seccionesFichaVehiculo (esa sí deriva los grupos solita).
-  const app = read('src/html/js/app.html');
+  const app = APP;
   const bloqueCampos = /const CAMPOS_VEHICULO = \[([\s\S]*?)\n  \];/.exec(app)[1];
   const gruposUsados = [...new Set([...bloqueCampos.matchAll(/grupo: '([^']+)'/g)].map((m) => m[1]))];
   const pasos = /const VEH_GRUPOS_PASO = \[([^\]]*)\];/.exec(app)[1].match(/'[^']+'/g).map((x) => x.slice(1, -1));

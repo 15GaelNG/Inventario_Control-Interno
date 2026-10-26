@@ -37,10 +37,10 @@ function apiRegistrarInspeccion(token, datos, imagenes) {
 function apiListarPendientesInspeccion(token) {
   return PendientesInspeccionService.listar(token);
 }
-function apiEnviarRecordatorioPendiente(token, id) {
+function apiInspeccionEnviarRecordatorioPendiente(token, id) {
   return PendientesInspeccionService.enviarRecordatorio(token, id);
 }
-function apiVincularTicketHelpdesk(token, id, idTicketHelpdesk) {
+function apiInspeccionVincularTicketHelpdesk(token, id, idTicketHelpdesk) {
   return PendientesInspeccionService.vincularManual(token, id, idTicketHelpdesk);
 }
 

@@ -1,13 +1,13 @@
 /**
- * El conteo de "activos" por colaborador en Gestión de Activos (src/html/js/lineas.html,
+ * El conteo de "activos" por colaborador en Gestión de Activos (src/html/js/lineas-activos.html,
  * dentro de initGestionActivos): debe contar solo lo que sigue activo hoy -- lo dado de baja
  * (vehículo, holograma, Uber, caja chica, línea o equipo) se queda en el panel de la persona
  * (eso no lo toca este bloque: ve mostrarColaborador), pero ya no debe sumar al total. Desde
  * que Vehículos usa apiListarVehiculosResumen (20-oct) en vez de apiListarVehiculosBasico,
  * también los BAJA VEHICULAR llegan aquí -- antes el servidor mismo los excluía.
  *
- * Se extrae el bloque REAL de lineas.html (no una copia a mano, para no desalinearse si el
- * código cambia) y se corre con datos de prueba.
+ * Se extrae el bloque REAL de lineas-activos.html (no una copia a mano, para no desalinearse si
+ * el código cambia) y se corre con datos de prueba.
  *
  * Correr: node tests/gestion-activos-conteo.test.js
  */
@@ -15,13 +15,13 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const lineasHtml = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'lineas.html'), 'utf8');
+const lineasHtml = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'lineas-activos.html'), 'utf8');
 const formatoHtml = fs.readFileSync(path.join(__dirname, '..', 'src', 'html', 'js', 'componentes', 'formato.html'), 'utf8');
 const formatoJs = formatoHtml.slice(formatoHtml.indexOf('<script>') + 8, formatoHtml.lastIndexOf('</script>'));
 
 const inicio = lineasHtml.indexOf('const conteo = {};');
 const fin = lineasHtml.indexOf('colaboradores = filasComoObjetos(r)');
-if (inicio === -1 || fin === -1) throw new Error('No se encontró el bloque de conteo en lineas.html (¿cambió el código?)');
+if (inicio === -1 || fin === -1) throw new Error('No se encontró el bloque de conteo en lineas-activos.html (¿cambió el código?)');
 const bloqueConteo = lineasHtml.slice(inicio, fin);
 
 const contexto = vm.createContext({});
