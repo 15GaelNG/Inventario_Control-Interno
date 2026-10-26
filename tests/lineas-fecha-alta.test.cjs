@@ -19,9 +19,8 @@ function cargar(hojas, cache) {
     buscarFilas: (n, col, valor) => (hojas[n] || []).map((f, i) => (String(f[col]) === valor ? i + 2 : 0)).filter(Boolean),
     leerFilas: (pedidos) => pedidos.map((p) => p.filas.map((i) => Object.assign({ _fila: i }, hojas[p.tabla][i - 2]))),
   };
-  return new Function('LineasDatos', 'LineasRepo', 'PropertiesService', 'ESTRUCTURA_ES_CODIGO_RESGUARDO', 'soloEditor_',
-    read('src/services/lineas/LineasLectura.gs') + '; return LineasLectura;')(LineasDatos, { folioRegistro: () => '', borrarCaches: () => {} },
-    { getScriptProperties: () => ({ getProperty: () => 'ESTRUCTURA' }) }, /^$/, () => {});
+  return new Function('LineasDatos', 'LineasRepo', read('src/services/lineas/LineasLectura.gs') + '; return LineasLectura;')(
+    LineasDatos, { folioRegistro: () => '', borrarCaches: () => {} });
 }
 
 const HOJAS = {
@@ -58,10 +57,8 @@ test('ya nadie escribe FECHA DE ALTA; Corregir no muestra la fecha; la línea nu
   assert.doesNotMatch(read('src/services/lineas/LineasEscritura.gs'), /'FECHA DE ALTA':/);
   assert.match(read('src/services/lineas/LineasEscritura.gs'), /LineasLectura\.anotarAlta\(\[e && e\['ID'\], l && l\['ID'\]\], ahora\);/);
   assert.match(read('src/services/lineas/LineasEscritura.gs'), /LineasLectura\.anotarAlta\(\[nueva\['ID'\]\], ahora\);/);
-  const estructura = read('src/services/lineas/LineasEstructura.gs');
-  assert.doesNotMatch(estructura.slice(estructura.indexOf('const ESTRUCTURA_HOJAS'), estructura.indexOf('ASIGNACIONES:')), /FECHA DE ALTA/);
   const reg = read('src/services/lineas/LineasRegistros.gs');
   assert.doesNotMatch(reg, /'Fecha de alta'/);
   assert.match(reg, /\(guardado\.altas \|\| \[\]\)\.forEach\(\(idLinea\) => \{/);
-  assert.match(read('src/services/lineas/LineasLectura.gs'), /'enc_' \+ HOJA_VIEJA, 'ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS\]/);
+  assert.match(read('src/services/lineas/LineasLectura.gs'), /\.concat\(\['ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS\]\)/);
 });

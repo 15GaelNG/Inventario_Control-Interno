@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const LINEAS = require('./lineas-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
@@ -91,7 +92,7 @@ test('la imagen solo la usa el servidor, con el correo de la sesión; la pantall
   assert.match(cap, /nombreCI === String\(usuario\.nombre \|\| ''\)\.trim\(\)\.toUpperCase\(\)/);
   // La caché junta lo nuevo con lo que ya había (la pantalla no manda la firma guardada)
   assert.match(cap, /Object\.keys\(nuevas\)\.forEach\(\(k\) => \{ if \(nuevas\[k\]\) juntas\[k\] = nuevas\[k\]; \}\);/);
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /function firmaGuardadaEn\(contenedor, nombre, alFirmarAMano\)/);
   assert.match(lineas, /base64: \(\) => Promise\.resolve\(null\) \}/);
   assert.match(lineas, /usarFirmaGuardada: !!firmaInspector\.guardada,/);
@@ -101,13 +102,39 @@ test('la imagen solo la usa el servidor, con el correo de la sesión; la pantall
   assert.match(admin, /function lineasFirmasGuardadas_revisar\(\)/);
   assert.match(admin, /if \(aplicar && salida\.compartida\) throw/);
   assert.match(admin, /ese correo no está en USUARIOS/);
+  // _agregar suma las de la carpeta sin quitar a nadie (19-oct)
+  assert.match(admin, /function lineasFirmasGuardadas_agregar\(\) \{\r?\n  soloEditor_\(\);\r?\n  return firmasGuardadas_\(true, true\);/);
+  assert.match(admin, /if \(enCarpeta\[g\.correo\] \|\| sinQuitar\) return;/);
 });
 
 test('al terminar Reasignar se ofrecen los dos PDF, cada uno con su nombre', () => {
-  const lineas = read('src/html/js/lineas.html');
+  const lineas = LINEAS;
   assert.match(lineas, /flujo\.resolver\(Object\.assign\(\{\}, r, \{ pdfPromesa: pdf \}\)\);/);
   assert.match(lineas, /pdfInspeccion = r\.pdfPromesa \|\| null;/);
   assert.match(lineas, /refrescarDespuesDeCaptura\(fila\.id, 'RESPONSIVA', r\.id, false, pdfInspeccion \? \{ promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' \} : null\);/);
   assert.match(lineas, /tipo === 'INSPECCION' \? 'Ver PDF de la inspección' : 'Ver PDF de la responsiva'/);
   assert.match(lineas, /conOtro \? 'Tus PDF están listos' : 'Tu PDF está listo'/);
+});
+
+test('la firma guardada también va como FIRMA RESPONSABLE si el responsable es quien captura (19-oct)', () => {
+  const cap = read('src/services/lineas/LineasCaptura.gs');
+  const lineas = LINEAS;
+  // El servidor y la pantalla comparan el nombre igual
+  const servidor = vm.runInNewContext('(' + cap.match(/function nombreDeFirma_\(s\) \{[\s\S]*?\r?\n  \}/)[0] + ')');
+  const Formato = vm.runInNewContext(read('src/html/js/componentes/formato.html').replace(/<\/?script>/g, '') + '; Formato');
+  const pantalla = vm.runInNewContext('(' + lineas.match(/function nombreDeFirma\(s\) \{[\s\S]*?\r?\n    \}/)[0] + ')', { Formato });
+  ['Dafne  Donis García ', 'YOVANNI NAVA PERALTA', 'gamaliel jair mora gonzález'].forEach((n) => assert.equal(servidor(n), pantalla(n)));
+  assert.equal(servidor('Dafne  Donis García '), 'DAFNE DONIS GARCIA');
+  // Sus nombres: el de USUARIOS y el suyo en Capital Humano por correo; solo si tiene firma guardada
+  assert.match(cap, /function nombresPropios_\(usuario\) \{\r?\n    const nombres = \[nombreDeFirma_\(usuario && usuario\.nombre\)\];/);
+  assert.match(cap, /if \(String\(f\[iCor\] \|\| ''\)\.toLowerCase\(\) === correo\) nombres\.push\(nombreDeFirma_\(f\[iNom\]\)\);/);
+  assert.equal((cap.match(/nombresPropios: nombresConFirma_\(usuario\),/g) || []).length, 2);
+  // Al guardar, el servidor revisa que el responsable sea quien captura antes de poner su firma
+  assert.match(cap, /if \(nombresPropios_\(usuario\)\.indexOf\(nombreDeFirma_\(responsable\)\) < 0\) throw/);
+  assert.equal((cap.match(/if \(datos\.usarFirmaGuardadaResponsable\) datos\.firmaResponsableBase64 = firmaResponsablePropia_\(usuario, \(datos\.valores \|\| \{\}\)\['RESPONSABLE'\]\);/g) || []).length, 2);
+  // Al regenerar, solo si ya está la de Control Interno (sin ella se piden las firmas)
+  assert.match(cap, /if \(firmas && firmas\[rolCI\] && !firmas\.responsable && usuario && nombresPropios_\(usuario\)/);
+  // La pantalla cambia el recuadro al elegir a otra persona
+  assert.match(lineas, /if \(captura\.revisarFirmaResponsable\) captura\.revisarFirmaResponsable\(\);/);
+  assert.equal((lineas.match(/usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\)/g) || []).length, 2);
 });

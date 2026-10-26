@@ -1,0 +1,383 @@
+<script>
+  /**
+   * app-incidencias.html — Incidencias: la pantalla (initIncidencias) y su ayuda.
+   * Era parte de app.html (fase 6.1, tools/app/partir.js). Comparte el espacio global: usa los ayudantes de app.html,
+   * que carga antes (Index.html lo incluye justo después de app; los que vienen después ya lo ven).
+   */
+  function fijarFechaRegistroHoy() {
+    document.getElementById('inc-fecha-registro').value = Formato.fecha(new Date());
+  }
+
+  async function initIncidencias() {
+    Tabs.iniciar(document.getElementById('view-container'));
+    // Permisos del módulo (el servidor los vuelve a revisar en cada llamada)
+    const puedeEditar = puedeEditarModulo('incidencias');
+    if (!puedeEditar) document.querySelector('#inc-tabs .tab-btn[data-tab="registrar"]').remove();
+    const modal = document.getElementById('modal-cerrar');
+    const modalEditar = document.getElementById('modal-editar');
+
+    // Registrar = los del ingreso; Editar = todos; Cerrar = los del cierre (soloEdicion).
+    // Nucco solo sirve para buscar el vehículo (FolioNucco, más abajo): lo que se guarda es FOLIO.
+    const CAMPOS_INCIDENCIA = [
+      { clave: 'NUCCO', etiqueta: 'Nucco', tipo: 'select', catalogo: true, noSeGuarda: true, placeholder: 'Otra forma de buscar el vehículo…' },
+      { clave: 'FOLIO', etiqueta: 'Folio del vehículo', tipo: 'select', catalogo: true, requeridoAlCrear: true },
+      { clave: 'DEPARTAMENTO', etiqueta: 'Departamento', tipo: 'text' },
+      { clave: 'MODELO', etiqueta: 'Modelo', tipo: 'text' },
+      { clave: 'ANIO', etiqueta: 'Año', tipo: 'number' },
+      { clave: 'FECHA_REGISTRO', etiqueta: 'Fecha de registro', tipo: 'text', soloLectura: true, soloAlta: true },
+      { clave: 'FECHA_INSPECCION', etiqueta: 'Fecha de inspección', tipo: 'date' },
+      { clave: 'KILOMETRAJE', etiqueta: 'Kilometraje', tipo: 'number' },
+      { clave: 'TICKET', etiqueta: 'Ticket', tipo: 'text' },
+      { clave: 'PERIODO_VERIFICACION', etiqueta: 'Periodo de verificación', tipo: 'text', placeholder: 'Ej. 2do semestre 2026' },
+      { clave: 'SEGURO_AUTO', etiqueta: 'Seguro de auto', tipo: 'text', placeholder: 'Ej. Póliza vigente' },
+      { clave: 'INSPECCION_INGRESO', etiqueta: 'Inspección de ingreso (motivo)', tipo: 'text', renglonCompleto: true, placeholder: 'Ej. Cambio de batería' },
+      { clave: 'DESCRIPCION_TRABAJO', etiqueta: 'Trabajo realizado', tipo: 'text', soloEdicion: true, renglonCompleto: true, placeholder: 'Ej. Cambio de batería' },
+      { clave: 'FECHA_TRABAJO', etiqueta: 'Fecha del trabajo realizado', tipo: 'date', soloEdicion: true },
+      { clave: 'MECANICO', etiqueta: 'Mecánico', tipo: 'text', soloEdicion: true, placeholder: 'Nombre del mecánico' },
+      { clave: 'INSPECCION_SALIDA', etiqueta: 'Inspección de salida', tipo: 'text', soloEdicion: true, renglonCompleto: true, placeholder: 'Ej. Reemplazo realizado' },
+    ];
+    // Al cerrar, el trabajo realizado es obligatorio (al editar no: puede seguir abierta)
+    const CAMPOS_CIERRE_INCIDENCIA = CAMPOS_INCIDENCIA.filter((c) => c.soloEdicion)
+      .map((c) => (c.clave === 'DESCRIPCION_TRABAJO' ? Object.assign({}, c, { requerido: true }) : c));
+    document.getElementById('campos-form-incidencia').innerHTML = CamposHoja.html(CAMPOS_INCIDENCIA, { prefijo: 'inc' });
+    document.getElementById('campos-form-editar-incidencia').innerHTML = CamposHoja.html(CAMPOS_INCIDENCIA, { prefijo: 'editar', esEdicion: true });
+    document.getElementById('campos-form-cerrar-incidencia').innerHTML = CamposHoja.html(CAMPOS_CIERRE_INCIDENCIA, { prefijo: 'cerrar', esEdicion: true });
+
+    // Fecha de registro: siempre hoy, no editable (el servidor la fuerza igual).
+    fijarFechaRegistroHoy();
+    document.getElementById('inc-fecha-inspeccion').value = hoyISO();
+
+    // Autollenado: el folio del vehículo trae Departamento/Modelo desde Vehículos.
+    // OJO: esto NO se espera aquí (sin await) para que salga en paralelo con la
+    // carga del historial (cargar(), al final de esta función) en vez de una
+    // petición tras otra — cada una puede tardar un rato y sumadas se sentía
+    // muy lento.
+    // vehiculosPorFolio: una entrada por FOLIO y otra por NUCO (apiListarVehiculosBasico
+    // lo manda como "NUCO", sin doble C -- ver VehiculosService.listarBasico), las dos
+    // apuntando al mismo vehículo -- así se puede resolver el vehículo con cualquiera de
+    // los dos. Folio y Nucco son campos INDEPENDIENTES (uno no se mete dentro del otro):
+    // escribir en uno resuelve el vehículo y pone el valor correspondiente en el otro (ver
+    // componente FolioNucco). Lo que de verdad se guarda es FOLIO.
+    const vehiculosPorFolio = {};
+    const promesaVehiculos = callServerCacheado('apiListarVehiculosBasico', state.token)
+      .then((vehiculos) => {
+        // Si mientras tanto se navegó a otra vista, el router ya destruyó este
+        // DOM (montarVista hace container.innerHTML = '') — escribir aquí
+        // tronaría con "Cannot set properties of null".
+        if (!document.body.contains(modal)) return;
+        FolioNucco.indexar(vehiculos, vehiculosPorFolio);
+        const opcionesFolio = vehiculos
+          .map((v) => `<option value="${escaparHtml(v.FOLIO)}">${escaparHtml([v.MARCA, v.LINEA_VEHICULO].filter(Boolean).join(' '))}</option>`)
+          .join('');
+        const opcionesNucco = FolioNucco.opcionesNucco(vehiculos, true);
+        ['inc', 'editar'].forEach((prefijo) => {
+          document.getElementById(prefijo + '-folio-lista').innerHTML = opcionesFolio;
+          document.getElementById(prefijo + '-nucco-lista').innerHTML = opcionesNucco;
+        });
+      })
+      .catch((err) => {
+        // Antes esto se ignoraba en silencio — ahora se ve para poder diagnosticar.
+        console.error('No se pudo cargar el catálogo de vehículos:', err);
+        if (!document.body.contains(modal)) return;
+        const errorBox = document.getElementById('inc-error');
+        errorBox.textContent = 'No se pudo cargar el catálogo de vehículos para autocompletar: ' + err.message;
+        errorBox.hidden = false;
+      });
+
+    /** Al resolver el vehículo (por Folio o Nucco, componente FolioNucco) se sugieren
+     *  Departamento/Modelo/Año con la etiqueta "auto"; se pueden corregir. Sin vehículo no
+     *  se borra lo escrito, solo deja de decir "auto". */
+    function autollenarIncidencia_(prefijo, vehiculo) {
+      ['departamento', 'modelo', 'anio'].forEach((c) => {
+        const el = document.getElementById(prefijo + '-' + c);
+        if (!vehiculo) { CampoAuto.quitar(el); return; }
+        CampoAuto.llenar(el, {
+          departamento: vehiculo.DEPARTAMENTO,
+          modelo: [vehiculo.MARCA, vehiculo.LINEA_VEHICULO].filter(Boolean).join(' '),
+          anio: vehiculo.MODELO,
+        }[c]);
+      });
+    }
+    const buscarVehiculoInc_ = (texto) => vehiculosPorFolio[texto];
+    FolioNucco.ligar('inc-folio', 'inc-nucco', { buscar: buscarVehiculoInc_, alResolver: (v) => autollenarIncidencia_('inc', v) });
+
+    function abrirModalCierre(id, folio) {
+      document.getElementById('cerrar-id').value = id;
+      document.getElementById('cerrar-folio').textContent = 'Folio: ' + folio;
+      document.getElementById('cerrar-fecha-trabajo').value = hoyISO();
+      modal.hidden = false;
+    }
+    function cerrarModal() {
+      modal.hidden = true;
+      document.getElementById('form-cerrar-incidencia').reset();
+      document.getElementById('cerrar-error').hidden = true;
+    }
+
+    // Mismo autollenado, pero para el folio/nucco dentro del modal de Editar.
+    FolioNucco.ligar('editar-folio', 'editar-nucco', { buscar: buscarVehiculoInc_, alResolver: (v) => autollenarIncidencia_('editar', v) });
+
+    /** Abre el modal general de edición con lo que ya trae la fila (el resumen
+     *  ya incluye todos los campos, no hace falta pedir el registro completo). */
+    function abrirModalEditar(inc) {
+      if (!inc) return;
+      document.getElementById('editar-id').value = inc.ID;
+      document.getElementById('editar-folio-label').textContent = 'Folio: ' + inc.FOLIO;
+      CamposHoja.poblar(CAMPOS_INCIDENCIA, 'editar', inc);
+      document.getElementById('editar-nucco').value = (vehiculosPorFolio[inc.FOLIO] || {}).NUCO || '';
+      // Lo que se abre es lo guardado, no una sugerencia: sin "auto" de la edición anterior
+      ['folio', 'nucco', 'departamento', 'modelo', 'anio'].forEach((c) => CampoAuto.quitar('editar-' + c));
+      document.getElementById('editar-error').hidden = true;
+      modalEditar.hidden = false;
+    }
+    function cerrarModalEditar() {
+      modalEditar.hidden = true;
+      document.getElementById('form-editar-incidencia').reset();
+      document.getElementById('editar-error').hidden = true;
+    }
+    document.getElementById('btn-cancelar-editar').addEventListener('click', cerrarModalEditar);
+    modalEditar.addEventListener('click', (ev) => { if (ev.target === modalEditar) cerrarModalEditar(); });
+
+    document.getElementById('form-editar-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('editar-error');
+      errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        await callServer('apiActualizarIncidencia', state.token, document.getElementById('editar-id').value,
+          CamposHoja.recolectar(CAMPOS_INCIDENCIA, 'editar'));
+        cerrarModalEditar();
+        invalidarCacheLista('apiListarIncidencias', state.token);
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    /** Sección "Vehículo" dentro del panel de detalle nativo de DataTable — los
+     *  datos de la incidencia ya los pinta el panel solo (vienen de `columnas`);
+     *  esto solo agrega, abajo, lo que trae el catálogo de Vehículos. */
+    async function mostrarVehiculoEnPanel(inc, contenedor) {
+      const titulo = '<div class="dt-campo-titulo" style="margin:14px 0 6px">Vehículo</div>';
+      contenedor.innerHTML = titulo + '<div class="loading-inline"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
+      try {
+        const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, inc.FOLIO);
+        if (!vehiculo) {
+          contenedor.innerHTML = titulo + '<p class="empty-state">No se encontró este folio en el catálogo de Vehículos.</p>';
+          return;
+        }
+        contenedor.innerHTML = titulo + Object.keys(vehiculo)
+          .filter((clave) => vehiculo[clave] !== '' && vehiculo[clave] !== null && vehiculo[clave] !== undefined)
+          .map((clave) => itemInfo(tituloDesdeClave(clave), vehiculo[clave]))
+          .join('');
+      } catch (err) {
+        contenedor.innerHTML = titulo + '<p class="error-msg">No se pudo cargar el vehículo: ' + escaparHtml(err.message) + '</p>';
+      }
+    }
+
+    function badgeEstadoIncidencia(estado) {
+      const abierta = estado === 'ABIERTA';
+      return `<span class="badge-estado ${abierta ? 'abierta' : 'cerrada'}"><i data-lucide="${abierta ? 'lock-open' : 'circle-check'}" class="ico"></i> ${abierta ? 'Abierta' : 'Cerrada'}</span>`;
+    }
+
+    let todasLasIncidencias = [];
+
+    const tabla = DataTable.crear(document.getElementById('inc-tabla'), {
+      idCampo: 'ID',
+      idTabla: 'incidencias',
+      ordenInicial: { campo: 'FECHA_REGISTRO', dir: 'desc' },
+      textoVacio: 'Todavía no hay incidencias registradas',
+      exportar: {
+        nombreArchivo: 'Incidencias',
+        titulo: 'Descarga la base completa: todas las filas y columnas de la hoja, sin importar filtros ni búsqueda',
+        descargar: async () => ExportarExcel.descargarCrudo({ nombreArchivo: 'Incidencias', filas: JSON.parse(await callServer('apiIncidenciasCompleto', state.token)) }),
+      },
+      etiquetaFila: (inc) => inc.FOLIO,
+      alCambiarFiltros: (filtros) => marcarKpiActivo(filtros),
+      detalle: {
+        titulo: (inc) => 'Folio: ' + (inc.FOLIO || ''),
+        contenidoExtra: (inc, contenedor) => mostrarVehiculoEnPanel(inc, contenedor),
+      },
+      // Selección estilo Google Drive/Apple (rama emmanuel, ver componentes/datatable.html):
+      // clic = selecciona, doble clic/tocar = abre el panel de detalle (tabla.abrirDetalle
+      // se resuelve en el momento del clic, para entonces `tabla` ya está asignada).
+      modoSeleccion: true,
+      seleccionDrive: true,
+      alAbrirFila: (inc) => tabla.abrirDetalle(String(inc.ID)),
+      alTocarFila: (inc) => tabla.abrirDetalle(String(inc.ID)),
+      columnas: [
+        { campo: 'FOLIO', titulo: 'Folio', tipo: 'texto', fijada: true },
+        { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
+        { campo: 'INSPECCION_INGRESO', titulo: 'Motivo', tipo: 'texto' },
+        { campo: 'FECHA_REGISTRO', titulo: 'Fecha', tipo: 'fecha' },
+        { campo: 'ESTADO', titulo: 'Estado', tipo: 'lista', render: (v) => badgeEstadoIncidencia(v) },
+        { campo: 'MODELO', titulo: 'Modelo', tipo: 'texto', visible: false },
+        { campo: 'ANIO', titulo: 'Año', tipo: 'numero', visible: false },
+        { campo: 'FECHA_INSPECCION', titulo: 'Fecha de inspección', tipo: 'fecha', visible: false },
+        { campo: 'KILOMETRAJE', titulo: 'Kilometraje', tipo: 'numero', visible: false },
+        { campo: 'TICKET', titulo: 'Ticket', tipo: 'texto', visible: false },
+        { campo: 'PERIODO_VERIFICACION', titulo: 'Periodo de verificación', tipo: 'texto', visible: false },
+        { campo: 'SEGURO_AUTO', titulo: 'Seguro de auto', tipo: 'texto', visible: false },
+        { campo: 'DESCRIPCION_TRABAJO', titulo: 'Trabajo realizado', tipo: 'texto', visible: false },
+        { campo: 'FECHA_TRABAJO', titulo: 'Fecha del trabajo realizado', tipo: 'fecha', visible: false },
+        { campo: 'INSPECCION_SALIDA', titulo: 'Inspección de salida', tipo: 'texto', visible: false },
+        { campo: 'MECANICO', titulo: 'Mecánico', tipo: 'texto', visible: false },
+      ],
+      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (inc) => verFichaVehiculoDesdeOtroModulo(inc.FOLIO) }].concat(puedeEditar ? [
+        {
+          icono: 'lock-open', titulo: 'Cerrar incidencia',
+          visible: (inc) => inc.ESTADO === 'ABIERTA',
+          alHacer: (inc) => abrirModalCierre(inc.ID, inc.FOLIO),
+        },
+        { icono: 'pencil', titulo: 'Editar', alHacer: (inc) => abrirModalEditar(inc) },
+      ] : []),
+      seleccionable: true,
+      alEliminar: puedeEditar ? async (filas) => {
+        await Promise.all(filas.map((f) => callServer('apiEliminarIncidencia', state.token, f.ID)));
+        invalidarCacheLista('apiListarIncidencias', state.token);
+      } : null,
+      motivoSinEliminar: 'Tu permiso en este módulo es de solo lectura',
+    });
+
+    // ---- Filtro rápido por Estado (FiltroTipo). Mismos colores que badgeEstadoIncidencia.
+    const ORDEN_ESTADO_INC = ['ABIERTA', 'CERRADA'];
+    const ESTILO_ESTADO_INC = {
+      'ABIERTA': { icono: 'lock-open', color: 'var(--color-danger)' },
+      'CERRADA': { icono: 'circle-check', color: 'var(--color-success)' },
+    };
+    let filtrosActualesInc = {};
+    const panelEstadoInc = FiltroTipo.crear(document.getElementById('inc-filtro-estado'), {
+      titulo: 'Estado', todos: 'Todas', campo: 'ESTADO', orden: ORDEN_ESTADO_INC, estilos: ESTILO_ESTADO_INC,
+      alElegir: (valor) => tabla.setFiltro('ESTADO', valor ? { valores: [valor] } : null),
+    });
+    function marcarEstadoInc() { panelEstadoInc.marcar(filtrosActualesInc.ESTADO); }
+    function pintarEstadoInc(filas) { panelEstadoInc.pintar(filas); }
+
+    const tilesKpiIncidencias = { 'stat-total': null, 'stat-abiertas': 'ABIERTA', 'stat-cerradas': 'CERRADA' };
+    Object.keys(tilesKpiIncidencias).forEach((id) => {
+      const tile = document.getElementById(id).closest('.stat-tile');
+      tile.classList.add('stat-tile-clickable');
+      tile.addEventListener('click', () => {
+        const valor = tilesKpiIncidencias[id];
+        tabla.setFiltro('ESTADO', valor ? { valores: [valor] } : null);
+      });
+    });
+    function marcarKpiActivo(filtros) {
+      filtrosActualesInc = filtros || {};
+      marcarEstadoInc();
+      const valores = filtros.ESTADO && filtros.ESTADO.valores;
+      Object.keys(tilesKpiIncidencias).forEach((id) => {
+        const valor = tilesKpiIncidencias[id];
+        const activo = valor ? !!(valores && valores.length === 1 && valores[0] === valor) : !valores;
+        document.getElementById(id).closest('.stat-tile').classList.toggle('stat-tile-activo', activo);
+      });
+      actualizarKpis(tabla.getFiltradas());
+    }
+
+    function actualizarKpis(filas) {
+      // Si cargar() tardó y mientras tanto se navegó a otra vista, view-container
+      // ya no tiene estos elementos -- sin esto, tronaba al volver de un módulo
+      // rápido (ej. Panorama) antes de que esta carga terminara.
+      const total = document.getElementById('stat-total');
+      if (!total) return;
+      total.textContent = filas.length;
+      document.getElementById('stat-abiertas').textContent = filas.filter((i) => i.ESTADO === 'ABIERTA').length;
+      document.getElementById('stat-cerradas').textContent = filas.filter((i) => i.ESTADO === 'CERRADA').length;
+    }
+
+    async function cargar() {
+      tabla.setCargando(true);
+      try {
+        // google.script.run entrega null en vez de [] cuando el servidor regresa
+        // un arreglo vacío — normalizamos aquí para no tronar en .forEach/.map.
+        todasLasIncidencias = (await callServerListaCacheada('apiListarIncidencias', state.token)) || [];
+      } catch (err) {
+        tabla.setError('No se pudo cargar el historial de incidencias: ' + err.message);
+        return;
+      }
+
+      actualizarKpis(todasLasIncidencias);
+      pintarEstadoInc(todasLasIncidencias);
+      tabla.setDatos(todasLasIncidencias);
+    }
+    // Pinta al instante con lo guardado; si del servidor llega algo distinto, se vuelve a pintar (api.html)
+    escucharLista('apiListarIncidencias', cargar, document.getElementById('view-container').firstElementChild);
+
+    document.getElementById('form-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('inc-error');
+      errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Registrando…';
+      toastCargando('Registrando…');
+      try {
+        const nueva = CamposHoja.recolectar(CAMPOS_INCIDENCIA, 'inc');
+        nueva.ID_VEHICULO = (buscarVehiculoInc_(String(nueva.FOLIO || '').trim()) || {}).ID || '';
+        await callServer('apiCrearIncidencia', state.token, nueva);
+        ev.target.reset();
+        fijarFechaRegistroHoy();
+        document.getElementById('inc-fecha-inspeccion').value = hoyISO();
+        invalidarCacheLista('apiListarIncidencias', state.token);
+        await cargar();
+        toastExito('Registrado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo registrar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    document.getElementById('btn-cancelar-cierre').addEventListener('click', cerrarModal);
+    modal.addEventListener('click', (ev) => { if (ev.target === modal) cerrarModal(); });
+
+    document.getElementById('form-cerrar-incidencia').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const errorBox = document.getElementById('cerrar-error');
+      errorBox.hidden = true;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      const textoOriginal = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      toastCargando('Guardando cambios…');
+      try {
+        await callServer('apiCerrarIncidencia', state.token, document.getElementById('cerrar-id').value,
+          CamposHoja.recolectar(CAMPOS_CIERRE_INCIDENCIA, 'cerrar'));
+        cerrarModal();
+        invalidarCacheLista('apiListarIncidencias', state.token);
+        await cargar();
+        toastExito('Actualizado exitosamente');
+      } catch (err) {
+        errorBox.textContent = err.message;
+        errorBox.hidden = false;
+        toastError('No se pudo actualizar: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+      }
+    });
+
+    await Promise.all([promesaVehiculos, cargar()]);
+  }
+
+  const AYUDA_INCIDENCIAS = [
+    { pregunta: '¿Qué es una incidencia?', respuesta: 'La bitácora de taller: cuándo entró un vehículo, qué se le hizo y cuándo salió.' },
+    { pregunta: '¿Cómo registro el ingreso de un vehículo al taller?', respuesta: 'Pestaña "Registrar": elige el vehículo y describe el motivo del ingreso.' },
+    { pregunta: '¿Cómo cierro una incidencia?', respuesta: 'Desde el ⋮ o clic derecho de su fila, "Cerrar" -- ahí se captura el trabajo realizado y la fecha de salida.' },
+    { pregunta: '¿Puedo corregir cualquier dato después de registrada?', respuesta: 'Sí, con "Editar" se puede corregir cualquier campo, esté abierta o cerrada.' },
+    { pregunta: '¿Cómo veo solo las abiertas o solo las cerradas?', respuesta: 'El panel de la izquierda de la tabla filtra por estado; los números de arriba también son clicables.' },
+  ];
+</script>

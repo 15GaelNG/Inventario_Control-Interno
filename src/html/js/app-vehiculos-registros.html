@@ -1,0 +1,230 @@
+<script>
+  /**
+   * app-vehiculos-registros.html — Vehículos: ver, eliminar, cambiar estatus o devolver un registro de la ficha; adquisición y ligas de firma.
+   * Parte de initVehiculos (fase 6.1b, tools/app/partir-vehiculos.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  Vehiculos.registrar('registros', (T) => {
+    const { abrirFichaVehiculo } = T.de('ficha');
+
+    // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
+    // sin salir de la ficha del vehículo. Inspección solo lleva "Ver completo": es un
+    // acta firmada, misma regla de negocio que ya rige su propio módulo. ----------
+
+    const API_VER_FICHA_REGISTRO = {
+      verificacion: { api: 'apiBuscarVerificacionPorId', titulo: 'Verificación' },
+      inspeccion: { api: 'apiBuscarInspeccionPorId', titulo: 'Inspección' },
+      sensor: { api: 'apiBuscarSensorPorId', titulo: 'Sensor' },
+      holograma: { api: 'apiBuscarHologramaPorId', titulo: 'Holograma' },
+      incidencia: { api: 'apiBuscarIncidenciaPorId', titulo: 'Incidencia' },
+      // json: true -- esta respuesta viaja como texto (JSON.stringify en ClientApi.gs), no
+      // como objeto directo: tiene 47+ columnas y google.script.run pierde objetos grandes
+      // de forma intermitente si no viajan como texto (mismo motivo que las listas grandes).
+      responsiva: { api: 'apiBuscarResponsivaVehicularPorId', titulo: 'Responsiva', json: true },
+      adherente: { api: 'apiBuscarAdherenteVehicularPorId', titulo: 'Adherente', json: true },
+    };
+    async function verRegistroFicha(tipo, id) {
+      const cfg = API_VER_FICHA_REGISTRO[tipo];
+      if (!cfg) return;
+      document.getElementById('veh-ver-registro-titulo').textContent = cfg.titulo;
+      document.getElementById('veh-ver-registro-subtitulo').textContent = 'ID: ' + id;
+      const cuerpo = document.getElementById('veh-ver-registro-cuerpo');
+      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      document.getElementById('veh-modal-ver-registro').hidden = false;
+      try {
+        const resultado = await callServer(cfg.api, state.token, id);
+        if (document.getElementById('veh-modal-ver-registro').hidden) return; // se cerró mientras cargaba
+        const registro = cfg.json ? JSON.parse(resultado || 'null') : resultado;
+        if (!registro) { cuerpo.innerHTML = '<p class="empty-state">No se encontró el registro (ID ' + escaparHtml(id) + ').</p>'; return; }
+        const items = Object.keys(registro)
+          .filter((k) => registro[k] !== '' && registro[k] !== null && registro[k] !== undefined)
+          .map((k) => itemInfo(tituloDesdeClave(k), registro[k]));
+        cuerpo.innerHTML = '<div class="card ln-card"><div class="info-grid">' + items.join('') + '</div></div>';
+      } catch (err) {
+        cuerpo.innerHTML = '<p class="error-msg">' + escaparHtml(err.message) + '</p>';
+      }
+    }
+    function cerrarVerRegistroFicha() {
+      document.getElementById('veh-modal-ver-registro').hidden = true;
+      document.getElementById('veh-ver-registro-cuerpo').innerHTML = '';
+    }
+
+    const TAB_FICHA_POR_TIPO = {
+      verificacion: 'verificaciones', inspeccion: 'inspecciones', sensor: 'sensor',
+      holograma: 'hologramas', incidencia: 'incidencias', responsiva: 'responsiva', adherente: 'adherente',
+    };
+    // multiple: true → la API pide un arreglo de IDs (aunque aquí siempre se manda uno solo)
+    const API_ELIMINAR_FICHA_REGISTRO = {
+      verificacion: { api: 'apiEliminarVerificaciones', lista: 'apiListarVerificaciones', multiple: true },
+      sensor: { api: 'apiEliminarSensores', lista: 'apiListarSensores', multiple: true },
+      holograma: { api: 'apiEliminarHologramas', lista: 'apiListarHologramas', multiple: true },
+      incidencia: { api: 'apiEliminarIncidencia', lista: 'apiListarIncidencias', multiple: false },
+      responsiva: { api: 'apiEliminarResponsivaVehicular', multiple: false },
+      adherente: { api: 'apiEliminarAdherenteVehicular', multiple: false },
+    };
+    async function eliminarRegistroFicha(tipo, id, vResumen) {
+      const cfg = API_ELIMINAR_FICHA_REGISTRO[tipo];
+      if (!cfg) return;
+      const ok = await Confirmar.pedir({
+        titulo: '¿Eliminar este registro?',
+        mensaje: 'Esta acción no se puede deshacer.',
+        textoConfirmar: 'Eliminar',
+        peligro: true,
+      });
+      if (!ok) return;
+      try {
+        if (cfg.multiple) await callServer(cfg.api, state.token, [id]);
+        else await callServer(cfg.api, state.token, id);
+        invalidarCacheLista(cfg.lista, state.token);
+        toastExito('Eliminado exitosamente');
+        abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
+      } catch (err) {
+        toastError('No se pudo eliminar: ' + err.message);
+      }
+    }
+
+    // ACTIVO/BAJA con un clic, sin confirmación (es reversible: volver a dar clic regresa al
+    // estatus anterior) -- a diferencia de eliminar, que sí pide confirmar por ser permanente.
+    const API_ESTATUS_FICHA_REGISTRO = {
+      adherente: { api: 'apiCambiarEstatusAdherenteVehicular' },
+    };
+    async function cambiarEstatusFicha(tipo, id, estatus, vResumen) {
+      const cfg = API_ESTATUS_FICHA_REGISTRO[tipo];
+      if (!cfg) return;
+      try {
+        await callServer(cfg.api, state.token, id, estatus);
+        toastExito(estatus === 'BAJA' ? 'Dado de baja' : 'Reactivado');
+        abrirFichaVehiculo(vResumen, TAB_FICHA_POR_TIPO[tipo]);
+      } catch (err) {
+        toastError('No se pudo actualizar: ' + err.message);
+      }
+    }
+
+    /** Cierra un Préstamo Vehicular (Responsiva): regresa el vehículo a quien lo tenía antes,
+     *  sin pedir firma ni generar PDF (ver el comentario de devolverPrestamo en el servicio). */
+    async function devolverPrestamoFicha(id, vResumen) {
+      try {
+        await callServer('apiDevolverPrestamoVehicular', state.token, id);
+        toastExito('Préstamo devuelto');
+        abrirFichaVehiculo(vResumen, 'responsiva');
+      } catch (err) {
+        toastError('No se pudo devolver el préstamo: ' + err.message);
+      }
+    }
+
+    /** Busca, por SERIE VEHICULO, el folio y la carpeta de la compra en Adquisición Vehicular
+     *  (proceso externo -- ver AdquisicionVehicularService.gs) y, si la persona confirma, lo
+     *  guarda en la ficha. Nunca escribe nada afuera, solo lee. */
+    async function buscarExpedienteAdquisicionFicha(vResumen, completo) {
+      const serie = completo['SERIE VEHICULO'];
+      if (!serie) { toastError('Este vehículo no tiene número de serie registrado.'); return; }
+      try {
+        const encontrado = await callServer('apiBuscarExpedienteAdquisicion', state.token, serie);
+        if (!encontrado) { toastError('No se encontró un expediente de adquisición con esa serie.'); return; }
+        const ok = await Confirmar.pedir({
+          titulo: 'Expediente encontrado',
+          mensaje: 'Folio ' + encontrado.folio + ' · ' + (encontrado.area || 'sin área') + ' (' + encontrado.año + ')' +
+            (encontrado.liga ? '' : ' — no se encontró la carpeta en Drive, solo se guardará el folio.'),
+          textoConfirmar: 'Guardar en la ficha',
+        });
+        if (!ok) return;
+        await callServer('apiGuardarExpedienteAdquisicion', state.token, vResumen.ID_VEHICULO, {
+          'FOLIO ADQUISICION': encontrado.folio, 'LIGA EXPEDIENTE ADQUISICION': encontrado.liga || '',
+        });
+        toastExito('Expediente guardado');
+        abrirFichaVehiculo(vResumen, 'general');
+      } catch (err) {
+        toastError('No se pudo buscar el expediente: ' + err.message);
+      }
+    }
+
+    /** Contenido de la pestaña "Adquisición" de la ficha: folio y carpeta ya ligados (si los
+     *  hay), o el botón para buscarlos (buscarExpedienteAdquisicionFicha, vía el dispatcher
+     *  genérico data-agregar) si todavía no se ha ligado ninguno. Solo con el permiso de
+     *  Adquisición (14-oct); "Buscar" además necesita edición de Vehículos (escribe en su renglón). */
+    function contenidoAdquisicionFicha(completo, puedeEditar) {
+      const folio = completo['FOLIO ADQUISICION'];
+      const liga = completo['LIGA EXPEDIENTE ADQUISICION'];
+      const boton = puedeEditar
+        ? '<button type="button" class="secondary" data-agregar="adquisicion" style="margin-left:auto">' +
+          Iconos.svg('ver') + (folio ? ' Buscar de nuevo' : ' Buscar expediente') + '</button>' : '';
+      if (!folio) {
+        return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+          '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' + boton + '</h3>' +
+          '<p class="empty-state">Todavía no se ha ligado el expediente de compra de este vehículo.</p></div>';
+      }
+      return '<div class="card ln-card"><h3 style="display:flex; align-items:center; gap:8px">' +
+        '<i data-lucide="receipt" class="ico ln-icon"></i> Adquisición' +
+        (liga ? '<span style="margin-left:auto">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</span>' : boton) + '</h3>' +
+        '<dl class="ficha-resumen"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
+        (liga ? '<div data-adq-ficha-archivos data-liga="' + escaparHtml(liga) + '" style="margin-top:12px">' +
+          '<p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>'
+          : '<p class="empty-state" style="margin-top:12px">No se encontró la carpeta en Drive.</p>') +
+        '</div>';
+    }
+
+    /** Los archivos de la carpeta (Galeria), pedidos solo al abrir la pestaña -- mismo
+     *  apiAdquisicionVehicularArchivos que usa el apartado "Adquisición". */
+    async function cargarArchivosAdquisicionFichaTab(contenedor) {
+      if (!contenedor || contenedor.dataset.cargado) return;
+      contenedor.dataset.cargado = '1';
+      try {
+        const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, contenedor.dataset.liga));
+        if (!document.body.contains(contenedor)) return;
+        if (!r.soportado) {
+          contenedor.innerHTML = '<p class="empty-state">Esta carpeta no es de Drive (por ejemplo, Dropbox) — no se pueden listar sus archivos aquí. Usa "Abrir carpeta" arriba.</p>';
+          return;
+        }
+        if (!r.archivos.length) { contenedor.innerHTML = '<p class="empty-state">La carpeta no tiene archivos todavía.</p>'; return; }
+        const grupos = [{ titulo: 'Archivos', fotos: r.archivos }];
+        contenedor.innerHTML = Galeria.html(grupos);
+        Galeria.ligar(contenedor, grupos, { titulo: 'Adquisición' });
+      } catch (err) {
+        contenedor.innerHTML = '<p class="empty-state">No se pudieron leer los archivos: ' + escaparHtml(err.message) + '</p>';
+      }
+    }
+
+    /** "Copiar liga de nuevo" (Responsiva/Adherente pendientes): SIEMPRE se pide al servidor
+     *  (apiFirmaRemotaLiga) -- armarla en el navegador con location.origin apunta al sandbox
+     *  de Apps Script, no a la URL real (8-oct, confirmado con el usuario). */
+    async function copiarLigaFicha_(tipo, quien, tokenFirma) {
+      try {
+        mostrarLigaFirma_(await callServer('apiFirmaRemotaLiga', state.token, tipo, quien, tokenFirma));
+      } catch (err) {
+        toastError('No se pudo generar la liga: ' + err.message);
+      }
+    }
+
+    /** "Generar nueva liga" (botón manual): la anterior queda muerta en cuanto se genera la
+     *  nueva (apiFirmaRemotaRegenerarLiga sobrescribe el token/la fecha de expira del mismo
+     *  registro) -- se pide confirmar antes porque no hay vuelta atrás, y se repinta la pestaña
+     *  después (el token cambió, aunque no se vea distinto en pantalla). */
+    async function regenerarLigaFicha_(tipo, quien, id, vResumen) {
+      const ok = await Confirmar.pedir({
+        titulo: 'Generar nueva liga',
+        mensaje: 'La liga anterior deja de funcionar en cuanto generes la nueva -- y si esa parte ' +
+          'ya había firmado (por ejemplo, si firmó mal), esa firma se descarta: va a tener que volver ' +
+          'a firmar con la liga nueva. ¿Continuar?',
+        textoConfirmar: 'Generar nueva liga',
+      });
+      if (!ok) return;
+      toastCargando('Generando liga…');
+      try {
+        mostrarLigaFirma_(await callServer('apiFirmaRemotaRegenerarLiga', state.token, tipo, id, quien));
+        toastExito('Liga generada');
+        abrirFichaVehiculo(vResumen, tipo === 'responsiva' ? 'responsiva' : 'adherente', true);
+      } catch (err) {
+        toastError('No se pudo generar la liga: ' + err.message);
+      }
+    }
+
+    return {
+      buscarExpedienteAdquisicionFicha: buscarExpedienteAdquisicionFicha, cambiarEstatusFicha: cambiarEstatusFicha,
+      cargarArchivosAdquisicionFichaTab: cargarArchivosAdquisicionFichaTab,
+      cerrarVerRegistroFicha: cerrarVerRegistroFicha, contenidoAdquisicionFicha: contenidoAdquisicionFicha,
+      copiarLigaFicha_: copiarLigaFicha_, devolverPrestamoFicha: devolverPrestamoFicha,
+      eliminarRegistroFicha: eliminarRegistroFicha, regenerarLigaFicha_: regenerarLigaFicha_,
+      verRegistroFicha: verRegistroFicha,
+    };
+  });
+</script>

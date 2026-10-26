@@ -4,12 +4,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
+const API = require('./api-fuente');   // ClientApi.gs + src/api/*.gs (fase 6.3)
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('el servidor solo acepta el PDF que Documentos le muestra al registro', () => {
-  const api = read('src/ClientApi.gs');
+  const api = API;
   assert.match(api, /function apiLineasSubirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64, vista\) \{\r?\n  return TelefoniaService\.subirPdfFirmado\(token, registroId, tipo, docId, pdfId, base64, vista\);/);
   const servicio = read('src/services/TelefoniaService.gs');
   const fn = servicio.slice(servicio.indexOf('function subirPdfFirmado('), servicio.indexOf('/** Panorama de Líneas'));
@@ -70,7 +72,7 @@ test('solo PDF: el contenido debe empezar con %PDF- y pesar 15 MB o menos; queda
 });
 
 test('la pantalla: «Subir PDF firmado» en Documentos, solo con permiso de operar y solo PDF', () => {
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   // Del sistema con su PDF; del AppSheet y de NUCOS siempre (usuario, 5-oct)
   assert.match(cliente, /doc\('file-up', 'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA'\),\s*\(d\) => \(d\.registroId \? subirPdfFirmado\(d\.registroId, d\) : subirPdfFirmado\(id, d, vista\)\)\)/);
   const fn = cliente.slice(cliente.indexOf('function subirPdfFirmado('), cliente.indexOf('function soltarDocumentos('));

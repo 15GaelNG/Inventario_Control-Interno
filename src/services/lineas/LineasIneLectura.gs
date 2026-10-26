@@ -68,8 +68,8 @@ function lineasIneLectura_todo() {
   return lineasIneLectura_continuar();
 }
 
-function lineasIneLectura_continuar() {
-  soloEditor_();   // el activador de tiempo pasa (sin usuario activo); desde el navegador, nadie
+function lineasIneLectura_continuar(e) {
+  soloEditor_(e);   // el activador de tiempo pasa con su evento (triggerUid); desde el navegador, nadie
   ineLecBorrarActivadores_();
   ineNucosExigirDev_();
   const st = ineLecLeer_();

@@ -14,35 +14,9 @@ const Auth = (function () {
     return SheetUtils.getSheet(Config.SPREADSHEET_IDS.USUARIOS(), NOMBRE_HOJA_USUARIOS);
   }
 
-  function hashPassword_(password, salt) {
-    const digest = Utilities.computeHmacSha256Signature(password, salt);
-    return digest.map((b) => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
-  }
-
-  /** Se usa una sola vez al crear/resetear un usuario (esquema propio con hash) */
+  /** Al crear un usuario a mano (SetupInicial): la huella v2 va completa en PASSWORD_HASH (Credenciales.gs) */
   function crearHashParaUsuario(password) {
-    const salt = Utilities.getUuid();
-    return { salt: salt, hash: hashPassword_(password, salt) };
-  }
-
-  function compararSeguro_(a, b) {
-    a = String(a || '');
-    b = String(b || '');
-    let diferencia = a.length ^ b.length;
-    const longitud = Math.max(a.length, b.length);
-    for (let i = 0; i < longitud; i++) diferencia |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-    return diferencia === 0;
-  }
-
-  /** Acepta el esquema nuevo con hash y mantiene compatibilidad con la hoja histórica. */
-  function passwordValido_(found, password) {
-    if (found.SALT && found.PASSWORD_HASH) {
-      return compararSeguro_(hashPassword_(String(password), String(found.SALT)), found.PASSWORD_HASH);
-    }
-    if (found['CONTRASEÑA'] !== undefined && found['CONTRASEÑA'] !== '') {
-      return compararSeguro_(found['CONTRASEÑA'], password);
-    }
-    return false;
+    return { salt: '', hash: Credenciales.crear(password) };
   }
 
   /** El spreadsheet original solo distingue ADMIN / USER; todo lo que no sea ADMIN opera como OPERADOR */
@@ -65,32 +39,174 @@ const Auth = (function () {
       .find((u) => String(u.CORREO).toLowerCase().trim() === String(correo).toLowerCase().trim());
   }
 
+  // ---------------------------------------------------------------- la sesión (23-oct)
+  // Vive en CacheService con su token. Vence a los Config.SESION_INACTIVIDAD_MIN sin usar la app (cada llamada de la
+  // persona la renueva, a lo más cada RENOVAR_CADA_MIN) y nunca pasa de Config.SESION_DURACION_HORAS desde que se creó.
+  // Las llamadas automáticas (el vigía, la campanita, sensores en vivo) llaman Auth.automatica() antes: validan sin
+  // renovar; si no, una pestaña abierta nunca se cerraría.
+  // Cada persona tiene una VERSIÓN de sesión (ScriptProperties, copiada en caché): cerrarSesiones la sube y las sesiones
+  // con la vieja dejan de servir aunque sigan en la caché (cambiar o restablecer la contraseña, quitar dispositivos).
+  const RENOVAR_CADA_MIN = 5;
+  const SEG_VERSION_EN_CACHE = 21600;   // 6 h, lo más que guarda CacheService; la de verdad está en ScriptProperties
+  const claveVersion_ = (correo) => 'sesion_version_' + String(correo || '').trim().toLowerCase();
+  const maximoMs_ = () => Config.SESION_DURACION_HORAS * 3600000;
+  const inactividadSeg_ = () => Math.max(60, Math.round((Config.SESION_INACTIVIDAD_MIN || 60) * 60));
+
+  function versionDe_(correo) {
+    const k = claveVersion_(correo);
+    const cache = CacheService.getScriptCache();
+    const guardada = cache.get(k);
+    if (guardada !== null) return Number(guardada);
+    const v = Number(PropertiesService.getScriptProperties().getProperty(k) || 0);
+    cache.put(k, String(v), SEG_VERSION_EN_CACHE);
+    return v;
+  }
+
+  /** La guarda con lo que le queda: lo menor entre la inactividad y lo que falta para el máximo absoluto */
+  function guardarSesion_(token, sesion) {
+    const restanteSeg = Math.floor((maximoMs_() - (Date.now() - sesion.creada)) / 1000);
+    const seg = Math.min(inactividadSeg_(), restanteSeg);
+    if (seg < 1) return false;
+    CacheService.getScriptCache().put('sesion_' + token, JSON.stringify(sesion), seg);
+    return true;
+  }
+
+  // Global por ejecución: cada llamada de google.script.run empieza sin marca
+  let automatica_ = false;
+  /** Esta llamada la hizo un temporizador de la pantalla, no la persona: valida la sesión sin renovarla */
+  function automatica() { automatica_ = true; }
+
   /** Crea el token de sesión a partir de una fila de usuario ya validada (login manual o con Google) */
   function construirSesion_(found) {
     const token = Utilities.getUuid();
+    const ahora = Date.now();
     const sesion = {
       correo: found.CORREO,
       nombre: found.NOMBRE,
       rol: mapearRol_(found.ROL),
       departamento: found.AREA || found.COORDINACION || '',
       dptosPermitidos: found['DPTOS PERMITIDOS'] || '',
+      v: versionDe_(found.CORREO),
+      creada: ahora,
+      renovada: ahora,
     };
-
-    CacheService.getScriptCache().put(
-      'sesion_' + token,
-      JSON.stringify(sesion),
-      Config.SESION_DURACION_HORAS * 60 * 60
-    );
-
+    guardarSesion_(token, sesion);
     return Object.assign({ token: token }, sesion);
   }
 
-  function login(correo, password) {
-    const found = buscarUsuarioPorCorreo_(correo);
-    if (!found) throw new Error('Usuario o contraseña incorrectos');
-    if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
-    if (!passwordValido_(found, password)) throw new Error('Usuario o contraseña incorrectos');
+  /**
+   * Cierra todas las sesiones de un correo (sube su versión). conservar: el token de quien lo hizo, que sigue
+   * trabajando con uno nuevo → regresa esa sesión ({ token, … }, para la pantalla); sin conservar → null.
+   */
+  function cerrarSesiones(correo, opciones) {
+    const o = opciones || {};
+    const k = claveVersion_(correo);
+    const nueva = versionDe_(correo) + 1;
+    PropertiesService.getScriptProperties().setProperty(k, String(nueva));
+    CacheService.getScriptCache().put(k, String(nueva), SEG_VERSION_EN_CACHE);
+    if (!o.conservar) return null;
+    const raw = leerSesion_(o.conservar);
+    logout(o.conservar);
+    if (!raw) return null;
+    const sesion = Object.assign(JSON.parse(raw), { v: nueva, renovada: Date.now() });
+    if (!sesion.creada) sesion.creada = Date.now();
+    const token = Utilities.getUuid();
+    return guardarSesion_(token, sesion) ? Object.assign({ token: token }, sesion) : null;
+  }
+
+  // Intentos fallidos por correo (23-oct): con la web app abierta a cualquier cuenta de Google (POST VENTA, de gph), que
+  // nadie pruebe contraseñas sin fin. 5 fallos seguidos bloquean ese correo 15 min; entrar bien borra la cuenta.
+  const MAX_FALLOS = 5;
+  const SEG_BLOQUEO = 15 * 60;
+  const claveFallos_ = (correo) => 'login_fallos_' + String(correo || '').trim().toLowerCase();
+  function fallosDe_(correo) {
+    return Number(CacheService.getScriptCache().get(claveFallos_(correo)) || 0);
+  }
+  function anotarFallo_(correo) {
+    CacheService.getScriptCache().put(claveFallos_(correo), String(fallosDe_(correo) + 1), SEG_BLOQUEO);
+  }
+
+  /**
+   * Lo que falta antes de la sesión (23-oct). Con una contraseña temporal (DEBE CAMBIAR CONTRASEÑA, la que puso un
+   * admin) no hay sesión todavía: se regresa { pendiente: 'cambiar', reto } y la pantalla pide una nueva. El reto vive
+   * 10 min en CacheService y solo sirve para ese correo y ese paso.
+   */
+  const SEG_RETO = 10 * 60;
+  function nuevoReto_(datos) {
+    const id = Utilities.getUuid();
+    CacheService.getScriptCache().put('login_reto_' + id, JSON.stringify(datos), SEG_RETO);
+    return id;
+  }
+  function leerReto_(id, paso) {
+    const raw = id ? CacheService.getScriptCache().get('login_reto_' + String(id)) : null;
+    const r = raw ? JSON.parse(raw) : null;
+    if (!r || r.paso !== paso) throw new Error('Ese paso ya venció. Vuelve a iniciar sesión.');
+    return r;
+  }
+  /**
+   * En orden: el código por correo si el dispositivo es nuevo o algo se ve raro (Verificacion.gs), la contraseña nueva
+   * si entró con una temporal, y la sesión. verificado: ya pasó el código (no se vuelve a preguntar).
+   */
+  // La bitácora de entradas (Accesos.gs): nunca truena ni impide entrar
+  function anotar_(correo, metodo, resultado, dispositivo) {
+    if (typeof Accesos !== 'undefined') Accesos.anotar(correo, metodo, resultado, dispositivo && dispositivo.nombre);
+  }
+
+  function continuar_(found, metodo, dispositivo, verificado) {
+    if (!verificado) {
+      const paso = Verificacion.decidir(found, metodo, dispositivo);
+      if (paso) return paso;
+    }
+    if (metodo === 'contrasena' && String(found['DEBE CAMBIAR CONTRASEÑA'] || '').toUpperCase() === 'TRUE') {
+      return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO };
+    }
+    anotar_(found.CORREO, metodo, 'entro', dispositivo);
     return construirSesion_(found);
+  }
+
+  /** La contraseña nueva en lugar de la temporal; con eso, la sesión */
+  function cambiarContrasenaInicial(reto, nueva) {
+    const r = leerReto_(reto, 'cambiar');
+    const found = buscarUsuarioPorCorreo_(r.correo);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    if (Credenciales.verificar(found, nueva).ok) throw new Error('La contraseña nueva debe ser distinta de la temporal.');
+    Credenciales.revisarNueva(nueva, { correo: found.CORREO, nombre: found.NOMBRE });
+    Credenciales.guardar(found.CORREO, nueva, { debeCambiar: false });
+    Credenciales.avisar_(found, 'cambiada');
+    CacheService.getScriptCache().remove('login_reto_' + String(reto));
+    return construirSesion_(found);
+  }
+
+  /**
+   * El código del correo. Bueno → lo que sigue (contraseña nueva o la sesión), con la llave del dispositivo si se pidió
+   * recordarlo: { …, dispositivo: { llave } } (la pantalla la guarda en el navegador; el servidor solo su huella).
+   */
+  function verificarCodigo(reto, codigo, recordar) {
+    const v = Verificacion.verificarCodigo(reto, codigo, recordar);
+    const found = buscarUsuarioPorCorreo_(v.correo);
+    if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    const siguiente = continuar_(found, v.metodo, null, true);
+    return v.llave ? Object.assign({}, siguiente, { dispositivo: { correo: found.CORREO, llave: v.llave } }) : siguiente;
+  }
+
+  function login(correo, password, dispositivo) {
+    if (fallosDe_(correo) >= MAX_FALLOS) {
+      anotar_(correo, 'contrasena', 'bloqueado', dispositivo);
+      throw new Error('Demasiados intentos con este correo. Espera 15 minutos o pide a un administrador que revise tu contraseña.');
+    }
+    const found = buscarUsuarioPorCorreo_(correo);
+    // Un correo que no existe cuenta igual que una contraseña mala: el mensaje no dice cuál de las dos fue
+    if (!found) { anotarFallo_(correo); anotar_(correo, 'contrasena', 'correo-desconocido', dispositivo); throw new Error('Usuario o contraseña incorrectos'); }
+    if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    const revisada = Credenciales.verificar(found, password);
+    if (!revisada.ok) { anotarFallo_(correo); anotar_(correo, 'contrasena', 'contrasena-mala', dispositivo); throw new Error('Usuario o contraseña incorrectos'); }
+    CacheService.getScriptCache().remove(claveFallos_(correo));
+    // Entró con la de texto plano o una huella vieja: se guarda la nueva y se borra CONTRASEÑA. Si escribir falla, entra
+    // igual (se intenta otra vez la siguiente)
+    if (revisada.migrar) {
+      try { Credenciales.guardar(found.CORREO, password); } catch (e) { console.warn('login, pasar a hash: ' + e.message); }
+    }
+    return continuar_(found, 'contrasena', dispositivo);
   }
 
   /**
@@ -107,27 +223,49 @@ const Auth = (function () {
     if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') {
       return { coincide: false, correo: correoDetectado };
     }
+    // Bloqueada por seguridad (se sospecha que tomaron su cuenta de Google): sin "Continuar como…"
+    if (Credenciales.bloqueado(found)) return { coincide: false, correo: correoDetectado };
     // La foto, solo si ya está guardada (FotosDirectorio.de no llama a Google: la entrada no espera)
     let foto = '';
     try { foto = FotosDirectorio.de(correoDetectado); } catch (e) { /* sin foto: iniciales */ }
     return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE, foto: foto };
   }
 
-  function loginConGoogle() {
+  function loginConGoogle(dispositivo) {
     const correoDetectado = Session.getActiveUser().getEmail();
     if (!correoDetectado) throw new Error('No se pudo detectar tu cuenta de Google en esta sesión.');
 
     const found = buscarUsuarioPorCorreo_(correoDetectado);
     if (!found) throw new Error('Tu cuenta (' + correoDetectado + ') no está registrada en el sistema.');
     if (String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
+    if (Credenciales.bloqueado(found)) {
+      anotar_(found.CORREO, 'google', 'google-bloqueado', dispositivo);
+      throw new Error('Tu cuenta está en revisión de seguridad: entra con tu correo y la contraseña que te dio Control Interno.');
+    }
 
-    return construirSesion_(found);
+    return continuar_(found, 'google', dispositivo);
   }
 
   function validarSesion(token) {
     const raw = leerSesion_(token);
     if (!raw) throw new Error('Sesión expirada, inicia sesión de nuevo');
-    return JSON.parse(raw);
+    const sesion = JSON.parse(raw);
+    const ahora = Date.now();
+    // Las de antes del 23-oct no traen creada ni v: cuentan desde ahora y como versión 0 (nadie sale al desplegar)
+    if (sesion.creada && ahora - sesion.creada > maximoMs_()) {
+      logout(token);
+      throw new Error('Sesión expirada, inicia sesión de nuevo');
+    }
+    if ((sesion.v || 0) !== versionDe_(sesion.correo)) {
+      logout(token);
+      throw new Error('Sesión expirada: se cerró desde otro dispositivo o cambió tu contraseña. Inicia sesión de nuevo.');
+    }
+    if (!automatica_ && (!sesion.renovada || ahora - sesion.renovada > RENOVAR_CADA_MIN * 60000)) {
+      sesion.renovada = ahora;
+      if (!sesion.creada) sesion.creada = ahora;
+      try { guardarSesion_(token, sesion); } catch (e) { /* sin renovar: vence a su hora, no truena la llamada */ }
+    }
+    return sesion;
   }
 
   /**
@@ -158,5 +296,6 @@ const Auth = (function () {
     CacheService.getScriptCache().remove('sesion_' + token);
   }
 
-  return { login, identidadGoogle, loginConGoogle, validarSesion, requiereRol, logout, crearHashParaUsuario };
+  return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout,
+    crearHashParaUsuario, cerrarSesiones, automatica };
 })();

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -117,9 +118,10 @@ function captura(registro) {
     LineasFirmas: { tiene: () => false },
     LineasChecklist: { CONDICIONES: [] },
     LineasAcciones: { exigirEstatusParaResponsiva: () => '' },
+    LineasDG: { esFila: () => false, esRegistro: () => false, exigirAdmin: () => {} },
     LineasUtil: {
       col: (f, c) => (c in f ? f[c] : null), digitos: (v) => String(v || '').replace(/\D/g, ''),
-      nucoVisible: (v) => (v ? String(v) : null),
+      nucoVisible: (v) => (v ? String(v) : null), sinCargador: (v) => v,
     },
   });
   vm.runInContext(read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
@@ -167,7 +169,7 @@ test('al guardar: «NO APLICA» en lo del equipo, NUCO vacío, nada al inventari
 });
 
 test('la pantalla: la línea solo ofrece la Responsiva y su carpeta en Drive', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   // Responsiva primero e Inspección después, solo en el equipo (usuario, 16-oct; pendiente 2.50)
   assert.match(html, /return \(!conCaptura \? '' :\s*'<button type="button" class="ln-btn-icono" data-ln-captura="RESPONSIVA"[^\n]*\n\s*\(tipo === 'linea' \? '' :\s*'<button type="button" class="ln-btn-icono" data-ln-captura="INSPECCION"[^\n]*' Inspección<\/button>'\)\)/);
   assert.match(html, /estatusLinea: l\.estatus \|\| '', carpetaDriveId: l\.carpetaDriveId \|\| null \};/);
@@ -196,9 +198,9 @@ test('la ficha de la línea ve las responsivas que firmó dentro de un equipo (I
   assert.match(tel, /LineasRepo\.responsivasEntregadas\(base\)\.forEach\(\(d\) => \{ if \(!vistas\[d\._id\]\) ev\.responsivas\.push\(d\); \}\);/);
   assert.match(tel, /if \(!enEquipo\) nucos = evidenciasNucos_\(id, sesion\);/);
   assert.match(tel, /enNuco: d\.enEquipo \? \(d\.nuco \|\| '—'\) : null, registroId: d\.enEquipo \? d\.registroId \|\| null : null,/);
-  const html = read('src/html/js/lineas.html');
-  // Toda línea tiene Documentos, y la columna Equipo dice en qué NUCO la firmó
-  assert.match(html, /tarjetaDetallesCopiar\(r\.detalles\), true\);\s*\/\/[^\n]*\n\s*cargarEvidencias\(id\);/);
+  const html = LINEAS;
+  // Toda línea tiene Documentos (salvo DG a quien no es ADMIN, 8.20), y la columna Equipo dice en qué NUCO la firmó
+  assert.match(html, /'<\/div>', !l\._dgOculto\);\s*ponerCopiarTarjetas\(detalle\);\s*\/\/[^\n]*\n\s*if \(l\._dgOculto\) return;\n\s*cargarEvidencias\(id\);/);
   assert.match(html, /const vista = arriba && arriba\.tipo === 'linea' && arriba\.id === id \? 'linea' : '';/);
   assert.match(html, /vista === 'linea' \? \{ campo: 'enNuco', titulo: 'Equipo'/);
 });

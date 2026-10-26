@@ -30,6 +30,14 @@ const ENTORNOS = {
     // Correcciones de líneas (no está terminado) y Sistemas de Líneas (no tiene enlaces): apagados (12-oct-2026).
     MODULOS_APAGADOS: 'vinculos-lineas,correcciones-lineas,sistemas-lineas',
 
+    // El código por correo al entrar desde un dispositivo nuevo (Verificacion.gs, 23-oct-2026): apagado aquí hasta avisar
+    // al equipo; en los DEV, encendido (sin esta clave). Encenderlo es quitar esta línea.
+    VERIFICACION_DOS_PASOS: 'APAGADA',
+
+    // El link que usa el equipo (CLAUDE.md, "dos links"): a él lleva el enlace de "¿Olvidaste tu contraseña?" (23-oct)
+    // La forma general (/macros/s/…), no la del dominio (/a/macros/ciudadmaderas.com/…): esa pide cuenta del dominio y POST VENTA es de gph
+    URL_APP: 'https://script.google.com/macros/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec',
+
     // El libro migrado (migrar.py --copiar-produccion, 4-oct-2026, corrida final)
     SS_ID_USUARIOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',
     SS_ID_VEHICULOS: '17YrtuMYjGGg5LZm1BxMNrEZyCxTMI2DiUHSVUIldUlc',

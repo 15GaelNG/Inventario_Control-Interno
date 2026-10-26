@@ -1,0 +1,295 @@
+<script>
+  /**
+   * lineas-telefonicas-documentos.html — Líneas Telefónicas: Detalles, evidencias, PDF pendiente o firmado y la pestaña Documentos de la ficha.
+   * Parte de initTelefonicas (fase 6.2b, tools/lineas/partir-telefonicas.js), que la monta: lo del arranque sale de T y
+   * lo de otras partes, de T.de('parte') (se busca al llamar). Lo que publica es lo que usan las demás.
+   */
+  (function () {
+    'use strict';
+    const { $, aviso, chip, copiarTexto, crearFirma, enlaceDrive, esc, fecha, htmlFirma, ico, icono, llamar,
+      mensajeError, miles, porcentaje, puedeOperar, tablaLineas, tilesKpi, vacio, veDocumentos } = Lineas.comun;
+    Lineas.telefonicas.registrar('documentos', (T) => {
+      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, raiz,
+        resumenDocumentos, vigente } = T;
+      const { abrir, contarEnPestana, precargarDocumento, tarjeta } = T.de('ficha');
+      const { mostrarErrorCaptura, mostrarEspera, mostrarModalCaptura, ocultarEspera, refrescarDespuesDeCaptura } = T.de('captura');
+      const { cargarHistorial } = T.de('historial');
+
+      let tablaDocumentos = null; // DataTable de Documentos (inspecciones y responsivas) de la ficha abierta
+
+      function copiarConAviso(boton, texto, mensaje) {
+        copiarTexto(texto).then((ok) => {
+          if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
+          aviso(esc(mensaje), 4000);
+          const original = boton.innerHTML;
+          boton.innerHTML = icono('check');
+          setTimeout(() => { if (document.body.contains(boton)) boton.innerHTML = original; }, 1800);
+        });
+      }
+
+      // Copiar cada tarjeta de la pestaña General de las fichas (usuario, 22-oct): el botón va en su título y copia
+      // «Etiqueta: valor», un renglón por dato con valor, como se ve en pantalla
+      function ponerCopiarTarjetas(detalle) {
+        detalle.querySelectorAll('[data-tab-panel="general"] .ln-grid-2 > .ln-card > h3').forEach((h3) => {
+          if (!h3.parentNode.querySelector('.ln-campos')) return;
+          h3.insertAdjacentHTML('beforeend', '<button type="button" class="secondary ln-btn-chico ln-copiar-tarjeta" data-ln-copiar-tarjeta title="Copiar" aria-label="Copiar">' + icono('copy') + '</button>');
+        });
+      }
+      function textoTarjeta(card) {
+        // El patrón se ve como dibujo: se copian sus puntos (data-ln-texto)
+        const texto = (el) => {
+          const propio = el.querySelector('[data-ln-texto]');
+          return (propio ? propio.dataset.lnTexto : el.innerText).replace(/\s*\n\s*/g, ', ').replace(/\s+/g, ' ').trim();
+        };
+        const titulo = Array.from(card.querySelector('h3').childNodes).map((n) => (n.nodeType === 3 ? n.textContent
+          : (n.classList && n.classList.contains('ln-card-titulo-dato') ? ' · ' + n.textContent : ''))).join('').trim();
+        const renglones = [titulo];
+        Array.from(card.children).forEach((el) => {
+          if (el.matches('.ln-campos')) {
+            el.querySelectorAll(':scope > dt').forEach((dt) => {
+              const v = dt.nextElementSibling ? texto(dt.nextElementSibling) : '';
+              if (v && v !== '—') renglones.push(texto(dt) + ': ' + v);
+            });
+          } else if (el.matches('.ln-subtitulo')) {
+            renglones.push('', texto(el));
+          } else if (el.matches('.ln-vida')) {
+            renglones.push(Array.from(el.querySelectorAll('.ln-vida-texto > span')).map(texto).join(' · '));
+          } else if (el.matches('.ln-meses')) {
+            el.querySelectorAll('.ln-meses-fila:not(.ln-meses-encabezado)').forEach((fila) => {
+              const c = Array.from(fila.children).map(texto).filter(Boolean);
+              renglones.push(c[0] + ': ' + c.slice(1).join(' · '));
+            });
+          }
+        });
+        return renglones.join('\n');
+      }
+
+      function cargarEvidencias(id) {
+        if (!veDocumentos()) return;
+        const pila0 = pila.length;
+        // La ficha de la línea pide las suyas, sin las de su equipo y con las que firmó dentro de un equipo (pendiente 2.45)
+        const arriba = pila[pila.length - 1];
+        const vista = arriba && arriba.tipo === 'linea' && arriba.id === id ? 'linea' : '';
+        llamar('apiLineasEvidencias', id, vista).then((ev) => {
+          const cont = $('#ln-evidencias', raiz);
+          if (!vigente() || !cont || pila.length !== pila0) return;
+          pintarDocumentos(cont, ev.inspecciones || [], ev.responsivas || [], id, vista);
+        }).catch((e) => {
+          const cont = $('#ln-evidencias', raiz);
+          if (cont) cont.innerHTML = tarjeta(icono('clipboard-check') + ' Inspecciones y responsivas', '<p class="error-msg">' + mensajeError(e) + '</p>');
+        });
+      }
+
+      /** PDF que el sistema no alcanzó a generar al guardar una inspección o responsiva. */
+      function generarPdfPendiente(tipo, idDoc, carpetaId, registroId) {
+        T.captura = { guardada: true, firmas: {}, carpetaId: carpetaId || '' };
+        mostrarModalCaptura();
+        $('#ln-captura-titulo', raiz).textContent = 'Generar PDF pendiente';
+        refrescarDespuesDeCaptura(registroId || pila[pila.length - 1].id, tipo, idDoc);
+      }
+
+      /**
+       * Regenerar PDF (usuario, 5-oct; la inspección desde el 22-oct): se vuelve a hacer con la plantilla y lo que ya está
+       * guardado, sin llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
+       */
+      function regenerarPdf(d, registroId) {
+        T.captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
+        mostrarModalCaptura();
+        const esInspeccion = d.tipoPdf === 'INSPECCION';
+        $('#ln-captura-icono', raiz).innerHTML = icono(esInspeccion ? 'clipboard-check' : 'signature');
+        $('#ln-captura-tipo', raiz).textContent = esInspeccion ? 'Inspección de telefonía' : 'Responsiva de entrega';
+        $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
+        $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
+        $('#ln-captura-cuerpo', raiz).innerHTML = '';
+        refrescarDespuesDeCaptura(registroId || pila[pila.length - 1].id, d.tipoPdf, d.id, true);
+      }
+
+      /**
+       * Las firmas de la captura ya no están (el servidor las guarda 6 h; no se guardan como archivos, acuerdo del
+       * 18-sep): se vuelven a firmar aquí y se genera el PDF. Control Interno es obligatoria; el patrón lo dibuja el servidor.
+       * `soloResponsable` (usuario, 22-oct): la de Control Interno sí está y solo falta la del responsable.
+       */
+      function pedirFirmasPdf(sesion, tipo, nombres, continuar, soloResponsable) {
+        const esInspeccion = tipo === 'INSPECCION';
+        const fondo = esInspeccion ? '#ddebf7' : '#ffffff';
+        ocultarEspera();
+        $('#ln-captura-cuerpo', raiz).innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + (soloResponsable ? ' La firma del responsable ya no está disponible.' : ' Las firmas de la captura ya no están disponibles.') + '</div>' +
+          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + (soloResponsable ? '' : htmlFirma('ci', 'pdf-firma-ci')) + '</div>' +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Generar PDF</button></div>';
+        const responsable = crearFirma(document.getElementById('pdf-firma-responsable'), nombres.responsable);
+        const ci = soloResponsable ? null : crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
+        $('#cap-guardar', raiz).addEventListener('click', () => {
+          if (ci && ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
+          $('#cap-error', raiz).hidden = true;
+          mostrarEspera('Generando tu PDF');
+          // Sin la de Control Interno (soloResponsable) el servidor usa la que ya tiene
+          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci ? ci.base64(fondo) : null]).then(([r, c]) => {
+            sesion.pdfFirmas = esInspeccion ? { inspector: c, responsable: r, patron: null } : { ci: c, responsable: r, patron: null };
+            continuar();
+          });
+        });
+      }
+
+      /**
+       * PDF firmado (usuario, 5-oct): la inspección o la responsiva se guardó sin la firma del responsable; ya firmada se
+       * sube aquí y reemplaza su PDF (el mismo archivo de Drive, LineasCaptura.subirPdfFirmado). Solo PDF.
+       */
+      function subirPdfFirmado(registroId, d, vista) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/pdf,.pdf';
+        input.addEventListener('change', () => {
+          const f = input.files && input.files[0];
+          if (!f) return;
+          if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) { aviso(icono('triangle-alert', 'ln-alerta') + ' Solo se aceptan archivos PDF.', 6000); return; }
+          if (f.size > 15 * 1024 * 1024) { aviso(icono('triangle-alert', 'ln-alerta') + ' El archivo supera 15 MB.', 6000); return; }
+          const sesion = T.captura = { guardada: true, guardando: true, firmas: {}, carpetaId: '' };
+          mostrarModalCaptura();
+          $('#ln-captura-titulo', raiz).textContent = 'PDF firmado';
+          $('#ln-captura-subtitulo', raiz).textContent = [d.documento, fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
+          $('#ln-captura-cuerpo', raiz).innerHTML = '';
+          const modal = $('#ln-modal-captura', raiz);
+          modal.setAttribute('aria-busy', 'true');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+          mostrarEspera('Subiendo PDF firmado');
+          new Promise((resolve, reject) => {
+            const r = new FileReader();
+            r.onload = () => resolve(String(r.result).split(',')[1]);
+            r.onerror = () => reject(new Error('No se pudo leer ' + f.name));
+            r.readAsDataURL(f);
+          }).then((base64) => llamar('apiLineasSubirPdfFirmado', registroId, d.tipoPdf, d.id, d.pdfId || '', base64, vista || '')).then((pdf) => {
+            if (!vigente() || T.captura !== sesion) return;
+            mostrarEspera('PDF firmado guardado', { tono: 'listo', icono: 'circle-check', texto: '',
+              acciones: enlaceDrive(pdf.id, 'Ver PDF', true) + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+            // La ficha abierta (la de la línea, si se subió desde ella una responsiva de su equipo)
+            const enFicha = pila[pila.length - 1];
+            const ficha = enFicha && (enFicha.tipo === 'linea' || enFicha.tipo === 'equipo') ? enFicha.id : registroId;
+            cargarEvidencias(ficha);
+            cargarHistorial(ficha);
+            // Desde la página de la inspección o la responsiva: se pinta de nuevo con su PDF
+            const arriba = pila[pila.length - 1];
+            if (arriba && arriba.id === d.id && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true);
+          }).catch((e) => {
+            if (!vigente() || T.captura !== sesion) return;
+            mostrarEspera('No se pudo subir el PDF', { tono: 'error', icono: 'file-warning', texto: '', detalle: mensajeError(e),
+              acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          }).finally(() => {
+            sesion.guardando = false;
+            modal.removeAttribute('aria-busy');
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          });
+        });
+        input.click();
+      }
+
+      function soltarDocumentos() {
+        if (tablaDocumentos) tablaDocumentos.destruir();
+        tablaDocumentos = null;
+      }
+
+
+      /**
+       * Documentos de la ficha, con el mismo diseño que Historial: indicadores (cuántas hay y la más reciente) y una
+       * sola tabla de inspecciones y responsivas, de la hoja (AppSheet o sistema nuevo) y de la carpeta NUCOS.
+       * Cada fila tiene sus acciones: ver la inspección, abrir el PDF o la carpeta.
+       */
+      function pintarDocumentos(cont, inspecciones, responsivas, id, vista) {
+        const filas = inspecciones.map((d) => Object.assign({}, d, { documento: 'Inspección', tipoPdf: 'INSPECCION' }))
+          .concat(responsivas.map((d) => Object.assign({}, d, { documento: 'Responsiva', tipoPdf: 'RESPONSIVA' })))
+          .map((d, n) => Object.assign(d, { _clave: 'doc' + n, origenTexto: ORIGEN_DOCUMENTO[d.origen] || d.origen || '' }));
+        filas.forEach((d) => { resumenDocumentos[(d.tipoPdf === 'INSPECCION' ? 'inspeccion' : 'responsiva') + '|' + d.id] = d; });
+        contarEnPestana('documentos', filas.length);
+        // El servidor las manda de la más reciente a la más antigua
+        const ultimaInsp = inspecciones[0];
+        const ultimaResp = responsivas[0];
+        cont.innerHTML = '<div class="stat-row ln-docs-kpis"></div>' +
+          '<div class="card ln-card ln-historial">' +
+          '<div class="ln-historial-cabecera"><h3>' + icono('folder-check') + ' Inspecciones y responsivas (' + miles(filas.length) + ')</h3></div>' +
+          (filas.length ? '<div class="ln-docs-tabla"></div>' : '<p class="empty-state">Este registro no tiene inspecciones ni responsivas.</p>') + '</div>';
+        const conFecha = (d) => (d ? fecha(d.fecha) || 'Sin fecha' : 'Ninguna');
+        const marcar = tilesKpi($('.ln-docs-kpis', cont), [
+          { icono: 'clipboard-check', valor: miles(inspecciones.length), etiqueta: 'Inspecciones', titulo: 'Mostrar solo inspecciones',
+            filtros: { documento: { valores: ['Inspección'] } }, calcular: (f) => miles(f.filter((d) => d.documento === 'Inspección').length) },
+          { icono: 'calendar-check', valor: conFecha(ultimaInsp), etiqueta: 'Última inspección', filtros: false },
+          { icono: 'signature', valor: miles(responsivas.length), etiqueta: 'Responsivas', titulo: 'Mostrar solo responsivas',
+            filtros: { documento: { valores: ['Responsiva'] } }, calcular: (f) => miles(f.filter((d) => d.documento === 'Responsiva').length) },
+          { icono: 'calendar-check', valor: conFecha(ultimaResp), etiqueta: 'Última responsiva', filtros: false },
+        ], () => tablaDocumentos);
+        if (!filas.length) return;
+        soltarDocumentos();
+        const operar = puedeOperar();
+        // Una acción de un documento: con una fila seleccionada, en la barra (enBarra) o solo en el ⋮ y el clic derecho
+        const doc = (ic, texto, grupo, enBarra, visible, alHacer) => ({ icono: ic, texto: texto, maximo: 1, grupo: grupo, enBarra: enBarra,
+          visible: (f) => visible(f[0]), alHacer: (f) => alHacer(f[0]) });
+        const tabla = tablaDocumentos = tablaLineas($('.ln-docs-tabla', cont), {
+          idCampo: '_clave',
+          idTabla: 'lineas-documentos-v1',
+          exportar: false,
+          tamanoPagina: 25,
+          // Seleccionable (30-sep): sus botones (ver inspección, PDF, carpeta) van en la barra y el clic derecho.
+          // Una fila a la vez: no hay acciones masivas
+          seleccionUnica: true,
+          ordenInicial: { campo: 'fecha', dir: 'desc' },
+          textoVacio: 'Sin documentos con esos filtros',
+          etiquetaFila: (d) => d.documento + ' · ' + (fecha(d.fecha) || 'Sin fecha'),
+          // Al seleccionar una fila su página se pide antes: al abrirla ya está (o casi)
+          alCambiarSeleccion: (sel) => { if (sel.length === 1) precargarDocumento(sel[0].tipoPdf === 'INSPECCION' ? 'inspeccion' : 'responsiva', sel[0].id); },
+          detalle: false,
+          alCambiarFiltros: marcar,
+          // Arriba solo ver y lo del PDF del día a día; Regenerar PDF y Ver carpeta en Drive, en el ⋮ y el clic derecho
+          // (usuario, 12-oct; pendiente 2.34). Van como acciones de selección para poder dejar fuera de la barra las dos últimas
+          accionesSeleccion: [
+            doc('eye', 'Ver inspección', 'ver', true, (d) => d.documento === 'Inspección', (d) => abrir('inspeccion', d.id)),
+            doc('eye', 'Ver responsiva', 'ver', true, (d) => d.documento === 'Responsiva', (d) => abrir('responsiva', d.id)),
+            doc('file-text', 'Ver PDF', 'ver', true, (d) => !!d.pdfId,
+              (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
+            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente && !pdfsEnCurso[d.id], (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
+            // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
+            // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
+            doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),
+              (d) => (d.registroId ? subirPdfFirmado(d.registroId, d) : subirPdfFirmado(id, d, vista))),
+            // Inspecciones también (usuario, 22-oct: el PDF del NUCO 0820 salió sin el patrón)
+            doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.origen === 'SISTEMA' && !!d.pdfId,
+              (d) => regenerarPdf(d)),
+            doc('folder-open', 'Ver carpeta en Drive', 'drive', false, (d) => !!d.carpetaId,
+              (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener')),
+          ],
+          columnas: [
+            { campo: 'fecha', titulo: 'Fecha', tipo: 'lnFechaHora', fijada: true, ancho: 130, render: (v) => esc(fecha(v) || 'Sin fecha') },
+            { campo: 'documento', titulo: 'Documento', tipo: 'lista', ancho: 150,
+              render: (v) => '<span class="ln-movimiento">' + ico(v === 'Inspección' ? 'clipboard-check' : 'signature') + ' ' + esc(v) + '</span>' },
+            { campo: 'origenTexto', titulo: 'Origen', tipo: 'lista', ancho: 150, render: (v) => chip(v, COLOR_ORIGEN_DOCUMENTO[v] || 'neutro') },
+            { campo: 'responsable', titulo: 'Responsable', tipo: 'texto', ancho: 230 },
+            { campo: 'inspector', titulo: 'Realizó', tipo: 'texto', ancho: 210 },
+            // En la ficha de la línea: el equipo en que la firmó (pendiente 2.45)
+            vista === 'linea' ? { campo: 'enNuco', titulo: 'Equipo', tipo: 'texto', ancho: 120, render: (v) => (v ? esc('NUCO ' + v) : vacio) } : null,
+            { campo: 'calificacion', titulo: 'Calificación', tipo: 'numero', ancho: 120, render: (v) => (v === null || v === undefined ? vacio : esc(porcentaje(v))) },
+            { campo: 'fotos', titulo: 'Fotos', tipo: 'numero', ancho: 90, render: (v) => (v ? miles(v) : vacio) },
+          ].filter(Boolean),
+        });
+        tabla.setDatos(filas);
+        // Doble clic en la fila: la página de la inspección o de la responsiva (usuario, 6-oct)
+        const porClave = {};
+        filas.forEach((d) => { porClave[d._clave] = d; });
+        $('.ln-docs-tabla', cont).addEventListener('dblclick', (ev) => {
+          const tr = ev.target.closest('tbody tr[data-id]');
+          const d = tr && !ev.target.closest('button, input, a') ? porClave[tr.dataset.id] : null;
+          if (!d) return;
+          abrir(d.documento === 'Inspección' ? 'inspeccion' : 'responsiva', d.id);
+        });
+      }
+
+      // Lo que también usan otras partes (T.tablaDocumentos)
+      Object.defineProperty(T, 'tablaDocumentos', { get: () => tablaDocumentos, set: (v) => { tablaDocumentos = v; } });
+
+      return {
+        cargarEvidencias: cargarEvidencias, copiarConAviso: copiarConAviso, generarPdfPendiente: generarPdfPendiente,
+        pedirFirmasPdf: pedirFirmasPdf, ponerCopiarTarjetas: ponerCopiarTarjetas, regenerarPdf: regenerarPdf,
+        soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado, textoTarjeta: textoTarjeta,
+      };
+    });
+  })();
+</script>

@@ -152,6 +152,9 @@
   [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha { grid-column: 1 / -1; }
   [data-tab-panel="general"] .ln-grid-2 > .ln-card-ancha > .ln-campos { grid-template-columns: 120px minmax(0, 1fr) 120px minmax(0, 1fr); }
   .ln-card-titulo-dato { margin-left: auto; font-size: var(--texto-s); font-weight: 500; color: var(--color-text-muted); }
+  /* Copiar la tarjeta (usuario, 22-oct): a la derecha del título, después del mes de Facturación */
+  .ln-card h3 .ln-copiar-tarjeta { margin-left: auto; min-height: 26px; padding: 3px 7px; }
+  .ln-card h3 .ln-card-titulo-dato + .ln-copiar-tarjeta { margin-left: 0; }
   [data-tab-panel="general"] .ln-grid-2 > .ln-card > .ln-card-pie { margin: auto 0 0; padding: 8px 16px; border-top: 1px solid var(--color-border);
     display: flex; align-items: center; gap: 6px; font-size: var(--texto-s); color: var(--color-text-muted); }
   .ln-card-pie .ln-icon { width: 14px; height: 14px; }
@@ -187,6 +190,14 @@
     background: var(--color-note-bg); border: 1px solid var(--color-border); border-radius: var(--radio-l);
     padding: 10px 14px; font-size: var(--texto-s); margin-bottom: 14px;
   }
+  /* La nota bajo un campo (estatus que no entra al panel de Pau; pendiente 3.12) */
+  .ln-nota.ln-nota-campo { margin: 8px 0 0; padding: 6px 10px; }
+  /* Quitar del panel: qué vuelve a como estaba y qué se queda */
+  .ln-quitar { margin-bottom: 12px; }
+  .ln-quitar-texto { margin: 4px 0 6px; font-size: var(--texto-s); }
+  .ln-quitar-tabla { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: var(--texto-s); }
+  .ln-quitar-tabla th { text-align: left; font-weight: 500; color: var(--color-text-muted); padding: 4px 6px 4px 0; }
+  .ln-quitar-tabla td { border-top: 1px solid var(--color-border); padding: 6px 6px 6px 0; overflow-wrap: anywhere; vertical-align: top; }
   .lac-stock-celda { text-align: center; width: 84px; }
   .lac-stock {
     display: inline-flex; align-items: center; justify-content: center;
@@ -527,7 +538,7 @@
        .btn-excel           verde: Exportar a Excel (lo pone el DataTable)
      Dentro de tablas (.ln-tabla) los botones son compactos, pero con los mismos colores. */
   .ln-modulo .page-header-actions button, .ln-captura-acciones button,
-  .ln-pdf-acciones > button, .ln-cuadros-mas button, .ln-copiar-cabecera button, .ln-segmentado button,
+  .ln-pdf-acciones > button, .ln-cuadros-mas button, .ln-segmentado button,
   .ln-historial-completo button, .ln-modulo .modal-card .modal-acciones button, a.ln-boton {
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     min-height: 36px; padding: 8px 12px; font-size: var(--texto-s); font-weight: 600; line-height: 1.2; border-radius: var(--radio-m); white-space: nowrap;
@@ -571,20 +582,12 @@
   #ln-telefonicas button.ln-cuadro.ln-cuadro-sel { background: var(--color-primary-soft); box-shadow: inset 0 0 0 2px var(--color-primary); }
   #ln-telefonicas #ln-listado button.ln-cuadro { user-select: none; }
   .dt-panel.ln-panel-nomodal { width: min(440px, 100vw); box-shadow: -8px 0 24px rgba(6,38,58,.16); }
+  /* Con una ventana abierta, el panel (Detalles o vista rápida) va detrás de ella: encima tapaba su X, Cancelar o Cerrar
+     (pendiente 2.37). Los avisos (600) y el visor de fotos (700) siguen arriba de la ventana */
+  body:has(#ln-modal-captura:not([hidden])) .dt-panel.ln-panel,
+  body:has(#ln-modal-captura:not([hidden])) .ln-panel-fondo { z-index: 490; }
   .ln-btn-mas { padding-left: 10px; padding-right: 10px; }
 
-  /* Detalles para copiar (DETALLES LINEAS TELEFONICAS del AppSheet) */
-  .ln-copiar-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-  .ln-copiar-cabecera h3 { margin: 0; }
-  .ln-copiar-ayuda { font-size: var(--texto-s); margin: 6px 0 12px; }
-  .ln-copiar-cuerpo { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
-  .ln-copiar-campos .field:last-child { margin-bottom: 0; }
-  .ln-copiar-texto {
-    margin: 0; padding: 14px 16px; border-radius: var(--radio-l); border: 1px solid var(--color-border); background: var(--color-bg);
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--texto-s); line-height: 1.65;
-    white-space: pre-wrap; overflow-wrap: anywhere; user-select: all; color: var(--color-text);
-  }
-  @media (max-width: 640px) { .ln-copiar-cuerpo { grid-template-columns: 1fr; } }
 
   /* Historial filtrable */
   /* Historial, un renglón por acción (paso 3): el comentario y los cambios se ven completos */
@@ -668,7 +671,6 @@
     .ln-modulo .dt-ayuda, .ln-modulo .dt-atajos { display: none; }
     .ln-modulo .dt-toolbar .dt-buscar { max-width: none; flex: 1 1 100%; }
 
-    .ln-copiar-cabecera button { width: 100%; }
 
     /* Formularios: pantalla completa, controles grandes para el dedo y pie fijo con lo necesario */
     /* El modal ocupa la pantalla: encabezado arriba, el formulario desplaza y el pie queda siempre a la vista */
@@ -719,9 +721,6 @@
   :root[data-theme="dark"] .ln-firma-ci .ln-firma-cabecera { color: var(--color-text); }
   .ln-firma .firma-caja canvas { height: 240px; }
   .ln-af-campo.form-campo-error .ln-firma { border-color: var(--color-danger); }
-  /* Detalles con el diseño de General: los campos a llenar se ven como parte de la lista */
-  .ln-copiar .ln-campos dd { white-space: normal; }
-  .ln-detalle-entrada { padding: 6px 10px; min-height: 0; font-size: var(--texto-s); max-width: 420px; }
   /* Fotos: cámara (solo en pantallas táctiles) y galería */
   .ln-fotos-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   @media (hover: hover) and (pointer: fine) { .ln-solo-tactil { display: none !important; } }
@@ -731,11 +730,29 @@
   .ln-ine-lista { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
   .ln-ine-lista:empty { display: none; }
   .ln-ine [hidden] { display: none !important; }
-  /* La que ya tiene la persona en el registro (paso 3, 2.29): «¿Es correcta?» */
-  .ln-ine-registrada { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin-bottom: 10px; padding: 10px 12px; border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary, #2563eb); border-radius: var(--radio-l); background: var(--color-bg); font-size: var(--texto-s); }
+  /* En su lugar, a todo lo ancho debajo del tipo (20-oct); la del principal sin etiqueta: el tipo de arriba ya la dice */
+  .ln-af-grid > .ln-af-campo[data-af-columna^="_IDENTIFICACION_"] { grid-column: 1 / -1; margin-bottom: 14px; }
+  .ln-af-campo[data-af-columna="_IDENTIFICACION_0"] > label { display: none; }
+  /* La que ya tiene la persona en el registro (paso 3, 2.29; usuario, 20-oct): dos tarjetas, «Usar la registrada» o
+     «Subir otra»; usada, una tarjeta verde «en uso» */
+  .ln-ine-registrada { margin-bottom: 10px; border-radius: var(--radio-xl); }
   .ln-ine-registrada-falta { box-shadow: 0 0 0 2px var(--ln-rojo-tx, #b42318); }
-  .ln-ine-registrada-texto { font-weight: 600; }
-  .ln-ine-pregunta { margin-left: auto; color: var(--color-text-muted, inherit); }
+  .ln-ine-opciones { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+  .ln-ine-opcion, .ln-ine-en-uso { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radio-xl); font-size: var(--texto-s); }
+  .ln-ine-opcion { border: 1.5px solid var(--color-border); background: var(--color-surface, var(--color-bg)); cursor: pointer; transition: border-color .15s ease, background-color .15s ease; }
+  .ln-ine-opcion:hover { border-color: var(--color-accent); }
+  .ln-ine-opcion.activa { border-color: var(--color-primary); background: var(--color-accent-soft); }
+  .ln-ine-opcion:has(input:focus-visible) { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+  .ln-ine-opcion input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+  .ln-ine-opcion-icono { flex: none; display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: var(--radio-l); background: var(--color-accent-soft); color: var(--color-primary); }
+  .ln-ine-opcion.activa .ln-ine-opcion-icono { background: var(--color-primary); color: #fff; }
+  .ln-ine-opcion-texto { flex: 1; min-width: 0; }
+  .ln-ine-opcion-texto b, .ln-ine-opcion-texto small { display: block; }
+  .ln-ine-opcion-texto small { margin-top: 2px; color: var(--color-text-muted); font-size: var(--texto-xs); }
+  .ln-ine-ver { display: inline-flex; align-items: center; gap: 4px; flex: none; text-decoration: none; }
+  .ln-ine-en-uso { flex-wrap: wrap; border: 1.5px solid var(--ln-verde-tx); background: var(--ln-verde-bg); }
+  .ln-ine-en-uso .ln-ine-opcion-icono { background: var(--color-surface, #fff); color: var(--ln-verde-tx); }
+  .ln-ine-en-uso .ln-ine-opcion-texto b { color: var(--ln-verde-tx); }
   /* Miniatura de una foto elegida (identificación e inspección): clic = en grande */
   .ln-miniatura { position: relative; width: 168px; aspect-ratio: 3 / 2; border: 1px solid var(--color-border); border-radius: var(--radio-l); overflow: hidden; background: var(--color-bg); }
   .ln-miniatura img { width: 100%; height: 100%; object-fit: contain; cursor: zoom-in; }
@@ -798,7 +815,6 @@
   @media (max-width: 640px) {
     .ln-firmas { grid-template-columns: 1fr; }
     .ln-firma .firma-caja canvas { height: 220px; }
-    .ln-detalle-entrada { max-width: none; }
   }
 
   /* ============ Panorama de Líneas ============
@@ -1009,6 +1025,7 @@
   /* Con el color del resto del sistema (el gris neutro es del checklist), usuario 4-oct */
   [data-resg-fila] .ln-segmento .ln-pastilla.activa,
   :root[data-theme="dark"] [data-resg-fila] .ln-segmento .ln-pastilla.activa { background: var(--color-primary); color: #fff; }
+  /* El estatus que ya tiene en la bandeja de Pau: se ve marcado, sin poder elegirlo (usuario, 20-oct) */
   .lnr-pestanas { margin: 4px 0 12px; }
   /* ================= Inspección más clara (usuario, 3-oct) ================= */
   /* Datos que vienen del registro: se leen como ficha, no como campos por llenar */

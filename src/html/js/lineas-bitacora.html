@@ -1,0 +1,147 @@
+<script>
+  /**
+   * lineas-bitacora.html — Bitácora: Control de Cambios (fuera del menú; alimenta el Historial y el Panorama).
+   * Era parte de lineas.html (fase 6.2, tools/lineas/partir.js): lo de la base sale de Lineas.comun.
+   */
+  (function () {
+    'use strict';
+    const { $, columnasDeHoja, contarDesde, diaClave, exportarBase, fechaTabla, ico, llamar, memoria, mensajeError,
+      miles, montaje, normEncabezado, tablaLineas, tilesKpi } = Lineas.comun;
+    const { irARegistro } = Lineas;
+
+    // ======================================================================
+    // Bitácora: Control de Cambios (fuera del menú; su pestaña alimenta el Historial y el Panorama)
+    // ======================================================================
+
+    const BITACORAS = {
+      CAMBIOS: {
+        titulo: 'Control de Cambios - Líneas', icono: 'eye',
+        subtitulo: 'Bitácora de campos modificados en LINEAS TELEFONICAS (AppSheet y nuevo sistema)',
+        idRegistro: 'ID_LINEA', fecha: 'FECHA ACTUALIZACION',
+        kpis: (filas) => {
+          const deCampo = (lista, arr) => arr.filter((f) => lista.indexOf(String(f['CAMPO'] || '').trim()) >= 0).length;
+          return [
+            { icono: 'toggle-right', valor: miles(deCampo(['ESTATUS LINEA', 'ESTATUS EQUIPO'], filas)), etiqueta: 'Cambios de estatus',
+              filtros: { CAMPO: { valores: ['ESTATUS LINEA', 'ESTATUS EQUIPO'] } }, calcular: (f) => miles(deCampo(['ESTATUS LINEA', 'ESTATUS EQUIPO'], f)) },
+            { icono: 'recycle', valor: miles(deCampo(['RESPONSABLE'], filas)), etiqueta: 'Cambios de responsable',
+              filtros: { CAMPO: { valores: ['RESPONSABLE'] } }, calcular: (f) => miles(deCampo(['RESPONSABLE'], f)) },
+          ];
+        },
+        // Vista CONTROL DE CAMBIOS - LINEAS del AppSheet
+        columnas: [
+          ['NUCO', 'NUCO'], ['IMEI', 'IMEI'], ['CAMPO', 'Campo'], ['ANTES', 'Antes'], ['DESPUES', 'Después'],
+          ['ACTUALIZADO POR', 'Actualizado por'], ['FECHA ACTUALIZACION', 'Fecha actualización'],
+        ],
+      },
+    };
+
+    function initBitacora(tipo) {
+      const n = ++montaje.n;
+      const cfg = BITACORAS[tipo];
+      const raiz = document.getElementById('ln-bitacora');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      let solicitud = 0;
+      let tabla = null;
+      let filtrosBit = {};
+      let marcarKpi = null;
+      let busqueda = '';
+
+      $('#ln-bit-titulo', raiz).textContent = cfg.titulo;
+      $('#ln-bit-subtitulo', raiz).textContent = cfg.subtitulo;
+      $('#ln-bit-titulo-icono', raiz).innerHTML = ico(cfg.icono);
+      refreshIcons();
+
+      const norm = normEncabezado;
+      const buscarEncabezado = (encabezados, nombre) => encabezados.find((h) => norm(h) === norm(nombre));
+
+      function crearTabla(r) {
+        const titulos = {};
+        cfg.columnas.forEach(([nombre, titulo]) => { titulos[norm(nombre)] = titulo; });
+        const columnas = columnasDeHoja(r.encabezados, r.filas, cfg.columnas.map((c) => c[0]), titulos, tipo);
+        const hId = buscarEncabezado(r.encabezados, cfg.idRegistro);
+        const hFecha = buscarEncabezado(r.encabezados, cfg.fecha || cfg.columnas[0][0]);
+        const hFolio = buscarEncabezado(r.encabezados, 'NUCO') || buscarEncabezado(r.encabezados, 'FOLIO DESECHO');
+        tabla = tablaLineas($('#ln-bit-tabla', raiz), {
+          idCampo: '_fila',
+          idTabla: 'lineas-bitacora-' + tipo.toLowerCase() + '-v2',
+          columnas: columnas,
+          ordenInicial: hFecha ? { campo: hFecha, dir: 'desc' } : undefined,
+          textoVacio: 'Sin registros',
+          exportar: exportarBase(tipo, cfg.titulo),
+          etiquetaFila: (f) => [hFolio && f[hFolio], hFecha && fechaTabla(f[hFecha])].filter(Boolean).join(' · ') || 'Registro',
+          detalle: { titulo: (f) => cfg.titulo + (hFolio && f[hFolio] ? ' · ' + f[hFolio] : '') },
+          accionesFila: hId ? [{ icono: 'circle-chevron-right', titulo: 'Ver activo', visible: (f) => !!f[hId], alHacer: (f) => irARegistro(f[hId]) }] : [],
+          alCambiarFiltros: (f) => { filtrosBit = f || {}; if (marcarKpi) marcarKpi(filtrosBit); },
+        });
+        tabla.hFecha = hFecha;
+      }
+
+      function pintarKpis(r) {
+        const hFecha = tabla && tabla.hFecha;
+        // "Registros en la hoja" no recalcula con calcular: r.total es el total REAL de la hoja
+        // (la tabla solo carga un lote), no el de las filas cargadas — dejarlo fijo evita mentir.
+        const defs = [{ icono: cfg.icono, valor: miles(r.total), etiqueta: busqueda ? 'Coinciden con "' + busqueda + '"' : 'Registros en la hoja' }];
+        if (hFecha) {
+          defs.push({ icono: 'calendar-days', valor: miles(contarDesde(r.filas, hFecha, 29)), etiqueta: 'Últimos 30 días',
+            filtros: { [hFecha]: { op: 'entre', v1: diaClave(29), v2: diaClave(0) } }, calcular: (f) => miles(contarDesde(f, hFecha, 29)) });
+          defs.push({ icono: 'clock', valor: miles(contarDesde(r.filas, hFecha, 0)), etiqueta: 'Hoy', clase: 'stat-tile-ok',
+            filtros: { [hFecha]: { op: 'igual', v1: diaClave(0) } }, calcular: (f) => miles(contarDesde(f, hFecha, 0)) });
+        }
+        (cfg.kpis ? cfg.kpis(r.filas, r.encabezados, hFecha) : []).forEach((d) => defs.push(d));
+        marcarKpi = tilesKpi($('#ln-bit-kpis', raiz), defs, () => tabla);
+        marcarKpi(filtrosBit);
+      }
+
+      function cargar() {
+        const turno = ++solicitud;
+        const clave = 'bit:' + tipo;
+        const previo = busqueda ? null : memoria.tablas[clave];
+        if (previo) procesar(previo); else if (tabla) tabla.setCargando(true);
+        llamar('apiLineasBitacoraTabla', tipo, { q: busqueda }).then((texto) => {
+          if (!vigente() || turno !== solicitud) return;
+          if (!busqueda) memoria.tablas[clave] = texto;
+          if (texto !== previo) procesar(texto);
+        }).catch((e) => {
+          if (!vigente() || turno !== solicitud) return;
+          if (previo) return;
+          if (!tabla) tabla = tablaLineas($('#ln-bit-tabla', raiz), { idCampo: '_fila', columnas: [{ campo: '_fila', titulo: 'Fila' }], detalle: false, exportar: false });
+          tabla.setError('No se pudo cargar la bitácora: ' + mensajeError(e));
+        });
+      }
+
+      /** Pinta la respuesta del servidor (o la que quedó en memoria de la visita anterior). */
+      function procesar(texto) {
+        {
+          const r = JSON.parse(texto);
+          if (!tabla) crearTabla(r);
+          pintarKpis(r);
+          tabla.setDatos(r.filas);
+          // Si la hoja tiene más filas de las que se cargan, se ofrece buscar en todo el historial
+          const form = $('#ln-bit-form', raiz);
+          form.hidden = !busqueda && r.filas.length >= r.total;
+          $('#ln-bit-limpiar', raiz).hidden = !busqueda;
+          $('#ln-bit-aviso', raiz).textContent = busqueda
+            ? miles(r.total) + ' coincidencia(s) en todo el historial' + (r.filas.length < r.total ? ' (se muestran las ' + miles(r.filas.length) + ' más recientes)' : '') + '.'
+            : 'Se muestran los ' + miles(r.filas.length) + ' registros más recientes de ' + miles(r.total) + '.';
+        }
+      }
+
+      $('#ln-bit-form', raiz).addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        busqueda = $('#ln-bit-q', raiz).value.trim();
+        cargar();
+      });
+      $('#ln-bit-limpiar', raiz).addEventListener('click', () => {
+        $('#ln-bit-q', raiz).value = '';
+        busqueda = '';
+        cargar();
+      });
+
+      cargar();
+    }
+
+    Object.assign(Lineas, {
+      initCambios: () => initBitacora('CAMBIOS'),
+    });
+  })();
+</script>

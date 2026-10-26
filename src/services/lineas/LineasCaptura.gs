@@ -42,8 +42,11 @@ const LineasCaptura = (function () {
     INSPECCION: { carpeta: 'INSPECCIONES_Files_', nombre: (id) => 'INSPECCION - ' + id + '.pdf', columna: 'FORMATO INSPECCIONES LINEAS' },
     RESPONSIVA: { carpeta: 'Files', nombre: (id) => 'RESPONSIVA' + id + '.pdf', columna: 'FORMATO RESPONSIVA' },
   };
+  /** La firma de la pantalla: PNG, o JPEG si era una foto que se achicó para caber en la caché (usuario, 22-oct). */
   function blobBase64_(base64, nombre) {
-    return base64 ? Utilities.newBlob(Utilities.base64Decode(String(base64)), 'image/png', nombre || 'firma.png') : null;
+    if (!base64) return null;
+    const jpeg = String(base64).indexOf('/9j/') === 0; // los bytes FF D8 FF de un JPEG en base64
+    return Utilities.newBlob(Utilities.base64Decode(String(base64)), jpeg ? 'image/jpeg' : 'image/png', nombre || 'firma.png');
   }
 
   function firmasCache_(tipo, id, nuevas) {
@@ -68,6 +71,38 @@ const LineasCaptura = (function () {
     return png;
   }
 
+  /** Nombre para comparar: mayúsculas, sin acentos ni espacios de más (igual que nombreDeFirma en lineas.html). */
+  function nombreDeFirma_(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
+  }
+
+  /**
+   * Los nombres de quien captura (usuario, 19-oct): el de USUARIOS y el suyo en Capital Humano (por su correo). Si el
+   * responsable es uno de ellos (p. ej. procesos recibe en Mandar a resguardo), su firma guardada va también como
+   * FIRMA RESPONSABLE. Solo los de la sesión: cada quien con su firma.
+   */
+  function nombresPropios_(usuario) {
+    const nombres = [nombreDeFirma_(usuario && usuario.nombre)];
+    const correo = String((usuario && usuario.correo) || '').trim().toLowerCase();
+    if (correo) {
+      const ix = LineasRepo.indiceColaboradores();
+      const iNom = ix.columnas.indexOf('nombre'), iCor = ix.columnas.indexOf('correo');
+      ix.filas.forEach((f) => { if (String(f[iCor] || '').toLowerCase() === correo) nombres.push(nombreDeFirma_(f[iNom])); });
+    }
+    return nombres.filter((n, i) => n && nombres.indexOf(n) === i);
+  }
+
+  /** Los nombres de quien captura, solo si tiene firma guardada (la pantalla los compara con el responsable). */
+  function nombresConFirma_(usuario) {
+    return LineasFirmas.tiene(usuario && usuario.correo) ? nombresPropios_(usuario) : [];
+  }
+
+  /** La firma guardada como FIRMA RESPONSABLE: solo si el responsable es quien captura. */
+  function firmaResponsablePropia_(usuario, responsable) {
+    if (nombresPropios_(usuario).indexOf(nombreDeFirma_(responsable)) < 0) throw new Error('Tu firma guardada solo va si el responsable eres tú: firma en el recuadro.');
+    return firmaPropia_(usuario);
+  }
+
   /** Registro objetivo a partir de { equipoId } o { lineaId } (línea suelta). */
   function objetivoCaptura_(ref) {
     const id = ref.equipoId || ref.lineaId;
@@ -79,9 +114,18 @@ const LineasCaptura = (function () {
     return { fila: fila, reg: reg, equipo: reg.equipo, linea: reg.linea };
   }
 
-  /** La línea sin equipo solo tiene responsiva (pendiente 2.45, usuario 15-oct). */
-  function exigirEquipoParaInspeccion_(obj) {
+  /**
+   * La línea sin equipo solo tiene responsiva (pendiente 2.45, usuario 15-oct). El equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-ROBO no se inspecciona (usuario, 21-oct; pendiente 2.55; la pantalla no
+   * muestra el botón), salvo dentro de la Responsiva que abre «Corregir equipo» al pasarlo a USO (ref.desdeCorregir).
+   */
+  function exigirEquipoParaInspeccion_(obj, ref) {
     if (!obj.equipo) throw new Error('La línea sin equipo no lleva inspección: solo responsiva.');
+    const estatus = String(LineasUtil.col(obj.fila, 'ESTATUS EQUIPO') || '').trim().toUpperCase();
+    if (!(ref && ref.reasignar && ref.desdeCorregir) && LineasAcciones.ESTATUS_SIN_RESPONSIVA.equipo.indexOf(estatus) >= 0) {
+      throw new Error(LineasAcciones.nombreRegistro(obj.fila, true) + ' está ' + estatus + '.');
+    }
+    // En el panel de Pau tampoco (pendiente 3.15)
+    if (LineasResguardos.enPanel(obj.fila)) throw new Error(LineasAcciones.nombreRegistro(obj.fila, true) + ' está en Resguardos y cancelaciones.');
     return obj;
   }
 
@@ -150,7 +194,7 @@ const LineasCaptura = (function () {
   const PERSONAS_PROCESOS = ['DAFNE DONIS GARCIA', 'GAMALIEL JAIR MORA GONZALEZ', 'YOVANNI NAVA PERALTA'];
 
   const ETIQUETAS_INSPECCION = {
-    'IDENTIFICACION': 'Identificación', 'CUBO': 'Cubo (cargador)', 'CABLE': 'Cable', 'FUNDA': 'Funda', 'MICA': 'Mica',
+    'IDENTIFICACION': 'Identificación',
     'SO': 'Sistema operativo', 'ACTUALIZACIONES': 'Actualizaciones', 'PANTALLA TACTIL': 'Pantalla táctil', 'MULTITAREA': 'Multitarea',
     'WIFI': 'Wi-Fi', 'RED MOVIL': 'Red móvil', 'GPS': 'GPS', 'USO DATOS': 'Uso de datos',
     'PANTALLA': 'Pantalla', 'BOTONES VOLUMEN': 'Botones de volumen', 'BOTON ENCENDIDO': 'Botón de encendido', 'CUERPO EQUIPO': 'Cuerpo del equipo',
@@ -167,16 +211,72 @@ const LineasCaptura = (function () {
    * inspecciona el aparato del registro; cambiar aquí el IMEI o el NUCO solo cambiaba el documento, no el inventario);
    * el COLOR sí se captura, precargado con el del equipo; los datos del responsable se pueden cambiar, como antes.
    */
+  /**
+   * Datos del responsable, los mismos en la inspección y la responsiva (usuario, 19-oct; pendiente 2.54): número de
+   * empleado, nombre, puesto, departamento, área, sede, oficina, jefe directo, director y correo. La responsiva agrega
+   * la identificación (opciones.identificacion). Listas de Capital Humano y, al elegir a la persona, se llenan con lo que
+   * dice CH. Obligatorio lo que CH siempre trae; jefe directo, director y correo pueden venir vacíos de CH (19-oct: 410,
+   * 117 y 1,810 de los activos sin ellos) y no lo son.
+   *   valor(columna): el valor inicial, por la columna del documento (No EMPLEADO, CORREO).
+   *   opciones.personaFija: nombre y número fijos (Vincular o Cambiar línea: la persona es la que ya lo tiene).
+   *   opciones.soloProcesos: Mandar a resguardo; el nombre solo se elige entre las personas de procesos.
+   */
+  const DATOS_CH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
+    'OFICINA / DESARROLLO': 'oficina', 'JEFE DIRECTO': 'jefe', 'DIRECTOR': 'director', 'CORREO': 'correo' };
+  /** Columna del inventario de cada dato del responsable que en los documentos se llama distinto. */
+  const COLUMNA_FICHA = { 'No EMPLEADO': 'NO EMPLEADO', 'CORREO': 'CUENTA GOOGLE' };
+  const columnaFicha_ = (c) => COLUMNA_FICHA[c] || c;
+  /**
+   * Lo que cada hoja del AppSheet no tenía: la inspección no pedía número ni director y la responsiva, jefe directo. La
+   * inspección pide los accesorios con la lista de la responsiva desde el 22-oct (usuario).
+   */
+  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'], RESPONSIVA: ['JEFE DIRECTO'] };
+  /**
+   * Valor y opciones del campo ACCESORIOS, el mismo en la responsiva y la inspección (usuario, 22-oct): la lista única
+   * (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma), CARGADOR como CABLE y CUBO (usuario,
+   * 22-oct) y lo que ya traiga el equipo fuera de la lista, para no perderlo.
+   */
+  function listaAccesorios_(texto) {
+    const accesorios = String(LineasUtil.sinCargador(texto) || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
+    return {
+      valor: accesorios.join(' , '),
+      opciones: LineasRepo.CATALOGO.accesorios.concat(accesorios.filter((x) => LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
+    };
+  }
+  function camposResponsable_(catalogos, valor, opciones) {
+    const o = opciones || {};
+    const req = { requerido: 'SIEMPRE' };
+    const lista = (columna, etiqueta, opcionesLista, extra) => campo_(columna, etiqueta, 'listaAbierta', Object.assign({ valor: valor(columna), opciones: opcionesLista || [] }, extra || {}));
+    const fijo = (columna, etiqueta) => campo_(columna, etiqueta, 'texto', { valor: valor(columna), soloLectura: true });
+    const noEmpleado = o.personaFija ? fijo('No EMPLEADO', 'No. de empleado')
+      // En Mandar a resguardo el número sale de la persona de procesos elegida
+      : lista('No EMPLEADO', 'No. de empleado', [], Object.assign(o.soloProcesos ? {} : { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, DATOS_CH), llenarVacios: true }, req));
+    // llenarVacios: al abrir, lo que falte de la persona se llena con Capital Humano (usuario, 4-oct: el jefe directo no salía)
+    const nombre = o.personaFija ? fijo('RESPONSABLE', 'Nombre')
+      : lista('RESPONSABLE', 'Nombre', o.soloProcesos ? PERSONAS_PROCESOS : [], Object.assign({ sugerencias: 'PERSONAS', autollenar: Object.assign({ 'No EMPLEADO': 'noEmpleado' }, DATOS_CH), llenarVacios: true },
+        o.soloProcesos ? { soloLista: true } : {}, req));
+    return [noEmpleado, nombre].concat(o.identificacion || [], [
+      // Listas abiertas: un valor viejo fuera de la lista no debe impedir guardar
+      lista('PUESTO', 'Puesto', catalogos.puestos, Object.assign({ sugerencias: 'PUESTOS' }, req)),
+      lista('DEPARTAMENTO', 'Departamento', catalogos.departamentos, req),
+      lista('AREA', 'Área', catalogos.areas, req),
+      lista('SEDE', 'Sede', catalogos.sedes, req),
+      lista('OFICINA / DESARROLLO', 'Oficina o desarrollo', catalogos.oficinas, req),
+      lista('JEFE DIRECTO', 'Jefe directo', catalogos.jefes),
+      lista('DIRECTOR', 'Director', catalogos.directores),
+      campo_('CORREO', 'Correo', 'texto', { valor: valor('CORREO'), literal: true }),
+    ]);
+  }
+
   function formularioInspeccion_(fila, catalogos, usuario, id, ahora, enAccion, deResponsiva) {
     const v = (c) => valorLinea_(fila, c);
     // Dentro de Reasignar (usuario, 6-oct), la inspección empieza con lo que se capturó en la responsiva: la persona
-    // nueva, el color, los accesos, el ticket y el comentario. El jefe directo, que la responsiva no lleva, sale de CH
+    // nueva (con su jefe directo y su director desde el 19-oct), el color, los accesos, el ticket y el comentario
     const resp = !enAccion && deResponsiva && deResponsiva.valores ? deResponsiva.valores : null;
     const deResp = (c, siNo) => (resp && Object.prototype.hasOwnProperty.call(resp, c) ? String(resp[c] === null || resp[c] === undefined ? '' : resp[c]) : siNo);
     // Dentro de Mandar a resguardo (enAccion), el responsable es quien recibe: empieza en blanco y solo se elige entre
     // las personas de procesos; lo demás se llena con Capital Humano (usuario, 4-oct)
-    const persona = (c, enResponsiva) => (enAccion ? '' : (resp ? deResp(enResponsiva || c, '') : v(c)));
-    const jefeDeCH = () => (typeof LineasAcciones === 'undefined' ? '' : LineasAcciones.datoDeCH_(resp['No EMPLEADO'], resp['RESPONSABLE'], 'jefe'));
+    const persona = (c) => (enAccion ? '' : (resp ? deResp(c, '') : v(columnaFicha_(c))));
     // Es una inspección normal: lo de la responsiva solo llega llenado y se puede cambiar (usuario, 6-oct; del 6-oct en la
     // mañana a la tarde quedaba fijo)
     const patronResp = resp && deResponsiva.patron !== undefined && deResponsiva.patron !== null ? String(deResponsiva.patron) : '';
@@ -184,10 +284,6 @@ const LineasCaptura = (function () {
     const esEquipo = tipo === 'EQUIPO';
     const req = { requerido: 'SIEMPRE' };
     const fijo = (extra) => Object.assign({ soloLectura: true }, extra);
-    // Datos del responsable: listas de Capital Humano y, al elegir a la persona, se llenan con lo que dice CH. El jefe
-    // directo solo va en la inspección (PLAN_REESTRUCTURA_LINEAS.md §3.3)
-    const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
-      'OFICINA / DESARROLLO': 'oficina', 'JEFE DIRECTO': 'jefe', 'CORREO': 'correo' };
     const elementos = [
       titulo_('EQUIPO', 'smartphone'),
       campo_('ID', 'ID', 'texto', { valor: id, soloLectura: true }),
@@ -204,18 +300,7 @@ const LineasCaptura = (function () {
       campo_('PLAN', 'Plan', 'texto', fijo({ valor: esEquipo ? '' : v('COSTO PLAN'), mostrar: 'NO_EQUIPO' })),
       campo_('RAZON SOCIAL', 'Razón social', 'texto', fijo({ valor: v('RAZON SOCIAL'), mostrar: 'NO_EQUIPO' })),
       titulo_('RESPONSABLE', 'user'),
-      // llenarVacios: al abrir, lo que falte de la persona se llena con Capital Humano (usuario, 4-oct: el jefe directo no salía)
-      campo_('RESPONSABLE', 'Nombre', 'listaAbierta', Object.assign({ valor: persona('RESPONSABLE'), sugerencias: 'PERSONAS', autollenar: datosCH, llenarVacios: true },
-        enAccion ? { opciones: PERSONAS_PROCESOS, soloLista: true } : {}, req)),
-      campo_('PUESTO', 'Puesto', 'listaAbierta', Object.assign({ valor: persona('PUESTO'), opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }, req)),
-      campo_('DEPARTAMENTO', 'Departamento', 'listaAbierta', Object.assign({ valor: persona('DEPARTAMENTO'), opciones: catalogos.departamentos || [] }, req)),
-      campo_('AREA', 'Área', 'listaAbierta', Object.assign({ valor: persona('AREA'), opciones: catalogos.areas || [] }, req)),
-      campo_('SEDE', 'Sede', 'listaAbierta', Object.assign({ valor: persona('SEDE'), opciones: catalogos.sedes || [] }, req)),
-      campo_('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', Object.assign({ valor: persona('OFICINA / DESARROLLO'), opciones: catalogos.oficinas || [] }, req)),
-      // La responsiva no lleva al jefe directo: se puede corregir aquí y Reasignar lo toma de esta inspección
-      campo_('JEFE DIRECTO', 'Jefe directo', 'listaAbierta', Object.assign({ valor: resp ? jefeDeCH() : persona('JEFE DIRECTO'), opciones: catalogos.jefes || [] }, req)),
-      campo_('CORREO', 'Correo', 'texto', Object.assign({ valor: persona('CUENTA GOOGLE', 'CORREO'), literal: true }, req)),
-    ].concat(
+    ].concat(camposResponsable_(catalogos, persona, { soloProcesos: !!enAccion }),
       // Los responsables adicionales (usuario, 6-oct): los del registro o, en Reasignar, los de la responsiva; se pueden
       // quitar o agregar. Al mandar a resguardo no hay (recibe procesos)
       enAccion ? [] : LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra),
@@ -226,6 +311,9 @@ const LineasCaptura = (function () {
       s.puntos.filter((p) => p.mostrar !== 'NUNCA').forEach((p) => elementos.push(campo_(p.columna, ETIQUETAS_INSPECCION[p.columna] || p.etiqueta, 'escala', {
         escala: p.escala, opciones: LineasChecklist.ESCALAS[p.escala].valores, mostrar: p.mostrar, requerido: p.requerido, valor: '', checklist: true,
       })));
+      // Los accesorios, con la lista de la responsiva en lugar de CUBO, CABLE, FUNDA y MICA SI/NO (usuario, 22-oct): los
+      // del equipo (en Reasignar, los de la responsiva) y pasan a la ficha. Donde antes iban CUBO y CABLE: todo menos la línea
+      if (nombre === 'DOCUMENTACIÓN / ACCESORIOS') elementos.push(campo_('ACCESORIOS', 'Accesorios', 'multi', Object.assign(listaAccesorios_(deResp('ACCESORIOS', v('ACCESORIOS'))), { mostrar: 'NO_LINEA' })));
     };
     ['DOCUMENTACIÓN / ACCESORIOS', 'SISTEMA', 'CONECTIVIDAD', 'ESTADO FÍSICO GENERAL', 'DESEMPEÑO'].forEach(agregarSeccion);
     elementos.push(
@@ -277,8 +365,8 @@ const LineasCaptura = (function () {
    * accesorios y accesos; y el paso de firmas en Datos de la responsiva, Comentario y Firmas. Los datos del equipo se
    * pueden corregir antes de firmar; los de la línea van fijos (16-oct).
    * La fecha es una sola, como en la inspección; DIA, MES y AÑO (los que usa el PDF) se sacan de ella al guardar.
-   * Lleva al DIRECTOR de la persona, como el AppSheet; el jefe directo va en la inspección (usuario, 6-oct: del 4 al
-   * 6-oct la responsiva guardó al jefe en DIRECTOR).
+   * Lleva al DIRECTOR y al JEFE DIRECTO de la persona, como la inspección (usuario, 19-oct; hasta el 19-oct solo el
+   * director, como el AppSheet, y el jefe iba en la inspección; del 4 al 6-oct la responsiva guardó al jefe en DIRECTOR).
    */
   /**
    * Identificación de cada responsable (usuario, 9-oct; pendiente 2.27): fotos o PDF que se revisan antes de subir. No
@@ -309,19 +397,12 @@ const LineasCaptura = (function () {
     // La responsiva es la acción (pendiente 2.49, usuario 16-oct): empieza con la persona que lo tiene (si firma ella,
     // es renovación); si está en resguardo o DISPONIBLE no tiene persona y se elige aquí (reasignación)
     const sinPersona = String(valorLinea_(fila, sinEquipo ? 'ESTATUS LINEA' : 'ESTATUS EQUIPO')).trim().toUpperCase() !== 'USO';
-    const persona = (c) => (sinPersona ? '' : v(c));
+    const persona = (c) => (sinPersona ? '' : v(columnaFicha_(c)));
     const ro = (columna, etiqueta, valor) => campo_(columna, etiqueta, 'texto', { valor: valor, soloLectura: true });
     const ed = (columna, etiqueta, control, valor, extra) => campo_(columna, etiqueta, control, Object.assign({ valor: valor }, extra || {}));
     // La línea, fija (usuario, 16-oct: lo que pasa a la ficha es de la persona y del equipo): se cambia con Vincular o
     // Cambiar línea y un dato mal capturado se corrige con Editar línea
     const deLinea = (columna, etiqueta, valor) => ro(columna, etiqueta, valor);
-    // Accesorios: la lista única (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma) y lo que
-    // ya traiga el equipo fuera de la lista, para no perderlo
-    const accesorios = String(acceso('ACCESORIOS') || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => (x === 'SD' ? 'TARJETA SD' : x));
-    // Al elegir a la persona (o al abrir, si falta algo) se llenan sus datos con lo que dice Capital Humano
-    const datosCH = { 'PUESTO': 'puesto', 'DEPARTAMENTO': 'departamento', 'AREA': 'area', 'SEDE': 'sede',
-      'OFICINA / DESARROLLO': 'oficina', 'DIRECTOR': 'director', 'CORREO': 'correo' };
-    const autoResponsable = Object.assign({ 'No EMPLEADO': 'noEmpleado' }, datosCH);
     // La línea sin equipo (pendiente 2.45): solo la línea, fija (es la responsiva de esa línea; un dato mal capturado se
     // corrige con Editar línea), sin equipo ni accesorios y accesos
     const datos = sinEquipo ? [
@@ -351,30 +432,16 @@ const LineasCaptura = (function () {
     ];
     const accesos = sinEquipo ? [] : [
       titulo_('ACCESORIOS Y ACCESOS', 'key-round'),
-      ed('ACCESORIOS', 'Accesorios entregados', 'multi', accesorios.join(' , '), {
-        opciones: LineasRepo.CATALOGO.accesorios.concat(accesorios.filter((x) => LineasRepo.CATALOGO.accesorios.indexOf(x) < 0)),
-      }),
+      campo_('ACCESORIOS', 'Accesorios entregados', 'multi', listaAccesorios_(acceso('ACCESORIOS'))),
       campo_('PIN WHATSAPP', 'PIN de WhatsApp', 'texto', { valor: acceso('PIN WHATSAPP'), literal: true, secreto: true }),
       campo_('PIN EQUIPO', 'PIN EQUIPO', 'texto', { valor: acceso('PIN EQUIPO'), literal: true, secreto: true }),
       campo_('CONTRASEÑA', 'Patrón', 'patron', { valor: acceso('PATRON'), secreto: true }),
     ];
-    return datos.concat([
-      titulo_('RESPONSABLE', 'user'),
-      conLinea ? ro('No EMPLEADO', 'No. de empleado', persona('NO EMPLEADO'))
-        : ed('No EMPLEADO', 'No. de empleado', 'listaAbierta', persona('NO EMPLEADO'), { sugerencias: 'NO_EMPLEADO', autollenar: Object.assign({ 'RESPONSABLE': 'nombre' }, datosCH), llenarVacios: true }),
-      conLinea ? ro('RESPONSABLE', 'Nombre', persona('RESPONSABLE'))
-        : ed('RESPONSABLE', 'Nombre', 'listaAbierta', persona('RESPONSABLE'), { requerido: 'SIEMPRE', sugerencias: 'PERSONAS', autollenar: autoResponsable, llenarVacios: true }),
+    // Los mismos datos del responsable que la inspección (19-oct, pendiente 2.54), más su identificación
+    return datos.concat([titulo_('RESPONSABLE', 'user')], camposResponsable_(catalogos, persona, { personaFija: conLinea, identificacion: [
       campo_('IDENTIFICACION', 'Identificación', 'listaAbierta', { valor: '', requerido: 'SIEMPRE', opciones: IDENTIFICACIONES }),
       archivoIdentificacion_(0),
-      // Listas abiertas: un valor viejo fuera de la lista no debe impedir firmar la responsiva
-      ed('PUESTO', 'Puesto', 'listaAbierta', persona('PUESTO'), { opciones: catalogos.puestos || [], sugerencias: 'PUESTOS' }),
-      ed('DEPARTAMENTO', 'Departamento', 'listaAbierta', persona('DEPARTAMENTO'), { opciones: catalogos.departamentos || [] }),
-      ed('AREA', 'Área', 'listaAbierta', persona('AREA'), { opciones: catalogos.areas || [] }),
-      ed('SEDE', 'Sede', 'listaAbierta', persona('SEDE'), { opciones: catalogos.sedes || [] }),
-      ed('OFICINA / DESARROLLO', 'Oficina o desarrollo', 'listaAbierta', persona('OFICINA / DESARROLLO'), { opciones: catalogos.oficinas || [] }),
-      ed('DIRECTOR', 'Director', 'listaAbierta', persona('DIRECTOR'), { opciones: catalogos.directores || [] }),
-      ed('CORREO', 'Correo', 'texto', persona('CUENTA GOOGLE'), { literal: true }),
-    ]).concat(
+    ] })).concat(
       // Hasta cuatro responsables más (usuario, 6-oct), como en Editar; sin persona empiezan vacíos. Cada uno con su
       // identificación debajo de su nombre (usuario, 9-oct)
       conIdentificacionAdicional_(LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra), persona)), accesos, [
@@ -419,11 +486,12 @@ const LineasCaptura = (function () {
   // ======================================================================
 
   function contextoInspeccion(ref, usuario, puedeVerSecretos) {
-    const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref));
+    const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref), ref);
+    LineasDG.exigirAdmin(obj.fila, usuario); // Dirección General: solo ADMIN (pendiente 8.16)
     const ahora = new Date();
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.INSP),
-      formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES, firmaGuardada: LineasFirmas.tiene(usuario.correo),
+      formulario: null, inspector: usuario.nombre, condiciones: LineasChecklist.CONDICIONES, firmaGuardada: LineasFirmas.tiene(usuario.correo), nombresPropios: nombresConFirma_(usuario),
       _armar: (id) => ocultarSecretos_(formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!(ref && ref.enAccion),
         ref && ref.reasignar ? ref.desdeResponsiva : null), puedeVerSecretos),
     };
@@ -436,14 +504,15 @@ const LineasCaptura = (function () {
 
   function contextoResponsiva(ref, usuario, puedeVerSecretos) {
     const obj = objetivoCaptura_(ref);
+    LineasDG.exigirAdmin(obj.fila, usuario); // Dirección General: solo ADMIN (pendiente 8.16)
     if (!obj.equipo) numeroParaResponsiva_(obj);
     // Lo vendido, desechado, robado o la línea cancelada ya no se entrega (usuario, 16-oct); Vincular ya lo revisó
-    if (!(ref && String(ref.modo || '').toUpperCase() === 'LINEA')) LineasAcciones.exigirEstatusParaResponsiva(obj.fila, !!obj.equipo);
+    if (!(ref && String(ref.modo || '').toUpperCase() === 'LINEA')) LineasAcciones.exigirEstatusParaResponsiva(obj.fila, !!obj.equipo, !!(ref && ref.desdeCorregir));
     const ahora = new Date();
     const lineaFila = lineaDeRef_(ref);
     return {
       equipo: obj.equipo, linea: obj.linea, idPropuesto: LineasDatos.nuevoId(LineasRepo.TAB.RESP), nombreCI: usuario.nombre,
-      firmaGuardada: LineasFirmas.tiene(usuario.correo),
+      firmaGuardada: LineasFirmas.tiene(usuario.correo), nombresPropios: nombresConFirma_(usuario),
       _armar: (id) => ocultarSecretos_(formularioResponsiva_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, ref && ref.modo, lineaFila, !obj.equipo), puedeVerSecretos),
     };
   }
@@ -504,6 +573,8 @@ const LineasCaptura = (function () {
   const COPIA_INSPECCION_A_LINEA = [
     ['RESPONSABLE', 'RESPONSABLE'], ['DEPARTAMENTO', 'DEPARTAMENTO'], ['AREA', 'AREA'], ['SEDE', 'SEDE'],
     ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['PUESTO', 'PUESTO'], ['JEFE DIRECTO', 'JEFE DIRECTO'],
+    // Número de empleado y director, desde que la inspección los pide como la responsiva (19-oct, pendiente 2.54)
+    ['NO EMPLEADO', 'No EMPLEADO'], ['DIRECTOR', 'DIRECTOR'],
     ['CUENTA GOOGLE', 'CORREO'], ['PIN WHATSAPP', 'PIN WHATSAPP'], ['PIN EQUIPO', 'PIN EQUIPO'], ['PATRON', 'PATRON'],
     ['CONTRASEÑA MODEM', 'CONTRASEÑA MODEM'],
   ];
@@ -515,6 +586,7 @@ const LineasCaptura = (function () {
     LineasUtil.exigirPinEquipo(datos);
     const ref = { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaInspectorBase64 = firmaPropia_(usuario);
+    if (datos.usarFirmaGuardadaResponsable) datos.firmaResponsableBase64 = firmaResponsablePropia_(usuario, (datos.valores || {})['RESPONSABLE']);
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
@@ -523,7 +595,8 @@ const LineasCaptura = (function () {
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
       const t0 = Date.now();
-      const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref));
+      const obj = exigirEquipoParaInspeccion_(objetivoCaptura_(ref), datos);
+      LineasDG.exigirAdmin(obj.fila, usuario);
       const elementos = formularioInspeccion_(obj.fila, LineasRepo.catalogos(), usuario, id, ahora, !!datos.enAccion, datos.reasignar ? datos.desdeResponsiva : null)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
       marca_('inspección · registro y formulario', t0);
@@ -545,6 +618,9 @@ const LineasCaptura = (function () {
         'CALIFICACION': calificacion, 'NOMBRE INSPECTOR': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       });
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, ADICIONALES);
+      // Las columnas que la hoja del AppSheet no tiene (19-oct, pendiente 2.54) se agregan con el primero que las trae
+      const nuevas = COLUMNAS_NUEVAS.INSPECCION.filter((c) => fila[c]);
+      if (nuevas.length) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, nuevas);
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
 
       // 2) Bot ACTUALIZAR DESDE INSPECCION: copia a la línea (la bitácora la deja guardarCambiosRegistro).
@@ -560,6 +636,8 @@ const LineasCaptura = (function () {
       else if (!datos.enAccion) COPIA_INSPECCION_A_LINEA.concat(ADICIONALES.map((c) => [c, c])).forEach(copiar);
       // El color es del aparato (EQUIPOS): la inspección lo actualiza si trae uno (decisión del usuario, 3-oct)
       if (String(valores['COLOR'] || '').trim()) copia['COLOR'] = valores['COLOR'];
+      // Los accesorios también (usuario, 22-oct), como en la responsiva: lo que quedó marcado, aunque sea nada
+      if (LineasChecklist.cumple('NO_LINEA', valores['TIPO'] || '')) copia['ACCESORIOS'] = valores['ACCESORIOS'] || '';
       // tolerante: lo que no tiene dónde guardarse en las hojas nuevas (p. ej. la persona de un equipo guardado) se ignora
       const t1 = Date.now();
       const g = LineasRepo.guardarCambiosRegistro(obj.fila, copia, usuario, ahora, { tolerante: true });
@@ -582,7 +660,9 @@ const LineasCaptura = (function () {
       return { obj: obj, calificacion: calificacion };
     });
 
-    firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null, patron: datos.patronBase64 || null });
+    // sinResponsable: no firmó al capturar; al generar el PDF después no se le pide (usuario, 22-oct)
+    firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null, patron: datos.patronBase64 || null,
+      sinResponsable: !datos.firmaResponsableBase64 });
     const t2 = Date.now();
     const filas = opciones && opciones.sinIndice ? null : LineasRepo.refrescarIndice([res.obj.reg.id]);
     marca_('inspección · refrescar el índice', t2);
@@ -602,6 +682,7 @@ const LineasCaptura = (function () {
     LineasUtil.exigirPinEquipo(datos);
     const ref = accion ? accion.ref : { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaCiBase64 = firmaPropia_(usuario);
+    if (datos.usarFirmaGuardadaResponsable) datos.firmaResponsableBase64 = firmaResponsablePropia_(usuario, (datos.valores || {})['RESPONSABLE']);
     if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
     // Identificación de cada responsable (usuario, 9-oct): se escribe antes, en la carpeta de la responsiva; si la
@@ -626,7 +707,8 @@ const LineasCaptura = (function () {
       throw e;
     }
 
-    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null });
+    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null,
+      sinResponsable: !datos.firmaResponsableBase64 });
     const filas = LineasRepo.refrescarIndice([res.obj.reg.id]);
     return { id: id, pdfPendiente: true, filas: filas, hecho: res.hecho, registroId: res.obj.reg.id,
       identificaciones: escritos ? escritos.archivos.length : 0 };
@@ -658,6 +740,10 @@ const LineasCaptura = (function () {
       // Bot MAYUSCULAS
       valores['IDENTIFICACION'] = String(valores['IDENTIFICACION'] || '').toUpperCase();
       valores['COMENTARIO'] = String(valores['COMENTARIO'] || '').toUpperCase();
+      // Con otra persona, los accesorios son los de la inspección que se acaba de guardar (usuario, 22-oct: manda la
+      // inspección, que revisa el equipo en la mano; la responsiva se capturó antes y si no, la ficha volvía a lo de ella)
+      const deInspeccion = sinEquipo ? null : accesoriosDeInspeccion_(datos.inspeccionId, obj.reg.id);
+      if (deInspeccion !== null) valores['ACCESORIOS'] = deInspeccion;
       // La responsiva está completa: ahora sí la acción, y la responsiva queda en el registro
       const hecho = accion ? accion.aplicar(ahora, valores) : null;
       if (hecho) obj = objetivoCaptura_(ref);
@@ -671,6 +757,8 @@ const LineasCaptura = (function () {
       });
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, ADICIONALES);
       if (fila[LineasRepo.COL_LINEA_ENTREGADA]) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, [LineasRepo.COL_LINEA_ENTREGADA]);
+      const nuevas = COLUMNAS_NUEVAS.RESPONSIVA.filter((c) => fila[c]);
+      if (nuevas.length) LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, nuevas);
       LineasDatos.agregarFilas(LineasRepo.TAB.RESP, [fila]);
       // Todo lo de la responsiva pasa a la ficha (usuario, 16-oct, L2; pendiente 2.49): la persona y, en un equipo, el
       // modelo, el IMEI, los accesorios, el color, el bloqueo y el PIN de WhatsApp. Si firmó otra persona, la acción ya la
@@ -732,11 +820,16 @@ const LineasCaptura = (function () {
     return id;
   }
 
-  /** Un dato de una inspección guardada ('' si no está). */
-  function datoDeInspeccion(id, columna) {
-    const fila = id ? leerFilaPorId_(LineasRepo.TAB.INSP, String(id)) : null;
-    const v = fila ? LineasUtil.col(fila, columna) : '';
-    return v === null || v === undefined ? '' : String(v).trim();
+  /**
+   * ACCESORIOS de la inspección `inspeccionId` del registro `idRegistro`, o null si no hay, es de otro registro o se
+   * capturó con CUBO, CABLE, FUNDA y MICA (antes del 22-oct).
+   */
+  function accesoriosDeInspeccion_(inspeccionId, idRegistro) {
+    const id = String(inspeccionId || '').trim();
+    const fila = id ? leerFilaPorId_(LineasRepo.TAB.INSP, id) : null;
+    if (!fila || String(LineasUtil.col(fila, 'ID LINEA') || '') !== String(idRegistro || '')) return null;
+    if (['CUBO', 'CABLE', 'FUNDA', 'MICA'].some((c) => String(LineasUtil.col(fila, c) || '').trim())) return null;
+    return String(LineasUtil.col(fila, 'ACCESORIOS') || '').trim();
   }
 
   // ======================================================================
@@ -861,7 +954,7 @@ const LineasCaptura = (function () {
    * vuelve a hacer con la plantilla y los datos de la hoja, sin capturar de nuevo, y queda como versión nueva del MISMO
    * archivo (mismo enlace; la anterior se conserva en el historial de versiones de Drive, como Subir PDF firmado).
    * Firmas: las de la captura (caché 6 h) o `firmasNuevas`. Sin ellas regresa { faltanFirmas, nombres } y se vuelven a
-   * firmar (no se guardan como archivos, acuerdo del 18-sep). El patrón, si ya no está su imagen, se dibuja con sus puntos.
+   * firmar (no se guardan como archivos, acuerdo del 18-sep); sin la del responsable, { faltanFirmas, soloResponsable }. El patrón, si ya no está su imagen, se dibuja con sus puntos.
    */
   function generarPdf(tipo, id, forzar, usuario, firmasNuevas) {
     const esInspeccion = tipo === 'INSPECCION';
@@ -884,10 +977,20 @@ const LineasCaptura = (function () {
       const propia = LineasFirmas.png(usuario.correo);
       if (propia) firmas = firmasCache_(tipo, id, { [rolCI]: propia });
     }
+    // Lo mismo con la del responsable, si es quien regenera (usuario, 19-oct) y ya está la de Control Interno
+    if (firmas && firmas[rolCI] && !firmas.responsable && usuario && nombresPropios_(usuario).indexOf(nombreDeFirma_(col('RESPONSABLE'))) >= 0) {
+      const propia = LineasFirmas.png(usuario.correo);
+      if (propia) firmas = firmasCache_(tipo, id, { responsable: propia });
+    }
     if (!firmas && !col(esInspeccion ? 'FIRMA INSPECTOR' : 'FIRMA CI')) {
       return { faltanFirmas: true, nombres: esInspeccion
         ? { inspector: col('NOMBRE INSPECTOR') || '', responsable: col('RESPONSABLE') || '' }
         : { ci: col('NOMBRE CI') || '', responsable: col('RESPONSABLE') || '' } };
+    }
+    // La del responsable se perdió (caché vencida, o no cupo, como una foto de la firma; usuario, 22-oct): se pide solo esa
+    // en vez de sacar el recuadro vacío. No con firmas nuevas (las de la captura, o ya se pidió) ni si al capturar no firmó
+    if (!firmasNuevas && firmas && firmas[rolCI] && !firmas.responsable && !firmas.sinResponsable && col('RESPONSABLE') && !col('FIRMA RESPONSABLE')) {
+      return { faltanFirmas: true, soloResponsable: true, nombres: { responsable: col('RESPONSABLE') || '' } };
     }
     // Firmas: las de la captura o las nuevas; si la fila trae una ruta de imagen (AppSheet), se busca en la carpeta de la app
     const archivo = (c) => LineasArchivos.blob(col(c));
@@ -912,7 +1015,7 @@ const LineasCaptura = (function () {
     try {
       const tp = Date.now();
       const pdf = LineasPdf.generarPdfDesdePlantilla(
-        esInspeccion ? LineasPdf.PLANTILLAS.INSPECCION_CELULAR : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
+        esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos);
       marca_('pdf · copiar la plantilla y convertir', tp);
       if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
@@ -1080,10 +1183,11 @@ const LineasCaptura = (function () {
   }
 
   return {
-    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, datoDeInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
+    objetivo: objetivoCaptura_, guardarInspeccion, guardarResponsiva, exigirInspeccion, generarPdf, fotosInspeccion, subirPdfFirmado,
     contextoInspeccion: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoInspeccion(ref, usuario, puedeVerSecretos)),
     contextoResponsiva: (ref, usuario, puedeVerSecretos) => paraCliente_(contextoResponsiva(ref, usuario, puedeVerSecretos)),
     // Para pruebas: las definiciones de los formularios
     _formularioInspeccion: formularioInspeccion_, _formularioResponsiva: formularioResponsiva_, _validar: validarFormulario_,
+    _accesoriosDeInspeccion: accesoriosDeInspeccion_,
   };
 })();

@@ -46,13 +46,30 @@ function include(filename) {
  * permisos de quien la desplegó (USER_DEPLOYING): sin esto, cualquier persona del dominio
  * podría, desde la consola, revertir la migración o borrar pestañas.
  *
- * Deja pasar al editor y a los activadores (quien corre = dueño del script) y a quien
- * desplegó la app. A cualquier otra persona que llegue desde la web app, la detiene.
+ * Deja pasar al editor y a quien desplegó la app (quien corre = dueño del script). A cualquier
+ * otra persona que llegue desde la web app, la detiene.
+ *
+ * Sin usuario activo (23-oct): así llega un activador de tiempo, pero también alguien de FUERA
+ * del dominio (Google no le dice a la app quién es) cuando la web app está abierta a cualquier
+ * cuenta de Google (access ANYONE, para POST VENTA de gph). Antes pasaba todo lo que llegaba sin
+ * correo; ahora solo el activador de verdad: su evento (e) trae el triggerUid de un activador del
+ * proyecto, que desde la consola no se puede inventar. Por eso cada función que corre un
+ * activador de tiempo recibe (e) y llama soloEditor_(e).
+ *
+ * Lo que esa misma ejecución llame después (otra función con candado, sin el evento) ya pasa.
  */
-function soloEditor_() {
+let soloEditorConfirmado_ = false;
+function soloEditor_(e) {
+  if (soloEditorConfirmado_) return;
   const activo = String(Session.getActiveUser().getEmail() || '').toLowerCase();
   const efectivo = String(Session.getEffectiveUser().getEmail() || '').toLowerCase();
-  if (activo && efectivo && activo !== efectivo) {
-    throw new Error('Esta función solo se corre desde el editor de Apps Script.');
+  if (activo) {
+    if (efectivo && activo !== efectivo) throw new Error('Esta función solo se corre desde el editor de Apps Script.');
+  } else {
+    const uid = e && e.triggerUid ? String(e.triggerUid) : '';
+    if (!uid || !ScriptApp.getProjectTriggers().some((t) => String(t.getUniqueId()) === uid)) {
+      throw new Error('Esta función solo se corre desde el editor de Apps Script o un activador.');
+    }
   }
+  soloEditorConfirmado_ = true;
 }

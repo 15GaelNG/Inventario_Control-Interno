@@ -590,6 +590,34 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   delete window.Pantalla;
   caja.remove();
 
+  // Barra de selección angosta (rama emmanuel, 22-oct): lo que no cabe pasa al ⋮ en vez de salirse por la derecha
+  console.log('\nBarra de selección angosta');
+  const cajaBarra = doc.createElement('div');
+  doc.body.appendChild(cajaBarra);
+  const hechas = [];
+  const acciones4 = ['Uno', 'Dos', 'Tres', 'Cuatro'].map((t) => ({ icono: 'check', texto: t, alHacer: () => { hechas.push(t); } }));
+  const tb = window.DataTable.crear(cajaBarra, { idCampo: 'ID', columnas: COLS7, datos: filas7, exportar: false, modoSeleccion: true,
+    seleccionDrive: true, accionesSeleccion: acciones4 });
+  const barraSel = cajaBarra.querySelector('.dt-barra-sel');
+  let anchoBarra = 1000;
+  // jsdom no mide: cada botón «mide» 100 px
+  Object.defineProperty(barraSel, 'scrollWidth', { get: () => barraSel.querySelectorAll('button').length * 100 });
+  Object.defineProperty(barraSel, 'clientWidth', { get: () => anchoBarra });
+  const enLaBarra = () => Array.from(barraSel.querySelectorAll('[data-accion-sel]')).map((b) => b.textContent.trim());
+  tb.clicSeleccion('r0');
+  ok(enLaBarra().slice(0, 4).join() === 'Uno,Dos,Tres,Cuatro', 'con espacio, todas las acciones en la barra');
+  anchoBarra = 450;
+  tb.refrescarSeleccion();
+  ok(enLaBarra().join() === 'Uno,Dos' && !!barraSel.querySelector('[data-sel-mas]'), 'angosta: lo que no cabe se quita de la barra, de la última a la primera, y sale el ⋮');
+  click(barraSel.querySelector('[data-sel-mas]'));
+  const enMenu = Array.from(doc.querySelectorAll('[data-menu-accion]')).map((b) => b.textContent.trim());
+  ok(enMenu.slice(0, 2).join() === 'Tres,Cuatro' && enMenu.indexOf('Dos') < 0, 'el ⋮ trae las que no cupieron (y no las que se ven)');
+  click(doc.querySelector('[data-menu-accion]'));
+  await esperar();
+  ok(hechas.join() === 'Tres', 'y desde el ⋮ se hacen igual');
+  tb.destruir();
+  cajaBarra.remove();
+
   console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
   process.exit(fallas ? 1 : 0);
 })().catch((e) => { console.error('ERROR:', e); process.exit(1); });

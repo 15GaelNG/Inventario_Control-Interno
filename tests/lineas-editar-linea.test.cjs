@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -79,7 +80,7 @@ test('línea sola: Quitar responsable y responsable para USO', () => {
 });
 
 test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por número anterior', () => {
-  const html = read('src/html/js/lineas.html');
+  const html = LINEAS;
   // Corregir la línea solo desde la línea, en la lista y en la ficha; el equipo corrige el equipo (usuario, 13-oct). «Corregir»
   // en lugar de «Editar» (usuario, 16-oct; pendiente 2.50)
   assert.doesNotMatch(html, /'Editar línea'|'Editar equipo'/);
@@ -93,7 +94,7 @@ test('la pantalla: Editar línea en los menús, { cambio } y la búsqueda por n�
   assert.doesNotMatch(html, />antes ' \+ esc\(r\.numerosAnteriores\)/);
   assert.match(html, /anteriores \? 'Antes <span class="ln-mono">' \+ esc\(anteriores\) \+ '<\/span>' : ''\)/);
   assert.doesNotMatch(html, /tarjetaNumeros|Números de esta línea/);
-  assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores'\];/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /'numerosAnteriores', 'dg'\];/);
 });
 
 test('al editar, un SIM BASICO sin datos de adendum no enseña el adendum', () => {
@@ -138,5 +139,5 @@ test('LINEA BASICA ahora se llama SIM BASICO (usuario, 12-oct; pendiente 2.35)',
   const r = Reg._resolver(Reg._elementos(vieja, {}, usuario, ctx), vieja, vieja, ctx);
   assert.equal(r.valores.TIPO, 'SIM BASICO');
   assert.equal(Reg._tipoAutomatico('LINEA', { 'TIPO DE LINEA': 'SIM BASICO' }, ''), 'SIM BASICO');
-  assert.doesNotMatch(read('src/html/js/lineas.html'), /'Línea básica'/);
+  assert.doesNotMatch(LINEAS, /'Línea básica'/);
 });

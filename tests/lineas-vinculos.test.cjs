@@ -9,6 +9,7 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 // Vínculos (usuario, 8-oct): el grafo con todo, el cajón y el lienzo donde soltar abre la acción que ya existe
 
 const fuente = require('./formato-fuente') + read('src/html/js/lineas-vinculos.html').replace(/^\s*<script>/, '').replace(/<\/script>\s*$/, '');
+const LINEAS = require('./lineas-fuente');
 const cargar = (dom) => {
   const w = dom ? dom.window : {};
   return new Function('window', 'document', 'getComputedStyle', 'localStorage', 'requestAnimationFrame', 'performance', fuente + '; return LineasVinculos;')(
@@ -113,6 +114,12 @@ test('alSoltar: en el lienzo cada movimiento abre la acción de siempre con lo q
   assert.equal(V.alSoltar(equipo, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
   const guardado = { tipo: 'equipo', fila: e('E13'), dueno: null };
   assert.equal(V.describir(V.alSoltar(guardado, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } })), 'Responsiva · NUCO 0013 → ANA RUIZ');
+  // Lo vendido, donado, desechado o robado ya no se entrega: soltarlo en una persona no abre nada ni avisa (pendiente 2.55)
+  assert.equal(V.alSoltar({ tipo: 'equipo', fila: e('E30'), dueno: null }, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
+  // En el panel de Pau (pendiente 3.15): ni Responsiva ni otra vez a resguardo
+  const enPanel = { tipo: 'equipo', fila: Object.assign({}, e('E13'), { panel: 'PENDIENTE DE RECEPCION' }), dueno: null };
+  assert.equal(V.alSoltar(enPanel, { tipo: 'persona', persona: { clave: 'p:501', nombre: 'ANA RUIZ' } }), null);
+  assert.equal(V.alSoltar(enPanel, { tipo: 'caja', caja: 'venta' }), null);
   assert.equal(V.alSoltar(guardado, { tipo: 'caja', caja: 'resguardo' }), null);
 });
 
@@ -183,7 +190,7 @@ test('Líneas Telefónicas: Vínculos es un modo de la lista y abre las ventanas
   assert.match(vista, /data-modo="vinculos"[^>]*>.*Vínculos<\/button>/);
   assert.match(vista, /<div class="vn" id="ln-vinculos" hidden><\/div>/);
   assert.match(read('src/html/Index.html'), /include\('html\/js\/lineas-vinculos'\); \?>\r?\n\s*<\?!= include\('html\/js\/lineas'\)/);
-  const js = read('src/html/js/lineas.html');
+  const js = LINEAS;
   assert.match(js, /\['tabla', 'tarjetas', 'vinculos'\]\.indexOf\(guardado\)/);
   assert.match(js, /if \(a\.tipo === 'vinculo'\) abrirVinculo\(a\.modo, a\.fila, a\.pre\);/);
   assert.match(js, /else if \(a\.tipo === 'cancelacion'\) abrirCancelacion\(\[a\.fila\]\);/);
@@ -204,7 +211,7 @@ test('Vínculos es una idea que no sale a producción: apagada ahí como Help De
   const prod = entornos.slice(entornos.indexOf("'1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'"), entornos.indexOf('},', entornos.indexOf("'1NbOczw_H8UJ7adxRP4h_jl9VlfyvxM3mANYsaz12U5uo8Gj0BmfIYN3k'")));
   assert.match(prod, /MODULOS_APAGADOS: '[^']*vinculos-lineas[^']*'/);
   assert.equal((entornos.match(/vinculos-lineas/g) || []).length, 2, 'solo en el bloque de producción (y su comentario)');
-  const js = read('src/html/js/lineas.html');
+  const js = LINEAS;
   assert.match(js, /JSON\.parse\(document\.body\.dataset\.apagados \|\| '\[\]'\)\.indexOf\('vinculos-lineas'\) >= 0/);
   assert.match(js, /if \(boton\) boton\.remove\(\);/);
   assert.match(js, /const espacioVinculos = vinculosApagado \? \{ pintar: \(\) => \{\} \} : LineasVinculos\.montar\(/);

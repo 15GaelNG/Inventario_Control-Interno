@@ -45,8 +45,8 @@ const LineasDatos = (function () {
   // Estado por ejecución (cada llamada de google.script.run empieza de cero).
   const bd = { id: null, libro: null, tablas: {}, zona: null, apiSheets: undefined };
 
-  // Reestructura, etapa 2 (LineasLectura.gs): con el interruptor encendido, LINEAS TELEFONICAS se lee armada con las
-  // hojas nuevas y no se puede escribir. Apagado (lo normal), nada de esto cambia el comportamiento.
+  // Reestructura, etapa 2 (LineasLectura.gs): LINEAS TELEFONICAS se lee armada con las hojas nuevas y no se puede
+  // escribir (sin interruptor desde el 21-oct, pendiente 7.13).
   const virtual_ = (nombre) => typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(nombre);
   function tablaVirtual_(nombre) {
     if (bd.tablas[nombre] && bd.tablas[nombre].virtual) return bd.tablas[nombre];
@@ -248,11 +248,11 @@ const LineasDatos = (function () {
 
   // ---------------- Lectura ----------------
 
-  /** Todas las filas no vacías de una pestaña. `real`: la hoja tal cual, aunque esté encendida la etapa 2. */
-  function leerTabla(nombre, real) {
-    if (!real && virtual_(nombre)) return LineasLectura.filas().map((f) => Object.assign({}, f));
+  /** Todas las filas no vacías de una pestaña (LINEAS TELEFONICAS: los renglones que arma LineasLectura). */
+  function leerTabla(nombre) {
+    if (virtual_(nombre)) return LineasLectura.filas().map((f) => Object.assign({}, f));
     const inicio = Date.now();
-    const t = real && virtual_(nombre) ? tablaReal_(nombre) : tabla(nombre);
+    const t = tabla(nombre);
     const ultima = t.hoja.getLastRow();
     if (ultima < 2 || !t.encabezados.length) return [];
     const valores = t.hoja.getRange(2, 1, ultima - 1, t.encabezados.length).getValues();
@@ -263,17 +263,6 @@ const LineasDatos = (function () {
       filas.push(filaAObjeto_(t, v, i + 2));
     });
     return filas;
-  }
-
-  /** La hoja de verdad aunque esté encendida la etapa 2 (para que LineasLectura lea lo que aún no se migra). */
-  function tablaReal_(nombre) {
-    const hoja = libro().getSheetByName(nombre);
-    if (!hoja) throw new Error('No existe la pestaña "' + nombre + '" en la base de datos de Líneas.');
-    const encabezados = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => String(h).trim());
-    while (encabezados.length && !encabezados[encabezados.length - 1]) encabezados.pop();
-    const indice = {};
-    encabezados.forEach((h, i) => { const k = normCol(h); if (k && !(k in indice)) indice[k] = i; });
-    return { nombre: nombre, encabezados: encabezados, indice: indice, hoja: hoja };
   }
 
   /** Última fila con datos de una pestaña. */
@@ -536,7 +525,11 @@ const LineasDatos = (function () {
   function valorCelda_(v, nombreTabla) {
     if (v === null || v === undefined) return '';
     if (v instanceof Date) return aHoraHoja(v);
-    if (typeof v === 'string' && /^\d+$/.test(v) && (v.length >= 11 || /^0\d/.test(v)) && !HOJAS_EN_TEXTO.test(nombreTabla || '')) return "'" + v;
+    if (typeof v === 'string' && !HOJAS_EN_TEXTO.test(nombreTabla || '')) {
+      if (/^\d+$/.test(v) && (v.length >= 11 || /^0\d/.test(v))) return "'" + v;
+      // Un patrón (puntos 1 a 9 con guiones, «1-9-7»): Sheets lo tomaba como fecha, 1-sep-2007 (pendiente 2.47)
+      if (/^[1-9](-[1-9])+$/.test(v)) return "'" + v;
+    }
     return v;
   }
   const HOJAS_EN_TEXTO = /^(APP_.*|LINEAS|EQUIPOS|ASIGNACIONES|ADENDUMS|FACTURAS|CUENTAS|CATALOGOS)$/;
@@ -625,6 +618,22 @@ const LineasDatos = (function () {
     t.hoja.getRange(inicio, 1, filas.length, t.encabezados.length).setValues(filas);
     CacheHojas.tocar(id(), nombre);
     return filas.map((_, i) => inicio + i);
+  }
+
+  /**
+   * Borra filas de la pestaña, de abajo hacia arriba (Quitar del panel, pendiente 3.12: usuario, 22-oct). Dentro de
+   * conCandado, primero se escribe el lote: sus celdas apuntan a números de fila que el borrado recorre. Después de
+   * borrar, los números de fila leídos antes ya no sirven: va al final.
+   */
+  function eliminarFilas(nombre, filas) {
+    const lista = (filas || []).filter((f) => f > 1).sort((a, b) => b - a).filter((f, i, a) => a.indexOf(f) === i);
+    if (!lista.length) return 0;
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    if (lote_) { vaciarLote_(); lote_ = { datos: {}, hojas: {}, respaldo: [] }; }
+    const t = tablaFresca(nombre);
+    lista.forEach((f) => t.hoja.deleteRow(f));
+    CacheHojas.tocar(id(), nombre);
+    return lista.length;
   }
 
   // Rapidez (etapa 3, paso 2): dentro de conCandado, las celdas que cambia actualizarFila se juntan y van en una sola
@@ -767,7 +776,7 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo, medirPasos, pasos,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
+    actualizarFila, agregarFilas, eliminarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
   };
 })();

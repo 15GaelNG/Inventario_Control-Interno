@@ -6,9 +6,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const LINEAS = require('./lineas-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
-const cliente = read('src/html/js/lineas.html');
+const cliente = LINEAS;
 const tramo = (desde, hasta) => {
   const i = cliente.indexOf(desde);
   const f = cliente.indexOf(hasta, i);
@@ -34,7 +35,7 @@ test('servidor: con «PIN» solo números; la contraseña, el patrón o sin bloq
 test('servidor: Editar, Agregar, la inspección y la responsiva lo revisan antes de guardar', () => {
   const registros = read('src/services/lineas/LineasRegistros.gs');
   assert.match(registros, /function crear\(datos, usuario\) \{[\s\S]{0,200}LineasUtil\.exigirPinEquipo\(datos\);/);
-  assert.match(registros, /function editar\(id, datos, usuario, puedeVerSecretos\) \{\s*asegurarEsquema_\(\);\s*LineasUtil\.exigirPinEquipo\(datos\);/);
+  assert.match(registros, /function editar\(id, datos, usuario, puedeVerSecretos\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
   const captura = read('src/services/lineas/LineasCaptura.gs');
   assert.match(captura, /function guardarInspeccion\(datos, usuario, puedeVerSecretos, opciones\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
   assert.match(captura, /function guardarResponsiva\(datos, usuario, puedeVerSecretos, accion\) \{\s*LineasUtil\.exigirPinEquipo\(datos\);/);
@@ -73,7 +74,7 @@ test('tipo de bloqueo obligatorio siempre que se ve (usuario, 9-oct): la lista y
   assert.throws(() => LineasUtil.exigirPinEquipo({ bloqueo: '', valores: {} }), /TIPO DE BLOQUEO DEL EQUIPO es obligatorio/);
   assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: null, valores: {} }), 'sin la lista (o oculta) no llega');
   assert.doesNotThrow(() => LineasUtil.exigirPinEquipo({ bloqueo: 'SIN BLOQUEO', valores: { 'PIN EQUIPO': 'N/A' } }));
-  const cliente = read('src/html/js/lineas.html');
+  const cliente = LINEAS;
   assert.match(cliente, /columna: '_BLOQUEO', etiqueta: 'TIPO DE BLOQUEO DEL EQUIPO', control: 'lista', opciones: OPCIONES_BLOQUEO, valor: inicial, mostrar: pin\.mostrar, requerido: pin\.mostrar, virtual: true/);
   assert.match(cliente, /const v = \(e\.columna === '_BLOQUEO' \? bloqueoElegido\(cuerpo\) : valores\[e\.columna\]\) \|\| '';/, 'Editar y Agregar');
   assert.match(cliente, /if \(e\.columna === '_BLOQUEO' && bloqueoElegido\(cuerpo\) === null\) return;/,
@@ -111,7 +112,7 @@ test('pantalla: Editar tiene la lista de bloqueo y los tres formularios mandan e
   assert.equal((cliente.match(/activarBloqueo\(cuerpo\);/g) || []).length, 2, 'Editar y las capturas');
   assert.match(cliente, /parte: ctx\.parte, bloqueo: bloqueoElegido\(cuerpo\),/);
   assert.equal((cliente.match(/valores: valores, patron: patron, bloqueo: bloqueo,/g) || []).length, 2, 'inspección y responsiva');
-  assert.match(tramo('    function erroresFormularioEn(', '    /** FOLIO y ESTATUS GENERAL'), /errorPinBloqueo\(cuerpo\)/);
+  assert.match(tramo('    function erroresFormularioEn(', '    function tipoAutomatico('), /errorPinBloqueo\(cuerpo\)/);
   assert.match(tramo('      function erroresCaptura(', '      function patronParaGuardar('), /errorPinBloqueo\(/);
 });
 
@@ -165,4 +166,12 @@ test('la responsiva pasa a la línea el PIN de WhatsApp', () => {
   assert.match(esc, /'NUCO': 'NUCO', 'PIN WHATSAPP': 'PIN WHATSAPP' \};/);
   assert.doesNotMatch(esc, /'RAZON SOCIAL': 'RAZON SOCIAL', 'PIN WHATSAPP'/);
   assert.match(esc, /function sinPinWhatsapp_\(e, campos\)/);
+});
+
+test('la ficha dice SIN BLOQUEO cuando PIN EQUIPO está guardado NO APLICA (2.56)', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /pinEquipo: sinAcentos_\(col\(f, 'PIN EQUIPO'\)\) === 'NO APLICA' \? 'SIN BLOQUEO' : texto\('PIN EQUIPO'\)/);
+  const sinAcentos_ = new Function(repo.match(/const sinAcentos_ = [^\n]+/)[0] + '\nreturn sinAcentos_;')();
+  assert.strictEqual(sinAcentos_(' no  aplica '), 'NO APLICA');
+  assert.notStrictEqual(sinAcentos_('1234'), 'NO APLICA');
 });

@@ -6,6 +6,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const zlib = require('node:zlib');
+const LINEAS = require('./lineas-fuente');
 
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
@@ -86,7 +87,9 @@ function captura(fila, opciones) {
       evidenciaDesdeFila: () => ev,
       revisarPdfsLigados: () => {},
       registrarMovimiento: (...a) => hechos.movimientos.push(a),
+      indiceColaboradores: () => ({ columnas: ['nombre', 'correo'], filas: [] }),
     },
+    LineasFirmas: { png: (c) => (o.firmaGuardada && c === o.firmaGuardada.correo ? o.firmaGuardada.png : null), tiene: (c) => !!(o.firmaGuardada && c === o.firmaGuardada.correo) },
     LineasDatos: {
       buscarFilasPorId: () => [2], leerFilas: () => [[fila]], idsDeFila: () => [fila.ID], existeTabla: () => true,
       buscarFilasVarios: () => [7], conCandado: (f) => f(), actualizarFila: (...a) => hechos.ligados.push(a),
@@ -99,6 +102,7 @@ function captura(fila, opciones) {
     },
     LineasPdf: {
       PLANTILLAS: { RESPONSIVA_CELULAR: 'R', INSPECCION_CELULAR: 'I' },
+      plantillaInspeccion: (registro) => (registro.CUBO ? 'I-CHECKLIST' : 'I'),
       generarPdfDesdePlantilla: (plantilla, registro, imagenes, carpeta, nombre) => {
         hechos.generados.push({ plantilla, imagenes, nombre });
         return { id: 'NUEVO', nombre, url: 'url-nuevo', avisos: [] };
@@ -143,6 +147,29 @@ test('regenerar: versión nueva del mismo PDF, el patrón dibujado en el servido
   assert.match(read('src/services/lineas/LineasRepo.gs'), /PDF_REGENERADO: 'PDF regenerado'/);
 });
 
+test('regenerar una inspección (usuario, 22-oct, NUCO 0820): quien la hizo y es el responsable no vuelve a firmar y el patrón sale dibujado', () => {
+  const firma = Buffer.from('png').toString('base64');
+  const gamaliel = { correo: 'g@b.mx', nombre: 'GAMALIEL JAIR MORA GONZALEZ' };
+  const fila = { ID: 'ILI-9', 'ID LINEA': 'EQU-1', NUCO: 820, RESPONSABLE: 'GAMALIEL JAIR MORA GONZALEZ', 'NOMBRE INSPECTOR': 'GAMALIEL JAIR MORA GONZALEZ',
+    'FIRMA INSPECTOR': '', 'FIRMA RESPONSABLE': '', 'PIN EQUIPO': 'PATRON', PATRON: '1-7-9' };
+  // Otra persona, sin las firmas de la captura: se le piden las dos y no se toca el PDF
+  const otro = captura(Object.assign({}, fila), { firmaGuardada: { correo: 'g@b.mx', png: firma } });
+  const r0 = otro.C.generarPdf('INSPECCION', 'ILI-9', true, USUARIO, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(r0)), { faltanFirmas: true, nombres: { inspector: fila['NOMBRE INSPECTOR'], responsable: fila.RESPONSABLE } });
+  assert.equal(otro.hechos.reemplazos.length, 0);
+  const { C, hechos } = captura(Object.assign({}, fila), { firmaGuardada: { correo: 'g@b.mx', png: firma } });
+  const r = C.generarPdf('INSPECCION', 'ILI-9', true, gamaliel, null);
+  assert.equal(r.faltanFirmas, undefined);
+  assert.equal(hechos.generados[0].plantilla, 'I');
+  const img = hechos.generados[0].imagenes;
+  assert.equal(img['FIRMA INSPECTOR'].nombre, 'firma-inspector.png');
+  assert.equal(img['FIRMA RESPONSABLE'].nombre, 'firma-responsable.png');
+  assert.ok(img.PATRON.bytes.length > 90000, 'patrón «1-7-9» dibujado con los puntos de la hoja');
+  assert.deepEqual(hechos.reemplazos, [['PDF1', 4]], 'versión nueva del mismo archivo');
+  assert.equal(hechos.movimientos[0][0], 'PDF_REGENERADO');
+  assert.equal(hechos.movimientos[0][4].detalle.inspeccionId, 'ILI-9');
+});
+
 test('las firmas de la captura (caché) bastan para regenerar sin pedirlas', () => {
   const { C, hechos } = captura(Object.assign({}, FILA));
   const firma = Buffer.from('png').toString('base64');
@@ -154,15 +181,66 @@ test('las firmas de la captura (caché) bastan para regenerar sin pedirlas', () 
   assert.equal(hechos.generados[1].imagenes['CONTRASEÑA'].bytes.length, 3, 'el patrón de la captura, no uno nuevo');
 });
 
-test('la pantalla: «Regenerar PDF» solo en responsivas del sistema con PDF y con permiso de operar; pide solo las firmas', () => {
-  const cliente = read('src/html/js/lineas.html');
-  // Fuera de la barra: en el ⋮ y el clic derecho (usuario, 12-oct; pendiente 2.34)
-  assert.match(cliente, /doc\('refresh-ccw', 'Regenerar PDF', 'pdf', false, \(d\) => operar && d\.tipoPdf === 'RESPONSIVA' && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+\(d\) => regenerarPdf\(d\)\)/);
+test('la pantalla: «Regenerar PDF» en inspecciones y responsivas del sistema con PDF y con permiso de operar; pide solo las firmas', () => {
+  const cliente = LINEAS;
+  // Fuera de la barra: en el ⋮ y el clic derecho (usuario, 12-oct; pendiente 2.34). Inspecciones también (22-oct)
+  assert.match(cliente, /doc\('refresh-ccw', 'Regenerar PDF', 'pdf', false, \(d\) => operar && d\.origen === 'SISTEMA' && !!d\.pdfId,\r?\n\s+\(d\) => regenerarPdf\(d\)\)/);
+  const regenerar = cliente.slice(cliente.indexOf('function regenerarPdf('), cliente.indexOf('function pedirFirmasPdf('));
+  assert.match(regenerar, /esInspeccion \? 'Inspección de telefonía' : 'Responsiva de entrega'/);
   assert.match(cliente, /refrescarDespuesDeCaptura\(registroId \|\| pila\[pila\.length - 1\]\.id, d\.tipoPdf, d\.id, true\);/);
   assert.match(cliente, /llamar\('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura\.pdfFirmas \|\| null\)/);
-  assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar\); return; \}/);
+  assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar, !!pdf\.soloResponsable\); return; \}/);
   const fn = cliente.slice(cliente.indexOf('function pedirFirmasPdf('), cliente.indexOf('/** `regenerar`'));
-  assert.match(fn, /if \(ci\.estaVacia\(\)\) \{ mostrarErrorCaptura\('Falta la firma de Control Interno\.'\); return; \}/);
+  assert.match(fn, /if \(ci && ci\.estaVacia\(\)\) \{ mostrarErrorCaptura\('Falta la firma de Control Interno\.'\); return; \}/);
   assert.match(fn, /patron: null/);
   assert.match(cliente, /'PDF regenerado': 'refresh-ccw'/);
+});
+
+// Usuario, 22-oct: con la firma del responsable puesta con «Usar foto» (PNG de megas) la caché no la guardaba y al pulsar
+// «Generar PDF» después el recuadro del responsable salía vacío sin avisar
+test('sin la firma del responsable en caché (y sí la de Control Interno): pide solo esa, no saca el recuadro vacío', () => {
+  const { C, hechos } = captura(Object.assign({}, FILA));
+  const firma = Buffer.from('png').toString('base64');
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: firma, responsable: null, patron: null }); // la caché solo con la de CI
+  const r = C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, null);
+  assert.deepEqual(JSON.parse(JSON.stringify(r)), { faltanFirmas: true, soloResponsable: true, nombres: { responsable: 'ANA PEREZ' } });
+  assert.equal(hechos.generados.length, 1, 'solo el del primer llamado');
+  // Lo que regresa la ventana (aunque la deje vacía) ya no se vuelve a pedir
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: null, responsable: null, patron: null });
+  assert.equal(hechos.generados.length, 2);
+  assert.equal(hechos.generados[1].imagenes['FIRMA CI'].nombre, 'firma-ci.png', 'la de Control Interno de la caché');
+});
+
+test('si al capturar el responsable no firmó (sinResponsable en caché) no se le pide', () => {
+  const { C, hechos } = captura(Object.assign({}, FILA));
+  const firma = Buffer.from('png').toString('base64');
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: firma, responsable: null, patron: null, sinResponsable: true });
+  const r = C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, null);
+  assert.equal(r.faltanFirmas, undefined);
+  assert.equal(hechos.generados.length, 2);
+  assert.equal(hechos.generados[1].imagenes['FIRMA RESPONSABLE'], null);
+  const fuente = read('src/services/lineas/LineasCaptura.gs');
+  assert.equal((fuente.match(/sinResponsable: !datos\.firmaResponsableBase64/g) || []).length, 2, 'inspección y responsiva lo marcan al guardar');
+});
+
+test('una firma que llega como JPEG (foto achicada en la pantalla) va al PDF como JPEG', () => {
+  const { C, hechos } = captura(Object.assign({}, FILA));
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+  const png = Buffer.from('png').toString('base64');
+  C.generarPdf('RESPONSIVA', 'RES-9', true, USUARIO, { ci: png, responsable: jpeg, patron: null });
+  const img = hechos.generados[0].imagenes;
+  assert.equal(img['FIRMA RESPONSABLE'].mime, 'image/jpeg');
+  assert.equal(img['FIRMA CI'].mime, 'image/png');
+});
+
+test('la pantalla: la firma que pasa del tope (una foto) se manda como JPEG más chico', () => {
+  const cliente = LINEAS;
+  assert.match(cliente, /const TOPE_FIRMA = 40000;/);
+  const fn = cliente.slice(cliente.indexOf('function crearFirma('), cliente.indexOf('function crearFirma(') + 1600);
+  assert.match(fn, /resolve\(png\.length <= TOPE_FIRMA \? png : firmaAchicada\(img, fondo\)\);/);
+  const achicar = cliente.slice(cliente.indexOf('function firmaAchicada('), cliente.indexOf('function crearFirma('));
+  assert.match(achicar, /toDataURL\('image\/jpeg', calidad\)/);
+  assert.match(achicar, /if \(salida\.length <= TOPE_FIRMA\) break;/);
+  const pedir = cliente.slice(cliente.indexOf('function pedirFirmasPdf('), cliente.indexOf('/** `regenerar`'));
+  assert.match(pedir, /const ci = soloResponsable \? null : crearFirma/);
 });

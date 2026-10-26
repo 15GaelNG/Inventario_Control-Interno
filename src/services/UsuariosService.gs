@@ -5,8 +5,7 @@
  * tabla de usuarios desde la propia app.
  *
  * Hoja esperada en Config.SPREADSHEET_IDS.USUARIOS():
- *   USUARIOS: ID | CORREO | NOMBRE | SALT | PASSWORD_HASH | ROL | ACTIVO
- *             | DEPARTAMENTO | DPTOS_PERMITIDOS
+ *   USUARIOS: CORREO | NOMBRE | ROL | ACTIVO | AREA | DPTOS PERMITIDOS | PASSWORD_HASH … (sin columna ID)
  */
 
 const UsuariosService = (function () {
@@ -23,24 +22,7 @@ const UsuariosService = (function () {
       .map(({ SALT, PASSWORD_HASH, ...resto }) => resto);
   }
 
-  function crear(token, datos, passwordInicial) {
-    Permisos.puedeEditar(token, 'usuarios');
-    const credenciales = Auth.crearHashParaUsuario(passwordInicial);
-    return SheetUtils.insert(ssId(), SHEET_USUARIOS, Object.assign({}, datos, {
-      SALT: credenciales.salt,
-      PASSWORD_HASH: credenciales.hash,
-      ACTIVO: true,
-    }));
-  }
-
-  function resetearPassword(token, id, nuevoPassword) {
-    Permisos.puedeEditar(token, 'usuarios');
-    const credenciales = Auth.crearHashParaUsuario(nuevoPassword);
-    return SheetUtils.update(ssId(), SHEET_USUARIOS, id, {
-      SALT: credenciales.salt,
-      PASSWORD_HASH: credenciales.hash,
-    });
-  }
+  // Las contraseñas (huella, restablecer, cambiar la propia) viven en Credenciales.gs (23-oct)
 
   function cambiarEstatus(token, id, activo) {
     Permisos.puedeEditar(token, 'usuarios');
@@ -86,5 +68,5 @@ const UsuariosService = (function () {
     };
   }
 
-  return { listar, crear, resetearPassword, cambiarEstatus, miPerfil };
+  return { listar, cambiarEstatus, miPerfil };
 })();
