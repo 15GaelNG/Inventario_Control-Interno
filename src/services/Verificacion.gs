@@ -14,6 +14,9 @@
  *   Verificacion.reenviar(reto) / misDispositivos(token, llave) / quitar(token, id) / olvidarDispositivos(correo, nota)
  *
  * Encendido por proyecto: VERIFICACION_DOS_PASOS = 'APAGADA' en Entornos.gs lo apaga (prod, hasta avisar al equipo).
+ * Salvo `decidir(…, { confirmar: true })` (26-oct): quien cambia una contraseña VIEJA (Credenciales.pedirCambio) siempre
+ * confirma con el código, encendido o no, porque esa contraseña pudo verse en la hoja; apagado, ese paso no recuerda el
+ * dispositivo (sin llave ni correo de "dispositivo nuevo": una sola vez y sin más fricción).
  * El reto vive 10 min en CacheService: el código va con huella, 5 intentos, hasta 3 reenvíos con 60 s entre cada uno.
  */
 const Verificacion = (function () {
@@ -97,17 +100,19 @@ const Verificacion = (function () {
     return null;
   }
 
-  function decidir(fila, metodo, dispositivo) {
-    if (!encendida()) return null;
+  function decidir(fila, metodo, dispositivo, opciones) {
+    const o = opciones || {};
+    const prendida = encendida();
+    if (!prendida && !o.confirmar) return null;
     const d = limpiar_(dispositivo);
-    const motivo = motivo_(fila.CORREO, d);
+    const motivo = o.confirmar ? 'confirmar' : motivo_(fila.CORREO, d);
     if (!motivo) return null;
     const reto = Utilities.getUuid();
     const r = { correo: fila.CORREO, nombre: fila.NOMBRE || '', metodo, motivo, dispositivo: d, intentos: 0, envios: 0,
-      bloqueado: typeof Credenciales !== 'undefined' && Credenciales.bloqueado(fila) };
+      bloqueado: typeof Credenciales !== 'undefined' && Credenciales.bloqueado(fila), recordable: prendida };
     mandar_(reto, r);
     if (typeof Accesos !== 'undefined') Accesos.anotar(fila.CORREO, metodo, 'codigo-enviado', d.nombre, motivo);
-    return { pendiente: 'codigo', reto, correoOculto: oculto_(fila.CORREO), motivo };
+    return { pendiente: 'codigo', reto, correoOculto: oculto_(fila.CORREO), motivo, recordable: prendida };
   }
 
   /** a•••@gph.com: lo justo para que la persona reconozca a dónde llegó */
@@ -169,7 +174,8 @@ const Verificacion = (function () {
     }
     cache_().remove('login_codigo_' + reto);
     if (typeof Accesos !== 'undefined') Accesos.anotar(r.correo, r.metodo, 'codigo-bueno', r.dispositivo.nombre);
-    return { correo: r.correo, metodo: r.metodo, llave: recordar ? recordar_(r) : '' };
+    // recordable === false: el código se pidió solo para confirmar un cambio con la verificación apagada
+    return { correo: r.correo, metodo: r.metodo, llave: recordar && r.recordable !== false ? recordar_(r) : '' };
   }
 
   /** Da de alta el dispositivo: una llave nueva (la vieja de ese navegador, si había, deja de servir) y el aviso por correo */

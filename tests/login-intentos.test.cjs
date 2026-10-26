@@ -20,7 +20,9 @@ let usuarios = [];
 // Verificacion simulado: pedirCodigo decide si el dispositivo necesita el código (Verificacion.gs tiene su prueba)
 let pedirCodigo = false;
 const Verificacion = {
-  decidir: (fila, metodo) => (pedirCodigo ? { pendiente: 'codigo', reto: 'r-codigo', metodo } : null),
+  // confirmar: el cambio de una contraseña VIEJA pide el código aunque la verificación esté apagada
+  decidir: (fila, metodo, d, o) => (pedirCodigo || (o && o.confirmar)
+    ? { pendiente: 'codigo', reto: 'r-codigo', metodo, motivo: o && o.confirmar ? 'confirmar' : 'nuevo' } : null),
   verificarCodigo: (reto, codigo, recordar) => {
     if (reto !== 'r-codigo' || codigo !== '123456') throw new Error('Ese código no es correcto.');
     return { correo: 'ana@gph.com', metodo: 'contrasena', llave: recordar ? 'llave-1' : '' };
@@ -29,7 +31,7 @@ const Verificacion = {
 
 function cargar(debeCambiar) {
   usuarios = [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ROL: 'CLIENT', ACTIVO: 'TRUE', 'CONTRASEÑA': 'buena',
-    'DEBE CAMBIAR CONTRASEÑA': debeCambiar ? 'TRUE' : '' }];
+    'DEBE CAMBIAR CONTRASEÑA': debeCambiar === true ? 'TRUE' : (debeCambiar || '') }];
   const cache = {};
   pedirCodigo = false;
   const ctx = vm.createContext({
@@ -92,7 +94,8 @@ test('con una contraseña temporal no hay sesión: pide la nueva con un reto de 
   assert.equal(r.pendiente, 'cambiar');
   assert.ok(r.reto && !r.token, 'sin token todavía');
   assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'corta'), /al menos 10/);
-  assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'buena'), /distinta de la temporal/);
+  assert.throws(() => A.cambiarContrasenaInicial(r.reto, 'buena'), /distinta de la que tenías/);
+  assert.equal(r.motivo, 'temporal');
   assert.throws(() => A.cambiarContrasenaInicial('inventado', 'Una frase larga 1'), /venció/);
   const s = A.cambiarContrasenaInicial(r.reto, 'Una frase larga 1');
   assert.ok(s.token && s.correo === 'ana@gph.com', 'ahora sí, la sesión');
@@ -121,4 +124,30 @@ test('bloqueada por seguridad: "Continuar como…" no aparece y entrar con Googl
   assert.equal(A.identidadGoogle().coincide, false, 'con bloqueo, no');
   assert.throws(() => A.loginConGoogle({}), /revisión de seguridad/);
   assert.equal(A.login('ana@gph.com', 'buena').pendiente, 'cambiar', 'con la contraseña que dio el admin sí entra (y cambia la suya)');
+});
+
+test('contraseña VIEJA (pedir cambio a todos, 26-oct): primero el código aunque la verificación esté apagada, luego la nueva', () => {
+  const A = cargar('VIEJA');
+  const r = A.login('ana@gph.com', 'buena', { navegador: 'Chrome' });
+  assert.equal(r.pendiente, 'codigo', 'quien solo conoce la vieja (pudo verse en la hoja) no pasa sin el correo');
+  assert.equal(r.motivo, 'confirmar');
+  assert.ok(!r.token);
+  assert.throws(() => A.cambiarContrasenaInicial('uuid-1', 'Una frase larga 1'), /venció/, 'sin el código no hay reto de cambio');
+  assert.throws(() => A.verificarCodigo('r-codigo', '000000', false), /no es correcto/);
+  const despues = A.verificarCodigo('r-codigo', '123456', false);
+  assert.equal(despues.pendiente, 'cambiar');
+  assert.equal(despues.motivo, 'vieja');
+  assert.ok(A.cambiarContrasenaInicial(despues.reto, 'Una frase larga 1').token);
+});
+
+test('con Google: cualquier cambio pendiente (temporal o VIEJA) pide elegir la nueva, sin código; sin pendiente, entra', () => {
+  for (const marca of [true, 'VIEJA', 'vieja ']) {
+    const A = cargar(marca);
+    const r = A.loginConGoogle({});
+    assert.equal(r.pendiente, 'cambiar', 'marca ' + JSON.stringify(marca));
+    assert.equal(r.motivo, 'google');
+    assert.ok(A.cambiarContrasenaInicial(r.reto, 'Una frase larga 1').token);
+  }
+  assert.ok(cargar().loginConGoogle({}).token, 'sin marca: la sesión de siempre');
+  assert.ok(cargar('FALSE').login('ana@gph.com', 'buena').token, 'otro valor en la columna no pide nada');
 });

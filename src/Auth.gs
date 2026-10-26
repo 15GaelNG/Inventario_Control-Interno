@@ -152,24 +152,36 @@ const Auth = (function () {
     if (typeof Accesos !== 'undefined') Accesos.anotar(correo, metodo, resultado, dispositivo && dispositivo.nombre);
   }
 
+  /**
+   * DEBE CAMBIAR CONTRASEÑA: 'TRUE' = la temporal que dio un admin (en persona); 'VIEJA' = su contraseña de antes, que
+   * pudo verse en la hoja (Credenciales.pedirCambio, 26-oct): con ella se confirma primero con el código por correo, aunque
+   * la verificación esté apagada. Con Google (ya probó que el correo es suyo) cualquiera de las dos pide elegir la nueva.
+   */
+  function cambioPendiente_(found) {
+    const v = String(found['DEBE CAMBIAR CONTRASEÑA'] || '').trim().toUpperCase();
+    return v === 'TRUE' ? 'temporal' : v === 'VIEJA' ? 'vieja' : '';
+  }
+
   function continuar_(found, metodo, dispositivo, verificado) {
+    const cambio = cambioPendiente_(found);
     if (!verificado) {
-      const paso = Verificacion.decidir(found, metodo, dispositivo);
+      const paso = Verificacion.decidir(found, metodo, dispositivo, { confirmar: metodo === 'contrasena' && cambio === 'vieja' });
       if (paso) return paso;
     }
-    if (metodo === 'contrasena' && String(found['DEBE CAMBIAR CONTRASEÑA'] || '').toUpperCase() === 'TRUE') {
-      return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO };
+    if (cambio && (metodo === 'contrasena' || metodo === 'google')) {
+      return { pendiente: 'cambiar', reto: nuevoReto_({ correo: found.CORREO, paso: 'cambiar' }), minimo: Credenciales.MINIMO,
+        motivo: metodo === 'google' ? 'google' : cambio };
     }
     anotar_(found.CORREO, metodo, 'entro', dispositivo);
     return construirSesion_(found);
   }
 
-  /** La contraseña nueva en lugar de la temporal; con eso, la sesión */
+  /** La contraseña nueva en lugar de la temporal (o la vieja, o la primera de quien entró con Google); con eso, la sesión */
   function cambiarContrasenaInicial(reto, nueva) {
     const r = leerReto_(reto, 'cambiar');
     const found = buscarUsuarioPorCorreo_(r.correo);
     if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') throw new Error('Usuario inactivo, contacta al administrador');
-    if (Credenciales.verificar(found, nueva).ok) throw new Error('La contraseña nueva debe ser distinta de la temporal.');
+    if (Credenciales.verificar(found, nueva).ok) throw new Error('La contraseña nueva debe ser distinta de la que tenías.');
     Credenciales.revisarNueva(nueva, { correo: found.CORREO, nombre: found.NOMBRE });
     Credenciales.guardar(found.CORREO, nueva, { debeCambiar: false });
     Credenciales.avisar_(found, 'cambiada');

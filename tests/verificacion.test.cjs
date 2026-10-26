@@ -182,3 +182,23 @@ test('cuenta bloqueada por seguridad: el código sí se manda (sin la contraseñ
   V.verificarCodigo(paso.reto, codigoDe(correos[0]), true);
   assert.equal(correos.length, 1, 'sin "Nuevo dispositivo"');
 });
+
+test('confirmar el cambio de una contraseña vieja (26-oct): el código va aunque esté apagada, y apagada no recuerda nada', () => {
+  const { V, correos, hoja } = cargar({ config: { VERIFICACION_DOS_PASOS: 'APAGADA' } });
+  const paso = V.decidir(ANA, 'contrasena', CHROME, { confirmar: true });
+  assert.equal(paso.pendiente, 'codigo');
+  assert.equal(paso.motivo, 'confirmar');
+  assert.equal(paso.recordable, false, 'la pantalla no ofrece recordar el dispositivo');
+  assert.equal(correos.length, 1);
+  const r = V.verificarCodigo(paso.reto, codigoDe(correos[0]), true);
+  assert.equal(r.llave, '', 'aunque lo pida, no se recuerda: sin llave');
+  assert.equal(hoja.datos.length, 0, 'ni renglón en DISPOSITIVOS');
+  assert.equal(correos.length, 1, 'ni correo de dispositivo nuevo');
+
+  // Encendida: se pide aunque el dispositivo sea de confianza, y ahí sí se puede recordar
+  const e = cargar();
+  const llave = recordar(e.V, e.correos, CHROME);
+  const otra = e.V.decidir(ANA, 'contrasena', Object.assign({ llave }, CHROME), { confirmar: true });
+  assert.equal(otra.motivo, 'confirmar');
+  assert.equal(otra.recordable, true);
+});
