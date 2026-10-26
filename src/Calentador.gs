@@ -42,10 +42,11 @@ function pasosCalentador_() {
     ['Reasignaciones (todas las columnas)', () => ReasignacionesVehicularesService.calentarCompleto()],
     ['Sensores', () => SensoresService.calentar()],
     ['Hologramas', () => HologramasService.calentar()],
-    // Antes de calentar la lista de Uber, no después: sincronizarBajas escribe en la hoja, y
-    // eso invalida (CacheHojas.tocar) lo que "Uber" acabara de calentar si corriera después --
-    // así la caché que se arma ya trae las bajas del día, sin un segundo round-trip.
-    ['Uber (bajas automáticas)', () => UberService.sincronizarBajas()],
+    // Ya NO pone BAJA sola (el usuario pidió que nunca se toque el estatus automáticamente,
+    // 23-oct-2026): solo detecta y anota la etiqueta "Baja, quitar de Uber" en la hoja aparte
+    // UBER BAJAS DETECTADAS -- alguien la revisa y decide a mano. La etiqueta se deja de
+    // mostrar sola a la semana de detectada (UberService.advertenciasVigentes_).
+    ['Uber (detecta bajas pendientes)', () => UberService.detectarBajasPendientes()],
     ['Uber', () => UberService.calentar()],
     ['Uber (todas las columnas)', () => UberService.calentarCompleto()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],

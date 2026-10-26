@@ -4714,15 +4714,24 @@
 
     document.getElementById('uber-fecha-de-alta').value = Formato.fecha(new Date());
 
-    function badgeEstatusUber(estatus) {
+    function badgeEstatusUber(estatus, advertencia) {
       const valor = String(estatus || '').toUpperCase();
+      let html;
       if (valor.includes('BAJA')) {
-        return '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Baja</span>';
+        html = '<span class="badge-estado baja"><i data-lucide="ban" class="ico"></i> Baja</span>';
+      } else if (valor.includes('PENDIENTE')) {
+        html = '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
+      } else {
+        html = '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Activo</span>';
       }
-      if (valor.includes('PENDIENTE')) {
-        return '<span class="badge-estado pendiente"><i data-lucide="clock" class="ico"></i> Pendiente</span>';
+      // Alguien ya no sale como activo en Capital Humano pero sigue ACTIVO en Uber -- el sistema
+      // NUNCA le cambia el estatus solo (pedido del usuario, 23-oct-2026): solo avisa aquí, y la
+      // persona decide a mano. La etiqueta se quita sola a la semana (UberService.listarResumen).
+      if (advertencia) {
+        html += ' <span class="badge-estado pendiente" title="Ya no aparece como activo en Capital Humano">'
+          + '<i data-lucide="triangle-alert" class="ico"></i> ' + escaparHtml(advertencia) + '</span>';
       }
-      return '<span class="badge-estado activo"><i data-lucide="circle-check" class="ico"></i> Activo</span>';
+      return html;
     }
 
     function etiquetaRol(rol) {
@@ -4825,7 +4834,7 @@
         { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => etiquetaRol(v) },
         { campo: 'DEPARTAMENTO', titulo: 'Departamento', tipo: 'lista' },
         { campo: 'PUESTO', titulo: 'Puesto', tipo: 'texto' },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeEstatusUber(v) },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v, fila) => badgeEstatusUber(v, fila.ADVERTENCIA) },
         { campo: 'CORREO ELECTRONICO', titulo: 'Correo electrónico', tipo: 'texto', visible: false },
         { campo: 'NUMERO TELEFONO', titulo: 'Teléfono', tipo: 'texto', visible: false },
         { campo: 'SEDE', titulo: 'Sede', tipo: 'lista', visible: false },

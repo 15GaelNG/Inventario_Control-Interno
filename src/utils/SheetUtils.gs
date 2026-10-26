@@ -204,10 +204,12 @@ const SheetUtils = (function () {
   /**
    * Actualiza (merge) varias filas por ID en una sola pasada: una lectura y una escritura
    * para TODAS, no un viaje de lectura + uno de escritura por cada una como update() --
-   * carísimo si cambian muchas filas de un jalón (UberService.sincronizarBajas: la primera
-   * corrida, con el atraso de quien dejó la empresa sin darse de baja en Uber, tardó casi un
-   * minuto por llamar a update() renglón por renglón). Bloquea mientras actualiza, igual que
-   * removeMany, para no pisar una escritura concurrente.
+   * carísimo si cambian muchas filas de un jalón (el extinto UberService.sincronizarBajas,
+   * que ponía BAJA automático en Uber: su primera corrida, con el atraso de quien había
+   * dejado la empresa sin darse de baja ahí, tardó casi un minuto por llamar a update()
+   * renglón por renglón -- hoy UberService ya no cambia el estatus solo, ver
+   * UberService.detectarBajasPendientes). Bloquea mientras actualiza, igual que removeMany,
+   * para no pisar una escritura concurrente.
    * @param {Array<{id: *, changes: Object}>} updates
    * @return {number} cuántas filas encontró y cambió
    */
