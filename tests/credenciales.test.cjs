@@ -136,17 +136,17 @@ test('contrasenasAHash: revisar solo cuenta; aplicar pasa todas las de texto pla
 test('reglas de una contraseña nueva (NIST 800-63B): largo, comunes, correo, nombre y distinta de la actual', () => {
   const { C } = cargar(hojaFalsa(['CORREO'], []));
   const motivo = (p, c) => { try { C.revisarNueva(p, c); return 'ok'; } catch (e) { return e.message; } };
-  assert.match(motivo('Ay05n!'), /al menos 8/);
-  // Como "Ayrt05n!": mayúscula, minúscula, número y símbolo (el espacio no es símbolo)
-  assert.match(motivo('ayrt05n!x'), /falta: una mayúscula/);
-  assert.match(motivo('AYRT05N!X'), /falta: una minúscula/);
-  assert.match(motivo('Ayrtonx!y'), /falta: un número/);
-  assert.match(motivo('Ayrt05n x'), /falta: un símbolo/);
+  assert.match(motivo('Ma1po!'), /al menos 8/);
+  // Como "Mar1posa!": mayúscula, minúscula, número y símbolo (el espacio no es símbolo)
+  assert.match(motivo('mar1posa!x'), /falta: una mayúscula/);
+  assert.match(motivo('MAR1POSA!X'), /falta: una minúscula/);
+  assert.match(motivo('Mariposa!y'), /falta: un número/);
+  assert.match(motivo('Mar1posa x'), /falta: un símbolo/);
   assert.match(motivo('Password123!'), /más usadas/, 'las comunes que sí cumplen la forma también se rechazan');
   assert.match(motivo('Ana.lopez26!', { correo: 'ana.lopez@gph.com' }), /tu correo/);
   assert.match(motivo('Guadalupe9!', { nombre: 'Maria Guadalupe Perez' }), /tu nombre/);
   assert.match(motivo('Misma1!clave', { actual: 'Misma1!clave' }), /distinta/);
-  assert.equal(motivo('Ayrt05n!', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok', 'el ejemplo del área');
+  assert.equal(motivo('Mar1posa!', { correo: 'ana@gph.com', nombre: 'Ana' }), 'ok', 'el ejemplo del área');
 });
 
 test('restablecer: solo con EDICIÓN en usuarios; la temporal sirve, la de antes no, y queda "debe cambiar"', () => {

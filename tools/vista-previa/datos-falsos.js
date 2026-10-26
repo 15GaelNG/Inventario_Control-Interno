@@ -722,7 +722,7 @@
       window.google.script.history = { replace: () => {} };
       respuestas.apiSeguridadRecuperarEstado = { correo: 'ana.lopez@gph.com', minimo: 8 };
       state.token = null; render();
-      (await hasta('#seg-nueva')).value = 'Ayrt05n';
+      (await hasta('#seg-nueva')).value = 'Mar1pos';
       document.getElementById('seg-nueva').dispatchEvent(new Event('input'));
       await esperar(400);
     },

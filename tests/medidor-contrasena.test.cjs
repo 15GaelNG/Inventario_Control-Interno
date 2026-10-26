@@ -1,5 +1,5 @@
 // MedidorContrasena (componentes/medidor-contrasena.html, 23-oct): la barra se llena y la lista se palomea con cada
-// requisito, como "Ayrt05n!" (8+, mayúscula, minúscula, número, símbolo, sin el correo, las dos iguales). jsdom.
+// requisito, como "Mar1posa!" (8+, mayúscula, minúscula, número, símbolo, sin el correo, las dos iguales). jsdom.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -27,17 +27,17 @@ test('vacío: barra en cero, nada palomeado', () => {
   assert.deepEqual(palomeados(), []);
 });
 
-test('la barra avanza con cada requisito y "Ayrt05n!" queda Lista cuando las dos coinciden', () => {
+test('la barra avanza con cada requisito y "Mar1posa!" queda Lista cuando las dos coinciden', () => {
   const { escribir, palomeados, barra, medidor, d } = montar();
-  escribir('n', 'ayrt');
+  escribir('n', 'mar');
   assert.deepEqual(palomeados(), ['correo', 'minuscula']);
   assert.equal(barra().dataset.nivel, 'falta');
-  escribir('n', 'Ayrt05n');
+  escribir('n', 'Mar1pos');
   assert.deepEqual(palomeados(), ['correo', 'mayuscula', 'minuscula', 'numero']);
-  escribir('n', 'Ayrt05n!');
+  escribir('n', 'Mar1posa!');
   assert.equal(medidor.cumple(), false, 'falta repetirla');
   assert.equal(barra().dataset.nivel, 'casi');
-  escribir('r', 'Ayrt05n!');
+  escribir('r', 'Mar1posa!');
   assert.equal(medidor.cumple(), true);
   assert.equal(barra().dataset.nivel, 'lista');
   assert.equal(d.querySelector('#m .medidor-relleno').style.width, '100%');
@@ -49,6 +49,6 @@ test('con el correo dentro o un espacio en vez de símbolo, no cumple', () => {
   escribir('n', 'Ana.lopez26!'); escribir('r', 'Ana.lopez26!');
   assert.ok(!palomeados().includes('correo'));
   assert.equal(medidor.cumple(), false);
-  escribir('n', 'Ayrt05n x'); escribir('r', 'Ayrt05n x');
+  escribir('n', 'Mar1posa x'); escribir('r', 'Mar1posa x');
   assert.ok(!palomeados().includes('simbolo'), 'el espacio no es símbolo');
 });

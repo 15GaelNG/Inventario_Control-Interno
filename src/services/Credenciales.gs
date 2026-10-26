@@ -25,7 +25,7 @@ const Credenciales = (function () {
   // de miles; aquí cada vuelta es una llamada a Utilities. Lo compensan el límite de intentos y el código por correo.
   const ITERACIONES = 3000;
   const MINIMO = 8;
-  // Lo que debe traer una contraseña nueva, como "Ayrt05n!" (la pantalla repite la misma lista para palomearla)
+  // Lo que debe traer una contraseña nueva, como "Mar1posa!" (la pantalla repite la misma lista para palomearla)
   const TIPOS = {
     'una mayúscula': /[A-ZÁÉÍÓÚÑ]/,
     'una minúscula': /[a-záéíóúñ]/,
@@ -111,7 +111,7 @@ const Credenciales = (function () {
     const p = String(contrasena || '');
     const minus = p.toLowerCase();
     if (p.length < MINIMO) throw new Error('La contraseña debe tener al menos ' + MINIMO + ' caracteres.');
-    // Como "Ayrt05n!": mayúscula, minúscula, número y símbolo (lo pidió el área, 23-oct; el espacio no cuenta como símbolo)
+    // Como "Mar1posa!": mayúscula, minúscula, número y símbolo (lo pidió el área, 23-oct; el espacio no cuenta como símbolo)
     const falta = Object.keys(TIPOS).filter((k) => !TIPOS[k].test(p));
     if (falta.length) throw new Error('A la contraseña le falta: ' + falta.join(', ') + '.');
     if (/^(.)\1+$/.test(p)) throw new Error('La contraseña no puede ser un solo carácter repetido.');
