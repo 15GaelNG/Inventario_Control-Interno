@@ -242,6 +242,12 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   `contrasenasTemporalesRevisar()` cuenta y `contrasenasTemporalesParaTodos()` le pone una de 10 a cada usuario activo
   (debe cambiarla al entrar; sesiones y dispositivos cerrados) y deja la lista en una hoja nueva y privada en el Drive de
   quien la corre, para repartirla en persona y borrarla. En PROD no corre sin `contrasenasTemporalesParaTodos('SI, EN PROD')`.
+  **Pedir cambio a todos, sin lista** (26-oct, la otra opción): `contrasenasPedirCambioRevisar()` cuenta y
+  `contrasenasPedirCambioATodos('SI, EN PROD')` solo pone `DEBE CAMBIAR CONTRASEÑA = 'VIEJA'` a los activos (no toca la
+  contraseña, no cierra sesiones, no pisa una temporal). Cada quien entra con la de siempre, **confirma con el código por
+  correo aunque la verificación esté apagada** (esa contraseña pudo verse en la hoja de AppSheet; `Verificacion.decidir(…,
+  { confirmar })`, y apagada no recuerda el dispositivo) y elige la nueva. Con Google, cualquier marca (`TRUE` o `VIEJA`)
+  pide elegir la nueva sin código. Quien no recibe correo en su CORREO: "Restablecer contraseña" (temporal, sin código).
 - **El código por correo → `Verificacion.gs`.** Solo si el dispositivo es nuevo o algo se ve raro: la señal es una llave
   aleatoria que guarda el navegador (`localStorage`, `Seguridad.dispositivo`) y de la que el servidor guarda solo su huella
   en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
