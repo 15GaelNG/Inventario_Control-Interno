@@ -252,7 +252,7 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   aleatoria que guarda el navegador (`localStorage`, `Seguridad.dispositivo`) y de la que el servidor guarda solo su huella
   en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
   recientes o en alerta. La IP NO sirve (Apps Script no la da y la del navegador se inventa). Sin cuota de correo, no se
-  entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; en prod hasta avisar al equipo).
+  entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; encendido en prod desde el 26-oct).
 - **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
   impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
 - Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se
