@@ -14,6 +14,8 @@ const guardados = [];      // lo que se guardó en el expediente del NUCO
 const buscadas = [];       // en qué carpeta raíz se buscó cada dibujo en blanco
 let actualizado = null;    // lo que se escribió después (la liga del PDF)
 let nuccoVehiculo = '25';
+const encabezadosHoja = ['ID INSPECCION', 'FOLIO', 'TIPO', 'PUNTAJE FINAL INSPECCION'];
+let candados = 0;
 const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
 
 const ESTRUCTURA = {
@@ -37,7 +39,16 @@ const contexto = vm.createContext({
   CacheService: { getScriptCache: () => ({ get: () => JSON.stringify(ESTRUCTURA), put: () => {} }) },
   SheetUtils: {
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
-    getSheetByColumns: () => ({ getName: () => 'INSPECCION VEHICULAR' }),
+    // Sin PUNTAJE MAXIMO, como la hoja de prod: registrar la agrega al final
+    getSheetByColumns: () => ({
+      getName: () => 'INSPECCION VEHICULAR',
+      getLastColumn: () => encabezadosHoja.length,
+      getRange: (r, c) => ({
+        getValues: () => [encabezadosHoja.slice()],
+        setValue: (v) => { encabezadosHoja[c - 1] = v; },
+      }),
+    }),
+    indiceDeColumnas: (enc, nombres) => nombres.reduce((m, n) => (m[n] = enc.indexOf(n), m), {}),
     leerColumnas: () => ({ filas: 0, datos: { 'ID INSPECCION': [] } }),
     // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
     // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).
@@ -74,6 +85,7 @@ const contexto = vm.createContext({
     fechaParaNombre: () => '2026-09-18',
   },
   Plantilla: {}, DocumentApp: {}, Utilities: {},
+  Candado: { con: (fn) => { candados++; return fn(); } },
 });
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') +
@@ -155,12 +167,26 @@ console.log('6. La calificación va en porcentaje en todos lados (27-oct: las se
 ok(fila['PUNTUACION_CRISTALERIA'] === '100.00%' && fila['PUNTAJE FINAL INSPECCION'] === '100.00%',
   'la sección se escribe igual que el total: "100.00%", no 1');
 
-const CRUDO = { 'ID INSPECCION': 'I1', 'PUNTAJE FINAL INSPECCION': 0.7909, 'PUNTUACION_NEUMATICOS': 0.15,
+ok(fila['PUNTAJE MAXIMO'] === '100.00%', 'guarda lo más que podía sacar esa unidad');
+ok(encabezadosHoja.filter((e) => e === 'PUNTAJE MAXIMO').length === 1 && candados === 1,
+  'la columna se crea una sola vez, bajo el candado, aunque se registren varias');
+
+console.log('7. El máximo no cuenta las secciones todas N/A');
+const DOS = [
+  { titulo: 'Cristalería', peso: 10, campos: [{ campo: 'PARABRISAS', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
+  { titulo: 'Inventarios', peso: 10, campos: [{ campo: 'GATO', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
+];
+const conNA = contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'BUENO', GATO: 'N/A' });
+ok(conNA.final === 10 && conNA.maximo === 10, 'Inventarios toda N/A: sacó 10 de 10 posibles, no de 20');
+ok(contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'MALO', GATO: 'BUENO' }).maximo === 20,
+  'con algo evaluado en las dos, el máximo es la suma de sus pesos');
+
+const CRUDO = { 'ID INSPECCION': 'I1', 'PUNTAJE FINAL INSPECCION': 0.7909, 'PUNTAJE MAXIMO': 0.9, 'PUNTUACION_NEUMATICOS': 0.15,
   'PUNTUACION_LIMPIEZA': '2.50%', 'PUNTUACION_NIVELES': '', 'FOLIO': 'AUT0025' };
 contexto.HojaServicio = { completo: () => [CRUDO], buscarPorId: () => CRUDO };
 const exportado = contexto.InspeccionesService.completo('token')[0];
 ok(exportado['PUNTAJE FINAL INSPECCION'] === '79.09%' && exportado['PUNTUACION_NEUMATICOS'] === '15.00%' &&
-  exportado['PUNTUACION_LIMPIEZA'] === '2.50%', 'al exportar, el total y las secciones salen en porcentaje (de AppSheet o de la app)');
+  exportado['PUNTUACION_LIMPIEZA'] === '2.50%' && exportado['PUNTAJE MAXIMO'] === '90.00%', 'al exportar, el total y las secciones salen en porcentaje (de AppSheet o de la app)');
 ok(exportado['PUNTUACION_NIVELES'] === '' && exportado['FOLIO'] === 'AUT0025', 'lo vacío y lo demás no cambian');
 ok(CRUDO['PUNTAJE FINAL INSPECCION'] === 0.7909, 'sin tocar el renglón de la caché');
 ok(contexto.InspeccionesService.buscarPorId('token', 'I1')['PUNTUACION_NEUMATICOS'] === '15.00%', '"Ver completo" también');
