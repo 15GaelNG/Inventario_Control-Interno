@@ -3,6 +3,9 @@
   .pu-stat-nota { font-size: var(--texto-2xs); font-weight: 700; margin-top: 2px; }
   .pu-tendencia-sube { color: var(--color-danger); }
   .pu-tendencia-baja { color: var(--color-success); }
+  /* Un <select> con valor elegido (no la opción "Todos/Todas", siempre value="") resalta su
+     borde -- así se ve de un vistazo cuántos filtros están aplicados sin tener que leer cada uno. */
+  #pu-filtros select:has(option:checked:not([value=""])) { border-color: var(--color-primary); }
 </style>
 
 <template id="tpl-panorama-uber">
