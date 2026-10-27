@@ -109,7 +109,9 @@ de todos: medir, listas con huella, Inicio, sesión, campanita, qué impide borr
 Lo que se repite entre módulos va en un componente, no en otra copia. Antes de
 escribirlo a mano en un módulo, revisa si ya existe: `Formulario` (captura con
 validación, pasos y panel), `DataTable`, `Combobox`, `Confirmar`, `Notificar`,
-`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar` y `Apariencia`. Cada
+`Firma`, `Lienzo`, `ExportarExcel`, `CampoAuto`, `FolioNucco`, `CamposHoja`, `Avatar`, `Apariencia`, `CampoCodigo`
+(un código de verificación en recuadros: pegarlo como venga lo reparte) y `MedidorContrasena` (la barra y la lista de
+requisitos de una contraseña nueva, los mismos que `Credenciales.TIPOS`). Cada
 uno documenta su uso al inicio del archivo y tiene su prueba en `tests/`.
 
 De la homologación (rama `common`, docs/homologacion-codigo.md), también: `Formato` (esc, fechas, moneda, miles: nunca
@@ -207,6 +209,77 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   pantalla"). `HojaServicio.actualizar` ya propaga (`Relaciones.alGuardar`) y el activador de `AvisoDeCambios.gs` copia lo
   editado a mano. Solo lo que va AL REVÉS (un registro nuevo que actualiza a su dueño) se escribe en el servicio, y se
   anota en `DatosConectados.AL_REVES` para que la pantalla lo muestre.
+
+## Acceso: contraseñas, código por correo y bitácora (23-oct, rama `seguridad`)
+
+La web app está abierta a cualquier cuenta de Google (`"access": "ANYONE"`, por POST VENTA de gph): lo que protege es
+el login de la app, en capas. El orden de un inicio de sesión (`Auth.continuar_`): credenciales → código por correo si
+hace falta → contraseña nueva si es temporal → sesión. Cada paso que falta regresa `{ pendiente, reto }` (un UUID de 10
+min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Seguridad.entrar`, `js/app-seguridad.html`).
+
+- **Contraseñas → `Credenciales.gs`.** Solo la huella en `PASSWORD_HASH`: `v2$<iteraciones>$<sal>$<hash>` (PBKDF2-HMAC-
+  SHA256). La de texto plano (`CONTRASEÑA`, de AppSheet) y el v1 se aceptan y al entrar pasan a v2 y la celda se borra.
+  Nadie escribe contraseñas en la hoja: "Restablecer contraseña" (Usuarios y permisos) da una temporal que se ve una vez
+  y obliga a cambiarla; "Contraseña y seguridad" (Mi perfil) cambia la propia. Reglas de una nueva en
+  `Credenciales.revisarNueva`. USUARIOS no tiene ID: se escribe por CORREO (`Credenciales.escribirPorCorreo_`).
+  Desde el editor: `contrasenasAHashRevisar()`, `contrasenasAHash()`, `medirHashContrasena()` (subir `ITERACIONES`
+  no rompe las que ya están: se rehacen al entrar). **Temporales para todos** (lo pidió el área, 23-oct):
+  `contrasenasTemporalesRevisar()` cuenta y `contrasenasTemporalesParaTodos()` le pone una de 10 a cada usuario activo
+  (debe cambiarla al entrar; sesiones y dispositivos cerrados) y deja la lista en una hoja nueva y privada en el Drive de
+  quien la corre, para repartirla en persona y borrarla. En PROD no corre sin `contrasenasTemporalesParaTodos('SI, EN PROD')`.
+  **Pedir cambio a todos, sin lista** (26-oct, la otra opción): `contrasenasPedirCambioRevisar()` cuenta y
+  `contrasenasPedirCambioATodos('SI, EN PROD')` solo pone `DEBE CAMBIAR CONTRASEÑA = 'VIEJA'` a los activos (no toca la
+  contraseña, no cierra sesiones, no pisa una temporal). Cada quien entra con la de siempre, **confirma con el código por
+  correo aunque la verificación esté apagada** (esa contraseña pudo verse en la hoja de AppSheet; `Verificacion.decidir(…,
+  { confirmar })`, y apagada no recuerda el dispositivo) y elige la nueva. Con Google, cualquier marca (`TRUE` o `VIEJA`)
+  pide elegir la nueva sin código. Quien no recibe correo en su CORREO: "Restablecer contraseña" (temporal, sin código).
+- **El código por correo → `Verificacion.gs`.** Solo si el dispositivo es nuevo o algo se ve raro: la señal es una llave
+  aleatoria que guarda el navegador (`localStorage`, `Seguridad.dispositivo`) y de la que el servidor guarda solo su huella
+  en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
+  recientes o en alerta. La IP NO sirve (Apps Script no la da y la del navegador se inventa). Sin cuota de correo, no se
+  entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; encendido en prod desde el 26-oct).
+- **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
+  impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
+- Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se
+  cuida con su reto o su token propio y sus límites; todo lo demás pide sesión. Ninguna respuesta al cliente lleva
+  `CONTRASEÑA`, `SALT`, `PASSWORD_HASH`, el código ni la huella de una llave. **Las `api…` sin token son una lista
+  cerrada** (`source-contracts`: "ninguna api… nueva corre sin sesión"): agregar una exige anotar qué la protege.
+- **Regla de una contraseña nueva** (lo pidió el área): 8+ caracteres con mayúscula, minúscula, número y símbolo, como
+  `Mar1posa!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
+  `COMUNES`; la pantalla repite la lista para palomearla). La regla es para ELEGIRLA: guardarla con huella no cambia nada
+  para la persona y no se quita.
+- **La sesión** (`Auth.gs`): vence a los 60 min sin uso (`Config.SESION_INACTIVIDAD_MIN`; cada llamada la renueva, a lo
+  más cada 5 min) y nunca pasa de 8 h. **Una `api…` que llama un temporizador de la pantalla empieza con
+  `Auth.automatica()`** (el vigía, la campanita, sensores en vivo): valida sin renovar, o la pestaña abierta nunca
+  cerraría. La pantalla avisa a los 59 min ("¿Sigues ahí?") y, con actividad sin llamadas (un formulario largo), avisa al
+  servidor cada 10 min (`apiSeguridadSigo`). Cada persona tiene una versión de sesión (ScriptProperties):
+  `Auth.cerrarSesiones(correo, { conservar: token })` saca a todas sus sesiones abiertas (cambiar o restablecer la
+  contraseña, quitar dispositivos, el admin) y a quien lo hizo le regresa un token nuevo (`{ sesion }`, la pantalla lo
+  guarda con `guardarSesion`). Prueba: `sesion.test.cjs`.
+- **"¿Olvidaste tu contraseña?" → `Recuperacion.gs`** (guía de OWASP): la respuesta es la misma exista o no el correo;
+  el enlace es la app de siempre con `?recuperar=<64 hex>` (`Config.urlApp`: `URL_APP` de Entornos.gs, en prod el link
+  del equipo en su forma general `/macros/s/…`, que no pide cuenta del dominio; la app ya está abierta, no hace falta
+  otro despliegue como el de la firma). Del enlace se guarda solo su huella en CacheService: 30 min, un uso, pedir otro
+  anula el anterior, 3 por correo por hora. Al cambiarla se cierran sus sesiones, se avisa y se vuelve al login (no
+  entra solo). La pantalla lee el parámetro con `google.script.url.getLocation` (`Seguridad.conectarLogin`). El
+  "Restablecer contraseña" del admin sigue para quien no puede entrar a su correo.
+- **Bloqueo por seguridad** (columna `BLOQUEO SEGURIDAD` de USUARIOS: `fecha | quién | motivo`, vacía = sin bloqueo): se
+  pone con la casilla "Sospecho que tomaron su correo…" del Restablecer del admin. Mientras dure, nada pasa por ese
+  correo: la recuperación responde igual pero no manda enlace y alerta a los admins (`Accesos.alertarAdmins`), Google
+  no entra (`identidadGoogle`/`loginConGoogle`) y no salen avisos informativos (`Credenciales.avisar_`,
+  `Verificacion`); el código del login sí se manda (sin la contraseña no sirve). Se entra solo con la temporal que el
+  admin da por teléfono. "Quitar bloqueo" (aviso en la ficha de la persona, `Seguridad.avisoBloqueo`) la limpia y ahí sí
+  avisa. Pregunta siempre con `Credenciales.bloqueado(fila)` / `bloqueadoCorreo(correo)`; un aviso nuevo a la persona
+  también lo respeta.
+- **Pendiente:** sacar las huellas, DISPOSITIVOS y ACCESOS del libro compartido de USUARIOS a uno restringido (decidido
+  para después, 23-oct).
+- Pruebas: `credenciales.test.cjs`, `verificacion.test.cjs`, `accesos.test.cjs`, `login-intentos.test.cjs`; vista previa:
+  `login-codigo`, `login-contrasena-nueva`, `perfil-seguridad`.
+- **Todo correo que mande el sistema → `Correos.mensaje(para, asunto, { etiqueta, titulo, parrafos, codigo, detalle,
+  boton, aviso })`** (`src/utils/Correos.gs`): la misma cara que la app (barra marino con el logo, tarjeta, dorado),
+  tablas con estilos en línea para Gmail y Outlook, modo oscuro y su versión en texto. No se arma otro HTML de correo a
+  mano. Los `parrafos` y el `aviso` son HTML: lo que venga de una persona va con `Correos.esc`. Vista previa:
+  `node tools/correos/vista.js` (capturas en escritorio, celular y oscuro).
 
 ## Permisos entre módulos (lo de un módulo dentro de otro)
 

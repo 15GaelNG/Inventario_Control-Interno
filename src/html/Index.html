@@ -11,7 +11,7 @@
 </head>
 <!-- data-apagados: lo que este proyecto tiene apagado (Config.apagados); el menú no lo pinta.
      data-temporada: la decoración de temporada encendida (TemporadaService; html/temporada.html) -->
-<body data-apagados="<?= apagados ?>" data-temporada="<?= temporada ?>">
+<body data-apagados="<?= apagados ?>" data-temporada="<?= temporada ?>" data-recuperar="<?= recuperar ?>">
 
   <div id="login-screen-container"></div>
   <div id="loading-screen-container"></div>
@@ -157,6 +157,7 @@
   <?!= include('html/js/app-incidencias'); ?>
   <?!= include('html/js/app-uber'); ?>
   <?!= include('html/js/app-tickets'); ?>
+  <?!= include('html/js/app-seguridad'); ?>
   <?!= include('html/js/app-documentos-vehiculo'); ?>
   <?!= include('html/js/app-inspecciones-vehiculo'); ?>
   <?!= include('html/js/app-arqueos'); ?>
@@ -177,6 +178,8 @@
   <?!= include('html/js/componentes/filtro-tipo'); ?>
   <?!= include('html/js/componentes/combobox'); ?>
   <?!= include('html/js/componentes/campo-auto'); ?>
+  <?!= include('html/js/componentes/campo-codigo'); ?>
+  <?!= include('html/js/componentes/medidor-contrasena'); ?>
   <?!= include('html/js/componentes/folio-nucco'); ?>
   <?!= include('html/js/componentes/datatable'); ?>
   <?!= include('html/js/componentes/pasos'); ?>

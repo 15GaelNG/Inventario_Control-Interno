@@ -52,10 +52,14 @@ test('la versión de Lucide contiene card-sim', () => {
 });
 
 test('el login acepta hash y conserva compatibilidad con la hoja histórica', () => {
+  // Desde el 23-oct la contraseña la revisa Credenciales.gs (huella v2; acepta texto plano y v1 y los pasa a v2 al
+  // entrar). El comportamiento lo prueba tests/credenciales.test.cjs.
   const auth = read('src/Auth.gs');
-  assert.match(auth, /found\.SALT && found\.PASSWORD_HASH/);
-  assert.match(auth, /found\['CONTRASEÑA'\]/);
-  assert.match(auth, /hashPassword_\(String\(password\)/);
+  assert.match(auth, /Credenciales\.verificar\(found, password\)/);
+  assert.match(auth, /if \(revisada\.migrar\)/);
+  const cred = read('src/services/Credenciales.gs');
+  assert.match(cred, /PLANA: 'CONTRASEÑA'/);
+  assert.match(cred, /fila\[COL\.SAL\]/, 'v1: SALT + PASSWORD_HASH');
 });
 
 test('Telefonía muestra sus módulos en orden y Gestión de Activos queda fuera del grupo', () => {
@@ -1510,7 +1514,8 @@ test('Notificaciones: adendum por vencer una semana antes, sin las ya vencidas n
   assert.equal(Ntf.DIAS_AVISO, 7);
   // Enganches: API, alta que pide revisar, campana en el shell y vista
   // La campana pide todos los módulos en una llamada; Líneas es una fuente de NotificacionesService (fase 5.5)
-  assert.match(API, /function apiNotificaciones\(token, limite\) \{\s+return NotificacionesService\.campana\(token, limite\);/);
+  // Auth.automatica(): la campanita se revisa sola y no cuenta como actividad de la sesión (23-oct)
+  assert.match(API, /function apiNotificaciones\(token, limite\) \{\s+(Auth\.automatica\(\);[^\n]*\s+)?return NotificacionesService\.campana\(token, limite\);/);
   assert.match(read('src/services/NotificacionesService.gs'), /lineas: \(token, limite\) => TelefoniaService\.notificaciones\(token, limite\)/);
   assert.doesNotMatch(read('src/html/notificaciones.html'), /apiLineasNotificaciones|apiNotificacionesPendientes/);
   // Sus avisos dan huella (el vigía ve un aviso nuevo o uno marcado como leído)
@@ -3061,4 +3066,43 @@ test('Exportar es la sección exportar del módulo de la pantalla', () => {
   assert.match(dt, /if \(cfg\.exportar && typeof puedeExportarAqui === 'function' && !puedeExportarAqui\(\)\) cfg\.exportar = false;/);
   const app = APP;
   assert.match(app, /function puedeExportarAqui\(\) \{[\s\S]*?return !modulo \|\| puede\(modulo \+ '\.exportar'\);/);
+});
+
+test('ninguna api… nueva corre sin sesión: las que no piden token son una lista cerrada, cada una con su razón (23-oct)', () => {
+  // La web app está abierta a cualquier cuenta de Google ("access": "ANYONE"): una api… sin token la puede llamar
+  // cualquiera desde la consola. Agregar una aquí exige decir qué la protege en lugar de la sesión.
+  const SIN_TOKEN = {
+    apiPing: 'solo regresa la hora (medir el piso de Apps Script)',
+    apiLogin: 'el login; límite de 5 intentos por correo (Auth.login)',
+    apiIdentidadGoogle: 'solo dice si la cuenta de Google del dominio existe; fuera del dominio no hay correo',
+    apiLoginConGoogle: 'Session.getActiveUser del dominio; luego el código por correo (Verificacion)',
+    apiFirmaRemotaObtener: 'el token de la liga de firma (UUID, vence, un solo uso)',
+    apiFirmaRemotaVistaPrevia: 'el token de la liga de firma',
+    apiFirmaRemotaCompletar: 'el token de la liga de firma',
+    apiSeguridadCambiarInicial: 'el reto del login (UUID de 10 min, de un solo correo y paso)',
+    apiSeguridadVerificarCodigo: 'el reto del código (5 intentos)',
+    apiSeguridadReenviarCodigo: 'el reto del código (3 reenvíos, 60 s entre cada uno)',
+    apiSeguridadRecuperarPedir: 'siempre la misma respuesta; 3 por correo por hora (Recuperacion.gs)',
+    apiSeguridadRecuperarEstado: 'el enlace del correo (huella, 30 min, un uso)',
+    apiSeguridadRecuperarCambiar: 'el enlace del correo (huella, 30 min, un uso)',
+  };
+  const gs = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs')).map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f === 'src/ClientApi.gs' || f.startsWith('src/api/'));
+  const sinToken = [];
+  gs.forEach((f) => [...read(f).matchAll(/^function (api\w+)\(([^)]*)\)/gm)].forEach((m) => {
+    if (m[2].split(',')[0].trim() !== 'token') sinToken.push(m[1]);
+  }));
+  assert.deepEqual(sinToken.filter((n) => !SIN_TOKEN[n]), [], 'sin token y sin razón en la lista');
+  assert.deepEqual(Object.keys(SIN_TOKEN).filter((n) => !sinToken.includes(n)), [], 'en la lista pero ya no existe (o ya pide token): quitarla');
+});
+
+test('el primer render espera a que cargue toda la página: el login usa Seguridad, que carga después de app (23-oct)', () => {
+  const app = read('src/html/js/app.html');
+  const sinComentarios = app.replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/^ {2}render\(\);/m.test(sinComentarios),   // nivel superior del <script> (dos espacios)
+    'app.html llama render() directo al cargar: initLogin usaría Seguridad (app-seguridad.html) antes de que exista');
+  assert.match(app, /addEventListener\('DOMContentLoaded', render/);
+  const index = read('src/html/Index.html');
+  assert.ok(index.indexOf("include('html/js/app-seguridad')") > index.indexOf("include('html/js/app')"),
+    'si app-seguridad pasa antes que app, este contrato ya no hace falta: revísalo');
 });
