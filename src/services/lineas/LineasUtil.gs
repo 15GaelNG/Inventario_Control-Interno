@@ -173,8 +173,8 @@ const LineasUtil = (function () {
   /**
    * Región del proveedor por la lada del número, como la pide el asesor en el correo de cancelación (usuario, 22-oct; la
    * tabla de regiones por estado que mandó Líneas). Solo las ladas seguras de cada estado; una que no está aquí deja la
-   * región vacía en vez de adivinarla. 442 y 446 son Querétaro Norte (región 6, ejemplos del usuario); las demás de
-   * Querétaro (427 San Juan del Río…) esperan a que Líneas diga si son Norte o Sur.
+   * región vacía en vez de adivinarla. Querétaro es todo región 6 (Telcel a Líneas, 27-oct; L30): 442, 446, 427 San
+   * Juan del Río, 414, 419, 441, 448 y 487.
    */
   const LADAS_POR_REGION = {
     1: ['664', '663', '686', '646', '612', '624'], // Baja California y Baja California Sur
@@ -182,10 +182,11 @@ const LineasUtil = (function () {
     3: ['614', '656', '618'], // Chihuahua y Durango
     4: ['81', '844', '866', '833', '899', '867', '868', '834'], // Coahuila, Nuevo León y Tamaulipas
     5: ['33', '311', '312', '314', '322', '443', '452', '351'], // Nayarit, Jalisco, Colima y Michoacán
-    6: ['442', '446', '444', '488', '449', '492', '477', '479', '473', '461', '462', '464', '415'], // Zac, SLP, Ags, Gto y Qro Norte
+    6: ['442', '446', '427', '414', '419', '441', '448', '487', // Querétaro
+      '444', '488', '449', '492', '477', '479', '473', '461', '462', '464', '415'], // Zac, SLP, Ags y Gto
     7: ['222', '221', '220', '246', '229', '228', '744', '747', '951', '921'], // Guerrero, Tlaxcala, Puebla, Veracruz y Oaxaca
     8: ['999', '990', '998', '984', '983', '981', '993', '961', '962'], // Tabasco, Chiapas, Campeche, Yucatán y Quintana Roo
-    9: ['55', '56', '722', '729', '771', '777', '595'], // Querétaro Sur, Hidalgo, Morelos, Estado de México y Ciudad de México
+    9: ['55', '56', '722', '729', '771', '777', '595'], // Hidalgo, Morelos, Estado de México y Ciudad de México
   };
   const REGION_DE_LADA = Object.keys(LADAS_POR_REGION).reduce((o, r) => {
     LADAS_POR_REGION[r].forEach((l) => { o[l] = r; });
