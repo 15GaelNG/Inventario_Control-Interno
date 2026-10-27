@@ -149,11 +149,28 @@ const InspeccionesService = (function () {
   /** Las 13 columnas de calificación: el total y una por sección */
   const COLUMNAS_CALIFICACION = () => ['PUNTAJE FINAL INSPECCION'].concat(COLUMNAS_PUNTUACION.map((p) => p[0]));
 
+  /**
+   * Lo más que podía sacar esa unidad (27-oct): la suma de los pesos de las secciones con algo evaluado. Una sección
+   * toda N/A vale 0 y su peso no se gana, así que 79% de 90% no es lo mismo que 79% de 100%. Solo lo escribe la app:
+   * las de AppSheet no lo tienen. La crea registrar() la primera vez (la hoja de prod no la trae).
+   */
+  const COL_MAXIMO = 'PUNTAJE MAXIMO';
+
+  /** Agrega la columna al final si la hoja no la tiene (solo el encabezado; bajo el candado: dos a la vez no la duplican) */
+  function asegurarColumna_(hoja, columna) {
+    const tiene = () => SheetUtils.indiceDeColumnas(
+      hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0], [columna])[columna] !== -1;
+    if (tiene()) return;
+    Candado.con(() => {
+      if (!tiene()) hoja.getRange(1, hoja.getLastColumn() + 1).setValue(columna);
+    });
+  }
+
   /** Un renglón crudo con su calificación en porcentaje (copia: la caché es de todos y no se toca) */
   function conPorcentajes_(row) {
     if (!row) return row;
     const copia = Object.assign({}, row);
-    COLUMNAS_CALIFICACION().forEach((c) => { if (c in copia) copia[c] = porcentajeTexto_(copia[c]); });
+    COLUMNAS_CALIFICACION().concat(COL_MAXIMO).forEach((c) => { if (c in copia) copia[c] = porcentajeTexto_(copia[c]); });
     return copia;
   }
 
@@ -234,7 +251,7 @@ const InspeccionesService = (function () {
 
     // Lo que no es cabecera, ni imagen, ni puntuación, ni llanta: el checklist de piezas
     const conocidas = {};
-    COLUMNAS_LISTA.concat(COLUMNAS_LLANTAS.map((p) => p[0]), COLUMNAS_PUNTUACION.map((p) => p[0]),
+    COLUMNAS_LISTA.concat(COL_MAXIMO, COLUMNAS_LLANTAS.map((p) => p[0]), COLUMNAS_PUNTUACION.map((p) => p[0]),
       COLUMNAS_IMAGEN.map((p) => p[0])).forEach((c) => { conocidas[c] = true; });
 
     const checklist = Object.keys(row)
@@ -447,6 +464,7 @@ const InspeccionesService = (function () {
       if (columna) fila[columna] = (s.valor * 100).toFixed(2) + '%';
     });
     fila['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
+    fila[COL_MAXIMO] = puntaje.maximo.toFixed(2) + '%';
 
     // ---- dónde: el expediente del NUCO (12-oct-2026) ----
     // 4.-INSPECCIONES/<año>/<N> TRIMESTRE con su PDF (INSPECCION-0088 2026-10-12.pdf) y, en FIRMAS Y DIAGRAMAS, lo
@@ -501,7 +519,9 @@ const InspeccionesService = (function () {
 
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
-      SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      const hoja = hoja_();
+      asegurarColumna_(hoja, COL_MAXIMO);
+      SheetUtils.insert(ssId(), hoja.getName(), fila);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -694,9 +714,11 @@ const InspeccionesService = (function () {
     });
 
     const final = detalle.reduce((suma, s) => suma + s.valor, 0) * 100;
+    const maximo = detalle.reduce((suma, s) => suma + (s.evaluadas ? s.peso : 0), 0);
     return {
       secciones: detalle,
       final: Math.round(final * 100) / 100,
+      maximo: maximo,
       evaluadas: detalle.reduce((n, s) => n + s.evaluadas, 0),
     };
   }
