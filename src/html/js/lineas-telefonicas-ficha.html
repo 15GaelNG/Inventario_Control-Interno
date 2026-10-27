@@ -203,17 +203,22 @@
       const esSimBasico = (l) => String(l.tipoLinea || '').toUpperCase() === 'SIM BASICO';
       /** Renta del SIM básico (usuario, 14-oct): no tiene adendum; es lo cobrado en su último mes completo. */
       const rentaSimBasico = (facturas) => (facturas || []).filter((f) => f.cobrado > 0 && !f.parcial)[0] || null;
+      /** Gigas del plan (usuario, 27-oct): los de la factura más reciente que los trae, como los da el proveedor. */
+      function datosPlan(facturas) {
+        const f = (facturas || []).filter((x) => x.gbPlan !== null && x.gbPlan !== undefined)[0];
+        return f ? ['Datos', Formato.miles(f.gbPlan, { decimales: 2 }) + ' GB'] : null;
+      }
       function tarjetaPlan(l, resumen, facturas) {
         const titulo = icono('file-text') + (resumen ? ' Plan de la línea' : ' Plan');
         if (esSimBasico(l)) {
           const f = rentaSimBasico(facturas);
           if (!f) return tarjeta(titulo, '<p class="empty-state">SIM básico: sin contrato ni plazo.</p>');
-          return tarjeta(titulo, campos([['Renta', dinero(f.cobrado, true) + ' al mes'], ['Plazo', 'Sin plazo forzoso']]) +
+          return tarjeta(titulo, campos([['Renta', dinero(f.cobrado, true) + ' al mes'], datosPlan(facturas), ['Plazo', 'Sin plazo forzoso']]) +
             (resumen ? '' : pieOrigen(f.origen, true)));
         }
         return tarjeta(titulo, campos([
           resumen ? null : ['Plan', l.plan],
-          ['Renta', dinero(l.costoPlan)], ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
+          ['Renta', dinero(l.costoPlan)], datosPlan(facturas), ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
         ]) + vidaPlan(l) + (resumen ? '' : pieOrigen(origenPlan(l), !!l.origenPlan)));
       }
       function tarjetaFacturacion(l, facturas) {
