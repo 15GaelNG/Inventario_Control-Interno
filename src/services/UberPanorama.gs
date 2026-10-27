@@ -131,7 +131,11 @@ const UberPanorama = (function () {
     return { generadoEn: new Date(), total: filas.length, filas: filas };
   }
 
-  /** Panorama con caché de 30 min (`forzar` la rehace) -- la hoja la alimentan cada semana, no hace falta leerla en vivo cada vez. */
+  /** Panorama con caché de 30 min (`forzar` la rehace) -- la hoja la alimentan cada semana, no hace falta leerla en vivo cada vez.
+   *  Un 0 filas NUNCA se guarda: la hoja es de otra área y se lee en vivo -- si un momento sale
+   *  vacía (ella la está alimentando justo entonces, o un hipo al leerla), que se vuelva a
+   *  intentar en la SIGUIENTE carga, no que medio mundo vea "sin datos" hasta 30 min por un
+   *  vacío que quedó guardado (usuario, 27-oct: el panorama salía vacío al abrir y "Actualizar" sí lo traía). */
   function panorama(token, forzar) {
     Permisos.puedeLeer(token, 'panorama-uber');
     if (!forzar) {
@@ -139,7 +143,7 @@ const UberPanorama = (function () {
       if (enCache) return enCache;
     }
     const r = calcular_();
-    CacheHojas.guardar(CLAVE_CACHE, r, SEG_CACHE);
+    if (r.filas.length) CacheHojas.guardar(CLAVE_CACHE, r, SEG_CACHE);
     return r;
   }
 
