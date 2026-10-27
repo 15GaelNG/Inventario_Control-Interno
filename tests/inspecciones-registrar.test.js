@@ -221,5 +221,32 @@ ok(JSON.stringify(escrito['PUNTAJE FINAL INSPECCION']) === JSON.stringify([[0.84
   escrito['PUNTUACION_NEUMATICOS formato'] === '0.00%' && tocada,
   'aplicar deja la fracción con formato 0.00%, no toca lo vacío ni lo que no es número, e invalida la caché');
 
+console.log('8. PUNTAJE MAXIMO de las ya guardadas, con sus respuestas (también las de AppSheet)');
+// La estructura del tipo sale de la caché simulada (ESTRUCTURA: Cristalería con PARABRISAS)
+const tabla = [
+  ['ID INSPECCION', 'TIPO', 'PARABRISAS', 'VOLTAJE'],
+  ['A1', 'HONDA 150XR', 'BUENO', ''],          // AppSheet: se calcula
+  ['A2', 'HONDA 150XR', 'N/A', ''],            // nada evaluado: no se inventa
+  ['A3', '', 'BUENO', ''],                     // sin tipo
+];
+let escritoMax = null;
+contexto.SheetUtils.getSheetByColumns = () => ({
+  getName: () => 'INSPECCION VEHICULAR',
+  getLastColumn: () => tabla[0].length,
+  getDataRange: () => ({ getValues: () => tabla.map((f) => f.slice()) }),
+  getRange: (fila1, col, filas) => (fila1 === 1
+    ? { getValues: () => [tabla[0].slice()], setValue: (v) => { tabla.forEach((f, i) => { f[col - 1] = i ? '' : v; }); } }
+    : { setValues: (v) => { escritoMax = { col, v }; }, setNumberFormat: () => {} }),
+});
+const revMax = contexto.InspeccionesService.puntajesMaximos(false);
+ok(revMax.calculadas === 1 && revMax.sinRespuestas === 1 && revMax.sinTipo === 1 && revMax.porMaximo[100] === 1 && !escritoMax &&
+  tabla[0].length === 4, 'revisar cuenta sin escribir ni crear la columna: ' + JSON.stringify(revMax));
+contexto.InspeccionesService.puntajesMaximos(true);
+ok(tabla[0][4] === 'PUNTAJE MAXIMO' && escritoMax.col === 5 && JSON.stringify(escritoMax.v) === JSON.stringify([[1], [''], ['']]),
+  'aplicar crea la columna y escribe 100% (1) solo donde hubo respuestas');
+tabla[1][4] = 0.9;
+const otraVez = contexto.InspeccionesService.puntajesMaximos(false);
+ok(otraVez.yaTenian === 1 && otraVez.calculadas === 0, 'la que ya tiene máximo no se recalcula');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

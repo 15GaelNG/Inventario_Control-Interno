@@ -362,31 +362,7 @@ const InspeccionesService = (function () {
 
     const estructura = estructuraDeTipo(token, p.TIPO);
     const checklist = p.checklist || {};
-    // El voltaje de la batería cuenta en el puntaje como una pieza más de la sección
-    // "Batería" -- seccionesParaPuntaje/checklistParaPuntaje son copias SOLO para esta
-    // cuenta: estructura.secciones y checklist siguen intactos para la fila y el PDF (ahí
-    // "VOLTAJE BATERIA" no es una columna real).
-    const calificacionVoltaje = calificacionVoltaje_(p.VOLTAJE);
-    const calificacionesLlantas = {};
-    estructura.llantas.forEach((l) => {
-      const cal = calificacionLlanta_(p.llantas && p.llantas[l.campo]);
-      if (cal !== null) calificacionesLlantas[l.campo] = cal;
-    });
-    const hayLlantas = Object.keys(calificacionesLlantas).length > 0;
-    const seccionesParaPuntaje = estructura.secciones.map((s) => {
-      if (s.titulo === 'Batería' && calificacionVoltaje !== null) {
-        return Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) });
-      }
-      if (s.titulo === 'Neumáticos' && hayLlantas) {
-        return Object.assign({}, s, { campos: s.campos.concat(Object.keys(calificacionesLlantas)
-          .map((campo) => ({ campo: campo, opciones: ['BUENO', 'REGULAR', 'MALO'] }))) });
-      }
-      return s;
-    });
-    const checklistParaPuntaje = Object.assign({}, checklist,
-      calificacionVoltaje !== null ? { 'VOLTAJE BATERIA': calificacionVoltaje } : {},
-      calificacionesLlantas);
-    const puntaje = calcularPuntaje_(seccionesParaPuntaje, checklistParaPuntaje);
+    const puntaje = puntajeDe_(estructura, checklist, p.VOLTAJE, p.llantas);
     if (!puntaje.evaluadas) throw new Error('Responde al menos una pieza del checklist antes de guardar');
 
     const id = nuevoId_(vehiculo.data['NUCCO']);
@@ -608,6 +584,88 @@ const InspeccionesService = (function () {
       }
     });
     if (aplicar && r.cambian) CacheHojas.tocarHoja(hoja);
+    return r;
+  }
+
+  /**
+   * El puntaje de unas respuestas con la estructura de su tipo: lo usan registrar() y puntajesMaximos() (las ya
+   * guardadas, que traen las mismas respuestas en su renglón).
+   */
+  function puntajeDe_(estructura, checklist, voltaje, llantas) {
+    // El voltaje de la batería cuenta en el puntaje como una pieza más de la sección
+    // "Batería" -- seccionesParaPuntaje/checklistParaPuntaje son copias SOLO para esta
+    // cuenta: estructura.secciones y checklist siguen intactos para la fila y el PDF (ahí
+    // "VOLTAJE BATERIA" no es una columna real).
+    const calificacionVoltaje = calificacionVoltaje_(voltaje);
+    const calificacionesLlantas = {};
+    estructura.llantas.forEach((l) => {
+      const cal = calificacionLlanta_(llantas && llantas[l.campo]);
+      if (cal !== null) calificacionesLlantas[l.campo] = cal;
+    });
+    const hayLlantas = Object.keys(calificacionesLlantas).length > 0;
+    const seccionesParaPuntaje = estructura.secciones.map((s) => {
+      if (s.titulo === 'Batería' && calificacionVoltaje !== null) {
+        return Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) });
+      }
+      if (s.titulo === 'Neumáticos' && hayLlantas) {
+        return Object.assign({}, s, { campos: s.campos.concat(Object.keys(calificacionesLlantas)
+          .map((campo) => ({ campo: campo, opciones: ['BUENO', 'REGULAR', 'MALO'] }))) });
+      }
+      return s;
+    });
+    const checklistParaPuntaje = Object.assign({}, checklist,
+      calificacionVoltaje !== null ? { 'VOLTAJE BATERIA': calificacionVoltaje } : {},
+      calificacionesLlantas);
+    return calcularPuntaje_(seccionesParaPuntaje, checklistParaPuntaje);
+  }
+
+  /**
+   * PUNTAJE MAXIMO de las inspecciones ya guardadas (27-oct): sale de sus respuestas con la plantilla de su tipo, igual
+   * que al guardar. Sirve también para las de AppSheet (no tienen puntuaciones, pero sí las respuestas). No toca las que
+   * ya lo tienen ni ninguna otra columna.
+   * @param {boolean} aplicar  false = solo contar
+   */
+  function puntajesMaximos(aplicar) {
+    const hoja = hoja_();
+    if (aplicar) asegurarColumna_(hoja, COL_MAXIMO);
+    const datos = hoja.getDataRange().getValues();
+    const encabezados = datos[0];
+    const norm = SheetUtils.normalizarEncabezado_;
+    const col = (nombre) => encabezados.findIndex((e) => norm(e) === norm(nombre));
+    const iTipo = col('TIPO');
+    const iMaximo = col(COL_MAXIMO);
+    const estructuras = {};
+    const r = { filas: datos.length - 1, calculadas: 0, yaTenian: 0, sinRespuestas: 0, sinTipo: 0, porMaximo: {}, errores: {} };
+    const nuevos = datos.slice(1).map((row) => {
+      const actual = iMaximo === -1 ? '' : row[iMaximo];
+      if (limpiar_(actual) !== '') { r.yaTenian++; return [actual]; }
+      const tipo = limpiar_(row[iTipo]);
+      if (!tipo) { r.sinTipo++; return ['']; }
+      if (!(tipo in estructuras)) {
+        try { estructuras[tipo] = estructura_(tipo); } catch (err) { estructuras[tipo] = null; r.errores[tipo] = err.message; }
+      }
+      const estructura = estructuras[tipo];
+      if (!estructura) return [''];
+      const valor = {};
+      encabezados.forEach((e, i) => { valor[norm(e)] = row[i]; });
+      const deColumna = (campo) => valor[norm(campo)];
+      const checklist = {};
+      estructura.secciones.forEach((s) => s.campos.forEach((c) => { checklist[c.campo] = deColumna(c.campo); }));
+      const llantas = {};
+      estructura.llantas.forEach((l) => { llantas[l.campo] = deColumna(l.campo); });
+      const puntaje = puntajeDe_(estructura, checklist, deColumna('VOLTAJE'), llantas);
+      if (!puntaje.evaluadas) { r.sinRespuestas++; return ['']; }
+      r.calculadas++;
+      r.porMaximo[puntaje.maximo] = (r.porMaximo[puntaje.maximo] || 0) + 1;
+      return [puntaje.maximo / 100];
+    });
+    if (aplicar && r.calculadas) {
+      const columna = col(COL_MAXIMO) + 1;
+      const rango = hoja.getRange(2, columna, nuevos.length, 1);
+      rango.setValues(nuevos);
+      rango.setNumberFormat('0.00%');
+      CacheHojas.tocarHoja(hoja);
+    }
     return r;
   }
 
@@ -1009,6 +1067,11 @@ const InspeccionesService = (function () {
 
   function estructuraDeTipo(token, tipo) {
     Permisos.puedeLeer(token, MODULO);
+    return estructura_(tipo);
+  }
+
+  /** Lo mismo sin sesión, para lo que corre desde el editor (puntajesMaximos) */
+  function estructura_(tipo) {
     const clave = 'inspeccion_tipo_' + SheetUtils.normalizarEncabezado_(tipo);
     const guardado = CacheService.getScriptCache().get(clave);
     if (guardado) {
@@ -1091,7 +1154,7 @@ const InspeccionesService = (function () {
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
     buscarPorId: (token, id) => conPorcentajes_(HojaServicio.buscarPorId(INSPECCIONES, token, id)),
     completo: (token) => HojaServicio.completo(INSPECCIONES, token).map(conPorcentajes_),
-    puntajesAPorcentaje,
+    puntajesAPorcentaje, puntajesMaximos,
     detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
@@ -1120,5 +1183,30 @@ function inspeccionesPuntajesAPorcentaje(confirmacion) {
   }
   const r = InspeccionesService.puntajesAPorcentaje(true);
   Logger.log('Pasadas a porcentaje: ' + r.cambian + ' de ' + r.celdas + ' celdas (no son número: ' + r.raras + ').');
+  return r;
+}
+
+/** Desde el editor (27-oct): a cuántas inspecciones ya guardadas se les calcularía el PUNTAJE MAXIMO (no cambia nada) */
+function inspeccionesMaximosRevisar() {
+  soloEditor_();
+  const r = InspeccionesService.puntajesMaximos(false);
+  Logger.log('Inspecciones: ' + r.filas + ' · se calcularían: ' + r.calculadas + ' · ya lo tenían: ' + r.yaTenian +
+    ' · sin respuestas: ' + r.sinRespuestas + ' · sin tipo: ' + r.sinTipo + ' · cuántas por máximo: ' + JSON.stringify(r.porMaximo) +
+    (Object.keys(r.errores).length ? ' · tipos que no se pudieron leer: ' + JSON.stringify(r.errores) : '') +
+    ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor (27-oct): escribe el PUNTAJE MAXIMO de las inspecciones que no lo tienen (correr antes
+ * inspeccionesMaximosRevisar). En PROD no corre sin inspeccionesMaximosCalcular('SI, EN PROD').
+ */
+function inspeccionesMaximosCalcular(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesMaximosCalcular('SI, EN PROD').");
+  }
+  const r = InspeccionesService.puntajesMaximos(true);
+  Logger.log('PUNTAJE MAXIMO calculado: ' + r.calculadas + ' de ' + r.filas + ' inspecciones (ya lo tenían: ' + r.yaTenian + ').');
   return r;
 }
