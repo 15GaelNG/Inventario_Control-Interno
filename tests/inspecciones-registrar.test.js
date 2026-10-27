@@ -240,7 +240,7 @@ ok(pendientesRegistrados.correosCc.slice().sort().join(',') === 'inspector@x.com
   'y los demás que SÍ se notificaron en copia -- sin el asistente (correo inválido) ni repetir al responsable: ' + pendientesRegistrados.correosCc);
 ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
   'el correo trae su propia sección con lo que hay que subir a Help Desk');
-ok(/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
+ok(/Tickets por generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
 ok(/Asunto:.*<code>[^<]*Reparaci.n de faro/.test(correos[0].htmlBody),
   'el asunto va en su propia línea, con su etiqueta: ' + correos[0].htmlBody);
 ok(/Familia o grupo a reportar:.*ELECTRICO Y LUCES/.test(correos[0].htmlBody),
@@ -252,7 +252,7 @@ const sinPendientes = contexto.InspeccionesService.registrar('token', {
   FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
   NOTIFICAR: { responsable: 'responsable@x.com', inspector: '', asistente: '', otros: [] },
 }, {});
-ok(!/Tickets a generar en Help Desk/.test(correos[0].htmlBody), 'sin PENDIENTES, el correo no trae esa sección');
+ok(!/Tickets por generar en Help Desk/.test(correos[0].htmlBody), 'sin PENDIENTES, el correo no trae esa sección');
 void sinPendientes;
 
 console.log('8. La calificación va en porcentaje en todos lados (27-oct: las secciones salían en decimal)');

@@ -593,10 +593,10 @@ const InspeccionesService = (function () {
     // usar ese mismo texto como asunto del ticket es lo que hace que el sistema lo detecte solo.
     const seccionPendientes = (pendientes || []).length
       ? '<div style="margin-top:16px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
-        '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Tickets a generar en Help Desk</h3>' +
-        '<p style="margin:0 0 10px;font-size:13px;color:#78350f">Da de alta cada uno como ticket en Help Desk usando ' +
-        'EXACTAMENTE el texto de "Asunto" (ya trae el folio de esta inspección): así el sistema lo detecta solo, ' +
-        'sin que nadie tenga que buscarlo.</p>' +
+        '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Tickets por generar en Help Desk</h3>' +
+        '<p style="margin:0 0 10px;font-size:13px;color:#78350f">Registra cada pendiente como un ticket en Help Desk, ' +
+        'utilizando exactamente el texto del campo "Asunto", ya que incluye el folio de la inspección correspondiente. ' +
+        'De esta manera, el sistema podrá identificarlo automáticamente, sin necesidad de realizar búsquedas manuales.</p>' +
         pendientes.map((pe) =>
           '<div style="margin:0 0 8px;padding:8px 10px;background:#fff;border:1px solid #f0b429;border-radius:4px">' +
           '<div style="margin:0 0 3px"><span style="color:#92400e">Asunto:</span> <code>' + escaparHtml_(pe['ASUNTO']) + '</code></div>' +
