@@ -98,14 +98,37 @@ const InspeccionesService = (function () {
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
   const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
 
+  /** "84.50%", 0.845 o 84.5 → 84.5 sin redondear, o null si no es un número */
+  function enCien_(valor) {
+    const texto = limpiar_(valor);
+    if (!texto) return null;
+    const n = Number(texto.replace('%', '').replace(/,/g, ''));
+    if (isNaN(n)) return null;
+    // Sin el símbolo, AppSheet guarda la fracción (0.845); con él, el número ya es 84.5
+    return texto.indexOf('%') === -1 && n <= 1 ? n * 100 : n;
+  }
+
   /** "84.50%" o 0.845 → 84.5 (número, para poder ordenar y promediar en la tabla) */
   function porcentaje_(valor) {
-    const texto = limpiar_(valor);
-    if (!texto) return '';
-    const n = Number(texto.replace('%', '').replace(/,/g, ''));
-    if (isNaN(n)) return '';
-    // Sin el símbolo, AppSheet guarda la fracción (0.845); con él, el número ya es 84.5
-    return texto.indexOf('%') === -1 && n <= 1 ? Math.round(n * 1000) / 10 : Math.round(n * 10) / 10;
+    const n = enCien_(valor);
+    return n === null ? '' : Math.round(n * 10) / 10;
+  }
+
+  /** "84.50%" o 0.845 → "84.50%": como se escribe en la hoja y se ve al exportar (27-oct: salía en decimal) */
+  function porcentajeTexto_(valor) {
+    const n = enCien_(valor);
+    return n === null ? valor : n.toFixed(2) + '%';
+  }
+
+  /** Las 13 columnas de calificación: el total y una por sección */
+  const COLUMNAS_CALIFICACION = () => ['PUNTAJE FINAL INSPECCION'].concat(COLUMNAS_PUNTUACION.map((p) => p[0]));
+
+  /** Un renglón crudo con su calificación en porcentaje (copia: la caché es de todos y no se toca) */
+  function conPorcentajes_(row) {
+    if (!row) return row;
+    const copia = Object.assign({}, row);
+    COLUMNAS_CALIFICACION().forEach((c) => { if (c in copia) copia[c] = porcentajeTexto_(copia[c]); });
+    return copia;
   }
 
   /** Lee solo las columnas pedidas (no las 195) → [{columna: valor}] */
@@ -386,7 +409,8 @@ const InspeccionesService = (function () {
     });
     puntaje.secciones.forEach((s) => {
       const columna = columnaPuntuacion_(s.titulo);
-      if (columna) fila[columna] = s.valor;
+      // Igual que el total ("8.33%", no 0.0833): la hoja lo guarda como porcentaje (27-oct)
+      if (columna) fila[columna] = (s.valor * 100).toFixed(2) + '%';
     });
     fila['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
 
@@ -524,6 +548,47 @@ const InspeccionesService = (function () {
     if (v <= 1.6) return 'MALO';
     if (v > 4) return 'BUENO';
     return 'REGULAR';
+  }
+
+  /**
+   * Las 13 columnas de calificación de la hoja a porcentaje (27-oct): las secciones se guardaban como fracción
+   * (0.0833), el total como "84.50%" y lo de AppSheet en fracción. Deja la fracción como valor y el formato 0.00%,
+   * que es como la hoja guarda un "84.50%". Una celda que no es número no se toca (se cuenta en raras).
+   * @param {boolean} aplicar  false = solo contar
+   */
+  function puntajesAPorcentaje(aplicar) {
+    const hoja = hoja_();
+    const filas = Math.max(0, hoja.getLastRow() - 1);
+    const indices = SheetUtils.indiceDeColumnas(
+      hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0], COLUMNAS_CALIFICACION());
+    const r = { filas: filas, columnas: 0, faltan: [], celdas: 0, cambian: 0, raras: 0 };
+    COLUMNAS_CALIFICACION().forEach((columna) => {
+      if (indices[columna] === -1) { r.faltan.push(columna); return; }
+      r.columnas++;
+      if (!filas) return;
+      const rango = hoja.getRange(2, indices[columna] + 1, filas, 1);
+      const valores = rango.getValues();
+      const formatos = rango.getNumberFormats();
+      let cambia = false;
+      const nuevos = valores.map(([v], i) => {
+        if (limpiar_(v) === '') return [v];
+        r.celdas++;
+        const n = enCien_(v);
+        if (n === null) { r.raras++; return [v]; }
+        const fraccion = Math.round(n * 100) / 10000;
+        if (typeof v !== 'number' || Math.abs(v - fraccion) > 1e-9 || formatos[i][0] !== '0.00%') {
+          r.cambian++;
+          cambia = true;
+        }
+        return [fraccion];
+      });
+      if (aplicar && cambia) {
+        rango.setValues(nuevos);
+        rango.setNumberFormat('0.00%');
+      }
+    });
+    if (aplicar && r.cambian) CacheHojas.tocarHoja(hoja);
+    return r;
   }
 
   // ---------- puntaje ----------
@@ -1002,11 +1067,36 @@ const InspeccionesService = (function () {
     listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(INSPECCIONES, token, id),
     /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
-    buscarPorId: (token, id) => HojaServicio.buscarPorId(INSPECCIONES, token, id),
-    completo: (token) => HojaServicio.completo(INSPECCIONES, token),
+    buscarPorId: (token, id) => conPorcentajes_(HojaServicio.buscarPorId(INSPECCIONES, token, id)),
+    completo: (token) => HojaServicio.completo(INSPECCIONES, token).map(conPorcentajes_),
+    puntajesAPorcentaje,
     detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas
   };
 })();
+
+/** Desde el editor (27-oct): cuántas calificaciones de INSPECCION VEHICULAR no están en porcentaje (no cambia nada) */
+function inspeccionesPuntajesRevisar() {
+  soloEditor_();
+  const r = InspeccionesService.puntajesAPorcentaje(false);
+  Logger.log('Inspecciones: ' + r.filas + ' · celdas con calificación: ' + r.celdas + ' · se pasarían a porcentaje: ' +
+    r.cambian + ' · no son número (no se tocan): ' + r.raras +
+    (r.faltan.length ? ' · columnas que no están: ' + r.faltan.join(', ') : '') + ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor (27-oct): pasa las 13 columnas de calificación a porcentaje (correr antes inspeccionesPuntajesRevisar).
+ * En PROD no corre sin inspeccionesPuntajesAPorcentaje('SI, EN PROD').
+ */
+function inspeccionesPuntajesAPorcentaje(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesPuntajesAPorcentaje('SI, EN PROD').");
+  }
+  const r = InspeccionesService.puntajesAPorcentaje(true);
+  Logger.log('Pasadas a porcentaje: ' + r.cambian + ' de ' + r.celdas + ' celdas (no son número: ' + r.raras + ').');
+  return r;
+}
