@@ -1,3 +1,10 @@
+<style>
+  /* Variación del gasto vs el mes anterior, bajo el KPI "Gasto total" */
+  .pu-stat-nota { font-size: var(--texto-2xs); font-weight: 700; margin-top: 2px; }
+  .pu-tendencia-sube { color: var(--color-danger); }
+  .pu-tendencia-baja { color: var(--color-success); }
+</style>
+
 <template id="tpl-panorama-uber">
   <div class="page-header">
     <div>
@@ -5,6 +12,7 @@
       <p class="page-subtitle">KPIs y gráficas de los viajes justificados de Uber -- los filtros se aplican a todo en vivo</p>
     </div>
     <div class="page-header-actions">
+      <button type="button" class="btn-excel" id="pu-exportar"><i data-lucide="file-spreadsheet" class="ico"></i> Exportar a Excel</button>
       <button type="button" class="secondary" id="pu-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
     </div>
   </div>

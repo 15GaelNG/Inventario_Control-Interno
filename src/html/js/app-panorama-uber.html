@@ -9,6 +9,11 @@
    * apiUberPanorama (UberPanorama.gs), que lee EN VIVO y SOLO LECTURA la hoja externa de Uber
    * (la lleva otra área) y los guarda en caché del servidor 30 min. Por eso se usa callServer
    * normal (no callServerListaCacheada) y hay un botón "Actualizar" que fuerza a releerla.
+   *
+   * Dos KPIs con algo más de contexto: "Gasto total" trae la variación contra el mes anterior
+   * (de entre lo que dejan los filtros activos) y "Viaje más caro" señala el viaje individual de
+   * mayor monto -- ambos pensados para control interno, no solo para ver el total. "Exportar a
+   * Excel" baja exactamente lo que dejan los filtros activos (mismo criterio que DataTable).
    */
 
   const PU_ORDEN_ESTATUS = ['JUSTIFICADO', 'SIN ESTATUS', 'REVISAR', 'COBRADO/DEVUELTO'];
@@ -129,6 +134,27 @@
       }
     });
 
+    document.getElementById('pu-exportar').addEventListener('click', async (ev) => {
+      const boton = ev.currentTarget;
+      boton.disabled = true;
+      try {
+        await ExportarExcel.descargar({
+          nombreArchivo: 'Panorama de Uber',
+          columnas: [
+            { titulo: 'Fecha de pedido', tipo: 'fecha' }, { titulo: 'Departamento', tipo: 'texto' }, { titulo: 'Sede', tipo: 'texto' },
+            { titulo: 'Colaborador', tipo: 'texto' }, { titulo: 'Categoría', tipo: 'texto' }, { titulo: 'Estatus', tipo: 'texto' },
+            { titulo: 'Autorización', tipo: 'texto' }, { titulo: 'Mes', tipo: 'texto' }, { titulo: 'Semana', tipo: 'texto' },
+            { titulo: 'Monto', tipo: 'numero' },
+          ],
+          filas: filasFiltradas().map((v) => [v.FECHA_PEDIDO, v.DEPARTAMENTO, v.SEDE, v.NOMBRE_COMPLETO, v.CATEGORIA, v.ESTATUS, v.AUTORIZACION, v.MES, v.SEMANA, v.MONTO]),
+        });
+      } catch (err) {
+        Notificar.error('No se pudo exportar: ' + escaparHtml(err.message));
+      } finally {
+        if (document.body.contains(boton)) boton.disabled = false;
+      }
+    });
+
     /** Clic en una rebanada/barra activa ese valor en el <select> del mismo campo (segundo clic lo quita). */
     function activarFiltroDesdeGrafica(idSelect, valor) {
       if (valor === 'Otros') return; // categoría agregada, no es una opción real del filtro
@@ -140,6 +166,23 @@
     }
 
     // ---------- KPIs ----------
+    /** Gasto del mes más reciente de `filas` vs el que le sigue hacia atrás -- entre lo que ya
+     *  dejan los demás filtros (p. ej. con un Departamento elegido, compara SUS dos últimos meses).
+     *  null si no hay al menos dos meses con datos o el anterior fue $0 (no hay contra qué comparar). */
+    function tendenciaMensual_(filas) {
+      const suma = {};
+      filas.forEach((f) => { if (f.MES && f.MES !== 'SIN MES') suma[f.MES] = (suma[f.MES] || 0) + (Number(f.MONTO) || 0); });
+      const meses = Object.keys(suma).sort((a, b) => PU_MES_ORDEN.indexOf(a) - PU_MES_ORDEN.indexOf(b));
+      if (meses.length < 2) return null;
+      const actual = meses[meses.length - 1];
+      const anterior = meses[meses.length - 2];
+      if (!suma[anterior]) return null;
+      return {
+        mesAnterior: anterior, sube: suma[actual] > suma[anterior],
+        pct: Math.round(Math.abs(suma[actual] - suma[anterior]) / suma[anterior] * 100),
+      };
+    }
+
     function pintarKpis(filas) {
       const porEstatus = {};
       PU_ORDEN_ESTATUS.forEach((e) => { porEstatus[e] = 0; });
@@ -147,21 +190,36 @@
       const gastoTotal = filas.reduce((acc, v) => acc + (Number(v.MONTO) || 0), 0);
       const promedio = filas.length ? gastoTotal / filas.length : 0;
       const pctJustificado = filas.length ? Math.round(porEstatus['JUSTIFICADO'] / filas.length * 100) : 0;
+      const tendencia = tendenciaMensual_(filas);
+      // El viaje individual de mayor monto -- un vistazo rápido para control interno, sin tener que ordenar nada a mano
+      const masCaro = filas.reduce((top, v) => (Number(v.MONTO) > Number((top && top.MONTO) || 0) ? v : top), null);
 
       const tiles = [
         { etiqueta: 'Total de viajes', valor: Formato.miles(filas.length), icono: 'route', clase: '' },
-        { etiqueta: 'Gasto total', valor: formatoMonedaPU(gastoTotal), icono: 'coins', clase: 'stat-tile-ok' },
+        {
+          etiqueta: 'Gasto total', valor: formatoMonedaPU(gastoTotal), icono: 'coins', clase: 'stat-tile-ok',
+          nota: tendencia ? (tendencia.sube ? '▲' : '▼') + ' ' + tendencia.pct + '% vs ' + tendencia.mesAnterior.slice(0, 3) : '',
+          notaClase: tendencia ? (tendencia.sube ? 'pu-tendencia-sube' : 'pu-tendencia-baja') : '',
+        },
         { etiqueta: 'Gasto promedio', valor: formatoMonedaPU(promedio), icono: 'calculator', clase: '' },
         { etiqueta: 'Justificado', valor: Formato.miles(porEstatus['JUSTIFICADO']) + ' (' + pctJustificado + '%)', icono: PU_ICONO_ESTATUS['JUSTIFICADO'], clase: 'stat-tile-ok' },
         { etiqueta: 'Sin estatus', valor: porEstatus['SIN ESTATUS'], icono: PU_ICONO_ESTATUS['SIN ESTATUS'], clase: porEstatus['SIN ESTATUS'] ? 'stat-tile-warn' : '' },
         { etiqueta: 'A revisar', valor: porEstatus['REVISAR'], icono: PU_ICONO_ESTATUS['REVISAR'], clase: porEstatus['REVISAR'] ? 'stat-tile-warn' : '' },
         { etiqueta: 'Cobrado/devuelto', valor: porEstatus['COBRADO/DEVUELTO'], icono: PU_ICONO_ESTATUS['COBRADO/DEVUELTO'], clase: '' },
-      ];
+        masCaro ? {
+          etiqueta: 'Viaje más caro', valor: formatoMonedaPU(masCaro.MONTO), icono: 'flame', clase: '',
+          nota: masCaro.NOMBRE_COMPLETO + ' · ' + masCaro.CATEGORIA,
+        } : null,
+      ].filter(Boolean);
 
       document.getElementById('pu-kpis').innerHTML = tiles.map((t) => `
         <div class="stat-tile ${t.clase}">
           <div class="stat-icon"><i data-lucide="${t.icono}" class="ico"></i></div>
-          <div><div class="stat-value">${t.valor}</div><div class="stat-label">${escaparHtml(t.etiqueta)}</div></div>
+          <div>
+            <div class="stat-value">${t.valor}</div>
+            <div class="stat-label">${escaparHtml(t.etiqueta)}</div>
+            ${t.nota ? `<div class="pu-stat-nota ${t.notaClase || ''}">${escaparHtml(t.nota)}</div>` : ''}
+          </div>
         </div>`).join('');
       refreshIcons();
     }
@@ -351,5 +409,8 @@
     { pregunta: '¿Por qué "Por autorización" no trae "SI" y "SÍ" por separado?', respuesta: 'Se fusionaron a propósito (control interno, oct-2026): eran la misma respuesta escrita de formas distintas (con/sin acento, y un typo "IS").' },
     { pregunta: '¿Cómo filtro?', respuesta: 'Elige Departamento, Sede, Categoría, Estatus, Autorización, Mes o Semana arriba -- se combinan entre sí, y también puedes hacer clic en una barra o rebanada para filtrar por ese valor.' },
     { pregunta: '¿Cómo quito los filtros?', respuesta: 'Botón "Limpiar filtros".' },
+    { pregunta: '¿Qué es la flechita bajo "Gasto total"?', respuesta: 'Cuánto subió o bajó el gasto del mes más reciente (de los que dejan los filtros activos) contra el que le sigue hacia atrás -- no aparece si solo hay un mes con datos.' },
+    { pregunta: '¿Y "Viaje más caro"?', respuesta: 'El viaje individual de mayor monto entre lo que dejan los filtros activos, con quién lo hizo y su categoría -- para no tener que buscarlo a mano.' },
+    { pregunta: '¿Qué exporta "Exportar a Excel"?', respuesta: 'Exactamente los viajes que ves en pantalla ahora mismo (respeta los filtros activos), en un .xlsx con fechas y montos ya como tales.' },
   ];
 </script>
