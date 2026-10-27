@@ -151,5 +151,49 @@ ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRO
 ok(paraPdf.carpetaId === 'formatos' && paraPdf.subcarpeta === ESTRUCTURA.carpeta, 'y el PDF a REPORTES, como antes');
 ok(actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/' + ESTRUCTURA.carpeta + '/INSPECCION.pdf', 'con su ruta');
 
+console.log('6. La calificación va en porcentaje en todos lados (27-oct: las secciones salían en decimal)');
+ok(fila['PUNTUACION_CRISTALERIA'] === '100.00%' && fila['PUNTAJE FINAL INSPECCION'] === '100.00%',
+  'la sección se escribe igual que el total: "100.00%", no 1');
+
+const CRUDO = { 'ID INSPECCION': 'I1', 'PUNTAJE FINAL INSPECCION': 0.7909, 'PUNTUACION_NEUMATICOS': 0.15,
+  'PUNTUACION_LIMPIEZA': '2.50%', 'PUNTUACION_NIVELES': '', 'FOLIO': 'AUT0025' };
+contexto.HojaServicio = { completo: () => [CRUDO], buscarPorId: () => CRUDO };
+const exportado = contexto.InspeccionesService.completo('token')[0];
+ok(exportado['PUNTAJE FINAL INSPECCION'] === '79.09%' && exportado['PUNTUACION_NEUMATICOS'] === '15.00%' &&
+  exportado['PUNTUACION_LIMPIEZA'] === '2.50%', 'al exportar, el total y las secciones salen en porcentaje (de AppSheet o de la app)');
+ok(exportado['PUNTUACION_NIVELES'] === '' && exportado['FOLIO'] === 'AUT0025', 'lo vacío y lo demás no cambian');
+ok(CRUDO['PUNTAJE FINAL INSPECCION'] === 0.7909, 'sin tocar el renglón de la caché');
+ok(contexto.InspeccionesService.buscarPorId('token', 'I1')['PUNTUACION_NEUMATICOS'] === '15.00%', '"Ver completo" también');
+
+// La hoja: dos columnas (total y Neumáticos) con lo que hay hoy mezclado
+const columnas = { 'PUNTAJE FINAL INSPECCION': [[0.845], ['84.50%'], [''], ['n/d']], 'PUNTUACION_NEUMATICOS': [[0.15], [0.075], [''], ['']] };
+const formatos = { 'PUNTAJE FINAL INSPECCION': '0.00%', 'PUNTUACION_NEUMATICOS': '0.###############' };
+const escrito = {};
+const encabezados = Object.keys(columnas);
+contexto.SheetUtils.getSheetByColumns = () => ({
+  getName: () => 'INSPECCION VEHICULAR', getLastRow: () => 5, getLastColumn: () => encabezados.length,
+  getRange: (fila1, col, filas) => {
+    if (fila1 === 1) return { getValues: () => [encabezados] };
+    const nombre = encabezados[col - 1];
+    return {
+      getValues: () => columnas[nombre],
+      getNumberFormats: () => columnas[nombre].map((_, i) => [i === 0 ? formatos[nombre] : '0.00%']),
+      setValues: (v) => { escrito[nombre] = v; },
+      setNumberFormat: (f) => { escrito[nombre + ' formato'] = f; },
+    };
+  },
+});
+contexto.SheetUtils.indiceDeColumnas = (enc, nombres) => nombres.reduce((m, n) => (m[n] = enc.indexOf(n), m), {});
+let tocada = false;
+contexto.CacheHojas = { tocarHoja: () => { tocada = true; } };
+const revisado = contexto.InspeccionesService.puntajesAPorcentaje(false);
+ok(revisado.celdas === 5 && revisado.cambian === 2 && revisado.raras === 1 && Object.keys(escrito).length === 0,
+  'revisar cuenta (el texto "84.50%" y la sección sin formato) y no escribe: ' + JSON.stringify(revisado));
+ok(revisado.faltan.length === 11, 'y dice qué columnas de sección no están en la hoja');
+contexto.InspeccionesService.puntajesAPorcentaje(true);
+ok(JSON.stringify(escrito['PUNTAJE FINAL INSPECCION']) === JSON.stringify([[0.845], [0.845], [''], ['n/d']]) &&
+  escrito['PUNTUACION_NEUMATICOS formato'] === '0.00%' && tocada,
+  'aplicar deja la fracción con formato 0.00%, no toca lo vacío ni lo que no es número, e invalida la caché');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
