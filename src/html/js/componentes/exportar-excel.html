@@ -16,6 +16,7 @@
    *       { titulo: 'Folio', tipo: 'texto' },
    *       { titulo: 'Kilometraje', tipo: 'numero' },
    *       { titulo: 'Fecha', tipo: 'fecha' },   // Date, ISO o "yyyy-MM-dd" → celda de fecha dd/mm/yyyy
+   *       { titulo: 'Puntaje', tipo: 'porcentaje' },   // "79.09%" → 0.7909 con formato 0.00% (número, no texto)
    *     ],
    *     filas: [ ['ST0443E', 12000, '2026-09-15'], … ],
    *   });
@@ -74,6 +75,12 @@
       return isNaN(n) ? null : n;
     }
 
+    /** "79.09%" → 0.7909 (un número sin el símbolo ya es la fracción) */
+    function aFraccion(valor) {
+      const n = aNumero(String(valor == null ? '' : valor).replace('%', ''));
+      return n === null || String(valor).indexOf('%') === -1 ? n : Math.round(n * 100) / 10000;
+    }
+
     function marcaDeTiempo() {
       const f = new Date();
       return Formato.dia(f) + '_' + Formato.hora(f).replace(':', '');
@@ -90,6 +97,7 @@
       const cuerpo = filas.map((fila) => fila.map((valor, i) => {
         const tipo = columnas[i].tipo;
         if (tipo === 'numero') return aNumero(valor);
+        if (tipo === 'porcentaje') return aFraccion(valor);
         if (tipo === 'fecha') return serialExcel(valor);
         if (tipo === 'fechaHora') return serialExcelHora(valor);
         return valor === null || valor === undefined ? '' : String(valor);
@@ -97,12 +105,13 @@
 
       const hoja = XLSX.utils.aoa_to_sheet([columnas.map((c) => c.titulo)].concat(cuerpo));
 
-      // Formato de fecha en las columnas de fecha
+      // Formato de las columnas de fecha y de porcentaje
+      const FORMATOS = { fecha: 'dd/mm/yyyy', fechaHora: 'dd/mm/yyyy hh:mm', porcentaje: '0.00%' };
       columnas.forEach((col, c) => {
-        if (col.tipo !== 'fecha' && col.tipo !== 'fechaHora') return;
+        if (!FORMATOS[col.tipo]) return;
         for (let r = 1; r <= cuerpo.length; r++) {
           const celda = hoja[XLSX.utils.encode_cell({ r, c })];
-          if (celda && celda.t === 'n') celda.z = col.tipo === 'fecha' ? 'dd/mm/yyyy' : 'dd/mm/yyyy hh:mm';
+          if (celda && celda.t === 'n') celda.z = FORMATOS[col.tipo];
         }
       });
 
@@ -142,10 +151,11 @@
       guardar(XLSX, libro, opciones.nombreArchivo);
     }
 
-    /** 'texto' | 'numero' | 'fecha' a partir de una muestra de valores crudos de una columna. */
+    /** 'texto' | 'numero' | 'porcentaje' | 'fecha' a partir de una muestra de valores crudos de una columna. */
     function tipoDeColumna_(valores) {
       const muestra = valores.filter((v) => v !== '' && v !== null && v !== undefined).slice(0, 60);
       if (!muestra.length) return 'texto';
+      if (muestra.every((v) => typeof v === 'string' && /^-?[\d.,]+\s?%$/.test(v.trim()))) return 'porcentaje';
       if (muestra.every((v) => v instanceof Date || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)))) return 'fecha';
       if (muestra.every((v) => typeof v === 'number' || (String(v).trim() !== '' && !isNaN(Number(String(v).replace(/[$,\s]/g, '')))))) return 'numero';
       return 'texto';
