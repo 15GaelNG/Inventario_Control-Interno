@@ -78,7 +78,12 @@ const contexto = vm.createContext({
   } } },
   SheetUtils: {
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
-    getSheetByColumns: () => ({ getName: () => 'INSPECCION VEHICULAR' }),
+    // Ya trae PUNTAJE MAXIMO: registrar no tiene que crearla (eso se prueba en inspecciones-registrar)
+    getSheetByColumns: () => ({
+      getName: () => 'INSPECCION VEHICULAR', getLastColumn: () => 2,
+      getRange: () => ({ getValues: () => [['ID INSPECCION', 'PUNTAJE MAXIMO']] }),
+    }),
+    indiceDeColumnas: (enc, nombres) => nombres.reduce((m, n) => (m[n] = enc.indexOf(n), m), {}),
     leerColumnas: () => ({ filas: 0, datos: { 'ID INSPECCION': [] } }),
     findById: (libro, hoja, id, col) => (col === 'ID INSPECCION'
       ? { data: { 'ID INSPECCION': id, NUCO: '25', TIPO: 'HONDA 150XR', FECHA: new Date(), 'FORMATO INSPECCION VEHICULAR': pdf.getUrl() } }
