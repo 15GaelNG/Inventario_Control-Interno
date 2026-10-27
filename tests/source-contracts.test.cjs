@@ -2981,7 +2981,7 @@ test('SIM básico: la renta sale de su último mes completo facturado (usuario, 
   const renta = new Function('return ' + html.slice(ini, html.indexOf('\n', ini)).replace('      const rentaSimBasico = ', '').replace(/;\s*$/, ''))();
   assert.strictEqual(renta([{ cobrado: -7.74 }, { cobrado: 12, parcial: true }, { cobrado: 29, origen: 'x' }]).cobrado, 29);
   assert.strictEqual(renta([{ cobrado: 0 }]), null);
-  assert.match(html, /\['Renta', dinero\(f\.cobrado, true\) \+ ' al mes'\], \['Plazo', 'Sin plazo forzoso'\]/);
+  assert.match(html, /\['Renta', dinero\(f\.cobrado, true\) \+ ' al mes'\], datosPlan\(facturas\), \['Plazo', 'Sin plazo forzoso'\]/);
   assert.match(read('src/services/lineas/LineasRepo.gs'), /parcial: \/CARGO DEL \.\+ AL \/\.test\(sinAcentos_\(x\['CONCEPTOS'\]\)\)/);
 });
 
@@ -3015,6 +3015,20 @@ test('Facturación: la parcialidad del equipo se ve y la diferencia contra la re
   assert.match(repo, /const cargoEquipo = LineasUtil\.numero\(x\['CARGO EQUIPO'\]\) \|\| 0;/);
   assert.match(repo, /equipo: cargoEquipo \? \{ nombre: txt\(x\['EQUIPO FACTURADO'\]\) \|\| '', parcialidad: txt\(x\['PARCIALIDAD'\]\) \|\| '', cargo: cargoEquipo \} : null,/);
   assert.match(LINEAS, /f\.equipo \? \['Equipo', esc\('Parcialidad ' \+ f\.equipo\.parcialidad \+ ' · ' \+ f\.equipo\.nombre \+ ' · ' \+ dinero\(f\.equipo\.cargo, true\)\), true\] : null,/);
+});
+
+test('Plan de la línea: los gigas del plan, de la factura más reciente que los trae (usuario, 27-oct)', () => {
+  const repo = read('src/services/lineas/LineasRepo.gs');
+  assert.match(repo, /gbPlan: LineasUtil\.numero\(x\['GB PLAN'\]\),/);
+  const inicio = LINEAS.indexOf('      function datosPlan(');
+  const datosPlan = new Function('Formato', LINEAS.slice(inicio, LINEAS.indexOf('      function tarjetaPlan(')) + '\nreturn datosPlan;')(
+    new Function(require('./formato-fuente') + '\nreturn Formato;')());
+  assert.deepEqual(datosPlan([{ gbPlan: null }, { gbPlan: 18.5 }, { gbPlan: 4 }]), ['Datos', '18.5 GB']);
+  assert.deepEqual(datosPlan([{ gbPlan: 9 }]), ['Datos', '9 GB']);
+  assert.strictEqual(datosPlan([{ gbPlan: null }]), null, 'sin gigas en los archivos no sale el renglón');
+  assert.strictEqual(datosPlan(undefined), null);
+  const plan = LINEAS.slice(LINEAS.indexOf('      function tarjetaPlan('), LINEAS.indexOf('      function tarjetaFacturacion('));
+  assert.equal((plan.match(/datosPlan\(facturas\)/g) || []).length, 2, 'en el plan y en el SIM básico');
 });
 
 test('Cobro habitual (usuario, 14-oct; pendiente 1.17): la diferencia es contra lo que la línea paga normalmente', () => {

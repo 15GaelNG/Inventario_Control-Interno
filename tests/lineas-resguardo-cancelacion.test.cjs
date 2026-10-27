@@ -679,13 +679,13 @@ test('Cancelaciones: región por la lada y cuenta padre de la línea, también y
   const filas = t.R.bandeja({ puedeAprobar: true }).filas;
   const r = (id) => filas.filter((f) => f.ID === id)[0];
   assert.deepEqual(['R1', 'R2', 'R3', 'R4'].map((id) => [r(id).REGION, r(id).CUENTA_PADRE]),
-    [['Región 9', '99022914'], ['Región 6', '62637313'], ['Región 6', '62637313'], ['', '62637313']]);
+    [['Región 9', '99022914'], ['Región 6', '62637313'], ['Región 6', '62637313'], ['Región 6', '62637313']], 'Querétaro es todo región 6 (427 San Juan del Río; L30, 27-oct)');
   assert.equal(r('R5').REGION, undefined, 'los resguardos no llevan región');
   assert.equal(t.tablas.APP_RESGUARDOS[0].REGION, undefined, 'no se guarda en la hoja');
 
   const U = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')({}, {});
-  assert.deepEqual(['3312345678', '8112345678', '9991234567', '9981234567', '4771234567', '4441234567', '6641234567', '6561234567', '2221234567', '7221234567', '561234567', ''].map(U.regionDeNumero),
-    ['Región 5', 'Región 4', 'Región 8', 'Región 8', 'Región 6', 'Región 6', 'Región 1', 'Región 3', 'Región 7', 'Región 9', '', '']);
+  assert.deepEqual(['3312345678', '8112345678', '9991234567', '9981234567', '4771234567', '4441234567', '6641234567', '6561234567', '2221234567', '7221234567', '4141234567', '4871234567', '9001234567', '561234567', ''].map(U.regionDeNumero),
+    ['Región 5', 'Región 4', 'Región 8', 'Región 8', 'Región 6', 'Región 6', 'Región 1', 'Región 3', 'Región 7', 'Región 9', 'Región 6', 'Región 6', '', '', '']);
   const html = LINEAS;
   assert.match(html, /\{ campo: 'REGION', titulo: 'Región', tipo: 'lista' \},\n\s+\{ campo: 'CUENTA_PADRE', titulo: 'Cuenta padre'/);
 });

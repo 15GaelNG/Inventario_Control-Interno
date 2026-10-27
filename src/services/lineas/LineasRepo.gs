@@ -307,7 +307,8 @@ const LineasRepo = (function () {
         equipo: cargoEquipo ? { nombre: txt(x['EQUIPO FACTURADO']) || '', parcialidad: txt(x['PARCIALIDAD']) || '', cargo: cargoEquipo } : null,
         parcial: /CARGO DEL .+ AL /.test(sinAcentos_(x['CONCEPTOS'])), numero: digitos(x['NUMERO EN FACTURA']),
         minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
-        origen: txt(x['ARCHIVO']) || '',
+        // Gigas que el proveedor dice que trae el plan ese mes (usuario, 27-oct); null si el archivo no los trae
+        gbPlan: LineasUtil.numero(x['GB PLAN']), origen: txt(x['ARCHIVO']) || '',
       };
     }).sort((a, b) => (b.corte || 0) - (a.corte || 0));
     todas.forEach((f, i) => {
