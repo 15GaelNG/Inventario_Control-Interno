@@ -9,6 +9,13 @@
       filasComoObjetos, guion, ico, icono, mensajeError, miles, montaje, normal, panelActual, pintarIconos } = Lineas.comun;
     const { irARegistro } = Lineas;
 
+    /** apiListarVehiculosResumen manda JSON.stringify (arreglo grande con Date, google.script.run
+     *  lo pierde a veces si no -- mismo patrón que app-panorama-vehiculos.html), a diferencia de
+     *  Hologramas/Uber/Cajas chicas, que sí regresan el arreglo directo: hay que parsearlo antes de
+     *  usarlo (si no, "(vehiculos || []).forEach is not a function" porque vehiculos es un string). */
+    const vehiculosDeOtroModulo = () => deOtroModulo('vehiculos', 'apiListarVehiculosResumen')
+      .then((t) => (typeof t === 'string' ? JSON.parse(t) : t));
+
     // ======================================================================
     // Gestión de Activos: busca un colaborador y muestra sus líneas/equipos
     // (vehículos, hologramas, Uber y cajas chicas se integran con los demás módulos)
@@ -140,7 +147,7 @@
         // no pide nada nuevo al servidor.
         Promise.all([
           cargarIndice(),
-          deOtroModulo('vehiculos', 'apiListarVehiculosResumen'),
+          vehiculosDeOtroModulo(),
           deOtroModulo('hologramas', 'apiListarHologramas'),
           deOtroModulo('uber', 'apiListarUberResumen'),
           deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
@@ -374,7 +381,7 @@
       Promise.all([
         cargarColaboradores(),
         cargarIndice(),
-        deOtroModulo('vehiculos', 'apiListarVehiculosResumen'),
+        vehiculosDeOtroModulo(),
         deOtroModulo('hologramas', 'apiListarHologramas'),
         deOtroModulo('uber', 'apiListarUberResumen'),
         deOtroModulo('caja-chica', 'apiListarCajasChicasResumen'),
