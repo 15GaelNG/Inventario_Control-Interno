@@ -612,8 +612,11 @@ test('el candado del script se pide solo con Candado.con (reentrante), y SheetUt
   const su = read('src/utils/SheetUtils.gs');
   const funcion = (nombre) => new RegExp('function ' + nombre + '\\([\\s\\S]*?\\r?\\n  }\\r?\\n').exec(su)[0];
   assert.match(funcion('update'), /Candado\.con\(/);
-  assert.match(funcion('update'), /escribirColumnas_\(/);
+  // 28-oct: escribe con la primitiva cambiarCeldas (la de todos), que escribe por tramos solo las celdas del cambio
+  assert.match(funcion('update'), /cambiarCeldas\(/);
   assert.doesNotMatch(funcion('update'), /objectToRow_\(|setValues\(\[row\]\)/);
+  assert.match(funcion('escribirConHoja_'), /escribirColumnas_\(/);
+  assert.doesNotMatch(funcion('cambiarCeldas'), /objectToRow_\(/);
   assert.match(funcion('remove'), /Candado\.con\(/);
 });
 

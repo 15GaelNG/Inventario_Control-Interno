@@ -39,7 +39,14 @@ function crearEntorno(opciones) {
   };
 
   // locks: cuántas veces se pidió el candado; candadoTomado: si alguien lo tiene ahora mismo
-  const registro = { locks: 0, candadoTomado: 0, consola: [] };
+  // api: cada llamada a la API de Sheets (Sheets.Spreadsheets.Values.batchUpdate), para contarlas en las pruebas
+  const registro = { locks: 0, candadoTomado: 0, consola: [], api: [] };
+  /** 'B5' → [5, 2] (renglón, columna; base 1) */
+  const deA1 = (a1) => {
+    const m = /^([A-Z]+)(\d+)$/.exec(a1);
+    if (!m) throw new Error('A1 simulado: ' + a1);
+    return [Number(m[2]), m[1].split('').reduce((n, l) => n * 26 + l.charCodeAt(0) - 64, 0)];
+  };
 
   // ------------------------------------------------------------------ hojas
   function crearHoja(libro, nombre, renglones) {
@@ -57,6 +64,7 @@ function crearEntorno(opciones) {
       getLastColumn: ancho,
       getMaxRows: () => datos.length,
       getRange(fila, col, filas, cols) {
+        if (typeof fila === 'string') return hoja.getRange(...deA1(fila));
         const nf = filas || 1;
         const nc = cols || 1;
         return {
@@ -70,6 +78,7 @@ function crearEntorno(opciones) {
             return this;
           },
           setValue(v) { return this.setValues([[v]]); },
+          clearContent() { return this.setValues(Array.from({ length: nf }, () => Array(nc).fill(''))); },
           // Formato: no cambia los datos, solo se acepta
           setFontWeight() { return this; },
           setNumberFormat() { return this; },
@@ -81,6 +90,10 @@ function crearEntorno(opciones) {
       appendRow(r) { datos.splice(ultimaFila(), 0, r.slice()); return hoja; },
       deleteRow(f) { datos.splice(f - 1, 1); },
       deleteRows(f, n) { datos.splice(f - 1, n); },
+      insertRowsAfter(f, n) { datos.splice(f, 0, ...Array.from({ length: n }, () => Array(ancho()).fill(''))); return hoja; },
+      deleteColumn(c) { datos.forEach((r) => r.splice(c - 1, 1)); },
+      deleteColumns(c, n) { datos.forEach((r) => r.splice(c - 1, n)); },
+      getRangeList(a1s) { return { setValue: (v) => { registro.rangeLists = (registro.rangeLists || 0) + 1; a1s.forEach((a) => hoja.getRange(a).setValue(v)); } }; },
       _datos: datos,
     };
     return hoja;
@@ -91,7 +104,7 @@ function crearEntorno(opciones) {
     const libro = { getId: () => id, getName: () => 'Libro ' + id, _hojas: [] };
     libro.getSheets = () => libro._hojas.slice();
     libro.getSheetByName = (n) => libro._hojas.find((h) => h.getName() === n) || null;
-    libro.insertSheet = (n) => {
+    libro.insertSheet = (n) => {   // (la posición no importa en las pruebas)
       if (libro.getSheetByName(n)) throw new Error('Ya existe la hoja ' + n);
       const h = crearHoja(libro, n, []);
       libro._hojas.push(h);
@@ -166,6 +179,24 @@ function crearEntorno(opciones) {
       flush: () => {},
     },
     CacheService: { getScriptCache: () => cache, getUserCache: () => cache },
+    // La API de Sheets (servicio avanzado): batchUpdate con rangos 'HOJA'!B5. cfg.apiSheets === false: apagada en el proyecto
+    Sheets: {
+      Spreadsheets: {
+        Values: {
+          batchUpdate(cuerpo, id) {
+            if (cfg.apiSheets === false) throw new Error('Sheets API has not been used in project 1 before or it is disabled. SERVICE_DISABLED');
+            registro.api.push({ libro: id, modo: cuerpo.valueInputOption, celdas: cuerpo.data.length });
+            cuerpo.data.forEach((d) => {
+              const m = /^'((?:[^']|'')*)'!([A-Z]+\d+)$/.exec(d.range);
+              const v = d.values[0][0];
+              const tecleada = cuerpo.valueInputOption === 'USER_ENTERED' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(v);
+              libros[id].getSheetByName(m[1].replace(/''/g, "'")).getRange(m[2]).setValue(tecleada ? fecha(v.slice(0, 16)) : v);
+            });
+            return {};
+          },
+        },
+      },
+    },
     LockService: {
       getScriptLock: () => ({
         waitLock: () => { registro.locks++; registro.candadoTomado++; },
