@@ -82,8 +82,21 @@ function crearEntorno(opciones) {
           // Formato: no cambia los datos, solo se acepta
           setFontWeight() { return this; },
           setNumberFormat() { return this; },
+          setBackground() { return this; },
+          setFontColor() { return this; },
+          setFontSize() { return this; },
+          setHorizontalAlignment() { return this; },
+          setVerticalAlignment() { return this; },
+          setWrap() { return this; },
+          createFilter() { hoja._filtro = {}; return hoja._filtro; },
         };
       },
+      setRowHeight: () => hoja,
+      setColumnWidth: () => hoja,
+      // Formato condicional: las reglas quedan en hoja._reglas para revisarlas
+      setConditionalFormatRules(reglas) { hoja._reglas = reglas; return hoja; },
+      getConditionalFormatRules: () => hoja._reglas || [],
+      getFilter: () => hoja._filtro || null,
       setFrozenRows: () => hoja,
       getMaxColumns: () => Math.max(26, ancho()),
       protect() { const p = { setDescription: () => p, setWarningOnly: () => p }; return p; },
@@ -188,6 +201,19 @@ function crearEntorno(opciones) {
       flush: () => {},
       // Un libro nuevo trae su "Hoja 1" vacía, como el de verdad
       create: (nombre) => crearLibro('nuevo-' + (++nuevos), nombre, { 'Hoja 1': [] }),
+      // Una regla de formato condicional: guarda lo que se le pidió (texto, fondo, letra) para revisarlo
+      newConditionalFormatRule: () => {
+        const r = {};
+        const b = {
+          whenTextEqualTo: (t) => { r.texto = t; return b; },
+          whenFormulaSatisfied: (f) => { r.formula = f; return b; },
+          setBackground: (c) => { r.fondo = c; return b; },
+          setFontColor: (c) => { r.letra = c; return b; },
+          setRanges: (rs) => { r.rangos = rs; return b; },
+          build: () => r,
+        };
+        return b;
+      },
     },
     CacheService: { getScriptCache: () => cache, getUserCache: () => cache },
     // La API de Sheets (servicio avanzado): batchUpdate con rangos 'HOJA'!B5. cfg.apiSheets === false: apagada en el proyecto
