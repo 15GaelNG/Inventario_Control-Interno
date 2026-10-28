@@ -9,7 +9,7 @@
     const { aviso, chip, enlaceDrive, esc, fecha, icono, llamar, mensajeError, menuFlotante, miles, pedirDatos,
       pedirFotoGrande, porcentaje, verFotos } = Lineas.comun;
     Lineas.telefonicas.registrar('paginas', (T) => {
-      const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pila, vigente } = T;
+      const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, vigente } = T;
       const { abrir, campos, encabezado, migas, pedirDocumento, tarjeta } = T.de('ficha');
       const { generarPdfPendiente, regenerarPdf, subirPdfFirmado } = T.de('documentos');
       const { htmlSubirFotos, manejarSubidaArchivo } = T.de('captura');
@@ -31,9 +31,9 @@
           r.equipo ? { icono: 'smartphone', texto: 'Ver equipo', alHacer: () => abrir('equipo', r.equipo._id) } : null,
           x.carpetaId ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
             alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
-          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
+          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId && !pdfsEnCurso[x.id] ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
             alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
-          operar && x.registroId && x.tipoPdf === 'RESPONSIVA' && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
+          operar && x.registroId && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
             alHacer: () => regenerarPdf(x, x.registroId) } : null,
         ].filter(Boolean);
       }

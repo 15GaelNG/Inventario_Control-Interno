@@ -14,14 +14,17 @@ const LineasAcciones = (function () {
 
   // ---------------- Responsiva (antes Reasignar) ----------------
 
-  /** Datos de la persona en la responsiva → columnas del inventario. */
+  /** Datos de la persona en la responsiva → columnas del inventario (con el jefe directo desde el 19-oct, pendiente 2.54). */
   const PERSONA_DE_RESPONSIVA = [
     ['NO EMPLEADO', 'No EMPLEADO'], ['RESPONSABLE', 'RESPONSABLE'], ['PUESTO', 'PUESTO'], ['DEPARTAMENTO', 'DEPARTAMENTO'], ['AREA', 'AREA'],
-    ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['DIRECTOR', 'DIRECTOR'], ['CUENTA GOOGLE', 'CORREO'],
+    ['SEDE', 'SEDE'], ['OFICINA / DESARROLLO', 'OFICINA / DESARROLLO'], ['JEFE DIRECTO', 'JEFE DIRECTO'], ['DIRECTOR', 'DIRECTOR'], ['CUENTA GOOGLE', 'CORREO'],
   ].concat(['SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'].reduce((a, n) => a.concat([['NO EMPLEADO ' + n + ' RESPONSABLE', 'NO EMPLEADO ' + n + ' RESPONSABLE'],
     ['NOMBRE ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']]), []));
 
-  /** Lo que ya no se entrega (usuario, 16-oct): primero se corrige su estatus con Editar. */
+  /**
+   * Lo que ya no se entrega (usuario, 16-oct) ni se inspecciona (21-oct; pendiente 2.55): la pantalla no muestra los
+   * botones. El equipo vuelve a USO con «Corregir», que abre la Responsiva (desdeCorregir).
+   */
   const ESTATUS_SIN_RESPONSIVA = {
     equipo: ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'],
     linea: ['CANCELADA', 'EN PROCESO DE CANCELACION'],
@@ -33,10 +36,17 @@ const LineasAcciones = (function () {
     return esEquipo ? 'NUCO ' + (LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')) || '') : 'La línea ' + (txt(LineasUtil.col(f, 'NUMERO TELEFONO')) || txt(LineasUtil.col(f, 'NUMERO SIM')));
   }
 
-  /** El estatus del registro (el del equipo, o el de la línea sin equipo), o error si ya no se entrega. */
-  function exigirEstatusParaResponsiva(f, esEquipo) {
+  /**
+   * El estatus del registro (el del equipo, o el de la línea sin equipo), o error si ya no se entrega. desdeCorregir: la
+   * Responsiva que abre «Corregir equipo» al pasarlo a USO sí acepta el estatus final (usuario, 21-oct; pendiente 2.55).
+   */
+  function exigirEstatusParaResponsiva(f, esEquipo, desdeCorregir) {
     const estatus = may(LineasUtil.col(f, esEquipo ? 'ESTATUS EQUIPO' : 'ESTATUS LINEA'));
-    if (ESTATUS_SIN_RESPONSIVA[esEquipo ? 'equipo' : 'linea'].indexOf(estatus) >= 0) throw new Error(nombreRegistro_(f, esEquipo) + ' está ' + estatus + '.');
+    if (!(esEquipo && desdeCorregir) && ESTATUS_SIN_RESPONSIVA[esEquipo ? 'equipo' : 'linea'].indexOf(estatus) >= 0) {
+      throw new Error(nombreRegistro_(f, esEquipo) + ' está ' + estatus + '.');
+    }
+    // En el panel de Pau tampoco (pendiente 3.15): sale con Quitar del panel o, ya recibido, con Entregar a líneas
+    if (esEquipo && LineasResguardos.enPanel(f)) throw new Error(nombreRegistro_(f, true) + ' está en Resguardos y cancelaciones.');
     return estatus;
   }
 
@@ -69,29 +79,26 @@ const LineasAcciones = (function () {
     const inspeccionId = txt(d.inspeccionId);
     const r = LineasCaptura.guardarResponsiva(d, usuario, puedeVerSecretos, {
       ref: ref, modo: 'RESPONSIVA',
-      aplicar: (ahora, valores) => aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora),
+      aplicar: (ahora, valores) => aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora, !!d.desdeCorregir),
     });
     return { id: r.id, registroId: r.registroId, pdfPendiente: true, filas: r.filas, reasignado: !!(r.hecho && r.hecho.reasignado) };
   }
 
   /** Dentro del candado de la responsiva: si es reasignación, cambia a la persona y el estatus (ver responsiva). */
-  function aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora) {
+  function aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora, desdeCorregir) {
     const esEquipo = !!ref.equipoId;
     const id = ref.equipoId || ref.lineaId;
     const f = LineasRepo.leerRegistroObligatorio(id, esEquipo ? 'el equipo' : 'la línea');
-    const estatus = exigirEstatusParaResponsiva(f, esEquipo);
+    const estatus = exigirEstatusParaResponsiva(f, esEquipo, desdeCorregir);
     const comentario = txt(valores['COMENTARIO']);
     if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial).');
     const antes = txt(LineasUtil.col(f, 'RESPONSABLE'));
     if (esRenovacion(estatus, antes, valores['RESPONSABLE'])) return { id: id, reasignado: false };
     if (esEquipo) LineasCaptura.exigirInspeccion(inspeccionId, LineasDatos.idsDeFila(f), nombreRegistro_(f, true));
-    const nuevo = may(valores['RESPONSABLE']);
     const cambios = {};
+    // El jefe directo también es de la responsiva (usuario, 19-oct; pendiente 2.54): del 6 al 19-oct salía de la
+    // inspección o de Capital Humano, porque la responsiva no lo pedía
     PERSONA_DE_RESPONSIVA.forEach(([destino, origen]) => { cambios[destino] = txt(valores[origen]); });
-    // El jefe directo no viene en la responsiva (lleva al director): el de la inspección, que se puede corregir ahí, o
-    // el de Capital Humano de la persona elegida (usuario, 6-oct; del 4 al 6-oct era al revés)
-    const deInspeccion = esEquipo && may(LineasCaptura.datoDeInspeccion(inspeccionId, 'RESPONSABLE')) === nuevo ? LineasCaptura.datoDeInspeccion(inspeccionId, 'JEFE DIRECTO') : '';
-    cambios['JEFE DIRECTO'] = deInspeccion || datoDeCH_(valores['No EMPLEADO'], valores['RESPONSABLE'], 'jefe');
     if (esEquipo) {
       cambios['ESTATUS EQUIPO'] = 'USO';
       if (may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'DISPONIBLE') cambios['ESTATUS LINEA'] = 'USO';
@@ -107,16 +114,6 @@ const LineasAcciones = (function () {
         idsReasignacion: g.idReasignacion ? [g.idReasignacion] : [], cambios: g.campos },
     });
     return { id: id, reasignado: true };
-  }
-
-  /** Un dato de la persona en Capital Humano ('jefe', 'director'…) por número de empleado o, si no, por nombre; '' si no está. */
-  function datoDeCH_(noEmpleado, nombre, campo) {
-    const ix = LineasRepo.indiceColaboradores();
-    const c = ix.columnas;
-    const iNum = c.indexOf('noEmpleado'), iNom = c.indexOf('nombre'), iDir = c.indexOf(campo);
-    const num = may(noEmpleado), nom = may(nombre);
-    const fila = (num && ix.filas.filter((f) => may(f[iNum]) === num)[0]) || (nom && ix.filas.filter((f) => may(f[iNom]) === nom)[0]);
-    return fila ? txt(fila[iDir]) : '';
   }
 
   // ---------------- Vincular, cambiar y desvincular línea y equipo (etapa 3, usuario 8-oct; pendiente 2.24) ----------------
@@ -169,7 +166,8 @@ const LineasAcciones = (function () {
     // La línea que deja el equipo y va a cancelación entra a la bandeja de Pau, como con «Mandar a cancelación»; su motivo
     // sale del adendum (13-oct)
     if (hecho.anteriorACancelar) {
-      LineasResguardos.mandarCancelacion([hecho.anteriorACancelar], { comentario: comentario, ticket: ticket }, usuario, { motivoDelAdendum: true });
+      LineasResguardos.mandarCancelacion([hecho.anteriorACancelar], { comentario: comentario, ticket: ticket }, usuario,
+        { motivoDelAdendum: true, nucos: { [hecho.anteriorACancelar]: hecho.nuco } });
     }
     const filas = LineasRepo.refrescarIndice([equipoId].concat(hecho.tocados));
     return { id: responsivaId || equipoId, responsivaId: responsivaId, equipoId: equipoId, pdfPendiente: !!responsivaId, filas: filas };
@@ -185,12 +183,20 @@ const LineasAcciones = (function () {
     if (ESTATUS_VINCULABLE.indexOf(may(col(fE, 'ESTATUS EQUIPO'))) < 0) {
       throw new Error(nombre + ' está en ' + may(col(fE, 'ESTATUS EQUIPO')) + ': la línea se pone o se cambia en un equipo en USO o en RESGUARDO.');
     }
+    // En el panel de Pau no se le cambia la línea, como con la Responsiva (usuario, 22-oct): sale con Quitar del panel o,
+    // ya recibido, con Entregar a líneas
+    if (LineasResguardos.enPanel(fE)) throw new Error(nombre + ' está en Resguardos y cancelaciones.');
     const tieneLinea = !!(txt(col(fE, 'NUMERO TELEFONO')) || txt(col(fE, 'NUMERO SIM'))) && may(col(fE, 'ESTATUS LINEA')) !== 'CANCELADA';
     if (!lineaId && !tieneLinea) throw new Error(nombre + ' no tiene línea.');
     const campos = [];
     const refs = [equipoId];
     const tocados = [];
     const lineaFila = lineaId ? LineasRepo.leerRegistroObligatorio(lineaId, 'la línea') : null;
+    // Una línea en Cancelaciones no pasa a otro equipo ni a DISPONIBLE: avisa su fase (pendiente 3.12). Se revisa antes de
+    // escribir nada. La del equipo que ya está ahí solo sale «a cancelación» (sigue en su renglón, sin otro)
+    if (lineaFila) LineasResguardos.exigirSinCancelacion(lineaFila);
+    const anteriorEnCurso = tieneLinea ? LineasResguardos.cancelacionDe(fE) : null;
+    if (anteriorEnCurso && may(anterior) !== 'CANCELACION') LineasResguardos.exigirSinCancelacion(fE);
     let numeroNuevo = '';
     let desde = '';
     if (lineaFila) {
@@ -198,8 +204,9 @@ const LineasAcciones = (function () {
       numeroNuevo = txt(col(lineaFila, 'NUMERO TELEFONO'));
       if (!numeroNuevo) throw new Error('La línea no tiene número: se vincula por su número.');
       if (LineasRepo.TIPOS_CON_EQUIPO[may(col(lineaFila, 'TIPO'))]) {
-        // Cambiar de equipo: la línea deja su equipo
+        // Cambiar de equipo: la línea deja su equipo (no si ese equipo está en el panel de Pau; usuario, 22-oct)
         desde = 'NUCO ' + (LineasUtil.nucoVisible(col(lineaFila, 'NUCO')) || '');
+        if (LineasResguardos.enPanel(lineaFila)) throw new Error(desde + ' está en Resguardos y cancelaciones: su línea no se pasa a otro equipo.');
         const s = LineasEscritura.separarLinea(lineaFila, ahora);
         s.campos.forEach((c) => campos.push(c));
         s.refs.forEach((x) => refs.push(x));
@@ -213,11 +220,11 @@ const LineasAcciones = (function () {
     let anteriorACancelar = null;
     if (tieneLinea) {
       numeroAnterior = txt(col(fE, 'NUMERO TELEFONO'));
-      const s = LineasEscritura.separarLinea(fE, ahora);
+      const s = LineasEscritura.separarLinea(fE, ahora, anteriorEnCurso ? { estatus: 'EN PROCESO DE CANCELACION' } : null);
       s.campos.forEach((c) => campos.push(c));
       s.refs.forEach((x) => refs.push(x));
       tocados.push(s.idLinea);
-      if (may(anterior) === 'CANCELACION') anteriorACancelar = s.idLinea;
+      if (may(anterior) === 'CANCELACION' && !anteriorEnCurso) anteriorACancelar = s.idLinea;
     }
     if (lineaFila) {
       // La misma escritura que ponerle línea a un equipo en Editar (LineasEscritura.lineaParaEquipo_): la encuentra por
@@ -233,9 +240,10 @@ const LineasAcciones = (function () {
       antes: { numero: numeroAnterior }, despues: { numero: numeroNuevo },
       detalle: { cambios: campos, desde: desde || undefined, anteriorACancelacion: !!anteriorACancelar || undefined },
     });
-    return { tocados: tocados, anteriorACancelar: anteriorACancelar };
+    return { tocados: tocados, anteriorACancelar: anteriorACancelar, nuco: nuco };
   }
 
   // aplicarVinculo: también para Agregar equipo con una línea que ya existe (LineasRegistros.crear, 13-oct), dentro de su candado
-  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_, esRenovacion, exigirEstatusParaResponsiva };
+  return { responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, ESTATUS_SIN_RESPONSIVA, esRenovacion, exigirEstatusParaResponsiva,
+    nombreRegistro: nombreRegistro_ };
 })();

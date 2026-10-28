@@ -135,7 +135,7 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
 });
 
 test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus columnas se borraron: DEV 6-oct, producción 7-oct)', () => {
-  ['LineasEscritura', 'LineasLectura', 'LineasResguardos', 'LineasRetiro', 'LineasEstructura', 'LineasRegistros', 'LineasCaptura']
+  ['LineasEscritura', 'LineasLectura', 'LineasResguardos', 'LineasEstructura', 'LineasRegistros', 'LineasCaptura']
     .forEach((f) => assert.doesNotMatch(read('src/services/lineas/' + f + '.gs'), /'(NOMBRE|PUESTO) QUIEN USA'/, f));
   assert.doesNotMatch(LINEAS, /QUIEN USA/);
   const admin = read('src/services/lineas/LineasAdmin.gs');

@@ -33,6 +33,8 @@
     const USO_LINEA = ['', 'USO', 'EN USO', 'DISPONIBLE', 'USO TEMPORAL', 'ESPERA DE RESPONSIVA', 'ESPERA DE EQUIPO', 'SUSPENDIDA', 'RENOVADA'];
     // Lo mismo que pide LineasAcciones.vincular (ESTATUS_VINCULABLE) y la ventana de Vincular
     const VINCULABLE = ['USO', 'RESGUARDO'];
+    // Ya no se entregan: soltarlos en una persona no abre la Responsiva (LineasAcciones.ESTATUS_SIN_RESPONSIVA; pendiente 2.55)
+    const SIN_RESPONSIVA = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO', 'EXTRAVIADO', 'ROBADO', 'ROBO'];
     const ICONO_EQUIPO = { CELULAR: 'smartphone', CELULAR_BASICO: 'smartphone', MODEM: 'router', BANDA_ANCHA: 'wifi', CAMARA: 'cctv' };
     // Un responsable como «RES-12» es el código de un resguardo del AppSheet, no una persona (LineasRepo.convertirRegistro)
     const esCodigoResguardo = (s) => /^[A-Z]{1,4}-\d+/i.test(String(s || '').trim());
@@ -49,7 +51,8 @@
     function zonaEquipo(e) {
       const s = may(e.estatus);
       if (USO_EQUIPO.indexOf(s) >= 0) return 'uso';
-      return s === 'RESGUARDO' ? 'resguardo' : 'venta';
+      // POR RECIBIR: mandado a resguardo y Pau aún no lo recibe (pendiente 3.15)
+      return s === 'RESGUARDO' || s === 'POR RECIBIR' ? 'resguardo' : 'venta';
     }
     const zonaLinea = (l) => (USO_LINEA.indexOf(may(l.estatus)) >= 0 ? 'uso' : 'cancelacion');
     const arrastraEquipo = (e) => zonaEquipo(e) !== 'venta' || VENTA.indexOf(may(e.estatus)) >= 0;
@@ -235,7 +238,11 @@
       }
       if (o.tipo !== 'equipo') return null;
       const e = o.fila;
-      if (d.tipo === 'persona') return o.dueno === d.persona.clave ? null : { tipo: 'responsiva', fila: e, persona: d.persona };
+      // En el panel de Pau (por recibir o recibido) no se entrega ni se vuelve a mandar: sin acción ni aviso (pendiente 3.15)
+      if (e.panel || may(e.estatus) === 'POR RECIBIR') return null;
+      if (d.tipo === 'persona') {
+        return o.dueno === d.persona.clave || SIN_RESPONSIVA.indexOf(may(e.estatus)) >= 0 ? null : { tipo: 'responsiva', fila: e, persona: d.persona };
+      }
       if (d.tipo !== 'caja') return null;
       if (d.caja === 'resguardo') return may(e.estatus) === 'RESGUARDO' ? null : { tipo: 'resguardo', fila: e, estatus: 'RESGUARDO' };
       if (d.caja === 'venta') return VENTA.indexOf(may(e.estatus)) >= 0 ? null : { tipo: 'resguardo', fila: e, estatus: 'PARA VENTA' };

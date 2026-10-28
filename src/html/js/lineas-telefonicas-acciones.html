@@ -6,11 +6,11 @@
    */
   (function () {
     'use strict';
-    const { $, SIGNIFICADO_ESTATUS, activarCombosEn, aplicarCambiosIndice, aviso, erroresFormularioEn, esc,
+    const { $, activarCombosEn, aplicarCambiosIndice, aviso, erroresFormularioEn, esc, formularioResguardo,
       htmlElementoFormulario, htmlFormularioAppSheet, icono, leerFormularioEn, llamar, marcarErroresEn, memoria,
       mensajeError, miles, pedirDatos, pintarIconos, puedeOperar } = Lineas.comun;
     Lineas.telefonicas.registrar('acciones', (T) => {
-      const { LINEA_SIN_PANEL, MOTIVOS_CANCELACION, pila, pintarIndicadores, pintarListado, raiz, tablas, vigente } = T;
+      const { MOTIVOS_CANCELACION, pdfsEnCurso, pila, pintarIndicadores, pintarListado, raiz, tablas, vigente } = T;
       const { abrir } = T.de('ficha');
       const { capturarEnFlujo, cerrarCaptura, errorAlGuardar, estadoGuardado, mostrarErrorCaptura, mostrarEspera,
         mostrarModalCaptura, refrescarDespuesDeCaptura } = T.de('captura');
@@ -25,12 +25,14 @@
        * exige la inspección) y se genera su PDF. Cerrar cualquiera sin guardar no cambia nada; si falla, la inspección del
        * día ya no se vuelve a pedir. La línea sin equipo no lleva inspección.
        */
-      async function abrirResponsiva(tipo, fila, para) {
+      async function abrirResponsiva(tipo, fila, para, opciones) {
         if (!fila) return;
         const esEquipo = tipo === 'equipo';
         const nombre = esEquipo ? 'NUCO ' + (fila.nuco || '—') : 'Línea ' + (fila.numero || '—');
         const subtitulo = [nombre, esEquipo ? fila.modelo : fila.compania, fila.responsable].filter(Boolean).join(' · ');
-        const ref = Object.assign(esEquipo ? { equipoId: fila.id } : { lineaId: fila.id }, { modo: 'RESPONSIVA' });
+        // desdeCorregir: la que abre Corregir equipo al pasarlo a USO; el servidor acepta el estatus final (pendiente 2.55)
+        const desdeCorregir = !!(esEquipo && opciones && opciones.desdeCorregir);
+        const ref = Object.assign(esEquipo ? { equipoId: fila.id } : { lineaId: fila.id }, { modo: 'RESPONSIVA' }, desdeCorregir ? { desdeCorregir: true } : {});
         const reasigna = (valores) => esEquipo && !mismaPersonaResponsiva(fila, valores);
         const listo = (r) => aplicarCambiosIndice(r && r.filas).then(() => {
           Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
@@ -51,7 +53,8 @@
         let pdfInspeccion = null;
         if (!inspeccionId) {
           // Empieza con lo capturado en la responsiva y no cambia a la persona del inventario: eso lo hace la responsiva
-          const r = await capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+          const r = await capturarEnFlujo('INSPECCION', Object.assign({ equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } },
+            desdeCorregir ? { desdeCorregir: true } : {}),
             { aviso: 'Inspección · ' + nombre, boton: 'Guardar inspección y responsiva' });
           if (!r) return;
           inspeccionesDelDia[fila.id] = { id: r.id, dia: hoyLocal() };
@@ -112,6 +115,7 @@
       const inspeccionesDelDia = {};
       const hoyLocal = () => new Date().toDateString();
       const inspeccionHecha = (id) => (inspeccionesDelDia[id] && inspeccionesDelDia[id].dia === hoyLocal() ? inspeccionesDelDia[id].id : null);
+      // Documentos guardados dentro de una acción cuyo PDF se está generando (terminarFlujo; pendiente 2.63)
 
       /**
        * Pide en orden la inspección de cada equipo que todavía no la tiene. Regresa { idRegistro: idInspeccion } o null
@@ -326,121 +330,55 @@
        * N/A en el servidor; la línea se propone DISPONIBLE o EN PROCESO DE CANCELACION según su FIN PLAN.
        * Al guardar se crea el renglón de la bandeja de Pau (Resguardos y cancelaciones).
        * opciones.estatus: estatus del equipo ya elegido (desde "Cambiar estatus": PARA VENTA, PARA DESECHO…).
+       * opciones.corregir (Corregir resguardo, pendiente 3.12): el equipo ya está en el panel; el formulario llega lleno con
+       * lo de su renglón, sin restricciones de estatus, sin inspección y sin renglón nuevo.
        */
       async function abrirResguardo(filas, opciones) {
         const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
+        const corregir = !!(opciones && opciones.corregir);
+        const accionTexto = corregir ? 'Corregir resguardo' : (estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial);
         if (!puedeOperar()) { aviso(icono('triangle-alert', 'ln-alerta') + ' Tu rol no permite modificar equipos.', 6000); return; }
         mostrarModalCaptura();
         $('#ln-captura-icono', raiz).innerHTML = icono('archive');
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
-        $('#ln-captura-titulo', raiz).textContent = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
+        $('#ln-captura-titulo', raiz).textContent = accionTexto;
         const cuerpo = $('#ln-captura-cuerpo', raiz);
         cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
         const sesion = T.captura = { tipo: 'RESGUARDO', firmas: {} };
         let form;
         try {
-          form = await llamar('apiLineasFormularioResguardo', filas.map((r) => r.id));
+          form = await llamar('apiLineasFormularioResguardo', filas.map((r) => r.id), { corregir: corregir });
         } catch (e) {
           if (T.captura === sesion) cuerpo.innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>';
           return;
         }
         if (T.captura !== sesion) return;
-        const equipos = form.equipos || [];
-        if (!equipos.length) {
-          cuerpo.innerHTML = '<p class="error-msg">Ninguno de los seleccionados es un equipo: ' + esc((form.omitidos || []).map((o) => o.motivo).join(' · ')) + '</p>';
+        if (!(form.equipos || []).length) {
+          cuerpo.innerHTML = '<p class="error-msg">' + esc((form.omitidos || []).map((o) => (o.nuco ? 'NUCO ' + o.nuco + ': ' : '') + o.motivo).join(' · ')) + '</p>';
           return;
         }
-        const columnaFila = (id, c) => 'FILA|' + id + '|' + c;
-        const base = (c) => (form.campos || []).filter((e) => e.columna === c)[0];
-        const enLista = (e, v) => !v || !e || e.control !== 'lista' || (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(String(v).toUpperCase()) >= 0;
-        const campo = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control,
-          requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false }, extra || {});
-        const ubicacion = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
-        const accionTexto = estatusInicial === 'RESGUARDO' ? 'Mandar a resguardo' : 'Pasar a ' + estatusInicial;
-        $('#ln-captura-subtitulo', raiz).textContent = equipos.length === 1
-          ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ')
-          : miles(equipos.length) + ' equipos';
-        // Formulario intermedio (usuario, 4-oct): equipo, línea y adendum informativos, como en la inspección; solo se
-        // captura el destino, el comentario y el ticket. Los datos de la persona no se muestran: quedan en blanco
-        const vigenciaTexto = (q) => (q.vigencia === 'vencido' ? 'VENCIDO' : (q.vigencia === 'vigente' ? 'VIGENTE' : 'SIN FECHA'));
-        const info = (q, columna, etiqueta, valor) => campo('INFO|' + q.id + '|' + columna, etiqueta, 'texto', { valor: valor || '—', soloLectura: true, editable: 'NUNCA' });
-        const titulo = (q, texto, icono) => ({ tipo: 'titulo', texto: (equipos.length > 1 ? 'NUCO ' + (q.nuco || '—') + ' · ' : '') + texto, icono: icono });
-        const ETIQUETA_UBICACION = { 'DEPARTAMENTO': 'Departamento', 'SEDE': 'Sede', 'OFICINA / DESARROLLO': 'Oficina o desarrollo' };
-        const elementosFila = {}; // lo que se captura de cada equipo (con prefijo FILA|<id>| para que sea único)
-        const vistaFila = {}; // lo que se dibuja: lo informativo y lo que se captura
-        equipos.forEach((q) => {
-          // La ubicación sale siempre DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA, sin importar dónde estaba, y se puede
-          // cambiar (usuario, 13-oct; el valor lo pone el servidor: LineasResguardos.UBICACION_RESGUARDO)
-          const els = ubicacion.map((c) => {
-            const b = base(c);
-            const valor = b && b.valor;
-            return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, valor) ? valor || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
-          });
-          // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación y se elige
-          // si pasa por el panel (EN PROCESO DE CANCELACION) o queda CANCELADA sin panel, sin nada elegido de inicio (usuario,
-          // 16-oct; pendiente 2.50); vigente o sin fecha, se elige DISPONIBLE o cancelación (usuario, 4-oct; el servidor revisa lo mismo).
-          // Ya en la bandeja de Pau, sin el estatus que tiene: solo se cambia a otro (usuario, 13-oct)
-          const posibles = q.opcionesEstatus || form.estatusEquipo;
-          const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles,
-            valor: posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : '', requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
-          if (q.tieneLinea) {
-            const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
-            estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: vencido ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea,
-              valor: vencido ? '' : q.propuestaLinea, requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS }));
-          }
-          elementosFila[q.id] = els.concat(estatus);
-          vistaFila[q.id] = [titulo(q, 'EQUIPO', 'smartphone'),
-            info(q, 'NUCO', 'NUCO', q.nuco), info(q, 'TIPO', 'Tipo', q.tipo), info(q, 'MODELO', 'Modelo', q.modelo), info(q, 'IMEI', 'IMEI', q.imei),
-            info(q, 'COLOR', 'Color', q.color), info(q, 'ESTATUS EQUIPO', 'Estatus actual', q.estatusEquipo)]
-            .concat(q.tieneLinea ? [titulo(q, 'LÍNEA', 'card-sim'),
-              info(q, 'NUMERO', 'Número', q.numero), info(q, 'SIM', 'SIM', q.sim), info(q, 'COMPANIA', 'Compañía', q.compania),
-              info(q, 'RAZON SOCIAL', 'Razón social', q.razonSocial), info(q, 'ESTATUS LINEA', 'Estatus actual', q.estatusLinea),
-              titulo(q, 'ADENDUM', 'file-text'),
-              info(q, 'INICIO PLAN', 'Inicio', q.inicioPlan), info(q, 'FIN PLAN', 'Fin', q.finPlan), info(q, 'COSTO PLAN', 'Costo del plan', q.costoPlan),
-              info(q, 'VIGENCIA', 'Vigencia', vigenciaTexto(q))] : [])
-            .concat([titulo(q, 'DESTINO', 'archive')], els, [titulo(q, 'ESTATUS', 'toggle-right')], estatus);
-        });
-        // Un solo COMENTARIO (plan §5.2) y el TICKET. La regla del servidor (más de 3 caracteres) se revisa aquí, antes de
-        // pedir las inspecciones: si no, el error salía al final, con las inspecciones ya guardadas (usuario, 8-oct)
-        const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: '', valida: 'COMENTARIOS' });
-        const ticketEl = campo('_TICKET', 'Ticket', 'texto', { valor: '', literal: true });
-        cuerpo.innerHTML =
-          ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +
-            esc(form.omitidos.map((o) => (o.nuco ? 'NUCO ' + o.nuco + ' ' : '') + '(' + o.motivo + ')').join(' · ')) + '</div>' : '') +
-          equipos.map((q) => '<div data-resg-fila="' + esc(q.id) + '">' + htmlFormularioAppSheet(vistaFila[q.id], { acomodar: true }) + '</div>').join('') +
-          htmlFormularioAppSheet([{ tipo: 'titulo', texto: 'COMENTARIO', icono: 'message-square-text' }, motivoEl, ticketEl], { acomodar: true }) +
+        // El formulario lo arma formularioResguardo (también lo abre el panel de Pau; usuario, 21-oct)
+        const fr = formularioResguardo(form, { corregir: corregir, estatus: estatusInicial });
+        const equipos = fr.equipos;
+        $('#ln-captura-subtitulo', raiz).textContent = fr.subtitulo;
+        cuerpo.innerHTML = fr.html +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div><div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
           '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('archive') + ' ' + esc(accionTexto) + (equipos.length > 1 ? ' (' + miles(equipos.length) + ')' : '') + '</button></div>';
-        pintarIconos(cuerpo);
-        activarCombosEn(cuerpo, equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []));
+        fr.activar(cuerpo);
         $('#cap-guardar', raiz).addEventListener('click', async () => {
           $('#cap-error', raiz).hidden = true;
-          const todos = equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []).concat([motivoEl, ticketEl]);
-          const errores = erroresFormularioEn(cuerpo, todos, '', { nuevo: false, tipoInicial: '' });
-          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
-          const nucoDe = (columna) => {
-            const partes = String(columna).split('|');
-            const q = partes[0] === 'FILA' ? equipos.filter((x) => x.id === partes[1])[0] : null;
-            return q ? 'NUCO ' + (q.nuco || '—') + ' · ' : '';
-          };
-          if (errores.length) { mostrarErrorCaptura(errores.map((x) => nucoDe(x.columna) + x.msg).slice(0, 4).join(' · ')); return; }
-          const valores = leerFormularioEn(cuerpo, todos);
-          const porEquipo = {};
-          equipos.forEach((q) => {
-            const v = (c) => String(valores[columnaFila(q.id, c)] || '').trim();
-            porEquipo[q.id] = { _ETIQUETA: 'NUCO ' + (q.nuco || '—'), DEPARTAMENTO: v('DEPARTAMENTO'), SEDE: v('SEDE'), 'OFICINA / DESARROLLO': v('OFICINA / DESARROLLO'),
-              'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
-              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.propuestaLinea === 'EN PROCESO DE CANCELACION' ? q.propuestaLinea : v('ESTATUS LINEA')),
-              cancelacionLinea: q.tieneLinea && q.propuestaLinea === 'EN PROCESO DE CANCELACION' && v('ESTATUS LINEA') === LINEA_SIN_PANEL ? 'DIRECTO' : '' };
-          });
+          const leido = fr.leer(cuerpo);
+          if (leido.error) { mostrarErrorCaptura(leido.error); return; }
+          const valores = leido.valores;
+          const porEquipo = leido.porEquipo;
           if (T.captura !== sesion) return; // sin ventana de confirmación (usuario, 4-oct)
           // La inspección es obligatoria al mandar a resguardo (pendiente 2.6) y se captura dentro de la acción (decisión
           // del usuario, 3-oct): una por cada equipo que viene de una persona. Si se cierra una sin guardar, no se manda
           // ninguno; las que ya se guardaron no se vuelven a pedir hoy
-          const deUnaPersona = equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
-          const textoEspera = estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
+          const deUnaPersona = corregir ? [] : equipos.filter((q) => String(q.estatusEquipo || '').toUpperCase() === 'USO');
+          const textoEspera = corregir ? 'Corrigiendo ' + miles(equipos.length) + ' resguardo(s)' : estatusInicial === 'RESGUARDO' ? 'Mandando ' + miles(equipos.length) + ' a resguardo' : 'Pasando ' + miles(equipos.length) + ' a ' + estatusInicial;
           const enviar = (extra) => llamar('apiLineasMandarResguardo', equipos.map((q) => q.id),
-            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo }, extra));
+            Object.assign({ comentario: valores._MOTIVO, ticket: valores._TICKET, porEquipo: porEquipo, corregir: corregir }, extra));
           // La espera también después de la inspección (usuario, 13-oct): antes solo salía un aviso en la esquina y no se
           // sabía si se estaba mandando. Igual que Reasignar: la ventana vuelve con la pantalla de espera
           const ventanaEspera = () => {
@@ -508,6 +446,16 @@
             }
             errorAlGuardar(e);
           }
+        });
+      }
+
+      /** Después de Quitar del panel: el índice y la ficha abierta con lo que regresó (pendiente 3.12). */
+      function trasQuitar(r) {
+        return (r && r.indice ? aplicarCambiosIndice(r.indice) : Promise.resolve()).then(() => {
+          if (tablas.equipos) tablas.equipos.limpiarSeleccion();
+          if (vigente()) { pintarIndicadores(); pintarListado(); }
+          const actual = pila[pila.length - 1];
+          if (actual) abrir(actual.tipo, actual.id, true);
         });
       }
 
@@ -584,7 +532,16 @@
               Object.keys(tablas).forEach((m) => { if (tablas[m]) tablas[m].limpiarSeleccion(); });
               if (vigente()) { pintarIndicadores(); pintarListado(); }
               aviso(icono('circle-check') + ' ' + titulo + ' · NUCO ' + (equipo.nuco || '—'), 6000);
-              if (vigente() && pila.length) abrir('equipo', equipo.id, true);
+              // La ficha que estaba abierta, la del equipo o la de la línea (2.61: se pintaba la del equipo con la de la línea
+              // arriba en la pila, pintarEquipo no la reconocía y la página se quedaba en «Cargando…»)
+              const arriba = pila[pila.length - 1];
+              // La línea cambia de registro al vincularla (pasa a ser la del equipo) o al desvincularla (vuelve a ser
+              // suelta): su ficha se busca otra vez por su número (DEV, 22-oct: «No existe la línea LIN-…»)
+              const numero = String((arriba && arriba.tipo === 'linea' && (fila.numero || numeroActual)) || '');
+              const conNumero = numero ? memoria.indice.lineas.filter((l) => String(l.numero) === numero) : [];
+              const laLinea = conNumero.filter((l) => may(l.estatus) !== 'CANCELADA')[0] || conNumero[0];
+              if (laLinea) arriba.id = laLinea.id;
+              if (vigente() && arriba) abrir(arriba.tipo, arriba.id, true);
             });
           };
           if (T.captura !== sesion) return;
@@ -643,7 +600,7 @@
 
       return {
         abrirCancelacion: abrirCancelacion, abrirResguardo: abrirResguardo, abrirResponsiva: abrirResponsiva,
-        abrirVinculo: abrirVinculo, filaDelIndice: filaDelIndice,
+        abrirVinculo: abrirVinculo, filaDelIndice: filaDelIndice, trasQuitar: trasQuitar,
       };
     });
   })();

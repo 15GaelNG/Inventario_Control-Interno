@@ -65,6 +65,11 @@
       return callServer(fn, state.token, ...args);
     }
 
+    // Las pantallas no pueden asignar el let de la base: lo vacían con esta (2.63)
+    function olvidarFicha() {
+      fichaEnMemoria = {};
+    }
+
     // ---------------- Archivos del AppSheet ----------------
     // Las columnas File/Image/Signature del AppSheet guardan "TABLA_Files_/archivo.ext" (relativo a su carpeta
     // raíz en Drive). Se muestran con su ícono, como en AppSheet, y al hacer clic el servidor busca el archivo
@@ -175,6 +180,7 @@
       'USO': 'verde', 'EN USO': 'verde', 'RENOVADA': 'verde',
       'RESGUARDO': 'azul', 'DISPONIBLE': 'azul', 'EN ENVIO': 'azul', 'ESPERA DE RESPONSIVA': 'azul', 'ESPERA DE EQUIPO': 'azul',
       'PARA VENTA': 'ambar', 'PARA VENTA CON DETALLE': 'ambar', 'PARA DESECHO': 'ambar', 'EN PROCESO DE CANCELACION': 'ambar',
+      'POR RECIBIR': 'ambar',
       // Bandeja de resguardos y cancelaciones
       'PENDIENTE DE RECEPCION': 'ambar', 'EN RESGUARDO': 'azul', 'ENTREGADO A LINEAS': 'verde',
       'POR FIRMAR': 'ambar', 'CARTA FIRMADA': 'ambar', 'CARTA ENVIADA': 'azul',
@@ -187,9 +193,9 @@
     const SIGNIFICADO_ESTATUS = {
       'USO': 'En operación, con una persona', 'RESGUARDO': 'Guardado en almacén; puede volver a usarse',
       'PARA VENTA': 'Buen estado; se ofrece en venta', 'PARA VENTA CON DETALLE': 'Tiene un detalle; se ofrece en venta',
-      'PARA DESECHO': 'Apartado para desecharse', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
+      'PARA DESECHO': 'Apartado para desecharse', 'POR RECIBIR': 'Mandado a resguardo; Pau aún no lo recibe', 'VENDIDO': 'Ya se vendió', 'DONADO': 'Donado a fundación o personas',
       'DESECHADO': 'Ya se desechó', 'EXTRAVIO-ROBO': 'Extraviado o robado',
-      'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Pasa a la bandeja de cancelaciones; se pide al proveedor',
+      'DISPONIBLE': 'Línea viva sin persona; lista para asignarse', 'EN PROCESO DE CANCELACION': 'Se pide su cancelación al proveedor; falta confirmarla',
       'CANCELADA': 'Cancelada; confirmada con el proveedor',
     };
     const significado = (estatus) => SIGNIFICADO_ESTATUS[String(estatus || '').trim().toUpperCase()] || '';
@@ -339,7 +345,7 @@
       if (panelAbierto) panelAbierto.cerrar();
       const focoPrevio = document.activeElement;
       const fondo = document.createElement('div');
-      fondo.className = 'dt-panel-fondo';
+      fondo.className = 'dt-panel-fondo ln-panel-fondo';
       const elemento = document.createElement('aside');
       elemento.className = 'dt-panel ln-panel' + (o.noModal ? ' ln-panel-nomodal' : '');
       elemento.setAttribute('role', 'dialog');
@@ -350,7 +356,13 @@
         '<div class="dt-panel-cuerpo"></div>';
       // Sin fondo en el modo no modal: la tabla sigue a la mano para elegir otra fila
       if (o.noModal) document.body.append(elemento); else document.body.append(fondo, elemento);
-      const alTecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); cerrar(); } };
+      // Con una ventana abierta encima (#ln-modal-captura), Escape es de la ventana: el panel se queda detrás (pendiente 2.37;
+      // antes se lo quedaba y la ventana no cerraba)
+      const alTecla = (ev) => {
+        if (ev.key !== 'Escape' || document.querySelector('#ln-modal-captura:not([hidden])')) return;
+        ev.stopPropagation();
+        cerrar();
+      };
       const api = { elemento: elemento, cuerpo: elemento.querySelector('.dt-panel-cuerpo'), cerrar: cerrar, alCerrar: null, noModal: !!o.noModal };
       function cerrar() {
         if (panelAbierto !== api) return;
@@ -577,6 +589,27 @@
         '" data-valor="' + esc(v) + '"' + (ayudas && ayudas[v] ? ' title="' + esc(ayudas[v]) + '"' : '') + '>' + esc(textos[i]) + '</button>').join('') + '</div>';
     }
 
+    /** La nota de una escala (e.notas) según lo que se eligió: sale en cuanto se elige, sin otra ventana (usuario, 20-oct). */
+    function notaDeEscala(pastilla) {
+      const punto = pastilla.closest('[data-notas]');
+      const caja = punto && punto.parentElement.querySelector('[data-escala-nota]');
+      if (!caja) return;
+      const texto = JSON.parse(punto.dataset.notas || '{}')[pastilla.dataset.valor] || '';
+      caja.innerHTML = texto ? icono('info', 'ln-icon-sm') + ' ' + esc(texto) : '';
+      caja.hidden = !texto;
+    }
+    /** Elige una opción de una escala y muestra su nota (Líneas telefónicas y el Corregir resguardo del panel). */
+    function elegirPastilla(pastilla) {
+      pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => { b.classList.remove('activa'); if (b.hasAttribute('aria-checked')) b.setAttribute('aria-checked', 'false'); });
+      pastilla.classList.add('activa');
+      if (pastilla.hasAttribute('aria-checked')) pastilla.setAttribute('aria-checked', 'true');
+      notaDeEscala(pastilla);
+    }
+    /** Lo que no pasa por el panel de Pau se avisa con esta nota bajo el estatus (pendiente 3.12). */
+    const NOTA_SIN_PANEL = 'No entra al panel de Resguardos y cancelaciones; queda en el historial.';
+    // Directo, sin pasar por el panel (LineasResguardos.LINEA_SIN_PANEL)
+    const LINEA_SIN_PANEL = 'CANCELADA';
+
     /**
      * Patrón: además de la forma, el orden y la dirección (usuario, 4-oct). Cada punto marcado lleva su número (1 = donde
      * empieza) y cada tramo una flecha hacia donde va. Lo usan la inspección, la responsiva y Editar; la imagen del PDF
@@ -640,7 +673,7 @@
     function vistaPatron(valor) {
       const v = String(valor === null || valor === undefined ? '' : valor).trim();
       if (!v) return vacio;
-      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta">' + svgPatron(v) + '</div>';   // el dibujo ya marca inicio, orden y dirección
+      if (esPuntosPatron(v)) return '<div class="ln-patron-consulta" data-ln-texto="' + esc(v) + '">' + svgPatron(v) + '</div>';   // el dibujo ya marca inicio, orden y dirección
       const ruta = rutaPatronAppSheet(v);
       if (!ruta) return esRutaArchivo(v) ? botonArchivo(v, 'Ver patrón') : esc(v); // "••••" (oculto para el rol)
       return '<div class="ln-patron-consulta" data-ln-patron-appsheet="' + esc(ruta) + '"><span class="ln-tenue"><span class="ln-spinner"></span> Patrón de AppSheet…</span></div>';
@@ -719,8 +752,8 @@
     }
     const condAtributo = (c) => esc(typeof c === 'object' && c !== null ? JSON.stringify(c) : (c || 'SIEMPRE'));
 
-    // CALIFICACION: misma AppFormula del AppSheet (ver LineasChecklist.calificacion)
-    const CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
+    // CALIFICACION: la misma de LineasChecklist.calificacion (sin los accesorios desde el 22-oct)
+    const CALIFICACION_SI = ['IDENTIFICACION', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
       'CUERPO EQUIPO', 'CAMARA', 'PUERTO CARGA', 'ALTAVOZ', 'BOCINAS', 'MICROFONO', 'LINEA DE VOZ'];
     const CALIFICACION_DESEMPENO = { 'DURACION BATERIA': 1, 'TEMPERATURA': 1, 'DESEMPEÑO': 1 };
     function calificacionAppSheet(valores) {
@@ -759,7 +792,11 @@
       const valor = e.valor === null || e.valor === undefined ? '' : String(e.valor);
       let control;
       if (e.control === 'escala') {
-        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '">' + grupoEscala(e.opciones || [], valor || null, e.ayudas) + '</div>';
+        // notas: { VALOR: texto } bajo el control cuando ese valor está elegido (CANCELADA sin panel; pendiente 3.12)
+        const nota = e.notas && e.notas[valor];
+        control = '<div class="ln-checklist-punto" data-columna="' + esc(e.columna) + '"' + (e.notas ? ' data-notas="' + esc(JSON.stringify(e.notas)) + '"' : '') + '>' +
+          grupoEscala(e.opciones || [], valor || null, e.ayudas) + '</div>' +
+          (e.notas ? '<div class="ln-nota ln-nota-campo" data-escala-nota' + (nota ? '' : ' hidden') + '>' + (nota ? icono('info', 'ln-icon-sm') + ' ' + esc(nota) : '') + '</div>' : '');
       } else if (e.control === 'lista') {
         const opciones = (e.opciones || []).slice();
         const fuera = valor && opciones.map((o) => String(o).toUpperCase()).indexOf(valor.toUpperCase()) < 0;
@@ -844,7 +881,8 @@
           const ocultos = sec.campos.filter((e) => e.soloLectura && nombresDeFirma.indexOf(e.columna) >= 0);
           const lectura = sec.campos.filter((e) => e.soloLectura && e.control !== 'calculado' && ocultos.indexOf(e) < 0);
           const firmas = sec.campos.filter((e) => e.control === 'firma');
-          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron' || e.control === 'identificacion');
+          // La identificación (archivo) no va al final: se queda en su lugar, a todo lo ancho, debajo de su tipo (usuario, 20-oct)
+          const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');
           const escalas = sec.campos.filter((e) => e.control === 'escala' && e.checklist); // renglones del checklist; las demás, a todo lo ancho
           const resto = sec.campos.filter((e) => [ocultos, lectura, firmas, anchos, escalas].every((g) => g.indexOf(e) < 0));
           cuerpo = (lectura.length ? '<div class="ln-af-grid ln-af-datos">' + html(lectura) + '</div>' : '') +
@@ -978,6 +1016,32 @@
       return { guardada: true, estaVacia: () => false, limpiar: () => {}, ajustar: () => {}, setNombre: () => {}, base64: () => Promise.resolve(null) };
     }
 
+    /** Nombre para comparar con los de quien captura (igual que nombreDeFirma_ en LineasCaptura.gs). */
+    function nombreDeFirma(s) {
+      return Formato.normal(s).replace(/\s+/g, ' ').trim().toUpperCase();
+    }
+
+    // Tope de cada firma en base64 (usuario, 22-oct): el servidor guarda las de la captura 6 h en una caché que acepta
+    // hasta 100 KB por documento, con la de Control Interno y el patrón. Una foto de la firma pasada a PNG pesaba megas,
+    // no cabía y al generar el PDF después el recuadro del responsable salía vacío
+    const TOPE_FIRMA = 40000;
+
+    /** La firma como JPEG más chico hasta que quepa en TOPE_FIRMA (en el PDF ocupa 160 × 70). */
+    function firmaAchicada(img, fondo) {
+      let ancho = Math.min(img.naturalWidth || 600, 600), calidad = 0.8, salida = '';
+      for (let i = 0; i < 10; i++) {
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(ancho));
+        c.height = Math.max(1, Math.round((img.naturalHeight || 1) * c.width / (img.naturalWidth || c.width)));
+        const g = c.getContext('2d');
+        g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        salida = c.toDataURL('image/jpeg', calidad).split(',')[1];
+        if (salida.length <= TOPE_FIRMA) break;
+        if (calidad > 0.55) calidad -= 0.15; else ancho *= 0.75;
+      }
+      return salida;
+    }
+
     /** Firma con el componente del sistema; misma interfaz que antes (estaVacia, limpiar, base64 → promesa). */
     function crearFirma(contenedor, nombre) {
       if (!contenedor || typeof Firma === 'undefined') return null;
@@ -987,7 +1051,7 @@
         limpiar: () => f.limpiar(),
         ajustar: () => f.ajustar(),
         setNombre: (n) => f.setNombre(n || ''),
-        /** PNG con el color de la celda del PDF (la firma llega recortada al trazo). */
+        /** PNG con el color de la celda del PDF (la firma llega recortada al trazo); JPEG más chico si pasa del tope (una foto). */
         base64: (fondo) => {
           const x = f.exportar();
           if (!x) return Promise.resolve(null);
@@ -998,7 +1062,8 @@
               c.width = img.naturalWidth; c.height = img.naturalHeight;
               const g = c.getContext('2d');
               g.fillStyle = fondo || '#ffffff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0);
-              resolve(c.toDataURL('image/png').split(',')[1]);
+              const png = c.toDataURL('image/png').split(',')[1];
+              resolve(png.length <= TOPE_FIRMA ? png : firmaAchicada(img, fondo));
             };
             img.onerror = () => resolve(x.base64);
             img.src = 'data:' + x.mimeType + ';base64,' + x.base64;
@@ -1223,7 +1288,7 @@
         });
       }
       return cargarColaboradores().then((r) => {
-        // Personas activas de Capital Humano con los datos que se llenan al elegirlas (autollenar)
+        // Personas de Capital Humano (activas y bajas de los últimos 12 meses, 2.58) con los datos que se llenan al elegirlas
         const gente = filasComoObjetos(r).map((c) => ({
           nombre: mayusSinAcentos(c.nombre), noEmpleado: c.noEmpleado ? String(c.noEmpleado).trim().toUpperCase() : '',
           puesto: mayusSinAcentos(c.puesto), departamento: mayusSinAcentos(c.departamento),
@@ -1231,8 +1296,9 @@
           correo: c.correo ? String(c.correo).trim().toLowerCase() : '',
           baja: c.estatus && String(c.estatus).toUpperCase() !== 'ACTIVO',
         })).filter((c) => c.nombre);
-        const distintos = (campo) => gente.map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
-        const etiquetaDe = (partes, c) => partes.filter(Boolean).join(' · ') + (c.baja ? ' · BAJA' : '');
+        const distintos = (campo) => gente.filter((c) => !c.baja).map((c) => c[campo]).filter((v, i, a) => v && a.indexOf(v) === i).sort();
+        // BAJA primero, junto al nombre: al final la cortaba el «…» de la lista (DEV, 22-oct; 2.58)
+        const etiquetaDe = (partes, c) => (c.baja ? ['BAJA'] : []).concat(partes).filter(Boolean).join(' · ');
         if (tipo === 'PUESTOS') return distintos('puesto');
         if (tipo === 'DEPARTAMENTOS') return distintos('departamento');
         if (tipo === 'NO_EMPLEADO') {
@@ -1274,8 +1340,10 @@
               Object.keys(e.autollenar).forEach((columna) => {
                 const destino = cuerpo.querySelector('[data-columna="' + CSS.escape(columna) + '"]');
                 const valor = opcion.datos[e.autollenar[columna]];
-                if (!destino || destino.disabled || destino.readOnly || !valor) return;
-                CampoAuto.llenar(destino, valor);   // "auto" hasta que lo cambien
+                if (!destino || destino.disabled || destino.readOnly) return;
+                // Lo que CH no tiene de la persona elegida queda vacío, no con lo de la anterior (usuario, 19-oct: el
+                // correo de otra persona se quedaba); el correo también
+                CampoAuto.llenar(destino, valor || '');   // "auto" hasta que lo cambien
                 // solo "change": "input" abriría la lista del otro campo
                 destino.dispatchEvent(new Event('change', { bubbles: true }));
               });
@@ -1341,7 +1409,6 @@
       return errores;
     }
 
-    /** FOLIO y ESTATUS GENERAL (AppFormula de LINEAS TELEFONICAS) para mostrarlos en vivo. */
     /**
      * TIPO asignado solo (usuario, 4-oct; la misma cuenta que LineasRegistros.tipoAutomatico_): equipo sin línea → EQUIPO;
      * con línea → EQUIPO + SIM, o EQUIPO + SIM BASICO si es básica; línea sola → LINEA o SIM BASICO. Una línea
@@ -1366,7 +1433,8 @@
       return ((memoria.indice || {}).equipos || []).filter((e) => String(e.nuco || '') === clave)[0] || null;
     }
 
-    function formulaRegistro(nombre, v, id) {
+    /** Campos calculados del formulario, en vivo (FOLIO: AppFormula de LINEAS TELEFONICAS). */
+    function formulaRegistro(nombre, v) {
       const tipo = String(v.TIPO || '').toUpperCase();
       // Agregar línea (usuario, 8-oct; misma cuenta que LineasRegistros.estatusAltaLinea_): con equipo, USO si está en uso
       // y DISPONIBLE si está guardado; sola, USO con responsable y DISPONIBLE sin él
@@ -1386,12 +1454,6 @@
       if (nombre === 'FOLIO') {
         const prefijo = { 'EQUIPO + SIM': 'EQS', 'LINEA': 'LIN', 'MODEM': 'MOD', 'CAMARA': 'CAM', 'BANDA ANCHA': 'BAN', 'EQUIPO': 'EQP' }[tipo] || '';
         return prefijo + ('0000' + (v.NUCO || '')).slice(-4);
-      }
-      if (nombre === 'ESTATUS_GENERAL') {
-        if (/^DG/i.test(id || '')) return 'PERSONAL DG';
-        if (tipo === 'EQUIPO') return { 'ESPERA DE RESPONSIVA': 'USO', 'EN ENVIO': 'USO', 'VENTA': 'RESGUARDO', 'DESECHADO': 'DESECHO' }[v['ESTATUS EQUIPO']] || v['ESTATUS EQUIPO'] || '';
-        if (['EQUIPO + SIM', 'LINEA', 'MODEM', 'BANDA ANCHA'].indexOf(tipo) >= 0) return { 'ESPERA DE RESPONSIVA': 'USO', 'SIN LINEA': 'CANCELADA', 'EN PROCESO DE CANCELACION': 'CANCELADA' }[v['ESTATUS LINEA']] || v['ESTATUS LINEA'] || '';
-        return '';
       }
       return '';
     }
@@ -1427,7 +1489,7 @@
       cuerpo.querySelectorAll('.ln-af-seccion:not(.ln-af-extra)').forEach((sec) => { sec.hidden = !sec.querySelector('.ln-af-campo:not([hidden])'); });
       cuerpo.querySelectorAll('[data-formula]').forEach((el) => {
         if (el.dataset.formula === 'NO_ASIGNACION') return;
-        el.textContent = formulaRegistro(el.dataset.formula, valores, ctx.idDG || ctx.id) || '—';
+        el.textContent = formulaRegistro(el.dataset.formula, valores) || '—';
       });
     }
 
@@ -1479,7 +1541,9 @@
     /**
      * Lo elegido en cada apartado vive en el propio elemento: caja._ine = { pdf, fotos: [{ archivo, url }], reutilizar },
      * caja._registrada = la identificación que ya tiene la persona en el registro (o null) y caja._clave = de quién se
-     * buscó (nombre|número). Con una registrada se pregunta «¿Es correcta?»: sí = se usa esa (reutilizar = su registro).
+     * buscó (nombre|número). Con una registrada se elige entre dos tarjetas (usuario, 20-oct): «Usar la registrada»
+     * (reutilizar = su registro; queda una tarjeta verde «en uso» con Cambiar) o «Subir otra» (r.subirOtra: salen los
+     * botones de fotos y PDF). Usarla llena el tipo de identificación con el suyo (CampoAuto).
      */
     function activarIdentificaciones(cuerpo) {
       const pintarRegistrada = (caja) => {
@@ -1487,18 +1551,35 @@
         const s = caja._ine;
         const bloque = caja.querySelector('.ln-ine-registrada');
         const usa = !!(r && s.reutilizar);
-        bloque.hidden = !r || r.descartada;
-        caja.querySelector('.ln-fotos-botones').hidden = usa;
-        caja.querySelector('.ln-ine-lista').hidden = usa;
+        bloque.hidden = !r;
+        // Con una registrada, los botones de fotos y PDF solo salen al elegir «Subir otra»
+        caja.querySelector('.ln-fotos-botones').hidden = !!r && !r.subirOtra;
+        caja.querySelector('.ln-ine-lista').hidden = !!r && !r.subirOtra;
         if (bloque.hidden) { bloque.innerHTML = ''; return; }
-        const detalle = [r.tipo || 'INE', 'registrada', r.nuco ? 'NUCO ' + r.nuco : '', r.fecha].filter(Boolean).join(' · ');
-        bloque.innerHTML = icono('id-card') + '<span class="ln-ine-registrada-texto">' + esc(detalle) + '</span>' +
-          '<a href="https:\/\/drive.google.com/file/d/' + esc(r.archivoId) + '/view" target="_blank" rel="noopener">Ver</a>' +
-          (usa ? '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="cambiar">Cambiar</button>'
-            : '<span class="ln-ine-pregunta">¿Es correcta?</span>' +
-              '<button type="button" class="primary ln-btn-chico" data-ine-registrada="si">Sí</button>' +
-              '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="no">No</button>');
+        const tipo = r.tipo || 'INE';
+        const datos = [r.nuco ? 'NUCO ' + r.nuco : '', r.fecha].filter(Boolean).join(' · ');
+        const ver = '<a class="ln-btn-chico ln-ine-ver" href="https:\/\/drive.google.com/file/d/' + esc(r.archivoId) + '/view" target="_blank" rel="noopener">' + icono('eye', 'ln-icon-sm') + ' Ver</a>';
+        const nombre = 'ine-eleccion-' + caja.dataset.ineOrden;
+        const opcion = (valor, activa, icon, titulo, detalle, extra) => '<label class="ln-ine-opcion' + (activa ? ' activa' : '') + '">' +
+          '<input type="radio" name="' + nombre + '" value="' + valor + '" data-ine-registrada="' + valor + '"' + (activa ? ' checked' : '') + ' />' +
+          '<span class="ln-ine-opcion-icono">' + icono(icon) + '</span>' +
+          '<span class="ln-ine-opcion-texto"><b>' + esc(titulo) + '</b><small>' + esc(detalle) + '</small></span>' + (extra || '') + '</label>';
+        bloque.innerHTML = usa
+          ? '<div class="ln-ine-en-uso"><span class="ln-ine-opcion-icono">' + icono('circle-check') + '</span>' +
+            '<span class="ln-ine-opcion-texto"><b>' + esc(tipo) + ' registrada · en uso</b><small>' + esc(datos) + '</small></span>' + ver +
+            '<button type="button" class="secondary ln-btn-chico" data-ine-registrada="cambiar">Cambiar</button></div>'
+          : '<div class="ln-ine-opciones">' +
+            opcion('si', false, 'id-card', 'Usar la registrada', [tipo, datos].filter(Boolean).join(' · '), ver) +
+            opcion('no', !!r.subirOtra, 'upload', 'Subir otra', 'Fotos o PDF') + '</div>';
         pintarIconos(bloque);
+      };
+      // Usar la registrada llena el tipo con el suyo: el del principal es IDENTIFICACION; el de los demás, su lista
+      const llenarTipo = (caja, tipo) => {
+        const orden = Number(caja.dataset.ineOrden);
+        const campo = orden === 0 ? cuerpo.querySelector('[data-columna="IDENTIFICACION"]') : caja.querySelector('[data-ine-tipo]');
+        if (!campo || !tipo || campo.disabled) return;
+        CampoAuto.llenar(campo, tipo);
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
       };
       const pintar = (caja) => {
         const s = caja._ine;
@@ -1582,18 +1663,24 @@
         }
         pintar(caja);
       });
+      // Las dos tarjetas son radios: el teclado también elige; Cambiar regresa a las dos
+      const elegirRegistrada = (control) => {
+        const caja = control.closest('.ln-ine');
+        const r = caja._registrada;
+        if (!r) return;
+        caja.querySelector('.ln-ine-registrada').classList.remove('ln-ine-registrada-falta');
+        const eleccion = control.dataset.ineRegistrada;
+        if (eleccion === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; r.subirOtra = false; llenarTipo(caja, r.tipo || 'INE'); }
+        else if (eleccion === 'no') { r.subirOtra = true; caja._ine.reutilizar = null; }
+        else { r.subirOtra = false; caja._ine.reutilizar = null; }
+        pintar(caja);
+      };
+      cuerpo.addEventListener('change', (ev) => {
+        if (ev.target.matches && ev.target.matches('input[type="radio"][data-ine-registrada]')) elegirRegistrada(ev.target);
+      });
       cuerpo.addEventListener('click', (ev) => {
-        const respuesta = ev.target.closest('[data-ine-registrada]');
-        if (respuesta) {
-          const caja = respuesta.closest('.ln-ine');
-          const r = caja._registrada;
-          if (!r) return;
-          if (respuesta.dataset.ineRegistrada === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; }
-          else if (respuesta.dataset.ineRegistrada === 'no') { r.descartada = true; caja._ine.reutilizar = null; }
-          else caja._ine.reutilizar = null;
-          pintar(caja);
-          return;
-        }
+        const cambiar = ev.target.closest('button[data-ine-registrada]');
+        if (cambiar) { elegirRegistrada(cambiar); return; }
         const quitar = ev.target.closest('[data-ine-quitar]');
         if (quitar) {
           const caja = quitar.closest('.ln-ine');
@@ -2184,8 +2271,8 @@
      */
     const puedeOperar = () => puedeEditarModulo('lineas-telefonicas');
     /**
-     * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.detalles,
-     * .documentos, .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
+     * Las pestañas de la ficha son secciones de Líneas Telefónicas (Modulos.gs: lineas-telefonicas.documentos,
+     * .historial, .facturacion), con su permiso ya resuelto del servidor (puede, app.html). El
      * servidor pide la misma sección (TelefoniaService.leerSeccion_); esto solo no pinta lo que no va a abrir.
      * Rol CLIENT (POST VENTA, 14-oct): ve la ficha como está hoy, sin su pasado. Documentos e Historial no respetan el
      * alcance (Modulos.gs), así que a quien está limitado el servidor ya se las resuelve Sin acceso (Permisos.resolver_)
@@ -2194,6 +2281,10 @@
     const veSeccion = (seccion) => puede('lineas-telefonicas.' + seccion);
     const veDocumentos = () => veSeccion('documentos');
     const veHistorial = () => veSeccion('historial');
+    // Dirección General (pendiente 8.16; LineasDG): solo ADMIN ve su información y la modifica. El servidor manda sus
+    // renglones con `dg` y, a quien no es ADMIN, sin datos (la ficha con `_dgOculto`)
+    const esAdmin = () => !!(state.sesion && state.sesion.rol === 'ADMIN');
+    const bloqueadoDG = (r) => !!(r && (r.dg || r._dgOculto)) && !esAdmin();
 
     /**
      * Catálogos de los formularios, el directorio de Capital Humano y el índice de accesorios: como los catálogos de los
@@ -2201,11 +2292,13 @@
      * instante y lo fresco por detrás. forzar (o CATALOGOS_LINEAS.forEach(olvidar…)) pide lo nuevo.
      */
     const CATALOGOS_LINEAS = ['apiLineasCatalogos', 'apiLineasColaboradores', 'apiLineasAccesoriosIndice'];
-    function catalogoLineas_(fn, forzar) {
-      if (forzar) invalidarCacheCatalogo(fn, state.token);
-      return callServerCacheado(fn, state.token);
+    function catalogoLineas_(fn, forzar, ...version) {
+      if (forzar) invalidarCacheCatalogo(fn, state.token, ...version);
+      return callServerCacheado(fn, state.token, ...version);
     }
-    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar);
+    // 'bajas': otra copia en el navegador desde que la lista trae las bajas recientes (2.58); la de antes, sin ellas,
+    // se enseñaba la primera vez mientras llegaba la nueva. El servidor no lo lee
+    const cargarColaboradores = (forzar) => catalogoLineas_('apiLineasColaboradores', forzar, 'bajas');
     const cargarAccesorios = (forzar) => catalogoLineas_('apiLineasAccesoriosIndice', forzar);
     const cargarCatalogos = (forzar) => catalogoLineas_('apiLineasCatalogos', forzar);
 
@@ -2227,6 +2320,109 @@
     // ---------------- De las pantallas, para varias (partir.js, fase 6.2) ----------------
     const dinero = (n) => Formato.moneda(n || 0, { centavos: false });
 
+    /**
+     * El formulario de Mandar a resguardo y Corregir resguardo, con lo que contesta apiLineasFormularioResguardo. Lo usan
+     * Líneas telefónicas (abrirResguardo) y el panel de Pau, que corrige sin salir del panel (usuario, 21-oct).
+     * opciones: { corregir, estatus }. Regresa { equipos, subtitulo, html, activar(cuerpo), leer(cuerpo) }; leer marca los
+     * errores y regresa { error } o { valores, porEquipo }.
+     */
+    function formularioResguardo(form, opciones) {
+      const corregir = !!(opciones && opciones.corregir);
+      const estatusInicial = (opciones && opciones.estatus) || 'RESGUARDO';
+      const equipos = form.equipos || [];
+      const columnaFila = (id, c) => 'FILA|' + id + '|' + c;
+      const base = (c) => (form.campos || []).filter((e) => e.columna === c)[0];
+      const enLista = (e, v) => !v || !e || e.control !== 'lista' || (e.opciones || []).map((o) => String(o).toUpperCase()).indexOf(String(v).toUpperCase()) >= 0;
+      const campo = (columna, etiqueta, control, extra) => Object.assign({ tipo: 'campo', columna: columna, etiqueta: etiqueta, control: control,
+        requerido: 'NUNCA', mostrar: 'SIEMPRE', editable: 'SIEMPRE', soloLectura: false }, extra || {});
+      const ubicacion = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
+      const subtitulo = equipos.length === 1
+        ? ['NUCO ' + (equipos[0].nuco || '—'), equipos[0].modelo].filter(Boolean).join(' · ')
+        : miles(equipos.length) + ' equipos';
+      // Formulario intermedio (usuario, 4-oct): equipo, línea y adendum informativos, como en la inspección; solo se
+      // captura el destino, el comentario y el ticket. Los datos de la persona no se muestran: quedan en blanco
+      const vigenciaTexto = (q) => (q.vigencia === 'vencido' ? 'VENCIDO' : (q.vigencia === 'vigente' ? 'VIGENTE' : 'SIN FECHA'));
+      const info = (q, columna, etiqueta, valor) => campo('INFO|' + q.id + '|' + columna, etiqueta, 'texto', { valor: valor || '—', soloLectura: true, editable: 'NUNCA' });
+      const titulo = (q, texto, icono) => ({ tipo: 'titulo', texto: (equipos.length > 1 ? 'NUCO ' + (q.nuco || '—') + ' · ' : '') + texto, icono: icono });
+      const ETIQUETA_UBICACION = { 'DEPARTAMENTO': 'Departamento', 'SEDE': 'Sede', 'OFICINA / DESARROLLO': 'Oficina o desarrollo' };
+      const elementosFila = {}; // lo que se captura de cada equipo (con prefijo FILA|<id>| para que sea único)
+      const vistaFila = {}; // lo que se dibuja: lo informativo y lo que se captura
+      equipos.forEach((q) => {
+        // La ubicación sale siempre DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA, sin importar dónde estaba, y se puede
+        // cambiar (usuario, 13-oct; el valor lo pone el servidor: LineasResguardos.UBICACION_RESGUARDO)
+        const els = ubicacion.map((c) => {
+          const b = base(c);
+          const valor = (corregir && q.actual && q.actual[c]) || (b && b.valor);
+          return Object.assign({}, b, { columna: columnaFila(q.id, c), etiqueta: ETIQUETA_UBICACION[c], valor: enLista(b, valor) ? valor || '' : '', requerido: 'SIEMPRE', autollenar: undefined });
+        });
+        // Estatus con botones y su significado al pasar el ratón. Con el adendum vencido la línea va a cancelación y se elige
+        // si pasa por el panel (EN PROCESO DE CANCELACION) o queda CANCELADA sin panel, sin nada elegido de inicio (usuario,
+        // 16-oct; pendiente 2.50), con su nota al elegir CANCELADA (usuario, 20-oct); vigente o sin fecha, se elige DISPONIBLE o
+        // cancelación (usuario, 4-oct; el servidor revisa lo mismo). Corregir resguardo llega con lo de su renglón y sin
+        // restricciones (pendiente 3.12). La línea que ya está en Cancelaciones no se elige: la retira Pau
+        const posibles = q.opcionesEstatus || form.estatusEquipo;
+        const actual = (corregir && q.actual) || {};
+        const estatus = [campo(columnaFila(q.id, 'ESTATUS EQUIPO'), 'Estatus del equipo', 'escala', { opciones: posibles,
+          valor: actual['ESTATUS EQUIPO'] || (posibles.indexOf(estatusInicial) >= 0 ? estatusInicial : ''), requerido: 'SIEMPRE', ayudas: SIGNIFICADO_ESTATUS })];
+        if (q.tieneLinea && !q.cancelacion) {
+          const vencido = q.propuestaLinea === 'EN PROCESO DE CANCELACION';
+          // Al corregir, las dos de siempre: la vencida se puede dejar DISPONIBLE (el servidor no la manda sola; tres no caben)
+          const opciones = vencido && !corregir ? [q.propuestaLinea, LINEA_SIN_PANEL] : form.estatusLinea;
+          estatus.push(campo(columnaFila(q.id, 'ESTATUS LINEA'), 'Estatus de la línea', 'escala', { opciones: opciones,
+            valor: opciones.indexOf(actual['ESTATUS LINEA']) >= 0 ? actual['ESTATUS LINEA'] : (vencido ? '' : q.propuestaLinea), requerido: 'SIEMPRE',
+            ayudas: SIGNIFICADO_ESTATUS, notas: { [LINEA_SIN_PANEL]: NOTA_SIN_PANEL } }));
+        }
+        elementosFila[q.id] = els.concat(estatus);
+        vistaFila[q.id] = [titulo(q, 'EQUIPO', 'smartphone'),
+          info(q, 'NUCO', 'NUCO', q.nuco), info(q, 'TIPO', 'Tipo', q.tipo), info(q, 'MODELO', 'Modelo', q.modelo), info(q, 'IMEI', 'IMEI', q.imei),
+          info(q, 'COLOR', 'Color', q.color), info(q, 'ESTATUS EQUIPO', 'Estatus actual', q.estatusEquipo)]
+          .concat(q.tieneLinea ? [titulo(q, 'LÍNEA', 'card-sim'),
+            info(q, 'NUMERO', 'Número', q.numero), info(q, 'SIM', 'SIM', q.sim), info(q, 'COMPANIA', 'Compañía', q.compania),
+            info(q, 'RAZON SOCIAL', 'Razón social', q.razonSocial), info(q, 'ESTATUS LINEA', 'Estatus actual', q.cancelacion ? q.estatusLinea + ' · ' + q.cancelacion + ' en Cancelaciones' : q.estatusLinea),
+            titulo(q, 'ADENDUM', 'file-text'),
+            info(q, 'INICIO PLAN', 'Inicio', q.inicioPlan), info(q, 'FIN PLAN', 'Fin', q.finPlan), info(q, 'COSTO PLAN', 'Costo del plan', q.costoPlan),
+            info(q, 'VIGENCIA', 'Vigencia', vigenciaTexto(q))] : [])
+          .concat([titulo(q, 'DESTINO', 'archive')], els, [titulo(q, 'ESTATUS', 'toggle-right')], estatus);
+      });
+      // Un solo COMENTARIO (plan §5.2) y el TICKET. La regla del servidor (más de 3 caracteres) se revisa aquí, antes de
+      // pedir las inspecciones: si no, el error salía al final, con las inspecciones ya guardadas (usuario, 8-oct)
+      const motivoEl = campo('_MOTIVO', 'Comentario', 'area', { requerido: 'SIEMPRE', valor: corregir && equipos.length === 1 && equipos[0].actual ? equipos[0].actual.COMENTARIO : '',
+        valida: 'COMENTARIOS' });
+      const ticketEl = campo('_TICKET', 'Ticket', 'texto', { valor: '', literal: true });
+      const html =
+        ((form.omitidos || []).length ? '<div class="ln-nota ln-alerta">' + icono('triangle-alert', 'ln-icon-sm') + ' No se incluyen: ' +
+          esc(form.omitidos.map((o) => (o.nuco ? 'NUCO ' + o.nuco + ' ' : '') + '(' + o.motivo + ')').join(' · ')) + '</div>' : '') +
+        equipos.map((q) => '<div data-resg-fila="' + esc(q.id) + '">' + htmlFormularioAppSheet(vistaFila[q.id], { acomodar: true }) + '</div>').join('') +
+        htmlFormularioAppSheet([{ tipo: 'titulo', texto: 'COMENTARIO', icono: 'message-square-text' }, motivoEl, ticketEl], { acomodar: true });
+      const capturables = equipos.reduce((lista, q) => lista.concat(elementosFila[q.id]), []);
+      return {
+        equipos: equipos, subtitulo: subtitulo, html: html,
+        activar: (cuerpo) => { pintarIconos(cuerpo); activarCombosEn(cuerpo, capturables); },
+        leer: (cuerpo) => {
+          const todos = capturables.concat([motivoEl, ticketEl]);
+          const errores = erroresFormularioEn(cuerpo, todos, '', { nuevo: false, tipoInicial: '' });
+          marcarErroresEn(cuerpo, errores.map((x) => ({ columna: x.columna, msg: x.corto })));
+          const nucoDe = (columna) => {
+            const partes = String(columna).split('|');
+            const q = partes[0] === 'FILA' ? equipos.filter((x) => x.id === partes[1])[0] : null;
+            return q ? 'NUCO ' + (q.nuco || '—') + ' · ' : '';
+          };
+          if (errores.length) return { error: errores.map((x) => nucoDe(x.columna) + x.msg).slice(0, 4).join(' · ') };
+          const valores = leerFormularioEn(cuerpo, todos);
+          const porEquipo = {};
+          equipos.forEach((q) => {
+            const v = (c) => String(valores[columnaFila(q.id, c)] || '').trim();
+            porEquipo[q.id] = { _ETIQUETA: 'NUCO ' + (q.nuco || '—'), DEPARTAMENTO: v('DEPARTAMENTO'), SEDE: v('SEDE'), 'OFICINA / DESARROLLO': v('OFICINA / DESARROLLO'),
+              'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
+              'ESTATUS LINEA': !q.tieneLinea ? '' : (q.cancelacion || (!corregir && q.propuestaLinea === 'EN PROCESO DE CANCELACION') || v('ESTATUS LINEA') === LINEA_SIN_PANEL
+                ? 'EN PROCESO DE CANCELACION' : v('ESTATUS LINEA')),
+              cancelacionLinea: q.tieneLinea && !q.cancelacion && v('ESTATUS LINEA') === LINEA_SIN_PANEL ? 'DIRECTO' : '' };
+          });
+          return { valores: valores, porEquipo: porEquipo };
+        },
+      };
+    }
+
     // ======================================================================
     // Resguardos y cancelaciones (bandeja de Pau, reunión con Líneas 30-sep)
     // ======================================================================
@@ -2236,33 +2432,57 @@
      * opciones }]. Regresa una promesa con { clave: valor } o null si se cancela.
      * opciones.alConfirmar(valores) (promesa): la ventana se queda con la pantalla de espera (opciones.espera) desde el
      * clic hasta que termina; si falla, muestra el error y "Volver" regresa a lo capturado. Regresa lo que regrese.
+     * opciones.cuerpo: promesa con el HTML de lo que se va a hacer (Quitar del panel); hasta que llega no se confirma.
      * opciones.detalle: lista de lo que se va a tocar (como Confirmar); opciones.peligro: botón rojo. Sin campos sirve
      * de confirmación con espera (pasos de la bandeja de Pau, 13-oct). opciones.encima: por arriba del visor de fotos.
+     * opciones.ancho = { tipo, icono }: ventana ancha como la de captura de Líneas telefónicas, para un formulario completo
+     * en opciones.cuerpo (Corregir resguardo en el panel, 21-oct); opciones.alCuerpo(div) al llegar el cuerpo y
+     * opciones.leer(div) al confirmar: { error } o lo que se suma a los valores. opciones.dentro: dónde se pone (con los
+     * estilos del módulo); si no, en la página.
      */
     function pedirDatos(titulo, mensaje, campos, textoConfirmar, opciones) {
       const o = opciones || {};
       const detalle = o.detalle || [];
+      const ancho = o.ancho;
       return new Promise((resolve) => {
         const fondo = document.createElement('div');
         fondo.className = 'modal-backdrop';
         if (o.encima) fondo.style.zIndex = '800';
-        fondo.innerHTML = '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px;position:relative">' +
-          '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' +
-          '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button></div>' +
+        const cerrarX = '<button type="button" class="modal-close" data-cerrar aria-label="Cerrar">' + ico('x') + '</button>';
+        fondo.innerHTML = (ancho
+          ? '<div class="modal-card modal-card-wide ln-captura-modal" role="dialog" aria-modal="true">' +
+            '<div class="modal-header ln-captura-cabecera"><div class="ln-captura-cabecera-principal"><span class="ln-captura-icono">' + icono(ancho.icono || 'file-text') + '</span>' +
+            '<div><span class="ln-captura-tipo">' + esc(ancho.tipo || '') + '</span><h3 class="ln-titulo" style="margin:3px 0 0">' + esc(titulo) + '</h3>' +
+            (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div></div>' + cerrarX + '</div><div class="modal-form-scroll">'
+          : '<div class="modal-card" role="dialog" aria-modal="true" style="max-width:480px;position:relative">' +
+            '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' + cerrarX + '</div>') +
           (detalle.length ? '<ul class="confirmar-detalle">' + detalle.slice(0, 50).map((d) => '<li>' + esc(d) + '</li>').join('') +
             (detalle.length > 50 ? '<li><em>…y ' + miles(detalle.length - 50) + ' más</em></li>' : '') + '</ul>' : '') +
+          (o.cuerpo ? '<div data-cuerpo><p class="empty-state"><span class="ln-spinner"></span> Cargando…</p></div>' : '') +
           campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
             // elegir: la lista empieza sin nada elegido («Selecciona…»), como las de los formularios
             (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + (c.elegir ? '<option value="">Selecciona…</option>' : '') +
               c.opciones.map((o) => '<option' + (o === c.valor ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>'
               : c.area ? '<textarea id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" rows="4">' + esc(c.valor || '') + '</textarea>'
               : '<input type="text" id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '" value="' + esc(c.valor || '') + '" autocomplete="off" data-respetar-texto />') + '</div>').join('') +
-          '<div class="error-msg" data-error hidden></div>' +
-          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button"' + (o.peligro ? ' class="danger"' : '') + ' data-ok>' + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
-          '<div class="ln-espera" data-espera hidden></div></div>';
-        document.body.appendChild(fondo);
+          '<div class="error-msg' + (ancho ? ' ln-error-fijo' : '') + '" data-error hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar>Cancelar</button><button type="button"' +
+          (o.peligro ? ' class="danger"' : ancho ? ' class="primary ln-btn-icono"' : '') + ' data-ok>' + (ancho ? icono(ancho.icono || 'check') + ' ' : '') + esc(textoConfirmar || 'Aceptar') + '</button></div>' +
+          (ancho ? '</div>' : '') + '<div class="ln-espera" data-espera hidden></div></div>';
+        (o.dentro || document.body).appendChild(fondo);
         const espera = fondo.querySelector('[data-espera]');
         let ocupado = false;
+        // o.cuerpo: promesa con el HTML de lo que se va a hacer; hasta que llega no se confirma
+        let listo = !o.cuerpo;
+        if (o.cuerpo) {
+          o.cuerpo.then((html) => {
+            const div = fondo.querySelector('[data-cuerpo]');
+            div.innerHTML = html;
+            pintarIconos(fondo);
+            if (o.alCuerpo) o.alCuerpo(div);
+            listo = true;
+          }).catch((e) => { fondo.querySelector('[data-cuerpo]').innerHTML = '<p class="error-msg">' + mensajeError(e) + '</p>'; });
+        }
         const cerrar = (valor) => { fondo.remove(); document.removeEventListener('keydown', tecla, true); resolve(valor); };
         const tecla = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); if (!ocupado) cerrar(null); } };
         document.addEventListener('keydown', tecla, true);
@@ -2278,10 +2498,18 @@
           espera.hidden = false;
         };
         fondo.querySelector('[data-ok]').addEventListener('click', async () => {
+          if (!listo) return;
           const valores = {};
           fondo.querySelectorAll('[data-clave]').forEach((el) => { valores[el.dataset.clave] = String(el.value || '').trim(); });
           const falta = campos.filter((c) => (c.requerido && !valores[c.clave]) || (c.minimo && valores[c.clave].length < c.minimo))[0];
-          if (falta) { const e = fondo.querySelector('[data-error]'); e.textContent = falta.etiqueta + ' es obligatorio.'; e.hidden = false; return; }
+          const error = fondo.querySelector('[data-error]');
+          if (falta) { error.textContent = falta.etiqueta + ' es obligatorio.'; error.hidden = false; return; }
+          if (o.leer) {
+            const leido = o.leer(fondo.querySelector('[data-cuerpo]'));
+            if (leido.error) { error.textContent = leido.error; error.hidden = false; return; }
+            error.hidden = true;
+            Object.assign(valores, leido);
+          }
           if (!o.alConfirmar) { cerrar(valores); return; }
           ocupado = true;
           pintarEspera(o.espera || 'Guardando', 'No cierres esta ventana.');
@@ -2297,6 +2525,42 @@
       });
     }
 
+    /**
+     * Quitar del panel (usuario, 20-oct; pendiente 3.12): un equipo mandado por error que Pau aún no recibe. La ventana dice
+     * qué vuelve a como estaba antes de mandarlo y qué se queda porque alguien lo cambió después, y pide el comentario.
+     * `ids`: de equipos (inventario) o de renglones (panel). alTerminar(r) con lo que contestó el servidor.
+     */
+    /**
+     * Lo que regresa y lo que se queda de un equipo (Quitar del panel) o de una línea (Retirar cancelación): tabla Campo |
+     * Hoy | Queda. `q` = { omitir, regresa: [{ campo, de, a, nota? }], seQueda: [{ campo, valor, motivo }] }.
+     */
+    function tablaRegreso(q, texto, sinCambios) {
+      if (q.omitir) return '<p class="ln-tenue">' + esc(q.omitir) + '</p>';
+      if (!q.regresa.length && !q.seQueda.length) return '<p class="ln-tenue">' + esc(sinCambios) + '</p>';
+      const etiqueta = (c) => c.charAt(0) + c.slice(1).toLowerCase();
+      const fila = (campo, hoy, queda) => '<tr><td>' + esc(etiqueta(campo)) + '</td><td>' + hoy + '</td><td>' + queda + '</td></tr>';
+      const minuscula = (t) => esc(t.charAt(0).toLowerCase() + t.slice(1));
+      return '<p class="ln-quitar-texto">' + esc(texto) + '</p><table class="ln-quitar-tabla"><thead><tr><th>Campo</th><th>Hoy</th><th>Queda</th></tr></thead><tbody>' +
+        q.regresa.map((x) => fila(x.campo, '<span class="ln-tenue">' + guion(x.de) + '</span>', icono('undo-2', 'ln-icon-sm') + ' ' + guion(x.a) +
+          (x.nota ? ' <span class="ln-chip ambar">' + minuscula(x.nota) + '</span>' : ''))).join('') +
+        q.seQueda.map((x) => fila(x.campo, guion(x.valor), '<span class="ln-chip ambar">Se queda: ' + minuscula(x.motivo) + '</span>')).join('') +
+        '</tbody></table>';
+    }
+
+    function quitarDelPanel(ids, alTerminar) {
+      const cuerpo = llamar('apiLineasVistaQuitarPanel', ids).then((v) => v.filas.map((q) => '<div class="ln-quitar"><p class="ln-fuerte">NUCO ' + esc(q.nuco || '—') +
+        (q.modelo ? ' · ' + esc(q.modelo) : '') + '</p>' + tablaRegreso(q, 'El equipo vuelve a como estaba antes de mandarlo:', 'Sin cambios que regresar: solo sale del panel.') + '</div>').join(''));
+      return pedirDatos('Quitar del panel', '', [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }],
+        'Quitar del panel', { peligro: true, cuerpo: cuerpo, espera: 'Quitando del panel', alConfirmar: (datos) => llamar('apiLineasQuitarDelPanel', ids, datos) })
+        .then((r) => {
+          if (!r) return null;
+          const omitidos = r.omitidos || [];
+          aviso(icono('circle-check') + ' Quitados del panel: ' + miles(r.hechos.length) + (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' +
+            omitidos.slice(0, 4).map((x) => 'NUCO ' + (x.nuco || x.id) + ': ' + x.motivo).join(' · ') + ')' : '') + '.', 8000);
+          return alTerminar ? alTerminar(r) : r;
+        });
+    }
+
     return {
       precargar: precargar,
       // La base para las pantallas (lineas-*.html, fase 6.2) y para los módulos en su propio archivo (p. ej. el temporal
@@ -2306,28 +2570,30 @@
         tablaLineas: tablaLineas, tilesKpi: tilesKpi, aviso: aviso, icono: icono, mensajeError: mensajeError,
         llamar: llamar, pedirDatos: pedirDatos, CALIFICACION_DESEMPENO: CALIFICACION_DESEMPENO,
         CALIFICACION_SI: CALIFICACION_SI, CATALOGOS_LINEAS: CATALOGOS_LINEAS, COLOR_ESTATUS: COLOR_ESTATUS,
-        NOMBRE_DE_FIRMA: NOMBRE_DE_FIRMA, PASOS_FORMULARIO: PASOS_FORMULARIO, POSICIONES_PATRON: POSICIONES_PATRON,
-        REGLAS_FORMATO: REGLAS_FORMATO, SIGNIFICADO_ESTATUS: SIGNIFICADO_ESTATUS, TIPO_EQUIPO: TIPO_EQUIPO,
+        NOMBRE_DE_FIRMA: NOMBRE_DE_FIRMA, NOTA_SIN_PANEL: NOTA_SIN_PANEL, PASOS_FORMULARIO: PASOS_FORMULARIO,
+        POSICIONES_PATRON: POSICIONES_PATRON, REGLAS_FORMATO: REGLAS_FORMATO, TIPO_EQUIPO: TIPO_EQUIPO,
         abrirPanelLateral: abrirPanelLateral, abrirUltimoDesdeMenu: abrirUltimoDesdeMenu,
         activarAdicionales: activarAdicionales, activarBloqueo: activarBloqueo, activarCombosEn: activarCombosEn,
         activarIdentificaciones: activarIdentificaciones, activarPasos: activarPasos, alternarMulti: alternarMulti,
         aplicarBloqueo: aplicarBloqueo, aplicarCambiosIndice: aplicarCambiosIndice, aplicarReglasEn: aplicarReglasEn,
-        bloqueoElegido: bloqueoElegido, calificacionAppSheet: calificacionAppSheet, cargarAccesorios: cargarAccesorios,
-        cargarCatalogos: cargarCatalogos, cargarColaboradores: cargarColaboradores, cargarIndice: cargarIndice,
-        cargarPatronesAppSheet: cargarPatronesAppSheet, colorAppSheet: colorAppSheet, columnasDeHoja: columnasDeHoja,
-        conSelectorBloqueo: conSelectorBloqueo, contarDesde: contarDesde, contarPor: contarPor,
-        copiarTexto: copiarTexto, crearFirma: crearFirma, cumpleCondicion: cumpleCondicion, deOtroModulo: deOtroModulo,
-        diaClave: diaClave, dinero: dinero, enlaceDrive: enlaceDrive, errorPinBloqueo: errorPinBloqueo,
-        erroresFormularioEn: erroresFormularioEn, esFechaIso: esFechaIso, esPuntosPatron: esPuntosPatron,
-        exportarBase: exportarBase, fecha: fecha, fechaHora: fechaHora, filasComoObjetos: filasComoObjetos,
-        firmaGuardadaEn: firmaGuardadaEn, flechasPatron: flechasPatron, formatoAppSheet: formatoAppSheet,
+        bloqueadoDG: bloqueadoDG, bloqueoElegido: bloqueoElegido, calificacionAppSheet: calificacionAppSheet,
+        cargarAccesorios: cargarAccesorios, cargarCatalogos: cargarCatalogos, cargarColaboradores: cargarColaboradores,
+        cargarIndice: cargarIndice, cargarPatronesAppSheet: cargarPatronesAppSheet, colorAppSheet: colorAppSheet,
+        columnasDeHoja: columnasDeHoja, conSelectorBloqueo: conSelectorBloqueo, contarDesde: contarDesde,
+        contarPor: contarPor, copiarTexto: copiarTexto, crearFirma: crearFirma, cumpleCondicion: cumpleCondicion,
+        deOtroModulo: deOtroModulo, diaClave: diaClave, dinero: dinero, elegirPastilla: elegirPastilla,
+        enlaceDrive: enlaceDrive, errorPinBloqueo: errorPinBloqueo, erroresFormularioEn: erroresFormularioEn,
+        esPuntosPatron: esPuntosPatron, exportarBase: exportarBase, fecha: fecha, fechaHora: fechaHora,
+        filasComoObjetos: filasComoObjetos, firmaGuardadaEn: firmaGuardadaEn, flechasPatron: flechasPatron,
+        formatoAppSheet: formatoAppSheet, formularioResguardo: formularioResguardo,
         htmlAccionesPasos: htmlAccionesPasos, htmlElementoFormulario: htmlElementoFormulario, htmlFirma: htmlFirma,
         htmlFormularioAppSheet: htmlFormularioAppSheet, htmlPasosAppSheet: htmlPasosAppSheet,
         leerArchivosEn: leerArchivosEn, leerFormularioEn: leerFormularioEn, leerIdentificaciones: leerIdentificaciones,
         marcarErroresEn: marcarErroresEn, memoria: memoria, menuFlotante: menuFlotante, montaje: montaje,
-        normEncabezado: normEncabezado, normal: normal, panelActual: panelActual, pedirFotoGrande: pedirFotoGrande,
-        pintarIconos: pintarIconos, porcentaje: porcentaje, precargarUltimosNucos: precargarUltimosNucos,
-        puedeOperar: puedeOperar, redimensionarImagen: redimensionarImagen, vacio: vacio, veDocumentos: veDocumentos,
+        nombreDeFirma: nombreDeFirma, normEncabezado: normEncabezado, normal: normal, olvidarFicha: olvidarFicha,
+        panelActual: panelActual, pedirFotoGrande: pedirFotoGrande, pintarIconos: pintarIconos, porcentaje: porcentaje,
+        precargarUltimosNucos: precargarUltimosNucos, puedeOperar: puedeOperar, quitarDelPanel: quitarDelPanel,
+        redimensionarImagen: redimensionarImagen, tablaRegreso: tablaRegreso, vacio: vacio, veDocumentos: veDocumentos,
         veHistorial: veHistorial, veSeccion: veSeccion, verFotoEnGrande: verFotoEnGrande, verFotos: verFotos,
         vistaPatron: vistaPatron,
       },

@@ -96,7 +96,6 @@ const Modulos = (function () {
           id: 'lineas-telefonicas', etiqueta: 'Líneas Telefónicas', alcance: true,
           // Las pestañas de la ficha de un equipo o una línea (lineas.html, fichaEnPestanas)
           secciones: [
-            { id: 'detalles', etiqueta: 'Detalles', icono: 'clipboard-list', alcance: true },
             // Inspecciones y responsivas (de la hoja y de la carpeta del NUCO). Sin alcance: el pasado del registro
             // puede ser de cuando era de otro departamento (usuario, 14-oct)
             { id: 'documentos', etiqueta: 'Documentos', icono: 'folder-check' },

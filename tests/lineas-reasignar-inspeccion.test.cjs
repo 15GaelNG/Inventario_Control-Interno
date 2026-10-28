@@ -8,13 +8,14 @@ const LINEAS = require('./lineas-fuente');
 
 const read = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
-test('la inspección de Reasignar se llena con la responsiva y el jefe directo sale de Capital Humano', () => {
+test('la inspección de Reasignar se llena con la responsiva, también el jefe directo (19-oct)', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const form = captura.slice(captura.indexOf('function formularioInspeccion_('), captura.indexOf('function ocultarSecretos_'));
   assert.match(form, /const resp = !enAccion && deResponsiva && deResponsiva\.valores \? deResponsiva\.valores : null;/);
-  assert.match(form, /valor: persona\('CUENTA GOOGLE', 'CORREO'\)/);
-  assert.match(form, /valor: resp \? jefeDeCH\(\) : persona\('JEFE DIRECTO'\)/);
-  assert.match(form, /LineasAcciones\.datoDeCH_\(resp\['No EMPLEADO'\], resp\['RESPONSABLE'\], 'jefe'\)/);
+  // Los datos del responsable, por la columna del documento (No EMPLEADO, CORREO, JEFE DIRECTO…): de la responsiva o de la ficha
+  assert.match(form, /const persona = \(c\) => \(enAccion \? '' : \(resp \? deResp\(c, ''\) : v\(columnaFicha_\(c\)\)\)\);/);
+  assert.match(form, /camposResponsable_\(catalogos, persona, \{ soloProcesos: !!enAccion \}\)/);
+  assert.doesNotMatch(form, /jefeDeCH|datoDeCH_/);
   ['COLOR', 'PIN WHATSAPP', 'PIN EQUIPO', 'TICKET', 'COMENTARIO'].forEach((c) => assert.match(form, new RegExp("deResp\\('" + c + "'"), c));
   assert.match(form, /deResponsiva\.patron !== undefined && deResponsiva\.patron !== null \? String\(deResponsiva\.patron\)/);
   // Es una inspección normal: lo de la responsiva llega llenado y se puede cambiar (usuario, 6-oct en la tarde)
@@ -33,6 +34,6 @@ test('guardar la inspección de Reasignar no cambia a la persona del inventario 
   // Fuera de una acción, también los responsables adicionales
   assert.match(captura, /else if \(!datos\.enAccion\) COPIA_INSPECCION_A_LINEA\.concat\(ADICIONALES\.map\(\(c\) => \[c, c\]\)\)\.forEach\(copiar\);/);
   const cliente = LINEAS;
-  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
-  assert.match(fn, /reasignar: true, desdeResponsiva: \{ valores: resp\.datos\.valores, patron: resp\.datos\.patron \}/);
+  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para, opciones)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  assert.match(fn, /reasignar: true, desdeResponsiva: \{ valores: resp\.datos\.valores, patron: resp\.datos\.patron \} \},\s+desdeCorregir \? \{ desdeCorregir: true \} : \{\}\)/);
 });

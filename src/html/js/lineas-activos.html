@@ -383,7 +383,8 @@
         suma(hologramas, 'RESPONSABLE');
         suma(uber, 'NOMBRE_COMPLETO');
         suma(cajasChicas, 'RESPONSABLE');
-        colaboradores = filasComoObjetos(r).map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
+        // Solo activos: las bajas recientes (2.58) son para las listas de los formularios
+        colaboradores = filasComoObjetos(r).filter((c) => c.estatus !== 'BAJA').map((c, i) => Object.assign(c, { _i: i, totalActivos: conteo[normal(c.nombre)] || 0 }));
         aplicarFiltros();
       }).catch((e) => {
         if (!vigente()) return;

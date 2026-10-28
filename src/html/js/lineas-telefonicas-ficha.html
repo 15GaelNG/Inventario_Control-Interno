@@ -6,16 +6,16 @@
    */
   (function () {
     'use strict';
-    const { $, TIPO_EQUIPO, abrirUltimoDesdeMenu, cargarPatronesAppSheet, chip, enlaceDrive, esc, fecha,
+    const { $, TIPO_EQUIPO, abrirUltimoDesdeMenu, bloqueadoDG, cargarPatronesAppSheet, chip, enlaceDrive, esc, fecha,
       formatoAppSheet, guion, ico, icono, llamar, memoria, mensajeError, menuFlotante, miles, porcentaje,
-      precargarUltimosNucos, puedeOperar, vacio, veDocumentos, veHistorial, veSeccion, vistaPatron } = Lineas.comun;
+      precargarUltimosNucos, puedeOperar, quitarDelPanel, vacio, veDocumentos, veHistorial, veSeccion, vistaPatron } = Lineas.comun;
     const { tieneNuco } = Lineas.telefonicas.comun;
     Lineas.telefonicas.registrar('ficha', (T) => {
-      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pasoHistorial, pila, pintarIndicadores,
-        pintarListado, raiz, resumenDocumentos, vigente } = T;
+      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, conDocumentos, mandaResguardo, pasoHistorial, pila,
+        pintarIndicadores, pintarListado, raiz, resumenDocumentos, vigente } = T;
       const { pilaParaHistorial } = T.de('principal');
-      const { cargarEvidencias, soltarDocumentos, tarjetaDetallesCopiar } = T.de('documentos');
-      const { abrirCancelacion, abrirResguardo, abrirVinculo } = T.de('acciones');
+      const { cargarEvidencias, ponerCopiarTarjetas, soltarDocumentos } = T.de('documentos');
+      const { abrirCancelacion, abrirResguardo, abrirVinculo, filaDelIndice, trasQuitar } = T.de('acciones');
       const { abrirEditor } = T.de('captura');
       const { cargarHistorial, soltarHistorial } = T.de('historial');
       const { pintarInspeccion, pintarResponsiva } = T.de('paginas');
@@ -203,23 +203,28 @@
       const esSimBasico = (l) => String(l.tipoLinea || '').toUpperCase() === 'SIM BASICO';
       /** Renta del SIM básico (usuario, 14-oct): no tiene adendum; es lo cobrado en su último mes completo. */
       const rentaSimBasico = (facturas) => (facturas || []).filter((f) => f.cobrado > 0 && !f.parcial)[0] || null;
+      /** Gigas del plan (usuario, 27-oct): los de la factura más reciente que los trae, como los da el proveedor. */
+      function datosPlan(facturas) {
+        const f = (facturas || []).filter((x) => x.gbPlan !== null && x.gbPlan !== undefined)[0];
+        return f ? ['Datos', Formato.miles(f.gbPlan, { decimales: 2 }) + ' GB'] : null;
+      }
       function tarjetaPlan(l, resumen, facturas) {
         const titulo = icono('file-text') + (resumen ? ' Plan de la línea' : ' Plan');
         if (esSimBasico(l)) {
           const f = rentaSimBasico(facturas);
           if (!f) return tarjeta(titulo, '<p class="empty-state">SIM básico: sin contrato ni plazo.</p>');
-          return tarjeta(titulo, campos([['Renta', dinero(f.cobrado, true) + ' al mes'], ['Plazo', 'Sin plazo forzoso']]) +
+          return tarjeta(titulo, campos([['Renta', dinero(f.cobrado, true) + ' al mes'], datosPlan(facturas), ['Plazo', 'Sin plazo forzoso']]) +
             (resumen ? '' : pieOrigen(f.origen, true)));
         }
         return tarjeta(titulo, campos([
           resumen ? null : ['Plan', l.plan],
-          ['Renta', dinero(l.costoPlan)], ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
+          ['Renta', dinero(l.costoPlan)], datosPlan(facturas), ['Inicio de plan', fecha(l.inicioPlan)], ['Fin de plan', fecha(l.finPlan)],
         ]) + vidaPlan(l) + (resumen ? '' : pieOrigen(origenPlan(l), !!l.origenPlan)));
       }
-      function tarjetaFacturacion(l, facturas, resumen) {
+      function tarjetaFacturacion(l, facturas) {
         const lista = facturas || [];
         const f = lista[0];
-        const titulo = icono('receipt') + (resumen ? ' Facturación de la línea' : ' Facturación') +
+        const titulo = icono('receipt') + ' Facturación' +
           (f ? '<span class="ln-card-titulo-dato">' + esc(mesDe(f.corte)) + '</span>' : '');
         if (!f) return tarjeta(titulo, '<p class="empty-state">Sin facturas cargadas.</p>');
         // La diferencia es contra el cobro habitual de la línea (usuario, 14-oct; pendiente 1.17); la renta del adendum
@@ -230,15 +235,15 @@
           (sinUso(x) ? ' <span class="ln-chip ambar">Sin uso</span>' : '') + '</span></div>').join('');
         return tarjeta(titulo, campos([
           ['Cobrado', dinero(f.cobrado, true)],
-          resumen || !conHabitual(f) ? null : ['Habitual', dinero(f.habitual, true)],
+          conHabitual(f) ? ['Habitual', dinero(f.habitual, true)] : null,
           conHabitual(f) ? ['Diferencia', diferenciaTexto(f.diferencia), true] : null,
-          resumen ? null : ['Uso', usoTexto(f), true],
+          ['Uso', usoTexto(f), true],
           // Parcialidad del equipo que viene en la factura (usuario, 14-oct): ya está dentro de lo cobrado
           f.equipo ? ['Equipo', esc('Parcialidad ' + f.equipo.parcialidad + ' · ' + f.equipo.nombre + ' · ' + dinero(f.equipo.cargo, true)), true] : null,
           f.numero && l.numero && f.numero !== l.numero ? ['Cobrado como', '<span class="ln-mono">' + esc(f.numero) + '</span>', true] : null,
-        ]) + (resumen ? '' : '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
+        ]) + '<div class="ln-meses" tabindex="0"><div class="ln-meses-titulo">' + (lista.length === 1 ? 'Último mes' : 'Últimos ' + lista.length + ' meses') +
           icono('chevron-down') + '</div><div class="ln-meses-cuerpo"><div class="ln-meses-fila ln-meses-encabezado"><span>Mes</span><span>Cobrado</span><span>' +
-          'Diferencia</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true)));
+          'Diferencia</span></div>' + meses + '</div></div>' + pieOrigen(f.origen, true));
       }
 
       function tarjetaResponsable(r, titulo, clase) {
@@ -276,19 +281,19 @@
       }
 
       /**
-       * Ficha en pestañas: General (datos), Detalles (texto para copiar), Documentos (inspecciones y
-       * responsivas) e Historial. Lo esencial queda arriba y el resto a un toque, en vez de una página larguísima.
+       * Ficha en pestañas: General (datos), Documentos (inspecciones y responsivas) e Historial. Lo esencial queda
+       * arriba y el resto a un toque, en vez de una página larguísima. La pestaña Detalles (el texto del AppSheet para
+       * copiar) se quitó el 22-oct (usuario): cada tarjeta de General tiene su botón de copiar
        */
-      function pestanasFicha(general, detalles, conDocumentos) {
-        // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion)
-        const conDetalles = veSeccion('detalles');
-        const pasado = veHistorial();
+      function pestanasFicha(general, conDocumentos) {
+        // Cada pestaña con su sección (Documentos e Historial nunca para un CLIENT: ver veSeccion). conDocumentos = false:
+        // Dirección General a quien no es ADMIN, solo General (pendiente 8.20; el servidor tampoco da documentos ni historial)
+        const pasado = conDocumentos && veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
         const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
         return Tabs.html([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
-          conDetalles && { id: 'detalles', titulo: 'Detalles', icono: 'clipboard-list', contenido: detalles },
           conDocumentos && { id: 'documentos', titulo: 'Documentos', icono: 'folder-check', contenido: '<div id="ln-evidencias">' + cargando + '</div>' },
           pasado && { id: 'historial', titulo: 'Historial', icono: 'history', contenido: '<div id="ln-historial">' + cargando + '</div>' },
         ], { activa: (pila[pila.length - 1] || {}).pestana });
@@ -312,15 +317,15 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'equipo' || pila[pila.length - 1].id !== id) return;
           const e = r.equipo;
           const l = r.linea;
-          const operarEquipo = puedeOperar();
+          const operarEquipo = puedeOperar() && !bloqueadoDG(e);
           pila[pila.length - 1].etiqueta = 'NUCO ' + (e.nuco || '—');
           const resp = e.responsable || {};
           fichaActual = { id: id, titulo: 'NUCO ' + (e.nuco || '—'), estatusEquipo: e.estatus || '', estatusLinea: null, carpetaDriveId: e.carpetaDriveId || null };
-          if (e.nuco) precargarUltimosNucos(id);
+          if (e.nuco && !e._dgOculto) precargarUltimosNucos(id);
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
-              chip(e.estatus) + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
-              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo, '', true),
+              chip(e.estatus) + (e.dg ? chip('DG', 'neutro') : '') + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
+              botonesFicha('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos('equipo', e.estatus, filaDelIndice('equipo', id).panel), '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],
                 ['Departamento', resp.departamento]]) +
@@ -340,14 +345,21 @@
                 l ? ['PIN WhatsApp', e.pinWhatsapp] : null,
                 e.simResidual ? ['SIM residual', chip(e.simResidual, 'ambar'), true] : null,
               ])) +
-              // La línea, resumida en las mismas tarjetas que su ficha (usuario, 13-oct): Línea, Plan y Facturación
+              // La línea, resumida en las mismas tarjetas que su ficha (usuario, 13-oct): Línea y Plan. Sin Facturación y con
+              // la SIM y la cuenta (usuario, 22-oct): lo cobrado se ve en la ficha de la línea
               tarjeta(icono('card-sim') + ' Línea', l ? campos([
                 ['Número', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + ' ' + icono('chevron-right') + '</a>', true],
-                ['Compañía', l.compania], ['Estatus', chip(l.estatus), true], ['Razón social', l.razonSocial],
+                ['Compañía', l.compania], ['SIM', l.sim ? '<span class="ln-mono">' + esc(l.sim) + '</span>' : '', true], ['Estatus', chip(l.estatus), true],
+                ['Razón social', l.razonSocial],
+                ['Cuenta padre', l.cuentaPadre ? '<span class="ln-mono">' + esc(l.cuentaPadre) + '</span>' : '', true],
+                l.cuenta ? ['Cuenta', '<span class="ln-mono">' + esc(l.cuenta) + '</span>', true] : null,
               ]) : '<p class="empty-state">Este equipo no tiene línea asignada.</p>') +
-              (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) + tarjetaFacturacion(l, r.facturas, true) : '') +
+              (l && veSeccion('facturacion') ? tarjetaPlan(l, true, r.facturas) : '') +
               tarjetaResponsable(e.responsable, null, 'ln-card-ancha') +
-            '</div>', tarjetaDetallesCopiar(r.detalles), true);
+            '</div>', !e._dgOculto);
+          // Dirección General a quien no es ADMIN: sin documentos ni historial (el servidor tampoco los da)
+          ponerCopiarTarjetas(detalle);
+          if (e._dgOculto) return;
           cargarPatronesAppSheet(detalle);
           cargarEvidencias(id);
           cargarHistorial(id, 'NUCO ' + (e.nuco || id), 'equipo');
@@ -359,7 +371,7 @@
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'linea' || pila[pila.length - 1].id !== id) return;
           const l = r.linea;
           const e = r.equipo;
-          const puedeOperarLinea = puedeOperar();
+          const puedeOperarLinea = puedeOperar() && !bloqueadoDG(l);
           // La miga nombra lo que se está viendo: la línea (antes decía el NUCO de su equipo y confundía)
           pila[pila.length - 1].etiqueta = 'Línea ' + (l.numero || '—');
           const respL = (e ? e.responsable : l.responsable) || {};
@@ -367,9 +379,9 @@
           // Los números que tuvo por un cambio de número, abajo del actual (usuario, 12-oct; antes iban en la tabla)
           const anteriores = (((memoria.indice || {}).lineas || []).filter((x) => x.id === id)[0] || {}).numerosAnteriores;
           detalle.innerHTML = migas() +
-            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
+            encabezado('card-sim', esc(l.numero || 'Línea sin número'), chip(l.estatus) + (l.dg ? chip('DG', 'neutro') : '') + usoTemporalVencido(l) + (e ? chip('En NUCO ' + (e.nuco || '—'), 'neutro') : chip('Suelta', 'ambar')),
               // Con equipo, las capturas son del equipo: a la vista "Ver equipo"; suelta: sus capturas. El resto en ⋮
-              botonesFicha('data-linea-id', id, 'linea', puedeOperarLinea && !e,
+              botonesFicha('data-linea-id', id, 'linea', puedeOperarLinea && !e && conDocumentos('linea', l.estatus),
                 e ? '<button type="button" class="ln-btn-icono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + icono('smartphone') + ' Ver equipo</button>' : '', puedeOperarLinea),
               [['Responsable', respL.nombre], ['Compañía', l.compania], ['SIM', l.sim], ['Fin de plan', fecha(l.finPlan)],
                 ['Equipo', e ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="equipo" data-id="' + esc(e._id) + '">NUCO ' + esc(e.nuco || '—') + '</a>' + (e.modelo ? ' · ' + esc(e.modelo) : '') : '<span class="ln-tenue">Suelta</span>', true]],
@@ -385,15 +397,17 @@
                 !e && l.nucoLegado ? ['NUCO (anterior)', l.nucoLegado] : null,
               ])) +
               tarjetaCuenta(l, r.corte) +
-              (veSeccion('facturacion') ? tarjetaPlan(l, false, r.facturas) + tarjetaFacturacion(l, r.facturas, false) : '') +
+              (veSeccion('facturacion') ? tarjetaPlan(l, false, r.facturas) + tarjetaFacturacion(l, r.facturas) : '') +
               tarjeta(icono('smartphone') + ' Equipo', e ? campos([
                 ['NUCO', '<a href="#" class="ln-enlace ln-mono ln-accion-enlace" data-ln-ir="equipo" data-id="' + esc(e._id) + '">' + esc(e.nuco || '—') + ' ' + icono('chevron-right') + '</a>', true],
                 ['Modelo', e.modelo], ['IMEI', e.imei], ['Estatus', chip(e.estatus), true],
                 ['PIN WhatsApp', e.pinWhatsapp],
               ]) : '<p class="empty-state">Línea suelta: no está instalada en un equipo de la empresa.</p>') +
               tarjetaResponsable(e ? e.responsable : l.responsable, e ? 'Responsable (del equipo)' : 'Responsable') +
-            '</div>', tarjetaDetallesCopiar(r.detalles), true);
+            '</div>', !l._dgOculto);
+          ponerCopiarTarjetas(detalle);
           // Toda línea tiene Documentos: las de cuando estuvo suelta y las que firmó dentro de un equipo (pendiente 2.45)
+          if (l._dgOculto) return;
           cargarEvidencias(id);
           cargarHistorial(id, e ? 'NUCO ' + (e.nuco || id) : 'Linea ' + (l.numero || id), 'linea');
         });
@@ -428,7 +442,8 @@
         const id = boton.dataset.id;
         const ix = memoria.indice || { equipos: [], lineas: [] };
         const r = (tipo === 'equipo' ? ix.equipos : ix.lineas).filter((x) => x.id === id)[0] || { id: id };
-        const operar = puedeOperar();
+        const dgOculto = bloqueadoDG(r);
+        const operar = puedeOperar() && !dgOculto;
         // Corregir el equipo y corregir la línea por separado (usuario, 8-oct; «Editar» hasta el 16-oct, pendiente 2.50). En el
         // equipo no va la línea ni Ir a la línea, ni en la línea Ir al equipo: la ficha los tiene en su información (usuario, 12-oct)
         const editar = [tipo === 'equipo'
@@ -440,8 +455,8 @@
         const drive = carpeta ? [{ icono: 'folder-open', texto: 'Ver carpeta en Drive', separador: true,
           alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(carpeta), '_blank', 'noopener') }] : [];
         const documentos = [
-          tieneNuco(r) && veDocumentos() ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
-          tieneNuco(r) && veDocumentos() ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
+          tieneNuco(r) && veDocumentos() && !dgOculto ? { icono: 'file-search', texto: 'Ver última inspección', alHacer: () => abrirUltimoDesdeMenu('INSPECCION', id) } : null,
+          tieneNuco(r) && veDocumentos() && !dgOculto ? { icono: 'file-text', texto: 'Ver última responsiva', alHacer: () => abrirUltimoDesdeMenu('RESPONSIVA', id) } : null,
         ].filter(Boolean);
         if (documentos.length) documentos[0].titulo = 'Documentos';
         // Vincular, cambiar y desvincular (etapa 3, usuario 8-oct)
@@ -455,10 +470,12 @@
               ? [{ icono: 'link', texto: 'Vincular a equipo', separador: true, alHacer: () => abrirVinculo('VINCULAR_EQUIPO', r) }] : [])));
         // Mismo orden que el clic derecho de la lista (usuario, 12-oct; pendiente 2.34): mover · documentos · editar ·
         // vincular · historial. Responsiva e Inspección están en los botones de la ficha
-        const historial = veHistorial() ? [{ icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') }] : [];
+        const historial = veHistorial() && !dgOculto ? [{ icono: 'history', texto: 'Historial', separador: true, alHacer: () => mostrarPestanaFicha('historial') }] : [];
         const items = tipo === 'equipo'
           ? (operar ? [
-            { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) },
+            r.panel ? { icono: 'archive-restore', texto: 'Corregir resguardo', alHacer: () => abrirResguardo([r], { corregir: true }) }
+              : (mandaResguardo(r) ? { icono: 'archive', texto: 'Mandar a resguardo', alHacer: () => abrirResguardo([r]) } : null),
+            r.panel === 'PENDIENTE DE RECEPCION' ? { icono: 'archive-x', texto: 'Quitar del panel', alHacer: () => quitarDelPanel([r.id], trasQuitar) } : null,
           ] : []).concat(documentos, drive, operar ? editar.concat(vinculo) : [], historial)
           // La línea sin equipo: su carpeta en LINEAS, si ya tiene responsiva (pendiente 2.45)
           : [r.numero ? { icono: 'phone-off', texto: 'Mandar a cancelación', alHacer: () => abrirCancelacion([r]) } : null]

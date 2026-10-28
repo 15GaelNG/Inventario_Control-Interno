@@ -1,5 +1,5 @@
-// El DEV de Emmanuel (5-oct) lee la copia de producción: Líneas toma el interruptor de las hojas nuevas y el retiro de
-// LINEAS TELEFONICAS de Entornos.gs (en producción siguen en Script Properties).
+// El DEV de Emmanuel (5-oct) lee la copia de producción. El interruptor de las hojas nuevas (LINEAS_LECTURA) ya no se lee
+// desde el 21-oct (7.13); el retiro de LINEAS TELEFONICAS sí, en Diagnostico.gs (en producción, Script Properties).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -8,11 +8,9 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
-test('LineasLectura lee LINEAS_LECTURA y LINEAS_HOJA_VIEJA_RETIRADA con leerConfig_ (Entornos.gs o Script Property)', () => {
+test('Líneas ya no tiene interruptor de lectura ni lee la hoja vieja (7.13)', () => {
   const lectura = read('src/services/lineas/LineasLectura.gs');
-  assert.match(lectura, /const config_ = \(clave\) => \(typeof leerConfig_ === 'function' \? leerConfig_\(clave\) : PropertiesService\.getScriptProperties\(\)\.getProperty\(clave\)\);/);
-  assert.match(lectura, /activo_ = config_\(PROPIEDAD\) === VALOR_NUEVO;/);
-  assert.match(lectura, /const v = config_\(PROPIEDAD_RETIRADA\);/);
+  assert.doesNotMatch(lectura, /LINEAS_LECTURA'|LINEAS_HOJA_VIEJA_RETIRADA'|function activo\(|function retirada\(|function vieja_\(/);
 });
 
 test('el DEV de Emmanuel: copia de producción, hojas nuevas y Drive de pruebas (nunca NUCOS de producción)', () => {

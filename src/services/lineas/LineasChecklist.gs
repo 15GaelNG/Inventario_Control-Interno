@@ -1,9 +1,11 @@
 /**
  * LineasChecklist.gs
- * Checklist de INSPECCIONES LINEAS, réplica exacta del AppSheet (v1.001924):
- * mismo orden del formulario (INSPECCIONES LINEAS_Form), mismos títulos de sección,
- * mismas etiquetas (nombre de columna o su "display name"), mismas opciones en el
- * mismo orden, y los Show_If / Required_If evaluados sobre el texto de [TIPO].
+ * Checklist de INSPECCIONES LINEAS, como el del AppSheet (v1.001924): mismo orden del
+ * formulario (INSPECCIONES LINEAS_Form), mismos títulos de sección, mismas etiquetas
+ * (nombre de columna o su "display name"), mismas opciones en el mismo orden, y los
+ * Show_If / Required_If evaluados sobre el texto de [TIPO]. Se aparta en los accesorios
+ * (usuario, 22-oct): CUBO, CABLE, FUNDA y MICA ya no se piden ni cuentan en la
+ * calificación; van en la lista ACCESORIOS de la responsiva (LineasCaptura).
  *
  * Cada punto: [columna, clave interna, etiqueta del AppSheet, escala, mostrar, requerido]
  * `mostrar` y `requerido` son códigos de CONDICIONES (abajo); un punto oculto no se
@@ -50,10 +52,12 @@ const LineasChecklist = (function () {
   const SECCIONES = [
     { seccion: 'DOCUMENTACIÓN / ACCESORIOS', puntos: [
       ['IDENTIFICACION', 'identificacion', 'IDENTIFICACION', 'SI_NO', 'SIEMPRE', 'SIEMPRE'],
-      ['CUBO', 'cubo', 'CUBO', 'SI_NO', 'NO_LINEA', 'SIEMPRE'],
-      ['CABLE', 'cable', 'CABLE', 'SI_NO', 'NO_LINEA', 'SIEMPRE'],
-      ['FUNDA', 'funda', 'FUNDA', 'SI_NO', 'EQUIPOS', 'SIEMPRE'],
-      ['MICA', 'mica', 'MICA', 'SI_NO', 'EQUIPOS', 'SIEMPRE'],
+      // Desde el 22-oct (usuario) los accesorios se piden con la lista de la responsiva (ACCESORIOS, LineasCaptura): estos
+      // cuatro ya no se muestran y quedan solo para leer las inspecciones de antes
+      ['CUBO', 'cubo', 'CUBO', 'SI_NO', 'NUNCA', 'NUNCA'],
+      ['CABLE', 'cable', 'CABLE', 'SI_NO', 'NUNCA', 'NUNCA'],
+      ['FUNDA', 'funda', 'FUNDA', 'SI_NO', 'NUNCA', 'NUNCA'],
+      ['MICA', 'mica', 'MICA', 'SI_NO', 'NUNCA', 'NUNCA'],
       // CUBO 2 / CABLE 2 dependen de [CUBO]/[CABLE] = "PRESENTA", valor que no existe: nunca se muestran
       ['CUBO 2', 'cubo2', 'CUBO 2', 'SI_NO', 'NUNCA', 'NUNCA'],
       ['CABLE 2', 'cable2', 'CABLE 2', 'SI_NO', 'NUNCA', 'NUNCA'],
@@ -121,15 +125,16 @@ const LineasChecklist = (function () {
       .filter((s) => s.puntos.length);
   }
 
-  // CALIFICACION (AppFormula del AppSheet): 15 puntos SI/NO + 3 de desempeño.
-  const PUNTOS_CALIFICACION_SI = ['IDENTIFICACION', 'CUBO', 'CABLE', 'FUNDA', 'MICA', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
+  // CALIFICACION (AppFormula del AppSheet): puntos SI/NO + 3 de desempeño. Sin CUBO, CABLE, FUNDA ni MICA desde el 22-oct
+  // (usuario: los accesorios no suman ni restan); la de las inspecciones de antes quedó guardada y no se recalcula.
+  const PUNTOS_CALIFICACION_SI = ['IDENTIFICACION', 'PANTALLA', 'BOTONES VOLUMEN', 'BOTON ENCENDIDO',
     'CUERPO EQUIPO', 'CAMARA', 'PUERTO CARGA', 'ALTAVOZ', 'BOCINAS', 'MICROFONO', 'LINEA DE VOZ'];
   const PUNTOS_CALIFICACION_DESEMPENO = ['DURACION BATERIA', 'TEMPERATURA', 'DESEMPEÑO'];
   const VALOR_DESEMPENO = { BUENO: 1, REGULAR: 0.5, MALO: 0 };
 
   /**
-   * Réplica exacta de la fórmula del AppSheet, sobre los valores por columna:
-   *   (SI de los 15 puntos + BUENO 1 / REGULAR 0.5 / MALO 0 de los 3 de desempeño)
+   * La fórmula del AppSheet (sin los accesorios desde el 22-oct), sobre los valores por columna:
+   *   (SI de los 11 puntos + BUENO 1 / REGULAR 0.5 / MALO 0 de los 3 de desempeño)
    *   / MAX(1, puntos contestados con SI o NO + puntos de desempeño contestados)
    * N/A, conectividad, sistema y apps no cuentan. Regresa 0..1 (Percent del AppSheet).
    */

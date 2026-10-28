@@ -167,7 +167,7 @@ test('pantalla: fotos o PDF por responsable, se ven antes de guardar y viajan co
   assert.match(pantalla, /if \(pdfs\.length && fotos\.length\) return error\('Elige fotos o un PDF, no los dos\.'\);/);
   assert.match(pantalla, /activarIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\)\);/);
   assert.match(pantalla, /leerIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\), valores\)\]\)\.then\(\(\[responsable, ci, identificaciones\]\)/);
-  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, identificaciones: identificaciones,/);
+  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\), identificaciones: identificaciones,/);
   // Las listas del cuerpo del modal se escuchan una sola vez (el cuerpo se reutiliza)
   assert.match(pantalla, /if \(cuerpo\._identificacionesActivas\) return;/);
 });
@@ -275,13 +275,12 @@ test('paso 3: «Sí» copia la registrada a la carpeta de la responsiva nueva, s
   assert.throws(() => sinId.I.escribir(sinId.I.revisar([{ orden: 1, reutilizar: 'IDN-NUEVA' }], VALORES), '15', new Date(), 'Files'), /no es de ANA RUIZ/);
 });
 
-test('paso 3 en la pantalla: busca al cambiar el responsable, pregunta «¿Es correcta?» y manda reutilizar', () => {
+test('paso 3 en la pantalla: busca al cambiar el responsable, pide elegir «Usar la registrada» o «Subir otra» y manda reutilizar', () => {
   const pantalla = LINEAS;
   const estilos = read('src/html/lineas-estilos.html');
   const tiene = (texto, trozo, porque) => assert.ok(texto.includes(trozo), porque || trozo);
   tiene(pantalla, "llamar('apiLineasIdentificacionesRegistradas', ");
-  tiene(pantalla, '<span class="ln-ine-pregunta">¿Es correcta?</span>');
-  tiene(pantalla, 'data-ine-registrada="si"');
+  tiene(pantalla, "opcion('si', false, 'id-card', 'Usar la registrada', ");
   tiene(pantalla, "if (s.reutilizar) return { orden: Number(caja.dataset.ineOrden), tipo: tipo ? tipo.value : '', reutilizar: s.reutilizar };");
   tiene(pantalla, 'if (!caja || !pedida || caja._clave !== pedida.clave || !x.registrada) return;', 'una respuesta vieja no pinta a otra persona');
   tiene(estilos, '.ln-ine [hidden] { display: none !important; }', 'los botones (display: grid) sí se ocultan');
@@ -312,4 +311,30 @@ test('la registrada sin ID PERSONA se usa si es el mismo nombre y número (prod 
   // Con ID PERSONA de los dos lados manda el ID, aunque el nombre sea igual
   const ajeno = modulo({ registro: REGISTRO.concat([Object.assign({}, sinId, { 'ID PERSONA': 'PER-777' })]) });
   assert.throws(() => ajeno.I.escribir(ajeno.I.revisar([{ orden: 0, reutilizar: 'IDN-SINID' }], VALORES), '15', new Date(), 'Files'), /no es de JUAN PEREZ LOPEZ/);
+});
+
+test('INE registrada (usuario, 20-oct): dos tarjetas, la usada en verde con Cambiar, llena el tipo y va debajo de él', () => {
+  const pantalla = LINEAS;
+  const estilos = read('src/html/lineas-estilos.html');
+  const tiene = (texto, trozo, porque) => assert.ok(texto.includes(trozo), porque || trozo);
+  // Las dos opciones son radios (el teclado elige) y «Ver» queda dentro de la de usarla
+  tiene(pantalla, "'<input type=\"radio\" name=\"' + nombre + '\" value=\"' + valor + '\" data-ine-registrada=\"' + valor + '\"'");
+  tiene(pantalla, "opcion('no', !!r.subirOtra, 'upload', 'Subir otra', 'Fotos o PDF')");
+  tiene(pantalla, "esc(tipo) + ' registrada · en uso</b>", 'usada: la tarjeta verde');
+  tiene(pantalla, 'data-ine-registrada="cambiar">Cambiar</button>');
+  assert.ok(!pantalla.includes('¿Es correcta?'), 'ya no se pregunta Sí / No');
+  // Los botones de fotos y PDF solo salen con «Subir otra»
+  tiene(pantalla, "caja.querySelector('.ln-fotos-botones').hidden = !!r && !r.subirOtra;");
+  // Usarla llena el tipo con CampoAuto: IDENTIFICACION del principal y la lista de cada adicional
+  tiene(pantalla, "const campo = orden === 0 ? cuerpo.querySelector('[data-columna=\"IDENTIFICACION\"]') : caja.querySelector('[data-ine-tipo]');");
+  tiene(pantalla, 'CampoAuto.llenar(campo, tipo);');
+  tiene(pantalla, "if (eleccion === 'si') { vaciar(caja); caja._ine.reutilizar = r.registro; r.subirOtra = false; llenarTipo(caja, r.tipo || 'INE'); }");
+  // Sin elegir no se guarda; «Subir otra» sin archivo sí (la identificación es opcional)
+  tiene(pantalla, "return caja._registrada && !caja._registrada.subirOtra && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);");
+  // En su lugar (debajo del tipo), no al final de la sección
+  tiene(pantalla, "const anchos = sec.campos.filter((e) => e.control === 'area' || e.control === 'patron');");
+  tiene(estilos, '.ln-af-grid > .ln-af-campo[data-af-columna^="_IDENTIFICACION_"] { grid-column: 1 / -1;');
+  // El tipo del principal va justo antes de su archivo en los campos de la responsiva
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /campo_\('IDENTIFICACION', 'Identificación', 'listaAbierta', \{[^}]*\}\),\n\s+archivoIdentificacion_\(0\),/);
 });

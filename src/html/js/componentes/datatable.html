@@ -88,7 +88,8 @@
   .dt.dt-drive tbody tr[data-id] { user-select: none; }
   .dt.dt-drive .dt-scroll table { margin-bottom: 56px; }
   /* La barra se pone ENCIMA de la barra de herramientas (como en Drive): la tabla no se mueve al seleccionar, así el
-     segundo clic de un doble clic cae en la misma fila. Si no cabe, se desplaza de lado en vez de crecer. */
+     segundo clic de un doble clic cae en la misma fila. Lo que no cabe pasa al ⋮ (pintarBarraSeleccion); si aun así no
+     cabe, se desplaza de lado en vez de crecer. */
   .dt-barra-sel { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 6px;
     flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; border-radius: var(--radio-l); background: var(--color-primary-soft);
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 18%, transparent); }
@@ -153,6 +154,11 @@
   .dt tbody td.dt-fija, .dt tfoot td.dt-fija { background: var(--color-surface); }
   .dt thead th.dt-fija { z-index: 4; }
   .dt .dt-fija-ultima { box-shadow: 3px 0 4px -2px rgba(6,38,58,.15); }
+  /* Al desplazar de lado, la tabla se acomoda para que la siguiente columna empiece justo después de las fijas, como en
+     Google Sheets: antes una columna quedaba a medias debajo de la fijada, con el título escondido y el texto cortado
+     (usuario, 22-oct, panel de resguardos de Líneas). scroll-padding-left = ancho de las fijas (aplicarFijadas) */
+  .dt .dt-scroll { scroll-snap-type: x proximity; }
+  .dt thead th { scroll-snap-align: start; }
 
   /* Densidad */
   .dt.dt-densidad-compacta tbody td, .dt.dt-densidad-compacta tfoot td { padding-top: 3px; padding-bottom: 3px; }
@@ -475,6 +481,10 @@
    *       // varios buscadores más en la misma barra (o un arreglo: [{ campo, placeholder }, …]),
    *       // que solo filtran esa columna (op "contiene") -- para cuando el buscador general (que
    *       // ya busca en todas las columnas filtrables, estén ocultas o no) mezcla demasiado.
+   *     buscarPrimero: ['NUCO'],                // opcional: con algo en el buscador general, primero las filas en
+   *       // que esas columnas son igual a lo buscado (sin los ceros de la izquierda: «12» = «0012»), luego en las que
+   *       // empiezan con ello, luego en las que lo contienen y al final las que coinciden por otra columna; dentro de
+   *       // cada grupo, el orden de siempre. Sin la opción la búsqueda no cambia (Líneas, 21-oct).
    *   });
    *
    * ─── MODO TARJETAS (celular y tableta) ────────────────────────────────────────────
@@ -957,6 +967,17 @@
         return true;
       }
 
+      /** cfg.buscarPrimero: 0 = igual a lo buscado, 1 = empieza con ello, 2 = lo contiene, 3 = coincide por otra columna */
+      const sinCerosIzq_ = (t) => t.replace(/^0+(?=\d)/, '');
+      function grupoBusqueda_(fila, q, prioritarias) {
+        return prioritarias.reduce((mejor, col) => {
+          const t = normalizar(textoVisible(col, fila));
+          const g = t === q || sinCerosIzq_(t) === sinCerosIzq_(q) ? 0
+            : t.startsWith(q) || sinCerosIzq_(t).startsWith(sinCerosIzq_(q)) ? 1 : t.includes(q) ? 2 : 3;
+          return Math.min(mejor, g);
+        }, 3);
+      }
+
       function filasFiltradas() {
         const q = normalizar(st.busqueda.trim());
         const buscables = columnasBuscables();
@@ -965,7 +986,11 @@
         const criterios = st.orden
           .map((o) => ({ col: colPorCampo(o.campo), signo: o.dir === 'desc' ? -1 : 1 }))
           .filter((c) => c.col);
-        return criterios.length ? filas.sort(compararFilas(criterios)) : filas;
+        const prioritarias = q && cfg.buscarPrimero ? cfg.buscarPrimero.map(colPorCampo).filter(Boolean) : [];
+        if (!prioritarias.length) return criterios.length ? filas.sort(compararFilas(criterios)) : filas;
+        const grupo = new Map(filas.map((f) => [f, grupoBusqueda_(f, q, prioritarias)]));
+        const porOrden = criterios.length ? compararFilas(criterios) : () => 0;
+        return filas.sort((a, b) => grupo.get(a) - grupo.get(b) || porOrden(a, b));
       }
 
       /** Ids de las filas de la página actual */
@@ -1308,20 +1333,31 @@
         const n = filas.length;
         return accionesSeleccion.filter((a) => n >= (a.minimo || 1) && n <= (a.maximo || Infinity) && (!a.visible || a.visible(filas)));
       }
+      /** Las acciones que se ven en la barra: las enBarra que caben (pintarBarraSeleccion); las demás van en el ⋮ */
+      let accionesEnBarra = [];
       function pintarBarraSeleccion() {
         const barra = $('.dt-barra-sel');
         if (!barra) return;
         const filas = seleccionadas();
         barra.hidden = !filas.length;
-        if (!filas.length) { barra.innerHTML = ''; return; }
+        if (!filas.length) { barra.innerHTML = ''; accionesEnBarra = []; return; }
         barra.style.minHeight = $('.dt-toolbar').offsetHeight + 'px';   // mismo alto que lo que tapa
         const aplican = accionesAplicables(filas);
-        const enBarra = aplican.filter((a) => a.enBarra);
         const cuenta = `${filas.length} ${plural(filas.length, 'seleccionado')}`;
-        barra.innerHTML = botonIcono('secondary dt-sel-icono', 'x', 'Quitar la selección (Esc)', 'data-sel-quitar') +
-          `<span class="dt-sel-cuenta">${esc(cuenta)}</span>` +
-          enBarra.map((a) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'}${a.activo && a.activo() ? ' activo' : ''}" data-accion-sel="${accionesSeleccion.indexOf(a)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`).join('') +
-          (aplican.length > enBarra.length ? botonIcono('secondary dt-sel-icono', 'ellipsis-vertical', 'Más opciones', 'data-sel-mas') : '');
+        const pintar = (visibles) => {
+          barra.innerHTML = botonIcono('secondary dt-sel-icono', 'x', 'Quitar la selección (Esc)', 'data-sel-quitar') +
+            `<span class="dt-sel-cuenta">${esc(cuenta)}</span>` +
+            visibles.map((a) => `<button type="button" class="${a.peligro ? 'danger' : 'secondary'}${a.activo && a.activo() ? ' activo' : ''}" data-accion-sel="${accionesSeleccion.indexOf(a)}"${a.titulo ? ` title="${esc(a.titulo)}"` : ''}>${ic(a.icono)} ${esc(a.texto)}</button>`).join('') +
+            (aplican.length > visibles.length ? botonIcono('secondary dt-sel-icono', 'ellipsis-vertical', 'Más opciones', 'data-sel-mas') : '');
+        };
+        // Lo que no cabe pasa al ⋮, de la última a la primera, como en Drive (rama emmanuel, 22-oct: con la pantalla
+        // angosta los botones se salían por la derecha y había que deslizar la barra)
+        accionesEnBarra = aplican.filter((a) => a.enBarra);
+        pintar(accionesEnBarra);
+        while (accionesEnBarra.length && barra.scrollWidth > barra.clientWidth + 1) {
+          accionesEnBarra = accionesEnBarra.slice(0, -1);
+          pintar(accionesEnBarra);
+        }
       }
       /** Ejecuta la acción `i` sobre la selección actual (desde la barra, el ⋮ o el menú contextual) */
       function ejecutarAccion(i, boton) {
@@ -1335,7 +1371,7 @@
       }
       /** Menú de acciones bajo un botón (⋮) o en el punto del clic derecho; soloMenu = sin las que ya están en la barra */
       function abrirMenuAcciones(posicion, soloMenu) {
-        const lista = accionesAplicables(seleccionadas()).filter((a) => !soloMenu || !a.enBarra);
+        const lista = accionesAplicables(seleccionadas()).filter((a) => !soloMenu || accionesEnBarra.indexOf(a) < 0);
         if (!lista.length) return;
         let grupo;
         const html = lista.map((a, n) => {
@@ -1433,6 +1469,8 @@
           izquierda += th.offsetWidth;
           ultima = i;
         }
+        // Las columnas se acomodan después de las fijas al desplazar de lado (ver .dt-scroll en los estilos)
+        $('.dt-scroll').style.scrollPaddingLeft = izquierda + 'px';
         // La sombra solo tiene sentido si el usuario fijó columnas de datos
         if (ultima >= 0 && st.fijadas.size) {
           filasTabla.forEach((tr) => { const c = tr.cells[ultima]; if (c && c.classList.contains('dt-fija')) c.classList.add('dt-fija-ultima'); });
@@ -2278,6 +2316,15 @@
         if (boton) ejecutarAccion(Number(boton.dataset.accionSel), boton);
       });
       if ($('.dt-barra-sel')) {
+        // Si cambia el ancho (girar la tableta, abrir un panel), se vuelve a ver qué cabe
+        if (typeof ResizeObserver !== 'undefined') {
+          let ancho = 0;
+          new ResizeObserver((e) => {
+            const w = Math.round(e[0].contentRect.width);
+            if (w !== ancho && !$('.dt-barra-sel').hidden) pintarBarraSeleccion();
+            ancho = w;
+          }).observe($('.dt-barra-sel'));
+        }
         $('.dt-barra-sel').addEventListener('click', (ev) => {
           if (ev.target.closest('[data-sel-quitar]')) { limpiarSeleccion(); if (st.modoSeleccion) setModoSeleccion(false); return; }
           const mas = ev.target.closest('[data-sel-mas]');
