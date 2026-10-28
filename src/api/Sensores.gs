@@ -32,6 +32,15 @@ function apiGeotabDisponible(token) {
 }
 function apiEstadoEnVivoSensores(token) {
   Auth.automatica();   // el estado en vivo se refresca solo: no cuenta como actividad
+  // Se pide solo, cada minuto: con la sesión vencida no es un error, se contesta { sesionExpirada } (28-oct). Antes cada
+  // pestaña que quedó abierta (también las de antes del arreglo de sensores.html, que no se actualizan solas) dejaba un
+  // "Sesión expirada" en el log de producción por minuto.
+  try {
+    Auth.validarSesion(token);
+  } catch (e) {
+    if (/sesi[oó]n expirada/i.test(e.message)) return { disponible: false, estados: {}, sesionExpirada: true };
+    throw e;
+  }
   return SensoresService.estadoEnVivo(token);
 }
 function apiResumenGeotabSensor(token, id, dias) {

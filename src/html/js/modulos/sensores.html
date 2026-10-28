@@ -420,6 +420,12 @@
       } catch (err) {
         vivo = { disponible: false, estados: {}, motivo: err.message };
       }
+      // La sesión venció: el servidor lo dice sin error (no ensucia el log); aquí se va al login como cualquier otra
+      if (vivo.sesionExpirada) {
+        clearInterval(temporizador);
+        if (typeof manejarSesionExpirada === 'function') manejarSesionExpirada();
+        return;
+      }
       if (!document.body.contains(document.getElementById('sen-tabla'))) return;   // se salieron de la pantalla
       refrescarTabla();
       pintarStats(tabla.getFiltradas());
