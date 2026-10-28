@@ -33,6 +33,7 @@ function preparar({ fila, ev, enLineas }) {
       } }),
     },
     LineasIdentificaciones: { deResponsiva: () => [{ id: 'INE-1' }] },
+    DriveUtils: require('./drive-utils-real')(),   // mover y tirar pasan por sus primitivas (28-oct)
     DriveApp: { getFolderById: (id) => ({ id }), getFileById: (id) => ({ moveTo: (c) => movidos.push(id + ' → ' + c.id) }) },
   });
   vm.runInContext(trozo('const SIN_EQUIPO', '/** Valor de la fila') + trozo('function pasarALineas_(', '\n  /**\n   * Genera el PDF') +

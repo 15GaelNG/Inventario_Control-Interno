@@ -90,7 +90,7 @@ function partesDeFicha_(token, deQue) {
   return (modulo, leer) => {
     if (!permisos[modulo]) return null;
     try {
-      return leer();
+      return Permisos.sinAnotar(leer);
     } catch (e) {
       if (Permisos.esFaltaDePermiso(e)) return null;
       console.warn('Ficha ' + deQue + ', pestaña ' + modulo + ': ' + e.message);

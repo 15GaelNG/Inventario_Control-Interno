@@ -254,12 +254,12 @@ function indiceAdqTemporal_() {
 /** El texto de una factura: copia como Documento con OCR en la carpeta temporal, se lee y la
  *  copia se manda a la papelera -- mismo patrón que ineLecTexto_ (LineasIneLectura.gs). */
 function indiceAdqTexto_(archivo, temporal) {
-  const copia = Drive.Files.copy({ name: 'OCR ' + archivo.getId(), mimeType: 'application/vnd.google-apps.document', parents: [temporal] },
-    archivo.getId(), { ocrLanguage: 'es', supportsAllDrives: true, fields: 'id' });
+  const copia = DriveUtils.copiarConApi({ name: 'OCR ' + archivo.getId(), mimeType: 'application/vnd.google-apps.document', parents: [temporal] },
+    archivo.getId(), { ocrLanguage: 'es', supportsAllDrives: true, fields: 'id' }, { temporal: true });
   try {
     return DocumentApp.openById(copia.id).getBody().getText();
   } finally {
-    try { DriveApp.getFileById(copia.id).setTrashed(true); } catch (e) { console.warn('ADQUISICION_VEHICULAR_INDICE: no se tiró la copia ' + copia.id); }
+    try { DriveUtils.aPapelera(DriveApp.getFileById(copia.id), { temporal: true }); } catch (e) { console.warn('ADQUISICION_VEHICULAR_INDICE: no se tiró la copia ' + copia.id); }
   }
 }
 

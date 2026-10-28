@@ -179,6 +179,16 @@ Sheets en lote). `source-contracts` falla con un `setValues`/`appendRow`/`delete
 de editor y la marca `// fuera del sistema` (un libro que no es del sistema). Pruebas con hojas simuladas a mano:
 `require('./sheet-utils-real')(contexto)`.
 
+**En Drive, lo mismo con `DriveUtils`** (28-oct): `crearArchivo`, `crearCarpeta`, `mover`, `renombrar`, `copiar`,
+`aPapelera` (el archivo, no su ID), `cambiarContenido` y las de la API (`crearConApi`, `copiarConApi`,
+`reemplazarConApi`); lo temporal (la copia de una plantilla para un PDF, una copia para OCR) con `{ temporal: true }`.
+Contrato: ningún `createFile`/`setTrashed`/`moveTo`/`makeCopy`/`Drive.Files.*` suelto. Pruebas con un Drive de mentira:
+`{ ...require('./drive-utils-real')(), loQueSeSimula }`.
+
+**Bitácora** (`Bitacora.gs`, docs/bitacora.md): esas primitivas la escriben solas, así que **nunca se anota a mano**.
+Una hoja nueva se anota completa; una excepción (copia derivada, columna secreta de más) va en `Bitacora.HOJAS` con su
+razón. Algo que se pide "por si acaso" y sin permiso solo no se muestra va dentro de `Permisos.sinAnotar(fn)`.
+
 ## Servidor: un módulo de una hoja → `HojaServicio`
 
 `src/utils/HojaServicio.gs` hace lo que repetían todos los servicios: listar con caché,

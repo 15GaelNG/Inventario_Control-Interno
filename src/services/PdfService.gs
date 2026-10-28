@@ -342,7 +342,7 @@ const PdfService = (function () {
 
     let copia;
     try {
-      copia = DriveApp.getFileById(p.plantillaId).makeCopy(nombre, carpeta);
+      copia = DriveUtils.copiar(DriveApp.getFileById(p.plantillaId), nombre, carpeta, { temporal: true });
     } catch (err) {
       throw new Error(
         'No se pudo copiar la plantilla (' + err.message + '). Revisa que el id sea de un ' +
@@ -356,7 +356,7 @@ const PdfService = (function () {
 
       let pdf;
       try {
-        pdf = DriveUtils.marcarAutor(carpeta.createFile(DriveApp.getFileById(copia.getId()).getAs('application/pdf')).setName(nombre + '.pdf'));
+        pdf = DriveUtils.crearArchivo(carpeta, DriveApp.getFileById(copia.getId()).getAs('application/pdf'), nombre + '.pdf');
       } catch (err) {
         throw new Error(
           'Se armó el documento, pero no se pudo guardar el PDF en la carpeta. La cuenta ' + cuenta() +
@@ -381,7 +381,7 @@ const PdfService = (function () {
       };
     } finally {
       // La copia del Doc ya no se necesita: lo que queda es el PDF
-      try { DriveApp.getFileById(copia.getId()).setTrashed(true); } catch (e) { /* no-op */ }
+      try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op */ }
     }
   }
 
@@ -398,13 +398,13 @@ const PdfService = (function () {
   function generarVistaPrevia(p) {
     if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
     const carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
-    const copia = DriveApp.getFileById(p.plantillaId).makeCopy('vista previa ' + Utilities.getUuid(), carpeta);
+    const copia = DriveUtils.copiar(DriveApp.getFileById(p.plantillaId), 'vista previa ' + Utilities.getUuid(), carpeta, { temporal: true });
     try {
       llenarCopia_(copia.getId(), p, 'VISTA PREVIA — AÚN SIN FIRMAR');
       const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
       return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
     } finally {
-      try { DriveApp.getFileById(copia.getId()).setTrashed(true); } catch (e) { /* no-op */ }
+      try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op */ }
     }
   }
 

@@ -99,10 +99,10 @@ const LineasIdentificaciones = (function () {
           // Paso 3: se copia la registrada a la carpeta de esta responsiva, si de verdad es de esta persona
           const previa = registro_(x.reutilizar);
           if (!esDeLaPersona_(previa, x.persona, idPersona)) throw new Error('La identificación registrada no es de ' + x.persona.nombre + '.');
-          f = DriveUtils.marcarAutor(DriveApp.getFileById(previa.archivoId).makeCopy(nombre, carpeta));
+          f = DriveUtils.marcarAutor(DriveUtils.copiar(DriveApp.getFileById(previa.archivoId), nombre, carpeta));
         } else {
           // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (como el PDF firmado, 6-oct)
-          f = DriveUtils.marcarAutor(carpeta.createFile(Utilities.newBlob(x.bytes, MimeType.PDF, nombre)));
+          f = DriveUtils.crearArchivo(carpeta, Utilities.newBlob(x.bytes, MimeType.PDF, nombre));
         }
         archivos.push({ orden: x.orden, id: f.getId(), nombre: nombre, tipo: x.tipo, persona: x.persona, idPersona: idPersona,
           reutilizada: x.reutilizar || '' });
@@ -120,7 +120,7 @@ const LineasIdentificaciones = (function () {
     if (!escritos) return;
     try {
       if (escritos.carpetaId) { LineasArchivos.descartarCarpeta(escritos.carpetaId); return; }
-      (escritos.archivos || []).forEach((a) => DriveApp.getFileById(a.id).setTrashed(true));
+      (escritos.archivos || []).forEach((a) => DriveUtils.aPapelera(DriveApp.getFileById(a.id)));
     } catch (e) {
       console.warn('Identificación: no se pudo limpiar lo que se subió: ' + e.message);
     }

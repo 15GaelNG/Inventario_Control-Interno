@@ -465,7 +465,7 @@ const HojaServicio = (function () {
       const extension = (archivo.getName().match(/\.[^.]+$/) || [''])[0];
       const fecha = Utilities.formatDate(new Date(), ZONA_HORARIA(), 'yyyy-MM-dd');
       const nuevo = id + '_' + etiqueta + '_' + fecha + extension;
-      archivo.setName(nuevo);
+      DriveUtils.renombrar(archivo, nuevo);
       return nuevo;
     } catch (e) {
       console.warn('No se pudo renombrar el archivo ' + fileId + ' (' + etiqueta + '): ' + e.message);
@@ -509,7 +509,7 @@ const HojaServicio = (function () {
         'corre la app ahora mismo (' + cuenta() + ') no tiene acceso a esa carpeta.');
     }
     try {
-      archivo = DriveUtils.marcarAutor(carpeta.createFile(blob));
+      archivo = DriveUtils.crearArchivo(carpeta, blob);
     } catch (e) {
       throw new Error('Se pudo abrir la carpeta ' + deQue + ', pero no crear el archivo ahí. La cuenta ' +
         cuenta() + ' necesita permiso de editor (no solo lector) en esa carpeta. Error original: ' + e.message);

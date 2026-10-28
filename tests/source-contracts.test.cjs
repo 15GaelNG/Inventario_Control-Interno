@@ -661,13 +661,33 @@ test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se co
   // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
   // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
   const sinComentarios = (s) => s.replace(/^.*\/\/ fuera del sistema.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // Bitacora.gs escribe SU libro (la bitácora no se anota a sí misma): el único otro lugar que escribe hojas
   const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
     .map((f) => path.relative(root, f).replace(/\\/g, '/'))
-    .filter((f) => f !== 'src/utils/SheetUtils.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+    .filter((f) => f !== 'src/utils/SheetUtils.gs' && f !== 'src/services/Bitacora.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
   assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
     'escribe con SheetUtils (tabla + agregarFilas / cambiarCeldas / borrarFilas / reemplazarFilas / cambiarColumna / asegurarPestana…): ahí se conecta la bitácora');
   assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por SheetUtils: quitarlo de QUEDAN');
   assert.match(read('package.json'), /node tests\/sheet-utils-primitivas\.test\.js/);
+});
+
+test('toda escritura en Drive pasa por DriveUtils (sus primitivas avisan a la bitácora)', () => {
+  // 28-oct: crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido y las de la API
+  // (crearConApi, copiarConApi, reemplazarConApi). Lo temporal (copias de plantillas y de OCR) va con { temporal: true }.
+  const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
+  const QUEDAN = {   // solo puede encoger
+    'src/services/AdherenteVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/ArqueosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/ResponsivaVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+  };
+  const ESCRIBE = /\.(createFile|makeCopy|setTrashed|moveTo|createFolder|setContent)\(|Drive\.Files\.(create|update|copy|remove|delete|insert)\(/;
+  const sinComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/utils/DriveUtils.gs' && f !== 'src/services/Bitacora.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
+    'escribe en Drive con DriveUtils (crearArchivo / crearCarpeta / mover / renombrar / copiar / aPapelera…): ahí se conecta la bitácora');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por DriveUtils: quitarlo de QUEDAN');
 });
 
 test('el candado del script se pide solo con Candado.con (reentrante), y SheetUtils escribe solo lo que cambia', () => {

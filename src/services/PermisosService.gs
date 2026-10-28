@@ -323,6 +323,10 @@ const Permisos = (function () {
     const permisos = deCorreo(sesion.correo);
     const tiene = permisos[idModulo_(modulo)] || NINGUNO;
     if (NIVEL[tiene] < NIVEL[nivelValido_(nivel) || EDICION]) {
+      // Un intento sin permiso queda en la bitácora (salvo lo que se pide a propósito por si acaso: sinAnotar)
+      if (!silencio_ && typeof Bitacora !== 'undefined') {
+        Bitacora.evento('DENEGADO', { quien: sesion.correo, detalle: idModulo_(modulo) + ' · pidió ' + (nivelValido_(nivel) || EDICION) + ', tiene ' + tiene });
+      }
       throw new Error(nivel === LECTURA
         ? 'No tienes acceso a este módulo. Pídeselo a quien administra los permisos.'
         : 'Solo puedes consultar este módulo, no modificarlo.');
@@ -342,6 +346,16 @@ const Permisos = (function () {
     let h = 5381;
     for (let i = 0; i < texto.length; i++) h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
     return h.toString(36);
+  }
+
+  /**
+   * Lo que se pide por si acaso (una pestaña de la ficha, una sección del Inicio o de la campanita) y, sin permiso,
+   * simplemente no se muestra: ese "sin permiso" no es un intento indebido y no va a la bitácora.
+   */
+  let silencio_ = 0;
+  function sinAnotar(fn) {
+    silencio_++;
+    try { return fn(); } finally { silencio_--; }
   }
 
   /** ¿El error es porque no tiene permiso? (eso no cambia de una vez a otra; un error pasajero sí) */
@@ -842,7 +856,7 @@ const Permisos = (function () {
   return {
     LECTURA, EDICION, NINGUNO, MODULO_USUARIOS, PREFIJO_PERFIL, ASIGNADO, MODULO_ALCANCE, ALCANCE_AREA,
     deCorreo, olvidar, exigir, puedeLeer, puedeEditar, puedeLeerAlguno, puedeLeerFamilia, mios, revisarCatalogo, crearHoja,
-    firmaDeLectura, esFaltaDePermiso, alcanceDe, dentroDeAlcance, ROL_CLIENTE,
+    firmaDeLectura, esFaltaDePermiso, sinAnotar, alcanceDe, dentroDeAlcance, ROL_CLIENTE,
     panel, guardar, migrarCatalogo, crearPerfilesDesdeAreas, alcanceDesdeClientes,
     resolver_, alcance_, separacion_, migracion_, perfilesDesdeAreas_, perfilesDelPanel_, alcanceDesdeClientes_, aplicarCambios_, diferencias_,   // expuestas para las pruebas
   };

@@ -23,7 +23,7 @@ const DashboardService = (function () {
   let fallos_ = [];   // errores pasajeros de la última vez (no los de permisos)
   function seccion_(fn) {
     try {
-      return fn();
+      return Permisos.sinAnotar(fn);
     } catch (e) {
       if (!Permisos.esFaltaDePermiso(e)) {
         fallos_.push(e.message);

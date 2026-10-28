@@ -53,6 +53,8 @@ function pasosCalentador_() {
     ['Líneas (revisión diaria de avisos)', () => LineasNotificaciones.revisar(false)],
     // Una vez al día: a la papelera las fotos de inspecciones que nadie terminó de capturar (más de 3 días)
     ['Inspecciones (fotos temporales)', () => InspeccionesService.limpiarFotosTemporales()],
+    // Una vez al día: la cola de la bitácora, su cadena de huellas y que se siga escribiendo (avisa por correo)
+    ['Bitácora (revisión diaria)', () => Bitacora.revisarDiaria()],
   ];
 }
 

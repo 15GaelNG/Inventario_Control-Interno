@@ -234,7 +234,7 @@ const LineasPdf = (function () {
    */
   function generarPdfDesdePlantilla(plantillaId, registro, imagenes, carpeta, nombrePdf, sinCompartir) {
     const avisos = [];
-    const copia = DriveApp.getFileById(plantillaId).makeCopy('TMP ' + nombrePdf, carpeta);
+    const copia = DriveUtils.copiar(DriveApp.getFileById(plantillaId), 'TMP ' + nombrePdf, carpeta, { temporal: true });
     try {
       const doc = DocumentApp.openById(copia.getId());
       const secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean);
@@ -250,12 +250,12 @@ const LineasPdf = (function () {
       // La hoja 1 no alcanzó (p. ej. muchos responsables): sin el salto, las sanciones siguen donde termina y no queda
       // una hoja en blanco
       if (ajuste && ajuste.hojas && paginas_(blob) > ajuste.hojas && quitarSalto_(copia.getId())) blob = copia.getAs('application/pdf');
-      const pdf = DriveUtils.marcarAutor(carpeta.createFile(blob.setName(nombrePdf)));
+      const pdf = DriveUtils.crearArchivo(carpeta, blob, nombrePdf);
       // Fuera de NUCOS y LINEAS se abre al dominio; si Drive no lo deja, se queda con los permisos de su carpeta
       if (!sinCompartir) LineasArchivos.compartirEnDominio(pdf);
       return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos };
     } finally {
-      copia.setTrashed(true); // la copia temporal es nuestra; la plantilla original no se toca
+      DriveUtils.aPapelera(copia, { temporal: true }); // la copia temporal es nuestra; la plantilla original no se toca
     }
   }
 

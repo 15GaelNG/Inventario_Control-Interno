@@ -159,7 +159,7 @@ const LineasArchivos = (function () {
     const bytes = Utilities.base64Decode(base64);
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     const nombre = String(llave).replace(/[\\/]/g, '_') + '.' + columna + '.' + Utilities.formatDate(new Date(), ZONA, 'HHmmss') + '.' + EXTENSION[mime];
-    const archivo = DriveUtils.marcarAutor(carpetaDeApp(carpeta).createFile(Utilities.newBlob(bytes, mime, nombre)));
+    const archivo = DriveUtils.crearArchivo(carpetaDeApp(carpeta), Utilities.newBlob(bytes, mime, nombre));
     compartirEnDominio(archivo);
     return carpeta + '/' + nombre;
   }
@@ -291,7 +291,7 @@ const LineasArchivos = (function () {
   function carpetaUnica_(padre, nombre) {
     let candidato = nombre;
     for (let n = 2; padre.getFoldersByName(candidato).hasNext(); n++) candidato = nombre + ' (' + n + ')';
-    return padre.createFolder(candidato);
+    return DriveUtils.crearCarpeta(padre, candidato);
   }
 
   /** Carpeta del NUCO dentro de NUCOS ("0599" o "599", la que ya exista); si no hay, la crea a 4 dígitos. */
@@ -305,7 +305,7 @@ const LineasArchivos = (function () {
     LineasDatos.cacheBorrar('carpetas_nucos_v2');
     const raiz = DriveApp.getFolderById(carpetaNucosId());
     const otra = carpetasNucos()[n4];
-    return otra ? DriveApp.getFolderById(otra) : raiz.createFolder(n4);
+    return otra ? DriveApp.getFolderById(otra) : DriveUtils.crearCarpeta(raiz, n4);
   }
 
   /** Olvida lo que se tenía en caché del NUCO (Documentos, "Última inspección / responsiva"). */
@@ -332,7 +332,7 @@ const LineasArchivos = (function () {
     if (tipo === 'INSPECCION') {
       ramas = ['INSPECCIONES', anio, CUATRIMESTRES_[Math.floor((mes - 1) / 4)], MESES_[mes - 1]];
       carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizNuco), 'INSP ' + ddmm);
-      fotos = carpeta.createFolder('FOTOS');
+      fotos = DriveUtils.crearCarpeta(carpeta, 'FOTOS');
     } else if (tipo === 'RESPONSIVA') {
       ramas = ['CARTA RESPONSIVA', anio];
       carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizNuco), 'RESP ' + ddmm);
@@ -416,13 +416,13 @@ const LineasArchivos = (function () {
     }
     const raiz = DriveApp.getFolderById(carpetaLineasId());
     if (!carpeta) {
-      const nueva = Drive.Files.create({ name: nombreLibre_(raiz, nombre, null), mimeType: 'application/vnd.google-apps.folder',
+      const nueva = DriveUtils.crearConApi({ name: nombreLibre_(raiz, nombre, null), mimeType: 'application/vnd.google-apps.folder',
         parents: [raiz.getId()], properties: { idLinea: String(lineaId) } }, null, { supportsAllDrives: true, fields: 'id' });
       LineasDatos.cacheBorrar('carpetas_lineas_v1');
       return DriveApp.getFolderById(nueva.id);
     }
     if (carpeta.getName().replace(/ \(\d+\)$/, '') !== nombre) {
-      carpeta.setName(nombreLibre_(raiz, nombre, carpeta.getId()));
+      DriveUtils.renombrar(carpeta, nombreLibre_(raiz, nombre, carpeta.getId()));
       LineasDatos.cacheBorrar('carpetas_lineas_v1');
     }
     return carpeta;
@@ -476,7 +476,7 @@ const LineasArchivos = (function () {
     const dentroDeNucos = !dentroDeLineas && estaDentroDe(carpetaId, carpetaNucosId());
     const padres = c.getParents();
     let padre = padres.hasNext() ? padres.next() : null;
-    c.setTrashed(true);
+    DriveUtils.aPapelera(c);
     if (dentroDeLineas) {
       // RESP DD MM → <AÑO> → CARTA RESPONSIVA → <NÚMERO>; nunca LINEAS
       const raiz = carpetaLineasId();
@@ -484,7 +484,7 @@ const LineasArchivos = (function () {
         if (padre.searchFiles('trashed = false').hasNext() || padre.searchFolders('trashed = false').hasNext()) break;
         const arriba = padre.getParents();
         const siguiente = arriba.hasNext() ? arriba.next() : null;
-        padre.setTrashed(true);
+        DriveUtils.aPapelera(padre);
         padre = siguiente;
       }
       LineasDatos.cacheBorrar('carpetas_lineas_v1');
@@ -498,7 +498,7 @@ const LineasArchivos = (function () {
       const arriba = padre.getParents();
       const siguiente = arriba.hasNext() ? arriba.next() : null;
       if (!siguiente || siguiente.getId() === carpetaNucosId()) break; // es la carpeta del NUCO
-      padre.setTrashed(true);
+      DriveUtils.aPapelera(padre);
       padre = siguiente;
     }
   }
@@ -556,7 +556,7 @@ const LineasArchivos = (function () {
     }
     let r;
     try {
-      r = Drive.Files.update({}, archivoId, Utilities.newBlob(bytes, 'application/pdf'), { supportsAllDrives: true, fields: 'id,name' });
+      r = DriveUtils.reemplazarConApi({}, archivoId, Utilities.newBlob(bytes, 'application/pdf'), { supportsAllDrives: true, fields: 'id,name' });
     } catch (e) {
       throw new Error('No se pudo guardar el PDF en Drive (' + e.message + ').');
     }

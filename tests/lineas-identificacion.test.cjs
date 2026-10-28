@@ -49,7 +49,7 @@ function modulo(opciones) {
         makeCopy: (nombre, destino) => { copias.push({ de: id, nombre, carpeta: destino.getId() }); return { getId: () => 'COPIA' + copias.length }; },
       }),
     },
-    DriveUtils: { marcarAutor: (f) => f },
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (f) => f },
     // Como el de verdad (13-oct): si el correo es de otra persona, no decide
     CapitalHumano: { idPara: (hoja, r) => (r['RESPONSABLE'] === 'JUAN PEREZ LOPEZ' && (!r['CUENTA GOOGLE'] || r['CUENTA GOOGLE'] === 'juan@x.com') ? 'PER-000123' : '') },
     LineasUtil: {

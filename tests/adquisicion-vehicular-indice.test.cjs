@@ -89,7 +89,7 @@ function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () 
         setTrashed: () => {},
       }),
     },
-    DriveUtils: { carpetaEnRaiz: () => ({ getId: () => 'TEMP-FOLDER' }) },
+    DriveUtils: { ...require('./drive-utils-real')(), carpetaEnRaiz: () => ({ getId: () => 'TEMP-FOLDER' }) },
     CacheHojas: { tocarHoja: () => {} },
     Drive: { Files: { copy: (meta, id) => ({ id: 'copia-' + id }) } },
     DocumentApp: { openById: (id) => ({ getBody: () => ({ getText: () => (contexto._textoOcr || {})[id] || '' }) }) },

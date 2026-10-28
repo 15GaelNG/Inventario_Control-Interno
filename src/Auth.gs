@@ -277,6 +277,8 @@ const Auth = (function () {
       if (!sesion.creada) sesion.creada = ahora;
       try { guardarSesion_(token, sesion); } catch (e) { /* sin renovar: vence a su hora, no truena la llamada */ }
     }
+    // Quién hace lo que siga en esta llamada (la bitácora lo anota)
+    if (typeof Bitacora !== 'undefined') Bitacora.sesion(sesion);
     return sesion;
   }
 

@@ -176,7 +176,7 @@ const SolicitudCompraService = (function () {
       const carpetaId = valores[i][colCarpeta];
       if (nombreNuevo !== valores[i][colNombre] && carpetaId) {
         try {
-          DriveApp.getFolderById(carpetaId).setName(String(valores[i][colFolio]).trim() + '-' + nombreNuevo);
+          DriveUtils.renombrar(DriveApp.getFolderById(carpetaId), String(valores[i][colFolio]).trim() + '-' + nombreNuevo);
         } catch (e) {
           throw new Error('No se pudo renombrar la carpeta en Drive (' + e.message + '). El nombre no se cambió.');
         }

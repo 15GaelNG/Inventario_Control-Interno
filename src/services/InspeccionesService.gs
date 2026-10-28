@@ -1216,18 +1216,21 @@ const InspeccionesService = (function () {
     try { cache_().put('insfoto_raiz_v1', c.getId(), 6 * 60 * 60); } catch (e) { /* sin caché */ }
     return c;
   }
-  /** Crea la foto ya con su descripción ("Subido por…") en UNA llamada a Drive (Drive v3); si no hay, como antes */
+  /**
+   * Crea la foto ya con su descripción ("Subido por…") en UNA llamada a Drive (Drive v3); si no hay, como antes. Va a la
+   * carpeta temporal de la captura: es borrador y no va a la bitácora (se anota al guardar, cuando entra al expediente).
+   */
   function crearFoto_(carpeta, blob, nombre) {
     if (typeof Drive !== 'undefined' && Drive.Files && Drive.Files.create) {
       let quien = '';
       try { quien = Session.getActiveUser().getEmail(); } catch (e) { /* sin correo */ }
       const descripcion = quien ? 'Subido por ' + quien + ' desde Control Interno, el ' +
         Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm') : '';
-      const r = Drive.Files.create({ name: nombre, parents: [carpeta.getId()], description: descripcion },
-        blob.setName(nombre), { supportsAllDrives: true, fields: 'id,name' });
+      const r = DriveUtils.crearConApi({ name: nombre, parents: [carpeta.getId()], description: descripcion },
+        blob.setName(nombre), { supportsAllDrives: true, fields: 'id,name' }, { temporal: true });
       return { id: r.id, nombre: r.name };
     }
-    const f = DriveUtils.marcarAutor(carpeta.createFile(blob.setName(nombre)));
+    const f = DriveUtils.crearArchivo(carpeta, blob, nombre, { temporal: true });
     return { id: f.getId(), nombre: f.getName() };
   }
   /** Fotos que ya tiene la carpeta de una sección (para el máximo) */
@@ -1255,14 +1258,14 @@ const InspeccionesService = (function () {
   function revisarMaximo_(carpetaSeccion) {
     if (contarFotos_(carpetaSeccion) >= MAX_FOTOS_SECCION) throw new Error('Máximo ' + MAX_FOTOS_SECCION + ' fotos por sección.');
   }
-  function carpetaSeccion_(carpeta, seccion) {
+  function carpetaSeccion_(carpeta, seccion, temporal) {
     const buscado = SheetUtils.normalizarEncabezado_(seccion);
     const hijas = carpeta.getFolders();
     while (hijas.hasNext()) {
       const h = hijas.next();
       if (SheetUtils.normalizarEncabezado_(h.getName()) === buscado) return h;
     }
-    return carpeta.createFolder(seccion);
+    return DriveUtils.crearCarpeta(carpeta, seccion, temporal ? { temporal: true } : null);
   }
   /** Fotos por sección de una carpeta, con la sección normalizada a la del tipo ('NEUMÁTICOS ' → 'NEUMATICOS') */
   function fotosDeCarpeta_(carpetaId, secciones) {
@@ -1296,15 +1299,15 @@ const InspeccionesService = (function () {
   /** Empieza las fotos de una captura: su carpeta temporal → { carpetaId } */
   function fotosPreparar(token) {
     Permisos.puedeEditar(token, MODULO);
-    const carpeta = carpetaTemporalRaiz_().createFolder('CAPTURA ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmmss') +
-      ' ' + Utilities.getUuid().slice(0, 8));
+    const carpeta = DriveUtils.crearCarpeta(carpetaTemporalRaiz_(), 'CAPTURA ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HHmmss') +
+      ' ' + Utilities.getUuid().slice(0, 8), { temporal: true });
     return { carpetaId: carpeta.getId() };
   }
   /** Sube una foto a la temporal de la captura → { id, nombre, miniatura } */
   function fotosSubir(token, carpetaId, seccion, archivo) {
     Permisos.puedeEditar(token, MODULO);
     const foto = blobDeFoto_(archivo, seccion);
-    const carpeta = carpetaSeccion_(temporalValida_(carpetaId), foto.seccion);
+    const carpeta = carpetaSeccion_(temporalValida_(carpetaId), foto.seccion, true);
     revisarMaximo_(carpeta);
     const f = crearFoto_(carpeta, foto.blob, nombreTemporal_(foto));
     return { id: f.id, nombre: f.nombre, miniatura: null };
@@ -1322,7 +1325,7 @@ const InspeccionesService = (function () {
       try {
         const foto = blobDeFoto_(x && x.archivo, x && x.seccion);
         if (!secciones[foto.seccion]) {
-          const carpeta = carpetaSeccion_(temporal, foto.seccion);
+          const carpeta = carpetaSeccion_(temporal, foto.seccion, true);
           secciones[foto.seccion] = { carpeta, n: contarFotos_(carpeta) };
         }
         const s = secciones[foto.seccion];
@@ -1353,13 +1356,13 @@ const InspeccionesService = (function () {
     const raiz = temporalValida_(carpetaId).getId();
     const archivo = DriveApp.getFileById(String(archivoId || ''));
     if (!enCarpeta_(archivo, raiz)) throw new Error('Esa foto no es de esta captura.');
-    archivo.setTrashed(true);
+    DriveUtils.aPapelera(archivo, { temporal: true });   // borrador: todavía no estaba en el expediente
     return true;
   }
   /** Se canceló la captura: la temporal a la papelera */
   function fotosCancelar(token, carpetaId) {
     Permisos.puedeEditar(token, MODULO);
-    temporalValida_(carpetaId).setTrashed(true);
+    DriveUtils.aPapelera(temporalValida_(carpetaId), { temporal: true });
     return true;
   }
   /** El Calentador, una vez al día: a la papelera las temporales de más de 3 días (capturas que nadie terminó) */
@@ -1373,21 +1376,21 @@ const InspeccionesService = (function () {
     let n = 0;
     while (hijas.hasNext()) {
       const c = hijas.next();
-      if (c.getLastUpdated().getTime() < limite) { c.setTrashed(true); n++; }
+      if (c.getLastUpdated().getTime() < limite) { DriveUtils.aPapelera(c, { temporal: true }); n++; }
     }
     return n;
   }
 
-  /** Mueve y renombra una foto en UNA llamada a Drive (v3); sin el servicio avanzado, como antes (tres llamadas) */
+  /**
+   * Mueve y renombra una foto en UNA llamada a Drive (v3); sin el servicio avanzado, como antes (tres llamadas). Aquí
+   * entra al expediente del NUCO: se anota en la bitácora (MOVER, con quién guardó).
+   */
   function moverYNombrar_(foto, carpeta, nombre) {
     if (typeof Drive !== 'undefined' && Drive.Files && Drive.Files.update && foto.carpeta) {
-      Drive.Files.update({ name: nombre }, foto.id, null,
-        { addParents: carpeta.getId(), removeParents: foto.carpeta, supportsAllDrives: true, fields: 'id' });
+      DriveUtils.moverConApi(foto.id, foto.carpeta, carpeta, nombre);
       return;
     }
-    const archivo = DriveApp.getFileById(foto.id);
-    archivo.moveTo(carpeta);
-    archivo.setName(nombre);
+    DriveUtils.mover(DriveApp.getFileById(foto.id), carpeta, nombre);
   }
 
   /**
@@ -1407,7 +1410,7 @@ const InspeccionesService = (function () {
         moverYNombrar_(f, carpeta, siguiente ? siguiente(ext) : seccion + '-' + idInspeccion + ' ' + f.id.slice(-4) + ext);
       });
     });
-    temporal.setTrashed(true);
+    DriveUtils.aPapelera(temporal, { temporal: true });   // ya vacía: sus fotos pasaron al expediente
     ExpedienteNuco.olvidarFotos(destino.getId());
   }
 
@@ -1457,7 +1460,7 @@ const InspeccionesService = (function () {
     const fotos = fotosDeCarpeta_(x.carpeta.getId(), x.secciones);
     const clave = Object.keys(fotos).find((k) => fotos[k].some((f) => f.id === archivo.getId()));
     if ((fotos[clave] || []).length <= 1) throw new Error('Debe quedar al menos una foto de ' + clave.toLowerCase() + '.');
-    archivo.setTrashed(true);
+    DriveUtils.aPapelera(archivo);
     ExpedienteNuco.olvidarFotos(x.carpeta.getId());
     ExpedienteNuco.olvidar(x.nucco);
     return true;

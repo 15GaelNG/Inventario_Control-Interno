@@ -189,7 +189,7 @@ const LineasCorrecciones = (function () {
   function copiarComoHoja_(id, nombre, carpetaId) {
     // Servicio avanzado de Drive, no UrlFetchApp (LineasArchivos.listarDrive)
     try {
-      return Drive.Files.copy({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }, id, { supportsAllDrives: true }).id;
+      return DriveUtils.copiarConApi({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }, id, { supportsAllDrives: true }).id;
     } catch (e) {
       throw new Error('No se pudo convertir ' + nombre + ': ' + e.message);
     }
@@ -254,14 +254,14 @@ const LineasCorrecciones = (function () {
     const carpeta = carpetaEvidencias_();
     const existentes = carpeta.getFilesByName(n);
     if (n === MANIFIESTO) {
-      if (existentes.hasNext()) existentes.next().setContent(Utilities.newBlob(bytes).getDataAsString('UTF-8'));
-      else carpeta.createFile(Utilities.newBlob(bytes, 'application/json', n));
+      if (existentes.hasNext()) DriveUtils.cambiarContenido(existentes.next(), Utilities.newBlob(bytes).getDataAsString('UTF-8'));
+      else DriveUtils.crearArchivo(carpeta, Utilities.newBlob(bytes, 'application/json', n));
     } else if (existentes.hasNext()) {
       return { nombre: n, yaEstaba: true };
     } else if (/\.xlsx?$/i.test(n)) {
       convertirAHoja_(carpeta.getId(), n, bytes);
     } else {
-      carpeta.createFile(Utilities.newBlob(bytes, mime || 'application/octet-stream', n));
+      DriveUtils.crearArchivo(carpeta, Utilities.newBlob(bytes, mime || 'application/octet-stream', n));
     }
     LineasDatos.cacheBorrar(CLAVE_EVIDENCIAS);
     return { nombre: n, yaEstaba: false };
@@ -271,7 +271,7 @@ const LineasCorrecciones = (function () {
   function convertirAHoja_(carpetaId, nombre, bytes) {
     const tipo = /\.xls$/i.test(nombre) ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     try {
-      Drive.Files.create({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }, Utilities.newBlob(bytes, tipo, nombre), { supportsAllDrives: true });
+      DriveUtils.crearConApi({ name: nombre, mimeType: MIME_HOJA, parents: [carpetaId] }, Utilities.newBlob(bytes, tipo, nombre), { supportsAllDrives: true });
     } catch (e) {
       throw new Error('No se pudo convertir ' + nombre + ' a Google Sheets: ' + e.message);
     }

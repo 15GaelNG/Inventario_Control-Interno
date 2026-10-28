@@ -128,6 +128,8 @@ const contexto = vm.createContext({
   VehiculosService: { nuccoEnAlcance: () => true },
   Plantilla: {}, DocumentApp: {},
 });
+// Escribe en Drive por DriveUtils (28-oct): las primitivas de verdad, con el Drive de esta prueba
+contexto.DriveUtils = Object.assign(require('./drive-utils-real')({ Drive: contexto.Drive, DriveApp: contexto.DriveApp }), contexto.DriveUtils);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') +
   '\nthis.S = InspeccionesService;', contexto);
 const S = contexto.S;
