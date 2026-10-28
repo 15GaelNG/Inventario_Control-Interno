@@ -52,6 +52,8 @@ function pasosCalentador_() {
     ['Líneas (revisión diaria de avisos)', () => LineasNotificaciones.revisar(false)],
     // Una vez al día: la cola de la bitácora, su cadena de huellas y que se siga escribiendo (avisa por correo)
     ['Bitácora (revisión diaria)', () => Bitacora.revisarDiaria()],
+    // Cada vuelta (casi siempre solo la caché): la pestaña del mes con su formato vigente
+    ['Bitácora (formato al día)', () => Bitacora.alDia()],
   ];
 }
 

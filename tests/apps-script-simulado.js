@@ -116,7 +116,7 @@ function crearEntorno(opciones) {
 
   const libros = {};
   function crearLibro(id, nombreLibro, hojas) {
-    const libro = { getId: () => id, getName: () => nombreLibro || 'Libro ' + id, _hojas: [] };
+    const libro = { getId: () => id, getName: () => nombreLibro || 'Libro ' + id, getUrl: () => 'https://docs.google.com/spreadsheets/d/' + id, _hojas: [] };
     libro.getSheets = () => libro._hojas.slice();
     libro.getSheetByName = (n) => libro._hojas.find((h) => h.getName() === n) || null;
     libro.insertSheet = (n) => {   // (la posición no importa en las pruebas)

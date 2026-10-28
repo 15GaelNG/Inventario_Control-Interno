@@ -27,8 +27,9 @@ function entorno(opciones) {
       },
     },
     globales: {
-      DriveUtils: { carpetaEnRaiz: () => carpeta },
-      DriveApp: { getFileById: (id) => ({ moveTo: () => { archivos.push({ nombre: e.libros[id].getName(), getId: () => id }); } }) },
+      DriveUtils: { carpetaEnRaiz: () => carpeta, carpetaEnRaizSiExiste: () => (archivos.length ? carpeta : null) },
+      Config: { DRIVE_FOLDERS: { RAIZ: () => 'RAIZ' } },
+      DriveApp: { getFileById: (id) => ({ moveTo: () => { archivos.push({ nombre: e.libros[id].getName(), getId: () => id }); } }), getFolderById: () => ({}) },
       MailApp: { sendEmail: (m) => correos.push(m) },
     },
   }, opciones || {}));
@@ -203,6 +204,25 @@ console.log('9. Revisión diaria (Calentador)');
     'la cadena rota: avisa por correo a la cuenta que despliega');
   const fuente = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'Calentador.gs'), 'utf8');
   ok(/Bitacora\.revisarDiaria\(\)/.test(fuente), 'es un paso del Calentador');
+}
+
+console.log('10. Una pestaña que ya existía sin formato se repinta sola (Calentador) o desde el editor');
+{
+  const { e, S, B, archivos } = entorno();
+  ok(B.alDia() === 'sin bitácora todavía', 'donde no hay bitácora no la crea');
+  B.sesion({ correo: 'ana@x.com' });
+  S.update('libro', 'TICKETS', 'TCK-1', { ESTADO: 'A' });
+  const pestana = e.libros[archivos[0].getId()].getSheets()[0];
+  // Como la del DEV: hecha antes de que existiera el formato
+  pestana._reglas = [];
+  e.propiedades.delete('BITACORA_FORMATO_' + archivos[0].getId() + '_2026-10');
+  e.contexto.CacheService.getScriptCache().remove('bitacora_v1_f1_2026-10');
+  ok(B.alDia() === 'revisada' && pestana._reglas.length === 17, 'el Calentador la ve sin formato y la pinta (17 reglas)');
+  ok(B.alDia() === 'al día', 'la siguiente vuelta solo lee la caché');
+  pestana._reglas = [];
+  ok(/2026-10/.test(B.repintar()) && pestana._reglas.length === 17, 'repintarBitacora() la vuelve a pintar al momento');
+  const calentador = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'Calentador.gs'), 'utf8');
+  ok(/Bitacora\.alDia\(\)/.test(calentador), 'es un paso del Calentador');
 }
 
 if (fallas) { console.error('\n' + fallas + ' FALLA(S)'); process.exit(1); }

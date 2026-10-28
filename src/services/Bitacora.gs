@@ -420,7 +420,32 @@ const Bitacora = (function () {
     return SpreadsheetApp.openById(d.libroId).getUrl() + ' (pestaña ' + d.nombre + ')';
   }
 
-  return { COLUMNAS, HOJAS, anotar, evento, sesion, aMano, vaciar, quiereAntes, revisarCadena, revisarDiaria, instalar };
+  /**
+   * El Calentador, cada vuelta: que la pestaña del mes exista y tenga el formato vigente (un formato nuevo se ve en
+   * minutos, sin esperar a que alguien cambie algo). Casi siempre es solo leer la caché. No crea la bitácora donde no
+   * existe todavía (en producción la crea instalarBitacora).
+   */
+  function alDia() {
+    const mes = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+    if (CacheService.getScriptCache().get('bitacora_v1_f' + FORMATO + '_' + mes)) return 'al día';
+    const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
+    if (!DriveUtils.carpetaEnRaizSiExiste(raiz, CARPETA)) return 'sin bitácora todavía';
+    pestana_();
+    return 'revisada';
+  }
+
+  /** Vuelve a dar el formato a la pestaña del mes ahora (repintarBitacora, desde el editor) */
+  function repintar() {
+    const mes = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
+    CacheService.getScriptCache().remove('bitacora_v1_f' + FORMATO + '_' + mes);
+    const d = pestana_();
+    props_().deleteProperty('BITACORA_FORMATO_' + d.libroId + '_' + mes);
+    CacheService.getScriptCache().remove('bitacora_v1_f' + FORMATO + '_' + mes);
+    pestana_();
+    return SpreadsheetApp.openById(d.libroId).getUrl() + ' (pestaña ' + mes + ')';
+  }
+
+  return { COLUMNAS, HOJAS, anotar, evento, sesion, aMano, vaciar, quiereAntes, revisarCadena, revisarDiaria, instalar, alDia, repintar };
 })();
 
 /**
@@ -433,4 +458,10 @@ function instalarBitacora() {
   const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
   if (!DriveUtils.carpetaEnRaizSiExiste(raiz, 'BITACORA')) DriveUtils.crearCarpeta(raiz, 'BITACORA');
   return 'Bitácora lista: ' + Bitacora.instalar();
+}
+
+/** Desde el editor: vuelve a pintar la pestaña del mes con el formato vigente (colores por acción, filtros…) */
+function repintarBitacora() {
+  soloEditor_();
+  return 'Bitácora repintada: ' + Bitacora.repintar();
 }
