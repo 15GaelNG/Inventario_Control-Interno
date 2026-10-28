@@ -259,6 +259,7 @@ const REVISION_EN_RAIZ = [
   'ARQUEOS', 'ARQUEOS_Images', 'ARQUEOS_Files_', 'UBER_Files_', 'VEHICULOS_Files_', 'VEHICULOS_Images',
   'RESPONSIVAS VEHICULARES_Images',   // RESPONSIVAS_VEHICULARES y ADHERENTES VEHICULAR ya no: el PDF va al NUCO (8-oct)
   'ADQUISICION_VEHICULAR_OCR_TEMPORAL',   // copias con OCR de AdquisicionVehicularIndice.gs, se tiran enseguida
+  'BITACORA',   // la bitácora de ingresos y cambios (Bitacora.gs); en producción la crea instalarBitacora()
 ];
 /**
  * Hojas del catálogo que pueden faltar sin que sea error: APP_CORRECCIONES la crea Líneas la primera vez que

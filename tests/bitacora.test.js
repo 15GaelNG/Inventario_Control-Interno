@@ -12,6 +12,7 @@ const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto);
 
 function entorno(opciones) {
   const archivos = [];   // lo que hay en la carpeta BITACORA
+  const correos = [];    // lo que mandó la revisión diaria
   const carpeta = {
     getFilesByName: (n) => { const lista = archivos.filter((a) => a.nombre === n); let i = 0; return { hasNext: () => i < lista.length, next: () => lista[i++] }; },
   };
@@ -28,9 +29,11 @@ function entorno(opciones) {
     globales: {
       DriveUtils: { carpetaEnRaiz: () => carpeta },
       DriveApp: { getFileById: (id) => ({ moveTo: () => { archivos.push({ nombre: e.libros[id].getName(), getId: () => id }); } }) },
+      MailApp: { sendEmail: (m) => correos.push(m) },
     },
   }, opciones || {}));
-  e.cargar('src/utils/Ids.gs', 'src/config/Entidades.gs', 'src/utils/CacheHojas.gs', 'src/utils/SheetUtils.gs', 'src/services/Bitacora.gs');
+  e.cargar('src/utils/Ids.gs', 'src/config/Entidades.gs', 'src/utils/CacheHojas.gs', 'src/utils/SheetUtils.gs', 'src/utils/Correos.gs',
+    'src/services/Bitacora.gs');
   const S = e.global('SheetUtils');
   const B = e.global('Bitacora');
   const renglones = () => {
@@ -39,7 +42,7 @@ function entorno(opciones) {
     const h = e.libros[id].getSheets()[0];
     return h._datos.slice(1).map((r) => Object.fromEntries(B.COLUMNAS.map((c, i) => [c, r[i]])));
   };
-  return { e, S, B, renglones, archivos };
+  return { e, S, B, renglones, archivos, correos };
 }
 
 console.log('1. Cambiar: un renglón por campo que de verdad cambió, con antes y después');
@@ -172,6 +175,23 @@ console.log('8. Drive: lo que se sube, mueve, renombra o tira (lo temporal no)')
   ok(r.map((x) => x.ACCION).join() === 'SUBIR,RENOMBRAR,MOVER,PAPELERA', 'subir, renombrar, mover y tirar; la copia temporal de la plantilla no');
   ok(r[0].HOJA === 'DRIVE' && r[0]['ID REGISTRO'] === 'F-1' && r[0].CAMPO === 'RESP-0088.pdf' && /CARP-1/.test(r[0].DETALLE), 'qué archivo y dónde');
   ok(r[1].ANTES === 'viejo.pdf' && r[1].DESPUES === 'nuevo.pdf', 'renombrar: el nombre de antes y el nuevo');
+}
+
+console.log('9. Revisión diaria (Calentador)');
+{
+  const { e, S, B, archivos, correos } = entorno();
+  B.sesion({ correo: 'ana@x.com' });
+  S.update('libro', 'TICKETS', 'TCK-1', { ESTADO: 'A' });
+  S.update('libro', 'TICKETS', 'TCK-2', { ESTADO: 'B' });
+  ok(/^bien: 2 renglones/.test(B.revisarDiaria()) && correos.length === 0, 'todo bien: no avisa');
+  ok(B.revisarDiaria() === 'ya se revisó hoy', 'una vez al día');
+  e.libros[archivos[0].getId()].getSheets()[0]._datos[1][11] = 'Z';   // alguien editó un renglón
+  e.propiedades.delete('BITACORA_REVISION');
+  const r = B.revisarDiaria();
+  ok(/cadena de huellas se rompe en el renglón 2/.test(r) && correos.length === 1 && correos[0].to === 'despliega@ejemplo.com',
+    'la cadena rota: avisa por correo a la cuenta que despliega');
+  const fuente = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'Calentador.gs'), 'utf8');
+  ok(/Bitacora\.revisarDiaria\(\)/.test(fuente), 'es un paso del Calentador');
 }
 
 if (fallas) { console.error('\n' + fallas + ' FALLA(S)'); process.exit(1); }

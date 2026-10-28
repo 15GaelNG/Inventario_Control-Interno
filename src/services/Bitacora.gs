@@ -302,5 +302,76 @@ const Bitacora = (function () {
     return { renglones: datos.length, rota: null };
   }
 
-  return { COLUMNAS, HOJAS, anotar, evento, sesion, aMano, vaciar, quiereAntes, revisarCadena };
+  /**
+   * El Calentador, una vez al día: reintenta la cola, revisa la cadena del mes y que se siga escribiendo (de martes a
+   * viernes, algo en las últimas 24 h). Si algo anda mal, avisa por correo a la cuenta que despliega (la única que
+   * abre la bitácora; usuario, 28-oct). → lo que encontró
+   */
+  function revisarDiaria() {
+    const props = props_();
+    const zona = Session.getScriptTimeZone();
+    const hoy = Utilities.formatDate(new Date(), zona, 'yyyy-MM-dd');
+    if (props.getProperty('BITACORA_REVISION') === hoy) return 'ya se revisó hoy';
+    props.setProperty('BITACORA_REVISION', hoy);
+    vaciar(true);
+    const problemas = [];
+    const cadena = revisarCadena();
+    if (cadena.rota) problemas.push('La cadena de huellas se rompe en el renglón ' + cadena.rota.fila + ' de la pestaña del mes: ' + cadena.rota.motivo + '.');
+    const enCola = leerCola_().length;
+    if (enCola) problemas.push(enCola + ' renglones siguen en la cola: el libro no se pudo escribir.');
+    const dia = new Date().getDay();
+    if (dia >= 2 && dia <= 5 && Number(hoy.slice(8)) > 1) {
+      const ultima = ultimaFecha_();
+      if (!ultima || Date.now() - ultima.getTime() > 24 * 60 * 60 * 1000) problemas.push('No hay renglones en las últimas 24 horas: ¿dejó de escribir?');
+    }
+    if (problemas.length) avisar_(problemas, cadena.renglones);
+    return problemas.length ? problemas.join(' ') : 'bien: ' + cadena.renglones + ' renglones este mes';
+  }
+
+  /** La fecha del último renglón de la pestaña del mes (o null) */
+  function ultimaFecha_() {
+    const destino = pestana_();
+    const hoja = SpreadsheetApp.openById(destino.libroId).getSheetByName(destino.nombre);
+    if (!hoja || hoja.getLastRow() < 2) return null;
+    const v = String(hoja.getRange(hoja.getLastRow(), 1).getValue());
+    const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(v);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : null;
+  }
+
+  function avisar_(problemas, renglones) {
+    try {
+      const para = Session.getEffectiveUser().getEmail();
+      if (!para) return;
+      MailApp.sendEmail(Correos.mensaje(para, 'Control Interno: revisar la bitácora', {
+        preencabezado: problemas[0],
+        etiqueta: 'Bitácora',
+        titulo: 'La revisión diaria de la bitácora encontró algo',
+        parrafos: problemas,
+        detalle: [['Renglones este mes', String(renglones)], ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')]],
+        aviso: 'La bitácora está en la carpeta <b>BITACORA</b> de la raíz del proyecto (solo la abre esta cuenta).',
+      }));
+    } catch (e) {
+      console.error('Bitácora: no se pudo avisar por correo: ' + e.message);
+    }
+  }
+
+  /** Deja listo el libro del año y la pestaña del mes (instalarBitacora). → el enlace */
+  function instalar() {
+    const d = pestana_();
+    return SpreadsheetApp.openById(d.libroId).getUrl() + ' (pestaña ' + d.nombre + ')';
+  }
+
+  return { COLUMNAS, HOJAS, anotar, evento, sesion, aMano, vaciar, quiereAntes, revisarCadena, revisarDiaria, instalar };
 })();
+
+/**
+ * Desde el editor, una vez por proyecto (en producción, antes de desplegar la bitácora): crea la carpeta BITACORA en la
+ * raíz, el libro del año y la pestaña del mes. En un DEV se crean solos con el primer cambio; en producción las carpetas
+ * no se crean solas (DriveUtils.carpetaEnRaiz) y revisarEntorno avisa si falta.
+ */
+function instalarBitacora() {
+  soloEditor_();
+  const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
+  if (!DriveUtils.carpetaEnRaizSiExiste(raiz, 'BITACORA')) DriveUtils.crearCarpeta(raiz, 'BITACORA');
+  return 'Bitácora lista: ' + Bitacora.instalar();
+}
