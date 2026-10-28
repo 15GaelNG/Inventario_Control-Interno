@@ -11,7 +11,7 @@ let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
 
 function entorno(opciones) {
-  const archivos = [];   // lo que hay en la carpeta BITACORA
+  const archivos = [];   // lo que hay en la carpeta LOGS
   const correos = [];    // lo que mandó la revisión diaria
   const carpeta = {
     getFilesByName: (n) => { const lista = archivos.filter((a) => a.nombre === n); let i = 0; return { hasNext: () => i < lista.length, next: () => lista[i++] }; },
@@ -52,7 +52,7 @@ console.log('1. Cambiar: un renglón por campo que de verdad cambió, con antes 
   B.sesion({ correo: 'ana@x.com' });
   S.update('libro', 'TICKETS', 'TCK-1', { ESTADO: 'CERRADO', ASUNTO: 'uno' });
   const r = renglones();
-  ok(archivos.length === 1 && archivos[0].nombre === 'BITACORA 2026', 'el libro del año se crea solo en la carpeta BITACORA');
+  ok(archivos.length === 1 && archivos[0].nombre === 'LOGS 2026', 'el libro del año (LOGS 2026) se crea solo en la carpeta LOGS');
   ok(e.libros[archivos[0].getId()].getSheets().map((h) => h.getName()).join() === '2026-10', 'una pestaña por mes (y sin la "Hoja 1" vacía)');
   ok(r.length === 1 && r[0].ACCION === 'CAMBIAR' && r[0].CAMPO === 'ESTADO' && r[0].ANTES === 'ABIERTO' && r[0].DESPUES === 'CERRADO',
     'solo ESTADO (ASUNTO no cambió), con antes y después');
@@ -164,7 +164,7 @@ console.log('7. Lo que no pasa por SheetUtils: a mano y accesos denegados');
 console.log('8. Drive: lo que se sube, mueve, renombra o tira (lo temporal no)');
 {
   const { e, B, renglones } = entorno();
-  const carpetaBitacora = e.global('DriveUtils').carpetaEnRaiz;   // la de mentira (la carpeta BITACORA)
+  const carpetaBitacora = e.global('DriveUtils').carpetaEnRaiz;   // la de mentira (la carpeta LOGS)
   e.cargar('src/utils/DriveUtils.gs');
   const D = e.global('DriveUtils');
   D.carpetaEnRaiz = carpetaBitacora;
@@ -216,7 +216,7 @@ console.log('10. Una pestaña que ya existía sin formato se repinta sola (Calen
   // Como la del DEV: hecha antes de que existiera el formato
   pestana._reglas = [];
   e.propiedades.delete('BITACORA_FORMATO_' + archivos[0].getId() + '_2026-10');
-  e.contexto.CacheService.getScriptCache().remove('bitacora_v1_f1_2026-10');
+  e.contexto.CacheService.getScriptCache().remove('bitacora_v2_f1_2026-10');
   ok(B.alDia() === 'revisada' && pestana._reglas.length === 17, 'el Calentador la ve sin formato y la pinta (17 reglas)');
   ok(B.alDia() === 'al día', 'la siguiente vuelta solo lee la caché');
   pestana._reglas = [];

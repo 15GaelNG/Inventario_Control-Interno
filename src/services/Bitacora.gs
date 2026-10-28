@@ -5,7 +5,7 @@
  * nadie escribe la bitácora a mano y un módulo nuevo nace anotado. Lo que se junta en una ejecución sale en UNA
  * escritura al soltar el candado (Candado.con → vaciar), así nunca se cruzan dos operaciones.
  *
- * Dónde: carpeta BITACORA en la raíz del proyecto → libro "BITACORA <año>" → una pestaña por mes ("2026-10"). Solo la
+ * Dónde: carpeta LOGS en la raíz del proyecto (usuario, 28-oct) → libro "LOGS <año>" → una pestaña por mes ("2026-10"). Solo la
  * cuenta que despliega (la dueña) lo abre: no se comparte (usuario, 28-oct).
  *
  * Un renglón: FECHA · QUIEN · ORIGEN (app / a mano / sistema) · OPERACION (una por ejecución) · ACCION · LIBRO · HOJA ·
@@ -30,7 +30,7 @@
 const Bitacora = (function () {
   const COLUMNAS = ['FECHA', 'QUIEN', 'ORIGEN', 'OPERACION', 'ACCION', 'LIBRO', 'HOJA', 'ID REGISTRO', 'FILA', 'CAMPO',
     'ANTES', 'DESPUES', 'DETALLE', 'HUELLA'];
-  const CARPETA = 'BITACORA';
+  const CARPETA = 'LOGS';   // la carpeta en la raíz, y el nombre de cada libro ("LOGS 2026")
   const MASIVA = 50;              // más renglones que esto en una escritura: un solo renglón CARGA
   const MAX_TEXTO = 5000;         // una celda aguanta 50,000; la bitácora no necesita tanto
   const MAX_CELDAS = 8000000;     // un libro aguanta 10 millones: antes de eso, otro libro del año
@@ -239,7 +239,7 @@ const Bitacora = (function () {
     const anio = Utilities.formatDate(ahora, Session.getScriptTimeZone(), 'yyyy');
     const mes = Utilities.formatDate(ahora, Session.getScriptTimeZone(), 'yyyy-MM');
     const cache = CacheService.getScriptCache();
-    const clave = 'bitacora_v1_f' + FORMATO + '_' + mes;   // con la versión del formato: uno nuevo vuelve a pasar por aquí
+    const clave = 'bitacora_v2_f' + FORMATO + '_' + mes;   // con la versión del formato: uno nuevo vuelve a pasar por aquí
     const guardado = cache.get(clave);
     if (guardado) return { libroId: guardado, nombre: mes };
 
@@ -318,7 +318,7 @@ const Bitacora = (function () {
     if (!hoja.getFilter()) hoja.getRange(1, 1, filas, n).createFilter();
   }
 
-  /** El libro del año que todavía tiene lugar: "BITACORA 2026", "BITACORA 2026 (2)"… */
+  /** El libro del año que todavía tiene lugar: "LOGS 2026", "LOGS 2026 (2)"… */
   function libroDelAnio_(carpeta, anio) {
     let ultimo = null;
     for (let n = 1; n < 50; n++) {
@@ -328,7 +328,7 @@ const Bitacora = (function () {
     }
     return ultimo ? SpreadsheetApp.openById(ultimo.getId()) : libroNuevo_(carpeta, anio, false);
   }
-  const nombreLibro_ = (anio, n) => 'BITACORA ' + anio + (n > 1 ? ' (' + n + ')' : '');
+  const nombreLibro_ = (anio, n) => CARPETA + ' ' + anio + (n > 1 ? ' (' + n + ')' : '');
   function libroNuevo_(carpeta, anio, siguiente) {
     let n = 1;
     if (siguiente) while (carpeta.getFilesByName(nombreLibro_(anio, n)).hasNext()) n++;
@@ -407,7 +407,7 @@ const Bitacora = (function () {
         titulo: 'La revisión diaria de la bitácora encontró algo',
         parrafos: problemas,
         detalle: [['Renglones este mes', String(renglones)], ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')]],
-        aviso: 'La bitácora está en la carpeta <b>BITACORA</b> de la raíz del proyecto (solo la abre esta cuenta).',
+        aviso: 'La bitácora está en la carpeta <b>' + CARPETA + '</b> de la raíz del proyecto (solo la abre esta cuenta).',
       }));
     } catch (e) {
       console.error('Bitácora: no se pudo avisar por correo: ' + e.message);
@@ -427,7 +427,7 @@ const Bitacora = (function () {
    */
   function alDia() {
     const mes = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-    if (CacheService.getScriptCache().get('bitacora_v1_f' + FORMATO + '_' + mes)) return 'al día';
+    if (CacheService.getScriptCache().get('bitacora_v2_f' + FORMATO + '_' + mes)) return 'al día';
     const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
     if (!DriveUtils.carpetaEnRaizSiExiste(raiz, CARPETA)) return 'sin bitácora todavía';
     pestana_();
@@ -437,26 +437,26 @@ const Bitacora = (function () {
   /** Vuelve a dar el formato a la pestaña del mes ahora (repintarBitacora, desde el editor) */
   function repintar() {
     const mes = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-    CacheService.getScriptCache().remove('bitacora_v1_f' + FORMATO + '_' + mes);
+    CacheService.getScriptCache().remove('bitacora_v2_f' + FORMATO + '_' + mes);
     const d = pestana_();
     props_().deleteProperty('BITACORA_FORMATO_' + d.libroId + '_' + mes);
-    CacheService.getScriptCache().remove('bitacora_v1_f' + FORMATO + '_' + mes);
+    CacheService.getScriptCache().remove('bitacora_v2_f' + FORMATO + '_' + mes);
     pestana_();
     return SpreadsheetApp.openById(d.libroId).getUrl() + ' (pestaña ' + mes + ')';
   }
 
-  return { COLUMNAS, HOJAS, anotar, evento, sesion, aMano, vaciar, quiereAntes, revisarCadena, revisarDiaria, instalar, alDia, repintar };
+  return { COLUMNAS, HOJAS, CARPETA, anotar, evento, sesion, aMano, vaciar, quiereAntes, revisarCadena, revisarDiaria, instalar, alDia, repintar };
 })();
 
 /**
- * Desde el editor, una vez por proyecto (en producción, antes de desplegar la bitácora): crea la carpeta BITACORA en la
+ * Desde el editor, una vez por proyecto (en producción, antes de desplegar la bitácora): crea la carpeta LOGS en la
  * raíz, el libro del año y la pestaña del mes. En un DEV se crean solos con el primer cambio; en producción las carpetas
  * no se crean solas (DriveUtils.carpetaEnRaiz) y revisarEntorno avisa si falta.
  */
 function instalarBitacora() {
   soloEditor_();
   const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
-  if (!DriveUtils.carpetaEnRaizSiExiste(raiz, 'BITACORA')) DriveUtils.crearCarpeta(raiz, 'BITACORA');
+  if (!DriveUtils.carpetaEnRaizSiExiste(raiz, Bitacora.CARPETA)) DriveUtils.crearCarpeta(raiz, Bitacora.CARPETA);
   return 'Bitácora lista: ' + Bitacora.instalar();
 }
 
