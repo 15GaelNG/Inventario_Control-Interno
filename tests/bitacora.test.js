@@ -150,5 +150,29 @@ console.log('7. Lo que no pasa por SheetUtils: a mano y accesos denegados');
   ok(/Bitacora\.aMano\(quien\)/.test(fuente('AvisoDeCambios.gs')), 'el activador de edición anota lo hecho a mano');
 }
 
+console.log('8. Drive: lo que se sube, mueve, renombra o tira (lo temporal no)');
+{
+  const { e, B, renglones } = entorno();
+  const carpetaBitacora = e.global('DriveUtils').carpetaEnRaiz;   // la de mentira (la carpeta BITACORA)
+  e.cargar('src/utils/DriveUtils.gs');
+  const D = e.global('DriveUtils');
+  D.carpetaEnRaiz = carpetaBitacora;
+  B.sesion({ correo: 'ana@x.com' });
+  const archivo = (id, nombre) => ({ getId: () => id, getName: () => nombre, setName(n) { nombre = n; return this; },
+    setDescription() { return this; }, setTrashed() {}, moveTo() { return this; }, makeCopy: (n) => archivo('copia-' + id, n) });
+  const carpeta = { getId: () => 'CARP-1', createFile: (b) => archivo('F-1', b.getName()), createFolder: (n) => archivo('C-9', n) };
+  const blob = { n: 'a.pdf', getName() { return this.n; }, setName(n) { this.n = n; return this; } };
+  D.crearArchivo(carpeta, blob, 'RESP-0088.pdf');
+  D.renombrar(archivo('F-2', 'viejo.pdf'), 'nuevo.pdf');
+  D.mover(archivo('F-3', 'foto.jpg'), carpeta, 'NEUMATICOS-0088.jpg');
+  const tmp = D.copiar(archivo('PLANTILLA', 'Formato'), 'TMP x', carpeta, { temporal: true });
+  D.aPapelera(tmp, { temporal: true });
+  D.aPapelera(archivo('F-4', 'quitada.jpg'));
+  const r = renglones();
+  ok(r.map((x) => x.ACCION).join() === 'SUBIR,RENOMBRAR,MOVER,PAPELERA', 'subir, renombrar, mover y tirar; la copia temporal de la plantilla no');
+  ok(r[0].HOJA === 'DRIVE' && r[0]['ID REGISTRO'] === 'F-1' && r[0].CAMPO === 'RESP-0088.pdf' && /CARP-1/.test(r[0].DETALLE), 'qué archivo y dónde');
+  ok(r[1].ANTES === 'viejo.pdf' && r[1].DESPUES === 'nuevo.pdf', 'renombrar: el nombre de antes y el nuevo');
+}
+
 if (fallas) { console.error('\n' + fallas + ' FALLA(S)'); process.exit(1); }
 console.log('\nTODO OK');

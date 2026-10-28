@@ -15,7 +15,7 @@ const LineasEvidencias = (function () {
   function carpetaUnica_(padre, nombre) {
     let candidato = nombre;
     for (let n = 2; padre.getFoldersByName(candidato).hasNext(); n++) candidato = nombre + ' (' + n + ')';
-    return padre.createFolder(candidato);
+    return DriveUtils.crearCarpeta(padre, candidato);
   }
 
   const claveSubida_ = (correo, id) => 'ln_subida_' + correo + '_' + id;
@@ -61,7 +61,7 @@ const LineasEvidencias = (function () {
     if (!/^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(mime)) throw new Error('Tipo de archivo no permitido: ' + mime);
     const bytes = Utilities.base64Decode(base64);
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
-    const archivo = DriveUtils.marcarAutor(DriveApp.getFolderById(carpetaId).createFile(Utilities.newBlob(bytes, mime, String(nombre).replace(/[\\/]/g, '_'))));
+    const archivo = DriveUtils.crearArchivo(DriveApp.getFolderById(carpetaId), Utilities.newBlob(bytes, mime, String(nombre).replace(/[\\/]/g, '_')));
     // Fuera de NUCOS se abre al dominio; en NUCOS no: ahí cada archivo toma los permisos de la carpeta, como los que sube el área.
     const nuco = CacheService.getScriptCache().get(claveNuco_(carpetaId)) || (LineasArchivos.enNucos(carpetaId) ? nucoDeCarpeta_(carpetaId) : null);
     if (nuco) LineasArchivos.olvidarNuco(nuco);
