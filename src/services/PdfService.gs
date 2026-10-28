@@ -381,7 +381,7 @@ const PdfService = (function () {
       };
     } finally {
       // La copia del Doc ya no se necesita: lo que queda es el PDF
-      try { DriveUtils.aPapelera(copia.getId(), { temporal: true }); } catch (e) { /* no-op */ }
+      try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op */ }
     }
   }
 
@@ -404,7 +404,7 @@ const PdfService = (function () {
       const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
       return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
     } finally {
-      try { DriveUtils.aPapelera(copia.getId(), { temporal: true }); } catch (e) { /* no-op */ }
+      try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op */ }
     }
   }
 

@@ -78,6 +78,7 @@ function captura(fila, opciones) {
       formatDate: () => '05 10',
     },
     CacheService: { getScriptCache: () => ({ get: (k) => cache[k] || null, put: (k, v) => { cache[k] = v; } }) },
+    DriveUtils: require('./drive-utils-real')(),   // tirar la copia nueva pasa por sus primitivas (28-oct)
     DriveApp: {
       getFolderById: () => ({ getName: () => 'RESP 05 10' }),
       getFileById: (id) => archivos[id],

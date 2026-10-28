@@ -224,7 +224,7 @@ const DriveUtils = (function () {
   }
 
   function eliminar(fileId) {
-    try { aPapelera(fileId); } catch (e) { /* no-op */ }
+    try { aPapelera(DriveApp.getFileById(fileId)); } catch (e) { /* no-op */ }
   }
 
   /**
@@ -343,7 +343,8 @@ const DriveUtils = (function () {
   function anotar_(accion, archivo, datos, opciones) {
     if ((opciones && opciones.temporal) || typeof Bitacora === 'undefined' || !Bitacora.evento) return;
     try {
-      const d = datos || {};
+      // Los datos se arman solo si hay bitácora (piden getId/getName, que cuestan una llamada)
+      const d = (typeof datos === 'function' ? datos() : datos) || {};
       Bitacora.evento(accion, { hoja: 'DRIVE', id: archivo ? (archivo.getId ? archivo.getId() : archivo.id) : '',
         campo: d.nombre, antes: d.antes, despues: d.despues, detalle: d.detalle });
     } catch (e) {
@@ -356,14 +357,14 @@ const DriveUtils = (function () {
   function crearArchivo(carpeta, blob, nombre, opciones) {
     if (nombre) blob.setName(nombre);
     const archivo = marcarAutor(carpeta.createFile(blob));
-    anotar_('SUBIR', archivo, { nombre: nombre || nombreDe_(archivo), detalle: 'en la carpeta ' + carpeta.getId() }, opciones);
+    anotar_('SUBIR', archivo, () => ({ nombre: nombre || nombreDe_(archivo), detalle: 'en la carpeta ' + carpeta.getId() }), opciones);
     return archivo;
   }
 
   /** Una carpeta nueva dentro de otra. → Folder */
   function crearCarpeta(padre, nombre) {
     const carpeta = padre.createFolder(nombre);
-    anotar_('CARPETA', carpeta, { nombre: nombre, detalle: 'en la carpeta ' + padre.getId() });
+    anotar_('CARPETA', carpeta, () => ({ nombre: nombre, detalle: 'en la carpeta ' + padre.getId() }));
     return carpeta;
   }
 
@@ -372,7 +373,7 @@ const DriveUtils = (function () {
     const antes = nombre ? nombreDe_(archivo) : '';
     archivo.moveTo(destino);
     if (nombre) archivo.setName(nombre);
-    anotar_('MOVER', archivo, { nombre: nombre || '', antes: antes, despues: nombre || '', detalle: 'a la carpeta ' + destino.getId() });
+    anotar_('MOVER', archivo, () => ({ nombre: nombre || '', antes: antes, despues: nombre || '', detalle: 'a la carpeta ' + destino.getId() }));
     return archivo;
   }
 
@@ -380,29 +381,28 @@ const DriveUtils = (function () {
   function renombrar(archivo, nombre) {
     const antes = nombreDe_(archivo);
     archivo.setName(nombre);
-    if (antes !== nombre) anotar_('RENOMBRAR', archivo, { antes: antes, despues: nombre });
+    if (antes !== nombre) anotar_('RENOMBRAR', archivo, () => ({ antes: antes, despues: nombre }));
     return archivo;
   }
 
   /** Copia un archivo a una carpeta (opciones.temporal: una copia de trabajo que se tira enseguida). → File */
   function copiar(archivo, nombre, carpeta, opciones) {
     const copia = archivo.makeCopy(nombre, carpeta);
-    anotar_('COPIAR', copia, { nombre: nombre, detalle: 'de ' + archivo.getId() }, opciones);
+    anotar_('COPIAR', copia, () => ({ nombre: nombre, detalle: 'de ' + archivo.getId() }), opciones);
     return copia;
   }
 
-  /** Manda a la papelera un archivo o carpeta (o su ID). opciones.temporal: lo que se creó como temporal */
-  function aPapelera(archivoOId, opciones) {
-    const archivo = typeof archivoOId === 'string' ? DriveApp.getFileById(archivoOId) : archivoOId;
+  /** Manda a la papelera un archivo o carpeta (el objeto, no su ID). opciones.temporal: lo que se creó como temporal */
+  function aPapelera(archivo, opciones) {
     const nombre = opciones && opciones.temporal ? '' : nombreDe_(archivo);
     archivo.setTrashed(true);
-    anotar_('PAPELERA', archivo, { nombre: nombre }, opciones);
+    anotar_('PAPELERA', archivo, () => ({ nombre: nombre }), opciones);
   }
 
   /** Reemplaza el contenido (texto) de un archivo que ya existe. → el mismo */
   function cambiarContenido(archivo, texto) {
     archivo.setContent(texto);
-    anotar_('REEMPLAZAR', archivo, { nombre: nombreDe_(archivo), detalle: 'contenido nuevo' });
+    anotar_('REEMPLAZAR', archivo, () => ({ nombre: nombreDe_(archivo), detalle: 'contenido nuevo' }));
     return archivo;
   }
 
@@ -410,17 +410,17 @@ const DriveUtils = (function () {
   function crearConApi(recurso, blob, argumentos, opciones) {
     const r = Drive.Files.create(recurso, blob || null, argumentos);
     anotar_(recurso.mimeType === 'application/vnd.google-apps.folder' ? 'CARPETA' : 'SUBIR', r,
-      { nombre: recurso.name, detalle: 'en la carpeta ' + ((recurso.parents || [])[0] || '') }, opciones);
+      () => ({ nombre: recurso.name, detalle: 'en la carpeta ' + ((recurso.parents || [])[0] || '') }), opciones);
     return r;
   }
   function copiarConApi(recurso, id, argumentos, opciones) {
     const r = Drive.Files.copy(recurso, id, argumentos);
-    anotar_('COPIAR', r, { nombre: recurso.name, detalle: 'de ' + id }, opciones);
+    anotar_('COPIAR', r, () => ({ nombre: recurso.name, detalle: 'de ' + id }), opciones);
     return r;
   }
   function reemplazarConApi(recurso, id, blob, argumentos) {
     const r = Drive.Files.update(recurso, id, blob, argumentos);
-    anotar_('REEMPLAZAR', r, { nombre: r && r.name, detalle: 'contenido nuevo' });
+    anotar_('REEMPLAZAR', r, () => ({ nombre: r && r.name, detalle: 'contenido nuevo' }));
     return r;
   }
 

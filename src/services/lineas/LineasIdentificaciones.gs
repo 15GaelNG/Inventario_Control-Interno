@@ -120,7 +120,7 @@ const LineasIdentificaciones = (function () {
     if (!escritos) return;
     try {
       if (escritos.carpetaId) { LineasArchivos.descartarCarpeta(escritos.carpetaId); return; }
-      (escritos.archivos || []).forEach((a) => DriveUtils.aPapelera(a.id));
+      (escritos.archivos || []).forEach((a) => DriveUtils.aPapelera(DriveApp.getFileById(a.id)));
     } catch (e) {
       console.warn('Identificación: no se pudo limpiar lo que se subió: ' + e.message);
     }

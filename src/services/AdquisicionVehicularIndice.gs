@@ -259,7 +259,7 @@ function indiceAdqTexto_(archivo, temporal) {
   try {
     return DocumentApp.openById(copia.id).getBody().getText();
   } finally {
-    try { DriveUtils.aPapelera(copia.id, { temporal: true }); } catch (e) { console.warn('ADQUISICION_VEHICULAR_INDICE: no se tiró la copia ' + copia.id); }
+    try { DriveUtils.aPapelera(DriveApp.getFileById(copia.id), { temporal: true }); } catch (e) { console.warn('ADQUISICION_VEHICULAR_INDICE: no se tiró la copia ' + copia.id); }
   }
 }
 

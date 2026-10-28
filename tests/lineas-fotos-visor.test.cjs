@@ -49,7 +49,7 @@ test('el servidor solo quita una foto de esa inspección, con permiso de operar,
   assert.match(quitar, /const carpetas = carpetasFotos_\(doc, id\);/);
   assert.match(quitar, /carpetas\.indexOf\(c\.getId\(\)\) >= 0/);
   assert.match(quitar, /if \(!carpeta \|\| !esFotoDeInspeccion_\(archivo\.getName\(\), archivo\.getMimeType\(\)\)\) throw new Error\('La foto no es de esta inspección\.'\);/);
-  assert.match(quitar, /archivo\.setTrashed\(true\);/);
+  assert.match(quitar, /DriveUtils\.aPapelera\(archivo\);/);   // por DriveUtils (28-oct): se anota en la bitácora
   assert.match(quitar, /'FOTOS QUITADAS'/);
   assert.match(quitar, /registrarMovimiento\('FOTO_QUITADA', \{ motivo: motivo \}/);
   assert.match(quitar, /cambios: \[\{ campo: 'FOTO', antes: nombre, despues: '' \}\]/);
