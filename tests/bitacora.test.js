@@ -41,7 +41,8 @@ function entorno(opciones) {
     const id = Object.keys(e.libros).find((k) => /^nuevo-/.test(k));
     if (!id) return [];
     const h = e.libros[id].getSheets()[0];
-    return h._datos.slice(1).map((r) => Object.fromEntries(B.COLUMNAS.map((c, i) => [c, r[i]])));
+    return h._datos.slice(1).filter((r) => r.some((v) => v !== '' && v !== undefined))   // los renglones vacíos de por delante no cuentan
+      .map((r) => Object.fromEntries(B.COLUMNAS.map((c, i) => [c, r[i]])));
   };
   return { e, S, B, renglones, archivos, correos };
 }
@@ -64,7 +65,10 @@ console.log('1. Cambiar: un renglón por campo que de verdad cambió, con antes 
     regla('INGRESO').fondo === '#f3e8fd' && regla('DENEGADO').fondo === '#fef7e0' && regla('CARGA').fondo === '#f1f3f4',
     'un color por acción: verde agregar, azul cambiar, rojo borrar, morado ingresos, ámbar seguridad, gris masivo');
   ok((pestana._reglas || []).every((x) => !x.formula) && pestana._filtro, 'sin fórmulas (no dependen del idioma) y con filtros en el encabezado');
-  ok(e.propiedades.get('BITACORA_FORMATO_' + archivos[0].getId() + '_2026-10') === '1', 'el formato se da una vez por pestaña (y versión)');
+  ok(e.propiedades.get('BITACORA_FORMATO_' + archivos[0].getId() + '_2026-10') === '2', 'el formato se da una vez por pestaña (y versión)');
+  ok(e.registro.api.filter((x) => x.append).every((x) => x.insertar === 'OVERWRITE'),
+    'escribe sobre renglones vacíos (OVERWRITE): un renglón insertado copiaba el formato del encabezado (prod, 28-oct)');
+  ok(pestana.getMaxRows() >= 2000, 'la pestaña nace con 2000 renglones por delante (los colores y el filtro los cubren)');
 }
 
 console.log('2. Una escritura por operación (al soltar el candado), todos con la misma OPERACION');
@@ -216,7 +220,7 @@ console.log('10. Una pestaña que ya existía sin formato se repinta sola (Calen
   // Como la del DEV: hecha antes de que existiera el formato
   pestana._reglas = [];
   e.propiedades.delete('BITACORA_FORMATO_' + archivos[0].getId() + '_2026-10');
-  e.contexto.CacheService.getScriptCache().remove('bitacora_v2_f1_2026-10');
+  e.contexto.CacheService.getScriptCache().remove('bitacora_v2_f2_2026-10');
   ok(B.alDia() === 'revisada' && pestana._reglas.length === 17, 'el Calentador la ve sin formato y la pinta (17 reglas)');
   ok(B.alDia() === 'al día', 'la siguiente vuelta solo lee la caché');
   pestana._reglas = [];

@@ -215,9 +215,32 @@ const Bitacora = (function () {
       previa = h;
       return r.concat([h]);
     });
-    Sheets.Spreadsheets.Values.append({ values: valores }, destino.libroId, "'" + destino.nombre + "'!A1",
-      { valueInputOption: 'RAW', insertDataOption: 'INSERT_ROWS' });
+    // OVERWRITE: sobre los renglones vacíos que ya traen su formato. Con INSERT_ROWS, cada renglón insertado copiaba el
+    // formato del de arriba, y el primero de una pestaña nueva salía con el del encabezado (prod, 28-oct)
+    const r = Sheets.Spreadsheets.Values.append({ values: valores }, destino.libroId, "'" + destino.nombre + "'!A1",
+      { valueInputOption: 'RAW', insertDataOption: 'OVERWRITE' });
     props_().setProperty(clave, previa);
+    const escrito = /!A\d+:[A-Z]+(\d+)$/.exec(String((r && r.updates && r.updates.updatedRange) || ''));
+    if (escrito) asegurarEspacio_(destino, Number(escrito[1]));
+  }
+
+  /**
+   * Que siempre queden renglones vacíos (y con formato) por delante: se agregan DENTRO de la tabla, así los colores por
+   * acción y el filtro los cubren. El tamaño de la rejilla se recuerda en la caché: casi nunca se abre el libro.
+   */
+  const LIBRES = 2000;
+  function asegurarEspacio_(destino, ultima) {
+    const cache = CacheService.getScriptCache();
+    const clave = 'bitacora_filas_' + destino.libroId + '_' + destino.nombre;
+    let maximo = Number(cache.get(clave)) || 0;
+    if (maximo && ultima < maximo - LIBRES / 4) return;
+    const hoja = SpreadsheetApp.openById(destino.libroId).getSheetByName(destino.nombre);
+    maximo = hoja.getMaxRows();
+    if (ultima >= maximo - LIBRES / 4) {
+      hoja.insertRowsAfter(Math.min(ultima, maximo - 1), LIBRES);
+      maximo += LIBRES;
+    }
+    cache.put(clave, String(maximo), 6 * 60 * 60);
   }
 
   function leerCola_() {
@@ -276,7 +299,7 @@ const Bitacora = (function () {
    * estructura. ANTES en rojo y DESPUES en verde, como un "diff". Las columnas técnicas, chicas y en gris.
    * Subir FORMATO repinta una vez las pestañas que ya existen.
    */
-  const FORMATO = 1;
+  const FORMATO = 2;   // 2 (28-oct): el cuerpo vuelve a formato normal (en prod salió con el del encabezado)
   const COLORES = [
     // [acciones, fondo, texto]
     [['AGREGAR', 'SUBIR', 'CARPETA', 'COPIAR'], '#e6f4ea', '#137333'],
@@ -291,7 +314,12 @@ const Bitacora = (function () {
   function darFormato_(hoja) {
     const n = COLUMNAS.length;
     const col = (nombre) => COLUMNAS.indexOf(nombre) + 1;
+    // Renglones vacíos por delante (los colores y el filtro se dan a toda la rejilla)
+    if (hoja.getMaxRows() < LIBRES) hoja.insertRowsAfter(hoja.getMaxRows(), LIBRES - hoja.getMaxRows());
     const filas = Math.max(hoja.getMaxRows(), 2);
+    // El cuerpo, normal: sin el fondo ni la letra del encabezado (los renglones insertados lo copiaban)
+    hoja.getRange(2, 1, filas - 1, n).setBackground(null).setFontColor(null).setFontWeight('normal').setFontSize(10)
+      .setHorizontalAlignment(null);
     hoja.setFrozenRows(1);
     hoja.getRange(1, 1, 1, n).setBackground('#202124').setFontColor('#ffffff').setFontWeight('bold').setVerticalAlignment('middle');
     hoja.setRowHeight(1, 28);

@@ -234,10 +234,13 @@ function crearEntorno(opciones) {
           // Renglones al final de la pestaña del rango ('HOJA'!A1); cfg.appendFalla: el libro no responde
           append(cuerpo, id, rango, opciones) {
             if (cfg.appendFalla) throw new Error('Service unavailable');
-            registro.api.push({ libro: id, modo: opciones.valueInputOption, renglones: cuerpo.values.length, append: true });
-            const h = libros[id].getSheetByName(/^'((?:[^']|'')*)'!/.exec(rango)[1].replace(/''/g, "'"));
+            registro.api.push({ libro: id, modo: opciones.valueInputOption, insertar: opciones.insertDataOption, renglones: cuerpo.values.length, append: true });
+            const nombre = /^'((?:[^']|'')*)'!/.exec(rango)[1].replace(/''/g, "'");
+            const h = libros[id].getSheetByName(nombre);
+            const desde = h.getLastRow() + 1;
             cuerpo.values.forEach((r) => h.appendRow(r));
-            return {};
+            // Como la API: dónde quedó lo escrito
+            return { updates: { updatedRange: "'" + nombre + "'!A" + desde + ':N' + (desde + cuerpo.values.length - 1) } };
           },
         },
       },
