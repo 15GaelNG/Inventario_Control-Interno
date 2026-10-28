@@ -199,10 +199,11 @@ const CapitalHumano = (function () {
   /** Escribe la columna ID PERSONA (la crea al final si falta) con el ID de cada renglón según su empleo */
   function escribirColumna_(hoja, ch, asignado) {
     let col = ch.encabezados.indexOf(COLUMNA) + 1;
+    const t = SheetUtils.tabla(hoja);
     if (!col) {
       col = ch.encabezados.length + 1;
       if (hoja.getMaxColumns() < col) hoja.insertColumnsAfter(hoja.getMaxColumns(), col - hoja.getMaxColumns());
-      hoja.getRange(1, col).setValue(COLUMNA);
+      SheetUtils.asegurarColumnas(t, [COLUMNA], { negritas: false });
     }
     // Por renglón de la hoja (leer_ se salta los vacíos: aquí se recorre la hoja tal cual)
     const n = hoja.getLastRow() - 1;
@@ -211,8 +212,7 @@ const CapitalHumano = (function () {
     const iNum = enc.indexOf('No EMPLEADO');
     const iNom = enc.indexOf('NOMBRE COMPLETO');
     const valores = hoja.getRange(2, 1, n, enc.length).getDisplayValues();
-    hoja.getRange(2, col, n, 1).setValues(valores.map((r) => [asignado[claveEmpleo(r[iNum], r[iNom])] || r[col - 1] || '']));
-    CacheHojas.tocarHoja(hoja);
+    SheetUtils.cambiarColumna(t, col - 1, valores.map((r) => asignado[claveEmpleo(r[iNum], r[iNom])] || r[col - 1] || ''));
   }
 
   /**
@@ -334,19 +334,14 @@ const CapitalHumano = (function () {
 
       const filas = filasArchivo.concat(seQuedan).map((f) => encabezados.map((h) =>
         (h === COLUMNA ? r.asignado[claveEmpleo(f['No EMPLEADO'], f['NOMBRE COMPLETO'])] || '' : (f[h] == null ? '' : String(f[h])))));
-      if (!hoja) hoja = ss.insertSheet(HOJA_CH);
-      hoja.clearContents();
-      const total = filas.length + 1;
-      if (hoja.getMaxRows() < total) hoja.insertRowsAfter(hoja.getMaxRows(), total - hoja.getMaxRows());
+      if (!hoja) hoja = SheetUtils.asegurarPestana(ss, HOJA_CH, encabezados, { fijar: false });
       if (hoja.getMaxColumns() < encabezados.length) hoja.insertColumnsAfter(hoja.getMaxColumns(), encabezados.length - hoja.getMaxColumns());
-      // Texto: que Sheets no convierta un número de empleado o una fecha
-      hoja.getRange(1, 1, total, encabezados.length).setNumberFormat('@');
-      hoja.getRange(1, 1, 1, encabezados.length).setValues([encabezados]).setFontWeight('bold');
-      if (filas.length) hoja.getRange(2, 1, filas.length, encabezados.length).setValues(filas);
-      // Las columnas no permitidas que tuviera la hoja quedan vacías al final: se quitan
-      if (hoja.getMaxColumns() > encabezados.length) hoja.deleteColumns(encabezados.length + 1, hoja.getMaxColumns() - encabezados.length);
+      // Toda la pestaña de nuevo, por SheetUtils: como texto (que Sheets no convierta un número de empleado o una
+      // fecha), y las columnas no permitidas que tuviera la hoja se quitan
+      SheetUtils.reemplazarFilas(SheetUtils.tabla(hoja, { encabezados: encabezados }), filas,
+        { encabezados: encabezados, formato: '@', ajustarColumnas: true });
+      hoja.getRange(1, 1, 1, encabezados.length).setFontWeight('bold');
       proteger_(hoja);
-      CacheHojas.tocarHoja(hoja);
       colaboradores_(true);
       anotarHistorial_(ss, sesion, resultado);
       return resultado;
@@ -367,13 +362,10 @@ const CapitalHumano = (function () {
 
   function anotarHistorial_(ss, sesion, r) {
     try {
-      let h = ss.getSheetByName(HISTORIAL);
-      if (!h) {
-        h = ss.insertSheet(HISTORIAL);
-        h.appendRow(['FECHA', 'QUIEN', 'RENGLONES', 'NUEVOS', 'CAMBIAN', 'NO VINIERON', 'EMPLEOS NUEVOS', 'PERSONAS NUEVAS', 'AVISOS']);
-      }
-      h.appendRow([new Date(), (sesion && sesion.correo) || '', r.renglones, r.nuevos, r.cambian, r.faltan, r.empleosNuevos,
-        r.personasNuevas, r.conflictos.concat(r.avisos).slice(0, 20).join('\n')]);
+      const enc = ['FECHA', 'QUIEN', 'RENGLONES', 'NUEVOS', 'CAMBIAN', 'NO VINIERON', 'EMPLEOS NUEVOS', 'PERSONAS NUEVAS', 'AVISOS'];
+      const h = SheetUtils.asegurarPestana(ss, HISTORIAL, enc, { negritas: false, fijar: false, soloCrear: true });
+      SheetUtils.agregarFilas(SheetUtils.tabla(h, { encabezados: enc }), [[new Date(), (sesion && sesion.correo) || '', r.renglones, r.nuevos,
+        r.cambian, r.faltan, r.empleosNuevos, r.personasNuevas, r.conflictos.concat(r.avisos).slice(0, 20).join('\n')]]);
     } catch (e) {
       console.warn('Capital humano: no se pudo anotar el historial: ' + e.message);
     }
@@ -634,14 +626,14 @@ const CapitalHumano = (function () {
         entradas.push(Object.assign({ tipo: p.tipo, motivo: p.motivo, tenia: f[l.columnaNombre], quedo: '' }, base));
       });
       if (cfg.escribir && r.diferencias) {
+        const t = SheetUtils.tabla(hoja);
         if (!col) {
           // La columna se crea al final la primera vez; los formularios la ignoran
           col = enc.length + 1;
           if (hoja.getMaxColumns() < col) hoja.insertColumnsAfter(hoja.getMaxColumns(), col - hoja.getMaxColumns());
-          hoja.getRange(1, col).setValue(columna);
+          SheetUtils.asegurarColumnas(t, [columna], { negritas: false });
         }
-        hoja.getRange(2, col, nuevos.length, 1).setValues(nuevos);
-        CacheHojas.tocarHoja(hoja);
+        SheetUtils.cambiarColumna(t, col - 1, nuevos.map((x) => x[0]));
         r.corregido = true;
         Relaciones.anotar(l.libro(), entradas.filter((e) => e.tipo === 'DIFERENCIA' && (!soloFilas || soloFilas.indexOf(e.fila) !== -1)), cfg.quien);
       }

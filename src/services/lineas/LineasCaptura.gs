@@ -942,10 +942,10 @@ const LineasCaptura = (function () {
     ev.carpetaId = c.carpetaId;
     ev.ruta = c.ruta;
     const carpeta = DriveApp.getFolderById(c.carpetaId);
-    LineasIdentificaciones.deResponsiva(LineasDatos.idsDeFila(fila)).forEach((x) => DriveApp.getFileById(x.id).moveTo(carpeta));
+    LineasIdentificaciones.deResponsiva(LineasDatos.idsDeFila(fila)).forEach((x) => DriveUtils.mover(DriveApp.getFileById(x.id), carpeta));
     // Los PDF que dejó en `Files` cada intento (con el nombre del AppSheet: solo los de esta responsiva)
     const viejos = LineasArchivos.carpetaDeApp(PDF.RESPONSIVA.carpeta).getFilesByName(PDF.RESPONSIVA.nombre(id));
-    while (viejos.hasNext()) viejos.next().setTrashed(true);
+    while (viejos.hasNext()) DriveUtils.aPapelera(viejos.next());
     return PDF.RESPONSIVA.carpeta + '/' + PDF.RESPONSIVA.nombre(id);
   }
 
@@ -1022,7 +1022,7 @@ const LineasCaptura = (function () {
       if (anterior) {
         const nuevo = DriveApp.getFileById(pdf.id);
         LineasArchivos.reemplazarPdf(anterior.getId(), nuevo.getBlob().getBytes());
-        nuevo.setTrashed(true);
+        DriveUtils.aPapelera(nuevo, { temporal: true });   // su contenido ya está en el de antes
         LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('PDF_REGENERADO', { motivo: '' }, usuario, new Date(), {
           refs: [col('ID LINEA')], nuco: col('NUCO'),
           detalle: Object.assign(esInspeccion ? { inspeccionId: id } : { responsivaId: id }, { cambios: [{ campo: 'PDF', antes: '', despues: anterior.getName() }] }),
@@ -1092,7 +1092,7 @@ const LineasCaptura = (function () {
         if (!fotosNucos) {
           const carpetaInsp = DriveApp.getFolderById(nucosDrive.carpetaId);
           const it = carpetaInsp.getFoldersByName('FOTOS');
-          fotosNucos = (it.hasNext() ? it.next() : carpetaInsp.createFolder('FOTOS')).getId();
+          fotosNucos = (it.hasNext() ? it.next() : DriveUtils.crearCarpeta(carpetaInsp, 'FOTOS')).getId();
         }
         LineasEvidencias.autorizarSubida(correo, [fotosNucos]);
         if (fila) {
@@ -1176,7 +1176,7 @@ const LineasCaptura = (function () {
       throw new Error('El registro no tiene NUCO: no hay carpeta en NUCOS para el PDF.');
     }
     LineasArchivos.exigirEscribible(carpeta.getId());
-    const f = DriveUtils.marcarAutor(carpeta.createFile(Utilities.newBlob(bytes, MimeType.PDF, nombre)));
+    const f = DriveUtils.crearArchivo(carpeta, Utilities.newBlob(bytes, MimeType.PDF, nombre));
     // Sin setSharing: en NUCOS el archivo toma los permisos de la carpeta (LineasEvidencias) y la cuenta de la app no es
     // dueña de esa carpeta: setSharing lanzaba «Acceso denegado: DriveApp» con el PDF ya creado (6-oct).
     return { id: f.getId(), name: f.getName() };

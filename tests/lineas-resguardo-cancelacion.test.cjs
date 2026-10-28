@@ -585,7 +585,9 @@ test('Quitar del panel con varios: borra sus renglones, de abajo hacia arriba, y
   assert.deepEqual(t.tablas.APP_RESGUARDOS.map((x) => x.REGISTRO_ID), ['EQU-2']);
   assert.deepEqual(t.escritas.eliminadas.map((x) => x.fila), [4, 2]);
   assert.equal(t.escritas.movimientos.filter((m) => m.tipo === 'QUITAR_PANEL').length, 2, 'lo que pasó queda en el historial');
-  assert.match(read('src/services/lineas/LineasDatos.gs'), /if \(lote_\) \{ vaciarLote_\(\); lote_ = \{ datos: \{\}, hojas: \{\}, respaldo: \[\] \}; \}/);
+  // Borrar recorre los renglones: lo pendiente del lote se escribe antes (28-oct: en SheetUtils, por donde borra Líneas)
+  assert.match(read('src/services/lineas/LineasDatos.gs'), /return SheetUtils\.borrarFilas\(tablaEscribir_\(nombre\), filas\);/);
+  assert.match(read('src/utils/SheetUtils.gs'), /if \(lote_\) \{ vaciarLote_\(\); lote_ = loteNuevo_\(\); \}/);
 });
 
 // DEV, 22-oct (NUCO 0013): un envío que no cambió el estatus no lo trae en su movimiento; al quitarlo no puede quedar

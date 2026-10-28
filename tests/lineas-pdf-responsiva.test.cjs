@@ -75,7 +75,7 @@ function generar(plantillaId, elemento, cuerpoArmado, registro, hojas) {
   };
   const contexto = vm.createContext({
     DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
-    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a },   // quién lo subió: aquí no importa
     LineasArchivos: { compartirEnDominio: () => true },
     DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
   });
@@ -183,7 +183,7 @@ test('si Drive no deja compartir el PDF con el dominio, el PDF se entrega igual 
   const contexto = vm.createContext({
     console: { warn: (m) => avisos.push(m), log: () => {}, error: () => {} },
     DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
-    DriveUtils: { marcarAutor: (a) => a },
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a },
     DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => contenedor('BODY_SECTION', []), getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
   });
   const fuente = (r) => fs.readFileSync(path.join(__dirname, '../src/services/lineas/' + r), 'utf8');

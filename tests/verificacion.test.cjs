@@ -15,6 +15,9 @@ function hojaFalsa() {
   return {
     datos,
     getLastRow: () => datos.length,
+    getLastColumn: () => (datos[0] || []).length,
+    getMaxRows: () => Math.max(1000, datos.length),
+    getName: () => 'DISPOSITIVOS',
     getRange: (r, c, nr, nc) => ({
       getValues: () => datos.slice(r - 1, r - 1 + (nr || 1)).map((f) => Array.from({ length: nc || 1 }, (_, j) => (f[c - 1 + j] === undefined ? '' : f[c - 1 + j]))),
       setValues: (v) => v.forEach((f, i) => f.forEach((x, j) => { (datos[r - 1 + i] = datos[r - 1 + i] || [])[c - 1 + j] = x; })),
@@ -34,7 +37,7 @@ function cargar(opciones) {
   const ctx = vm.createContext({
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' } },
     leerConfig_: (k) => (k in o.config ? o.config[k] : null),
-    SpreadsheetApp: { openById: () => ({ getSheetByName: () => (hoja.datos.length ? hoja : null), insertSheet: () => hoja }) },
+    SpreadsheetApp: { openById: () => ({ getSheetByName: () => (hoja.datos.length ? hoja : null), insertSheet: () => hoja, getSheets: () => [] }) },
     Utilities: {
       DigestAlgorithm: { SHA_256: 'sha256' },
       computeDigest: (alg, texto) => conSigno(crypto.createHash('sha256').update(String(texto), 'utf8').digest()),
@@ -51,6 +54,8 @@ function cargar(opciones) {
     console: { warn: () => {} },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
+  // Escribe por SheetUtils (28-oct): el de verdad
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'SheetUtils.gs'), 'utf8'), ctx);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Verificacion.gs'), 'utf8') + '\nthis.V = Verificacion;', ctx);
   return { V: ctx.V, correos, cache, hoja, cerradas };
 }

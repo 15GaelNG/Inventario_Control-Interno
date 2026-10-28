@@ -22,6 +22,8 @@ function hojaFalsa(encabezados, filas) {
   const datos = [encabezados.slice()].concat(filas.map((f) => encabezados.map((h) => (f[h] === undefined ? '' : f[h]))));
   const hoja = {
     datos,
+    getName: () => 'USUARIOS',
+    getMaxRows: () => 1000,
     getLastRow: () => datos.length,
     getLastColumn: () => datos[0].length,
     getRange: (r, c, nr, nc) => ({
@@ -66,6 +68,7 @@ function cargar(hoja, sesion) {
   ctx.cerradas = cerradas;
   ctx.correos = correos;
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Correos.gs'), 'utf8'), ctx);   // la plantilla de verdad
+  require('./sheet-utils-real')(ctx);   // escribe por SheetUtils (28-oct)
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'Credenciales.gs'), 'utf8') +
     '\nthis.C = Credenciales; this.revisar = contrasenasAHashRevisar; this.pasar = contrasenasAHash;' +
     ' this.temporalesRevisar = contrasenasTemporalesRevisar; this.temporalesParaTodos = contrasenasTemporalesParaTodos;' +

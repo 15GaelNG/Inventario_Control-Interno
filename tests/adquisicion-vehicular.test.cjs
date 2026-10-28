@@ -77,7 +77,7 @@ function crearContexto({ fuentes2024 = [], fuentes2025 = [], fuentes2026 = [], d
     Permisos: { puedeLeer: () => ({ alcance: null }), puedeEditar: () => {} },
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS_VEH' } },
     CacheHojas: { recordar: (clave, hojas2, armar) => armar() },   // sin caché: cada llamada relee la hoja
-    DriveUtils: { archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [] },
+    DriveUtils: { ...require('./drive-utils-real')(), archivosDeCarpeta: (id) => archivosPorCarpeta[id] || [] },
     SpreadsheetApp: {
       openById: (id) => {
         if (id === 'SS_VEH') return libroVehiculos;

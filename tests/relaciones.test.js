@@ -30,6 +30,12 @@ function truena(fn, patron) {
 
 // ---------------------------------------------------------------- hojas falsas
 
+/** 'C5' → [5, 3] (los rangos A1 que arma SheetUtils al escribir celdas sueltas) */
+const deA1 = (a1) => {
+  const m = /^([A-Z]+)(\d+)$/.exec(a1);
+  return [Number(m[2]), m[1].split('').reduce((n, l) => n * 26 + l.charCodeAt(0) - 64, 0)];
+};
+
 /** Hoja falsa con lo que Relaciones.gs usa: rangos por fila/columna y getRangeList. */
 function hoja(nombre, encabezados, filasObj) {
   const enc = encabezados.slice();
@@ -44,7 +50,12 @@ function hoja(nombre, encabezados, filasObj) {
     getName: () => nombre,
     getLastRow: () => datos.length + 1,
     getLastColumn: () => enc.length,
+    getMaxRows: () => 1000,
+    getParent: () => ({ getId: () => 'SS' }),
+    deleteRow: (f) => { datos.splice(f - 2, 1); },
+    deleteRows: (f, n) => { datos.splice(f - 2, n); },
     getRange: (f, c, nf, nc) => {
+      if (typeof f === 'string') return celda(...deA1(f));
       if (nf === undefined) return celda(f, c);
       return {
         getValues: () => {
@@ -62,7 +73,8 @@ function hoja(nombre, encabezados, filasObj) {
     getRangeList: (tokens) => ({
       setValue: (v) => tokens.forEach((t) => {
         const m = /^F(\d+)C(\d+)$/.exec(t);
-        (datos[+m[1] - 2] = datos[+m[1] - 2] || [])[+m[2] - 1] = v;
+        const [f, c] = m ? [+m[1], +m[2]] : deA1(t);
+        (datos[f - 2] = datos[f - 2] || [])[c - 1] = v;
       }),
     }),
     appendRow: (fila) => datos.push(fila.slice()),
@@ -223,6 +235,7 @@ function cargar(hs, extra) {
       openById: () => ({
         getSheetByName: (n) => hs[n] || null,
         insertSheet: (n) => (hs[n] = hoja(n, [], [])),
+        getSheets: () => Object.values(hs),
       }),
     },
     Utilities: { formatDate: () => '2026-09-29' },
@@ -269,6 +282,7 @@ function cargar(hs, extra) {
     '\nthis.Relaciones = Relaciones; this.Ids = Ids;',
     ctx
   );
+  require('./sheet-utils-real')(ctx);   // escribe por SheetUtils (28-oct)
   return ctx.Relaciones;
 }
 

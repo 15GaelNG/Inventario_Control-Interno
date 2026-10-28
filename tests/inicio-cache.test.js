@@ -28,6 +28,7 @@ e.cargar('src/utils/CacheHojas.gs', {
     var Permisos = {
       firmaDeLectura: (c) => permisosDe[c].slice().sort().join(','),
       esFaltaDePermiso: (e) => /No tienes acceso/.test(e.message),
+      sinAnotar: (fn) => fn(),   // lo que se pide por si acaso no va a la bitácora
     };
     var HojaServicio = { fechaISO: (v) => v };
     var VehiculosService = {

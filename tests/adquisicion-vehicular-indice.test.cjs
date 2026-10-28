@@ -11,7 +11,9 @@ const path = require('node:path');
 function hojaMock(filasIniciales) {
   const filas = (filasIniciales || []).map((f) => f.slice());
   return {
+    getName: () => 'INDICE ADQUISICION',
     getLastRow: () => filas.length,
+    getMaxRows: () => Math.max(1000, filas.length),
     getRange(row, col, numRows, numCols) {
       return {
         setValues(valores) {
@@ -30,6 +32,8 @@ function hojaMock(filasIniciales) {
       };
     },
     deleteRow(row) { filas.splice(row - 1, 1); },
+    deleteRows(row, n) { filas.splice(row - 1, n); },
+    appendRow(fila) { filas.push(fila.slice()); },
     setFrozenRows() { return this; },
     _filas: filas,
   };
@@ -85,7 +89,7 @@ function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () 
         setTrashed: () => {},
       }),
     },
-    DriveUtils: { carpetaEnRaiz: () => ({ getId: () => 'TEMP-FOLDER' }) },
+    DriveUtils: { ...require('./drive-utils-real')(), carpetaEnRaiz: () => ({ getId: () => 'TEMP-FOLDER' }) },
     CacheHojas: { tocarHoja: () => {} },
     Drive: { Files: { copy: (meta, id) => ({ id: 'copia-' + id }) } },
     DocumentApp: { openById: (id) => ({ getBody: () => ({ getText: () => (contexto._textoOcr || {})[id] || '' }) }) },
@@ -93,6 +97,7 @@ function crearContexto({ hojaIndice, listarCarpetas = () => [], leerFuente = () 
     ScriptApp: scriptApp,
     console,
   });
+  require('./sheet-utils-real')(contexto);   // escribe por SheetUtils (28-oct)
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/services/AdquisicionVehicularIndice.gs'), 'utf8'), contexto);
   return { contexto, hoja, scriptApp, propiedades };
 }

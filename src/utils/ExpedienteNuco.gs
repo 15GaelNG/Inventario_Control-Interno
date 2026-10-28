@@ -77,10 +77,10 @@ const ExpedienteNuco = (function () {
     const nucos = raiz_();
     const hay = nucos.getFoldersByName(nombre);
     if (hay.hasNext()) return hay.next();
-    const nueva = nucos.createFolder(nombre);
-    const doc = nueva.createFolder(DOCUMENTACION);
-    Object.keys(DOCUMENTOS).forEach((k) => doc.createFolder(DOCUMENTOS[k].carpeta));
-    OTRAS.forEach((o) => nueva.createFolder(o));
+    const nueva = DriveUtils.crearCarpeta(nucos, nombre);
+    const doc = DriveUtils.crearCarpeta(nueva, DOCUMENTACION);
+    Object.keys(DOCUMENTOS).forEach((k) => DriveUtils.crearCarpeta(doc, DOCUMENTOS[k].carpeta));
+    OTRAS.forEach((o) => DriveUtils.crearCarpeta(nueva, o));
     return nueva;
   }
 
@@ -152,7 +152,7 @@ const ExpedienteNuco = (function () {
   function guardar(blob, carpetaDrive, prefijo, nucco, fecha, ext) {
     const extension = ext || extension_(blob.getName()) || '';
     const nombre = nombreConFecha(carpetaDrive, prefijo, nucco, extension, fecha);
-    const archivo = DriveUtils.marcarAutor(carpetaDrive.createFile(blob.setName(nombre)));
+    const archivo = DriveUtils.crearArchivo(carpetaDrive, blob, nombre);
     olvidar(nucco);
     return archivo;
   }
@@ -181,8 +181,7 @@ const ExpedienteNuco = (function () {
       if (f.getId() === nuevoId) continue;
       try {
         const nombre = nombreLibre(anteriores, def.prefijo, nucco, extension_(f.getName()), f.getLastUpdated());
-        f.moveTo(anteriores);
-        f.setName(nombre);
+        DriveUtils.mover(f, anteriores, nombre);
       } catch (e) {
         console.error('Expediente NUCO ' + nucco + ': no se pudo pasar "' + f.getName() + '" a ' + def.anteriores + ': ' + e.message);
       }
@@ -206,15 +205,13 @@ const ExpedienteNuco = (function () {
       // Un adherente, un préstamo o una baja no es el documento vigente: va a su subcarpeta y no lo toca
       const destino = carpeta(nucco, documento, [aparte.sub]);
       const nombre = nombreLibre(destino, aparte.prefijo, nucco, ext, new Date());
-      archivo.moveTo(destino);
-      archivo.setName(nombre);
+      DriveUtils.mover(archivo, destino, nombre);
       return { carpetaId: destino.getId(), nombre: nombre };
     }
     const destino = carpeta(nucco, documento);
     apartarVigente_(destino, def, nucco, archivo.getId());
     const nombre = nombreLibre(destino, def.prefijo, nucco, ext, new Date());
-    archivo.moveTo(destino);
-    archivo.setName(nombre);
+    DriveUtils.mover(archivo, destino, nombre);
     return { carpetaId: destino.getId(), nombre: nombre };
   }
 

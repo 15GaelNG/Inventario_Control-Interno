@@ -556,10 +556,10 @@ const TelefoniaService = (function () {
     const nombre = archivo.getName();
     let quedo = 'PAPELERA';
     try {
-      archivo.setTrashed(true);
+      DriveUtils.aPapelera(archivo);
     } catch (e) {
       const destino = carpeta.getFoldersByName('FOTOS QUITADAS');
-      archivo.moveTo(destino.hasNext() ? destino.next() : carpeta.createFolder('FOTOS QUITADAS'));
+      DriveUtils.mover(archivo, destino.hasNext() ? destino.next() : DriveUtils.crearCarpeta(carpeta, 'FOTOS QUITADAS'));
       quedo = 'FOTOS QUITADAS';
     }
     if (doc.nuco) LineasArchivos.olvidarNuco(doc.nuco);

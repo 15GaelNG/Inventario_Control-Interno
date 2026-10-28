@@ -273,22 +273,15 @@ const DatosConectados = (function () {
       tipo: existente ? existente.tipo : tipo, existente: !!existente, yaReciben: yaReciben };
   }
 
-  function hojaConEncabezados_(ss, nombre, enc) {
-    let hoja = ss.getSheetByName(nombre);
-    if (!hoja) {
-      hoja = ss.insertSheet(nombre);
-      hoja.getRange(1, 1, 1, enc.length).setValues([enc]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
-    return hoja;
+  /** La pestaña (se crea con sus encabezados la primera vez), lista para escribir por SheetUtils */
+  function tablaConEncabezados_(ss, nombre, enc) {
+    return SheetUtils.tabla(SheetUtils.asegurarPestana(ss, nombre, enc, { soloCrear: true }), { encabezados: enc });
   }
 
   function anotarHistorial_(ss, sesion, accion, filas) {
-    const hoja = hojaConEncabezados_(ss, HOJA_HISTORIAL, ENC_HISTORIAL);
     const ahora = new Date();
-    const valores = filas.map((f) => [ahora, sesion.correo || '', sesion.nombre || '', accion, f.dueno, f.copia, f.colDueno, f.colCopia, f.tipo]);
-    hoja.getRange(hoja.getLastRow() + 1, 1, valores.length, ENC_HISTORIAL.length).setValues(valores);
-    CacheHojas.tocarHoja(hoja);
+    SheetUtils.agregarFilas(tablaConEncabezados_(ss, HOJA_HISTORIAL, ENC_HISTORIAL),
+      filas.map((f) => [ahora, sesion.correo || '', sesion.nombre || '', accion, f.dueno, f.copia, f.colDueno, f.colCopia, f.tipo]));
   }
 
   /**
@@ -304,13 +297,10 @@ const DatosConectados = (function () {
       nuevas = p.columnas.filter(([cd, cc]) => norm_(p.yaReciben[norm_(cc)]) !== norm_(cd));
       if (!nuevas.length) return { conectados: 0, mensaje: 'Esos datos ya estaban conectados' };
       const ss = SpreadsheetApp.openById(ssId());
-      const hoja = hojaConEncabezados_(ss, HOJA, ENC);
       const ahora = new Date();
       const filas = nuevas.map(([cd, cc]) => ({ dueno: p.dueno, copia: p.copia, colDueno: cd, colCopia: cc, tipo: p.tipo }));
-      const valores = filas.map((f) => [Ids.nuevo('DCX'), true, f.dueno, f.copia, p.llaveDueno, p.llaveCopia, f.colDueno, f.colCopia,
-        f.tipo, sesion.correo || '', ahora]);
-      hoja.getRange(hoja.getLastRow() + 1, 1, valores.length, ENC.length).setValues(valores);
-      CacheHojas.tocarHoja(hoja);
+      SheetUtils.agregarFilas(tablaConEncabezados_(ss, HOJA, ENC), filas.map((f) => [Ids.nuevo('DCX'), true, f.dueno, f.copia,
+        p.llaveDueno, p.llaveCopia, f.colDueno, f.colCopia, f.tipo, sesion.correo || '', ahora]));
       anotarHistorial_(ss, sesion, 'CONECTAR', filas);
       Relaciones.olvidarMapa();
     });
@@ -333,16 +323,17 @@ const DatosConectados = (function () {
       const i = (n) => enc.indexOf(norm_(n));
       const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, enc.length).getValues();
       const quitadas = [];
+      const apagar = [];
       datos.forEach((f, k) => {
         if (norm_(f[i('ACTIVO')]) === 'FALSE') return;
         if (norm_(f[i('HOJA DUEÑA')]) !== norm_(dueno) || norm_(f[i('HOJA COPIA')]) !== norm_(copia) ||
             norm_(f[i('COLUMNA DUEÑA')]) !== norm_(colDueno)) return;
-        hoja.getRange(k + 2, i('ACTIVO') + 1).setValue(false);
+        apagar.push({ fila: k + 2, columnas: [{ i: i('ACTIVO'), valor: false }] });
         quitadas.push({ dueno: f[i('HOJA DUEÑA')], copia: f[i('HOJA COPIA')], colDueno: f[i('COLUMNA DUEÑA')],
           colCopia: f[i('COLUMNA COPIA')], tipo: f[i('TIPO')] });
       });
       if (!quitadas.length) throw new Error('Ese dato no se conectó desde la pantalla (los del sistema no se quitan aquí)');
-      CacheHojas.tocarHoja(hoja);
+      SheetUtils.cambiarCeldas(SheetUtils.tabla(hoja), apagar);
       anotarHistorial_(ss, sesion, 'QUITAR', quitadas);
       Relaciones.olvidarMapa();
       return { quitados: quitadas.length };
