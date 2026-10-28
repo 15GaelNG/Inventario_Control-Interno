@@ -131,5 +131,24 @@ console.log('6. Si el libro falla, el guardado no truena y queda en la cola');
   ok(JSON.parse(e.propiedades.get('BITACORA_COLA')).length === 1 && renglones().length === 0, 'lo de la bitácora quedó en la cola');
 }
 
+console.log('7. Lo que no pasa por SheetUtils: a mano y accesos denegados');
+{
+  const { B, renglones } = entorno();
+  B.aMano('luis@x.com');
+  B.evento('CAMBIAR', { libro: 'libro', hoja: 'TICKETS', fila: 2, id: 'TCK-1', campo: 'ESTADO', antes: 'ABIERTO', despues: 'X' });
+  B.evento('CAMBIAR', { libro: 'libro', hoja: 'USUARIOS', fila: 2, campo: 'PASSWORD_HASH', antes: 'abc', despues: 'def' });
+  B.evento('CAMBIAR', { libro: 'libro', hoja: 'APP_HELPDESK', fila: 2, campo: 'ASUNTO', antes: 'x', despues: 'y' });
+  const r = renglones();
+  ok(r.length === 2 && r[0].ORIGEN === 'a mano' && r[0].QUIEN === 'luis@x.com' && r[0].ANTES === 'ABIERTO', 'a mano: quién y lo de antes');
+  ok(r[1].ANTES === '' && r[1].DESPUES === '(cambió)', 'a mano, un secreto tampoco se anota');
+  const fs = require('fs');
+  const permisos = fs.readFileSync(require('path').join(__dirname, '..', 'src', 'services', 'PermisosService.gs'), 'utf8');
+  ok(/if \(!silencio_ && typeof Bitacora !== 'undefined'\) \{\s*Bitacora\.evento\('DENEGADO'/.test(permisos), 'Permisos.exigir anota DENEGADO');
+  const fuente = (f) => fs.readFileSync(require('path').join(__dirname, '..', 'src', f), 'utf8');
+  ok(['ClientApi.gs', 'services/DashboardService.gs', 'services/NotificacionesService.gs'].every((f) => /Permisos\.sinAnotar\(/.test(fuente(f))),
+    'lo que se pide por si acaso (ficha, Inicio, campanita) no cuenta como denegado');
+  ok(/Bitacora\.aMano\(quien\)/.test(fuente('AvisoDeCambios.gs')), 'el activador de edición anota lo hecho a mano');
+}
+
 if (fallas) { console.error('\n' + fallas + ' FALLA(S)'); process.exit(1); }
 console.log('\nTODO OK');

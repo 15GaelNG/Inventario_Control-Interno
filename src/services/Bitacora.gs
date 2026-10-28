@@ -167,10 +167,17 @@ const Bitacora = (function () {
     if (typeof Candado === 'undefined' || !Candado.tomado()) vaciar();
   }
 
-  /** Algo que no es escribir una hoja: un acceso denegado, un archivo de Drive. → se escribe con lo demás */
+  /**
+   * Algo que no pasa por SheetUtils: un acceso denegado, un archivo de Drive, una celda editada a mano.
+   * datos: { libro, hoja, id, fila, campo, antes, despues, detalle, quien }. → se escribe con lo demás
+   */
   function evento(accion, datos) {
     const d = datos || {};
-    pendientes_.push(renglon_(accion, d.libro, d.hoja, d.id, '', d.campo, d.antes, d.despues, d.detalle, d.quien));
+    if (d.hoja && HOJAS[d.hoja] && HOJAS[d.hoja].no) return;
+    if (d.hoja && d.campo && ignorada_(d.hoja, d.campo)) return;
+    const secreto = d.hoja && d.campo && esSecreto_(d.hoja, d.campo);
+    pendientes_.push(renglon_(accion, d.libro, d.hoja, d.id, d.fila, d.campo, secreto ? '' : d.antes,
+      secreto ? '(cambió)' : d.despues, d.detalle, d.quien));
     if (typeof Candado === 'undefined' || !Candado.tomado()) vaciar();
   }
 
