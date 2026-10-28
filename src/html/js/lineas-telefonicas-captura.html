@@ -6,18 +6,20 @@
    */
   (function () {
     'use strict';
-    const { $, CALIFICACION_DESEMPENO, CALIFICACION_SI, NOMBRE_DE_FIRMA, PASOS_FORMULARIO, POSICIONES_PATRON,
-      activarAdicionales, activarBloqueo, activarCombosEn, activarIdentificaciones, activarPasos, alternarMulti,
-      aplicarBloqueo, aplicarCambiosIndice, aplicarReglasEn, aviso, bloqueoElegido, calificacionAppSheet,
-      cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, crearFirma, cumpleCondicion, enlaceDrive,
-      errorPinBloqueo, erroresFormularioEn, esPuntosPatron, esc, firmaGuardadaEn, flechasPatron, htmlAccionesPasos,
-      htmlPasosAppSheet, icono, leerArchivosEn, leerFormularioEn, leerIdentificaciones, llamar, marcarErroresEn,
-      memoria, mensajeError, pedirDatos, pintarIconos, redimensionarImagen } = Lineas.comun;
+    const { $, CALIFICACION_DESEMPENO, CALIFICACION_SI, NOMBRE_DE_FIRMA, NOTA_SIN_PANEL, PASOS_FORMULARIO,
+      POSICIONES_PATRON, activarAdicionales, activarBloqueo, activarCombosEn, activarIdentificaciones, activarPasos,
+      alternarMulti, aplicarBloqueo, aplicarCambiosIndice, aplicarReglasEn, aviso, bloqueoElegido,
+      calificacionAppSheet, cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, crearFirma, cumpleCondicion,
+      enlaceDrive, errorPinBloqueo, erroresFormularioEn, esPuntosPatron, esc, firmaGuardadaEn, flechasPatron,
+      htmlAccionesPasos, htmlPasosAppSheet, icono, leerArchivosEn, leerFormularioEn, leerIdentificaciones, llamar,
+      marcarErroresEn, memoria, mensajeError, nombreDeFirma, olvidarFicha, pedirDatos, pintarIconos,
+      redimensionarImagen } = Lineas.comun;
     Lineas.telefonicas.registrar('captura', (T) => {
       const { CANCELACION_LINEA, ESTATUS_EQUIPO_FINAL, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_PANEL,
-        ETIQUETA_DOCUMENTO, pila, raiz, vigente } = T;
+        ETIQUETA_DOCUMENTO, pdfsEnCurso, pila, raiz, vigente } = T;
       const { abrir, abrirRegistro } = T.de('ficha');
       const { cargarEvidencias, pedirFirmasPdf } = T.de('documentos');
+      const { abrirResponsiva, filaDelIndice } = T.de('acciones');
       const { cargarHistorial } = T.de('historial');
 
       let captura = null; // sesión de captura de inspección/responsiva en curso (null si el modal está cerrado)
@@ -44,7 +46,7 @@
           const cuerpo = $('#ln-captura-cuerpo', raiz);
           const elementos = conSelectorBloqueo(form.elementos);
           const valorDe = (c) => ((elementos.filter((e) => e.columna === c)[0] || {}).valor) || '';
-          const ctx = { nuevo: form.nuevo, id: id, idDG: form.idDG || null, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
+          const ctx = { nuevo: form.nuevo, id: id, tipoInicial: form.tipo || '', parte: form.parte, historico: !!form.historico,
             nuco: form.nuevo ? '' : valorDe('NUCO'), inicial: {} };
           elementos.forEach((e) => { if (e.tipo === 'campo') ctx.inicial[e.columna] = String(e.valor === undefined || e.valor === null ? '' : e.valor); });
           captura.contexto = { formulario: elementos };
@@ -58,6 +60,11 @@
             htmlAccionesPasos('<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + (id ? ' Guardar cambios' : ' ' + agregar) + '</button>');
           pintarIconos(cuerpo);
           activarCombosEn(cuerpo, elementos);
+          // Lo que el servidor propone y se puede cambiar (el NUCO de Agregar equipo, 2.59): «auto» hasta que lo escriban
+          elementos.forEach((e) => {
+            const el = e.sugerido && e.valor && cuerpo.querySelector('[data-columna="' + CSS.escape(e.columna) + '"]');
+            if (el) CampoAuto.llenar(el, e.valor);
+          });
           activarAdicionales(cuerpo);
           activarBloqueo(cuerpo);
           const patron = elementos.filter((e) => e.control === 'patron')[0];
@@ -65,7 +72,26 @@
             captura.patronInicial = esPuntosPatron(patron.valor) ? patron.valor : null;
             captura.controlPatron = activarPatron('af-' + patron.columna.replace(/[^A-Za-z0-9]+/g, '-') + '-patron', captura.patronInicial ? captura.patronInicial.split('-') : []);
           }
-          const aplicar = () => aplicarReglasEn(cuerpo, elementos, ctx);
+          // Un estatus que no entra al panel de Pau se avisa con una nota bajo el campo al elegirlo, sin ventana al guardar
+          // (usuario, 20-oct; pendiente 3.12)
+          const notaPanel = () => {
+            if (!id) return;
+            const v = leerFormularioEn(cuerpo, elementos);
+            [['ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO], ['ESTATUS LINEA', ESTATUS_LINEA_PANEL]].forEach((par) => {
+              const caja = cuerpo.querySelector('[data-af-columna="' + par[0] + '"]');
+              if (!caja) return;
+              let nota = caja.querySelector('[data-nota-panel]');
+              if (!nota) {
+                nota = document.createElement('div');
+                nota.className = 'ln-nota ln-nota-campo';
+                nota.setAttribute('data-nota-panel', '');
+                nota.innerHTML = icono('info', 'ln-icon-sm') + ' ' + esc(NOTA_SIN_PANEL);
+                caja.appendChild(nota);
+              }
+              nota.hidden = !(v[par[0]] !== ctx.inicial[par[0]] && par[1].indexOf(v[par[0]]) >= 0);
+            });
+          };
+          const aplicar = () => { aplicarReglasEn(cuerpo, elementos, ctx); notaPanel(); };
           cuerpo.addEventListener('input', aplicar);
           cuerpo.addEventListener('change', aplicar);
           cuerpo.addEventListener('click', (ev) => {
@@ -115,13 +141,20 @@
             // El equipo que sale del inventario deja su línea en USO DISPONIBLE (el servidor); con el adendum vencido va a
             // cancelación y se pregunta en la ventana del comentario si pasa por el panel (usuario, 16-oct; pendiente 2.50)
             const lineaACancelar = form.lineaVencida && cambiaA('ESTATUS EQUIPO', ESTATUS_EQUIPO_FINAL);
-            const avisoEstatus = !avisos.length ? Promise.resolve(true) : Confirmar.pedir({
-              titulo: 'Cambio de estatus',
-              mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial.',
-              detalle: avisos, textoConfirmar: 'Confirmar',
-            });
-            // Segunda ventana: un solo COMENTARIO obligatorio y el TICKET (plan §5.2), ya con los cambios aceptados
-            avisoEstatus.then((ok) => (!ok || captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
+            // A USO sin responsable vigente (usuario, 21-oct; pendiente 2.55): se guardan las demás correcciones y se abre la
+            // Responsiva obligatoria, que es la que lo pasa a USO (el servidor deja el estatus). Si solo cambió el estatus, se
+            // abre ya; si se cierra sin guardar, el estatus no cambia
+            const aResponsiva = form.parte !== 'LINEA' && !form.conResponsable && cambiaA('ESTATUS EQUIPO', ['USO']);
+            const conArchivo = Array.from(cuerpo.querySelectorAll('input[type="file"][data-archivo]')).some((i) => i.files && i.files[0]);
+            const responsivaDeCorregir = () => abrirResponsiva('equipo', filaDelIndice('equipo', id), null, { desdeCorregir: true });
+            if (aResponsiva && !conArchivo && Object.keys(valores).every((c) => c === 'ESTATUS EQUIPO' || String(valores[c]) === (inicial[c] || ''))) {
+              cerrarCaptura(true);
+              responsivaDeCorregir();
+              return;
+            }
+            // La nota bajo el estatus ya avisó que no entra al panel (usuario, 20-oct; pendiente 3.12): directo a la ventana
+            // del comentario, un solo COMENTARIO obligatorio y el TICKET (plan §5.2)
+            Promise.resolve().then(() => (captura !== sesionEditor ? null : pedirDatos('Comentario', $('#ln-captura-subtitulo', raiz).textContent || (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo'),
               (lineaACancelar ? [{ clave: 'cancelacionLinea', etiqueta: 'Línea · adendum vencido', opciones: CANCELACION_LINEA.map((x) => x.texto), elegir: true, requerido: true }] : [])
                 .concat([{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }, { clave: 'ticket', etiqueta: 'Ticket' }]),
               id ? 'Guardar cambios' : (ctx.parte === 'LINEA' ? 'Agregar línea' : 'Agregar equipo')))).then((nota) => {
@@ -134,6 +167,7 @@
                 cerrarCaptura(true);
                 aviso(icono('circle-check') + ' ' + (id ? 'Información actualizada' : (ctx.parte === 'LINEA' ? 'Línea agregada' : 'Equipo agregado')), 6000);
                 abrirRegistro(id || r.id);
+                if (r.responsiva) responsivaDeCorregir();
               }));
               });
             }).catch(errorAlGuardar);
@@ -144,10 +178,13 @@
       // ---- Captura: inspección y responsiva nuevas ----
 
       /** La ventana de captura se reutiliza: se abre siempre sin la marca de guardado de la anterior (con ella el lienzo
-       *  de firma no recibe trazos; pasaba en Reasignar después de la inspección de Mandar a resguardo, 4-oct). */
+       *  de firma no recibe trazos; pasaba en Reasignar después de la inspección de Mandar a resguardo, 4-oct). Ni con la X
+       *  apagada: el guardado la apaga y Corregir, Mandar a resguardo o una acción de varios cierran la ventana sin
+       *  prenderla; la siguiente salía con el reloj y no cerraba (usuario, 22-oct, pendiente 2.64). */
       function mostrarModalCaptura() {
         const modal = $('#ln-modal-captura', raiz);
         modal.removeAttribute('aria-busy');
+        modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
         modal.hidden = false;
       }
 
@@ -202,6 +239,7 @@
           const origen = NOMBRE_DE_FIRMA[col] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[col]) + '"]');
           if (f && f.setNombre && origen) f.setNombre(origen.value);
         });
+        if (captura.revisarFirmaResponsable) captura.revisarFirmaResponsable();
       }
       const actualizarProgresoChecklist = actualizarFormularioAppSheet;
 
@@ -261,7 +299,23 @@
             // La de quien captura (inspector o Control Interno) puede ser su firma guardada
             const propia = sesion.contexto.firmaGuardada && e.columna === (sesion.tipo === 'INSPECCION' ? 'FIRMA INSPECTOR' : 'FIRMA CI');
             if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
-            else aMano();
+            else if (e.columna === 'FIRMA RESPONSABLE' && origen && (sesion.contexto.nombresPropios || []).length) {
+              // También la del responsable, cuando el responsable es quien captura (usuario, 19-oct: en Mandar a resguardo
+              // recibe procesos). Cambia sola al elegir a otra persona; «Firmar a mano» queda mientras siga siendo ella
+              let aManoElegido = false;
+              sesion.revisarFirmaResponsable = () => {
+                const suya = (sesion.contexto.nombresPropios || []).indexOf(nombreDeFirma(origen.value)) >= 0;
+                if (!suya) aManoElegido = false;
+                const actual = sesion.firmas[e.columna];
+                if (suya && !aManoElegido && !(actual && actual.guardada)) {
+                  sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen.value, () => { aManoElegido = true; aMano(); });
+                } else if (!suya && (!actual || actual.guardada)) {
+                  lienzo.innerHTML = '';
+                  aMano();
+                }
+              };
+              sesion.revisarFirmaResponsable();
+            } else aMano();
           }
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
@@ -561,7 +615,7 @@
             .then((pdf) => Promise.resolve(otroPdf ? otroPdf.promesa : null).catch(() => null).then((otro) => [pdf, otro])).then(([pdf, otro]) => {
             if (!vigente() || captura !== sesionCaptura) return;
             sesionCaptura.guardando = false;
-            if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar); return; }
+            if (pdf && pdf.faltanFirmas) { pedirFirmasPdf(sesionCaptura, tipo, pdf.nombres || {}, generar, !!pdf.soloResponsable); return; }
             const conOtro = !!(otro && otro.id);
             mostrarEspera(conOtro ? 'Tus PDF están listos' : 'Tu PDF está listo', { tono: 'listo', icono: 'circle-check', texto: '',
               acciones: enlaceDrive(pdf.id, tipo === 'INSPECCION' ? 'Ver PDF de la inspección' : 'Ver PDF de la responsiva', true) +
@@ -641,7 +695,7 @@
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaInspector.guardada,
+            usarFirmaGuardada: !!firmaInspector.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada),
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
         }).then((r) => {
@@ -667,16 +721,16 @@
       function guardarResponsivaDesdeFormulario() {
         $('#cap-error', raiz).hidden = true;
         if (!validarFormularioAppSheet()) return;
-        // La INE registrada no se puede pasar por alto (usuario, 9-oct): sin contestar «¿Es correcta?» no se guarda
+        // La INE registrada no se puede pasar por alto (usuario, 9-oct): sin elegir «Usar la registrada» o «Subir otra» no se guarda
         const sinContestar = Array.from(raiz.querySelectorAll('#ln-captura-cuerpo .ln-ine')).filter((caja) => {
           const s = caja._ine;
           const campo = caja.closest('.ln-af-campo');
-          return caja._registrada && !caja._registrada.descartada && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);
+          return caja._registrada && !caja._registrada.subirOtra && s && !s.reutilizar && !s.pdf && !s.fotos.length && !(campo && campo.hidden);
         })[0];
         if (sinContestar) {
           if (captura.pasos) captura.pasos.irAlCampo('_IDENTIFICACION_' + sinContestar.dataset.ineOrden);
           sinContestar.querySelector('.ln-ine-registrada').classList.add('ln-ine-registrada-falta');
-          mostrarErrorCaptura('Contesta si la INE registrada es correcta.', '.ln-ine[data-ine-orden="' + sinContestar.dataset.ineOrden + '"]');
+          mostrarErrorCaptura('Elige si se usa la identificación registrada o se sube otra.', '.ln-ine[data-ine-orden="' + sinContestar.dataset.ineOrden + '"]');
           return;
         }
         const firmaCi = captura.firmas['FIRMA CI'];
@@ -696,7 +750,7 @@
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaCi.guardada, identificaciones: identificaciones,
+            usarFirmaGuardada: !!firmaCi.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada), identificaciones: identificaciones,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
@@ -730,6 +784,21 @@
         // La promesa del PDF viaja con el resultado (Reasignar lo ofrece al terminar); si falla, regresa null
         const pdf = sesion.flujo.sinPdf ? null : llamar('apiLineasGenerarPdf', tipo, r.id, false, sesion.pdfFirmas || null)
           .catch((e) => { aviso(icono('triangle-alert', 'ln-alerta') + ' El documento quedó guardado, pero su PDF no se generó: ' + mensajeError(e) + '. En Documentos está «Generar PDF».', 12000); return null; });
+        // La acción vuelve a pintar la ficha antes de que el PDF esté (Mandar a resguardo; pendiente 2.63): mientras, Documentos
+        // no ofrece «Generar PDF» y al terminar se pinta de nuevo con su PDF
+        if (pdf) {
+          pdfsEnCurso[r.id] = true;
+          pdf.then(() => {
+            delete pdfsEnCurso[r.id];
+            // Lo que la ficha pidió mientras se generaba ya es de antes del PDF: sin esto, Documentos volvía con la copia
+            // guardada (FICHA_MEMORIA_MS) y ofrecía «Generar PDF» (prueba del 22-oct, NUCO 1010; pendiente 2.63)
+            olvidarFicha();
+            const arriba = pila[pila.length - 1];
+            if (!vigente() || !arriba) return;
+            if (arriba.tipo === 'equipo' || arriba.tipo === 'linea') cargarEvidencias(arriba.id);
+            else if (arriba.id === r.id && ETIQUETA_DOCUMENTO[arriba.tipo]) abrir(arriba.tipo, arriba.id, true, true);
+          });
+        }
         const flujo = sesion.flujo;
         if (captura === sesion) cerrarCaptura(true);
         flujo.resolver(Object.assign({}, r, { pdfPromesa: pdf }));

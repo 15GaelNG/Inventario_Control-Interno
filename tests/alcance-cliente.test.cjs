@@ -20,6 +20,7 @@ function ayudantes(registros) {
   assert.ok(ini > 0 && fin > ini, 'ayudantes de alcance en TelefoniaService');
   const ctx = vm.createContext({
     LineasRepo: { leerRegistroPorId: (id) => registros[id] || null, convertirRegistro: (f) => f },
+    LineasDG: { AREA: 'DIRECCION GENERAL', esRegistro: (e) => !!(e && e.nuco === '11001') }, // Dirección General (8.16)
   });
   vm.runInContext(permisos + '\n' + telefonia.slice(ini, fin) +
     '\nthis.r = { deptoDeRegistro_, exigirAlcance_, sinAlcance_, filtrarIndice_ };', ctx);
@@ -56,6 +57,7 @@ test('la ficha y sus documentos: solo de un registro de su departamento', () => 
   };
   const a = ayudantes(regs);
   assert.equal(a.deptoDeRegistro_(regs.R5), 'POST VENTA', 'una línea suelta: el de su responsable');
+  assert.equal(a.deptoDeRegistro_({ equipo: { nuco: '11001', responsable: { departamento: '' } } }), 'DIRECCION GENERAL', 'DG: su área (8.16)');
   assert.doesNotThrow(() => a.exigirAlcance_(CLIENTE, regs.R1));
   assert.doesNotThrow(() => a.exigirAlcance_(CLIENTE, regs.R5));
   assert.throws(() => a.exigirAlcance_(CLIENTE, regs.R2), /No tienes acceso a este registro/);
@@ -75,7 +77,7 @@ test('toda lectura de Líneas pasa por el alcance', () => {
   const leen = funciones.filter((f) => /\bleer_\(token\)|\bleerSeccion_\(token|Permisos\.puedeLeer\(token/.test(f.cuerpo) &&
     NO_SON_DE_UN_DEPARTAMENTO.indexOf(f.nombre) === -1);
   assert.ok(leen.length >= 12, leen.length + ' funciones leen');
-  const sueltas = leen.filter((f) => !/exigirAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance\)/.test(f.cuerpo));
+  const sueltas = leen.filter((f) => !/exigirAlcance_|filtrarIndice_|sinAlcance_|documento_\(token|, sesion\.alcance[,)]/.test(f.cuerpo));
   assert.deepEqual(sueltas.map((f) => f.nombre), [], 'leen Líneas sin revisar el alcance del rol CLIENT');
   assert.match(telefonia, /function notificaciones\(token, limite\) \{[^}]*Permisos\.alcanceDe\(sesion\.correo\)/,
     'la campana de Líneas sale vacía para un CLIENT');

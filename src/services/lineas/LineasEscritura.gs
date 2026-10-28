@@ -1,19 +1,19 @@
 /**
  * LineasEscritura.gs
- * Etapa 3, paso 1 de la implementación de las partes 4 y 5 (migracion/PLAN_REESTRUCTURA_LINEAS.md §I.6): con el
- * interruptor de la etapa 2 encendido (LINEAS_LECTURA = ESTRUCTURA), guardar escribe en las hojas nuevas.
+ * Etapa 3, paso 1 de la implementación de las partes 4 y 5 (migracion/PLAN_REESTRUCTURA_LINEAS.md §I.6): guardar
+ * escribe en las hojas nuevas (el interruptor LINEAS_LECTURA y el guardado en la hoja vieja se quitaron el 21-oct, 7.13).
  *
  * Todo cambio al inventario pasa por LineasRepo.guardarCambiosRegistro (editar, cambiar estatus, reasignar, mandar a
- * resguardo o a cancelación, la bandeja de Pau y la inspección) o por LineasRepo.agregarRegistro (alta). Con el
- * interruptor encendido, esas dos funciones llaman a este archivo, que reparte cada columna de la hoja vieja a su hoja:
+ * resguardo o a cancelación, la bandeja de Pau y la inspección) o por LineasRepo.agregarRegistro (alta). Esas dos
+ * funciones llaman a este archivo, que reparte cada columna de la hoja vieja a su hoja:
  *   EQUIPOS       EQUIPO (→ MODELO), COLOR, IMEI, ACCESORIOS, PIN EQUIPO, PATRON, CONTRASEÑA MODEM, ESTATUS EQUIPO, NUCO y
  *                 PIN WHATSAPP (del equipo desde el 13-oct, pendiente 2.25: se borra cuando la línea deja al equipo)
  *   LINEAS        NUMERO TELEFONO, NUMERO SIM, COMPAÑIA, RAZON SOCIAL y ESTATUS LINEA
  *   ADENDUMS      COSTO PLAN, INICIO PLAN y FIN PLAN, en el adendum más reciente (los que vienen de un archivo del
  *                 proveedor no se corrigen a mano: los corrige su carga)
  *   ASIGNACIONES  la persona y la ubicación
- * La bitácora CAMBIOS ya no recibe nada: el historial es APP_MOVIMIENTOS (§5.5), que sigue escribiendo quien llama
- * con los campos que regresa guardar().
+ * La bitácora CAMBIOS ya no recibe nada: el historial es MOVIMIENTOS (§5.5), que escribe quien llama
+ * (LineasRepo.registrarMovimiento) con los campos que regresa guardar().
  *
  * Reglas de la asignación (plan §4.3 y §5.4):
  *   - El estatus dice dónde vive cada parte: USO, con una persona; RESGUARDO, PARA VENTA,
@@ -53,6 +53,8 @@ const LineasEscritura = (function () {
   const PERSONA = ['ID PERSONA', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'AREA', 'DIRECTOR', 'JEFE DIRECTO', 'CUENTA GOOGLE'].concat(ADICIONALES);
   /** Dónde está (con persona o guardado). */
   const UBICACION = ['DEPARTAMENTO', 'SEDE', 'OFICINA / DESARROLLO'];
+  /** Del equipo, en blanco al pasar a un estatus final (usuario, 22-oct). */
+  const SE_LIMPIA_AL_CERRAR = ['ACCESORIOS', 'PIN EQUIPO', 'PATRON', 'CONTRASEÑA MODEM'];
   // Los "no aplica" se guardan en blanco, como en la migración (LineasEstructura)
   const NO_APLICA = ['', 'N/A', 'NA', 'NO APLICA', '-', 'SOLO LINEA', 'SIN EQUIPO'];
   // Tipos viejos que llevan línea sí o sí (MODEM, BANDA ANCHA y CAMARA la llevan solo si tienen número)
@@ -71,12 +73,26 @@ const LineasEscritura = (function () {
     return NO_APLICA.indexOf(sinAcentos(s)) >= 0 ? '' : s;
   }
 
+  /** Como limpio_, salvo PIN EQUIPO «NO APLICA»: es el bloqueo SIN BLOQUEO y se guarda tal cual (usuario, 21-oct;
+   *  pendiente 2.53: en blanco, Corregir equipo abría la lista de bloqueo en «Selecciona…»). */
+  function limpioDe_(columna, v) {
+    const c = LineasDatos.normCol(columna);
+    if (c === 'ACCESORIOS') return limpio_(LineasUtil.sinCargador(v));
+    return c === 'PIN EQUIPO' && sinAcentos(v) === 'NO APLICA' ? 'NO APLICA' : limpio_(v);
+  }
+
   function igual_(a, b) {
     const k = (v) => (v instanceof Date ? 'D' + v.getTime() : may(v));
     return k(a) === k(b);
   }
 
   const vacio_ = (v) => v === '' || v === 0 || v === '0';
+
+  /** Los mismos accesorios aunque cambie el orden: la pantalla los regresa en el de la lista (lineas-revisor, 22-oct). */
+  function mismosAccesorios_(a, b) {
+    const k = (v) => may(v).split(',').map((x) => x.trim()).filter((x, i, l) => x && l.indexOf(x) === i).sort().join(',');
+    return k(a) === k(b);
+  }
 
   function texto_(v) {
     if (v instanceof Date) return Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy');
@@ -252,9 +268,10 @@ const LineasEscritura = (function () {
     let tipoNuevo = null;
     Object.keys(cambios).forEach((columna) => {
       const c = LineasDatos.normCol(columna);
-      const despues = limpio_(cambios[columna]);
-      const antes = limpio_(LineasUtil.col(f, columna));
-      if (c === 'NUCO' ? (LineasUtil.nucoVisible(antes) || '') === (LineasUtil.nucoVisible(despues) || '') : igual_(antes, despues)) return;
+      const despues = limpioDe_(columna, cambios[columna]);
+      const antes = c === 'ACCESORIOS' ? limpio_(LineasUtil.col(f, columna)) : limpioDe_(columna, LineasUtil.col(f, columna));
+      if (c === 'NUCO' ? (LineasUtil.nucoVisible(antes) || '') === (LineasUtil.nucoVisible(despues) || '')
+        : c === 'ACCESORIOS' ? mismosAccesorios_(antes, despues) : igual_(antes, despues)) return;
       if (c === 'TIPO') { tipoNuevo = may(despues); return; }
       if (c in A_EQUIPO) {
         if (!e) { if (despues !== '') sinLugar(c === 'NUCO' ? 'el NUCO es del aparato y esta línea no tiene equipo.' : c + ' es del aparato y esta línea no tiene equipo.'); return; }
@@ -277,6 +294,18 @@ const LineasEscritura = (function () {
       if (c === 'COMENTARIOS') campos.push({ campo: columna, antes: texto_(antes), despues: texto_(despues) });
       // Lo demás ya no se guarda (FECHA INSPECCION, responsables 2 a 5…)
     });
+
+    // El equipo que pasa a un estatus final (VENDIDO, DONADO, DESECHADO, EXTRAVIO-ROBO…) se queda sin accesorios ni
+    // bloqueo (usuario, 22-oct: «limpiar toda la información, no solo responsables»); la persona, la ubicación y la
+    // línea ya salen al cerrarse su asignación. MODELO, COLOR, IMEI y NUCO se conservan
+    const nuevoEstatusEquipo = (anotados.filter((x) => x.hoja === 'E' && x.columna === 'ESTATUS EQUIPO')[0] || {}).despues;
+    if (e && clase_('equipo', nuevoEstatusEquipo) === 'NINGUNA') {
+      for (let i = anotados.length - 1; i >= 0; i--) if (anotados[i].hoja === 'E' && SE_LIMPIA_AL_CERRAR.indexOf(anotados[i].columna) >= 0) anotados.splice(i, 1);
+      SE_LIMPIA_AL_CERRAR.forEach((c) => {
+        const antes = limpioDe_(c, e[c]);
+        if (antes !== '') anotados.push({ hoja: 'E', columna: c, campo: c, antes: antes, despues: '' });
+      });
+    }
 
     const nuevoEstatusLinea = (anotados.filter((x) => x.hoja === 'L' && x.columna === 'ESTATUS LINEA')[0] || {}).despues;
     const seCancela = !!l && may(nuevoEstatusLinea) === 'CANCELADA';
@@ -414,6 +443,10 @@ const LineasEscritura = (function () {
     const clase = a ? may(a['TIPO']) : clase_('equipo', limpio_(cambios['ESTATUS EQUIPO']) || e['ESTATUS EQUIPO']);
     const estatus = limpio_(cambios['ESTATUS LINEA']) || (clase === 'PERSONA' ? 'USO' : 'DISPONIBLE');
     if (existente) {
+      // Una línea en Cancelaciones no pasa a otro equipo (pendiente 3.12): la retira Pau
+      if (typeof LineasResguardos !== 'undefined') {
+        LineasResguardos.exigirSinCancelacion({ 'ID': existente['ID'], 'ID LINEA': existente['ID'], 'NUMERO TELEFONO': existente['NUMERO TELEFONO'] });
+      }
       const suya = h.ASIGNACIONES.filas.filter((x) => String(x['ID LINEA'] || '') === String(existente['ID']) && !x['FECHA FIN'])[0];
       if (suya && suya['ID EQUIPO']) {
         const otro = h.EQUIPOS.porId[String(suya['ID EQUIPO'])];
@@ -452,7 +485,7 @@ const LineasEscritura = (function () {
     const refs = [];
     const e = conEquipo ? agregar_('EQUIPOS', {
       'ID ANTERIOR': '', 'ID APPSHEET': '', 'NUCO': LineasUtil.nucoVisible(v('NUCO')) || '', 'TIPO DE EQUIPO': ESTRUCTURA_TIPO_EQUIPO[tipo],
-      'MODELO': v('EQUIPO'), 'COLOR': v('COLOR'), 'IMEI': v('IMEI'), 'ACCESORIOS': v('ACCESORIOS'), 'PIN EQUIPO': v('PIN EQUIPO'), 'PATRON': v('PATRON'),
+      'MODELO': v('EQUIPO'), 'COLOR': v('COLOR'), 'IMEI': v('IMEI'), 'ACCESORIOS': limpioDe_('ACCESORIOS', LineasUtil.col(datos, 'ACCESORIOS')), 'PIN EQUIPO': limpioDe_('PIN EQUIPO', LineasUtil.col(datos, 'PIN EQUIPO')), 'PATRON': v('PATRON'),
       'CONTRASEÑA MODEM': v('CONTRASEÑA MODEM'), 'ESTATUS EQUIPO': v('ESTATUS EQUIPO'),
       'PIN WHATSAPP': conLinea ? v('PIN WHATSAPP') : '',
     }) : null;
@@ -511,9 +544,11 @@ const LineasEscritura = (function () {
    * asignación del registro y abre dos: la del equipo, igual que estaba (su persona o su resguardo), y la de la línea
    * sola y guardada (departamento DISPONIBLE, la sede y la oficina de antes), con ESTATUS LINEA DISPONIBLE. Funciona
    * también con el equipo guardado, donde cambiar el estatus no los separa (los dos quedan en RESGUARDO).
-   * Regresa { idLinea, campos, refs }.
+   * opciones.estatus: el que conserva la línea (la que ya está en Cancelaciones sigue EN PROCESO DE CANCELACION; pendiente
+   * 3.12). Regresa { idLinea, campos, refs }.
    */
-  function separarLinea(f, ahora) {
+  function separarLinea(f, ahora, opciones) {
+    const estatus = (opciones && opciones.estatus) || 'DISPONIBLE';
     const h = hojas();
     const id = (c) => String(f[c] === null || f[c] === undefined ? '' : f[c]).trim();
     const e = id('ID EQUIPO') ? h.EQUIPOS.porId[id('ID EQUIPO')] || null : null;
@@ -533,9 +568,9 @@ const LineasEscritura = (function () {
     }))['ID']);
     const campos = [{ campo: 'NUMERO TELEFONO', antes: texto_(l['NUMERO TELEFONO']), despues: '' }];
     sinPinWhatsapp_(e, campos);
-    if (may(l['ESTATUS LINEA']) !== 'DISPONIBLE') {
-      campos.push({ campo: 'ESTATUS LINEA', antes: texto_(l['ESTATUS LINEA']), despues: 'DISPONIBLE' });
-      actualizar_('LINEAS', l, { 'ESTATUS LINEA': 'DISPONIBLE' });
+    if (may(l['ESTATUS LINEA']) !== estatus) {
+      campos.push({ campo: 'ESTATUS LINEA', antes: texto_(l['ESTATUS LINEA']), despues: estatus });
+      actualizar_('LINEAS', l, { 'ESTATUS LINEA': estatus });
     }
     tocados_.push(String(l['ID']));
     LineasLectura.olvidar();
@@ -554,56 +589,6 @@ const LineasEscritura = (function () {
     ADICIONALES, guardar, agregar, hojasEnMemoria, separarLinea,
     /** Registros que aparecieron en esta ejecución (para refrescar el índice sin recargar). */
     tocados: () => tocados_.slice(),
-    _limpio: limpio_, _clase: clase_,
+    _limpio: limpio_,
   };
 })();
-
-/**
- * Etapa 3: revisa que las hojas nuevas sigan las reglas de la asignación (plan §5.4). Solo lee; se corre desde el
- * editor antes y después de probar, para ver que guardar no deja combinaciones imposibles. Lo que ya venía así de la
- * hoja vieja (estatus que no dicen dónde está, casos de Correcciones) también sale: se compara contra la corrida
- * anterior.
- */
-function reestructuraRevisarEscritura() {
-  soloEditor_();
-  const leer = (n) => (LineasDatos.existeTabla(n) ? LineasDatos.leerTabla(n) : []);
-  const equipos = leer('EQUIPOS');
-  const lineas = leer('LINEAS');
-  const asignaciones = leer('ASIGNACIONES');
-  const vigentes = asignaciones.filter((a) => !a['FECHA FIN']);
-  const temas = {};
-  const anotar = (tema, ejemplo) => {
-    const x = temas[tema] = temas[tema] || { cuantos: 0, ejemplos: [] };
-    x.cuantos++;
-    if (x.ejemplos.length < 6) x.ejemplos.push(ejemplo);
-  };
-  const porParte = { equipo: {}, linea: {} };
-  vigentes.forEach((a) => {
-    if (a['ID EQUIPO']) (porParte.equipo[a['ID EQUIPO']] = porParte.equipo[a['ID EQUIPO']] || []).push(a);
-    if (a['ID LINEA']) (porParte.linea[a['ID LINEA']] = porParte.linea[a['ID LINEA']] || []).push(a);
-    if (a['TIPO'] === 'RESGUARDO' && String(a['RESPONSABLE'] || '').trim()) anotar('Resguardo con nombre de persona (B13, viene de la hoja vieja)', a['ID']);
-    if (a['TIPO'] === 'PERSONA' && !String(a['RESPONSABLE'] || '').trim()) anotar('Con persona pero sin responsable', a['ID']);
-  });
-  const revisar = (parte, filas, columna, ref) => filas.forEach((r) => {
-    const vs = porParte[parte][r['ID']] || [];
-    if (vs.length > 1) anotar('Más de una asignación vigente (' + parte + ')', ref(r));
-    const clase = LineasEscritura._clase(parte, r[columna]);
-    const tiene = vs.length ? vs[0]['TIPO'] : 'NINGUNA';
-    if (clase === 'SIGUE' || clase === tiene) return;
-    anotar((parte === 'equipo' ? 'Equipo ' : 'Línea ') + (r[columna] || 'sin estatus') + ' en asignación ' + tiene, ref(r));
-  });
-  revisar('equipo', equipos, 'ESTATUS EQUIPO', (e) => 'NUCO ' + e['NUCO']);
-  revisar('linea', lineas, 'ESTATUS LINEA', (l) => l['NUMERO TELEFONO'] || l['NUMERO SIM'] || l['ID']);
-  const hoy = Utilities.formatDate(new Date(), LineasDatos.ZONA_APP, 'yyyy-MM-dd');
-  const deHoy = asignaciones.filter((a) => a['FECHA INICIO'] instanceof Date && Utilities.formatDate(a['FECHA INICIO'], LineasDatos.ZONA_APP, 'yyyy-MM-dd') === hoy);
-  const conColor = equipos.filter((e) => String(e['COLOR'] || '').trim()).length;
-  const salida = [
-    'EQUIPOS ' + equipos.length + ' · LINEAS ' + lineas.length + ' · ASIGNACIONES ' + asignaciones.length + ' (vigentes ' + vigentes.length +
-      ', cerradas ' + (asignaciones.length - vigentes.length) + ', abiertas hoy ' + deHoy.length + ')',
-    'EQUIPOS con color: ' + conColor,
-    '', 'TEMA | cuántos | ejemplos',
-  ];
-  Object.keys(temas).sort((a, b) => temas[b].cuantos - temas[a].cuantos).forEach((k) => salida.push(k + ' | ' + temas[k].cuantos + ' | ' + temas[k].ejemplos.join(', ')));
-  for (let i = 0; i < salida.length; i += 25) console.log(salida.slice(i, i + 25).join('\n'));
-  return 'Listo: ver el registro de ejecución.';
-}

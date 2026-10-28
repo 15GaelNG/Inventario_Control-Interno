@@ -15,18 +15,30 @@ const src = (p) => path.join(__dirname, '..', 'src', p);
 let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
 
-function conSesion(activo, efectivo) {
+// Los activadores del proyecto (ScriptApp.getProjectTriggers): solo el 111 existe
+function contexto(activo, efectivo) {
   const ctx = vm.createContext({
     Session: { getActiveUser: () => ({ getEmail: () => activo }), getEffectiveUser: () => ({ getEmail: () => efectivo }) },
+    ScriptApp: { getProjectTriggers: () => [{ getUniqueId: () => '111' }] },
     HtmlService: {},
   });
   vm.runInContext(fs.readFileSync(src('Code.gs'), 'utf8') + '\nthis.soloEditor_ = soloEditor_;', ctx);
-  try { ctx.soloEditor_(); return true; } catch (e) { return false; }
+  return ctx;
+}
+function conSesion(activo, efectivo, evento) {
+  try { contexto(activo, efectivo).soloEditor_(evento); return true; } catch (e) { return false; }
 }
 
 console.log('1. El candado');
 ok(conSesion('dueno@ciudadmaderas.com', 'dueno@ciudadmaderas.com'), 'desde el editor (quien corre = dueño): pasa');
-ok(conSesion('', 'dueno@ciudadmaderas.com'), 'desde un activador (sin usuario activo): pasa');
+ok(conSesion('', 'dueno@ciudadmaderas.com', { triggerUid: '111' }), 'desde un activador de verdad (sin usuario activo, con su triggerUid): pasa');
+// Con la web app abierta a cualquier cuenta de Google (23-oct), alguien de fuera del dominio llega SIN correo
+ok(!conSesion('', 'dueno@ciudadmaderas.com'), 'sin correo y sin evento (alguien de fuera del dominio, desde la consola): se detiene');
+ok(!conSesion('', 'dueno@ciudadmaderas.com', { triggerUid: '999' }), 'sin correo con un triggerUid inventado: se detiene');
+const cadena = contexto('', 'dueno@ciudadmaderas.com');
+cadena.soloEditor_({ triggerUid: '111' });
+ok((() => { try { cadena.soloEditor_(); return true; } catch (e) { return false; } })(),
+  'lo que llama después esa misma ejecución (otra función con candado, sin el evento): pasa');
 ok(!conSesion('otra.persona@ciudadmaderas.com', 'dueno@ciudadmaderas.com'), 'otra persona desde la web app: se detiene');
 ok(conSesion('DUENO@ciudadmaderas.com', 'dueno@ciudadmaderas.com'), 'sin importar mayúsculas en el correo');
 
@@ -57,11 +69,26 @@ ARCHIVOS.forEach((archivo) => {
     let j = i + 1;
     while (j < lineas.length && !/^function /.test(lineas[j])) j++;
     const cuerpo = lineas.slice(i + 1, j).join('\n');
-    if (!/soloEditor_\(\)/.test(cuerpo)) sinCandado.push(archivo + ': ' + m[1]);
+    if (!/soloEditor_\(e?\)/.test(cuerpo)) sinCandado.push(archivo + ': ' + m[1]);
   });
 });
 ok(revisadas > 60, revisadas + ' funciones de administración revisadas');
 ok(!sinCandado.length, sinCandado.length ? 'SIN candado: ' + sinCandado.join(', ') : 'todas empiezan con soloEditor_()');
+
+console.log('3. Cada función que corre un activador de tiempo le pasa su evento al candado');
+// Sin el evento, el candado ya no la deja pasar (no hay usuario activo en un activador de tiempo)
+const conActivador = [];
+ARCHIVOS.forEach((archivo) => {
+  const texto = fs.readFileSync(src(archivo), 'utf8');
+  [...texto.matchAll(/newTrigger\(([A-Za-z0-9_]+)\)\.timeBased/g)].forEach((m) => {
+    const nombre = (new RegExp("const " + m[1] + " = '([A-Za-z0-9_]+)'").exec(texto) || [])[1] || m[1];
+    conActivador.push(nombre);
+  });
+});
+const todoElCodigo = ARCHIVOS.map((a) => fs.readFileSync(src(a), 'utf8')).join('\n');
+ok(conActivador.length >= 5, conActivador.length + ' activadores de tiempo: ' + conActivador.join(', '));
+const sinEvento = conActivador.filter((n) => !new RegExp('function ' + n + '\\(e\\) \\{\\r?\\n\\s*soloEditor_\\(e\\);').test(todoElCodigo));
+ok(!sinEvento.length, sinEvento.length ? 'sin pasar (e): ' + sinEvento.join(', ') : 'todas: function x(e) { soloEditor_(e); …');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

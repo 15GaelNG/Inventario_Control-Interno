@@ -425,14 +425,18 @@
       pintarStats(tabla.getFiltradas());
     }
 
-    /** Se refresca solo cada minuto; se detiene al salir de la pantalla */
+    /**
+     * Se refresca solo cada minuto; se detiene al salir de la pantalla o de la sesión (al vencer, la pantalla se
+     * queda debajo del login y antes seguía pidiendo cada minuto sin token: un "Sesión expirada" en el log cada vez)
+     */
     function programarRefresco() {
       clearInterval(temporizador);
       temporizador = setInterval(() => {
-        if (!document.body.contains(document.getElementById('sen-tabla'))) {
+        if (!state.token || !document.body.contains(document.getElementById('sen-tabla'))) {
           clearInterval(temporizador);
           return;
         }
+        if (document.hidden) return;   // pestaña en segundo plano: nadie la ve, no gasta llamadas
         cargarEstadoEnVivo();
       }, 60000);
     }

@@ -17,7 +17,8 @@ test('separar la línea de su equipo deja dos asignaciones: el equipo como estab
   assert.match(fn, /'ID LINEA': '', 'FECHA INICIO': ahora, 'FECHA FIN': ''/);
   assert.match(fn, /datosAsignacion_\('RESGUARDO', a \|\| \{\}, \{\}, null\)/);
   assert.match(fn, /'TIPO': 'RESGUARDO', 'ID LINEA': l\['ID'\], 'ID EQUIPO': ''/);
-  assert.match(fn, /actualizar_\('LINEAS', l, \{ 'ESTATUS LINEA': 'DISPONIBLE' \}\)/);
+  assert.match(fn, /const estatus = \(opciones && opciones\.estatus\) \|\| 'DISPONIBLE';/);
+  assert.match(fn, /actualizar_\('LINEAS', l, \{ 'ESTATUS LINEA': estatus \}\)/);
   assert.match(fn, /tocados_\.push\(String\(l\['ID'\]\)\)/);
   assert.match(esc, /ADICIONALES, guardar, agregar, hojasEnMemoria, separarLinea,/);
 });
@@ -71,6 +72,6 @@ test('el clic derecho de la lista trae las mismas acciones que el ⋮ de la fich
     .forEach(([t]) => assert.ok(fn.includes('vinculo(' + t), t));
   // Sin Editar línea en el equipo (usuario, 13-oct): en los dos, el editar de su tipo
   assert.doesNotMatch(fn, /abrirEditor\(f\[0\]\.lineaId, 'LINEA'\)/);
-  // Desde la lista no abre la ficha al terminar (como Reasignar)
-  assert.match(html, /if \(vigente\(\) && pila\.length\) abrir\('equipo', equipo\.id, true\);/);
+  // Desde la lista no abre la ficha al terminar (como Reasignar): solo vuelve a pintar la que estaba abierta (2.61)
+  assert.match(html, /if \(vigente\(\) && arriba\) abrir\(arriba\.tipo, arriba\.id, true\);/);
 });

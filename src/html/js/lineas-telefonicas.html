@@ -5,10 +5,10 @@
    */
   (function () {
     'use strict';
-    const { $, CATALOGOS_LINEAS, COLOR_ESTATUS, REGLAS_FORMATO, abrirPanelLateral, alternarMulti, aviso,
-      cargarIndice, chip, colorAppSheet, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion, ico, icono,
-      llamar, memoria, mensajeError, miles, montaje, panelActual, pintarIconos, precargarUltimosNucos, puedeOperar,
-      tablaLineas, vacio, veDocumentos, veHistorial, verFotoEnGrande } = Lineas.comun;
+    const { $, CATALOGOS_LINEAS, COLOR_ESTATUS, REGLAS_FORMATO, abrirPanelLateral, alternarMulti, aviso, bloqueadoDG,
+      cargarIndice, chip, colorAppSheet, elegirPastilla, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion,
+      ico, icono, llamar, memoria, mensajeError, miles, montaje, panelActual, pintarIconos, precargarUltimosNucos,
+      puedeOperar, quitarDelPanel, tablaLineas, vacio, veDocumentos, veHistorial, verFotoEnGrande } = Lineas.comun;
 
     // ======================================================================
     // Líneas Telefónicas
@@ -22,7 +22,7 @@
      */
     const COLUMNAS_VISTA_LINEAS = [
       ['NUMERO TELEFONO', 'Número teléfono', 'mono'], ['NUCO', 'NUCO', 'mono'], ['TIPO', 'Tipo', 'tipo'],
-      ['ESTATUS GENERAL', 'Estatus general', 'chip'], ['NO EMPLEADO', 'No. empleado', 'mono'], ['RESPONSABLE', 'Responsable'],
+      ['NO EMPLEADO', 'No. empleado', 'mono'], ['RESPONSABLE', 'Responsable'],
       ['PUESTO', 'Puesto'], ['NOMBRE RESPONSABLES 2', 'Nombre colaborador/es'], ['PUESTO RESPONSABLES 2', 'Puesto colaborador/es'],
       ['EQUIPO', 'Equipo', 'lista'], ['IMEI', 'IMEI', 'mono'], ['NUMERO SIM', 'Número SIM', 'mono'], ['ACCESORIOS', 'Accesorios'],
       ['SEDE', 'Sede', 'lista'], ['OFICINA / DESARROLLO', 'Oficina / desarrollo', 'lista'], ['DEPARTAMENTO', 'Departamento', 'lista'],
@@ -42,6 +42,8 @@
         icono('file-text') + ' Ver</button>';
     }
     const tieneNuco = (r) => !!(r.NUCO || r.nuco || r.nucoEquipo);
+    // «Última responsiva / inspección»: no para Dirección General a quien no es ADMIN (pendiente 8.20; el servidor tampoco los da)
+    const conUltimo = (r) => tieneNuco(r) && !bloqueadoDG(r);
     /**
      * Columnas de la vista del AppSheet que la tabla aún no tiene (`sinEstas`): ocultas, salvo "Última responsiva" y
      * "Última inspección", que van al final.
@@ -59,8 +61,8 @@
           const tipo = campo === 'RESPONSIVA' ? 'RESPONSIVA' : 'INSPECCION';
           c.visible = true;
           c.tipo = 'lista';
-          c.valor = (r) => (tieneNuco(r) ? titulo : '');
-          c.render = (v, r) => (tieneNuco(r) ? botonUltimoNucos(tipo, r.id) : vacio);
+          c.valor = (r) => (conUltimo(r) ? titulo : '');
+          c.render = (v, r) => (conUltimo(r) ? botonUltimoNucos(tipo, r.id) : vacio);
         }
         if (clase === 'correo') c.render = (v) => (v ? '<a class="ln-enlace" href="mailto:' + esc(v) + '">' + icono('mail') + ' ' + esc(v) + '</a>' : vacio);
         return c;
@@ -84,6 +86,7 @@
     const TABLAS_INVENTARIO = {
       equipos: {
         detalle: 'equipo', textoVacio: 'Sin equipos',
+        buscarPrimero: ['nuco'], // al buscar, primero lo que coincide por NUCO (usuario, 21-oct; pendiente 2.60)
         etiqueta: (r) => 'NUCO ' + (r.nuco || '—') + (r.modelo ? ' · ' + r.modelo : ''),
         columnas: [
           { campo: 'nuco', titulo: 'NUCO', tipo: 'texto', fijada: true, render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
@@ -101,6 +104,7 @@
       },
       lineas: {
         detalle: 'linea', textoVacio: 'Sin líneas',
+        buscarPrimero: ['numero'], // al buscar, primero lo que coincide por número (usuario, 21-oct; pendiente 2.60)
         etiqueta: (r) => 'Línea ' + (r.numero || '—'),
         columnas: [
           // La búsqueda encuentra la línea por un número que tuvo (8-oct); en la celda solo se ve el actual y los anteriores
@@ -139,8 +143,8 @@
       // Las partes (lineas-telefonicas-*.html): se montan abajo, cuando ya está lo que piden del arranque
       const T = Lineas.telefonicas.contexto();
       const { abrir, abrirMenuFicha, abrirRegistro, alAbrirPestanaFicha, cerrarDetalle, volver } = T.de('ficha');
-      const { copiarDetalles, pintarTextoDetalles } = T.de('documentos');
-      const { abrirCancelacion, abrirResguardo, abrirResponsiva, abrirVinculo, filaDelIndice } = T.de('acciones');
+      const { copiarConAviso, textoTarjeta } = T.de('documentos');
+      const { abrirCancelacion, abrirResguardo, abrirResponsiva, abrirVinculo, filaDelIndice, trasQuitar } = T.de('acciones');
       const { abrirCaptura, abrirEditor, actualizarProgresoChecklist, cerrarCaptura, ocultarEspera } = T.de('captura');
       pintarIconos(raiz);
       document.addEventListener('app:before-navigate', () => { if (vigente() && T.captura) cerrarCaptura(); }, { once: true });
@@ -158,20 +162,27 @@
       const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
       // El equipo que sale del inventario (LineasRegistros.ESTATUS_EQUIPO_FINAL; usuario, 16-oct, pendiente 2.50)
       const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+      // Lo que ya no se entrega ni se inspecciona: sin botones de Responsiva ni de Inspección (LineasAcciones.ESTATUS_SIN_RESPONSIVA;
+      // usuario, 21-oct, pendiente 2.55). El equipo vuelve a USO con Corregir. Tampoco el equipo en el panel de Pau (`panel`,
+      // por recibir o recibido; pendiente 3.15): sale con Quitar del panel o, ya recibido, con Entregar a líneas
+      const SIN_DOCUMENTOS = { equipo: ESTATUS_EQUIPO_FINAL.concat(['EXTRAVIADO', 'ROBADO', 'ROBO']), linea: ESTATUS_LINEA_PANEL };
+      const conDocumentos = (tipo, estatus, panel) => !panel && SIN_DOCUMENTOS[tipo].indexOf(String(estatus || '').trim().toUpperCase()) < 0;
+      // «Mandar a resguardo»: ni el que ya está en el panel ni el que salió del inventario (usuario, 23-oct: «Que se bloquee, solo
+      // permitir corregir estatus pero tiene que pasar por todo el proceso»; LineasResguardos.ESTATUS_EQUIPO_FINAL)
+      const mandaResguardo = (r) => !r.panel && SIN_DOCUMENTOS.equipo.indexOf(String(r.estatus || '').trim().toUpperCase()) < 0;
       // La línea con el adendum vencido que se manda sola a cancelación: quien captura elige (LineasRegistros.CANCELACION_PANEL
       // y CANCELACION_DIRECTA; usuario, 16-oct, pendiente 2.50)
       const CANCELACION_LINEA = [{ valor: 'PANEL', texto: 'PANEL DE RESGUARDOS Y CANCELACIONES' }, { valor: 'DIRECTO', texto: 'CANCELADA SIN PANEL' }];
-      // Directo, sin pasar por el panel (LineasResguardos.LINEA_SIN_PANEL)
-      const LINEA_SIN_PANEL = 'CANCELADA';
       let marcarKpi = null;
       const resumenDocumentos = {}; // de ficha; lo usan otras partes
       const ETIQUETA_DOCUMENTO = { inspeccion: 'Inspección', responsiva: 'Responsiva' }; // de ficha; lo usan otras partes
       const ORIGEN_DOCUMENTO = { APPSHEET: 'AppSheet', SISTEMA: 'Sistema nuevo', DRIVE: 'Carpeta NUCOS' }; // de documentos; lo usan otras partes
       const COLOR_ORIGEN_DOCUMENTO = { AppSheet: 'azul', 'Sistema nuevo': 'verde', 'Carpeta NUCOS': 'neutro' }; // de documentos; lo usan otras partes
+      const pdfsEnCurso = {}; // de acciones; lo usan otras partes
       T.montar({
         CANCELACION_LINEA, COLOR_ORIGEN_DOCUMENTO, ESTATUS_EQUIPO_FINAL, ESTATUS_EQUIPO_RESGUARDO,
-        ESTATUS_LINEA_PANEL, ETIQUETA_DOCUMENTO, LINEA_SIN_PANEL, MOTIVOS_CANCELACION, ORIGEN_DOCUMENTO,
-        pasoHistorial, pila, pintarIndicadores, pintarListado, raiz, resumenDocumentos, tablas, vigente,
+        ESTATUS_LINEA_PANEL, ETIQUETA_DOCUMENTO, MOTIVOS_CANCELACION, ORIGEN_DOCUMENTO, conDocumentos, mandaResguardo, pasoHistorial,
+        pdfsEnCurso, pila, pintarIndicadores, pintarListado, raiz, resumenDocumentos, tablas, vigente,
       }, () => ({
         pilaParaHistorial,
       }));
@@ -224,8 +235,12 @@
         if (masFicha) { ev.preventDefault(); abrirMenuFicha(masFicha); return; }
         const mas = ev.target.closest('[data-ln-mas-tarjetas]');
         if (mas) { tarjetasVisibles[mas.dataset.lnMasTarjetas] += PASO_TARJETAS; pintarTarjetas(mas.dataset.lnMasTarjetas); return; }
-        const copiar = ev.target.closest('[data-ln-copiar-detalles]');
-        if (copiar) { copiarDetalles(copiar); return; }
+        const copiarCard = ev.target.closest('[data-ln-copiar-tarjeta]');
+        if (copiarCard) {
+          const card = copiarCard.closest('.ln-card');
+          copiarConAviso(copiarCard, textoTarjeta(card), 'Copiado: ' + textoTarjeta(card).split('\n')[0]);
+          return;
+        }
         if (ev.target.closest('[data-ln-volver]')) { ev.preventDefault(); volver(); return; }
         if (ev.target.closest('[data-ln-lista]')) { ev.preventDefault(); cerrarDetalle(); return; }
         const miga = ev.target.closest('[data-ln-miga]');
@@ -249,9 +264,8 @@
         if (multi) { alternarMulti(multi); actualizarProgresoChecklist(); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
         if (pastilla) {
-          pastilla.parentElement.querySelectorAll('.ln-pastilla').forEach((b) => { b.classList.remove('activa'); if (b.hasAttribute('aria-checked')) b.setAttribute('aria-checked', 'false'); });
-          pastilla.classList.add('activa');
-          if (pastilla.hasAttribute('aria-checked')) pastilla.setAttribute('aria-checked', 'true');
+          if (pastilla.disabled) return;
+          elegirPastilla(pastilla);
           actualizarProgresoChecklist();
           return;
         }
@@ -280,7 +294,20 @@
         tabla.asegurarSeleccionada(tarjeta.dataset.id);
         tabla.abrirMenu(ev.clientX, ev.clientY);
       });
-      raiz.addEventListener('input', (ev) => { if (ev.target.closest('[data-ln-copiar]')) pintarTextoDetalles(); });
+      // Al entrar al buscador de una tabla, lo que ya tiene queda seleccionado: se escribe encima (usuario, 22-oct: buscar 0001
+      // y luego 0002 sin borrar todo). El mouseup del mismo clic quitaba la selección: ese se ignora
+      let buscadorRecien = null;
+      raiz.addEventListener('focusin', (ev) => {
+        const b = ev.target.closest && ev.target.closest('.dt-buscar, .dt-buscar-col');
+        if (!b || !b.value) return;
+        b.select();
+        buscadorRecien = b;
+      });
+      raiz.addEventListener('mouseup', (ev) => {
+        if (buscadorRecien && ev.target === buscadorRecien) ev.preventDefault();
+        buscadorRecien = null;
+      });
+      raiz.addEventListener('focusout', () => { buscadorRecien = null; });
       raiz.addEventListener('keydown', (ev) => {
         if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][tabindex="0"]')) {
           ev.preventDefault();
@@ -290,6 +317,15 @@
         // Tarjetas: el foco queda en la tarjeta (no en la tabla), así que Esc quita la selección desde aquí
         else if (ev.key === 'Escape' && ev.target.closest && ev.target.closest('#ln-listado .ln-cuadro') && tablas[memoria.modulo]) tablas[memoria.modulo].limpiarSeleccion();
       });
+      // Escape también con el foco fuera de la ventana (en la página, tras un clic en su encabezado o con el panel Detalles
+      // abierto; pendiente 2.37): el keydown de la raíz solo lo oye con el foco dentro
+      // (se quita sola cuando la pantalla ya no está: al volver a Líneas se pone otra)
+      const escapeVentana = (ev) => {
+        if (!document.body.contains(raiz)) { document.removeEventListener('keydown', escapeVentana); return; }
+        if (ev.key !== 'Escape' || raiz.contains(ev.target) || $('#ln-modal-captura', raiz).hidden) return;
+        cerrarCaptura();
+      };
+      document.addEventListener('keydown', escapeVentana);
       $('#ln-modal-captura', raiz).addEventListener('click', (ev) => {
         if (ev.target.closest('[data-espera-volver]')) { ocultarEspera(); return; }
         // Un clic afuera no cierra la ventana (usuario, 4-oct): solo la X, Cancelar o Cerrar
@@ -432,17 +468,17 @@
        */
       function accionesSeleccionDe(modulo) {
         const tipo = TABLAS_INVENTARIO[modulo].detalle;
-        const operar = puedeOperar;
+        const operar = (f) => puedeOperar() && !(f || []).some(bloqueadoDG);
         const UNO = 1; // sin acciones masivas por ahora
         const detalles = { icono: 'info', texto: 'Detalles', titulo: 'Panel con lo fundamental; sigue a la fila que selecciones', maximo: 1, grupo: 'ver',
           activo: () => detallesAbiertos, alHacer: (f) => (detallesAbiertos && panelActual() ? panelActual().cerrar() : mostrarDetalles(tipo, f[0])) };
         // «Corregir» en lugar de «Editar» (usuario, 16-oct; pendiente 2.50): solo corrige lo mal capturado; la persona cambia con la Responsiva
         const editar = { icono: 'pencil', texto: 'Corregir', maximo: 1, enBarra: false, grupo: 'abrir', visible: operar,
           alHacer: (f) => abrirEditor(f[0].id, tipo === 'linea' ? 'LINEA' : undefined) };
-        const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', visible: veHistorial, alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
+        const historial = { icono: 'history', texto: 'Historial', maximo: 1, enBarra: false, grupo: 'ir', visible: (f) => veHistorial() && !f.some(bloqueadoDG), alHacer: (f) => abrirEnPestana(tipo, f[0].id, 'historial') };
         // Vincular, cambiar y desvincular, igual que en el ⋮ de la ficha (etapa 3, usuario 8-oct)
         const vinculo = (ic, texto, modo, cuando) => ({ icono: ic, texto: texto, maximo: 1, enBarra: false, grupo: 'vinculo',
-          visible: (f) => operar() && cuando(f[0]), alHacer: (f) => abrirVinculo(modo, f[0]) });
+          visible: (f) => operar(f) && cuando(f[0]), alHacer: (f) => abrirVinculo(modo, f[0]) });
         const disponible = (r) => String(r.estatus || '').toUpperCase() === 'DISPONIBLE';
         // Orden (usuario, 12-oct; pendiente 2.34): Detalles · mover · documentos nuevos · editar · vincular · ir e historial.
         // La barra de arriba son los de enBarra, en este mismo orden
@@ -450,13 +486,18 @@
           return [detalles,
             // Responsiva en lugar de Reasignar (pendiente 2.49, usuario 16-oct): la misma persona renueva, otra reasigna.
             // Responsiva e Inspección juntas, la Responsiva primero (usuario, 16-oct; pendiente 2.50)
-            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,
-              alHacer: (f) => abrirResponsiva('equipo', f[0]) },
+            { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos',
+              visible: (f) => operar(f) && conDocumentos('equipo', f[0].estatus, f[0].panel), alHacer: (f) => abrirResponsiva('equipo', f[0]) },
             // Ver la última inspección o responsiva queda en la ficha (usuario, 12-oct)
-            { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos', visible: operar,
-              alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            { icono: 'clipboard-check', texto: 'Inspección', maximo: 1, enBarra: false, grupo: 'documentos',
+              visible: (f) => operar(f) && conDocumentos('equipo', f[0].estatus, f[0].panel), alHacer: (f) => abrirCaptura('INSPECCION', { equipoId: f[0].id }) },
+            // Ya en el panel de Pau: se corrige y, si aún no lo recibe, se quita (usuario, 20-oct; pendiente 3.12)
             { icono: 'archive', texto: 'Mandar a resguardo', titulo: 'El equipo con su ubicación y el estatus de su línea; se cierra la asignación de la persona', maximo: UNO, grupo: 'mover',
-              visible: operar, alHacer: (f) => abrirResguardo(f) },
+              visible: (f) => operar(f) && f.every(mandaResguardo), alHacer: (f) => abrirResguardo(f) },
+            { icono: 'archive-restore', texto: 'Corregir resguardo', titulo: 'Destino, estatus y comentario de su renglón en Resguardos y cancelaciones', maximo: UNO, grupo: 'mover',
+              visible: (f) => operar(f) && f.every((r) => r.panel), alHacer: (f) => abrirResguardo(f, { corregir: true }) },
+            { icono: 'archive-x', texto: 'Quitar del panel', titulo: 'Mandado por error: vuelve a como estaba antes de mandarlo', maximo: UNO, grupo: 'mover',
+              visible: (f) => operar(f) && f.every((r) => r.panel === 'PENDIENTE DE RECEPCION'), alHacer: (f) => quitarDelPanel(f.map((r) => r.id), trasQuitar) },
             // En el equipo solo corrige el equipo: la línea se corrige desde la línea (usuario, 13-oct)
             editar,
             vinculo('link', 'Vincular línea', 'VINCULAR_LINEA', (r) => !r.lineaId),
@@ -469,7 +510,7 @@
         return [detalles,
           // La línea sin equipo también entrega con su Responsiva (pendiente 2.49); la de un equipo, con su equipo
           { icono: 'signature', texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna', maximo: UNO, grupo: 'documentos',
-            visible: (f) => operar() && !f[0].equipoId, alHacer: (f) => abrirResponsiva('linea', f[0]) },
+            visible: (f) => operar(f) && !f[0].equipoId && conDocumentos('linea', f[0].estatus), alHacer: (f) => abrirResponsiva('linea', f[0]) },
           { icono: 'phone-off', texto: 'Mandar a cancelación', titulo: 'Pasa a la bandeja de cancelaciones de quien la tramita; el equipo no cambia', maximo: UNO, grupo: 'mover',
             visible: operar, alHacer: (f) => abrirCancelacion(f) },
           editar,
@@ -516,6 +557,7 @@
           idTabla: 'lineas-' + modulo + '-v4',
           columnas: cfg.columnas,
           textoVacio: cfg.textoVacio,
+          buscarPrimero: cfg.buscarPrimero,
           exportar: exportarBase('INVENTARIO', 'Lineas telefonicas'),
           etiquetaFila: cfg.etiqueta,
           detalle: false, // la ficha completa (responsable, evidencias, historial) es su propia pantalla
@@ -558,7 +600,7 @@
         const sub = tipo === 'equipo' ? [r.modelo || v('EQUIPO'), r.numero ? 'Línea ' + r.numero : 'Sin línea'].filter(Boolean).join(' · ')
           : [r.compania || v('COMPAÑIA'), nuco ? 'NUCO ' + nuco : 'Suelta'].filter(Boolean).join(' · ');
         const panel = abrirPanelLateral(titulo, sub, opciones);
-        if (tieneNuco(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
+        if (conUltimo(r)) precargarUltimosNucos(r.id); // "Última responsiva / inspección" listos al dar clic
         const campo = (t, valor, html) => '<div class="dt-campo"><div class="dt-campo-titulo">' + esc(t) + '</div><div class="dt-campo-valor">' +
           (html ? (valor || vacio) : guion(valor)) + '</div></div>';
         const seccion = (icono, t, filas) => '<section class="ln-vr-seccion"><h4>' + ico(icono) + ' ' + esc(t) + '</h4>' + filas.join('') + '</section>';
@@ -579,7 +621,7 @@
             (formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || (r.tipoHoja ? chip(r.tipoHoja) : '')) +
           '</div><div class="ln-vr-acciones">' +
             '<button type="button" class="ln-btn-icono" data-vr-ficha>' + icono('maximize-2') + ' Abrir ficha completa</button>' +
-            (tieneNuco(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
+            (conUltimo(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
               botonUltimoNucos('INSPECCION', r.id).replace(' Ver</button>', ' Última inspección</button>') : '') +
           '</div></div>' +
           seccion('user', 'Responsable', [

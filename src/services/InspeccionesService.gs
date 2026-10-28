@@ -98,14 +98,54 @@ const InspeccionesService = (function () {
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
   const fechaISO_ = (valor) => HojaServicio.fechaISO(valor);
 
+  /** "84.50%", 0.845 o 84.5 → 84.5 sin redondear, o null si no es un número */
+  function enCien_(valor) {
+    const texto = limpiar_(valor);
+    if (!texto) return null;
+    const n = Number(texto.replace('%', '').replace(/,/g, ''));
+    if (isNaN(n)) return null;
+    // Sin el símbolo, AppSheet guarda la fracción (0.845); con él, el número ya es 84.5
+    return texto.indexOf('%') === -1 && n <= 1 ? n * 100 : n;
+  }
+
   /** "84.50%" o 0.845 → 84.5 (número, para poder ordenar y promediar en la tabla) */
   function porcentaje_(valor) {
-    const texto = limpiar_(valor);
-    if (!texto) return '';
-    const n = Number(texto.replace('%', '').replace(/,/g, ''));
-    if (isNaN(n)) return '';
-    // Sin el símbolo, AppSheet guarda la fracción (0.845); con él, el número ya es 84.5
-    return texto.indexOf('%') === -1 && n <= 1 ? Math.round(n * 1000) / 10 : Math.round(n * 10) / 10;
+    const n = enCien_(valor);
+    return n === null ? '' : Math.round(n * 10) / 10;
+  }
+
+  /** "84.50%" o 0.845 → "84.50%": como se escribe en la hoja y se ve al exportar (27-oct: salía en decimal) */
+  function porcentajeTexto_(valor) {
+    const n = enCien_(valor);
+    return n === null ? valor : n.toFixed(2) + '%';
+  }
+
+  /** Las 13 columnas de calificación: el total y una por sección */
+  const COLUMNAS_CALIFICACION = () => ['PUNTAJE FINAL INSPECCION'].concat(COLUMNAS_PUNTUACION.map((p) => p[0]));
+
+  /**
+   * Lo más que podía sacar esa unidad (27-oct): la suma de los pesos de las secciones con algo evaluado. Una sección
+   * toda N/A vale 0 y su peso no se gana, así que 79% de 90% no es lo mismo que 79% de 100%. Solo lo escribe la app:
+   * las de AppSheet no lo tienen. La crea registrar() la primera vez (la hoja de prod no la trae).
+   */
+  const COL_MAXIMO = 'PUNTAJE MAXIMO';
+
+  /** Agrega la columna al final si la hoja no la tiene (solo el encabezado; bajo el candado: dos a la vez no la duplican) */
+  function asegurarColumna_(hoja, columna) {
+    const tiene = () => SheetUtils.indiceDeColumnas(
+      hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0], [columna])[columna] !== -1;
+    if (tiene()) return;
+    Candado.con(() => {
+      if (!tiene()) hoja.getRange(1, hoja.getLastColumn() + 1).setValue(columna);
+    });
+  }
+
+  /** Un renglón crudo con su calificación en porcentaje (copia: la caché es de todos y no se toca) */
+  function conPorcentajes_(row) {
+    if (!row) return row;
+    const copia = Object.assign({}, row);
+    COLUMNAS_CALIFICACION().concat(COL_MAXIMO).forEach((c) => { if (c in copia) copia[c] = porcentajeTexto_(copia[c]); });
+    return copia;
   }
 
   /** Lee solo las columnas pedidas (no las 195) → [{columna: valor}] */
@@ -185,7 +225,7 @@ const InspeccionesService = (function () {
 
     // Lo que no es cabecera, ni imagen, ni puntuación, ni llanta: el checklist de piezas
     const conocidas = {};
-    COLUMNAS_LISTA.concat(COLUMNAS_LLANTAS.map((p) => p[0]), COLUMNAS_PUNTUACION.map((p) => p[0]),
+    COLUMNAS_LISTA.concat(COL_MAXIMO, COLUMNAS_LLANTAS.map((p) => p[0]), COLUMNAS_PUNTUACION.map((p) => p[0]),
       COLUMNAS_IMAGEN.map((p) => p[0])).forEach((c) => { conocidas[c] = true; });
 
     const checklist = Object.keys(row)
@@ -322,31 +362,7 @@ const InspeccionesService = (function () {
 
     const estructura = estructuraDeTipo(token, p.TIPO);
     const checklist = p.checklist || {};
-    // El voltaje de la batería cuenta en el puntaje como una pieza más de la sección
-    // "Batería" -- seccionesParaPuntaje/checklistParaPuntaje son copias SOLO para esta
-    // cuenta: estructura.secciones y checklist siguen intactos para la fila y el PDF (ahí
-    // "VOLTAJE BATERIA" no es una columna real).
-    const calificacionVoltaje = calificacionVoltaje_(p.VOLTAJE);
-    const calificacionesLlantas = {};
-    estructura.llantas.forEach((l) => {
-      const cal = calificacionLlanta_(p.llantas && p.llantas[l.campo]);
-      if (cal !== null) calificacionesLlantas[l.campo] = cal;
-    });
-    const hayLlantas = Object.keys(calificacionesLlantas).length > 0;
-    const seccionesParaPuntaje = estructura.secciones.map((s) => {
-      if (s.titulo === 'Batería' && calificacionVoltaje !== null) {
-        return Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) });
-      }
-      if (s.titulo === 'Neumáticos' && hayLlantas) {
-        return Object.assign({}, s, { campos: s.campos.concat(Object.keys(calificacionesLlantas)
-          .map((campo) => ({ campo: campo, opciones: ['BUENO', 'REGULAR', 'MALO'] }))) });
-      }
-      return s;
-    });
-    const checklistParaPuntaje = Object.assign({}, checklist,
-      calificacionVoltaje !== null ? { 'VOLTAJE BATERIA': calificacionVoltaje } : {},
-      calificacionesLlantas);
-    const puntaje = calcularPuntaje_(seccionesParaPuntaje, checklistParaPuntaje);
+    const puntaje = puntajeDe_(estructura, checklist, p.VOLTAJE, p.llantas);
     if (!puntaje.evaluadas) throw new Error('Responde al menos una pieza del checklist antes de guardar');
 
     const id = nuevoId_(vehiculo.data['NUCCO']);
@@ -386,9 +402,11 @@ const InspeccionesService = (function () {
     });
     puntaje.secciones.forEach((s) => {
       const columna = columnaPuntuacion_(s.titulo);
-      if (columna) fila[columna] = s.valor;
+      // Igual que el total ("8.33%", no 0.0833): la hoja lo guarda como porcentaje (27-oct)
+      if (columna) fila[columna] = (s.valor * 100).toFixed(2) + '%';
     });
     fila['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
+    fila[COL_MAXIMO] = puntaje.maximo.toFixed(2) + '%';
 
     // ---- dónde: el expediente del NUCO (12-oct-2026) ----
     // 4.-INSPECCIONES/<año>/<N> TRIMESTRE con su PDF (INSPECCION-0088 2026-10-12.pdf) y, en FIRMAS Y DIAGRAMAS, lo
@@ -443,7 +461,9 @@ const InspeccionesService = (function () {
 
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
-      SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      const hoja = hoja_();
+      asegurarColumna_(hoja, COL_MAXIMO);
+      SheetUtils.insert(ssId(), hoja.getName(), fila);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -526,6 +546,129 @@ const InspeccionesService = (function () {
     return 'REGULAR';
   }
 
+  /**
+   * Las 13 columnas de calificación de la hoja a porcentaje (27-oct): las secciones se guardaban como fracción
+   * (0.0833), el total como "84.50%" y lo de AppSheet en fracción. Deja la fracción como valor y el formato 0.00%,
+   * que es como la hoja guarda un "84.50%". Una celda que no es número no se toca (se cuenta en raras).
+   * @param {boolean} aplicar  false = solo contar
+   */
+  function puntajesAPorcentaje(aplicar) {
+    const hoja = hoja_();
+    const filas = Math.max(0, hoja.getLastRow() - 1);
+    const indices = SheetUtils.indiceDeColumnas(
+      hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0], COLUMNAS_CALIFICACION());
+    const r = { filas: filas, columnas: 0, faltan: [], celdas: 0, cambian: 0, raras: 0 };
+    COLUMNAS_CALIFICACION().forEach((columna) => {
+      if (indices[columna] === -1) { r.faltan.push(columna); return; }
+      r.columnas++;
+      if (!filas) return;
+      const rango = hoja.getRange(2, indices[columna] + 1, filas, 1);
+      const valores = rango.getValues();
+      const formatos = rango.getNumberFormats();
+      let cambia = false;
+      const nuevos = valores.map(([v], i) => {
+        if (limpiar_(v) === '') return [v];
+        r.celdas++;
+        const n = enCien_(v);
+        if (n === null) { r.raras++; return [v]; }
+        const fraccion = Math.round(n * 100) / 10000;
+        if (typeof v !== 'number' || Math.abs(v - fraccion) > 1e-9 || formatos[i][0] !== '0.00%') {
+          r.cambian++;
+          cambia = true;
+        }
+        return [fraccion];
+      });
+      if (aplicar && cambia) {
+        rango.setValues(nuevos);
+        rango.setNumberFormat('0.00%');
+      }
+    });
+    if (aplicar && r.cambian) CacheHojas.tocarHoja(hoja);
+    return r;
+  }
+
+  /**
+   * El puntaje de unas respuestas con la estructura de su tipo: lo usan registrar() y puntajesMaximos() (las ya
+   * guardadas, que traen las mismas respuestas en su renglón).
+   */
+  function puntajeDe_(estructura, checklist, voltaje, llantas) {
+    // El voltaje de la batería cuenta en el puntaje como una pieza más de la sección
+    // "Batería" -- seccionesParaPuntaje/checklistParaPuntaje son copias SOLO para esta
+    // cuenta: estructura.secciones y checklist siguen intactos para la fila y el PDF (ahí
+    // "VOLTAJE BATERIA" no es una columna real).
+    const calificacionVoltaje = calificacionVoltaje_(voltaje);
+    const calificacionesLlantas = {};
+    estructura.llantas.forEach((l) => {
+      const cal = calificacionLlanta_(llantas && llantas[l.campo]);
+      if (cal !== null) calificacionesLlantas[l.campo] = cal;
+    });
+    const hayLlantas = Object.keys(calificacionesLlantas).length > 0;
+    const seccionesParaPuntaje = estructura.secciones.map((s) => {
+      if (s.titulo === 'Batería' && calificacionVoltaje !== null) {
+        return Object.assign({}, s, { campos: s.campos.concat([{ campo: 'VOLTAJE BATERIA', opciones: ['BUENO', 'REGULAR', 'MALO'] }]) });
+      }
+      if (s.titulo === 'Neumáticos' && hayLlantas) {
+        return Object.assign({}, s, { campos: s.campos.concat(Object.keys(calificacionesLlantas)
+          .map((campo) => ({ campo: campo, opciones: ['BUENO', 'REGULAR', 'MALO'] }))) });
+      }
+      return s;
+    });
+    const checklistParaPuntaje = Object.assign({}, checklist,
+      calificacionVoltaje !== null ? { 'VOLTAJE BATERIA': calificacionVoltaje } : {},
+      calificacionesLlantas);
+    return calcularPuntaje_(seccionesParaPuntaje, checklistParaPuntaje);
+  }
+
+  /**
+   * PUNTAJE MAXIMO de las inspecciones ya guardadas (27-oct): sale de sus respuestas con la plantilla de su tipo, igual
+   * que al guardar. Sirve también para las de AppSheet (no tienen puntuaciones, pero sí las respuestas). No toca las que
+   * ya lo tienen ni ninguna otra columna.
+   * @param {boolean} aplicar  false = solo contar
+   */
+  function puntajesMaximos(aplicar) {
+    const hoja = hoja_();
+    if (aplicar) asegurarColumna_(hoja, COL_MAXIMO);
+    const datos = hoja.getDataRange().getValues();
+    const encabezados = datos[0];
+    const norm = SheetUtils.normalizarEncabezado_;
+    const col = (nombre) => encabezados.findIndex((e) => norm(e) === norm(nombre));
+    const iTipo = col('TIPO');
+    const iMaximo = col(COL_MAXIMO);
+    const estructuras = {};
+    const r = { filas: datos.length - 1, calculadas: 0, yaTenian: 0, sinRespuestas: 0, sinTipo: 0, porMaximo: {}, errores: {} };
+    const nuevos = datos.slice(1).map((row) => {
+      const actual = iMaximo === -1 ? '' : row[iMaximo];
+      if (limpiar_(actual) !== '') { r.yaTenian++; return [actual]; }
+      const tipo = limpiar_(row[iTipo]);
+      if (!tipo) { r.sinTipo++; return ['']; }
+      if (!(tipo in estructuras)) {
+        try { estructuras[tipo] = estructura_(tipo); } catch (err) { estructuras[tipo] = null; r.errores[tipo] = err.message; }
+      }
+      const estructura = estructuras[tipo];
+      if (!estructura) return [''];
+      const valor = {};
+      encabezados.forEach((e, i) => { valor[norm(e)] = row[i]; });
+      const deColumna = (campo) => valor[norm(campo)];
+      const checklist = {};
+      estructura.secciones.forEach((s) => s.campos.forEach((c) => { checklist[c.campo] = deColumna(c.campo); }));
+      const llantas = {};
+      estructura.llantas.forEach((l) => { llantas[l.campo] = deColumna(l.campo); });
+      const puntaje = puntajeDe_(estructura, checklist, deColumna('VOLTAJE'), llantas);
+      if (!puntaje.evaluadas) { r.sinRespuestas++; return ['']; }
+      r.calculadas++;
+      r.porMaximo[puntaje.maximo] = (r.porMaximo[puntaje.maximo] || 0) + 1;
+      return [puntaje.maximo / 100];
+    });
+    if (aplicar && r.calculadas) {
+      const columna = col(COL_MAXIMO) + 1;
+      const rango = hoja.getRange(2, columna, nuevos.length, 1);
+      rango.setValues(nuevos);
+      rango.setNumberFormat('0.00%');
+      CacheHojas.tocarHoja(hoja);
+    }
+    return r;
+  }
+
   // ---------- puntaje ----------
   /**
    * Cuánto suma cada respuesta.
@@ -581,9 +724,11 @@ const InspeccionesService = (function () {
     });
 
     const final = detalle.reduce((suma, s) => suma + s.valor, 0) * 100;
+    const maximo = detalle.reduce((suma, s) => suma + (s.evaluadas ? s.peso : 0), 0);
     return {
       secciones: detalle,
       final: Math.round(final * 100) / 100,
+      maximo: maximo,
       evaluadas: detalle.reduce((n, s) => n + s.evaluadas, 0),
     };
   }
@@ -922,6 +1067,11 @@ const InspeccionesService = (function () {
 
   function estructuraDeTipo(token, tipo) {
     Permisos.puedeLeer(token, MODULO);
+    return estructura_(tipo);
+  }
+
+  /** Lo mismo sin sesión, para lo que corre desde el editor (puntajesMaximos) */
+  function estructura_(tipo) {
     const clave = 'inspeccion_tipo_' + SheetUtils.normalizarEncabezado_(tipo);
     const guardado = CacheService.getScriptCache().get(clave);
     if (guardado) {
@@ -1002,11 +1152,61 @@ const InspeccionesService = (function () {
     listarPorVehiculo: (token, id) => HojaServicio.listarPorVehiculo(INSPECCIONES, token, id),
     /** Registro completo -- TODAS las 195 columnas crudas -- por ID (para "Ver completo" desde
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
-    buscarPorId: (token, id) => HojaServicio.buscarPorId(INSPECCIONES, token, id),
-    completo: (token) => HojaServicio.completo(INSPECCIONES, token),
+    buscarPorId: (token, id) => conPorcentajes_(HojaServicio.buscarPorId(INSPECCIONES, token, id)),
+    completo: (token) => HojaServicio.completo(INSPECCIONES, token).map(conPorcentajes_),
+    puntajesAPorcentaje, puntajesMaximos,
     detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas
   };
 })();
+
+/** Desde el editor (27-oct): cuántas calificaciones de INSPECCION VEHICULAR no están en porcentaje (no cambia nada) */
+function inspeccionesPuntajesRevisar() {
+  soloEditor_();
+  const r = InspeccionesService.puntajesAPorcentaje(false);
+  Logger.log('Inspecciones: ' + r.filas + ' · celdas con calificación: ' + r.celdas + ' · se pasarían a porcentaje: ' +
+    r.cambian + ' · no son número (no se tocan): ' + r.raras +
+    (r.faltan.length ? ' · columnas que no están: ' + r.faltan.join(', ') : '') + ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor (27-oct): pasa las 13 columnas de calificación a porcentaje (correr antes inspeccionesPuntajesRevisar).
+ * En PROD no corre sin inspeccionesPuntajesAPorcentaje('SI, EN PROD').
+ */
+function inspeccionesPuntajesAPorcentaje(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesPuntajesAPorcentaje('SI, EN PROD').");
+  }
+  const r = InspeccionesService.puntajesAPorcentaje(true);
+  Logger.log('Pasadas a porcentaje: ' + r.cambian + ' de ' + r.celdas + ' celdas (no son número: ' + r.raras + ').');
+  return r;
+}
+
+/** Desde el editor (27-oct): a cuántas inspecciones ya guardadas se les calcularía el PUNTAJE MAXIMO (no cambia nada) */
+function inspeccionesMaximosRevisar() {
+  soloEditor_();
+  const r = InspeccionesService.puntajesMaximos(false);
+  Logger.log('Inspecciones: ' + r.filas + ' · se calcularían: ' + r.calculadas + ' · ya lo tenían: ' + r.yaTenian +
+    ' · sin respuestas: ' + r.sinRespuestas + ' · sin tipo: ' + r.sinTipo + ' · cuántas por máximo: ' + JSON.stringify(r.porMaximo) +
+    (Object.keys(r.errores).length ? ' · tipos que no se pudieron leer: ' + JSON.stringify(r.errores) : '') +
+    ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor (27-oct): escribe el PUNTAJE MAXIMO de las inspecciones que no lo tienen (correr antes
+ * inspeccionesMaximosRevisar). En PROD no corre sin inspeccionesMaximosCalcular('SI, EN PROD').
+ */
+function inspeccionesMaximosCalcular(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesMaximosCalcular('SI, EN PROD').");
+  }
+  const r = InspeccionesService.puntajesMaximos(true);
+  Logger.log('PUNTAJE MAXIMO calculado: ' + r.calculadas + ' de ' + r.filas + ' inspecciones (ya lo tenían: ' + r.yaTenian + ').');
+  return r;
+}

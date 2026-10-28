@@ -1,0 +1,63 @@
+<script>
+  /**
+   * MedidorContrasena — lo que le falta a una contraseña nueva, mientras se escribe (23-oct): una barra que se llena con
+   * cada requisito cumplido y la lista palomeada.
+   *
+   *   const medidor = MedidorContrasena.crear(contenedor, { nueva: input, repetida: input, minimo: 8, correo });
+   *   medidor.cumple()   // true si cumple todo (y las dos coinciden)
+   *
+   * Los requisitos son los de Credenciales.revisarNueva (servidor, TIPOS): largo, mayúscula, minúscula, número y
+   * símbolo (el espacio no cuenta), y sin el correo. Lo demás (las comunes, el nombre, distinta de la actual) lo dice el
+   * servidor al guardar. Si cambia la regla, se cambia en los dos lados. Prueba: tests/medidor-contrasena.test.cjs.
+   */
+  const MedidorContrasena = (function () {
+    function requisitos(o) {
+      const usuario = String(o.correo || '').trim().toLowerCase().split('@')[0];
+      return [
+        { id: 'largo', texto: 'Al menos ' + o.minimo + ' caracteres', ok: (p) => p.length >= o.minimo },
+        { id: 'mayuscula', texto: 'Una mayúscula', ok: (p) => /[A-ZÁÉÍÓÚÑ]/.test(p) },
+        { id: 'minuscula', texto: 'Una minúscula', ok: (p) => /[a-záéíóúñ]/.test(p) },
+        { id: 'numero', texto: 'Un número', ok: (p) => /\d/.test(p) },
+        { id: 'simbolo', texto: 'Un símbolo (! # $ .)', ok: (p) => /[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s]/.test(p) },
+        { id: 'correo', texto: 'Sin tu correo', ok: (p) => !!p && !(usuario.length >= 4 && p.toLowerCase().indexOf(usuario) !== -1) },
+      ];
+    }
+
+    function crear(contenedor, opciones) {
+      const o = Object.assign({ minimo: 8, correo: '', nueva: null, repetida: null }, opciones);
+      const reqs = requisitos(o).concat(o.repetida ? [{ id: 'igual', texto: 'Las dos coinciden', ok: (p) => !!p && p === o.repetida.value }] : []);
+      contenedor.classList.add('medidor-contrasena');
+      contenedor.innerHTML =
+        '<div class="medidor-barra" role="progressbar" aria-valuemin="0" aria-valuemax="' + reqs.length + '" aria-label="Requisitos cumplidos">' +
+          '<span class="medidor-relleno"></span></div>' +
+        '<p class="medidor-texto" aria-live="polite"></p>' +
+        '<ul class="medidor-lista">' + reqs.map((r) => '<li data-req="' + r.id + '">' + r.texto + '</li>').join('') + '</ul>';
+      const barra = contenedor.querySelector('.medidor-barra');
+      const relleno = contenedor.querySelector('.medidor-relleno');
+      const texto = contenedor.querySelector('.medidor-texto');
+
+      function pintar() {
+        const p = o.nueva.value;
+        let n = 0;
+        reqs.forEach((r) => {
+          const si = r.ok(p);
+          if (si) n++;
+          contenedor.querySelector('[data-req="' + r.id + '"]').classList.toggle('ok', si);
+        });
+        const nivel = !p ? 'vacio' : n === reqs.length ? 'lista' : n >= reqs.length - 2 ? 'casi' : 'falta';
+        relleno.style.width = Math.round((n / reqs.length) * 100) + '%';
+        barra.dataset.nivel = nivel;
+        barra.setAttribute('aria-valuenow', String(n));
+        texto.textContent = { vacio: '', falta: 'Le falta', casi: 'Casi', lista: 'Lista' }[nivel] +
+          (p ? ' · ' + n + ' de ' + reqs.length : '');
+        return n === reqs.length;
+      }
+      o.nueva.addEventListener('input', pintar);
+      if (o.repetida) o.repetida.addEventListener('input', pintar);
+      pintar();
+      return { cumple: pintar };
+    }
+
+    return { crear, requisitos };
+  })();
+</script>

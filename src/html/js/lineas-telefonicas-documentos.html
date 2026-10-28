@@ -6,75 +6,62 @@
    */
   (function () {
     'use strict';
-    const { $, aviso, chip, copiarTexto, crearFirma, enlaceDrive, esFechaIso, esc, fecha, fechaTabla, htmlFirma, ico,
-      icono, llamar, mensajeError, miles, porcentaje, puedeOperar, tablaLineas, tilesKpi, vacio, veDocumentos } = Lineas.comun;
+    const { $, aviso, chip, copiarTexto, crearFirma, enlaceDrive, esc, fecha, htmlFirma, ico, icono, llamar,
+      mensajeError, miles, porcentaje, puedeOperar, tablaLineas, tilesKpi, vacio, veDocumentos } = Lineas.comun;
     Lineas.telefonicas.registrar('documentos', (T) => {
-      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pila, raiz, resumenDocumentos, vigente } = T;
-      const { abrir, campos, contarEnPestana, precargarDocumento, tarjeta } = T.de('ficha');
+      const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, raiz,
+        resumenDocumentos, vigente } = T;
+      const { abrir, contarEnPestana, precargarDocumento, tarjeta } = T.de('ficha');
       const { mostrarErrorCaptura, mostrarEspera, mostrarModalCaptura, ocultarEspera, refrescarDespuesDeCaptura } = T.de('captura');
       const { cargarHistorial } = T.de('historial');
 
-      let detallesFicha = null; // datos de la tarjeta "Detalles" de la ficha abierta
       let tablaDocumentos = null; // DataTable de Documentos (inspecciones y responsivas) de la ficha abierta
 
-      // ---- Detalles: la columna DETALLES LINEAS TELEFONICAS del AppSheet, con botón para copiarla ----
-      // Mismo texto y orden que copiaban del módulo "Detalles Líneas Telefónicas". AppSheet deja en blanco
-      // motivo, ticket y estatus actual para llenarlos al pegar; aquí se escriben antes de copiar (no se guardan)
-      // y el estatus actual se propone con ESTATUS LINEA.
-      function textoDetalles() {
-        const d = detallesFicha || {};
-        const caja = $('[data-ln-copiar]', raiz);
-        const escrito = (campo) => (caja ? caja.querySelector('[data-ln-copiar-campo="' + campo + '"]').value.trim() : '');
-        const valor = (v) => (v === null || v === undefined ? '' : (esFechaIso(v) ? fechaTabla(v) : String(v)));
-        return 'NUCO ' + valor(d.nuco) + '\n-------------------------------------------------------\n' +
-          'Motivo de resguardo: ' + escrito('motivo') + '\n' +
-          'Ticket / Asunto: ' + escrito('ticket') + '\n' +
-          'Código de resguardo: ' + valor(d.responsable) + '\n' +
-          'IMEI: ' + valor(d.imei) + '\n' +
-          'SIM: ' + valor(d.sim) + '\n' +
-          'Número: ' + valor(d.numero) + '\n' +
-          'Modelo: ' + valor(d.modelo) + '\n' +
-          'Compañía: ' + valor(d.compania) + '\n' +
-          'Razón Social: ' + valor(d.razonSocial) + '\n' +
-          'Estatus de adendum: ' + valor(d.finPlan) + '\n' +
-          'Estatus actual de la línea: ' + escrito('estatus');
-      }
-      function pintarTextoDetalles() {
-        const pre = $('[data-ln-copiar-texto]', raiz);
-        if (pre) pre.textContent = textoDetalles();
-      }
-      function tarjetaDetallesCopiar(d) {
-        detallesFicha = d || null;
-        if (!d) return '';
-        const valor = (v) => (v === null || v === undefined ? '' : (esFechaIso(v) ? fechaTabla(v) : String(v)));
-        const entrada = (clave, v, ayuda) => '<input type="text" class="ln-detalle-entrada" data-ln-copiar-campo="' + clave + '" value="' + esc(v || '') + '" autocomplete="off" placeholder="' + esc(ayuda) + '">';
-        // Mismo diseño que General (etiqueta · valor); al copiar sale el texto del AppSheet (textoDetalles)
-        return '<div class="card ln-card ln-copiar" data-ln-copiar data-respetar-texto>' +
-          '<div class="ln-copiar-cabecera"><h3>' + icono('clipboard-list') + ' Detalles</h3>' +
-          '<button type="button" class="ln-btn-icono" data-ln-copiar-detalles>' + icono('copy') + ' Copiar detalles</button></div>' +
-          campos([
-            ['NUCO', valor(d.nuco)],
-            ['Motivo de resguardo', entrada('motivo', '', 'Escribe el motivo'), true],
-            ['Ticket / Asunto', entrada('ticket', '', 'Escribe el ticket o asunto'), true],
-            ['Código de resguardo', valor(d.responsable)],
-            ['IMEI', valor(d.imei)],
-            ['SIM', valor(d.sim)],
-            ['Número', valor(d.numero)],
-            ['Modelo', valor(d.modelo)],
-            ['Compañía', valor(d.compania)],
-            ['Razón Social', valor(d.razonSocial)],
-            ['Estatus de adendum', valor(d.finPlan)],
-            ['Estatus actual de la línea', entrada('estatus', d.estatusLinea, 'Escribe el estatus'), true],
-          ]) + '</div>';
-      }
-      function copiarDetalles(boton) {
-        copiarTexto(textoDetalles()).then((ok) => {
+      function copiarConAviso(boton, texto, mensaje) {
+        copiarTexto(texto).then((ok) => {
           if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
-          aviso('Detalles copiados: pégalos en el ticket o correo.', 4000);
+          aviso(esc(mensaje), 4000);
           const original = boton.innerHTML;
-          boton.innerHTML = icono('check') + ' Copiado';
+          boton.innerHTML = icono('check');
           setTimeout(() => { if (document.body.contains(boton)) boton.innerHTML = original; }, 1800);
         });
+      }
+
+      // Copiar cada tarjeta de la pestaña General de las fichas (usuario, 22-oct): el botón va en su título y copia
+      // «Etiqueta: valor», un renglón por dato con valor, como se ve en pantalla
+      function ponerCopiarTarjetas(detalle) {
+        detalle.querySelectorAll('[data-tab-panel="general"] .ln-grid-2 > .ln-card > h3').forEach((h3) => {
+          if (!h3.parentNode.querySelector('.ln-campos')) return;
+          h3.insertAdjacentHTML('beforeend', '<button type="button" class="secondary ln-btn-chico ln-copiar-tarjeta" data-ln-copiar-tarjeta title="Copiar" aria-label="Copiar">' + icono('copy') + '</button>');
+        });
+      }
+      function textoTarjeta(card) {
+        // El patrón se ve como dibujo: se copian sus puntos (data-ln-texto)
+        const texto = (el) => {
+          const propio = el.querySelector('[data-ln-texto]');
+          return (propio ? propio.dataset.lnTexto : el.innerText).replace(/\s*\n\s*/g, ', ').replace(/\s+/g, ' ').trim();
+        };
+        const titulo = Array.from(card.querySelector('h3').childNodes).map((n) => (n.nodeType === 3 ? n.textContent
+          : (n.classList && n.classList.contains('ln-card-titulo-dato') ? ' · ' + n.textContent : ''))).join('').trim();
+        const renglones = [titulo];
+        Array.from(card.children).forEach((el) => {
+          if (el.matches('.ln-campos')) {
+            el.querySelectorAll(':scope > dt').forEach((dt) => {
+              const v = dt.nextElementSibling ? texto(dt.nextElementSibling) : '';
+              if (v && v !== '—') renglones.push(texto(dt) + ': ' + v);
+            });
+          } else if (el.matches('.ln-subtitulo')) {
+            renglones.push('', texto(el));
+          } else if (el.matches('.ln-vida')) {
+            renglones.push(Array.from(el.querySelectorAll('.ln-vida-texto > span')).map(texto).join(' · '));
+          } else if (el.matches('.ln-meses')) {
+            el.querySelectorAll('.ln-meses-fila:not(.ln-meses-encabezado)').forEach((fila) => {
+              const c = Array.from(fila.children).map(texto).filter(Boolean);
+              renglones.push(c[0] + ': ' + c.slice(1).join(' · '));
+            });
+          }
+        });
+        return renglones.join('\n');
       }
 
       function cargarEvidencias(id) {
@@ -102,14 +89,15 @@
       }
 
       /**
-       * Regenerar PDF (usuario, 5-oct): la responsiva se vuelve a hacer con la plantilla y lo que ya está guardado, sin
-       * llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
+       * Regenerar PDF (usuario, 5-oct; la inspección desde el 22-oct): se vuelve a hacer con la plantilla y lo que ya está
+       * guardado, sin llenar el formulario; queda como versión nueva del mismo PDF (LineasCaptura.generarPdf con forzar).
        */
       function regenerarPdf(d, registroId) {
         T.captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
         mostrarModalCaptura();
-        $('#ln-captura-icono', raiz).innerHTML = icono('signature');
-        $('#ln-captura-tipo', raiz).textContent = 'Responsiva de entrega';
+        const esInspeccion = d.tipoPdf === 'INSPECCION';
+        $('#ln-captura-icono', raiz).innerHTML = icono(esInspeccion ? 'clipboard-check' : 'signature');
+        $('#ln-captura-tipo', raiz).textContent = esInspeccion ? 'Inspección de telefonía' : 'Responsiva de entrega';
         $('#ln-captura-titulo', raiz).textContent = 'Regenerar PDF';
         $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
@@ -119,24 +107,26 @@
       /**
        * Las firmas de la captura ya no están (el servidor las guarda 6 h; no se guardan como archivos, acuerdo del
        * 18-sep): se vuelven a firmar aquí y se genera el PDF. Control Interno es obligatoria; el patrón lo dibuja el servidor.
+       * `soloResponsable` (usuario, 22-oct): la de Control Interno sí está y solo falta la del responsable.
        */
-      function pedirFirmasPdf(sesion, tipo, nombres, continuar) {
+      function pedirFirmasPdf(sesion, tipo, nombres, continuar, soloResponsable) {
         const esInspeccion = tipo === 'INSPECCION';
         const fondo = esInspeccion ? '#ddebf7' : '#ffffff';
         ocultarEspera();
         $('#ln-captura-cuerpo', raiz).innerHTML =
-          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Las firmas de la captura ya no están disponibles.</div>' +
-          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + htmlFirma('ci', 'pdf-firma-ci') + '</div>' +
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + (soloResponsable ? ' La firma del responsable ya no está disponible.' : ' Las firmas de la captura ya no están disponibles.') + '</div>' +
+          '<div class="ln-firmas">' + htmlFirma('responsable', 'pdf-firma-responsable') + (soloResponsable ? '' : htmlFirma('ci', 'pdf-firma-ci')) + '</div>' +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
           '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
           '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Generar PDF</button></div>';
         const responsable = crearFirma(document.getElementById('pdf-firma-responsable'), nombres.responsable);
-        const ci = crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
+        const ci = soloResponsable ? null : crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
         $('#cap-guardar', raiz).addEventListener('click', () => {
-          if (ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
+          if (ci && ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
           $('#cap-error', raiz).hidden = true;
           mostrarEspera('Generando tu PDF');
-          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci.base64(fondo)]).then(([r, c]) => {
+          // Sin la de Control Interno (soloResponsable) el servidor usa la que ya tiene
+          Promise.all([responsable.estaVacia() ? null : responsable.base64(fondo), ci ? ci.base64(fondo) : null]).then(([r, c]) => {
             sesion.pdfFirmas = esInspeccion ? { inspector: c, responsable: r, patron: null } : { ci: c, responsable: r, patron: null };
             continuar();
           });
@@ -256,12 +246,13 @@
             doc('eye', 'Ver responsiva', 'ver', true, (d) => d.documento === 'Responsiva', (d) => abrir('responsiva', d.id)),
             doc('file-text', 'Ver PDF', 'ver', true, (d) => !!d.pdfId,
               (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
-            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente, (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
+            doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente && !pdfsEnCurso[d.id], (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
             // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
             doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),
               (d) => (d.registroId ? subirPdfFirmado(d.registroId, d) : subirPdfFirmado(id, d, vista))),
-            doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.tipoPdf === 'RESPONSIVA' && d.origen === 'SISTEMA' && !!d.pdfId,
+            // Inspecciones también (usuario, 22-oct: el PDF del NUCO 0820 salió sin el patrón)
+            doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.origen === 'SISTEMA' && !!d.pdfId,
               (d) => regenerarPdf(d)),
             doc('folder-open', 'Ver carpeta en Drive', 'drive', false, (d) => !!d.carpetaId,
               (d) => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(d.carpetaId), '_blank', 'noopener')),
@@ -295,10 +286,9 @@
       Object.defineProperty(T, 'tablaDocumentos', { get: () => tablaDocumentos, set: (v) => { tablaDocumentos = v; } });
 
       return {
-        cargarEvidencias: cargarEvidencias, copiarDetalles: copiarDetalles, generarPdfPendiente: generarPdfPendiente,
-        pedirFirmasPdf: pedirFirmasPdf, pintarTextoDetalles: pintarTextoDetalles, regenerarPdf: regenerarPdf,
-        soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado,
-        tarjetaDetallesCopiar: tarjetaDetallesCopiar,
+        cargarEvidencias: cargarEvidencias, copiarConAviso: copiarConAviso, generarPdfPendiente: generarPdfPendiente,
+        pedirFirmasPdf: pedirFirmasPdf, ponerCopiarTarjetas: ponerCopiarTarjetas, regenerarPdf: regenerarPdf,
+        soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado, textoTarjeta: textoTarjeta,
       };
     });
   })();

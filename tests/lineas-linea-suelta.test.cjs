@@ -118,9 +118,10 @@ function captura(registro) {
     LineasFirmas: { tiene: () => false },
     LineasChecklist: { CONDICIONES: [] },
     LineasAcciones: { exigirEstatusParaResponsiva: () => '' },
+    LineasDG: { esFila: () => false, esRegistro: () => false, exigirAdmin: () => {} },
     LineasUtil: {
       col: (f, c) => (c in f ? f[c] : null), digitos: (v) => String(v || '').replace(/\D/g, ''),
-      nucoVisible: (v) => (v ? String(v) : null),
+      nucoVisible: (v) => (v ? String(v) : null), sinCargador: (v) => v,
     },
   });
   vm.runInContext(read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
@@ -198,8 +199,8 @@ test('la ficha de la línea ve las responsivas que firmó dentro de un equipo (I
   assert.match(tel, /if \(!enEquipo\) nucos = evidenciasNucos_\(id, sesion\);/);
   assert.match(tel, /enNuco: d\.enEquipo \? \(d\.nuco \|\| '—'\) : null, registroId: d\.enEquipo \? d\.registroId \|\| null : null,/);
   const html = LINEAS;
-  // Toda línea tiene Documentos, y la columna Equipo dice en qué NUCO la firmó
-  assert.match(html, /tarjetaDetallesCopiar\(r\.detalles\), true\);\s*\/\/[^\n]*\n\s*cargarEvidencias\(id\);/);
+  // Toda línea tiene Documentos (salvo DG a quien no es ADMIN, 8.20), y la columna Equipo dice en qué NUCO la firmó
+  assert.match(html, /'<\/div>', !l\._dgOculto\);\s*ponerCopiarTarjetas\(detalle\);\s*\/\/[^\n]*\n\s*if \(l\._dgOculto\) return;\n\s*cargarEvidencias\(id\);/);
   assert.match(html, /const vista = arriba && arriba\.tipo === 'linea' && arriba\.id === id \? 'linea' : '';/);
   assert.match(html, /vista === 'linea' \? \{ campo: 'enNuco', titulo: 'Equipo'/);
 });

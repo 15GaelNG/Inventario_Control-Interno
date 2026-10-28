@@ -316,9 +316,13 @@
         iconoHtml: Avatar.html(p.correo, p.nombre, { tam: 0, clase: 'usr-avatar' }), titulo: p.nombre || p.correo,
         chips: badgeRol(p.rol) + badgeActivo(p.activo) +
           (p.area ? '<button type="button" class="badge-estado pendiente usr-chip-enlace" data-usr-area="' + escaparHtml(p.area) + '" title="Ver el área">' + ico('users') + ' ' + escaparHtml(p.area) + '</button>' : ''),
-        botones: total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>',
+        // Restablecer: una contraseña temporal (Seguridad, js/app-seguridad.html; 23-oct)
+        botones: (total ? '' : '<button type="button" data-usr-editar>' + ico('pencil') + ' Editar permisos</button>') +
+          '<button type="button" class="secondary" data-usr-contrasena>' + ico('key-round') + ' Restablecer contraseña</button>' +
+          '<button type="button" class="secondary" data-usr-olvidar>' + ico('monitor-x') + ' Olvidar sus dispositivos</button>',
         resumen: resumen,
       });
+      html += Seguridad.avisoBloqueo(p);   // bloqueada por seguridad (js/app-seguridad.html)
 
       // En una línea: cuánto le viene de su área (y sus perfiles) y cuánto es solo suyo
       const porSuArea = modulos().filter((m) => regla(p.correo, m.id) === undefined && deArea(p.area, m.id) !== 'NINGUNO').length;
@@ -868,6 +872,13 @@
     }
 
     /** Manda cambios a apiPermisosGuardar y vuelve a pintar todo con lo que regresa (el panel completo) */
+    /** Después de bloquear o desbloquear a alguien (Seguridad): los datos de nuevo, la lista y la ficha */
+    async function recargarPanel() {
+      cargar(await callServer('apiPermisosPanel', state.token));
+      refrescarListado();
+      pintarFicha();
+    }
+
     async function guardarCambios(cambios, alTerminar) {
       toastCargando('Guardando permisos…');
       cargar(await callServer('apiPermisosGuardar', state.token, cambios));
@@ -1065,7 +1076,7 @@
     // ---------------------------------------------------------------- listado: tablas y KPIs
     const filaPersona = (p) => ({
       ID: p.correo, NOMBRE: p.nombre || p.correo, CORREO: p.correo, AREA: p.area || 'Sin área', ROL: p.rol,
-      ESTATUS: p.activo ? 'Activo' : 'Inactivo', MODULOS: conAcceso(p), EXCEPCIONES: excepcionesDe(p).length,
+      ESTATUS: p.activo ? 'Activo' : 'Inactivo', BLOQUEO: p.bloqueo ? 'Bloqueada' : '', MODULOS: conAcceso(p), EXCEPCIONES: excepcionesDe(p).length,
       COORDINACION: p.coordinacion, OFICINA: p.oficina, SEDE: p.sede, NO_EMPLEADO: p.noEmpleado,
     });
     const filaArea = (a) => {
@@ -1097,7 +1108,8 @@
           render: (v, f) => '<span class="usr-nombre">' + Avatar.html(f.CORREO, v, { tam: 26 }) + escaparHtml(v) + '</span>' },
         { campo: 'AREA', titulo: 'Área', tipo: 'lista' },
         { campo: 'ROL', titulo: 'Rol', tipo: 'lista', render: (v) => badgeRol(v) || escaparHtml(v) },
-        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v) => badgeActivo(v === 'Activo') },
+        { campo: 'ESTATUS', titulo: 'Estatus', tipo: 'lista', render: (v, f) => badgeActivo(v === 'Activo') +
+          (f.BLOQUEO ? ' <span class="seg-insignia seg-mal" title="Bloqueada por seguridad">Bloqueada</span>' : '') },
         { campo: 'MODULOS', titulo: 'Módulos', tipo: 'numero', render: (v) => conteo(v, 'Ninguno') },
         { campo: 'EXCEPCIONES', titulo: 'Excepciones', tipo: 'numero',
           render: (v) => (v ? '<span class="usr-origen excepcion">' + ico('sparkles') + ' ' + v + '</span>' : '—') },
@@ -1270,6 +1282,10 @@
       if (el.hasAttribute('data-usr-editar')) { abrirEditar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-asignar')) { abrirAsignar(fichaActual.tipo, fichaActual.id); return; }
       if (el.hasAttribute('data-usr-eliminar-perfil')) { eliminarPerfil(fichaActual.id); return; }
+      // data-usr-contrasena, no data-usr-restablecer: ese ya es el ↺ de la ventana de editar permisos
+      if (el.hasAttribute('data-usr-contrasena')) { const p = persona(fichaActual.id); Seguridad.restablecer(p.correo, p.nombre, recargarPanel); return; }
+      if (el.hasAttribute('data-usr-olvidar')) { const p = persona(fichaActual.id); Seguridad.olvidarDispositivos(p.correo, p.nombre); return; }
+      if (el.hasAttribute('data-usr-desbloquear')) { const p = persona(fichaActual.id); Seguridad.desbloquear(p.correo, p.nombre, recargarPanel); return; }
       if (el.dataset.usrPerfil) { abrirFicha('perfil', el.dataset.usrPerfil, true); return; }
       if (el.dataset.usrArea) { abrirFicha('area', el.dataset.usrArea, true); return; }
       if (el.dataset.usrPersona) abrirFicha('persona', el.dataset.usrPersona, true);

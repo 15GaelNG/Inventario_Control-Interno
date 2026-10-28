@@ -247,7 +247,7 @@ const Permisos = (function () {
    * contraseña, hash ni sal (esto se guarda en CacheService). Guardadas mientras la hoja no
    * cambie; lo que se edite a mano en la hoja se ve a más tardar en 10 min.
    */
-  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE', 'DPTOS PERMITIDOS'];
+  const COLUMNAS_USUARIO = ['CORREO', 'NOMBRE', 'AREA', 'ROL', 'ACTIVO', 'NO_EMPLEADO', 'OFICINA', 'SEDE', 'DPTOS PERMITIDOS', 'BLOQUEO SEGURIDAD'];
   function usuarios_() {
     return CacheHojas.recordar('permisos_usuarios_v1', [[ssId(), HOJA_USUARIOS]], () =>
       SheetUtils.getAll(ssId(), HOJA_USUARIOS).map((u) => {
@@ -478,6 +478,8 @@ const Permisos = (function () {
         rol: clave_(u['ROL']) || 'USER', activo: clave_(u['ACTIVO']) === 'TRUE',
         noEmpleado: limpiar_(u['NO_EMPLEADO']), oficina: limpiar_(u['OFICINA']), sede: limpiar_(u['SEDE']),
         coordinacion: limpiar_(u['COORDINACION']), dptosPermitidos: limpiar_(u['DPTOS PERMITIDOS']),
+        // Bloqueo por seguridad (Credenciales.gs): 'fecha | quién | motivo', o ''
+        bloqueo: limpiar_(u['BLOQUEO SEGURIDAD']),
       })),
       // Las reglas de áreas y de personas; las de los perfiles van en perfiles
       reglas: reglas.filas

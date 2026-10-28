@@ -85,8 +85,8 @@ function migracionTodoLab() {
 }
 
 /** Lo llaman los activadores. Correrlo a mano también es seguro: sigue donde iba. */
-function migracionTodoContinuar() {
-  soloEditor_();
+function migracionTodoContinuar(e) {
+  soloEditor_(e);
   todoBorrarActivadores_();
   return todoAvanzar_();
 }

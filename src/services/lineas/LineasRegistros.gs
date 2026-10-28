@@ -14,7 +14,8 @@
 const LineasRegistros = (function () {
   const ZONA = 'America/Mexico_City';
   const NO_APLICA = 'NO APLICA';
-  // "TARJETA SD" en lugar de "SD" (usuario, 4-oct); SD y CARGADOR de antes siguen siendo válidos (no se cambian)
+  // "TARJETA SD" en lugar de "SD" (usuario, 4-oct); SD de antes sigue siendo válido. CARGADOR ya no se ofrece: si llega,
+  // se guarda como CABLE y CUBO (usuario, 22-oct; LineasUtil.sinCargador)
   const ACCESORIOS = ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'];
   const ACCESORIOS_VALIDOS = ['CAJA', 'CARGADOR', 'FUNDA', 'MICA', 'CABLE', 'CUBO', 'TARJETA SD', 'SD', 'NINGUNO'];
   /** Ya no se asignan (usuario, 4-oct): los registros que los tienen se quedan así. */
@@ -37,6 +38,8 @@ const LineasRegistros = (function () {
   const ESTATUS_LINEA_PANEL = ['EN PROCESO DE CANCELACION', 'CANCELADA'];
   /** El equipo que sale del inventario (usuario, 16-oct; pendiente 2.50): su línea en USO no se va con él. */
   const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+  /** Los que se eligen en Corregir equipo (usuario, 21-oct; pendiente 2.55); los demás del panel, con «Mandar a resguardo». */
+  const ESTATUS_EQUIPO_CORREGIR = ['USO', 'RESGUARDO'].concat(ESTATUS_EQUIPO_FINAL);
   /** Cómo va a cancelación la línea con el adendum vencido: lo elige quien captura (usuario, 16-oct; pendiente 2.50). */
   const CANCELACION_PANEL = 'PANEL';
   const CANCELACION_DIRECTA = 'DIRECTO';
@@ -181,7 +184,8 @@ const LineasRegistros = (function () {
     // Una línea sola no tiene NUCO (si trae uno viejo, para sus documentos, se muestra)
     const identificacion = [
       fijo('FOLIO', 'Folio', v('FOLIO'), { formula: 'FOLIO' }),
-      conEquipo && nuevo ? ed('NUCO', 'NUCO', 'numero', { valor: '', requerido: 'SIEMPRE', valida: 'NUCO' })
+      // El NUCO se propone (pendiente 2.59) y se puede cambiar: «auto» hasta que lo escriban
+      conEquipo && nuevo ? ed('NUCO', 'NUCO', 'numero', { valor: (ctx && ctx.nucoSiguiente) || '', sugerido: !!(ctx && ctx.nucoSiguiente), requerido: 'SIEMPRE', valida: 'NUCO' })
         : (conEquipo || LineasUtil.nucoVisible(v('NUCO')) ? fijo('NUCO', 'NUCO', LineasUtil.nucoVisible(v('NUCO')) || '') : null),
       fijo('TIPO', 'Tipo', tipoFijo ? tipoActual : (nuevo ? '' : tipoActual), tipoFijo ? {} : { formula: 'TIPO_' + parte }),
       lineaEnEquipo ? fijo('_RESPONSABLE_EQUIPO', 'Responsable (del equipo)', v('RESPONSABLE') || '—') : null,
@@ -194,9 +198,12 @@ const LineasRegistros = (function () {
       ed('COLOR', 'Color', 'listaAbierta', { opciones: catalogos.colores || [] }),
       // Los estatus se cambian aquí (sin «Cambiar estatus», usuario 4-oct). RESGUARDO, PARA VENTA y PARA DESECHO, con un
       // aviso confirmado: no entran al panel de Pau, solo al historial (usuario, 8-oct; ver editar)
-      // Corregir equipo no entrega: a USO se pasa con la Responsiva (usuario, 16-oct; pendiente 2.50)
-      ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'),
-        opciones: nuevo || texto_(v('ESTATUS EQUIPO')).toUpperCase() === 'USO' ? LineasRepo.CATALOGO.estatusEquipo : LineasRepo.CATALOGO.estatusEquipo.filter((x) => x !== 'USO'),
+      // Corregir equipo (usuario, 21-oct; pendiente 2.55): USO (sin responsable vigente lo hace la Responsiva, ver editar),
+      // RESGUARDO y los finales, más el que ya tiene; PARA VENTA y PARA DESECHO, con «Mandar a resguardo». El alta, todos.
+      // En el panel de Pau no se cambia (pendiente 3.15): lo sacan el panel, Quitar del panel o Corregir resguardo
+      ctx && ctx.enPanel ? fijo('ESTATUS EQUIPO', 'Estatus del equipo', v('ESTATUS EQUIPO')) : ed('ESTATUS EQUIPO', 'Estatus del equipo', 'lista', { valor: enBlanco('ESTATUS EQUIPO'),
+        opciones: nuevo ? LineasRepo.CATALOGO.estatusEquipo : LineasRepo.CATALOGO.estatusEquipo.filter((x) => ESTATUS_EQUIPO_CORREGIR.indexOf(x) >= 0 ||
+          x === texto_(v('ESTATUS EQUIPO')).toUpperCase()),
         requerido: 'SIEMPRE', valida: 'LISTA', validaSiCambia: true }),
     ]); // Sin «Fecha de alta»: el alta está en el historial (usuario, 16-oct; pendiente 2.51)
     const responsable = [
@@ -265,8 +272,9 @@ const LineasRegistros = (function () {
       // elige en el alta: se hace en Editar o con «Mandar a cancelación». El servidor hace la misma cuenta (estatusAltaLinea_)
       campo_('ESTATUS LINEA', 'Estatus de la línea', 'calculado', { valor: '', soloLectura: true, formula: 'ESTATUS_LINEA_ALTA' }),
     ] : [
-      // La línea de un equipo sigue al equipo (USO o DISPONIBLE); aquí solo se manda a cancelación o se cancela
-      ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'),
+      // La línea de un equipo sigue al equipo (USO o DISPONIBLE); aquí solo se manda a cancelación o se cancela. Con el
+      // equipo en el panel de Pau, no (auditoría del 23-oct; ver equipoEnPanel_)
+      lineaEnEquipo && ctx && ctx.enPanel ? fijo('ESTATUS LINEA', 'Estatus de la línea', v('ESTATUS LINEA')) : ed('ESTATUS LINEA', 'Estatus de la línea', 'lista', { valor: enBlanco('ESTATUS LINEA'),
         opciones: lineaEnEquipo ? [enBlanco('ESTATUS LINEA')].concat(ESTATUS_LINEA_PANEL).filter((x, i, a) => x && a.indexOf(x) === i)
           : LineasRepo.CATALOGO.estatusLinea,
         requerido: lineaReq, valida: 'LISTA', validaSiCambia: true }),
@@ -333,6 +341,21 @@ const LineasRegistros = (function () {
    * Equipos sin línea (o con su línea CANCELADA) en USO o RESGUARDO: los que se pueden elegir en «¿Se vincula a un
    * equipo?». Regresa [{ id, nuco, fila }].
    */
+  /**
+   * El NUCO que se propone en Agregar equipo (usuario, 21-oct; pendiente 2.59): el más alto de la serie normal (hasta 4
+   * dígitos) + 1, sin rellenar huecos. Los bloques de 5 dígitos (10001-10100 y 11001-11011, Dirección General) no
+   * cuentan, ni los 9000-9999: son los equipos de prueba del DEV (9043, 9251, 9713) y proponían 9714 en vez del
+   * siguiente de la serie (usuario, 22-oct; en producción el más alto es 1712). Al guardar se revisa que no esté
+   * repetido, como siempre.
+   */
+  function nucoSiguiente_(filas) {
+    const alto = filas.reduce((m, f) => {
+      const n = texto_(LineasUtil.col(f, 'NUCO'));
+      return /^\d{1,4}$/.test(n) && Number(n) < 9000 ? Math.max(m, Number(n)) : m;
+    }, 0);
+    return alto < 8999 ? LineasUtil.nuco4(alto + 1) : '';
+  }
+
   function equiposSinLinea_(filas) {
     return (filas || LineasDatos.leerTabla(LineasRepo.TAB.LINEAS)).filter((f) => {
       if (!LineasRepo.TIPOS_CON_EQUIPO[texto_(LineasUtil.col(f, 'TIPO')).toUpperCase()]) return false;
@@ -413,29 +436,43 @@ const LineasRegistros = (function () {
    * Contexto de una edición: `parte` 'LINEA' edita solo la línea del registro (Editar línea, 8-oct); si no, lo que es el
    * registro (equipo o línea sola). lineaEnEquipo: la línea está en un NUCO.
    */
-  function contextoEdicion_(base, parte) {
+  function contextoEdicion_(base, parte, enPanel) {
     const conLinea = !!(LineasUtil.txt(base['NUMERO TELEFONO']) || LineasUtil.txt(base['NUMERO SIM']));
     const deEquipo = !!LineasRepo.TIPOS_CON_EQUIPO[texto_(base['TIPO']).toUpperCase()];
     const soloLinea = String(parte || '').toUpperCase() === 'LINEA' && conLinea;
-    return { nuevo: false, parte: soloLinea ? 'LINEA' : null, lineaEnEquipo: soloLinea && deEquipo, base: base };
+    return { nuevo: false, parte: soloLinea ? 'LINEA' : null, lineaEnEquipo: soloLinea && deEquipo, base: base, enPanel: !!enPanel };
+  }
+
+  /**
+   * Corregir equipo o Corregir línea de un equipo con su renglón abierto en el panel de Pau (pendiente 3.15): su estatus lo
+   * cambia el panel. Corregir línea también (auditoría del 23-oct: la línea del equipo en el panel se mandaba a cancelación
+   * por fuera del panel), como Vincular, Cambiar y Desvincular (cambio 39).
+   */
+  function equipoEnPanel_(fila, base) {
+    if (!LineasRepo.TIPOS_CON_EQUIPO[texto_(base['TIPO']).toUpperCase()]) return false;
+    return LineasResguardos.enPanel(fila);
   }
 
   /** Formulario para el cliente: alta (id vacío) o edición. */
   function formulario(id, usuario, puedeVerSecretos, parte) {
     const fila = id ? LineasRepo.leerRegistroObligatorio(id, 'el registro') : null;
     const base = fila ? baseDeFila_(fila) : baseNueva_();
-    const ctx = fila ? contextoEdicion_(base, parte) : { nuevo: true, parte: parte };
+    const ctx = fila ? contextoEdicion_(base, parte, equipoEnPanel_(fila, base)) : { nuevo: true, parte: parte };
     // Agregar línea: los NUCO a los que se le puede vincular (se leen solo aquí; al guardar se revisan otra vez)
     if (!fila && parteDe_(ctx, '') === 'LINEA') ctx.equiposSinLinea = equiposSinLinea_().map((x) => x.nuco);
     // Agregar equipo: las líneas sueltas DISPONIBLE que se le pueden vincular (al guardar se revisan otra vez)
-    if (!fila && parteDe_(ctx, '') === 'EQUIPO') ctx.lineasSueltas = lineasSueltas_().map((x) => x.numero);
-    // idDG: el ID con el que ESTATUS GENERAL reconoce al personal de DG (DG001…); tras migrar quedó en ID APPSHEET
-    const idDG = fila ? LineasDatos.idsDeFila(fila).filter((k) => /^DG/i.test(k))[0] || null : null;
+    if (!fila && parteDe_(ctx, '') === 'EQUIPO') {
+      const filas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
+      ctx.lineasSueltas = lineasSueltas_(filas).map((x) => x.numero);
+      ctx.nucoSiguiente = nucoSiguiente_(filas);
+    }
     const tipo = texto_(base['TIPO']).toUpperCase();
     // La línea en USO del equipo con el adendum vencido: si el equipo sale del inventario, se pregunta cómo se cancela
     const lineaVencida = !!fila && !ctx.parte && texto_(base['ESTATUS LINEA']).toUpperCase() === 'USO' && LineasResguardos.lineaVencida(fila);
-    return { nuevo: ctx.nuevo, idDG: idDG, parte: parteDe_(ctx, tipo), tipo: tipo, lineaVencida: lineaVencida, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0 || !!ctx.lineaEnEquipo ||
+    return { nuevo: ctx.nuevo, parte: parteDe_(ctx, tipo), tipo: tipo, lineaVencida: lineaVencida, historico: TIPOS_HISTORICOS.indexOf(tipo) >= 0 || !!ctx.lineaEnEquipo ||
       (!ctx.nuevo && !ctx.parte && !!LineasRepo.TIPOS_CON_EQUIPO[tipo] && !!(LineasUtil.txt(base['NUMERO TELEFONO']) || LineasUtil.txt(base['NUMERO SIM']))), estatusLinea: texto_(base['ESTATUS LINEA']).toUpperCase(),
+      // A USO sin responsable vigente, la pantalla abre la Responsiva al guardar (pendiente 2.55)
+      conResponsable: !!fila && responsableVigente_(base),
       elementos: ocultarSecretos_(elementos_(base, LineasRepo.catalogos(), usuario, ctx), puedeVerSecretos) };
   }
 
@@ -507,16 +544,6 @@ const LineasRegistros = (function () {
 
   // ---------------- Guardar ----------------
 
-  /**
-   * COLOR es una columna real del sistema nuevo (en AppSheet es virtual): se crea si falta. Con las hojas nuevas
-   * (reestructura) LINEAS TELEFONICAS ya no se toca.
-   */
-  function asegurarEsquema_() {
-    if (LineasLectura.activo()) return;
-    const tabla = LineasDatos.tablaFresca(LineasRepo.TAB.LINEAS);
-    if (LineasDatos.colIndice(tabla, 'COLOR') < 0) LineasDatos.asegurarPestana(LineasRepo.TAB.LINEAS, ['COLOR']);
-  }
-
   /** Columnas que se escriben en la hoja (las del formulario, sin las calculadas). */
   function columnasEscribibles_(elementos) {
     return elementos.filter((e) => e.tipo === 'campo' && e.control !== 'calculado' && e.control !== 'adicionales' && !e.soloLectura &&
@@ -572,15 +599,20 @@ const LineasRegistros = (function () {
   const PERSONA_SOLO_RESPONSIVA = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'JEFE DIRECTO',
     'DIRECTOR', 'CUENTA GOOGLE'].concat(ORDEN_ADICIONALES.reduce((a, n) => a.concat(['NO EMPLEADO ' + n + ' RESPONSABLE', 'NOMBRE ' + n + ' RESPONSABLE']), []));
 
-  /** Corregir equipo: truena si llega otra persona o un estatus USO nuevo (una pestaña abierta antes del 16-oct los manda). */
+  /** Responsable vigente: la asignación es de una persona y tiene RESPONSABLE (usuario, 21-oct; pendiente 2.55). */
+  const responsableVigente_ = (base) => texto_(base['TIPO ASIGNACION']).toUpperCase() === 'PERSONA' && !enBlanco_(base['RESPONSABLE']);
+
+  /**
+   * Corregir equipo: truena si llega otra persona (una pestaña abierta antes del 16-oct la manda). Regresa true si pide
+   * USO para un equipo sin responsable vigente (usuario, 21-oct; pendiente 2.55): el estatus no cambia aquí, lo pasa a
+   * USO la Responsiva obligatoria que la pantalla abre al guardar. Con responsable vigente, a USO se guarda directo.
+   */
   function exigirSinPersona_(base, enviados) {
     const cambia = PERSONA_SOLO_RESPONSIVA.filter((c) => Object.prototype.hasOwnProperty.call(enviados, c) &&
       texto_(enviados[c]).toUpperCase() !== texto_(base[c]).toUpperCase());
     if (cambia.length) throw new Error(cambia.join(', ') + ': la persona se cambia con «Responsiva».');
     const estatus = texto_(enviados['ESTATUS EQUIPO']).toUpperCase();
-    if (estatus === 'USO' && texto_(base['ESTATUS EQUIPO']).toUpperCase() !== 'USO') {
-      throw new Error('Para pasar el equipo a USO usa «Responsiva».');
-    }
+    return estatus === 'USO' && texto_(base['ESTATUS EQUIPO']).toUpperCase() !== 'USO' && !responsableVigente_(base);
   }
 
   /** Un solo COMENTARIO obligatorio en cada acción (plan §5.2): el del alta o el de la corrección. */
@@ -591,7 +623,6 @@ const LineasRegistros = (function () {
   }
 
   function crear(datos, usuario) {
-    asegurarEsquema_();
     const comentario = comentarioObligatorio_(datos, 'de dónde sale este registro');
     LineasUtil.exigirPinEquipo(datos);
     const enviados = (datos && datos.valores) || datos || {};
@@ -616,12 +647,10 @@ const LineasRegistros = (function () {
       ? lineaParaVincular_(r.valores[LINEA_VINCULAR], valores) : null;
     if (vinculada) COLUMNAS_LINEA_NUEVA.forEach((c) => { valores[c] = ''; });
     valores.TIPO = tipoAutomatico_(parte, valores, '');
-    // Con las hojas nuevas, el ID del registro lo pone agregarRegistro (el del equipo o el de la línea)
-    const estructura = LineasLectura.activo();
+    // El ID del registro lo pone agregarRegistro (el del equipo o el de la línea)
     const ahora = new Date();
-    valores.ID = estructura ? '' : LineasDatos.nuevoId(LineasRepo.TAB.LINEAS);
+    valores.ID = '';
     valores['FECHA REGISTRO'] = ahora;
-    if (!estructura) valores['ESTATUS GENERAL'] = LineasRepo.estatusGeneralRegistro(valores.ID, texto_(valores.TIPO).toUpperCase(), texto_(valores['ESTATUS EQUIPO']), texto_(valores['ESTATUS LINEA']));
     let tocados = [];
     LineasDatos.conCandado(() => {
       const alta = LineasRepo.agregarRegistro(valores);
@@ -682,22 +711,34 @@ const LineasRegistros = (function () {
   }
 
   function editar(id, datos, usuario, puedeVerSecretos) {
-    asegurarEsquema_();
     LineasUtil.exigirPinEquipo(datos);
     const enviados = (datos && datos.valores) || datos || {};
     const resultado = LineasDatos.conCandado(() => {
       const fila = LineasRepo.leerRegistroObligatorio(id, 'el registro');
       const base = baseDeFila_(fila);
       // Editar línea (datos.parte = 'LINEA') o lo que es el registro
-      const edicion = contextoEdicion_(base, datos && datos.parte);
+      const edicion = contextoEdicion_(base, datos && datos.parte, equipoEnPanel_(fila, base));
       const parte = parteDe_(edicion, base['TIPO']);
-      if (parte === 'EQUIPO') exigirSinPersona_(base, enviados);
+      // En el panel de Pau el estatus no se corrige aquí (pendiente 3.15); los demás datos sí
+      if (edicion.enPanel && Object.prototype.hasOwnProperty.call(enviados, 'ESTATUS EQUIPO') &&
+        texto_(enviados['ESTATUS EQUIPO']).toUpperCase() !== texto_(base['ESTATUS EQUIPO']).toUpperCase()) {
+        throw new Error('NUCO ' + (LineasUtil.nucoVisible(base['NUCO']) || '') + ' está en Resguardos y cancelaciones: su estatus lo cambia el panel.');
+      }
+      // Ni el de su línea (Corregir línea; auditoría del 23-oct)
+      if (edicion.enPanel && Object.prototype.hasOwnProperty.call(enviados, 'ESTATUS LINEA') &&
+        texto_(enviados['ESTATUS LINEA']).toUpperCase() !== texto_(base['ESTATUS LINEA']).toUpperCase()) {
+        throw new Error('NUCO ' + (LineasUtil.nucoVisible(base['NUCO']) || '') + ' está en Resguardos y cancelaciones: el estatus de su línea lo cambia el panel.');
+      }
+      // A USO sin responsable: se guardan las demás correcciones y el estatus se queda (lo cambia la Responsiva)
+      const pideResponsiva = parte === 'EQUIPO' && exigirSinPersona_(base, enviados);
+      const pedidos = pideResponsiva ? Object.assign({}, enviados) : enviados;
+      if (pideResponsiva) delete pedidos['ESTATUS EQUIPO'];
       // A un equipo sin línea se le puede poner una línea sola que ya existe: su número no cuenta como repetido
       const sinLinea = parte === 'EQUIPO' && !LineasUtil.txt(base['NUMERO TELEFONO']) && !LineasUtil.txt(base['NUMERO SIM']);
       const ctx = Object.assign(contextoValidacion_(id, false, sinLinea), edicion, { parte: parte });
       const elementos = elementos_(base, LineasRepo.catalogos(), usuario, ctx)
         .map((e) => (e.secreto && !puedeVerSecretos ? Object.assign({}, e, { valorOculto: true }) : e));
-      const r = resolver_(elementos, base, enviados, ctx);
+      const r = resolver_(elementos, base, pedidos, ctx);
       if (r.errores.length) throw new Error(r.errores.slice(0, 8).join(' · '));
       const valores = homologarNuco_(aHoja_(elementos, r.valores));
       if (LineasUtil.bloqueoSinPatron(datos) && 'PATRON' in valores) valores['PATRON'] = '';
@@ -711,6 +752,8 @@ const LineasRegistros = (function () {
       // Los datos de la persona solo quedan en blanco al mandar a resguardo (usuario, 4-oct): aquí no se vacían
       const vacios = PERSONA_SOLO_RESGUARDO.filter((c) => !enBlanco_(base[c]) && c in cambios && enBlanco_(valores[c]));
       if (vacios.length) throw new Error(vacios.join(', ') + ': no se deja en blanco al corregir; solo «Mandar a resguardo» lo deja en blanco.');
+      // Solo pedía USO: no hay nada que guardar aquí
+      if (pideResponsiva && !Object.keys(cambios).length) return { guardado: { campos: [] }, lineaAlPanel: null, responsiva: true };
       // Editar es corregir un dato mal capturado: siempre con su comentario (qué se corrigió y por qué), §5.2
       const motivo = comentarioObligatorio_(datos, 'qué se corrigió y por qué');
       // RESGUARDO, PARA VENTA y PARA DESECHO del equipo, y EN PROCESO DE CANCELACION y CANCELADA de la línea (usuario,
@@ -758,6 +801,8 @@ const LineasRegistros = (function () {
       // CORRECCION DE CAPTURA, un dato mal escrito (solo Edición en el historial)
       const cambioDeNumero = 'NUMERO TELEFONO' in cambios && !!texto_(base['NUMERO TELEFONO']) &&
         texto_(r.valores[CAMBIO_NUMERO]).toUpperCase() === MOTIVO_CAMBIO_NUMERO;
+      // Una línea en Cancelaciones no cambia de estatus aquí: la retira Pau (pendiente 3.12)
+      if ('ESTATUS LINEA' in cambios) LineasResguardos.exigirSinCancelacion(fila);
       const antes = LineasRepo.convertirRegistro(fila);
       // corregir: cambiar a la persona aquí es corregir el dato en la misma asignación (usuario, 4-oct); pasar el equipo a
       // otra persona es la Responsiva (pendiente 2.49)
@@ -780,13 +825,17 @@ const LineasRegistros = (function () {
       if (lineaSale && lineaSale.estatus === LineasResguardos.LINEA_SIN_PANEL) {
         LineasResguardos.registrarCancelacionDirecta(fila, texto_(base['ID LINEA']), motivo, texto_(datos && datos.ticket), usuario, new Date());
       }
-      return { guardado: guardado, lineaAlPanel: lineaSale && lineaSale.alPanel ? texto_(base['ID LINEA']) : null, motivo: motivo };
+      return { guardado: guardado, lineaAlPanel: lineaSale && lineaSale.alPanel ? texto_(base['ID LINEA']) : null, motivo: motivo,
+        nuco: LineasUtil.nucoVisible(base['NUCO']) || '', responsiva: pideResponsiva };
     });
     // La línea que va al panel ya quedó sola: entra a la bandeja como con «Mandar a cancelación», desde su propio registro
     if (resultado.lineaAlPanel) {
-      LineasResguardos.mandarCancelacion([resultado.lineaAlPanel], { comentario: resultado.motivo, ticket: texto_(datos && datos.ticket) }, usuario, { motivoDelAdendum: true });
+      LineasResguardos.mandarCancelacion([resultado.lineaAlPanel], { comentario: resultado.motivo, ticket: texto_(datos && datos.ticket) }, usuario,
+        { motivoDelAdendum: true, nucos: { [resultado.lineaAlPanel]: resultado.nuco } });
     }
-    return { id: id, cambios: resultado.guardado.campos, filas: LineasRepo.refrescarIndice([id].concat(resultado.lineaAlPanel ? [resultado.lineaAlPanel] : [])) };
+    // responsiva: la pantalla abre la Responsiva obligatoria, que pasa el equipo a USO (pendiente 2.55)
+    return { id: id, cambios: resultado.guardado.campos, responsiva: !!resultado.responsiva,
+      filas: LineasRepo.refrescarIndice([id].concat(resultado.lineaAlPanel ? [resultado.lineaAlPanel] : [])) };
   }
 
   /**

@@ -458,14 +458,28 @@
     // inicio hasta que lleguen; si fallan, se queda así.
     state.permisos = permisosGuardados_() || {};
     renderNavGrupos();
+    const inicial = vistaInicial_();
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
       guardarPermisos_(state.permisos);
       renderNavGrupos();
       precargarListas();
+      // Sin permisos de la visita anterior se abrió el Inicio: con los de verdad, la pantalla de su área
+      if (inicial === 'dashboard' && vistaActual === 'dashboard' && vistaInicial_() !== 'dashboard') navegarA(vistaInicial_());
     }).catch((err) => toastError('No se pudieron cargar tus permisos: ' + ((err && err.message) || err)));
     Notificaciones.iniciar();
-    navegarA('dashboard');
+    navegarA(inicial);
+  }
+
+  /**
+   * Pantalla con que abre cada área en vez del Inicio (rama emmanuel; usuario, 22-oct: el equipo de Líneas pidió entrar
+   * directo a Líneas Telefónicas). La llave es el AREA de USUARIOS (`sesion.departamento`); solo con permiso de esa vista.
+   */
+  function vistaInicial_() {
+    const INICIO_POR_AREA = { lineas: 'lineas-telefonicas' };
+    const area = Formato.normal(state.sesion && state.sesion.departamento).trim();
+    const destino = INICIO_POR_AREA[area] ? vistaDe(INICIO_POR_AREA[area]) : null;
+    return destino && !estaApagada(destino) && (!destino.requiere || permisoDe(destino.requiere)) ? destino.vista : 'dashboard';
   }
 
   /**
@@ -922,6 +936,8 @@
     });
 
     initGoogleQuickLogin();
+    // "¿Olvidaste tu contraseña?" y el enlace que llega por correo (?recuperar=…): Seguridad (js/app-seguridad.html)
+    Seguridad.conectarLogin();
 
     document.getElementById('form-login').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -946,9 +962,8 @@
       const chip = document.getElementById('google-account-chip');
       if (chip) chip.disabled = true;
       try {
-        const resultado = await callServer('apiLogin', correo, password);
-        guardarSesion(resultado);
-        mostrarPantallaCarga(() => render());
+        // La sesión, o el paso que falta (contraseña nueva, código): Seguridad (js/app-seguridad.html)
+        Seguridad.entrar(await callServer('apiLogin', correo, password, Seguridad.dispositivo(correo)));
         // A propósito NO se reactivan los botones en éxito: ya se está
         // navegando a la pantalla de carga, no debería poder volver a
         // usarse este formulario.
@@ -993,9 +1008,7 @@
         const btnLogin = document.getElementById('btn-login');
         if (btnLogin) btnLogin.disabled = true;
         try {
-          const resultado = await callServer('apiLoginConGoogle');
-          guardarSesion(resultado);
-          mostrarPantallaCarga(() => render());
+          Seguridad.entrar(await callServer('apiLoginConGoogle', Seguridad.dispositivo(identidad.correo)));
           // Tampoco se reactiva en éxito — ver comentario en form-login.
         } catch (err) {
           errorBox.textContent = err.message;
@@ -1591,5 +1604,9 @@
   });
 
   renderNavGrupos();
-  render();
+  // El primer render espera a que carguen TODOS los <script> de Index.html: el login usa Seguridad
+  // (app-seguridad.html, que carga después). Corrido aquí, initLogin tronaba en Seguridad.conectarLogin
+  // y el botón de "¿Olvidaste tu contraseña?" y el formulario de entrar se quedaban sin conectar (23-oct).
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', render, { once: true });
+  else setTimeout(render, 0);
 </script>

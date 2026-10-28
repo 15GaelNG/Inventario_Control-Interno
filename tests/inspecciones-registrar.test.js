@@ -14,6 +14,8 @@ const guardados = [];      // lo que se guardó en el expediente del NUCO
 const buscadas = [];       // en qué carpeta raíz se buscó cada dibujo en blanco
 let actualizado = null;    // lo que se escribió después (la liga del PDF)
 let nuccoVehiculo = '25';
+const encabezadosHoja = ['ID INSPECCION', 'FOLIO', 'TIPO', 'PUNTAJE FINAL INSPECCION'];
+let candados = 0;
 const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
 
 const ESTRUCTURA = {
@@ -37,7 +39,16 @@ const contexto = vm.createContext({
   CacheService: { getScriptCache: () => ({ get: () => JSON.stringify(ESTRUCTURA), put: () => {} }) },
   SheetUtils: {
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
-    getSheetByColumns: () => ({ getName: () => 'INSPECCION VEHICULAR' }),
+    // Sin PUNTAJE MAXIMO, como la hoja de prod: registrar la agrega al final
+    getSheetByColumns: () => ({
+      getName: () => 'INSPECCION VEHICULAR',
+      getLastColumn: () => encabezadosHoja.length,
+      getRange: (r, c) => ({
+        getValues: () => [encabezadosHoja.slice()],
+        setValue: (v) => { encabezadosHoja[c - 1] = v; },
+      }),
+    }),
+    indiceDeColumnas: (enc, nombres) => nombres.reduce((m, n) => (m[n] = enc.indexOf(n), m), {}),
     leerColumnas: () => ({ filas: 0, datos: { 'ID INSPECCION': [] } }),
     // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
     // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).
@@ -74,6 +85,7 @@ const contexto = vm.createContext({
     fechaParaNombre: () => '2026-09-18',
   },
   Plantilla: {}, DocumentApp: {}, Utilities: {},
+  Candado: { con: (fn) => { candados++; return fn(); } },
 });
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') +
@@ -150,6 +162,91 @@ ok(guardados.length === 0 && subidas.length === 1 && subidas[0].carpetaId === 'i
 ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRONTAL']), 'con la ruta de AppSheet');
 ok(paraPdf.carpetaId === 'formatos' && paraPdf.subcarpeta === ESTRUCTURA.carpeta, 'y el PDF a REPORTES, como antes');
 ok(actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/' + ESTRUCTURA.carpeta + '/INSPECCION.pdf', 'con su ruta');
+
+console.log('6. La calificación va en porcentaje en todos lados (27-oct: las secciones salían en decimal)');
+ok(fila['PUNTUACION_CRISTALERIA'] === '100.00%' && fila['PUNTAJE FINAL INSPECCION'] === '100.00%',
+  'la sección se escribe igual que el total: "100.00%", no 1');
+
+ok(fila['PUNTAJE MAXIMO'] === '100.00%', 'guarda lo más que podía sacar esa unidad');
+ok(encabezadosHoja.filter((e) => e === 'PUNTAJE MAXIMO').length === 1 && candados === 1,
+  'la columna se crea una sola vez, bajo el candado, aunque se registren varias');
+
+console.log('7. El máximo no cuenta las secciones todas N/A');
+const DOS = [
+  { titulo: 'Cristalería', peso: 10, campos: [{ campo: 'PARABRISAS', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
+  { titulo: 'Inventarios', peso: 10, campos: [{ campo: 'GATO', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
+];
+const conNA = contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'BUENO', GATO: 'N/A' });
+ok(conNA.final === 10 && conNA.maximo === 10, 'Inventarios toda N/A: sacó 10 de 10 posibles, no de 20');
+ok(contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'MALO', GATO: 'BUENO' }).maximo === 20,
+  'con algo evaluado en las dos, el máximo es la suma de sus pesos');
+
+const CRUDO = { 'ID INSPECCION': 'I1', 'PUNTAJE FINAL INSPECCION': 0.7909, 'PUNTAJE MAXIMO': 0.9, 'PUNTUACION_NEUMATICOS': 0.15,
+  'PUNTUACION_LIMPIEZA': '2.50%', 'PUNTUACION_NIVELES': '', 'FOLIO': 'AUT0025' };
+contexto.HojaServicio = { completo: () => [CRUDO], buscarPorId: () => CRUDO };
+const exportado = contexto.InspeccionesService.completo('token')[0];
+ok(exportado['PUNTAJE FINAL INSPECCION'] === '79.09%' && exportado['PUNTUACION_NEUMATICOS'] === '15.00%' &&
+  exportado['PUNTUACION_LIMPIEZA'] === '2.50%' && exportado['PUNTAJE MAXIMO'] === '90.00%', 'al exportar, el total y las secciones salen en porcentaje (de AppSheet o de la app)');
+ok(exportado['PUNTUACION_NIVELES'] === '' && exportado['FOLIO'] === 'AUT0025', 'lo vacío y lo demás no cambian');
+ok(CRUDO['PUNTAJE FINAL INSPECCION'] === 0.7909, 'sin tocar el renglón de la caché');
+ok(contexto.InspeccionesService.buscarPorId('token', 'I1')['PUNTUACION_NEUMATICOS'] === '15.00%', '"Ver completo" también');
+
+// La hoja: dos columnas (total y Neumáticos) con lo que hay hoy mezclado
+const columnas = { 'PUNTAJE FINAL INSPECCION': [[0.845], ['84.50%'], [''], ['n/d']], 'PUNTUACION_NEUMATICOS': [[0.15], [0.075], [''], ['']] };
+const formatos = { 'PUNTAJE FINAL INSPECCION': '0.00%', 'PUNTUACION_NEUMATICOS': '0.###############' };
+const escrito = {};
+const encabezados = Object.keys(columnas);
+contexto.SheetUtils.getSheetByColumns = () => ({
+  getName: () => 'INSPECCION VEHICULAR', getLastRow: () => 5, getLastColumn: () => encabezados.length,
+  getRange: (fila1, col, filas) => {
+    if (fila1 === 1) return { getValues: () => [encabezados] };
+    const nombre = encabezados[col - 1];
+    return {
+      getValues: () => columnas[nombre],
+      getNumberFormats: () => columnas[nombre].map((_, i) => [i === 0 ? formatos[nombre] : '0.00%']),
+      setValues: (v) => { escrito[nombre] = v; },
+      setNumberFormat: (f) => { escrito[nombre + ' formato'] = f; },
+    };
+  },
+});
+contexto.SheetUtils.indiceDeColumnas = (enc, nombres) => nombres.reduce((m, n) => (m[n] = enc.indexOf(n), m), {});
+let tocada = false;
+contexto.CacheHojas = { tocarHoja: () => { tocada = true; } };
+const revisado = contexto.InspeccionesService.puntajesAPorcentaje(false);
+ok(revisado.celdas === 5 && revisado.cambian === 2 && revisado.raras === 1 && Object.keys(escrito).length === 0,
+  'revisar cuenta (el texto "84.50%" y la sección sin formato) y no escribe: ' + JSON.stringify(revisado));
+ok(revisado.faltan.length === 11, 'y dice qué columnas de sección no están en la hoja');
+contexto.InspeccionesService.puntajesAPorcentaje(true);
+ok(JSON.stringify(escrito['PUNTAJE FINAL INSPECCION']) === JSON.stringify([[0.845], [0.845], [''], ['n/d']]) &&
+  escrito['PUNTUACION_NEUMATICOS formato'] === '0.00%' && tocada,
+  'aplicar deja la fracción con formato 0.00%, no toca lo vacío ni lo que no es número, e invalida la caché');
+
+console.log('8. PUNTAJE MAXIMO de las ya guardadas, con sus respuestas (también las de AppSheet)');
+// La estructura del tipo sale de la caché simulada (ESTRUCTURA: Cristalería con PARABRISAS)
+const tabla = [
+  ['ID INSPECCION', 'TIPO', 'PARABRISAS', 'VOLTAJE'],
+  ['A1', 'HONDA 150XR', 'BUENO', ''],          // AppSheet: se calcula
+  ['A2', 'HONDA 150XR', 'N/A', ''],            // nada evaluado: no se inventa
+  ['A3', '', 'BUENO', ''],                     // sin tipo
+];
+let escritoMax = null;
+contexto.SheetUtils.getSheetByColumns = () => ({
+  getName: () => 'INSPECCION VEHICULAR',
+  getLastColumn: () => tabla[0].length,
+  getDataRange: () => ({ getValues: () => tabla.map((f) => f.slice()) }),
+  getRange: (fila1, col, filas) => (fila1 === 1
+    ? { getValues: () => [tabla[0].slice()], setValue: (v) => { tabla.forEach((f, i) => { f[col - 1] = i ? '' : v; }); } }
+    : { setValues: (v) => { escritoMax = { col, v }; }, setNumberFormat: () => {} }),
+});
+const revMax = contexto.InspeccionesService.puntajesMaximos(false);
+ok(revMax.calculadas === 1 && revMax.sinRespuestas === 1 && revMax.sinTipo === 1 && revMax.porMaximo[100] === 1 && !escritoMax &&
+  tabla[0].length === 4, 'revisar cuenta sin escribir ni crear la columna: ' + JSON.stringify(revMax));
+contexto.InspeccionesService.puntajesMaximos(true);
+ok(tabla[0][4] === 'PUNTAJE MAXIMO' && escritoMax.col === 5 && JSON.stringify(escritoMax.v) === JSON.stringify([[1], [''], ['']]),
+  'aplicar crea la columna y escribe 100% (1) solo donde hubo respuestas');
+tabla[1][4] = 0.9;
+const otraVez = contexto.InspeccionesService.puntajesMaximos(false);
+ok(otraVez.yaTenian === 1 && otraVez.calculadas === 0, 'la que ya tiene máximo no se recalcula');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

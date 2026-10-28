@@ -60,7 +60,8 @@ const LineasRepo = (function () {
     // Un registro sin línea deja ESTATUS LINEA en blanco (antes "SIN LINEA").
     estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
     companias: ['TELCEL', 'AT&T', 'BAIT'],
-    // Una sola lista (D5.5); "TARJETA SD" en lugar de "SD" (usuario, 4-oct). CARGADOR y SD de antes se quedan como están
+    // Una sola lista (D5.5); "TARJETA SD" en lugar de "SD" (usuario, 4-oct). SD de antes se queda como está; CARGADOR
+    // se muestra y se guarda como CABLE y CUBO (usuario, 22-oct)
     accesorios: ['CAJA', 'CABLE', 'CUBO', 'FUNDA', 'MICA', 'TARJETA SD', 'NINGUNO'],
   };
   /** Valores viejos que hoy significan "sin estatus": el formulario los muestra en blanco. */
@@ -82,22 +83,21 @@ const LineasRepo = (function () {
     noEmpleado: 'NO EMPLEADO', nombre: 'RESPONSABLE', puesto: 'PUESTO', departamento: 'DEPARTAMENTO', area: 'AREA',
     sede: 'SEDE', oficina: 'OFICINA / DESARROLLO', jefeDirecto: 'JEFE DIRECTO', director: 'DIRECTOR', razonSocial: 'RAZON SOCIAL',
   };
-  /** Los 23 campos que registra el bot "CAMBIOS TELEFONIA" del AppSheet (una fila por campo que cambia). */
-  const CAMPOS_BITACORA = ['NUMERO TELEFONO', 'RESPONSABLE', 'EQUIPO', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO', 'DEPARTAMENTO',
-    'AREA', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'ESTATUS EQUIPO',
-    'RESPONSIVA', 'TIPO', 'COMPAÑIA', 'COSTO PLAN', 'NUCO', 'COMENTARIOS'];
 
-  const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'];
+  // dg: de Dirección General (pendiente 8.16; LineasDG): su responsable dice DG y solo ADMIN ve lo demás (TelefoniaService)
+  const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel',
+    'dg'];
   // numerosAnteriores: los que tuvo la línea por un cambio de número (8-oct); la búsqueda de la tabla los encuentra
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
-    'numerosAnteriores'];
+    'numerosAnteriores', 'dg'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v9'; // v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v13'; // v13: sin ubicación en estatus finales (22-oct); v12: dg, Dirección General (21-oct; pendiente 8.16); v11: sin ESTATUS GENERAL en la vista (21-oct); v10: panel (su renglón abierto en Resguardos, 20-oct; pendiente 3.12); v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
-   * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO y ESTATUS GENERAL son fórmulas del AppSheet.
+   * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO es fórmula del AppSheet. Sin ESTATUS GENERAL (usuario,
+   * 21-oct): combinaba el estatus del equipo y el de la línea, que en el AppSheet vivían en un mismo renglón.
    */
-  const COLS_VISTA_LINEAS = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
+  const COLS_VISTA_LINEAS = ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'NO EMPLEADO', 'RESPONSABLE', 'PUESTO',
     'NOMBRE RESPONSABLES 2', 'PUESTO RESPONSABLES 2', 'EQUIPO', 'IMEI', 'NUMERO SIM', 'ACCESORIOS', 'SEDE', 'OFICINA / DESARROLLO',
     'DEPARTAMENTO', 'AREA', 'JEFE DIRECTO', 'DIRECTOR', 'FOLIO', 'RAZON SOCIAL', 'PIN WHATSAPP', 'PIN EQUIPO', 'CUENTA GOOGLE',
     'COMPAÑIA', 'COSTO PLAN', 'FECHA REGISTRO', 'INICIO PLAN', 'FIN PLAN', 'ESTATUS LINEA', 'FECHA CAMBIO TEMPORAL',
@@ -157,7 +157,6 @@ const LineasRepo = (function () {
     const legado = {
       id: id, idAnterior: txt(col(f, LineasDatos.COL_ID_APPSHEET)), fila: f._fila, folio: folioRegistro(tipo, col(f, 'NUCO')), tipo: tipo || null,
       nuco: txt(col(f, 'NUCO')) === null ? null : LineasUtil.nucoVisible(col(f, 'NUCO')),
-      estatusGeneral: estatusGeneralRegistro(idParaDG_(f), tipo, txt(col(f, 'ESTATUS EQUIPO')), txt(col(f, 'ESTATUS LINEA'))),
       comentarios: txt(col(f, 'COMENTARIOS')),
       responsivaRuta: txt(col(f, 'RESPONSIVA')), formatoInspeccionRuta: txt(col(f, 'FORMATO INSPECCION')),
       fechaInspeccion: fecha(col(f, 'FECHA INSPECCION')), fechaRegistro: fecha(col(f, 'FECHA REGISTRO')),
@@ -168,9 +167,10 @@ const LineasRepo = (function () {
     const equipo = tieneEquipo ? {
       _id: id, nuco: nuco, tipo: TIPOS_CON_EQUIPO[tipo], modelo: txt(col(f, 'EQUIPO')), imei: digitos(col(f, 'IMEI')),
       simResidual: tipo === 'EQUIPO' ? sim : null,
-      accesorios: (txt(col(f, 'ACCESORIOS')) || '').split(',').map((s) => s.trim()).filter(Boolean),
-      // Con un PIN o una contraseña, el patrón que quedó de antes no se muestra (usuario, 9-oct)
-      pinEquipo: texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
+      accesorios: (txt(LineasUtil.sinCargador(col(f, 'ACCESORIOS'))) || '').split(',').map((s) => s.trim()).filter(Boolean),
+      // Con un PIN o una contraseña, el patrón que quedó de antes no se muestra (usuario, 9-oct). «NO APLICA» es el
+      // bloqueo SIN BLOQUEO (2.53): la ficha lo dice así y no «—» (usuario, 21-oct; pendiente 2.56)
+      pinEquipo: sinAcentos_(col(f, 'PIN EQUIPO')) === 'NO APLICA' ? 'SIN BLOQUEO' : texto('PIN EQUIPO'), patronRuta: LineasUtil.patronVigente(col(f, 'PIN EQUIPO'), col(f, 'PATRON')) || null,
       cuentaGoogle: texto('CUENTA GOOGLE'), contrasenaModem: texto('CONTRASEÑA MODEM'),
       color: texto('COLOR'),
       // El PIN de WhatsApp es del equipo (pendiente 2.25); sin línea no tiene
@@ -196,18 +196,7 @@ const LineasRepo = (function () {
       nucoLegado: tieneEquipo ? null : nuco, legado: legado,
     } : null;
 
-    // Columna virtual DETALLES LINEAS TELEFONICAS del AppSheet: los valores tal cual están en la fila
-    const crudo = (c) => {
-      const v = col(f, c);
-      return v === null || v === undefined ? '' : (v instanceof Date ? v : String(v).trim());
-    };
-    const detalles = {
-      nuco: LineasUtil.nucoVisible(crudo('NUCO')) || '', responsable: crudo('RESPONSABLE'), imei: crudo('IMEI'), sim: crudo('NUMERO SIM'),
-      numero: crudo('NUMERO TELEFONO'), modelo: crudo('EQUIPO'), compania: crudo('COMPAÑIA'), razonSocial: crudo('RAZON SOCIAL'),
-      finPlan: crudo('FIN PLAN'), estatusLinea: estatusLinea || '',
-    };
-
-    return { id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea, detalles: detalles };
+    return { id: id, tipo: tipo, nuco: nuco, equipo: equipo, linea: linea };
   }
 
   /**
@@ -229,42 +218,28 @@ const LineasRepo = (function () {
     return prefijo + ('0000' + (nuco === null || nuco === undefined ? '' : String(nuco))).slice(-4);
   }
 
-  /**
-   * ID con el que la fórmula reconoce al personal de DG (DG001, DG002…). Tras la migración de IDs ese valor quedó en
-   * ID APPSHEET y el ID es LIN-…
-   */
-  function idParaDG_(f) {
-    return txt(col(f, LineasDatos.COL_ID_APPSHEET)) || txt(f['ID']);
-  }
-
-  /** Fórmula ESTATUS GENERAL del AppSheet. */
-  function estatusGeneralRegistro(id, tipo, estatusEquipo, estatusLinea) {
-    if (/^DG/i.test(id || '')) return 'PERSONAL DG';
-    if (tipo === 'EQUIPO') {
-      return { 'ESPERA DE RESPONSIVA': 'USO', 'EN ENVIO': 'USO', 'VENTA': 'RESGUARDO', 'DESECHADO': 'DESECHO' }[estatusEquipo] || estatusEquipo || '';
-    }
-    if (['EQUIPO + SIM', 'LINEA', 'MODEM', 'BANDA ANCHA'].indexOf(tipo) >= 0) {
-      return { 'ESPERA DE RESPONSIVA': 'USO', 'SIN LINEA': 'CANCELADA', 'EN PROCESO DE CANCELACION': 'CANCELADA' }[estatusLinea] || estatusLinea || '';
-    }
-    return '';
-  }
-
   // ---------------- Índices de listados (caché) ----------------
 
-  function filaIndiceEquipo_(equipo, linea) {
+  /**
+   * panel: el ESTADO de su renglón abierto en Resguardos y cancelaciones (PENDIENTE DE RECEPCION o EN RESGUARDO) o null;
+   * la pantalla cambia «Mandar a resguardo» por «Corregir resguardo» y «Quitar del panel» (pendiente 3.12).
+   */
+  function filaIndiceEquipo_(equipo, linea, panel) {
     const r = equipo.responsable || {};
+    const dg = LineasDG.esRegistro(equipo, linea);
     return [equipo._id, equipo.nuco || null, equipo.tipo || null, equipo.modelo || null, equipo.imei || null, equipo.estatus || null,
-      r.nombre || null, r.departamento || null, r.sede || null,
+      dg ? LineasDG.ETIQUETA : r.nombre || null, r.departamento || null, r.sede || null,
       equipo.lineaId || null, linea ? linea.numero || null : null, linea ? linea.compania || null : null, linea ? linea.estatus || null : null,
-      (equipo.legado || {}).tipo || null]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
+      (equipo.legado || {}).tipo || null, panel || null, dg]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
   }
 
   function filaIndiceLinea_(linea, equipo, cambiosNumero) {
     const r = (equipo ? equipo.responsable : linea.responsable) || {};
     const anteriores = numerosDeLinea(linea, cambiosNumero).map((x) => x.antes).filter((n, i, a) => n && n !== linea.numero && a.indexOf(n) === i);
+    const dg = LineasDG.esRegistro(equipo, linea);
     return [linea._id, linea.numero || null, linea.sim || null, linea.compania || null, linea.estatus || null, linea.equipoId || null,
-      equipo ? equipo.nuco || null : linea.nucoLegado || null, r.nombre || null, r.departamento || null, !linea.equipoId,
-      ((equipo || linea).legado || {}).tipo || null, anteriores.length ? anteriores.join(' · ') : null];
+      equipo ? equipo.nuco || null : linea.nucoLegado || null, dg ? LineasDG.ETIQUETA : r.nombre || null, r.departamento || null, !linea.equipoId,
+      ((equipo || linea).legado || {}).tipo || null, anteriores.length ? anteriores.join(' · ') : null, dg];
   }
 
   // ---------------- Números de una línea (cambio de número, 8-oct) ----------------
@@ -332,7 +307,8 @@ const LineasRepo = (function () {
         equipo: cargoEquipo ? { nombre: txt(x['EQUIPO FACTURADO']) || '', parcialidad: txt(x['PARCIALIDAD']) || '', cargo: cargoEquipo } : null,
         parcial: /CARGO DEL .+ AL /.test(sinAcentos_(x['CONCEPTOS'])), numero: digitos(x['NUMERO EN FACTURA']),
         minutos: LineasUtil.numero(x['MINUTOS']) || 0, mensajes: LineasUtil.numero(x['MENSAJES']) || 0, datosMb: LineasUtil.numero(x['DATOS MB']) || 0,
-        origen: txt(x['ARCHIVO']) || '',
+        // Gigas que el proveedor dice que trae el plan ese mes (usuario, 27-oct); null si el archivo no los trae
+        gbPlan: LineasUtil.numero(x['GB PLAN']), origen: txt(x['ARCHIVO']) || '',
       };
     }).sort((a, b) => (b.corte || 0) - (a.corte || 0));
     todas.forEach((f, i) => {
@@ -375,7 +351,6 @@ const LineasRepo = (function () {
     const legado = ((r.equipo || r.linea) || {}).legado || {};
     return [r.id].concat(COLS_VISTA_LINEAS.map((c) => {
       if (c === 'FOLIO') return legado.folio || null;
-      if (c === 'ESTATUS GENERAL') return legado.estatusGeneral || null;
       // «Nombre colaborador/es» del AppSheet: los responsables adicionales
       if (c === 'NOMBRE RESPONSABLES 2') return usuariosAdicionales_(f).map((u) => u.nombre).join(' / ') || null;
       const v = col(f, c);
@@ -405,15 +380,14 @@ const LineasRepo = (function () {
   /**
    * La huella del índice (apiListaConHuella, fase 5.2b): la versión de cada pestaña de la que sale, aunque se responda
    * de la caché. Con ella el vigía de la pantalla (api.html) sabe si cambió sin volver a pedirlo. Solo CacheService.
-   * Las pestañas: la de líneas (o, leyendo la estructura nueva, las que la arman: LineasLectura.filas) y MOVIMIENTOS
-   * (los cambios de número). Las escrituras de LineasDatos las tocan (CacheHojas.tocar); lo editado a mano, AvisoDeCambios.
+   * Las pestañas: las que arman los renglones de líneas (LineasLectura.filas) y MOVIMIENTOS (los cambios de número). Las escrituras de LineasDatos las tocan (CacheHojas.tocar); lo editado a mano, AvisoDeCambios.
    */
   function huellaIndice_() {
     try {
       if (typeof CacheHojas === 'undefined') return;
-      const L = typeof LineasLectura !== 'undefined' && LineasLectura.esVirtual(TAB.LINEAS) ? LineasLectura : null;
-      const hojas = L ? [L.HOJAS.LINEAS, L.HOJAS.EQUIPOS, L.HOJAS.ASIGNACIONES, L.HOJAS.ADENDUMS, L.HOJA_VIEJA] : [TAB.LINEAS];
-      CacheHojas.versiones(hojas.concat([TAB.MOV]).map((n) => [LineasDatos.id(), n]));
+      const H = LineasLectura.HOJAS;
+      const hojas = [H.LINEAS, H.EQUIPOS, H.ASIGNACIONES, H.ADENDUMS];
+      CacheHojas.versiones(hojas.concat([TAB.MOV, 'APP_RESGUARDOS']).map((n) => [LineasDatos.id(), n]));
     } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
   }
 
@@ -429,10 +403,11 @@ const LineasRepo = (function () {
     const lineas = [];
     const vista = [];
     const cambiosNumero = cambiosDeNumero_();
+    const panel = enPanel_();
     LineasDatos.leerTabla(TAB.LINEAS).forEach((f) => {
       const r = convertirRegistro(f);
       if (!r) return;
-      if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea));
+      if (r.equipo) equipos.push(filaIndiceEquipo_(r.equipo, r.linea, panelDe_(panel, f)));
       if (r.linea) lineas.push(filaIndiceLinea_(r.linea, r.equipo, cambiosNumero));
       if (r.equipo || r.linea) vista.push(filaVista_(f, r));
     });
@@ -446,6 +421,10 @@ const LineasRepo = (function () {
     LineasDatos.tiempo('índice (armado completo)', inicio);
     return ix;
   }
+
+  /** Equipos con su renglón abierto en el panel de Pau ({ ID de registro: ESTADO }). */
+  const enPanel_ = () => (typeof LineasResguardos !== 'undefined' ? LineasResguardos.abiertosPorEquipo() : {});
+  const panelDe_ = (panel, f) => LineasDatos.idsDeFila(f).map((k) => panel[k]).filter(Boolean)[0] || null;
 
   /**
    * Tras una operación: vuelve a leer los registros tocados y actualiza la caché del índice.
@@ -461,8 +440,9 @@ const LineasRepo = (function () {
     const cambios = { equipos: [], lineas: [], vista: [], quitar: { equipos: [], lineas: [] } };
     const ix = LineasDatos.cacheLeer(CLAVE_INDICE);
     // Hojas nuevas: una línea que se separa de su equipo aparece como registro aparte
-    const todos = (ids || []).concat(LineasLectura.activo() ? LineasEscritura.tocados() : []);
+    const todos = (ids || []).concat(LineasEscritura.tocados());
     let cambiosNumero = null;
+    let panel = null;
     todos.filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).forEach((id) => {
       const f = leerRegistroPorId(id);
       const r = f ? convertirRegistro(f) : null;
@@ -478,7 +458,8 @@ const LineasRepo = (function () {
         if (ix && ix.vista) ix.vista.filas.push(fv);
       }
       if (r && r.equipo) {
-        const fe = LineasUtil.paraCliente(filaIndiceEquipo_(r.equipo, r.linea));
+        if (!panel) panel = enPanel_();
+      const fe = LineasUtil.paraCliente(filaIndiceEquipo_(r.equipo, r.linea, panelDe_(panel, f)));
         cambios.equipos.push(fe);
         if (ix) ix.equipos.filas.push(fe);
       } else {
@@ -552,13 +533,7 @@ const LineasRepo = (function () {
     return f;
   }
 
-  // ---------------- Escritura: modelo → columnas + bitácora ----------------
-
-  function normalizarComparacion_(v) {
-    if (v instanceof Date) return 'D' + v.getTime();
-    if (v === null || v === undefined) return '';
-    return String(v).trim().toUpperCase();
-  }
+  // ---------------- Escritura: a las hojas nuevas (LineasEscritura) y el renglón de MOVIMIENTOS ----------------
 
   function textoBitacora_(v) {
     if (v instanceof Date) return Utilities.formatDate(v, LineasDatos.ZONA_APP, 'dd/MM/yyyy');
@@ -566,129 +541,33 @@ const LineasRepo = (function () {
   }
 
   /**
-   * Aplica cambios de columnas a una fila de LINEAS TELEFONICAS (recién leída, dentro del candado)
-   * y registra la bitácora como los bots del AppSheet. Recalcula FOLIO y ESTATUS GENERAL si existen.
-   * usuario = { correo, nombre }. Devuelve { idsCambios, idReasignacion, campos: [{campo, antes, despues}], refs }.
-   * Reestructura, etapa 3: con el interruptor de la etapa 2 encendido, los cambios van a las hojas nuevas
-   * (LineasEscritura) y `refs` trae los IDs de equipo, línea, adendum y asignaciones que tocó (para APP_MOVIMIENTOS).
+   * Guarda los cambios de un registro (renglón armado por LineasLectura, recién leído dentro del candado) en las hojas
+   * nuevas (LineasEscritura). usuario = { correo, nombre }. Devuelve { idsCambios, idReasignacion, campos:
+   * [{campo, antes, despues}], refs } (refs: los IDs de equipo, línea, adendum y asignaciones que tocó).
    * opciones.tolerante: lo que no tiene dónde guardarse en las hojas nuevas se ignora (la inspección).
+   * El camino que escribía en LINEAS TELEFONICAS y en la bitácora CAMBIOS se quitó el 21-oct (pendiente 7.13).
    */
   function guardarCambiosRegistro(f, cambios, usuario, ahora, opciones) {
-    if (LineasLectura.activo()) return LineasEscritura.guardar(f, cambios, usuario, ahora, opciones);
-    const t = LineasDatos.tablaFresca(TAB.LINEAS);
-    const efectivos = [];
-    const soloFormato = {}; // NUCO "5" → "0005": se escribe homologado, pero no es un cambio para la bitácora
-    const nuevo = Object.assign({}, f);
-    Object.keys(cambios).forEach((c) => {
-      if (LineasDatos.colIndice(t, c) < 0) return;
-      const antes = col(f, c);
-      if (normalizarComparacion_(antes) === normalizarComparacion_(cambios[c])) return;
-      nuevo[t.encabezados[LineasDatos.colIndice(t, c)]] = cambios[c];
-      if (LineasDatos.normCol(c) === 'NUCO' && LineasUtil.nucoVisible(antes) === LineasUtil.nucoVisible(cambios[c])) {
-        soloFormato[c] = cambios[c];
-        return;
-      }
-      efectivos.push({ campo: c, antes: antes, despues: cambios[c] });
-    });
-    if (!efectivos.length && !Object.keys(soloFormato).length) return { idsCambios: [], idReasignacion: null, campos: [] };
-
-    const escribir = Object.assign({}, soloFormato);
-    efectivos.forEach((e) => { escribir[e.campo] = e.despues; });
-    const tipoNuevo = (txt(col(nuevo, 'TIPO')) || '').toUpperCase();
-    if (LineasDatos.colIndice(t, 'FOLIO') >= 0) escribir['FOLIO'] = folioRegistro(tipoNuevo, col(nuevo, 'NUCO'));
-    if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) {
-      escribir['ESTATUS GENERAL'] = estatusGeneralRegistro(idParaDG_(f), tipoNuevo, txt(col(nuevo, 'ESTATUS EQUIPO')), txt(col(nuevo, 'ESTATUS LINEA')));
-    }
-    conPersona_(t, escribir, nuevo);
-    LineasDatos.actualizarFila(TAB.LINEAS, f._fila, escribir);
-
-    const bitacora = efectivos.filter((e) => CAMPOS_BITACORA.indexOf(LineasDatos.normCol(e.campo)) >= 0).map((e) => ({
-      // NUCO e IMEI ya actualizados, como [NUCO] / [IMEI] en las acciones del bot
-      'ID': idCambio_(), 'ID_LINEA': f['ID'], 'NUCO': LineasUtil.nucoVisible(col(nuevo, 'NUCO')) || '', 'IMEI': col(nuevo, 'IMEI'), 'TABLA': TAB.LINEAS,
-      'CAMPO': e.campo, 'ANTES': textoBitacora_(e.antes), 'DESPUES': textoBitacora_(e.despues),
-      'ACTUALIZADO POR': usuario.nombre, 'FECHA ACTUALIZACION': ahora,
-    }));
-    // Mismo valor en ID y en ID_CAMBIO: la hoja tiene una u otra según esté o no migrada
-    bitacora.forEach((b) => { b['ID_CAMBIO'] = b['ID']; });
-    LineasDatos.agregarFilas(TAB.CAMBIOS, bitacora);
-
-    // HISTORIAL_REASIGNACIONES ya no se escribe (módulo retirado el 30-sep): el cambio de responsable queda en la
-    // bitácora CAMBIOS y en el movimiento de APP_MOVIMIENTOS de la operación.
-    const idReasignacion = null;
-    return {
-      idsCambios: bitacora.map((b) => b['ID']),
-      idReasignacion: idReasignacion,
-      campos: efectivos.map((e) => ({ campo: e.campo, antes: textoBitacora_(e.antes), despues: textoBitacora_(e.despues) })),
-      refs: [f['ID']],
-    };
+    LineasDG.exigirAdmin(f, usuario); // Dirección General: solo ADMIN (pendiente 8.16)
+    return LineasEscritura.guardar(f, cambios, usuario, ahora, opciones);
   }
 
-  /**
-   * Nueva fila en LINEAS TELEFONICAS (con FOLIO / ESTATUS GENERAL calculados).
-   * Reestructura, etapa 3: con el interruptor encendido crea equipo, línea, adendum y asignación en las hojas nuevas
-   * (LineasEscritura), pone en datos.ID el ID del registro y regresa { id, refs }.
-   */
+  /** Alta: crea equipo, línea, adendum y asignación en las hojas nuevas (LineasEscritura), pone en datos.ID el ID del registro y regresa { id, refs }. */
   function agregarRegistro(datos) {
-    if (LineasLectura.activo()) return LineasEscritura.agregar(datos);
-    const t = LineasDatos.tablaFresca(TAB.LINEAS);
-    const tipo = (datos['TIPO'] || '').toUpperCase();
-    if (LineasDatos.colIndice(t, 'FOLIO') >= 0) datos['FOLIO'] = folioRegistro(tipo, datos['NUCO']);
-    if (LineasDatos.colIndice(t, 'ESTATUS GENERAL') >= 0) datos['ESTATUS GENERAL'] = estatusGeneralRegistro(datos['ID'], tipo, txt(datos['ESTATUS EQUIPO']), txt(datos['ESTATUS LINEA']));
-    conPersona_(t, datos, datos);
-    return LineasDatos.agregarFilas(TAB.LINEAS, [datos])[0];
-  }
-
-  const personas_ = {}; // por ejecución: un resguardo o reasignación masiva calcula una sola vez por persona
-
-  /**
-   * ID PERSONA (catálogo de Ayrton, Capital Humano): no se captura, se calcula del responsable como en Vehículos y
-   * Caja Chica (CapitalHumano.idPara). Solo si en `escribir` cambia alguna columna de la persona (RESPONSABLE,
-   * NO EMPLEADO, EMAIL USUARIO) y la hoja ya tiene la columna. null = todavía no hay PERSONAS: no se toca.
-   */
-  function conPersona_(t, escribir, registro) {
-    if (typeof CapitalHumano === 'undefined' || LineasDatos.colIndice(t, CapitalHumano.COLUMNA) < 0) return;
-    Object.keys(escribir).forEach((c) => { if (LineasDatos.normCol(c) === CapitalHumano.COLUMNA) delete escribir[c]; });
-    const columnas = CapitalHumano.columnasDePersona(TAB.LINEAS);
-    const norm = columnas.map(LineasDatos.normCol);
-    if (!Object.keys(escribir).some((c) => norm.indexOf(LineasDatos.normCol(c)) >= 0)) return;
-    const persona = {};
-    columnas.forEach((c) => { persona[c] = txt(col(registro, c)) || ''; });
-    const clave = JSON.stringify(persona);
-    try {
-      if (!(clave in personas_)) personas_[clave] = CapitalHumano.idPara(TAB.LINEAS, persona);
-      if (personas_[clave] !== null) escribir[CapitalHumano.COLUMNA] = personas_[clave];
-    } catch (err) {
-      console.error('CapitalHumano: no se pudo calcular la persona de la línea: ' + err.message);
-    }
-  }
-
-  /** ID de una fila de la bitácora CAMBIOS (CLI-…). */
-  function idCambio_() {
-    return LineasDatos.nuevoId(TAB.CAMBIOS);
+    return LineasEscritura.agregar(datos);
   }
 
   /**
-   * Registro de la acción en el historial. Con las hojas nuevas (etapa 3, paso 3, §5.5), un renglón en MOVIMIENTOS; sin
-   * ellas, APP_MOVIMIENTOS como antes. datos = { motivo (el comentario, sin el nombre de la acción delante), ticket };
+   * Registro de la acción en el historial: un renglón en MOVIMIENTOS (etapa 3, paso 3, §5.5; APP_MOVIMIENTOS ya no se
+   * escribe, solo se lee en el historial). datos = { motivo (el comentario, sin el nombre de la acción delante), ticket };
    * extra = { refs, detalle: { cambios, inspeccionId, responsivaId }, despues, origen }.
    */
   function registrarMovimiento(tipo, datos, usuario, ahora, extra) {
-    if (typeof LineasLectura !== 'undefined' && LineasLectura.activo()) return registrarEnMovimientos_(tipo, datos, usuario, ahora, extra || {});
-    asegurarPestanaApp(TAB.APP_MOV);
-    const id = LineasDatos.nuevoId(TAB.APP_MOV);
-    LineasDatos.agregarFilas(TAB.APP_MOV, [{
-      'ID': id, 'FECHA': ahora, 'TIPO': tipo, 'REFS': ',' + (extra.refs || []).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(',') + ',',
-      'NUCO': LineasUtil.nucoVisible(extra.nuco) || '', 'NUMERO': extra.numero || '', 'NUCO_DESTINO': LineasUtil.nucoVisible(extra.nucoDestino) || '',
-      'MOTIVO': txt(datos.motivo) || '', 'TICKET': txt(datos.ticket) || '',
-      'USUARIO_CORREO': usuario.correo, 'USUARIO_NOMBRE': usuario.nombre,
-      'ANTES_JSON': JSON.stringify(extra.antes || {}), 'DESPUES_JSON': JSON.stringify(extra.despues || {}),
-      'DETALLE_JSON': JSON.stringify(extra.detalle || {}),
-    }]);
-    return id;
+    return registrarEnMovimientos_(tipo, datos, usuario, ahora, extra || {});
   }
 
   /** Lo que no es un cambio en el alta: IDs, campos calculados y los de la pantalla (empiezan con _). */
-  const NO_VA_EN_ALTA = ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'FOLIO', 'FECHA REGISTRO', 'ESTATUS GENERAL', 'ID PERSONA'];
+  const NO_VA_EN_ALTA = ['ID', 'ID ANTERIOR', 'ID APPSHEET', 'FOLIO', 'FECHA REGISTRO', 'ID PERSONA'];
 
   /**
    * Un renglón de MOVIMIENTOS: ID, FECHA, ACCION, ID EQUIPO, ID LINEA, ID ASIGNACION (las que tocó), COMENTARIO, TICKET,
@@ -1010,6 +889,10 @@ const LineasRepo = (function () {
     ASIGNAR_LINEA: 'Vincular línea', RETIRAR_LINEA: 'Desvincular línea', CAMBIO_EQUIPO: 'Cambio de equipo',
     // Resguardos y cancelaciones (30-sep)
     RESGUARDO: 'Resguardo', CANCELACION_LINEA: 'Cancelación de línea', VENTA: 'Venta',
+    // Panel de Pau (pendiente 3.12)
+    CORREGIR_RESGUARDO: 'Corrección de resguardo', QUITAR_PANEL: 'Quitado del panel', RETIRAR_CANCELACION: 'Cancelación retirada',
+    // Pau recibe el equipo POR RECIBIR: pasa al estatus elegido (pendiente 3.15)
+    RECEPCION: 'Recepción en resguardo',
     // Acciones con nombre (etapa 3, paso 2): Entregar y el cierre (vendido, donado, desechado o extravío-robo)
     ENTREGA: 'Entrega', CIERRE: 'Cierre', NOTA: 'Nota', CAMBIO_LINEA: 'Cambio de línea',
     // Editar (corrige y cambia estatus, 4-oct)
@@ -1539,6 +1422,19 @@ const LineasRepo = (function () {
   // ---------------- Catálogos y colaboradores ----------------
 
   /**
+   * Colores que se sugieren al capturar (usuario, 22-oct): los de los equipos y los de inspecciones y responsivas que se
+   * repiten. Un error de captura que salió una sola vez («NEGO», de una inspección del AppSheet) ya no se ofrece, ni lo
+   * que no es color. La lista sigue abierta: un color nuevo se escribe.
+   */
+  const NO_SON_COLOR = ['NA', 'N/A', 'NO APLICA'];
+  function coloresSugeridos(deEquipos, capturados) {
+    const veces = {};
+    capturados.forEach((v) => { veces[v] = (veces[v] || 0) + 1; });
+    return deEquipos.concat(Object.keys(veces).filter((v) => veces[v] > 1))
+      .filter((v, i, a) => v && a.indexOf(v) === i && NO_SON_COLOR.indexOf(v) < 0).sort();
+  }
+
+  /**
    * Catálogos para formularios: enums del AppSheet + valores de LISTAS TELEFONOS y BITACORA DE DESECHO,
    * y sugerencias (valores ya capturados) para los campos que en AppSheet eran texto libre: así se elige de
    * una lista en vez de escribir (personas, puestos y números se completan en el navegador con COLABORADORES
@@ -1550,7 +1446,7 @@ const LineasRepo = (function () {
    * "Agregar 'x'" se queda en su registro y no entra a estas listas.
    */
   function catalogos() {
-    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v8'); // v8: sedes con QUERETARO en vez de QRO (13-oct)
+    const enCache = LineasDatos.cacheLeer('catalogos_telefonia_v9'); // v9: colores sin los capturados una sola vez (22-oct)
     if (enCache) return enCache;
     const unicos = (filas, columna) => {
       const m = {};
@@ -1562,13 +1458,17 @@ const LineasRepo = (function () {
     const lineas = LineasDatos.leerTabla(TAB.LINEAS);
     const inspecciones = LineasDatos.leerTabla(TAB.INSP);
     const responsivas = LineasDatos.leerTabla(TAB.RESP);
+    // Un valor por renglón (no únicos): coloresSugeridos cuenta cuántas veces salió cada uno
+    const porRenglon = (filas, columna) => filas.map((f) => txt(col(f, columna)))
+      .filter((v) => v && !(v instanceof Date)).map((v) => String(v).trim().toUpperCase());
     const juntar = function () {
       return Array.prototype.concat.apply([], arguments).filter((v, i, a) => a.indexOf(v) === i).sort();
     };
     // Lo de Capital Humano sale del índice de colaboradores (caché 6 h), no de leer otra vez la base (usuario, 9-oct: la
     // inspección pedía catálogos y colaboradores y las dos leían las 15 mil filas de CH sin caché)
     const ix = indiceColaboradores();
-    const ch = ix.filas.map((f) => {
+    const iEstatus = ix.columnas.indexOf('estatus');
+    const ch = ix.filas.filter((f) => f[iEstatus] !== 'BAJA').map((f) => {
       const o = {};
       [['puesto', 'PUESTO'], ['departamento', 'DEPARTAMENTO'], ['area', 'AREA'], ['sede', 'SEDE'], ['oficina', 'OFICINA/DESARROLLO'],
         ['director', 'DIRECTOR'], ['jefe', 'JEFE DIRECTO']].forEach(([k, c]) => { o[c] = f[ix.columnas.indexOf(k)]; });
@@ -1587,56 +1487,57 @@ const LineasRepo = (function () {
       estadosDesecho: unicos(desechos, 'ESTADO'),
       // Sugerencias (lo que ya se ha capturado)
       motivosDesecho: unicos(desechos, 'MOTIVO'),
-      colores: juntar(unicos(lineas, 'COLOR'), unicos(inspecciones, 'COLOR'), unicos(responsivas, 'COLOR')),
+      colores: coloresSugeridos(unicos(lineas, 'COLOR'), porRenglon(inspecciones, 'COLOR').concat(porRenglon(responsivas, 'COLOR'))),
       puestos: unicos(ch, 'PUESTO'),
       jefes: unicos(ch, 'JEFE DIRECTO'),
       directores: unicos(ch, 'DIRECTOR'),
       otrasApps: unicos(inspecciones, 'OTRA'),
       identificaciones: unicos(responsivas, 'IDENTIFICACION'),
     });
-    LineasDatos.cacheGuardar('catalogos_telefonia_v8', c, 21600);
+    LineasDatos.cacheGuardar('catalogos_telefonia_v9', c, 21600);
     return c;
   }
 
   /** Personas activas de CH para elegir al responsable: al elegir una se llenan sus datos (autollenar). */
   function indiceColaboradores() {
-    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v6');
+    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v7');
     if (enCache) return enCache;
-    // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (CapitalHumano.activos, 12-oct-2026).
+    // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (12-oct-2026), más las bajas de los últimos
+    // 12 meses con estatus BAJA (usuario, 21-oct; pendiente 2.58: la lista las marca y los catálogos no las toman).
     // Líneas los guarda en mayúsculas y el correo en minúsculas, como siempre.
     const may = (v) => { const t = String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toUpperCase(); return t || null; };
     // Sede, área y oficina como las muestra el sistema («QRO» → «QUERETARO»; LineasUtil.mostrarCH). Al leer la base de CH
     // con leerTabla ya salían así; con CapitalHumano.activos (12-oct) la lista de Sede ofrecía QRO (usuario, 13-oct). Al
     // guardar se escribe como en CH (guardarCH)
     const comoSeMuestra = (c, v) => { const t = may(v); return t && LineasUtil.mostrarCH(c, t); };
-    const filas = CapitalHumano.activos().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
-      comoSeMuestra('AREA', p.AREA), comoSeMuestra('SEDE', p.SEDE), comoSeMuestra('OFICINA/DESARROLLO', p.OFICINA), 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
+    const filas = CapitalHumano.conBajasRecientes().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
+      comoSeMuestra('AREA', p.AREA), comoSeMuestra('SEDE', p.SEDE), comoSeMuestra('OFICINA/DESARROLLO', p.OFICINA), p.ESTATUS === 'BAJA' ? 'BAJA' : 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
       String(p.CORREO || '').trim().toLowerCase() || null]).filter((c) => c[1]);
     const ix = LineasUtil.paraCliente({
       columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo'],
       filas: filas, generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_colaboradores_v6', ix, 21600);
+    LineasDatos.cacheGuardar('indice_colaboradores_v7', ix, 21600);
     return ix;
   }
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6',
-      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8',
+    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6', 'indice_colaboradores_v7',
+      'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8', 'catalogos_telefonia_v9',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
     equivalencias_ = null;
   }
 
   return {
     TAB, ENCABEZADOS_APP, TIPOS_CON_EQUIPO, TIPOS_CON_LINEA, TIPOS_LINEA_OPCIONAL, CATALOGO,
-    COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE, CAMPOS_BITACORA,
-    tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro, estatusGeneralRegistro,
+    COLS_LINEA, VALORES_SIN_LINEA, ESTATUS_EN_BLANCO, DEPARTAMENTO_DISPONIBLE, COLS_RESPONSABLE,
+    tipoConLinea, tipoSinLinea, convertirRegistro, folioRegistro,
     indice, vistaCompleta, refrescarIndice, leerRegistroPorId, leerRegistroObligatorio, idActual, idsDeRegistro,
     guardarCambiosRegistro, agregarRegistro, registrarMovimiento, asegurarPestanaApp,
     evidenciaDesdeFila, inspeccionDesdeFila, inspeccionDesdeEvidencia, responsivaDesdeFila,
     evidenciasDeRegistro, responsivasEntregadas, COL_LINEA_ENTREGADA, leerInspeccion, leerResponsiva, revisarPdfsLigados, historialDeRegistro, asignacionesDeRegistro, movimientoDeCampo, bitacora,
     ACCION_CAMBIO_NUMERO, numerosDeLinea, facturasDeLinea, cobroHabitual, diaDeCorte,
-    catalogos, indiceColaboradores, borrarCaches,
+    catalogos, coloresSugeridos, indiceColaboradores, borrarCaches,
   };
 })();

@@ -7,7 +7,7 @@ const path = require('path');
 // con las hojas en memoria: el renglón armado (LineasLectura) → guardar → cómo quedan las hojas y el renglón armado.
 const leer = (archivo) => fs.readFileSync(path.join(__dirname, '../src/services/lineas', archivo), 'utf8');
 
-function cargar(inicial, retirada) {
+function cargar(inicial) {
   const hojas = JSON.parse(JSON.stringify(inicial), (k, v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v) ? new Date(v) : v));
   hojas['LINEAS TELEFONICAS'] = hojas['LINEAS TELEFONICAS'] || [];
   const escrituras = [];
@@ -31,11 +31,10 @@ function cargar(inicial, retirada) {
   let n = 0;
   const Ids = { nuevo: (p) => p + '-NUEVO' + (++n) };
   const Utilities = { formatDate: (d) => d.toISOString().slice(0, 10) };
-  const PropertiesService = { getScriptProperties: () => ({ getProperty: (k) => (k === 'LINEAS_HOJA_VIEJA_RETIRADA' ? retirada || null : 'ESTRUCTURA') }) };
   const fuente = leer('LineasUtil.gs') + ';' + leer('LineasEstructura.gs') + ';' + leer('LineasLectura.gs') + ';' + leer('LineasEscritura.gs') +
     '; return { LineasLectura, LineasEscritura };';
-  const m = new Function('LineasDatos', 'LineasRepo', 'Ids', 'Utilities', 'PropertiesService', 'soloEditor_', fuente)(
-    LineasDatos, LineasRepo, Ids, Utilities, PropertiesService, () => {});
+  const m = new Function('LineasDatos', 'LineasRepo', 'Ids', 'Utilities', 'soloEditor_', fuente)(
+    LineasDatos, LineasRepo, Ids, Utilities, () => {});
   const usuario = { correo: 'prueba@x', nombre: 'PRUEBA' };
   const ahora = new Date('2026-10-03T18:00:00Z');
   const registro = (id) => m.LineasLectura.filas().find((f) => f['ID'] === id);
@@ -173,8 +172,56 @@ test('vendido: el equipo sale de toda asignación y la línea disponible se qued
   assert.strictEqual(linea['TIPO'], 'RESGUARDO');
   assert.strictEqual(linea['SEDE'], 'MERIDA');
   const f = t.registro('EQU-2');
-  assert.strictEqual(f['DEPARTAMENTO'], 'N/A');
-  assert.strictEqual(f['SEDE'], 'MERIDA'); // muestra su última asignación cerrada
+  // Estatus final: sin ubicación aunque su última asignación la tenga (usuario, 22-oct)
+  assert.strictEqual(f['DEPARTAMENTO'], '');
+  assert.strictEqual(f['SEDE'], '');
+  assert.strictEqual(f['OFICINA / DESARROLLO'], '');
+});
+
+// Usuario, 22-oct: «limpiar estatus finales toda la información, no solo responsables»
+test('estatus final: el equipo queda sin accesorios, PIN, patrón ni contraseña; modelo, IMEI y NUCO se conservan', () => {
+  const base = JSON.parse(JSON.stringify(BASE));
+  Object.assign(base.EQUIPOS.find((e) => e.ID === 'EQU-2'), { 'ACCESORIOS': 'CAJA, CABLE', 'PIN EQUIPO': '1234', 'PATRON': 'L', 'CONTRASEÑA MODEM': 'X1' });
+  const t = cargar(base);
+  // Lo que la pantalla manda de esos campos no cuenta: el estatus final los deja en blanco
+  const r = t.guardar('EQU-2', { 'ESTATUS EQUIPO': 'DONADO', 'ACCESORIOS': 'CAJA' });
+  const e = t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2');
+  assert.deepStrictEqual([e['ACCESORIOS'], e['PIN EQUIPO'], e['PATRON'], e['CONTRASEÑA MODEM']], ['', '', '', '']);
+  assert.deepStrictEqual([e['MODELO'], e['IMEI'], e['NUCO'], e['ESTATUS EQUIPO']], ['MOTO', '222', '0020', 'DONADO']);
+  assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'CAJA, CABLE' && c.despues === ''), 'queda en el historial');
+  assert.ok(!t.vigentes().some((a) => a['ID EQUIPO'] === 'EQU-2'));
+  // Fuera de un estatus final no se limpia
+  const t2 = cargar(base);
+  t2.guardar('EQU-2', { 'ESTATUS EQUIPO': 'PARA VENTA' });
+  assert.strictEqual(t2.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CAJA, CABLE');
+});
+
+// Usuario, 22-oct: CARGADOR ya no es accesorio; se guarda como CABLE y CUBO
+test('accesorios: CARGADOR se guarda como CABLE y CUBO, también si el registro ya lo traía', () => {
+  const base = JSON.parse(JSON.stringify(BASE));
+  Object.assign(base.EQUIPOS.find((e) => e.ID === 'EQU-2'), { 'ACCESORIOS': 'CAJA, CARGADOR' });
+  const t = cargar(base);
+  t.guardar('EQU-1', { 'ACCESORIOS': 'CARGADOR, FUNDA' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-1')['ACCESORIOS'], 'CABLE, CUBO, FUNDA');
+  // Se guarda sin tocarlo: lo de antes cuenta tal cual y queda en el historial
+  const r = t.guardar('EQU-2', { 'ACCESORIOS': 'CAJA, CARGADOR' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CAJA, CABLE, CUBO');
+  assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'CAJA, CARGADOR' && c.despues === 'CAJA, CABLE, CUBO'));
+});
+
+// lineas-revisor, 22-oct: la pantalla regresa los accesorios en el orden de la lista; los mismos en otro orden no son cambio
+test('accesorios: los mismos en otro orden no se escriben ni van al historial; uno de más o de menos sí', () => {
+  const base = JSON.parse(JSON.stringify(BASE));
+  Object.assign(base.EQUIPOS.find((e) => e.ID === 'EQU-2'), { 'ACCESORIOS': 'FUNDA , MICA , CUBO , CABLE' });
+  const t = cargar(base);
+  let r = t.guardar('EQU-2', { 'ACCESORIOS': 'CABLE , CUBO , FUNDA , MICA' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'FUNDA , MICA , CUBO , CABLE');
+  assert.ok(!r.campos.some((c) => c.campo === 'ACCESORIOS'));
+  r = t.guardar('EQU-2', { 'ACCESORIOS': 'cable,cubo , funda, mica, CABLE' });
+  assert.ok(!r.campos.some((c) => c.campo === 'ACCESORIOS'));
+  r = t.guardar('EQU-2', { 'ACCESORIOS': 'CABLE , CUBO , FUNDA' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((x) => x.ID === 'EQU-2')['ACCESORIOS'], 'CABLE , CUBO , FUNDA');
+  assert.ok(r.campos.some((c) => c.campo === 'ACCESORIOS' && c.antes === 'FUNDA , MICA , CUBO , CABLE' && c.despues === 'CABLE , CUBO , FUNDA'));
 });
 
 test('de resguardo a uso con su persona (reasignar): abre la asignación con persona y deja DISPONIBLE fuera', () => {
@@ -331,16 +378,10 @@ test('no se le pone a un equipo la línea de otro equipo, ni se borra el número
   assert.throws(() => t.guardar('EQU-1', { 'NUMERO TELEFONO': '' }), /no se borra/);
 });
 
-test('paso 4: con LINEAS TELEFONICAS retirada no se lee; rutas y NUCO de la línea sola salen de las hojas nuevas', () => {
-  const vieja = [{ 'ID': 'LIN-V4', 'NUCO': '0777', 'COMENTARIOS': 'VIEJO', 'RESPONSIVA': 'R_Files_/vieja.pdf' }];
-  const base = Object.assign({}, BASE, { 'LINEAS TELEFONICAS': vieja });
-  // Antes de retirarla: se lee de la hoja vieja
-  const antes = cargar(base);
-  assert.strictEqual(antes.registro('LIN-C')['NUCO'], '0777');
-  assert.strictEqual(antes.registro('LIN-C')['COMENTARIOS'], 'VIEJO');
-  // Retirada: la hoja vieja no se lee; lo copiado está en LINEAS (NUCO ANTERIOR y la ruta)
+test('la hoja vieja no se lee aunque exista (7.13); rutas y NUCO de la línea sola salen de las hojas nuevas', () => {
+  const vieja = [{ 'ID': 'LIN-V4', 'NUCO': '0999', 'COMENTARIOS': 'VIEJO', 'RESPONSIVA': 'R_Files_/otra.pdf' }];
   const lineas = BASE.LINEAS.map((l) => (l['ID'] === 'LIN-C' ? Object.assign({}, l, { 'NUCO ANTERIOR': '0777', 'RESPONSIVA': 'R_Files_/vieja.pdf' }) : l));
-  const t = cargar(Object.assign({}, base, { LINEAS: lineas }), '2026-10-04T23:00:00.000Z');
+  const t = cargar(Object.assign({}, BASE, { 'LINEAS TELEFONICAS': vieja, LINEAS: lineas }));
   assert.strictEqual(t.registro('LIN-C')['NUCO'], '0777');
   assert.strictEqual(t.registro('LIN-C')['RESPONSIVA'], 'R_Files_/vieja.pdf');
   assert.strictEqual(t.registro('LIN-C')['COMENTARIOS'], ''); // el comentario viejo vive en MOVIMIENTOS
@@ -368,4 +409,23 @@ test('rapidez (13-oct): una asignación sin persona deja el ID PERSONA en blanco
   } finally {
     delete globalThis.CapitalHumano;
   }
+});
+
+// Pendiente 2.53 (usuario, 21-oct): SIN BLOQUEO guarda «NO APLICA» en PIN EQUIPO; en blanco, Corregir equipo abría la
+// lista de bloqueo en «Selecciona…». Los demás «no aplica» siguen en blanco
+test('PIN EQUIPO «NO APLICA» (SIN BLOQUEO) se guarda tal cual; los demás «no aplica», en blanco', () => {
+  const t = cargar(BASE);
+  const r = t.guardar('EQU-1', { 'PIN EQUIPO': 'NO APLICA', 'COLOR': 'N/A' });
+  assert.strictEqual(t.hojas.EQUIPOS[0]['PIN EQUIPO'], 'NO APLICA');
+  assert.ok(!t.hojas.EQUIPOS[0]['COLOR']);
+  assert.deepStrictEqual(r.campos.map((c) => c.campo), ['PIN EQUIPO']);
+  t.olvidar();
+  assert.strictEqual(t.registro('EQU-1')['PIN EQUIPO'], 'NO APLICA', 'el renglón armado lo trae para la lista de bloqueo');
+  // Guardar otra vez lo mismo no es un cambio; «N/A» de antes sigue en blanco
+  assert.deepStrictEqual(t.guardar('EQU-1', { 'PIN EQUIPO': 'no aplica' }).campos, []);
+  t.guardar('EQU-1', { 'PIN EQUIPO': 'N/A' });
+  assert.strictEqual(t.hojas.EQUIPOS[0]['PIN EQUIPO'], '');
+  // El alta, igual
+  t.agregar({ 'TIPO': 'EQUIPO', 'NUCO': '0099', 'EQUIPO': 'MOTO', 'IMEI': '999', 'PIN EQUIPO': 'NO APLICA', 'ESTATUS EQUIPO': 'DISPONIBLE' });
+  assert.strictEqual(t.hojas.EQUIPOS.find((e) => e['NUCO'] === '0099')['PIN EQUIPO'], 'NO APLICA');
 });

@@ -11,11 +11,11 @@ const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (usuario, 4-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /return \{ responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, datoDeCH_, esRenovacion, exigirEstatusParaResponsiva \};/);
-  // Reasignar: el director sale de la responsiva y el jefe directo de la inspección (si es de la misma persona) o de
-  // Capital Humano (usuario, 6-oct)
-  assert.match(acciones, /cambios\['JEFE DIRECTO'\] = deInspeccion \|\| datoDeCH_\(valores\['No EMPLEADO'\], valores\['RESPONSABLE'\], 'jefe'\);/);
-  assert.match(acciones, /may\(LineasCaptura\.datoDeInspeccion\(inspeccionId, 'RESPONSABLE'\)\) === nuevo \? LineasCaptura\.datoDeInspeccion\(inspeccionId, 'JEFE DIRECTO'\) : ''/);
+  assert.match(acciones, /return \{ responsiva, vincular, aplicarVinculo: aplicarVinculo_, PERSONA_DE_RESPONSIVA, ESTATUS_SIN_RESPONSIVA, esRenovacion, exigirEstatusParaResponsiva,\s+nombreRegistro: nombreRegistro_ \};/);
+  // Reasignar: el director y el jefe directo salen de la responsiva (usuario, 19-oct; del 6 al 19-oct el jefe salía de la
+  // inspección o de Capital Humano)
+  assert.match(acciones, /\['JEFE DIRECTO', 'JEFE DIRECTO'\], \['DIRECTOR', 'DIRECTOR'\]/);
+  assert.doesNotMatch(acciones, /datoDeCH_|datoDeInspeccion/);
   assert.doesNotMatch(acciones, /function (reglas|permite|hayCamino|cerrar|cambiar)\(/);
   assert.match(read('src/services/TelefoniaService.gs'), /function catalogos\(token\) \{\r?\n    leer_\(token\);\r?\n    return LineasRepo\.catalogos\(\);/);
   const api = API;
@@ -27,9 +27,12 @@ test('sin «¿Qué pasó?» ni regla de estatus: regresa «Cambiar estatus» (us
   // La pantalla: el botón «Cambiar estatus» y todas las acciones sin depender del estatus
   const cliente = LINEAS;
   assert.doesNotMatch(cliente, /texto: '¿Qué pasó\?'|function (abrirQuePaso|accionesPosibles|permiteAccion|abrirCierre|abrirCambio)\(|ACCION_ENTREGAR|estatusPosibles/);
-  assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: operar, alHacer: \(f\) => abrirResguardo\(f\)/);
-  // Reasignar se volvió la Responsiva (pendiente 2.49, usuario 16-oct): solo revisa lo que ya no se entrega
-  assert.match(cliente, /texto: 'Responsiva'[^\n]*visible: operar,/);
+  assert.match(cliente, /texto: 'Mandar a resguardo'[^\n]*\n\s+visible: \(f\) => operar\(f\) && f\.every\(mandaResguardo\), alHacer: \(f\) => abrirResguardo\(f\)/);
+  // Ya en el panel de Pau: Corregir resguardo y, si aún no lo recibe, Quitar del panel (pendiente 3.12)
+  assert.match(cliente, /texto: 'Corregir resguardo'[^\n]*\n\s+visible: \(f\) => operar\(f\) && f\.every\(\(r\) => r\.panel\), alHacer: \(f\) => abrirResguardo\(f, \{ corregir: true \}\)/);
+  assert.match(cliente, /visible: \(f\) => operar\(f\) && f\.every\(\(r\) => r\.panel === 'PENDIENTE DE RECEPCION'\), alHacer: \(f\) => quitarDelPanel\(f\.map\(\(r\) => r\.id\), trasQuitar\)/);
+  // Reasignar se volvió la Responsiva (pendiente 2.49, usuario 16-oct): sin botón en lo que ya no se entrega (pendiente 2.55)
+  assert.match(cliente, /texto: 'Responsiva'[^\n]*\n\s+visible: \(f\) => operar\(f\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\),/);
   assert.doesNotMatch(cliente, /apiLineasAgregarNota|esNota/);
 });
 
@@ -49,10 +52,13 @@ test('sin «Cambiar estatus»: los estatus se cambian en Editar; los del panel d
   const cliente = LINEAS;
   assert.doesNotMatch(cliente, /abrirCambioEstatus|fichaDeFila|texto: 'Cambiar estatus'/);
   const editar = cliente.slice(cliente.indexOf('function abrirEditor('), cliente.indexOf('// ---- Captura: inspección y responsiva nuevas'));
-  // Ya no abre Mandar a resguardo ni Mandar a cancelación: avisa, se confirma y se guarda con sinPanel
+  // Ya no abre Mandar a resguardo ni Mandar a cancelación: la nota bajo el estatus avisa y se guarda con sinPanel (sin la
+  // ventana «Cambio de estatus»; usuario, 20-oct, pendiente 3.12)
   assert.match(editar, /cambiaA\('ESTATUS EQUIPO', ESTATUS_EQUIPO_RESGUARDO\)/);
   assert.match(editar, /cambiaA\('ESTATUS LINEA', ESTATUS_LINEA_PANEL\)/);
-  assert.match(editar, /mensaje: 'Este cambio no se agregará en el panel de Resguardos y cancelaciones, pero se quedará en el historial\.'/);
+  assert.doesNotMatch(editar, /Confirmar\.pedir|titulo: 'Cambio de estatus'/);
+  assert.match(editar, /nota\.hidden = !\(v\[par\[0\]\] !== ctx\.inicial\[par\[0\]\] && par\[1\]\.indexOf\(v\[par\[0\]\]\) >= 0\);/);
+  assert.match(cliente, /const NOTA_SIN_PANEL = 'No entra al panel de Resguardos y cancelaciones; queda en el historial\.';/);
   assert.match(editar, /sinPanel: avisos\.length > 0/);
   assert.doesNotMatch(editar, /seguirFlujo|abrirResguardo\(|abrirCancelacion\(/);
   assert.doesNotMatch(editar, /placeholder=|class="ln-nota"/); // sin textos de ayuda
@@ -95,7 +101,8 @@ test('inspección: el equipo y la línea vienen del registro y no se cambian; el
     assert.match(cuerpo, new RegExp("campo_\\('" + c + "', '[^']+', 'texto', fijo\\("), c + ' debe ser fijo');
   });
   assert.match(cuerpo, /campo_\('COLOR', 'Color', 'listaAbierta', \{ valor: deResp\('COLOR', v\('COLOR'\)\)/);
-  assert.match(cuerpo, /campo_\('RESPONSABLE', 'Nombre', 'listaAbierta'/);
+  // El responsable, con los mismos campos que la responsiva (19-oct, pendiente 2.54; lineas-responsable-homologado.test.cjs)
+  assert.match(cuerpo, /camposResponsable_\(catalogos, persona, \{ soloProcesos: !!enAccion \}\)/);
   const pantalla = LINEAS;
   assert.doesNotMatch(pantalla, /Opcional\. Se guardan en Drive/);
   assert.match(pantalla, /desde: 'titulo:EQUIPO'/);
@@ -168,7 +175,7 @@ test('opciones separadas: el equipo no trae lo de la línea (usuario, 4-oct)', (
   ["texto: 'Mandar a cancelación'", "texto: 'Ir al equipo'"].forEach((t) => assert.ok(linea.includes(t), t));
   assert.doesNotMatch(linea, /abrirResguardo|abrirReasignar|abrirCaptura/);
   // La línea sin equipo entrega con su Responsiva (pendiente 2.49)
-  assert.match(linea, /visible: \(f\) => operar\(\) && !f\[0\]\.equipoId, alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\)/);
+  assert.match(linea, /visible: \(f\) => operar\(f\) && !f\[0\]\.equipoId && conDocumentos\('linea', f\[0\]\.estatus\), alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\)/);
   const ficha = cliente.slice(cliente.indexOf('function abrirMenuFicha'), cliente.indexOf('menuFlotante(boton, items.filter(Boolean));'));
   assert.doesNotMatch(ficha, /Mandar línea a cancelación/);
   // En la ficha ya no van Ir a la línea ni Ir al equipo: están en su información (usuario, 12-oct; pendiente 2.34)
@@ -217,10 +224,6 @@ test('POSIBLE VENTA-DAÑO ya no existe y PARA VENTA CON DETALLE sí: 9 estatus d
   assert.doesNotMatch(estructura, /'POSIBLE VENTA': 'POSIBLE VENTA-DAÑO'|'POSIBLE VENTA-DAÑO'/);
   assert.match(estructura, /'POSIBLE VENTA': 'RESGUARDO'/); // sigue guardado mientras Líneas lo corrige
   assert.doesNotMatch(LINEAS, /POSIBLE VENTA-DAÑO/);
-  const fn = read('src/services/lineas/LineasReestructura.gs');
-  // \r?\n: en Windows git deja los archivos con CRLF (core.autocrlf) y con \n solo fallaba ahí
-  assert.match(fn, /function reestructuraQuitarPosibleVentaDano\(\) \{\r?\n\s+soloEditor_\(\);/);
-  assert.match(fn, /guardarCambiosRegistro\(f, \{ 'ESTATUS EQUIPO': 'POSIBLE VENTA' \}/);
 });
 
 // Pendiente 2.39 (13-oct): el error del pie de las capturas flotaba sin fondo y se pintaba encima del Comentario de

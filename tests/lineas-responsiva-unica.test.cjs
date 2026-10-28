@@ -20,11 +20,11 @@ function accionesCon(registro) {
   const ctx = vm.createContext({
     LineasUtil: { col: (f, c) => f[c], nucoVisible: (n) => String(n).padStart(4, '0') },
     LineasDatos: { idsDeFila: (f) => [f.ID] },
+    LineasResguardos: { enPanel: (f) => !!f._enPanel },
     LineasRepo: {
       leerRegistroObligatorio: () => registro,
       guardarCambiosRegistro: (...a) => { escritos.push(a); return { refs: [], campos: [] }; },
       registrarMovimiento: (...a) => escritos.push(a),
-      indiceColaboradores: () => ({ columnas: ['noEmpleado', 'nombre', 'director', 'jefe'], filas: [['AC1', 'LUIS', 'DIR', 'JEFE DE CH']] }),
     },
     LineasCaptura: {
       exigirInspeccion: (id, ids, nombre) => {
@@ -32,9 +32,9 @@ function accionesCon(registro) {
         if (!id) throw new Error(nombre + ': falta su inspección (se captura dentro de la acción).');
         return id;
       },
-      datoDeInspeccion: (id, c) => ({ RESPONSABLE: 'LUIS', 'JEFE DIRECTO': 'JEFA DE LA INSPECCION' })[c] || '',
       guardarResponsiva: (datos, usuario, secretos, accion) => {
-        const hecho = accion.aplicar(new Date(), Object.assign({ COMENTARIO: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1' }, datos.valores || {}));
+        const hecho = accion.aplicar(new Date(), Object.assign({ COMENTARIO: 'CAMBIO DE PUESTO', RESPONSABLE: 'LUIS', 'No EMPLEADO': 'AC1',
+          'JEFE DIRECTO': 'JEFA DE LA RESPONSIVA', DIRECTOR: 'DIR' }, datos.valores || {}));
         return { id: 'RES-1', registroId: hecho.id, filas: [], hecho: hecho };
       },
     },
@@ -45,7 +45,7 @@ function accionesCon(registro) {
 
 test('servidor: la responsiva es la acción; Reasignar ya no existe', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  const cuerpo = acciones.slice(acciones.indexOf('function responsiva('), acciones.indexOf('function datoDeCH_('));
+  const cuerpo = acciones.slice(acciones.indexOf('function responsiva('), acciones.indexOf('// ---------------- Vincular'));
   assert.match(cuerpo, /ref: ref, modo: 'RESPONSIVA'/);
   assert.match(cuerpo, /registrarMovimiento\('REASIGNACION', \{ motivo: comentario, ticket: txt\(valores\['TICKET'\]\) \}/);
   assert.match(acciones, /\['DIRECTOR', 'DIRECTOR'\]/); // la responsiva lleva al director (usuario, 6-oct)
@@ -65,8 +65,10 @@ test('otra persona en un equipo es reasignación y la inspección es obligatoria
   const mov = escritos.find((a) => a[0] === 'REASIGNACION');
   assert.equal(mov[4].detalle.inspeccionId, 'INS-9');
   const cambios = escritos.find((a) => a[1] && a[1]['ESTATUS EQUIPO'] === 'USO')[1];
-  // El jefe directo que se corrigió en la inspección (de la misma persona) es el que queda; su línea DISPONIBLE se va con él (L1)
-  assert.equal(cambios['JEFE DIRECTO'], 'JEFA DE LA INSPECCION');
+  // El jefe directo y el director son los de la responsiva (usuario, 19-oct); su línea DISPONIBLE se va con él (L1)
+  assert.equal(cambios['JEFE DIRECTO'], 'JEFA DE LA RESPONSIVA');
+  assert.equal(cambios['DIRECTOR'], 'DIR');
+  assert.equal(cambios['NO EMPLEADO'], 'AC1');
   assert.equal(cambios['ESTATUS LINEA'], 'USO');
   assert.equal(cambios['RESPONSABLE'], 'LUIS');
 });
@@ -91,7 +93,7 @@ test('la línea sin equipo: DISPONIBLE pasa a USO con la persona, sin inspecció
   assert.equal(exigidas.length, 0, 'la línea sin equipo no lleva inspección');
   const cambios = escritos.find((a) => a[1] && a[1]['ESTATUS LINEA'] === 'USO')[1];
   assert.equal(cambios['RESPONSABLE'], 'LUIS');
-  assert.equal(cambios['JEFE DIRECTO'], 'JEFE DE CH');
+  assert.equal(cambios['JEFE DIRECTO'], 'JEFA DE LA RESPONSIVA');
   assert.ok(!('ESTATUS EQUIPO' in cambios));
   assert.ok(escritos.some((a) => a[0] === 'REASIGNACION'));
   [['LIN-2', { 'ESTATUS LINEA': 'CANCELADA', 'NUMERO TELEFONO': '4420000000' }, /La línea 4420000000 está CANCELADA\./],
@@ -117,7 +119,7 @@ test('todo lo de la responsiva pasa a la ficha: persona, modelo, IMEI, accesorio
   // La línea sin equipo guarda su carpeta en LINEAS también dentro de la acción
   assert.match(captura, /const carpetaLinea = objetivo\.equipo \? null\s*: LineasArchivos\.carpetaEvidenciaLinea\(/);
   // Lo vendido o cancelado no abre la responsiva (Vincular ya lo revisó)
-  assert.match(captura, /LineasAcciones\.exigirEstatusParaResponsiva\(obj\.fila, !!obj\.equipo\);/);
+  assert.match(captura, /LineasAcciones\.exigirEstatusParaResponsiva\(obj\.fila, !!obj\.equipo, !!\(ref && ref\.desdeCorregir\)\);/);
 });
 
 test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la persona fija', () => {
@@ -126,7 +128,8 @@ test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la p
     LineasRegistros: { camposAdicionales: () => [] },
     LineasRepo: { CATALOGO: { accesorios: ['CUBO'] }, TAB: { INSP: 'INSP', RESP: 'RESP' }, catalogos: () => ({}) },
     LineasDatos: { nuevoId: () => 'RES-1' }, LineasFirmas: { tiene: () => false }, LineasChecklist: { CONDICIONES: [] },
-    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null) },
+    LineasUtil: { col: (f, c) => (c in f ? f[c] : null), nucoVisible: (v) => (v ? String(v) : null),
+      sinCargador: new Function(read('src/services/lineas/LineasUtil.gs') + '; return LineasUtil;')().sinCargador },
   });
   vm.runInContext(read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
   const fila = { ID: 'EQU-1', NUCO: '12', EQUIPO: 'MOTO G', IMEI: '35', 'ESTATUS EQUIPO': 'USO', RESPONSABLE: 'ANA', 'NUMERO TELEFONO': '442' };
@@ -144,6 +147,10 @@ test('el formulario: modelo e IMEI se corrigen; la línea fija; en Vincular la p
   const v = campos(fila, 'LINEA');
   assert.equal(v['RESPONSABLE'].soloLectura, true);
   assert.equal(v['No EMPLEADO'].soloLectura, true);
+  // CARGADOR de antes llega como CABLE y CUBO y ya no es opción (usuario, 22-oct)
+  const a = campos(Object.assign({}, fila, { ACCESORIOS: 'CAJA, CARGADOR, CUBO' }), 'RESPONSIVA')['ACCESORIOS'];
+  assert.equal(a.valor, 'CAJA , CABLE , CUBO');
+  assert.deepEqual(Array.from(a.opciones), ['CUBO', 'CAJA', 'CABLE']);
 });
 
 test('pantalla: un botón «Responsiva»; inspección solo si otra persona recibe el equipo; luego se guarda con las dos', () => {
@@ -151,13 +158,13 @@ test('pantalla: un botón «Responsiva»; inspección solo si otra persona recib
   assert.doesNotMatch(cliente, /abrirReasignar|apiLineasReasignar|texto: 'Reasignar', alHacer|Nueva responsiva<\/button>/);
   assert.match(cliente, /icono\('signature'\) \+ ' Responsiva<\/button>'/);
   assert.match(cliente, /if \(btnCaptura\.dataset\.lnCaptura === 'RESPONSIVA'\) abrirResponsiva\(/);
-  assert.match(cliente, /texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos', visible: operar,\s*alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\) \},/);
-  assert.match(cliente, /visible: \(f\) => operar\(\) && !f\[0\]\.equipoId, alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\) \},/);
+  assert.match(cliente, /texto: 'Responsiva', titulo: 'Misma persona: renueva; otra: reasigna con su inspección', maximo: UNO, grupo: 'documentos',\s*visible: \(f\) => operar\(f\) && conDocumentos\('equipo', f\[0\]\.estatus, f\[0\]\.panel\), alHacer: \(f\) => abrirResponsiva\('equipo', f\[0\]\) \},/);
+  assert.match(cliente, /visible: \(f\) => operar\(f\) && !f\[0\]\.equipoId && conDocumentos\('linea', f\[0\]\.estatus\), alHacer: \(f\) => abrirResponsiva\('linea', f\[0\]\) \},/);
   assert.match(cliente, /else if \(a\.tipo === 'responsiva'\) abrirResponsiva\('equipo', a\.fila, a\.persona\);/);
-  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para)'), cliente.indexOf('const inspeccionesDelDia = {};'));
+  const fn = cliente.slice(cliente.indexOf('async function abrirResponsiva(tipo, fila, para, opciones)'), cliente.indexOf('const inspeccionesDelDia = {};'));
   // Orden (usuario, 5-oct): responsiva (se revisa, no se guarda) → inspección (se guarda) → responsiva con las dos
   const iResp = fn.indexOf("capturarEnFlujo('RESPONSIVA'");
-  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', { equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");
+  const iInsp = fn.indexOf("capturarEnFlujo('INSPECCION', Object.assign({ equipoId: fila.id, reasignar: true, desdeResponsiva: { valores: resp.datos.valores, patron: resp.datos.patron } }");
   const iGuardar = fn.indexOf("llamar('apiLineasGuardarResponsiva', Object.assign({}, d, { inspeccionId: inspeccionId }))");
   assert.ok(iResp > 0 && iResp < iInsp && iInsp < iGuardar, 'responsiva, inspección y luego guardar');
   assert.match(fn, /const reasigna = \(valores\) => esEquipo && !mismaPersonaResponsiva\(fila, valores\);/);

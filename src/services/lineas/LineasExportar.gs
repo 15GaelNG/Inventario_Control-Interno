@@ -62,11 +62,12 @@ const LineasExportar = (function () {
   }
 
   /** El inventario como lo muestra el panel: la vista del AppSheet de LINEAS TELEFONICAS. */
-  function vista_(puedeVerSecretos, alcance) {
+  function vista_(puedeVerSecretos, alcance, ocultarDG) {
     const v = LineasRepo.vistaCompleta();
     // Rol CLIENT: solo los renglones de sus departamentos (sin la columna, ninguno)
     const iDepto = v.columnas.indexOf('DEPARTAMENTO');
-    const filas = alcance ? v.filas.filter((f) => iDepto >= 0 && Permisos.dentroDeAlcance(alcance, f[iDepto])) : v.filas;
+    let filas = alcance ? v.filas.filter((f) => iDepto >= 0 && Permisos.dentroDeAlcance(alcance, f[iDepto])) : v.filas;
+    if (ocultarDG) filas = filas.map((f) => (LineasDG.esRenglonVista(v.columnas, f, 0) ? LineasDG.ocultarRenglon(v.columnas, f, 0) : f));
     return armar_(LineasRepo.TAB.LINEAS, v.columnas, filas, puedeVerSecretos);
   }
 
@@ -113,11 +114,12 @@ const LineasExportar = (function () {
    * Base completa de un módulo (ver modulos_). `alcance` (rol CLIENT, Permisos.alcanceDe): solo el inventario, y solo
    * sus departamentos; las demás pestañas no dicen de qué departamento es cada renglón.
    */
-  function baseCompleta(modulo, puedeVerSecretos, alcance) {
+  /** ocultarDG: quien no es ADMIN ve los renglones de Dirección General solo con DG, su estatus y el área (pendiente 8.16). */
+  function baseCompleta(modulo, puedeVerSecretos, alcance, ocultarDG) {
     const tablas = modulos_()[String(modulo || '').toUpperCase()];
     if (!tablas) throw new Error('Módulo desconocido para exportar: ' + modulo);
     if (alcance && tablas.some((nombre) => nombre !== VISTA)) throw new Error('No tienes acceso a esta parte de Líneas.');
-    const hojas = tablas.map((nombre) => (nombre === VISTA ? vista_(puedeVerSecretos, alcance) : hoja_(nombre, puedeVerSecretos))).filter(Boolean);
+    const hojas = tablas.map((nombre) => (nombre === VISTA ? vista_(puedeVerSecretos, alcance, ocultarDG) : hoja_(nombre, puedeVerSecretos))).filter(Boolean);
     if (!hojas.length) throw new Error('No existe la pestaña de este módulo en la base de datos.');
     return { hojas: hojas };
   }

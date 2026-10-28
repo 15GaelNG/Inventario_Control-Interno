@@ -33,6 +33,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   | Vincular… | Historial (el botón «Ver equipo» de la cabecera sigue). En Documentos la barra al seleccionar trae
   Ver inspección o Ver responsiva, Ver PDF, Generar PDF y Subir PDF firmado; Regenerar PDF y Ver carpeta en Drive solo
   en el ⋮ y el clic derecho (son `accionesSeleccion` de la tabla, no `accionesFila`).
+- **Entrada, buscador, ventanas y PDF** (22-oct, `31f10ad`, `1af7a2d`): quien tiene AREA = LINEAS en USUARIOS (`sesion.departamento`) abre directo Líneas Telefónicas en vez del Inicio si tiene su permiso (`app.html`, `vistaInicial_` con `INICIO_POR_AREA`; sin permisos guardados abre el Inicio y pasa a Líneas cuando llegan los de verdad). Al entrar a un buscador de las tablas («Buscar en la tabla…» y los de columna) lo que ya tiene queda seleccionado. Con la ventana de captura abierta (`#ln-modal-captura`) el panel lateral (Detalles o vista rápida) y su fondo bajan a z-index 490, por debajo de ella (los avisos, 600, y el visor de fotos, 700, siguen encima); Escape cierra la ventana aunque el foco esté fuera de ella (`escapeVentana`) y el panel deja pasar la tecla. Mientras se genera el PDF de un documento tras una acción (`pdfsEnCurso`), «Generar PDF» no se ofrece y, al terminar, se vuelven a pintar los Documentos de la ficha abierta (o la página del documento).
 - **Sin textos de ayuda** (12-oct, `4d07afa`): ni el párrafo de Documentos, ni el de Reasignar varios, ni
   las notas de Agregar fotos, ni la opción `ayuda` (botón «Ayuda») de las tablas de Líneas (inventario, Documentos,
   Historial, Asignaciones, Accesorios, Resguardos, Bitácora, Correcciones); queda la nota del patrón.
@@ -54,12 +55,14 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   escritura y el movimiento de «Vincular línea» (`LineasAcciones.aplicarVinculo`, ASIGNAR_LINEA), con el comentario del alta.
   La línea sigue al equipo (USO si está en uso, DISPONIBLE si está guardado). En el historial quedan «Alta de registro» y
   «Vincular línea»; no genera responsiva.
-- **Estatus en Corregir equipo** (8-oct; «Editar información» hasta el 13-oct y «Editar equipo» hasta el 16-oct): directo. RESGUARDO, PARA VENTA, PARA VENTA
-  CON DETALLE (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO del equipo, y EN PROCESO DE
+- **Estatus en Corregir equipo** (8-oct; «Editar información» hasta el 13-oct y «Editar equipo» hasta el 16-oct): directo. Desde el 21-oct (`f1b7af5`, usuario) el equipo
+  solo ofrece USO, RESGUARDO y los finales VENDIDO, DONADO, DESECHADO y EXTRAVIO-ROBO, más el que ya tiene
+  (`LineasRegistros.ESTATUS_EQUIPO_CORREGIR`; el servidor valida con la misma lista); PARA VENTA, PARA VENTA CON DETALLE
+  (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO salen solo con «Mandar a
+  resguardo» (el alta conserva todos). De la línea, EN PROCESO DE
   CANCELACION y CANCELADA de la línea, con un aviso «no se agregará en el panel de Resguardos y cancelaciones, pero se
   quedará en el historial» (Confirmar o Cancelar; el servidor los acepta solo con `datos.sinPanel`). El equipo que pasa
-  a uno de esos estatus deja DISPONIBLE su línea en uso (el aviso lo dice). **A USO no se pasa aquí** (16-oct, `a6c8398`; publicado en la v124; usuario): la lista de estatus no trae USO si el equipo no estaba en USO y el servidor lo rechaza («Para pasar el equipo a USO usa «Responsiva».»,
-  `LineasRegistros.exigirSinPersona_`); la Responsiva lo pasa a USO con su línea (antes, 13-oct, `aff5615`, Editar lo hacía). Al panel de Pau se llega con «Mandar a resguardo» y «Mandar a cancelación».
+  a uno de esos estatus deja DISPONIBLE su línea en uso (el aviso lo dice). **USO** (usuario, 21-oct, `57850c3`; sustituye la regla del 16-oct): sí se ofrece. Con responsable vigente (TIPO ASIGNACION = PERSONA y RESPONSABLE; `formulario` manda `conResponsable`) se guarda directo. Sin él, `LineasRegistros.editar` guarda las demás correcciones sin el estatus y responde `responsiva: true`; la pantalla abre la Responsiva obligatoria (`desdeCorregir`), que acepta el estatus final (`exigirEstatusParaResponsiva(f, esEquipo, desdeCorregir)`, solo equipos), con su Inspección, y es la que pasa a USO con su línea; si solo cambió el estatus, abre la Responsiva de una vez sin pedir comentario; si se cierra sin guardar, el estatus no cambia. La CANCELADA de una línea se reactiva con Corregir a DISPONIBLE, sin responsiva. Al panel de Pau se llega con «Mandar a resguardo» y «Mandar a cancelación».
 - **El equipo que sale del inventario y su línea** (16-oct, `a6c8398`; publicado en la v124; usuario): el equipo que pasa a VENDIDO, DONADO, DESECHADO o EXTRAVIO-ROBO con Corregir y tiene su línea en
   USO la deja DISPONIBLE y suelta (`LineasRegistros.lineaSaleDelEquipo_`). Si el adendum de la línea está vencido (FIN PLAN pasado y no SIM básico: `LineasResguardos.lineaVencida`), la ventana del comentario pregunta
   «Línea · adendum vencido» (obligatoria, sin nada elegido) y el usuario eligió qué significa cada respuesta: **«PANEL DE RESGUARDOS Y CANCELACIONES»**: la línea queda suelta y entra a la bandeja como con «Mandar a cancelación», desde su propio
@@ -67,9 +70,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   CANCELACION_LINEA en el historial (`LineasResguardos.registrarCancelacionDirecta`). Sin la respuesta, el servidor no guarda. **Mandar a resguardo** con el adendum vencido pregunta lo mismo: «Estatus de la línea» ofrece EN PROCESO DE CANCELACION
   (panel) y CANCELADA (sin panel), sin nada elegido (antes iba forzada a EN PROCESO); con CANCELADA el equipo sigue entrando a la bandeja por recibir, pero sin camino de cancelación. Ningún otro proceso pasa el equipo a esos estatus tocando la
   línea (la bandeja de Pau «Vendido» recibe equipos ya en resguardo, con su línea DISPONIBLE o en cancelación).
+- **El equipo en estatus final queda sin accesorios ni claves** (22-oct, `425c52b`; v135; usuario): al pasar a un estatus final (los de clase NINGUNA en ESTRUCTURA_CLASE: VENDIDO, DONADO, DESECHADO, EXTRAVIO-ROBO y sus nombres viejos), `LineasEscritura.guardar` deja en blanco ACCESORIOS, PIN EQUIPO, PATRON y CONTRASEÑA MODEM (`SE_LIMPIA_AL_CERRAR`), además de cerrar la asignación, separar la línea y borrar el PIN WhatsApp. Lo que la pantalla mande de esos cuatro campos en el mismo guardado no cuenta; cada uno va al historial del movimiento (antes → vacío). MODELO, COLOR, IMEI, TIPO y NUCO se conservan. Aplica a todos los caminos (Corregir, panel de Pau, cualquier guardado).
 - **Responsable en blanco en los estatus finales** (16-oct, `a6c8398`; publicado en la v124; usuario): la ficha, la tabla y lo exportado de los equipos VENDIDO, DONADO, DESECHADO y EXTRAVIO-ROBO (y sus nombres viejos) y de las líneas sin equipo
   CANCELADA no muestran responsable (`LineasLectura`: `ESTATUS_FINAL` y `PERSONA_FINAL`: no. de empleado, responsable, puesto, director, jefe directo, cuenta Google, ID persona y los adicionales). No se borra nada: las asignaciones cerradas siguen en su pestaña. La
-  ubicación (departamento, área, sede, oficina) se queda; la regla anterior que pone DEPARTAMENTO «N/A» a VENDIDO y DESECHADO sin asignación sigue. Estrenó las cachés `estructura_virtual_v5` e `indice_telefonia_v9`.
+  ubicación se quedaba en esa versión. **Desde el 22-oct (`7ce3702`; v135; usuario)** tampoco se muestran departamento, área, sede ni oficina de la última asignación cerrada (también salen en blanco en la tabla y lo exportado); VENDIDO y DESECHADO sin asignación ya no muestran DEPARTAMENTO «N/A». Las asignaciones cerradas conservan su sede y oficina en su pestaña. Cachés `estructura_virtual_v8` e `indice_telefonia_v13`.
 - **PIN de WhatsApp** (8-oct; columna de EQUIPOS desde el 14-oct, `4e00ac9`): en la ficha va en la información del equipo
   (General → Equipo, y Equipo en la ficha de la línea), no en la línea; sin línea no se muestra. La línea sola ya no lo muestra ni
   lo pide. Se guarda en la columna PIN WHATSAPP de EQUIPOS (`asegurarColumnas` la crea al escribir) y se borra cuando la línea
@@ -80,25 +84,28 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   `LineasRepo.diaDeCorte`), Plan (plan, renta, inicio y fin de plan y una barra con la vida del plazo: verde vigente, ámbar a 3
   meses o menos, rojo vencido, con «Faltan N meses» o «Vencido hace N meses» y «X de Y meses»; abajo, de dónde salió el plan en
   palabras: ORIGEN PLAN, que es el ARCHIVO del adendum; un SIM básico no tiene adendum: dice «Renta $29.00 al mes» y «Plazo: Sin plazo forzoso», con el
-  pie de la factura de donde salió; la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
+  pie de la factura de donde salió; después de «Renta», el renglón «Datos» con los gigas del plan («18.5 GB»; `gbPlan` de la factura más reciente que lo trae, también en el SIM básico; sin dato no sale; 27-oct, `984371c`); la renta es lo cobrado en su último mes completo facturado (`rentaSimBasico` en `lineas.html`: el primer cobro mayor a 0 sin
   «Cargo del … al …», que `facturasDeLinea` marca como `parcial`), y sin una factura así dice «SIM básico: sin contrato ni plazo»; `ad20d6e`, 14-oct), Facturación (título con el mes
   del corte; Cobrado (con la parcialidad del equipo dentro; un importe negativo se escribe «-$7.74», no «$-7.74»: `dinero` de `lineas.html`, `1b4943c`, 14-oct; publicado en la v120), Habitual (el cobro habitual de la línea) y Diferencia (cobrado menos habitual: «Igual», «$200.00 de más» o «de menos»; menos de $0.05 cuenta como igual, el centavo de redondeo de Telcel; `fd25efd`, 14-oct, publicado en la v120 (15-oct): ya no es contra la renta del adendum, que en AT&T es el precio de lista y no lo que se paga con el descuento corporativo; la renta sigue en la tarjeta Plan), Uso (un SIM básico también tiene Habitual y Diferencia; lleva su renta en la tarjeta Plan),
   Equipo (solo si la línea paga un equipo a plazos: «Parcialidad 10 de 24 · MOTOROLA 4G XT2521-2 G15 256GB GRIS · $52.08»; `3cce1da`, 14-oct), «Cobrado como» solo si el número facturado es otro; «Últimos N meses» (con una sola factura,
   «Último mes»), que se
   despliega al pasar el cursor o al tocarlo, y el origen de la factura; sin facturas dice «Sin facturas cargadas»), Equipo (con PIN
   WhatsApp) y Responsable. Salen de ADENDUMS (por `LineasLectura`: CUENTA PADRE, CUENTA, PLAN, FUENTE PLAN y ORIGEN PLAN; caché
-  `estructura_virtual_v6`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea, pero leyendo toda su historia para calcular el habitual de cada mes: `LineasRepo.cobroHabitual` toma lo que más veces cobraron los 3 meses anteriores completos —sin meses parciales ni notas de crédito—, y si ninguno se repite, el del mes anterior; un mes sin meses anteriores no muestra Habitual ni Diferencia, y con pocos meses de historia un mes raro se puede marcar también en el siguiente; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
+  `estructura_virtual_v7`) y de FACTURAS (`LineasRepo.facturasDeLinea`, los últimos 3 por línea, pero leyendo toda su historia para calcular el habitual de cada mes: `LineasRepo.cobroHabitual` toma lo que más veces cobraron los 3 meses anteriores completos —sin meses parciales ni notas de crédito—, y si ninguno se repite, el del mes anterior; un mes sin meses anteriores no muestra Habitual ni Diferencia, y con pocos meses de historia un mes raro se puede marcar también en el siguiente; la columna MINUTOS son las llamadas hechas (no las recibidas ni las especiales): en AT&T salen del «DETALLE DE LLAMADAS» de la factura y no del
   «Consumido» del resumen; la de los SIM básicos está en producción desde el 14-oct y, con la actualización del mismo día, solo con llamadas hechas (pendiente 1.15);
   `TelefoniaService.linea` y `equipo` regresan `corte` y `facturas`. **Equipo:** Equipo (con PIN WhatsApp), Línea (el número es el
-  enlace a la línea), Plan de la línea, Facturación de la línea (sin habitual, uso ni meses) y Responsable a todo el ancho. Cada
+  enlace a la línea; con Compañía, SIM, Estatus, Razón social, Cuenta padre y, si la línea la tiene, Cuenta, la cuenta hija), Plan de la línea
+  y Responsable a todo el ancho; sin tarjeta de Facturación (la ficha de la línea sí la lleva completa; 22-oct, `8741a21`). Cada
   tarjeta lleva su título en una franja (`lineas-estilos.html`, solo en `[data-ficha-panel="general"]`).
+  **Copiar tarjeta** (22-oct, `22374e0`): cada tarjeta con datos (Equipo, Línea, Cuenta, Plan, Facturación, Responsable) lleva a la derecha del título (en Facturación, tras el mes) un botón con el ícono de copiar; copia el título y un renglón «Etiqueta: valor» por dato con valor (sin «—»; Plan agrega «Faltan N meses · X de Y meses», Facturación un renglón por mes, el patrón con sus puntos) y avisa «Copiado: <título>». Una tarjeta sin datos no lo lleva; las tarjetas de las páginas de inspección y responsiva tampoco. Las fichas no tienen pestaña Detalles (se quitó el 22-oct, `fea4430`, a pedido del usuario: copiar es el botón de cada tarjeta); `TelefoniaService.equipo/linea` ya no mandan `detalles`, `LineasRepo` no los arma y el catálogo de `config/Modulos.gs` ya no tiene la sección `lineas-telefonicas.detalles` (una regla de PERMISOS con ese nombre queda sin efecto; la de Caja Chica sigue). El panel «Detalles» de la barra de la lista (vista rápida) no cambió.
 - **Corregir línea y Corregir equipo** (8-oct como «Editar línea» y «Editar equipo»; «Editar información» hasta el 13-oct; «Corregir» desde el 16-oct, `a6c8398`, publicado en la v124; usuario: «Editar» confundía, y solo se corrige un dato mal capturado, siempre con su comentario): la línea se corrige aparte (⋮ de la línea
   y la tabla de líneas; el equipo no la trae desde el 12-oct; `apiLineasFormularioRegistro(id, 'LINEA')`,
   `LineasRegistros.contextoEdicion_`); el formulario se titula «Corregir línea» o «Corregir equipo». Una línea de un NUCO
   trae Línea y Adendum, su responsable (el del equipo) solo para ver y, como estatus, el suyo, EN PROCESO DE CANCELACION
   o CANCELADA. **Corregir equipo, con línea, trae el equipo y Accesorios y accesos (ya no la línea ni el adendum) y, desde el 16-oct, ya no trae la pestaña Responsable**: la persona
   del equipo y su ubicación solo cambian con la Responsiva o con Mandar a resguardo; el servidor rechaza otra persona (`LineasRegistros.exigirSinPersona_`: «…: la persona se cambia con «Responsiva».»). Agregar equipo sí
-  trae Responsable. La línea sola con
+  trae Responsable. **Corregir línea de un equipo que está en el panel** (23-oct, `cc92886`): el estatus de la línea queda fijo y el
+  servidor lo rechaza («el estatus de su línea lo cambia el panel»; `equipoEnPanel_` ya no excluye la parte LINEA). La línea sola con
   responsable tiene «Quitar responsable» (queda DISPONIBLE); con un responsable nuevo pasa a USO y en USO lo exige. Ni Corregir equipo ni Corregir línea muestran «Fecha de alta» (ver «La fecha de alta»).
   Un SIM BASICO no enseña el adendum al agregar. Al corregir, cambiar el Tipo de línea a SIM BASICO esconde el adendum y
   al guardar lo borra (costo, inicio y fin; MOVIMIENTOS guarda los de antes en `antes`; 12-oct, `a23f9ec`,
@@ -110,7 +117,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (6 h; «Recargar datos» lo vuelve a leer), porque MOVIMIENTOS cambia con cada acción; `anotarAlta` suma el alta nueva al crear el renglón (`LineasEscritura.agregar` y la línea nueva de `lineaParaEquipo_`), sin releer. La
   línea nueva que Corregir le pone a un equipo sin línea deja su movimiento ALTA (antes solo EDICION). Los movimientos ALTA de lo migrado salen de la columna con `reporte_lineas/actualizacion_base/altas_movimientos.js` (FECHA = la de la columna con su
   hora, COMENTARIO «Alta tomada de la columna FECHA DE ALTA», QUIEN MIGRACIÓN, ORIGEN MIGRACION; el historial lo muestra «Migración»; sin fecha, con fecha futura —pendiente 7.11— o anterior a 2000 —el 31/12/1969 que el AppSheet dejaba por fecha en blanco— no se crea). **Estado:** están creados en el DEV (2,527) y en producción (2,528, con permiso del usuario, 16-oct); la columna, quitada de los dos libros con
-  `reporte_lineas/actualizacion_base/quitar_fecha_alta.js` (guarda antes `RESPALDO FECHA DE ALTA - <libro>.json/.csv` y comprueba que cada fecha tenga su ALTA); en producción se quitó el 16-oct, ya publicada la v124 (EQUIPOS la columna 14 y LINEAS la 13). La carga del proveedor (`actualizar.py`) y `para_lineas.py` ya no escriben la columna y leen el alta del movimiento. Caché `estructura_virtual_v6`.
+  `reporte_lineas/actualizacion_base/quitar_fecha_alta.js` (guarda antes `RESPALDO FECHA DE ALTA - <libro>.json/.csv` y comprueba que cada fecha tenga su ALTA); en producción se quitó el 16-oct, ya publicada la v124 (EQUIPOS la columna 14 y LINEAS la 13). La carga del proveedor (`actualizar.py`) y `para_lineas.py` ya no escriben la columna y leen el alta del movimiento. Caché `estructura_virtual_v7`.
 - **Vincular, cambiar y desvincular** (8-oct; ⋮ de la ficha y clic derecho de la lista; `LineasAcciones.vincular`, `apiLineasVincular`): en el
   equipo, Vincular línea (sin línea) o Cambiar línea y Desvincular línea; en la línea, Vincular a equipo (suelta y
   DISPONIBLE) o Cambiar de equipo y Desvincular del equipo. Solo líneas sueltas DISPONIBLE y equipos en USO o RESGUARDO
@@ -119,6 +126,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   fija (ref.lineaNueva) y la persona fija también (No. de empleado y nombre: firma quien ya lo tiene; para cambiarla, primero la Responsiva; usuario, 16-oct) y su comentario; si no, el comentario va en otra ventana. Movimientos ASIGNAR_LINEA («Vincular
   línea»), CAMBIO_LINEA, CAMBIO_EQUIPO y RETIRAR_LINEA («Desvincular línea»). La línea se separa con
   `LineasEscritura.separarLinea` (también con el equipo guardado, donde cambiar el estatus no los separaba).
+  **Equipo en el panel** (22-oct, `b3269f6`; `LineasAcciones.aplicarVinculo_`): un equipo por recibir o en resguardo
+  (`LineasResguardos.enPanel`) no se vincula, no cambia de línea ni se desvincula («NUCO 0035 está en Resguardos y
+  cancelaciones.»), y la línea de un equipo en el panel no pasa a otro NUCO; igual que la Responsiva (usuario, 22-oct: «Bloquear»).
 - **Vínculos** (8-oct; `lineas-vinculos.html`): **una idea del usuario que se queda así**, apagada en producción como Help
   Desk (`vinculos-lineas` en `MODULOS_APAGADOS` del bloque de producción de `Entornos.gs`: sin botón ni espacio); en
   los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas telefónicas junto a
@@ -150,11 +160,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   ficha de los dos; soltar un equipo sobre una persona en Vínculos la abre con esa persona. **Misma persona = renovación**
   (`LineasAcciones.esRenovacion`, igual que `mismaPersonaResponsiva` en la pantalla: el registro en USO y el mismo nombre sin acentos): sin inspección, se guarda con su PDF y todo lo de la responsiva pasa a la
   ficha en la misma asignación (ver «Qué pasa la responsiva al inventario»). **Otra persona, o el registro en resguardo o DISPONIBLE (o sin responsable) = reasignación**
-  (`aplicarResponsiva_`, dentro del candado): cierra la asignación vigente y abre otra con la persona de la responsiva; el equipo queda en USO y su línea DISPONIBLE pasa a USO (L1); el director sale de la responsiva y el jefe directo de la
-  inspección o, si no, de Capital Humano. En un equipo la inspección es obligatoria: la responsiva se revisa, sigue la inspección (llega llenada con la responsiva, se puede cambiar y no cambia a la persona) y la
+  (`aplicarResponsiva_`, dentro del candado): cierra la asignación vigente y abre otra con la persona de la responsiva; el equipo queda en USO y su línea DISPONIBLE pasa a USO (L1); el director y el jefe directo salen de la responsiva (desde el 19-oct, 2.54). En un equipo la inspección es obligatoria: la responsiva se revisa, sigue la inspección (llega llenada con la responsiva, se puede cambiar y no cambia a la persona) y la
   responsiva se guarda con `inspeccionId`; el servidor exige la del día (`LineasCaptura.exigirInspeccion`). La línea sin equipo, la misma regla sin inspección (ESTATUS LINEA → USO). Termina con «Ver PDF de la responsiva»
   y, si hubo, «Ver PDF de la inspección». **No se entregan** (usuario, 16-oct): equipo VENDIDO, DONADO, DESECHADO, EXTRAVIO-ROBO (y sus nombres viejos) y línea CANCELADA o EN PROCESO DE CANCELACION:
-  «NUCO 0012 está VENDIDO.» / «La línea 9990000002 está CANCELADA.» (`exigirEstatusParaResponsiva`, al abrir en `contextoResponsiva` y al guardar). Movimientos: REASIGNACION (`detalle.accion` 'RESPONSIVA') y RESPONSIVA.
+  «NUCO 0012 está VENDIDO.» / «La línea 9990000002 está CANCELADA.» (`exigirEstatusParaResponsiva`, al abrir en `contextoResponsiva` y al guardar). Esos estatus (equipo VENDIDO, DONADO, DESECHADO, EXTRAVIO-ROBO, EXTRAVIADO, ROBADO, ROBO; línea CANCELADA o EN PROCESO DE CANCELACION; lista `LineasAcciones.ESTATUS_SIN_RESPONSIVA`) tampoco muestran los botones de Responsiva ni de Inspección, sin mensaje (ficha `botonesFicha` con `conDocumentos`, menú de la lista, y en Vínculos soltar el equipo en una persona no abre nada, `alSoltar`; desde el 21-oct, `57850c3`), y el servidor rechaza también la Inspección (`LineasCaptura.exigirEquipoParaInspeccion_`). Movimientos: REASIGNACION (`detalle.accion` 'RESPONSIVA') y RESPONSIVA.
   **«Reasignar varios»** sigue apagado en la pantalla (usuario, 16-oct); en el servidor (`LineasRegistros.accionMasiva`, REASIGNAR) omite lo que ya no se entrega, con la misma regla. La Responsiva, como Reasignar, no toca la bandeja de
   Pau: el renglón de un equipo en resguardo sigue EN RESGUARDO hasta que Pau lo entregue (P6, pendiente 3.5).
 - **Formulario de la Responsiva** (16-oct): empieza con la persona que lo tiene (vacía si el registro no está en USO); accesorios y accesos con los del equipo; Modelo e IMEI se pueden corregir (antes iban fijos, decisión del 4-oct que el
@@ -162,7 +171,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Otras acciones con nombre:** Inspección, Mandar a resguardo (pide la
   inspección de lo que viene de una persona), Mandar a cancelación, Subir PDF firmado (del sistema, del AppSheet o de
   NUCOS: versión nueva del PDF de NUCOS o, si no tiene, PDF nuevo en la carpeta de NUCOS de la captura o del día),
-  Regenerar PDF (responsivas del sistema: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
+  Regenerar PDF (responsivas e inspecciones del sistema, `c58c2eb`: versión nueva del mismo archivo; pasadas 6 h pide solo las firmas). Cada
   acción deja un renglón en el historial con su comentario: de más de 3 caracteres («N/A» no), revisado en la pantalla
   al escribirlo (Mandar a resguardo, antes de pedir las inspecciones; inspección y responsiva) y en el servidor.
 - **Páginas de la inspección y de la responsiva** (Documentos, doble clic o Historial): lo que dice el documento de ese
@@ -171,8 +180,9 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   trajo Documentos (fecha, responsable, inspector, calificación, Ver PDF) y se completa al llegar lo demás; al
   seleccionar su fila se pide antes (`precargarDocumento`). Lo que pide la ficha queda 2 min en la página: «Volver» no
   lo pide otra vez; cualquier otra llamada al servidor (guardar, PDF, formularios) lo borra (`llamar`, 9-oct).
-- **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES). La inspección lleva al
-  jefe directo y la responsiva al director, los dos de Capital Humano como en el AppSheet.
+- **Inspección y responsiva:** un solo «Comentario» (columna COMENTARIO, antes OBSERVACIONES).
+- **Datos del responsable iguales en la responsiva y la inspección** (19-oct, `53f4a7c`, `046a3b1`; 2.54; v135): `camposResponsable_` (`LineasCaptura.gs`) los pide en el mismo orden: No. de empleado, Nombre, Puesto, Departamento, Área, Sede, Oficina o desarrollo, Jefe directo, Director y Correo; la responsiva suma Identificación (tipo) y la INE después del nombre. Se llenan igual desde la ficha y, al elegir persona, de Capital Humano. Obligatorios: No. de empleado, nombre, puesto, departamento, área, sede y oficina; jefe directo, director y correo no (CH puede traerlos vacíos). Al elegir a otra persona, lo que CH no tiene de ella queda vacío (también el correo). Las dos pasan a la ficha No. de empleado, jefe directo y director (`PERSONA_DE_RESPONSIVA`, `COPIA_INSPECCION_A_LINEA`). Columnas que se agregan solas con el primer registro que las trae (`COLUMNAS_NUEVAS`): `No EMPLEADO` y `DIRECTOR` en INSPECCIONES LINEAS, `JEFE DIRECTO` en RESPONSIVAS LINEAS. En Mandar a resguardo, la inspección sigue con el nombre solo de personas de procesos.
+- **Accesorios iguales en la responsiva y la inspección** (22-oct, `5009fdd`, `b6ad39e`; usuario; v135): la inspección ya no pide CUBO, CABLE, FUNDA ni MICA como SI/NO/N/A. En su lugar lleva el campo de selección múltiple «Accesorios», con las opciones de la responsiva (`LineasRepo.CATALOGO.accesorios`), en DOCUMENTACIÓN / ACCESORIOS, debajo de Identificación; no es obligatorio y sale en todo menos en la línea sola (`NO_LINEA`). Empieza con los accesorios del equipo (en Reasignar, con los de la responsiva). Los dos formularios arman el campo con `listaAccesorios_` (`LineasCaptura.gs`); en la responsiva se llama «Accesorios entregados». Se guarda en ACCESORIOS de INSPECCIONES LINEAS (columna nueva en `COLUMNAS_NUEVAS.INSPECCION`, se agrega con la primera inspección que la trae) y pasa a la ficha (EQUIPOS.ACCESORIOS) en todos los casos (normal, Mandar a resguardo y Reasignar), como el color. En Reasignar manda la inspección: la responsiva se guarda con los accesorios de la inspección recién guardada (`accesoriosDeInspeccion_`). Los mismos accesorios en otro orden no son cambio (`mismosAccesorios_`, `LineasEscritura.gs`): ni la ficha ni el historial dejan movimiento. **Calificación:** la misma fórmula sin esos cuatro puntos (11 puntos SI/NO y 3 de desempeño; `LineasChecklist.gs` y `CALIFICACION_SI` en `lineas.html`); la de las inspecciones de antes queda guardada y no se recalcula, y los cuatro puntos siguen en `LineasChecklist` con `NUNCA`, solo para leer las de antes. **PDF:** plantilla «Formato inspecciones (SISTEMA) - ACCESORIOS 22-oct» (`101CtfZb…`, copia de la «- PRUEBA RESPONSABLE 19-oct» en FORMATOS) con un recuadro «Accesorios: <<ACCESORIOS>>» en lugar de los renglones Cubo, Cable, Funda y Mica; es `LineasPdf.PLANTILLAS.INSPECCION_CELULAR`. La del 19-oct queda como `INSPECCION_CELULAR_CHECKLIST`: `LineasPdf.plantillaInspeccion` la elige al regenerar el PDF de una inspección de antes (con CUBO/CABLE/FUNDA/MICA o de una línea sola). `revisarEntorno` revisa las dos. Producción apunta a las plantillas desde el código: al publicar usa sola la nueva (bitácora del 23-oct).
 - **La línea sin equipo solo tiene responsiva** (15-oct, `ec5bcd6`, `a5d2b85`; pendiente 2.45; publicado en la v122, 15-oct). Sin inspección: la ficha de la
   línea no trae el botón y el servidor la rechaza (`exigirEquipoParaInspeccion_` en `LineasCaptura.contextoInspeccion` y `guardarInspeccion`, y en
   `TelefoniaService.prepararEvidencia`). Sin número no abre ni guarda la responsiva («La línea no tiene número: captúralo con Corregir.»,
@@ -191,10 +201,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   (o, con `vista`, el de la línea; `apiLineasSubirPdfFirmado` la recibe). Las responsivas de equipo anteriores al 15-oct solo tienen la columna si se pudo probar su línea (la asignación del
   equipo en esa fecha y el número impreso dicen lo mismo, o sin asignación de esa fecha, el número, la SIM y que sea la única línea del equipo): 689 en producción (688 el 15-oct y 1 más después de la v122, la responsiva firmada con la v121) y 655 en el DEV, con `reporte_lineas/actualizacion_base/ligar_responsivas.js`; la v121 no la llena en las nuevas y desde la v122 sí.
 - **Qué pasa la responsiva al inventario** (16-oct, `736c103`, usuario, respuesta a L2; publicado en la v124): todo lo que lleva la responsiva pasa a la ficha
-  (`guardarResponsivaEnCandado_`, por `guardarCambiosRegistro` con `corregir: true`, que solo anota lo que cambió): la persona (RESPONSABLE, No. de empleado, puesto, departamento, área, sede, oficina, director, cuenta Google y los
+  (`guardarResponsivaEnCandado_`, por `guardarCambiosRegistro` con `corregir: true`, que solo anota lo que cambió): la persona (RESPONSABLE, No. de empleado, puesto, departamento, área, sede, oficina, jefe directo, director, cuenta Google y los
   adicionales; `PERSONA_DE_RESPONSIVA`) y, en un equipo, modelo (EQUIPO), IMEI, accesorios, color, bloqueo (PIN EQUIPO y PATRON) y, si el registro tiene línea (la que ya tenía o la que pone Vincular o Cambiar línea), el PIN de WhatsApp. Con la
   misma persona (renovación) se corrige en la misma asignación; con otra, la reasignación ya abrió la asignación nueva (`LineasAcciones.aplicarResponsiva_`) y aquí solo se anota. La línea sin equipo solo pasa la persona. A quien no ve los
-  secretos se le conserva el valor oculto. «SIN BLOQUEO» llena el PIN del equipo con «NO APLICA» en la pantalla (usuario, 16-oct; `aplicarBloqueo`, antes «N/A»); en el inventario se sigue guardando en blanco. Lo que no está en esta lista
+  secretos se le conserva el valor oculto. «SIN BLOQUEO» llena el PIN del equipo con «NO APLICA» en la pantalla (usuario, 16-oct; `aplicarBloqueo`, antes «N/A»); en el inventario se guarda igual, «NO APLICA» (usuario, 21-oct; `limpioDe_`; antes en blanco). Lo que no está en esta lista
   (fotos, comentario, firmas) queda en la responsiva y su PDF.
 - **Error del pie de las capturas** (13-oct): el mensaje (`#cap-error`, `.ln-error-fijo` en `lineas-estilos.html`) va en su
   lugar, arriba de los botones, y no flota; cada campo con error se sigue marcando. Aplica a las capturas que lo usan:
@@ -212,12 +222,14 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   **Reutilizarla** (9-oct, en producción desde la v88): al llenar o cambiar el nombre o el número de un responsable, la
   pantalla busca su identificación más reciente en APP_IDENTIFICACIONES por su nombre (sin acentos; si el nombre es de
   dos personas, con su número; `apiLineasIdentificacionesRegistradas`, permiso de operar Líneas; la de un archivo en la
-  papelera no cuenta) y, si tiene, muestra «INE registrada · NUCO ·
-  fecha · Ver · ¿Es correcta? Sí / No». Sí: no se sube nada; al guardar se copia a la carpeta de la responsiva nueva con
+  papelera no cuenta) y, si tiene, muestra dos tarjetas (desde el
+  20-oct, `b1dd872`): «Usar la registrada» (tipo · NUCO · fecha y «Ver») y «Subir otra» («Fotos o PDF»), a todo lo ancho
+  debajo del tipo de identificación (o del Nombre del responsable adicional). Usarla: no se sube nada, queda una tarjeta
+  verde «en uso» con «Ver» y «Cambiar», y el tipo se llena solo (`CampoAuto`, etiqueta «auto»); al guardar se copia a la carpeta de la responsiva nueva con
   su nombre de siempre y queda un renglón con ORIGEN REUTILIZADA (el servidor revisa que el registro sea de esa misma
   persona: el mismo ID PERSONA, que se busca por nombre y número sin el CORREO de la responsiva, porque es la cuenta Google
   del equipo y puede ser de otra persona; si falta el ID PERSONA de un lado, el mismo nombre y, si los dos lo tienen, el
-  mismo número; `esDeLaPersona_`, desde `29ba60e`). No: se suben fotos o PDF como siempre. Sin contestar, Guardar no deja pasar y lleva a la pregunta. Sirve en la
+  mismo número; `esDeLaPersona_`, desde `29ba60e`). «Subir otra»: se suben fotos o PDF como siempre (la identificación es opcional: sin archivo sí deja guardar). Sin elegir, Guardar no deja pasar y lleva a las tarjetas. Sirve en la
   responsiva sola (también cuando reasigna) y Vincular.
 - **Fotos de la inspección** (9-oct): se ven en miniatura desde que se eligen, con la espera encima mientras suben;
   clic = en grande (`verFotoEnGrande`, que desde el 13-oct usa el visor de abajo), X = quitar (`subirImagenCaptura`, lineas.html). El campo oculto de archivos va
@@ -285,10 +297,16 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 - **Secretos** (PIN, patrones, contraseñas, firmas): los ven ADMIN y el área `LINEAS` de USUARIOS
   (`TelefoniaService.puedeVerSecretos_`).
 - **Firma guardada** (`LineasFirmas.gs`): la de quien captura en Líneas va sola en FIRMA INSPECTOR o FIRMA CI («Se usa tu
-  firma guardada», con «Firmar a mano»). Va cifrada en las propiedades del proyecto (clave `LINEAS_FIRMAS_CLAVE`,
+  firma guardada», con «Firmar a mano»), y también en FIRMA RESPONSABLE cuando el responsable elegido es quien captura
+  (su NOMBRE de USUARIOS o su nombre en Capital Humano; el servidor lo revisa al guardar y, al regenerar el PDF, usa
+  su firma si él es el responsable y ya está la de Control Interno; si falta la del responsable y no es quien regenera, `generarPdf` regresa `soloResponsable` y la pantalla pide solo su recuadro, opcional). Las firmas van a la caché del servidor (100 KB por documento): la foto que pasa de 40,000 caracteres base64 se manda como JPEG de máx. 600 px (`firmaAchicada`). Va cifrada en las propiedades del proyecto (clave `LINEAS_FIRMAS_CLAVE`,
   creada ahí); la imagen no llega a la pantalla y solo se usa la del correo de la sesión. Se carga con
-  `lineasFirmasGuardadas_revisar` / `_cargar` (LineasAdmin) desde la carpeta privada «FIRMAS LINEAS (CARGAR)».
+  `lineasFirmasGuardadas_revisar` / `_cargar` (LineasAdmin) desde la carpeta privada «FIRMAS LINEAS (CARGAR)»;
+  `_cargar` quita la firma de quien no esté en la carpeta, y `lineasFirmasGuardadas_agregar` guarda las de la carpeta
+  sin quitar a nadie.
 - **Patrón:** EQUIPOS.PATRON guarda los puntos trazados en el sistema («1-5-9») o la ruta de la imagen del AppSheet.
+  Los renglones nuevos de INSPECCIONES LINEAS y RESPONSIVAS LINEAS escriben un patrón con apóstrofo (`LineasDatos.valorCelda_`, hojas fuera de
+  `HOJAS_EN_TEXTO`) para que Sheets no lo tome por fecha (22-oct, pendiente 2.47).
   General lo muestra solo si hay uno: los puntos dibujados o la imagen del AppSheet (`apiLineasPatronAppSheet`, solo
   con permiso de secretos); las capturas enseñan la imagen junto al lienzo. La inspección, la responsiva y Corregir, al
   trazar uno nuevo, lo guardan en el equipo y la imagen deja de verse; al guardar una captura la ficha se pinta de nuevo.
@@ -299,11 +317,11 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   pantalla: los 9 puntos, los usados con su número y flechas (`activarPatron` y `LineasPatronPng`, iguales).
 - **Tipo de bloqueo del equipo** (PIN, PATRÓN, CONTRASEÑA o SIN BLOQUEO): una lista en Corregir, la inspección y la
   responsiva (`conSelectorBloqueo` / `activarBloqueo`, lineas.html) que no se guarda: PIN y contraseña van en PIN
-  EQUIPO; patrón, «PATRON»; sin bloqueo, «NO APLICA» en la pantalla (desde el 16-oct; antes «N/A») y en blanco en el inventario. Con «PIN» solo números (no deja escribir letras); la contraseña acepta
+  EQUIPO; patrón, «PATRON»; sin bloqueo, «NO APLICA» en la pantalla (desde el 16-oct; antes «N/A») y también «NO APLICA» en el inventario (21-oct: en blanco la pantalla no reconocía el tipo; los guardados antes quedan en blanco y abren en «Selecciona…»; la ficha lo muestra como «SIN BLOQUEO» en PIN equipo, `LineasRepo.convertirRegistro`, y los que están en blanco siguen en «—»). Con «PIN» solo números (no deja escribir letras); la contraseña acepta
   todo. Es obligatoria siempre que se ve (usuario, 9-oct: ya trae SIN BLOQUEO). La lista viaja como `datos.bloqueo`
   (null si el formulario no la tiene o no se ve) y el servidor la revisa: vacía no pasa (`LineasUtil.exigirPinEquipo`). En Corregir, PIN
   EQUIPO sigue con 6 caracteres como máximo (regla del AppSheet).
-- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a Líneas, vendido, cancelación con carta). Los pasos
+- **Resguardos y cancelaciones:** bandeja de Pau (recibir, entregar a líneas, vendido, donado, desechado, cancelación con carta). Los pasos
   de la bandeja y sus notificaciones (campana) los hace quien tiene EDICION en `resguardos-lineas`
   (`usuario.puedeAprobar`, calculado con `Permisos.deCorreo` en `TelefoniaService.usuarioResguardo_`); ADMIN y SUPER también,
   porque editan todo. Con solo LECTURA se ve y no se modifica («Solo puedes consultar Resguardos y cancelaciones, no
@@ -314,16 +332,21 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   permisos individuales. La semilla (`PermisosSemilla.gs`, solo si no existe la hoja PERMISOS) sí trae LECTURA para el área
   LINEAS y EDICION para `paulina.bustamante@ciudadmaderas.com`.
   Ya no existe la lista `LINEAS_APROBADORES_RESGUARDO` (12-oct, `585d1c6`).
+  **Vista Cancelaciones** (22-oct, `962dd92`): después de «Compañía», dos columnas calculadas que no se guardan en APP_RESGUARDOS; `LineasResguardos.bandeja` las agrega a cada renglón (REGION, CUENTA_PADRE). **Región:** por la lada del número (`LineasUtil.regionDeNumero`, tabla `LADAS_POR_REGION`, regiones 1 a 9 por estado); todo Querétaro (442, 446, 427, 414, 419, 441, 448 y 487) es región 6 (27-oct, `c4ab33e`, Telcel lo confirmó a Líneas); una lada que no está en la tabla queda vacía. **Cuenta padre:** de la columna CUENTA PADRE de la línea, también con la cancelación ya CANCELADA. Resguardos no las muestra.
+  **Excel de Cancelaciones, dos botones** (22-oct, `b610806`, `b23d74d` y `6e1ea1d`; `hojasPorAsesor`, `cargarXlsxConEstilos` y `descargarPorAsesor` en `lineas.html`, `botonBaseCancelaciones` en `initResguardos`): «Exportar a Excel» de la tabla da solo la base (componente `ExportarExcel`, hoja «Cancelaciones de lineas», respeta filtros y búsqueda). El botón verde «Cancelaciones», a la derecha de «Exportar a Excel» en la barra de la tabla (solo en Cancelaciones y con el permiso de exportar; sin el de la tabla no sale), baja «Cancelaciones por asesor_AAAA-MM-DD_HHMM.xlsx»: una hoja por compañía y asesor («TELCEL - ALFREDO», «TELCEL - WILBERTO», «ATT - KARLA»; Telcel primero) solo con las POR FIRMAR filtradas: REGIÓN, CUENTA (padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y ASESOR, encabezado #002060 con letra blanca en negritas, bordes y centrado; sin asesor, «… - SIN ASESOR». `xlsx-js-style` 1.2.0 (jsDelivr) solo para este Excel. Sin POR FIRMAR avisa «No hay líneas POR FIRMAR con los filtros actuales». Resguardos exporta como siempre.
 - **Mandar a resguardo y Mandar a cancelación** (13-oct, `aff5615`; `LineasResguardos.gs`, `abrirResguardo` y
   `abrirCancelacion` en `lineas.html`):
   - **Ubicación:** el formulario llena solo, aunque se puede cambiar, DISPONIBLE · QUERETARO · JARDINES DE LA HACIENDA
     (`UBICACION_RESGUARDO`, valor de `camposUbicacion_`), sin importar la sede ni la oficina que traiga el equipo.
+  - **Estatus finales** (23-oct, `cc92886`; usuario: «que se bloquee, solo permitir corregir estatus pero tiene que pasar por
+    todo el proceso»): un equipo VENDIDO, DONADO, DESECHADO o EXTRAVIO-ROBO (y los viejos EXTRAVIADO, ROBADO, ROBO) no se manda
+    a resguardo: la lista y la ficha no ofrecen «Mandar a resguardo» (`mandaResguardo` en `lineas-telefonicas.html`) y el
+    servidor lo omite («Está VENDIDO: primero se corrige su estatus («Corregir»)»; `ESTATUS_EQUIPO_FINAL` en `LineasResguardos`).
   - **Estatus:** `ESTATUS_EQUIPO_RESGUARDO` = RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE (estatus nuevo; ámbar, «Tiene
     un detalle; se ofrece en venta», `GRUPO_EQUIPO` del Panorama y `VENTA` de Vínculos) y PARA DESECHO.
-  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): el formulario no
-    ofrece su estatus actual (`formulario` regresa por equipo `enBandeja` y `opcionesEstatus`), y `mandar` rechaza el
-    mismo estatus («NUCO X: ya está en Resguardos y cancelaciones como RESGUARDO; elige otro estatus.»). Con otro
-    estatus se actualiza su renglón; no se pide otra recepción.
+  - **Equipo que ya tiene su renglón abierto en la bandeja** (PENDIENTE DE RECEPCION o EN RESGUARDO): no se vuelve a
+    mandar; `mandar` lo omite con «usa Corregir resguardo» (20-oct, panel de Pau; antes `c5954bd` mostraba el estatus
+    fijo y rechazaba el mismo). El menú ofrece «Corregir resguardo» en vez de «Mandar a resguardo» (ver abajo).
   - **Equipo sin renglón abierto** (viene de una persona, viene guardado del AppSheet o Pau ya lo entregó a Líneas): crea un
     renglón PENDIENTE DE RECEPCION, que Pau recibe; las respuestas traen `porRecibir` (antes `yaGuardado`: uno ya guardado no
     entraba a la bandeja o entraba como EN RESGUARDO con «Ya estaba en resguardo»). Líneas decide cuáles de los equipos
@@ -350,7 +373,7 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     `ln_notif_esquema_v1` y `ln_resguardos_esquema_v2`). Tiempos, en `migracion/TIEMPOS_LINEAS.md` (cambio 4).
 - **La bandeja de Pau: espera en cada paso, espejo del inventario y accesorios** (13-oct, `93e77a8`; `LineasResguardos.gs` y
   `initResguardos` en `lineas.html`):
-  - **Espera:** Recibir, Entregar a Líneas, Vendido, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
+  - **Espera:** Recibir, Entregar a líneas, Vendido, Donado, Desechado, Carta firmada, Carta enviada y Confirmar cancelada pasan todas por
     `pedirDatos` con `{ detalle, peligro, espera, alConfirmar }`: la ventana lista lo que se toca (`detalle`, clase
     `confirmar-detalle`), y al aceptar se queda con la pantalla de espera («Recibiendo N equipo(s)», «Entregando…»,
     «Marcando… como vendidos», «Guardando N carta(s)…», «Cancelando N línea(s)») hasta que contesta el servidor; un error se
@@ -361,16 +384,105 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
     RECEPCION, EN RESGUARDO o con su cancelación en curso) muestra al leer lo de hoy del registro: NUCO, TIPO, MODELO, IMEI y
     ACCESORIOS y, si el renglón no va a cancelación o el registro sigue con el mismo número, NUMERO (solo sin cancelación),
     COMPANIA, RAZON_SOCIAL y FIN_PLAN. Una cancelación es de su número: si el equipo ya tiene otra línea, el renglón conserva
-    lo de la línea que se cancela. La hoja sigue guardando lo de cuando se mandó. No siguen al inventario los datos que se
-    llenan al mandar: estatus del equipo y de la línea, departamento, sede, oficina y comentario (mandar otra vez un equipo
-    abierto con otro estatus sí actualiza estatus, departamento, sede y oficina; el comentario no se actualiza, usuario,
-    13-oct). Lo cerrado (entregado, vendido, cancelado) se queda como quedó.
+    lo de la línea que se cancela. La hoja sigue guardando lo de cuando se mandó. Un renglón viejo que junta resguardo y
+    cancelación muestra el estatus de hoy de su línea (`registroDeLinea_`). No siguen al inventario los datos que se
+    llenan al mandar: estatus del equipo y de la línea, departamento, sede, oficina y comentario (un equipo que ya está en el panel no se
+    vuelve a mandar: se rechaza con «usa Corregir resguardo»). **Lo cerrado** (22-oct, `b3269f6`; usuario: «que siga a la línea»): los renglones ENTREGADO A LINEAS, VENDIDO,
+    DONADO y DESECHADO muestran el número y el estatus de hoy de la línea con que se mandó el equipo
+    (`lineaDelRenglon_`: por ID_LINEA_AL_MANDAR; los renglones de antes, por número); `bandeja` también lee lo cerrado.
+    **Foto al cerrar:** al Entregar y al cerrar (Vendido, Donado, Desechado) el renglón guarda lo que el panel mostraba
+    (`FOTO`: NUCO, TIPO, MODELO, IMEI, ACCESORIOS, ESTATUS_EQUIPO, NUMERO, ESTATUS_LINEA, COMPANIA, RAZON_SOCIAL,
+    FIN_PLAN); antes volvía a lo del día que se mandó. **Confirmar cancelada** guarda en el renglón el número de hoy de la
+    línea si se corrigió. Una cancelación CANCELADA se queda como quedó.
   - **Accesorios:** columna ACCESORIOS al final de APP_RESGUARDOS (`asegurarBandeja_` la agrega a la hoja que ya existe;
-    caché `ln_resguardos_esquema_v2`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
+    caché `ln_resguardos_esquema_v3`), que se guarda al mandar a resguardo (renglón nuevo y al actualizar el abierto) y al
     mandar a cancelación; la pestaña Resguardos tiene la columna «Accesorios» después de IMEI.
+  - **Comentario** (22-oct, `ebcd218`; usuario: «para homologar»): en Resguardos, la columna MOTIVO se titula «Comentario»
+    y la oculta COMENTARIO, «Comentario por equipo»; Cancelaciones trae MOTIVO como «Comentario», oculta. El «Motivo» de
+    Cancelaciones (MOTIVO_CANCELACION: LINEA VENCIDA o CANCELACION ANTICIPADA) no cambia.
+- **Panel de Pau: resguardo y cancelación separados, Corregir resguardo, Quitar del panel y Retirar cancelación**
+  (20-oct, `6cbb7c5`, `36e0947`, `484de50`; reestructura del panel de Pau; v135; `LineasResguardos.gs`, `LineasEscritura.gs`,
+  `LineasAcciones.gs`, `LineasRegistros.gs`):
+  - **Separados:** al mandar a resguardo un equipo cuya línea va a cancelación (o que ya está en Cancelaciones), la línea se
+    separa primero del equipo (`LineasEscritura.separarLinea`, con opción de conservar el estatus) y entra sola a
+    Cancelaciones con su ID_LINEA y el NUCO del que salió; con CANCELADA directo queda cancelada y suelta, solo en el
+    historial. El equipo entra a Resguardos con NUMERO y LINEA_AL_MANDAR (el número que tenía). **La cancelación sigue a la
+    línea:** por ID_LINEA o, en renglones viejos, por número; `confirmarCancelacion` marca CANCELADA esté donde esté y los
+    duplicados se revisan por línea. Los renglones viejos que juntan las dos cosas se siguen leyendo (se separan una
+    vez, después de publicar, con `tools/lineas-datos/separar-cancelaciones.js`: ver abajo). La columna «Línea» del panel muestra el número aunque la línea ya esté en
+    Cancelaciones, con su estatus de hoy.
+  - **Corregir resguardo** (equipo con renglón abierto; en el inventario y en el panel; EDICION de `lineas-telefonicas`):
+    formulario lleno (comentario = COMENTARIO o MOTIVO del renglón), sin restricciones, inspección ni renglón nuevo;
+    movimiento CORREGIR_RESGUARDO («Corrección de resguardo»). No separa la línea salvo que se elija mandarla a
+    cancelación; la que ya está en Cancelaciones se queda; dos opciones de estatus de línea (DISPONIBLE, EN PROCESO DE
+    CANCELACION). Desde el panel (21-oct, `8ce4bb9`) abre el mismo formulario en una ventana ancha encima del panel
+    (`corregirEnPanel`; el armado es `formularioResguardo`, el mismo de Líneas telefónicas): al guardar sigue en el
+    panel y la tabla se recarga. Se espeja en los dos lados: el servidor guarda en el inventario (estatus del equipo y
+    de la línea, destino) y actualiza el renglón abierto de APP_RESGUARDOS; el panel muestra el estatus de hoy del inventario.
+  - **Quién los ve en el panel** (21-oct): «Corregir resguardo» y «Quitar del panel» solo salen a quien edita Líneas
+    (`operaPanel` de `TelefoniaService.usuarioResguardo_`: EDICION de `lineas-telefonicas` y rol que no sea ADMIN ni SUPER),
+    no a Pau ni a administradores; `LineasResguardos.bandeja` lo regresa. En Líneas telefónicas siguen saliendo a quien
+    edita Líneas telefónicas, administradores incluidos. El servidor las acepta con `puedeOperar`.
+  - **POR RECIBIR y el equipo en el panel** (21-oct, `83a0744`, `80faf58`; v135): «Mandar a resguardo»
+    deja el equipo con ESTATUS EQUIPO = POR RECIBIR (guardado en EQUIPOS; `LineasResguardos.POR_RECIBIR`, fuera de
+    `LineasRepo.CATALOGO.estatusEquipo` y de las listas; clase RESGUARDO en `ESTRUCTURA_CLASE`; colores, Panorama y la zona
+    resguardo de Vínculos lo cuentan) y el estatus elegido va al renglón (columna ESTATUS_EQUIPO de APP_RESGUARDOS); el panel
+    muestra el elegido. «Recibir» de Pau pone el elegido en el equipo, con el movimiento RECEPCION («Recepción en resguardo»).
+    «Corregir resguardo» de uno por recibir cambia el renglón y deja POR RECIBIR (la ubicación del equipo sí se corrige); de
+    uno ya recibido le pone el elegido. «Quitar del panel» lo regresa (POR RECIBIR cuenta como sin tocar). Con renglón abierto
+    (por recibir o recibido, `LineasResguardos.enPanel`): sin Responsiva ni Inspección (ficha, menú y Vínculos,
+    `conDocumentos` con `panel`) y Corregir con el estatus fijo; el servidor lo rechaza (`exigirEstatusParaResponsiva`,
+    `exigirEquipoParaInspeccion_` y `LineasRegistros.editar`). `reporte_lineas/scripts/conciliacion.py` cuenta POR RECIBIR como
+    RESGUARDO. Datos: `tools/lineas-datos/por-recibir.js` (`--ensayo`; `--produccion` solo con permiso) pasa a POR RECIBIR los
+    equipos con renglón PENDIENTE DE RECEPCION. Los ya recibidos (EN RESGUARDO) también pueden pasar a DONADO o DESECHADO desde el panel (22-oct, ver «Panel»).
+  - **Quitar del panel** (EDICION de `lineas-telefonicas`; solo renglones PENDIENTE DE RECEPCION (equipo POR RECIBIR); en el inventario y en el
+    panel; `vistaQuitar` y `quitarDelPanel`): ventana con tabla Campo | Hoy | Queda. Regresa campo por campo lo que el
+    envío cambió y nadie tocó después (lo demás: «Se queda: cambió después»), con el movimiento del envío (MOVIMIENTO_ID
+    o, en renglones viejos, por equipo y hora). La persona solo regresa si el equipo vuelve a USO. La línea que se fue a
+    Cancelaciones con ese envío también regresa si su cancelación sigue POR FIRMAR. PIN y patrón con su valor para ADMIN
+    y el área de Líneas. Borra el renglón de APP_RESGUARDOS y el de esa cancelación (`LineasDatos.eliminarFilas`; desde el
+    22-oct, `1f8f60c`; ya no existe ESTADO RETIRADO); lo que pasó queda en el movimiento QUITAR_PANEL («Quitado del panel»).
+    Si el equipo está POR RECIBIR y el movimiento del envío no trae el estatus (RESGUARDO a RESGUARDO o datos viejos), vuelve
+    al estatus elegido en el renglón (ESTATUS_EQUIPO; `99447e6`) para no dejar POR RECIBIR sin renglón.
+    **Arreglos de la auditoría del 23-oct** (`cc92886`; v135): (1) un renglón viejo que junta resguardo y cancelación
+    (`renglonesParaQuitar_`) solo se quita con su cancelación POR FIRMAR o RETIRADA; con CARTA FIRMADA o CARTA ENVIADA se omite
+    con el aviso de la fase («Pau tiene que retirarla») y con CANCELADA, «Su línea ya se canceló: Pau lo recibe»; el panel
+    (`lineas-resguardos.html`) no ofrece «Quitar del panel» en esos renglones, la lista y la ficha sí y la ventana dice por qué
+    se omite. (2) Quitar del panel y Retirar cancelación buscan la línea por ID_LINEA_AL_MANDAR (los renglones de antes del
+    22-oct, por número): la línea regresa con su número de hoy y lo que no puede regresar sale en «Se queda» con su motivo
+    («El equipo ya tiene otra línea», «La línea ya no está en el equipo», «La línea cambió de número después de salir del NUCO X»).
+    (3) Regresa también lo corregido con «Corregir resguardo» (usuario, 23-oct: es parte del resguardo; solo se queda lo
+    cambiado después): `cambiosDelEnvio_` junta el movimiento RESGUARDO con los CORREGIR_RESGUARDO de ese equipo desde el envío.
+  - **Retirar cancelación** (solo aprobadores; pestaña Cancelaciones; comentario obligatorio; `retirarCancelacion`):
+    fase RETIRADA (se puede en POR FIRMAR, CARTA FIRMADA o CARTA ENVIADA). La línea vuelve a como estaba antes de mandarla
+    a cancelar, campo por campo, y lo que cambió después no se regresa («Cambió después»). Lo anterior sale del
+    movimiento de resguardo del envío (`envioDeCancelacion_`) o, si no hay, del CANCELACION_LINEA de la línea; sin envío
+    encontrado, la regla vieja (DISPONIBLE). La línea separada vuelve a su equipo, con su PIN de WhatsApp, si el equipo
+    no tiene otra línea y está en USO, POR RECIBIR, RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE o PARA DESECHO; si no, se queda
+    suelta («Se queda: el NUCO X ya tiene la línea N» / «está en <estatus>»). El estatus es el de antes; si era USO y el
+    equipo no está en USO (o la línea queda sin equipo), queda DISPONIBLE con la nota «Antes USO: …». Si ya no está EN
+    PROCESO DE CANCELACION, se queda. La ventana (`vistaRetirarCancelacion`, `planRetirar_`) muestra la tabla Campo | Hoy
+    | Queda, la misma de Quitar del panel (`tablaRegreso`); PIN y patrón solo con `puedeVerSecretos_`. Movimiento
+    RETIRAR_CANCELACION («Cancelación retirada») con los cambios.
+  - **Líneas no saca una línea de Cancelaciones:** Desvincular y Cambiar línea (salvo «a cancelación»), Cambiar de
+    equipo, Corregir el estatus y poner la línea en otro equipo avisan «Línea N: está en FASE en Cancelaciones; Pau tiene
+    que retirarla.»
+  - **Nota de CANCELADA:** bajo el estatus, «No entra al panel de Resguardos y cancelaciones; queda en el historial.», al
+    elegir CANCELADA en Mandar/Corregir resguardo y en Corregir con RESGUARDO, PARA VENTA, PARA DESECHO o EN PROCESO DE
+    CANCELACION; ya no sale la ventana «Cambio de estatus».
+  - **Panel:** botones y KPI en oración («Entregar a líneas», «Entregados a líneas»), KPI «Retiradas» (cancelaciones; sin «Quitados»). Acciones «Donado» (gift) y «Desechado» (trash-2) junto a «Vendido», con comentario obligatorio (mínimo 4 letras; en «Vendido» también; queda en ENTREGA_ASUNTO y en el motivo del movimiento, «Vendido (bandeja de resguardos): <comentario>»; servidor: `LineasResguardos.cerrar_`; usuario, 22-oct) y contadores «Donados» y «Desechados» (22-oct, `LineasResguardos.donado` y `desechado`, `TelefoniaService.accionBandejaResguardo`): solo renglones EN RESGUARDO (los demás se omiten con «No está en resguardo»), y los botones de selección «Vendido», «Donado» y «Desechado» solo salen cuando todo lo seleccionado está EN RESGUARDO (`recibidos` en `lineas.html`; usuario, 22-oct); «Recibir» sale solo con todo PENDIENTE DE RECEPCION (`porRecibir`) y «Entregar a líneas» solo con todo EN RESGUARDO; en Cancelaciones la fase solo avanza (`enFase`): «Carta firmada» solo con todo POR FIRMAR, «Carta enviada» con POR FIRMAR o CARTA FIRMADA, «Confirmar cancelada» y «Retirar cancelación» solo con lo que sigue en curso (ni CANCELADA ni RETIRADA), y `LineasResguardos.faseCancelacion` tampoco regresa una fase (usuario, 22-oct); ESTADO del panel y ESTATUS EQUIPO pasan a DONADO o DESECHADO; movimiento CIERRE o DESECHO. El
+    índice del cliente trae la columna `panel` (`CLAVE_INDICE`, caché del índice; huella con APP_RESGUARDOS).
 - **Sede, área y oficina en la lista de personas** (13-oct, `4e8ccd6`): `LineasRepo.indiceColaboradores` las muestra como el
   sistema (`LineasUtil.mostrarCH`: QUERETARO, no QRO) aunque la lista salga de `CapitalHumano.activos()`; al guardar se
-  escribe como en Capital Humano (`guardarCH`: QUERETARO → QRO). Cachés `indice_colaboradores_v6` y `catalogos_telefonia_v8`.
+  escribe como en Capital Humano (`guardarCH`: QUERETARO → QRO). Cachés `indice_colaboradores_v7` y `catalogos_telefonia_v8`.
+- **CARGADOR ya no es accesorio** (22-oct, `3be56cd`; v135; usuario): las opciones de ACCESORIOS son CAJA, CABLE, CUBO, FUNDA, MICA, TARJETA SD y NINGUNO. `LineasUtil.sinCargador` cambia CARGADOR por CABLE, CUBO en su lugar, sin repetir y con el separador que traía; se aplica al guardar (`LineasEscritura`, Editar y Agregar; un CARGADOR guardado que pasa por Editar sin tocarlo se convierte con su movimiento), en el campo «Accesorios entregados» de la Responsiva y de Corregir equipo (`LineasCaptura`) y al mostrar la ficha (`LineasRepo`). `tools/lineas-datos/cable-cubo.js` hace lo mismo con lo ya guardado en ACCESORIOS de EQUIPOS, RESPONSIVAS LINEAS y APP_RESGUARDOS (un movimiento EDICION por renglón, sin DOCUMENTO para no tapar la responsiva original en el historial); los PDF firmados siguen diciendo CARGADOR.
+- **Lista de colores** (22-oct, `0c6f3d4`): `LineasRepo.coloresSugeridos` arma la lista de Color con los de EQUIPOS más los de INSPECCIONES LINEAS y RESPONSIVAS LINEAS que salen 2 veces o más, sin «NA», «N/A» ni «NO APLICA» (un color capturado una sola vez no sale como opción; se escribe, la lista sigue abierta). Caché `catalogos_telefonia_v9`. `tools/lineas-datos/corregir-color.js` pasa NEGO a NEGRO en las tres hojas con movimiento EDICION.
+- **Bajas de Capital Humano en las listas de personas** (22-oct): `CapitalHumano.conBajasRecientes` (función nueva; `activos()` no cambia) devuelve los activos y las bajas con FECHA DE BAJA (dd/mm/aaaa) de los últimos 12 meses, con ESTATUS BAJA, sin repetir a alguien activo; `LineasRepo.indiceColaboradores` la usa y la etiqueta lleva «BAJA» primero, junto al nombre. El navegador guarda esa lista aparte (`catalogoLineas_` con versión «bajas»). Los catálogos (puestos, jefes, sedes…) y Gestión de activos siguen solo con activos.
+- **NUCO propuesto al agregar equipo** (22-oct): `LineasRegistros.nucoSiguiente_` toma el más alto de los NUCO de hasta 4 dígitos + 1, sin rellenar huecos; los bloques 9000-9999 (equipos de prueba del DEV; `8839773`, 22-oct), 10001-10100 y 11001-11011 (Dirección General) no cuentan; el NUCO ANTERIOR de una línea suelta sí cuenta. El campo lleva «auto» (`CampoAuto.llenar`) hasta que se escribe otro; al guardar se sigue revisando que no esté repetido.
+- **Separar las cancelaciones viejas** (22-oct, `tools/lineas-datos/separar-cancelaciones.js` con `comun.js`; DEV por omisión, `--ensayo`, `--produccion` solo con permiso; prueba `tests/lineas-separar-cancelaciones.test.cjs`): se corre una vez después de publicar el 3.12. Los renglones ABIERTOS (PENDIENTE DE RECEPCION o EN RESGUARDO) de APP_RESGUARDOS con CANCELACION y sin ID_LINEA se separan: el del equipo se queda sin la cancelación ni lo de la línea y con LINEA_AL_MANDAR; un renglón nuevo en Cancelaciones (como `abrirCancelacion_`, con la FECHA del envío original, la fase, las fechas, asesor y NUCO); si la línea sigue en el equipo se desvincula como `separarLinea` (movimiento EDICION de AUTOMATIZACIÓN). También los que ya están CANCELADA (usuario, 22-oct); los cerrados no se tocan y lo que pide criterio solo se reporta. Agrega a APP_RESGUARDOS las columnas del 3.12 si faltan. Si Pau retira una de esas cancelaciones, la línea no vuelve a su equipo: queda suelta.
+- **Barra de selección** (22-oct, `8b7d0bb`, `componentes/datatable.html`): en las tablas con selección estilo Drive, los botones que no caben pasan al ⋮ (de la última a la primera) y se recalcula al cambiar el ancho (ResizeObserver). Pruebas: `tests/datatable.test.js`.
+- **Buscador** (22-oct): opción `buscarPrimero` de `componentes/datatable.html` (sin ella nada cambia; Líneas pasa `nuco` en Equipos y `numero` en Líneas). Con texto buscado el orden es: igual a lo buscado (sin contar los ceros de la izquierda: «12» = «0012»), empieza con, contiene y, al final, lo que coincide por otra columna; dentro de cada grupo, el orden de siempre. Prueba: `tests/datatable-buscar-primero.test.cjs`.
+- **Vincular y desvincular desde la ficha de una línea** (22-oct): al terminar, `listo` de `abrirVinculo` vuelve a pintar la ficha que quedó arriba de la pila, y si es una línea la busca otra vez por su número en el índice (al vincularla o desvincularla cambia de registro: antes daba «No existe la línea LIN-…» y la página quedaba en «Cargando…»).
 - **Panorama:** líneas y equipos por estatus, renta por cuenta y adendums, al cierre del mes elegido.
 - **Notificaciones:** campana con adendums por vencer y avisos de seguimiento.
 - **Accesorios** de celular, **Gestión de activos** (por persona) y **Correcciones de líneas** (módulo temporal).
@@ -387,6 +499,28 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   las pantallas de Líneas, Gestión de activos y Control de cambios, que no tienen ayuda ni recorrido
   (propiedad `sinAsistente` de `NAV_GRUPOS` y `VISTAS_FUERA_DEL_MENU` en `app.html`; `navegarA` le pone `hidden` a
   `#asistente-flotante`). En los demás módulos sigue igual.
+- **Dirección General** (21-oct, `41dda43`; v135): `lineas/LineasDG.gs` guarda la lista fija de las 12
+  líneas de DG y los NUCO 11001 a 11011. El índice trae la columna `dg` (caché `indice_telefonia_v12`) y DG en el responsable.
+  Quien no es ADMIN (`usuario.esAdmin` de `TelefoniaService.usuarioOperacion_`) ve DG, su estatus y el área DIRECCION GENERAL
+  en la lista, la ficha (`fichaOculta`: departamento vacío y área DIRECCION GENERAL) y Exportar (DEPARTAMENTO en blanco y
+  AREA = DIRECCION GENERAL); sin historial, documentos ni facturas y sin acciones; el servidor rechaza escribir
+  (`LineasRepo.guardarCambiosRegistro` y las capturas). ADMIN ve todo con el chip DG y sí puede editarlos. Corrección del
+  22-oct (`24f42a3`): `LineasDG.conArea` pone DIRECCION GENERAL en la columna departamento del índice (sus tablas no tienen
+  área) para los renglones de DG, también para ADMIN y antes del filtro por alcance (`TelefoniaService.indice`);
+  `TelefoniaService.deptoDeRegistro_` da DIRECCION GENERAL para DG. Solo cuenta la lista fija: los registros con área
+  DIRECCION GENERAL fuera de ella (NUCO 1667, 0457 y 0686) no son DG. No cubre el módulo del proveedor ni Control de Cambios
+  (pendiente 8.19). Datos: `tools/lineas-datos/limpiar-dg.js` deja en blanco ID PERSONA, NO EMPLEADO, RESPONSABLE, PUESTO,
+  DEPARTAMENTO, SEDE, OFICINA / DESARROLLO, JEFE DIRECTO, DIRECTOR, CUENTA GOOGLE y los adicionales de las asignaciones
+  vigentes, y pone solo AREA = DIRECCION GENERAL (`--ensayo`; `--produccion` solo con permiso; pendiente 8.18).
+  **El servidor también pide ser ADMIN** (23-oct, `cc92886`): `formularioRegistro`, `documento_` (inspección y responsiva),
+  `quitarFotoInspeccion`, `fotosInspeccion`, `generarPdf` y `prepararEvidencia` (`TelefoniaService`: `sinDG_` y `sinDGDocumento_`), y
+  el formulario de resguardo, Mandar a resguardo, Mandar a cancelación y Quitar del panel (`LineasResguardos`, se omite con
+  «Es de Dirección General: solo ADMIN lo modifica.»). El panel de Pau (`bandeja`) muestra a quien no es ADMIN los renglones de
+  DG con NUCO, estados, número «DG» y DEPARTAMENTO DIRECCION GENERAL, y lo demás en blanco (`LineasDG.esRenglonPanel` y
+  `ocultarRenglonPanel`). **La pantalla no ofrece lo que el servidor niega** (23-oct, `14f3f69`, pendiente 8.20; v136): a quien no
+  es ADMIN la ficha del equipo y de la línea de DG solo tiene la pestaña General (`pestanasFicha` con `!_dgOculto` en
+  `lineas-telefonicas-ficha.html`), y la lista y el panel Detalles no pintan ni precargan «Última responsiva / inspección»
+  (`conUltimo` en `lineas-telefonicas.html`).
 - **Panel de tipos** (a la izquierda de la tabla de Líneas telefónicas, pestañas Equipos y Líneas; 12-oct, `7163c54`
   y `97073c0`): cada opción muestra el valor de la columna Tipo tal cual (`EQUIPO`, `EQUIPO + SIM`, …), más `TODOS` y
   `SIN TIPO`; el panel abierto mide 248 px, solo en Líneas.
@@ -398,18 +532,22 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
 | LINEAS, EQUIPOS | Una fila por línea y por equipo (IDs de `Entidades.gs`). EQUIPOS lleva PIN WHATSAPP desde el 14-oct |
 | ASIGNACIONES | Quién tiene qué, con FECHA INICIO / FECHA FIN (persona o resguardo), jefe directo y responsables adicionales |
 | ADENDUMS, CUENTAS | Plan, costo y fin de plan por línea; cuentas padre y razón social |
-| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae junio a septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15; `COMO SE HACE ESTE REPORTE.md` §11.8); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; las columnas nuevas y las correcciones están en el DEV y en producción (14-oct); 182 renglones de junio a agosto no tienen ID LINEA (el número no es de ninguna línea del sistema ni hay prueba del proveedor para ligarlo; pendiente 1.19) y no salen en ninguna ficha; después la llenará la carga mensual del proveedor (1.10) |
+| FACTURAS | Un renglón por línea y periodo con lo que dice el proveedor (plan §4.9); alimenta la tarjeta de Facturación de General. Trae junio a septiembre 2026 en el DEV y en producción (14-oct, pendiente 1.15; `COMO SE HACE ESTE REPORTE.md` §11.8); desde el 14-oct lleva EQUIPO FACTURADO, PARCIALIDAD y CARGO EQUIPO (la parcialidad del equipo ya está dentro de TOTAL CON IVA, `COMO SE HACE ESTE REPORTE.md` §11.6) y MINUTOS son solo llamadas hechas; GB PLAN, los gigas del plan según el proveedor (27-oct; lo aplicado en el DEV, en producción falta, `CAMBIOS_A_PRODUCCION.md`); las columnas nuevas y las correcciones están en el DEV y en producción (14-oct); 182 renglones de junio a agosto no tienen ID LINEA (el número no es de ninguna línea del sistema ni hay prueba del proveedor para ligarlo; pendiente 1.19) y no salen en ninguna ficha; después la llenará la carga mensual del proveedor (1.10) |
 | CATALOGOS, LISTAS TELEFONOS | Listas de opciones |
-| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct). RESPONSIVAS LINEAS lleva ID LINEA (el registro: el equipo o la línea sin equipo) e **ID LINEA ENTREGADA** (la línea de ese día; columna AR en producción, creada el 15-oct) |
+| INSPECCIONES LINEAS, RESPONSIVAS LINEAS | Los documentos capturados (PDF en NUCOS; la responsiva de una línea sin equipo, en LINEAS). El comentario va en COMENTARIO (antes OBSERVACIONES; renombrada en el DEV el 6-oct y en producción el 7-oct). Desde el 19-oct (v135) INSPECCIONES LINEAS suma `No EMPLEADO` y `DIRECTOR`, y RESPONSIVAS LINEAS `JEFE DIRECTO`. RESPONSIVAS LINEAS lleva ID LINEA (el registro: el equipo o la línea sin equipo) e **ID LINEA ENTREGADA** (la línea de ese día; columna AR en producción, creada el 15-oct) |
 | MOVIMIENTOS | Historial único: un renglón por acción (`LineasRepo.registrarMovimiento`) |
 | APP_MOVIMIENTOS, CAMBIOS LINEAS TELEFONICAS | Historial de antes del 4-oct (APP_MOVIMIENTOS trae las pestañas retiradas con TIPO HISTORICO; CAMBIOS, la bitácora del AppSheet). La ficha los lee hasta que pasen a MOVIMIENTOS |
-| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario), avisos, fotos y correcciones |
+| APP_RESGUARDOS, APP_NOTIFICACIONES, APP_EVIDENCIAS, APP_CORRECCIONES | Bandeja de Pau (con MOTIVO_CANCELACION de las cancelaciones y ACCESORIOS, desde el 13-oct; lo abierto se muestra con lo de hoy del inventario; desde el 20-oct ID_LINEA, LINEA_AL_MANDAR (el número con que se mandó), MOVIMIENTO_ID, RETIRADO_EN, RETIRO y RETIRO_MOTIVO y fase RETIRADA de las cancelaciones; desde el 22-oct ID_LINEA_AL_MANDAR, la línea con que se mandó el equipo por su ID, que no es ID_LINEA —ese marca una cancelación— y se agrega sola, `COLUMNAS_NUEVAS`), avisos, fotos y correcciones |
 | APP_IDENTIFICACIONES | Identificación de cada responsable subida con la responsiva: ID PERSONA, número de empleado, nombre, tipo, archivo, NUCO, ID RESPONSIVA, ID LINEA, origen (RESPONSIVA, REUTILIZADA: la registrada copiada a otra responsiva; NUCOS: las que ya estaban, 610 el 9-oct), fecha y quién. Se crea sola con la primera (no se pide antes de desplegar: `noSePide_`) |
 | ACCESORIOS CELULARES | Inventario de accesorios |
 | COLABORADORES ACTUALIZADO | Capital Humano (la mantiene Ayrton; Líneas solo la lee) |
 
 `LINEAS TELEFONICAS` (la hoja del AppSheet) se retiró y se borró el 4-oct; el sistema lee y escribe solo en las hojas
-de arriba (`LINEAS_LECTURA = ESTRUCTURA`, `LINEAS_HOJA_VIEJA_RETIRADA`).
+de arriba. Desde el 21-oct (`4808a97`, `c60942f`, v135) tampoco queda en el código el interruptor de lectura ni la
+rama que escribía la hoja vieja: `LineasLectura` arma todo de las hojas nuevas, y `LineasRepo` guarda, agrega y anota
+movimientos solo en ellas (MOVIMIENTOS). CAMBIOS LINEAS TELEFONICAS y APP_MOVIMIENTOS ya no se escriben y solo se leen.
+`LINEAS_HOJA_VIEJA_RETIRADA` la usa solo `Diagnostico.gs` (no marca como grave que falte la hoja vieja); `LINEAS_LECTURA`
+sigue en `Entornos.gs` sin que nada la lea (pendiente 8.17).
 
 **Drive:** documentos y fotos en la carpeta de cada NUCO dentro de NUCOS (`LINEAS_DRIVE_NUCOS`); lo que no tiene NUCO, en
 la carpeta de la app (`LINEAS_DRIVE_APPSHEET`), salvo la responsiva de una línea sin equipo (15-oct, pendiente 2.45), que va a la raíz
@@ -419,7 +557,7 @@ reconoce por la propiedad de Drive `idLinea`, no por el nombre (caché `carpetas
 `descartarCarpeta` manda a la papelera la carpeta de la responsiva y, si quedó vacía, la de la línea (nunca LINEAS); `destinoPdf_` manda el PDF a la carpeta LINEAS ligada en
 APP_EVIDENCIAS; un documento se queda donde se firmó (vincular, cambiar o desvincular no mueve nada). La clave de producción está en `Entornos.gs` desde `b12d37f` (15-oct). Sin la clave, en producción la responsiva de una línea sin equipo
 no se guarda («Falta la carpeta LINEAS en Drive…»); en un DEV sin ella es «LINEAS» dentro de la carpeta de pruebas. `TelefoniaService.linea` manda `carpetaDriveId` de la línea sin equipo y
-`Diagnostico.gs` revisa `LINEAS_DRIVE_LINEAS` si está. **Compartir** (desde `700385e`, 16-oct; publicado en la v124, 16-oct): lo que la app guarda fuera de NUCOS y LINEAS (el PDF de una responsiva sin carpeta, `guardarComoAppSheet`, `LineasEvidencias.subirArchivo`) se abre al dominio solo para ver con `LineasArchivos.compartirEnDominio`; si Drive no deja (con la cuenta de producción, «Acceso denegado: DriveApp»), el archivo ya está guardado, se queda con los permisos de su carpeta y se anota un aviso en el registro, sin error para quien captura. En NUCOS y LINEAS no se cambia cómo se comparte. **Responsiva vieja de una línea suelta** (`413613f`, 16-oct; publicado en la v125, 16-oct): la responsiva de una línea sin equipo firmada antes de la v122 (la de la línea 4461456715, del 14-oct, v120) no tiene «NO APLICA» ni carpeta, y al regenerarla salía como de equipo (NUCO «0000», PDF en `Files`, lo del equipo en blanco). `LineasCaptura.pasarALineas_` (la llama `generarPdf` antes de `destinoPdf_`, solo en responsivas) la reconoce por tener ID LINEA «LIN-…» sin estar ya en LINEAS con «NO APLICA» y, antes de hacer el PDF: escribe `SIN_EQUIPO` en su fila de RESPONSIVAS LINEAS; crea su carpeta con `LineasArchivos.carpetaEvidenciaLinea` (`LINEAS/<número>/CARTA RESPONSIVA/<año>/RESP DD MM`, con la fecha de la responsiva) y la liga en APP_EVIDENCIAS (CARPETA_ID y RUTA); mueve ahí sus identificaciones (APP_IDENTIFICACIONES por ID RESPONSIVA; el mismo archivo, `moveTo`); y manda a la papelera los PDF «RESPONSIVA<id>.pdf» de `Files` (los de todos los intentos). El PDF nuevo se hace en LINEAS, se liga y deja un movimiento PDF_REGENERADO con «PDF Files/… → LINEAS/…». Una responsiva que ya está bien no se toca. **PDF:** copias «(SISTEMA)» de las plantillas de Google Docs del
+`Diagnostico.gs` revisa `LINEAS_DRIVE_LINEAS` si está. **Compartir** (desde `700385e`, 16-oct; publicado en la v124, 16-oct): lo que la app guarda fuera de NUCOS y LINEAS (el PDF de una responsiva sin carpeta, `guardarComoAppSheet`, `LineasEvidencias.subirArchivo`) se abre al dominio solo para ver con `LineasArchivos.compartirEnDominio`; si Drive no deja (con la cuenta de producción, «Acceso denegado: DriveApp»), el archivo ya está guardado, se queda con los permisos de su carpeta y se anota un aviso en el registro, sin error para quien captura. En NUCOS y LINEAS no se cambia cómo se comparte. **Responsiva vieja de una línea suelta** (`413613f`, 16-oct; publicado en la v125, 16-oct): la responsiva de una línea sin equipo firmada antes de la v122 (la de la línea 4461456715, del 14-oct, v120) no tiene «NO APLICA» ni carpeta, y al regenerarla salía como de equipo (NUCO «0000», PDF en `Files`, lo del equipo en blanco). `LineasCaptura.pasarALineas_` (la llama `generarPdf` antes de `destinoPdf_`, solo en responsivas) la reconoce por tener ID LINEA «LIN-…» sin estar ya en LINEAS con «NO APLICA» y, antes de hacer el PDF: escribe `SIN_EQUIPO` en su fila de RESPONSIVAS LINEAS; crea su carpeta con `LineasArchivos.carpetaEvidenciaLinea` (`LINEAS/<número>/CARTA RESPONSIVA/<año>/RESP DD MM`, con la fecha de la responsiva) y la liga en APP_EVIDENCIAS (CARPETA_ID y RUTA); mueve ahí sus identificaciones (APP_IDENTIFICACIONES por ID RESPONSIVA; el mismo archivo, `moveTo`); y manda a la papelera los PDF «RESPONSIVA<id>.pdf» de `Files` (los de todos los intentos). El PDF nuevo se hace en LINEAS, se liga y deja un movimiento PDF_REGENERADO con «PDF Files/… → LINEAS/…». Una responsiva que ya está bien no se toca. **PDF:** producción (v125) usa las copias «(SISTEMA)» (`13qeTsLm…` responsiva, `11l9vL9K…` inspección); `emmanuel` y el DEV usan, desde `c59cc33` (19-oct), copias de ellas «- PRUEBA RESPONSABLE 19-oct» (responsiva `1sbV_lv6…` con «JEFE DIRECTO»; inspección `1TcIyGty…` con «No. empleado» y «Director de Dpto»; desde el 22-oct la inspección es la de ACCESORIOS, ver «Accesorios iguales en la responsiva y la inspección»). Antes: copias «(SISTEMA)» de las plantillas de Google Docs del
 AppSheet, en sus mismas carpetas (FORMATOS y RESPONSIVAS_LINEAS), con «Comentario» (`LineasPdf.PLANTILLAS`; las
 originales, que no se tocan, en `PLANTILLAS_APPSHEET`; las copias se hicieron una vez, el 6-oct);
 la responsiva conserva los márgenes de su plantilla y su interlineado se ajusta para salir igual que la impresión del
@@ -448,20 +586,22 @@ su nombre dentro de ella (`LineasArchivos.resolver`); el DEV además los lee de 
 
 | Archivo | Qué hace |
 |---|---|
-| `src/services/TelefoniaService.gs` + `apiLineas*` en `ClientApi.gs` | Entrada del cliente |
+| `src/services/TelefoniaService.gs` + `apiLineas*` en `src/api/Lineas.gs` | Entrada del cliente (desde el 22-oct, homologación 6.3 de Ayrton; antes en `ClientApi.gs`) |
 | `lineas/LineasLectura.gs`, `LineasEscritura.gs` | Leen y escriben las hojas nuevas |
 | `lineas/LineasRepo.gs`, `LineasDatos.gs`, `LineasUtil.gs` | Acceso a datos, IDs, normalización (NUCO a 4 dígitos) |
 | `lineas/LineasRegistros.gs` | Formulario de alta y edición (reglas del AppSheet) |
 | `lineas/LineasCaptura.gs`, `LineasChecklist.gs`, `LineasPdf.gs`, `LineasPatronPng.gs`, `LineasEvidencias.gs`, `LineasArchivos.gs` | Inspección y responsiva: checklist, firmas, fotos, PDF (y la imagen del patrón) y Drive |
 | `lineas/LineasIdentificaciones.gs` | Identificación de cada responsable en la responsiva (Drive y APP_IDENTIFICACIONES) |
 | `lineas/LineasIneNucos.gs` | INE que ya estaban en NUCOS (9-oct): inventario de solo lectura de NUCOS de producción en la pestaña «INE NUCOS» del libro del DEV (`lineasIneNucos_inventario`, desde el editor de un DEV) |
+| `lineas/LineasDG.gs`, `tools/lineas-datos/` (`por-recibir.js`, `limpiar-dg.js`, `patron-texto.js`, `movimientos-vacios.js`, `corregir-color.js`, `cable-cubo.js`, `vaciar-documento.js`, `textos-movimientos.js`, `comun.js`) | Dirección General (21-oct): lista fija y ocultamiento; programas de datos que se corren desde la computadora con `--ensayo` y, en producción, con permiso (`patron-texto.js` regresa a texto los patrones guardados como fecha; `movimientos-vacios.js` borra los renglones vacíos de en medio de MOVIMIENTOS; `cable-cubo.js` separa CARGADOR en CABLE y CUBO; `vaciar-documento.js` vacía DOCUMENTO en los movimientos de `cable-cubo.js` y `corregir-color.js`, que no lo llevan; `textos-movimientos.js` corrige COMENTARIO y CAMBIOS de los movimientos ya escritos). Los movimientos de estos programas dicen solo la acción y, si es de un documento, cuál y su fecha («RESPONSIVA DEL dd/mm/aaaa · ACCESORIOS»; `campoDe` de `comun.js`) |
 | `lineas/LineasAcciones.gs`, `LineasResguardos.gs` | Responsiva (renovar o reasignar), Vincular, Mandar a resguardo y bandeja de Pau |
-| `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel (el inventario: una hoja LINEAS TELEFONICAS como el panel, con ID del AppSheet y las columnas de la vista del AppSheet, `LineasRepo.vistaCompleta`; Cambios y Accesorios, sus pestañas tal cual) |
+| `lineas/LineasPanorama.gs`, `LineasNotificaciones.gs`, `LineasExportar.gs` | Panorama, avisos y Exportar a Excel (el inventario: una hoja LINEAS TELEFONICAS como el panel, con ID del AppSheet y las columnas de la vista del AppSheet, sin ESTATUS GENERAL desde el 21-oct, `LineasRepo.vistaCompleta`; Cambios y Accesorios, sus pestañas tal cual) |
 | `lineas/LineasAccesorios.gs`, `LineasCorrecciones.gs` (+ `LineasCorreccionesSemilla.gs`, fuera de git) | Accesorios y Correcciones |
-| `lineas/LineasEstructura.gs`, `LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | Herramientas de la reestructura (ya corridas; no se vuelven a usar) |
-| `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor |
+| `lineas/LineasEstructura.gs` | Encabezados y equivalencias vivas de las hojas nuevas (`ESTRUCTURA_*`; los usan la lectura y el guardado) |
+| `lineas/LineasRetiro.gs`, `LineasReestructura.gs`, `LineasRevisionBD.gs` | **Vacíos a propósito** (`6cb342a`, 21-oct): eran herramientas de editor de la reestructura, ya corridas; `subir.js` conserva en Apps Script lo borrado de git, así que se dejan con una nota, como `LineasProveedor.gs` |
+| `lineas/LineasAdmin.gs` | Utilidades que se corren desde el editor (las firmas guardadas, `lineasFirmasGuardadas_*`; desde el 21-oct sin el retiro de pestañas, las pruebas del 4-oct ni pintar pestañas) |
 | `lineas/LineasProveedor.gs`, `html/js/lineas-proveedor.html`, `html/views/lineas/lineas-proveedor.html` | **Vacíos** (`35d0fb2`, 14-oct): `subir.js` conserva en Apps Script los archivos que ya no están en git y estos sobrescriben a los de la primera versión del Proveedor (7-oct); se borran cuando el módulo nuevo (pendiente 1.10) los reemplace o `subir.js` sepa retirar archivos |
-| `html/js/lineas.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas (`lineas-vinculos.html`: la vista Vínculos) |
+| `html/js/lineas.html` (la base: utilidades, formularios y `Lineas.comun`), `lineas-telefonicas.html` (arranque y lista) con sus partes `lineas-telefonicas-<parte>.html` (ficha, documentos, acciones, captura, historial y paginas), `lineas-panorama.html`, `lineas-activos.html`, `lineas-accesorios.html`, `lineas-resguardos.html` (panel de Pau), `lineas-bitacora.html`, `lineas-vinculos.html`, `lineas-correcciones.html`, `html/lineas-estilos.html`, `html/views/lineas/*` | Pantallas. Desde el 22-oct (unión de `master`, homologación 6.2 y 6.2b de Ayrton) lo que este documento cita «en `lineas.html`» vive en la base o en una de esas partes: `grep -n` de la función en `src/html/js/lineas*.html`. Las pruebas leen todo con `tests/lineas-fuente.js` |
 | `html/js/lineas-medidor.html` + `apiLineasMediciones`, `apiLineasMedirServidor` | Medidor de tiempos (9-oct): apagado salvo con `?medir=1` en la dirección; escribe en la hoja MEDICIONES LINEAS solo en un DEV (en producción lo rechaza). Desde el 13-oct, en un DEV, guardar una inspección, generar un PDF, Mandar a resguardo y Mandar a cancelación anotan sus pasos dentro del servidor (`TelefoniaService.conPasosEnDev_`, con `LineasDatos.tiempo` «@a los ms») y el medidor los pide con `apiLineasPasosServidor` y los escribe como «SERVIDOR …»; en producción no hacen nada. Cómo se usa: `migracion/TIEMPOS_LINEAS.md` |
 | `tests/lineas-*.test.cjs`, `pdf-render.test.cjs` | Pruebas (`npm test`) |
 

@@ -32,6 +32,7 @@ function apiListaConHuella(token, fn, args) {
 }
 // ¿Cambió algo de lo que se ve? Solo CacheService (sin leer hojas): la llamada más barata que hay.
 function apiHuellasVigentes(token, claves) {
+  Auth.automatica();   // la pide el vigía cada minuto: no cuenta como actividad (la sesión se cierra a los 60 min sin uso)
   Auth.validarSesion(token);
   const validas = (claves || []).filter((k) => /^ver_[\w-]{1,10}_/.test(String(k))).slice(0, 300);
   return CacheHojas.vigentes(validas);
@@ -45,8 +46,9 @@ function apiResumenInicio(token) {
 }
 
 // --- Auth ---
-function apiLogin(correo, password) {
-  return Auth.login(correo, password);
+// dispositivo: { llave, navegador, sistema, nombre } (Verificacion.gs decide si pide el código por correo)
+function apiLogin(correo, password, dispositivo) {
+  return Auth.login(correo, password, dispositivo);
 }
 // Las fotos de perfil del directorio ({ correo: url }), para el componente Avatar
 function apiFotosPerfil(token) {
@@ -59,8 +61,8 @@ function apiMiPerfil(token) {
 function apiIdentidadGoogle() {
   return Auth.identidadGoogle();
 }
-function apiLoginConGoogle() {
-  return Auth.loginConGoogle();
+function apiLoginConGoogle(dispositivo) {
+  return Auth.loginConGoogle(dispositivo);
 }
 // Temporal, para el arreglo retroactivo de archivos sin compartir (ver
 // compartirArchivosExistentes en SetupInicial.gs) — hay que correrla como
@@ -100,6 +102,7 @@ function partesDeFicha_(token, deQue) {
 // --- Campanita (notificaciones de todos los módulos) ---
 // La campana: los avisos de todos los módulos en una llamada ({ lineas, vehiculos }; null = ese módulo falló)
 function apiNotificaciones(token, limite) {
+  Auth.automatica();   // la campanita se revisa sola cada tanto: no cuenta como actividad
   return NotificacionesService.campana(token, limite);
 }
 
