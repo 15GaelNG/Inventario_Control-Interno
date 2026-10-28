@@ -720,5 +720,7 @@ const LineasDatos = (function () {
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
     actualizarFila, actualizarFilas, agregarFilas, eliminarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
+    // La pestaña lista para escribir con SheetUtils y la política de Líneas (lo que no es actualizar/agregar/borrar filas)
+    paraEscribir: tablaEscribir_,
   };
 })();

@@ -600,14 +600,18 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
 test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se conecta la bitácora)', () => {
   // 28-oct (homologación 8): agregarFilas, cambiarCeldas, borrarFilas, reemplazarFilas, cambiarColumna, asegurarPestana…
   // avisan a la caché y al enganche de la bitácora (Bitacora.anotar). Escribir a mano se salta las dos cosas.
-  const EDITOR = /^src\/(Migracion\w*|SetupInicial)\.gs$/;   // scripts que corre un editor una vez, no la app
+  // Scripts que corre un editor (no la app): las migraciones, el arranque y la lectura de INE (solo en un DEV,
+  // pestañas de análisis que se rehacen completas)
+  const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
   const QUEDAN = {   // solo puede encoger
     'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
     'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
     'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
   };
   const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
-  const sinComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
+  // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
+  const sinComentarios = (s) => s.replace(/^.*\/\/ fuera del sistema.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
     .map((f) => path.relative(root, f).replace(/\\/g, '/'))
     .filter((f) => f !== 'src/utils/SheetUtils.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));

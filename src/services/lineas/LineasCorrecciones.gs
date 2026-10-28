@@ -365,13 +365,8 @@ const LineasCorrecciones = (function () {
       const encabezados = t.encabezados;
       const valor = (v) => (v instanceof Date ? LineasDatos.aHoraHoja(v) : (v === null || v === undefined ? '' : v));
       const matriz = r.filas.map((o) => encabezados.map((h) => valor(o[h])));
-      const hoja = t.hoja;
-      const antes = Math.max(0, hoja.getLastRow() - 1);
-      const faltan = matriz.length + 1 - hoja.getMaxRows();
-      if (faltan > 0) hoja.insertRowsAfter(hoja.getMaxRows(), faltan);
-      if (matriz.length) hoja.getRange(2, 1, matriz.length, encabezados.length).setValues(matriz);
-      CacheHojas.tocarHoja(hoja);
-      if (antes > matriz.length) hoja.getRange(matriz.length + 2, 1, antes - matriz.length, encabezados.length).clearContent();
+      // Toda la pestaña de nuevo, por SheetUtils (lo que sobraba de antes se vacía)
+      SheetUtils.reemplazarFilas(LineasDatos.paraEscribir(TAB), matriz);
     });
     LineasDatos.cacheBorrar('enc_' + TAB);
     console.log('Correcciones cargadas por ' + usuario.correo + ': ' + JSON.stringify(resumen));

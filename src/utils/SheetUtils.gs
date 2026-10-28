@@ -349,23 +349,30 @@ const SheetUtils = (function () {
   /**
    * Reescribe el cuerpo completo (renglón 2 en adelante) con `filas` (arreglos u objetos): lo que sobra de antes se
    * vacía. Para lo que se sincroniza de otra fuente (Capital Humano, permisos, correcciones). → cuántas quedaron
+   * opciones: { encabezados: [...] (también reescribe el renglón 1 con estos), formato: '@' (antes de escribir, a todo
+   * lo que se escribe), ajustarColumnas: true (borra las columnas de la rejilla que pasen de los encabezados) }
    */
-  function reemplazarFilas(t, filas) {
-    const enc = t.encabezados;
+  function reemplazarFilas(t, filas, opciones) {
+    const o = opciones || {};
+    const enc = o.encabezados || t.encabezados;
     const valores = (filas || []).map((f) => (Array.isArray(f) ? f : objectToRow_(enc, f).map((v, i) => celda_(t, enc[i], v))));
     const ancho = Math.max(enc.length, valores.reduce((m, v) => Math.max(m, v.length), 0));
     Candado.con(() => {
       const antes = Math.max(0, t.hoja.getLastRow() - 1);
       const faltan = valores.length + 1 - t.hoja.getMaxRows();
       if (faltan > 0) t.hoja.insertRowsAfter(t.hoja.getMaxRows(), faltan);
+      if (o.formato) t.hoja.getRange(1, 1, valores.length + 1, ancho).setNumberFormat(o.formato);
+      if (o.encabezados) t.hoja.getRange(1, 1, 1, ancho).setValues([enc.concat(Array(ancho - enc.length).fill(''))]);
       if (valores.length) {
         t.hoja.getRange(2, 1, valores.length, ancho)
           .setValues(valores.map((v) => (v.length < ancho ? v.concat(Array(ancho - v.length).fill('')) : v)));
       }
       if (antes > valores.length) t.hoja.getRange(valores.length + 2, 1, antes - valores.length, ancho).clearContent();
+      if (o.ajustarColumnas && t.hoja.getMaxColumns() > ancho) t.hoja.deleteColumns(ancho + 1, t.hoja.getMaxColumns() - ancho);
     });
+    if (o.encabezados) t.encabezados = enc.slice();
     tocarTabla_(t);
-    avisar_(t, 'reemplazar', [{ filas: valores.length }]);
+    avisar_(t, 'reemplazar', [{ filas: valores.length, encabezados: o.encabezados ? enc.slice() : undefined }]);
     return valores.length;
   }
 
