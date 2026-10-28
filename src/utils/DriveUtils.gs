@@ -361,10 +361,10 @@ const DriveUtils = (function () {
     return archivo;
   }
 
-  /** Una carpeta nueva dentro de otra. → Folder */
-  function crearCarpeta(padre, nombre) {
+  /** Una carpeta nueva dentro de otra (opciones.temporal: un borrador que se tira o se vacía después). → Folder */
+  function crearCarpeta(padre, nombre, opciones) {
     const carpeta = padre.createFolder(nombre);
-    anotar_('CARPETA', carpeta, () => ({ nombre: nombre, detalle: 'en la carpeta ' + padre.getId() }));
+    anotar_('CARPETA', carpeta, () => ({ nombre: nombre, detalle: 'en la carpeta ' + padre.getId() }), opciones);
     return carpeta;
   }
 
