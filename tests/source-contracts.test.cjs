@@ -612,9 +612,10 @@ test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se co
   // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
   // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
   const sinComentarios = (s) => s.replace(/^.*\/\/ fuera del sistema.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // Bitacora.gs escribe SU libro (la bitácora no se anota a sí misma): el único otro lugar que escribe hojas
   const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
     .map((f) => path.relative(root, f).replace(/\\/g, '/'))
-    .filter((f) => f !== 'src/utils/SheetUtils.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+    .filter((f) => f !== 'src/utils/SheetUtils.gs' && f !== 'src/services/Bitacora.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
   assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
     'escribe con SheetUtils (tabla + agregarFilas / cambiarCeldas / borrarFilas / reemplazarFilas / cambiarColumna / asegurarPestana…): ahí se conecta la bitácora');
   assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por SheetUtils: quitarlo de QUEDAN');

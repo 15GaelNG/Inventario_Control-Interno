@@ -262,44 +262,58 @@ const SheetUtils = (function () {
   function cambiarCeldas(t, cambios) {
     const lista = (cambios || []).map((x) => ({
       fila: x.fila,
+      antes: x.antes,
       columnas: x.columnas || columnasDeCambios_(t.encabezados, x.cambios),
     })).filter((x) => x.fila > 1 && x.columnas.length);
     if (!lista.length) return 0;
     Candado.con(() => {
-      if (t.politica.escritor === 'api' && apiDisponible_()) {
-        const crudos = [];
-        const tecleados = [];
-        lista.forEach((x) => x.columnas.forEach((c) => {
-          const v = t.politica.paraApi(t.encabezados[c.i], c.valor);
-          (v.tal ? crudos : tecleados).push({ range: a1_(t.nombre, x.fila, c.i + 1), values: [[v.valor]] });
-        }));
-        if (lote_) {
-          // Dentro de enLote: se juntan y se mandan en una sola llamada al final (vaciarLote_)
-          const delLibro = lote_.libros[t.libroId] = lote_.libros[t.libroId] || { datos: {}, tablas: {} };
-          crudos.forEach((d) => { delLibro.datos[d.range] = { d: d, tal: true }; });
-          tecleados.forEach((d) => { delLibro.datos[d.range] = { d: d, tal: false }; });
-          delLibro.tablas[t.nombre] = t;
-          lote_.respaldo.push([t, lista]);
-          if (!lote_.medir) lote_.medir = t.politica.medir;
-          return;
-        }
-        try {
-          mandarApi_(t.libroId, crudos, tecleados);
-          tocarTabla_(t);
-          return;
-        } catch (e) {
-          // Solo se reintenta sin API si no se escribió nada (la API no está habilitada)
-          if (!marcarApiApagada_(e)) throw e;
-        }
+      // La bitácora anota el antes y el después: el renglón se lee antes de escribir (update ya lo trae)
+      if (quiereAntes_(t, lista.length)) {
+        lista.forEach((x) => { if (!x.antes) x.antes = rowToObject_(t.encabezados, t.hoja.getRange(x.fila, 1, 1, t.encabezados.length).getValues()[0]); });
       }
-      escribirConHoja_(t, lista);
-      tocarTabla_(t);
+      escribirCeldas_(t, lista);
+      avisar_(t, 'cambiar', lista.map((x) => ({
+        fila: x.fila,
+        antes: x.antes,
+        cambios: x.columnas.reduce((o, c) => { o[claveDeEncabezado_(t.encabezados[c.i])] = c.valor; return o; }, {}),
+      })));
     });
-    avisar_(t, 'cambiar', lista.map((x) => ({
-      fila: x.fila,
-      cambios: x.columnas.reduce((o, c) => { o[claveDeEncabezado_(t.encabezados[c.i])] = c.valor; return o; }, {}),
-    })));
     return lista.length;
+  }
+
+  /** Lo que la bitácora quiere saber antes de escribir (no en lo que no anota ni en lo masivo, que va en un resumen) */
+  const quiereAntes_ = (t, n) => typeof Bitacora !== 'undefined' && !!Bitacora.quiereAntes && Bitacora.quiereAntes(t.nombre, n);
+
+  function escribirCeldas_(t, lista) {
+    // Por la API (Líneas): en lote dentro de enLote; si no, con SpreadsheetApp
+    if (t.politica.escritor === 'api' && apiDisponible_()) {
+      const crudos = [];
+      const tecleados = [];
+      lista.forEach((x) => x.columnas.forEach((c) => {
+        const v = t.politica.paraApi(t.encabezados[c.i], c.valor);
+        (v.tal ? crudos : tecleados).push({ range: a1_(t.nombre, x.fila, c.i + 1), values: [[v.valor]] });
+      }));
+      if (lote_) {
+        // Dentro de enLote: se juntan y se mandan en una sola llamada al final (vaciarLote_)
+        const delLibro = lote_.libros[t.libroId] = lote_.libros[t.libroId] || { datos: {}, tablas: {} };
+        crudos.forEach((d) => { delLibro.datos[d.range] = { d: d, tal: true }; });
+        tecleados.forEach((d) => { delLibro.datos[d.range] = { d: d, tal: false }; });
+        delLibro.tablas[t.nombre] = t;
+        lote_.respaldo.push([t, lista]);
+        if (!lote_.medir) lote_.medir = t.politica.medir;
+        return;
+      }
+      try {
+        mandarApi_(t.libroId, crudos, tecleados);
+        tocarTabla_(t);
+        return;
+      } catch (e) {
+        // Solo se reintenta sin API si no se escribió nada (la API no está habilitada)
+        if (!marcarApiApagada_(e)) throw e;
+      }
+    }
+    escribirConHoja_(t, lista);
+    tocarTabla_(t);
   }
 
   /**
@@ -333,6 +347,11 @@ const SheetUtils = (function () {
     Candado.con(() => {
       // Lo del lote apunta a números de renglón que el borrado recorre: primero se escribe
       if (lote_) { vaciarLote_(); lote_ = loteNuevo_(); }
+      // La bitácora anota lo que se borró: se lee antes
+      const antes = {};
+      if (quiereAntes_(t, lista.length)) {
+        lista.forEach((f) => { antes[f] = rowToObject_(t.encabezados, t.hoja.getRange(f, 1, 1, t.encabezados.length).getValues()[0]); });
+      }
       for (let i = 0; i < lista.length;) {
         let cantidad = 1;
         while (i + cantidad < lista.length && lista[i + cantidad] === lista[i] - cantidad) cantidad++;
@@ -340,9 +359,9 @@ const SheetUtils = (function () {
         else t.hoja.deleteRows(lista[i] - cantidad + 1, cantidad);
         i += cantidad;
       }
+      tocarTabla_(t);
+      avisar_(t, 'borrar', lista.slice().reverse().map((f) => ({ fila: f, antes: antes[f] })));
     });
-    tocarTabla_(t);
-    avisar_(t, 'borrar', lista.map((f) => ({ fila: f })));
     return lista.length;
   }
 
@@ -570,7 +589,7 @@ const SheetUtils = (function () {
       const fila = filaDeId_(t.hoja, t.encabezados, id, idColumn, sheetName);
       if (fila < 0) throw new Error('No se encontró el registro con ID=' + id + ' en "' + sheetName + '"');
       const actual = rowToObject_(t.encabezados, t.hoja.getRange(fila, 1, 1, t.encabezados.length).getValues()[0]);
-      cambiarCeldas(t, [{ fila: fila, cambios: changes }]);
+      cambiarCeldas(t, [{ fila: fila, cambios: changes, antes: actual }]);
       return Object.assign({}, actual, changes);
     });
   }

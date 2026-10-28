@@ -85,6 +85,8 @@ function crearEntorno(opciones) {
         };
       },
       setFrozenRows: () => hoja,
+      getMaxColumns: () => Math.max(26, ancho()),
+      protect() { const p = { setDescription: () => p, setWarningOnly: () => p }; return p; },
       clearContents() { datos.forEach((r) => r.fill('')); return hoja; },
       getDataRange() { return this.getRange(1, 1, ultimaFila(), ancho()); },
       appendRow(r) { datos.splice(ultimaFila(), 0, r.slice()); return hoja; },
@@ -100,8 +102,8 @@ function crearEntorno(opciones) {
   }
 
   const libros = {};
-  Object.keys(cfg.libros || {}).forEach((id) => {
-    const libro = { getId: () => id, getName: () => 'Libro ' + id, _hojas: [] };
+  function crearLibro(id, nombreLibro, hojas) {
+    const libro = { getId: () => id, getName: () => nombreLibro || 'Libro ' + id, _hojas: [] };
     libro.getSheets = () => libro._hojas.slice();
     libro.getSheetByName = (n) => libro._hojas.find((h) => h.getName() === n) || null;
     libro.insertSheet = (n) => {   // (la posición no importa en las pruebas)
@@ -110,9 +112,13 @@ function crearEntorno(opciones) {
       libro._hojas.push(h);
       return h;
     };
-    Object.keys(cfg.libros[id]).forEach((nombre) => libro._hojas.push(crearHoja(libro, nombre, cfg.libros[id][nombre])));
+    libro.deleteSheet = (h) => { libro._hojas = libro._hojas.filter((x) => x !== h); };
+    Object.keys(hojas || {}).forEach((nombre) => libro._hojas.push(crearHoja(libro, nombre, hojas[nombre])));
     libros[id] = libro;
-  });
+    return libro;
+  }
+  Object.keys(cfg.libros || {}).forEach((id) => crearLibro(id, null, cfg.libros[id]));
+  let nuevos = 0;
 
   // ------------------------------------------------------------------ servicios de Apps Script
   const cacheMem = new Map();
@@ -155,6 +161,9 @@ function crearEntorno(opciones) {
       if (formato !== 'yyyy-MM-dd') throw new Error('parseDate simulado: solo yyyy-MM-dd');
       return fecha(texto);
     },
+    DigestAlgorithm: { SHA_256: 'sha256' },
+    // Como Apps Script: bytes con signo (-128…127)
+    computeDigest: (alg, texto) => Array.from(require('crypto').createHash('sha256').update(String(texto), 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
   };
 
   const propiedades = new Map();
@@ -177,6 +186,8 @@ function crearEntorno(opciones) {
     SpreadsheetApp: {
       openById: (id) => { if (!libros[id]) throw new Error('No existe el libro ' + id); return libros[id]; },
       flush: () => {},
+      // Un libro nuevo trae su "Hoja 1" vacía, como el de verdad
+      create: (nombre) => crearLibro('nuevo-' + (++nuevos), nombre, { 'Hoja 1': [] }),
     },
     CacheService: { getScriptCache: () => cache, getUserCache: () => cache },
     // La API de Sheets (servicio avanzado): batchUpdate con rangos 'HOJA'!B5. cfg.apiSheets === false: apagada en el proyecto
@@ -192,6 +203,14 @@ function crearEntorno(opciones) {
               const tecleada = cuerpo.valueInputOption === 'USER_ENTERED' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(v);
               libros[id].getSheetByName(m[1].replace(/''/g, "'")).getRange(m[2]).setValue(tecleada ? fecha(v.slice(0, 16)) : v);
             });
+            return {};
+          },
+          // Renglones al final de la pestaña del rango ('HOJA'!A1); cfg.appendFalla: el libro no responde
+          append(cuerpo, id, rango, opciones) {
+            if (cfg.appendFalla) throw new Error('Service unavailable');
+            registro.api.push({ libro: id, modo: opciones.valueInputOption, renglones: cuerpo.values.length, append: true });
+            const h = libros[id].getSheetByName(/^'((?:[^']|'')*)'!/.exec(rango)[1].replace(/''/g, "'"));
+            cuerpo.values.forEach((r) => h.appendRow(r));
             return {};
           },
         },
