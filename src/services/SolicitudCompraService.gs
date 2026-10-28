@@ -44,15 +44,12 @@ const SolicitudCompraService = (function () {
   /** La hoja (o null si no existe y no se pide crearla) -- mismo patrón que HelpdeskService.hoja_. */
   function hoja_(crear) {
     const ss = SpreadsheetApp.openById(ssId());
-    let hoja = ss.getSheetByName(HOJA);
-    if (!hoja) {
-      if (!crear) return null;
-      hoja = ss.insertSheet(HOJA);
-      hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
-    return hoja;
+    const hoja = ss.getSheetByName(HOJA);
+    if (hoja || !crear) return hoja;
+    return SheetUtils.asegurarPestana(ss, HOJA, ENCABEZADOS);
   }
+  /** Para escribir: por SheetUtils, como toda escritura (ahí se conecta la bitácora) */
+  const tabla_ = (hoja) => SheetUtils.tabla(hoja, { encabezados: ENCABEZADOS });
 
   /** La carpeta del mes en curso ("NN. MES", la misma convención que ya usan las carpetas reales
    *  de Adquisición Vehicular -- p. ej. "11. NOVIEMBRE") dentro de la carpeta del año. La crea si
@@ -120,20 +117,18 @@ const SolicitudCompraService = (function () {
     const hoja = hoja_(false);
     if (!hoja || hoja.getLastRow() < 2) return [];
     const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
-    const colNombre = ENCABEZADOS.indexOf('NOMBRE') + 1;
-    let tocoAlgo = false;
+    const cambios = [];
     const filas = valores.map((v, i) => {
       const f = filaAObjeto_(v);
       if (!f.ID) return f;
       const nombreSincronizado = nombreSincronizadoDesdeCarpeta_(f);
       if (nombreSincronizado !== f.NOMBRE) {
-        hoja.getRange(i + 2, colNombre, 1, 1).setValue(nombreSincronizado);
+        cambios.push({ fila: i + 2, cambios: { NOMBRE: nombreSincronizado } });
         f.NOMBRE = nombreSincronizado;
-        tocoAlgo = true;
       }
       return f;
     }).filter((f) => f.ID);
-    if (tocoAlgo) CacheHojas.tocarHoja(hoja);
+    if (cambios.length) SheetUtils.cambiarCeldas(tabla_(hoja), cambios);
     return filas.reverse();   // más nuevas primero (se agregan al final)
   }
 
@@ -156,8 +151,7 @@ const SolicitudCompraService = (function () {
       CARPETA_ID: carpeta.getId(),
       NUCCO_RESULTANTE: '',
     };
-    hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
-    CacheHojas.tocarHoja(hoja);
+    SheetUtils.agregarFilas(tabla_(hoja), [ENCABEZADOS.map((c) => fila[c])]);
     return Object.assign({}, fila, { FECHA: HojaServicio.fechaISO(fila.FECHA) });
   }
 
@@ -187,9 +181,7 @@ const SolicitudCompraService = (function () {
           throw new Error('No se pudo renombrar la carpeta en Drive (' + e.message + '). El nombre no se cambió.');
         }
       }
-      hoja.getRange(i + 2, colNombre + 1, 1, 1).setValue(nombreNuevo);
-      hoja.getRange(i + 2, colArea + 1, 1, 1).setValue(areaNueva);
-      CacheHojas.tocarHoja(hoja);
+      SheetUtils.cambiarCeldas(tabla_(hoja), [{ fila: i + 2, cambios: { NOMBRE: nombreNuevo, AREA: areaNueva } }]);
       return { NOMBRE: nombreNuevo, AREA: areaNueva };
     }
     throw new Error('No se encontró la solicitud.');
@@ -201,11 +193,7 @@ const SolicitudCompraService = (function () {
     if (!hoja || hoja.getLastRow() < 2) return false;
     const ids = hoja.getRange(2, 1, hoja.getLastRow() - 1, 1).getValues();
     for (let i = 0; i < ids.length; i++) {
-      if (ids[i][0] === id) {
-        hoja.deleteRow(i + 2);
-        CacheHojas.tocarHoja(hoja);
-        return true;
-      }
+      if (ids[i][0] === id) return SheetUtils.borrarFilas(tabla_(hoja), [i + 2]) > 0;
     }
     return false;
   }
@@ -232,13 +220,9 @@ const SolicitudCompraService = (function () {
     const hoja = hoja_(false);
     if (!hoja || hoja.getLastRow() < 2) throw new Error('No se encontró la solicitud.');
     const ids = hoja.getRange(2, 1, hoja.getLastRow() - 1, 1).getValues();
-    const colEstatus = ENCABEZADOS.indexOf('ESTATUS') + 1;
-    const colNucco = ENCABEZADOS.indexOf('NUCCO_RESULTANTE') + 1;
     for (let i = 0; i < ids.length; i++) {
       if (ids[i][0] === id) {
-        hoja.getRange(i + 2, colEstatus, 1, 1).setValue('CONVERTIDA');
-        hoja.getRange(i + 2, colNucco, 1, 1).setValue(nucco);
-        CacheHojas.tocarHoja(hoja);
+        SheetUtils.cambiarCeldas(tabla_(hoja), [{ fila: i + 2, cambios: { ESTATUS: 'CONVERTIDA', NUCCO_RESULTANTE: nucco } }]);
         return { ESTATUS: 'CONVERTIDA', NUCCO_RESULTANTE: nucco };
       }
     }

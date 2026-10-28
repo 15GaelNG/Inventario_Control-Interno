@@ -387,13 +387,15 @@ const SheetUtils = (function () {
 
   /**
    * La pestaña con esos encabezados: si no existe se crea al final (encabezados en negritas, renglón 1 fijo); si
-   * existe, se le agregan al final los que le falten. opciones: { negritas: false, fijar: false, alCrear(hoja) }.
+   * existe, se le agregan al final los que le falten. opciones: { negritas: false, fijar: false, alCrear(hoja),
+   * soloCrear: true (si ya existe no lee sus encabezados: para lo que se escribe muy seguido, como ACCESOS) }.
    * → la hoja
    */
   function asegurarPestana(libro, nombre, encabezados, opciones) {
     const o = opciones || {};
     const ss = typeof libro === 'string' ? abrirSpreadsheet_(libro) : libro;
     let hoja = ss.getSheetByName(nombre);
+    if (hoja && o.soloCrear) return hoja;
     if (!hoja) {
       hoja = Candado.con(() => {
         const nueva = ss.getSheetByName(nombre) || ss.insertSheet(nombre, ss.getSheets().length);

@@ -7,7 +7,8 @@
  *   - Encabezados en caché (1 h); las escrituras siempre releen encabezados.
  *   - Búsquedas por columna con TextFinder en vez de leer la pestaña completa.
  *   - Varias filas sueltas en UNA llamada a la API de Sheets (values:batchGetByDataFilter).
- *   - Escrituras de una fila en UNA llamada (values:batchUpdate) y siempre bajo candado.
+ *   - Escrituras por SheetUtils (28-oct, como todo el sistema) con la política de Líneas: las celdas por la API de
+ *     Sheets en UNA llamada (values:batchUpdate), siempre bajo candado y, dentro de conCandado, juntas al final.
  *   - Fechas con la hora de México aunque la hoja tenga otra zona horaria.
  *   - Caché JSON comprimida (gzip) en trozos de 90 KB.
  *
@@ -507,7 +508,6 @@ const LineasDatos = (function () {
   function sheetsApi(ruta, cuerpo) {
     try {
       if (ruta === '/values:batchGetByDataFilter') return Sheets.Spreadsheets.Values.batchGetByDataFilter(cuerpo, id());
-      if (ruta === '/values:batchUpdate') return Sheets.Spreadsheets.Values.batchUpdate(cuerpo, id());
       throw new Error('Ruta de la API de Sheets no soportada: ' + ruta);
     } catch (e) {
       throw new Error('API de Sheets 403: ' + e.message);

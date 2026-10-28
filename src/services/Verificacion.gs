@@ -54,15 +54,10 @@ const Verificacion = (function () {
 
   // ---------------------------------------------------------------- la hoja DISPOSITIVOS
   function hoja_() {
-    const libro = SpreadsheetApp.openById(ssId());
-    let h = libro.getSheetByName(HOJA);
-    if (!h) {
-      h = libro.insertSheet(HOJA);
-      h.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]);
-      h.setFrozenRows(1);
-    }
-    return h;
+    return SheetUtils.asegurarPestana(ssId(), HOJA, COLUMNAS, { negritas: false, soloCrear: true });
   }
+  /** Para escribir: por SheetUtils, como toda escritura (ahí se conecta la bitácora) */
+  const tabla_ = (hoja) => SheetUtils.tabla(hoja, { encabezados: COLUMNAS });
   /** Los renglones de un correo, con su número de renglón (base 1) */
   function deCorreo_(hoja, correo) {
     const ultima = hoja.getLastRow();
@@ -77,7 +72,9 @@ const Verificacion = (function () {
   }
   const activo_ = (d) => String(d.ACTIVO).toUpperCase() === 'TRUE';
   function poner_(hoja, fila, columna, valor) {
-    hoja.getRange(fila, COLUMNAS.indexOf(columna) + 1).setValue(valor);
+    const cambios = {};
+    cambios[columna] = valor;
+    SheetUtils.cambiarCeldas(tabla_(hoja), [{ fila: fila, cambios: cambios }]);
   }
   const hoy_ = () => Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
@@ -192,7 +189,7 @@ const Verificacion = (function () {
         });
       }
       const ahora = new Date();
-      hoja.appendRow([r.correo, huella_(llave), r.dispositivo.nombre, r.dispositivo.navegador, r.dispositivo.sistema, ahora, ahora, 'TRUE', '']);
+      SheetUtils.agregarFilas(tabla_(hoja), [[r.correo, huella_(llave), r.dispositivo.nombre, r.dispositivo.navegador, r.dispositivo.sistema, ahora, ahora, 'TRUE', '']]);
     });
     avisarNuevo_(r);
     return llave;
@@ -296,12 +293,14 @@ const Verificacion = (function () {
       const iCorreo = COLUMNAS.indexOf('CORREO');
       const iActivo = COLUMNAS.indexOf('ACTIVO');
       const iNota = COLUMNAS.indexOf('NOTA');
-      let n = 0;
-      valores.forEach((v) => {
-        if (buscados.has(clave_(v[iCorreo])) && String(v[iActivo]).toUpperCase() === 'TRUE') { v[iActivo] = 'FALSE'; v[iNota] = nota || 'olvidado'; n++; }
+      // Solo los renglones que cambian (antes se reescribía la hoja completa)
+      const cambios = [];
+      valores.forEach((v, i) => {
+        if (buscados.has(clave_(v[iCorreo])) && String(v[iActivo]).toUpperCase() === 'TRUE') {
+          cambios.push({ fila: i + 2, columnas: [{ i: iActivo, valor: 'FALSE' }, { i: iNota, valor: nota || 'olvidado' }] });
+        }
       });
-      if (n) hoja.getRange(2, 1, valores.length, COLUMNAS.length).setValues(valores);
-      return n;
+      return SheetUtils.cambiarCeldas(tabla_(hoja), cambios);
     });
   }
 

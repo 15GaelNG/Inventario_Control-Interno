@@ -597,6 +597,26 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
 });
 
+test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se conecta la bitácora)', () => {
+  // 28-oct (homologación 8): agregarFilas, cambiarCeldas, borrarFilas, reemplazarFilas, cambiarColumna, asegurarPestana…
+  // avisan a la caché y al enganche de la bitácora (Bitacora.anotar). Escribir a mano se salta las dos cosas.
+  const EDITOR = /^src\/(Migracion\w*|SetupInicial)\.gs$/;   // scripts que corre un editor una vez, no la app
+  const QUEDAN = {   // solo puede encoger
+    'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+  };
+  const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
+  const sinComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/utils/SheetUtils.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
+    'escribe con SheetUtils (tabla + agregarFilas / cambiarCeldas / borrarFilas / reemplazarFilas / cambiarColumna / asegurarPestana…): ahí se conecta la bitácora');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por SheetUtils: quitarlo de QUEDAN');
+  assert.match(read('package.json'), /node tests\/sheet-utils-primitivas\.test\.js/);
+});
+
 test('el candado del script se pide solo con Candado.con (reentrante), y SheetUtils escribe solo lo que cambia', () => {
   // waitLock() no es reentrante: un getScriptLock suelto no sabe que su hilo ya tiene el candado, y lo que llama
   // adentro (SheetUtils.update, HojaServicio.actualizar…) se colgaba hasta el timeout (docs/homologacion-codigo.md, fase 1)
