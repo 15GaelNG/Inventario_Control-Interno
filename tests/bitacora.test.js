@@ -171,8 +171,12 @@ console.log('8. Drive: lo que se sube, mueve, renombra o tira (lo temporal no)')
   const tmp = D.copiar(archivo('PLANTILLA', 'Formato'), 'TMP x', carpeta, { temporal: true });
   D.aPapelera(tmp, { temporal: true });
   D.aPapelera(archivo('F-4', 'quitada.jpg'));
+  const movidas = [];
+  e.contexto.Drive = { Files: { update: (recurso, id, blob, args) => { movidas.push(id + '→' + args.addParents + ':' + recurso.name); return {}; } } };
+  D.moverConApi('F-5', 'TEMP', carpeta, 'NEUMATICOS-0088 (2).jpg');
   const r = renglones();
-  ok(r.map((x) => x.ACCION).join() === 'SUBIR,RENOMBRAR,MOVER,PAPELERA', 'subir, renombrar, mover y tirar; la copia temporal de la plantilla no');
+  ok(r.map((x) => x.ACCION).join() === 'SUBIR,RENOMBRAR,MOVER,PAPELERA,MOVER', 'subir, renombrar, mover y tirar; la copia temporal de la plantilla no');
+  ok(movidas.join() === 'F-5→CARP-1:NEUMATICOS-0088 (2).jpg' && r[4]['ID REGISTRO'] === 'F-5', 'moverConApi: mueve y renombra en una llamada, y se anota');
   ok(r[0].HOJA === 'DRIVE' && r[0]['ID REGISTRO'] === 'F-1' && r[0].CAMPO === 'RESP-0088.pdf' && /CARP-1/.test(r[0].DETALLE), 'qué archivo y dónde');
   ok(r[1].ANTES === 'viejo.pdf' && r[1].DESPUES === 'nuevo.pdf', 'renombrar: el nombre de antes y el nuevo');
 }

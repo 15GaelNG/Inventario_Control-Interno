@@ -20,7 +20,7 @@ module.exports = function driveUtilsReal(globales) {
   return {
     subcarpeta: D.subcarpeta, claveCarpeta: D.claveCarpeta,
     crearArchivo: D.crearArchivo, crearCarpeta: D.crearCarpeta, mover: D.mover, renombrar: D.renombrar, copiar: D.copiar,
-    aPapelera: D.aPapelera, cambiarContenido: D.cambiarContenido, crearConApi: D.crearConApi, copiarConApi: D.copiarConApi,
+    aPapelera: D.aPapelera, cambiarContenido: D.cambiarContenido, crearConApi: D.crearConApi, copiarConApi: D.copiarConApi, moverConApi: D.moverConApi,
     reemplazarConApi: D.reemplazarConApi, marcarAutor: D.marcarAutor,
   };
 };

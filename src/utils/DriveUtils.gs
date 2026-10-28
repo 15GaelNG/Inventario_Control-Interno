@@ -418,6 +418,16 @@ const DriveUtils = (function () {
     anotar_('COPIAR', r, () => ({ nombre: recurso.name, detalle: 'de ' + id }), opciones);
     return r;
   }
+  /**
+   * Mueve (de la carpeta desdeId a destino) y renombra en UNA llamada (Drive v3): para mover muchas de un jalón (las
+   * fotos de una inspección). → lo que regresa Drive
+   */
+  function moverConApi(id, desdeId, destino, nombre) {
+    const r = Drive.Files.update(nombre ? { name: nombre } : {}, id, null,
+      { addParents: destino.getId(), removeParents: desdeId, supportsAllDrives: true, fields: 'id' });
+    anotar_('MOVER', { id: id }, () => ({ nombre: nombre || '', despues: nombre || '', detalle: 'a la carpeta ' + destino.getId() }));
+    return r;
+  }
   function reemplazarConApi(recurso, id, blob, argumentos) {
     const r = Drive.Files.update(recurso, id, blob, argumentos);
     anotar_('REEMPLAZAR', r, () => ({ nombre: r && r.name, detalle: 'contenido nuevo' }));
@@ -440,6 +450,7 @@ const DriveUtils = (function () {
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
     marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio, archivosDeCarpeta, subcarpeta, claveCarpeta,
     // Escribir en Drive (28-oct): toda escritura pasa por aquí
-    crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido, crearConApi, copiarConApi, reemplazarConApi,
+    crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido, crearConApi, copiarConApi, moverConApi,
+    reemplazarConApi,
   };
 })();
