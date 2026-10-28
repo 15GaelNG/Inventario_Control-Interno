@@ -6,10 +6,10 @@ Pedida a Control Interno y autorizada para producción (28-oct-2026). Código: `
 ## Cómo funciona
 - **Nadie la escribe a mano.** Toda escritura de hojas pasa por `SheetUtils` y toda escritura en Drive por
   `DriveUtils` (dos contratos lo vigilan). Sus primitivas avisan a `Bitacora`, así que un módulo nuevo nace anotado.
-- **Dónde:** carpeta `BITACORA` en la raíz del proyecto → libro `BITACORA <año>` (si se acerca al límite de celdas,
-  `BITACORA <año> (2)`) → una pestaña por mes (`2026-10`). Solo la abre la cuenta que despliega (la dueña); no se
+- **Dónde:** carpeta `LOGS` en la raíz del proyecto → libro `LOGS <año>` (si se acerca al límite de celdas,
+  `LOGS <año> (2)`) → una pestaña por mes (`2026-10`). Solo la abre la cuenta que despliega (la dueña); no se
   comparte. En un DEV se crea sola; en producción, `instalarBitacora()` desde el editor, **antes de desplegar**
-  (`revisarEntorno` marca error si falta la carpeta `BITACORA`).
+  (`revisarEntorno` marca error si falta la carpeta `LOGS`).
 - **Cuándo se escribe:** lo de una ejecución se junta y sale en una sola llamada (`Sheets…Values.append`, RAW) al
   soltar el candado (`Candado.con`). Si el libro falla, el guardado no truena: lo pendiente va a una cola
   (`BITACORA_COLA` en Script Properties) que la revisión diaria reintenta.
