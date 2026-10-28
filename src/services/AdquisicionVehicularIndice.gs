@@ -197,17 +197,15 @@ function indiceAdqSeriesDeFuente_(hoja, fuenteNombre) {
 
 /** Quita del índice los renglones de esa FUENTE y escribe los nuevos en su lugar. */
 function indiceAdqReemplazarFuente_(hoja, fuenteNombre, filasNuevas) {
-  const colFuente = AdquisicionVehicularService.ENCABEZADOS_INDICE.indexOf('FUENTE');
+  const encabezados = AdquisicionVehicularService.ENCABEZADOS_INDICE;
+  const t = SheetUtils.tabla(hoja, { encabezados: encabezados });
+  const colFuente = encabezados.indexOf('FUENTE');
+  // Por SheetUtils (borra los seguidos de una vez y avisa a la caché: buscar()/listar() ven lo nuevo al momento)
   if (hoja.getLastRow() > 1) {
-    const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, AdquisicionVehicularService.ENCABEZADOS_INDICE.length).getValues();
-    for (let i = valores.length - 1; i >= 0; i--) {
-      if (valores[i][colFuente] === fuenteNombre) hoja.deleteRow(i + 2);
-    }
+    const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, encabezados.length).getValues();
+    SheetUtils.borrarFilas(t, valores.map((v, i) => (v[colFuente] === fuenteNombre ? i + 2 : 0)));
   }
-  if (filasNuevas.length) hoja.getRange(hoja.getLastRow() + 1, 1, filasNuevas.length, filasNuevas[0].length).setValues(filasNuevas);
-  // Escritura directa (sin SheetUtils ni HojaServicio): avisa a mano, si no buscar()/listar() no
-  // ven lo nuevo hasta que se les acabe la caché sola (TTL_INDICE_SEGUNDOS, 30 min).
-  CacheHojas.tocarHoja(hoja);
+  SheetUtils.agregarFilas(t, filasNuevas);
 }
 
 // ---------------------------------------------------------------------------------------------- pasada B (OCR)
@@ -292,7 +290,7 @@ function indiceAdqProcesarOcr_(candidatas, hoja, st, queda) {
     }
     const fuenteNombre = 'OCR-' + c.año;
     const filas = (series.length ? series : ['']).map((serie) => [serie, c.folio, c.area, c.año, c.url, fuenteNombre, ahora]);
-    hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, filas[0].length).setValues(filas);
+    SheetUtils.agregarFilas(SheetUtils.tabla(hoja, { encabezados: AdquisicionVehicularService.ENCABEZADOS_INDICE }), filas);
     st.procesados++;
     if (error || !series.length) st.errores++;
     st.faltan--;

@@ -81,15 +81,10 @@ const TemporadaService = (function () {
     return vista_(Auth.validarSesion(token));
   }
 
-  function hojaOfrenda_() {
-    const ss = SpreadsheetApp.openById(ssId_());
-    let hoja = ss.getSheetByName(HOJA_OFRENDA);
-    if (!hoja) {
-      hoja = ss.insertSheet(HOJA_OFRENDA);
-      hoja.getRange(1, 1, 1, ENCABEZADOS_OFRENDA.length).setValues([ENCABEZADOS_OFRENDA]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
-    return hoja;
+  /** La pestaña de la ofrenda, lista para escribir (SheetUtils: ahí se conecta la bitácora) */
+  function tablaOfrenda_() {
+    const hoja = SheetUtils.asegurarPestana(ssId_(), HOJA_OFRENDA, ENCABEZADOS_OFRENDA, { soloCrear: true });
+    return SheetUtils.tabla(hoja, { encabezados: ENCABEZADOS_OFRENDA });
   }
 
   /** Renglón (1 = encabezados) de la vela con ese ID, o 0 */
@@ -107,15 +102,14 @@ const TemporadaService = (function () {
     if (actual() !== 'muertos') throw new Error('La ofrenda no está abierta.');
     const texto = String(memoria || '').replace(/\s+/g, ' ').trim().slice(0, MAX_MEMORIA);
     Candado.con(() => {
-      const hoja = hojaOfrenda_();
+      const t = tablaOfrenda_();
       const mia = velas_().find((v) => v.correo === correo_(sesion.correo));
-      const renglon = mia ? renglonDe_(hoja, mia.id) : 0;
+      const renglon = mia ? renglonDe_(t.hoja, mia.id) : 0;
       if (renglon) {
-        hoja.getRange(renglon, ENCABEZADOS_OFRENDA.indexOf('EN MEMORIA DE') + 1).setValue(texto);
+        SheetUtils.cambiarCeldas(t, [{ fila: renglon, cambios: { 'EN MEMORIA DE': texto } }]);
       } else {
-        hoja.appendRow([Utilities.getUuid().slice(0, 8), new Date(), anio_(), sesion.correo || '', sesion.nombre || '', texto]);
+        SheetUtils.agregarFilas(t, [[Utilities.getUuid().slice(0, 8), new Date(), anio_(), sesion.correo || '', sesion.nombre || '', texto]]);
       }
-      CacheHojas.tocarHoja(hoja);
     });
     return vista_(sesion);
   }
@@ -129,10 +123,9 @@ const TemporadaService = (function () {
       throw new Error('Solo quien encendió la vela (o un administrador) la puede quitar.');
     }
     Candado.con(() => {
-      const hoja = hojaOfrenda_();
-      const renglon = renglonDe_(hoja, id);
-      if (renglon) hoja.deleteRow(renglon);
-      CacheHojas.tocarHoja(hoja);
+      const t = tablaOfrenda_();
+      const renglon = renglonDe_(t.hoja, id);
+      if (renglon) SheetUtils.borrarFilas(t, [renglon]);
     });
     return vista_(sesion);
   }

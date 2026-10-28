@@ -149,26 +149,15 @@ const AccesoriosVehiculoService = (function () {
   };
   const enTexto_ = (v) => (v instanceof Date ? Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd') : texto_(v));
 
-  /** La hoja de estado con todas sus columnas (la crea si no existe; agrega al final las piezas nuevas) → { hoja, encabezados } */
+  /**
+   * La hoja de estado con todas sus columnas (la crea si no existe; agrega al final las piezas nuevas), lista para
+   * escribir por SheetUtils → { hoja, encabezados, t }
+   */
   function hojaEstado_(catalogo) {
     const quiere = ESTADO_INICIO.concat(catalogo.map((p) => p.CLAVE), ESTADO_FIN);
-    const ss = SpreadsheetApp.openById(libro());
-    let hoja = ss.getSheetByName(HOJA_ESTADO);
-    if (!hoja) {
-      hoja = ss.insertSheet(HOJA_ESTADO);
-      hoja.getRange(1, 1, 1, quiere.length).setValues([quiere]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-      return { hoja: hoja, encabezados: quiere };
-    }
-    const ancho = hoja.getLastColumn();
-    const encabezados = ancho ? hoja.getRange(1, 1, 1, ancho).getValues()[0].map(texto_) : [];
-    const indices = SheetUtils.indiceDeColumnas(encabezados, quiere);
-    const faltan = quiere.filter((c) => indices[c] === -1);
-    if (faltan.length) {
-      hoja.getRange(1, encabezados.length + 1, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
-      faltan.forEach((c) => encabezados.push(c));
-    }
-    return { hoja: hoja, encabezados: encabezados };
+    const hoja = SheetUtils.asegurarPestana(libro(), HOJA_ESTADO, quiere);
+    const t = SheetUtils.tabla(hoja);
+    return { hoja: hoja, encabezados: t.encabezados.map(texto_), t: t };
   }
 
   /** Un renglón de estado como arreglo, en el orden de los encabezados de la hoja */
@@ -184,7 +173,7 @@ const AccesoriosVehiculoService = (function () {
     Candado.con(() => {
       const catalogo = catalogoDeHoja_();
       const todos = movimientosDeHoja_();
-      const { hoja, encabezados } = hojaEstado_(catalogo);
+      const { hoja, encabezados, t } = hojaEstado_(catalogo);
       const col = SheetUtils.indiceDeColumnas(encabezados, ['ID VEHICULO'])['ID VEHICULO'];
       const ultima = hoja.getLastRow();
       const ids = ultima > 1 ? hoja.getRange(2, col + 1, ultima - 1, 1).getValues().map((x) => texto_(x[0])) : [];
@@ -192,13 +181,12 @@ const AccesoriosVehiculoService = (function () {
         const fila = comoFila_(encabezados, renglonEstado(vehiculoDe_(id), todos.filter((m) => m.ID_VEHICULO === id), catalogo));
         const i = ids.indexOf(id);
         if (i >= 0) {
-          hoja.getRange(i + 2, 1, 1, fila.length).setValues([fila]);
+          SheetUtils.cambiarCeldas(t, [{ fila: i + 2, columnas: fila.map((v, k) => ({ i: k, valor: v })) }]);
         } else {
-          hoja.getRange(hoja.getLastRow() + 1, 1, 1, fila.length).setValues([fila]);
+          SheetUtils.agregarFilas(t, [fila]);
           ids.push(id);
         }
       });
-      CacheHojas.tocarHoja(hoja);
     });
   }
 
@@ -261,13 +249,10 @@ const AccesoriosVehiculoService = (function () {
   function rehacerEstado() {
     return Candado.con(() => {
       const catalogo = catalogoDeHoja_();
-      const { hoja, encabezados } = hojaEstado_(catalogo);
+      const { encabezados, t } = hojaEstado_(catalogo);
       const filas = estadoCompleto_(catalogo, encabezados);
-      // Lo de antes que sobre (una unidad que ya no tiene movimientos) se escribe en blanco, en la misma escritura
-      const total = filas.slice();
-      while (total.length < hoja.getLastRow() - 1) total.push(encabezados.map(() => ''));
-      if (total.length) hoja.getRange(2, 1, total.length, encabezados.length).setValues(total);
-      CacheHojas.tocarHoja(hoja);
+      // Lo de antes que sobre (una unidad que ya no tiene movimientos) queda en blanco
+      SheetUtils.reemplazarFilas(t, filas);
       return { unidades: filas.length };
     });
   }

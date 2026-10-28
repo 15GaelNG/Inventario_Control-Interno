@@ -427,18 +427,24 @@ const Permisos = (function () {
       return 'La hoja PERMISOS ya existe en "' + ss.getName() + '": no se tocó.';
     }
     const reglas = semilla_();
-    escribirHoja_(ss.insertSheet(HOJA_PERMISOS), reglas);
+    escribirHoja_(hojaPermisos_(ss), reglas);
     return 'Hoja PERMISOS creada en "' + ss.getName() + '" con ' + reglas.length + ' reglas.';
   }
 
-  /** Reemplaza el contenido de la hoja PERMISOS por estas reglas ([QUIEN, MODULO, PERMISO, NOTA]) */
+  /** La hoja PERMISOS (se crea con sus encabezados si falta) */
+  function hojaPermisos_(ss) {
+    return SheetUtils.asegurarPestana(ss, HOJA_PERMISOS, ENCABEZADOS, { soloCrear: true });
+  }
+
+  /**
+   * Reemplaza el contenido de la hoja PERMISOS por estas reglas ([QUIEN, MODULO, PERMISO, NOTA]), por SheetUtils
+   * (avisa a la caché: las reglas guardadas, reglas_, se vuelven a leer ya; y a la bitácora)
+   */
   function escribirHoja_(hoja, reglas) {
-    const filas = [ENCABEZADOS].concat(reglas.map((r) => [0, 1, 2, 3].map((i) => (r[i] == null ? '' : r[i]))));
-    hoja.clearContents();
-    hoja.getRange(1, 1, filas.length, ENCABEZADOS.length).setValues(filas);
+    SheetUtils.reemplazarFilas(SheetUtils.tabla(hoja, { encabezados: ENCABEZADOS }),
+      reglas.map((r) => [0, 1, 2, 3].map((i) => (r[i] == null ? '' : r[i]))));
     hoja.setFrozenRows(1);
     hoja.getRange(1, 1, 1, ENCABEZADOS.length).setFontWeight('bold');
-    CacheHojas.tocarHoja(hoja);   // las reglas guardadas (reglas_) se vuelven a leer ya
   }
 
   // ------------------------------------------------------------ pantalla de administración
@@ -562,16 +568,10 @@ const Permisos = (function () {
   /** Agrega los cambios al final de PERMISOS_HISTORIAL (la crea si falta) */
   function anotarHistorial_(ss, sesion, difs) {
     if (!difs.length) return;
-    let hoja = ss.getSheetByName(HOJA_HISTORIAL);
-    if (!hoja) {
-      hoja = ss.insertSheet(HOJA_HISTORIAL);
-      hoja.getRange(1, 1, 1, ENCABEZADOS_HISTORIAL.length).setValues([ENCABEZADOS_HISTORIAL]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
+    const hoja = SheetUtils.asegurarPestana(ss, HOJA_HISTORIAL, ENCABEZADOS_HISTORIAL, { soloCrear: true });
     const ahora = new Date();
-    const filas = difs.map((d) => [ahora, sesion.correo || '', sesion.nombre || '', d.quien, d.modulo, d.antes, d.despues]);
-    hoja.getRange(hoja.getLastRow() + 1, 1, filas.length, ENCABEZADOS_HISTORIAL.length).setValues(filas);
-    CacheHojas.tocarHoja(hoja);
+    SheetUtils.agregarFilas(SheetUtils.tabla(hoja, { encabezados: ENCABEZADOS_HISTORIAL }),
+      difs.map((d) => [ahora, sesion.correo || '', sesion.nombre || '', d.quien, d.modulo, d.antes, d.despues]));
   }
 
   /** Los cambios más recientes primero, para la pantalla ([] si la hoja aún no existe) */
@@ -625,7 +625,7 @@ const Permisos = (function () {
       // Primero las reglas vigentes: si la hoja no existe son las de la semilla, y se crea con ellas
       const vigentes = reglas_(true).filas;
       const ss = SpreadsheetApp.openById(ssId());
-      const hoja = ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS);
+      const hoja = hojaPermisos_(ss);
       const nota = 'Cambiado por ' + (sesion.nombre || sesion.correo) + ' el ' +
         Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
       escribirHoja_(hoja, aplicarCambios_(vigentes, cambios, nota));
@@ -735,7 +735,7 @@ const Permisos = (function () {
       m = migracion_(vigentes, usuarios_());
       if (!m.agregadas.length && !m.renombradas) return 'No faltaba nada: PERMISOS ya estaba como el catálogo en árbol.';
       const ss = SpreadsheetApp.openById(ssId());
-      const hoja = ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS);
+      const hoja = hojaPermisos_(ss);
       escribirHoja_(hoja, m.reglas);
       anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Migrar catálogo' }, diferencias_(vigentes, m.agregadas));
       SpreadsheetApp.flush();
@@ -782,7 +782,7 @@ const Permisos = (function () {
       r = perfilesDesdeAreas_(vigentes);
       if (!r.perfiles.length) return 'No faltaba nada: ninguna área tiene reglas fuera de un perfil.';
       const ss = SpreadsheetApp.openById(ssId());
-      escribirHoja_(ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS), r.reglas);
+      escribirHoja_(hojaPermisos_(ss), r.reglas);
       // En el historial: cada perfil nuevo y su asignación (las reglas del área pasan tal cual al perfil)
       anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Perfiles desde las áreas' },
         r.perfiles.map((p) => ({ quien: p, modulo: PREFIJO_PERFIL + p, antes: '', despues: ASIGNADO })));
@@ -828,7 +828,7 @@ const Permisos = (function () {
       r = alcanceDesdeClientes_(vigentes, usuarios_());
       if (!r.perfiles.length) return 'No faltaba nada: ningún perfil de un área de CLIENT está sin su alcance.';
       const ss = SpreadsheetApp.openById(ssId());
-      escribirHoja_(ss.getSheetByName(HOJA_PERMISOS) || ss.insertSheet(HOJA_PERMISOS), r.reglas);
+      escribirHoja_(hojaPermisos_(ss), r.reglas);
       anotarHistorial_(ss, { correo: quienCorre || '', nombre: 'Alcance desde CLIENT' },
         r.perfiles.map((p) => ({ quien: PREFIJO_PERFIL + p, modulo: MODULO_ALCANCE, antes: '', despues: ALCANCE_AREA })));
       SpreadsheetApp.flush();

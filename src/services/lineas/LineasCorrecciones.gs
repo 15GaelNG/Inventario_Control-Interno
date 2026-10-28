@@ -365,13 +365,8 @@ const LineasCorrecciones = (function () {
       const encabezados = t.encabezados;
       const valor = (v) => (v instanceof Date ? LineasDatos.aHoraHoja(v) : (v === null || v === undefined ? '' : v));
       const matriz = r.filas.map((o) => encabezados.map((h) => valor(o[h])));
-      const hoja = t.hoja;
-      const antes = Math.max(0, hoja.getLastRow() - 1);
-      const faltan = matriz.length + 1 - hoja.getMaxRows();
-      if (faltan > 0) hoja.insertRowsAfter(hoja.getMaxRows(), faltan);
-      if (matriz.length) hoja.getRange(2, 1, matriz.length, encabezados.length).setValues(matriz);
-      CacheHojas.tocarHoja(hoja);
-      if (antes > matriz.length) hoja.getRange(matriz.length + 2, 1, antes - matriz.length, encabezados.length).clearContent();
+      // Toda la pestaña de nuevo, por SheetUtils (lo que sobraba de antes se vacía)
+      SheetUtils.reemplazarFilas(LineasDatos.paraEscribir(TAB), matriz);
     });
     LineasDatos.cacheBorrar('enc_' + TAB);
     console.log('Correcciones cargadas por ' + usuario.correo + ': ' + JSON.stringify(resumen));
@@ -415,29 +410,12 @@ const LineasCorrecciones = (function () {
     return { hechos: hechos, omitidos: omitidos, estado: nuevo };
   }
 
-  /** [{ fila, cambios: { COLUMNA: valor } }] en una sola llamada (textos RAW, fechas USER_ENTERED); sin API, fila por fila. */
+  /**
+   * [{ fila, cambios: { COLUMNA: valor } }] en una sola llamada (textos RAW, fechas USER_ENTERED; sin API, con
+   * SpreadsheetApp): LineasDatos.actualizarFilas, que escribe por SheetUtils como todo lo demás (28-oct).
+   */
   function escribir_(lista) {
-    if (!lista.length) return;
-    const t = LineasDatos.tablaFresca(TAB);
-    const hoja = "'" + TAB + "'!";
-    const crudos = [];
-    const fechas = [];
-    lista.forEach((x) => Object.keys(x.cambios).forEach((col) => {
-      const c = LineasDatos.colIndice(t, col);
-      if (c < 0) return;
-      const v = x.cambios[col];
-      const rango = hoja + LineasDatos.letraColumna(c + 1) + x.fila;
-      if (v instanceof Date) fechas.push({ range: rango, values: [[Utilities.formatDate(v, LineasDatos.ZONA_APP, 'yyyy-MM-dd HH:mm:ss')]] });
-      else crudos.push({ range: rango, values: [[v === null || v === undefined ? '' : v]] });
-    }));
-    try {
-      SpreadsheetApp.flush();
-      if (crudos.length) LineasDatos.sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
-      if (fechas.length) LineasDatos.sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
-    } catch (e) {
-      console.warn('Correcciones: sin API de Sheets, fila por fila (' + e.message + ')');
-      lista.forEach((x) => LineasDatos.actualizarFila(TAB, x.fila, x.cambios));
-    }
+    if (lista.length) LineasDatos.actualizarFilas(TAB, lista);
   }
 
   return { TAB, ENCABEZADOS, TIPO, ESTADO, estado, cargar, marcar, combinar, subirEvidencia, enlacesDe };

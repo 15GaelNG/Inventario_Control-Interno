@@ -7,7 +7,8 @@
  *   - Encabezados en caché (1 h); las escrituras siempre releen encabezados.
  *   - Búsquedas por columna con TextFinder en vez de leer la pestaña completa.
  *   - Varias filas sueltas en UNA llamada a la API de Sheets (values:batchGetByDataFilter).
- *   - Escrituras de una fila en UNA llamada (values:batchUpdate) y siempre bajo candado.
+ *   - Escrituras por SheetUtils (28-oct, como todo el sistema) con la política de Líneas: las celdas por la API de
+ *     Sheets en UNA llamada (values:batchUpdate), siempre bajo candado y, dentro de conCandado, juntas al final.
  *   - Fechas con la hora de México aunque la hoja tenga otra zona horaria.
  *   - Caché JSON comprimida (gzip) en trozos de 90 KB.
  *
@@ -507,7 +508,6 @@ const LineasDatos = (function () {
   function sheetsApi(ruta, cuerpo) {
     try {
       if (ruta === '/values:batchGetByDataFilter') return Sheets.Spreadsheets.Values.batchGetByDataFilter(cuerpo, id());
-      if (ruta === '/values:batchUpdate') return Sheets.Spreadsheets.Values.batchUpdate(cuerpo, id());
       throw new Error('Ruta de la API de Sheets no soportada: ' + ruta);
     } catch (e) {
       throw new Error('API de Sheets 403: ' + e.message);
@@ -535,62 +535,61 @@ const LineasDatos = (function () {
   const HOJAS_EN_TEXTO = /^(APP_.*|LINEAS|EQUIPOS|ASIGNACIONES|ADENDUMS|FACTURAS|CUENTAS|CATALOGOS)$/;
 
   /**
-   * Cambia celdas de una fila: cambios = { 'COLUMNA': valor }. Columnas inexistentes se ignoran.
-   * Todas las celdas van en UNA llamada a la API de Sheets:
-   *  - textos y números como RAW (Sheets no los reinterpreta: SIM/IMEI siguen siendo texto),
-   *  - fechas como texto ISO "yyyy-MM-dd HH:mm:ss" en hora de México (USER_ENTERED).
+   * Cómo escribe Líneas: la política de su tabla en SheetUtils (28-oct: toda escritura de hojas pasa por SheetUtils,
+   * donde se conecta la bitácora; el lote y la API de Sheets que vivían aquí ahora son de todos).
+   *  - celdas que cambian: por la API de Sheets, textos y números RAW (Sheets no los reinterpreta: SIM/IMEI siguen
+   *    siendo texto) y fechas como texto "yyyy-MM-dd HH:mm:ss" en hora de México (USER_ENTERED); dentro de conCandado
+   *    van todas juntas al final;
+   *  - con SpreadsheetApp (agregar filas, o sin la API): valorCelda_.
+   * "QUERETARO" se guarda como en CH: "QRO" (guardarCH).
    */
+  function politica_(nombre) {
+    return {
+      escritor: 'api',
+      anexar: 'bloque',
+      medir: tiempo,
+      paraApi: (col, v) => {
+        const x = LineasUtil.guardarCH(col, v);
+        return x instanceof Date ? { valor: Utilities.formatDate(x, ZONA_APP, 'yyyy-MM-dd HH:mm:ss'), tal: false }
+          : { valor: x === null || x === undefined ? '' : x, tal: true };
+      },
+      paraCelda: (col, v) => valorCelda_(LineasUtil.guardarCH(col, v), nombre),
+    };
+  }
+
+  /** La tabla de SheetUtils para escribir en una pestaña (con los encabezados de Líneas: los en blanco ya nombrados) */
+  function tablaEscribir_(nombre) {
+    const t = tablaFresca(nombre);
+    if (!t.escribir) t.escribir = SheetUtils.tabla(t.hoja, { encabezados: t.encabezados, politica: politica_(nombre) });
+    return t.escribir;
+  }
+
+  /** Cambia celdas de una fila: cambios = { 'COLUMNA': valor }. Columnas inexistentes se ignoran. */
   function actualizarFila(nombre, fila, cambios) {
     if (virtual_(nombre)) LineasLectura.bloquearEscritura();
     const inicio = Date.now();
-    try { return actualizarFila_(nombre, fila, cambios); } finally { tiempo('escribir ' + nombre + ' fila ' + fila, inicio); }
+    try { actualizarFilas_(nombre, [{ fila: fila, cambios: cambios }]); } finally { tiempo('escribir ' + nombre + ' fila ' + fila, inicio); }
   }
 
-  function actualizarFila_(nombre, fila, cambios) {
+  /** Varias filas de una pestaña, [{ fila, cambios }]: por la API, todas en una sola llamada */
+  function actualizarFilas(nombre, lista) {
+    if (!lista || !lista.length) return;
+    if (virtual_(nombre)) LineasLectura.bloquearEscritura();
+    const inicio = Date.now();
+    try { actualizarFilas_(nombre, lista); } finally { tiempo('escribir ' + lista.length + ' filas de ' + nombre, inicio); }
+  }
+
+  function actualizarFilas_(nombre, lista) {
     const t = tablaFresca(nombre);
-    const hojaA1 = "'" + nombre.replace(/'/g, "''") + "'!";
-    const crudos = [];
-    const fechas = [];
-    Object.keys(cambios).forEach((col) => {
-      const c = colIndice(t, col);
-      if (c < 0) return;
-      const v = LineasUtil.guardarCH(col, cambios[col]); // "QUERETARO" se guarda como en CH: "QRO"
-      const rango = hojaA1 + letraColumna(c + 1) + fila;
-      if (v instanceof Date) fechas.push({ range: rango, values: [[Utilities.formatDate(v, ZONA_APP, 'yyyy-MM-dd HH:mm:ss')]] });
-      else crudos.push({ range: rango, values: [[v === null || v === undefined ? '' : v]] });
-    });
-    if (!crudos.length && !fechas.length) return;
-    if (apiSheetsDisponible_() && lote_) {
-      // Dentro de conCandado: se juntan y se mandan en una sola llamada al final (vaciarLote_)
-      crudos.forEach((x) => { lote_.datos[x.range] = { x: x, fecha: false }; });
-      fechas.forEach((x) => { lote_.datos[x.range] = { x: x, fecha: true }; });
-      lote_.hojas[nombre] = true;
-      lote_.respaldo.push([nombre, fila, cambios]);
-      return;
-    }
-    if (apiSheetsDisponible_()) {
-      try {
-        SpreadsheetApp.flush(); // que no queden escrituras de SpreadsheetApp pendientes antes de escribir por la API
-        if (crudos.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
-        if (fechas.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
-        CacheHojas.tocar(id(), nombre);
-        return;
-      } catch (e) {
-        // Solo se reintenta sin API si no se escribió nada (la API no está habilitada).
-        if (!marcarApiSinHabilitar_(e)) throw e;
-      }
-    }
-    // Respaldo sin API: celda por celda (textos de solo dígitos con apóstrofo para que sigan siendo texto).
-    Object.keys(cambios).forEach((c) => {
-      const i = colIndice(t, c);
-      if (i >= 0) t.hoja.getRange(fila, i + 1).setValue(valorCelda_(LineasUtil.guardarCH(c, cambios[c]), nombre));
-    });
-    CacheHojas.tocar(id(), nombre);
+    SheetUtils.cambiarCeldas(tablaEscribir_(nombre), lista.map((x) => ({
+      fila: x.fila,
+      columnas: Object.keys(x.cambios).map((col) => ({ i: colIndice(t, col), valor: x.cambios[col] })).filter((c) => c.i >= 0),
+    })));
   }
 
   /**
    * Agrega filas al final. objetos = [{ 'COLUMNA': valor }]. Devuelve los números de fila.
-   * Junto con SheetUtils.insert es uno de los dos lugares donde nace un ID (docs/ids-asignacion.md, sección 8):
+   * Junto con SheetUtils.agregarFilas es uno de los dos lugares donde nace un ID (docs/ids-asignacion.md, sección 8):
    * se respeta el que ya venga, y las pestañas sin columna ID no se tocan (LISTAS TELEFONOS, DEPARTAMENTOS…).
    */
   function agregarFilas(nombre, objetos) {
@@ -612,89 +611,36 @@ const LineasDatos = (function () {
       });
       return fila;
     });
-    const inicio = t.hoja.getLastRow() + 1;
-    const faltanFilas = inicio + filas.length - 1 - t.hoja.getMaxRows();
-    if (faltanFilas > 0) t.hoja.insertRowsAfter(t.hoja.getMaxRows(), faltanFilas); // heredan el formato de la fila anterior
-    t.hoja.getRange(inicio, 1, filas.length, t.encabezados.length).setValues(filas);
-    CacheHojas.tocar(id(), nombre);
-    return filas.map((_, i) => inicio + i);
+    // Al final, en una escritura; si la rejilla no alcanza se le agregan renglones (heredan el formato del anterior)
+    return SheetUtils.agregarFilas(tablaEscribir_(nombre), filas);
   }
 
   /**
    * Borra filas de la pestaña, de abajo hacia arriba (Quitar del panel, pendiente 3.12: usuario, 22-oct). Dentro de
-   * conCandado, primero se escribe el lote: sus celdas apuntan a números de fila que el borrado recorre. Después de
-   * borrar, los números de fila leídos antes ya no sirven: va al final.
+   * conCandado, primero se escribe el lote: sus celdas apuntan a números de fila que el borrado recorre (SheetUtils lo
+   * hace). Después de borrar, los números de fila leídos antes ya no sirven: va al final.
    */
   function eliminarFilas(nombre, filas) {
-    const lista = (filas || []).filter((f) => f > 1).sort((a, b) => b - a).filter((f, i, a) => a.indexOf(f) === i);
-    if (!lista.length) return 0;
+    if (!(filas || []).some((f) => f > 1)) return 0;
     if (virtual_(nombre)) LineasLectura.bloquearEscritura();
-    if (lote_) { vaciarLote_(); lote_ = { datos: {}, hojas: {}, respaldo: [] }; }
-    const t = tablaFresca(nombre);
-    lista.forEach((f) => t.hoja.deleteRow(f));
-    CacheHojas.tocar(id(), nombre);
-    return lista.length;
-  }
-
-  // Rapidez (etapa 3, paso 2): dentro de conCandado, las celdas que cambia actualizarFila se juntan y van en una sola
-  // llamada a la API de Sheets al final (cada llamada tardaba ~0.7 s; un cambio de equipo hacía cuatro o más). Las filas
-  // que se agregan siguen al momento. La hoja se marca como cambiada (CacheHojas.tocar) hasta que ya se escribió, para
-  // que nadie guarde en caché lo de antes con la versión nueva.
-  let lote_ = null;
-
-  function vaciarLote_() {
-    const l = lote_;
-    lote_ = null;
-    const datos = l ? Object.keys(l.datos).map((k) => l.datos[k]) : [];
-    if (!datos.length) return;
-    const inicio = Date.now();
-    try {
-      SpreadsheetApp.flush(); // las filas agregadas con SpreadsheetApp, antes que la API
-      const crudos = datos.filter((d) => !d.fecha).map((d) => d.x);
-      const fechas = datos.filter((d) => d.fecha).map((d) => d.x);
-      if (crudos.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'RAW', data: crudos });
-      if (fechas.length) sheetsApi('/values:batchUpdate', { valueInputOption: 'USER_ENTERED', data: fechas });
-    } catch (e) {
-      if (!marcarApiSinHabilitar_(e)) throw e;
-      l.respaldo.forEach((r) => actualizarFila_(r[0], r[1], r[2])); // sin la API: celda por celda
-      return;
-    }
-    Object.keys(l.hojas).forEach((n) => CacheHojas.tocar(id(), n));
-    tiempo('escribir en lote ' + datos.length + ' celdas (' + Object.keys(l.hojas).join(', ') + ')', inicio);
+    return SheetUtils.borrarFilas(tablaEscribir_(nombre), filas);
   }
 
   /**
-   * Ejecuta fn con el candado del script (las escrituras no se cruzan entre usuarios). Es el común (Candado.gs):
-   * si quien llama ya lo tiene, no se vuelve a pedir. Lo propio de Líneas es el lote: lo escrito adentro se
-   * manda junto al final.
+   * Ejecuta fn con el candado del script (las escrituras no se cruzan entre usuarios): SheetUtils.enLote, el común.
+   * Lo que se escribe adentro por la API se manda junto al final (cada llamada tardaba ~0.7 s; un cambio de equipo
+   * hacía cuatro o más).
    */
   function conCandado(fn) {
     const inicio = Date.now();
-    return Candado.con(() => {
-      tiempo('candado (espera)', inicio);
-      const propio = !lote_;
-      if (propio) lote_ = { datos: {}, hojas: {}, respaldo: [] };
-      let fallo = null;
-      try {
+    try {
+      return SheetUtils.enLote(() => {
+        tiempo('candado (espera)', inicio);
         return fn();
-      } catch (e) {
-        fallo = e;
-        throw e;
-      } finally {
-        try {
-          // También si fn falló: lo que alcanzó a cambiar se escribe, igual que cuando cada celda iba al momento
-          if (propio) vaciarLote_();
-        } catch (e) {
-          // eslint-disable-next-line no-unsafe-finally -- a propósito: si fn ya falló, gana su error; si no, el de escribir el lote
-          if (!fallo) throw e;
-          console.warn('conCandado: no se pudo escribir el lote después de un error: ' + e.message);
-        } finally {
-          if (propio) lote_ = null;
-          SpreadsheetApp.flush();
-          tiempo('candado (todo lo de adentro)', inicio);
-        }
-      }
-    });
+      });
+    } finally {
+      tiempo('candado (todo lo de adentro)', inicio);
+    }
   }
 
   /** ID nuevo para una pestaña, con su prefijo del catálogo (LIN-…, ILI-…, CLI-…). Ver src/utils/Ids.gs. */
@@ -722,7 +668,7 @@ const LineasDatos = (function () {
     const t = tablaFresca(nombre);
     const faltan = columnas.filter((c) => colIndice(t, c) < 0);
     if (!faltan.length) return [];
-    t.hoja.getRange(1, t.encabezados.length + 1, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
+    SheetUtils.asegurarColumnas(tablaEscribir_(nombre), faltan);
     delete bd.tablas[nombre];
     cacheBorrar('enc_' + nombre);
     return faltan;
@@ -732,9 +678,7 @@ const LineasDatos = (function () {
   function quitarColumnas(nombre, columnas) {
     if (virtual_(nombre)) LineasLectura.bloquearEscritura();
     const t = tablaFresca(nombre);
-    const indices = columnas.map((c) => colIndice(t, c)).filter((i) => i >= 0).sort((a, b) => b - a);
-    const quitadas = indices.map((i) => t.encabezados[i]);
-    indices.forEach((i) => t.hoja.deleteColumn(i + 1));
+    const quitadas = SheetUtils.quitarColumnas(tablaEscribir_(nombre), columnas.filter((c) => colIndice(t, c) >= 0));
     delete bd.tablas[nombre];
     cacheBorrar('enc_' + nombre);
     return quitadas;
@@ -749,17 +693,14 @@ const LineasDatos = (function () {
     const lb = libro();
     let hoja = lb.getSheetByName(nombre);
     if (!hoja) {
-      hoja = lb.insertSheet(nombre, lb.getSheets().length);
-      hoja.getRange(1, 1, 1, encabezados.length).setValues([encabezados]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-      // Todo como texto salvo fechas (evita que IDs o NUCO pierdan ceros).
-      encabezados.forEach((h, i) => {
-        if (!esColumnaFecha(h)) hoja.getRange(2, i + 1, Math.max(1, hoja.getMaxRows() - 1), 1).setNumberFormat('@');
+      hoja = SheetUtils.asegurarPestana(lb, nombre, encabezados, {
+        // Todo como texto salvo fechas (evita que IDs o NUCO pierdan ceros).
+        alCrear: (nueva) => encabezados.forEach((h, i) => {
+          if (!esColumnaFecha(h)) nueva.getRange(2, i + 1, Math.max(1, nueva.getMaxRows() - 1), 1).setNumberFormat('@');
+        }),
       });
     } else {
-      const t = tablaFresca(nombre);
-      const faltan = encabezados.filter((h) => colIndice(t, h) < 0);
-      if (faltan.length) hoja.getRange(1, t.encabezados.length + 1, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
+      asegurarColumnas(nombre, encabezados);
     }
     // Fechas con hora (si solo muestran el día, la lectura pierde la hora).
     delete bd.tablas[nombre];
@@ -777,7 +718,9 @@ const LineasDatos = (function () {
     cacheGuardar, cacheLeer, cacheBorrar, recordar, tocar, tiempo, medirPasos, pasos,
     tabla, tablaFresca, existeTabla, colIndice, deHoraHoja, aHoraHoja,
     leerTabla, ultimaFila, buscarFilas, buscarFilasVarios, buscarFilasPorId, idsDeFila, buscarEnTabla, leerFilas, leerRango,
-    actualizarFila, agregarFilas, eliminarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
+    actualizarFila, actualizarFilas, agregarFilas, eliminarFilas, conCandado, nuevoId, nuevoIdCorto, asegurarPestana, asegurarColumnas, quitarColumnas, COLS_ID_ANTERIOR, COL_ID_APPSHEET,
     olvidarTabla: (nombre) => { delete bd.tablas[nombre]; },
+    // La pestaña lista para escribir con SheetUtils y la política de Líneas (lo que no es actualizar/agregar/borrar filas)
+    paraEscribir: tablaEscribir_,
   };
 })();

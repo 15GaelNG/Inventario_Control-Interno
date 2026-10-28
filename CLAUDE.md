@@ -167,6 +167,18 @@ con poca memoria y de una en una (en el celular, abrir fotos de cámara completa
 - Un componente nuevo se incluye en `src/html/Index.html` antes de los módulos y
   componentes que lo usan (`campo-auto` va antes que `formulario`).
 
+## Servidor: toda escritura de una hoja → `SheetUtils`
+
+Desde el 28-oct (homologación 8) **nada escribe en una hoja fuera de `src/utils/SheetUtils.gs`**: ahí se conecta la
+bitácora (`Bitacora.anotar`, el enganche de cada primitiva) y el aviso a la caché. Con la hoja en la mano:
+`const t = SheetUtils.tabla(hoja, { encabezados })` y luego `agregarFilas(t, filas)`, `cambiarCeldas(t, [{ fila, cambios }])`,
+`borrarFilas(t, filas)`, `reemplazarFilas(t, filas)` (sincronías), `cambiarColumna(t, columna, valores)`; una pestaña
+que se crea sola, `SheetUtils.asegurarPestana(libro, nombre, encabezados, { soloCrear: true })`. Por ID siguen
+`insert/update/remove/removeMany`. Líneas escribe por `LineasDatos` (su capa delgada encima, con su política: API de
+Sheets en lote). `source-contracts` falla con un `setValues`/`appendRow`/`deleteRow`… suelto; exentos solo los scripts
+de editor y la marca `// fuera del sistema` (un libro que no es del sistema). Pruebas con hojas simuladas a mano:
+`require('./sheet-utils-real')(contexto)`.
+
 ## Servidor: un módulo de una hoja → `HojaServicio`
 
 `src/utils/HojaServicio.gs` hace lo que repetían todos los servicios: listar con caché,

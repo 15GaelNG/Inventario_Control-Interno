@@ -580,18 +580,13 @@ const MAPA = {
     if (!entradas.length) return;
     try {
       const ss = SpreadsheetApp.openById(ssId);
-      let log = ss.getSheetByName('LOG_RELACIONES');
-      if (!log) {
-        log = ss.insertSheet('LOG_RELACIONES');
-        log.appendRow(['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO', 'QUIEN']);
-      } else if (!limpiar_(log.getRange(1, 8, 1, 1).getValues()[0][0])) {
-        // La pestaña se creó antes de que existiera QUIEN (01/10/2026)
-        log.getRange(1, 8).setValue('QUIEN');
-      }
+      const enc = ['FECHA', 'TIPO', 'HOJA', 'CLAVE', 'COLUMNA', 'TENIA', 'QUEDO', 'QUIEN'];
+      // Si la pestaña se creó antes de que existiera QUIEN (01/10/2026), se le agrega
+      const log = SheetUtils.asegurarPestana(ss, 'LOG_RELACIONES', enc, { negritas: false, fijar: false });
       const ahora = new Date();
       // QUIEN va vacío en la corrida nocturna y en lo que se corre desde el editor
-      const filas = entradas.map((e) => [ahora, e.tipo, e.hoja, e.clave, e.columna, e.tenia, e.quedo, quien || '']);
-      log.getRange(log.getLastRow() + 1, 1, filas.length, 8).setValues(filas);
+      SheetUtils.agregarFilas(SheetUtils.tabla(log, { encabezados: enc }),
+        entradas.map((e) => [ahora, e.tipo, e.hoja, e.clave, e.columna, e.tenia, e.quedo, quien || '']));
     } catch (err) {
       console.error('Relaciones: no se pudo escribir en LOG_RELACIONES (' + entradas.length + ' entradas): ' + err.message);
     }
@@ -696,12 +691,13 @@ const MAPA = {
 
           // Aquí sí se escribe un valor vacío si el usuario borró el campo: fue explícito.
           // El barrido nocturno de revisar() es el que no lo hace (ver vaciariaDatoBueno_).
+          // Por SheetUtils: las celdas con el mismo valor van juntas (getRangeList), y avisa a la caché y a la bitácora
+          const t = SheetUtils.tabla(hoja, { encabezados: encabezados });
           escribir.forEach(([columna, valor]) => {
-            const col = columna1_(hoja, columna, encabezados);
-            const a1 = filas.map((fila) => hoja.getRange(fila, col).getA1Notation());
-            hoja.getRangeList(a1).setValue(valor === undefined || valor === null ? '' : valor);
+            const i = columna1_(hoja, columna, encabezados) - 1;
+            const v = valor === undefined || valor === null ? '' : valor;
+            SheetUtils.cambiarCeldas(t, filas.map((fila) => ({ fila: fila, columnas: [{ i: i, valor: v }] })));
           });
-          CacheHojas.tocarHoja(hoja);
           resumen[copia.nombre] = filas.length;
           if (porClave) {
             // Vale la pena saberlo: son filas sin FK, y las que la app crea ya nacen con
@@ -1077,14 +1073,13 @@ const MAPA = {
 
         if (corregir && Object.keys(correcciones).length) {
           const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+          const t = SheetUtils.tabla(hoja, { encabezados: encabezados });
           Object.keys(correcciones).forEach((colDestino) => {
-            const col = columna1_(hoja, colDestino, encabezados);
+            const i = columna1_(hoja, colDestino, encabezados) - 1;
             Object.keys(correcciones[colDestino]).forEach((valorNuevo) => {
-              const a1 = correcciones[colDestino][valorNuevo].map((f) => hoja.getRange(f, col).getA1Notation());
-              hoja.getRangeList(a1).setValue(valorNuevo);
+              SheetUtils.cambiarCeldas(t, correcciones[colDestino][valorNuevo].map((f) => ({ fila: f, columnas: [{ i: i, valor: valorNuevo }] })));
             });
           });
-          CacheHojas.tocarHoja(hoja);
         }
 
         resultado[copia.nombre] = {
@@ -1392,9 +1387,8 @@ const MAPA = {
         const filas = [];
         claves.forEach((f, i) => { if (normalizar_(f[0]) === normalizar_(claveVieja)) filas.push(i + 2); });
         if (filas.length) {
-          const a1 = filas.map((fila) => hoja.getRange(fila, colClave).getA1Notation());
-          hoja.getRangeList(a1).setValue(claveNueva);
-          CacheHojas.tocarHoja(hoja);
+          SheetUtils.cambiarCeldas(SheetUtils.tabla(hoja, { encabezados: encabezados }),
+            filas.map((fila) => ({ fila: fila, columnas: [{ i: colClave - 1, valor: claveNueva }] })));
         }
       });
     });
@@ -1573,9 +1567,8 @@ const MAPA = {
       if (!padres.length) return { eliminadas: 0 };
       const imp = impedimentos_(padre, ssId, padres);
       if (imp.mensaje) throw new Error(imp.mensaje);
-      // De abajo hacia arriba: borrar una fila recorre las de abajo
-      padres.map((p) => p.fila).sort((x, y) => y - x).forEach((fila) => hoja.deleteRow(fila));
-      CacheHojas.tocarHoja(hoja);
+      // De abajo hacia arriba (borrar una fila recorre las de abajo): SheetUtils.borrarFilas
+      SheetUtils.borrarFilas(SheetUtils.tabla(hoja), padres.map((p) => p.fila));
       return { eliminadas: padres.length };
     });
   }

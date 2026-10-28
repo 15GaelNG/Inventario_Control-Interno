@@ -14,7 +14,11 @@ const ENCABEZADOS = ['ID', 'FOLIO', 'AREA', 'NOMBRE', 'FECHA', 'ESTATUS', 'LIGA_
 function hojaMock(filasIniciales) {
   const filas = (filasIniciales || []).map((f) => f.slice());
   return {
+    getName: () => 'SOLICITUD COMPRA',
+    getParent: () => ({ getId: () => 'SS' }),
     getLastRow: () => filas.length,
+    getLastColumn: () => (filas[0] || []).length,
+    getMaxRows: () => 1000,
     getRange(row, col, numRows, numCols) {
       return {
         getValues() {
@@ -52,6 +56,7 @@ function libroMock(hojasIniciales) {
   return {
     getSheetByName: (nombre) => hojas[nombre] || null,
     insertSheet(nombre) { const h = hojaMock([]); hojas[nombre] = h; return h; },
+    getSheets: () => Object.values(hojas),
     _hojas: hojas,
   };
 }
@@ -126,7 +131,7 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {}, 
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
     Ids: { nuevo: (prefijo) => prefijo + '-TEST-1' },
     Entidades: { prefijo: () => 'SOC' },
-    CacheHojas: { tocarHoja: () => { llamadas.tocarHoja++; } },
+    CacheHojas: { tocarHoja: () => { llamadas.tocarHoja++; }, tocar: () => { llamadas.tocarHoja++; } },   // SheetUtils avisa con tocar
     HojaServicio: {
       fechaISO: (v) => { if (!v) return ''; try { return new Date(v).toISOString(); } catch (e) { return ''; } },
       subirArchivo: (carpetaId, deQue, nombreArchivo, mimeType, base64Data) => {
@@ -136,6 +141,7 @@ function crearContexto({ libro, archivosPorCarpeta = {}, subcarpetasEnMes = {}, 
     },
     console,
   });
+  require('./sheet-utils-real')(contexto);   // escribe por SheetUtils (28-oct)
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, '../src/services/SolicitudCompraService.gs'), 'utf8') +
     '\nthis.Servicio = SolicitudCompraService;',
@@ -196,6 +202,7 @@ test('crear da un mensaje claro si la cuenta no tiene permiso de EDITOR en la ca
     HojaServicio: { fechaISO: () => '' },
     console,
   });
+  require('./sheet-utils-real')(contexto);   // escribe por SheetUtils (28-oct)
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, '../src/services/SolicitudCompraService.gs'), 'utf8') +
     '\nthis.Servicio = SolicitudCompraService;',

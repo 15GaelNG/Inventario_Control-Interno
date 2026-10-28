@@ -601,7 +601,8 @@ test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin 
   // blanco. Imagen las abre con poca memoria y de una en una. Una copia nueva no tendría eso.
   const QUEDAN = {
     'src/html/js/app-arqueos.html': 'Evidencias: se pasa a Imagen al integrar la rama de Jorge (él la cambió: aviso HEIC)',
-    'src/html/js/lineas.html': 'una PÁGINA de PDF dibujada con pdf.js (no es reducir una foto)',
+    'src/html/js/lineas.html': 'una PÁGINA de PDF dibujada con pdf.js y firmaAchicada (una firma ya dibujada de 600 px, ' +
+      'hasta que quepa en la caché; Emmanuel, 22-oct): ninguna abre una foto de cámara',
   };
   const con = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html'))
     .map((f) => path.relative(root, f).replace(/\\/g, '/'))
@@ -645,6 +646,30 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
 });
 
+test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se conecta la bitácora)', () => {
+  // 28-oct (homologación 8): agregarFilas, cambiarCeldas, borrarFilas, reemplazarFilas, cambiarColumna, asegurarPestana…
+  // avisan a la caché y al enganche de la bitácora (Bitacora.anotar). Escribir a mano se salta las dos cosas.
+  // Scripts que corre un editor (no la app): las migraciones, el arranque y la lectura de INE (solo en un DEV,
+  // pestañas de análisis que se rehacen completas)
+  const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
+  const QUEDAN = {   // solo puede encoger
+    'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+  };
+  const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
+  // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
+  // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
+  const sinComentarios = (s) => s.replace(/^.*\/\/ fuera del sistema.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/utils/SheetUtils.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
+    'escribe con SheetUtils (tabla + agregarFilas / cambiarCeldas / borrarFilas / reemplazarFilas / cambiarColumna / asegurarPestana…): ahí se conecta la bitácora');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por SheetUtils: quitarlo de QUEDAN');
+  assert.match(read('package.json'), /node tests\/sheet-utils-primitivas\.test\.js/);
+});
+
 test('el candado del script se pide solo con Candado.con (reentrante), y SheetUtils escribe solo lo que cambia', () => {
   // waitLock() no es reentrante: un getScriptLock suelto no sabe que su hilo ya tiene el candado, y lo que llama
   // adentro (SheetUtils.update, HojaServicio.actualizar…) se colgaba hasta el timeout (docs/homologacion-codigo.md, fase 1)
@@ -660,8 +685,11 @@ test('el candado del script se pide solo con Candado.con (reentrante), y SheetUt
   const su = read('src/utils/SheetUtils.gs');
   const funcion = (nombre) => new RegExp('function ' + nombre + '\\([\\s\\S]*?\\r?\\n  }\\r?\\n').exec(su)[0];
   assert.match(funcion('update'), /Candado\.con\(/);
-  assert.match(funcion('update'), /escribirColumnas_\(/);
+  // 28-oct: escribe con la primitiva cambiarCeldas (la de todos), que escribe por tramos solo las celdas del cambio
+  assert.match(funcion('update'), /cambiarCeldas\(/);
   assert.doesNotMatch(funcion('update'), /objectToRow_\(|setValues\(\[row\]\)/);
+  assert.match(funcion('escribirConHoja_'), /escribirColumnas_\(/);
+  assert.doesNotMatch(funcion('cambiarCeldas'), /objectToRow_\(/);
   assert.match(funcion('remove'), /Candado\.con\(/);
 });
 
