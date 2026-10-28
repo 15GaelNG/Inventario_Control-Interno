@@ -239,7 +239,7 @@ const Bitacora = (function () {
     const anio = Utilities.formatDate(ahora, Session.getScriptTimeZone(), 'yyyy');
     const mes = Utilities.formatDate(ahora, Session.getScriptTimeZone(), 'yyyy-MM');
     const cache = CacheService.getScriptCache();
-    const clave = 'bitacora_v1_' + mes;
+    const clave = 'bitacora_v1_f' + FORMATO + '_' + mes;   // con la versión del formato: uno nuevo vuelve a pasar por aquí
     const guardado = cache.get(clave);
     if (guardado) return { libroId: guardado, nombre: mes };
 
@@ -249,14 +249,73 @@ const Bitacora = (function () {
     if (!hoja) {
       if (celdas_(libro) > MAX_CELDAS) libro = libroNuevo_(carpeta, anio, true);
       hoja = libro.getSheetByName(mes) || libro.insertSheet(mes, 0);
-      hoja.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
+      hoja.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]);
       try { hoja.protect().setDescription('La escribe la app (bitácora): no se edita a mano.'); } catch (e) { /* sin proteger */ }
       const vacia = libro.getSheets().filter((s) => s.getName() !== mes && s.getLastRow() === 0);
       vacia.forEach((s) => { try { libro.deleteSheet(s); } catch (e) { /* la única que queda */ } });
     }
+    // El formato (colores por acción…): una vez por pestaña y por versión del formato
+    const marca = 'BITACORA_FORMATO_' + libro.getId() + '_' + mes;
+    if (props_().getProperty(marca) !== String(FORMATO)) {
+      try {
+        darFormato_(hoja);
+        props_().setProperty(marca, String(FORMATO));
+      } catch (e) {
+        console.warn('Bitácora: no se pudo dar formato a la pestaña ' + mes + ': ' + e.message);   // se intenta la próxima vez
+      }
+    }
     cache.put(clave, libro.getId(), 6 * 60 * 60);
     return { libroId: libro.getId(), nombre: mes };
+  }
+
+  // ------------------------------------------------------------------ cómo se ve (28-oct)
+  /*
+   * Como los registros de auditoría de los grandes: el color va en la ACCION (una etiqueta), con su texto siempre (el
+   * color nunca es lo único que lo dice) y un color por significado: verde lo que se agrega, azul lo que cambia, rojo lo
+   * que se borra, morado los ingresos, ámbar lo de seguridad (intentos fallidos, accesos negados), gris lo masivo y la
+   * estructura. ANTES en rojo y DESPUES en verde, como un "diff". Las columnas técnicas, chicas y en gris.
+   * Subir FORMATO repinta una vez las pestañas que ya existen.
+   */
+  const FORMATO = 1;
+  const COLORES = [
+    // [acciones, fondo, texto]
+    [['AGREGAR', 'SUBIR', 'CARPETA', 'COPIAR'], '#e6f4ea', '#137333'],
+    [['CAMBIAR', 'RENOMBRAR', 'MOVER', 'REEMPLAZAR'], '#e8f0fe', '#1967d2'],
+    [['BORRAR', 'PAPELERA'], '#fce8e6', '#c5221f'],
+    [['INGRESO', 'ACCESO'], '#f3e8fd', '#8430ce'],
+    [['INGRESO FALLIDO', 'DENEGADO'], '#fef7e0', '#b06000'],
+    [['CARGA', 'ESTRUCTURA'], '#f1f3f4', '#3c4043'],
+  ];
+  const ANCHOS = [140, 210, 70, 85, 130, 85, 170, 130, 45, 160, 230, 230, 300, 90];
+
+  function darFormato_(hoja) {
+    const n = COLUMNAS.length;
+    const col = (nombre) => COLUMNAS.indexOf(nombre) + 1;
+    const filas = Math.max(hoja.getMaxRows(), 2);
+    hoja.setFrozenRows(1);
+    hoja.getRange(1, 1, 1, n).setBackground('#202124').setFontColor('#ffffff').setFontWeight('bold').setVerticalAlignment('middle');
+    hoja.setRowHeight(1, 28);
+    ANCHOS.forEach((ancho, i) => hoja.setColumnWidth(i + 1, ancho));
+    const cuerpo = (nombre) => hoja.getRange(2, col(nombre), filas - 1, 1);
+    // Lo técnico, chico y en gris; el valor de antes en rojo y el de después en verde
+    ['OPERACION', 'LIBRO', 'FILA', 'HUELLA'].forEach((c) => cuerpo(c).setFontSize(8).setFontColor('#80868b'));
+    cuerpo('ANTES').setFontColor('#c5221f');
+    cuerpo('DESPUES').setFontColor('#137333');
+    cuerpo('ACCION').setFontWeight('bold').setHorizontalAlignment('center');
+    hoja.getRange(2, 1, filas - 1, n).setVerticalAlignment('top').setWrap(false);
+
+    // Un color por acción, una regla por acción con "el texto es" (sin fórmulas: no dependen del idioma del libro, que
+    // en español separa con ";"). Y en ORIGEN, "a mano" resalta: no pasó por la app
+    const rangoAccion = cuerpo('ACCION');
+    const reglas = [];
+    COLORES.forEach(([acciones, fondo, texto]) => acciones.forEach((a) => reglas.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenTextEqualTo(a).setBackground(fondo).setFontColor(texto).setRanges([rangoAccion]).build())));
+    reglas.push(SpreadsheetApp.newConditionalFormatRule().whenTextEqualTo('a mano')
+      .setBackground('#fef7e0').setFontColor('#b06000').setRanges([cuerpo('ORIGEN')]).build());
+    hoja.setConditionalFormatRules(reglas);
+
+    // Filtros en el encabezado (buscar por quién, acción, hoja…)
+    if (!hoja.getFilter()) hoja.getRange(1, 1, filas, n).createFilter();
   }
 
   /** El libro del año que todavía tiene lugar: "BITACORA 2026", "BITACORA 2026 (2)"… */

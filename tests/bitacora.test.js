@@ -57,6 +57,13 @@ console.log('1. Cambiar: un renglón por campo que de verdad cambió, con antes 
     'solo ESTADO (ASUNTO no cambió), con antes y después');
   ok(r[0].QUIEN === 'ana@x.com' && r[0].ORIGEN === 'app' && r[0]['ID REGISTRO'] === 'TCK-1' && r[0].HOJA === 'TICKETS', 'quién, desde la app, qué registro');
   ok(e.registro.api.filter((x) => x.append).every((x) => x.modo === 'RAW'), 'se escribe como texto (RAW): un "=" no se vuelve fórmula');
+  const pestana = e.libros[archivos[0].getId()].getSheets()[0];
+  const regla = (t) => (pestana._reglas || []).find((x) => x.texto === t) || {};
+  ok(regla('AGREGAR').fondo === '#e6f4ea' && regla('CAMBIAR').fondo === '#e8f0fe' && regla('BORRAR').fondo === '#fce8e6' &&
+    regla('INGRESO').fondo === '#f3e8fd' && regla('DENEGADO').fondo === '#fef7e0' && regla('CARGA').fondo === '#f1f3f4',
+    'un color por acción: verde agregar, azul cambiar, rojo borrar, morado ingresos, ámbar seguridad, gris masivo');
+  ok((pestana._reglas || []).every((x) => !x.formula) && pestana._filtro, 'sin fórmulas (no dependen del idioma) y con filtros en el encabezado');
+  ok(e.propiedades.get('BITACORA_FORMATO_' + archivos[0].getId() + '_2026-10') === '1', 'el formato se da una vez por pestaña (y versión)');
 }
 
 console.log('2. Una escritura por operación (al soltar el candado), todos con la misma OPERACION');
