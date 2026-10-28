@@ -183,9 +183,9 @@ const LineasAcciones = (function () {
     if (ESTATUS_VINCULABLE.indexOf(may(col(fE, 'ESTATUS EQUIPO'))) < 0) {
       throw new Error(nombre + ' está en ' + may(col(fE, 'ESTATUS EQUIPO')) + ': la línea se pone o se cambia en un equipo en USO o en RESGUARDO.');
     }
-    // En el panel de Pau no se le cambia la línea, como con la Responsiva (usuario, 22-oct): sale con Quitar del panel o,
-    // ya recibido, con Entregar a líneas
-    if (LineasResguardos.enPanel(fE)) throw new Error(nombre + ' está en Resguardos y cancelaciones.');
+    // En el panel de Pau, por recibir, no se le cambia la línea (usuario, 22-oct): sale con Quitar del panel. Ya recibido sí
+    // (usuario, 28-oct: Líneas guarda ahí sus líneas sueltas; LineasResguardos.porRecibirEnPanel)
+    if (LineasResguardos.porRecibirEnPanel(fE)) throw new Error(nombre + ' está por recibir en Resguardos y cancelaciones.');
     const tieneLinea = !!(txt(col(fE, 'NUMERO TELEFONO')) || txt(col(fE, 'NUMERO SIM'))) && may(col(fE, 'ESTATUS LINEA')) !== 'CANCELADA';
     if (!lineaId && !tieneLinea) throw new Error(nombre + ' no tiene línea.');
     const campos = [];
@@ -204,9 +204,9 @@ const LineasAcciones = (function () {
       numeroNuevo = txt(col(lineaFila, 'NUMERO TELEFONO'));
       if (!numeroNuevo) throw new Error('La línea no tiene número: se vincula por su número.');
       if (LineasRepo.TIPOS_CON_EQUIPO[may(col(lineaFila, 'TIPO'))]) {
-        // Cambiar de equipo: la línea deja su equipo (no si ese equipo está en el panel de Pau; usuario, 22-oct)
+        // Cambiar de equipo: la línea deja su equipo (no si ese equipo está por recibir en el panel de Pau; usuario, 22 y 28-oct)
         desde = 'NUCO ' + (LineasUtil.nucoVisible(col(lineaFila, 'NUCO')) || '');
-        if (LineasResguardos.enPanel(lineaFila)) throw new Error(desde + ' está en Resguardos y cancelaciones: su línea no se pasa a otro equipo.');
+        if (LineasResguardos.porRecibirEnPanel(lineaFila)) throw new Error(desde + ' está por recibir en Resguardos y cancelaciones: su línea no se pasa a otro equipo.');
         const s = LineasEscritura.separarLinea(lineaFila, ahora);
         s.campos.forEach((c) => campos.push(c));
         s.refs.forEach((x) => refs.push(x));

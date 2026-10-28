@@ -264,10 +264,39 @@ test('espejo: al cerrar se guarda lo que se veía; cerrado sigue a su línea (po
   assert.equal(linea['ESTATUS LINEA'], 'CANCELADA');
 });
 
-test('un equipo en el panel no cambia de línea ni pasa la suya a otro NUCO, como con la Responsiva (usuario, 22-oct)', () => {
+// Usuario, 22-oct: en el panel no se cambia la línea. Usuario, 28-oct: ya recibido sí (Líneas guarda ahí sus líneas sueltas)
+test('por recibir en el panel no cambia de línea ni pasa la suya a otro NUCO; ya recibido sí (usuario, 22 y 28-oct)', () => {
   const acciones = read('src/services/lineas/LineasAcciones.gs');
-  assert.match(acciones, /if \(LineasResguardos\.enPanel\(fE\)\) throw new Error\(nombre \+ ' está en Resguardos y cancelaciones\.'\);/);
-  assert.match(acciones, /if \(LineasResguardos\.enPanel\(lineaFila\)\) throw new Error\(desde \+ ' está en Resguardos y cancelaciones/);
+  assert.match(acciones, /if \(LineasResguardos\.porRecibirEnPanel\(fE\)\) throw new Error\(nombre \+ ' está por recibir en Resguardos y cancelaciones\.'\);/);
+  assert.match(acciones, /if \(LineasResguardos\.porRecibirEnPanel\(lineaFila\)\) throw new Error\(desde \+ ' está por recibir en Resguardos y cancelaciones/);
+  assert.doesNotMatch(acciones.slice(acciones.indexOf('function aplicarVinculo_('), acciones.indexOf('function aplicarVinculo_(') + 4000), /LineasResguardos\.enPanel\(/);
+  const t = cargar([equipo('EQU-1', '0012', 'POR RECIBIR'), equipo('EQU-2', '0013', 'RESGUARDO'), equipo('EQU-3', '0014', 'RESGUARDO')], [
+    { 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'ESTADO': 'PENDIENTE DE RECEPCION' },
+    { 'ID': 'RSG-2', 'REGISTRO_ID': 'EQU-2', 'NUCO': '0013', 'ESTADO': 'EN RESGUARDO' }]);
+  const inv = t.tablas['LINEAS TELEFONICAS'];
+  assert.deepEqual(inv.map((f) => t.R.porRecibirEnPanel(f)), [true, false, false]);
+  assert.deepEqual(inv.map((f) => t.R.enPanel(f)), [true, true, false], 'la Responsiva y la Inspección siguen sin entrar a los dos');
+});
+
+// Usuario, 28-oct: con la línea adentro, Pau no lo vende, dona ni desecha (la SIM se iría con el equipo); Líneas la desvincula
+test('Vendido, Donado y Desechado: no con una línea activa en el equipo; el panel muestra la que trae hoy', () => {
+  const t = cargar([
+    equipo('EQU-1', '0012', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4420000012', 'ESTATUS LINEA': 'DISPONIBLE' }),
+    equipo('EQU-2', '0013', 'RESGUARDO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4420000013', 'ESTATUS LINEA': 'CANCELADA' }),
+    equipo('EQU-3', '0014', 'RESGUARDO')], [
+    { 'ID': 'RSG-1', 'REGISTRO_ID': 'EQU-1', 'NUCO': '0012', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO', 'NUMERO': '' },
+    { 'ID': 'RSG-2', 'REGISTRO_ID': 'EQU-2', 'NUCO': '0013', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' },
+    { 'ID': 'RSG-3', 'REGISTRO_ID': 'EQU-3', 'NUCO': '0014', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' }]);
+  const enBandeja = t.R.bandeja(pau).filas.filter((x) => x.NUCO === '0012')[0];
+  assert.deepEqual([enBandeja.NUMERO, enBandeja.ESTATUS_LINEA], ['4420000012', 'DISPONIBLE'], 'la línea que Líneas le puso ya recibido');
+  ['vendido', 'donado', 'desechado'].forEach((accion) => {
+    const r = t.R[accion](['RSG-1'], { comentario: 'PRUEBA' }, pau);
+    assert.equal(r.hechos.length, 0, accion);
+    assert.equal(r.omitidos[0].motivo, 'Tiene la línea 4420000012: Líneas la desvincula primero');
+  });
+  const r = t.R.vendido(['RSG-2', 'RSG-3'], { comentario: 'PRUEBA' }, pau);
+  assert.deepEqual(r.hechos.map((h) => h.id), ['RSG-2', 'RSG-3'], 'cancelada o sin línea sí');
+  assert.deepEqual(t.tablas['LINEAS TELEFONICAS'].map((f) => f['ESTATUS EQUIPO']), ['RESGUARDO', 'VENDIDO', 'VENDIDO']);
 });
 
 test('Quitar del panel: solo lo pendiente; regresa lo que nadie tocó y respeta lo que cambió después', () => {
