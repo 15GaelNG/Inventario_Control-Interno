@@ -608,7 +608,8 @@ test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin 
     .filter((f) => f !== 'src/html/js/componentes/imagen.html' && /toDataURL\('image\/jpeg'|createImageBitmap/.test(read(f)));
   assert.deepEqual(con.filter((f) => !QUEDAN[f]), [], 'usar Imagen.reducir');
   assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'esta ya no tiene copia: quitarla de QUEDAN');
-  assert.equal((read('src/html/js/lineas.html').match(/toDataURL\('image\/jpeg'/g) || []).length, 1, 'en lineas.html solo la página del PDF');
+  // y firmaAchicada (de master, 22-oct): baja la calidad de la firma hasta que quepa en TOPE_FIRMA; Imagen no lo hace
+  assert.equal((read('src/html/js/lineas.html').match(/toDataURL\('image\/jpeg'/g) || []).length, 2, 'en lineas.html solo la página del PDF y firmaAchicada');
   assert.match(read('src/html/js/componentes/firma.html'), /Imagen\.reducir\(elegido, \{ ancho: 1200, calidad: 0\.85 \}\)/);
   assert.match(read('src/html/js/lineas.html'), /Imagen\.reducir\(archivo, \{ lado: maxDim, calidad: 0\.82 \}\)/);
 });
