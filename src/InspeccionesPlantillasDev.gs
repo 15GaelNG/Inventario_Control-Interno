@@ -142,9 +142,9 @@ function inspeccionesDescribirPlantilla(tipo) {
  * una COPIA de su última celda (mismo borde, fondo y letra), con "N/A" en el encabezado y la opción "N/A" en la fórmula
  * de cada pieza. El formulario, el PDF y la calificación ya la entienden solos.
  *
- * El ancho total de la tablita NO cambia (va a media página): la columna nueva mide lo que la última opción y sale de la
- * del nombre de la pieza, que no baja de INSP_NA_NOMBRE_MIN de lo que medía; si no alcanza, también se angostan las
- * opciones, todas parejo. Una tabla que no tiene esa forma (renglones de distinto número de celdas, una opción que no
+ * El ancho total de la tablita NO cambia (va a media página) y el nombre de la pieza se respeta: la columna nueva sale
+ * de las opciones, sin que queden más angostas que en las secciones que ya traen N/A (inspDevAnchos_). Una tabla que no
+ * tiene esa forma (renglones de distinto número de celdas, una opción que no
  * está al final, dos piezas en un renglón) no se toca: sale en el reporte para hacerla a mano.
  *
  *   inspeccionesNA1Ensayo()          las 18: qué secciones cambiarían y cómo quedan los anchos. No escribe.
@@ -177,6 +177,7 @@ function inspDevNA_(cfg) {
   const soloTipos = cfg.tipos && cfg.tipos.map((t) => SheetUtils.normalizarEncabezado_(t));
   const lineas = [(cfg.escribir ? 'AGREGANDO N/A' : 'ENSAYO (no cambia nada)') + ' — plantillas de inspección del DEV', ''];
   const tocados = [];
+  const anchosVistos = {};
   SheetUtils.getAll(Config.SPREADSHEET_IDS.VEHICULOS(), 'MODELOS INSPECCION').forEach((f) => {
     const tipo = String(f['TIPO'] || '').trim();
     const id = String(f['PLANTILLA'] || '').trim();
@@ -192,16 +193,27 @@ function inspDevNA_(cfg) {
       lineas.push('  ✘ ' + tipo + ': "' + doc.getName() + '" no es una copia "(DEV)"; no se toca');
       return;
     }
-    const r = { secciones: 0, piezas: 0, yaTraian: 0, anchos: [], saltadas: [], problemas: [] };
-    inspDevTablas_(doc.getBody()).forEach((t) => inspDevNATabla_(t, cfg.escribir, r));
+    const r = { secciones: 0, piezas: 0, yaTraian: 0, opcionesConNA: [], anchos: [], saltadas: [], problemas: [] };
+    const tablas = inspDevTablas_(doc.getBody());
+    // Primero se miden las secciones que ya traen N/A: el ancho de sus opciones es el mínimo para las nuevas
+    tablas.forEach((t) => inspDevNATabla_(t, { medir: true }, r));
+    r.minOpcion = r.opcionesConNA.length ? Math.min.apply(null, r.opcionesConNA) : null;
+    tablas.forEach((t) => inspDevNATabla_(t, { escribir: cfg.escribir }, r));
     if (cfg.escribir) {
       doc.saveAndClose();
       tocados.push(tipo);
     }
     const aviso = r.saltadas.length || r.problemas.length;
     lineas.push('  ' + (aviso ? '⚠ ' : '✔ ') + tipo + ': ' + r.secciones + ' secciones ' +
-      (cfg.escribir ? 'con N/A nuevo' : 'sin N/A') + ' (' + r.piezas + ' piezas) · ' + r.yaTraian + ' ya lo traían');
-    r.anchos.forEach((a) => lineas.push('      ' + a));
+      (cfg.escribir ? 'con N/A nuevo' : 'sin N/A') + ' (' + r.piezas + ' piezas) · ' + r.yaTraian + ' ya lo traían' +
+      (r.minOpcion ? ' (sus opciones miden desde ' + Math.round(r.minOpcion * 10) / 10 + ' pt)' : ''));
+    // Un tipo con los mismos anchos que otro ya reportado no los repite (el registro del editor se corta)
+    const firma = r.anchos.join('\n');
+    if (firma && anchosVistos[firma]) lineas.push('      anchos: igual que ' + anchosVistos[firma]);
+    else {
+      if (firma) anchosVistos[firma] = tipo;
+      r.anchos.forEach((a) => lineas.push('      ' + a));
+    }
     r.saltadas.forEach((s) => lineas.push('      SALTADA ' + s));
     r.problemas.forEach((p) => lineas.push('      REVISAR ' + p));
   });
@@ -238,7 +250,8 @@ function inspDevTablas_(contenedor) {
 
 const inspDevRegex_ = (s) => String(s).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
-function inspDevNATabla_(tabla, escribir, r) {
+/** modo.medir: solo junta el ancho de las opciones de las secciones que ya traen N/A; si no, cuenta (y con escribir, cambia). */
+function inspDevNATabla_(tabla, modo, r) {
   const filas = [];
   for (let i = 0; i < tabla.getNumRows(); i++) {
     const renglon = tabla.getRow(i);
@@ -253,9 +266,18 @@ function inspDevNATabla_(tabla, escribir, r) {
   if (!piezas.length) return;   // no es del checklist: datos, firmas, llantas en mm
   const titulo = String(tabla.getRow(0).getCell(0).getText()).replace(/\s+/g, ' ').trim().slice(0, 40);
   if (piezas.some((f) => f.marcas.some((m) => /^N\/?A$/i.test(m.opcion)))) {
-    r.yaTraian++;
+    if (!modo.medir) {
+      r.yaTraian++;
+      return;
+    }
+    const desde = Math.min.apply(null, piezas.map((f) => f.marcas[0].c));
+    for (let c = desde; c < filas[0].celdas; c++) {
+      const w = tabla.getColumnWidth(c);
+      if (w) r.opcionesConNA.push(w);
+    }
     return;
   }
+  if (modo.medir) return;
   const n = filas[0].celdas;
   const raro = filas.some((f) => f.celdas !== n) ? 'renglones con distinto número de celdas'
     : piezas.some((f) => f.marcas[f.marcas.length - 1].c !== n - 1) ? 'la última opción no está en la última columna'
@@ -272,10 +294,10 @@ function inspDevNATabla_(tabla, escribir, r) {
   const primeraOpcion = Math.min.apply(null, piezas.map((f) => f.marcas[0].c));
   const anchos = [];
   for (let c = 0; c < n; c++) anchos.push(tabla.getColumnWidth(c));
-  const nuevos = inspDevAnchos_(anchos, primeraOpcion);
+  const nuevos = inspDevAnchos_(anchos, primeraOpcion, r.minOpcion);
   r.anchos.push('"' + titulo + '": ' + nuevos.texto);
 
-  if (!escribir) return;
+  if (!modo.escribir) return;
   const primeraPieza = filas.indexOf(piezas[0]);
   filas.forEach((f, i) => {
     const ultima = f.renglon.getCell(n - 1);
@@ -295,31 +317,35 @@ function inspDevNATabla_(tabla, escribir, r) {
 }
 
 /**
- * Los anchos con una columna más, sin cambiar el total: { anchos (o null si la tabla no los fija), texto }. La nueva mide
- * lo que la última; sale de la columna de nombre más ancha (antes de la primera opción) sin bajarla de
- * INSP_NA_NOMBRE_MIN; lo que falte, de las opciones, todas en la misma proporción.
+ * Los anchos con una columna más, sin cambiar el total: { anchos (o null si la tabla no los fija), texto }. El espacio
+ * sale primero de las OPCIONES (una palomita no necesita mucho; angostar el nombre lo parte en más renglones y la hoja
+ * crece): las opciones, con la nueva, se reparten parejo lo que ya medían, sin bajar de `minOpcion` (lo que miden en las
+ * secciones que ya traen N/A; sin ese dato, lo que mide hoy la más angosta). Lo que falte sale de la columna de nombre
+ * más ancha, sin bajarla de INSP_NA_NOMBRE_MIN; si ni así alcanza, las opciones quedan por debajo del mínimo (avisa).
  */
-function inspDevAnchos_(anchos, primeraOpcion) {
+function inspDevAnchos_(anchos, primeraOpcion, minOpcion) {
   if (anchos.some((w) => !w)) return { anchos: null, texto: 'anchos automáticos (Docs reparte la columna nueva solo)' };
   const redondo = (w) => Math.round(w * 10) / 10;
   const total = anchos.reduce((a, b) => a + b, 0);
-  const nueva = anchos[anchos.length - 1];
+  const opciones = anchos.slice(primeraOpcion);
+  const enOpciones = opciones.reduce((a, b) => a + b, 0);
+  const n = opciones.length + 1;
+  const minimo = minOpcion || Math.min.apply(null, opciones);
   let nombre = 0;
   for (let c = 1; c < primeraOpcion; c++) if (anchos[c] > anchos[nombre]) nombre = c;
-  const cede = Math.min(nueva, anchos[nombre] * (1 - INSP_NA_NOMBRE_MIN));
-  const resultado = anchos.concat([nueva]);
+  const falta = Math.max(0, minimo * n - enOpciones);
+  const cede = Math.min(falta, anchos[nombre] * (1 - INSP_NA_NOMBRE_MIN));
+  const cadaOpcion = (enOpciones + cede) / n;
+  const resultado = anchos.slice(0, primeraOpcion);
   resultado[nombre] = anchos[nombre] - cede;
-  if (cede < nueva) {
-    // Lo que falta sale de las opciones (incluida la nueva), parejo
-    let opciones = 0;
-    for (let c = primeraOpcion; c < resultado.length; c++) opciones += resultado[c];
-    const factor = (opciones - (nueva - cede)) / opciones;
-    for (let c = primeraOpcion; c < resultado.length; c++) resultado[c] = resultado[c] * factor;
-  }
+  for (let i = 0; i < n; i++) resultado.push(cadaOpcion);
   const fin = resultado.map(redondo);
+  const suma = fin.reduce((a, b) => a + b, 0);
   return {
     anchos: fin,
-    texto: 'nombre ' + redondo(anchos[nombre]) + '→' + fin[nombre] + ' pt, opción ' + redondo(nueva) + '→' + fin[fin.length - 1] +
-      ' pt (total ' + redondo(total) + ' pt' + (Math.abs(fin.reduce((a, b) => a + b, 0) - total) > 0.5 ? ', NO CUADRA' : '') + ')',
+    texto: 'nombre ' + redondo(anchos[nombre]) + '→' + fin[nombre] + ' pt, opciones ' + redondo(Math.min.apply(null, opciones)) +
+      '→' + redondo(cadaOpcion) + ' pt (total ' + redondo(total) + ' pt' +
+      (cadaOpcion < minimo - 0.05 ? ', OPCIONES MÁS ANGOSTAS QUE ' + redondo(minimo) + ' pt' : '') +
+      (Math.abs(suma - total) > 0.5 ? ', NO CUADRA' : '') + ')',
   };
 }

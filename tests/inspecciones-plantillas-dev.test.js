@@ -92,21 +92,51 @@ console.log('1. Agrega N/A a la sección que no lo trae, con el total de ancho i
   ok(t[0][4] === 'N/A', 'encabezado: "Malo" → "N/A" (en la copia de la celda)');
   ok(t[1][4] === marca('PARABRISAS', 'N/A') && t[2][4] === marca('MEDALLON', 'N/A'), 'cada pieza con su fórmula de N/A, igual a las otras');
   ok(t[1][3] === marca('PARABRISAS', 'MALO'), 'la opción de antes no se toca');
-  ok(cristal.anchos.length === 5 && cristal.anchos[4] === 25 && cristal.anchos[0] === 75, 'la nueva mide como la última; sale del nombre');
+  ok(cristal.anchos.length === 5 && cristal.anchos.slice(1).every((w) => w === 20),
+    'las opciones se reparten parejo, sin bajar de lo que miden en la sección que ya trae N/A (20)');
+  ok(cristal.anchos[0] === 95, 'al nombre solo se le quita lo que faltó (5)');
   ok(cristal.anchos.reduce((a, b) => a + b, 0) === 175, 'el ancho total no cambia');
+  ok(/opciones miden desde 20 pt/.test(ensayo), 'el ensayo dice cuánto miden las opciones de las secciones con N/A');
   ok(textos(inventario)[0].length === 5 && textos(datos)[0].length === 2, 'la que ya traía N/A y la de datos, igual');
   ok(doc.guardado === 1, 'se guarda el documento');
   ok(/0 secciones con N\/A nuevo \(0 piezas\) · 2 ya lo traían/.test(ctx.inspeccionesNA3EscribirTodas()), 'correrla otra vez no agrega otra columna');
 }
 
-console.log('2. Si el nombre no alcanza, también se angostan las opciones');
+console.log('2. Los anchos: primero las opciones, el nombre solo si hace falta');
 {
+  const holgada = seccion('Cristalería 10%', ['Parabrisas'], ['Bueno', 'Regular', 'Malo'], false, [140, 46, 46, 48]);
+  const conNA = seccion('Inventarios 10%', ['Gato'], ['Bueno', 'Regular', 'Malo'], true, [100, 30, 30, 30, 30]);
+  const x = armar([holgada, conNA]);
+  x.ctx.inspeccionesNA2EscribirAutos();
+  ok(holgada.anchos[0] === 140 && holgada.anchos.slice(1).every((w) => w === 35), 'opciones holgadas: el nombre no se toca (4 × 35)');
+
   const angosta = seccion('Niveles 10%', ['Aceite'], ['Bueno', 'Regular', 'Malo'], false, [40, 30, 30, 30]);
   const { ctx } = armar([angosta]);
+  const ensayo = ctx.inspeccionesNA1Ensayo();
   ctx.inspeccionesNA2EscribirAutos();
   const a = angosta.anchos;
-  ok(a[0] === 24, 'el nombre baja solo hasta el 60%');
-  ok(Math.abs(a.reduce((x, y) => x + y, 0) - 130) < 0.5 && a.slice(1).every((w) => w === a[1]), 'las opciones, parejas, y el total igual');
+  ok(a[0] === 24, 'sin sección con N/A de referencia, el mínimo es la opción de hoy; el nombre baja solo hasta el 60%');
+  ok(Math.abs(a.reduce((p, q) => p + q, 0) - 130) < 0.5 && a.slice(1).every((w) => w === a[1]), 'las opciones, parejas, y el total igual');
+  ok(/OPCIONES MÁS ANGOSTAS QUE 30 pt/.test(ensayo), 'si quedan bajo el mínimo, el ensayo lo avisa');
+}
+
+console.log('2b. Un tipo con los mismos anchos que otro no los repite en el reporte');
+{
+  const doc = { nombre: 'Copia de FORMATO AUTOS (DEV)', getName: () => doc.nombre, saveAndClose: () => {},
+    getBody: () => { const t = seccion('Cristalería 10%', ['Parabrisas'], ['Bueno', 'Regular', 'Malo'], false, [140, 46, 46, 48]);
+      return { getNumChildren: () => 1, getChild: () => t }; } };
+  const ctx = vm.createContext({
+    soloEditor_: () => {}, Logger: { log: () => {} },
+    Config: { ENTORNO: 'DEV', SPREADSHEET_IDS: { VEHICULOS: () => 'SS' } },
+    SheetUtils: { getAll: () => [{ TIPO: 'KWID', PLANTILLA: 'C1' }, { TIPO: 'AUTOS', PLANTILLA: 'C2' }],
+      normalizarEncabezado_: (s) => String(s).trim().toUpperCase() },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => JSON.stringify({ KWID: 'O1', AUTOS: 'O2' }) }) },
+    CacheService: { getScriptCache: () => ({ removeAll: () => {} }) },
+    DocumentApp: { ElementType: TIPO, openById: () => doc },
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'InspeccionesPlantillasDev.gs'), 'utf8'), ctx);
+  const r = ctx.inspeccionesNA1Ensayo();
+  ok((r.match(/"Cristalería 10%"/g) || []).length === 1 && /anchos: igual que KWID/.test(r), 'AUTOS dice "igual que KWID"');
 }
 
 console.log('3. Lo raro no se toca y sale en el reporte');
