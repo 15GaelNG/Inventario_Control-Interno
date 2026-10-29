@@ -37,6 +37,34 @@
       </div>
     </div>
 
+    <!-- Contra la factura del proveedor (29-oct): solo con la sección "Plan y facturación"; el servidor la quita si no -->
+    <div class="lnp-factura" id="lnp-factura" hidden>
+      <h3 class="lnp-seccion"><i data-lucide="receipt" class="ico"></i> Contra la factura del proveedor</h3>
+      <p class="lnp-nota lnp-factura-nota" id="lnp-factura-nota"></p>
+      <div class="stat-row" id="lnp-factura-kpis"></div>
+      <div class="lnp-dos">
+        <div class="card lnp-tarjeta">
+          <div class="lnp-cabeza"><h4><i data-lucide="scale" class="ico"></i> Por cuenta</h4><span class="lnp-total" id="lnp-factura-mes"></span></div>
+          <div class="lnp-cuentas" id="lnp-factura-cuentas" data-scroll-x></div>
+        </div>
+        <div class="card lnp-tarjeta">
+          <div class="lnp-cabeza"><h4><i data-lucide="calendar-range" class="ico"></i> Facturado por mes</h4><span class="lnp-total" id="lnp-factura-total"></span></div>
+          <div class="lnp-cuentas" id="lnp-factura-meses" data-scroll-x></div>
+        </div>
+      </div>
+      <div class="card lnp-tarjeta lnp-diferencias">
+        <div class="lnp-cabeza"><h4><i data-lucide="list-checks" class="ico"></i> Diferencias, número por número</h4></div>
+        <div class="lnp-controles">
+          <div class="ln-segmentado" id="lnp-dif" role="group" aria-label="Qué diferencia ver">
+            <button type="button" class="secondary activo" data-valor="activasSinCobro" aria-pressed="true">Activas sin cobro</button>
+            <button type="button" class="secondary" data-valor="cobradasNoActivas" aria-pressed="false">Cobradas sin estar activas</button>
+          </div>
+        </div>
+        <p class="lnp-nota" id="lnp-dif-nota"></p>
+        <div class="lnp-tabla" id="lnp-dif-tabla"></div>
+      </div>
+    </div>
+
     <h3 class="lnp-seccion"><i data-lucide="calendar-clock" class="ico"></i> Adendums de los planes activos</h3>
     <div class="stat-row lnp-vigencia" id="lnp-vigencia"></div>
 
