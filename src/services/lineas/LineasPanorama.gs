@@ -187,12 +187,112 @@ const LineasPanorama = (function () {
     return acc;
   }
 
+  // ---------------- Contra la factura del proveedor (usuario, 29-oct: «info que podamos comparar más fácil y directo») ----------------
+  const COLS_FACTURAS = ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO'];
+  const CUENTA_SIM_BASICOS = '643495915';
+  const MAX_LISTA = 300;
+  const digitos10 = (v) => txt(v).replace(/\D/g, '').slice(-10);
+  const redondo = (n) => Math.round(n * 100) / 100;
+  /** Grupos de estatus de línea que no son activas (los mismos que la portada: canceladas y sin línea). */
+  const NO_ACTIVA = ['CANCELADA', 'CANCELADO', 'SIN LINEA', 'SIN ESTATUS', ''];
+  const esActiva = (e) => NO_ACTIVA.indexOf(estatus(e) === 'SIN ESTATUS' ? '' : estatus(e)) < 0;
+
+  /** Mes ('yyyy-MM') del corte: la celda es fecha; un texto dd/mm/aaaa también se acepta. */
+  function mesDeCorte_(v) {
+    if (v instanceof Date && !isNaN(v.getTime())) return mesDe(v);
+    const m = txt(v).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? m[3] + '-' + ('0' + m[2]).slice(-2) : '';
+  }
+
+  /**
+   * Lo facturado por mes y cuenta, y la comparación de las líneas activas de HOY contra la última factura, número por
+   * número. lineasHoy: [{ numero, estatus, cuenta, basico }]. Sin la pestaña FACTURAS, null. Las listas traen números
+   * de teléfono: la interfaz no las guarda en el navegador (guardarCopiaPanorama) y el servidor las quita a quien no
+   * tiene la sección de facturación (TelefoniaService.panorama).
+   */
+  function factura_(lineasHoy) {
+    if (!LineasDatos.existeTabla('FACTURAS')) return null;
+    const t = LineasDatos.tabla('FACTURAS');
+    const ix = COLS_FACTURAS.map((c) => LineasDatos.colIndice(t, c));
+    if (ix.slice(0, 5).some((i) => i < 0)) return null;
+    const ultima = t.hoja.getLastRow();
+    if (ultima < 2) return null;
+    const desde = Math.min.apply(null, ix.filter((i) => i >= 0));
+    const hasta = Math.max.apply(null, ix);
+    const razonDe = {};
+    if (LineasDatos.existeTabla('CUENTAS')) LineasDatos.leerTabla('CUENTAS').forEach((c) => { razonDe[digitos10(LineasUtil.col(c, 'CUENTA PADRE'))] = txt(LineasUtil.col(c, 'RAZON SOCIAL')); });
+    const meses = {};
+    const porNumero = {}; // número → { ym: monto } (para la comparación con la última factura)
+    t.hoja.getRange(2, desde + 1, ultima - 1, hasta - desde + 1).getValues().forEach((v) => {
+      const val = (k) => (ix[k] < 0 ? '' : v[ix[k] - desde]);
+      const ym = mesDeCorte_(val(1));
+      if (!ym) return;
+      const padre = digitos10(val(3));
+      const archivo = txt(val(5)).toUpperCase();
+      // La razón social de la cuenta (CUENTAS); si la cuenta no está, la del nombre del archivo
+      const razon = razonDe[padre] || (/ FRO\b/.test(archivo) ? 'FRO' : (/ GPH\b/.test(archivo) ? 'GPH' : ''));
+      const cuenta = cuentaDe(val(2), razon);
+      const monto = Number(val(4)) || 0;
+      const m = meses[ym] = meses[ym] || { total: 0, cuentas: {}, numeros: {} };
+      const c = m.cuentas[cuenta] = m.cuentas[cuenta] || { monto: 0, lineas: 0 };
+      m.total += monto;
+      c.monto += monto;
+      const n = digitos10(val(0));
+      if (!n) return; // un ajuste de la cuenta: suma al total, no es una línea
+      if (!m.numeros[n]) { m.numeros[n] = true; c.lineas++; }
+      (porNumero[n] = porNumero[n] || { cuenta: cuenta, basico: padre === CUENTA_SIM_BASICOS, meses: {} }).meses[ym] = redondo((porNumero[n].meses[ym] || 0) + monto);
+    });
+    const lista = Object.keys(meses).sort();
+    if (!lista.length) return null;
+    const ultimo = lista[lista.length - 1];
+    const porMes = lista.map((ym) => {
+      const m = meses[ym];
+      const cuentas = {};
+      Object.keys(m.cuentas).forEach((k) => { cuentas[k] = { monto: redondo(m.cuentas[k].monto), lineas: m.cuentas[k].lineas }; });
+      return { ym: ym, total: redondo(m.total), lineas: Object.keys(m.numeros).length, cuentas: cuentas };
+    });
+
+    // Hoy contra la última factura, por número (una línea con dos renglones cuenta una vez; manda el activo)
+    const inv = {};
+    lineasHoy.forEach((l) => { if (l.numero && (!inv[l.numero] || (!esActiva(inv[l.numero].estatus) && esActiva(l.estatus)))) inv[l.numero] = l; });
+    const cobradas = Object.keys(meses[ultimo].numeros);
+    const comp = { ultimo: ultimo, activas: 0, cobradas: cobradas.length, activasCobradas: 0, porCuenta: {}, basicos: { activas: 0, cobradas: 0 },
+      activasSinCobro: [], cobradasNoActivas: [], recortadas: false };
+    const cuentaComp = (k) => (comp.porCuenta[k] = comp.porCuenta[k] || { activas: 0, cobradas: 0, activasCobradas: 0, activasSinCobro: 0, cobradasNoActivas: 0 });
+    // Último mes con cobro de cada número: para decir desde cuándo una activa no se cobra
+    const ultimoCobro = (n) => (porNumero[n] ? Object.keys(porNumero[n].meses).sort().pop() : '');
+    Object.keys(inv).forEach((n) => {
+      const l = inv[n];
+      if (!esActiva(l.estatus)) return;
+      comp.activas++;
+      cuentaComp(l.cuenta).activas++;
+      if (l.basico) comp.basicos.activas++;
+      if (meses[ultimo].numeros[n]) { comp.activasCobradas++; cuentaComp(l.cuenta).activasCobradas++; } else { cuentaComp(l.cuenta).activasSinCobro++; comp.activasSinCobro.push([n, estatus(l.estatus), l.cuenta, ultimoCobro(n)]); }
+    });
+    cobradas.forEach((n) => {
+      const f = porNumero[n];
+      cuentaComp(f.cuenta).cobradas++;
+      if (f.basico) comp.basicos.cobradas++;
+      const l = inv[n];
+      if (!l || !esActiva(l.estatus)) { cuentaComp(f.cuenta).cobradasNoActivas++; comp.cobradasNoActivas.push([n, l ? estatus(l.estatus) : 'NO ESTÁ EN EL INVENTARIO', f.cuenta, f.meses[ultimo]]); }
+    });
+    comp.activasSinCobro.sort((a, b) => a[2].localeCompare(b[2]) || a[0].localeCompare(b[0]));
+    comp.cobradasNoActivas.sort((a, b) => (a[1] === 'NO ESTÁ EN EL INVENTARIO' ? 0 : 1) - (b[1] === 'NO ESTÁ EN EL INVENTARIO' ? 0 : 1) || a[0].localeCompare(b[0]));
+    comp.totalActivasSinCobro = comp.activasSinCobro.length;
+    comp.totalCobradasNoActivas = comp.cobradasNoActivas.length;
+    if (comp.activasSinCobro.length > MAX_LISTA || comp.cobradasNoActivas.length > MAX_LISTA) comp.recortadas = true;
+    comp.activasSinCobro = comp.activasSinCobro.slice(0, MAX_LISTA);
+    comp.cobradasNoActivas = comp.cobradasNoActivas.slice(0, MAX_LISTA);
+    return { meses: porMes, comparacion: comp };
+  }
+
   function calcular() {
     const ahora = Date.now();
     const ms = {}; // tiempos de cada paso (diagnóstico: se ven en la respuesta)
     let marca = ahora;
     const tomar = (paso) => { const t = Date.now(); ms[paso] = t - marca; marca = t; };
     const regs = { equipos: [], lineas: [] };
+    const lineasHoy = []; // número, estatus y cuenta de hoy, para comparar con la factura (no viaja al cliente)
     // Utilities.formatDate cuesta ~1 ms por llamada y los fines de adendum se repiten mucho: uno por fecha distinta
     const dias = {};
     const diaDe = (d) => dias[d.getTime()] || (dias[d.getTime()] = Utilities.formatDate(d, zona(), 'yyyy-MM-dd'));
@@ -215,6 +315,7 @@ const LineasPanorama = (function () {
           cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
           costo: Number(r.linea.costoPlan) || 0,
         });
+        lineasHoy.push({ numero: digitos10(r.linea.numero), estatus: r.linea.estatus, cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || '') });
       }
     });
 
@@ -240,6 +341,8 @@ const LineasPanorama = (function () {
       registros: registros(regs, eventos, meses),
     };
     tomar('calcular');
+    salida.factura = factura_(lineasHoy);
+    tomar('factura');
     salida.ms = ms;
     return salida;
   }
@@ -255,5 +358,5 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe };
+  return { panorama, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_ };
 })();

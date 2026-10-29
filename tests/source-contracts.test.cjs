@@ -1782,6 +1782,47 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.match(API, /function apiLineasPanorama\(token, forzar\)/);
 });
 
+test('Panorama contra la factura: facturado por mes y cuenta, y las activas de hoy contra la última factura (29-oct)', () => {
+  const d = (s) => new Date(s + 'T12:00:00-06:00');
+  // FACTURAS: NUMERO EN FACTURA, FECHA DE CORTE, COMPAÑIA, CUENTA PADRE, TOTAL CON IVA, ARCHIVO
+  const filas = [
+    ['4420000001', d('2026-08-15'), 'AT&T', '507727479', 269.78, 'Factura AT&T · agosto 2026'],
+    ['4420000001', d('2026-09-15'), 'AT&T', '507727479', 269.78, 'Factura AT&T · septiembre 2026'],
+    ['4420000002', d('2026-08-15'), 'AT&T', '507727479', 269.78, 'Factura AT&T · agosto 2026'], // dejó de cobrarse en sep
+    ['4420000003', d('2026-09-15'), 'AT&T', '507727479', 120, 'Factura AT&T · septiembre 2026'], // cancelada: su último cobro
+    ['5510000004', '27/09/2026', 'TELCEL', '62637313', 269, 'Estado de cuenta Telcel · septiembre 2026'], // corte como texto; GPH por CUENTAS
+    ['5510000005', d('2026-09-27'), 'TELCEL', '99999999', 229, 'Estado de cuenta Telcel FRO · septiembre 2026'], // cuenta sin CUENTAS: FRO por el archivo
+    ['', d('2026-09-15'), 'AT&T', '507727479', -100, 'Factura AT&T · septiembre 2026'], // ajuste: suma, no es línea
+  ];
+  const hoja = { getLastRow: () => filas.length + 1, getRange: (f, c, n) => ({ getValues: () => filas.slice(f - 2, f - 2 + n) }) };
+  const LineasDatos = {
+    ZONA_APP: 'America/Mexico_City', existeTabla: () => true, tabla: () => ({ hoja }), colIndice: (t, c) => ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO'].indexOf(c),
+    leerTabla: () => [{ 'CUENTA PADRE': '62637313', 'RAZON SOCIAL': 'GPH SERVICIOS CONDOMINALES SC' }],
+  };
+  const P = new Function('LineasDatos', 'LineasRepo', 'LineasUtil', 'Utilities',
+    read('src/services/lineas/LineasPanorama.gs') + '; return LineasPanorama;')(
+    LineasDatos, {}, { col: (f, c) => f[c] },
+    { formatDate: (x) => x.toISOString().slice(0, 7) });
+  const f = P._factura([
+    { numero: '4420000001', estatus: 'USO', cuenta: 'AT&T', basico: false },
+    { numero: '4420000002', estatus: 'USO', cuenta: 'AT&T', basico: false }, // activa sin cobro en sep
+    { numero: '4420000003', estatus: 'CANCELADA', cuenta: 'AT&T', basico: false },
+    { numero: '5510000004', estatus: 'DISPONIBLE', cuenta: 'TELCEL GPH', basico: false },
+    { numero: '6660000006', estatus: 'USO', cuenta: 'TELCEL FRO', basico: false }, // nunca cobrada
+  ]);
+  assert.deepEqual(f.meses.map((m) => [m.ym, m.total, m.lineas]), [['2026-08', 539.56, 2], ['2026-09', 787.78, 4]]);
+  assert.deepEqual(f.meses[1].cuentas['TELCEL GPH'], { monto: 269, lineas: 1 });
+  assert.deepEqual(f.meses[1].cuentas['TELCEL FRO'], { monto: 229, lineas: 1 });
+  const c = f.comparacion;
+  assert.deepEqual([c.ultimo, c.activas, c.cobradas, c.activasCobradas, c.totalActivasSinCobro, c.totalCobradasNoActivas], ['2026-09', 4, 4, 2, 2, 2]);
+  assert.deepEqual(c.activasSinCobro, [['4420000002', 'USO', 'AT&T', '2026-08'], ['6660000006', 'USO', 'TELCEL FRO', '']]);
+  assert.deepEqual(c.cobradasNoActivas, [['5510000005', 'NO ESTÁ EN EL INVENTARIO', 'TELCEL FRO', 229], ['4420000003', 'CANCELADA', 'AT&T', 120]]);
+  assert.deepEqual(c.porCuenta['AT&T'], { activas: 2, cobradas: 2, activasCobradas: 1, activasSinCobro: 1, cobradasNoActivas: 1 });
+  // Montos y números solo con la sección de facturación; el navegador no guarda las listas con números
+  assert.match(read('src/services/TelefoniaService.gs'), /return veFacturacion_\(sesion\) \|\| !r\.factura \? r : Object\.assign\(\{\}, r, \{ factura: null \}\);/);
+  assert.match(LINEAS, /comparacion: Object\.assign\(\{\}, r\.factura\.comparacion, \{ activasSinCobro: \[\], cobradasNoActivas: \[\] \}\)/);
+});
+
 test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo de la inspección', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
   const resp = captura.slice(captura.indexOf('function formularioResponsiva_'), captura.indexOf('function ocultarSecretos_'));

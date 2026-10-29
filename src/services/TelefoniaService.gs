@@ -857,8 +857,10 @@ const TelefoniaService = (function () {
   /** Panorama de Líneas: equipos y líneas por estatus, hoy y al cierre de cada mes. */
   function panorama(token, forzar) {
     // Los totales son de todos los departamentos
-    sinAlcance_(Permisos.puedeLeer(token, 'panorama-lineas'));
-    return LineasPanorama.panorama(!!forzar);
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, 'panorama-lineas'));
+    const r = LineasPanorama.panorama(!!forzar);
+    // Lo de la factura (montos y números de teléfono), solo con la sección de facturación; la caché es de todos
+    return veFacturacion_(sesion) || !r.factura ? r : Object.assign({}, r, { factura: null });
   }
 
   /** Acciones masivas de equipos (resguardo, reasignar, cancelar): formulario y aplicación. */
