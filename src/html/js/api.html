@@ -83,7 +83,8 @@
    * así que reintentarla es seguro aun si escribe. Por eso, aquí:
    *   - cada pestaña tiene a lo más `maxEnVuelo` llamadas en curso; las demás esperan su turno (entrar ya no pide 8-10
    *     cosas de golpe);
-   *   - ese error se reintenta solo, tras `esperas` (más un poco al azar, para que no reintenten todas juntas).
+   *   - ese error se reintenta solo, tras una espera al azar de hasta `esperas[n]` (azar completo, como recomienda AWS:
+   *     si no, las pestañas que fallaron juntas reintentan juntas). En verTiempos() cuenta como `saturado:<fn>`.
    */
   const llamadasConfig = { maxEnVuelo: 4, esperas: [1000, 2000, 4000, 8000] };
   const SATURADO = /demasiadas secuencias|too many scripts|simult[aá]neamente|simultaneous/i;
@@ -117,13 +118,15 @@
         })
         .withFailureHandler((err) => {
           liberar_();
-          anotarTiempo_(etiqueta || fnName, inicio, false);
           const mensaje = err.message || String(err);
           if (SATURADO.test(mensaje) && vez < llamadasConfig.esperas.length) {
-            const espera = llamadasConfig.esperas[vez] * (1 + Math.random() * 0.5);
-            setTimeout(() => { pedir_(fnName, args, etiqueta, vez + 1).then(resolve, reject); }, espera);
+            anotarTiempo_('saturado:' + (etiqueta || fnName), inicio, false);
+            const tope = llamadasConfig.esperas[vez];
+            const piso = Math.min(200, tope);
+            setTimeout(() => { pedir_(fnName, args, etiqueta, vez + 1).then(resolve, reject); }, piso + Math.random() * (tope - piso));
             return;
           }
+          anotarTiempo_(etiqueta || fnName, inicio, false);
           // Sesión expirada (Auth.validarSesion, server-side): sin importar
           // desde qué pantalla/módulo venga la llamada, se maneja aquí una
           // sola vez — regresa al login con un aviso, en vez de dejar cada
@@ -135,6 +138,51 @@
         })
         [fnName](...args);
     }));
+  }
+
+  /**
+   * El lote (29-oct): las llamadas «de fondo» (precargar una lista, el vigía, revalidar una lista que ya se está viendo)
+   * no salen solas: se juntan con las que se piden en el mismo instante y viajan como UNA ejecución (apiLote, en
+   * ClientApi.gs), así gastan menos del cupo compartido. Cada parte recibe su propia respuesta o su propio error. Lo
+   * interactivo (guardar, abrir una ficha, una lista que la persona está esperando) nunca va aquí: en lote esperaría a
+   * las demás. Solo lo que esté en LOTE_PERMITIDAS_ del servidor; una llamada sola sale como siempre, sin envoltura.
+   */
+  const LOTE_MAX = 6;   // el mismo tope que apiLote
+  let loteAbierto = null;
+  function pedirFondo_(fnName, args, etiqueta) {
+    return new Promise((resolve, reject) => {
+      if (!loteAbierto) {
+        const lote = { pedidos: [] };
+        setTimeout(() => { if (loteAbierto === lote) mandarLote_(); }, 0);
+        loteAbierto = lote;
+      }
+      loteAbierto.pedidos.push({ fn: fnName, args: args, etiqueta: etiqueta, resolve: resolve, reject: reject });
+      if (loteAbierto.pedidos.length >= LOTE_MAX) mandarLote_();
+    });
+  }
+  function mandarLote_() {
+    const lote = loteAbierto;
+    loteAbierto = null;
+    if (!lote || !lote.pedidos.length) return;
+    if (lote.pedidos.length === 1) {
+      const p = lote.pedidos[0];
+      pedir_(p.fn, p.args, p.etiqueta).then(p.resolve, p.reject);
+      return;
+    }
+    const inicio = performance.now();
+    const token = lote.pedidos[0].args[0];
+    pedir_('apiLote', [token, lote.pedidos.map((p) => ({ fn: p.fn, args: p.args }))], 'apiLote ×' + lote.pedidos.length)
+      .then((respuestas) => lote.pedidos.forEach((p, i) => {
+        const r = (respuestas || [])[i] || { ok: false, error: 'El lote no trajo respuesta para ' + p.fn };
+        anotarTiempo_(p.etiqueta || p.fn, inicio, !!r.ok);
+        if (r.ok) {
+          p.resolve(r.v);
+          return;
+        }
+        if (/sesi[oó]n expirada/i.test(r.error) && typeof manejarSesionExpirada === 'function') manejarSesionExpirada();
+        p.reject(new Error(r.error));
+      }))
+      .catch((err) => lote.pedidos.forEach((p) => p.reject(err)));
   }
 
   /**
@@ -319,11 +367,12 @@
    * sabe si cambió sin volver a pedir la lista. Si la lista ya se había adelantado (adelantar), se usa esa respuesta
    * y la huella llega en la siguiente vuelta del vigía (huella null = todavía no se sabe).
    */
-  function pedirConHuella_(fnName, args) {
+  function pedirConHuella_(fnName, args, fondo) {
     if (adelantadas[fnName + JSON.stringify(args)]) {
       return callServer(fnName, ...args).then((v) => ({ valor: v, huella: null }));
     }
-    return pedir_('apiListaConHuella', [args[0], fnName, args.slice(1)], fnName).then((r) => ({ valor: r.v, huella: r.huella || {} }));
+    const pedir = fondo ? pedirFondo_ : pedir_;   // de fondo: en lote con lo que se pida al mismo tiempo
+    return pedir('apiListaConHuella', [args[0], fnName, args.slice(1)], fnName).then((r) => ({ valor: r.v, huella: r.huella || {} }));
   }
 
   /**
@@ -335,14 +384,15 @@
   const LIMPIAR_AL_GUARDAR = {};
   function guardarListaLimpia(fnName, limpiar) { LIMPIAR_AL_GUARDAR[fnName] = limpiar; }
 
-  function pedirLista_(fnName, args, llave) {
+  /** fondo: nadie la está esperando (precarga, vigía, revalidar una lista que ya se ve), así que puede ir en lote */
+  function pedirLista_(fnName, args, llave, fondo) {
     const entrada = entradaLista_(llave);
     if (entrada.promesa) return entrada.promesa;
     entrada.fn = fnName;
     entrada.args = args;
     entrada.promesa = entrada.carga.then(() => {
       const teniaCopia = entrada.texto !== null;
-      return pedirConHuella_(fnName, args).then(({ valor, huella }) => {
+      return pedirConHuella_(fnName, args, fondo).then(({ valor, huella }) => {
         const limpiar = LIMPIAR_AL_GUARDAR[fnName];
         const guardable = limpiar ? limpiar(valor) : valor;
         const texto = JSON.stringify(guardable === undefined ? null : guardable);
@@ -365,9 +415,10 @@
     const llave = llaveLista_(fnName, args);
     const entrada = entradaLista_(llave);
     await entrada.carga;
-    if (entrada.texto === null) return pedirLista_(fnName, args, llave);
+    if (entrada.texto === null) return pedirLista_(fnName, args, llave);   // la persona la está esperando: sola
     if (!entrada.promesa && Date.now() - entrada.ts > REPEDIR_MS) {
-      pedirLista_(fnName, args, llave).catch(() => { /* por detrás: si falla, se queda la copia */ });
+      // Ya ve la copia: lo fresco puede ir en lote
+      pedirLista_(fnName, args, llave, true).catch(() => { /* por detrás: si falla, se queda la copia */ });
     }
     return entrada.valor;
   }
@@ -408,47 +459,151 @@
     return new Set(listasEnPantalla.map((l) => l.fn));
   }
 
+  const tokenActual_ = () => (typeof state !== 'undefined' && state && state.token) || '';
+  /** Las listas a la vista con huella: [llave, entrada] */
+  function listasConHuella_() {
+    const vistas = listasALaVista_();
+    return Object.keys(cacheListas).map((k) => [k, cacheListas[k]])
+      .filter(([, e]) => e.fn && vistas.has(e.fn) && !e.promesa && e.texto !== null && e.huella && Object.keys(e.huella).length);
+  }
+  /** Vuelve a pedir (de fondo, en lote) una lista que el vigía vio cambiar */
+  function repedirLista_(k, e) {
+    pedirLista_(e.fn, [tokenActual_()].concat(e.args.slice(1)), k, true).catch(() => { /* se queda lo que hay */ });
+  }
+  /** Con las versiones vigentes, repide las listas a la vista que cambiaron. → cuántas */
+  function aplicarVigentes_(vigentes) {
+    // Sin ninguna clave: el servidor no pudo leer las versiones (CacheService lento). No se sabe si algo cambió, así que
+    // no se repide nada (si no, una falla de Google haría que todas las pantallas pidieran todo a la vez)
+    if (!vigentes || !Object.keys(vigentes).length || !tokenActual_()) return 0;
+    let pedidas = 0;
+    listasConHuella_().forEach(([k, e]) => {
+      const propias = Object.keys(e.huella).filter((c) => c in vigentes);
+      if (propias.some((c) => vigentes[c] !== e.huella[c])) {
+        pedidas++;
+        repedirLista_(k, e);
+      }
+    });
+    return pedidas;
+  }
+
   async function vigilarListas(forzar) {
-    const token = (typeof state !== 'undefined' && state && state.token) || '';
+    const token = tokenActual_();
     if (!token || document.hidden) return 0;
     if (!forzar && Date.now() - ultimaVigia < VIGIA_MS - 1000) return 0;
     ultimaVigia = Date.now();
     const vistas = listasALaVista_();
-    const entradas = Object.keys(cacheListas).map((k) => [k, cacheListas[k]])
-      .filter(([, e]) => e.fn && vistas.has(e.fn) && !e.promesa && e.texto !== null);
     let pedidas = 0;
-    const repedir = (k, e) => {
-      pedidas++;
-      pedirLista_(e.fn, [token].concat(e.args.slice(1)), k).catch(() => { /* se queda lo que hay */ });
-    };
-    const conHuella = [];
-    entradas.forEach(([k, e]) => {
-      if (e.huella === null || e.huella === undefined) repedir(k, e);
-      else if (!Object.keys(e.huella).length) { if (Date.now() - e.ts > SIN_HUELLA_MS) repedir(k, e); }
-      else conHuella.push([k, e]);
-    });
+    // Sin huella (adelantada) o con huella vacía: lo de cada pestaña, como siempre
+    Object.keys(cacheListas).map((k) => [k, cacheListas[k]])
+      .filter(([, e]) => e.fn && vistas.has(e.fn) && !e.promesa && e.texto !== null)
+      .forEach(([k, e]) => {
+        if (e.huella === null || e.huella === undefined) { pedidas++; repedirLista_(k, e); }
+        else if (!Object.keys(e.huella).length && Date.now() - e.ts > SIN_HUELLA_MS) { pedidas++; repedirLista_(k, e); }
+      });
+    const conHuella = listasConHuella_();
     if (!conHuella.length) return pedidas;
     const claves = Array.from(new Set([].concat(...conHuella.map(([, e]) => Object.keys(e.huella)))));
+    // Con varias pestañas: una sola pregunta por todas (la vigía); esta solo dice qué claves le interesan
+    if (VigiaCompartido.publicar(claves)) return pedidas;
     let vigentes;
     try {
-      vigentes = await pedir_('apiHuellasVigentes', [token, claves]);
+      vigentes = await pedirFondo_('apiHuellasVigentes', [token, claves]);
     } catch (err) {
       return pedidas;   // sin red o sesión vencida: se intenta en la siguiente vuelta
     }
-    // Sin ninguna clave: el servidor no pudo leer las versiones (CacheService lento). No se sabe si algo cambió, así que
-    // no se repide nada (si no, una falla de Google haría que todas las pantallas pidieran todo a la vez)
-    if (!vigentes || !Object.keys(vigentes).length) return pedidas;
-    conHuella.forEach(([k, e]) => {
-      if (Object.keys(e.huella).some((c) => vigentes[c] !== e.huella[c])) repedir(k, e);
-    });
-    return pedidas;
+    return pedidas + aplicarVigentes_(vigentes);
   }
+
+  /**
+   * Un solo vigía por navegador (29-oct): con varias pestañas abiertas, cada una preguntaba cada minuto (una ejecución
+   * por pestaña del cupo compartido). Ahora la pestaña que tiene el candado `vigia:<correo>` (Web Locks: si se cierra,
+   * la siguiente lo toma sola) junta las claves que le publican las demás a la vista (BroadcastChannel), pregunta UNA
+   * vez y les manda las versiones; cada una repide solo lo suyo. Sin Web Locks o BroadcastChannel (o sin sesión), cada
+   * pestaña pregunta sola, como antes. Las versiones de hoja no son de nadie: la vigía pregunta con su propio token.
+   */
+  const VigiaCompartido = (function () {
+    const soportado = () => typeof navigator !== 'undefined' && navigator.locks && typeof navigator.locks.request === 'function' &&
+      typeof BroadcastChannel === 'function';
+    const yo = Math.random().toString(36).slice(2);
+    let canal = null;
+    let nombre = '';
+    let soyVigia = false;
+    let soltar = null;
+    let interval = null;
+    const pedidas = {};   // pestaña → { claves, ts }
+
+    function conectar_() {
+      const correo = correoSesion_();
+      if (!soportado() || !correo || !tokenActual_()) return false;
+      const n = 'vigia:' + correo;
+      if (n === nombre && canal) return true;
+      desconectar();
+      nombre = n;
+      canal = new BroadcastChannel(n);
+      canal.onmessage = (ev) => {
+        const m = (ev && ev.data) || {};
+        if (m.tipo === 'claves' && soyVigia && Array.isArray(m.claves)) pedidas[m.de] = { claves: m.claves, ts: Date.now() };
+        if (m.tipo === 'vigentes' && m.vigentes && typeof m.vigentes === 'object') aplicarVigentes_(m.vigentes);
+      };
+      navigator.locks.request(n, () => new Promise((listo) => {
+        if (nombre !== n) { listo(); return; }   // ya se desconectó mientras esperaba
+        soyVigia = true;
+        soltar = listo;
+        interval = setInterval(consultar_, VIGIA_MS);
+      })).catch(() => { /* sin candado: sigue publicando */ });
+      return true;
+    }
+
+    /** La vigía: una sola pregunta con las claves de todas las pestañas a la vista (las de los últimos dos minutos) */
+    async function consultar_() {
+      const ahora = Date.now();
+      const todas = new Set();
+      Object.keys(pedidas).forEach((k) => {
+        if (ahora - pedidas[k].ts > 2 * VIGIA_MS) delete pedidas[k];
+        else pedidas[k].claves.forEach((c) => todas.add(c));
+      });
+      const token = tokenActual_();
+      if (!todas.size || !token || !canal) return;
+      let vigentes;
+      try {
+        vigentes = await pedirFondo_('apiHuellasVigentes', [token, Array.from(todas).slice(0, 300)]);
+      } catch (err) {
+        return;   // sesión vencida: manejarSesionExpirada cierra aquí y el candado pasa a otra
+      }
+      if (canal) canal.postMessage({ tipo: 'vigentes', vigentes: vigentes });   // a las demás (BroadcastChannel no se avisa a sí misma)
+      aplicarVigentes_(vigentes);
+    }
+
+    /** Las claves de esta pestaña. → true si las atiende la vigía (no hay que preguntar aquí) */
+    function publicar(claves) {
+      if (!conectar_()) return false;
+      if (soyVigia) pedidas[yo] = { claves: claves, ts: Date.now() };
+      else canal.postMessage({ tipo: 'claves', de: yo, claves: claves });
+      return true;
+    }
+
+    /** Al cerrar sesión: suelta el candado (otra pestaña toma el relevo) y cierra el canal */
+    function desconectar() {
+      if (interval) clearInterval(interval);
+      interval = null;
+      if (soltar) soltar();
+      soltar = null;
+      soyVigia = false;
+      if (canal) canal.close();
+      canal = null;
+      nombre = '';
+      Object.keys(pedidas).forEach((k) => { delete pedidas[k]; });
+    }
+
+    return { publicar, desconectar, esVigia: () => soyVigia, consultar: consultar_ };
+  })();
+
   setInterval(() => { vigilarListas(false); }, VIGIA_MS);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) vigilarListas(false); });
 
   /** Pide por detrás, sin pintar nada, para que el módulo abra al instante (precarga al entrar) */
   function precargarLista(fnName, ...args) {
-    return pedirLista_(fnName, args, llaveLista_(fnName, args)).catch(() => null);
+    return pedirLista_(fnName, args, llaveLista_(fnName, args), true).catch(() => null);
   }
 
   /** Borra una entrada de callServerListaCacheada — se llama justo después de
@@ -472,6 +627,7 @@
 
   /** Al cerrar sesión: que en una computadora compartida no quede nada guardado */
   function limpiarListasGuardadas() {
+    VigiaCompartido.desconectar();   // si era la vigía, otra pestaña toma el relevo
     Object.keys(cacheListas).forEach((k) => { delete cacheListas[k]; });
     Object.keys(cacheCatalogos).forEach((k) => { delete cacheCatalogos[k]; });
     return Almacen.borrarPrefijos([PREFIJO_LISTAS, PREFIJO_CATALOGOS]);

@@ -75,6 +75,11 @@ const Auth = (function () {
   let automatica_ = false;
   /** Esta llamada la hizo un temporizador de la pantalla, no la persona: valida la sesión sin renovarla */
   function automatica() { automatica_ = true; }
+  /**
+   * Empieza otra llamada dentro de la misma ejecución (apiLote, ClientApi.gs): sin la marca de automática, como si fuera
+   * su propia ejecución. Si no, la consulta del vigía dejaría sin renovar la sesión a las demás partes del lote.
+   */
+  function llamadaNueva() { automatica_ = false; }
 
   /** Crea el token de sesión a partir de una fila de usuario ya validada (login manual o con Google) */
   function construirSesion_(found) {
@@ -311,5 +316,5 @@ const Auth = (function () {
   }
 
   return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout,
-    crearHashParaUsuario, cerrarSesiones, automatica };
+    crearHashParaUsuario, cerrarSesiones, automatica, llamadaNueva };
 })();

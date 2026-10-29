@@ -38,6 +38,31 @@ function apiHuellasVigentes(token, claves) {
   return CacheHojas.vigentes(validas);
 }
 
+// --- El lote (api.html, 29-oct) ---
+// Varias llamadas «de fondo» de la pantalla (precargar listas, el vigía, revalidar una lista que ya se ve) en UNA
+// ejecución: todos comparten el cupo de ~30 ejecuciones a la vez de la cuenta que despliega. Solo despacha la lista
+// cerrada de abajo (lecturas que piden su propio token; las listas ya se filtran con LISTAS_CON_HUELLA_); cada parte
+// empieza como su propia llamada (Auth.llamadaNueva) y su error no tumba a las demás. source-contracts lo revisa.
+const LOTE_PERMITIDAS_ = ['apiListaConHuella', 'apiHuellasVigentes'];
+const LOTE_MAX_ = 6;
+function apiLote(token, pedidos) {
+  Auth.automatica();   // validar el lote no cuenta como actividad: eso lo decide cada parte
+  Auth.validarSesion(token);
+  if (!Array.isArray(pedidos) || !pedidos.length || pedidos.length > LOTE_MAX_) {
+    throw new Error('El lote debe traer de 1 a ' + LOTE_MAX_ + ' llamadas');
+  }
+  return pedidos.map((p) => {
+    try {
+      const fn = String((p && p.fn) || '');
+      if (LOTE_PERMITIDAS_.indexOf(fn) === -1) throw new Error('No se puede pedir en lote: ' + fn);
+      Auth.llamadaNueva();
+      return { ok: true, v: globalThis[fn].apply(null, Array.isArray(p.args) ? p.args : []) };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  });
+}
+
 // --- Dashboard ---
 // JSON.stringify: incluye fechas (Date/ISO) mezcladas en varias secciones —
 // mismo motivo que apiListarVehiculosResumen (ver comentario más abajo).
