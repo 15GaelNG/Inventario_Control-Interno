@@ -95,7 +95,8 @@ function tabla(renglones, anchos) {
     replaceText: (pat, por) => { t.filas.forEach((r) => r.replaceText(pat, por)); return t; },
     getColumnWidth: (i) => (t.anchos ? t.anchos[i] : null),
     setColumnWidth: (i, w) => { t.anchos[i] = w; return t; },
-    copy: () => { const n = tabla([], t.anchos); n.filas = t.filas.map((r) => r.copy()); return n; },
+    // _contenedor (el ancho de la columna de la página que la contiene, tools/plantillas/modelo.js) viaja con la copia
+    copy: () => { const n = tabla([], t.anchos); n.filas = t.filas.map((r) => r.copy()); n._contenedor = t._contenedor; return n; },
   };
   return t;
 }

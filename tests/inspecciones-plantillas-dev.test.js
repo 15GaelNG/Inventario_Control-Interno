@@ -63,32 +63,52 @@ console.log('1. Agrega N/A a la sección que no lo trae, con el total de ancho i
   ok(t[0][4] === 'N/A', 'encabezado: "Malo" → "N/A" (en la copia de la celda)');
   ok(t[1][4] === marca('PARABRISAS', 'N/A') && t[2][4] === marca('MEDALLON', 'N/A'), 'cada pieza con su fórmula de N/A, igual a las otras');
   ok(t[1][3] === marca('PARABRISAS', 'MALO'), 'la opción de antes no se toca');
-  ok(cristal.anchos.length === 5 && cristal.anchos.slice(1).every((w) => w === 20),
-    'las opciones se reparten parejo, sin bajar de lo que miden en la sección que ya trae N/A (20)');
-  ok(cristal.anchos[0] === 95, 'al nombre solo se le quita lo que faltó (5)');
-  ok(cristal.anchos.reduce((a, b) => a + b, 0) === 175, 'el ancho total no cambia');
-  ok(/opciones miden desde 20 pt/.test(ensayo), 'el ensayo dice cuánto miden las opciones de las secciones con N/A');
+  const necesita = (texto) => ctx.inspDevAnchoTexto_(texto) + 10.5;
+  ok(cristal.anchos.length === 5 && ['Bueno', 'Regular', 'Malo', 'N/A'].every((e, i) => cristal.anchos[i + 1] >= necesita(e) - 0.05),
+    'ninguna opción más angosta que su encabezado (con el relleno): no se parte un «Bueno»');
+  ok(cristal.anchos[0] >= ctx.inspDevAnchoTexto_('Parabrisas', true) + 10.5 && cristal.anchos[0] < 100,
+    'el nombre cede lo que hace falta, sin bajar de lo que mide su pieza más larga (en letra normal)');
+  ok(Math.abs(cristal.anchos.reduce((a, b) => a + b, 0) - 175) < 0.3, 'el ancho total no cambia');
   ok(textos(inventario)[0].length === 5 && textos(datos)[0].length === 2, 'la que ya traía N/A y la de datos, igual');
   ok(doc.guardado === 1, 'se guarda el documento');
   ok(/0 secciones con N\/A nuevo \(0 piezas\) · 2 ya lo traían/.test(ctx.inspeccionesNA3EscribirTodas()), 'correrla otra vez no agrega otra columna');
 }
 
-console.log('2. Los anchos: primero las opciones, el nombre solo si hace falta');
+console.log('2. Los anchos: lo que mide cada texto (Arial negrita 6.5 pt, como sale el PDF)');
 {
+  const x0 = armar([]);
+  const mide = (t) => Math.round(x0.ctx.inspDevAnchoTexto_(t) * 10) / 10;
+  ok(mide('Bueno') === 20.2 && mide('Regular') === 24.2, 'las medidas: «Bueno» 20.2 pt y «Regular» 24.2 pt (con 10 de relleno: se partía en 27, cabía en 35)');
+
   const holgada = seccion('Cristalería 10%', ['Parabrisas'], ['Bueno', 'Regular', 'Malo'], false, [140, 46, 46, 48]);
-  const conNA = seccion('Inventarios 10%', ['Gato'], ['Bueno', 'Regular', 'Malo'], true, [100, 30, 30, 30, 30]);
-  const x = armar([holgada, conNA]);
+  const x = armar([holgada]);
   x.ctx.inspeccionesNA2EscribirAutos();
-  ok(holgada.anchos[0] === 140 && holgada.anchos.slice(1).every((w) => w === 35), 'opciones holgadas: el nombre no se toca (4 × 35)');
+  ok(holgada.anchos[0] === 140 && holgada.anchos.slice(1).every((w) => w === 35), 'con espacio de sobra: el nombre igual y las opciones parejas (4 × 35)');
 
   const angosta = seccion('Niveles 10%', ['Aceite'], ['Bueno', 'Regular', 'Malo'], false, [40, 30, 30, 30]);
   const { ctx } = armar([angosta]);
   const ensayo = ctx.inspeccionesNA1Ensayo();
   ctx.inspeccionesNA2EscribirAutos();
-  const a = angosta.anchos;
-  ok(a[0] === 24, 'sin sección con N/A de referencia, el mínimo es la opción de hoy; el nombre baja solo hasta el 60%');
-  ok(Math.abs(a.reduce((p, q) => p + q, 0) - 130) < 0.5 && a.slice(1).every((w) => w === a[1]), 'las opciones, parejas, y el total igual');
-  ok(/OPCIONES MÁS ANGOSTAS QUE 30 pt/.test(ensayo), 'si quedan bajo el mínimo, el ensayo lo avisa');
+  ok(Math.abs(angosta.anchos.reduce((p, q) => p + q, 0) - 130) < 0.3, 'si no cabe, el total igual');
+  ok(/NO CABE/.test(ensayo), 'y el ensayo lo dice (para hacerla a mano)');
+}
+
+console.log('2c. Una sección que se sale de su columna de la página se acomoda dentro');
+{
+  // Como "Sistemas interiores" en la página 2: 280 pt en una columna de 258 (el PDF le cortaba la N/A)
+  const ancha = seccion('Sistemas interiores 10%', ['Luces altas', 'Mandos/botonera de vidrios y seguros'], ['Bueno', 'Regular', 'Malo'], true, [140, 35, 38.9, 35.4, 30.7]);
+  ancha._contenedor = 258.1;
+  const cabe = seccion('Inventarios 10%', ['Gato'], ['Bueno', 'Regular', 'Malo'], true, [140, 35, 38, 35.5, 31.5]);
+  cabe._contenedor = 280;
+  const { ctx } = armar([ancha, cabe]);
+  const ensayo = ctx.inspeccionesNA1Ensayo();
+  ok(/1 se salían de su columna/.test(ensayo) && /"Sistemas interiores 10%" \(ya traía N\/A; se salía de su columna\)/.test(ensayo), 'el ensayo la reporta');
+  ctx.inspeccionesNA2EscribirAutos();
+  const a = ancha.anchos;
+  ok(a.reduce((p, q) => p + q, 0) <= 258.1 + 0.3, 'ya cabe en su columna (' + Math.round(a.reduce((p, q) => p + q, 0) * 10) / 10 + ' pt)');
+  ok(['Bueno', 'Regular', 'Malo', 'N/A'].every((e, i) => a[i + 1] >= ctx.inspDevAnchoTexto_(e) + 10.5 - 0.05) &&
+    a[0] >= ctx.inspDevAnchoTexto_('Mandos/botonera de vidrios y seguros', true) + 10.5 - 0.05, 'sin partir encabezados ni el nombre más largo');
+  ok(cabe.anchos.join(',') === '140,35,38,35.5,31.5', 'la que sí cabe no se toca');
 }
 
 console.log('2b. Un tipo con los mismos anchos que otro no los repite en el reporte');

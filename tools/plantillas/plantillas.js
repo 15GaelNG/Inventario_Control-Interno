@@ -8,6 +8,7 @@
  *                                                            No escribe nada.
  *   node tools/plantillas/plantillas.js convertir TIPO …      si el ensayo cuadra: copia su "(DEV)" a "(DEV NUEVO)", aplica
  *   node tools/plantillas/plantillas.js convertir --todas      los cambios por la API (columnas N/A, marcas, reemplazos), la
+ *   … convertir … --rehacer                                    (reemplaza la "(DEV NUEVO)" que ya existe, cuando la nueva pasó)
  *                                                            vuelve a bajar y repite las comparaciones sobre lo real, más
  *                                                            una contra el ensayo. Si algo no cuadra, la manda a la papelera.
  *
@@ -85,11 +86,11 @@ function reportar(lineas, x) {
   if (mas > 0) lineas.push('      … y más');
 }
 
-async function convertir(e, c, t, viejo, ensayo) {
+async function convertir(e, c, t, viejo, ensayo, rehacer) {
   const nombreNuevo = viejo.nombre.replace(/\(DEV\)$/, '(DEV NUEVO)');
   const ya = await g.buscar("name = '" + nombreNuevo.replace(/'/g, "\\'") + "' and '" + c.carpeta + "' in parents and trashed = false");
-  if (ya.length) return { ok: false, texto: 'ya existe "' + nombreNuevo + '" (mándala a la papelera para rehacerla)' };
-  const copia = await g.copiar(t.id, nombreNuevo, c.carpeta);
+  if (ya.length && !rehacer) return { ok: false, texto: 'ya existe "' + nombreNuevo + '" (convertir --rehacer la reemplaza)' };
+  const copia = await g.copiar(viejo.id, nombreNuevo, c.carpeta);
   let ok = false;
   try {
     await exigirNuestro(copia.id, c.carpeta, '(DEV NUEVO)');
@@ -123,6 +124,13 @@ async function convertir(e, c, t, viejo, ensayo) {
         .concat(e.ctx.inspDevComparar_(ensayo.convertido, real).map((d) => 'contra el ensayo: ' + d));
     }
     ok = !x.pendientes.length && !x.errores.length && !x.diferencias.length;
+    // Con --rehacer, la anterior se va a la papelera solo cuando la nueva ya pasó todo
+    if (ok) {
+      for (const anterior of ya) {
+        await exigirNuestro(anterior.id, c.carpeta, '(DEV NUEVO)');
+        await g.aPapelera(anterior.id);
+      }
+    }
     return { ok: ok, texto: ok ? 'convertida: "' + nombreNuevo + '" (' + copia.id + ')' : 'lo real no cuadró', detalle: x };
   } finally {
     if (!ok) {
@@ -139,7 +147,8 @@ async function main() {
     process.exit(1);
   }
   const todas = resto.indexOf('--todas') !== -1;
-  const pedidos = resto.filter((x) => x !== '--todas').map(normal);
+  const rehacer = resto.indexOf('--rehacer') !== -1;
+  const pedidos = resto.filter((x) => !/^--/.test(x)).map(normal);
   if (accion === 'convertir' && !todas && !pedidos.length) throw new Error('Di qué tipos convertir (o --todas)');
 
   const c = await contexto();
@@ -153,15 +162,23 @@ async function main() {
   for (const t of elegidos) {
     const lineas = [];
     try {
-      const a = await exigirNuestro(t.id, c.carpeta, '(DEV)');
-      const viejo = { nombre: a.name, cuerpo: modelo.cuerpo(await g.documento(t.id)) };
+      // La fuente es siempre la copia (DEV) del tipo, aunque el DEV ya use su (DEV NUEVO)
+      let fuente = await g.archivo(t.id);
+      if (/\(DEV NUEVO\)$/.test(fuente.name)) {
+        const nombre = fuente.name.replace(/\(DEV NUEVO\)$/, '(DEV)');
+        const [x] = await g.buscar("name = '" + nombre.replace(/'/g, "\\'") + "' and '" + c.carpeta + "' in parents and trashed = false");
+        if (!x) throw new Error('no encontré su "' + nombre + '"');
+        fuente = x;
+      }
+      const a = await exigirNuestro(fuente.id, c.carpeta, '(DEV)');
+      const viejo = { id: a.id, nombre: a.name, cuerpo: modelo.cuerpo(await g.documento(a.id)) };
       const ensayo = ensayar(e, t.tipo, viejo.nombre, viejo.cuerpo);
       const cuadra = !ensayo.pendientes.length && !ensayo.errores.length && !ensayo.diferencias.length;
       lineas.push((cuadra ? '  ✔ ' : '  ✘ ') + t.tipo + ': ' + ensayo.resumen + (cuadra ? ' · la estructura y el oráculo dan lo mismo' : ''));
       reportar(lineas, ensayo);
       if (accion === 'ensayo') ensayo.anchos.forEach((x) => lineas.push('      ' + x));
       if (accion === 'convertir' && cuadra) {
-        const r = await convertir(e, c, t, viejo, ensayo);
+        const r = await convertir(e, c, t, viejo, ensayo, rehacer);
         lineas.push((r.ok ? '      ✔ ' : '      ✘ ') + r.texto);
         if (r.detalle) reportar(lineas, r.detalle);
         if (r.ok) bien++;

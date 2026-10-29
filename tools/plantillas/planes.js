@@ -1,7 +1,8 @@
 /**
  * planes.js — los cambios de la conversión al formato nuevo, como peticiones de documents.batchUpdate, en tres tandas
  * (cada una sobre el documento recién bajado, porque los índices se recorren con cada cambio):
- *   1. columnas: la columna N/A donde falte, con sus anchos (inspDevAgregarNA_ decide cuáles y cuánto, en memoria);
+ *   1. columnas: la columna N/A donde falte y los anchos (también de una tabla que se salía de su columna de la página);
+ *      inspDevAgregarNA_ decide cuáles y cuánto, en memoria;
  *   2. textos: «N/A» en el encabezado nuevo y ` {{PIEZA}}` junto al nombre de cada pieza (de atrás para adelante);
  *   3. reemplazos: replaceAllText de cada marca de AppSheet a la nueva (conserva el formato de cada una).
  * Son funciones puras sobre el modelo (modelo.js, con los índices reales en `_api`) y el entorno (entorno.js).
@@ -22,19 +23,22 @@ function opcionesDe(renglon, opcion) {
 function planColumnas(e, cuerpo) {
   const opcion = e.valor('INSP_CONV_OPCION');
   const tablas = e.ctx.inspDevTablas_(cuerpo);
-  const antes = tablas.map((t) => t.filas[0].celdas.length);
+  const antes = tablas.map((t) => ({ columnas: t.filas[0].celdas.length, anchos: JSON.stringify(t.anchos) }));
   const na = e.ctx.inspDevAgregarNA_(cuerpo, true);
   const requests = [];
-  const conNA = [];
+  const cambian = [];
   tablas.forEach((t, k) => {
-    if (t.filas[0].celdas.length === antes[k]) return;
+    const nueva = t.filas[0].celdas.length !== antes[k].columnas;
+    // Una tabla cambia si se le agregó la columna N/A o si solo se reacomodaron sus anchos (se salía de su columna)
+    if (!nueva && JSON.stringify(t.anchos) === antes[k].anchos) return;
     const renglon = t.filas.findIndex((f) => opcionesDe(f, opcion).length);
-    conNA.push({ k: k, columnas: antes[k], inicio: t._api.inicio, renglon: renglon, anchos: t.anchos ? t.anchos.slice() : null });
+    cambian.push({ k: k, nueva: nueva, columnas: antes[k].columnas, inicio: t._api.inicio, renglon: renglon, anchos: t.anchos ? t.anchos.slice() : null });
   });
+  const conNA = cambian.filter((x) => x.nueva);
   // De la última tabla a la primera: insertar en una no recorre los índices de las de antes
-  conNA.sort((a, b) => b.inicio - a.inicio).forEach((x) => {
+  cambian.sort((a, b) => b.inicio - a.inicio).forEach((x) => {
     const tabla = { index: x.inicio };
-    requests.push({ insertTableColumn: { tableCellLocation: { tableStartLocation: tabla, rowIndex: x.renglon, columnIndex: x.columnas - 1 }, insertRight: true } });
+    if (x.nueva) requests.push({ insertTableColumn: { tableCellLocation: { tableStartLocation: tabla, rowIndex: x.renglon, columnIndex: x.columnas - 1 }, insertRight: true } });
     (x.anchos || []).forEach((w, i) => {
       requests.push({ updateTableColumnProperties: { tableStartLocation: tabla, columnIndices: [i],
         tableColumnProperties: { widthType: 'FIXED_WIDTH', width: { magnitude: w, unit: 'PT' } }, fields: 'widthType,width' } });

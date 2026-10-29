@@ -205,18 +205,21 @@ function inspeccionesUsarConvertidas() {
       const tipo = String(f['TIPO'] || '').trim();
       const id = String(f['PLANTILLA'] || '').trim();
       if (!tipo || !id) return;
-      if (deAppSheet[tipo]) {
+      // Su copia (DEV): la de la hoja o, si ya usa una convertida, la que se guardó al cambiarla
+      const deDev = deAppSheet[tipo] || id;
+      const nombre = DriveApp.getFileById(deDev).getName();
+      const nueva = /\(DEV\)$/.test(nombre) ? nuevas[nombre.replace(/\(DEV\)$/, '(DEV NUEVO)')] : null;
+      if (nueva && nueva === id) {
         lineas.push('  = ' + tipo + ': ya usa su convertida');
         return;
       }
-      const nombre = DriveApp.getFileById(id).getName();
-      const nueva = /\(DEV\)$/.test(nombre) ? nuevas[nombre.replace(/\(DEV\)$/, '(DEV NUEVO)')] : null;
       if (!nueva) {
-        lineas.push('  · ' + tipo + ': sin convertida, sigue con "' + nombre + '"');
+        lineas.push('  · ' + tipo + ': sin convertida, sigue con "' + DriveApp.getFileById(id).getName() + '"');
         return;
       }
+      // Nueva, o una que se rehízo (tools/plantillas convertir --rehacer)
       cambios.push({ fila: i + 2, cambios: { PLANTILLA: nueva } });
-      deAppSheet[tipo] = id;
+      deAppSheet[tipo] = deDev;
       tocados.push(tipo);
       lineas.push('  ✔ ' + tipo + ' → ' + nombre.replace(/\(DEV\)$/, '(DEV NUEVO)'));
     });
@@ -690,7 +693,6 @@ function inspeccionesProbarMotor() {
  *   inspeccionesNA2EscribirAutos()   solo AUTOS, para revisar su PDF antes que las demás.
  *   inspeccionesNA3EscribirTodas()   las que falten (una sección que ya trae N/A no se vuelve a tocar).
  */
-const INSP_NA_NOMBRE_MIN = 0.6;
 const INSP_NA_MARCA = /<<IF\(\[([^\]]+)\]\s*=\s*"([^"]*)"/i;
 
 function inspeccionesNA1Ensayo() {
@@ -740,7 +742,7 @@ function inspDevNA_(cfg) {
     const aviso = r.saltadas.length || r.problemas.length;
     lineas.push('  ' + (aviso ? '⚠ ' : '✔ ') + tipo + ': ' + r.secciones + ' secciones ' +
       (cfg.escribir ? 'con N/A nuevo' : 'sin N/A') + ' (' + r.piezas + ' piezas) · ' + r.yaTraian + ' ya lo traían' +
-      (r.minOpcion ? ' (sus opciones miden desde ' + Math.round(r.minOpcion * 10) / 10 + ' pt)' : ''));
+      (r.ajustadas ? ' · ' + r.ajustadas + ' se salían de su columna' : ''));
     // Un tipo con los mismos anchos que otro ya reportado no los repite (el registro del editor se corta)
     const firma = r.anchos.join('\n');
     if (firma && anchosVistos[firma]) lineas.push('      anchos: igual que ' + anchosVistos[firma]);
@@ -758,14 +760,11 @@ function inspDevNA_(cfg) {
   return texto;
 }
 
-/** La columna N/A en las secciones de un documento (del formato de AppSheet) que no la traen. → el reporte { secciones, … } */
+/** La columna N/A en las secciones de un documento (del formato de AppSheet) que no la traen, y las que ya la traen
+ * pero se salen de su columna de la página (el PDF las recorta). → el reporte { secciones, ajustadas, … } */
 function inspDevAgregarNA_(body, escribir) {
-  const r = { secciones: 0, piezas: 0, yaTraian: 0, opcionesConNA: [], anchos: [], saltadas: [], problemas: [] };
-  const tablas = inspDevTablas_(body);
-  // Primero se miden las secciones que ya traen N/A: el ancho de sus opciones es el mínimo para las nuevas
-  tablas.forEach((t) => inspDevNATabla_(t, { medir: true }, r));
-  r.minOpcion = r.opcionesConNA.length ? Math.min.apply(null, r.opcionesConNA) : null;
-  tablas.forEach((t) => inspDevNATabla_(t, { escribir: escribir }, r));
+  const r = { secciones: 0, piezas: 0, yaTraian: 0, ajustadas: 0, anchos: [], saltadas: [], problemas: [] };
+  inspDevTablas_(body).forEach((t) => inspDevNATabla_(t, { escribir: escribir }, r));
   return r;
 }
 
@@ -795,7 +794,7 @@ function inspDevTablas_(contenedor) {
 
 const inspDevRegex_ = (s) => String(s).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 
-/** modo.medir: solo junta el ancho de las opciones de las secciones que ya traen N/A; si no, cuenta (y con escribir, cambia). */
+/** Modo para inspDevNATabla_: `escribir` cambia el documento; sin él solo cuenta y reporta. */
 function inspDevNATabla_(tabla, modo, r) {
   const filas = [];
   for (let i = 0; i < tabla.getNumRows(); i++) {
@@ -810,40 +809,47 @@ function inspDevNATabla_(tabla, modo, r) {
   const piezas = filas.filter((f) => f.marcas.length);
   if (!piezas.length) return;   // no es del checklist: datos, firmas, llantas en mm
   const titulo = String(tabla.getRow(0).getCell(0).getText()).replace(/\s+/g, ' ').trim().slice(0, 40);
+  const n = filas[0].celdas;
+  const primeraOpcion = Math.min.apply(null, piezas.map((f) => f.marcas[0].c));
+  const primeraPieza = filas.indexOf(piezas[0]);
+  const anchos = [];
+  for (let c = 0; c < n; c++) anchos.push(tabla.getColumnWidth(c));
+  // El encabezado (el renglón antes de la primera pieza con texto en la última columna) y los nombres de las piezas
+  const encabezado = filas.slice(0, primeraPieza).reverse().find((f) => f.celdas === n && String(f.renglon.getCell(n - 1).getText()).trim());
+  const etiquetas = [];
+  for (let c = primeraOpcion; encabezado && c < n; c++) etiquetas.push(String(encabezado.renglon.getCell(c).getText()).trim());
+  const nombres = piezas.map((f) => {
+    let c = f.marcas[0].c - 1;
+    while (c >= 0 && !String(f.renglon.getCell(c).getText()).trim()) c--;
+    return c >= 0 ? String(f.renglon.getCell(c).getText()).trim() : '';
+  });
+  const contenedor = inspDevAnchoContenedor_(tabla);
+
   if (piezas.some((f) => f.marcas.some((m) => /^N\/?A$/i.test(m.opcion)))) {
-    if (!modo.medir) {
-      r.yaTraian++;
-      return;
-    }
-    const desde = Math.min.apply(null, piezas.map((f) => f.marcas[0].c));
-    for (let c = desde; c < filas[0].celdas; c++) {
-      const w = tabla.getColumnWidth(c);
-      if (w) r.opcionesConNA.push(w);
-    }
+    r.yaTraian++;
+    // Ya trae N/A; solo si se sale de su columna de la página (el PDF la recorta) se acomoda dentro
+    const total = anchos.reduce((a, b) => a + (b || 0), 0);
+    if (!contenedor || !etiquetas.length || anchos.some((w) => !w) || total <= contenedor + 0.5) return;
+    const ajuste = inspDevAnchos_(anchos, primeraOpcion, etiquetas, nombres, contenedor);
+    r.ajustadas++;
+    r.anchos.push('"' + titulo + '" (ya traía N/A; se salía de su columna): ' + ajuste.texto);
+    if (modo.escribir && ajuste.anchos) ajuste.anchos.forEach((w, c) => tabla.setColumnWidth(c, w));
     return;
   }
-  if (modo.medir) return;
-  const n = filas[0].celdas;
   const raro = filas.some((f) => f.celdas !== n) ? 'renglones con distinto número de celdas'
     : piezas.some((f) => f.marcas[f.marcas.length - 1].c !== n - 1) ? 'la última opción no está en la última columna'
       : piezas.some((f) => f.marcas.some((m) => m.pieza !== f.marcas[0].pieza)) ? 'dos piezas en un renglón'
-        : '';
+        : !encabezado ? 'no encontré el renglón de encabezado' : '';
   if (raro) {
     r.saltadas.push('"' + titulo + '": ' + raro);
     return;
   }
   r.secciones++;
   r.piezas += piezas.length;
-
-  // Los anchos: el total se queda igual
-  const primeraOpcion = Math.min.apply(null, piezas.map((f) => f.marcas[0].c));
-  const anchos = [];
-  for (let c = 0; c < n; c++) anchos.push(tabla.getColumnWidth(c));
-  const nuevos = inspDevAnchos_(anchos, primeraOpcion, r.minOpcion);
+  const nuevos = inspDevAnchos_(anchos, primeraOpcion, etiquetas.concat(['N/A']), nombres, contenedor);
   r.anchos.push('"' + titulo + '": ' + nuevos.texto);
 
   if (!modo.escribir) return;
-  const primeraPieza = filas.indexOf(piezas[0]);
   filas.forEach((f, i) => {
     const ultima = f.renglon.getCell(n - 1);
     const nueva = f.renglon.appendTableCell(ultima.copy());
@@ -862,35 +868,130 @@ function inspDevNATabla_(tabla, modo, r) {
 }
 
 /**
- * Los anchos con una columna más, sin cambiar el total: { anchos (o null si la tabla no los fija), texto }. El espacio
- * sale primero de las OPCIONES (una palomita no necesita mucho; angostar el nombre lo parte en más renglones y la hoja
- * crece): las opciones, con la nueva, se reparten parejo lo que ya medían, sin bajar de `minOpcion` (lo que miden en las
- * secciones que ya traen N/A; sin ese dato, lo que mide hoy la más angosta). Lo que falte sale de la columna de nombre
- * más ancha, sin bajarla de INSP_NA_NOMBRE_MIN; si ni así alcanza, las opciones quedan por debajo del mínimo (avisa).
+ * Ancho (pt) de un texto en el PDF: PdfService lo exporta en Arial (FORMATO_PDF) y los encabezados y nombres van a 6.5 pt
+ * en negritas. Medidas de Arial/Helvetica negrita (milésimas de em), las mismas de cualquier PDF; lo que no está en la
+ * tabla cuenta como una letra ancha. Con el relleno de Docs (5 pt por lado) explica lo que se vio el 29-oct: «Bueno»
+ * (20.2 pt + 10) se partía en 27 pt y «Regular» (24.2 + 10) cabía en 35.
  */
-function inspDevAnchos_(anchos, primeraOpcion, minOpcion) {
-  if (anchos.some((w) => !w)) return { anchos: null, texto: 'anchos automáticos (Docs reparte la columna nueva solo)' };
+const INSP_ARIAL_NEGRITA = {
+  ' ': 278, '/': 278, '.': 278, ',': 278, '-': 333, '%': 889, '(': 333, ')': 333, '0': 556, '1': 556, '2': 556, '3': 556, '4': 556,
+  '5': 556, '6': 556, '7': 556, '8': 556, '9': 556, A: 722, B: 722, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 556,
+  K: 722, L: 611, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611,
+  a: 556, b: 611, c: 556, d: 611, e: 556, f: 333, g: 611, h: 611, i: 278, j: 278, k: 556, l: 278, m: 889, n: 611, o: 611, p: 611,
+  q: 611, r: 389, s: 556, t: 333, u: 611, v: 556, w: 778, x: 556, y: 556, z: 500,
+};
+/** Arial/Helvetica de peso normal: los nombres de las piezas (los encabezados van en negritas) */
+const INSP_ARIAL = {
+  ' ': 278, '/': 278, '.': 278, ',': 278, '-': 333, '%': 889, '(': 333, ')': 333, '0': 556, '1': 556, '2': 556, '3': 556, '4': 556,
+  '5': 556, '6': 556, '7': 556, '8': 556, '9': 556, A: 667, B: 667, C: 722, D: 722, E: 667, F: 611, G: 778, H: 722, I: 278, J: 500,
+  K: 667, L: 556, M: 833, N: 722, O: 778, P: 667, Q: 778, R: 722, S: 667, T: 611, U: 722, V: 667, W: 944, X: 667, Y: 667, Z: 611,
+  a: 556, b: 556, c: 500, d: 556, e: 556, f: 278, g: 556, h: 556, i: 222, j: 222, k: 500, l: 222, m: 833, n: 556, o: 556, p: 556,
+  q: 556, r: 333, s: 500, t: 278, u: 556, v: 500, w: 722, x: 500, y: 500, z: 500,
+};
+const INSP_LETRA_PT = 6.5;
+const INSP_RELLENO_PT = 10.5;   // 5 pt por lado (el de Docs) y medio punto de holgura
+
+/** Ancho (pt) de un texto a 6.5 pt en Arial: en negritas (encabezados, por omisión) o normal (los nombres de las piezas) */
+function inspDevAnchoTexto_(texto, normal) {
+  const medidas = normal ? INSP_ARIAL : INSP_ARIAL_NEGRITA;
+  const limpio = String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  let milesimas = 0;
+  for (const letra of limpio) milesimas += medidas[letra] || 722;
+  return milesimas / 1000 * INSP_LETRA_PT;
+}
+
+/**
+ * El ancho útil (pt) de la celda del acomodo de la página que contiene a la tabla, o null. En la herramienta local el
+ * modelo lo trae (`_contenedor`); en Apps Script se suma el ancho de las columnas que abarca la celda.
+ */
+function inspDevAnchoContenedor_(tabla) {
+  if (tabla._contenedor !== undefined) return tabla._contenedor;
+  try {
+    const celda = tabla.getParent();
+    if (!celda || celda.getType() !== DocumentApp.ElementType.TABLE_CELL) return null;
+    const renglon = celda.asTableCell().getParentRow();
+    const acomodo = renglon.getParentTable();
+    let inicio = 0;
+    for (let c = 0; c < renglon.getChildIndex(celda); c++) inicio += Math.max(1, renglon.getCell(c).getColSpan() || 1);
+    let ancho = 0;
+    for (let c = inicio; c < inicio + Math.max(1, celda.asTableCell().getColSpan() || 1); c++) ancho += acomodo.getColumnWidth(c) || 0;
+    return ancho || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Los anchos de una sección: { anchos (o null si la tabla no los fija), texto }. Las opciones son las de `etiquetas`
+ * (con la N/A nueva, si se agrega: una más que las columnas de opción de `anchos`). El total es el de hoy, salvo que la tabla se
+ * salga de su columna de la página (`contenedor`): entonces el de la columna; y si con el de hoy no cabe lo que necesita,
+ * crece lo justo dentro de su columna (Latonería mide 248.5 en una columna de 280).
+ *   - Cada opción necesita lo que mide su encabezado (inspDevAnchoTexto_ + relleno); el nombre, lo que mide su pieza
+ *     más larga. Así nunca se parte un «Bueno» ni un nombre.
+ *   - Si alcanza, las opciones van parejas (todas lo que necesita la más ancha) y el nombre se queda con lo que mide hoy
+ *     o con lo que sobra; si no, el nombre baja hasta lo que necesita y las opciones se reparten lo demás sin bajar de lo
+ *     suyo. Si ni así cabe, se dice (NO CABE) y se aprietan las opciones en proporción.
+ */
+function inspDevAnchos_(anchos, primeraOpcion, etiquetas, nombres, contenedor) {
+  if (anchos.some((w) => !w)) {
+    return { anchos: null, texto: 'anchos automáticos (Docs reparte la columna nueva solo)' };
+  }
+  const suma = (xs) => xs.reduce((a, b) => a + (b || 0), 0);
   const redondo = (w) => Math.round(w * 10) / 10;
-  const total = anchos.reduce((a, b) => a + b, 0);
-  const opciones = anchos.slice(primeraOpcion);
-  const enOpciones = opciones.reduce((a, b) => a + b, 0);
-  const n = opciones.length + 1;
-  const minimo = minOpcion || Math.min.apply(null, opciones);
+  const total = suma(anchos);
   let nombre = 0;
   for (let c = 1; c < primeraOpcion; c++) if (anchos[c] > anchos[nombre]) nombre = c;
-  const falta = Math.max(0, minimo * n - enOpciones);
-  const cede = Math.min(falta, anchos[nombre] * (1 - INSP_NA_NOMBRE_MIN));
-  const cadaOpcion = (enOpciones + cede) / n;
+  const fijas = suma(anchos.slice(0, primeraOpcion)) - anchos[nombre];
+  const n = etiquetas.length;
+  const necesita = etiquetas.map((e) => inspDevAnchoTexto_(e) + INSP_RELLENO_PT);
+  // Un nombre que hoy cabe en un renglón no se parte; uno que ya ocupa varios ("Guardafango/salpicadera posterior
+  // izquierda") puede angostarse mientras no necesite MÁS renglones (con 5 pt de holgura y sin partir una palabra)
+  const util = anchos[nombre] - INSP_RELLENO_PT;
+  const nombreNecesita = Math.max.apply(null, [0].concat(nombres.map((t) => {
+    const ancho = inspDevAnchoTexto_(t, true);
+    if (ancho <= util) return ancho + INSP_RELLENO_PT;
+    const renglones = Math.ceil(ancho / util);
+    const palabra = Math.max.apply(null, String(t).split(/[\s/]+/).map((p) => inspDevAnchoTexto_(p, true)));
+    return Math.max(ancho / renglones + 5, palabra) + INSP_RELLENO_PT;
+  })));
+  // El total: el de hoy; si así no cabe, crece lo justo sin pasar de su columna de la página; si ya se salía, el de su columna
+  const minimo = fijas + nombreNecesita + suma(necesita);
+  const objetivo = contenedor ? Math.min(contenedor, Math.max(total, minimo)) : total;
+  const disponible = objetivo - fijas;
+  const pareja = Math.max.apply(null, necesita);
+  let wNombre;
+  let opciones;
+  let apretado = false;
+  if (disponible - n * pareja >= nombreNecesita) {
+    wNombre = Math.min(anchos[nombre], disponible - n * pareja);
+    opciones = necesita.map(() => (disponible - wNombre) / n);
+  } else {
+    wNombre = Math.min(anchos[nombre], Math.max(nombreNecesita, disponible - suma(necesita)));
+    const resto = disponible - wNombre;
+    if (resto < suma(necesita) - 0.05) {
+      apretado = true;
+      opciones = necesita.map((x) => x * resto / suma(necesita));
+    } else {
+      // Al mismo nivel L las que necesitan menos; las que necesitan más, lo suyo
+      let nivel = resto / n;
+      for (let i = 0; i < n; i++) {
+        const grandes = necesita.filter((x) => x > nivel);
+        nivel = (resto - suma(grandes)) / (n - grandes.length);
+      }
+      opciones = necesita.map((x) => Math.max(x, nivel));
+    }
+  }
   const resultado = anchos.slice(0, primeraOpcion);
-  resultado[nombre] = anchos[nombre] - cede;
-  for (let i = 0; i < n; i++) resultado.push(cadaOpcion);
-  const fin = resultado.map(redondo);
-  const suma = fin.reduce((a, b) => a + b, 0);
+  resultado[nombre] = wNombre;
+  const fin = resultado.concat(opciones).map(redondo);
+  const antes = anchos.slice(primeraOpcion).filter((w) => w);
   return {
     anchos: fin,
-    texto: 'nombre ' + redondo(anchos[nombre]) + '→' + fin[nombre] + ' pt, opciones ' + redondo(Math.min.apply(null, opciones)) +
-      '→' + redondo(cadaOpcion) + ' pt (total ' + redondo(total) + ' pt' +
-      (cadaOpcion < minimo - 0.05 ? ', OPCIONES MÁS ANGOSTAS QUE ' + redondo(minimo) + ' pt' : '') +
-      (Math.abs(suma - total) > 0.5 ? ', NO CUADRA' : '') + ')',
+    texto: 'nombre ' + redondo(anchos[nombre]) + '→' + fin[nombre] + ' pt, opciones ' +
+      redondo(Math.min.apply(null, antes)) + '–' + redondo(Math.max.apply(null, antes)) + '→' +
+      redondo(Math.min.apply(null, opciones)) + '–' + redondo(Math.max.apply(null, opciones)) + ' pt (total ' + redondo(total) +
+      (redondo(suma(fin)) !== redondo(total) ? '→' + redondo(suma(fin)) : '') + ' pt' +
+      (contenedor && total > contenedor + 0.5 ? ', su columna mide ' + redondo(contenedor) : '') +
+      (apretado ? ', NO CABE: las opciones quedan más angostas que su texto' : '') + ')',
   };
 }

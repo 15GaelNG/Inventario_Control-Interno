@@ -24,14 +24,26 @@ function contenido(lista) {
 }
 
 function tabla(el) {
-  const renglones = el.table.tableRows.map((r) => r.tableCells.map((c) => {
-    const celda = D.celda('');
-    const hijos = contenido(c.content);
-    celda.hijos = hijos.length ? hijos : [D.parrafo('')];
-    celda._api = { inicio: c.startIndex, fin: c.endIndex };
-    return celda;
-  }));
   const propiedades = (el.table.tableStyle && el.table.tableStyle.tableColumnProperties) || [];
+  const anchoColumna = (i) => (propiedades[i] && propiedades[i].width ? propiedades[i].width.magnitude : null);
+  const renglones = el.table.tableRows.map((r) => {
+    let columna = 0;
+    return r.tableCells.map((c) => {
+      const celda = D.celda('');
+      const hijos = contenido(c.content);
+      celda.hijos = hijos.length ? hijos : [D.parrafo('')];
+      celda._api = { inicio: c.startIndex, fin: c.endIndex };
+      // El ancho útil de la celda (las columnas que abarca, menos su relleno): el tope de las tablas que lleva adentro
+      const estilo = c.tableCellStyle || {};
+      const abarca = Math.max(1, estilo.columnSpan || 1);
+      let ancho = 0;
+      for (let i = columna; i < columna + abarca; i++) ancho = ancho === null || anchoColumna(i) === null ? null : ancho + anchoColumna(i);
+      const relleno = ['paddingLeft', 'paddingRight'].reduce((s, k) => s + Math.max(0, (estilo[k] && estilo[k].magnitude) || 0), 0);
+      hijos.filter((h) => h.getType() === 'TABLE').forEach((t) => { t._contenedor = ancho === null ? null : ancho - relleno; });
+      columna += abarca;
+      return celda;
+    });
+  });
   // Un ancho que la tabla no fija (columna repartida por Docs) queda null: inspDevAnchos_ lo dice y no los cambia
   const anchos = propiedades.length === el.table.columns
     ? propiedades.map((p) => (p.width && p.width.magnitude ? p.width.magnitude : null))
