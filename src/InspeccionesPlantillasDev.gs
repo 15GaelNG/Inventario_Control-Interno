@@ -86,39 +86,46 @@ function inspeccionesPlantillasAOriginales() {
   });
 }
 
-/** Solo lee: cada tabla de la plantilla de un tipo, renglón por renglón (cuántas celdas y qué dice cada una). */
+/**
+ * Solo lee: cada tabla de la plantilla de un tipo (también las que van dentro de una celda), renglón por renglón. En
+ * cada celda, su texto; un marcador IF se resume como =OPCION ("=BUENO"), así se ve qué opciones tiene cada pieza.
+ * Sin tipo, AUTOS.
+ */
 function inspeccionesDescribirPlantilla(tipo) {
   soloEditor_();
-  const buscado = SheetUtils.normalizarEncabezado_(tipo || 'AUTOS');
+  tipo = tipo || 'AUTOS';
+  const buscado = SheetUtils.normalizarEncabezado_(tipo);
   const fila = SheetUtils.getAll(Config.SPREADSHEET_IDS.VEHICULOS(), 'MODELOS INSPECCION')
     .find((f) => SheetUtils.normalizarEncabezado_(f['TIPO']) === buscado);
   if (!fila) throw new Error('No está el tipo "' + tipo + '" en MODELOS INSPECCION.');
   const doc = DocumentApp.openById(String(fila['PLANTILLA']).trim());
-  const corto = (s) => String(s).replace(/\s+/g, ' ').trim().slice(0, 70);
+  const T = DocumentApp.ElementType;
+  const corto = (s) => String(s).replace(/<<IF\(\[[^\]]+\]\s*=\s*"([^"]*)"[^>]*>>/gi, '=$1').replace(/\s+/g, ' ').trim().slice(0, 60);
   const lineas = ['PLANTILLA "' + doc.getName() + '" (' + tipo + ')', ''];
-  const cuerpo = doc.getBody();
   let tablas = 0;
-  for (let i = 0; i < cuerpo.getNumChildren(); i++) {
-    const el = cuerpo.getChild(i);
-    if (el.getType() !== DocumentApp.ElementType.TABLE) {
-      const texto = corto(el.asText ? el.asText().getText() : '');
-      if (texto) lineas.push('[' + i + '] ' + el.getType() + ': ' + texto);
-      continue;
-    }
+  function tabla(t, sangria, ruta) {
     tablas++;
-    const tabla = el.asTable();
-    lineas.push('[' + i + '] TABLA ' + tablas + ': ' + tabla.getNumRows() + ' renglones');
-    for (let r = 0; r < tabla.getNumRows(); r++) {
-      const renglon = tabla.getRow(r);
+    lineas.push(sangria + 'TABLA ' + ruta + ': ' + t.getNumRows() + ' renglones');
+    for (let r = 0; r < t.getNumRows(); r++) {
+      const renglon = t.getRow(r);
       const celdas = [];
+      const dentro = [];
       for (let c = 0; c < renglon.getNumCells(); c++) {
         const celda = renglon.getCell(c);
-        const anidadas = celda.getNumChildren() && [...Array(celda.getNumChildren()).keys()]
-          .filter((k) => celda.getChild(k).getType() === DocumentApp.ElementType.TABLE).length;
-        celdas.push((anidadas ? '{' + anidadas + ' tabla(s)} ' : '') + corto(celda.getText()));
+        let anidadas = 0;
+        for (let k = 0; k < celda.getNumChildren(); k++) {
+          if (celda.getChild(k).getType() === T.TABLE) dentro.push([celda.getChild(k).asTable(), ruta + '.r' + r + 'c' + c + '.' + (++anidadas)]);
+        }
+        celdas.push(anidadas ? '{' + anidadas + ' tabla(s)}' : corto(celda.getText()));
       }
-      lineas.push('    r' + r + ' (' + celdas.length + ' celdas): ' + celdas.join(' | '));
+      lineas.push(sangria + '  r' + r + ' (' + celdas.length + '): ' + celdas.join(' | '));
+      dentro.forEach(([t2, ruta2]) => tabla(t2, sangria + '    ', ruta2));
     }
+  }
+  const cuerpo = doc.getBody();
+  for (let i = 0; i < cuerpo.getNumChildren(); i++) {
+    const el = cuerpo.getChild(i);
+    if (el.getType() === T.TABLE) tabla(el.asTable(), '', String(i));
   }
   lineas.push('', tablas + ' tablas en total');
   const texto = lineas.join('\n');
