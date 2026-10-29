@@ -73,7 +73,7 @@ console.log('2. Analizar: la estructura del checklist sale de las tablas');
 console.log('3. Revisar: todos los errores, con dónde y qué hacer');
 {
   const malo = D.tabla([
-    ['Cristalería', 'Bueno', 'Malo'],
+    ['Cristalería 10%', 'Bueno', 'Malo'],
     ['Parabrisa {{PARABRISA}}', '', ''],
     ['Faros {{FIRMA INSPECTOR}}', '', ''],
     ['Medallón {{MEDALLON}}', '{{MEDALLON}}', ''],
@@ -84,15 +84,38 @@ console.log('3. Revisar: todos los errores, con dónde y qué hacer');
   const errores = M.revisar(M.analizar(cuerpo), CONTRATO);
   const hay = (re) => errores.some((e) => re.test(e.donde + ': ' + e.mensaje));
   ok(hay(/sección «Cristalería», renglón 2: no existe el campo PARABRISA\. ¿Quisiste decir PARABRISAS\?/), 'campo desconocido, con dónde y sugerencia');
+  ok(!hay(/sin el peso/), 'una sección sin peso ya no existe: sin "N%" la tabla no es checklist');
   ok(hay(/FIRMA INSPECTOR es una imagen/), 'una imagen no puede ser pieza');
   ok(hay(/renglón 4: una celda de opción trae una marca/), 'una marca en una celda de opción');
   ok(hay(/renglón 5: la celda de «Bueno» trae texto/), 'texto en una celda de opción');
   ok(hay(/renglón 6: PARABRISAS ya está en sección «Cristalería», renglón 5/), 'una pieza repetida');
-  ok(hay(/su título no trae el peso/), 'una sección sin peso');
   ok(hay(/no se entiende \{\{IF/), 'una fórmula dentro de {{ }}: el cálculo va en el código');
   ok(hay(/\{\{si …\}\} sin su \{\{fin\}\}/), 'un bloque sin cerrar');
   ok(hay(/marca de AppSheet/) && hay(/documento: mezcla marcas/), 'una marca de AppSheet en un documento nuevo');
-  ok(errores.length >= 9, 'los da todos de una vez (' + errores.length + '), no solo el primero');
+  ok(errores.length >= 8, 'los da todos de una vez (' + errores.length + '), no solo el primero');
+}
+
+console.log('3b. Casos límite del lenguaje');
+{
+  // Una tabla de datos con un renglón de títulos cortos NO es checklist (no tiene "N%"): sus marcas son valores
+  const firmas = D.tabla([['', 'Nombre', 'Puesto'], ['Responsable', '{{RESPONSABLE}}', '{{PLACAS}}']]);
+  const a = M.analizar(D.cuerpo([firmas]));
+  ok(!a.secciones.length && M.revisar(a, CONTRATO).length === 0 && a.marcas.length === 2, 'tabla de datos con títulos: no es checklist ni da errores falsos');
+  const anidado = M.revisar(M.analizar(D.cuerpo(['{{si PLACAS}} a {{si RESPONSABLE}} b {{fin}} c {{fin}}'])), CONTRATO);
+  ok(anidado.some((e) => /dentro de otro bloque: no se permite/.test(e.mensaje)), 'un {{si}} dentro de otro: error (no se cierra con el {{fin}} equivocado)');
+  const vacio = M.revisar(M.analizar(D.cuerpo(['{{}} y {{  }} y {{si}}'])), CONTRATO);
+  ok(vacio.filter((e) => /no se entiende/.test(e.mensaje)).length === 3, 'marcas vacías o un {{si}} sin campo: error');
+  ok(M.revisar(M.analizar(D.cuerpo(['{{fin}}'])), CONTRATO).some((e) => /\{\{fin\}\} sin su/.test(e.mensaje)), 'un {{fin}} suelto: error');
+  const llave = M.analizar(D.cuerpo(['Un { suelto y } otro y {{PLACAS}}']));
+  ok(M.revisar(llave, CONTRATO).length === 0 && llave.marcas.length === 1, 'una llave sencilla en el texto no es marca');
+
+  const raros = D.cuerpo(['A: {{PLACAS}} / B: {{PLACAS}} / C: {{RESPONSABLE}} / {{si PLACAS}}[{{RESPONSABLE}}]{{fin}}']);
+  M.llenar(raros, { PLACAS: '$1 \\ (x)* {{RESPONSABLE}}', RESPONSABLE: 'Ana' }, CONTRATO);
+  ok(raros.getText() === 'A: $1 \\ (x)* { {RESPONSABLE}} / B: $1 \\ (x)* { {RESPONSABLE}} / C: Ana / [Ana]',
+    'la misma marca dos veces, valores con $, \\, paréntesis y "{{" (se escribe "{ {"), y un bloque con marca adentro');
+  const sinValor = D.cuerpo(['{{si PLACAS}}x{{fin}}|{{si RESPONSABLE}}y{{fin}}']);
+  M.llenar(sinValor, { PLACAS: 'FALSE', RESPONSABLE: '  ' }, CONTRATO);
+  ok(sinValor.getText() === '|', 'un bloque no sale con FALSE ni con espacios');
 }
 
 console.log('4. Llenar');

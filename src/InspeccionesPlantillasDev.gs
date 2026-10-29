@@ -11,6 +11,7 @@
  *   inspeccionesPlantillasAOriginales()   regresa la hoja a los IDs originales (las copias se quedan en la carpeta).
  *   inspeccionesDescribirPlantilla('AUTOS')   solo lee: cómo están armadas las tablas de una plantilla.
  *   inspeccionesNA1Ensayo() / NA2EscribirAutos() / NA3EscribirTodas()   la columna N/A en las copias (abajo).
+ *   inspeccionesProbarMotor()             el motor nuevo de plantillas en un Google Docs de verdad (temporal).
  */
 
 const INSP_DEV_CARPETA = 'PLANTILLAS INSPECCION DEV';
@@ -130,6 +131,85 @@ function inspeccionesDescribirPlantilla(tipo) {
   }
   lineas.push('', tablas + ' tablas en total');
   const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+// ---------------------------------------------------------------- el motor nuevo contra Google Docs de verdad (29-oct)
+
+/**
+ * Las pruebas de MotorPlantillas corren contra un Docs simulado; esto lo comprueba en Google Docs: crea un documento
+ * temporal en la raíz del DEV con datos, un checklist en el acomodo a dos columnas y llantas, lo revisa, lo llena, lo
+ * vuelve a abrir y compara cada celda (también que el formato de una marca pase a su valor y que $ o \ en un valor
+ * lleguen tal cual: replaceText de Docs usa RE2). Al final lo manda a la papelera. Solo lee y escribe ese documento.
+ */
+function inspeccionesProbarMotor() {
+  soloEditor_();
+  inspDevNoEnProd_();
+  const resultado = [];
+  const ok = (cond, texto) => resultado.push((cond ? '  ✔ ' : '  ✘ ') + texto);
+  const archivo = DriveUtils.crearConApi({ name: 'PRUEBA MOTOR DE PLANTILLAS (se borra sola)', mimeType: 'application/vnd.google-apps.document',
+    parents: [Config.DRIVE_FOLDERS.RAIZ()] }, null, { supportsAllDrives: true }, { temporal: true });
+  try {
+    let doc = DocumentApp.openById(archivo.id);
+    let body = doc.getBody();
+    const p1 = body.appendParagraph('Placas: {{PLACAS}} · otra vez {{ placas }} · quien: {{RESPONSABLE}}');
+    p1.editAsText().setBold(8, 17, true);   // "{{PLACAS}}" en negritas: su valor debe quedar en negritas
+    body.appendParagraph('{{si OBSERVACIONES}}Obs: {{OBSERVACIONES}}{{fin}}|{{si VACIO}}no sale{{fin}}');
+    const acomodo = body.appendTable([['', '']]);
+    acomodo.getCell(0, 0).appendTable([
+      ['Cristalería 10%', 'Bueno', 'Regular', 'Malo', 'N/A'],
+      ['Parabrisas {{PARABRISAS}}', '', '', '', ''],
+      ['Medallón {{MEDALLÓN}}', '', '', '', ''],
+    ]);
+    acomodo.getCell(0, 1).appendTable([
+      ['Neumáticos 15%', 'Bueno', 'Regular', 'Malo'],
+      ['Delantera derecha {{LLANTA DD ESTADO}}', '', '', ''],
+    ]);
+    const contrato = { campos: {
+      PLACAS: 'texto', RESPONSABLE: 'texto', OBSERVACIONES: 'texto', VACIO: 'texto', PARABRISAS: 'opcion', MEDALLON: 'opcion',
+      'LLANTA DD': 'numero', 'LLANTA DD ESTADO': { tipo: 'opcion', marca: 'LLANTA DD' },
+    } };
+
+    const arbol = MotorPlantillas.analizar(body);
+    const errores = MotorPlantillas.revisar(arbol, contrato);
+    ok(errores.length === 0, 'la plantilla se revisa sin errores' + (errores.length ? ':\n' + MotorPlantillas.textoErrores(errores) : ''));
+    ok(arbol.secciones.map((s) => s.titulo + ' ' + s.peso + ' [' + s.opciones.join(',') + ']').join(' | ') ===
+      'Cristalería 10 [Bueno,Regular,Malo,N/A] | Neumáticos 15 [Bueno,Regular,Malo]', 'las secciones salen de las tablas anidadas');
+
+    const r = MotorPlantillas.llenar(body, {
+      PLACAS: 'AB-1 $1', RESPONSABLE: 'Ana \\ Pérez', OBSERVACIONES: 'Todo bien', VACIO: '',
+      PARABRISAS: 'BUENO', MEDALLON: 'n/a', 'LLANTA DD': '3.2', 'LLANTA DD ESTADO': 'REGULAR',
+    }, contrato);
+    doc.saveAndClose();
+
+    doc = DocumentApp.openById(archivo.id);
+    body = doc.getBody();
+    const parrafos = [];
+    for (let i = 0; i < body.getNumChildren(); i++) {
+      const el = body.getChild(i);
+      if (el.getType() === DocumentApp.ElementType.PARAGRAPH && el.asParagraph().getText()) parrafos.push(el.asParagraph());
+    }
+    ok(parrafos[0] && parrafos[0].getText() === 'Placas: AB-1 $1 · otra vez AB-1 $1 · quien: Ana \\ Pérez',
+      'valores (la misma marca dos veces, con espacios dentro, y $ y \\ tal cual): «' + (parrafos[0] && parrafos[0].getText()) + '»');
+    ok(parrafos[0] && parrafos[0].editAsText().isBold(8) === true && parrafos[0].editAsText().isBold(20) !== true,
+      'el formato de la marca (negritas) pasa a su valor; lo demás, igual');
+    ok(parrafos[1] && parrafos[1].getText() === 'Obs: Todo bien|', 'el bloque con valor sale y el vacío no: «' + (parrafos[1] && parrafos[1].getText()) + '»');
+    const tablaDe = (c) => body.getTables()[0].getCell(0, c).getChild(1).asTable();
+    const fila = (t, r2) => { const x = []; for (let c = 0; c < t.getRow(r2).getNumCells(); c++) x.push(t.getCell(r2, c).getText()); return x.join('|'); };
+    ok(fila(tablaDe(0), 1) === 'Parabrisas|✓|||', 'la palomita en su columna y la marca borrada: «' + fila(tablaDe(0), 1) + '»');
+    ok(fila(tablaDe(0), 2) === 'Medallón||||✓', 'el valor se compara sin mayúsculas (n/a → N/A): «' + fila(tablaDe(0), 2) + '»');
+    ok(fila(tablaDe(1), 1) === 'Delantera derecha||3.2|', 'la llanta: sus mm en la columna de su estado: «' + fila(tablaDe(1), 1) + '»');
+    ok(r.sinResolver.length === 0, 'sin pendientes');
+    ok(!/\{\{/.test(body.getText()), 'no quedó ninguna marca en el documento');
+    doc.saveAndClose();
+  } catch (err) {
+    resultado.push('  ✘ tronó: ' + err.message);
+  } finally {
+    DriveUtils.aPapelera(DriveApp.getFileById(archivo.id), { temporal: true });
+  }
+  const texto = ['MOTOR DE PLANTILLAS EN GOOGLE DOCS', ''].concat(resultado,
+    ['', resultado.some((x) => /✘/.test(x)) ? 'HAY FALLAS: pégalas en el chat.' : 'TODO OK']).join('\n');
   Logger.log(texto);
   return texto;
 }

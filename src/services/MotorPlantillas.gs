@@ -53,6 +53,7 @@ const MotorPlantillas = (function () {
   function leerMarca_(contenido) {
     const t = String(contenido).replace(/\s+/g, ' ').trim();
     if (/^fin$/i.test(t)) return { tipo: 'fin' };
+    if (/^si$/i.test(t)) return { error: 'no se entiende {{si}}: le falta el campo ({{si OBSERVACIONES}})' };
     const si = /^si (.+)$/i.exec(t);
     const nombre = si ? si[1].trim() : t;
     if (!NOMBRE_VALIDO.test(nombre)) {
@@ -77,6 +78,7 @@ const MotorPlantillas = (function () {
     // Los bloques abren y cierran en el mismo párrafo
     let abiertos = 0;
     lista.forEach((x) => {
+      if (x.tipo === 'si' && abiertos) errores.push({ donde: donde, mensaje: '{{si ' + x.campo + '}} dentro de otro bloque: no se permite (calcula un campo que junte las dos condiciones)' });
       if (x.tipo === 'si') abiertos++;
       if (x.tipo === 'fin') {
         if (!abiertos) errores.push({ donde: donde, mensaje: '{{fin}} sin su {{si …}} antes (en el mismo párrafo)' });
@@ -130,16 +132,18 @@ const MotorPlantillas = (function () {
   }
 
   /**
-   * Las secciones de checklist de una tabla sin tablas adentro: [{ titulo, peso, opciones, piezas: [{ campo, etiqueta,
-   * renglon, celda (la del nombre), opciones: [celdas] }] }]. Un renglón con marca bajo un encabezado es una pieza si la
-   * marca está antes de la primera columna de opción.
+   * La sección de checklist de una tabla sin tablas adentro, o null: { titulo, peso, opciones, piezas: [{ campo,
+   * etiqueta, renglon, celda (la del nombre), opcionesCeldas }] }. Una tabla es de checklist si su primera celda es el
+   * título con su peso ("Cristalería 10%"): así una tabla de datos con un renglón de títulos ("Nombre | Puesto") nunca
+   * se confunde. Un renglón con marca bajo un encabezado de opciones es una pieza si la marca está antes de la primera
+   * columna de opción.
    */
   function checklistDe_(tabla, donde, errores) {
     const filas = renglones_(tabla);
     const textos = filas.map((r) => celdas_(r).map((c) => String(c.getText() || '')));
-    const titulo0 = (textos[0] && textos[0][0]) || '';
-    const tituloPeso = /^([\s\S]*?)\s*(\d{1,3})\s*%\s*$/.exec(titulo0.trim());
-    const seccion = { titulo: tituloPeso ? tituloPeso[1].trim() : titulo0.trim(), peso: tituloPeso ? Number(tituloPeso[2]) : null, opciones: [], piezas: [] };
+    const tituloPeso = /^([\s\S]*?)\s*(\d{1,3})\s*%\s*$/.exec(((textos[0] && textos[0][0]) || '').trim());
+    if (!tituloPeso || !tituloPeso[1].trim()) return null;
+    const seccion = { titulo: tituloPeso[1].trim(), peso: Number(tituloPeso[2]), opciones: [], piezas: [] };
     let desde = -1;
     let renglonEncabezado = -1;
     filas.forEach((renglon, r) => {
@@ -277,7 +281,6 @@ const MotorPlantillas = (function () {
     arbol.bloques.forEach((b) => desconocido(b.campo, b.donde));
     const vistas = {};
     arbol.secciones.forEach((s) => {
-      if (s.peso === null) errores.push({ donde: 'sección «' + s.titulo + '»', mensaje: 'su título no trae el peso ("Cristalería 10%")' });
       s.piezas.forEach((p) => {
         if (desconocido(p.campo, p.donde)) return;
         const def = mapa[clave(p.campo)];
@@ -366,11 +369,13 @@ const MotorPlantillas = (function () {
         const sale = String(valor_(datos, m[1])).trim() !== '' && String(valor_(datos, m[1])).toUpperCase() !== 'FALSE';
         texto.replaceText(escapar_(m[0]), sale ? m[2] : '');
         marcadores++;
+        if (texto.getText() === contenido) throw new Error('No se pudo llenar el bloque ' + m[0].slice(0, 40) + '…');
         contenido = texto.getText();
       }
+      // Un valor que trae "{{" se escribe como "{ {": si no, la siguiente marca lo llenaría como si fuera de la plantilla
       (contenido.match(MARCA) || []).forEach((literal) => {
         const marca = leerMarca_(literal.slice(2, -2));
-        texto.replaceText(escapar_(literal), String(valor_(datos, marca.campo)));
+        texto.replaceText(escapar_(literal), String(valor_(datos, marca.campo)).replace(/\{\{/g, '{ {'));
         marcadores++;
       });
     });
