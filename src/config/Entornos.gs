@@ -30,7 +30,9 @@ const ENTORNOS = {
     MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas',
 
     // El código por correo al entrar desde un dispositivo nuevo (Verificacion.gs): encendido aquí desde el 26-oct-2026, como
-    // en los DEV. Para apagarlo de emergencia: VERIFICACION_DOS_PASOS: 'APAGADA' (y desplegar).
+    // en los DEV. Para apagarlo de emergencia: VERIFICACION_DOS_PASOS: 'APAGADA' (y desplegar). Solo lo del dispositivo
+    // (nuevo, vencido, otro navegador), dejando el código por contraseñas malas y por alerta: VERIFICACION_DISPOSITIVOS:
+    // 'APAGADA' (29-oct). Los dos también como propiedad del proyecto, sin desplegar, si aquí no están.
 
     // El link que usa el equipo (CLAUDE.md, "dos links"): a él lleva el enlace de "¿Olvidaste tu contraseña?" (23-oct)
     // La forma general (/macros/s/…), no la del dominio (/a/macros/ciudadmaderas.com/…): esa pide cuenta del dominio y POST VENTA es de gph
