@@ -488,6 +488,22 @@ cada llamada). Por eso:
   `Calentador.gs`. Es un activador que la rehace cada 10 min: se instala una vez por proyecto
   con `instalarCalentador()` desde el editor. Un contrato revisa que cada paso exista.
 
+**El cupo: ~30 ejecuciones a la vez para TODOS** (29-oct). La app corre con la cuenta de quien despliega, así que todas
+las pestañas de todos y los activadores comparten el cupo de Apps Script; al llenarse sale «Hay demasiadas secuencias de
+comandos ejecutándose de forma simultánea…». Correr con la cuenta de cada quien lo repartiría, pero exigiría permisos
+individuales en todo: descartado. Todo vive en la capa de transporte (`api.html`), así que **los módulos no cambian**:
+- A lo más 4 llamadas en curso por pestaña (`llamadasConfig`) y ese error se reintenta solo, con espera al azar:
+  Google lo da antes de correr la función, así que es seguro aun si escribe. `verTiempos()` lo cuenta (`saturado:…`).
+- **Lo de fondo va en lote**: precargar (`precargarLista`), revalidar una lista que ya se ve y el vigía se juntan y
+  viajan como UNA ejecución (`apiLote`, ClientApi.gs, de a 6). Una llamada de fondo nueva usa `pedirFondo_` o
+  `pedirLista_(…, true)`; lo que la persona espera (guardar, abrir una ficha, una lista sin copia) nunca. Una api… que
+  deba poder ir en lote entra a `LOTE_PERMITIDAS_` solo si es de lectura y pide su token (contrato). Cada parte empieza
+  como su propia llamada (`Auth.llamadaNueva`) y su error no tumba a las demás.
+- **Un solo vigía por navegador** (`VigiaCompartido`): la pestaña con el candado `vigia:<correo>` (Web Locks) pregunta
+  por todas con las claves que le publican las demás (BroadcastChannel) y cada una repide solo lo suyo; si se cierra,
+  otra toma el relevo. Al cerrar sesión o vencer, `VigiaCompartido.desconectar()`. Sin esas APIs, cada pestaña sola.
+- Pruebas: `llamadas-cliente`, `lote-cliente`, `lote-servidor`, `vigia-pestanas`.
+
 ## Flujo de trabajo
 
 - Rama de trabajo: `jorge`. Nunca hacer push a `master` sin que se pida

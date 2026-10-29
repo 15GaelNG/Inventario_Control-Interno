@@ -389,12 +389,11 @@
       .filter((m) => permisoDe(m))
       .reduce((t, m) => t.concat(LISTAS_POR_MODULO[m]), [])
       .filter((fn, i, todas) => todas.indexOf(fn) === i);
-    const siguiente = () => {
-      const fn = pendientes.shift();
-      if (fn && state.token) precargarLista(fn, state.token).then(siguiente);
-    };
-    // Primero lo que la persona abre (el inicio); luego, de dos en dos
-    setTimeout(() => { siguiente(); siguiente(); }, 1500);
+    // Primero lo que la persona abre (el inicio); luego todas de una vez: son de fondo, así que api.html las junta en
+    // lotes de 6 (apiLote) y su tope de 4 llamadas en curso ordena el resto (29-oct: antes, una ejecución por lista)
+    setTimeout(() => {
+      if (state.token) pendientes.forEach((fn) => precargarLista(fn, state.token));
+    }, 1500);
   }
 
   async function apiLogoutSafe() {
@@ -414,6 +413,7 @@
   function manejarSesionExpirada() {
     if (sesionExpiradaManejada || !state.token) return;
     sesionExpiradaManejada = true;
+    VigiaCompartido.desconectar();   // sin sesión no puede ser la vigía de las demás pestañas (api.html)
     state.token = null;
     state.sesion = null;
     sessionStorage.clear();

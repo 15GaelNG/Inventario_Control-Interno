@@ -544,8 +544,30 @@ test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con
   const base = read('src/ClientApi.gs');
   ['apiFichaVehiculo', 'apiLineasPanorama', 'apiArqueosPorIdCch', 'apiVerificacionesPorFolio', 'apiOfrenda', 'apiListarSedes']
     .forEach((n) => assert.doesNotMatch(base, new RegExp('^function ' + n + '\\(', 'm'), n + ' vive en su módulo, no en la base'));
-  ['apiPing', 'apiListaConHuella', 'apiResumenInicio', 'apiLogin', 'apiNotificaciones', 'apiQueImpideBorrar', 'partesDeFicha_']
+  ['apiPing', 'apiListaConHuella', 'apiLote', 'apiResumenInicio', 'apiLogin', 'apiNotificaciones', 'apiQueImpideBorrar', 'partesDeFicha_']
     .forEach((n) => assert.match(base, new RegExp('^function ' + n + '\\(', 'm'), n + ' es de todos: en la base'));
+});
+
+test('el lote (apiLote) solo despacha lecturas que piden su propio token (29-oct)', () => {
+  // apiLote corre varias llamadas de fondo en una ejecución (el cupo de ~30 a la vez es de todos). Lo que entra a su lista
+  // cerrada no debe escribir (va sin la persona esperando, y un reintento por cupo repite el lote entero) y debe validar
+  // su sesión con el token, como si se llamara directo.
+  const base = read('src/ClientApi.gs');
+  const m = /const LOTE_PERMITIDAS_ = \[([^\]]*)\]/.exec(base);
+  assert.ok(m, 'la lista cerrada LOTE_PERMITIDAS_ está en ClientApi.gs');
+  const permitidas = [...m[1].matchAll(/'(\w+)'/g)].map((x) => x[1]);
+  assert.deepEqual(permitidas.sort(), ['apiHuellasVigentes', 'apiListaConHuella'],
+    'una api… nueva en el lote se agrega aquí a propósito: que sea de lectura y pida su token');
+  const ESCRIBE = /^api(Crear|Actualizar|Eliminar|Registrar|Subir|Cambiar|Cerrar|Guardar|Marcar|Reactivar|Sincronizar|Reasignar|Borrar|Quitar)/;
+  permitidas.forEach((fn) => {
+    assert.doesNotMatch(fn, ESCRIBE, fn + ' escribe: no va en el lote');
+    assert.match(base, new RegExp('^function ' + fn + '\\(token\\b', 'm'), fn + ' pide su token');
+  });
+  assert.match(base, /if \(LOTE_PERMITIDAS_\.indexOf\(fn\) === -1\) throw/, 'apiLote rechaza lo que no está en la lista');
+  assert.match(base, /Auth\.llamadaNueva\(\);/, 'cada parte empieza como su propia llamada (la marca del vigía no se cuela)');
+  const pantalla = read('src/html/js/api.html');
+  assert.match(pantalla, /const LOTE_MAX = 6;/, 'la pantalla junta de a lo más 6 …');
+  assert.match(base, /const LOTE_MAX_ = 6;/, '… lo mismo que acepta el servidor');
 });
 
 test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin otra copia', () => {
