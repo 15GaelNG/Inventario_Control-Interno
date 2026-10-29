@@ -105,5 +105,35 @@ console.log('4. De punta a punta: el PDF se llena con la estructura y lo calcula
   ok(D.textos(llantas)[3].join('|') === 'Rines|||✓', 'y las piezas, su palomita');
 }
 
+console.log('5. El PDF de prueba: el mismo camino que registrar, sin escribir en la hoja');
+{
+  const hoja = { getLastColumn: () => COLUMNAS.length, getRange: () => ({ getValues: () => [COLUMNAS] }) };
+  let pedido = null;
+  let escrituras = 0;
+  const ctx = vm.createContext({
+    Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'SS' }, DRIVE_FOLDERS: { MODELOS: () => 'MOD', RAIZ: () => 'RAIZ' } },
+    SheetUtils: {
+      getAll: (ss, nombre) => (nombre === 'MODELOS INSPECCION' ? [{ TIPO: 'AUTOS', PLANTILLA: 'DOC-AUTOS', FRONTAL: 'MODELOS INSPECCION/AUTOS/FRONTAL.png' }] : []),
+      getSheetByColumns: () => hoja, normalizarEncabezado_: (s) => String(s == null ? '' : s).trim().toUpperCase(),
+      insert: () => { escrituras++; }, update: () => { escrituras++; },
+    },
+    Permisos: { puedeLeer: () => ({}) },
+    CacheService: { getScriptCache: () => ({ get: () => null, put: () => {} }) },
+    DocumentApp: Object.assign({}, D.DocumentApp, { openById: () => ({ getBody: () => plantillaAutos() }) }),
+    DriveUtils: { archivoDeRutaProfunda: (ruta) => ({ getBlob: () => 'dibujo:' + ruta }) },
+    PdfService: { generar: (p) => { pedido = p; return { url: 'https://pdf', sinResolver: [] }; } },
+    Plantilla: {}, Utilities: {},
+  });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'MotorPlantillas.gs'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') + '\nthis.S = InspeccionesService;', ctx);
+  const r = ctx.S.pdfDePrueba_('AUTOS', { PLACAS: 'ABC', 'LLANTA DD': '1.4' }, { 'FIRMA INSPECTOR': 'firma' }, 'CARPETA', 'PRUEBA AUTOS');
+  ok(r.url === 'https://pdf' && pedido.plantillaId === 'DOC-AUTOS' && pedido.carpetaId === 'CARPETA' && pedido.nombre === 'PRUEBA AUTOS', 'genera con la plantilla del tipo, donde y como se le pide');
+  ok(pedido.contrato && pedido.contrato.campos.PLACAS === 'texto' && pedido.datos['LLANTA DD MALO'] === 'SI', 'con su contrato y lo calculado (presentar_)');
+  ok(pedido.imagenes['INS FRONTAL'].blob === 'dibujo:MODELOS INSPECCION/AUTOS/FRONTAL.png' && pedido.imagenes['FIRMA INSPECTOR'].ancho === 150 &&
+    pedido.datos['FIRMA RESPONSABLE'] === '', 'el dibujo en blanco del tipo, la firma en su caja de 150 × 60 y la que no llegó, vacía');
+  ok(pedido.formato && pedido.formato.fuente === 'Arial', 'con el formato del PDF de la app (Arial y sus márgenes)');
+  ok(escrituras === 0, 'y no escribe nada en la hoja');
+}
+
 if (fallas) { console.error('\n' + fallas + ' FALLA(S)'); process.exit(1); }
 console.log('\nTODO OK');

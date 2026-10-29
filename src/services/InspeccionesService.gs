@@ -1179,6 +1179,38 @@ const InspeccionesService = (function () {
   }
 
   /**
+   * Un PDF de prueba del formato de un tipo, por el mismo camino que registrar (su plantilla, presentar_, el contrato, los
+   * diagramas en blanco del tipo, las firmas en su caja y FORMATO_PDF), SIN escribir nada en la hoja. Para revisar cómo sale
+   * una plantilla sin capturar una inspección (inspeccionesPdfDePrueba en InspeccionesPlantillasDev.gs).
+   * @param {Object} datos   las columnas, como la fila de registrar
+   * @param {Object} firmas  { 'FIRMA RESPONSABLE': blob, … } (opcional)
+   * → lo de PdfService.generar, más sinDibujo (los diagramas que no están en Drive)
+   */
+  function pdfDePrueba_(tipo, datos, firmas, carpetaId, nombre) {
+    const estructura = estructura_(tipo);
+    const paraPdf = {};
+    const sinDibujo = [];
+    estructura.diagramas.forEach((d) => {
+      const archivo = DriveUtils.archivoDeRutaProfunda(d.ruta, raizDe_(d.ruta));
+      if (archivo) paraPdf[d.campo] = { blob: archivo.getBlob() };
+      else sinDibujo.push(d.etiqueta);
+    });
+    Object.keys(firmas || {}).forEach((c) => { paraPdf[c] = Object.assign({ blob: firmas[c] }, FIRMA_PDF); });
+    const vacias = {};
+    COLUMNAS_IMAGEN.forEach(([c]) => { if (!paraPdf[c]) vacias[c] = ''; });
+    const pdf = PdfService.generar({
+      plantillaId: estructura.plantillaId,
+      datos: presentar_(Object.assign({ TIPO: estructura.tipo }, datos, vacias)),
+      imagenes: paraPdf,
+      formato: FORMATO_PDF,
+      contrato: estructura.formato === 'nuevo' ? contrato_() : null,
+      carpetaId: carpetaId,
+      nombre: nombre,
+    });
+    return Object.assign({ sinDibujo: sinDibujo }, pdf);
+  }
+
+  /**
    * Formato nuevo: el checklist leído de las tablas de la plantilla (MotorPlantillas.analizar), en el orden del
    * documento; las opciones salen del encabezado de cada tabla. Una plantilla con errores truena con todos ellos.
    * → { secciones, llantas: [columna] }
@@ -1593,6 +1625,7 @@ const InspeccionesService = (function () {
     calcularPuntaje_, valorDeRespuesta_, seccionesFotos_, presentar_, contrato_,   // expuestas para las pruebas
     reagruparSiAplica_,   // la compara InspeccionesPlantillasDev con la estructura leída de las tablas
     estructura_,          // revisarEntorno (Diagnostico.gs): que el checklist de cada plantilla se pueda armar
+    pdfDePrueba_,         // InspeccionesPlantillasDev: un PDF con datos de ejemplo, sin capturar una inspección
   };
 })();
 

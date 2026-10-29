@@ -13,6 +13,7 @@
  *   inspeccionesNA1Ensayo() / NA2EscribirAutos() / NA3EscribirTodas()   la columna N/A en las copias (abajo).
  *   inspeccionesProbarMotor()             el motor nuevo de plantillas en un Google Docs de verdad (temporal).
  *   inspeccionesConvertir1EnsayoAutos() / 2EscribirAutos() / 3EscribirTodas()   al formato nuevo, con oráculo (abajo).
+ *   inspeccionesPdfDePrueba() / inspeccionesPdfDePruebaTodos()   un PDF con datos de ejemplo, sin capturar (abajo).
  */
 
 const INSP_DEV_CARPETA = 'PLANTILLAS INSPECCION DEV';
@@ -994,4 +995,91 @@ function inspDevAnchos_(anchos, primeraOpcion, etiquetas, nombres, contenedor) {
       (contenedor && total > contenedor + 0.5 ? ', su columna mide ' + redondo(contenedor) : '') +
       (apretado ? ', NO CABE: las opciones quedan más angostas que su texto' : '') + ')',
   };
+}
+
+// ---------------------------------------------------------------- PDF de prueba (29-oct)
+
+/**
+ * Un PDF por tipo con datos de ejemplo, para ver cómo sale una plantilla SIN capturar ni guardar ninguna inspección: por
+ * el mismo camino que la app (InspeccionesService.pdfDePrueba_: su plantilla, letra, márgenes, diagramas y firmas). Cada
+ * pieza va en una opción distinta (rotando), para que haya palomitas en todas las columnas, también la N/A; las llantas
+ * y el voltaje caen en sus distintos rangos.
+ *
+ *   inspeccionesPdfDePrueba()        el de INSP_PDF_PRUEBA_TIPO (lo rehace)
+ *   inspeccionesPdfDePruebaTodos()   todos los tipos, hasta donde alcance el tiempo (córrela otra vez: salta los que ya
+ *                                    tienen el suyo)
+ * Quedan en "PLANTILLAS INSPECCION DEV/PDF DE PRUEBA" como "PRUEBA <TIPO>.pdf". No escribe en ninguna hoja.
+ */
+const INSP_PDF_PRUEBA_TIPO = 'RAM 700';
+const INSP_PDF_PRUEBA_CARPETA = 'PDF DE PRUEBA';
+/** Una firma de ejemplo (200 × 80, un trazo azul): con ella el PDF ocupa lo mismo que uno firmado */
+const INSP_FIRMA_PRUEBA = 'iVBORw0KGgoAAAANSUhEUgAAAMgAAABQCAYAAABcbTqwAAABLElEQVR42u3c2xGCMBRF0VRCYVZsV2oJzCTBc3PXmvFXIbBNwMcYAAAAAAAAAAAAAAAAAAAAAMAe1+v9ufMwUohCLAhj3cOI0noZJRTah7HquYw2x8SxMzojT+lZIz1AKDdriARxbHhtR4XoOLptA0QvcSy5EIfZBEsqkSAO24o4bDPisO3MHhAX4yIRwmFf2T7ttqlIikThLpD9EkbRWDp82CaSP4SxMzZx2NeScSRH6GSx3+XDmJlZKu+nJZcwYmPxG2+zyVEDNHuR759CRNJmmdHlFrPzwTtGRCxyCA8ldX3voDIS/pcr6ffLTiBWztblbq8JgydDKXPiWnZQfjm748WEQbvpK/6iChIviISBUEQB62IxagAAAAAAAAAAAAAAAAAAAAAAAPx8AT+C6kcTQv+GAAAAAElFTkSuQmCC';
+
+function inspeccionesPdfDePrueba() {
+  soloEditor_();
+  return inspDevPdfDePrueba_([INSP_PDF_PRUEBA_TIPO], true);
+}
+
+function inspeccionesPdfDePruebaTodos() {
+  soloEditor_();
+  return inspDevPdfDePrueba_(null, false);
+}
+
+/** Los datos de ejemplo de un tipo: lo de la ficha, cada pieza en una opción distinta, llantas y voltaje, y el puntaje */
+function inspDevDatosEjemplo_(tipo) {
+  const e = InspeccionesService.estructura_(tipo);
+  const datos = {
+    FECHA: new Date(), RESPONSABLE: 'RESPONSABLE DE PRUEBA', DEPARTAMENTO: 'DEPARTAMENTO DE PRUEBA', AREA: 'ÁREA DE PRUEBA',
+    SEDE: 'SEDE', 'OFICINA / DESARROLLO': 'OFICINA', CONDUCTOR: 'CONDUCTOR DE PRUEBA', 'JEFE DIRECTO': 'JEFE DE PRUEBA',
+    NUCO: '0000', VEHICULO: tipo, 'NO SERIE': 'SERIE DE PRUEBA', 'MODELO / AÑO': '2024', PLACAS: 'ABC-123',
+    'FECHA ULTIMO SERVICIO': new Date(), HOLOGRAMA: '0', 'TIPO COMBUSTIBLE': 'GASOLINA', VOLTAJE: '12.5',
+    OBSERVACIONES: 'PDF de prueba: cada pieza va en una opción distinta para ver todas las columnas.',
+    'NOMBRE INSPECTOR': 'INSPECTOR DE PRUEBA',
+  };
+  const checklist = {};
+  let k = 0;
+  e.secciones.forEach((s) => s.campos.forEach((c) => { checklist[c.campo] = c.opciones[k++ % c.opciones.length]; }));
+  e.llantas.forEach((l, i) => { datos[l.campo] = ['1.4', '3.2', '5.5', '7'][i % 4]; });
+  datos['PUNTAJE FINAL INSPECCION'] = InspeccionesService.calcularPuntaje_(e.secciones, checklist).final.toFixed(2) + '%';
+  return Object.assign(datos, checklist);
+}
+
+function inspDevPdfDePrueba_(tipos, rehacer) {
+  inspDevNoEnProd_();
+  const inicio = Date.now();
+  const norm = (t) => SheetUtils.normalizarEncabezado_(t);
+  const carpeta = DriveUtils.subcarpeta(DriveUtils.subcarpeta(DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ()), INSP_DEV_CARPETA), INSP_PDF_PRUEBA_CARPETA);
+  const todos = SheetUtils.getAll(Config.SPREADSHEET_IDS.VEHICULOS(), 'MODELOS INSPECCION').map((f) => String(f['TIPO'] || '').trim()).filter(Boolean);
+  const elegidos = tipos ? todos.filter((t) => tipos.map(norm).indexOf(norm(t)) !== -1) : todos;
+  const firma = () => Utilities.newBlob(Utilities.base64Decode(INSP_FIRMA_PRUEBA), 'image/png', 'firma.png');
+  const lineas = ['PDF DE PRUEBA — carpeta "' + INSP_DEV_CARPETA + '/' + INSP_PDF_PRUEBA_CARPETA + '"', ''];
+  const faltan = [];
+  elegidos.forEach((tipo) => {
+    const nombre = 'PRUEBA ' + tipo;
+    const anteriores = [];
+    const ya = carpeta.getFilesByName(nombre + '.pdf');
+    while (ya.hasNext()) anteriores.push(ya.next());
+    if (anteriores.length && !rehacer) {
+      lineas.push('  = ' + tipo + ': ya tiene su PDF');
+      return;
+    }
+    if (Date.now() - inicio > INSP_CONV_TIEMPO_MS) {
+      faltan.push(tipo);
+      return;
+    }
+    try {
+      anteriores.forEach((a) => DriveUtils.aPapelera(a));   // antes, para que el nuevo se llame igual
+      const r = InspeccionesService.pdfDePrueba_(tipo, inspDevDatosEjemplo_(tipo),
+        { 'FIRMA RESPONSABLE': firma(), 'FIRMA INSPECTOR': firma() }, carpeta.getId(), nombre);
+      lineas.push('  ✔ ' + tipo + ': ' + r.url +
+        (r.sinResolver && r.sinResolver.length ? '\n      SIN RESOLVER: ' + r.sinResolver.join('; ') : '') +
+        (r.sinDibujo.length ? '\n      sin dibujo en Drive: ' + r.sinDibujo.join(', ') : ''));
+    } catch (err) {
+      lineas.push('  ✘ ' + tipo + ': ' + err.message);
+    }
+  });
+  if (faltan.length) lineas.push('', 'Se acabó el tiempo de esta corrida; faltan: ' + faltan.join(', ') + '. Córrela otra vez para seguir.');
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
 }
