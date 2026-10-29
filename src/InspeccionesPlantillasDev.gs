@@ -242,11 +242,13 @@ function inspDevConvertir_(cfg) {
     let seQueda = false;
     try {
       const r = inspDevConvertirDoc_(nuevo.getId(), contrato);
-      const diferencias = r.pendientes.length || r.errores.length ? [] : inspDevOraculo_(id, nuevo.getId(), contrato, carpeta);
+      const diferencias = r.pendientes.length || r.errores.length ? []
+        : inspDevCompararEstructura_(tipo, DocumentApp.openById(id).getBody().getText(), r.arbol, contrato)
+          .concat(inspDevOraculo_(id, nuevo.getId(), contrato, carpeta));
       const bien = !r.pendientes.length && !r.errores.length && !diferencias.length;
       lineas.push((bien ? '  ✔ ' : '  ✘ ') + tipo + ': ' + r.piezas + ' piezas, ' + r.bloques + ' bloques y ' + r.valores +
         ' valores convertidos · N/A nuevo en ' + r.na.secciones + ' secciones' +
-        (bien ? ' · el oráculo da lo mismo' : ''));
+        (bien ? ' · la estructura y el oráculo dan lo mismo' : ''));
       r.pendientes.slice(0, 15).forEach((x) => lineas.push('      PENDIENTE ' + x));
       r.errores.slice(0, 15).forEach((e) => lineas.push('      ERROR ' + e.donde + ': ' + e.mensaje));
       diferencias.slice(0, 15).forEach((d) => lineas.push('      DIFERENCIA ' + d));
@@ -365,8 +367,54 @@ function inspDevConvertirDoc_(docId, contrato) {
   });
   doc.saveAndClose();
 
-  const errores = pendientes.length ? [] : MotorPlantillas.revisar(MotorPlantillas.analizar(DocumentApp.openById(docId).getBody()), contrato);
-  return { piezas: piezas, bloques: bloques, valores: valores, na: na, pendientes: pendientes, errores: errores };
+  const arbol = pendientes.length ? null : MotorPlantillas.analizar(DocumentApp.openById(docId).getBody());
+  const errores = arbol ? MotorPlantillas.revisar(arbol, contrato) : [];
+  return { piezas: piezas, bloques: bloques, valores: valores, na: na, pendientes: pendientes, errores: errores, arbol: arbol };
+}
+
+/**
+ * ¿La estructura leída de las tablas (la nueva) es la misma que la de hoy (el texto + REAGRUPAR_SECCIONES)? Por
+ * sección (sin importar el orden): el peso, las piezas y sus opciones; la nueva solo puede tener N/A de más.
+ * → [diferencias]
+ */
+function inspDevCompararEstructura_(tipo, textoViejo, arbol, contrato) {
+  const k = MotorPlantillas.clave;
+  const vieja = InspeccionesService.reagruparSiAplica_(tipo, Plantilla.seccionesDe(textoViejo));
+  const nueva = {};
+  arbol.secciones.forEach((s) => {
+    const piezas = {};
+    s.piezas.forEach((p) => {
+      const def = MotorPlantillas.definicion(p.campo, contrato);
+      if (!def.calculado) piezas[k(def.nombre)] = s.opciones.map(k);
+    });
+    nueva[k(s.titulo)] = { titulo: s.titulo, peso: s.peso, piezas: piezas, vista: false };
+  });
+  const diferencias = [];
+  vieja.forEach((s) => {
+    if (!s.campos.length) return;   // una sección sin piezas tampoco sale en el formulario de hoy
+    const n = nueva[k(s.titulo)];
+    if (!n) {
+      diferencias.push('la sección «' + s.titulo + '» (' + s.campos.length + ' piezas) no está en la nueva');
+      return;
+    }
+    n.vista = true;
+    if (n.peso !== s.peso) diferencias.push('«' + s.titulo + '»: peso ' + s.peso + '% → ' + n.peso + '%');
+    s.campos.forEach((c) => {
+      const ops = n.piezas[k(c.campo)];
+      if (!ops) diferencias.push('«' + s.titulo + '»: la pieza ' + c.campo + ' no está en la nueva');
+      else {
+        const faltan = c.opciones.map(k).filter((o) => ops.indexOf(o) === -1);
+        const sobran = ops.filter((o) => c.opciones.map(k).indexOf(o) === -1 && o !== 'N/A');
+        if (faltan.length || sobran.length) diferencias.push('«' + s.titulo + '» / ' + c.campo + ': opciones ' + c.opciones.join(',') + ' → ' + ops.join(','));
+      }
+      delete n.piezas[k(c.campo)];
+    });
+    Object.keys(n.piezas).forEach((p) => diferencias.push('«' + s.titulo + '»: la pieza ' + p + ' solo está en la nueva'));
+  });
+  Object.keys(nueva).forEach((t) => {
+    if (!nueva[t].vista) diferencias.push('la sección «' + nueva[t].titulo + '» solo está en la nueva');
+  });
+  return diferencias.map((d) => 'estructura: ' + d);
 }
 
 /**

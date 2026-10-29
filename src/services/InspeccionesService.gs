@@ -1570,6 +1570,8 @@ const InspeccionesService = (function () {
     fotosDe, fotosAgregar, fotosQuitar,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_, seccionesFotos_, presentar_, contrato_,   // expuestas para las pruebas
+    reagruparSiAplica_,   // la compara InspeccionesPlantillasDev con la estructura leída de las tablas
+    estructura_,          // revisarEntorno (Diagnostico.gs): que el checklist de cada plantilla se pueda armar
   };
 })();
 

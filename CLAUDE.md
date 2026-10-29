@@ -247,6 +247,19 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   editado a mano. Solo lo que va AL REVÉS (un registro nuevo que actualiza a su dueño) se escribe en el servicio, y se
   anota en `DatosConectados.AL_REVES` para que la pantalla lo muestre.
 
+## Plantillas de los PDF: el formato nuevo `{{ }}` (29-oct, `MotorPlantillas`)
+
+Una plantilla de Google Docs nueva o convertida se escribe con el lenguaje propio (docs/plantillas.md), no con el de
+AppSheet: solo `{{CAMPO}}` (la columna; qué hace lo decide su tipo en el contrato del módulo) y `{{si CAMPO}} … {{fin}}`.
+**Nada de lógica en el documento**: lo calculado (rangos, mayúsculas, totales) lo pone el módulo en sus datos (en
+Inspecciones, `presentar_`) y se declara en su contrato (`contrato_`). El checklist es una tabla con «Sección N%» en su
+primera celda, un encabezado de opciones y una marca por pieza junto a su nombre (celdas de opción vacías): la
+estructura del formulario se lee de ahí (`MotorPlantillas.analizar`). `PdfService` decide por documento: `{{ }}` →
+`MotorPlantillas.llenar(body, datos, contrato)` (revisa antes y truena con todos los errores, con dónde y sugerencia);
+`<< >>` → `Plantilla.gs`, que se queda para lo no convertido y los PDF viejos. Mezclar las dos es error. Pruebas con el Docs
+de mentira compartido: `tests/docs-simulado.js`. Las plantillas de inspección se convierten en el DEV, sobre copias
+y con oráculo, con `InspeccionesPlantillasDev.gs`; producción sigue con las de AppSheet hasta que lo autoricen.
+
 ## Acceso: contraseñas, código por correo y bitácora (23-oct, rama `seguridad`)
 
 La web app está abierta a cualquier cuenta de Google (`"access": "ANYONE"`, por POST VENTA de gph): lo que protege es

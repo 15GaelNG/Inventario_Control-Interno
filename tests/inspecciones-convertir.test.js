@@ -17,7 +17,7 @@ const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto);
 const SI = (pieza, op) => '<<IF([' + pieza + '] ="' + op + '", "✓", "")>>';
 const piezas = (pieza, ops) => ops.map((o) => SI(pieza, o));
 const LLANTA = '<<If:([LLANTA DD] <= 1.6)>> <<[LLANTA DD]>> <<EndIf>><<If:(AND([LLANTA DD] >= 1.7, [LLANTA DD] <= 4.0))>> <<[LLANTA DD]>> <<EndIf>><<If:([LLANTA DD] >= 4.1)>> <<[LLANTA DD]>> <<EndIf>>';
-const COLUMNAS = ['FECHA', 'PLACAS', 'PARABRISAS', 'MEDALLON', 'GATO', 'RINES', 'LLANTA DD', 'PUNTAJE FINAL INSPECCION', 'FIRMA INSPECTOR'];
+const COLUMNAS = ['FECHA', 'PLACAS', 'PARABRISAS', 'MEDALLON', 'GATO MECANICO', 'RINES', 'LLANTA DD', 'PUNTAJE FINAL INSPECCION', 'FIRMA INSPECTOR'];
 
 /** La plantilla de AppSheet, como la de AUTOS (en chico) */
 function plantillaVieja(extra) {
@@ -29,7 +29,7 @@ function plantillaVieja(extra) {
   ], [140, 46.7, 46.7, 46.6]);
   const inventario = D.tabla([
     ['Inventarios 10%', 'Bueno', 'Regular', 'Malo', 'N/A'],
-    ['Gato'].concat(piezas('GATO', ['BUENO', 'REGULAR', 'MALO', 'N/A'])),
+    ['Gato mecánico'].concat(piezas('GATO MECANICO', ['BUENO', 'REGULAR', 'MALO', 'N/A'])),
   ], [100, 30, 30, 30, 30]);
   const llantas = D.tabla([
     ['Neumáticos 15%', 'mm', '', 'mm', '', '', '', ''],
@@ -93,7 +93,7 @@ console.log('1. Ensayo: convierte, revisa y el oráculo da lo mismo, sin dejar n
 {
   const x = armar(plantillaVieja());
   const r = x.ctx.inspeccionesConvertir1EnsayoAutos();
-  ok(/✔ AUTOS: 4 piezas, 3 bloques y \d+ valores convertidos · N\/A nuevo en 1 secciones · el oráculo da lo mismo/.test(r), 'el reporte: ' + r.split('\n')[2]);
+  ok(/✔ AUTOS: 4 piezas, 3 bloques y \d+ valores convertidos · N\/A nuevo en 1 secciones · la estructura y el oráculo dan lo mismo/.test(r), 'el reporte: ' + r.split('\n')[2]);
   ok(x.modelos[0].PLANTILLA === 'COPIA-AUTOS' && !x.props.INSPECCIONES_PLANTILLAS_DEV_APPSHEET, 'el ensayo no cambia la hoja');
   ok(x.papelera.length === 3, 'y tira lo que hizo (la convertida y las dos del oráculo)');
   ok(D.textos(x.docs['COPIA-AUTOS'].cuerpo.hijos[0].filas[0].celdas[0].hijos[2])[1][1] === SI('PARABRISAS', 'BUENO'), 'la copia de AppSheet no se toca');
@@ -138,6 +138,17 @@ console.log('4. El oráculo encuentra una diferencia');
   const conNA = plantillaVieja();
   conNA.hijos[0].filas[0].celdas[0].hijos[2].filas.forEach((f, i) => f.appendTableCell(D.celda(i ? '' : 'N/A')));
   ok(x.ctx.inspDevComparar_(viejo, conNA).length === 0, 'la columna N/A nueva (vacía, "N/A" en el encabezado) no es diferencia');
+}
+
+console.log('4b. La estructura nueva contra la de hoy (REAGRUPAR_SECCIONES)');
+{
+  // El peso impreso en el Doc no es el que fija REAGRUPAR_SECCIONES: la calificación cambiaría
+  const vieja = plantillaVieja();
+  vieja.hijos[0].filas[0].celdas[0].hijos[2].filas[0].celdas[0].setText('Cristalería 15%');
+  const x = armar(vieja);
+  const r = x.ctx.inspeccionesConvertir2EscribirAutos();
+  ok(/DIFERENCIA estructura: «Cristalería»: peso 10% → 15%/.test(r) && x.modelos[0].PLANTILLA === 'COPIA-AUTOS',
+    'un peso distinto al de hoy se dice y no se convierte (cambiaría la calificación)');
 }
 
 console.log('5. Las condiciones que sabe traducir');

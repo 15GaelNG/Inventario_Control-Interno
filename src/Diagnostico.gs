@@ -240,7 +240,7 @@ function revisionPlantillas_() {
   ];
   Object.keys(LineasPdf.PLANTILLAS).forEach((k) => lista.push({ nombre: 'Líneas ' + k, id: LineasPdf.PLANTILLAS[k] }));
   try {
-    InspeccionesService.plantillas().forEach((p) => lista.push({ nombre: 'Inspección ' + p.tipo, id: p.id }));
+    InspeccionesService.plantillas().forEach((p) => lista.push({ nombre: 'Inspección ' + p.tipo, id: p.id, tipo: p.tipo }));
   } catch (e) {
     lista.push({ nombre: 'Inspección (MODELOS INSPECCION)', error: e.message });
   }
@@ -432,6 +432,15 @@ function revisionEntorno_() {
       return;
     }
     exigir(x, p.id, 'canCopy', 'no puede copiarla: ese PDF no se va a generar (necesita ser Editor, o que la plantilla deje copiar)');
+    // Una de inspección: que su checklist se pueda armar (la del formato nuevo se revisa contra su contrato y truena con
+    // todos sus errores; MotorPlantillas, 29-oct). Es la misma estructura del formulario, en caché.
+    if (p.tipo) {
+      try {
+        InspeccionesService.estructura_(p.tipo);
+      } catch (e) {
+        anotar(x, 'su checklist no se puede armar: ' + e.message, true);
+      }
+    }
   });
 
   // ---- hojas y calentador
