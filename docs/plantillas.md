@@ -53,6 +53,9 @@ Una sección es una tabla cuya **primera celda es el título con su peso**, y un
 - El encabezado de opciones puede ir a media tabla (Neumáticos: arriba las llantas en mm, abajo Rines, Tapones…).
 - Las secciones se leen de las tablas, no del texto: el acomodo a dos columnas de la hoja ya no importa.
 - Una tabla sin «N%» en su primera celda no es checklist: sus marcas son valores normales.
+- **Una sección partida en dos columnas** ("Sistemas interiores" sigue en la otra columna): la tabla de la otra mitad
+  lleva `{{continúa Sistemas interiores}}` en la primera celda de su encabezado. Se borra al llenar y sus piezas se
+  juntan con las de su sección, con las opciones de su propia tabla.
 
 **Agregar una pieza:** un renglón nuevo en su sección con `Nombre {{COLUMNA}}`. La columna tiene que existir en la hoja
 (si no, la revisión lo dice). La calificación la cuenta sola, con el peso de su sección.
@@ -81,8 +84,15 @@ de opción, `{{fin}}` sin `{{si}}` y un bloque sin cerrar.
 - Contrato (`InspeccionesService.contrato_`): las columnas de la hoja de inspecciones, los diagramas y firmas como
   imagen, y lo calculado por llanta (`presentar_`, con el mismo semáforo del puntaje):
   - `LLANTA DD MALO` / `REGULAR` / `BUENO`: «SI» o vacío, para los bloques de color;
-  - `LLANTA DD ESTADO`: para poner la llanta en la columna de su rango, con sus mm en vez de la ✓.
-- Las 18 plantillas se convierten en el DEV con `InspeccionesPlantillasDev.gs`, siempre sobre copias:
+  - `LLANTA DD ESTADO`: para poner la llanta en la columna de su rango, con sus mm en vez de la ✓;
+  - `VOLTAJE BAJO` / `MEDIO` / `ALTO`: con los rangos que ya imprimía el PDF (≤12.3, 12.4–12.6, ≥12.7 V), que **no** son los
+    del formulario ni del puntaje (<11.6, 11.6–12.8, >12.8): unificarlos lo decide el área.
+- **La herramienta local** (29-oct, la forma recomendada): `node tools/plantillas/plantillas.js ensayo [TIPO …]` y
+  `convertir TIPO … | --todas`, con la API de Docs y el token de `tools/migracion/autorizar.py lab`. Corre el mismo código
+  de Apps Script en memoria y, sobre lo real, repite la estructura, el oráculo (3 variantes de datos) y la comparación
+  con el ensayo. Solo escribe en las "(DEV NUEVO)" de la carpeta de pruebas. Luego, en el editor:
+  `inspeccionesUsarConvertidas()`.
+- Desde el editor (lo de antes, con el límite de 6 min), con `InspeccionesPlantillasDev.gs`, siempre sobre copias:
   1. `inspeccionesPlantillasACopias()`: el DEV deja de usar los documentos de producción.
   2. `inspeccionesConvertir1EnsayoAutos()`: convierte AUTOS en una copia temporal y lo compara todo.
   3. `inspeccionesConvertir2EscribirAutos()`: deja la convertida «(DEV NUEVO)» y el DEV la usa.
