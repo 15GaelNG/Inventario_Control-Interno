@@ -9,7 +9,8 @@ refresh token queda en tools/migracion/.tokens/<destino>.json (fuera de git). Al
 una prueba de SOLO LECTURA contra el libro: titulo y numero de pestanas.
 
 El scope `spreadsheets` no se puede acotar a un libro en Google: el candado real es la lista
-blanca de IDs del codigo que escriba (LIBROS, abajo), no este token.
+blanca de IDs del codigo que escriba (LIBROS, abajo), no este token. Lo mismo `documents`: la
+herramienta de plantillas solo escribe en las copias de su carpeta de pruebas.
 """
 import json
 import sys
@@ -26,7 +27,9 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 # Drive, para que migrar.py --copiar-produccion pueda duplicar producción. `drive.file` no
 # alcanza: solo deja tocar archivos que creó la app, y producción no lo es.
 DRIVE = "https://www.googleapis.com/auth/drive"
-SCOPES_NUEVOS = SCOPES + [DRIVE]
+# Docs (29-oct): las herramientas de plantillas (copias, N/A, conversión al formato {{ }}) leen y editan Google Docs.
+DOCS = "https://www.googleapis.com/auth/documents"
+SCOPES_NUEVOS = SCOPES + [DRIVE, DOCS]
 
 LIBROS = {
     "lab": "1-RA6lmh-rZ-OKfsZSLl2Qd9lLyuDZ3dx3fP0M7qL-5o",
@@ -66,6 +69,11 @@ def credenciales(destino):
 def tiene_drive(destino):
     datos = json.loads((TOKENS / (destino + ".json")).read_text(encoding="utf-8"))
     return DRIVE in datos.get("scopes", [])
+
+
+def tiene_docs(destino):
+    datos = json.loads((TOKENS / (destino + ".json")).read_text(encoding="utf-8"))
+    return DOCS in datos.get("scopes", [])
 
 
 if __name__ == "__main__":
