@@ -85,6 +85,8 @@ console.log('3. Lo calculado para el PDF');
   ok(datos['LLANTA DD ESTADO'] === 'MALO' && datos['LLANTA DI ESTADO'] === 'BUENO' && datos['LLANTA TD ESTADO'] === '',
     'el estado de cada llanta con el mismo semáforo del puntaje (sin medir: vacío)');
   ok(datos.PLACAS === 'X' && datos['LLANTA DD'] === '1.4', 'lo demás, igual');
+  ok(datos['LLANTA DD MALO'] === 'SI' && datos['LLANTA DD REGULAR'] === '' && datos['LLANTA DI BUENO'] === 'SI' && datos['LLANTA TD MALO'] === '',
+    'y un "SI" por rango, para los bloques {{si LLANTA DD MALO}} (cada uno con su color en la plantilla)');
   const c = S.contrato_();
   ok(c.campos.PLACAS === 'texto' && c.campos['FIRMA INSPECTOR'] === 'imagen' && c.campos['LLANTA DD ESTADO'].marca === 'LLANTA DD',
     'el contrato: columnas (texto), imágenes y el estado calculado de cada llanta (con sus mm como marca)');

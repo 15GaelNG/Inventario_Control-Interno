@@ -42,6 +42,7 @@ function parrafo(t) {
     getText: () => p.hijos.map((h) => h.getText()).join(''),
     setText: (v) => { p.hijos = [texto(v)]; return p; },
     editAsText: () => p.hijos[0],
+    appendText: (v) => { const h = p.hijos[p.hijos.length - 1]; h.setText(h.getText() + v); return h; },
     replaceText: (pat, por) => { p.hijos.forEach((h) => h.replaceText(pat, por)); return p; },
     copy: () => parrafo(p.getText()),
   };
@@ -59,6 +60,7 @@ function celda(t, tablas) {
     getChild: (i) => c.hijos[i],
     getText: () => textoDe_(c.hijos),
     setText: (v) => { c.hijos = [parrafo(v)]; return c; },
+    appendParagraph: (v) => { const p = parrafo(v); c.hijos.push(p); return p; },
     replaceText: (pat, por) => { c.hijos.forEach((h) => h.replaceText(pat, por)); return c; },
     copy: () => { const n = celda(''); n.hijos = c.hijos.map((h) => h.copy()); return n; },
   };
@@ -106,6 +108,7 @@ function cuerpo(hijos) {
     getChild: (i) => b.hijos[i],
     getText: () => textoDe_(b.hijos),
     replaceText: (pat, por) => { b.hijos.forEach((h) => h.replaceText(pat, por)); return b; },
+    copy: () => cuerpo(b.hijos.map((h) => h.copy())),
   };
   return b;
 }

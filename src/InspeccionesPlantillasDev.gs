@@ -12,6 +12,7 @@
  *   inspeccionesDescribirPlantilla('AUTOS')   solo lee: cómo están armadas las tablas de una plantilla.
  *   inspeccionesNA1Ensayo() / NA2EscribirAutos() / NA3EscribirTodas()   la columna N/A en las copias (abajo).
  *   inspeccionesProbarMotor()             el motor nuevo de plantillas en un Google Docs de verdad (temporal).
+ *   inspeccionesConvertir1EnsayoAutos() / 2EscribirAutos() / 3EscribirTodas()   al formato nuevo, con oráculo (abajo).
  */
 
 const INSP_DEV_CARPETA = 'PLANTILLAS INSPECCION DEV';
@@ -82,6 +83,7 @@ function inspeccionesPlantillasAOriginales() {
     SheetUtils.cambiarCeldas(t, cambios);
     inspDevOlvidar_(Object.keys(originales));
     props.deleteProperty(INSP_DEV_PROP);
+    props.deleteProperty(INSP_DEV_PROP_APPSHEET);   // las convertidas ya no son las del DEV
     const texto = cambios.length + ' tipos de vuelta a su plantilla original (las copias siguen en "' + INSP_DEV_CARPETA + '").';
     Logger.log(texto);
     return texto;
@@ -133,6 +135,320 @@ function inspeccionesDescribirPlantilla(tipo) {
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
+}
+
+// ---------------------------------------------------------------- convertir al formato nuevo (29-oct)
+
+/**
+ * Pasa una copia (DEV) del formato de AppSheet al nuevo (MotorPlantillas), en un documento NUEVO "(DEV NUEVO)": la
+ * copia de AppSheet no se toca, así se compara y se puede volver.
+ *   1. La columna N/A donde falte (inspDevAgregarNA_, con su regla de anchos).
+ *   2. El checklist: cada <<IF([PIEZA] = "BUENO", "✓", "")>> sale de su celda de opción (queda vacía, con su formato) y
+ *      la pieza queda como {{PIEZA}} junto a su nombre.
+ *   3. <<If:(condición)>> … <<EndIf>> → {{si CAMPO}} … {{fin}}, con CAMPO el calculado que dice lo mismo (las llantas:
+ *      LLANTA DD MALO / REGULAR / BUENO, de presentar_ en InspeccionesService). Una condición sin traducción es pendiente.
+ *   4. <<[CAMPO]>> y <<CAMPO>> → {{CAMPO}}. Cualquier otra marca << >> es pendiente.
+ * Luego se revisa contra el contrato de inspecciones y, con el ORÁCULO, se llenan las dos (la vieja con Plantilla.gs,
+ * la nueva con MotorPlantillas) con los mismos datos de prueba y se comparan celda por celda: solo puede cambiar la
+ * columna N/A nueva. Con un pendiente, un error o una diferencia, el documento nuevo se tira.
+ *
+ *   inspeccionesConvertir1EnsayoAutos()    AUTOS en una copia temporal: el reporte, sin dejar nada.
+ *   inspeccionesConvertir2EscribirAutos()   AUTOS y, si todo cuadra, el DEV pasa a usar su "(DEV NUEVO)".
+ *   inspeccionesConvertir3EscribirTodas()   los que falten, hasta donde alcance el tiempo (córrela otra vez para seguir).
+ *   inspeccionesPlantillasAAppSheet()       el DEV de vuelta a sus copias del formato de AppSheet.
+ *
+ * Diferencia a propósito: las plantillas de AppSheet no imprimían una llanta entre 1.6 y 1.7 mm ni entre 4.0 y 4.1 mm
+ * (sus rangos tenían huecos); la nueva usa el mismo semáforo que el puntaje (calificacionLlanta_), sin huecos.
+ */
+const INSP_DEV_PROP_APPSHEET = 'INSPECCIONES_PLANTILLAS_DEV_APPSHEET';
+const INSP_CONV_TIEMPO_MS = 4.5 * 60 * 1000;
+const INSP_CONV_OPCION = /^<<IF\(\[([^\]]+)\]\s*=\s*"([^"]*)"\s*,\s*"✓"\s*,\s*""\)>>$/i;
+
+function inspeccionesConvertir1EnsayoAutos() {
+  soloEditor_();
+  return inspDevConvertir_({ escribir: false, tipos: ['AUTOS'] });
+}
+
+function inspeccionesConvertir2EscribirAutos() {
+  soloEditor_();
+  return inspDevConvertir_({ escribir: true, tipos: ['AUTOS'] });
+}
+
+function inspeccionesConvertir3EscribirTodas() {
+  soloEditor_();
+  return inspDevConvertir_({ escribir: true });
+}
+
+function inspeccionesPlantillasAAppSheet() {
+  soloEditor_();
+  inspDevNoEnProd_();
+  return Candado.con(() => {
+    const props = PropertiesService.getScriptProperties();
+    const deAppSheet = JSON.parse(props.getProperty(INSP_DEV_PROP_APPSHEET) || '{}');
+    const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+    const cambios = [];
+    SheetUtils.getAll(ssId, 'MODELOS INSPECCION').forEach((f, i) => {
+      const tipo = String(f['TIPO'] || '').trim();
+      if (deAppSheet[tipo]) cambios.push({ fila: i + 2, cambios: { PLANTILLA: deAppSheet[tipo] } });
+    });
+    SheetUtils.cambiarCeldas(SheetUtils.tabla(ssId, 'MODELOS INSPECCION'), cambios);
+    inspDevOlvidar_(Object.keys(deAppSheet));
+    props.deleteProperty(INSP_DEV_PROP_APPSHEET);
+    const texto = cambios.length + ' tipos de vuelta a su copia del formato de AppSheet (las "(DEV NUEVO)" siguen en "' + INSP_DEV_CARPETA + '").';
+    Logger.log(texto);
+    return texto;
+  });
+}
+
+function inspDevConvertir_(cfg) {
+  inspDevNoEnProd_();
+  const inicio = Date.now();
+  const props = PropertiesService.getScriptProperties();
+  const originales = JSON.parse(props.getProperty(INSP_DEV_PROP) || '{}');
+  const esOriginal = {};
+  Object.keys(originales).forEach((t) => { esOriginal[originales[t]] = true; });
+  const deAppSheet = JSON.parse(props.getProperty(INSP_DEV_PROP_APPSHEET) || '{}');
+  const soloTipos = cfg.tipos && cfg.tipos.map((t) => SheetUtils.normalizarEncabezado_(t));
+  const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+  const carpeta = DriveUtils.subcarpeta(DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ()), INSP_DEV_CARPETA);
+  const contrato = InspeccionesService.contrato_();
+  const lineas = [(cfg.escribir ? 'CONVIRTIENDO' : 'ENSAYO (no deja nada)') + ' — plantillas de inspección del DEV al formato nuevo', ''];
+  const cambios = [];
+  const tocados = [];
+  const faltan = [];
+  SheetUtils.getAll(ssId, 'MODELOS INSPECCION').forEach((f, i) => {
+    const tipo = String(f['TIPO'] || '').trim();
+    const id = String(f['PLANTILLA'] || '').trim();
+    if (!tipo || !id) return;
+    if (soloTipos && soloTipos.indexOf(SheetUtils.normalizarEncabezado_(tipo)) === -1) return;
+    if (deAppSheet[tipo]) {
+      lineas.push('  = ' + tipo + ': ya usa su plantilla del formato nuevo');
+      return;
+    }
+    if (!originales[tipo] || esOriginal[id]) {
+      lineas.push('  ✘ ' + tipo + ': no usa una copia del DEV (corre inspeccionesPlantillasACopias); no se toca');
+      return;
+    }
+    if (Date.now() - inicio > INSP_CONV_TIEMPO_MS) {
+      faltan.push(tipo);
+      return;
+    }
+    const viejo = DriveApp.getFileById(id);
+    if (!/\(DEV\)$/.test(viejo.getName())) {
+      lineas.push('  ✘ ' + tipo + ': "' + viejo.getName() + '" no es una copia "(DEV)"; no se toca');
+      return;
+    }
+    const nuevo = DriveUtils.copiar(viejo, viejo.getName().replace(/\(DEV\)$/, '(DEV NUEVO)'), carpeta, { temporal: !cfg.escribir });
+    let seQueda = false;
+    try {
+      const r = inspDevConvertirDoc_(nuevo.getId(), contrato);
+      const diferencias = r.pendientes.length || r.errores.length ? [] : inspDevOraculo_(id, nuevo.getId(), contrato, carpeta);
+      const bien = !r.pendientes.length && !r.errores.length && !diferencias.length;
+      lineas.push((bien ? '  ✔ ' : '  ✘ ') + tipo + ': ' + r.piezas + ' piezas, ' + r.bloques + ' bloques y ' + r.valores +
+        ' valores convertidos · N/A nuevo en ' + r.na.secciones + ' secciones' +
+        (bien ? ' · el oráculo da lo mismo' : ''));
+      r.pendientes.slice(0, 15).forEach((x) => lineas.push('      PENDIENTE ' + x));
+      r.errores.slice(0, 15).forEach((e) => lineas.push('      ERROR ' + e.donde + ': ' + e.mensaje));
+      diferencias.slice(0, 15).forEach((d) => lineas.push('      DIFERENCIA ' + d));
+      if (diferencias.length > 15) lineas.push('      … y ' + (diferencias.length - 15) + ' diferencias más');
+      if (bien && cfg.escribir) {
+        cambios.push({ fila: i + 2, cambios: { PLANTILLA: nuevo.getId() } });
+        deAppSheet[tipo] = id;
+        tocados.push(tipo);
+        seQueda = true;
+      }
+    } catch (err) {
+      lineas.push('  ✘ ' + tipo + ': tronó (' + err.message + ')');
+    } finally {
+      if (!seQueda) DriveUtils.aPapelera(nuevo, { temporal: true });
+    }
+  });
+  if (cambios.length) {
+    Candado.con(() => {
+      // Primero de dónde viene cada una: si la hoja fallara, se sabe a dónde regresar
+      props.setProperty(INSP_DEV_PROP_APPSHEET, JSON.stringify(deAppSheet));
+      SheetUtils.cambiarCeldas(SheetUtils.tabla(ssId, 'MODELOS INSPECCION'), cambios);
+    });
+    inspDevOlvidar_(tocados);
+    lineas.push('', tocados.length + ' tipos ya usan el formato nuevo en el DEV. Para volver: inspeccionesPlantillasAAppSheet().');
+  }
+  if (faltan.length) lineas.push('', 'Se acabó el tiempo de esta corrida; faltan: ' + faltan.join(', ') + '. Córrela otra vez para seguir.');
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+/** Todos los elementos de texto (también los de las tablas), como PdfService.textosDe_ */
+function inspDevTextos_(el, lista) {
+  if (el.getType() === DocumentApp.ElementType.TEXT) {
+    lista.push(el.asText());
+    return lista;
+  }
+  if (typeof el.getNumChildren !== 'function') return lista;
+  for (let i = 0; i < el.getNumChildren(); i++) inspDevTextos_(el.getChild(i), lista);
+  return lista;
+}
+
+/** Una condición de AppSheet → el campo calculado que dice lo mismo, o null (pendiente) */
+function inspDevCondicion_(condicion) {
+  let t = String(condicion).replace(/\s+/g, ' ').trim();
+  while (/^\(.*\)$/.test(t)) t = t.slice(1, -1).trim();
+  let m = /^\[(LLANTA [A-Z]+)\] ?<= ?1\.6$/.exec(t);
+  if (m) return m[1] + ' MALO';
+  m = /^AND\(\[(LLANTA [A-Z]+)\] ?>= ?1\.7 ?, ?\[\1\] ?<= ?4(?:\.0)?\)$/.exec(t);
+  if (m) return m[1] + ' REGULAR';
+  m = /^\[(LLANTA [A-Z]+)\] ?>= ?4\.1$/.exec(t);
+  if (m) return m[1] + ' BUENO';
+  return null;
+}
+
+/** Convierte un documento (ya copiado) al formato nuevo. → { piezas, bloques, valores, na, pendientes, errores } */
+function inspDevConvertirDoc_(docId, contrato) {
+  const T = DocumentApp.ElementType;
+  const doc = DocumentApp.openById(docId);
+  const body = doc.getBody();
+  const na = inspDevAgregarNA_(body, true);
+  const pendientes = na.saltadas.concat(na.problemas).map((x) => 'N/A: ' + x);
+  let piezas = 0;
+  let bloques = 0;
+  let valores = 0;
+
+  // 1. El checklist: la fórmula sale de cada celda de opción y la marca va junto al nombre de la pieza
+  inspDevTablas_(body).forEach((tabla) => {
+    for (let r = 0; r < tabla.getNumRows(); r++) {
+      const renglon = tabla.getRow(r);
+      const opciones = [];
+      for (let c = 0; c < renglon.getNumCells(); c++) {
+        const texto = renglon.getCell(c).getText().trim();
+        const m = INSP_CONV_OPCION.exec(texto);
+        if (m) opciones.push({ c: c, pieza: m[1].trim(), literal: texto });
+      }
+      if (!opciones.length) continue;
+      const pieza = opciones[0].pieza;
+      if (opciones.some((o) => o.pieza !== pieza)) {
+        pendientes.push('un renglón con dos piezas (' + opciones.map((o) => o.pieza).join(', ') + ')');
+        continue;
+      }
+      let nombre = opciones[0].c - 1;
+      while (nombre >= 0 && !renglon.getCell(nombre).getText().trim()) nombre--;
+      if (nombre < 0) {
+        pendientes.push(pieza + ': su renglón no tiene celda con el nombre');
+        continue;
+      }
+      opciones.forEach((o) => renglon.getCell(o.c).replaceText(inspDevRegex_(o.literal), ''));
+      const celda = renglon.getCell(nombre);
+      const ultimo = celda.getChild(celda.getNumChildren() - 1);
+      const parrafo = ultimo.getType() === T.PARAGRAPH ? ultimo.asParagraph() : celda.appendParagraph('');
+      parrafo.appendText(' {{' + pieza + '}}');
+      piezas++;
+    }
+  });
+
+  // 2. Lo demás, texto por texto (reemplazar marca por marca conserva el formato: el color de cada bloque de llanta)
+  inspDevTextos_(body, []).forEach((texto) => {
+    if (texto.getText().indexOf('<<') === -1) return;
+    (texto.getText().match(/<<If:[\s\S]*?>>/gi) || []).forEach((abre) => {
+      const campo = inspDevCondicion_(abre.replace(/^<<If:/i, '').replace(/>>$/, ''));
+      if (!campo) {
+        pendientes.push('una condición sin traducción: ' + abre);
+        return;
+      }
+      texto.replaceText(inspDevRegex_(abre), '{{si ' + campo + '}}');
+      bloques++;
+    });
+    texto.replaceText('<<[Ee][Nn][Dd][Ii][Ff]>>', '{{fin}}');
+    (texto.getText().match(/<<\[?[^<>[\]()"*,=]+\]?>>/g) || []).forEach((literal) => {
+      texto.replaceText(inspDevRegex_(literal), '{{' + literal.replace(/^<<\[?|\]?>>$/g, '').trim() + '}}');
+      valores++;
+    });
+    (texto.getText().match(/<<[\s\S]*?>>/g) || []).forEach((resto) => pendientes.push('una marca sin traducción: ' + resto.slice(0, 60)));
+  });
+  doc.saveAndClose();
+
+  const errores = pendientes.length ? [] : MotorPlantillas.revisar(MotorPlantillas.analizar(DocumentApp.openById(docId).getBody()), contrato);
+  return { piezas: piezas, bloques: bloques, valores: valores, na: na, pendientes: pendientes, errores: errores };
+}
+
+/**
+ * Datos de prueba para el oráculo: cada pieza con una opción distinta (rotando, para que la palomita pase por todas las
+ * columnas), una llanta de cada rango y un texto distinto en cada columna. Las imágenes, vacías.
+ */
+function inspDevDatosDePrueba_(viejoId, contrato) {
+  const datos = {};
+  Object.keys(contrato.campos).forEach((campo, i) => {
+    const def = contrato.campos[campo];
+    if (typeof def === 'object' && def.calculado) return;
+    datos[campo] = def === 'imagen' ? '' : 'V' + i;
+  });
+  Plantilla.seccionesDe(DocumentApp.openById(viejoId).getBody().getText())
+    .forEach((s) => s.campos.forEach((c, k) => { datos[c.campo] = c.opciones[k % c.opciones.length]; }));
+  Object.keys(contrato.campos).filter((k) => / ESTADO$/.test(k))
+    .forEach((k, i) => { datos[k.replace(/ ESTADO$/, '')] = ['1.4', '3.2', '5'][i % 3]; });
+  return datos;
+}
+
+/**
+ * EL ORÁCULO: llena una copia de la vieja (Plantilla.gs) y una de la nueva (MotorPlantillas) con los mismos datos y las
+ * compara: cada celda de cada tabla de sección y cada párrafo fuera de ellas. Una celda de más en la nueva solo puede
+ * ser la columna N/A (vacía, o "N/A" en el encabezado). → [diferencias]
+ */
+function inspDevOraculo_(viejoId, nuevoId, contrato, carpeta) {
+  const datos = inspDevDatosDePrueba_(viejoId, contrato);
+  const a = DriveUtils.copiar(DriveApp.getFileById(viejoId), 'ORÁCULO (se borra) viejo', carpeta, { temporal: true });
+  const b = DriveUtils.copiar(DriveApp.getFileById(nuevoId), 'ORÁCULO (se borra) nuevo', carpeta, { temporal: true });
+  try {
+    PdfService.llenarCopia_(a.getId(), { datos: datos });
+    PdfService.llenarCopia_(b.getId(), { datos: InspeccionesService.presentar_(datos), contrato: contrato });
+    return inspDevComparar_(DocumentApp.openById(a.getId()).getBody(), DocumentApp.openById(b.getId()).getBody());
+  } finally {
+    DriveUtils.aPapelera(a, { temporal: true });
+    DriveUtils.aPapelera(b, { temporal: true });
+  }
+}
+
+/** Las diferencias entre dos documentos llenos (ver inspDevOraculo_) */
+function inspDevComparar_(viejo, nuevo) {
+  const limpio = (s) => String(s).replace(/\s+/g, ' ').trim();
+  const diferencias = [];
+  const ta = inspDevTablas_(viejo);
+  const tb = inspDevTablas_(nuevo);
+  if (ta.length !== tb.length) diferencias.push(ta.length + ' tablas en la vieja y ' + tb.length + ' en la nueva');
+  ta.forEach((t, k) => {
+    const u = tb[k];
+    if (!u) return;
+    const titulo = limpio(t.getRow(0).getCell(0).getText()).slice(0, 30) || ('tabla ' + (k + 1));
+    if (t.getNumRows() !== u.getNumRows()) diferencias.push('«' + titulo + '»: renglones ' + t.getNumRows() + ' → ' + u.getNumRows());
+    for (let r = 0; r < Math.min(t.getNumRows(), u.getNumRows()); r++) {
+      const x = t.getRow(r);
+      const y = u.getRow(r);
+      for (let c = 0; c < Math.max(x.getNumCells(), y.getNumCells()); c++) {
+        const va = c < x.getNumCells() ? limpio(x.getCell(c).getText()) : null;
+        const vb = c < y.getNumCells() ? limpio(y.getCell(c).getText()) : null;
+        if (va === null && (vb === '' || vb === 'N/A')) continue;   // la columna N/A nueva
+        if (va !== vb) diferencias.push('«' + titulo + '», renglón ' + (r + 1) + ', celda ' + (c + 1) + ': «' + va + '» → «' + vb + '»');
+      }
+    }
+  });
+  const pa = inspDevParrafos_(viejo, []);
+  const pb = inspDevParrafos_(nuevo, []);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if (limpio(pa[i] || '') !== limpio(pb[i] || '')) diferencias.push('párrafo ' + (i + 1) + ': «' + limpio(pa[i] || '').slice(0, 60) + '» → «' + limpio(pb[i] || '').slice(0, 60) + '»');
+  }
+  return diferencias;
+}
+
+/** Los párrafos con texto fuera de las tablas de sección (las de acomodo sí se recorren) */
+function inspDevParrafos_(el, lista) {
+  const T = DocumentApp.ElementType;
+  const tipo = el.getType();
+  if (tipo === T.PARAGRAPH || tipo === T.LIST_ITEM) {
+    if (el.getText().trim()) lista.push(el.getText());
+    return lista;
+  }
+  if (tipo === T.TABLE && inspDevTablas_({ getNumChildren: () => 1, getChild: () => el }).indexOf(el) !== -1) return lista;
+  if (typeof el.getNumChildren !== 'function') return lista;
+  for (let i = 0; i < el.getNumChildren(); i++) inspDevParrafos_(el.getChild(i), lista);
+  return lista;
 }
 
 // ---------------------------------------------------------------- el motor nuevo contra Google Docs de verdad (29-oct)
@@ -273,12 +589,7 @@ function inspDevNA_(cfg) {
       lineas.push('  ✘ ' + tipo + ': "' + doc.getName() + '" no es una copia "(DEV)"; no se toca');
       return;
     }
-    const r = { secciones: 0, piezas: 0, yaTraian: 0, opcionesConNA: [], anchos: [], saltadas: [], problemas: [] };
-    const tablas = inspDevTablas_(doc.getBody());
-    // Primero se miden las secciones que ya traen N/A: el ancho de sus opciones es el mínimo para las nuevas
-    tablas.forEach((t) => inspDevNATabla_(t, { medir: true }, r));
-    r.minOpcion = r.opcionesConNA.length ? Math.min.apply(null, r.opcionesConNA) : null;
-    tablas.forEach((t) => inspDevNATabla_(t, { escribir: cfg.escribir }, r));
+    const r = inspDevAgregarNA_(doc.getBody(), cfg.escribir);
     if (cfg.escribir) {
       doc.saveAndClose();
       tocados.push(tipo);
@@ -302,6 +613,17 @@ function inspDevNA_(cfg) {
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
+}
+
+/** La columna N/A en las secciones de un documento (del formato de AppSheet) que no la traen. → el reporte { secciones, … } */
+function inspDevAgregarNA_(body, escribir) {
+  const r = { secciones: 0, piezas: 0, yaTraian: 0, opcionesConNA: [], anchos: [], saltadas: [], problemas: [] };
+  const tablas = inspDevTablas_(body);
+  // Primero se miden las secciones que ya traen N/A: el ancho de sus opciones es el mínimo para las nuevas
+  tablas.forEach((t) => inspDevNATabla_(t, { medir: true }, r));
+  r.minOpcion = r.opcionesConNA.length ? Math.min.apply(null, r.opcionesConNA) : null;
+  tablas.forEach((t) => inspDevNATabla_(t, { escribir: escribir }, r));
+  return r;
 }
 
 /** Las tablas que no llevan otra tabla adentro (las de acomodo de la página no son secciones), en orden. */

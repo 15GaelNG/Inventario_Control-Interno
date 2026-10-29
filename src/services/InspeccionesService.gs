@@ -1121,8 +1121,12 @@ const InspeccionesService = (function () {
 
   /**
    * El contrato de los campos para el formato nuevo de plantillas (MotorPlantillas): las columnas de la hoja (texto),
-   * los diagramas y las firmas (imagen) y, por llanta, su estado calculado (`LLANTA DD ESTADO`: la columna de su rango;
-   * en la celda van los mm). Lo calculado no se pide en el formulario: lo llena presentar_.
+   * los diagramas y las firmas (imagen) y, por llanta, lo calculado con el semáforo de calificacionLlanta_:
+   *   `LLANTA DD MALO` / `REGULAR` / `BUENO`  "SI" o vacío, para {{si …}}: las plantillas de hoy imprimen los mm con el
+   *                                           color de su rango (un bloque por rango, cada uno con su color);
+   *   `LLANTA DD ESTADO`                      el rango, como pieza de checklist con los mm como marca (una plantilla que
+   *                                           ponga la llanta en la columna de su rango).
+   * Lo calculado no se pide en el formulario: lo llena presentar_.
    */
   let contratoDeEstaEjecucion = null;
   function contrato_() {
@@ -1135,16 +1139,21 @@ const InspeccionesService = (function () {
     COLUMNAS_IMAGEN.forEach(([columna]) => { campos[columna] = 'imagen'; });
     COLUMNAS_LLANTAS.forEach(([columna]) => {
       campos[columna + ' ESTADO'] = { tipo: 'opcion', marca: columna, calculado: true };
+      RANGOS_LLANTA.forEach((rango) => { campos[columna + ' ' + rango] = { tipo: 'texto', calculado: true }; });
     });
     contratoDeEstaEjecucion = { campos: campos };
     return contratoDeEstaEjecucion;
   }
 
+  const RANGOS_LLANTA = ['MALO', 'REGULAR', 'BUENO'];
+
   /** Los datos del PDF con lo calculado: el estado de cada llanta medida (calificacionLlanta_, el mismo semáforo) */
   function presentar_(datos) {
     const salida = Object.assign({}, datos);
     COLUMNAS_LLANTAS.forEach(([columna]) => {
-      salida[columna + ' ESTADO'] = calificacionLlanta_(datos[columna]) || '';
+      const estado = calificacionLlanta_(datos[columna]) || '';
+      salida[columna + ' ESTADO'] = estado;
+      RANGOS_LLANTA.forEach((rango) => { salida[columna + ' ' + rango] = estado === rango ? 'SI' : ''; });
     });
     return salida;
   }
@@ -1160,7 +1169,7 @@ const InspeccionesService = (function () {
     const errores = MotorPlantillas.revisar(arbol, c);
     if (errores.length) throw new Error('La plantilla del tipo "' + tipo + '" tiene errores:\n' + MotorPlantillas.textoErrores(errores));
     const usados = {};
-    arbol.marcas.forEach((m) => { usados[MotorPlantillas.canonico(m.campo, c)] = true; });
+    arbol.marcas.concat(arbol.bloques).forEach((m) => { usados[MotorPlantillas.canonico(m.campo, c)] = true; });
     const secciones = arbol.secciones.map((s) => ({
       titulo: s.titulo,
       peso: s.peso,
@@ -1172,7 +1181,8 @@ const InspeccionesService = (function () {
         .filter((def) => !def.calculado)
         .map((def) => ({ campo: def.nombre, opciones: s.opciones.map(MotorPlantillas.clave) })),
     }));
-    const llantas = COLUMNAS_LLANTAS.map(([columna]) => columna).filter((col) => usados[col] || usados[col + ' ESTADO']);
+    const llantas = COLUMNAS_LLANTAS.map(([columna]) => columna)
+      .filter((col) => usados[col] || usados[col + ' ESTADO'] || RANGOS_LLANTA.some((rango) => usados[col + ' ' + rango]));
     return { secciones: secciones, llantas: llantas };
   }
 
