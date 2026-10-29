@@ -290,6 +290,17 @@ const MotorPlantillas = (function () {
     return errores;
   }
 
+  /** El nombre de un campo como lo dice el contrato (la columna real: "MEDALLÓN" en el Doc → "MEDALLON"), o null */
+  function canonico(campo, contrato) {
+    const def = tipos_(contrato)[clave(campo)];
+    return def ? def.nombre : null;
+  }
+
+  /** La definición de un campo en el contrato ({ nombre, tipo, marca, … }), o null */
+  function definicion(campo, contrato) {
+    return tipos_(contrato)[clave(campo)] || null;
+  }
+
   /** Los errores como un solo texto, uno por renglón (para un Error o un reporte) */
   const textoErrores = (errores) => errores.map((e) => '  - ' + e.donde + ': ' + e.mensaje).join('\n');
 
@@ -369,5 +380,5 @@ const MotorPlantillas = (function () {
   /** Patrón (de findText) de la marca de un campo, con o sin espacios por dentro: para insertar una imagen */
   const patron = (campo) => '\\{\\{\\s*' + escapar_(String(campo).trim()).replace(/ +/g, '\\s+') + '\\s*\\}\\}';
 
-  return { dialecto, analizar, revisar, llenar, textoErrores, clave, patron, PALOMITA };
+  return { dialecto, analizar, revisar, llenar, textoErrores, clave, patron, canonico, definicion, PALOMITA };
 })();

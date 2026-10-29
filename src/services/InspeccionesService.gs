@@ -524,11 +524,12 @@ const InspeccionesService = (function () {
         plantillaId: estructura.plantillaId,
         // Una imagen que no llegó deja su marcador vacío: si no, el PDF imprimiría la ruta
         // del archivo ("MODELOS INSPECCION/HONDA 150XR/IZQUIERDA.png") en lugar del dibujo
-        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+        datos: presentar_(Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
           if (!paraPdf[columna]) vacias[columna] = '';
           return vacias;
-        }, {})),
+        }, {}))),
         imagenes: paraPdf,
+        contrato: estructura.formato === 'nuevo' ? contrato_() : null,
         formato: FORMATO_PDF,
         carpetaId: enNuco ? carpetaInspeccion_().getId() : Config.DRIVE_FOLDERS.REPORTES(),
         subcarpeta: enNuco ? undefined : estructura.carpeta,
@@ -1118,6 +1119,63 @@ const InspeccionesService = (function () {
     return estructura_(tipo);
   }
 
+  /**
+   * El contrato de los campos para el formato nuevo de plantillas (MotorPlantillas): las columnas de la hoja (texto),
+   * los diagramas y las firmas (imagen) y, por llanta, su estado calculado (`LLANTA DD ESTADO`: la columna de su rango;
+   * en la celda van los mm). Lo calculado no se pide en el formulario: lo llena presentar_.
+   */
+  let contratoDeEstaEjecucion = null;
+  function contrato_() {
+    if (contratoDeEstaEjecucion) return contratoDeEstaEjecucion;
+    const hoja = hoja_();
+    const campos = {};
+    hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0].forEach((h) => {
+      if (limpiar_(h)) campos[limpiar_(h)] = 'texto';
+    });
+    COLUMNAS_IMAGEN.forEach(([columna]) => { campos[columna] = 'imagen'; });
+    COLUMNAS_LLANTAS.forEach(([columna]) => {
+      campos[columna + ' ESTADO'] = { tipo: 'opcion', marca: columna, calculado: true };
+    });
+    contratoDeEstaEjecucion = { campos: campos };
+    return contratoDeEstaEjecucion;
+  }
+
+  /** Los datos del PDF con lo calculado: el estado de cada llanta medida (calificacionLlanta_, el mismo semáforo) */
+  function presentar_(datos) {
+    const salida = Object.assign({}, datos);
+    COLUMNAS_LLANTAS.forEach(([columna]) => {
+      salida[columna + ' ESTADO'] = calificacionLlanta_(datos[columna]) || '';
+    });
+    return salida;
+  }
+
+  /**
+   * Formato nuevo: el checklist leído de las tablas de la plantilla (MotorPlantillas.analizar), en el orden del
+   * documento; las opciones salen del encabezado de cada tabla. Una plantilla con errores truena con todos ellos.
+   * → { secciones, llantas: [columna] }
+   */
+  function checklistDeTablas_(tipo, body) {
+    const c = contrato_();
+    const arbol = MotorPlantillas.analizar(body);
+    const errores = MotorPlantillas.revisar(arbol, c);
+    if (errores.length) throw new Error('La plantilla del tipo "' + tipo + '" tiene errores:\n' + MotorPlantillas.textoErrores(errores));
+    const usados = {};
+    arbol.marcas.forEach((m) => { usados[MotorPlantillas.canonico(m.campo, c)] = true; });
+    const secciones = arbol.secciones.map((s) => ({
+      titulo: s.titulo,
+      peso: s.peso,
+      campos: s.piezas
+        .map((p) => {
+          usados[MotorPlantillas.canonico(p.campo, c)] = true;
+          return MotorPlantillas.definicion(p.campo, c);
+        })
+        .filter((def) => !def.calculado)
+        .map((def) => ({ campo: def.nombre, opciones: s.opciones.map(MotorPlantillas.clave) })),
+    }));
+    const llantas = COLUMNAS_LLANTAS.map(([columna]) => columna).filter((col) => usados[col] || usados[col + ' ESTADO']);
+    return { secciones: secciones, llantas: llantas };
+  }
+
   /** Lo mismo sin sesión, para lo que corre desde el editor (puntajesMaximos) */
   function estructura_(tipo) {
     // v2 (22-oct): la estructura trae las secciones de fotos; una copia vieja no las tendría
@@ -1137,22 +1195,32 @@ const InspeccionesService = (function () {
       );
     }
 
-    let texto;
+    let body;
     try {
-      texto = DocumentApp.openById(plantillaId).getBody().getText();
+      body = DocumentApp.openById(plantillaId).getBody();
     } catch (err) {
       throw new Error('No se pudo abrir la plantilla del tipo "' + tipo + '" (' + err.message + ')');
     }
+    const texto = body.getText();
+    // El checklist y las llantas que aplican salen de la propia plantilla: un auto trae DD/DI/TD/TI, una moto D/T y un
+    // camión de rueda doble las TII/TID/TEI/TED. En el formato nuevo ({{ }}, 29-oct) se leen de sus tablas; en el de
+    // AppSheet, del texto (que el acomodo a dos columnas revuelve: de ahí REAGRUPAR_SECCIONES).
+    const formato = MotorPlantillas.dialecto(texto) === 'nuevo' ? 'nuevo' : 'appsheet';
+    const deLaPlantilla = formato === 'nuevo'
+      ? checklistDeTablas_(tipo, body)
+      : {
+        secciones: reagruparSiAplica_(tipo, Plantilla.seccionesDe(texto)),
+        llantas: COLUMNAS_LLANTAS.filter(([columna]) => texto.indexOf('[' + columna + ']') !== -1).map(([columna]) => columna),
+      };
 
     const estructura = {
       tipo: limpiar_(configuracion['TIPO']),
       plantillaId: plantillaId,
+      formato: formato,   // 'nuevo' llena con MotorPlantillas y su contrato; una estructura en caché sin él es de AppSheet
       carpeta: carpetaDe_(tipo, configuracion),
-      secciones: reagruparSiAplica_(tipo, Plantilla.seccionesDe(texto)),
-      // Las llantas que aplican salen de la propia plantilla: un auto trae DD/DI/TD/TI,
-      // una moto D/T y un camión de rueda doble las TII/TID/TEI/TED
+      secciones: deLaPlantilla.secciones,
       llantas: COLUMNAS_LLANTAS
-        .filter(([columna]) => texto.indexOf('[' + columna + ']') !== -1)
+        .filter(([columna]) => deLaPlantilla.llantas.indexOf(columna) !== -1)
         .map(([columna, etiqueta]) => ({ campo: columna, etiqueta: etiqueta })),
       diagramas: DIAGRAMAS
         .filter((d) => limpiar_(configuracion[d]))
@@ -1491,7 +1559,7 @@ const InspeccionesService = (function () {
     fotosPreparar, fotosSubir, fotosSubirVarias, fotosTemporal, fotosQuitarTemporal, fotosCancelar, limpiarFotosTemporales,
     fotosDe, fotosAgregar, fotosQuitar,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
-    calcularPuntaje_, valorDeRespuesta_, seccionesFotos_,   // expuestas para las pruebas
+    calcularPuntaje_, valorDeRespuesta_, seccionesFotos_, presentar_, contrato_,   // expuestas para las pruebas
   };
 })();
 

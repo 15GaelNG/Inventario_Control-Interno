@@ -119,5 +119,33 @@ const parrafo = { getType: () => 'PARAGRAPH', getParent: () => celda };
 cerca(PdfService.anchoDeCelda_(parrafo), 159.4, 'una celda combinada suma sus columnas (41.2 + 128.2) y resta su relleno');
 igual(PdfService.anchoDeCelda_({ getType: () => 'PARAGRAPH', getParent: () => null }), null, 'fuera de una tabla no hay celda');
 
+console.log('8. Cada plantilla se llena con el motor de su formato (29-oct)');
+{
+  const D = require('./docs-simulado');
+  const lee = (...p) => fs.readFileSync(path.join(__dirname, '..', 'src', 'services', ...p), 'utf8');
+  let doc = null;
+  const ctx = vm.createContext({
+    PropertiesService: { getScriptProperties: () => ({ getProperty: () => null }) },
+    DriveApp: {}, Utilities: {}, Session: { getScriptTimeZone: () => 'America/Mexico_City' },
+    DocumentApp: Object.assign({}, D.DocumentApp, { openById: () => doc }),
+  });
+  vm.runInContext(lee('Plantilla.gs') + '\n' + lee('MotorPlantillas.gs') + '\n' + lee('PdfService.gs') + '\nthis.P = PdfService;', ctx);
+  const documento = (cuerpo) => ({ getBody: () => cuerpo, saveAndClose: () => {} });
+
+  const viejo = D.cuerpo(['Placas: <<[PLACAS]>> <<IF([PARABRISAS] = "BUENO", "✓", "")>>']);
+  doc = documento(viejo);
+  ctx.P.llenarCopia_('x', { datos: { PLACAS: 'ABC', PARABRISAS: 'BUENO' } });
+  igual(viejo.getText(), 'Placas: ABC ✓', 'la de AppSheet (<< >>), con Plantilla.gs como siempre');
+
+  const nuevo = D.cuerpo(['Placas: {{PLACAS}}']);
+  doc = documento(nuevo);
+  ctx.P.llenarCopia_('x', { datos: { PLACAS: 'ABC' }, contrato: { campos: { PLACAS: 'texto' } } });
+  igual(nuevo.getText(), 'Placas: ABC', 'la nueva ({{ }}), con MotorPlantillas y su contrato');
+
+  const truena = (cuerpo, p) => { doc = documento(cuerpo); try { ctx.P.llenarCopia_('x', p); return ''; } catch (e) { return e.message; } };
+  ok(/no mandó su contrato/.test(truena(D.cuerpo(['{{PLACAS}}']), { datos: {} })), 'la nueva sin contrato: truena (no se llena a ciegas)');
+  ok(/mezcla marcas/.test(truena(D.cuerpo(['{{PLACAS}} <<[PLACAS]>>']), { datos: {}, contrato: { campos: {} } })), 'una que mezcla los dos: truena');
+}
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

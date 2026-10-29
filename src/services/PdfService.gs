@@ -218,10 +218,11 @@ const PdfService = (function () {
    * Cambia un marcador por una imagen. Se usa para las firmas y los diagramas de daños
    * (en las plantillas son <<[FIRMA INSPECTOR]>>, <<[INS FRONTAL]>>, etc.).
    * @param {Object} [caja]  { ancho, alto } máximos en puntos (las firmas: 150 × 60)
+   * @param {boolean} [esPatron]  el marcador ya es un patrón (MotorPlantillas.patron: {{ CAMPO }} con espacios)
    * @return {boolean} si encontró el marcador
    */
-  function insertarImagen_(body, marcador, blob, caja) {
-    const encontrado = body.findText(escaparRegex_(marcador));
+  function insertarImagen_(body, marcador, blob, caja, esPatron) {
+    const encontrado = body.findText(esPatron ? marcador : escaparRegex_(marcador));
     if (!encontrado) return false;
 
     const elemento = encontrado.getElement();
@@ -265,6 +266,12 @@ const PdfService = (function () {
   function llenarCopia_(copiaId, p, aviso) {
     const doc = DocumentApp.openById(copiaId);
     const body = doc.getBody();
+    // Qué lenguaje trae la plantilla: el propio ({{ }}, MotorPlantillas, revisado contra p.contrato) o el de AppSheet
+    // (<< >>, Plantilla.gs), que siguen usando las plantillas que todavía no se convierten (29-oct)
+    const dialecto = MotorPlantillas.dialecto(body.getText());
+    if (dialecto === 'mezclado') throw new Error('La plantilla mezcla marcas de AppSheet (<<…>>) y {{ }}: debe ser una sola forma.');
+    const nuevo = dialecto === 'nuevo';
+    if (nuevo && !p.contrato) throw new Error('Esta plantilla usa el formato nuevo ({{ }}) y el módulo no mandó su contrato de campos.');
 
     // Primero las imágenes: si no, el paso de texto borraría sus marcadores
     Object.keys(p.imagenes || {}).forEach((campo) => {
@@ -277,12 +284,14 @@ const PdfService = (function () {
       );
       // En las plantillas el marcador de imagen se escribe con corchetes
       const caja = { ancho: imagen.ancho, alto: imagen.alto };
-      if (!insertarImagen_(body, '<<[' + campo + ']>>', blob, caja)) {
+      if (nuevo) insertarImagen_(body, MotorPlantillas.patron(campo), blob, caja, true);
+      else if (!insertarImagen_(body, '<<[' + campo + ']>>', blob, caja)) {
         insertarImagen_(body, '<<' + campo + '>>', blob, caja);
       }
     });
 
-    const resultado = llenarTexto_(body, datosParaPlantilla_(p.datos));
+    const datos = datosParaPlantilla_(p.datos);
+    const resultado = nuevo ? MotorPlantillas.llenar(body, datos, p.contrato) : llenarTexto_(body, datos);
     if (p.formato) aplicarFormato_(body, p.formato);
     if (aviso) {
       const parrafo = body.insertParagraph(0, aviso);
@@ -305,6 +314,8 @@ const PdfService = (function () {
    * @param {string} [p.subcarpeta]  subcarpeta dentro de la anterior, ej. 'INSPECCIONES L200'
    * @param {Object} [p.formato]     ajustes a la COPIA (la plantilla no se toca, ver aplicarFormato_):
    *                                 { fuente: 'Arial', margenes: { arriba, abajo, izquierda, derecha } }
+   * @param {Object} [p.contrato]    los campos y sus tipos (MotorPlantillas): obligatorio si la plantilla es del
+   *                                 formato nuevo ({{ }}); con la de AppSheet no se usa
    * @return {{url: string, fileId: string, marcadores: number, sinResolver: string[]}}
    */
   function generar(p) {
@@ -416,6 +427,6 @@ const PdfService = (function () {
 
   return {
     generar, generarVistaPrevia, camposDePlantilla, nombreArchivo, fechaParaNombre, subcarpeta_,
-    datosParaPlantilla_, aplicarFormato_, medidaDeImagen_, anchoDeCelda_,   // expuestas para las pruebas
+    datosParaPlantilla_, aplicarFormato_, medidaDeImagen_, anchoDeCelda_, llenarCopia_,   // expuestas para las pruebas
   };
 })();
