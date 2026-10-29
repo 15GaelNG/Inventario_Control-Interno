@@ -10,6 +10,7 @@
  *                                         no copia otra vez lo que ya es copia.
  *   inspeccionesPlantillasAOriginales()   regresa la hoja a los IDs originales (las copias se quedan en la carpeta).
  *   inspeccionesDescribirPlantilla('AUTOS')   solo lee: cómo están armadas las tablas de una plantilla.
+ *   inspeccionesNA1Ensayo() / NA2EscribirAutos() / NA3EscribirTodas()   la columna N/A en las copias (abajo).
  */
 
 const INSP_DEV_CARPETA = 'PLANTILLAS INSPECCION DEV';
@@ -131,4 +132,194 @@ function inspeccionesDescribirPlantilla(tipo) {
   const texto = lineas.join('\n');
   Logger.log(texto);
   return texto;
+}
+
+// ---------------------------------------------------------------- la columna N/A (29-oct)
+
+/**
+ * Cada sección del checklist es una tablita: encabezado `Sección N% | Bueno | Regular | Malo` y una pieza por renglón,
+ * con un <<IF([PIEZA] = "BUENO", "✓", "")>> por opción. A la que no trae N/A se le agrega la columna: a cada renglón,
+ * una COPIA de su última celda (mismo borde, fondo y letra), con "N/A" en el encabezado y la opción "N/A" en la fórmula
+ * de cada pieza. El formulario, el PDF y la calificación ya la entienden solos.
+ *
+ * El ancho total de la tablita NO cambia (va a media página): la columna nueva mide lo que la última opción y sale de la
+ * del nombre de la pieza, que no baja de INSP_NA_NOMBRE_MIN de lo que medía; si no alcanza, también se angostan las
+ * opciones, todas parejo. Una tabla que no tiene esa forma (renglones de distinto número de celdas, una opción que no
+ * está al final, dos piezas en un renglón) no se toca: sale en el reporte para hacerla a mano.
+ *
+ *   inspeccionesNA1Ensayo()          las 18: qué secciones cambiarían y cómo quedan los anchos. No escribe.
+ *   inspeccionesNA2EscribirAutos()   solo AUTOS, para revisar su PDF antes que las demás.
+ *   inspeccionesNA3EscribirTodas()   las que falten (una sección que ya trae N/A no se vuelve a tocar).
+ */
+const INSP_NA_NOMBRE_MIN = 0.6;
+const INSP_NA_MARCA = /<<IF\(\[([^\]]+)\]\s*=\s*"([^"]*)"/i;
+
+function inspeccionesNA1Ensayo() {
+  soloEditor_();
+  return inspDevNA_({ escribir: false });
+}
+
+function inspeccionesNA2EscribirAutos() {
+  soloEditor_();
+  return inspDevNA_({ escribir: true, tipos: ['AUTOS'] });
+}
+
+function inspeccionesNA3EscribirTodas() {
+  soloEditor_();
+  return inspDevNA_({ escribir: true });
+}
+
+function inspDevNA_(cfg) {
+  inspDevNoEnProd_();
+  const originales = JSON.parse(PropertiesService.getScriptProperties().getProperty(INSP_DEV_PROP) || '{}');
+  const esOriginal = {};
+  Object.keys(originales).forEach((t) => { esOriginal[originales[t]] = true; });
+  const soloTipos = cfg.tipos && cfg.tipos.map((t) => SheetUtils.normalizarEncabezado_(t));
+  const lineas = [(cfg.escribir ? 'AGREGANDO N/A' : 'ENSAYO (no cambia nada)') + ' — plantillas de inspección del DEV', ''];
+  const tocados = [];
+  SheetUtils.getAll(Config.SPREADSHEET_IDS.VEHICULOS(), 'MODELOS INSPECCION').forEach((f) => {
+    const tipo = String(f['TIPO'] || '').trim();
+    const id = String(f['PLANTILLA'] || '').trim();
+    if (!tipo || !id) return;
+    if (soloTipos && soloTipos.indexOf(SheetUtils.normalizarEncabezado_(tipo)) === -1) return;
+    // Solo una copia del DEV: nunca el documento que usa producción
+    if (!originales[tipo] || esOriginal[id]) {
+      lineas.push('  ✘ ' + tipo + ': no usa una copia del DEV (corre inspeccionesPlantillasACopias); no se toca');
+      return;
+    }
+    const doc = DocumentApp.openById(id);
+    if (!/\(DEV\)$/.test(doc.getName())) {
+      lineas.push('  ✘ ' + tipo + ': "' + doc.getName() + '" no es una copia "(DEV)"; no se toca');
+      return;
+    }
+    const r = { secciones: 0, piezas: 0, yaTraian: 0, anchos: [], saltadas: [], problemas: [] };
+    inspDevTablas_(doc.getBody()).forEach((t) => inspDevNATabla_(t, cfg.escribir, r));
+    if (cfg.escribir) {
+      doc.saveAndClose();
+      tocados.push(tipo);
+    }
+    const aviso = r.saltadas.length || r.problemas.length;
+    lineas.push('  ' + (aviso ? '⚠ ' : '✔ ') + tipo + ': ' + r.secciones + ' secciones ' +
+      (cfg.escribir ? 'con N/A nuevo' : 'sin N/A') + ' (' + r.piezas + ' piezas) · ' + r.yaTraian + ' ya lo traían');
+    r.anchos.forEach((a) => lineas.push('      ' + a));
+    r.saltadas.forEach((s) => lineas.push('      SALTADA ' + s));
+    r.problemas.forEach((p) => lineas.push('      REVISAR ' + p));
+  });
+  if (tocados.length) inspDevOlvidar_(tocados);
+  if (!cfg.escribir) lineas.push('', 'Si cuadra: inspeccionesNA2EscribirAutos() y revisa el PDF de una inspección de AUTOS.');
+  const texto = lineas.join('\n');
+  Logger.log(texto);
+  return texto;
+}
+
+/** Las tablas que no llevan otra tabla adentro (las de acomodo de la página no son secciones), en orden. */
+function inspDevTablas_(contenedor) {
+  const T = DocumentApp.ElementType;
+  const lista = [];
+  for (let i = 0; i < contenedor.getNumChildren(); i++) {
+    const el = contenedor.getChild(i);
+    if (el.getType() !== T.TABLE) continue;
+    const tabla = el.asTable();
+    let anidadas = false;
+    for (let r = 0; r < tabla.getNumRows(); r++) {
+      const renglon = tabla.getRow(r);
+      for (let c = 0; c < renglon.getNumCells(); c++) {
+        const dentro = inspDevTablas_(renglon.getCell(c));
+        if (dentro.length) {
+          anidadas = true;
+          dentro.forEach((x) => lista.push(x));
+        }
+      }
+    }
+    if (!anidadas) lista.push(tabla);
+  }
+  return lista;
+}
+
+const inspDevRegex_ = (s) => String(s).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+function inspDevNATabla_(tabla, escribir, r) {
+  const filas = [];
+  for (let i = 0; i < tabla.getNumRows(); i++) {
+    const renglon = tabla.getRow(i);
+    const marcas = [];
+    for (let c = 0; c < renglon.getNumCells(); c++) {
+      const m = INSP_NA_MARCA.exec(renglon.getCell(c).getText());
+      if (m) marcas.push({ c: c, pieza: m[1].trim(), opcion: m[2].trim() });
+    }
+    filas.push({ renglon: renglon, celdas: renglon.getNumCells(), marcas: marcas });
+  }
+  const piezas = filas.filter((f) => f.marcas.length);
+  if (!piezas.length) return;   // no es del checklist: datos, firmas, llantas en mm
+  const titulo = String(tabla.getRow(0).getCell(0).getText()).replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (piezas.some((f) => f.marcas.some((m) => /^N\/?A$/i.test(m.opcion)))) {
+    r.yaTraian++;
+    return;
+  }
+  const n = filas[0].celdas;
+  const raro = filas.some((f) => f.celdas !== n) ? 'renglones con distinto número de celdas'
+    : piezas.some((f) => f.marcas[f.marcas.length - 1].c !== n - 1) ? 'la última opción no está en la última columna'
+      : piezas.some((f) => f.marcas.some((m) => m.pieza !== f.marcas[0].pieza)) ? 'dos piezas en un renglón'
+        : '';
+  if (raro) {
+    r.saltadas.push('"' + titulo + '": ' + raro);
+    return;
+  }
+  r.secciones++;
+  r.piezas += piezas.length;
+
+  // Los anchos: el total se queda igual
+  const primeraOpcion = Math.min.apply(null, piezas.map((f) => f.marcas[0].c));
+  const anchos = [];
+  for (let c = 0; c < n; c++) anchos.push(tabla.getColumnWidth(c));
+  const nuevos = inspDevAnchos_(anchos, primeraOpcion);
+  r.anchos.push('"' + titulo + '": ' + nuevos.texto);
+
+  if (!escribir) return;
+  const primeraPieza = filas.indexOf(piezas[0]);
+  filas.forEach((f, i) => {
+    const ultima = f.renglon.getCell(n - 1);
+    const nueva = f.renglon.appendTableCell(ultima.copy());
+    if (f.marcas.length) {
+      const m = f.marcas[f.marcas.length - 1];
+      nueva.replaceText('"' + inspDevRegex_(m.opcion) + '"', '"N/A"');
+      if (nueva.getText().indexOf('"N/A"') === -1) r.problemas.push('"' + titulo + '" / ' + m.pieza + ': la fórmula nueva no quedó con "N/A"');
+      return;
+    }
+    const texto = ultima.getText().trim();
+    if (!texto) return;
+    if (i < primeraPieza) nueva.replaceText(inspDevRegex_(texto), 'N/A');   // el encabezado: "Malo" → "N/A"
+    else nueva.setText('');
+  });
+  if (nuevos.anchos) nuevos.anchos.forEach((w, c) => tabla.setColumnWidth(c, w));
+}
+
+/**
+ * Los anchos con una columna más, sin cambiar el total: { anchos (o null si la tabla no los fija), texto }. La nueva mide
+ * lo que la última; sale de la columna de nombre más ancha (antes de la primera opción) sin bajarla de
+ * INSP_NA_NOMBRE_MIN; lo que falte, de las opciones, todas en la misma proporción.
+ */
+function inspDevAnchos_(anchos, primeraOpcion) {
+  if (anchos.some((w) => !w)) return { anchos: null, texto: 'anchos automáticos (Docs reparte la columna nueva solo)' };
+  const redondo = (w) => Math.round(w * 10) / 10;
+  const total = anchos.reduce((a, b) => a + b, 0);
+  const nueva = anchos[anchos.length - 1];
+  let nombre = 0;
+  for (let c = 1; c < primeraOpcion; c++) if (anchos[c] > anchos[nombre]) nombre = c;
+  const cede = Math.min(nueva, anchos[nombre] * (1 - INSP_NA_NOMBRE_MIN));
+  const resultado = anchos.concat([nueva]);
+  resultado[nombre] = anchos[nombre] - cede;
+  if (cede < nueva) {
+    // Lo que falta sale de las opciones (incluida la nueva), parejo
+    let opciones = 0;
+    for (let c = primeraOpcion; c < resultado.length; c++) opciones += resultado[c];
+    const factor = (opciones - (nueva - cede)) / opciones;
+    for (let c = primeraOpcion; c < resultado.length; c++) resultado[c] = resultado[c] * factor;
+  }
+  const fin = resultado.map(redondo);
+  return {
+    anchos: fin,
+    texto: 'nombre ' + redondo(anchos[nombre]) + '→' + fin[nombre] + ' pt, opción ' + redondo(nueva) + '→' + fin[fin.length - 1] +
+      ' pt (total ' + redondo(total) + ' pt' + (Math.abs(fin.reduce((a, b) => a + b, 0) - total) > 0.5 ? ', NO CUADRA' : '') + ')',
+  };
 }
