@@ -2,48 +2,19 @@
  * La columna N/A en las copias de las plantillas de inspección (src/InspeccionesPlantillasDev.gs), contra un Docs de
  * mentira: tablas de sección dentro de una tabla de acomodo, como la plantilla real de AUTOS.
  *
+ * El Docs de mentira es el compartido (tests/docs-simulado.js).
+ *
  * Correr: node tests/inspecciones-plantillas-dev.test.js
  */
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const D = require('./docs-simulado');
 
 let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
 
-const TIPO = { TABLE: 'TABLE', PARAGRAPH: 'PARAGRAPH' };
-function celda(texto, tablas) {
-  const c = {
-    texto: texto || '', tablas: tablas || [], copias: 0,
-    getText: () => c.texto,
-    setText: (t) => { c.texto = t; },
-    replaceText: (patron, por) => { c.texto = c.texto.replace(new RegExp(patron), por); },
-    copy: () => celda(c.texto),
-    getNumChildren: () => c.tablas.length,
-    getChild: (i) => c.tablas[i],
-    getType: () => 'TABLE_CELL',
-  };
-  return c;
-}
-function tabla(renglones, anchos) {
-  const t = {
-    anchos: anchos ? anchos.slice() : null,
-    filas: renglones.map((textos) => {
-      const r = { celdas: textos.map((x) => (typeof x === 'string' ? celda(x) : x)) };
-      r.getNumCells = () => r.celdas.length;
-      r.getCell = (i) => r.celdas[i];
-      r.appendTableCell = (c) => { r.celdas.push(c); return c; };
-      return r;
-    }),
-    getType: () => TIPO.TABLE,
-    asTable: () => t,
-    getNumRows: () => t.filas.length,
-    getRow: (i) => t.filas[i],
-    getColumnWidth: (i) => (t.anchos ? t.anchos[i] : null),
-    setColumnWidth: (i, w) => { t.anchos[i] = w; },
-  };
-  return t;
-}
+const { celda, tabla, DocumentApp } = D;
 const marca = (pieza, op) => '<<IF([' + pieza + '] ="' + op + '", "✓", "")>>';
 const seccion = (titulo, piezas, ops, conNA, anchos) => tabla(
   [[titulo].concat(ops).concat(conNA ? ['N/A'] : [])].concat(piezas.map((p) =>
@@ -68,7 +39,7 @@ function armar(cuerpo, opciones) {
     },
     PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => props[k] || null }) },
     CacheService: { getScriptCache: () => ({ removeAll: () => {} }) },
-    DocumentApp: { ElementType: TIPO, openById: () => doc },
+    DocumentApp: Object.assign({}, DocumentApp, { openById: () => doc }),
     Logger: { log: () => {} },
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'InspeccionesPlantillasDev.gs'), 'utf8'), ctx);
@@ -132,7 +103,7 @@ console.log('2b. Un tipo con los mismos anchos que otro no los repite en el repo
       normalizarEncabezado_: (s) => String(s).trim().toUpperCase() },
     PropertiesService: { getScriptProperties: () => ({ getProperty: () => JSON.stringify({ KWID: 'O1', AUTOS: 'O2' }) }) },
     CacheService: { getScriptCache: () => ({ removeAll: () => {} }) },
-    DocumentApp: { ElementType: TIPO, openById: () => doc },
+    DocumentApp: Object.assign({}, DocumentApp, { openById: () => doc }),
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'InspeccionesPlantillasDev.gs'), 'utf8'), ctx);
   const r = ctx.inspeccionesNA1Ensayo();
