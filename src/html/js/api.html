@@ -76,18 +76,54 @@
   const ESCRIBE = /^api(Crear|Actualizar|Eliminar|Registrar|Subir|Cambiar|Cerrar|Guardar|Marcar|Reactivar|Sincronizar|Reasignar)/;
   const FICHAS_GUARDADAS = ['apiFichaVehiculo', 'apiFichaCajaChica'];
 
-  function pedir_(fnName, args, etiqueta) {   // etiqueta: con qué nombre se anota en verTiempos (la lista, no la envoltura)
-    const inicio = performance.now();
-    return new Promise((resolve, reject) => {
+  /**
+   * El cupo de Apps Script: unas 30 ejecuciones a la vez POR CUENTA, y la app corre con la de quien despliega
+   * (USER_DEPLOYING), así que todas las pestañas de todos comparten ese cupo (y los activadores). Al llenarse, Google
+   * rechaza la llamada ANTES de correrla ("Hay demasiadas secuencias de comandos ejecutándose de forma simultánea…", 29-oct),
+   * así que reintentarla es seguro aun si escribe. Por eso, aquí:
+   *   - cada pestaña tiene a lo más `maxEnVuelo` llamadas en curso; las demás esperan su turno (entrar ya no pide 8-10
+   *     cosas de golpe);
+   *   - ese error se reintenta solo, tras `esperas` (más un poco al azar, para que no reintenten todas juntas).
+   */
+  const llamadasConfig = { maxEnVuelo: 4, esperas: [1000, 2000, 4000, 8000] };
+  const SATURADO = /demasiadas secuencias|too many scripts|simult[aá]neamente|simultaneous/i;
+  let enVuelo = 0;
+  const enEspera = [];
+  /** Corre `enviar` ya si hay lugar (como siempre: la llamada sale en el momento) o cuando se libere uno */
+  function enTurno_(enviar) {
+    if (enVuelo < llamadasConfig.maxEnVuelo) {
+      enVuelo++;
+      enviar();
+    } else {
+      enEspera.push(enviar);
+    }
+  }
+  function liberar_() {
+    const siguiente = enEspera.shift();
+    if (siguiente) siguiente();   // el lugar pasa directo al siguiente
+    else enVuelo--;
+  }
+
+  function pedir_(fnName, args, etiqueta, intento) {   // etiqueta: con qué nombre se anota en verTiempos (la lista, no la envoltura)
+    const vez = intento || 0;
+    return new Promise((resolve, reject) => enTurno_(() => {
+      const inicio = performance.now();
       google.script.run
         .withSuccessHandler((r) => {
+          liberar_();
           anotarTiempo_(etiqueta || fnName, inicio, true);
           if (ESCRIBE.test(fnName)) FICHAS_GUARDADAS.forEach(invalidarListasDe);
           resolve(r);
         })
         .withFailureHandler((err) => {
+          liberar_();
           anotarTiempo_(etiqueta || fnName, inicio, false);
           const mensaje = err.message || String(err);
+          if (SATURADO.test(mensaje) && vez < llamadasConfig.esperas.length) {
+            const espera = llamadasConfig.esperas[vez] * (1 + Math.random() * 0.5);
+            setTimeout(() => { pedir_(fnName, args, etiqueta, vez + 1).then(resolve, reject); }, espera);
+            return;
+          }
           // Sesión expirada (Auth.validarSesion, server-side): sin importar
           // desde qué pantalla/módulo venga la llamada, se maneja aquí una
           // sola vez — regresa al login con un aviso, en vez de dejar cada
@@ -98,7 +134,7 @@
           reject(new Error(mensaje));
         })
         [fnName](...args);
-    });
+    }));
   }
 
   /**
