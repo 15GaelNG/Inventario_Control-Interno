@@ -1011,20 +1011,22 @@ function inspDevAnchos_(anchos, primeraOpcion, etiquetas, nombres, contenedor) {
  * pieza va en una opción distinta (rotando), para que haya palomitas en todas las columnas, también la N/A; las llantas
  * y el voltaje caen en sus distintos rangos.
  *
- *   inspeccionesPdfDePrueba()        el de INSP_PDF_PRUEBA_TIPO (lo rehace), y el mismo con la plantilla de antes de
+ *   inspeccionesPdfDePrueba()        los de INSP_PDF_PRUEBA_TIPOS (los rehace), y cada uno con la plantilla de antes de
  *                                    convertirla: "PRUEBA <TIPO> (antes)", para comparar
  *   inspeccionesPdfDePruebaTodos()   todos los tipos, hasta donde alcance el tiempo (córrela otra vez: salta los que ya
  *                                    tienen el suyo)
  * Quedan en "PLANTILLAS INSPECCION DEV/PDF DE PRUEBA" como "PRUEBA <TIPO>.pdf". No escribe en ninguna hoja.
  */
-const INSP_PDF_PRUEBA_TIPO = 'RAM 700';
+// Los tipos de inspeccionesPdfDePrueba: RAM 700 ya se revisó (29-oct; su 3a hoja viene de antes, de sus dibujos); ahora
+// una moto y un motocarro, las de estructura más distinta
+const INSP_PDF_PRUEBA_TIPOS = ['ITALIKA DM250', 'MOTOCARRO'];
 const INSP_PDF_PRUEBA_CARPETA = 'PDF DE PRUEBA';
 /** Una firma de ejemplo (200 × 80, un trazo azul): con ella el PDF ocupa lo mismo que uno firmado */
 const INSP_FIRMA_PRUEBA = 'iVBORw0KGgoAAAANSUhEUgAAAMgAAABQCAYAAABcbTqwAAABLElEQVR42u3c2xGCMBRF0VRCYVZsV2oJzCTBc3PXmvFXIbBNwMcYAAAAAAAAAAAAAAAAAAAAAMAe1+v9ufMwUohCLAhj3cOI0noZJRTah7HquYw2x8SxMzojT+lZIz1AKDdriARxbHhtR4XoOLptA0QvcSy5EIfZBEsqkSAO24o4bDPisO3MHhAX4yIRwmFf2T7ttqlIikThLpD9EkbRWDp82CaSP4SxMzZx2NeScSRH6GSx3+XDmJlZKu+nJZcwYmPxG2+zyVEDNHuR759CRNJmmdHlFrPzwTtGRCxyCA8ldX3voDIS/pcr6ffLTiBWztblbq8JgydDKXPiWnZQfjm748WEQbvpK/6iChIviISBUEQB62IxagAAAAAAAAAAAAAAAAAAAAAAAPx8AT+C6kcTQv+GAAAAAElFTkSuQmCC';
 
 function inspeccionesPdfDePrueba() {
   soloEditor_();
-  return inspDevPdfDePrueba_([INSP_PDF_PRUEBA_TIPO], true, true);
+  return inspDevPdfDePrueba_(INSP_PDF_PRUEBA_TIPOS, true, true);
 }
 
 function inspeccionesPdfDePruebaTodos() {
