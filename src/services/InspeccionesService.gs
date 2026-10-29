@@ -1184,9 +1184,10 @@ const InspeccionesService = (function () {
    * una plantilla sin capturar una inspección (inspeccionesPdfDePrueba en InspeccionesPlantillasDev.gs).
    * @param {Object} datos   las columnas, como la fila de registrar
    * @param {Object} firmas  { 'FIRMA RESPONSABLE': blob, … } (opcional)
+   * @param {string} [plantillaId]  otra plantilla del tipo (la de antes de convertirla, para comparar); sin ella, la suya
    * → lo de PdfService.generar, más sinDibujo (los diagramas que no están en Drive)
    */
-  function pdfDePrueba_(tipo, datos, firmas, carpetaId, nombre) {
+  function pdfDePrueba_(tipo, datos, firmas, carpetaId, nombre, plantillaId) {
     const estructura = estructura_(tipo);
     const paraPdf = {};
     const sinDibujo = [];
@@ -1199,11 +1200,12 @@ const InspeccionesService = (function () {
     const vacias = {};
     COLUMNAS_IMAGEN.forEach(([c]) => { if (!paraPdf[c]) vacias[c] = ''; });
     const pdf = PdfService.generar({
-      plantillaId: estructura.plantillaId,
+      plantillaId: plantillaId || estructura.plantillaId,
       datos: presentar_(Object.assign({ TIPO: estructura.tipo }, datos, vacias)),
       imagenes: paraPdf,
       formato: FORMATO_PDF,
-      contrato: estructura.formato === 'nuevo' ? contrato_() : null,
+      // PdfService lo usa solo si la plantilla es del formato nuevo; con otra plantilla no se sabe de antemano
+      contrato: plantillaId || estructura.formato === 'nuevo' ? contrato_() : null,
       carpetaId: carpetaId,
       nombre: nombre,
     });

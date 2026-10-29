@@ -83,7 +83,7 @@ console.log('2. Los anchos: lo que mide cada texto (Arial negrita 6.5 pt, como s
   const holgada = seccion('Cristalería 10%', ['Parabrisas'], ['Bueno', 'Regular', 'Malo'], false, [140, 46, 46, 48]);
   const x = armar([holgada]);
   x.ctx.inspeccionesNA2EscribirAutos();
-  ok(holgada.anchos[0] === 140 && holgada.anchos.slice(1).every((w) => w === 35), 'con espacio de sobra: el nombre igual y las opciones parejas (4 × 35)');
+  ok(holgada.anchos[0] === 137.2 && holgada.anchos.slice(1).every((w) => w === 35.7), 'con espacio de sobra: las opciones parejas (4 × 35.7, lo que pide «Regular») y el nombre con el resto');
 
   const angosta = seccion('Niveles 10%', ['Aceite'], ['Bueno', 'Regular', 'Malo'], false, [40, 30, 30, 30]);
   const { ctx } = armar([angosta]);

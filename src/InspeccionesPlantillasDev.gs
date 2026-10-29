@@ -187,6 +187,10 @@ function inspeccionesConvertir3EscribirTodas() {
  */
 function inspeccionesUsarConvertidas() {
   soloEditor_();
+  return inspDevUsarConvertidas_();
+}
+
+function inspDevUsarConvertidas_() {
   inspDevNoEnProd_();
   return Candado.con(() => {
     const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
@@ -890,7 +894,9 @@ const INSP_ARIAL = {
   q: 556, r: 333, s: 500, t: 278, u: 556, v: 500, w: 722, x: 500, y: 500, z: 500,
 };
 const INSP_LETRA_PT = 6.5;
-const INSP_RELLENO_PT = 10.5;   // 5 pt por lado (el de Docs) y medio punto de holgura
+// El relleno de una celda más holgura, medido en los PDF del 29-oct: «Regular» (24.2 pt de texto) se partía en 34.7 pt y
+// cabía en 35; «Bueno» (20.2) se partía en 27.3 y cabía en 30.7. Con 11.5, «Regular» pide 35.7.
+const INSP_RELLENO_PT = 11.5;
 
 /** Ancho (pt) de un texto a 6.5 pt en Arial: en negritas (encabezados, por omisión) o normal (los nombres de las piezas) */
 function inspDevAnchoTexto_(texto, normal) {
@@ -1005,7 +1011,8 @@ function inspDevAnchos_(anchos, primeraOpcion, etiquetas, nombres, contenedor) {
  * pieza va en una opción distinta (rotando), para que haya palomitas en todas las columnas, también la N/A; las llantas
  * y el voltaje caen en sus distintos rangos.
  *
- *   inspeccionesPdfDePrueba()        el de INSP_PDF_PRUEBA_TIPO (lo rehace)
+ *   inspeccionesPdfDePrueba()        el de INSP_PDF_PRUEBA_TIPO (lo rehace), y el mismo con la plantilla de antes de
+ *                                    convertirla: "PRUEBA <TIPO> (antes)", para comparar
  *   inspeccionesPdfDePruebaTodos()   todos los tipos, hasta donde alcance el tiempo (córrela otra vez: salta los que ya
  *                                    tienen el suyo)
  * Quedan en "PLANTILLAS INSPECCION DEV/PDF DE PRUEBA" como "PRUEBA <TIPO>.pdf". No escribe en ninguna hoja.
@@ -1017,7 +1024,7 @@ const INSP_FIRMA_PRUEBA = 'iVBORw0KGgoAAAANSUhEUgAAAMgAAABQCAYAAABcbTqwAAABLElEQ
 
 function inspeccionesPdfDePrueba() {
   soloEditor_();
-  return inspDevPdfDePrueba_([INSP_PDF_PRUEBA_TIPO], true);
+  return inspDevPdfDePrueba_([INSP_PDF_PRUEBA_TIPO], true, true);
 }
 
 function inspeccionesPdfDePruebaTodos() {
@@ -1044,8 +1051,15 @@ function inspDevDatosEjemplo_(tipo) {
   return Object.assign(datos, checklist);
 }
 
-function inspDevPdfDePrueba_(tipos, rehacer) {
+/**
+ * Los PDF de prueba de unos tipos (todos, sin `tipos`). Primero apunta el DEV a las convertidas más recientes
+ * (inspDevUsarConvertidas_: tras un `convertir --rehacer` no hay que correr nada más). Con `antes`, también el mismo PDF
+ * con la plantilla de antes de convertirla ("PRUEBA <TIPO> (antes)"), para compararlos.
+ */
+function inspDevPdfDePrueba_(tipos, rehacer, antes) {
   inspDevNoEnProd_();
+  inspDevUsarConvertidas_();
+  const deAppSheet = JSON.parse(PropertiesService.getScriptProperties().getProperty(INSP_DEV_PROP_APPSHEET) || '{}');
   const inicio = Date.now();
   const norm = (t) => SheetUtils.normalizarEncabezado_(t);
   const carpeta = DriveUtils.subcarpeta(DriveUtils.subcarpeta(DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ()), INSP_DEV_CARPETA), INSP_PDF_PRUEBA_CARPETA);
@@ -1054,29 +1068,33 @@ function inspDevPdfDePrueba_(tipos, rehacer) {
   const firma = () => Utilities.newBlob(Utilities.base64Decode(INSP_FIRMA_PRUEBA), 'image/png', 'firma.png');
   const lineas = ['PDF DE PRUEBA — carpeta "' + INSP_DEV_CARPETA + '/' + INSP_PDF_PRUEBA_CARPETA + '"', ''];
   const faltan = [];
-  elegidos.forEach((tipo) => {
-    const nombre = 'PRUEBA ' + tipo;
+  const generar = (tipo, nombre, datos, plantillaId) => {
     const anteriores = [];
     const ya = carpeta.getFilesByName(nombre + '.pdf');
     while (ya.hasNext()) anteriores.push(ya.next());
     if (anteriores.length && !rehacer) {
-      lineas.push('  = ' + tipo + ': ya tiene su PDF');
-      return;
-    }
-    if (Date.now() - inicio > INSP_CONV_TIEMPO_MS) {
-      faltan.push(tipo);
+      lineas.push('  = ' + nombre + ': ya está');
       return;
     }
     try {
       anteriores.forEach((a) => DriveUtils.aPapelera(a));   // antes, para que el nuevo se llame igual
-      const r = InspeccionesService.pdfDePrueba_(tipo, inspDevDatosEjemplo_(tipo),
-        { 'FIRMA RESPONSABLE': firma(), 'FIRMA INSPECTOR': firma() }, carpeta.getId(), nombre);
-      lineas.push('  ✔ ' + tipo + ': ' + r.url +
+      const r = InspeccionesService.pdfDePrueba_(tipo, datos, { 'FIRMA RESPONSABLE': firma(), 'FIRMA INSPECTOR': firma() },
+        carpeta.getId(), nombre, plantillaId);
+      lineas.push('  ✔ ' + nombre + ': ' + r.url +
         (r.sinResolver && r.sinResolver.length ? '\n      SIN RESOLVER: ' + r.sinResolver.join('; ') : '') +
         (r.sinDibujo.length ? '\n      sin dibujo en Drive: ' + r.sinDibujo.join(', ') : ''));
     } catch (err) {
-      lineas.push('  ✘ ' + tipo + ': ' + err.message);
+      lineas.push('  ✘ ' + nombre + ': ' + err.message);
     }
+  };
+  elegidos.forEach((tipo) => {
+    if (Date.now() - inicio > INSP_CONV_TIEMPO_MS) {
+      faltan.push(tipo);
+      return;
+    }
+    const datos = inspDevDatosEjemplo_(tipo);   // los mismos en los dos, para compararlos
+    generar(tipo, 'PRUEBA ' + tipo, datos);
+    if (antes && deAppSheet[tipo]) generar(tipo, 'PRUEBA ' + tipo + ' (antes)', datos, deAppSheet[tipo]);
   });
   if (faltan.length) lineas.push('', 'Se acabó el tiempo de esta corrida; faltan: ' + faltan.join(', ') + '. Córrela otra vez para seguir.');
   const texto = lineas.join('\n');

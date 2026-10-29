@@ -59,7 +59,7 @@ console.log('2. Tanda 1: la columna N/A donde falta, con sus anchos');
     insertar[0].insertTableColumn.tableCellLocation.rowIndex === 1 && insertar[0].insertTableColumn.tableCellLocation.columnIndex === 3 &&
     insertar[0].insertTableColumn.insertRight === true, 'solo en la que no lo trae: a la derecha de la última columna, desde un renglón de pieza');
   const anchos = p.requests.filter((r) => r.updateTableColumnProperties).map((r) => r.updateTableColumnProperties.tableColumnProperties.width.magnitude);
-  ok(anchos.join(',') === '140,35,35,35,35', 'sus anchos: el nombre igual y las opciones repartidas (140 + 4 × 35 = 280)');
+  ok(anchos.join(',') === '137.2,35.7,35.7,35.7,35.7', 'sus anchos: las opciones parejas (lo que pide «Regular») y el nombre con el resto (280 en total)');
   ok(p.conNA.length === 1 && p.conNA[0].columnas === 4, 'y dice cuál cambió y cuántas columnas tenía');
 }
 
