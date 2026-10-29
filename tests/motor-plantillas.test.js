@@ -149,6 +149,23 @@ console.log('5. Llenar con un valor que no es opción, y con errores');
     'con un error truena antes de escribir nada');
 }
 
+console.log('5b. Una sección partida en dos columnas: {{continúa}}');
+{
+  const mitad1 = D.tabla([['Sistemas interiores 10%', 'Bueno', 'Malo'], ['Claxon {{PARABRISAS}}', '', '']]);
+  const mitad2 = D.tabla([['{{continúa Sistemas interiores}}', 'Bueno', 'Malo', 'N/A'], ['Stop {{MEDALLON}}', '', '', '']]);
+  const otra = D.tabla([['Documentación 5%', 'Presenta', 'No presenta'], ['Gafette {{GAFETTE}}', '', '']]);
+  const cuerpo = D.cuerpo([D.tabla([[D.celda('', [mitad1, otra]), D.celda('', [mitad2])]])]);
+  const a = M.analizar(cuerpo);
+  ok(a.secciones.length === 2 && a.secciones[0].piezas.map((p) => p.campo).join(',') === 'PARABRISAS,MEDALLON',
+    'la continuación se junta con su sección, aunque en el documento la siga otra (Documentación)');
+  ok(a.secciones[0].piezas[1].opciones.join(',') === 'Bueno,Malo,N/A', 'cada pieza con las opciones del encabezado de SU tabla');
+  ok(M.revisar(a, CONTRATO).length === 0, 'sin errores');
+  M.llenar(cuerpo, { PARABRISAS: 'MALO', MEDALLON: 'N/A' }, CONTRATO);
+  ok(D.textos(mitad2).map((f) => f.join('|')).join(' / ') === '|Bueno|Malo|N/A / Stop|||✓', 'al llenar, la marca de continuación se borra y la palomita va a su columna');
+  const huerfana = M.revisar(M.analizar(D.cuerpo([D.tabla([['{{continúa Nada}}', 'Bueno', 'Malo'], ['Stop {{MEDALLON}}', '', '']])])), CONTRATO);
+  ok(huerfana.some((e) => /\{\{continúa Nada\}\}: no hay una sección con ese título/.test(e.mensaje)), 'una continuación sin su sección: error');
+}
+
 console.log('6. Utilidades');
 {
   ok(M.clave(' Fascia /  defensa trasera ') === M.clave('FASCIA/DEFENSA TRASERA'), 'clave: sin acentos, mayúsculas ni espacios de más');

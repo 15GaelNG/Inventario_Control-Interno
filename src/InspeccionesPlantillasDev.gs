@@ -179,6 +179,60 @@ function inspeccionesConvertir3EscribirTodas() {
   return inspDevConvertir_({ escribir: true });
 }
 
+/**
+ * Apunta MODELOS INSPECCION del DEV a las "(DEV NUEVO)" de la carpeta de pruebas que dejó la herramienta local
+ * (node tools/plantillas/plantillas.js convertir …): la de cada tipo es la que se llama como su "(DEV)". Guarda de dónde
+ * viene cada una (inspeccionesPlantillasAAppSheet regresa) y olvida la estructura en caché.
+ */
+function inspeccionesUsarConvertidas() {
+  soloEditor_();
+  inspDevNoEnProd_();
+  return Candado.con(() => {
+    const ssId = Config.SPREADSHEET_IDS.VEHICULOS();
+    const props = PropertiesService.getScriptProperties();
+    const deAppSheet = JSON.parse(props.getProperty(INSP_DEV_PROP_APPSHEET) || '{}');
+    const carpeta = DriveUtils.subcarpeta(DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ()), INSP_DEV_CARPETA);
+    const nuevas = {};
+    const archivos = carpeta.getFiles();
+    while (archivos.hasNext()) {
+      const f = archivos.next();
+      if (/\(DEV NUEVO\)$/.test(f.getName()) && !f.isTrashed()) nuevas[f.getName()] = f.getId();
+    }
+    const lineas = ['EL DEV A LAS PLANTILLAS CONVERTIDAS', ''];
+    const cambios = [];
+    const tocados = [];
+    SheetUtils.getAll(ssId, 'MODELOS INSPECCION').forEach((f, i) => {
+      const tipo = String(f['TIPO'] || '').trim();
+      const id = String(f['PLANTILLA'] || '').trim();
+      if (!tipo || !id) return;
+      if (deAppSheet[tipo]) {
+        lineas.push('  = ' + tipo + ': ya usa su convertida');
+        return;
+      }
+      const nombre = DriveApp.getFileById(id).getName();
+      const nueva = /\(DEV\)$/.test(nombre) ? nuevas[nombre.replace(/\(DEV\)$/, '(DEV NUEVO)')] : null;
+      if (!nueva) {
+        lineas.push('  · ' + tipo + ': sin convertida, sigue con "' + nombre + '"');
+        return;
+      }
+      cambios.push({ fila: i + 2, cambios: { PLANTILLA: nueva } });
+      deAppSheet[tipo] = id;
+      tocados.push(tipo);
+      lineas.push('  ✔ ' + tipo + ' → ' + nombre.replace(/\(DEV\)$/, '(DEV NUEVO)'));
+    });
+    if (cambios.length) {
+      // Primero de dónde viene cada una: si la hoja fallara, se sabe a dónde regresar
+      props.setProperty(INSP_DEV_PROP_APPSHEET, JSON.stringify(deAppSheet));
+      SheetUtils.cambiarCeldas(SheetUtils.tabla(ssId, 'MODELOS INSPECCION'), cambios);
+      inspDevOlvidar_(tocados);
+    }
+    lineas.push('', cambios.length + ' tipos ya usan su plantilla del formato nuevo. Para volver: inspeccionesPlantillasAAppSheet().');
+    const texto = lineas.join('\n');
+    Logger.log(texto);
+    return texto;
+  });
+}
+
 function inspeccionesPlantillasAAppSheet() {
   soloEditor_();
   inspDevNoEnProd_();
@@ -241,7 +295,7 @@ function inspDevConvertir_(cfg) {
     const nuevo = DriveUtils.copiar(viejo, viejo.getName().replace(/\(DEV\)$/, '(DEV NUEVO)'), carpeta, { temporal: !cfg.escribir });
     let seQueda = false;
     try {
-      const r = inspDevConvertirDoc_(nuevo.getId(), contrato);
+      const r = inspDevConvertirDoc_(nuevo.getId(), contrato, tipo);
       const diferencias = r.pendientes.length || r.errores.length ? []
         : inspDevCompararEstructura_(tipo, DocumentApp.openById(id).getBody().getText(), r.arbol, contrato)
           .concat(inspDevOraculo_(id, nuevo.getId(), contrato, carpeta));
@@ -301,22 +355,42 @@ function inspDevCondicion_(condicion) {
   if (m) return m[1] + ' REGULAR';
   m = /^\[(LLANTA [A-Z]+)\] ?>= ?4\.1$/.exec(t);
   if (m) return m[1] + ' BUENO';
+  // El voltaje, con los rangos que ya imprimía el PDF (rangoVoltajePdf_ en InspeccionesService)
+  if (/^\[VOLTAJE\] ?<= ?12\.3$/.test(t)) return 'VOLTAJE BAJO';
+  if (/^AND\(\[VOLTAJE\] ?>= ?12\.4 ?, ?\[VOLTAJE\] ?<= ?12\.6\)$/.test(t)) return 'VOLTAJE MEDIO';
+  if (/^\[VOLTAJE\] ?>= ?12\.7$/.test(t)) return 'VOLTAJE ALTO';
   return null;
 }
 
+/** De qué sección es cada pieza hoy (el texto + REAGRUPAR_SECCIONES): { CLAVE DE LA PIEZA: título } */
+function inspDevSeccionDePieza_(tipo, texto) {
+  const mapa = {};
+  InspeccionesService.reagruparSiAplica_(tipo, Plantilla.seccionesDe(texto))
+    .forEach((s) => s.campos.forEach((c) => { mapa[MotorPlantillas.clave(c.campo)] = s.titulo; }));
+  return mapa;
+}
+
+/** ¿La tabla abre con el título de su sección y su peso ("Cristalería 10%")? Si no, es la continuación de otra. */
+function inspDevTieneTitulo_(tabla) {
+  return /\d\s*%\s*$/.test(tabla.getRow(0).getCell(0).getText().trim());
+}
+
 /** Convierte un documento (ya copiado) al formato nuevo. → { piezas, bloques, valores, na, pendientes, errores } */
-function inspDevConvertirDoc_(docId, contrato) {
+function inspDevConvertirDoc_(docId, contrato, tipo) {
   const T = DocumentApp.ElementType;
   const doc = DocumentApp.openById(docId);
   const body = doc.getBody();
+  const seccionDe = inspDevSeccionDePieza_(tipo, body.getText());
   const na = inspDevAgregarNA_(body, true);
   const pendientes = na.saltadas.concat(na.problemas).map((x) => 'N/A: ' + x);
   let piezas = 0;
   let bloques = 0;
   let valores = 0;
 
-  // 1. El checklist: la fórmula sale de cada celda de opción y la marca va junto al nombre de la pieza
+  // 1. El checklist: la fórmula sale de cada celda de opción y la marca va junto al nombre de la pieza. Una tabla sin
+  //    título (la otra mitad de una sección partida en dos columnas) lleva {{continúa Sección}} en su primera celda.
   inspDevTablas_(body).forEach((tabla) => {
+    let continuaVista = inspDevTieneTitulo_(tabla);
     for (let r = 0; r < tabla.getNumRows(); r++) {
       const renglon = tabla.getRow(r);
       const opciones = [];
@@ -330,6 +404,16 @@ function inspDevConvertirDoc_(docId, contrato) {
       if (opciones.some((o) => o.pieza !== pieza)) {
         pendientes.push('un renglón con dos piezas (' + opciones.map((o) => o.pieza).join(', ') + ')');
         continue;
+      }
+      if (!continuaVista) {
+        continuaVista = true;
+        const titulo = seccionDe[MotorPlantillas.clave(pieza)];
+        if (!titulo) pendientes.push(pieza + ': su tabla no tiene título y no sé de qué sección es');
+        else {
+          const c0 = tabla.getRow(0).getCell(0);
+          const ultimoC0 = c0.getChild(c0.getNumChildren() - 1);
+          (ultimoC0.getType() === T.PARAGRAPH ? ultimoC0.asParagraph() : c0.appendParagraph('')).appendText('{{continúa ' + titulo + '}}');
+        }
       }
       let nombre = opciones[0].c - 1;
       while (nombre >= 0 && !renglon.getCell(nombre).getText().trim()) nombre--;
@@ -385,7 +469,7 @@ function inspDevCompararEstructura_(tipo, textoViejo, arbol, contrato) {
     const piezas = {};
     s.piezas.forEach((p) => {
       const def = MotorPlantillas.definicion(p.campo, contrato);
-      if (!def.calculado) piezas[k(def.nombre)] = s.opciones.map(k);
+      if (!def.calculado) piezas[k(def.nombre)] = p.opciones.map(k);
     });
     nueva[k(s.titulo)] = { titulo: s.titulo, peso: s.peso, piezas: piezas, vista: false };
   });
@@ -419,9 +503,12 @@ function inspDevCompararEstructura_(tipo, textoViejo, arbol, contrato) {
 
 /**
  * Datos de prueba para el oráculo: cada pieza con una opción distinta (rotando, para que la palomita pase por todas las
- * columnas), una llanta de cada rango y un texto distinto en cada columna. Las imágenes, vacías.
+ * columnas), las llantas repartidas en sus tres rangos, un voltaje y un texto distinto en cada columna. Las imágenes,
+ * vacías. `variante` (0, 1, 2) recorre la rotación: entre las tres, cada pieza pasa por sus opciones, cada llanta por sus
+ * rangos y el voltaje por los suyos.
  */
-function inspDevDatosDePrueba_(viejoId, contrato) {
+function inspDevDatosDePrueba_(viejoId, contrato, variante) {
+  const v = variante || 0;
   const datos = {};
   Object.keys(contrato.campos).forEach((campo, i) => {
     const def = contrato.campos[campo];
@@ -429,29 +516,37 @@ function inspDevDatosDePrueba_(viejoId, contrato) {
     datos[campo] = def === 'imagen' ? '' : 'V' + i;
   });
   Plantilla.seccionesDe(DocumentApp.openById(viejoId).getBody().getText())
-    .forEach((s) => s.campos.forEach((c, k) => { datos[c.campo] = c.opciones[k % c.opciones.length]; }));
+    .forEach((s) => s.campos.forEach((c, k) => { datos[c.campo] = c.opciones[(k + v) % c.opciones.length]; }));
   Object.keys(contrato.campos).filter((k) => / ESTADO$/.test(k))
-    .forEach((k, i) => { datos[k.replace(/ ESTADO$/, '')] = ['1.4', '3.2', '5'][i % 3]; });
+    .forEach((k, i) => { datos[k.replace(/ ESTADO$/, '')] = ['1.4', '3.2', '5'][(i + v) % 3]; });
+  datos['VOLTAJE'] = ['12', '12.5', '13'][v % 3];
   return datos;
 }
 
 /**
  * EL ORÁCULO: llena una copia de la vieja (Plantilla.gs) y una de la nueva (MotorPlantillas) con los mismos datos y las
  * compara: cada celda de cada tabla de sección y cada párrafo fuera de ellas. Una celda de más en la nueva solo puede
- * ser la columna N/A (vacía, o "N/A" en el encabezado). → [diferencias]
+ * ser la columna N/A (vacía, o "N/A" en el encabezado). Con `variantes` (3 por omisión) lo repite con otros datos de
+ * prueba (inspDevDatosDePrueba_). → [diferencias]
  */
-function inspDevOraculo_(viejoId, nuevoId, contrato, carpeta) {
-  const datos = inspDevDatosDePrueba_(viejoId, contrato);
-  const a = DriveUtils.copiar(DriveApp.getFileById(viejoId), 'ORÁCULO (se borra) viejo', carpeta, { temporal: true });
-  const b = DriveUtils.copiar(DriveApp.getFileById(nuevoId), 'ORÁCULO (se borra) nuevo', carpeta, { temporal: true });
-  try {
-    PdfService.llenarCopia_(a.getId(), { datos: datos });
-    PdfService.llenarCopia_(b.getId(), { datos: InspeccionesService.presentar_(datos), contrato: contrato });
-    return inspDevComparar_(DocumentApp.openById(a.getId()).getBody(), DocumentApp.openById(b.getId()).getBody());
-  } finally {
-    DriveUtils.aPapelera(a, { temporal: true });
-    DriveUtils.aPapelera(b, { temporal: true });
+function inspDevOraculo_(viejoId, nuevoId, contrato, carpeta, variantes) {
+  const diferencias = [];
+  for (let v = 0; v < (variantes || 3); v++) {
+    const datos = inspDevDatosDePrueba_(viejoId, contrato, v);
+    const a = DriveUtils.copiar(DriveApp.getFileById(viejoId), 'ORÁCULO (se borra) viejo', carpeta, { temporal: true });
+    const b = DriveUtils.copiar(DriveApp.getFileById(nuevoId), 'ORÁCULO (se borra) nuevo', carpeta, { temporal: true });
+    try {
+      PdfService.llenarCopia_(a.getId(), { datos: datos });
+      PdfService.llenarCopia_(b.getId(), { datos: InspeccionesService.presentar_(datos), contrato: contrato });
+      inspDevComparar_(DocumentApp.openById(a.getId()).getBody(), DocumentApp.openById(b.getId()).getBody())
+        .forEach((d) => diferencias.push('datos ' + (v + 1) + ': ' + d));
+    } finally {
+      DriveUtils.aPapelera(a, { temporal: true });
+      DriveUtils.aPapelera(b, { temporal: true });
+    }
+    if (diferencias.length) break;   // con unas basta para verlas
   }
+  return diferencias;
 }
 
 /** Las diferencias entre dos documentos llenos (ver inspDevOraculo_) */

@@ -1125,7 +1125,8 @@ const InspeccionesService = (function () {
    *   `LLANTA DD MALO` / `REGULAR` / `BUENO`  "SI" o vacío, para {{si …}}: las plantillas de hoy imprimen los mm con el
    *                                           color de su rango (un bloque por rango, cada uno con su color);
    *   `LLANTA DD ESTADO`                      el rango, como pieza de checklist con los mm como marca (una plantilla que
-   *                                           ponga la llanta en la columna de su rango).
+   *                                           ponga la llanta en la columna de su rango);
+   *   `VOLTAJE BAJO` / `MEDIO` / `ALTO`       "SI" o vacío, con los rangos que ya imprimía el PDF (rangoVoltajePdf_).
    * Lo calculado no se pide en el formulario: lo llena presentar_.
    */
   let contratoDeEstaEjecucion = null;
@@ -1141,13 +1142,30 @@ const InspeccionesService = (function () {
       campos[columna + ' ESTADO'] = { tipo: 'opcion', marca: columna, calculado: true };
       RANGOS_LLANTA.forEach((rango) => { campos[columna + ' ' + rango] = { tipo: 'texto', calculado: true }; });
     });
+    RANGOS_VOLTAJE.forEach((rango) => { campos['VOLTAJE ' + rango] = { tipo: 'texto', calculado: true }; });
     contratoDeEstaEjecucion = { campos: campos };
     return contratoDeEstaEjecucion;
   }
 
   const RANGOS_LLANTA = ['MALO', 'REGULAR', 'BUENO'];
 
-  /** Los datos del PDF con lo calculado: el estado de cada llanta medida (calificacionLlanta_, el mismo semáforo) */
+  /**
+   * El color del voltaje en el PDF: las plantillas de AppSheet lo imprimen en uno de tres bloques con estos rangos
+   * (≤12.3 V, 12.4–12.6 V, ≥12.7 V), que NO son los del formulario ni del puntaje (calificacionVoltaje_: <11.6, 11.6–12.8,
+   * >12.8). Se conservan tal cual para que el PDF no cambie (29-oct); unificarlos es decisión del área.
+   * → 'BAJO' | 'MEDIO' | 'ALTO' | '' (sin voltaje, o en los huecos de esos rangos, como antes)
+   */
+  function rangoVoltajePdf_(voltaje) {
+    const v = Number(voltaje);
+    if (voltaje === undefined || voltaje === null || String(voltaje).trim() === '' || isNaN(v)) return '';
+    if (v <= 12.3) return 'BAJO';
+    if (v >= 12.4 && v <= 12.6) return 'MEDIO';
+    if (v >= 12.7) return 'ALTO';
+    return '';
+  }
+  const RANGOS_VOLTAJE = ['BAJO', 'MEDIO', 'ALTO'];
+
+  /** Los datos del PDF con lo calculado: el estado de cada llanta medida (calificacionLlanta_, el mismo semáforo) y el rango del voltaje */
   function presentar_(datos) {
     const salida = Object.assign({}, datos);
     COLUMNAS_LLANTAS.forEach(([columna]) => {
@@ -1155,6 +1173,8 @@ const InspeccionesService = (function () {
       salida[columna + ' ESTADO'] = estado;
       RANGOS_LLANTA.forEach((rango) => { salida[columna + ' ' + rango] = estado === rango ? 'SI' : ''; });
     });
+    const voltaje = rangoVoltajePdf_(datos['VOLTAJE']);
+    RANGOS_VOLTAJE.forEach((rango) => { salida['VOLTAJE ' + rango] = voltaje === rango ? 'SI' : ''; });
     return salida;
   }
 
@@ -1178,8 +1198,9 @@ const InspeccionesService = (function () {
           usados[MotorPlantillas.canonico(p.campo, c)] = true;
           return MotorPlantillas.definicion(p.campo, c);
         })
-        .filter((def) => !def.calculado)
-        .map((def) => ({ campo: def.nombre, opciones: s.opciones.map(MotorPlantillas.clave) })),
+        .map((def, i) => ({ def: def, opciones: s.piezas[i].opciones }))
+        .filter((x) => !x.def.calculado)
+        .map((x) => ({ campo: x.def.nombre, opciones: x.opciones.map(MotorPlantillas.clave) })),
     }));
     const llantas = COLUMNAS_LLANTAS.map(([columna]) => columna)
       .filter((col) => usados[col] || usados[col + ' ESTADO'] || RANGOS_LLANTA.some((rango) => usados[col + ' ' + rango]));

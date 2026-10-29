@@ -95,7 +95,7 @@ console.log('1. Ensayo: convierte, revisa y el oráculo da lo mismo, sin dejar n
   const r = x.ctx.inspeccionesConvertir1EnsayoAutos();
   ok(/✔ AUTOS: 4 piezas, 3 bloques y \d+ valores convertidos · N\/A nuevo en 1 secciones · la estructura y el oráculo dan lo mismo/.test(r), 'el reporte: ' + r.split('\n')[2]);
   ok(x.modelos[0].PLANTILLA === 'COPIA-AUTOS' && !x.props.INSPECCIONES_PLANTILLAS_DEV_APPSHEET, 'el ensayo no cambia la hoja');
-  ok(x.papelera.length === 3, 'y tira lo que hizo (la convertida y las dos del oráculo)');
+  ok(x.papelera.length === 7, 'y tira lo que hizo (la convertida y las dos del oráculo por cada una de sus 3 variantes de datos)');
   ok(D.textos(x.docs['COPIA-AUTOS'].cuerpo.hijos[0].filas[0].celdas[0].hijos[2])[1][1] === SI('PARABRISAS', 'BUENO'), 'la copia de AppSheet no se toca');
 }
 
