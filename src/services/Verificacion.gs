@@ -14,6 +14,9 @@
  *   Verificacion.reenviar(reto) / misDispositivos(token, llave) / quitar(token, id) / olvidarDispositivos(correo, nota)
  *
  * Encendido por proyecto: VERIFICACION_DOS_PASOS = 'APAGADA' en Entornos.gs lo apaga (prod, hasta avisar al equipo).
+ * VERIFICACION_DISPOSITIVOS = 'APAGADA' (29-oct) apaga solo lo del dispositivo (nuevo, vencido o con otro navegador): el
+ * código se sigue pidiendo con 3+ contraseñas malas recientes y con alerta. Los dos van en Entornos.gs o como propiedad
+ * del proyecto (leerConfig_): como propiedad se prenden y apagan sin desplegar.
  * Salvo `decidir(…, { confirmar: true })` (26-oct): quien cambia una contraseña VIEJA (Credenciales.pedirCambio) siempre
  * confirma con el código, encendido o no, porque esa contraseña pudo verse en la hoja; apagado, ese paso no recuerda el
  * dispositivo (sin llave ni correo de "dispositivo nuevo": una sola vez y sin más fricción).
@@ -38,6 +41,11 @@ const Verificacion = (function () {
 
   function encendida() {
     return String(leerConfig_('VERIFICACION_DOS_PASOS') || '').trim().toUpperCase() !== 'APAGADA';
+  }
+
+  /** ¿Se pide el código por el dispositivo (nuevo, vencido, otro navegador)? Lo de los fallos y la alerta no depende de esto */
+  function porDispositivo() {
+    return String(leerConfig_('VERIFICACION_DISPOSITIVOS') || '').trim().toUpperCase() !== 'APAGADA';
   }
 
   /** Lo que manda el navegador, limpio: { llave, navegador, sistema, nombre } (todo lo puede inventar: solo la llave cuenta) */
@@ -83,6 +91,7 @@ const Verificacion = (function () {
   function motivo_(correo, d) {
     if (typeof Accesos !== 'undefined' && Accesos.enAlerta()) return 'alerta';
     if (Number(cache_().get('login_fallos_' + clave_(correo)) || 0) >= FALLOS_SOSPECHOSOS) return 'fallos';
+    if (!porDispositivo()) return null;
     if (!d.llave) return 'nuevo';
     const hoja = hoja_();
     const suyo = deCorreo_(hoja, correo).find((x) => activo_(x) && x.HUELLA === huella_(d.llave));

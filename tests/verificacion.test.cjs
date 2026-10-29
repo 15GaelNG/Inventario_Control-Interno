@@ -76,6 +76,17 @@ test('apagada (VERIFICACION_DOS_PASOS = APAGADA) no pide nada', () => {
   assert.equal(correos.length, 0);
 });
 
+test('sin lo del dispositivo (VERIFICACION_DISPOSITIVOS = APAGADA): no se pide por nuevo, pero sí por fallos y alerta', () => {
+  const { V, correos, cache } = cargar({ config: { VERIFICACION_DISPOSITIVOS: 'apagada' } });
+  assert.equal(V.decidir(ANA, 'contrasena', CHROME), null, 'un dispositivo nuevo pasa sin código');
+  assert.equal(V.decidir(ANA, 'google', { llave: 'inventada', navegador: 'Firefox' }), null, 'una llave que no es suya, también');
+  assert.equal(correos.length, 0);
+  cache['login_fallos_ana@gph.com'] = '3';
+  assert.equal(V.decidir(ANA, 'contrasena', CHROME).motivo, 'fallos', 'con 3 contraseñas malas recientes, sí');
+  delete cache['login_fallos_ana@gph.com'];
+  assert.equal(V.decidir(ANA, 'contrasena', CHROME, { confirmar: true }).motivo, 'confirmar', 'y confirmar una contraseña VIEJA, también');
+});
+
 test('dispositivo nuevo: manda el código a su correo; el bueno da una llave y la siguiente vez no se pide', () => {
   const { V, correos, hoja } = cargar();
   const paso = V.decidir(ANA, 'contrasena', CHROME);

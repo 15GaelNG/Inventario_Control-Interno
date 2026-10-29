@@ -264,6 +264,9 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
   recientes o en alerta. La IP NO sirve (Apps Script no la da y la del navegador se inventa). Sin cuota de correo, no se
   entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; encendido en prod desde el 26-oct).
+  Solo lo del dispositivo (nuevo, a los 60 días, otro navegador), conservando el código por contraseñas malas y alerta:
+  `VERIFICACION_DISPOSITIVOS: 'APAGADA'` (29-oct). Los dos se leen con `leerConfig_`: como propiedad del proyecto se
+  prenden y apagan sin desplegar.
 - **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
   impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
 - Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se
