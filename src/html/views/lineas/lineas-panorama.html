@@ -66,43 +66,13 @@
           <div class="lnp-cuentas" id="lnp-factura-meses" data-scroll-x></div>
         </div>
       </div>
-      <div class="card lnp-tarjeta lnp-diferencias">
-        <div class="lnp-cabeza"><h4><i data-lucide="list-checks" class="ico"></i> Diferencias, número por número</h4></div>
-        <div class="lnp-controles">
-          <div class="ln-segmentado" id="lnp-dif" role="group" aria-label="Qué diferencia ver">
-            <button type="button" class="secondary activo" data-valor="activasSinCobro" aria-pressed="true">Activas sin cobro</button>
-            <button type="button" class="secondary" data-valor="cobradasNoActivas" aria-pressed="false">Cobradas sin estar activas</button>
-          </div>
-        </div>
-        <p class="lnp-nota" id="lnp-dif-nota"></p>
-        <div class="lnp-tabla" id="lnp-dif-tabla"></div>
-      </div>
     </div>
 
     <h3 class="lnp-seccion"><i data-lucide="calendar-clock" class="ico"></i> Adendums de los planes activos</h3>
     <div class="stat-row lnp-vigencia" id="lnp-vigencia"></div>
 
-    <div class="lnp-dos">
-      <div class="card lnp-tarjeta">
-        <div class="lnp-cabeza">
-          <h4 id="lnp-tendencia-titulo"><i data-lucide="chart-line" class="ico"></i> Líneas activas al cierre de cada mes</h4>
-        </div>
-        <div class="lnp-controles">
-          <div class="ln-segmentado" id="lnp-medida" role="group" aria-label="Qué medir">
-            <button type="button" class="secondary activo" data-valor="lineas" aria-pressed="true">Líneas</button>
-            <button type="button" class="secondary" data-valor="renta" aria-pressed="false">Renta</button>
-            <button type="button" class="secondary" data-valor="canceladas" aria-pressed="false">Canceladas</button>
-          </div>
-          <div class="ln-segmentado" id="lnp-rango-tendencia" role="group" aria-label="Periodo">
-            <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
-            <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
-          </div>
-        </div>
-        <div class="lnp-tendencia-leyenda" id="lnp-tendencia-leyenda"></div>
-        <div class="lnp-grafica" id="lnp-tendencia"></div>
-        <p class="lnp-nota" id="lnp-tendencia-nota">Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.</p>
-      </div>
-
+    <!-- La tendencia mensual se quitó a pedido de la Dirección (30-oct): el mes se elige arriba, en "Ver al cierre de" -->
+    <div class="lnp-dos lnp-una">
       <div class="card lnp-tarjeta">
         <div class="lnp-cabeza">
           <h4><i data-lucide="building-2" class="ico"></i> Líneas activas por departamento</h4>
