@@ -99,10 +99,9 @@
       const vigente = () => n === montaje.n && document.body.contains(raiz);
       const est = {
         conjunto: 'equipos', rango: 12, forma: 'grafica', seleccion: { equipos: null, lineas: null }, datos: null,
-        k: 0, medida: 'lineas', rangoTendencia: 12, deptosTodos: false, resumenes: null, series: {}, dif: 'activasSinCobro',
+        k: 0, deptosTodos: false, resumenes: null,
       };
       let tabla = null;
-      let tablaDif = null;
 
       const pct = (v, total) => (total ? Formato.miles(v / total * 100, { decimales: 1 }) + '%' : '—');
       const esHoy = () => est.k === est.datos.meses.length - 1;
@@ -418,161 +417,6 @@
           '<tr class="lnp-fila-total"><th scope="row">Total</th>' +
             conCuenta.map((x) => '<td>' + dinero(f.meses.reduce((t, m) => t + ((m.cuentas[x.clave] || {}).monto || 0), 0)) + '</td>').join('') +
             '<td>' + dinero(total) + '</td><td></td></tr></tbody></table>';
-        pintarDiferencias();
-      }
-
-      /** La lista de la diferencia elegida (con exportar a Excel): número, estatus en el inventario, cuenta y cobro. */
-      function pintarDiferencias() {
-        const c = est.datos.factura.comparacion;
-        const cont = $('#lnp-dif-tabla', raiz);
-        if (tablaDif) { tablaDif.destruir(); tablaDif = null; }
-        cont.innerHTML = '<div></div>';
-        $('#lnp-dif', raiz).querySelectorAll('[data-valor]').forEach((b) => {
-          const total = b.dataset.valor === 'activasSinCobro' ? c.totalActivasSinCobro : c.totalCobradasNoActivas;
-          b.textContent = (b.dataset.valor === 'activasSinCobro' ? 'Activas sin cobro' : 'Cobradas sin estar activas') + ' (' + miles(total || 0) + ')';
-          b.classList.toggle('activo', b.dataset.valor === est.dif);
-          b.setAttribute('aria-pressed', String(b.dataset.valor === est.dif));
-        });
-        const sinCobro = est.dif === 'activasSinCobro';
-        const lista = c[est.dif] || [];
-        $('#lnp-dif-nota', raiz).textContent = (sinCobro
-          ? 'Activas en el inventario que no vienen en la factura de ' + mesLargo(c.ultimo) + '. "Último cobro" es el último mes en que sí se cobraron (vacío: nunca en las facturas cargadas).'
-          : 'En la factura de ' + mesLargo(c.ultimo) + ' y canceladas (o sin registrar) en el inventario.') +
-          (c.recortadas ? ' Se muestran las primeras 300.' : '');
-        const filas = lista.map((x, i) => (sinCobro
-          ? { _id: String(i), numero: x[0], estatus: x[1], cuenta: x[2], dato: x[3] ? mesLargo(x[3]) : '' }
-          : { _id: String(i), numero: x[0], estatus: x[1], cuenta: x[2], dato: x[3] }));
-        tablaDif = tablaLineas(cont.firstChild, {
-          idCampo: '_id', idTabla: 'lineas-panorama-diferencias-' + est.dif + '-v1', seleccionable: false, detalle: false,
-          columnas: [
-            { campo: 'numero', titulo: 'Número', tipo: 'texto' },
-            { campo: 'estatus', titulo: 'Estatus en el inventario', tipo: 'texto' },
-            { campo: 'cuenta', titulo: 'Cuenta', tipo: 'texto', render: (v) => esc((CUENTAS.find((x) => x.clave === v) || { nombre: v || '—' }).nombre) },
-            sinCobro ? { campo: 'dato', titulo: 'Último cobro', tipo: 'texto' } : { campo: 'dato', titulo: 'Cobro en ' + mesLargo(c.ultimo), tipo: 'numero', render: (v) => esc(dinero(v)) },
-          ],
-          ordenInicial: { campo: 'cuenta', dir: 'asc' },
-          exportar: { nombreArchivo: 'Panorama ' + (sinCobro ? 'activas sin cobro' : 'cobradas sin estar activas'), nombreHoja: 'Diferencias' },
-          // La copia del navegador no trae las listas (números de teléfono): mientras llega la respuesta, "Cargando…"
-          textoVacio: (sinCobro ? c.totalActivasSinCobro : c.totalCobradasNoActivas) ? 'Cargando…'
-            : (sinCobro ? 'Todas las activas vienen en la factura.' : 'Todo lo cobrado está activo en el inventario.'),
-        });
-        tablaDif.setDatos(filas);
-      }
-
-      // ---------------- Tendencia ----------------
-
-      /**
-       * Series de la tendencia al cierre de cada mes (se calculan una vez): líneas activas, renta de los planes o las
-       * canceladas, partidas con y sin carta o correo cuando se tiene el dato. [{ nombre, color, valores }]
-       */
-      function seriesTendencia() {
-        if (est.series[est.medida]) return est.series[est.medida];
-        const meses = est.datos.meses;
-        const serie = (nombre, color, fn) => ({ nombre: nombre, color: color, valores: meses.map((_, k) => fn(resumen(k))) });
-        let s;
-        if (est.medida === 'renta') s = [serie('de renta', 'var(--lnp-s1)', (r) => r.renta)];
-        else if (est.medida === 'canceladas') {
-          s = est.datos.conCartas
-            ? [serie('con carta o correo', COLOR_CON_CARTA, (r) => r.bajas.conCarta), serie('sin carta ni correo', COLOR_SIN_CARTA, (r) => r.bajas.sinCarta + r.bajas.sinDato)]
-            : [serie('canceladas', 'var(--lnp-s1)', (r) => r.bajas.canceladas)];
-        } else s = [serie('líneas activas', 'var(--lnp-s1)', (r) => r.activas)];
-        est.series[est.medida] = s;
-        return s;
-      }
-
-      /** La tendencia (una serie con su área, o varias líneas), el mes elegido marcado y clic para elegir otro mes. */
-      function pintarTendencia() {
-        const cont = $('#lnp-tendencia', raiz);
-        const todos = est.datos.meses;
-        const desde = est.rangoTendencia ? Math.max(0, todos.length - est.rangoTendencia) : 0;
-        const meses = todos.slice(desde);
-        const series = seriesTendencia().map((s) => Object.assign({}, s, { valores: s.valores.slice(desde) }));
-        const valores = series[0].valores;
-        const varias = series.length > 1;
-        const esRenta = est.medida === 'renta';
-        const esBajas = est.medida === 'canceladas';
-        $('#lnp-tendencia-titulo', raiz).innerHTML = ico(esBajas ? 'circle-x' : 'chart-line') + ' ' +
-          (esRenta ? 'Renta mensual de los planes' : esBajas ? 'Líneas canceladas' : 'Líneas activas') + ' al cierre de cada mes';
-        $('#lnp-tendencia-leyenda', raiz).innerHTML = varias ? series.map((s) => '<span class="lnp-tendencia-clave"><span class="lnp-tooltip-clave" style="background:' + s.color + '"></span>' +
-          esc(s.nombre) + ' <strong>' + miles(s.valores[s.valores.length - 1]) + '</strong></span>').join('') : '';
-        $('#lnp-tendencia-nota', raiz).textContent = (esBajas && est.datos.conCartas ? 'Con o sin carta o correo según los de hoy. ' : '') +
-          'Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.';
-        const fmt = esRenta ? dineroCorto : miles;
-        const ancho = Math.max(280, cont.clientWidth || 520);
-        const angosto = ancho < 480;
-        const m = { arriba: 24, derecha: 18, abajo: 30, izquierda: esRenta ? 70 : 46 };
-        const alto = 250;
-        const w = ancho - m.izquierda - m.derecha;
-        const h = alto - m.arriba - m.abajo;
-        const eje = ejeRedondo(Math.max(1, ...series.reduce((t, s) => t.concat(s.valores), [])));
-        const x = (k) => m.izquierda + (meses.length === 1 ? w / 2 : (k * w) / (meses.length - 1));
-        const y = (v) => m.arriba + h - (v / eje.techo) * h;
-        const cadaCuanto = Math.max(1, Math.ceil(meses.length / (angosto ? 4 : 7)));
-        const sel = est.k - desde;
-        let svg = '<svg class="lnp-svg" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" tabindex="0" aria-label="' +
-          esc((esRenta ? 'Renta mensual' : esBajas ? 'Líneas canceladas' : 'Líneas activas') + ' al cierre de cada mes. Flechas para recorrer y Enter para ver ese mes.') + '">';
-        eje.marcas.forEach((v) => {
-          svg += '<line class="lnp-rejilla" x1="' + m.izquierda + '" x2="' + (m.izquierda + w) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
-            '<text class="lnp-eje" x="' + (m.izquierda - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmt(v)) + '</text>';
-        });
-        meses.forEach((ym, k) => {
-          const ultimo = meses.length - 1;
-          if (k !== ultimo && (k % cadaCuanto || ultimo - k < Math.max(2, cadaCuanto))) return;
-          svg += '<text class="lnp-eje" x="' + x(k) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(k === ultimo ? 'Hoy' : mesCorto(ym)) + '</text>';
-        });
-        series.forEach((s) => {
-          const puntos = s.valores.map((v, k) => x(k).toFixed(1) + ' ' + y(v).toFixed(1));
-          // El área solo con una serie: con varias se encimarían
-          if (!varias) svg += '<path class="lnp-area" d="M' + puntos.join(' L') + ' L' + x(s.valores.length - 1).toFixed(1) + ' ' + y(0) + ' L' + x(0).toFixed(1) + ' ' + y(0) + ' Z"></path>';
-          svg += '<path class="lnp-linea" d="M' + puntos.join(' L') + '" style="stroke:' + s.color + '"></path>';
-        });
-        if (sel >= 0 && sel < valores.length) {
-          svg += '<line class="lnp-marca-mes" x1="' + x(sel) + '" x2="' + x(sel) + '" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '"></line>';
-          series.forEach((s) => { svg += '<circle class="lnp-punto" cx="' + x(sel) + '" cy="' + y(s.valores[sel]) + '" r="5" style="fill:' + s.color + '"></circle>'; });
-          if (!varias) {
-            svg += '<text class="lnp-etiqueta" x="' + Math.min(Math.max(x(sel), m.izquierda + 34), m.izquierda + w - 34) + '" y="' + Math.max(14, y(valores[sel]) - 12) + '" text-anchor="middle">' +
-              '<tspan class="lnp-etiqueta-valor">' + esc(fmt(valores[sel])) + '</tspan></text>';
-          }
-        }
-        svg += '<line class="lnp-cruz" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '" hidden></line>';
-        svg += '<rect class="lnp-captura lnp-captura-clic" x="' + m.izquierda + '" y="' + m.arriba + '" width="' + w + '" height="' + h + '"></rect></svg>';
-        cont.innerHTML = svg + '<div class="lnp-tooltip" hidden></div>';
-
-        const lienzo = cont.querySelector('svg');
-        const cruz = cont.querySelector('.lnp-cruz');
-        const tip = cont.querySelector('.lnp-tooltip');
-        let actual = -1;
-        const mostrar = (k) => {
-          actual = k;
-          cruz.setAttribute('x1', x(k)); cruz.setAttribute('x2', x(k)); cruz.removeAttribute('hidden');
-          tip.innerHTML = '<div class="lnp-tooltip-mes">' + esc(k === meses.length - 1 ? 'Hoy' : 'Cierre de ' + mesLargo(meses[k])) + '</div>' +
-            series.map((s) => '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:' + s.color + '"></span><strong>' +
-              esc(esRenta ? dinero(s.valores[k]) : miles(s.valores[k])) + '</strong><span>' + esc(s.nombre) + '</span></div>').join('') +
-            '<div class="lnp-tooltip-pie">Clic para ver ese mes</div>';
-          tip.hidden = false;
-          const escala = lienzo.getBoundingClientRect().width / ancho;
-          const px = x(k) * escala;
-          tip.style.left = Math.min(Math.max(0, px + 12), cont.clientWidth - tip.offsetWidth) + 'px';
-          if (px + 12 + tip.offsetWidth > cont.clientWidth) tip.style.left = Math.max(0, px - tip.offsetWidth - 12) + 'px';
-          tip.style.top = '6px';
-        };
-        const ocultar = () => { actual = -1; cruz.setAttribute('hidden', ''); tip.hidden = true; };
-        const cercano = (ev) => {
-          const r = lienzo.getBoundingClientRect();
-          const px = ((ev.clientX - r.left) / r.width) * ancho;
-          return Math.max(0, Math.min(meses.length - 1, Math.round(((px - m.izquierda) / (w || 1)) * (meses.length - 1))));
-        };
-        lienzo.addEventListener('pointermove', (ev) => mostrar(cercano(ev)));
-        lienzo.addEventListener('pointerleave', ocultar);
-        lienzo.addEventListener('click', (ev) => elegirMes(desde + cercano(ev)));
-        lienzo.addEventListener('focus', () => mostrar(Math.max(0, sel)));
-        lienzo.addEventListener('blur', ocultar);
-        lienzo.addEventListener('keydown', (ev) => {
-          if (ev.key === 'Enter' && actual >= 0) { ev.preventDefault(); elegirMes(desde + actual); return; }
-          if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return;
-          ev.preventDefault();
-          mostrar(Math.max(0, Math.min(meses.length - 1, (actual < 0 ? meses.length - 1 : actual) + (ev.key === 'ArrowLeft' ? -1 : 1))));
-        });
       }
 
       // ---------------- Equipos y líneas por estatus (al cierre del mes elegido) ----------------
@@ -761,7 +605,6 @@
         pintarPortada();
         pintarCiclo();
         pintarFactura();
-        pintarTendencia();
         pintarBarras('equipos');
         pintarBarras('lineas');
         pintarEvolucion();
@@ -775,7 +618,6 @@
         est.datos = Object.assign({}, r, { registros: expandirRegistros(Object.assign({ mesesTotal: r.meses.length }, r.registros)) });
         if (!mismosMeses) est.k = r.meses.length - 1;
         est.resumenes = null;
-        est.series = {};
         pintarTodo();
       }
 
@@ -812,12 +654,9 @@
         alElegir(b.dataset.valor);
         repintar();
       });
-      segmentado('#lnp-medida', (v) => { est.medida = v; }, pintarTendencia);
-      segmentado('#lnp-rango-tendencia', (v) => { est.rangoTendencia = Number(v); }, pintarTendencia);
       segmentado('#lnp-conjunto', (v) => { est.conjunto = v; }, pintarEvolucion);
       segmentado('#lnp-rango', (v) => { est.rango = Number(v); }, pintarEvolucion);
       segmentado('#lnp-forma', (v) => { est.forma = v; }, pintarEvolucion);
-      segmentado('#lnp-dif', (v) => { est.dif = v; }, () => { if (est.datos.factura) pintarDiferencias(); });
       $('#lnp-mes', raiz).addEventListener('change', (ev) => elegirMes(Number(ev.target.value)));
       $('#lnp-deptos-mas', raiz).addEventListener('click', () => { est.deptosTodos = !est.deptosTodos; pintarPortada(); refreshIcons(); });
       $('#lnp-chips', raiz).addEventListener('click', (ev) => {
@@ -841,7 +680,6 @@
         clearTimeout(espera);
         espera = setTimeout(() => {
           if (!est.datos) return;
-          pintarTendencia();
           if (est.forma === 'grafica') pintarGrafica(seriesDe(est.conjunto));
         }, 150);
       };

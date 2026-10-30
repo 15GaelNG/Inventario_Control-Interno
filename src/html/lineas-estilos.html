@@ -985,10 +985,6 @@
   .lnp-alerta { display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px; font-size: var(--texto-s);
     color: var(--color-text); background: var(--color-bg); border: 1px solid var(--lnp-s4); }
   .lnp-alerta svg { width: 16px; height: 16px; color: var(--lnp-s4); flex: 0 0 auto; }
-  .lnp-tendencia-leyenda { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: var(--texto-s); color: var(--color-text-muted); }
-  .lnp-tendencia-leyenda:empty { display: none; }
-  .lnp-tendencia-clave { display: inline-flex; align-items: center; gap: 6px; }
-  .lnp-tendencia-clave strong { color: var(--color-text); font-variant-numeric: tabular-nums; }
   @media (max-width: 1024px) {
     .lnp-flujo { grid-template-columns: 1fr; }
     .lnp-flecha { transform: rotate(90deg); height: 20px; }
@@ -1028,6 +1024,7 @@
 
   .lnp-vigencia { margin-bottom: 22px; }
   .lnp-dos { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; margin-bottom: 22px; }
+  .lnp-dos.lnp-una { grid-template-columns: minmax(0, 1fr); }
   .lnp-area { fill: var(--lnp-s1); opacity: .10; }
   .lnp-marca-mes { stroke: var(--color-text-muted); stroke-width: 1; opacity: .55; }
   .lnp-captura-clic { cursor: pointer; }
