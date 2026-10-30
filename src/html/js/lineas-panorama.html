@@ -294,10 +294,12 @@
             (b.activasConCarta === 1 ? '' : 's')) + ': conviene revisar si el proveedor la' + (b.activasConCarta === 1 ? '' : 's') + ' sigue cobrando.' });
         }
         const f = est.datos.factura;
-        if (f && esHoy() && (f.comparacion.totalActivasSinCobro || f.comparacion.totalCobradasNoActivas)) {
+        // Solo las activas que no aparecen: "cobradas sin estar activas" se quitó (30-oct, Dirección: aparecer en la factura no
+        // es que se cobre, y era difícil de explicar)
+        if (f && esHoy() && f.comparacion.totalActivasSinCobro) {
           const c = f.comparacion;
-          frases.push({ ico: 'receipt', html: 'En la última factura (' + esc(mesLargo(c.ultimo)) + ') ' + fuerte(plural(c.totalActivasSinCobro, 'activa no se cobró', 'activas no se cobraron')) + ' y ' +
-            fuerte(plural(c.totalCobradasNoActivas, 'línea se cobró', 'líneas se cobraron') + ' sin estar activa' + (c.totalCobradasNoActivas === 1 ? '' : 's')) + ' (casi siempre bajas o cambios de número de ese mismo ciclo).' });
+          frases.push({ ico: 'receipt', html: 'En la última factura (' + esc(mesLargo(c.ultimo)) + ') ' + fuerte(plural(c.totalActivasSinCobro, 'línea activa no aparece', 'líneas activas no aparecen')) +
+            ' (casi siempre cambios de número recientes: el número nuevo sale en la factura siguiente).' });
         }
         if (r.vig.vencido) {
           frases.push({ ico: 'calendar-clock', html: fuerte(plural(r.vig.vencido, 'plan tiene', 'planes tienen') + ' el adendum vencido') + ' (' + pct(r.vig.vencido, r.planes) + ' de los planes activos).' });
@@ -373,18 +375,16 @@
         const c = f.comparacion;
         const mes = mesLargo(c.ultimo);
         $('#lnp-factura-nota', raiz).textContent = 'El inventario de hoy contra la última factura cargada (corte de ' + mes + '). Lo que cambió después de ese corte ' +
-          '(un cambio de número, una baja reciente) sale como diferencia hasta que se cargue la factura siguiente. "Cobradas sin estar activas" incluye las ' +
-          'que se cancelaron en ese ciclo: es su último cobro.';
+          '(un cambio de número, una baja reciente) sale como diferencia hasta que se cargue la factura siguiente.';
         const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase, filtros: false, titulo: titulo });
         tilesKpi($('#lnp-factura-kpis', raiz), [
           tile('card-sim', c.activas, 'Activas en el inventario (hoy)', '', 'USO, disponibles, en cancelación y por revisar'),
-          tile('receipt', c.cobradas, 'Cobradas en la factura de ' + mes),
-          tile('circle-check', c.activasCobradas, 'Activas y cobradas · ' + pct(c.activasCobradas, c.activas), 'stat-tile-ok'),
-          tile('circle-alert', c.totalActivasSinCobro, 'Activas sin cobro', c.totalActivasSinCobro ? 'stat-tile-warn' : 'stat-tile-ok', 'Activas en el inventario que no vienen en la factura de ' + mes),
-          tile('circle-alert', c.totalCobradasNoActivas, 'Cobradas sin estar activas', c.totalCobradasNoActivas ? 'stat-tile-warn' : 'stat-tile-ok', 'En la factura de ' + mes + ', canceladas o no registradas en el inventario'),
+          tile('receipt', c.cobradas, 'Aparecen en la factura de ' + mes, '', 'Líneas que vienen en la factura, con cargo o con saldo a favor o $0'),
+          tile('circle-check', c.activasCobradas, 'Activas y en la factura · ' + pct(c.activasCobradas, c.activas), 'stat-tile-ok'),
+          tile('circle-alert', c.totalActivasSinCobro, 'Activas que no aparecen en la factura', c.totalActivasSinCobro ? 'stat-tile-warn' : 'stat-tile-ok', 'Activas en el inventario que no vienen en la factura de ' + mes),
         ], () => null);
 
-        // Por cuenta: activas, cuántas de ellas se cobraron, las dos diferencias y lo facturado ese mes
+        // Por cuenta: activas, cuántas de ellas aparecen en la factura, las que no y lo facturado ese mes
         const ultimoMes = f.meses[f.meses.length - 1];
         $('#lnp-factura-mes', raiz).textContent = 'Factura de ' + mes;
         const alerta = (n) => (n ? '<span class="lnp-vencidas">' + miles(n) + '</span>' : '<span class="ln-tenue">0</span>');
@@ -392,16 +392,16 @@
         const filas = CUENTAS.filter((x) => c.porCuenta[x.clave] || ultimoMes.cuentas[x.clave]).map((x) => {
           const p = Object.assign({}, VACIA, c.porCuenta[x.clave]);
           return '<tr><th scope="row">' + esc(x.nombre) + '</th><td>' + miles(p.activas) + '</td><td>' + miles(p.activasCobradas) + '</td>' +
-            '<td>' + alerta(p.activasSinCobro) + '</td><td>' + alerta(p.cobradasNoActivas) + '</td>' +
+            '<td>' + alerta(p.activasSinCobro) + '</td>' +
             '<td>' + dinero((ultimoMes.cuentas[x.clave] || {}).monto || 0) + '</td></tr>';
         });
         $('#lnp-factura-cuentas', raiz).innerHTML = '<table class="lnp-tabla-cuentas"><thead><tr><th scope="col">Cuenta</th>' +
-          '<th scope="col" title="Activas en el inventario hoy">Activas</th><th scope="col" title="Activas que vienen en la factura">Se cobran</th>' +
-          '<th scope="col" title="Activas que no vienen en la factura">Sin cobro</th><th scope="col" title="En la factura y canceladas o sin registrar en el inventario">Cobradas no activas</th>' +
+          '<th scope="col" title="Activas en el inventario hoy">Activas</th><th scope="col" title="Activas que vienen en la factura">En factura</th>' +
+          '<th scope="col" title="Activas que no vienen en la factura">No aparecen</th>' +
           '<th scope="col">Facturado</th></tr></thead><tbody>' + filas.join('') +
           '<tr class="lnp-fila-total"><th scope="row">Total</th><td>' + miles(c.activas) + '</td><td>' + miles(c.activasCobradas) + '</td>' +
-            '<td>' + alerta(c.totalActivasSinCobro) + '</td><td>' + alerta(c.totalCobradasNoActivas) + '</td><td>' + dinero(ultimoMes.total) + '</td></tr>' +
-          '<tr class="lnp-fila-basicos"><th scope="row">De ellas, SIM básicos</th><td>' + miles(c.basicos.activas) + '</td><td colspan="4" class="ln-tenue">' +
+            '<td>' + alerta(c.totalActivasSinCobro) + '</td><td>' + dinero(ultimoMes.total) + '</td></tr>' +
+          '<tr class="lnp-fila-basicos"><th scope="row">De ellas, SIM básicos</th><td>' + miles(c.basicos.activas) + '</td><td colspan="3" class="ln-tenue">' +
             miles(c.basicos.cobradas) + ' SIM básicos en la factura</td></tr>' +
           '</tbody></table>';
 
