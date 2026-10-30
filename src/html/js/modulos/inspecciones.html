@@ -1007,7 +1007,15 @@
               <input type="number" id="ins-voltaje" step="0.01" min="0" max="20" inputmode="decimal" /></div>`}
             <div class="field form-completo"><label for="ins-observaciones">Observaciones</label>
               <textarea id="ins-observaciones" rows="7"></textarea></div>
-          </div>`;
+          </div>
+          ${opciones.idEditar ? `
+          <div class="field" style="margin-top:12px">
+            <label for="ins-formato-manual">¿Ya corregiste el formato por fuera del sistema?</label>
+            <input type="file" id="ins-formato-manual" accept="application/pdf,image/png,image/jpeg" />
+            <span class="form-ayuda">Opcional. Si subes un PDF o foto aquí, reemplaza al formato tal cual lo subas
+              (no se vuelve a generar desde la plantilla). Si lo dejas vacío, el PDF se regenera solo con los
+              cambios de arriba.</span>
+          </div>` : ''}`;
       }
       if (p.id === 'danos') {
         return `<div class="ins-diagramas">${estructura.diagramas.map((d) => `
@@ -1471,6 +1479,13 @@
         boton.disabled = true;
         boton.innerHTML = '<span class="spinner"></span> Guardando…';
         try {
+          // Opcional: un PDF/foto ya corregido a mano por fuera del sistema, para subirlo tal
+          // cual en vez de que el servidor regenere el PDF desde la plantilla.
+          const campoFormatoManual = $('#ins-formato-manual');
+          const archivoFormatoManual = campoFormatoManual && campoFormatoManual.files[0];
+          const archivoFormato = archivoFormatoManual
+            ? { base64: await leerArchivoBase64(archivoFormatoManual), mimeType: archivoFormatoManual.type }
+            : undefined;
           const res = await callServer('apiActualizarInspeccion', state.token, opciones.idEditar, {
             checklist: r.dadas,
             llantas: llantasEditar,
@@ -1480,7 +1495,7 @@
             VOLTAJE: valorDe('ins-voltaje'),
             ULTIMO_SERVICIO: valorDe('ins-servicio'),
             OBSERVACIONES: valorDe('ins-observaciones'),
-          });
+          }, archivoFormato);
           if (res.aviso) Notificar.error(res.aviso);
           else Notificar.exito(`Inspección actualizada · puntaje ${res.puntaje}%`, {
             duracion: 9000,

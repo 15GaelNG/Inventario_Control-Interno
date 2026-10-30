@@ -548,6 +548,35 @@ const InspeccionesService = (function () {
   }
 
   /**
+   * Sube el PDF (o foto) que alguien ya corrigió a mano, por fuera del sistema, y lo deja donde
+   * normalmente queda el formato generado -- mismo criterio de carpeta y nombre que PdfService.generar
+   * usa en registrar()/actualizar(), nada más que aquí el archivo YA viene hecho, no se genera.
+   * @return {{guardar: string, url: string}}  `guardar` es lo que va en FORMATO INSPECCION VEHICULAR
+   *   (URL completa en el expediente del NUCO, o ruta relativa en el legado); `url` es siempre la
+   *   liga real (para regresarle algo al cliente, igual que PdfService.generar.url).
+   */
+  function subirFormatoManual_(archivo, fila, estructura) {
+    const revisado = DriveUtils.blobRevisado(archivo, ['application/pdf', 'image/png', 'image/jpeg'], 'el formato de la inspección');
+    const nucco = fila['NUCO'];
+    if (ExpedienteNuco.tieneNuco(nucco)) {
+      const subido = ExpedienteNuco.guardar(revisado.blob, ExpedienteNuco.carpetaInspeccion(nucco, fila['FECHA']),
+        'INSPECCION', nucco, new Date(), revisado.extension);
+      ExpedienteNuco.olvidar(nucco);
+      return { guardar: subido.getUrl(), url: subido.getUrl() };
+    }
+    let carpeta = DriveApp.getFolderById(Config.DRIVE_FOLDERS.REPORTES());
+    if (estructura.carpeta) carpeta = DriveUtils.subcarpeta(carpeta, estructura.carpeta);
+    const nombre = PdfService.nombreArchivo(['INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(new Date())]) +
+      revisado.extension;
+    const subido = DriveUtils.crearArchivo(carpeta, revisado.blob, nombre);
+    DriveUtils.compartirLoMasAmplioPosible(subido);
+    return {
+      guardar: estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + nombre : nombre,
+      url: subido.getUrl(),
+    };
+  }
+
+  /**
    * Edita una inspección ya guardada: checklist, llantas, voltaje y los datos de encabezado que
    * captura el inspector (conductor, jefe directo, holograma, fecha de último servicio,
    * observaciones). A propósito NO toca firmas ni diagramas (se quedan tal como se firmaron/
@@ -556,9 +585,13 @@ const InspeccionesService = (function () {
    *
    * @param {Object} p   mismas llaves que registrar() acepta en CAPTURADOS, más `checklist` y
    *   `llantas` -- lo que no venga se queda con el valor que ya tenía la fila.
+   * @param {{base64: string, mimeType: string}} [archivoFormato]  si alguien ya corrigió el PDF
+   *   (o una foto) POR FUERA del sistema (p. ej. a mano en Acrobat) y lo quiere subir tal cual en
+   *   vez de que el sistema regenere uno desde la plantilla -- ese archivo reemplaza al de la
+   *   columna FORMATO INSPECCION VEHICULAR. Sin esto, el PDF se regenera como siempre.
    * @return {{ID, puntaje, pdf}}
    */
-  function actualizar(token, id, p) {
+  function actualizar(token, id, p, archivoFormato) {
     Permisos.puedeEditar(token, MODULO);
     const datos = Candado.con(() => {
       const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, COL_ID);
@@ -609,6 +642,20 @@ const InspeccionesService = (function () {
     // ---- el PDF, fuera del candado (como registrar(): copiar/llenar/exportar tarda) ----
     const fila = datos.registro;
     const estructura = datos.estructura;
+
+    // Alguien ya corrigió el formato por fuera del sistema y lo quiere subir tal cual: ese
+    // archivo reemplaza al que el sistema generaría, sin pasar por la plantilla.
+    if (archivoFormato && archivoFormato.base64) {
+      try {
+        const subido = subirFormatoManual_(archivoFormato, fila, estructura);
+        SheetUtils.update(ssId(), hoja_().getName(), id, { [COL_PDF]: subido.guardar }, COL_ID);
+        return { ID: id, puntaje: datos.puntaje.final, pdf: subido.url };
+      } catch (err) {
+        return { ID: id, puntaje: datos.puntaje.final, pdf: null,
+          aviso: 'Se guardaron los cambios, pero no se pudo subir el formato: ' + err.message };
+      }
+    }
+
     const paraPdf = {};
     COLUMNAS_IMAGEN.forEach(([columna]) => {
       const blob = blobDeImagenGuardada_(fila[columna]);

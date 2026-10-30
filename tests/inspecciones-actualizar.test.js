@@ -65,13 +65,22 @@ const contexto = vm.createContext({
   ExpedienteNuco: {
     tieneNuco: (n) => /^[0-9]+$/.test(String(n == null ? '' : n).trim()),
     carpetaInspeccion: () => ({ getId: () => 'carpeta-nuco' }),
+    guardar: (blob) => ({ getId: () => 'manual-nuco', getUrl: () => 'https://drive.google.com/file/d/MANUAL-NUCO/view' }),
     olvidar: () => {},
   },
   DriveApp: {
     getFileById: (id) => ({ getBlob: () => 'blob:' + id }),
+    getFolderById: (id) => ({ id: id }),
   },
   DriveUtils: {
     archivoDeRutaProfunda: (ruta) => (/TRASERA/.test(ruta) ? { getBlob: () => 'blob:trasera' } : null),
+    blobRevisado: (archivo, permitidos) => {
+      if (permitidos.indexOf(archivo.mimeType) === -1) throw new Error('Solo se aceptan archivos ' + permitidos.join(' o '));
+      return { blob: 'blob:manual:' + archivo.mimeType, extension: archivo.mimeType === 'application/pdf' ? '.pdf' : '.jpg' };
+    },
+    subcarpeta: (carpeta, nombre) => ({ id: (carpeta.id || '') + '/' + nombre }),
+    crearArchivo: (carpeta, blob, nombre) => ({ getId: () => 'manual-legado', getUrl: () => 'https://drive.google.com/file/d/MANUAL-LEGADO/view', nombre: nombre, carpeta: carpeta }),
+    compartirLoMasAmplioPosible: () => true,
   },
   PdfService: {
     generar: (p) => { llamadasPdf.push(p); return { url: 'https://pdf/nuevo.pdf', nombre: 'INSPECCION.pdf', sinResolver: [] }; },
@@ -145,6 +154,30 @@ console.log('6. Nunca manda el correo de aviso al editar');
 resetFila(); correosEnviados = 0;
 InspeccionesService.actualizar('token', 'INS-EXIST1', { checklist: { PARABRISAS: 'BUENO' }, OBSERVACIONES: 'ya quedó bien' });
 ok(correosEnviados === 0, 'MailApp.sendEmail no se llama al editar (solo al registrar la primera vez)');
+
+console.log('7. Subir un PDF ya corregido a mano reemplaza el que generaría el sistema (no pasa por la plantilla)');
+resetFila(); llamadasUpdate = []; llamadasPdf = [];
+const r7 = InspeccionesService.actualizar('token', 'INS-EXIST1', { checklist: { PARABRISAS: 'BUENO' } },
+  { base64: 'QQ==', mimeType: 'application/pdf' });
+ok(llamadasPdf.length === 0, 'no llama a PdfService.generar cuando ya viene un archivo');
+ok(llamadasUpdate.some((u) => u.cambios['FORMATO INSPECCION VEHICULAR'] === 'https://drive.google.com/file/d/MANUAL-NUCO/view'),
+  'guarda la liga del archivo subido en FORMATO INSPECCION VEHICULAR');
+ok(r7.pdf === 'https://drive.google.com/file/d/MANUAL-NUCO/view', 'regresa esa misma liga al cliente');
+ok(r7.puntaje === 100, 'el puntaje se recalculó igual (subir el archivo no sustituye el checklist)');
+
+console.log('8. El archivo subido también respeta un vehículo sin NUCO (legado): guarda la ruta relativa, no la URL completa');
+resetFila(); filaGuardada['NUCO'] = ''; llamadasUpdate = [];
+const r8 = InspeccionesService.actualizar('token', 'INS-EXIST1', { checklist: { PARABRISAS: 'BUENO' } },
+  { base64: 'QQ==', mimeType: 'image/jpeg' });
+ok(llamadasUpdate.some((u) => u.cambios['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/INSPECCIONES HONDA 150XR/INSPECCION JORGE AVECILLA GGR658F 2026-10-30.jpg'),
+  'guarda la ruta relativa (carpeta del tipo), como el resto del legado: ' + JSON.stringify(llamadasUpdate));
+ok(r8.pdf === 'https://drive.google.com/file/d/MANUAL-LEGADO/view', 'al cliente igual le regresa la liga real, no la ruta');
+
+console.log('9. Un tipo de archivo no permitido no revienta el guardado: el checklist ya se guardó, solo avisa que el archivo no se subió');
+resetFila();
+const r9 = InspeccionesService.actualizar('token', 'INS-EXIST1', { checklist: { PARABRISAS: 'MALO' } }, { base64: 'QQ==', mimeType: 'text/plain' });
+ok(!!r9.aviso && /no se pudo subir el formato/i.test(r9.aviso), 'avisa que no se pudo subir, en vez de tronar: ' + r9.aviso);
+ok(filaGuardada['PARABRISAS'] === 'MALO', 'el checklist sí quedó guardado aunque el archivo se rechazara (ya se escribió antes, bajo el candado)');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);
