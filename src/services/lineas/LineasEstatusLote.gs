@@ -13,6 +13,10 @@
  *   lineasEstatusLoteRevisar('<id del libro>')                 → solo lee: qué haría con cada NUCO
  *   lineasEstatusLoteAplicar('<id del libro>', 'SI, EN PROD')  → lo aplica (en un DEV no pide la confirmación)
  *
+ * El botón Ejecutar del editor no pasa argumentos: sin ellos, el ID sale de la propiedad del script LINEAS_LOTE_LIBRO y la
+ * confirmación de LINEAS_LOTE_CONFIRMACION (Configuración del proyecto › Propiedades del script). La confirmación se
+ * borra al aplicar, para que no se quede puesta.
+ *
  * Se puede correr de nuevo: el equipo que ya tiene el estatus nuevo se salta. Si se acaba el tiempo, se corre otra vez.
  */
 
@@ -22,20 +26,29 @@ const LOTE_LIMITE_MS = 4.5 * 60 * 1000;
 
 function lineasEstatusLoteRevisar(idLibro) {
   soloEditor_();
-  return lineasEstatusLote_(idLibro, false);
+  return lineasEstatusLote_(lineasLoteLibro_(idLibro), false);
 }
 
 function lineasEstatusLoteAplicar(idLibro, confirmacion) {
   soloEditor_();
-  if (String(Config.ENTORNO || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
-    throw new Error("En producción se corre como lineasEstatusLoteAplicar('<id del libro>', 'SI, EN PROD'). Primero lineasEstatusLoteRevisar.");
+  const props = PropertiesService.getScriptProperties();
+  const conf = typeof confirmacion === 'string' ? confirmacion : props.getProperty('LINEAS_LOTE_CONFIRMACION');
+  if (String(Config.ENTORNO || '').toUpperCase() === 'PROD' && conf !== 'SI, EN PROD') {
+    throw new Error("En producción pide la confirmación: lineasEstatusLoteAplicar('<id del libro>', 'SI, EN PROD'), o la propiedad del script " +
+      'LINEAS_LOTE_CONFIRMACION = SI, EN PROD. Primero lineasEstatusLoteRevisar.');
   }
-  return lineasEstatusLote_(idLibro, true);
+  props.deleteProperty('LINEAS_LOTE_CONFIRMACION');
+  return lineasEstatusLote_(lineasLoteLibro_(idLibro), true);
+}
+
+/** El ID del libro: el argumento o, desde el botón Ejecutar (llega el evento o nada), la propiedad LINEAS_LOTE_LIBRO. */
+function lineasLoteLibro_(idLibro) {
+  return typeof idLibro === 'string' && idLibro ? idLibro : PropertiesService.getScriptProperties().getProperty('LINEAS_LOTE_LIBRO');
 }
 
 /** Lee las decisiones del libro: [{ renglon, nuco, actual, nuevo, comentario }]. */
 function lineasEstatusLoteLeer_(idLibro) {
-  if (!idLibro) throw new Error('Falta el ID del libro con las decisiones.');
+  if (!idLibro) throw new Error('Falta el ID del libro con las decisiones: pásalo o ponlo en la propiedad del script LINEAS_LOTE_LIBRO.');
   const libro = SpreadsheetApp.openById(idLibro);
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   const hoja = libro.getSheets().filter((h) => {
