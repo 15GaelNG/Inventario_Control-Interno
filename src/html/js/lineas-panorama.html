@@ -293,6 +293,11 @@
           frases.push({ ico: 'triangle-alert', tono: 'warn', html: fuerte(plural(b.activasConCarta, 'línea tiene', 'líneas tienen') + ' carta o correo de cancelación y sigue' + (b.activasConCarta === 1 ? '' : 'n') + ' activa' +
             (b.activasConCarta === 1 ? '' : 's')) + ': conviene revisar si el proveedor la' + (b.activasConCarta === 1 ? '' : 's') + ' sigue cobrando.' });
         }
+        const g = gruposEquipos();
+        if (g.tenemos.total || g.baja.total) {
+          frases.push({ ico: 'smartphone', html: 'Tenemos ' + fuerte(plural(g.tenemos.total, 'equipo', 'equipos')) + ' (celulares y módems, en uso o guardados); ' +
+            fuerte(miles(g.baja.total) + ' ya salieron') + ': vendidos, donados, desechados, extraviados o robados.' });
+        }
         const f = est.datos.factura;
         // Solo las activas que no aparecen: "cobradas sin estar activas" se quitó (30-oct, Dirección: aparecer en la factura no
         // es que se cobre, y era difícil de explicar)
@@ -371,6 +376,8 @@
         const f = est.datos.factura;
         const caja = $('#lnp-factura', raiz);
         caja.hidden = !f;
+        $('#lnp-tab-factura', raiz).hidden = !f;
+        if (!f && Tabs.actual(pestanas()) === 'factura') irAPestana('resumen');
         if (!f) return;
         const c = f.comparacion;
         const mes = mesLargo(c.ultimo);
@@ -417,6 +424,85 @@
           '<tr class="lnp-fila-total"><th scope="row">Total</th>' +
             conCuenta.map((x) => '<td>' + dinero(f.meses.reduce((t, m) => t + ((m.cuentas[x.clave] || {}).monto || 0), 0)) + '</td>').join('') +
             '<td>' + dinero(total) + '</td><td></td></tr></tbody></table>';
+      }
+
+      // ---------------- Pestañas, puertas del Resumen y equipos por grupos (30-oct) ----------------
+
+      const PESTANA_GUARDADA = 'lineas.panorama.pestana';
+      /** Las pestañas que se calculan "al cierre del mes": en las demás (eventos con su fecha) se oculta el selector */
+      const CON_MES = ['resumen', 'lineas', 'equipos'];
+      const pestanas = () => $('#lnp-pestanas', raiz);
+      function alCambiarPestana(nombre) {
+        $('#lnp-filtros', raiz).hidden = CON_MES.indexOf(nombre) < 0;
+        $('#lnp-nota-historial', raiz).hidden = CON_MES.indexOf(nombre) >= 0;
+        try { localStorage.setItem(PESTANA_GUARDADA, nombre); } catch (e) { /* bloqueado: no se recuerda */ }
+        if (est.datos && nombre === 'equipos' && est.forma === 'grafica') pintarGrafica(seriesDe(est.conjunto)); // se dibuja con su ancho real
+      }
+      const irAPestana = (nombre) => { if (Tabs.mostrar(pestanas(), nombre)) alCambiarPestana(nombre); };
+
+      /** Los grupos de equipos al cierre del mes, con el detalle de cada estatus: { clave: { total, estatus: [[s, n]] } } */
+      function gruposEquipos() {
+        const h = est.datos.equipos.historico;
+        const g = { tenemos: { total: 0, estatus: [] }, baja: { total: 0, estatus: [] }, revisar: { total: 0, estatus: [] } };
+        Object.keys(h).forEach((s) => {
+          const n = (h[s] || [])[est.k] || 0;
+          if (!n) return;
+          const grupo = GRUPO_EQUIPO[s] === 'uso' || GRUPO_EQUIPO[s] === 'guardado' ? 'tenemos' : (GRUPO_EQUIPO[s] || 'revisar');
+          g[grupo].total += n;
+          g[grupo].estatus.push([s, n]);
+        });
+        Object.keys(g).forEach((k) => g[k].estatus.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+        return g;
+      }
+
+      /**
+       * Equipos por grupos: los que tenemos (en uso o guardados), los que ya salieron y los que están por revisar, cada uno
+       * con su subtotal y sus estatus. Reemplaza las 15 barras sueltas: "1,586 en total" sonaba a "tenemos 1,586".
+       */
+      function pintarEquiposGrupos() {
+        const g = gruposEquipos();
+        const total = g.tenemos.total + g.baja.total + g.revisar.total;
+        const max = Math.max(1, ...['tenemos', 'baja', 'revisar'].reduce((l, k) => l.concat(g[k].estatus.map((x) => x[1])), []));
+        const clic = esHoy();
+        $('#lnp-total-equipos', raiz).textContent = miles(total) + ' registrados';
+        const GRUPOS = [
+          { clave: 'tenemos', nombre: 'Los tenemos', sub: 'en uso o guardados', color: 'var(--lnp-s1)' },
+          { clave: 'baja', nombre: 'Ya no están', sub: 'vendidos, donados, desechados, extraviados o robados', color: 'var(--lnp-otros)' },
+          { clave: 'revisar', nombre: 'Por revisar', sub: 'estatus que ya no deberían existir', color: 'var(--lnp-s4)' },
+        ];
+        $('#lnp-equipos-grupos', raiz).innerHTML = GRUPOS.filter((x) => g[x.clave].total || x.clave !== 'revisar').map((x) =>
+          '<div class="lnp-grupo">' +
+            '<div class="lnp-grupo-cabeza"><span class="lnp-leyenda-marca" style="background:' + x.color + '"></span><strong>' + esc(x.nombre) + '</strong>' +
+              '<span class="lnp-grupo-num">' + miles(g[x.clave].total) + '</span><span class="lnp-leyenda-pct">' + pct(g[x.clave].total, total) + '</span>' +
+              '<span class="lnp-grupo-sub">' + esc(x.sub) + '</span></div>' +
+            g[x.clave].estatus.map(([s, v]) =>
+              '<button type="button" class="lnp-barra"' + (clic ? ' data-lnp-ir="equipos" data-estatus="' + esc(s) + '" title="Ver ' + esc(s) + ' en Líneas telefónicas"' : ' disabled') + '>' +
+                '<span class="lnp-barra-nombre">' + esc(s) + '</span>' +
+                '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%;background:' + x.color + '"></span></span>' +
+                '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, total) + '</span></button>').join('') +
+          '</div>').join('');
+      }
+
+      /** El Resumen: una tarjeta por tema con su número; cada una abre su pestaña. */
+      function pintarPuertas() {
+        const r = resumen(est.k);
+        const b = r.bajas;
+        const g = gruposEquipos();
+        const cuenta = (lista, s) => (lista.find((x) => x[0] === s) || [0, 0])[1];
+        const f = est.datos.factura;
+        const puerta = (tab, icono, titulo, valor, sub) => '<button type="button" class="card lnp-puerta" data-lnp-pestana="' + tab + '">' +
+          '<span class="lnp-puerta-titulo">' + ico(icono) + esc(titulo) + '</span><span class="lnp-puerta-num">' + valor + '</span>' +
+          '<span class="lnp-puerta-sub">' + sub + '</span><span class="lnp-puerta-ir">Ver ' + ico('arrow-right') + '</span></button>';
+        $('#lnp-puertas', raiz).innerHTML =
+          puerta('lineas', 'card-sim', 'Líneas activas', miles(r.activas), 'Sus planes cuestan ' + fuerte(dinero(r.renta)) + ' al mes') +
+          puerta('lineas', 'circle-x', 'Líneas canceladas', miles(b.canceladas), est.datos.conCartas
+            ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan') +
+          (f ? puerta('factura', 'receipt', 'Última factura (' + mesLargo(f.comparacion.ultimo) + ')', esc(dineroCorto(f.meses[f.meses.length - 1].total)),
+            fuerte(miles(f.comparacion.activasCobradas)) + ' de ' + miles(f.comparacion.activas) + ' activas aparecen en ella') : '') +
+          puerta('equipos', 'smartphone', 'Equipos con nosotros', miles(g.tenemos.total), 'En uso o guardados' + (g.revisar.total ? ' · ' + fuerte(miles(g.revisar.total)) + ' por revisar' : '')) +
+          puerta('ventas', 'package-x', 'Equipos que ya salieron', miles(g.baja.total),
+            fuerte(miles(cuenta(g.baja.estatus, 'VENDIDO'))) + ' vendidos · ' + fuerte(miles(cuenta(g.baja.estatus, 'DONADO'))) + ' donados · ' +
+            fuerte(miles(cuenta(g.baja.estatus, 'DESECHADO'))) + ' desechados · ' + fuerte(miles(cuenta(g.baja.estatus, 'EXTRAVIO-ROBO'))) + ' extraviados o robados');
       }
 
       // ---------------- Equipos y líneas por estatus (al cierre del mes elegido) ----------------
@@ -605,9 +691,11 @@
         pintarPortada();
         pintarCiclo();
         pintarFactura();
-        pintarBarras('equipos');
+        pintarPuertas();
+        pintarEquiposGrupos();
         pintarBarras('lineas');
         pintarEvolucion();
+        Lineas.panoramaBajas.pintar(raiz, est.datos.equiposBajas, { esHoy: esHoy() });
         $('#lnp-generado', raiz).textContent = 'Datos de la hoja al ' + fechaHora(est.datos.generadoEn) + ' (se guardan 30 min; "Actualizar" los vuelve a calcular).';
         refreshIcons();
       }
@@ -672,6 +760,13 @@
         if (b && !b.disabled) irConEstatus(b.dataset.lnpIr, b.dataset.estatus);
       };
       raiz.addEventListener('click', ir);
+      // Pestañas por tema (30-oct): la última que se vio se recuerda en este navegador
+      Tabs.iniciar(pestanas());
+      pestanas().addEventListener('tabs-cambio', (ev) => alCambiarPestana(ev.detail.nombre));
+      raiz.addEventListener('click', (ev) => { const p = ev.target.closest('[data-lnp-pestana]'); if (p) irAPestana(p.dataset.lnpPestana); });
+      let guardada = null;
+      try { guardada = localStorage.getItem(PESTANA_GUARDADA); } catch (e) { guardada = null; }
+      irAPestana(guardada && guardada !== 'factura' ? guardada : 'resumen');
       raiz.addEventListener('keydown', (ev) => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('.stat-tile[data-lnp-ir]')) { ev.preventDefault(); ir(ev); } });
       $('#lnp-actualizar', raiz).addEventListener('click', () => cargar(true));
       let espera = null;
