@@ -1,7 +1,8 @@
 /**
  * LineasCartaCancelacion.gs
- * La columna CARTA DE CANCELACION de la hoja LINEAS: SI si el número viene en alguna carta de cancelación que se mandó
- * al proveedor, NO si no. Solo distingue eso (30-oct): en el sistema CANCELADA quiere decir "este número ya no lo
+ * La columna CARTA DE CANCELACION de la hoja LINEAS: SI si la baja del número se pidió por escrito al proveedor, con
+ * carta o por correo (el libro trae los dos: cada renglón dice de qué carta o correo sale), NO si no. Solo distingue
+ * eso (30-oct): en el sistema CANCELADA quiere decir "este número ya no lo
  * usamos" (cambio de número, limpieza…), y el reporte de líneas cuenta solo las bajas pedidas; con esta columna se
  * separan las que se pidieron con carta.
  *
