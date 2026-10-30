@@ -67,6 +67,9 @@ const ENTORNOS = {
     LINEAS_DRIVE_NUCOS: '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-',
     // La carpeta LINEAS junto a NUCOS, para la responsiva de la línea sin equipo (pendiente 2.45, 15-oct-2026)
     LINEAS_DRIVE_LINEAS: '1MSkzelEJzIL0C7prDFRo1ytV9Ajh_yLA',
+    // Los números de las cartas de cancelación (LineasCartaCancelacion.gs, 30-oct-2026): "CARTAS DE CANCELACION - numeros
+    // (para LINEAS)". Solo lo abre quien corre la función en el editor.
+    LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
 
     // Geotab (opcional): usuario, base y servidor aquí; GEOTAB_PASSWORD solo en Script Properties
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',
