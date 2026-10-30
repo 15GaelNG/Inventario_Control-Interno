@@ -41,9 +41,10 @@ function cargar(numeros, opciones) {
   const propiedades = Object.assign({}, o.propiedades || {});
   const PropertiesService = { getScriptProperties: () => ({
     getProperty: (k) => (k in propiedades ? propiedades[k] : null), deleteProperty: (k) => { delete propiedades[k]; } }) };
-  const m = new Function('LineasDatos', 'SheetUtils', 'SpreadsheetApp', 'Config', 'Logger', 'PropertiesService', 'soloEditor_',
+  const leerConfig_ = (k) => (k in propiedades ? propiedades[k] : null);
+  const m = new Function('LineasDatos', 'SheetUtils', 'SpreadsheetApp', 'Config', 'Logger', 'PropertiesService', 'leerConfig_', 'soloEditor_',
     fuente + '; return { lineasCartaRevisar, lineasCartaAplicar };')(
-    LineasDatos, SheetUtils, SpreadsheetApp, { ENTORNO: o.entorno || 'DEV' }, { log: (t) => registros.push(t) }, PropertiesService, () => {});
+    LineasDatos, SheetUtils, SpreadsheetApp, { ENTORNO: o.entorno || 'DEV' }, { log: (t) => registros.push(t) }, PropertiesService, leerConfig_, () => {});
   return { m, escrito, propiedades, log: () => registros.join('\n') };
 }
 

@@ -145,6 +145,9 @@ const ENTORNOS = {
     // Líneas lee las hojas nuevas, igual que producción
     LINEAS_LECTURA: 'ESTRUCTURA',
     LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+
+    // Los números de las cartas de cancelación (LineasCartaCancelacion.gs): "CARTAS DE CANCELACION - numeros (para LINEAS)"
+    LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
   },
 
   // ---------------------------------------------------------------- DEV de la homologación (rama common)
