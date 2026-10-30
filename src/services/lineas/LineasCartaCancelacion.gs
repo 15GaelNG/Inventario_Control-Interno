@@ -11,8 +11,9 @@
  *   lineasCartaRevisar('<id del libro>')                 → solo lee: cuántas quedarían SI y NO y qué cambia
  *   lineasCartaAplicar('<id del libro>', 'SI, EN PROD')  → crea la columna (al final de LINEAS) y la llena
  *
- * El botón Ejecutar del editor no pasa argumentos: sin ellos, el ID sale de la propiedad del script LINEAS_CARTA_LIBRO y
- * la confirmación de LINEAS_CARTA_CONFIRMACION (que se borra al aplicar). Se puede correr de nuevo: solo escribe si
+ * El botón Ejecutar del editor no pasa argumentos: sin ellos, el ID sale de LINEAS_CARTA_LIBRO (el bloque del proyecto en
+ * Entornos.gs o su propiedad del script) y la confirmación de la propiedad LINEAS_CARTA_CONFIRMACION (que se borra al
+ * aplicar). Se puede correr de nuevo: solo escribe si
  * algún valor cambia. La columna se escribe completa en una sola operación (la bitácora la anota como CARGA).
  */
 
@@ -35,9 +36,12 @@ function lineasCartaAplicar(idLibro, confirmacion) {
   return lineasCarta_(lineasCartaLibro_(idLibro), true);
 }
 
-/** El ID del libro: el argumento o, desde el botón Ejecutar (llega el evento o nada), la propiedad LINEAS_CARTA_LIBRO. */
+/**
+ * El ID del libro: el argumento o, desde el botón Ejecutar (llega el evento o nada), LINEAS_CARTA_LIBRO del bloque del
+ * proyecto en Entornos.gs o de sus propiedades del script (leerConfig_).
+ */
 function lineasCartaLibro_(idLibro) {
-  return typeof idLibro === 'string' && idLibro ? idLibro : PropertiesService.getScriptProperties().getProperty('LINEAS_CARTA_LIBRO');
+  return typeof idLibro === 'string' && idLibro ? idLibro : leerConfig_('LINEAS_CARTA_LIBRO');
 }
 
 /** Los últimos 10 dígitos de un número (como se cruza todo Líneas con las facturas). */
@@ -47,7 +51,7 @@ function lineasCartaNumero_(v) {
 
 /** Lee los números de las cartas: { numero: 'CARTA · FECHA' }. */
 function lineasCartaLeer_(idLibro) {
-  if (!idLibro) throw new Error('Falta el ID del libro con los números de las cartas: pásalo o ponlo en la propiedad del script LINEAS_CARTA_LIBRO.');
+  if (!idLibro) throw new Error('Falta el ID del libro con los números de las cartas: pásalo o ponlo como LINEAS_CARTA_LIBRO (Entornos.gs o propiedad del script).');
   const libro = SpreadsheetApp.openById(idLibro);
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   const hoja = libro.getSheets().filter((h) => h.getLastColumn() &&
