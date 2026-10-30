@@ -269,7 +269,8 @@ const DOS = [
   { titulo: 'Inventarios', peso: 10, campos: [{ campo: 'GATO', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
 ];
 const conNA = contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'BUENO', GATO: 'N/A' });
-ok(conNA.final === 10 && conNA.maximo === 10, 'Inventarios toda N/A: sacó 10 de 10 posibles, no de 20');
+ok(conNA.final === 100 && conNA.maximo === 10,
+  'Inventarios toda N/A: sacó 10 de 10 posibles -- el total ya no se divide entre 20 (30-oct)');
 ok(contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'MALO', GATO: 'BUENO' }).maximo === 20,
   'con algo evaluado en las dos, el máximo es la suma de sus pesos');
 
@@ -339,6 +340,40 @@ ok(tabla[0][4] === 'PUNTAJE MAXIMO' && escritoMax.col === 5 && JSON.stringify(es
 tabla[1][4] = 0.9;
 const otraVez = contexto.InspeccionesService.puntajesMaximos(false);
 ok(otraVez.yaTenian === 1 && otraVez.calculadas === 0, 'la que ya tiene máximo no se recalcula');
+
+console.log('11. Corrige el PUNTAJE FINAL de las ya guardadas con la fórmula relativa (30-oct)');
+// Dos secciones (no una, como ESTRUCTURA): así se puede mostrar la diferencia entre "entre 100 fijo" y "entre lo aplicable"
+const ESTRUCTURA_DOS = {
+  tipo: 'HONDA 150XR', plantillaId: 'doc', carpeta: 'x',
+  secciones: [
+    { titulo: 'Cristalería', peso: 50, campos: [{ campo: 'PARABRISAS', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
+    { titulo: 'Inventarios', peso: 50, campos: [{ campo: 'GATO', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
+  ],
+  llantas: [], diagramas: [], piezas: 2,
+};
+contexto.CacheService.getScriptCache = () => ({ get: () => JSON.stringify(ESTRUCTURA_DOS), put: () => {} });
+const tablaRel = [
+  ['ID INSPECCION', 'TIPO', 'PARABRISAS', 'GATO', 'PUNTAJE FINAL INSPECCION'],
+  ['R1', 'HONDA 150XR', 'BUENO', 'N/A', 0.5],   // vieja fórmula: Inventarios N/A restaba su 50% del total -- debería quedar en 100%
+  ['R2', 'HONDA 150XR', 'BUENO', 'BUENO', 1],   // las dos aplicaron: 100% con cualquiera de las dos fórmulas, no se toca
+  ['R3', 'HONDA 150XR', '', '', ''],            // sin calificar, no se toca
+];
+let escritoRel = null;
+contexto.SheetUtils.getSheetByColumns = () => ({
+  getName: () => 'INSPECCION VEHICULAR',
+  getLastColumn: () => tablaRel[0].length,
+  getDataRange: () => ({ getValues: () => tablaRel.map((f) => f.slice()) }),
+  getRange: (fila1, col) => ({ setValues: (v) => { escritoRel = { col, v }; }, setNumberFormat: () => {} }),
+});
+const revRel = contexto.InspeccionesService.puntajesRelativos(false);
+ok(revRel.corregidas === 1 && revRel.yaCorrectas === 1 && revRel.sinCalificar === 1 && !escritoRel,
+  'revisar cuenta sin escribir: ' + JSON.stringify(revRel));
+contexto.InspeccionesService.puntajesRelativos(true);
+ok(escritoRel.col === 5 && JSON.stringify(escritoRel.v) === JSON.stringify([[1], [1], ['']]),
+  'aplicar corrige solo R1 (de 50% a 100%: Inventarios N/A ya no le resta) y deja las demás igual');
+tablaRel[1][4] = 1;
+const otraVezRel = contexto.InspeccionesService.puntajesRelativos(false);
+ok(otraVezRel.corregidas === 0 && otraVezRel.yaCorrectas === 2, 'correr otra vez no vuelve a tocar lo que ya quedó corregido (idempotente)');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

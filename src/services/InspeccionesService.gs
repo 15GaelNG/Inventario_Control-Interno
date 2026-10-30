@@ -786,6 +786,60 @@ const InspeccionesService = (function () {
     return r;
   }
 
+  /**
+   * Recalcula el PUNTAJE FINAL INSPECCION de las inspecciones ya guardadas con la fórmula corregida
+   * (30-oct): el total ahora es relativo a lo aplicable, no sobre 100 fijo (ver calcularPuntaje_).
+   * Se recalcula desde las respuestas crudas con la plantilla del tipo, igual que puntajesMaximos --
+   * por eso correr esto más de una vez no vuelve a tocar lo que ya quedó bien: solo escribe donde el
+   * recálculo da distinto de lo guardado (tolerancia de 0.01 puntos, por redondeo).
+   * @param {boolean} aplicar  false = solo contar
+   */
+  function puntajesRelativos(aplicar) {
+    const hoja = hoja_();
+    const datos = hoja.getDataRange().getValues();
+    const encabezados = datos[0];
+    const norm = SheetUtils.normalizarEncabezado_;
+    const col = (nombre) => encabezados.findIndex((e) => norm(e) === norm(nombre));
+    const iTipo = col('TIPO');
+    const iFinal = col('PUNTAJE FINAL INSPECCION');
+    const estructuras = {};
+    const r = { filas: datos.length - 1, corregidas: 0, yaCorrectas: 0, sinCalificar: 0, sinRespuestas: 0, sinTipo: 0, errores: {} };
+    let huboCambios = false;
+    const nuevos = datos.slice(1).map((row) => {
+      const actual = iFinal === -1 ? '' : row[iFinal];
+      if (limpiar_(actual) === '') { r.sinCalificar++; return [actual]; }
+      const tipo = limpiar_(row[iTipo]);
+      if (!tipo) { r.sinTipo++; return [actual]; }
+      if (!(tipo in estructuras)) {
+        try { estructuras[tipo] = estructura_(tipo); } catch (err) { estructuras[tipo] = null; r.errores[tipo] = err.message; }
+      }
+      const estructura = estructuras[tipo];
+      if (!estructura) return [actual];
+      const valor = {};
+      encabezados.forEach((e, j) => { valor[norm(e)] = row[j]; });
+      const deColumna = (campo) => valor[norm(campo)];
+      const checklist = {};
+      estructura.secciones.forEach((s) => s.campos.forEach((c) => { checklist[c.campo] = deColumna(c.campo); }));
+      const llantas = {};
+      estructura.llantas.forEach((l) => { llantas[l.campo] = deColumna(l.campo); });
+      const puntaje = puntajeDe_(estructura, checklist, deColumna('VOLTAJE'), llantas);
+      if (!puntaje.evaluadas) { r.sinRespuestas++; return [actual]; }
+      const actualPorcentaje = enCien_(actual);
+      if (actualPorcentaje !== null && Math.abs(actualPorcentaje - puntaje.final) < 0.01) { r.yaCorrectas++; return [actual]; }
+      r.corregidas++;
+      huboCambios = true;
+      return [puntaje.final / 100];
+    });
+    if (aplicar && huboCambios) {
+      const columna = iFinal + 1;
+      const rango = hoja.getRange(2, columna, nuevos.length, 1);
+      rango.setValues(nuevos);
+      rango.setNumberFormat('0.00%');
+      CacheHojas.tocarHoja(hoja);
+    }
+    return r;
+  }
+
   // ---------- puntaje ----------
   /**
    * Cuánto suma cada respuesta.
@@ -812,7 +866,12 @@ const InspeccionesService = (function () {
 
   /**
    * Puntaje por sección y total, a partir del checklist capturado.
-   * Cada sección vale su peso; el total es la suma de las 12. Función pura: se prueba sola.
+   * Cada sección vale su peso; el total es relativo a lo aplicable, no a 100 fijo (30-oct): una
+   * sección entera N/A (p. ej. unas herramientas que esa unidad no carga) no resta su peso del
+   * total, igual que ya no lo resta de `maximo` -- antes, el total SÍ se calculaba sobre 100 aunque
+   * `maximo` dijera que lo más que se podía sacar era menos, y una unidad en buen estado salía con
+   * una calificación baja y engañosa solo por tener secciones que no le aplican (usuario, 30-oct,
+   * caso real: moto NUCO 395, 83.13% con un 90% de máximo real -- 92.37% de lo aplicable).
    *
    * @param {Array} secciones   las de la plantilla (ver Plantilla.seccionesDe)
    * @param {Object} respuestas { 'PIEZA': 'BUENO' }
@@ -840,11 +899,14 @@ const InspeccionesService = (function () {
       };
     });
 
-    const final = detalle.reduce((suma, s) => suma + s.valor, 0) * 100;
+    const finalNominal = detalle.reduce((suma, s) => suma + s.valor, 0) * 100;
     const maximo = detalle.reduce((suma, s) => suma + (s.evaluadas ? s.peso : 0), 0);
+    // Relativo a `maximo`, no a 100: lo que no aplica no cuenta en contra del total, solo en lo
+    // que de verdad se evaluó. Sin nada evaluado (maximo = 0) el total es 0, no una división por cero.
+    const final = maximo ? Math.round((finalNominal / maximo) * 10000) / 100 : 0;
     return {
       secciones: detalle,
-      final: Math.round(final * 100) / 100,
+      final: final,
       maximo: maximo,
       evaluadas: detalle.reduce((n, s) => n + s.evaluadas, 0),
     };
@@ -1271,7 +1333,7 @@ const InspeccionesService = (function () {
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
     buscarPorId: (token, id) => conPorcentajes_(HojaServicio.buscarPorId(INSPECCIONES, token, id)),
     completo: (token) => HojaServicio.completo(INSPECCIONES, token).map(conPorcentajes_),
-    puntajesAPorcentaje, puntajesMaximos,
+    puntajesAPorcentaje, puntajesMaximos, puntajesRelativos,
     detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
@@ -1325,5 +1387,35 @@ function inspeccionesMaximosCalcular(confirmacion) {
   }
   const r = InspeccionesService.puntajesMaximos(true);
   Logger.log('PUNTAJE MAXIMO calculado: ' + r.calculadas + ' de ' + r.filas + ' inspecciones (ya lo tenían: ' + r.yaTenian + ').');
+  return r;
+}
+
+/**
+ * Desde el editor (30-oct): a cuántas inspecciones ya guardadas les cambiaría el PUNTAJE FINAL con la
+ * fórmula corregida (relativo a lo aplicable, no sobre 100 fijo -- ver calcularPuntaje_). No cambia nada;
+ * correr inspeccionesMaximosCalcular antes si hace falta (este no depende de PUNTAJE MAXIMO: lo recalcula
+ * todo desde las respuestas crudas).
+ */
+function inspeccionesRelativoRevisar() {
+  soloEditor_();
+  const r = InspeccionesService.puntajesRelativos(false);
+  Logger.log('Inspecciones: ' + r.filas + ' · se corregirían: ' + r.corregidas + ' · ya estaban bien: ' + r.yaCorrectas +
+    ' · sin calificar: ' + r.sinCalificar + ' · sin respuestas: ' + r.sinRespuestas + ' · sin tipo: ' + r.sinTipo +
+    (Object.keys(r.errores).length ? ' · tipos que no se pudieron leer: ' + JSON.stringify(r.errores) : '') +
+    ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
+  return r;
+}
+
+/**
+ * Desde el editor (30-oct): escribe el PUNTAJE FINAL corregido de las inspecciones que lo tenían mal (correr
+ * antes inspeccionesRelativoRevisar). En PROD no corre sin inspeccionesRelativoCalcular('SI, EN PROD').
+ */
+function inspeccionesRelativoCalcular(confirmacion) {
+  soloEditor_();
+  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
+    throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesRelativoCalcular('SI, EN PROD').");
+  }
+  const r = InspeccionesService.puntajesRelativos(true);
+  Logger.log('PUNTAJE FINAL corregido: ' + r.corregidas + ' de ' + r.filas + ' inspecciones (ya estaban bien: ' + r.yaCorrectas + ').');
   return r;
 }
