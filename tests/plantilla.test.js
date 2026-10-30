@@ -117,5 +117,18 @@ ok(Plantilla.seccionesDe('').length === 0 && Plantilla.seccionesDe(null).length 
 ok(!secciones.some((s) => s.campos.some((c) => c.campo === 'FECHA' || c.campo === 'RESPONSABLE')),
   'los datos de la cabecera no se cuelan como piezas del checklist');
 
+console.log('8. Un "Palabra 5%" sin piezas detrás no es una sección (30-oct: tronaba el checklist con campos[0] undefined)');
+const CON_FANTASMA = [
+  'Documentación 5%PresentaNo presentaN/A',
+  'Gafette<<IF([GAFETTE] ="PRESENTA", "✓", "")>>',
+  'Otro texto suelto 8%que no trae ningún IF detrás, solo prosa',
+  'Cristalería 10%BuenoRegularMalo',
+  'Parabrisas<<IF([PARABRISAS] ="BUENO", "✓", "")>>',
+].join('');
+const conFantasma = Plantilla.seccionesDe(CON_FANTASMA);
+ok(conFantasma.length === 2 && conFantasma.every((s) => s.campos.length > 0),
+  'la sección sin piezas detrás se descarta, no queda con campos: []: ' + JSON.stringify(conFantasma.map((s) => s.titulo)));
+ok(conFantasma.map((s) => s.titulo).join() === 'Documentación,Cristalería', 'quedan solo las dos secciones de verdad');
+
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

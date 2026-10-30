@@ -1232,7 +1232,11 @@ const InspeccionesService = (function () {
         return porPieza[clave];
       }).filter(Boolean);
       return { titulo: grupo.titulo, peso: grupo.peso, campos: campos };
-    });
+    })
+      // Si NINGUNA pieza del grupo calzó con la plantilla real (se editó el documento y los
+      // nombres de REAGRUPAR_SECCIONES quedaron viejos), no deja un grupo fantasma con
+      // campos: [] -- el mismo problema que una "sección" sin piezas de Plantilla.seccionesDe.
+      .filter((g) => g.campos.length > 0);
 
     // Si la plantilla real trae una pieza que este mapa no contempla (se agregó
     // después, o falta en la lista de arriba), no se pierde en silencio: se deja

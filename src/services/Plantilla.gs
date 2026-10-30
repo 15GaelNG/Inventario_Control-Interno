@@ -242,7 +242,12 @@ const Plantilla = (function () {
         porCampo[e.campo].opciones.push(e.opcion);
       }
     });
-    return secciones;
+    // Un "Palabra 5%" que haya en el documento sin ninguna pieza <<IF(...)>> detrás antes del
+    // siguiente encabezado real no es una sección -- es ruido del propio texto (otro número con
+    // signo de porcentaje que la expresión regular confunde con un título). Dejarla pasar con
+    // campos: [] rompe a cualquiera que asuma que toda sección tiene al menos una pieza
+    // (campos[0], como el botón "Todo bien" de la captura).
+    return secciones.filter((s) => s.campos.length > 0);
   }
 
   /** Campos que pide una plantilla (para saber qué hay que capturar) */
