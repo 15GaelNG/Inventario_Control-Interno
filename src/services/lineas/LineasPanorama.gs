@@ -15,7 +15,8 @@
  */
 const LineasPanorama = (function () {
   // v3 (1-oct): registros en columnas y estatus por mes comprimidos (la respuesta pesaba ~10 veces más)
-  const CLAVE_CACHE = 'ln_panorama_v3';
+  // v4 (30-oct): cada línea trae si su número viene en una carta de cancelación (columna k)
+  const CLAVE_CACHE = 'ln_panorama_v4';
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -115,7 +116,8 @@ const LineasPanorama = (function () {
   /**
    * Los registros para que el Panorama calcule todo para el mes que se elija, en columnas (sin repetir nombres de
    * campo en cada uno de los ~2,600 renglones) y con textos repetidos como índices a una lista. Líneas: cuenta,
-   * SIM básico, departamento, costo de plan, fin del adendum y estatus al cierre de cada mes (índices a `dic`).
+   * SIM básico, departamento, costo de plan, fin del adendum, si viene en una carta de cancelación (k: 1 sí, 0 no,
+   * -1 sin el dato) y estatus al cierre de cada mes (índices a `dic`).
    * El departamento, la cuenta y el costo son los de HOY (la bitácora no los reconstruye). La interfaz lo
    * desempaca con Lineas → expandirRegistros.
    */
@@ -136,7 +138,7 @@ const LineasPanorama = (function () {
       dic: dic, deps: deps, cuentas: cuentas, fechas: fechas,
       lineas: columnas(regs.lineas, {
         c: (r) => indice(cuentas, r.cuenta), b: (r) => (r.basico ? 1 : 0), d: (r) => indice(deps, r.depto),
-        p: (r) => r.costo, f: (r) => indice(fechas, r.fin), s: estados,
+        p: (r) => r.costo, f: (r) => indice(fechas, r.fin), k: (r) => (r.carta === 1 || r.carta === 0 ? r.carta : -1), s: estados,
       }),
       equipos: columnas(regs.equipos, { d: (r) => indice(deps, r.depto), s: estados }),
     };
@@ -286,6 +288,25 @@ const LineasPanorama = (function () {
     return { meses: porMes, comparacion: comp };
   }
 
+  /**
+   * Número → 1 si viene en una carta de cancelación al proveedor, 0 si no: la columna CARTA DE CANCELACION de la hoja
+   * LINEAS (la llena lineasCartaAplicar, LineasCartaCancelacion.gs). Sin la hoja o sin la columna, null.
+   */
+  function cartas_() {
+    if (!LineasDatos.existeTabla('LINEAS')) return null;
+    const filas = LineasDatos.leerTabla('LINEAS');
+    if (!filas.some((f) => txt(f['CARTA DE CANCELACION']))) return null;
+    const de = {};
+    filas.forEach((f) => {
+      const n = digitos10(f['NUMERO TELEFONO']);
+      const v = txt(f['CARTA DE CANCELACION']).toUpperCase();
+      if (!n || (v !== 'SI' && v !== 'NO')) return;
+      // Un número con varios registros: basta con que uno diga SI (la carta es del número, no del registro)
+      de[n] = de[n] === 1 || v === 'SI' ? 1 : 0;
+    });
+    return de;
+  }
+
   function calcular() {
     const ahora = Date.now();
     const ms = {}; // tiempos de cada paso (diagnóstico: se ven en la respuesta)
@@ -298,6 +319,8 @@ const LineasPanorama = (function () {
     const diaDe = (d) => dias[d.getTime()] || (dias[d.getTime()] = Utilities.formatDate(d, zona(), 'yyyy-MM-dd'));
     const filasLineas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
     tomar('leerLineas');
+    const cartaDe = cartas_();
+    tomar('leerCartas');
     filasLineas.forEach((f) => {
       const r = LineasRepo.convertirRegistro(f);
       if (!r) return;
@@ -314,6 +337,7 @@ const LineasPanorama = (function () {
           ids: ids, actual: estatus(r.linea.estatus), alta: altaMs, depto: depto, fin: fin,
           cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
           costo: Number(r.linea.costoPlan) || 0,
+          carta: cartaDe && cartaDe[digitos10(r.linea.numero)] !== undefined ? cartaDe[digitos10(r.linea.numero)] : -1,
         });
         lineasHoy.push({ numero: digitos10(r.linea.numero), estatus: r.linea.estatus, cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || '') });
       }
@@ -336,7 +360,7 @@ const LineasPanorama = (function () {
       historico: historico(regs[tipo], eventos[tipo], meses, ahora),
     });
     const salida = {
-      generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses,
+      generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses, conCartas: !!cartaDe,
       equipos: bloque('equipos'), lineas: bloque('lineas'),
       registros: registros(regs, eventos, meses),
     };

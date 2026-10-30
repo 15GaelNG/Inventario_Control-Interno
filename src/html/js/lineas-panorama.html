@@ -72,13 +72,14 @@
       const E = R.equipos;
       return {
         dic: R.dic, deps: R.deps,
-        lineas: L.s.map((s, i) => ({ c: R.cuentas[L.c[i]], b: L.b[i], d: L.d[i], p: L.p[i], f: R.fechas[L.f[i]], s: meses(s, n) })),
+        // k: 1 = el número viene en una carta de cancelación, 0 = no, -1 = sin el dato (respuesta de antes del 30-oct)
+        lineas: L.s.map((s, i) => ({ c: R.cuentas[L.c[i]], b: L.b[i], d: L.d[i], p: L.p[i], f: R.fechas[L.f[i]], k: L.k ? L.k[i] : -1, s: meses(s, n) })),
         equipos: E.s.map((s, i) => ({ d: E.d[i], s: meses(s, n) })),
       };
     }
     // Última respuesta del Panorama: al volver a entrar se pinta al instante y se actualiza por detrás. Se guarda
     // también en este navegador (solo conteos, departamentos y costos; sin nombres ni números) para la primera vez.
-    const COPIA_PANORAMA = 'lineas.panorama.v3';
+    const COPIA_PANORAMA = 'lineas.panorama.v4';
     let copiaPanorama = null;
     function leerCopiaPanorama() {
       if (copiaPanorama) return copiaPanorama;
@@ -122,14 +123,20 @@
           activas: 0, planes: 0, basicos: 0, renta: 0, grupos: { uso: 0, disponible: 0, cancelacion: 0, revisar: 0 },
           porCuenta: {}, porDepto: {}, vig: { vencido: 0, pronto: 0, vigente: 0, sinFecha: 0 },
           equipos: { total: 0, uso: 0, guardado: 0, baja: 0, revisar: 0 },
+          // Cómo termina una línea: canceladas con y sin carta, las que van en camino y las que tienen carta y siguen activas
+          bajas: { canceladas: 0, conCarta: 0, sinCarta: 0, sinDato: 0, proceso: 0, procesoConCarta: 0, procesoSinCarta: 0, activasConCarta: 0 },
         };
         const hoy = corte(k);
         const en30 = sumarDias(hoy, 30);
+        const b = r.bajas;
         R.lineas.forEach((l) => {
           const s = l.s[k];
           if (s < 0) return;
           const g = GRUPO_LINEA[dic[s]] || 'revisar';
+          if (g === 'cancelada') { b.canceladas++; b[l.k === 1 ? 'conCarta' : l.k === 0 ? 'sinCarta' : 'sinDato']++; }
           if (g === 'cancelada' || g === 'sin') return;
+          if (g === 'cancelacion') { b.proceso++; if (l.k === 1) b.procesoConCarta++; else if (l.k === 0) b.procesoSinCarta++; }
+          else if (l.k === 1 && (g === 'uso' || g === 'disponible')) b.activasConCarta++;
           r.activas++;
           r.grupos[g]++;
           const dep = R.deps[l.d];
@@ -252,6 +259,107 @@
         ], () => null);
       }
 
+      // ---------------- La historia del mes (30-oct) ----------------
+
+      const COLOR_CON_CARTA = 'var(--lnp-s6)';
+      const COLOR_SIN_CARTA = 'var(--lnp-otros)';
+      const fuerte = (t) => '<strong>' + t + '</strong>';
+      const plural = (n, uno, varios) => miles(n) + ' ' + (n === 1 ? uno : varios);
+
+      /**
+       * Lo que el Panorama dice en pocas frases, de lo más importante a lo de detalle (la "gran idea" primero). Cada frase
+       * sale de las mismas cuentas que las tarjetas de abajo, así que siempre coinciden con ellas.
+       */
+      function pintarHistoria() {
+        const r = resumen(est.k);
+        const b = r.bajas;
+        const previo = est.k > 0 ? resumen(est.k - 1) : null;
+        const cuando = esHoy() ? 'Hoy' : 'Al cierre de ' + mesLargo(est.datos.meses[est.k]);
+        $('#lnp-historia-titulo', raiz).textContent = esHoy() ? 'En resumen' : 'En resumen · cierre de ' + mesLargo(est.datos.meses[est.k]);
+        const frases = [];
+        const dif = previo ? r.activas - previo.activas : 0;
+        frases.push({ ico: 'card-sim', html: cuando + ' hay ' + fuerte(plural(r.activas, 'línea activa', 'líneas activas')) + ' y sus planes cuestan ' +
+          fuerte(dinero(r.renta)) + ' al mes' + (previo && dif ? ' (' + (dif > 0 ? '+' : '−') + miles(Math.abs(dif)) + ' líneas contra el mes anterior).' : '.') });
+        if (est.datos.conCartas) {
+          frases.push({ ico: 'file-check', html: 'De las ' + fuerte(plural(b.canceladas, 'cancelada', 'canceladas')) + ', ' + fuerte(miles(b.conCarta) + ' se pidieron con carta') +
+            ' al proveedor y ' + fuerte(miles(b.sinCarta + b.sinDato) + ' sin carta') + ': esas dejaron de usarse por un cambio de número, un registro reutilizado o la limpieza del inventario.' });
+        } else {
+          frases.push({ ico: 'circle-x', html: 'Hay ' + fuerte(plural(b.canceladas, 'línea cancelada', 'líneas canceladas')) + '.' });
+        }
+        if (b.proceso) {
+          frases.push({ ico: 'hourglass', tono: b.procesoSinCarta ? 'warn' : '', html: fuerte(plural(b.proceso, 'línea está', 'líneas están') + ' en cancelación') +
+            (est.datos.conCartas ? (b.procesoSinCarta ? ': ' + fuerte(miles(b.procesoSinCarta) + ' todavía sin carta') + ' al proveedor (mientras no se pida, se sigue pagando).' : ', todas con su carta.') : '.') });
+        }
+        if (b.activasConCarta) {
+          frases.push({ ico: 'triangle-alert', tono: 'warn', html: fuerte(plural(b.activasConCarta, 'línea tiene', 'líneas tienen') + ' carta de cancelación y sigue' + (b.activasConCarta === 1 ? '' : 'n') + ' activa' +
+            (b.activasConCarta === 1 ? '' : 's')) + ': conviene revisar si el proveedor la' + (b.activasConCarta === 1 ? '' : 's') + ' sigue cobrando.' });
+        }
+        const f = est.datos.factura;
+        if (f && esHoy() && (f.comparacion.totalActivasSinCobro || f.comparacion.totalCobradasNoActivas)) {
+          const c = f.comparacion;
+          frases.push({ ico: 'receipt', html: 'En la última factura (' + esc(mesLargo(c.ultimo)) + ') ' + fuerte(plural(c.totalActivasSinCobro, 'activa no se cobró', 'activas no se cobraron')) + ' y ' +
+            fuerte(plural(c.totalCobradasNoActivas, 'línea se cobró', 'líneas se cobraron') + ' sin estar activa' + (c.totalCobradasNoActivas === 1 ? '' : 's')) + ' (casi siempre bajas o cambios de número de ese mismo ciclo).' });
+        }
+        if (r.vig.vencido) {
+          frases.push({ ico: 'calendar-clock', html: fuerte(plural(r.vig.vencido, 'plan tiene', 'planes tienen') + ' el adendum vencido') + ' (' + pct(r.vig.vencido, r.planes) + ' de los planes activos).' });
+        }
+        $('#lnp-historia-lista', raiz).innerHTML = frases.map((x) => '<li class="lnp-historia-frase' + (x.tono ? ' lnp-tono-' + x.tono : '') + '">' + ico(x.ico) + '<span>' + x.html + '</span></li>').join('');
+      }
+
+      // ---------------- Cómo termina una línea (30-oct) ----------------
+
+      /**
+       * El camino activa → en cancelación → cancelada al cierre del mes elegido, y las canceladas partidas en con carta
+       * (se pidió la baja por escrito: es la que cuenta como ahorro) y sin carta (dejó de usarse sin pedirla).
+       */
+      function pintarCiclo() {
+        const r = resumen(est.k);
+        const b = r.bajas;
+        const conCartas = est.datos.conCartas;
+        const clic = esHoy();
+        const paso = (icono, titulo, valor, sub, estatus, extra) => '<div class="lnp-paso' + (extra || '') + '">' +
+          '<div class="lnp-paso-cabeza">' + ico(icono) + '<span>' + esc(titulo) + '</span></div>' +
+          (estatus && clic ? '<button type="button" class="lnp-paso-num" data-lnp-ir="lineas" data-estatus="' + esc(estatus) + '" title="Ver en Líneas Telefónicas">' + miles(valor) + '</button>'
+            : '<div class="lnp-paso-num">' + miles(valor) + '</div>') +
+          '<div class="lnp-paso-sub">' + sub + '</div></div>';
+        const flecha = '<div class="lnp-flecha" aria-hidden="true">' + ico('chevron-right') + '</div>';
+        $('#lnp-flujo', raiz).innerHTML =
+          paso('card-sim', 'Activas', r.activas - b.proceso, 'en uso, disponibles o por revisar', '') + flecha +
+          paso('hourglass', 'En cancelación', b.proceso, conCartas ? fuerte(miles(b.procesoConCarta)) + ' con carta · ' + fuerte(miles(b.procesoSinCarta)) + ' sin carta' : 'se pidió o se va a pedir la baja',
+            'EN PROCESO DE CANCELACION') + flecha +
+          paso('circle-x', 'Canceladas', b.canceladas, conCartas ? fuerte(miles(b.conCarta)) + ' con carta · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin carta' : 'ya no se usan', 'CANCELADA', ' lnp-paso-fin');
+
+        const cartas = $('#lnp-cartas', raiz);
+        if (!conCartas) {
+          cartas.innerHTML = '<p class="lnp-nota">Para separar las canceladas con y sin carta falta la columna CARTA DE CANCELACION en la hoja LINEAS (se llena desde el editor con lineasCartaAplicar).</p>';
+          $('#lnp-alertas', raiz).innerHTML = '';
+          return;
+        }
+        const sin = b.sinCarta + b.sinDato;
+        const total = b.canceladas || 1;
+        cartas.innerHTML =
+          '<div class="lnp-cartas-titulo">Las ' + plural(b.canceladas, 'cancelada', 'canceladas') + ', según cómo se dieron de baja</div>' +
+          '<div class="lnp-pila lnp-pila-cartas" role="img" aria-label="' + esc('Con carta ' + b.conCarta + ', sin carta ' + sin) + '">' +
+            (b.conCarta ? '<span class="lnp-pila-seg" style="flex-grow:' + b.conCarta + ';background:' + COLOR_CON_CARTA + '"></span>' : '') +
+            (sin ? '<span class="lnp-pila-seg" style="flex-grow:' + sin + ';background:' + COLOR_SIN_CARTA + '"></span>' : '') +
+          '</div>' +
+          '<div class="lnp-cartas-dos">' +
+            '<div class="lnp-carta-tipo"><div class="lnp-carta-cabeza"><span class="lnp-leyenda-marca" style="background:' + COLOR_CON_CARTA + '"></span>' +
+              ico('file-check') + '<span>Con carta</span><strong>' + miles(b.conCarta) + '</strong><span class="lnp-leyenda-pct">' + pct(b.conCarta, total) + '</span></div>' +
+              '<p>Se pidió la baja por escrito al proveedor. Es la que cuenta como <strong>ahorro</strong>, y si el proveedor la sigue cobrando, la carta es la prueba para reclamar.</p></div>' +
+            '<div class="lnp-carta-tipo"><div class="lnp-carta-cabeza"><span class="lnp-leyenda-marca" style="background:' + COLOR_SIN_CARTA + '"></span>' +
+              ico('file-x') + '<span>Sin carta</span><strong>' + miles(sin) + '</strong><span class="lnp-leyenda-pct">' + pct(sin, total) + '</span></div>' +
+              '<p>El número dejó de usarse en el sistema sin pedir la baja por escrito: casi siempre un <strong>cambio de número</strong>, un registro reutilizado o la limpieza del inventario. No es ahorro: la línea sigue con otro número o ya no se cobraba.</p></div>' +
+          '</div>';
+
+        const alertas = [];
+        if (b.procesoSinCarta) alertas.push('<span class="lnp-alerta">' + ico('mail-x') + '<span>' + fuerte(plural(b.procesoSinCarta, 'baja en proceso espera', 'bajas en proceso esperan')) + ' su carta al proveedor</span></span>');
+        if (b.activasConCarta) alertas.push('<span class="lnp-alerta">' + ico('triangle-alert') + '<span>' + fuerte(plural(b.activasConCarta, 'línea con carta sigue', 'líneas con carta siguen')) + ' activa' + (b.activasConCarta === 1 ? '' : 's') + ': revisar si se cobra' + (b.activasConCarta === 1 ? '' : 'n') + '</span></span>');
+        $('#lnp-alertas', raiz).innerHTML = alertas.join('') +
+          '<p class="lnp-nota">' + (esHoy() ? 'Clic en un número de arriba para ver esas líneas en Líneas Telefónicas.'
+            : 'Las cartas son las de hoy: una línea cuenta "con carta" si su número viene en alguna de las cartas de cancelación.') + '</p>';
+      }
+
       // ---------------- Contra la factura del proveedor (29-oct) ----------------
 
       /**
@@ -353,21 +461,42 @@
 
       // ---------------- Tendencia ----------------
 
-      /** Serie de la tendencia: líneas activas o renta de los planes al cierre de cada mes (se calcula una vez). */
-      function serieTendencia() {
-        if (!est.series[est.medida]) est.series[est.medida] = est.datos.meses.map((_, k) => (est.medida === 'renta' ? resumen(k).renta : resumen(k).activas));
-        return est.series[est.medida];
+      /**
+       * Series de la tendencia al cierre de cada mes (se calculan una vez): líneas activas, renta de los planes o las
+       * canceladas, partidas con y sin carta cuando se tiene el dato. [{ nombre, color, valores }]
+       */
+      function seriesTendencia() {
+        if (est.series[est.medida]) return est.series[est.medida];
+        const meses = est.datos.meses;
+        const serie = (nombre, color, fn) => ({ nombre: nombre, color: color, valores: meses.map((_, k) => fn(resumen(k))) });
+        let s;
+        if (est.medida === 'renta') s = [serie('de renta', 'var(--lnp-s1)', (r) => r.renta)];
+        else if (est.medida === 'canceladas') {
+          s = est.datos.conCartas
+            ? [serie('con carta', COLOR_CON_CARTA, (r) => r.bajas.conCarta), serie('sin carta', COLOR_SIN_CARTA, (r) => r.bajas.sinCarta + r.bajas.sinDato)]
+            : [serie('canceladas', 'var(--lnp-s1)', (r) => r.bajas.canceladas)];
+        } else s = [serie('líneas activas', 'var(--lnp-s1)', (r) => r.activas)];
+        est.series[est.medida] = s;
+        return s;
       }
 
-      /** Una sola serie con su área, el mes elegido marcado y clic para elegir otro mes. */
+      /** La tendencia (una serie con su área, o varias líneas), el mes elegido marcado y clic para elegir otro mes. */
       function pintarTendencia() {
         const cont = $('#lnp-tendencia', raiz);
         const todos = est.datos.meses;
         const desde = est.rangoTendencia ? Math.max(0, todos.length - est.rangoTendencia) : 0;
         const meses = todos.slice(desde);
-        const valores = serieTendencia().slice(desde);
+        const series = seriesTendencia().map((s) => Object.assign({}, s, { valores: s.valores.slice(desde) }));
+        const valores = series[0].valores;
+        const varias = series.length > 1;
         const esRenta = est.medida === 'renta';
-        $('#lnp-tendencia-titulo', raiz).innerHTML = ico('chart-line') + ' ' + (esRenta ? 'Renta mensual de los planes' : 'Líneas activas') + ' al cierre de cada mes';
+        const esBajas = est.medida === 'canceladas';
+        $('#lnp-tendencia-titulo', raiz).innerHTML = ico(esBajas ? 'circle-x' : 'chart-line') + ' ' +
+          (esRenta ? 'Renta mensual de los planes' : esBajas ? 'Líneas canceladas' : 'Líneas activas') + ' al cierre de cada mes';
+        $('#lnp-tendencia-leyenda', raiz).innerHTML = varias ? series.map((s) => '<span class="lnp-tendencia-clave"><span class="lnp-tooltip-clave" style="background:' + s.color + '"></span>' +
+          esc(s.nombre) + ' <strong>' + miles(s.valores[s.valores.length - 1]) + '</strong></span>').join('') : '';
+        $('#lnp-tendencia-nota', raiz).textContent = (esBajas && est.datos.conCartas ? 'Con carta o sin carta según las cartas de hoy. ' : '') +
+          'Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.';
         const fmt = esRenta ? dineroCorto : miles;
         const ancho = Math.max(280, cont.clientWidth || 520);
         const angosto = ancho < 480;
@@ -375,13 +504,13 @@
         const alto = 250;
         const w = ancho - m.izquierda - m.derecha;
         const h = alto - m.arriba - m.abajo;
-        const eje = ejeRedondo(Math.max(1, ...valores));
+        const eje = ejeRedondo(Math.max(1, ...series.reduce((t, s) => t.concat(s.valores), [])));
         const x = (k) => m.izquierda + (meses.length === 1 ? w / 2 : (k * w) / (meses.length - 1));
         const y = (v) => m.arriba + h - (v / eje.techo) * h;
         const cadaCuanto = Math.max(1, Math.ceil(meses.length / (angosto ? 4 : 7)));
         const sel = est.k - desde;
         let svg = '<svg class="lnp-svg" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" tabindex="0" aria-label="' +
-          esc((esRenta ? 'Renta mensual' : 'Líneas activas') + ' al cierre de cada mes. Flechas para recorrer y Enter para ver ese mes.') + '">';
+          esc((esRenta ? 'Renta mensual' : esBajas ? 'Líneas canceladas' : 'Líneas activas') + ' al cierre de cada mes. Flechas para recorrer y Enter para ver ese mes.') + '">';
         eje.marcas.forEach((v) => {
           svg += '<line class="lnp-rejilla" x1="' + m.izquierda + '" x2="' + (m.izquierda + w) + '" y1="' + y(v) + '" y2="' + y(v) + '"></line>' +
             '<text class="lnp-eje" x="' + (m.izquierda - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + esc(fmt(v)) + '</text>';
@@ -391,14 +520,19 @@
           if (k !== ultimo && (k % cadaCuanto || ultimo - k < Math.max(2, cadaCuanto))) return;
           svg += '<text class="lnp-eje" x="' + x(k) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(k === ultimo ? 'Hoy' : mesCorto(ym)) + '</text>';
         });
-        const puntos = valores.map((v, k) => x(k).toFixed(1) + ' ' + y(v).toFixed(1));
-        svg += '<path class="lnp-area" d="M' + puntos.join(' L') + ' L' + x(valores.length - 1).toFixed(1) + ' ' + y(0) + ' L' + x(0).toFixed(1) + ' ' + y(0) + ' Z"></path>';
-        svg += '<path class="lnp-linea" d="M' + puntos.join(' L') + '" style="stroke:var(--lnp-s1)"></path>';
+        series.forEach((s) => {
+          const puntos = s.valores.map((v, k) => x(k).toFixed(1) + ' ' + y(v).toFixed(1));
+          // El área solo con una serie: con varias se encimarían
+          if (!varias) svg += '<path class="lnp-area" d="M' + puntos.join(' L') + ' L' + x(s.valores.length - 1).toFixed(1) + ' ' + y(0) + ' L' + x(0).toFixed(1) + ' ' + y(0) + ' Z"></path>';
+          svg += '<path class="lnp-linea" d="M' + puntos.join(' L') + '" style="stroke:' + s.color + '"></path>';
+        });
         if (sel >= 0 && sel < valores.length) {
-          svg += '<line class="lnp-marca-mes" x1="' + x(sel) + '" x2="' + x(sel) + '" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '"></line>' +
-            '<circle class="lnp-punto" cx="' + x(sel) + '" cy="' + y(valores[sel]) + '" r="5" style="fill:var(--lnp-s1)"></circle>' +
-            '<text class="lnp-etiqueta" x="' + Math.min(Math.max(x(sel), m.izquierda + 34), m.izquierda + w - 34) + '" y="' + Math.max(14, y(valores[sel]) - 12) + '" text-anchor="middle">' +
+          svg += '<line class="lnp-marca-mes" x1="' + x(sel) + '" x2="' + x(sel) + '" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '"></line>';
+          series.forEach((s) => { svg += '<circle class="lnp-punto" cx="' + x(sel) + '" cy="' + y(s.valores[sel]) + '" r="5" style="fill:' + s.color + '"></circle>'; });
+          if (!varias) {
+            svg += '<text class="lnp-etiqueta" x="' + Math.min(Math.max(x(sel), m.izquierda + 34), m.izquierda + w - 34) + '" y="' + Math.max(14, y(valores[sel]) - 12) + '" text-anchor="middle">' +
               '<tspan class="lnp-etiqueta-valor">' + esc(fmt(valores[sel])) + '</tspan></text>';
+          }
         }
         svg += '<line class="lnp-cruz" y1="' + m.arriba + '" y2="' + (m.arriba + h) + '" hidden></line>';
         svg += '<rect class="lnp-captura lnp-captura-clic" x="' + m.izquierda + '" y="' + m.arriba + '" width="' + w + '" height="' + h + '"></rect></svg>';
@@ -412,8 +546,9 @@
           actual = k;
           cruz.setAttribute('x1', x(k)); cruz.setAttribute('x2', x(k)); cruz.removeAttribute('hidden');
           tip.innerHTML = '<div class="lnp-tooltip-mes">' + esc(k === meses.length - 1 ? 'Hoy' : 'Cierre de ' + mesLargo(meses[k])) + '</div>' +
-            '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:var(--lnp-s1)"></span><strong>' + esc(esRenta ? dinero(valores[k]) : miles(valores[k])) + '</strong>' +
-            '<span>' + (esRenta ? 'de renta' : 'líneas activas') + '</span></div><div class="lnp-tooltip-pie">Clic para ver ese mes</div>';
+            series.map((s) => '<div class="lnp-tooltip-fila"><span class="lnp-tooltip-clave" style="background:' + s.color + '"></span><strong>' +
+              esc(esRenta ? dinero(s.valores[k]) : miles(s.valores[k])) + '</strong><span>' + esc(s.nombre) + '</span></div>').join('') +
+            '<div class="lnp-tooltip-pie">Clic para ver ese mes</div>';
           tip.hidden = false;
           const escala = lienzo.getBoundingClientRect().width / ancho;
           const px = x(k) * escala;
@@ -622,7 +757,9 @@
 
       function pintarTodo() {
         pintarSelectorMes();
+        pintarHistoria();
         pintarPortada();
+        pintarCiclo();
         pintarFactura();
         pintarTendencia();
         pintarBarras('equipos');
