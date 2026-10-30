@@ -68,10 +68,13 @@ function cargar(decisiones, opciones) {
   const Config = { ENTORNO: (opciones && opciones.entorno) || 'DEV' };
   const registros = [];
   const Logger = { log: (t) => registros.push(t) };
-  const m = new Function('LineasDatos', 'LineasRepo', 'LineasLectura', 'LineasUtil', 'SpreadsheetApp', 'Session', 'Config', 'Logger', 'soloEditor_',
+  const propiedades = Object.assign({}, (opciones && opciones.propiedades) || {});
+  const PropertiesService = { getScriptProperties: () => ({
+    getProperty: (k) => (k in propiedades ? propiedades[k] : null), deleteProperty: (k) => { delete propiedades[k]; } }) };
+  const m = new Function('LineasDatos', 'LineasRepo', 'LineasLectura', 'LineasUtil', 'SpreadsheetApp', 'Session', 'Config', 'Logger', 'PropertiesService', 'soloEditor_',
     leer('LineasEstatusLote.gs') + '; return { lineasEstatusLoteRevisar, lineasEstatusLoteAplicar };')(
-    LineasDatos, LineasRepo, base.LineasLectura, base.LineasUtil, SpreadsheetApp, Session, Config, Logger, () => {});
-  return { m, hojas, movimientos, log: () => registros.join('\n') };
+    LineasDatos, LineasRepo, base.LineasLectura, base.LineasUtil, SpreadsheetApp, Session, Config, Logger, PropertiesService, () => {});
+  return { m, hojas, movimientos, propiedades, log: () => registros.join('\n') };
 }
 
 const DECISIONES = [
@@ -136,4 +139,14 @@ test('en producción no aplica sin la confirmación', () => {
   const t = cargar(DECISIONES, { entorno: 'PROD' });
   assert.throws(() => t.m.lineasEstatusLoteAplicar('libro'), /SI, EN PROD/);
   assert.match(t.m.lineasEstatusLoteAplicar('libro', 'SI, EN PROD'), /2 cambiados/);
+});
+
+test('desde el botón Ejecutar: el libro y la confirmación salen de las propiedades, y la confirmación se borra', () => {
+  const t = cargar(DECISIONES, { entorno: 'PROD', propiedades: { LINEAS_LOTE_LIBRO: 'libro' } });
+  assert.match(t.m.lineasEstatusLoteRevisar({}), /2 se cambiarían/);
+  assert.throws(() => t.m.lineasEstatusLoteAplicar({}), /LINEAS_LOTE_CONFIRMACION/);
+  t.propiedades.LINEAS_LOTE_CONFIRMACION = 'SI, EN PROD';
+  assert.match(t.m.lineasEstatusLoteAplicar({}), /2 cambiados/);
+  assert.strictEqual('LINEAS_LOTE_CONFIRMACION' in t.propiedades, false);
+  assert.throws(() => t.m.lineasEstatusLoteAplicar({}), /LINEAS_LOTE_CONFIRMACION/);
 });
