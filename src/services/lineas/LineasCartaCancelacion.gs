@@ -5,19 +5,24 @@
  * usamos" (cambio de número, limpieza…), y el reporte de líneas cuenta solo las bajas pedidas; con esta columna se
  * separan las que se pidieron con carta.
  *
+ * Junto a ella, LINK CARTA DE CANCELACION: el enlace de Drive de la carta (uno por renglón si el número viene en varias);
+ * vacía en las NO.
+ *
  * Los números NO van en el código (el repo es público): se leen de un libro con una pestaña que tenga la columna
- * NUMERO, un renglón por número de cada carta (CARTA y FECHA, si vienen, solo salen en el registro).
+ * NUMERO, un renglón por número de cada carta, y LINK con el enlace de esa carta (CARTA y FECHA, si vienen, solo salen
+ * en el registro).
  *
  *   lineasCartaRevisar('<id del libro>')                 → solo lee: cuántas quedarían SI y NO y qué cambia
- *   lineasCartaAplicar('<id del libro>', 'SI, EN PROD')  → crea la columna (al final de LINEAS) y la llena
+ *   lineasCartaAplicar('<id del libro>', 'SI, EN PROD')  → crea las dos columnas (al final de LINEAS) y las llena
  *
  * El botón Ejecutar del editor no pasa argumentos: sin ellos, el ID sale de LINEAS_CARTA_LIBRO (el bloque del proyecto en
  * Entornos.gs o su propiedad del script) y la confirmación de la propiedad LINEAS_CARTA_CONFIRMACION (que se borra al
- * aplicar). Se puede correr de nuevo: solo escribe si
- * algún valor cambia. La columna se escribe completa en una sola operación (la bitácora la anota como CARGA).
+ * aplicar). Se puede correr de nuevo: solo escribe si algún valor cambia. Cada columna se escribe completa en una sola
+ * operación (la bitácora la anota como CARGA).
  */
 
 const CARTA_COLUMNA = 'CARTA DE CANCELACION';
+const CARTA_LINK_COLUMNA = 'LINK CARTA DE CANCELACION';
 
 function lineasCartaRevisar(idLibro) {
   soloEditor_();
@@ -49,7 +54,7 @@ function lineasCartaNumero_(v) {
   return String(v === null || v === undefined ? '' : v).replace(/\D/g, '').slice(-10);
 }
 
-/** Lee los números de las cartas: { numero: 'CARTA · FECHA' }. */
+/** Lee los números de las cartas: { numero: { de: 'CARTA · FECHA; …', links: [enlace, …] } }. */
 function lineasCartaLeer_(idLibro) {
   if (!idLibro) throw new Error('Falta el ID del libro con los números de las cartas: pásalo o ponlo como LINEAS_CARTA_LIBRO (Entornos.gs o propiedad del script).');
   const libro = SpreadsheetApp.openById(idLibro);
@@ -65,7 +70,10 @@ function lineasCartaLeer_(idLibro) {
     const n = lineasCartaNumero_(r[c('NUMERO')]);
     if (n.length !== 10) return;
     const de = [c('CARTA') >= 0 ? r[c('CARTA')] : '', c('FECHA') >= 0 ? r[c('FECHA')] : ''].filter(Boolean).join(' · ');
-    numeros[n] = numeros[n] ? numeros[n] + '; ' + de : de;
+    const link = c('LINK') >= 0 ? String(r[c('LINK')] || '').trim() : '';
+    const x = numeros[n] || (numeros[n] = { de: '', links: [] });
+    x.de = x.de ? x.de + '; ' + de : de;
+    if (link && x.links.indexOf(link) < 0) x.links.push(link);
   });
   return numeros;
 }
@@ -77,16 +85,22 @@ function lineasCarta_(idLibro, aplicar) {
   const ultima = Math.max.apply(null, filas.map((f) => f._fila));
   // Un valor por renglón de la hoja (2..última); un renglón vacío conserva lo que tenga (nada)
   const valores = new Array(ultima - 1).fill('');
-  const cuenta = { si: 0, no: 0, cambian: 0 };
+  const links = new Array(ultima - 1).fill('');
+  const cuenta = { si: 0, no: 0, sinLink: 0, cambian: 0 };
   const enLineas = {};
   const siActivas = [];
+  const actual = (f, col) => String(f[col] === undefined || f[col] === null ? '' : f[col]).trim();
   filas.forEach((f) => {
     const n = lineasCartaNumero_(f['NUMERO TELEFONO']);
-    const valor = n && cartas[n] !== undefined ? 'SI' : 'NO';
+    const carta = n ? cartas[n] : undefined;
+    const valor = carta !== undefined ? 'SI' : 'NO';
+    const link = carta !== undefined ? carta.links.join('\n') : '';
     if (n) enLineas[n] = true;
     valores[f._fila - 2] = valor;
+    links[f._fila - 2] = link;
     cuenta[valor === 'SI' ? 'si' : 'no']++;
-    if (String(f[CARTA_COLUMNA] === undefined ? '' : f[CARTA_COLUMNA]).trim().toUpperCase() !== valor) cuenta.cambian++;
+    if (valor === 'SI' && !link) cuenta.sinLink++;
+    if (actual(f, CARTA_COLUMNA).toUpperCase() !== valor || actual(f, CARTA_LINK_COLUMNA) !== link) cuenta.cambian++;
     const estatus = String(f['ESTATUS LINEA'] || '').toUpperCase();
     if (valor === 'SI' && estatus !== 'CANCELADA' && estatus !== 'EN PROCESO DE CANCELACION') siActivas.push(n + ' (' + (estatus || 'sin estatus') + ')');
   });
@@ -95,16 +109,18 @@ function lineasCarta_(idLibro, aplicar) {
   let escrito = false;
   if (aplicar && cuenta.cambian) {
     LineasDatos.conCandado(() => {
-      LineasDatos.asegurarColumnas('LINEAS', [CARTA_COLUMNA]);
-      SheetUtils.cambiarColumna(LineasDatos.paraEscribir('LINEAS'), CARTA_COLUMNA, valores, 2);
+      LineasDatos.asegurarColumnas('LINEAS', [CARTA_COLUMNA, CARTA_LINK_COLUMNA]);
+      const t = LineasDatos.paraEscribir('LINEAS');
+      SheetUtils.cambiarColumna(t, CARTA_COLUMNA, valores, 2);
+      SheetUtils.cambiarColumna(t, CARTA_LINK_COLUMNA, links, 2);
     });
     LineasDatos.olvidarTabla('LINEAS');
     escrito = true;
   }
 
   const resumen = (aplicar ? (escrito ? 'APLICADO' : 'SIN CAMBIOS') : 'REVISIÓN (no se cambió nada)') + ' · ' +
-    Object.keys(cartas).length + ' números en las cartas · LINEAS: ' + filas.length + ' registros → ' + cuenta.si + ' SI · ' +
-    cuenta.no + ' NO · ' + cuenta.cambian + (aplicar ? ' escritos' : ' cambiarían');
+    Object.keys(cartas).length + ' números en las cartas · LINEAS: ' + filas.length + ' registros → ' + cuenta.si + ' SI (' +
+    (cuenta.si - cuenta.sinLink) + ' con link) · ' + cuenta.no + ' NO · ' + cuenta.cambian + (aplicar ? ' escritos' : ' cambiarían');
   Logger.log(resumen +
     '\nNúmeros de las cartas que no están en LINEAS (' + fuera.length + '): ' + (fuera.join(', ') || '—') +
     '\nCon carta y hoy no están cancelados ni en proceso (' + siActivas.length + '): ' + (siActivas.join(', ') || '—'));
