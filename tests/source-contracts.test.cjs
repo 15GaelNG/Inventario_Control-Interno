@@ -1788,7 +1788,7 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
 
   // Panorama nuevo (30-sep): el estatus de cada registro por mes, para calcular la portada del mes que se elija
   const R = P._registros({
-    lineas: regs.map((r, i) => Object.assign({}, r, { cuenta: ['AT&T', 'TELCEL GPH', ''][i], basico: i === 2, depto: i ? 'POST VENTA' : 'DISPONIBLE', costo: 299, fin: '2027-01-31' })),
+    lineas: regs.map((r, i) => Object.assign({}, r, { cuenta: ['AT&T', 'TELCEL GPH', ''][i], basico: i === 2, depto: i ? 'POST VENTA' : 'DISPONIBLE', costo: 299, fin: '2027-01-31', carta: [1, 0, undefined][i] })),
     equipos: [Object.assign({}, regs[0], { depto: 'DISPONIBLE' })],
   }, eventos, meses);
   // Va en columnas y el estatus por mes en corridas: un número si nunca cambió, o [código, meses, código, meses…]
@@ -1804,6 +1804,9 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.equal(typeof R.lineas.s[2], 'number'); // sin cambios: un solo número
   assert.deepEqual([R.lineas.b[2], R.cuentas[R.lineas.c[2]], R.deps[R.lineas.d[1]], R.fechas[R.lineas.f[0]]], [1, '', 'POST VENTA', '2027-01-31']);
   assert.deepEqual(estados(R.equipos.s[0]), ['USO', 'RESGUARDO', 'VENDIDO']);
+  // Carta de cancelación (30-oct): 1 sí, 0 no, -1 sin el dato; la portada separa las canceladas con y sin carta
+  assert.deepEqual(R.lineas.k, [1, 0, -1]);
+  assert.match(LINEAS, /if \(g === 'cancelada'\) \{ b\.canceladas\+\+; b\[l\.k === 1 \? 'conCarta' : l\.k === 0 \? 'sinCarta' : 'sinDato'\]\+\+; \}/);
   // La interfaz lo desempaca a un objeto por registro y guarda la última copia para pintar al instante
   const cli = LINEAS;
   assert.match(cli, /function expandirRegistros\(R\)/);

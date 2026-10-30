@@ -494,10 +494,14 @@
       const meses = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'];
       const dic = ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA', 'VENDIDO', 'RESGUARDO'];
       const cuentas = ['AT&T', 'TELCEL GPH', 'TELCEL FRO'];
-      const L = { c: [], b: [], d: [], p: [], f: [], s: [] };
+      // k: si el número viene en una carta de cancelación (30-oct): la mitad de las canceladas sí, una en proceso no, y una
+      // activa con carta (para que se vean las alertas)
+      const L = { c: [], b: [], d: [], p: [], f: [], k: [], s: [] };
       for (let i = 0; i < 120; i++) {
         L.c.push(i % 3); L.b.push(i % 9 === 0 ? 1 : 0); L.d.push(i % 4); L.p.push([299, 229, 269][i % 3]); L.f.push(i % 2);
-        L.s.push(i % 11 === 0 ? 3 : i % 13 === 0 ? 2 : i % 7 === 0 ? 1 : 0);
+        const s = i % 11 === 0 ? 3 : i % 13 === 0 ? 2 : i % 7 === 0 ? 1 : 0;
+        L.s.push(s);
+        L.k.push(s === 3 ? (i % 22 === 0 ? 1 : 0) : s === 2 ? (i === 26 ? 0 : 1) : i === 1 ? 1 : 0);
       }
       const E = { d: [], s: [] };
       for (let i = 0; i < 90; i++) { E.d.push(i % 4); E.s.push(i % 6 === 0 ? 4 : i % 5 === 0 ? 5 : 0); }
@@ -506,7 +510,7 @@
       const facturado = (m, k) => ({ ym: m, total: 280000 + k * 1500, lineas: 1000 + k * 5,
         cuentas: { 'AT&T': { monto: 140000 + k * 900, lineas: 480 + k }, 'TELCEL GPH': { monto: 90000 + k * 400, lineas: 300 }, 'TELCEL FRO': { monto: 50000 + k * 200, lineas: 140 } } });
       return {
-        generadoEn: hace(0), desde: '2025-04-22T12:00:00.000Z', cambiosDeEstatus: 5063, meses,
+        generadoEn: hace(0), desde: '2025-04-22T12:00:00.000Z', cambiosDeEstatus: 5063, meses, conCartas: true,
         lineas: { total: 120, actual: cuenta(L.s), historico: hist(L.s) }, equipos: { total: 90, actual: cuenta(E.s), historico: hist(E.s) },
         registros: { dic, deps: ['VENTAS', 'COMPRAS', 'POST VENTA', 'CONTROL INTERNO'], cuentas, fechas: ['2027-01-31', ''], lineas: L, equipos: E },
         factura: {

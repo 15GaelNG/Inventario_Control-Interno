@@ -17,6 +17,12 @@
       <span class="lnp-filtro-nota" id="lnp-filtro-nota"></span>
     </div>
 
+    <!-- La historia del mes en pocas frases (la "gran idea" primero; el detalle, abajo) -->
+    <div class="card lnp-historia" id="lnp-historia" aria-live="polite">
+      <div class="lnp-etiqueta-grande"><i data-lucide="sparkles" class="ico"></i> <span id="lnp-historia-titulo">En resumen</span></div>
+      <ul class="lnp-historia-lista" id="lnp-historia-lista"><li>Cargando…</li></ul>
+    </div>
+
     <div class="lnp-portada">
       <div class="card lnp-heroe">
         <div class="lnp-etiqueta-grande"><i data-lucide="card-sim" class="ico"></i> Líneas activas</div>
@@ -35,6 +41,14 @@
         <div class="lnp-heroe-sub" id="lnp-renta-sub"></div>
         <div class="lnp-cuentas" id="lnp-cuentas"></div>
       </div>
+    </div>
+
+    <!-- Cómo termina una línea (30-oct): el camino activa → en cancelación → cancelada, y las canceladas con y sin carta -->
+    <h3 class="lnp-seccion"><i data-lucide="route" class="ico"></i> Cómo termina una línea</h3>
+    <div class="card lnp-tarjeta lnp-ciclo" id="lnp-ciclo">
+      <div class="lnp-flujo" id="lnp-flujo"></div>
+      <div class="lnp-cartas" id="lnp-cartas"></div>
+      <div class="lnp-alertas" id="lnp-alertas"></div>
     </div>
 
     <!-- Contra la factura del proveedor (29-oct): solo con la sección "Plan y facturación"; el servidor la quita si no -->
@@ -77,14 +91,16 @@
           <div class="ln-segmentado" id="lnp-medida" role="group" aria-label="Qué medir">
             <button type="button" class="secondary activo" data-valor="lineas" aria-pressed="true">Líneas</button>
             <button type="button" class="secondary" data-valor="renta" aria-pressed="false">Renta</button>
+            <button type="button" class="secondary" data-valor="canceladas" aria-pressed="false">Canceladas</button>
           </div>
           <div class="ln-segmentado" id="lnp-rango-tendencia" role="group" aria-label="Periodo">
             <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
             <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
           </div>
         </div>
+        <div class="lnp-tendencia-leyenda" id="lnp-tendencia-leyenda"></div>
         <div class="lnp-grafica" id="lnp-tendencia"></div>
-        <p class="lnp-nota">Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.</p>
+        <p class="lnp-nota" id="lnp-tendencia-nota">Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.</p>
       </div>
 
       <div class="card lnp-tarjeta">
