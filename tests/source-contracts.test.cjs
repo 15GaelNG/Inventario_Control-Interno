@@ -607,6 +607,10 @@ test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se co
     'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
     'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
     'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    // Las dos de abajo son de la rama de Jorge y no existían cuando se armó esta lista (30-oct,
+    // merge de master a jorge): mismo trato, se pasan a SheetUtils al integrarla.
+    'src/services/PendientesInspeccionService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/UberService.gs': 'la rama de Jorge lo cambia (detección de bajas): se pasa al integrarla',
   };
   const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
   // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
