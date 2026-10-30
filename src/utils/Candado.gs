@@ -43,6 +43,10 @@ const Candado = (function () {
     try {
       return fn();
     } finally {
+      // Lo que se juntó para la bitácora sale antes de soltar el candado: sus huellas nunca se cruzan (Bitacora.gs)
+      if (typeof Bitacora !== 'undefined' && Bitacora.vaciar) {
+        try { Bitacora.vaciar(); } catch (e) { console.error('Bitácora al soltar el candado: ' + e.message); }
+      }
       profundidad = 0;
       lock.releaseLock();
     }

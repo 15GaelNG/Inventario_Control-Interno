@@ -31,7 +31,7 @@ test('mismo archivo de Drive: versión nueva, la anterior se conserva', () => {
   assert.match(fn, /exigirEscribible\(/);
   assert.match(fn, /keepForever: true/);
   // Servicio avanzado de Drive, no UrlFetchApp (7-oct: v65 sin el permiso de servicios externos)
-  assert.match(fn, /Drive\.Files\.update\(\{\}, archivoId, Utilities\.newBlob\(bytes, 'application\/pdf'\), \{ supportsAllDrives: true/);
+  assert.match(fn, /DriveUtils\.reemplazarConApi\(\{\}, archivoId, Utilities\.newBlob\(bytes, 'application\/pdf'\), \{ supportsAllDrives: true/);
   assert.doesNotMatch(fn, /UrlFetchApp\.fetch/);
   assert.doesNotMatch(fn, /setTrashed|createFile/);
 });
@@ -101,7 +101,7 @@ test('del AppSheet o de NUCOS sin PDF: el firmado se guarda en NUCOS; del sistem
     MimeType: { PDF: 'application/pdf' },
     Utilities: { base64Decode: (b) => Array.from(Buffer.from(b, 'base64')), newBlob: (bytes, mime, nombre) => ({ mime, nombre }), formatDate: () => '09 09' },
     DriveApp: { getFolderById: (id) => carpetas[id], Access: { DOMAIN: 'D' }, Permission: { VIEW: 'V' } },
-    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a },   // quién lo subió: aquí no importa
     LineasUtil: { nuco4: (n) => (n ? String(n).padStart(4, '0') : null) },
     LineasArchivos: {
       reemplazarPdf: () => { throw new Error('no debe reemplazar'); }, olvidarNuco: () => {},

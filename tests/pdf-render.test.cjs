@@ -22,7 +22,7 @@ test('el PDF sustituye etiquetas repetidas, expresiones y tablas sin búsquedas 
   const copia = { getId: () => 'tmp', getAs: () => { assert.ok(cerrado); return { setName: () => ({}) }; }, setTrashed: () => { limpiado = true; } };
   const contexto = vm.createContext({
     DriveApp: { getFileById: () => ({ makeCopy: () => copia }), Access: { DOMAIN: 'DOMAIN' }, Permission: { VIEW: 'VIEW' } },
-    DriveUtils: { marcarAutor: (a) => a },   // quién lo subió: aquí no importa
+    DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a },   // quién lo subió: aquí no importa
     LineasArchivos: { compartirEnDominio: () => true },
     DocumentApp: { ElementType: { TEXT: 'TEXT' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => grupo(cabecera), getFooter: () => null, saveAndClose: () => { cerrado = true; } }) },
   });

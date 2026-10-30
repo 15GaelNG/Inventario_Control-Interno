@@ -125,13 +125,11 @@ const Credenciales = (function () {
     if (c.actual !== undefined && c.actual === p) throw new Error('La contraseña nueva debe ser distinta de la actual.');
   }
 
-  /** Las columnas que falten al final de USUARIOS (solo el encabezado) */
+  /** Las columnas que falten al final de USUARIOS (solo el encabezado). → los encabezados, ya con ellas */
   function asegurarColumnas_(hoja, columnas) {
-    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
-    const indices = SheetUtils.indiceDeColumnas(encabezados, columnas);
-    const faltan = columnas.filter((c) => indices[c] === -1);
-    if (faltan.length) hoja.getRange(1, encabezados.length + 1, 1, faltan.length).setValues([faltan]);
-    return hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const t = SheetUtils.tabla(hoja);
+    SheetUtils.asegurarColumnas(t, columnas, { negritas: false });
+    return t.encabezados;
   }
 
   /** Escribe cambios en el renglón de un correo (por CORREO, USUARIOS no tiene ID). Bajo el candado. */
@@ -145,10 +143,10 @@ const Credenciales = (function () {
       const correos = ultima < 2 ? [] : hoja.getRange(2, indices.CORREO + 1, ultima - 1, 1).getValues();
       const i = correos.findIndex((r) => clave_(r[0]) === clave_(correo));
       if (i < 0) throw new Error('No existe el usuario ' + correo + '.');
-      Object.keys(cambios).forEach((c) => {
-        if (indices[c] >= 0) hoja.getRange(i + 2, indices[c] + 1).setValue(cambios[c]);
-      });
-      CacheHojas.tocarHoja(hoja);
+      SheetUtils.cambiarCeldas(SheetUtils.tabla(hoja, { encabezados: encabezados }), [{
+        fila: i + 2,
+        columnas: Object.keys(cambios).filter((c) => indices[c] >= 0).map((c) => ({ i: indices[c], valor: cambios[c] })),
+      }]);
       return true;
     });
   }
@@ -230,8 +228,8 @@ const Credenciales = (function () {
         lista.push({ correo: String(f[idx.CORREO]).trim(), nombre: idx.NOMBRE >= 0 ? f[idx.NOMBRE] : '', area: idx.AREA >= 0 ? f[idx.AREA] : '', temporal });
       });
       // Solo las columnas de la contraseña, de un jalón cada una: lo demás del renglón no se toca
-      columnas.forEach((c) => hoja.getRange(2, idx[c] + 1, datos.length, 1).setValues(datos.map((f) => [f[idx[c]]])));
-      CacheHojas.tocarHoja(hoja);
+      const t = SheetUtils.tabla(hoja, { encabezados: encabezados });
+      columnas.forEach((c) => SheetUtils.cambiarColumna(t, idx[c], datos.map((f) => f[idx[c]])));
       return { activos: activos.length, asignadas: lista.length, lista };
     });
     if (aplicar && r.lista.length) {
@@ -271,8 +269,7 @@ const Credenciales = (function () {
       });
       if (aplicar && datos.length && cuenta.marcados) {
         // Solo esa columna, de un jalón: lo demás del renglón no se toca
-        hoja.getRange(2, idx[COL.CAMBIAR] + 1, datos.length, 1).setValues(columna);
-        CacheHojas.tocarHoja(hoja);
+        SheetUtils.cambiarColumna(SheetUtils.tabla(hoja, { encabezados: encabezados }), idx[COL.CAMBIAR], columna.map((r) => r[0]));
       }
       return cuenta;
     });
@@ -425,8 +422,9 @@ function contrasenasTemporalesParaTodos(confirmacion) {
   const libro = SpreadsheetApp.create('CONTRASEÑAS TEMPORALES ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH.mm') +
     ' (' + (leerConfig_('ENTORNO') || '?') + ') - BORRAR AL REPARTIR');
   const h = libro.getSheets()[0];
-  h.getRange(1, 1, 1, 4).setValues([['CORREO', 'NOMBRE', 'AREA', 'CONTRASEÑA TEMPORAL']]);
-  if (r.lista.length) h.getRange(2, 1, r.lista.length, 4).setValues(r.lista.map((x) => [x.correo, x.nombre, x.area, x.temporal]));
+  // Un libro NUEVO y privado, fuera del sistema y con contraseñas: no pasa por SheetUtils (ni por la bitácora)
+  h.getRange(1, 1, 1, 4).setValues([['CORREO', 'NOMBRE', 'AREA', 'CONTRASEÑA TEMPORAL']]);   // fuera del sistema
+  if (r.lista.length) h.getRange(2, 1, r.lista.length, 4).setValues(r.lista.map((x) => [x.correo, x.nombre, x.area, x.temporal]));   // fuera del sistema
   h.setFrozenRows(1);
   h.autoResizeColumns(1, 4);
   Logger.log('Temporales asignadas: ' + r.asignadas + '. La lista (privada, solo tuya): ' + libro.getUrl() + ' — bórrala al terminar de repartir.');

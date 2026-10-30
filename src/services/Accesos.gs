@@ -25,19 +25,13 @@ const Accesos = (function () {
   const clave_ = (correo) => String(correo == null ? '' : correo).trim().toLowerCase();
 
   function hoja_() {
-    const libro = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.USUARIOS());
-    let h = libro.getSheetByName(HOJA);
-    if (!h) {
-      h = libro.insertSheet(HOJA);
-      h.getRange(1, 1, 1, COLUMNAS.length).setValues([COLUMNAS]);
-      h.setFrozenRows(1);
-    }
-    return h;
+    return SheetUtils.asegurarPestana(Config.SPREADSHEET_IDS.USUARIOS(), HOJA, COLUMNAS, { negritas: false, soloCrear: true });
   }
 
   function anotar(correo, metodo, resultado, dispositivo, detalle) {
     try {
-      hoja_().appendRow([new Date(), clave_(correo).slice(0, 120), metodo || '', resultado, String(dispositivo || '').slice(0, 60), String(detalle || '').slice(0, 200)]);
+      SheetUtils.agregarFilas(SheetUtils.tabla(hoja_(), { encabezados: COLUMNAS }),
+        [[new Date(), clave_(correo).slice(0, 120), metodo || '', resultado, String(dispositivo || '').slice(0, 60), String(detalle || '').slice(0, 200)]]);
     } catch (e) {
       console.warn('Accesos.anotar: ' + e.message);
     }

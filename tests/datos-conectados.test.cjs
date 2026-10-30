@@ -14,6 +14,8 @@ function hoja(nombre, enc, filas) {
     getName: () => nombre,
     getLastRow: () => datos.length + 1,
     getLastColumn: () => enc.length,
+    getMaxRows: () => 1000,
+    appendRow: (v) => { datos.push(v.slice()); },
     getRange: (f, c, nf, nc) => { const r = {
       getValues: () => {
         const out = [];
@@ -87,9 +89,14 @@ function cargar(opciones) {
       openById: () => ({
         getSheetByName: (n) => usuarios[n] || null,
         insertSheet: (n) => (usuarios[n] = hoja(n, [], [])),
+        getSheets: () => Object.values(usuarios),
       }),
     },
   });
+  // Escribe por SheetUtils (28-oct): las primitivas de verdad; getSheet sigue siendo el de la prueba
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'SheetUtils.gs'), 'utf8')
+    .replace('const SheetUtils = (function', 'this.SheetUtilsReal = (function'), ctx);
+  ['tabla', 'agregarFilas', 'cambiarCeldas', 'asegurarPestana', 'asegurarColumnas'].forEach((k) => { ctx.SheetUtils[k] = ctx.SheetUtilsReal[k]; });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') + fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'DatosConectados.gs'), 'utf8') +
     '\nthis.DatosConectados = DatosConectados;', ctx);
   return { D: ctx.DatosConectados, hs, usuarios };

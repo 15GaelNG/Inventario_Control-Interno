@@ -548,6 +548,24 @@ test('cada api… vive en src/api/<Módulo>.gs, el de su módulo, y se llama con
     .forEach((n) => assert.match(base, new RegExp('^function ' + n + '\\(', 'm'), n + ' es de todos: en la base'));
 });
 
+test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin otra copia', () => {
+  // 22-oct: había 5 copias; en el celular abrir fotos de cámara completas (y varias a la vez) dejaba la pantalla en
+  // blanco. Imagen las abre con poca memoria y de una en una. Una copia nueva no tendría eso.
+  const QUEDAN = {
+    'src/html/js/app-arqueos.html': 'Evidencias: se pasa a Imagen al integrar la rama de Jorge (él la cambió: aviso HEIC)',
+    'src/html/js/lineas.html': 'una PÁGINA de PDF dibujada con pdf.js y firmaAchicada (una firma ya dibujada de 600 px, ' +
+      'hasta que quepa en la caché; Emmanuel, 22-oct): ninguna abre una foto de cámara',
+  };
+  const con = filesBelow(path.join(root, 'src/html')).filter((f) => f.endsWith('.html'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/html/js/componentes/imagen.html' && /toDataURL\('image\/jpeg'|createImageBitmap/.test(read(f)));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [], 'usar Imagen.reducir');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'esta ya no tiene copia: quitarla de QUEDAN');
+  assert.equal((read('src/html/js/lineas.html').match(/toDataURL\('image\/jpeg'/g) || []).length, 2, 'en lineas.html solo la página del PDF y firmaAchicada');
+  assert.match(read('src/html/js/componentes/firma.html'), /Imagen\.reducir\(elegido, \{ ancho: 1200, calidad: 0\.85 \}\)/);
+  assert.match(read('src/html/js/lineas.html'), /Imagen\.reducir\(archivo, \{ lado: maxDim, calidad: 0\.82 \}\)/);
+});
+
 test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otra copia', () => {
   // Leer/escribir una hoja con su permiso, caché, fechas y archivos: src/utils/HojaServicio.gs.
   // Líneas (services/lineas/) todavía tiene su propia capa (LineasDatos) y queda fuera.
@@ -579,6 +597,50 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   assert.match(read('package.json'), /node tests\/hoja-servicio\.test\.js/);
 });
 
+test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se conecta la bitácora)', () => {
+  // 28-oct (homologación 8): agregarFilas, cambiarCeldas, borrarFilas, reemplazarFilas, cambiarColumna, asegurarPestana…
+  // avisan a la caché y al enganche de la bitácora (Bitacora.anotar). Escribir a mano se salta las dos cosas.
+  // Scripts que corre un editor (no la app): las migraciones, el arranque y la lectura de INE (solo en un DEV,
+  // pestañas de análisis que se rehacen completas)
+  const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
+  const QUEDAN = {   // solo puede encoger
+    'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+  };
+  const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
+  // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
+  // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
+  const sinComentarios = (s) => s.replace(/^.*\/\/ fuera del sistema.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  // Bitacora.gs escribe SU libro (la bitácora no se anota a sí misma): el único otro lugar que escribe hojas
+  const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/utils/SheetUtils.gs' && f !== 'src/services/Bitacora.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
+    'escribe con SheetUtils (tabla + agregarFilas / cambiarCeldas / borrarFilas / reemplazarFilas / cambiarColumna / asegurarPestana…): ahí se conecta la bitácora');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por SheetUtils: quitarlo de QUEDAN');
+  assert.match(read('package.json'), /node tests\/sheet-utils-primitivas\.test\.js/);
+});
+
+test('toda escritura en Drive pasa por DriveUtils (sus primitivas avisan a la bitácora)', () => {
+  // 28-oct: crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido y las de la API
+  // (crearConApi, copiarConApi, reemplazarConApi). Lo temporal (copias de plantillas y de OCR) va con { temporal: true }.
+  const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
+  const QUEDAN = {   // solo puede encoger
+    'src/services/AdherenteVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/ArqueosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    'src/services/ResponsivaVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+  };
+  const ESCRIBE = /\.(createFile|makeCopy|setTrashed|moveTo|createFolder|setContent)\(|Drive\.Files\.(create|update|copy|remove|delete|insert)\(/;
+  const sinComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
+    .map((f) => path.relative(root, f).replace(/\\/g, '/'))
+    .filter((f) => f !== 'src/utils/DriveUtils.gs' && f !== 'src/services/Bitacora.gs' && !EDITOR.test(f) && ESCRIBE.test(sinComentarios(read(f))));
+  assert.deepEqual(con.filter((f) => !QUEDAN[f]), [],
+    'escribe en Drive con DriveUtils (crearArchivo / crearCarpeta / mover / renombrar / copiar / aPapelera…): ahí se conecta la bitácora');
+  assert.deepEqual(Object.keys(QUEDAN).filter((f) => !con.includes(f)), [], 'este ya escribe por DriveUtils: quitarlo de QUEDAN');
+});
+
 test('el candado del script se pide solo con Candado.con (reentrante), y SheetUtils escribe solo lo que cambia', () => {
   // waitLock() no es reentrante: un getScriptLock suelto no sabe que su hilo ya tiene el candado, y lo que llama
   // adentro (SheetUtils.update, HojaServicio.actualizar…) se colgaba hasta el timeout (docs/homologacion-codigo.md, fase 1)
@@ -594,8 +656,11 @@ test('el candado del script se pide solo con Candado.con (reentrante), y SheetUt
   const su = read('src/utils/SheetUtils.gs');
   const funcion = (nombre) => new RegExp('function ' + nombre + '\\([\\s\\S]*?\\r?\\n  }\\r?\\n').exec(su)[0];
   assert.match(funcion('update'), /Candado\.con\(/);
-  assert.match(funcion('update'), /escribirColumnas_\(/);
+  // 28-oct: escribe con la primitiva cambiarCeldas (la de todos), que escribe por tramos solo las celdas del cambio
+  assert.match(funcion('update'), /cambiarCeldas\(/);
   assert.doesNotMatch(funcion('update'), /objectToRow_\(|setValues\(\[row\]\)/);
+  assert.match(funcion('escribirConHoja_'), /escribirColumnas_\(/);
+  assert.doesNotMatch(funcion('cambiarCeldas'), /objectToRow_\(/);
   assert.match(funcion('remove'), /Candado\.con\(/);
 });
 
@@ -1715,6 +1780,47 @@ test('Panorama: estatus al cierre de cada mes reconstruido hacia atrás con la b
   assert.match(app, /plantilla: 'tpl-lineas-panorama', init: \(\) => Lineas\.initPanorama\(\)/);
   assert.match(read('src/html/Index.html'), /include\('html\/views\/lineas\/lineas-panorama'\)/);
   assert.match(API, /function apiLineasPanorama\(token, forzar\)/);
+});
+
+test('Panorama contra la factura: facturado por mes y cuenta, y las activas de hoy contra la última factura (29-oct)', () => {
+  const d = (s) => new Date(s + 'T12:00:00-06:00');
+  // FACTURAS: NUMERO EN FACTURA, FECHA DE CORTE, COMPAÑIA, CUENTA PADRE, TOTAL CON IVA, ARCHIVO
+  const filas = [
+    ['4420000001', d('2026-08-15'), 'AT&T', '507727479', 269.78, 'Factura AT&T · agosto 2026'],
+    ['4420000001', d('2026-09-15'), 'AT&T', '507727479', 269.78, 'Factura AT&T · septiembre 2026'],
+    ['4420000002', d('2026-08-15'), 'AT&T', '507727479', 269.78, 'Factura AT&T · agosto 2026'], // dejó de cobrarse en sep
+    ['4420000003', d('2026-09-15'), 'AT&T', '507727479', 120, 'Factura AT&T · septiembre 2026'], // cancelada: su último cobro
+    ['5510000004', '27/09/2026', 'TELCEL', '62637313', 269, 'Estado de cuenta Telcel · septiembre 2026'], // corte como texto; GPH por CUENTAS
+    ['5510000005', d('2026-09-27'), 'TELCEL', '99999999', 229, 'Estado de cuenta Telcel FRO · septiembre 2026'], // cuenta sin CUENTAS: FRO por el archivo
+    ['', d('2026-09-15'), 'AT&T', '507727479', -100, 'Factura AT&T · septiembre 2026'], // ajuste: suma, no es línea
+  ];
+  const hoja = { getLastRow: () => filas.length + 1, getRange: (f, c, n) => ({ getValues: () => filas.slice(f - 2, f - 2 + n) }) };
+  const LineasDatos = {
+    ZONA_APP: 'America/Mexico_City', existeTabla: () => true, tabla: () => ({ hoja }), colIndice: (t, c) => ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO'].indexOf(c),
+    leerTabla: () => [{ 'CUENTA PADRE': '62637313', 'RAZON SOCIAL': 'GPH SERVICIOS CONDOMINALES SC' }],
+  };
+  const P = new Function('LineasDatos', 'LineasRepo', 'LineasUtil', 'Utilities',
+    read('src/services/lineas/LineasPanorama.gs') + '; return LineasPanorama;')(
+    LineasDatos, {}, { col: (f, c) => f[c] },
+    { formatDate: (x) => x.toISOString().slice(0, 7) });
+  const f = P._factura([
+    { numero: '4420000001', estatus: 'USO', cuenta: 'AT&T', basico: false },
+    { numero: '4420000002', estatus: 'USO', cuenta: 'AT&T', basico: false }, // activa sin cobro en sep
+    { numero: '4420000003', estatus: 'CANCELADA', cuenta: 'AT&T', basico: false },
+    { numero: '5510000004', estatus: 'DISPONIBLE', cuenta: 'TELCEL GPH', basico: false },
+    { numero: '6660000006', estatus: 'USO', cuenta: 'TELCEL FRO', basico: false }, // nunca cobrada
+  ]);
+  assert.deepEqual(f.meses.map((m) => [m.ym, m.total, m.lineas]), [['2026-08', 539.56, 2], ['2026-09', 787.78, 4]]);
+  assert.deepEqual(f.meses[1].cuentas['TELCEL GPH'], { monto: 269, lineas: 1 });
+  assert.deepEqual(f.meses[1].cuentas['TELCEL FRO'], { monto: 229, lineas: 1 });
+  const c = f.comparacion;
+  assert.deepEqual([c.ultimo, c.activas, c.cobradas, c.activasCobradas, c.totalActivasSinCobro, c.totalCobradasNoActivas], ['2026-09', 4, 4, 2, 2, 2]);
+  assert.deepEqual(c.activasSinCobro, [['4420000002', 'USO', 'AT&T', '2026-08'], ['6660000006', 'USO', 'TELCEL FRO', '']]);
+  assert.deepEqual(c.cobradasNoActivas, [['5510000005', 'NO ESTÁ EN EL INVENTARIO', 'TELCEL FRO', 229], ['4420000003', 'CANCELADA', 'AT&T', 120]]);
+  assert.deepEqual(c.porCuenta['AT&T'], { activas: 2, cobradas: 2, activasCobradas: 1, activasSinCobro: 1, cobradasNoActivas: 1 });
+  // Montos y números solo con la sección de facturación; el navegador no guarda las listas con números
+  assert.match(read('src/services/TelefoniaService.gs'), /return veFacturacion_\(sesion\) \|\| !r\.factura \? r : Object\.assign\(\{\}, r, \{ factura: null \}\);/);
+  assert.match(LINEAS, /comparacion: Object\.assign\(\{\}, r\.factura\.comparacion, \{ activasSinCobro: \[\], cobradasNoActivas: \[\] \}\)/);
 });
 
 test('Vista rápida en Líneas Telefónicas, responsiva editable y calificación en vivo de la inspección', () => {

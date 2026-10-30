@@ -259,6 +259,39 @@ acordado, con los archivos "congelados" unas horas, en un PR que solo mueve (sin
       No se sacaron `Migracion*` del build de prod: con el candado no hacen falta fuera, y quitarlos rompería
       `revisarEntorno` y lo que los llama.
 
+- [x] 6.5 Reducir fotos: `componentes/imagen.html` (22-oct). Había 5 copias (Firma, Líneas ×2, Arqueos y la de la
+      inspección vehicular en `ayrton`); en el celular abrir fotos de cámara completas, y varias a la vez, dejaba la
+      pantalla en blanco. `Imagen.reducir` abre con `createImageBitmap` reducido o `<img>` con URL del archivo (nunca
+      como texto), de una en una en toda la app, fondo blanco, nunca agranda. Firma y Líneas la usan con sus mismos
+      tamaños y calidades. **Falta Arqueos**: se pasa al integrar la rama de Jorge (él cambió esa función: aviso HEIC).
+      Contrato: ninguna copia nueva fuera de la lista que solo encoge.
+
+## Fase 8 — Toda escritura de hojas por `SheetUtils` (28-oct)
+
+Para la **bitácora** de ingresos y cambios (autorizada para producción): que se conecte en UN lugar y no en cada
+módulo. Había tres maneras de escribir: `SheetUtils` (por ID), `LineasDatos` (por renglón, con lote por la API de
+Sheets) y ~75 escrituras a mano en 20 archivos.
+
+- [x] `SheetUtils` con primitivas: `tabla`, `agregarFilas`, `cambiarCeldas`, `borrarFilas`, `reemplazarFilas`,
+      `cambiarColumna`, `asegurarPestana` / `asegurarColumnas` / `quitarColumnas` y `enLote`. Cada una avisa a
+      `CacheHojas` y al **enganche** `Bitacora.anotar(evento)` (si existe; hoy no). `insert` / `update` / `remove` /
+      `removeMany` encima, misma firma. La **política** de la tabla dice cómo se escribe un valor: por omisión como
+      siempre (`setValues`); Líneas, por la API de Sheets (RAW, fechas tecleadas) y en lote. Prueba
+      `tests/sheet-utils-primitivas.test.js`; el simulador aprendió rangos A1, `getRangeList` y una API de Sheets falsa.
+- [x] `LineasDatos` es la capa delgada de Líneas (su API pública no cambia; + `actualizarFilas` y `paraEscribir`):
+      conserva sus lecturas, `guardarCH`, `valorCelda_`, hojas virtuales y el candado de `ID_PRODUCCION`. Prueba
+      `tests/lineas-datos-escribir.test.js`.
+- [x] Los servicios que escribían a mano: Accesos, Verificación, Credenciales, Permisos, Datos conectados, Relaciones,
+      Capital Humano, Solicitud de compra, Temporada, Adquisición (índice), Notificaciones y Correcciones de Líneas.
+      `tests/sheet-utils-real.js` carga el `SheetUtils` de verdad en las pruebas que simulan hojas a mano.
+- [x] Contrato: ninguna escritura de hoja fuera de `SheetUtils`. Exentos: scripts de editor (`Migracion*`,
+      `SetupInicial`, lectura de INE en DEV) y la marca `// fuera del sistema` (la lista privada de temporales, con
+      contraseñas: a propósito no pasa por la bitácora).
+- [ ] **Esperan a Jorge** (`QUEDAN`, solo encoge): `HelpdeskService`, `InspeccionesService`, `VehiculosService`; su
+      `SheetUtils.updateMany` (solo en su rama) se rehace como envoltura por ID sobre `cambiarCeldas`.
+- [ ] Siguiente (plan aparte): la bitácora misma (libro por año, decisión por hoja en `Entidades`, quién/origen,
+      ingresos, archivos de Drive, huellas encadenadas) conectada al enganche.
+
 ## Fase 7 — Pruebas que no estorben
 
 - [x] Clasificar las aserciones de `source-contracts` (15-oct, `node tools/pruebas/clasificar-contratos.js

@@ -39,7 +39,14 @@ function crearEntorno(opciones) {
   };
 
   // locks: cuántas veces se pidió el candado; candadoTomado: si alguien lo tiene ahora mismo
-  const registro = { locks: 0, candadoTomado: 0, consola: [] };
+  // api: cada llamada a la API de Sheets (Sheets.Spreadsheets.Values.batchUpdate), para contarlas en las pruebas
+  const registro = { locks: 0, candadoTomado: 0, consola: [], api: [] };
+  /** 'B5' → [5, 2] (renglón, columna; base 1) */
+  const deA1 = (a1) => {
+    const m = /^([A-Z]+)(\d+)$/.exec(a1);
+    if (!m) throw new Error('A1 simulado: ' + a1);
+    return [Number(m[2]), m[1].split('').reduce((n, l) => n * 26 + l.charCodeAt(0) - 64, 0)];
+  };
 
   // ------------------------------------------------------------------ hojas
   function crearHoja(libro, nombre, renglones) {
@@ -57,6 +64,7 @@ function crearEntorno(opciones) {
       getLastColumn: ancho,
       getMaxRows: () => datos.length,
       getRange(fila, col, filas, cols) {
+        if (typeof fila === 'string') return hoja.getRange(...deA1(fila));
         const nf = filas || 1;
         const nc = cols || 1;
         return {
@@ -70,36 +78,60 @@ function crearEntorno(opciones) {
             return this;
           },
           setValue(v) { return this.setValues([[v]]); },
+          clearContent() { return this.setValues(Array.from({ length: nf }, () => Array(nc).fill(''))); },
           // Formato: no cambia los datos, solo se acepta
           setFontWeight() { return this; },
           setNumberFormat() { return this; },
+          setBackground() { return this; },
+          setFontColor() { return this; },
+          setFontSize() { return this; },
+          setHorizontalAlignment() { return this; },
+          setVerticalAlignment() { return this; },
+          setWrap() { return this; },
+          createFilter() { hoja._filtro = {}; return hoja._filtro; },
         };
       },
+      setRowHeight: () => hoja,
+      setColumnWidth: () => hoja,
+      // Formato condicional: las reglas quedan en hoja._reglas para revisarlas
+      setConditionalFormatRules(reglas) { hoja._reglas = reglas; return hoja; },
+      getConditionalFormatRules: () => hoja._reglas || [],
+      getFilter: () => hoja._filtro || null,
       setFrozenRows: () => hoja,
+      getMaxColumns: () => Math.max(26, ancho()),
+      protect() { const p = { setDescription: () => p, setWarningOnly: () => p }; return p; },
       clearContents() { datos.forEach((r) => r.fill('')); return hoja; },
       getDataRange() { return this.getRange(1, 1, ultimaFila(), ancho()); },
       appendRow(r) { datos.splice(ultimaFila(), 0, r.slice()); return hoja; },
       deleteRow(f) { datos.splice(f - 1, 1); },
       deleteRows(f, n) { datos.splice(f - 1, n); },
+      insertRowsAfter(f, n) { datos.splice(f, 0, ...Array.from({ length: n }, () => Array(ancho()).fill(''))); return hoja; },
+      deleteColumn(c) { datos.forEach((r) => r.splice(c - 1, 1)); },
+      deleteColumns(c, n) { datos.forEach((r) => r.splice(c - 1, n)); },
+      getRangeList(a1s) { return { setValue: (v) => { registro.rangeLists = (registro.rangeLists || 0) + 1; a1s.forEach((a) => hoja.getRange(a).setValue(v)); } }; },
       _datos: datos,
     };
     return hoja;
   }
 
   const libros = {};
-  Object.keys(cfg.libros || {}).forEach((id) => {
-    const libro = { getId: () => id, getName: () => 'Libro ' + id, _hojas: [] };
+  function crearLibro(id, nombreLibro, hojas) {
+    const libro = { getId: () => id, getName: () => nombreLibro || 'Libro ' + id, getUrl: () => 'https://docs.google.com/spreadsheets/d/' + id, _hojas: [] };
     libro.getSheets = () => libro._hojas.slice();
     libro.getSheetByName = (n) => libro._hojas.find((h) => h.getName() === n) || null;
-    libro.insertSheet = (n) => {
+    libro.insertSheet = (n) => {   // (la posición no importa en las pruebas)
       if (libro.getSheetByName(n)) throw new Error('Ya existe la hoja ' + n);
       const h = crearHoja(libro, n, []);
       libro._hojas.push(h);
       return h;
     };
-    Object.keys(cfg.libros[id]).forEach((nombre) => libro._hojas.push(crearHoja(libro, nombre, cfg.libros[id][nombre])));
+    libro.deleteSheet = (h) => { libro._hojas = libro._hojas.filter((x) => x !== h); };
+    Object.keys(hojas || {}).forEach((nombre) => libro._hojas.push(crearHoja(libro, nombre, hojas[nombre])));
     libros[id] = libro;
-  });
+    return libro;
+  }
+  Object.keys(cfg.libros || {}).forEach((id) => crearLibro(id, null, cfg.libros[id]));
+  let nuevos = 0;
 
   // ------------------------------------------------------------------ servicios de Apps Script
   const cacheMem = new Map();
@@ -142,6 +174,9 @@ function crearEntorno(opciones) {
       if (formato !== 'yyyy-MM-dd') throw new Error('parseDate simulado: solo yyyy-MM-dd');
       return fecha(texto);
     },
+    DigestAlgorithm: { SHA_256: 'sha256' },
+    // Como Apps Script: bytes con signo (-128…127)
+    computeDigest: (alg, texto) => Array.from(require('crypto').createHash('sha256').update(String(texto), 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
   };
 
   const propiedades = new Map();
@@ -164,8 +199,52 @@ function crearEntorno(opciones) {
     SpreadsheetApp: {
       openById: (id) => { if (!libros[id]) throw new Error('No existe el libro ' + id); return libros[id]; },
       flush: () => {},
+      // Un libro nuevo trae su "Hoja 1" vacía, como el de verdad
+      create: (nombre) => crearLibro('nuevo-' + (++nuevos), nombre, { 'Hoja 1': [] }),
+      // Una regla de formato condicional: guarda lo que se le pidió (texto, fondo, letra) para revisarlo
+      newConditionalFormatRule: () => {
+        const r = {};
+        const b = {
+          whenTextEqualTo: (t) => { r.texto = t; return b; },
+          whenFormulaSatisfied: (f) => { r.formula = f; return b; },
+          setBackground: (c) => { r.fondo = c; return b; },
+          setFontColor: (c) => { r.letra = c; return b; },
+          setRanges: (rs) => { r.rangos = rs; return b; },
+          build: () => r,
+        };
+        return b;
+      },
     },
     CacheService: { getScriptCache: () => cache, getUserCache: () => cache },
+    // La API de Sheets (servicio avanzado): batchUpdate con rangos 'HOJA'!B5. cfg.apiSheets === false: apagada en el proyecto
+    Sheets: {
+      Spreadsheets: {
+        Values: {
+          batchUpdate(cuerpo, id) {
+            if (cfg.apiSheets === false) throw new Error('Sheets API has not been used in project 1 before or it is disabled. SERVICE_DISABLED');
+            registro.api.push({ libro: id, modo: cuerpo.valueInputOption, celdas: cuerpo.data.length });
+            cuerpo.data.forEach((d) => {
+              const m = /^'((?:[^']|'')*)'!([A-Z]+\d+)$/.exec(d.range);
+              const v = d.values[0][0];
+              const tecleada = cuerpo.valueInputOption === 'USER_ENTERED' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(v);
+              libros[id].getSheetByName(m[1].replace(/''/g, "'")).getRange(m[2]).setValue(tecleada ? fecha(v.slice(0, 16)) : v);
+            });
+            return {};
+          },
+          // Renglones al final de la pestaña del rango ('HOJA'!A1); cfg.appendFalla: el libro no responde
+          append(cuerpo, id, rango, opciones) {
+            if (cfg.appendFalla) throw new Error('Service unavailable');
+            registro.api.push({ libro: id, modo: opciones.valueInputOption, insertar: opciones.insertDataOption, renglones: cuerpo.values.length, append: true });
+            const nombre = /^'((?:[^']|'')*)'!/.exec(rango)[1].replace(/''/g, "'");
+            const h = libros[id].getSheetByName(nombre);
+            const desde = h.getLastRow() + 1;
+            cuerpo.values.forEach((r) => h.appendRow(r));
+            // Como la API: dónde quedó lo escrito
+            return { updates: { updatedRange: "'" + nombre + "'!A" + desde + ':N' + (desde + cuerpo.values.length - 1) } };
+          },
+        },
+      },
+    },
     LockService: {
       getScriptLock: () => ({
         waitLock: () => { registro.locks++; registro.candadoTomado++; },

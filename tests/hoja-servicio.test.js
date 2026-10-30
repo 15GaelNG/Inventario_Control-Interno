@@ -67,7 +67,8 @@ function entorno() {
     },
     DriveApp: { getFileById: (id) => ({ getName: () => 'subido.pdf', setName: (n) => log.renombres.push(id + '→' + n) }) },
   });
-  e.cargar('src/utils/SheetUtils.gs', 'src/utils/CacheHojas.gs', 'src/utils/HojaServicio.gs');
+  // DriveUtils de verdad: renombrar el archivo subido pasa por sus primitivas (28-oct, la bitácora)
+  e.cargar('src/utils/SheetUtils.gs', 'src/utils/CacheHojas.gs', 'src/utils/DriveUtils.gs', 'src/utils/HojaServicio.gs');
   return { e, H: e.global('HojaServicio'), log, hoja: (n) => e.hojaComoTexto('libro', n) };
 }
 

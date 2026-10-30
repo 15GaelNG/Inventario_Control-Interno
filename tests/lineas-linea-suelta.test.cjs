@@ -52,7 +52,7 @@ function archivos(drive) {
     leerConfig_: (k) => (k === 'LINEAS_DRIVE_LINEAS' ? 'LINEAS' : ''),
     Config: { ENTORNO: 'PROD' },
     DriveApp: drive.DriveApp, Drive: drive.Drive,
-    DriveUtils: require('./drive-utils-real')(),   // subcarpeta: la regla real (fase 5.7)
+    DriveUtils: require('./drive-utils-real')({ Drive: drive.Drive, DriveApp: drive.DriveApp }),   // subcarpeta: la regla real (fase 5.7)
     Utilities: { formatDate: (f, z, formato) => (formato === 'yyyy' ? '2026' : '15 10') },
     LineasDatos: { cacheLeer: (k) => cache[k] || null, cacheGuardar: (k, v) => { cache[k] = v; }, cacheBorrar: (k) => { delete cache[k]; } },
     LineasUtil: { digitos: (v) => String(v || '').replace(/\D/g, '') },

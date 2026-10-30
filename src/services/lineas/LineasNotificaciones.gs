@@ -302,19 +302,18 @@ const LineasNotificaciones = (function () {
       const cId = LineasDatos.colIndice(t, 'ID');
       const cLeida = LineasDatos.colIndice(t, 'LEIDA_POR');
       const idsHoja = t.hoja.getRange(2, cId + 1, ultima - 1, 1).getValues();
-      const rango = t.hoja.getRange(2, cLeida + 1, ultima - 1, 1);
-      const leidas = rango.getValues();
-      let marcadas = 0;
+      const leidas = t.hoja.getRange(2, cLeida + 1, ultima - 1, 1).getValues();
+      const cambios = [];
       idsHoja.forEach((fila, i) => {
         const id = txt(fila[0]);
         if (!id || (buscar && buscar.indexOf(id) < 0)) return;
         const actual = String(leidas[i][0] || ',');
         if (actual.toLowerCase().indexOf(marca) >= 0) return;
-        leidas[i][0] = (actual.slice(-1) === ',' ? actual : actual + ',') + marca.slice(1);
-        marcadas++;
+        cambios.push({ fila: i + 2, cambios: { 'LEIDA_POR': (actual.slice(-1) === ',' ? actual : actual + ',') + marca.slice(1) } });
       });
-      if (marcadas) { rango.setValues(leidas); CacheHojas.tocarHoja(rango.getSheet()); }
-      return { marcadas: marcadas };
+      // Solo las que cambian, juntas al soltar el candado (por SheetUtils, como toda escritura)
+      LineasDatos.actualizarFilas(TAB, cambios);
+      return { marcadas: cambios.length };
     });
   }
 

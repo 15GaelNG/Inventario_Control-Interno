@@ -31,7 +31,9 @@ const ENTORNOS = {
     MODULOS_APAGADOS: 'vinculos-lineas,correcciones-lineas,sistemas-lineas',
 
     // El código por correo al entrar desde un dispositivo nuevo (Verificacion.gs): encendido aquí desde el 26-oct-2026, como
-    // en los DEV. Para apagarlo de emergencia: VERIFICACION_DOS_PASOS: 'APAGADA' (y desplegar).
+    // en los DEV. Para apagarlo de emergencia: VERIFICACION_DOS_PASOS: 'APAGADA' (y desplegar). Solo lo del dispositivo
+    // (nuevo, vencido, otro navegador), dejando el código por contraseñas malas y por alerta: VERIFICACION_DISPOSITIVOS:
+    // 'APAGADA' (29-oct). Los dos también como propiedad del proyecto, sin desplegar, si aquí no están.
 
     // El link que usa el equipo (CLAUDE.md, "dos links"): a él lleva el enlace de "¿Olvidaste tu contraseña?" (23-oct)
     // La forma general (/macros/s/…), no la del dominio (/a/macros/ciudadmaderas.com/…): esa pide cuenta del dominio y POST VENTA es de gph
@@ -66,6 +68,9 @@ const ENTORNOS = {
     LINEAS_DRIVE_NUCOS: '12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-',
     // La carpeta LINEAS junto a NUCOS, para la responsiva de la línea sin equipo (pendiente 2.45, 15-oct-2026)
     LINEAS_DRIVE_LINEAS: '1MSkzelEJzIL0C7prDFRo1ytV9Ajh_yLA',
+    // Los números de las cartas de cancelación (LineasCartaCancelacion.gs, 30-oct-2026): "CARTAS DE CANCELACION - numeros
+    // (para LINEAS)". Solo lo abre quien corre la función en el editor.
+    LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
 
     // Geotab (opcional): usuario, base y servidor aquí; GEOTAB_PASSWORD solo en Script Properties
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',
@@ -117,6 +122,36 @@ const ENTORNOS = {
     // que en producción (allá son Script Properties: LineasLectura)
     LINEAS_LECTURA: 'ESTRUCTURA',
     LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+  },
+
+  // ---------------------------------------------------------------- DEV de Ayrton (rama ayrton)
+  // Solo los libros y lo de solo lectura: las carpetas donde escribe siguen en sus Script Properties de siempre (las de
+  // pruebas), así que cambiar de libro no mueve dónde se guardan los PDF y las fotos.
+  '1zCusAR0-Jntf853WxfdwejgmGNzRODqeHkWq6PLVThM3CsNjusg5Nmaf': {
+    ENTORNO: 'DEV',
+
+    // La copia trae los USUARIOS reales y el sistema no frena los correos en un DEV: sin el código por correo al entrar
+    VERIFICACION_DOS_PASOS: 'APAGADA',
+
+    // Copia del libro de producción ("DEV AYRTON - Copia de produccion 2026-10-30"; la base anterior sigue en las
+    // Script Properties SS_ID_*, por si hay que regresar)
+    SS_ID_USUARIOS: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_VEHICULOS: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_TELEFONIA: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_ACCESORIOS: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_CAJACHICA: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+
+    // Solo lectura: los archivos que cita la copia viven en las carpetas de producción. Nunca se escribe ahí.
+    DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C',
+    DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: '1D3m1H3C_Is2Bol9IBPdnV6ugJiXizSCN',
+    LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
+
+    // Líneas lee las hojas nuevas, igual que producción
+    LINEAS_LECTURA: 'ESTRUCTURA',
+    LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+
+    // Los números de las cartas de cancelación (LineasCartaCancelacion.gs): "CARTAS DE CANCELACION - numeros (para LINEAS)"
+    LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
   },
 
   // ---------------------------------------------------------------- DEV de la homologación (rama common)

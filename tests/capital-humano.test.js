@@ -27,6 +27,7 @@ function hojaFalsa(enc, filas) {
   const h = {
     datos,
     protecciones: [],
+    getName: () => 'HOJA',
     getLastRow: () => datos.length,
     getLastColumn: () => Math.max.apply(null, datos.map((r) => r.length).concat([0])),
     getMaxRows: () => Math.max(datos.length, 1000),
@@ -47,6 +48,7 @@ function hojaFalsa(enc, filas) {
       setFontWeight() { return this; },
       setNumberFormat() { return this; },
       setValue(v) { datos[f - 1] = (datos[f - 1] || []).slice(); datos[f - 1][c - 1] = v; maxCols = Math.max(maxCols, c); return this; },
+      clearContent() { for (let i = 0; i < (nf || 1); i++) { if (datos[f - 1 + i]) { datos[f - 1 + i] = datos[f - 1 + i].slice(); for (let j = 0; j < (nc || 1); j++) datos[f - 1 + i][c - 1 + j] = ''; } } return this; },
     }),
     getMaxColumns: () => maxCols,
     insertColumnsAfter: (despues, n) => { maxCols += n; },
@@ -65,6 +67,7 @@ function cargar(hojas, anotados) {
   const ss = {
     getSheetByName: (n) => hojas[n] || null,
     insertSheet: (n) => { hojas[n] = hojaFalsa([], []); hojas[n].datos.length = 0; return hojas[n]; },
+    getSheets: () => Object.values(hojas),
   };
   // ProtectionType, para proteger la pestaña al cargar
   ss.ProtectionType = { SHEET: 'SHEET' };
@@ -95,6 +98,7 @@ function cargar(hojas, anotados) {
   // IDs predecibles para poder comparar
   vm.runInContext('Ids.nuevo = (p) => p + "-" + String(++globalThis.__n).padStart(4, "0");', Object.assign(ctx, { __n: 0 }));
   vm.runInContext(lee('utils', 'Candado.gs') + lee('MigracionIds.gs') + '\n' + lee('services', 'CapitalHumano.gs') + '\nthis.CH = CapitalHumano;', ctx);
+  require('./sheet-utils-real')(ctx);   // escribe por SheetUtils (28-oct)
   return ctx.CH;
 }
 

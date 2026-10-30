@@ -234,6 +234,16 @@ const LineasResguardos = (function () {
     return LineasDatos.idsDeFila(f).some((k) => !!m[txt(k)]);
   }
 
+  /**
+   * ¿El equipo `f` está en el panel y Pau aún no lo recibe? Así no se le pone, cambia ni quita la línea (usuario, 22-oct).
+   * Ya recibido (EN RESGUARDO) sí: Líneas guarda sus líneas sueltas dentro de esos equipos y quita la de los que Pau va a
+   * vender, donar o desechar (usuario, 28-oct). El panel muestra la línea de hoy (espejo_).
+   */
+  function porRecibirEnPanel(f) {
+    const m = abiertosPorEquipo();
+    return LineasDatos.idsDeFila(f).some((k) => m[txt(k)] === ESTADO.PENDIENTE);
+  }
+
   function filasPorId_() {
     return indices_().porId;
   }
@@ -859,10 +869,20 @@ const LineasResguardos = (function () {
     const comentario = txt((datos || {}).comentario);
     if (comentario.length <= 3) throw new Error('Escribe el comentario (queda en el historial del equipo).');
     const p = paraFoto_();
-    const r = actualizar_(ids, (x) => (txt(x['ESTADO']) !== ESTADO.RESGUARDO ? { omitir: 'No está en resguardo' }
-      : Object.assign(foto_(x, p.ix, p.hoy), { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': comentario })));
+    // Con línea no se cierra: la SIM se iría con el equipo (usuario, 28-oct). Líneas la quita con «Desvincular línea»
+    const r = actualizar_(ids, (x) => {
+      if (txt(x['ESTADO']) !== ESTADO.RESGUARDO) return { omitir: 'No está en resguardo' };
+      const numero = lineaActiva_(p.ix.porId[txt(x['REGISTRO_ID'])]);
+      if (numero) return { omitir: 'Tiene la línea ' + numero + ': Líneas la desvincula primero' };
+      return Object.assign(foto_(x, p.ix, p.hoy), { 'ESTADO': ESTADO[estatus], 'ESTATUS_EQUIPO': estatus, 'ENTREGA_ASUNTO': comentario });
+    });
     espejar_(r.hechos, () => ({ 'ESTATUS EQUIPO': estatus }), c.motivo + ' (bandeja de resguardos): ' + comentario, c.movimiento, usuario);
     return r;
+  }
+  /** El número de la línea que el equipo `f` trae hoy ('' si no tiene o ya está CANCELADA). */
+  function lineaActiva_(f) {
+    if (!f || /^EQUIPO$/.test(may(LineasUtil.col(f, 'TIPO'))) || may(LineasUtil.col(f, 'ESTATUS LINEA')) === 'CANCELADA') return '';
+    return txt(LineasUtil.col(f, 'NUMERO TELEFONO')) || txt(LineasUtil.col(f, 'NUMERO SIM'));
   }
   const vendido = (ids, datos, usuario) => cerrar_(ids, 'VENDIDO', datos, usuario);
   const donado = (ids, datos, usuario) => cerrar_(ids, 'DONADO', datos, usuario);
@@ -1376,7 +1396,7 @@ const LineasResguardos = (function () {
 
   return {
     formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, donado, desechado, faseCancelacion, confirmarCancelacion,
-    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
+    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, porRecibirEnPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
     _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_, _planQuitar: planQuitar_,

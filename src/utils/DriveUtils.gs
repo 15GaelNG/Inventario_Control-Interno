@@ -55,7 +55,7 @@ const DriveUtils = (function () {
     const nombre = p.idFila + '.' + p.columna + '.' + hora + revisado.extension;
     let archivo;
     try {
-      archivo = marcarAutor(DriveApp.getFolderById(p.carpetaId).createFile(revisado.blob.setName(nombre)));
+      archivo = crearArchivo(DriveApp.getFolderById(p.carpetaId), revisado.blob, nombre);
     } catch (err) {
       // "Acceso denegado: DriveApp" casi siempre = la cuenta puede VER la carpeta pero no EDITARLA
       throw new Error(
@@ -224,7 +224,7 @@ const DriveUtils = (function () {
   }
 
   function eliminar(fileId) {
-    try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op */ }
+    try { aPapelera(DriveApp.getFileById(fileId)); } catch (e) { /* no-op */ }
   }
 
   /**
@@ -276,7 +276,7 @@ const DriveUtils = (function () {
         throw new Error('No existe la carpeta "' + nombre + '" dentro de la raíz de la app ("' + raiz.getName() + '"). ' +
           'Créala ahí (o un acceso directo con ese nombre) y vuelve a intentarlo.');
       }
-      carpeta = raiz.createFolder(nombre);
+      carpeta = crearCarpeta(raiz, nombre);
     }
     cache.put(clave, carpeta.getId(), 6 * 60 * 60);
     return carpeta;
@@ -307,7 +307,7 @@ const DriveUtils = (function () {
       const c = todas.next();
       if (claveCarpeta(c.getName()) === buscada) return c;
     }
-    return padre.createFolder(nombre);
+    return crearCarpeta(padre, nombre);
   }
 
   /** La subcarpeta del año en curso dentro de `carpeta` (la crea si no existe todavía) */
@@ -333,6 +333,107 @@ const DriveUtils = (function () {
    * inspección "a nombre" de quien desplegó, que no las había subido). En el mismo dominio,
    * getActiveUser sí es quien usa la app. Nunca truena: un archivo sin nota sigue sirviendo.
    */
+  // ------------------------------------------------------------------ escribir en Drive (28-oct)
+  /*
+   * TODA escritura en Drive pasa por aquí (contrato en source-contracts), como las hojas por SheetUtils: cada una avisa
+   * a la bitácora (Bitacora.evento: SUBIR, CARPETA, MOVER, RENOMBRAR, COPIAR, PAPELERA, REEMPLAZAR). Lo temporal (la
+   * copia de una plantilla para hacer un PDF, una copia para OCR) va con { temporal: true }: se tira enseguida y no se
+   * anota.
+   */
+  function anotar_(accion, archivo, datos, opciones) {
+    if ((opciones && opciones.temporal) || typeof Bitacora === 'undefined' || !Bitacora.evento) return;
+    try {
+      // Los datos se arman solo si hay bitácora (piden getId/getName, que cuestan una llamada)
+      const d = (typeof datos === 'function' ? datos() : datos) || {};
+      Bitacora.evento(accion, { hoja: 'DRIVE', id: archivo ? (archivo.getId ? archivo.getId() : archivo.id) : '',
+        campo: d.nombre, antes: d.antes, despues: d.despues, detalle: d.detalle });
+    } catch (e) {
+      console.warn('Bitácora (Drive): ' + e.message);
+    }
+  }
+  const nombreDe_ = (x) => { try { return x.getName(); } catch (e) { return ''; } };
+
+  /** Sube un archivo a una carpeta, con quién lo subió en su descripción (marcarAutor). → File */
+  function crearArchivo(carpeta, blob, nombre, opciones) {
+    if (nombre) blob.setName(nombre);
+    const archivo = marcarAutor(carpeta.createFile(blob));
+    anotar_('SUBIR', archivo, () => ({ nombre: nombre || nombreDe_(archivo), detalle: 'en la carpeta ' + carpeta.getId() }), opciones);
+    return archivo;
+  }
+
+  /** Una carpeta nueva dentro de otra (opciones.temporal: un borrador que se tira o se vacía después). → Folder */
+  function crearCarpeta(padre, nombre, opciones) {
+    const carpeta = padre.createFolder(nombre);
+    anotar_('CARPETA', carpeta, () => ({ nombre: nombre, detalle: 'en la carpeta ' + padre.getId() }), opciones);
+    return carpeta;
+  }
+
+  /** Mueve un archivo (o carpeta) a otra carpeta y, si se pide, le cambia el nombre. → el mismo */
+  function mover(archivo, destino, nombre) {
+    const antes = nombre ? nombreDe_(archivo) : '';
+    archivo.moveTo(destino);
+    if (nombre) archivo.setName(nombre);
+    anotar_('MOVER', archivo, () => ({ nombre: nombre || '', antes: antes, despues: nombre || '', detalle: 'a la carpeta ' + destino.getId() }));
+    return archivo;
+  }
+
+  /** Le cambia el nombre a un archivo o carpeta. → el mismo */
+  function renombrar(archivo, nombre) {
+    const antes = nombreDe_(archivo);
+    archivo.setName(nombre);
+    if (antes !== nombre) anotar_('RENOMBRAR', archivo, () => ({ antes: antes, despues: nombre }));
+    return archivo;
+  }
+
+  /** Copia un archivo a una carpeta (opciones.temporal: una copia de trabajo que se tira enseguida). → File */
+  function copiar(archivo, nombre, carpeta, opciones) {
+    const copia = archivo.makeCopy(nombre, carpeta);
+    anotar_('COPIAR', copia, () => ({ nombre: nombre, detalle: 'de ' + archivo.getId() }), opciones);
+    return copia;
+  }
+
+  /** Manda a la papelera un archivo o carpeta (el objeto, no su ID). opciones.temporal: lo que se creó como temporal */
+  function aPapelera(archivo, opciones) {
+    const nombre = opciones && opciones.temporal ? '' : nombreDe_(archivo);
+    archivo.setTrashed(true);
+    anotar_('PAPELERA', archivo, () => ({ nombre: nombre }), opciones);
+  }
+
+  /** Reemplaza el contenido (texto) de un archivo que ya existe. → el mismo */
+  function cambiarContenido(archivo, texto) {
+    archivo.setContent(texto);
+    anotar_('REEMPLAZAR', archivo, () => ({ nombre: nombreDe_(archivo), detalle: 'contenido nuevo' }));
+    return archivo;
+  }
+
+  /** Lo mismo con la API de Drive (Drive.Files.*), para lo que DriveApp no hace (propiedades, convertir, reemplazar) */
+  function crearConApi(recurso, blob, argumentos, opciones) {
+    const r = Drive.Files.create(recurso, blob || null, argumentos);
+    anotar_(recurso.mimeType === 'application/vnd.google-apps.folder' ? 'CARPETA' : 'SUBIR', r,
+      () => ({ nombre: recurso.name, detalle: 'en la carpeta ' + ((recurso.parents || [])[0] || '') }), opciones);
+    return r;
+  }
+  function copiarConApi(recurso, id, argumentos, opciones) {
+    const r = Drive.Files.copy(recurso, id, argumentos);
+    anotar_('COPIAR', r, () => ({ nombre: recurso.name, detalle: 'de ' + id }), opciones);
+    return r;
+  }
+  /**
+   * Mueve (de la carpeta desdeId a destino) y renombra en UNA llamada (Drive v3): para mover muchas de un jalón (las
+   * fotos de una inspección). → lo que regresa Drive
+   */
+  function moverConApi(id, desdeId, destino, nombre) {
+    const r = Drive.Files.update(nombre ? { name: nombre } : {}, id, null,
+      { addParents: destino.getId(), removeParents: desdeId, supportsAllDrives: true, fields: 'id' });
+    anotar_('MOVER', { id: id }, () => ({ nombre: nombre || '', despues: nombre || '', detalle: 'a la carpeta ' + destino.getId() }));
+    return r;
+  }
+  function reemplazarConApi(recurso, id, blob, argumentos) {
+    const r = Drive.Files.update(recurso, id, blob, argumentos);
+    anotar_('REEMPLAZAR', r, () => ({ nombre: r && r.name, detalle: 'contenido nuevo' }));
+    return r;
+  }
+
   function marcarAutor(archivo) {
     try {
       const quien = Session.getActiveUser().getEmail();
@@ -348,5 +449,8 @@ const DriveUtils = (function () {
     blobRevisado, idDeLiga, guardarArchivoAppSheet, guardarImagenAppSheet, archivoDeRuta, urlDeRuta, previsualizarRuta,
     archivoDeRutaProfunda, urlDeRutaProfunda, previsualizarRutaProfunda, eliminar, compartirLoMasAmplioPosible,
     marcarAutor, carpetaEnRaiz, carpetaEnRaizSiExiste, carpetaDelAnio, archivosDeCarpeta, subcarpeta, claveCarpeta,
+    // Escribir en Drive (28-oct): toda escritura pasa por aquí
+    crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido, crearConApi, copiarConApi, moverConApi,
+    reemplazarConApi,
   };
 })();

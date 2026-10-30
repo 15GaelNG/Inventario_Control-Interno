@@ -129,6 +129,10 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   **Equipo en el panel** (22-oct, `b3269f6`; `LineasAcciones.aplicarVinculo_`): un equipo por recibir o en resguardo
   (`LineasResguardos.enPanel`) no se vincula, no cambia de línea ni se desvincula («NUCO 0035 está en Resguardos y
   cancelaciones.»), y la línea de un equipo en el panel no pasa a otro NUCO; igual que la Responsiva (usuario, 22-oct: «Bloquear»).
+  **Desde el 28-oct** (`4bf7906`; usuario, a pedido de Líneas) solo el equipo POR RECIBIR (`LineasResguardos.porRecibirEnPanel`) queda bloqueado: al que ya está EN RESGUARDO
+  Líneas le pone, cambia o quita la línea (Vincular, Cambiar, Desvincular línea, Cambiar de equipo) sin sacarlo del panel, que muestra la línea de hoy
+  (sin línea, la que tenía al mandarlo). Responsiva, Inspección y el estatus en Corregir siguen bloqueados. **Candado:** Pau no marca Vendido, Donado ni Desechado un
+  equipo con línea activa (no CANCELADA): «Tiene la línea N: Líneas la desvincula primero» (`lineaActiva_` en `cerrar_`), también si se mandó con la línea DISPONIBLE.
 - **Vínculos** (8-oct; `lineas-vinculos.html`): **una idea del usuario que se queda así**, apagada en producción como Help
   Desk (`vinculos-lineas` en `MODULOS_APAGADOS` del bloque de producción de `Entornos.gs`: sin botón ni espacio); en
   los DEV se ve. No tiene llamadas propias al servidor, solo abre las ventanas de siempre. Es el tercer modo de Líneas telefónicas junto a

@@ -1,0 +1,112 @@
+<script>
+  /**
+   * Imagen — reducir una foto en el navegador antes de subirla. Una sola copia para toda la app (22-oct).
+   *
+   *   const r = await Imagen.reducir(archivo, { lado: 1600, calidad: 0.82 });   // el lado más largo ≤ 1600 px
+   *   const r = await Imagen.reducir(archivo, { ancho: 1200 });                  // solo el ancho (la foto de una firma)
+   *   const r = await Imagen.reducir(archivo, { lado: 2000, miniatura: 240 });   // y una miniatura de la misma apertura
+   *   // r → { dataUrl, base64, mime: 'image/jpeg', ancho, alto, cabia, miniatura } o null si el navegador no la lee
+   *   Imagen.bytes(r.base64)   // Uint8Array (para meter el JPEG en un PDF)
+   *
+   * Nunca agranda; siempre con fondo blanco (un PNG transparente saldría negro en JPEG). `cabia`: la original ya estaba
+   * dentro del límite (quien quiera mandar la original en ese caso, lo decide).
+   *
+   * Por qué existe: cada módulo la tenía a su manera y en el celular eso deja la pantalla en blanco (22-oct): una foto
+   * de cámara de 12-50 MP abierta completa ocupa 50-200 MB, y algunas copias además leían el archivo entero como texto
+   * antes de abrirlo, o abrían varias a la vez. Aquí:
+   *   - se abre con lo menos de memoria posible: createImageBitmap con resizeWidth (decodifica ya reducida) si el archivo
+   *     pesa más de 1.5 MB; si no, <img> con una URL del archivo (nunca el archivo como texto);
+   *   - de una en una en toda la app, aunque se pidan varias a la vez;
+   *   - se sueltan el bitmap, la URL y el lienzo al terminar.
+   * Prueba: tests/imagen.test.js.
+   */
+  const Imagen = (function () {
+    const GRANDE = 1.5 * 1024 * 1024;
+    let turno = Promise.resolve();
+    /** Corre fn cuando termine lo anterior (una imagen abierta a la vez en toda la app) */
+    function enTurno(fn) {
+      const p = turno.then(fn);
+      turno = p.catch(() => {});
+      return p;
+    }
+
+    function leerDataUrl(archivo) {
+      return new Promise((resolve, reject) => {
+        const lector = new FileReader();
+        lector.onload = () => resolve(String(lector.result));
+        lector.onerror = () => reject(new Error('No se pudo leer el archivo.'));
+        lector.readAsDataURL(archivo);
+      });
+    }
+
+    /** La foto abierta: { fuente, ancho, alto, soltar() } o null si no se sabe leer */
+    async function abrir(archivo, anchoMax) {
+      if (typeof createImageBitmap === 'function' && archivo.size > GRANDE) {
+        try {
+          const b = await createImageBitmap(archivo, { resizeWidth: anchoMax, resizeQuality: 'high', imageOrientation: 'from-image' });
+          return { fuente: b, ancho: b.width, alto: b.height, soltar: () => { if (b.close) b.close(); } };
+        } catch (e) { /* este navegador no reduce al abrir (o no la sabe leer): con <img> */ }
+      }
+      let url = '';
+      let liberar = () => {};
+      try {
+        url = URL.createObjectURL(archivo);
+        liberar = () => URL.revokeObjectURL(url);
+      } catch (e) {
+        url = await leerDataUrl(archivo);   // un entorno sin URL de archivos (pruebas)
+      }
+      return new Promise((resolve) => {
+        const img = new Image();
+        const soltar = () => { img.onload = null; img.onerror = null; liberar(); };
+        img.onerror = () => { soltar(); resolve(null); };
+        img.onload = () => resolve({ fuente: img, ancho: img.naturalWidth, alto: img.naturalHeight, soltar });
+        img.src = url;
+      });
+    }
+
+    /** Dibuja con escala k (≤ 1) sobre blanco → data URL JPEG; el lienzo se suelta */
+    function dibujar(abierta, k, calidad) {
+      const lienzo = document.createElement('canvas');
+      lienzo.width = Math.max(1, Math.round(abierta.ancho * k));
+      lienzo.height = Math.max(1, Math.round(abierta.alto * k));
+      const g = lienzo.getContext('2d');
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, lienzo.width, lienzo.height);
+      g.drawImage(abierta.fuente, 0, 0, lienzo.width, lienzo.height);
+      const r = { dataUrl: lienzo.toDataURL('image/jpeg', calidad), ancho: lienzo.width, alto: lienzo.height };
+      lienzo.width = 0;
+      lienzo.height = 0;
+      return r;
+    }
+
+    function reducir(archivo, opciones) {
+      const o = opciones || {};
+      const calidad = o.calidad == null ? 0.85 : o.calidad;
+      return enTurno(async () => {
+        const abierta = await abrir(archivo, o.ancho || o.lado || 2000);
+        if (!abierta) return null;
+        try {
+          // Escala sobre la medida ORIGINAL del archivo (createImageBitmap ya pudo haberla abierto reducida)
+          const k = o.ancho ? Math.min(1, o.ancho / abierta.ancho)
+            : Math.min(1, (o.lado || 2000) / Math.max(abierta.ancho, abierta.alto));
+          const r = dibujar(abierta, k, calidad);
+          const out = { dataUrl: r.dataUrl, base64: r.dataUrl.slice(r.dataUrl.indexOf(',') + 1), mime: 'image/jpeg',
+            ancho: r.ancho, alto: r.alto, cabia: k === 1 && archivo.size <= GRANDE };
+          if (o.miniatura) out.miniatura = dibujar(abierta, Math.min(1, o.miniatura / Math.max(abierta.ancho, abierta.alto)), 0.7).dataUrl;
+          return out;
+        } finally {
+          abierta.soltar();
+        }
+      });
+    }
+
+    function bytes(base64) {
+      const bin = atob(base64);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    return { reducir: reducir, bytes: bytes };
+  })();
+</script>

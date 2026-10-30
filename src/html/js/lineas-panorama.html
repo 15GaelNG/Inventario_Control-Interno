@@ -87,7 +87,9 @@
     }
     function guardarCopiaPanorama(r) {
       copiaPanorama = r;
-      try { localStorage.setItem(COPIA_PANORAMA, JSON.stringify(r)); } catch (e) { /* sin espacio o bloqueado: solo en memoria */ }
+      // Sin las listas de diferencias de la factura: traen números de teléfono (en memoria sí, en el navegador no)
+      const sinNumeros = r.factura ? Object.assign({}, r, { factura: Object.assign({}, r.factura, { comparacion: Object.assign({}, r.factura.comparacion, { activasSinCobro: [], cobradasNoActivas: [] }) }) }) : r;
+      try { localStorage.setItem(COPIA_PANORAMA, JSON.stringify(sinNumeros)); } catch (e) { /* sin espacio o bloqueado: solo en memoria */ }
     }
 
     function initPanorama() {
@@ -96,9 +98,10 @@
       const vigente = () => n === montaje.n && document.body.contains(raiz);
       const est = {
         conjunto: 'equipos', rango: 12, forma: 'grafica', seleccion: { equipos: null, lineas: null }, datos: null,
-        k: 0, medida: 'lineas', rangoTendencia: 12, deptosTodos: false, resumenes: null, series: {},
+        k: 0, medida: 'lineas', rangoTendencia: 12, deptosTodos: false, resumenes: null, series: {}, dif: 'activasSinCobro',
       };
       let tabla = null;
+      let tablaDif = null;
 
       const pct = (v, total) => (total ? Formato.miles(v / total * 100, { decimales: 1 }) + '%' : '—');
       const esHoy = () => est.k === est.datos.meses.length - 1;
@@ -247,6 +250,105 @@
           tile('package-x', e.baja, 'Ya no están', '', 'Vendidos, donados, extraviados o robados y desechados'),
           tile('circle-help', e.revisar, 'Por revisar', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de líneas'),
         ], () => null);
+      }
+
+      // ---------------- Contra la factura del proveedor (29-oct) ----------------
+
+      /**
+       * El inventario de hoy contra la última factura cargada en FACTURAS: por cuenta, lo facturado mes por mes y las
+       * diferencias número por número. Siempre con hoy (no sigue al filtro de mes): la factura no se reconstruye.
+       */
+      function pintarFactura() {
+        const f = est.datos.factura;
+        const caja = $('#lnp-factura', raiz);
+        caja.hidden = !f;
+        if (!f) return;
+        const c = f.comparacion;
+        const mes = mesLargo(c.ultimo);
+        $('#lnp-factura-nota', raiz).textContent = 'El inventario de hoy contra la última factura cargada (corte de ' + mes + '). Lo que cambió después de ese corte ' +
+          '(un cambio de número, una baja reciente) sale como diferencia hasta que se cargue la factura siguiente. "Cobradas sin estar activas" incluye las ' +
+          'que se cancelaron en ese ciclo: es su último cobro.';
+        const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase, filtros: false, titulo: titulo });
+        tilesKpi($('#lnp-factura-kpis', raiz), [
+          tile('card-sim', c.activas, 'Activas en el inventario (hoy)', '', 'USO, disponibles, en cancelación y por revisar'),
+          tile('receipt', c.cobradas, 'Cobradas en la factura de ' + mes),
+          tile('circle-check', c.activasCobradas, 'Activas y cobradas · ' + pct(c.activasCobradas, c.activas), 'stat-tile-ok'),
+          tile('circle-alert', c.totalActivasSinCobro, 'Activas sin cobro', c.totalActivasSinCobro ? 'stat-tile-warn' : 'stat-tile-ok', 'Activas en el inventario que no vienen en la factura de ' + mes),
+          tile('circle-alert', c.totalCobradasNoActivas, 'Cobradas sin estar activas', c.totalCobradasNoActivas ? 'stat-tile-warn' : 'stat-tile-ok', 'En la factura de ' + mes + ', canceladas o no registradas en el inventario'),
+        ], () => null);
+
+        // Por cuenta: activas, cuántas de ellas se cobraron, las dos diferencias y lo facturado ese mes
+        const ultimoMes = f.meses[f.meses.length - 1];
+        $('#lnp-factura-mes', raiz).textContent = 'Factura de ' + mes;
+        const alerta = (n) => (n ? '<span class="lnp-vencidas">' + miles(n) + '</span>' : '<span class="ln-tenue">0</span>');
+        const VACIA = { activas: 0, cobradas: 0, activasCobradas: 0, activasSinCobro: 0, cobradasNoActivas: 0 };
+        const filas = CUENTAS.filter((x) => c.porCuenta[x.clave] || ultimoMes.cuentas[x.clave]).map((x) => {
+          const p = Object.assign({}, VACIA, c.porCuenta[x.clave]);
+          return '<tr><th scope="row">' + esc(x.nombre) + '</th><td>' + miles(p.activas) + '</td><td>' + miles(p.activasCobradas) + '</td>' +
+            '<td>' + alerta(p.activasSinCobro) + '</td><td>' + alerta(p.cobradasNoActivas) + '</td>' +
+            '<td>' + dinero((ultimoMes.cuentas[x.clave] || {}).monto || 0) + '</td></tr>';
+        });
+        $('#lnp-factura-cuentas', raiz).innerHTML = '<table class="lnp-tabla-cuentas"><thead><tr><th scope="col">Cuenta</th>' +
+          '<th scope="col" title="Activas en el inventario hoy">Activas</th><th scope="col" title="Activas que vienen en la factura">Se cobran</th>' +
+          '<th scope="col" title="Activas que no vienen en la factura">Sin cobro</th><th scope="col" title="En la factura y canceladas o sin registrar en el inventario">Cobradas no activas</th>' +
+          '<th scope="col">Facturado</th></tr></thead><tbody>' + filas.join('') +
+          '<tr class="lnp-fila-total"><th scope="row">Total</th><td>' + miles(c.activas) + '</td><td>' + miles(c.activasCobradas) + '</td>' +
+            '<td>' + alerta(c.totalActivasSinCobro) + '</td><td>' + alerta(c.totalCobradasNoActivas) + '</td><td>' + dinero(ultimoMes.total) + '</td></tr>' +
+          '<tr class="lnp-fila-basicos"><th scope="row">De ellas, SIM básicos</th><td>' + miles(c.basicos.activas) + '</td><td colspan="4" class="ln-tenue">' +
+            miles(c.basicos.cobradas) + ' SIM básicos en la factura</td></tr>' +
+          '</tbody></table>';
+
+        // Facturado por mes y compañía (el más nuevo arriba), con el total del periodo
+        const total = f.meses.reduce((t, m) => t + m.total, 0);
+        $('#lnp-factura-total', raiz).textContent = dinero(total) + ' en ' + miles(f.meses.length) + ' meses';
+        const conCuenta = CUENTAS.filter((x) => f.meses.some((m) => m.cuentas[x.clave]));
+        $('#lnp-factura-meses', raiz).innerHTML = '<table class="lnp-tabla-cuentas"><thead><tr><th scope="col">Mes</th>' +
+          conCuenta.map((x) => '<th scope="col">' + esc(x.nombre) + '</th>').join('') + '<th scope="col">Total</th><th scope="col">Líneas</th></tr></thead><tbody>' +
+          f.meses.slice().reverse().map((m) => '<tr><th scope="row">' + esc(mesLargo(m.ym)) + '</th>' +
+            conCuenta.map((x) => '<td>' + dinero((m.cuentas[x.clave] || {}).monto || 0) + '</td>').join('') +
+            '<td>' + dinero(m.total) + '</td><td>' + miles(m.lineas) + '</td></tr>').join('') +
+          '<tr class="lnp-fila-total"><th scope="row">Total</th>' +
+            conCuenta.map((x) => '<td>' + dinero(f.meses.reduce((t, m) => t + ((m.cuentas[x.clave] || {}).monto || 0), 0)) + '</td>').join('') +
+            '<td>' + dinero(total) + '</td><td></td></tr></tbody></table>';
+        pintarDiferencias();
+      }
+
+      /** La lista de la diferencia elegida (con exportar a Excel): número, estatus en el inventario, cuenta y cobro. */
+      function pintarDiferencias() {
+        const c = est.datos.factura.comparacion;
+        const cont = $('#lnp-dif-tabla', raiz);
+        if (tablaDif) { tablaDif.destruir(); tablaDif = null; }
+        cont.innerHTML = '<div></div>';
+        $('#lnp-dif', raiz).querySelectorAll('[data-valor]').forEach((b) => {
+          const total = b.dataset.valor === 'activasSinCobro' ? c.totalActivasSinCobro : c.totalCobradasNoActivas;
+          b.textContent = (b.dataset.valor === 'activasSinCobro' ? 'Activas sin cobro' : 'Cobradas sin estar activas') + ' (' + miles(total || 0) + ')';
+          b.classList.toggle('activo', b.dataset.valor === est.dif);
+          b.setAttribute('aria-pressed', String(b.dataset.valor === est.dif));
+        });
+        const sinCobro = est.dif === 'activasSinCobro';
+        const lista = c[est.dif] || [];
+        $('#lnp-dif-nota', raiz).textContent = (sinCobro
+          ? 'Activas en el inventario que no vienen en la factura de ' + mesLargo(c.ultimo) + '. "Último cobro" es el último mes en que sí se cobraron (vacío: nunca en las facturas cargadas).'
+          : 'En la factura de ' + mesLargo(c.ultimo) + ' y canceladas (o sin registrar) en el inventario.') +
+          (c.recortadas ? ' Se muestran las primeras 300.' : '');
+        const filas = lista.map((x, i) => (sinCobro
+          ? { _id: String(i), numero: x[0], estatus: x[1], cuenta: x[2], dato: x[3] ? mesLargo(x[3]) : '' }
+          : { _id: String(i), numero: x[0], estatus: x[1], cuenta: x[2], dato: x[3] }));
+        tablaDif = tablaLineas(cont.firstChild, {
+          idCampo: '_id', idTabla: 'lineas-panorama-diferencias-' + est.dif + '-v1', seleccionable: false, detalle: false,
+          columnas: [
+            { campo: 'numero', titulo: 'Número', tipo: 'texto' },
+            { campo: 'estatus', titulo: 'Estatus en el inventario', tipo: 'texto' },
+            { campo: 'cuenta', titulo: 'Cuenta', tipo: 'texto', render: (v) => esc((CUENTAS.find((x) => x.clave === v) || { nombre: v || '—' }).nombre) },
+            sinCobro ? { campo: 'dato', titulo: 'Último cobro', tipo: 'texto' } : { campo: 'dato', titulo: 'Cobro en ' + mesLargo(c.ultimo), tipo: 'numero', render: (v) => esc(dinero(v)) },
+          ],
+          ordenInicial: { campo: 'cuenta', dir: 'asc' },
+          exportar: { nombreArchivo: 'Panorama ' + (sinCobro ? 'activas sin cobro' : 'cobradas sin estar activas'), nombreHoja: 'Diferencias' },
+          // La copia del navegador no trae las listas (números de teléfono): mientras llega la respuesta, "Cargando…"
+          textoVacio: (sinCobro ? c.totalActivasSinCobro : c.totalCobradasNoActivas) ? 'Cargando…'
+            : (sinCobro ? 'Todas las activas vienen en la factura.' : 'Todo lo cobrado está activo en el inventario.'),
+        });
+        tablaDif.setDatos(filas);
       }
 
       // ---------------- Tendencia ----------------
@@ -521,6 +623,7 @@
       function pintarTodo() {
         pintarSelectorMes();
         pintarPortada();
+        pintarFactura();
         pintarTendencia();
         pintarBarras('equipos');
         pintarBarras('lineas');
@@ -577,6 +680,7 @@
       segmentado('#lnp-conjunto', (v) => { est.conjunto = v; }, pintarEvolucion);
       segmentado('#lnp-rango', (v) => { est.rango = Number(v); }, pintarEvolucion);
       segmentado('#lnp-forma', (v) => { est.forma = v; }, pintarEvolucion);
+      segmentado('#lnp-dif', (v) => { est.dif = v; }, () => { if (est.datos.factura) pintarDiferencias(); });
       $('#lnp-mes', raiz).addEventListener('change', (ev) => elegirMes(Number(ev.target.value)));
       $('#lnp-deptos-mas', raiz).addEventListener('click', () => { est.deptosTodos = !est.deptosTodos; pintarPortada(); refreshIcons(); });
       $('#lnp-chips', raiz).addEventListener('click', (ev) => {

@@ -500,6 +500,36 @@
       { id: 63, nombre: 'Solicitud - Análisis de Datos', modulo: '', moduloEtiqueta: '', campos: [] }],
     apiHelpdeskGuardados: JSON.stringify([]),
     // ---------- Líneas Telefónicas (fase 0 de la homologación: Líneas no tenía escenas) ----------
+    // El Panorama (LineasPanorama.panorama): registros en columnas y la comparación contra la factura (29-oct)
+    apiLineasPanorama: (() => {
+      const meses = ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'];
+      const dic = ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA', 'VENDIDO', 'RESGUARDO'];
+      const cuentas = ['AT&T', 'TELCEL GPH', 'TELCEL FRO'];
+      const L = { c: [], b: [], d: [], p: [], f: [], s: [] };
+      for (let i = 0; i < 120; i++) {
+        L.c.push(i % 3); L.b.push(i % 9 === 0 ? 1 : 0); L.d.push(i % 4); L.p.push([299, 229, 269][i % 3]); L.f.push(i % 2);
+        L.s.push(i % 11 === 0 ? 3 : i % 13 === 0 ? 2 : i % 7 === 0 ? 1 : 0);
+      }
+      const E = { d: [], s: [] };
+      for (let i = 0; i < 90; i++) { E.d.push(i % 4); E.s.push(i % 6 === 0 ? 4 : i % 5 === 0 ? 5 : 0); }
+      const cuenta = (lista) => lista.reduce((o, s) => (o[dic[s]] = (o[dic[s]] || 0) + 1, o), {});
+      const hist = (lista) => { const a = cuenta(lista); const h = {}; Object.keys(a).forEach((k) => { h[k] = meses.map(() => a[k]); }); return h; };
+      const facturado = (m, k) => ({ ym: m, total: 280000 + k * 1500, lineas: 1000 + k * 5,
+        cuentas: { 'AT&T': { monto: 140000 + k * 900, lineas: 480 + k }, 'TELCEL GPH': { monto: 90000 + k * 400, lineas: 300 }, 'TELCEL FRO': { monto: 50000 + k * 200, lineas: 140 } } });
+      return {
+        generadoEn: hace(0), desde: '2025-04-22T12:00:00.000Z', cambiosDeEstatus: 5063, meses,
+        lineas: { total: 120, actual: cuenta(L.s), historico: hist(L.s) }, equipos: { total: 90, actual: cuenta(E.s), historico: hist(E.s) },
+        registros: { dic, deps: ['VENTAS', 'COMPRAS', 'POST VENTA', 'CONTROL INTERNO'], cuentas, fechas: ['2027-01-31', ''], lineas: L, equipos: E },
+        factura: {
+          meses: meses.slice(0, 11).map(facturado),
+          comparacion: { ultimo: '2026-09', activas: 908, cobradas: 1051, activasCobradas: 891, totalActivasSinCobro: 17, totalCobradasNoActivas: 160, recortadas: false,
+            basicos: { activas: 69, cobradas: 69 },
+            porCuenta: { 'AT&T': { activas: 492, cobradas: 611, activasCobradas: 479, activasSinCobro: 13, cobradasNoActivas: 132 }, 'TELCEL GPH': { activas: 279, cobradas: 300, activasCobradas: 276, activasSinCobro: 3, cobradasNoActivas: 24 }, 'TELCEL FRO': { activas: 137, cobradas: 140, activasCobradas: 136, activasSinCobro: 1, cobradasNoActivas: 4 } },
+            activasSinCobro: [['4443578949', 'USO', 'AT&T', '2025-11'], ['4422866518', 'USO', 'TELCEL FRO', ''], ['4448194355', 'USO', 'TELCEL GPH', '']],
+            cobradasNoActivas: [['4425926793', 'NO ESTÁ EN EL INVENTARIO', 'TELCEL FRO', 269], ['4445169930', 'CANCELADA', 'AT&T', 269.78]] },
+        },
+      };
+    })(),
     // El índice (LineasRepo.indice): equipos y líneas en columnas + las columnas de la vista de tabla del AppSheet
     apiLineasIndice: (() => {
       const GENTE = [['JUAN MANUEL FULGENCIO HERNANDEZ', 'VENTAS', 'CANCUN'], ['ANA ISABEL CHI BUENFIL', 'COMPRAS', 'MERIDA'],

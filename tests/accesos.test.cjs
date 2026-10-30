@@ -15,7 +15,12 @@ function cargar(opciones) {
     Config: { SPREADSHEET_IDS: { USUARIOS: () => 'libro' } },
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => hoja, insertSheet: () => hoja }) },
     CacheService: { getScriptCache: () => ({ get: (k) => (k in cache ? cache[k] : null), put: (k, v) => { cache[k] = v; } }) },
-    SheetUtils: { getAll: () => [
+    // Escribe por SheetUtils (28-oct): la pestaña y el renglón
+    SheetUtils: {
+      asegurarPestana: () => hoja,
+      tabla: (h) => ({ hoja: h }),
+      agregarFilas: (t, filas) => filas.map((f) => t.hoja.appendRow(f)),
+      getAll: () => [
       { CORREO: 'jefa@ciudadmaderas.com', ROL: 'ADMIN', ACTIVO: 'TRUE' },
       { CORREO: 'otro@ciudadmaderas.com', ROL: 'ADMIN', ACTIVO: 'FALSE' },
       { CORREO: 'usuario@ciudadmaderas.com', ROL: 'USER', ACTIVO: 'TRUE' },

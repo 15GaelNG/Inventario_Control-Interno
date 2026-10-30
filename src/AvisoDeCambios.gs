@@ -35,6 +35,28 @@ function alEditarLibro(e) {
   } catch (err) {
     console.error('alEditarLibro, datos conectados: ' + err.message);
   }
+  // La bitácora: lo editado a mano. De una celda Google da lo de antes; de un pegado no (lo cubre el respaldo diario)
+  try {
+    if (typeof Bitacora !== 'undefined') {
+      const r = e.range;
+      const hoja = r.getSheet();
+      let quien = '';
+      try { quien = e.user && e.user.getEmail ? e.user.getEmail() : ''; } catch (x) { /* sin correo */ }
+      Bitacora.aMano(quien);
+      const una = r.getNumRows() === 1 && r.getNumColumns() === 1;
+      const enc = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0];
+      const iId = enc.findIndex((h) => String(h).trim().toUpperCase() === 'ID');
+      Bitacora.evento('CAMBIAR', {
+        libro: e.source.getId(), hoja: hoja.getName(), fila: r.getRow(),
+        id: iId >= 0 && r.getRow() > 1 ? hoja.getRange(r.getRow(), iId + 1).getValue() : '',
+        campo: una ? String(enc[r.getColumn() - 1] || '') : '',
+        antes: una ? e.oldValue : '', despues: una ? e.value : '',
+        detalle: una ? '' : 'a mano en ' + r.getA1Notation() + ' (de un pegado Google no da lo de antes)',
+      });
+    }
+  } catch (err) {
+    console.error('alEditarLibro, bitácora: ' + err.message);
+  }
 }
 
 /** Los libros de la app (sin repetir: hoy varios apuntan al mismo) */

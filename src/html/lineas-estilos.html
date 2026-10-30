@@ -961,6 +961,20 @@
   .lnp-fila-basicos th, .lnp-fila-basicos td { padding-top: 10px; }
   .lnp-fila-basicos td.ln-tenue { text-align: left; font-weight: 500; font-size: var(--texto-s); }
   .lnp-vencidas { display: inline-flex; align-items: center; gap: 4px; color: var(--color-danger); }
+  /* Contra la factura del proveedor (29-oct) */
+  .lnp-factura[hidden] { display: none; }
+  .lnp-factura-nota { margin: 0 0 10px; }
+  .lnp-factura #lnp-factura-kpis { margin-bottom: 16px; }
+  .lnp-fila-total th, .lnp-fila-total td { border-top: 2px solid var(--color-border); font-weight: 700; }
+  #lnp-factura-cuentas, #lnp-factura-meses { overflow-x: auto; }
+  #lnp-factura-cuentas .lnp-tabla-cuentas { min-width: 460px; }
+  #lnp-factura-meses .lnp-tabla-cuentas { min-width: 520px; }
+  .lnp-diferencias { margin-bottom: 22px; }
+  @media (max-width: 640px) {
+    .lnp-factura .lnp-dos { grid-template-columns: minmax(0, 1fr); }
+    .lnp-diferencias .ln-segmentado { display: flex; }
+    .lnp-diferencias .ln-segmentado button { flex: 1 1 0; white-space: normal; }
+  }
 
   .lnp-vigencia { margin-bottom: 22px; }
   .lnp-dos { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; margin-bottom: 22px; }

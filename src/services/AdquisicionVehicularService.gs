@@ -150,14 +150,9 @@ const AdquisicionVehicularService = (function () {
    *  HelpdeskService.hoja_: se crea sola la primera vez que hace falta. */
   function indiceHoja_(crear) {
     const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS());
-    let hoja = ss.getSheetByName(HOJA_INDICE);
-    if (!hoja) {
-      if (!crear) return null;
-      hoja = ss.insertSheet(HOJA_INDICE);
-      hoja.getRange(1, 1, 1, ENCABEZADOS_INDICE.length).setValues([ENCABEZADOS_INDICE]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
-    return hoja;
+    const hoja = ss.getSheetByName(HOJA_INDICE);
+    if (hoja || !crear) return hoja;
+    return SheetUtils.asegurarPestana(ss, HOJA_INDICE, ENCABEZADOS_INDICE);
   }
 
   function mapaIndice_() {

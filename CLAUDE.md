@@ -120,6 +120,10 @@ encabezado de una ficha), `FiltroTipo` (el filtro rápido por tipo/estatus) y `P
 por pasos: `Pasos.htmlChips` + `Pasos.navegar`; `libre`, `guardarAlFinal`). El error de un campo, fuera de un
 `Formulario`: `Formulario.marcarError(caja, mensaje)`. Cada uno tiene su contrato: una copia nueva hace fallar las pruebas.
 
+También `Partes` (una pantalla grande abierta en archivos, 6.1b) e `Imagen` (22-oct): **reducir una foto antes de
+subirla** es `Imagen.reducir(archivo, { lado | ancho, calidad })`, nunca otra copia con `new Image()` + lienzo — la abre
+con poca memoria y de una en una (en el celular, abrir fotos de cámara completas dejaba la pantalla en blanco).
+
 - **Una persona (foto o iniciales) → `Avatar.html(correo, nombre, { tam })`.** La foto es la de
   su perfil de Google, del directorio del dominio (`FotosDirectorio.gs`, People API, guardada en
   caché y rehecha por el Calentador). No pintes iniciales a mano.
@@ -151,6 +155,28 @@ por pasos: `Pasos.htmlChips` + `Pasos.navegar`; `libre`, `guardarAlFinal`). El e
   etiqueta "auto" a mano o hace otra copia del par Folio/Nucco.
 - Un componente nuevo se incluye en `src/html/Index.html` antes de los módulos y
   componentes que lo usan (`campo-auto` va antes que `formulario`).
+
+## Servidor: toda escritura de una hoja → `SheetUtils`
+
+Desde el 28-oct (homologación 8) **nada escribe en una hoja fuera de `src/utils/SheetUtils.gs`**: ahí se conecta la
+bitácora (`Bitacora.anotar`, el enganche de cada primitiva) y el aviso a la caché. Con la hoja en la mano:
+`const t = SheetUtils.tabla(hoja, { encabezados })` y luego `agregarFilas(t, filas)`, `cambiarCeldas(t, [{ fila, cambios }])`,
+`borrarFilas(t, filas)`, `reemplazarFilas(t, filas)` (sincronías), `cambiarColumna(t, columna, valores)`; una pestaña
+que se crea sola, `SheetUtils.asegurarPestana(libro, nombre, encabezados, { soloCrear: true })`. Por ID siguen
+`insert/update/remove/removeMany`. Líneas escribe por `LineasDatos` (su capa delgada encima, con su política: API de
+Sheets en lote). `source-contracts` falla con un `setValues`/`appendRow`/`deleteRow`… suelto; exentos solo los scripts
+de editor y la marca `// fuera del sistema` (un libro que no es del sistema). Pruebas con hojas simuladas a mano:
+`require('./sheet-utils-real')(contexto)`.
+
+**En Drive, lo mismo con `DriveUtils`** (28-oct): `crearArchivo`, `crearCarpeta`, `mover`, `renombrar`, `copiar`,
+`aPapelera` (el archivo, no su ID), `cambiarContenido` y las de la API (`crearConApi`, `copiarConApi`,
+`reemplazarConApi`); lo temporal (la copia de una plantilla para un PDF, una copia para OCR) con `{ temporal: true }`.
+Contrato: ningún `createFile`/`setTrashed`/`moveTo`/`makeCopy`/`Drive.Files.*` suelto. Pruebas con un Drive de mentira:
+`{ ...require('./drive-utils-real')(), loQueSeSimula }`.
+
+**Bitácora** (`Bitacora.gs`, docs/bitacora.md): esas primitivas la escriben solas, así que **nunca se anota a mano**.
+Una hoja nueva se anota completa; una excepción (copia derivada, columna secreta de más) va en `Bitacora.HOJAS` con su
+razón. Algo que se pide "por si acaso" y sin permiso solo no se muestra va dentro de `Permisos.sinAnotar(fn)`.
 
 ## Servidor: un módulo de una hoja → `HojaServicio`
 
@@ -238,6 +264,9 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   en la hoja DISPOSITIVOS. Se vuelve a pedir a los 60 días, si cambia el navegador o el sistema, con 3+ contraseñas malas
   recientes o en alerta. La IP NO sirve (Apps Script no la da y la del navegador se inventa). Sin cuota de correo, no se
   entra. Se apaga por proyecto con `VERIFICACION_DOS_PASOS: 'APAGADA'` (Entornos.gs; encendido en prod desde el 26-oct).
+  Solo lo del dispositivo (nuevo, a los 60 días, otro navegador), conservando el código por contraseñas malas y alerta:
+  `VERIFICACION_DISPOSITIVOS: 'APAGADA'` (29-oct). Los dos se leen con `leerConfig_`: como propiedad del proyecto se
+  prenden y apagan sin desplegar.
 - **Bitácora → `Accesos.gs`** (hoja ACCESOS): cada intento con su resultado, nunca contraseñas ni códigos, y nunca
   impide entrar. 15 correos distintos fallando en 10 min = alerta: aviso a los ADMIN y 1 h de código para todos.
 - Lo que no pide token (login, `apiSeguridadCambiarInicial/VerificarCodigo/ReenviarCodigo`, la firma a distancia) se

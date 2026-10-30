@@ -142,7 +142,11 @@ test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus colu
   assert.doesNotMatch(admin, /QuienUsaASegundo|lineasQuitarQuienUsa|QUIEN USA/);
   const datos = read('src/services/lineas/LineasDatos.gs');
   const q = datos.slice(datos.indexOf('function quitarColumnas('), datos.indexOf('function asegurarPestana('));
-  assert.match(q, /\.sort\(\(a, b\) => b - a\)/, 'de derecha a izquierda');
+  // 28-oct: las borra SheetUtils (toda escritura de hojas pasa por ahí), de derecha a izquierda
+  assert.match(q, /SheetUtils\.quitarColumnas\(/);
+  const su = read('src/utils/SheetUtils.gs');
+  assert.match(su.slice(su.indexOf('function quitarColumnas('), su.indexOf('// -----', su.indexOf('function quitarColumnas('))),
+    /\.sort\(\(a, b\) => b - a\)/, 'de derecha a izquierda');
   assert.match(q, /cacheBorrar\('enc_' \+ nombre\);/);
   // La ficha sigue mostrando a los adicionales
   const repo = read('src/services/lineas/LineasRepo.gs');
