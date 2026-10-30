@@ -12,7 +12,7 @@
       verRegistroFicha } = T.de('registros');
     const { abrirAgregarHolograma, abrirAgregarIncidencia, abrirAgregarInspeccion, abrirAgregarSensor,
       abrirAgregarVerificacion, abrirEditarHologramaFicha, abrirEditarIncidenciaFicha, abrirEditarInspeccionFicha,
-      abrirEditarSensorFicha, abrirEditarVerificacionFicha } = T.de('capturas');
+      abrirEditarSensorFicha, abrirEditarVerificacionFicha, abrirSubirFormatoInspeccionFicha } = T.de('capturas');
     const { abrirAgregarAdherenteVehicular, abrirAgregarResponsivaVehicular, abrirEditarAdherenteVehicularFicha,
       abrirEditarResponsivaVehicularFicha } = T.de('documentos');
 
@@ -206,7 +206,9 @@
             contenido: InspeccionesFicha.preparar(vResumen.NUCCO || completo['NUCCO'], {
               app: inspecciones,
               botonPdf: (ruta) => botonArchivoFicha('inspeccion', ruta),
-              acciones: (id) => accionesFichaRegistro('inspeccion', id, { editar: puedeEditarModulo('inspeccion-vehicular') }),
+              acciones: (id) => accionesFichaRegistro('inspeccion', id, {
+                editar: puedeEditarModulo('inspeccion-vehicular'), subirFormato: puedeEditarModulo('inspeccion-vehicular'),
+              }),
               agregar: puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null,
               alPintar: (el) => {
                 el.querySelectorAll('[data-ficha-ver]').forEach((btn) => btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id)));
@@ -215,6 +217,7 @@
                 // cableado genérico de [data-ficha-editar] en pintarFichaVehiculo ya corrió antes de que
                 // estos botones existieran, por eso "Editar" se conecta aquí, igual que ya hace "Ver completo".
                 el.querySelectorAll('[data-ficha-editar]').forEach((btn) => btn.addEventListener('click', () => abrirEditarInspeccionFicha(btn.dataset.id, vResumen)));
+                el.querySelectorAll('[data-ficha-subir-formato]').forEach((btn) => btn.addEventListener('click', () => abrirSubirFormatoInspeccionFicha(btn.dataset.id, vResumen)));
                 el.querySelectorAll('[data-agregar]').forEach((btn) => btn.addEventListener('click', () => abrirAgregarInspeccion(vResumen, completo, hologramas || [])));
               },
               alFotos: (d, app) => abrirFotosInspeccionVehiculo(vResumen, d, app),

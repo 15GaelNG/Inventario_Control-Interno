@@ -1528,11 +1528,16 @@
    *  tablaFicha, porque ambas fichas la usan. */
   function accionesFichaRegistro(tipo, id, opciones) {
     const o = Object.assign({ editar: false, eliminar: false, estatus: null, copiarLiga: null, copiarLigaJefe: null,
-      regenerarLiga: false, regenerarLigaJefe: false, devolverPrestamo: false }, opciones);
+      regenerarLiga: false, regenerarLigaJefe: false, devolverPrestamo: false, subirFormato: false }, opciones);
     let html = '<div class="ficha-acciones-fila">' +
       '<button type="button" class="ficha-btn-fila" data-ficha-ver="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Ver completo">' + Iconos.svg('ver') + '</button>';
     if (o.editar) {
       html += '<button type="button" class="ficha-btn-fila" data-ficha-editar="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Editar">' + Iconos.svg('editar') + '</button>';
+    }
+    // subirFormato: subir un PDF/foto ya corregido a mano por fuera del sistema, sin entrar al
+    // wizard completo de Editar (hoy solo lo usa Inspección Vehicular).
+    if (o.subirFormato) {
+      html += '<button type="button" class="ficha-btn-fila" data-ficha-subir-formato="' + tipo + '" data-id="' + escaparHtml(id) + '" title="Subir formato corregido">' + Iconos.svg('file-up') + '</button>';
     }
     // estatus: ACTIVO/BAJA de un registro que no se edita pero sí se puede dar de baja/reactivar
     // con un clic (sin abrir ningún formulario) -- ver cambiarEstatusFicha.

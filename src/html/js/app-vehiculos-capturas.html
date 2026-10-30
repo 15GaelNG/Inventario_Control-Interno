@@ -211,6 +211,30 @@
       });
     }
 
+    /** Subir un PDF/foto ya corregido a mano por fuera del sistema, SIN entrar al wizard completo
+     *  de Editar: reemplaza tal cual el formato de esa inspección (checklist y puntaje no cambian
+     *  -- InspeccionesService.actualizar los vuelve a calcular con lo que ya había en la fila). */
+    function abrirSubirFormatoInspeccionFicha(id, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('file-up', 'INSPECCIÓN', 'Subir formato corregido', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 1,
+        campos: [
+          { id: 'FORMATO', etiqueta: 'PDF o foto ya corregido', tipo: 'archivo', acepta: 'application/pdf,image/png,image/jpeg',
+            maxMB: 10, requerido: true, vistaPrevia: true,
+            ayuda: 'Reemplaza tal cual al formato actual de esta inspección. El checklist y el puntaje no cambian.' },
+        ],
+        textoGuardar: 'Subir', iconoGuardar: 'file-up',
+        alGuardar: async (valores, archivos) => {
+          const res = await callServer('apiActualizarInspeccion', state.token, id, {}, {
+            base64: await leerArchivoBase64(archivos.FORMATO), mimeType: archivos.FORMATO.type,
+          });
+          if (res.aviso) throw new Error(res.aviso);
+        },
+        textoExito: () => 'Formato actualizado',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
+      });
+    }
+
     /** Editar verificación: 3 campos, actualiza campo por campo (mismo que su
      *  módulo -- guardarCambiosCampoPorCampo + apiActualizarCampoVerificacion). */
     function abrirEditarVerificacionFicha(v, vResumen) {
@@ -383,7 +407,8 @@
       abrirAgregarVerificacion: abrirAgregarVerificacion, abrirCapturaVehiculo: abrirCapturaVehiculo,
       abrirEditarHologramaFicha: abrirEditarHologramaFicha, abrirEditarIncidenciaFicha: abrirEditarIncidenciaFicha,
       abrirEditarInspeccionFicha: abrirEditarInspeccionFicha, abrirEditarSensorFicha: abrirEditarSensorFicha,
-      abrirEditarVerificacionFicha: abrirEditarVerificacionFicha, cerrarCapturaVehiculo: cerrarCapturaVehiculo,
+      abrirEditarVerificacionFicha: abrirEditarVerificacionFicha, abrirSubirFormatoInspeccionFicha: abrirSubirFormatoInspeccionFicha,
+      cerrarCapturaVehiculo: cerrarCapturaVehiculo,
     };
   });
 </script>

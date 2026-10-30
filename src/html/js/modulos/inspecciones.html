@@ -726,47 +726,63 @@
      * se piden ni se muestran aquí (se quedan como ya están; verlos sigue siendo "Ver completo").
      */
     async function precargarEdicion_() {
+      // Bloquea TODO el formulario mientras llega la fila real -- si no, "Siguiente" ya se podía
+      // tocar con el paso 0 todavía en blanco (el mismo bug que ya tuvo Arqueos: "se abre y Guardar
+      // queda disponible de inmediato, pero el formulario TODAVÍA tiene los valores en blanco").
+      const bloqueo = document.createElement('div');
+      bloqueo.className = 'ins-bloqueo-carga';
+      bloqueo.innerHTML = '<span class="spinner"></span> Cargando la inspección…';
+      Object.assign(bloqueo.style, {
+        position: 'absolute', inset: '0', zIndex: '5', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', gap: '8px', background: 'var(--color-surface)', opacity: '0.95',
+        fontSize: 'var(--texto-s)', color: 'var(--color-text-muted)',
+      });
+      if (getComputedStyle(contenedor).position === 'static') contenedor.style.position = 'relative';
+      contenedor.appendChild(bloqueo);
       const boton = $('#ins-guardar');
       boton.disabled = true;
-      let fila;
       try {
-        fila = await callServer('apiBuscarInspeccionPorId', state.token, opciones.idEditar);
-      } catch (err) {
-        errorGeneral('No se pudo cargar la inspección: ' + err.message);
+        let fila;
+        try {
+          fila = await callServer('apiBuscarInspeccionPorId', state.token, opciones.idEditar);
+        } catch (err) {
+          errorGeneral('No se pudo cargar la inspección: ' + err.message);
+          return;
+        }
+        await catalogos;
+        campoFolio.value = fila['FOLIO'] || '';
+        if (fila['NUCO']) campoNucco.value = fila['NUCO'];
+        await buscarVehiculo();
+        campoTipo.value = fila['TIPO'] || '';
+        campoFolio.disabled = true;
+        campoNucco.disabled = true;
+        campoTipo.disabled = true;
+        await cargarChecklist();
+        if (!estructura) return;
+        estructura.secciones.forEach((s) => s.campos.forEach((c) => {
+          if (fila[c.campo] === undefined || fila[c.campo] === '') return;
+          const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(c.campo)}"][value="${CSS.escape(fila[c.campo])}"]`);
+          if (radio) radio.checked = true;
+        }));
+        estructura.llantas.forEach((l) => {
+          const el = cajaPasos.querySelector(`[data-llanta="${CSS.escape(l.campo)}"]`);
+          if (el && fila[l.campo] !== undefined && fila[l.campo] !== '') el.value = fila[l.campo];
+        });
+        const campo = (id, valor) => { const el = $('#' + id); if (el && valor !== undefined && valor !== '') el.value = valor; };
+        campo('ins-conductor', fila['CONDUCTOR']);
+        campo('ins-jefe', fila['JEFE DIRECTO']);
+        campo('ins-holograma', fila['HOLOGRAMA']);
+        campo('ins-voltaje', fila['VOLTAJE']);
+        campo('ins-observaciones', fila['OBSERVACIONES']);
+        if (fila['FECHA ULTIMO SERVICIO']) {
+          const f = new Date(fila['FECHA ULTIMO SERVICIO']);
+          if (!isNaN(f.getTime())) campo('ins-servicio', Formato.dia(f));
+        }
+        actualizarAvance();
+      } finally {
         boton.disabled = false;
-        return;
+        bloqueo.remove();
       }
-      await catalogos;
-      campoFolio.value = fila['FOLIO'] || '';
-      if (fila['NUCO']) campoNucco.value = fila['NUCO'];
-      await buscarVehiculo();
-      campoTipo.value = fila['TIPO'] || '';
-      campoFolio.disabled = true;
-      campoNucco.disabled = true;
-      campoTipo.disabled = true;
-      await cargarChecklist();
-      if (!estructura) { boton.disabled = false; return; }
-      estructura.secciones.forEach((s) => s.campos.forEach((c) => {
-        if (fila[c.campo] === undefined || fila[c.campo] === '') return;
-        const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(c.campo)}"][value="${CSS.escape(fila[c.campo])}"]`);
-        if (radio) radio.checked = true;
-      }));
-      estructura.llantas.forEach((l) => {
-        const el = cajaPasos.querySelector(`[data-llanta="${CSS.escape(l.campo)}"]`);
-        if (el && fila[l.campo] !== undefined && fila[l.campo] !== '') el.value = fila[l.campo];
-      });
-      const campo = (id, valor) => { const el = $('#' + id); if (el && valor !== undefined && valor !== '') el.value = valor; };
-      campo('ins-conductor', fila['CONDUCTOR']);
-      campo('ins-jefe', fila['JEFE DIRECTO']);
-      campo('ins-holograma', fila['HOLOGRAMA']);
-      campo('ins-voltaje', fila['VOLTAJE']);
-      campo('ins-observaciones', fila['OBSERVACIONES']);
-      if (fila['FECHA ULTIMO SERVICIO']) {
-        const f = new Date(fila['FECHA ULTIMO SERVICIO']);
-        if (!isNaN(f.getTime())) campo('ins-servicio', Formato.dia(f));
-      }
-      actualizarAvance();
-      boton.disabled = false;
     }
 
     // ----- vehículo -----
