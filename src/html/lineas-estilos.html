@@ -996,6 +996,49 @@
     .lnp-paso-num, .ln-panorama button.lnp-paso-num { font-size: var(--texto-2xl); }
   }
 
+  /* ---- Pestañas por tema (30-oct) ---- */
+  .lnp-filtros[hidden], .lnp-nota-historial[hidden] { display: none; }
+  .lnp-nota-historial { display: flex; align-items: center; gap: 7px; margin: 0 0 16px; }
+  .lnp-nota-historial svg { width: 15px; height: 15px; }
+  /* Resumen: una puerta por tema */
+  .lnp-puertas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .ln-panorama button.lnp-puerta {
+    display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; width: auto; min-height: 0; margin: 0;
+    padding: 16px 18px; text-align: left; cursor: pointer; color: var(--color-text); font-weight: 400;
+    border: 1px solid var(--color-border); border-radius: var(--radio-xl); background: var(--color-surface); box-shadow: none;
+  }
+  .ln-panorama button.lnp-puerta:hover, .ln-panorama button.lnp-puerta:focus-visible { border-color: var(--lnp-s1); }
+  .lnp-puerta-titulo { display: flex; align-items: center; gap: 7px; font-size: var(--texto-s); font-weight: 600; color: var(--color-text-muted); }
+  .lnp-puerta-titulo svg { width: 16px; height: 16px; }
+  .lnp-puerta-num { font-size: var(--texto-3xl); line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .lnp-puerta-sub { font-size: var(--texto-s); color: var(--color-text-muted); line-height: 1.4; }
+  .lnp-puerta-sub strong { color: var(--color-text); }
+  .lnp-puerta-ir { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-size: var(--texto-s); font-weight: 600; color: var(--lnp-s1); }
+  .lnp-puerta-ir svg { width: 14px; height: 14px; }
+  /* Equipos por grupos */
+  .lnp-grupos { display: flex; flex-direction: column; gap: 14px; }
+  .lnp-grupo { display: flex; flex-direction: column; }
+  .ln-panorama [data-tab-panel] > .card { margin-bottom: 22px; }
+  .lnp-grupo-cabeza { display: grid; grid-template-columns: 12px auto auto auto 1fr; align-items: baseline; gap: 8px; margin-bottom: 2px; font-size: var(--texto-m); }
+  .lnp-grupo-cabeza .lnp-leyenda-marca { align-self: center; }
+  .lnp-grupo-num { font-weight: 700; font-size: var(--texto-l); font-variant-numeric: tabular-nums; }
+  .lnp-grupo-sub { font-size: var(--texto-s); color: var(--color-text-muted); }
+  .lnp-barra-fija { cursor: default; }
+  .lnp-barra-fija:hover { background: transparent; }
+  /* Barras por mes (ventas, donaciones, desechos) */
+  .lnp-meses-caja { overflow-x: auto; }
+  .lnp-meses { display: block; margin: 0 auto; }
+  .lnp-mes-barra { fill: var(--lnp-barra); }
+  .lnp-mes-valor { font-size: var(--texto-xs); }
+  .lnp-lista-docs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .lnp-doc { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: var(--texto-s);
+    background: var(--color-bg); border: 1px solid var(--color-border); }
+  .lnp-doc svg { width: 14px; height: 14px; color: var(--color-text-muted); }
+  @media (max-width: 640px) {
+    .lnp-grupo-cabeza { grid-template-columns: 12px auto auto auto; }
+    .lnp-grupo-sub { grid-column: 1 / -1; }
+  }
+
   .lnp-dinero-num { font-size: 38px; line-height: 1.1; font-weight: 700; color: var(--color-text); letter-spacing: -0.01em; }
   .lnp-cuentas { margin-top: 10px; overflow-x: auto; }
   .lnp-tabla-cuentas { width: 100%; border-collapse: collapse; font-size: var(--texto-s); }

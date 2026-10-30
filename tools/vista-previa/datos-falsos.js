@@ -511,6 +511,19 @@
         cuentas: { 'AT&T': { monto: 140000 + k * 900, lineas: 480 + k }, 'TELCEL GPH': { monto: 90000 + k * 400, lineas: 300 }, 'TELCEL FRO': { monto: 50000 + k * 200, lineas: 140 } } });
       return {
         generadoEn: hace(0), desde: '2025-04-22T12:00:00.000Z', cambiosDeEstatus: 5063, meses, conCartas: true,
+        // Los equipos que ya salieron (LineasPanorama → bajasEquipos_): solo conteos
+        equiposBajas: {
+          ventas: { total: 30, sinDato: 4, sinFecha: 5, conRecibo: 18,
+            porMes: { '2025-10': 6, '2026-01': 9, '2026-07': 4, '2026-08': 2 },
+            porComprador: { 'RICARDO SANCHEZ RESENDIZ': 14, 'Colaboradores (venta individual)': 4, 'RICARDO (sin recibo en el sistema)': 5, 'Sin comprador en el sistema': 3 },
+            recibos: [{ recibo: 'Primera venta', fecha: '2025-10-08', comprador: 'Sin comprador en el sistema', equipos: 3 },
+              { recibo: 'R1-05', fecha: '2026-01-05', comprador: 'RICARDO SANCHEZ RESENDIZ', equipos: 9 },
+              { recibo: 'R1-08', fecha: '2026-01-05', comprador: 'Colaboradores (venta individual)', equipos: 1 },
+              { recibo: 'V09', fecha: '2026-07-23', comprador: 'RICARDO SANCHEZ RESENDIZ', equipos: 5 }] },
+          donaciones: { total: 20, sinDato: 6, sinFecha: 2, porMes: { '2025-12': 12 }, porDestino: { 'Fundación Merced': 14 }, facturas: { 'DONO/2025/00073': 12 } },
+          desechos: { total: 12, sinDato: 0, sinFecha: 3, porMes: { '2026-04': 9 }, depositos: [{ fecha: '2026-04-08', monto: 3700, equipos: 9 }] },
+          extravios: { total: 8, sinDato: 6, conCobro: 1 },
+        },
         lineas: { total: 120, actual: cuenta(L.s), historico: hist(L.s) }, equipos: { total: 90, actual: cuenta(E.s), historico: hist(E.s) },
         registros: { dic, deps: ['VENTAS', 'COMPRAS', 'POST VENTA', 'CONTROL INTERNO'], cuentas, fechas: ['2027-01-31', ''], lineas: L, equipos: E },
         factura: {
@@ -897,6 +910,13 @@
       fila.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: r.left + 80, clientY: r.top + 10 })); await esperar(600);
     },
     'lineas-panorama': async () => { await abrir('panorama-lineas'); await esperar(800); },
+    // Las pestañas del Panorama (30-oct): una escena por tema
+    ...Object.fromEntries(['lineas', 'factura', 'equipos', 'ventas', 'donaciones', 'desechos'].map((t) => ['lineas-panorama-' + t, async () => {
+      await abrir('panorama-lineas'); await esperar(800);
+      const b = document.querySelector('#lnp-pestanas .tab-btn[data-tab="' + t + '"]');
+      if (b) b.click();
+      await esperar(500);
+    }])),
     'lineas-activos': async () => { await abrir('gestion-activos'); await esperar(800); },
     'lineas-accesorios': async () => { await abrir('accesorios-lineas'); await esperar(800); },
     'lineas-resguardos': async () => { await abrir('resguardos-lineas'); await esperar(800); },
