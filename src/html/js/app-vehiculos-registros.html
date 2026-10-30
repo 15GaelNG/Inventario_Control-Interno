@@ -7,9 +7,10 @@
   Vehiculos.registrar('registros', (T) => {
     const { abrirFichaVehiculo } = T.de('ficha');
 
-    // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
-    // sin salir de la ficha del vehículo. Inspección solo lleva "Ver completo": es un
-    // acta firmada, misma regla de negocio que ya rige su propio módulo. ----------
+    // ---------- Ver completo / Editar / Eliminar de un registro de las 6 pestañas,
+    // sin salir de la ficha del vehículo. Inspección (30-oct) sí se puede editar --
+    // checklist/llantas/voltaje/encabezado, nunca firmas ni diagramas -- pero sigue sin
+    // Eliminar: si algo cambió, se corrige, no se borra una inspección firmada. ----------
 
     const API_VER_FICHA_REGISTRO = {
       verificacion: { api: 'apiBuscarVerificacionPorId', titulo: 'Verificación' },

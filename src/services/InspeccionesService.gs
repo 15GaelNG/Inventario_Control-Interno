@@ -526,6 +526,122 @@ const InspeccionesService = (function () {
     };
   }
 
+  /**
+   * El blob de una imagen YA guardada (firma o diagrama), para volver a armar el PDF sin que el
+   * cliente tenga que reenviarla -- actualizar() no toca firmas ni diagramas, así que para
+   * regenerar el PDF hay que releer de Drive lo que ya está en la fila. `valor` es lo que guarda
+   * la columna: una URL completa (expediente del NUCO, ExpedienteNuco.guardar) o una ruta relativa
+   * (legado sin NUCCO, o el dibujo en blanco del tipo). Mismo patrón que extraerIdDrive_ de
+   * ArqueosService.gs (generarLigaArqueo). null si no hay nada guardado o no se pudo leer.
+   */
+  function blobDeImagenGuardada_(valor) {
+    const v = limpiar_(valor);
+    if (!v) return null;
+    try {
+      if (/^https?:/i.test(v)) {
+        const m = v.match(/\/d\/([a-zA-Z0-9_-]+)/) || v.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+        return m ? DriveApp.getFileById(m[1]).getBlob() : null;
+      }
+      const archivo = DriveUtils.archivoDeRutaProfunda(v, raizDe_(v));
+      return archivo ? archivo.getBlob() : null;
+    } catch (e) { return null; }   // mejor esfuerzo: el PDF sale sin esa imagen, no truena la edición
+  }
+
+  /**
+   * Edita una inspección ya guardada: checklist, llantas, voltaje y los datos de encabezado que
+   * captura el inspector (conductor, jefe directo, holograma, fecha de último servicio,
+   * observaciones). A propósito NO toca firmas ni diagramas (se quedan tal como se firmaron/
+   * dibujaron la primera vez) ni manda el aviso por correo (eso solo pasa al registrar). El PDF SÍ
+   * se regenera, con las imágenes que ya estaban guardadas (ver blobDeImagenGuardada_).
+   *
+   * @param {Object} p   mismas llaves que registrar() acepta en CAPTURADOS, más `checklist` y
+   *   `llantas` -- lo que no venga se queda con el valor que ya tenía la fila.
+   * @return {{ID, puntaje, pdf}}
+   */
+  function actualizar(token, id, p) {
+    Permisos.puedeEditar(token, MODULO);
+    const datos = Candado.con(() => {
+      const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, COL_ID);
+      if (!encontrado) throw new Error('No se encontró la inspección ' + id);
+      const actual = encontrado.data;
+      const estructura = estructuraDeTipo(token, actual['TIPO']);
+
+      // Lo que ya estaba + lo que mandó el cliente: calcularPuntaje_ necesita el checklist
+      // COMPLETO, no solo lo que cambió.
+      const checklist = {};
+      estructura.secciones.forEach((s) => s.campos.forEach((c) => {
+        checklist[c.campo] = (p.checklist && p.checklist[c.campo] !== undefined) ? p.checklist[c.campo] : actual[c.campo];
+      }));
+      const llantas = {};
+      estructura.llantas.forEach((l) => {
+        llantas[l.campo] = (p.llantas && p.llantas[l.campo] !== undefined) ? p.llantas[l.campo] : actual[l.campo];
+      });
+      const voltaje = p.VOLTAJE !== undefined ? p.VOLTAJE : actual['VOLTAJE'];
+      const puntaje = puntajeDe_(estructura, checklist, voltaje, llantas);
+      if (!puntaje.evaluadas) throw new Error('Responde al menos una pieza del checklist antes de guardar');
+
+      const cambios = {};
+      // Solo estos CAPTURADOS son editables -- sin INSPECTOR: quién inspeccionó no cambia después.
+      ['CONDUCTOR', 'JEFE_DIRECTO', 'AREA', 'HOLOGRAMA', 'VOLTAJE', 'OBSERVACIONES'].forEach((campo) => {
+        if (p[campo] !== undefined) cambios[CAPTURADOS[campo]] = p[campo];
+      });
+      const servicio = /^(\d{4})-(\d{2})-(\d{2})$/.exec(limpiar_(p.ULTIMO_SERVICIO));
+      if (servicio) cambios['FECHA ULTIMO SERVICIO'] = new Date(+servicio[1], +servicio[2] - 1, +servicio[3]);
+
+      // Solo las piezas que ese tipo pide (si el cliente manda de más, se ignoran -- igual que registrar)
+      estructura.secciones.forEach((s) => s.campos.forEach((c) => {
+        if (p.checklist && p.checklist[c.campo] !== undefined) cambios[c.campo] = p.checklist[c.campo];
+      }));
+      estructura.llantas.forEach((l) => {
+        if (p.llantas && p.llantas[l.campo] !== undefined) cambios[l.campo] = p.llantas[l.campo];
+      });
+      puntaje.secciones.forEach((s) => {
+        const columna = columnaPuntuacion_(s.titulo);
+        if (columna) cambios[columna] = (s.valor * 100).toFixed(2) + '%';
+      });
+      cambios['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
+      cambios[COL_MAXIMO] = puntaje.maximo.toFixed(2) + '%';
+
+      const registro = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, COL_ID);
+      return { registro: registro, estructura: estructura, puntaje: puntaje };
+    });
+
+    // ---- el PDF, fuera del candado (como registrar(): copiar/llenar/exportar tarda) ----
+    const fila = datos.registro;
+    const estructura = datos.estructura;
+    const paraPdf = {};
+    COLUMNAS_IMAGEN.forEach(([columna]) => {
+      const blob = blobDeImagenGuardada_(fila[columna]);
+      if (blob) paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({ blob: blob }, FIRMA_PDF) : { blob: blob };
+    });
+    const nucco = fila['NUCO'];
+    const enNuco = ExpedienteNuco.tieneNuco(nucco);
+    try {
+      const pdf = PdfService.generar({
+        plantillaId: estructura.plantillaId,
+        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+          if (!paraPdf[columna]) vacias[columna] = '';
+          return vacias;
+        }, {})),
+        imagenes: paraPdf,
+        formato: FORMATO_PDF,
+        carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, fila['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
+        subcarpeta: enNuco ? undefined : estructura.carpeta,
+        nombre: (fila[COL_PDF] || '').replace(/^.*\//, '').replace(/\.pdf$/i, '') ||
+          PdfService.nombreArchivo(['INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(new Date())]),
+      });
+      if (enNuco) ExpedienteNuco.olvidar(nucco);
+      SheetUtils.update(ssId(), hoja_().getName(), id,
+        { [COL_PDF]: enNuco ? pdf.url
+          : estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
+        COL_ID);
+      return { ID: id, puntaje: datos.puntaje.final, pdf: pdf.url };
+    } catch (err) {
+      return { ID: id, puntaje: datos.puntaje.final, pdf: null,
+        aviso: 'Se guardaron los cambios, pero no se pudo regenerar el PDF: ' + err.message };
+    }
+  }
+
   // ---------- aviso por correo ----------
   /** Suficiente para no mandar correos basura; no hace falta validar contra el RFC completo */
   function correoValido_(correo) {
@@ -1338,7 +1454,7 @@ const InspeccionesService = (function () {
     buscarPorId: (token, id) => conPorcentajes_(HojaServicio.buscarPorId(INSPECCIONES, token, id)),
     completo: (token) => HojaServicio.completo(INSPECCIONES, token).map(conPorcentajes_),
     puntajesAPorcentaje, puntajesMaximos, puntajesRelativos,
-    detalle, registrar, urlFormato, previsualizarImagen,
+    detalle, registrar, actualizar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas

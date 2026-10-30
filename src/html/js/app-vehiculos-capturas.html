@@ -200,6 +200,17 @@
       });
     }
 
+    /** Editar una inspección ya guardada, desde la ficha del vehículo: mismo wizard, en modo
+     *  edición (prepararCaptura trae la fila completa sola -- aquí solo hace falta el ID).
+     *  Checklist/llantas/voltaje/encabezado; firmas y diagramas no se tocan. */
+    function abrirEditarInspeccionFicha(id, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Editar inspección', 'Folio ' + vResumen.FOLIO);
+      prepararCaptura(cuerpo, {
+        idEditar: id,
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
+      });
+    }
+
     /** Editar verificación: 3 campos, actualiza campo por campo (mismo que su
      *  módulo -- guardarCambiosCampoPorCampo + apiActualizarCampoVerificacion). */
     function abrirEditarVerificacionFicha(v, vResumen) {

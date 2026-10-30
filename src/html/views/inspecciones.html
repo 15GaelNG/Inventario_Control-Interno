@@ -62,4 +62,18 @@
       <div id="ins-form"></div>
     </div>
   </div>
+
+  <!-- Modal: editar inspección (checklist/llantas/voltaje/encabezado; firmas y diagramas no se tocan) -->
+  <div class="modal-backdrop" id="modal-editar-inspeccion" hidden>
+    <div class="modal-card modal-card-wide">
+      <div class="modal-header">
+        <div>
+          <h3 style="margin:0">Editar inspección</h3>
+          <p class="modal-subtitle" id="editar-inspeccion-label"></p>
+        </div>
+        <button type="button" class="modal-close" id="btn-cancelar-editar-inspeccion"><i data-lucide="x" class="ico"></i></button>
+      </div>
+      <div id="editar-inspeccion-cuerpo"></div>
+    </div>
+  </div>
 </template>

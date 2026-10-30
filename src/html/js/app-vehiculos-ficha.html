@@ -206,7 +206,7 @@
             contenido: InspeccionesFicha.preparar(vResumen.NUCCO || completo['NUCCO'], {
               app: inspecciones,
               botonPdf: (ruta) => botonArchivoFicha('inspeccion', ruta),
-              acciones: (id) => accionesFichaRegistro('inspeccion', id, {}),
+              acciones: (id) => accionesFichaRegistro('inspeccion', id, { editar: puedeEditarModulo('inspeccion-vehicular') }),
               agregar: puedeEditarModulo('inspeccion-vehicular') ? { tipo: 'inspeccion', texto: 'Agregar' } : null,
               alPintar: (el) => {
                 el.querySelectorAll('[data-ficha-ver]').forEach((btn) => btn.addEventListener('click', () => verRegistroFicha(btn.dataset.fichaVer, btn.dataset.id)));
@@ -342,6 +342,9 @@
             // el resumen, sin Área/Puesto/Sede/documentación) -- lo cargan ellas mismas.
             if (tipo === 'responsiva') { abrirEditarResponsivaVehicularFicha(btn.dataset.id, vResumen); return; }
             if (tipo === 'adherente') { abrirEditarAdherenteVehicularFicha(btn.dataset.id, vResumen); return; }
+            // Inspección también pide el registro completo (195 columnas, por nombre de pieza):
+            // prepararCaptura(idEditar) ya lo trae sola, no hace falta tenerlo aquí.
+            if (tipo === 'inspeccion') { abrirEditarInspeccionFicha(btn.dataset.id, vResumen); return; }
             const registro = porIdFicha[tipo] && porIdFicha[tipo][btn.dataset.id];
             if (!registro) return;
             if (tipo === 'verificacion') abrirEditarVerificacionFicha(registro, vResumen);

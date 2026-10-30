@@ -128,10 +128,12 @@
             : '—'),
         },
       ],
-      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (i) => verFichaVehiculoDesdeOtroModulo(i.FOLIO) }],
+      accionesFila: [
+        { icono: 'car', titulo: 'Ver vehículo', alHacer: (i) => verFichaVehiculoDesdeOtroModulo(i.FOLIO) },
+      ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (i) => abrirEditarInspeccion(i.ID, i) }] : []),
       seleccionable: true,
-      // Una inspección es un acta firmada: no se corrige, se levanta otra
-      motivoSinEliminar: 'Una inspección firmada no se edita: si algo cambió, levanta una nueva',
+      // Se puede corregir (checklist/llantas/voltaje/encabezado), pero no borrar: es un acta firmada
+      motivoSinEliminar: 'Una inspección firmada no se elimina: si algo cambió, corrígela con Editar',
     });
 
     document.getElementById('ins-tabla').addEventListener('click', (ev) => {
@@ -282,6 +284,26 @@
     const prepararSiFalta = () => {
       if (puedeEditar && !captura) captura = prepararCaptura(document.getElementById('ins-form'), { tabs: tabs, recargar: cargar });
     };
+
+    /** Editar una inspección ya guardada: checklist/llantas/voltaje/encabezado, en un modal
+     *  aparte (no la pestaña "Nueva inspección" -- esa sigue siendo solo para crear). Firmas y
+     *  diagramas no se tocan (se quedan tal como se firmaron/dibujaron la primera vez). */
+    function cerrarEditarInspeccion() {
+      document.getElementById('modal-editar-inspeccion').hidden = true;
+      document.getElementById('editar-inspeccion-cuerpo').innerHTML = '';
+    }
+    document.getElementById('btn-cancelar-editar-inspeccion').addEventListener('click', cerrarEditarInspeccion);
+    function abrirEditarInspeccion(id, i) {
+      document.getElementById('editar-inspeccion-label').textContent =
+        [i && i.FOLIO, i && i.PLACAS, i && formatearFecha(i.FECHA)].filter(Boolean).join(' · ');
+      const cuerpo = document.getElementById('editar-inspeccion-cuerpo');
+      cuerpo.innerHTML = '';
+      document.getElementById('modal-editar-inspeccion').hidden = false;
+      prepararCaptura(cuerpo, {
+        idEditar: id,
+        alGuardado: async () => { cerrarEditarInspeccion(); invalidarCacheLista('apiListarInspecciones', state.token); await cargar(); },
+      });
+    }
 
     const tabs = Tabs.iniciar(document.getElementById('ins-tabs'), {
       inicial: 'registros',
@@ -477,6 +499,9 @@
     const campoTipo = $('#ins-tipo');
     const cajaPasos = $('#ins-pasos-checklist');
     $('form').addEventListener('submit', (ev) => ev.preventDefault());
+    if (opciones.idEditar) {
+      $('#ins-guardar').innerHTML = Iconos.svg('guardar') + ' Guardar cambios';
+    }
 
     const error = (campo, mensaje) => {
       const caja = contenedor.querySelector(`[data-campo="${campo}"]`);
@@ -620,7 +645,12 @@
       borradorTimer = setTimeout(guardarBorrador_, 800);
     }
 
-    ['input', 'change', 'click'].forEach((ev) => contenedor.addEventListener(ev, programarGuardarBorrador_));
+    // Editar no guarda borrador: es sobre una inspección que ya existe, y usa la MISMA llave de
+    // localStorage que "Nueva inspección" -- guardarlo aquí pisaría (o se dejaría pisar por) el
+    // borrador real de una captura nueva que esta persona tenga a medias.
+    if (!opciones.idEditar) {
+      ['input', 'change', 'click'].forEach((ev) => contenedor.addEventListener(ev, programarGuardarBorrador_));
+    }
 
     /**
      * Si hay un borrador de esta persona sin terminar, ofrece continuarlo -- y si se acepta,
@@ -687,6 +717,56 @@
         if (v && v.NUCO) CampoAuto.llenar(campoNucco, v.NUCO);
         buscarVehiculo();
       }
+    }
+
+    /**
+     * Editar (opciones.idEditar): trae la fila completa (195 columnas, por nombre de pieza) y
+     * precarga el checklist, llantas, voltaje y los datos de encabezado -- el Folio/Nucco/Tipo
+     * quedan bloqueados (cambiar el tipo invalidaría el checklist entero) y firmas/diagramas no
+     * se piden ni se muestran aquí (se quedan como ya están; verlos sigue siendo "Ver completo").
+     */
+    async function precargarEdicion_() {
+      const boton = $('#ins-guardar');
+      boton.disabled = true;
+      let fila;
+      try {
+        fila = await callServer('apiBuscarInspeccionPorId', state.token, opciones.idEditar);
+      } catch (err) {
+        errorGeneral('No se pudo cargar la inspección: ' + err.message);
+        boton.disabled = false;
+        return;
+      }
+      await catalogos;
+      campoFolio.value = fila['FOLIO'] || '';
+      if (fila['NUCO']) campoNucco.value = fila['NUCO'];
+      await buscarVehiculo();
+      campoTipo.value = fila['TIPO'] || '';
+      campoFolio.disabled = true;
+      campoNucco.disabled = true;
+      campoTipo.disabled = true;
+      await cargarChecklist();
+      if (!estructura) { boton.disabled = false; return; }
+      estructura.secciones.forEach((s) => s.campos.forEach((c) => {
+        if (fila[c.campo] === undefined || fila[c.campo] === '') return;
+        const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(c.campo)}"][value="${CSS.escape(fila[c.campo])}"]`);
+        if (radio) radio.checked = true;
+      }));
+      estructura.llantas.forEach((l) => {
+        const el = cajaPasos.querySelector(`[data-llanta="${CSS.escape(l.campo)}"]`);
+        if (el && fila[l.campo] !== undefined && fila[l.campo] !== '') el.value = fila[l.campo];
+      });
+      const campo = (id, valor) => { const el = $('#' + id); if (el && valor !== undefined && valor !== '') el.value = valor; };
+      campo('ins-conductor', fila['CONDUCTOR']);
+      campo('ins-jefe', fila['JEFE DIRECTO']);
+      campo('ins-holograma', fila['HOLOGRAMA']);
+      campo('ins-voltaje', fila['VOLTAJE']);
+      campo('ins-observaciones', fila['OBSERVACIONES']);
+      if (fila['FECHA ULTIMO SERVICIO']) {
+        const f = new Date(fila['FECHA ULTIMO SERVICIO']);
+        if (!isNaN(f.getTime())) campo('ins-servicio', Formato.dia(f));
+      }
+      actualizarAvance();
+      boton.disabled = false;
     }
 
     // ----- vehículo -----
@@ -774,6 +854,7 @@
             `${estructura.secciones.length} secciones</p>`;
           armarPasos();
         } catch (err) {
+          console.error('cargarChecklist', tipo, err);
           if (campoTipo.value === tipo) error('TIPO', err.message);
           aviso.innerHTML = '';
         } finally {
@@ -809,6 +890,10 @@
           .forEach((g) => pasos.push(Object.assign({ id: 'checklist' }, g)));
         PASOS_FINALES
           .filter((p) => p.id !== 'danos' || estructura.diagramas.length)
+          // Editar no toca firmas ni diagramas (se quedan tal como se firmaron/dibujaron la
+          // primera vez): solo queda el paso "Cierre" (los datos de encabezado), sin "Daños"
+          // ni "Revisar y firmar" (ese es el que pide firmas, tickets y el correo de aviso).
+          .filter((p) => !opciones.idEditar || p.id === 'cierre')
           .forEach((p) => pasos.push(Object.assign({}, p)));
 
         cajaPasos.innerHTML = pasos.slice(1).map((p, k) => `
@@ -1378,6 +1463,39 @@
       if (!(await validarUnidad())) { mostrarPaso(0); return; }
       const r = calcular();
       if (!Object.keys(r.dadas).length) { errorGeneral('Responde al menos una pieza del checklist'); return; }
+
+      if (opciones.idEditar) {
+        const llantasEditar = {};
+        cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => { if (el.value !== '') llantasEditar[el.dataset.llanta] = Number(el.value); });
+        const htmlBotonEditar = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> Guardando…';
+        try {
+          const res = await callServer('apiActualizarInspeccion', state.token, opciones.idEditar, {
+            checklist: r.dadas,
+            llantas: llantasEditar,
+            CONDUCTOR: valorDe('ins-conductor'),
+            JEFE_DIRECTO: valorDe('ins-jefe'),
+            HOLOGRAMA: valorDe('ins-holograma'),
+            VOLTAJE: valorDe('ins-voltaje'),
+            ULTIMO_SERVICIO: valorDe('ins-servicio'),
+            OBSERVACIONES: valorDe('ins-observaciones'),
+          });
+          if (res.aviso) Notificar.error(res.aviso);
+          else Notificar.exito(`Inspección actualizada · puntaje ${res.puntaje}%`, {
+            duracion: 9000,
+            accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
+          });
+          if (opciones.alGuardado) await opciones.alGuardado(res);
+        } catch (err) {
+          errorGeneral(err.message);
+        } finally {
+          boton.disabled = false;
+          boton.innerHTML = htmlBotonEditar;
+        }
+        return;
+      }
+
       const faltan = estructura.piezas - r.respondidas;
       if (faltan > 0) {
         const ok = await Confirmar.pedir({
@@ -1507,7 +1625,11 @@
     });
 
     armarPasos();
-    restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
+    if (opciones.idEditar) {
+      precargarEdicion_();
+    } else {
+      restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
+    }
     return { catalogos };
   }
 
