@@ -260,10 +260,10 @@
         const e = r.equipos;
         tilesKpi($('#lnp-kpis-equipos', raiz), [
           tile('smartphone', e.total, 'Equipos registrados'),
-          tile('circle-check', e.uso, 'En uso · ' + pct(e.uso, e.total), 'stat-tile-ok'),
-          tile('archive', e.guardado, 'Guardados', '', 'Resguardo, para venta, posible venta-daño o para desecho'),
-          tile('package-x', e.baja, 'Ya no están', '', 'Vendidos, donados, extraviados o robados y desechados'),
-          tile('circle-help', e.revisar, 'Por revisar', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de líneas'),
+          tile('circle-check', e.uso, 'En uso (Uso) · ' + pct(e.uso, e.total), 'stat-tile-ok'),
+          tile('archive', e.guardado, 'Guardados (Resguardo, Para venta y Para desecho)', '', 'Con nosotros pero sin usarse'),
+          tile('package-x', e.baja, 'Ya no están (Vendido, Donado, Desechado y Extravío-robo)', '', 'Ya salieron de la empresa'),
+          tile('circle-help', e.revisar, 'Por revisar (Fuera de inventario y otros)', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de líneas'),
         ], () => null);
       }
 
@@ -292,10 +292,10 @@
           '<div class="lnp-paso-sub">' + sub + '</div></div>';
         const flecha = '<div class="lnp-flecha" aria-hidden="true">' + ico('chevron-right') + '</div>';
         $('#lnp-flujo', raiz).innerHTML =
-          paso('card-sim', 'Activas', r.activas, 'en uso o disponibles', '') + flecha +
-          paso('hourglass', 'En cancelación', b.proceso, conCartas ? fuerte(miles(b.procesoConCarta)) + ' con carta o correo · ' + fuerte(miles(b.procesoSinCarta)) + ' sin' : 'se pidió o se va a pedir la baja',
+          paso('card-sim', 'Activas (Uso y Disponible)', r.activas, 'asignadas o listas para asignar', '') + flecha +
+          paso('hourglass', 'En proceso de cancelación', b.proceso, conCartas ? fuerte(miles(b.procesoConCarta)) + ' con carta o correo · ' + fuerte(miles(b.procesoSinCarta)) + ' sin' : 'se pidió o se va a pedir la baja',
             'EN PROCESO DE CANCELACION') + flecha +
-          paso('circle-x', 'Canceladas', b.canceladas, conCartas ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan', 'CANCELADA', ' lnp-paso-fin');
+          paso('circle-x', 'Canceladas (Cancelada)', b.canceladas, conCartas ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan', 'CANCELADA', ' lnp-paso-fin');
 
         const cartas = $('#lnp-cartas', raiz);
         if (!conCartas) {
@@ -347,7 +347,7 @@
           '(un cambio de número, una baja reciente) sale como diferencia hasta que se cargue la factura siguiente.';
         const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase, filtros: false, titulo: titulo });
         tilesKpi($('#lnp-factura-kpis', raiz), [
-          tile('card-sim', c.activas, 'Activas en el inventario (hoy)', '', 'En uso o disponibles; las que van en cancelación se cuentan aparte'),
+          tile('card-sim', c.activas, 'Activas en el inventario hoy (Uso y Disponible)', '', 'Las que van en proceso de cancelación se cuentan aparte'),
           tile('receipt', c.cobradas, 'Aparecen en la factura de ' + mes, '', 'Líneas que vienen en la factura, con cargo o con saldo a favor o $0'),
           tile('circle-check', c.activasCobradas, 'Activas y en la factura · ' + pct(c.activasCobradas, c.activas), 'stat-tile-ok'),
           tile('circle-alert', c.totalActivasSinCobro, 'Activas que no aparecen en la factura', c.totalActivasSinCobro ? 'stat-tile-warn' : 'stat-tile-ok', 'Activas en el inventario que no vienen en la factura de ' + mes),
@@ -428,9 +428,9 @@
         const clic = esHoy();
         $('#lnp-total-equipos', raiz).textContent = miles(total) + ' registrados';
         const GRUPOS = [
-          { clave: 'tenemos', nombre: 'Los tenemos', sub: 'en uso o guardados', color: 'var(--lnp-s1)' },
-          { clave: 'baja', nombre: 'Ya no están', sub: 'vendidos, donados, desechados, extraviados o robados', color: 'var(--lnp-otros)' },
-          { clave: 'revisar', nombre: 'Por revisar', sub: 'estatus que ya no deberían existir', color: 'var(--lnp-s4)' },
+          { clave: 'tenemos', nombre: 'Los tenemos', sub: 'Uso, Resguardo, Para venta y Para desecho', color: 'var(--lnp-s1)' },
+          { clave: 'baja', nombre: 'Ya no están', sub: 'Vendido, Donado, Desechado y Extravío-robo', color: 'var(--lnp-otros)' },
+          { clave: 'revisar', nombre: 'Por revisar', sub: 'Fuera de inventario, Cancelado y otros estatus que ya no deberían existir', color: 'var(--lnp-s4)' },
         ];
         $('#lnp-equipos-grupos', raiz).innerHTML = GRUPOS.filter((x) => g[x.clave].total || x.clave !== 'revisar').map((x) =>
           '<div class="lnp-grupo">' +
@@ -456,13 +456,13 @@
           '<span class="lnp-puerta-titulo">' + ico(icono) + esc(titulo) + '</span><span class="lnp-puerta-num">' + valor + '</span>' +
           '<span class="lnp-puerta-sub">' + sub + '</span><span class="lnp-puerta-ir">Ver ' + ico('arrow-right') + '</span></button>';
         $('#lnp-puertas', raiz).innerHTML =
-          puerta('lineas', 'card-sim', 'Líneas activas', miles(r.activas), 'Sus planes cuestan ' + fuerte(dinero(r.renta)) + ' al mes') +
-          puerta('lineas', 'hourglass', 'En cancelación', miles(b.proceso), 'Baja ya pedida; se pagan ' + fuerte(dinero(b.procesoRenta)) + ' al mes mientras salen') +
-          puerta('lineas', 'circle-x', 'Líneas canceladas', miles(b.canceladas), est.datos.conCartas
+          puerta('lineas', 'card-sim', 'Líneas activas (Uso y Disponible)', miles(r.activas), 'Sus planes cuestan ' + fuerte(dinero(r.renta)) + ' al mes') +
+          puerta('lineas', 'hourglass', 'En proceso de cancelación', miles(b.proceso), 'Baja ya pedida; se pagan ' + fuerte(dinero(b.procesoRenta)) + ' al mes mientras salen') +
+          puerta('lineas', 'circle-x', 'Líneas canceladas (Cancelada)', miles(b.canceladas), est.datos.conCartas
             ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan') +
           (f ? puerta('factura', 'receipt', 'Última factura (' + mesLargo(f.comparacion.ultimo) + ')', esc(dineroCorto(f.meses[f.meses.length - 1].total)),
             fuerte(miles(f.comparacion.activasCobradas)) + ' de ' + miles(f.comparacion.activas) + ' activas aparecen en ella') : '') +
-          puerta('equipos', 'smartphone', 'Equipos con nosotros', miles(g.tenemos.total), 'En uso o guardados' + (g.revisar.total ? ' · ' + fuerte(miles(g.revisar.total)) + ' por revisar' : '')) +
+          puerta('equipos', 'smartphone', 'Equipos con nosotros', miles(g.tenemos.total), 'Uso, Resguardo, Para venta y Para desecho' + (g.revisar.total ? ' · ' + fuerte(miles(g.revisar.total)) + ' por revisar' : '')) +
           puerta('ventas', 'package-x', 'Equipos que ya salieron', miles(g.baja.total),
             fuerte(miles(cuenta(g.baja.estatus, 'VENDIDO'))) + ' vendidos · ' + fuerte(miles(cuenta(g.baja.estatus, 'DONADO'))) + ' donados · ' +
             fuerte(miles(cuenta(g.baja.estatus, 'DESECHADO'))) + ' desechados · ' + fuerte(miles(cuenta(g.baja.estatus, 'EXTRAVIO-ROBO'))) + ' extraviados o robados');
