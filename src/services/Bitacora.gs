@@ -496,18 +496,23 @@ function instalarBitacora() {
 }
 
 /**
- * Desde el editor, solo lee: revisa la cadena de huellas de un mes ('2026-10'; sin nada, el actual) y dice dónde se
- * rompe y cuántos renglones hay. Para saber qué pasó después de un aviso de la revisión diaria.
+ * Desde el editor, solo lee: revisa la cadena de huellas de un mes ('2026-10'; sin nada, el mes pasado y el actual,
+ * porque el editor no pasa argumentos) y dice dónde se rompe y cuántos renglones hay. Para saber qué pasó después de un
+ * aviso de la revisión diaria.
  */
 function revisarBitacora(mes) {
   soloEditor_();
-  const actual = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM');
-  const r = Bitacora.revisarCadena(mes || actual);
+  const zona = Session.getScriptTimeZone();
+  const hoy = new Date();
+  const actual = Utilities.formatDate(hoy, zona, 'yyyy-MM');
+  const pasado = Utilities.formatDate(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1), zona, 'yyyy-MM');
+  const meses = typeof mes === 'string' && mes ? [mes] : [pasado, actual];
   let cola = 0;
   try { cola = JSON.parse(PropertiesService.getScriptProperties().getProperty('BITACORA_COLA') || '[]').length; } catch (e) { /* sin cola */ }
-  const texto = (mes || actual) + ': ' + r.renglones + ' renglones · ' +
-    (r.rota ? 'se rompe en el renglón ' + r.rota.fila + ': ' + r.rota.motivo : 'la cadena verifica') +
-    ' · pendientes en la cola: ' + cola + ' · hoy se escribe en la pestaña ' + actual;
+  const texto = meses.map((m) => {
+    const r = Bitacora.revisarCadena(m);
+    return m + ': ' + r.renglones + ' renglones · ' + (r.rota ? 'se rompe en el renglón ' + r.rota.fila + ': ' + r.rota.motivo : 'la cadena verifica');
+  }).join(' | ') + ' · pendientes en la cola: ' + cola + ' · hoy se escribe en la pestaña ' + actual;
   Logger.log(texto);
   return texto;
 }
