@@ -258,9 +258,11 @@
 
         // Equipos
         const e = r.equipos;
+        // Solo el estatus USO, como la barra de la gráfica (usuario, 2-nov): EN ENVIO y ESPERA DE RESPONSIVA siguen en "Los tenemos"
+        const enUso = ((est.datos.equipos.historico['USO'] || [])[est.k]) || 0;
         tilesKpi($('#lnp-kpis-equipos', raiz), [
           tile('smartphone', e.total, 'Equipos registrados'),
-          tile('circle-check', e.uso, 'En uso (Uso) · ' + pct(e.uso, e.total), 'stat-tile-ok'),
+          tile('circle-check', enUso, 'En uso (Uso) · ' + pct(enUso, e.total), 'stat-tile-ok'),
           tile('archive', e.guardado, 'Guardados (Resguardo, Para venta y Para desecho)', '', 'Con nosotros pero sin usarse'),
           tile('package-x', e.baja, 'Ya no están (Vendido, Donado, Desechado y Extravío-robo)', '', 'Ya salieron de la empresa'),
           tile('circle-help', e.revisar, 'Por revisar (Fuera de inventario y otros)', e.revisar ? 'stat-tile-warn' : '', 'Fuera de inventario, cancelados y otros estatus que ya no existen: se corrigen en Correcciones de líneas'),
