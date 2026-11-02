@@ -285,7 +285,9 @@ const LineasLectura = (function () {
     // También los encabezados de las hojas nuevas: si el armado cambió sus columnas (p. ej. COLOR en EQUIPOS, 3-oct), los
     // guardados (1 h) leerían cada dato en la columna equivocada
     const nuevas = [HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS, 'FACTURAS', 'CUENTAS', 'CATALOGOS'];
-    nuevas.map((n) => 'enc_' + n).concat(['ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS])
+    // La del Panorama, la que use hoy (estaba fija en v3 y ya no se borraba al subir de versión)
+    const panorama = typeof LineasPanorama !== 'undefined' ? [LineasPanorama.CLAVE_CACHE] : [];
+    nuevas.map((n) => 'enc_' + n).concat(panorama, ['ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS])
       .forEach(LineasDatos.cacheBorrar);
     altas_ = null;
     LineasDatos.tocar([HOJAS.LINEAS, HOJAS.EQUIPOS, HOJAS.ASIGNACIONES, HOJAS.ADENDUMS]);
