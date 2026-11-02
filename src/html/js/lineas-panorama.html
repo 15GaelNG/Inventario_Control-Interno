@@ -201,15 +201,9 @@
 
       function pintarPortada() {
         const r = resumen(est.k);
-        const previo = est.k > 0 ? resumen(est.k - 1) : null;
+        // Sin la flecha "vs cierre de…" (usuario, 2-nov): mezclaba altas por cuadre con contrataciones y confundía
         $('#lnp-activas', raiz).textContent = miles(r.activas);
         $('#lnp-activas-sub', raiz).innerHTML = '<strong>' + miles(r.planes) + '</strong> con plan · <strong>' + miles(r.basicos) + '</strong> SIM básicos';
-        const delta = $('#lnp-delta', raiz);
-        if (previo) {
-          const dif = r.activas - previo.activas;
-          delta.innerHTML = (dif ? ico(dif > 0 ? 'trending-up' : 'trending-down') + ' ' + (dif > 0 ? '+' : '−') + miles(Math.abs(dif)) : 'Sin cambio') +
-            '<span> vs cierre de ' + esc(mesLargo(est.datos.meses[est.k - 1])) + '</span>';
-        } else delta.innerHTML = '';
 
         // Composición: una barra apilada (parte del todo) + leyenda con número y porcentaje, que es la que se lee
         const grupos = COMPOSICION_LINEAS.filter((g) => r.grupos[g.clave] || g.clave !== 'revisar');
