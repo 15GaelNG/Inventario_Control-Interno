@@ -258,59 +258,12 @@
         ], () => null);
       }
 
-      // ---------------- La historia del mes (30-oct) ----------------
+      // ---------------- Ayudantes de texto y color (30-oct) ----------------
 
       const COLOR_CON_CARTA = 'var(--lnp-s6)';
       const COLOR_SIN_CARTA = 'var(--lnp-otros)';
       const fuerte = (t) => '<strong>' + t + '</strong>';
       const plural = (n, uno, varios) => miles(n) + ' ' + (n === 1 ? uno : varios);
-
-      /**
-       * Lo que el Panorama dice en pocas frases, de lo más importante a lo de detalle (la "gran idea" primero). Cada frase
-       * sale de las mismas cuentas que las tarjetas de abajo, así que siempre coinciden con ellas.
-       */
-      function pintarHistoria() {
-        const r = resumen(est.k);
-        const b = r.bajas;
-        const previo = est.k > 0 ? resumen(est.k - 1) : null;
-        const cuando = esHoy() ? 'Hoy' : 'Al cierre de ' + mesLargo(est.datos.meses[est.k]);
-        $('#lnp-historia-titulo', raiz).textContent = esHoy() ? 'En resumen' : 'En resumen · cierre de ' + mesLargo(est.datos.meses[est.k]);
-        const frases = [];
-        const dif = previo ? r.activas - previo.activas : 0;
-        frases.push({ ico: 'card-sim', html: cuando + ' hay ' + fuerte(plural(r.activas, 'línea activa', 'líneas activas')) + ' y sus planes cuestan ' +
-          fuerte(dinero(r.renta)) + ' al mes' + (previo && dif ? ' (' + (dif > 0 ? '+' : '−') + miles(Math.abs(dif)) + ' líneas contra el mes anterior).' : '.') });
-        if (est.datos.conCartas) {
-          frases.push({ ico: 'file-check', html: 'De las ' + fuerte(plural(b.canceladas, 'cancelada', 'canceladas')) + ', ' + fuerte(miles(b.conCarta) + ' se pidieron con carta o correo') +
-            ' al proveedor y ' + fuerte(miles(b.sinCarta + b.sinDato) + ' sin carta ni correo') + ': esas dejaron de usarse por un cambio de número, un registro reutilizado o la limpieza del inventario.' });
-        } else {
-          frases.push({ ico: 'circle-x', html: 'Hay ' + fuerte(plural(b.canceladas, 'línea cancelada', 'líneas canceladas')) + '.' });
-        }
-        if (b.proceso) {
-          frases.push({ ico: 'hourglass', tono: b.procesoSinCarta ? 'warn' : '', html: fuerte(plural(b.proceso, 'línea está', 'líneas están') + ' en cancelación') +
-            (est.datos.conCartas ? (b.procesoSinCarta ? ': ' + fuerte(miles(b.procesoSinCarta) + ' todavía sin carta ni correo') + ' al proveedor (mientras no se pida, se sigue pagando).' : ', todas pedidas con carta o correo.') : '.') });
-        }
-        if (b.activasConCarta) {
-          frases.push({ ico: 'triangle-alert', tono: 'warn', html: fuerte(plural(b.activasConCarta, 'línea tiene', 'líneas tienen') + ' carta o correo de cancelación y sigue' + (b.activasConCarta === 1 ? '' : 'n') + ' activa' +
-            (b.activasConCarta === 1 ? '' : 's')) + ': conviene revisar si el proveedor la' + (b.activasConCarta === 1 ? '' : 's') + ' sigue cobrando.' });
-        }
-        const g = gruposEquipos();
-        if (g.tenemos.total || g.baja.total) {
-          frases.push({ ico: 'smartphone', html: 'Tenemos ' + fuerte(plural(g.tenemos.total, 'equipo', 'equipos')) + ' (celulares y módems, en uso o guardados); ' +
-            fuerte(miles(g.baja.total) + ' ya salieron') + ': vendidos, donados, desechados, extraviados o robados.' });
-        }
-        const f = est.datos.factura;
-        // Solo las activas que no aparecen: "cobradas sin estar activas" se quitó (30-oct, Dirección: aparecer en la factura no
-        // es que se cobre, y era difícil de explicar)
-        if (f && esHoy() && f.comparacion.totalActivasSinCobro) {
-          const c = f.comparacion;
-          frases.push({ ico: 'receipt', html: 'En la última factura (' + esc(mesLargo(c.ultimo)) + ') ' + fuerte(plural(c.totalActivasSinCobro, 'línea activa no aparece', 'líneas activas no aparecen')) +
-            ' (casi siempre cambios de número recientes: el número nuevo sale en la factura siguiente).' });
-        }
-        if (r.vig.vencido) {
-          frases.push({ ico: 'calendar-clock', html: fuerte(plural(r.vig.vencido, 'plan tiene', 'planes tienen') + ' el adendum vencido') + ' (' + pct(r.vig.vencido, r.planes) + ' de los planes activos).' });
-        }
-        $('#lnp-historia-lista', raiz).innerHTML = frases.map((x) => '<li class="lnp-historia-frase' + (x.tono ? ' lnp-tono-' + x.tono : '') + '">' + ico(x.ico) + '<span>' + x.html + '</span></li>').join('');
-      }
 
       // ---------------- Cómo termina una línea (30-oct) ----------------
 
@@ -687,7 +640,6 @@
 
       function pintarTodo() {
         pintarSelectorMes();
-        pintarHistoria();
         pintarPortada();
         pintarCiclo();
         pintarFactura();
