@@ -501,6 +501,19 @@
       "migrable": false
     },
     {
+      "hoja": "VENTAS",
+      "prefijo": "VTA",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "lineas",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "modulo": "",
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
       "hoja": "APP_HELPDESK",
       "prefijo": "HDK",
       "llaveAnterior": "ID",
@@ -640,6 +653,11 @@
       "hoja": "APP_EVIDENCIAS",
       "columna": "ID_LINEA",
       "padre": "LINEAS TELEFONICAS"
+    },
+    {
+      "hoja": "EQUIPOS",
+      "columna": "ID VENTA",
+      "padre": "VENTAS"
     },
     {
       "hoja": "MOVIMIENTOS_ACCESORIOS",
