@@ -1,0 +1,81 @@
+<script>
+  /**
+   * lineas-panorama-ahorro.html — la pestaña Ahorro del Panorama de Líneas (2-nov): la hoja «Cancelaciones» del reporte de
+   * Líneas, calculada por el sistema. Pinta lo que manda el servidor en `factura.ahorro` (LineasPanorama →
+   * ahorroCancelaciones_): por cada línea CANCELADA, su renta mensual × los meses de factura que ya no se pagaron, menos la
+   * penalización. Se mueve solo con cada factura que se carga. Vive aparte para que initPanorama no pase de 700 líneas.
+   *
+   *   Lineas.panoramaAhorro.pintar(raiz, ahorro)
+   */
+  (function () {
+    'use strict';
+    const { $, dinero, esc, miles, tablaLineas, tilesKpi } = Lineas.comun;
+
+    const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const mes = (ym) => (ym ? MESES[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(0, 4) : '');
+    const vacio = (texto) => '<p class="ln-tenue lnp-vacio">' + esc(texto) + '</p>';
+    let tabla = null;
+
+    function pintar(raiz, a) {
+      const caja = $('#lnp-ahorro', raiz);
+      if (!caja) return;
+      if (tabla) { tabla.destruir(); tabla = null; }
+      if (!a) { caja.innerHTML = vacio('Sin facturas cargadas o sin líneas canceladas.'); return; }
+      // Los ayudantes de la pestaña Ventas (lineas-panorama-bajas.html): se piden al pintar, no al cargar
+      const { barrasPorMes, tarjeta } = Lineas.panoramaBajas;
+      const periodo = mes(a.desde) + ' a ' + mes(a.hasta);
+      const cuentas = Object.keys(a.porCuenta).sort((x, y) => a.porCuenta[y].neto - a.porCuenta[x].neto);
+      caja.innerHTML =
+        '<p class="lnp-nota">Cada línea cancelada suma su renta mensual por cada mes que ya no se pagó, desde su último cobro hasta la última factura cargada (' +
+          esc(mes(a.hasta)) + '), menos la penalización que cobró el proveedor. Se actualiza solo al cargar cada factura nueva.</p>' +
+        '<div class="stat-row" id="lnp-ahorro-kpis"></div>' +
+        '<div class="lnp-dos">' +
+          tarjeta('calendar-range', 'Ahorro por mes', esc(periodo), barrasPorMes(a.porMes, 'Ahorro por mes'),
+            'Lo que se dejó de pagar cada mes por las líneas que ya estaban canceladas (en pesos, antes de penalizaciones).') +
+          tarjeta('scale', 'Por compañía', miles(a.lineas) + ' líneas',
+            '<div class="lnp-cuentas" data-scroll-x><table class="lnp-tabla-cuentas"><thead><tr><th scope="col">Compañía</th><th scope="col">Líneas</th>' +
+              '<th scope="col">Ahorro neto</th></tr></thead><tbody>' +
+              cuentas.map((k) => '<tr><th scope="row">' + esc(k || 'Sin compañía') + '</th><td>' + miles(a.porCuenta[k].lineas) + '</td><td>' +
+                dinero(a.porCuenta[k].neto) + '</td></tr>').join('') +
+              '<tr class="lnp-fila-total"><th scope="row">Total</th><td>' + miles(a.lineas) + '</td><td>' + dinero(a.neto) + '</td></tr></tbody></table></div>',
+            '') +
+        '</div>' +
+        tarjeta('list', 'Por línea', '', '<div class="lnp-tabla" id="lnp-ahorro-tabla"></div>',
+          (a.aunSinAhorro ? miles(a.aunSinAhorro) + (a.aunSinAhorro === 1 ? ' se cobró' : ' se cobraron') + ' en la última factura: empieza' + (a.aunSinAhorro === 1 ? '' : 'n') +
+            ' a sumar con la siguiente. ' : '') +
+          (a.sinRenta ? miles(a.sinRenta) + (a.sinRenta === 1 ? ' no tiene' : ' no tienen') + ' renta en ninguna factura ni en su plan del inventario: cuenta' +
+            (a.sinRenta === 1 ? '' : 'n') + ' como cancelada' + (a.sinRenta === 1 ? '' : 's') + ', sin dinero. ' : '') +
+          'El reporte de Líneas además resta el SIM básico que reemplazó a algunas líneas y prorratea el último ciclo de AT&T, por eso sale un poco distinto.');
+      const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: valor, etiqueta: etiqueta, clase: clase || '', filtros: false, titulo: titulo });
+      tilesKpi($('#lnp-ahorro-kpis', raiz), [
+        tile('circle-x', miles(a.lineas), 'Líneas canceladas (Cancelada)'),
+        tile('banknote', dinero(a.rentaMensual), 'Renta mensual que ya no se paga'),
+        tile('receipt', dinero(a.bruto), 'Se dejó de pagar · ' + periodo),
+        tile('circle-minus', dinero(-a.penalizaciones), 'Menos penalizaciones', '', 'Lo que cobró el proveedor por cancelar antes de tiempo'),
+        tile('piggy-bank', dinero(a.neto), 'Ahorro neto · ' + periodo, 'stat-tile-ok'),
+      ], () => null);
+      const cont = $('#lnp-ahorro-tabla', raiz);
+      if (!a.lista.length) { cont.innerHTML = vacio('La lista por línea se ve al actualizar el panorama.'); return; }
+      cont.innerHTML = '<div></div>';
+      tabla = tablaLineas(cont.firstChild, {
+        idCampo: 'numero', idTabla: 'lineas-panorama-ahorro-v1', seleccionable: false, detalle: false,
+        columnas: [
+          { campo: 'numero', titulo: 'Línea', tipo: 'texto' },
+          { campo: 'cuenta', titulo: 'Compañía', tipo: 'texto' },
+          { campo: 'renta', titulo: 'Renta mensual', tipo: 'numero', render: (n) => esc(dinero(n)) },
+          { campo: 'fuente', titulo: 'Renta tomada de', tipo: 'texto' },
+          { campo: 'ultimo', titulo: 'Último mes pagado', tipo: 'texto', render: (v) => esc(v ? mes(v) : 'Nunca en las facturas') },
+          { campo: 'meses', titulo: 'Meses sin pagar', tipo: 'numero' },
+          { campo: 'penal', titulo: 'Penalización', tipo: 'numero', render: (n) => (n ? esc(dinero(-n)) : '<span class="ln-tenue">—</span>') },
+          { campo: 'ahorro', titulo: 'Ahorro', tipo: 'numero', render: (n) => esc(dinero(n)) },
+        ],
+        ordenInicial: { campo: 'ahorro', dir: 'desc' },
+        exportar: { nombreArchivo: 'Panorama ahorro por cancelaciones', nombreHoja: 'Ahorro' },
+        textoVacio: 'Sin líneas canceladas.',
+      });
+      tabla.setDatos(a.lista.map((x) => ({ numero: x[0], cuenta: x[1], renta: x[2], fuente: x[3], ultimo: x[4], meses: x[5], penal: x[6], ahorro: x[7] })));
+    }
+
+    Object.assign(Lineas, { panoramaAhorro: { pintar: pintar } });
+  })();
+</script>

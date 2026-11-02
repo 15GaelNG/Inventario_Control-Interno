@@ -544,6 +544,14 @@
             porCuenta: { 'AT&T': { activas: 492, cobradas: 611, activasCobradas: 479, activasSinCobro: 13, cobradasNoActivas: 132 }, 'TELCEL GPH': { activas: 279, cobradas: 300, activasCobradas: 276, activasSinCobro: 3, cobradasNoActivas: 24 }, 'TELCEL FRO': { activas: 137, cobradas: 140, activasCobradas: 136, activasSinCobro: 1, cobradasNoActivas: 4 } },
             activasSinCobro: [['4443578949', 'USO', 'AT&T', '2025-11'], ['4422866518', 'USO', 'TELCEL FRO', ''], ['4448194355', 'USO', 'TELCEL GPH', '']],
             cobradasNoActivas: [['4425926793', 'NO ESTÁ EN EL INVENTARIO', 'TELCEL FRO', 269], ['4445169930', 'CANCELADA', 'AT&T', 269.78]] },
+          // El ahorro por cancelaciones (LineasPanorama → ahorroCancelaciones_)
+          ahorro: { desde: '2025-11', hasta: '2026-09', lineas: 11, conAhorro: 8, aunSinAhorro: 2, sinRenta: 1, rentaMensual: 2611.5, bruto: 9874.2,
+            penalizaciones: 536.27, neto: 9337.93,
+            porMes: { '2025-12': 228.99, '2026-01': 457.98, '2026-02': 457.98, '2026-03': 726.98, '2026-04': 726.98, '2026-05': 1025.98, '2026-06': 1324.98, '2026-07': 1923.98, '2026-08': 2501.37 },
+            porCuenta: { 'AT&T': { lineas: 6, neto: 5602.1 }, 'TELCEL GPH': { lineas: 3, neto: 2519.6 }, 'TELCEL FRO': { lineas: 2, neto: 1216.23 } },
+            lista: [['3318504270', 'TELCEL GPH', 228.99, 'Factura', '2025-11', 10, 0, 2289.9], ['4422086725', 'AT&T', 299, 'Factura', '2026-02', 7, 0, 2093],
+              ['4461394530', 'TELCEL FRO', 269, 'Factura', '2026-07', 2, 536.27, 1.73], ['4421124230', 'TELCEL GPH', 0, 'Sin dato', '', 11, 0, 0],
+              ['4425184352', 'AT&T', 351.78, 'Factura', '2026-09', 0, 0, 0]] },
         },
       };
     })(),
@@ -922,7 +930,7 @@
     },
     'lineas-panorama': async () => { await abrir('panorama-lineas'); await esperar(800); },
     // Las pestañas del Panorama (30-oct): una escena por tema
-    ...Object.fromEntries(['lineas', 'factura', 'equipos', 'ventas'].map((t) => ['lineas-panorama-' + t, async () => {
+    ...Object.fromEntries(['lineas', 'factura', 'ahorro', 'equipos', 'ventas'].map((t) => ['lineas-panorama-' + t, async () => {
       await abrir('panorama-lineas'); await esperar(800);
       const b = document.querySelector('#lnp-pestanas .tab-btn[data-tab="' + t + '"]');
       if (b) b.click();

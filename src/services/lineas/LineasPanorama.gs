@@ -19,7 +19,7 @@ const LineasPanorama = (function () {
   // v4 (30-oct): cada línea trae si su número viene en una carta de cancelación (columna k)
   // v5 (30-oct): los equipos que ya salieron (ventas, donaciones, desechos y extravíos)
   // v6 (2-nov): en cancelación ya no cuenta como activa en la comparación con la factura
-  const CLAVE_CACHE = 'ln_panorama_v8'; // v8 (2-nov): las ventas de la hoja VENTAS; v7: los cambios de estatus de MOVIMIENTOS
+  const CLAVE_CACHE = 'ln_panorama_v9'; // v9 (2-nov): el ahorro por cancelaciones; v8: la hoja VENTAS; v7: MOVIMIENTOS
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -226,7 +226,11 @@ const LineasPanorama = (function () {
   }
 
   // ---------------- Contra la factura del proveedor (usuario, 29-oct: «info que podamos comparar más fácil y directo») ----------------
-  const COLS_FACTURAS = ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO'];
+  const COLS_FACTURAS = ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO', 'CONCEPTOS'];
+  // Lo que el proveedor cobra por cancelar antes de tiempo, dentro de CONCEPTOS («Penalización sobre el Servicio $139.14 |
+  // Cargo Equipo Por Mora Corporativo cancelación anti $80.79»)
+  const RE_PENALIZACION = /penaliz|cancelaci[oó]n anti/i;
+  const RE_MONTO = /\$\s?(-?[\d,]+(?:\.\d+)?)/;
   const CUENTA_SIM_BASICOS = '643495915';
   const MAX_LISTA = 300;
   const digitos10 = (v) => txt(v).replace(/\D/g, '').slice(-10);
@@ -279,7 +283,13 @@ const LineasPanorama = (function () {
       const n = digitos10(val(0));
       if (!n) return; // un ajuste de la cuenta: suma al total, no es una línea
       if (!m.numeros[n]) { m.numeros[n] = true; c.lineas++; }
-      (porNumero[n] = porNumero[n] || { cuenta: cuenta, basico: padre === CUENTA_SIM_BASICOS, meses: {} }).meses[ym] = redondo((porNumero[n].meses[ym] || 0) + monto);
+      const p = porNumero[n] = porNumero[n] || { cuenta: cuenta, basico: padre === CUENTA_SIM_BASICOS, meses: {}, detalle: {} };
+      p.meses[ym] = redondo((p.meses[ym] || 0) + monto);
+      // Para el ahorro: la penalización de ese mes y si la renta vino en $0.00 (el primer concepto es el plan)
+      const conceptos = txt(val(6)).split('|').map((s) => s.trim()).filter(Boolean);
+      const d = p.detalle[ym] = p.detalle[ym] || { penal: 0, rentaCero: false };
+      conceptos.forEach((s) => { const x = RE_PENALIZACION.test(s) && s.match(RE_MONTO); if (x) d.penal = redondo(d.penal + (Number(x[1].replace(/,/g, '')) || 0)); });
+      if (conceptos.length && /\$\s?0\.00$/.test(conceptos[0])) d.rentaCero = true;
     });
     const lista = Object.keys(meses).sort();
     if (!lista.length) return null;
@@ -322,7 +332,61 @@ const LineasPanorama = (function () {
     if (comp.activasSinCobro.length > MAX_LISTA || comp.cobradasNoActivas.length > MAX_LISTA) comp.recortadas = true;
     comp.activasSinCobro = comp.activasSinCobro.slice(0, MAX_LISTA);
     comp.cobradasNoActivas = comp.cobradasNoActivas.slice(0, MAX_LISTA);
-    return { meses: porMes, comparacion: comp };
+    return { meses: porMes, comparacion: comp, ahorro: ahorroCancelaciones_(porNumero, lista, lineasHoy) };
+  }
+
+  /**
+   * El ahorro por cancelaciones (2-nov, la hoja «Cancelaciones» del reporte de Líneas, ahora del sistema): por cada línea
+   * CANCELADA, su renta mensual × los meses de factura que ya no se pagaron, menos la penalización que cobró el proveedor.
+   * Se mueve solo con cada factura que se carga.
+   *  - Mes pagado: total menos penalización > 0 y la renta no vino en $0.00 (un crédito o solo la penalización no es pago).
+   *  - Renta: el cobro más frecuente de sus meses pagados; si nunca aparece cobrada, el COSTO PLAN del inventario.
+   *  - Meses sin pagar: los de factura después de su último pago; nunca facturada = todos (se canceló antes de la primera).
+   * No resta el SIM básico que reemplazó a una línea ni prorratea el último ciclo de AT&T (el reporte sí: sale un poco distinto).
+   * porNumero: { n: { cuenta, meses: { ym: monto }, detalle: { ym: { penal, rentaCero } } } } · meses: ['yyyy-MM'] de factura.
+   */
+  function ahorroCancelaciones_(porNumero, meses, lineasHoy) {
+    if (!meses.length) return null;
+    const hasta = meses[meses.length - 1];
+    const vistas = {};
+    const r = { desde: meses[0], hasta: hasta, lineas: 0, conAhorro: 0, aunSinAhorro: 0, sinRenta: 0, rentaMensual: 0, bruto: 0,
+      penalizaciones: 0, neto: 0, porMes: {}, porCuenta: {}, lista: [] };
+    lineasHoy.forEach((l) => {
+      if (estatus(l.estatus) !== 'CANCELADA' || !l.numero || vistas[l.numero]) return;
+      vistas[l.numero] = true;
+      const f = porNumero[l.numero];
+      const det = (f && f.detalle) || {};
+      const pagados = f ? Object.keys(f.meses).filter((ym) => f.meses[ym] - ((det[ym] || {}).penal || 0) > 0 && !(det[ym] || {}).rentaCero).sort() : [];
+      const ultimoPago = pagados.length ? pagados[pagados.length - 1] : '';
+      const frec = {};
+      pagados.forEach((ym) => sumar(frec, String(f.meses[ym])));
+      const masFrecuente = Object.keys(frec).sort((a, b) => frec[b] - frec[a] || Number(b) - Number(a))[0];
+      const renta = masFrecuente !== undefined ? Number(masFrecuente) : (Number(l.costo) || 0);
+      const fuente = masFrecuente !== undefined ? 'Factura' : (renta ? 'Plan del inventario' : 'Sin dato');
+      const sinPagar = meses.filter((ym) => ym > ultimoPago);
+      const penal = f ? redondo(Object.keys(det).reduce((t, ym) => t + (det[ym].penal || 0), 0)) : 0;
+      const ahorro = redondo(renta * sinPagar.length - penal);
+      const cuenta = (f && f.cuenta) || l.cuenta;
+      r.lineas++;
+      if (!renta) r.sinRenta++;
+      else if (sinPagar.length) r.conAhorro++;
+      else r.aunSinAhorro++;
+      r.rentaMensual += renta;
+      r.bruto += renta * sinPagar.length;
+      r.penalizaciones += penal;
+      sinPagar.forEach((ym) => sumar(r.porMes, ym, renta));
+      const c = r.porCuenta[cuenta] = r.porCuenta[cuenta] || { lineas: 0, neto: 0 };
+      c.lineas++;
+      c.neto += ahorro;
+      r.lista.push([l.numero, cuenta, redondo(renta), fuente, ultimoPago, sinPagar.length, penal, ahorro]);
+    });
+    if (!r.lineas) return null;
+    ['rentaMensual', 'bruto', 'penalizaciones'].forEach((k) => { r[k] = redondo(r[k]); });
+    r.neto = redondo(r.bruto - r.penalizaciones);
+    Object.keys(r.porMes).forEach((k) => { r.porMes[k] = redondo(r.porMes[k]); });
+    Object.keys(r.porCuenta).forEach((k) => { r.porCuenta[k].neto = redondo(r.porCuenta[k].neto); });
+    r.lista.sort((a, b) => b[7] - a[7] || a[0].localeCompare(b[0]));
+    return r;
   }
 
   // ---------------- Equipos que ya salieron: ventas, donaciones, desechos y extravíos (30-oct) ----------------
@@ -534,7 +598,8 @@ const LineasPanorama = (function () {
           costo: Number(r.linea.costoPlan) || 0,
           carta: cartaDe && cartaDe[digitos10(r.linea.numero)] !== undefined ? cartaDe[digitos10(r.linea.numero)] : -1,
         });
-        lineasHoy.push({ numero: digitos10(r.linea.numero), estatus: r.linea.estatus, cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || '') });
+        lineasHoy.push({ numero: digitos10(r.linea.numero), estatus: r.linea.estatus, cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
+          costo: Number(r.linea.costoPlan) || 0 });
       }
     });
 
@@ -593,6 +658,6 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_, _ventasRegistradas: ventasRegistradas_,
+  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_, _ventasRegistradas: ventasRegistradas_, _ahorroCancelaciones: ahorroCancelaciones_,
     _eventosDeMovimientos: eventosDeMovimientos_ };
 })();

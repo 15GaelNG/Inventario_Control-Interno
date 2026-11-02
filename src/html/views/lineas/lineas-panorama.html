@@ -16,6 +16,7 @@
         <button type="button" class="tab-btn activa" data-tab="resumen"><i data-lucide="sparkles" class="ico"></i> Resumen</button>
         <button type="button" class="tab-btn" data-tab="lineas"><i data-lucide="card-sim" class="ico"></i> Líneas</button>
         <button type="button" class="tab-btn" data-tab="factura" id="lnp-tab-factura" hidden><i data-lucide="receipt" class="ico"></i> Facturación</button>
+        <button type="button" class="tab-btn" data-tab="ahorro" id="lnp-tab-ahorro" hidden><i data-lucide="piggy-bank" class="ico"></i> Ahorro</button>
         <button type="button" class="tab-btn" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos</button>
         <button type="button" class="tab-btn" data-tab="ventas"><i data-lucide="hand-coins" class="ico"></i> Ventas</button>
       </div>
@@ -132,6 +133,9 @@
           <p class="lnp-nota" id="lnp-nota"></p>
         </div>
       </div>
+
+      <!-- ===================== Ahorro por cancelaciones: lineas-panorama-ahorro.html (sale de FACTURAS: solo con facturación) ===================== -->
+      <div data-tab-panel="ahorro" hidden><div id="lnp-ahorro"><p class="ln-tenue">Cargando…</p></div></div>
 
       <!-- ===================== Ventas: lineas-panorama-bajas.html ===================== -->
       <div data-tab-panel="ventas" hidden><div id="lnp-ventas"><p class="ln-tenue">Cargando…</p></div></div>

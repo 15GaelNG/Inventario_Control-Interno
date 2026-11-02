@@ -87,8 +87,11 @@
     }
     function guardarCopiaPanorama(r) {
       copiaPanorama = r;
-      // Sin las listas de diferencias de la factura: traen números de teléfono (en memoria sí, en el navegador no)
-      const sinNumeros = r.factura ? Object.assign({}, r, { factura: Object.assign({}, r.factura, { comparacion: Object.assign({}, r.factura.comparacion, { activasSinCobro: [], cobradasNoActivas: [] }) }) }) : r;
+      // Sin las listas de la factura (diferencias y ahorro por línea): traen números de teléfono (en memoria sí, en el navegador no)
+      const sinNumeros = r.factura ? Object.assign({}, r, { factura: Object.assign({}, r.factura, {
+        comparacion: Object.assign({}, r.factura.comparacion, { activasSinCobro: [], cobradasNoActivas: [] }),
+        ahorro: r.factura.ahorro ? Object.assign({}, r.factura.ahorro, { lista: [] }) : r.factura.ahorro,
+      }) }) : r;
       try { localStorage.setItem(COPIA_PANORAMA, JSON.stringify(sinNumeros)); } catch (e) { /* sin espacio o bloqueado: solo en memoria */ }
     }
 
@@ -338,7 +341,9 @@
         const caja = $('#lnp-factura', raiz);
         caja.hidden = !f;
         $('#lnp-tab-factura', raiz).hidden = !f;
-        if (!f && Tabs.actual(pestanas()) === 'factura') irAPestana('resumen');
+        // Ahorro sale de las mismas facturas: sin la sección de facturación no llega
+        $('#lnp-tab-ahorro', raiz).hidden = !(f && f.ahorro);
+        if ((!f && Tabs.actual(pestanas()) === 'factura') || (!(f && f.ahorro) && Tabs.actual(pestanas()) === 'ahorro')) irAPestana('resumen');
         if (!f) return;
         const c = f.comparacion;
         const mes = mesLargo(c.ultimo);
@@ -460,6 +465,8 @@
             ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan') +
           (f ? puerta('factura', 'receipt', 'Última factura (' + mesLargo(f.comparacion.ultimo) + ')', esc(dineroCorto(f.meses[f.meses.length - 1].total)),
             fuerte(miles(f.comparacion.activasCobradas)) + ' de ' + miles(f.comparacion.activas) + ' activas aparecen en ella') : '') +
+          (f && f.ahorro ? puerta('ahorro', 'piggy-bank', 'Ahorro por cancelaciones', esc(dineroCorto(f.ahorro.neto)),
+            fuerte(miles(f.ahorro.lineas)) + ' líneas canceladas · hasta ' + esc(mesLargo(f.ahorro.hasta))) : '') +
           puerta('equipos', 'smartphone', 'Equipos con nosotros', miles(g.tenemos.total), 'Uso, Resguardo, Para venta y Para desecho' + (g.revisar.total ? ' · ' + fuerte(miles(g.revisar.total)) + ' por revisar' : '')) +
           puerta('ventas', 'package-x', 'Equipos que ya salieron', miles(g.baja.total),
             fuerte(miles(cuenta(g.baja.estatus, 'VENDIDO'))) + ' vendidos · ' + fuerte(miles(cuenta(g.baja.estatus, 'DONADO'))) + ' donados · ' +
@@ -656,6 +663,7 @@
         pintarBarras('lineas');
         pintarEvolucion();
         Lineas.panoramaBajas.pintar(raiz, est.datos.equiposBajas, { esHoy: esHoy(), ventas: est.datos.ventas });
+        Lineas.panoramaAhorro.pintar(raiz, est.datos.factura && est.datos.factura.ahorro);
         $('#lnp-generado', raiz).textContent = 'Datos de la hoja al ' + fechaHora(est.datos.generadoEn) + ' (se guardan 30 min; "Actualizar" los vuelve a calcular).';
         refreshIcons();
       }
