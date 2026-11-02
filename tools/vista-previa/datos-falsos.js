@@ -911,7 +911,7 @@
     },
     'lineas-panorama': async () => { await abrir('panorama-lineas'); await esperar(800); },
     // Las pestañas del Panorama (30-oct): una escena por tema
-    ...Object.fromEntries(['lineas', 'factura', 'equipos', 'ventas', 'donaciones', 'desechos'].map((t) => ['lineas-panorama-' + t, async () => {
+    ...Object.fromEntries(['lineas', 'factura', 'equipos', 'ventas'].map((t) => ['lineas-panorama-' + t, async () => {
       await abrir('panorama-lineas'); await esperar(800);
       const b = document.querySelector('#lnp-pestanas .tab-btn[data-tab="' + t + '"]');
       if (b) b.click();
