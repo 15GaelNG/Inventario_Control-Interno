@@ -19,7 +19,7 @@ const LineasPanorama = (function () {
   // v4 (30-oct): cada línea trae si su número viene en una carta de cancelación (columna k)
   // v5 (30-oct): los equipos que ya salieron (ventas, donaciones, desechos y extravíos)
   // v6 (2-nov): en cancelación ya no cuenta como activa en la comparación con la factura
-  const CLAVE_CACHE = 'ln_panorama_v7'; // v7 (2-nov): los cambios de estatus de MOVIMIENTOS (desde octubre)
+  const CLAVE_CACHE = 'ln_panorama_v8'; // v8 (2-nov): las ventas de la hoja VENTAS; v7: los cambios de estatus de MOVIMIENTOS
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -430,6 +430,54 @@ const LineasPanorama = (function () {
     return { ventas: v, donaciones: d, desechos: x, extravios: r };
   }
 
+  const MESES_CORTOS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  /** "nov-2025" (el mes del reporte, por su ciclo de facturación) → '2025-11'; si no se entiende, el de la fecha */
+  function mesReporte_(texto, fecha) {
+    const m = /^([a-z]{3})\w*[-\s/]+(\d{4})$/i.exec(txt(texto));
+    const i = m ? MESES_CORTOS.indexOf(m[1].toUpperCase()) : -1;
+    if (i >= 0) return m[2] + '-' + ('0' + (i + 1)).slice(-2);
+    return fecha instanceof Date && !isNaN(fecha.getTime()) ? Utilities.formatDate(fecha, zona(), 'yyyy-MM') : '';
+  }
+
+  /**
+   * Las ventas de la hoja VENTAS (LineasVentas.gs, 2-nov), tal cual el reporte, con cuántos equipos de cada una tiene ligados
+   * el inventario (EQUIPOS.ID VENTA). Sin la hoja, null: la pestaña Ventas sigue con lo que dicen los movimientos
+   * (bajasEquipos_). Quien compró 1 o 2 equipos en todas sus ventas sale como colaborador (no viaja su nombre).
+   */
+  function ventasRegistradas_() {
+    if (!LineasDatos.existeTabla('VENTAS')) return null;
+    const filas = LineasDatos.leerTabla('VENTAS').filter((v) => txt(v['ID']));
+    if (!filas.length) return null;
+    const ligados = {};
+    let vendidos = 0;
+    let vendidosSinVenta = 0;
+    LineasDatos.leerTabla('EQUIPOS').forEach((e) => {
+      const id = txt(e['ID VENTA']);
+      if (id) ligados[id] = (ligados[id] || 0) + 1;
+      if (txt(e['ESTATUS EQUIPO']).toUpperCase() === 'VENDIDO') { vendidos++; if (!id) vendidosSinVenta++; }
+    });
+    const porPersona = {};
+    filas.forEach((v) => sumar(porPersona, txt(v['COMPRADOR']).toUpperCase(), Number(v['EQUIPOS']) || 0));
+    const ventas = filas.map((v) => {
+      const comprador = txt(v['COMPRADOR']).toUpperCase();
+      const f = v['FECHA'] instanceof Date && !isNaN(v['FECHA'].getTime()) ? Utilities.formatDate(v['FECHA'], zona(), 'yyyy-MM-dd') : '';
+      const evidencia = txt(v['EVIDENCIA']);
+      return {
+        id: txt(v['ID']), referencia: txt(v['REFERENCIA REPORTE']), fecha: f, mes: mesReporte_(v['MES REPORTE'], v['FECHA']),
+        comprador: !comprador ? 'Sin comprador' : porPersona[comprador] <= MAX_INDIVIDUAL ? COLABORADORES : comprador,
+        equipos: Number(v['EQUIPOS']) || 0, importe: Number(v['IMPORTE']) || 0, ligados: ligados[txt(v['ID'])] || 0,
+        evidencia: /^https:\/\//i.test(evidencia) ? evidencia : '',
+      };
+    });
+    const total = (k) => ventas.reduce((t, v) => t + v[k], 0);
+    return {
+      ventas: ventas, equipos: total('equipos'), importe: total('importe'),
+      // Una venta con más ligados que equipos no suma de más (la carga no lo permite; por si alguien la edita a mano)
+      ligados: ventas.reduce((t, v) => t + Math.min(v.ligados, v.equipos), 0),
+      vendidos: vendidos, vendidosSinVenta: vendidosSinVenta,
+    };
+  }
+
   /**
    * Número → 1 si viene en una carta de cancelación al proveedor, 0 si no: la columna CARTA DE CANCELACION de la hoja
    * LINEAS (la llena lineasCartaAplicar, LineasCartaCancelacion.gs). Sin la hoja o sin la columna, null.
@@ -528,6 +576,8 @@ const LineasPanorama = (function () {
     tomar('factura');
     salida.equiposBajas = bajasEquipos_(movimientos);
     tomar('bajas');
+    salida.ventas = ventasRegistradas_();
+    tomar('ventas');
     salida.ms = ms;
     return salida;
   }
@@ -543,6 +593,6 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_,
+  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_, _ventasRegistradas: ventasRegistradas_,
     _eventosDeMovimientos: eventosDeMovimientos_ };
 })();

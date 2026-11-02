@@ -497,6 +497,17 @@
           desechos: { total: 12, sinDato: 0, sinFecha: 3, porMes: { '2026-04': 9 }, depositos: [{ fecha: '2026-04-08', monto: 3700, equipos: 9 }] },
           extravios: { total: 8, sinDato: 6, conCobro: 1 },
         },
+        // La hoja VENTAS (LineasPanorama → ventasRegistradas_): tal cual el reporte, con los equipos ligados de cada una
+        ventas: {
+          equipos: 49, importe: 35400, ligados: 41, vendidos: 52, vendidosSinVenta: 11,
+          ventas: [
+            { id: 'VTA-1', referencia: 'C-08OCT', fecha: '2025-10-08', mes: '2025-11', comprador: 'COMPRADOR MAYORISTA', equipos: 20, importe: 10400, ligados: 20, evidencia: '' },
+            { id: 'VTA-2', referencia: 'R1-05', fecha: '2026-01-05', comprador: 'COMPRADOR MAYORISTA', mes: '2026-01', equipos: 9, importe: 6000, ligados: 9, evidencia: '' },
+            { id: 'VTA-3', referencia: 'R1-08', fecha: '2026-01-05', comprador: 'Colaboradores (venta individual)', mes: '2026-01', equipos: 1, importe: 700, ligados: 0, evidencia: '' },
+            { id: 'VTA-4', referencia: 'A1', fecha: '2026-04-01', comprador: 'COMPRADOR MAYORISTA', mes: '2026-04', equipos: 12, importe: 9800, ligados: 11, evidencia: 'https://drive.google.com/file/d/ejemplo/view' },
+            { id: 'VTA-5', referencia: 'V09', fecha: '2026-07-23', comprador: 'COMPRADOR MAYORISTA', mes: '2026-07', equipos: 7, importe: 8500, ligados: 1, evidencia: 'https://drive.google.com/file/d/ejemplo2/view' },
+          ],
+        },
         lineas: { total: 120, actual: cuenta(L.s), historico: hist(L.s) }, equipos: { total: 90, actual: cuenta(E.s), historico: hist(E.s) },
         registros: { dic, deps: ['VENTAS', 'COMPRAS', 'POST VENTA', 'CONTROL INTERNO'], cuentas, fechas: ['2027-01-31', ''], lineas: L, equipos: E },
         factura: {

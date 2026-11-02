@@ -269,6 +269,8 @@ function noSePide_(hoja) {
   if (hoja === 'APP_CORRECCIONES') return true;
   // Se crea sola con la primera identificación que se sube en una responsiva (Líneas, 9-oct)
   if (hoja === 'APP_IDENTIFICACIONES') return true;
+  // La crea la carga de ventas de Líneas (LineasVentas.gs, 2-nov); un libro sin ventas cargadas no la tiene
+  if (hoja === 'VENTAS') return true;
   return hoja === 'LINEAS TELEFONICAS' && !!leerConfig_('LINEAS_HOJA_VIEJA_RETIRADA');
 }
 /** Un nombre así, en la carpeta o en una de arriba, en producción es casi seguro un error */

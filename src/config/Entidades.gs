@@ -151,6 +151,9 @@ const Entidades = (function () {
     'FACTURAS': { prefijo: 'FAC', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // El historial único (paso 3): un renglón por acción
     'MOVIMIENTOS': { prefijo: 'MVT', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
+    // Las ventas de equipos (2-nov): una fila por venta, tal cual el reporte de líneas; EQUIPOS la cita con ID VENTA.
+    // La carga LineasVentas.gs (lineasVentasCargaAplicar); revisarEntorno no la pide mientras no exista (noSePide_)
+    'VENTAS': { prefijo: 'VTA', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'lineas' },
     // Copia de los tickets del helpdesk de TI que se han visto desde la app (05/10/2026): la
     // crea y la mantiene HelpdeskService; un renglón por ticket del helpdesk
     'APP_HELPDESK': { prefijo: 'HDK', llaveAnterior: 'ID', delSistemaNuevo: true, familia: 'otros', modulo: 'helpdesk' },
@@ -193,6 +196,8 @@ const Entidades = (function () {
     { hoja: 'RESPONSIVAS LINEAS', columna: 'ID LINEA', padre: 'LINEAS TELEFONICAS' },
     { hoja: 'CAMBIOS LINEAS TELEFONICAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS' },
     { hoja: 'APP_EVIDENCIAS', columna: 'ID_LINEA', padre: 'LINEAS TELEFONICAS' },
+    // El equipo vendido cita su venta (2-nov). Sin llave de respaldo: la liga nace con el ID (LineasVentas.gs)
+    { hoja: 'EQUIPOS', columna: 'ID VENTA', padre: 'VENTAS' },
     { hoja: 'MOVIMIENTOS_ACCESORIOS', columna: 'ID ACCESORIO', padre: 'ACCESORIOS CELULARES', llave: { columna: 'ID_Accesorio', enPadre: 'ID ANTERIOR' } },
     { hoja: 'ARQUEOS', columna: 'ID CAJA CHICA', padre: 'CAJAS CHICAS', llave: { columna: 'ID CCH', enPadre: 'ID CCH' } },
     { hoja: 'INCREMENTOS', columna: 'ID CAJA CHICA', padre: 'CAJAS CHICAS', llave: { columna: 'ID CCH', enPadre: 'ID CCH' } },

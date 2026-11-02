@@ -1150,6 +1150,7 @@ const MAPA = {
     'ADHERENTE VEHICULAR': { modulo: 'Adherente Vehicular', uno: 'adherente', varios: 'adherentes', familia: 'Vehículos' },
     'CAMBIOS VEHICULOS': { modulo: 'Cambios de Vehículos', uno: 'cambio', varios: 'cambios', familia: 'Vehículos' },
     'APP_EVIDENCIAS': { modulo: 'Evidencias de Líneas', uno: 'evidencia', varios: 'evidencias', familia: 'Líneas' },
+    'EQUIPOS': { modulo: 'Líneas Telefónicas', uno: 'equipo', varios: 'equipos', familia: 'Líneas' },
   };
   // La clave es 'modulo' y no 'nombre' a propósito: tests/llave-nueva.test.js reconoce las
   // copias del MAPA por cómo se escribe su nombre en el código, y estas no son copias.

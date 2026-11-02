@@ -657,7 +657,7 @@
         pintarEquiposGrupos();
         pintarBarras('lineas');
         pintarEvolucion();
-        Lineas.panoramaBajas.pintar(raiz, est.datos.equiposBajas, { esHoy: esHoy() });
+        Lineas.panoramaBajas.pintar(raiz, est.datos.equiposBajas, { esHoy: esHoy(), ventas: est.datos.ventas });
         $('#lnp-generado', raiz).textContent = 'Datos de la hoja al ' + fechaHora(est.datos.generadoEn) + ' (se guardan 30 min; "Actualizar" los vuelve a calcular).';
         refreshIcons();
       }
