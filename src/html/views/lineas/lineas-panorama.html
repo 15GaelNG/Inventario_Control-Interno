@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2><i data-lucide="layout-dashboard" class="ico"></i> Panorama de Líneas</h2>
-        <p class="page-subtitle">Líneas, equipos, ventas, donaciones y desechos: un tema por pestaña.</p>
+        <p class="page-subtitle">Líneas, equipos y ventas: un tema por pestaña.</p>
       </div>
       <div class="page-header-actions">
         <button type="button" class="secondary" id="lnp-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
@@ -18,12 +18,10 @@
         <button type="button" class="tab-btn" data-tab="factura" id="lnp-tab-factura" hidden><i data-lucide="receipt" class="ico"></i> Facturación</button>
         <button type="button" class="tab-btn" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos</button>
         <button type="button" class="tab-btn" data-tab="ventas"><i data-lucide="hand-coins" class="ico"></i> Ventas</button>
-        <button type="button" class="tab-btn" data-tab="donaciones"><i data-lucide="heart-handshake" class="ico"></i> Donaciones</button>
-        <button type="button" class="tab-btn" data-tab="desechos"><i data-lucide="recycle" class="ico"></i> Desechos y extravíos</button>
       </div>
 
-      <!-- Un solo filtro: lo de Resumen, Líneas y Equipos se calcula al cierre del mes elegido. Ventas, donaciones y
-           desechos son eventos con su propia fecha: ahí se oculta -->
+      <!-- Un solo filtro: lo de Resumen, Líneas y Equipos se calcula al cierre del mes elegido. Las ventas son eventos
+           con su propia fecha: ahí se oculta. Donaciones y Desechos se quitaron (usuario, 2-nov) -->
       <div class="lnp-filtros" id="lnp-filtros">
         <label for="lnp-mes"><i data-lucide="calendar-days" class="ico"></i> Ver al cierre de</label>
         <select id="lnp-mes" disabled><option>Cargando…</option></select>
@@ -136,10 +134,8 @@
         </div>
       </div>
 
-      <!-- ===================== Ventas, Donaciones, Desechos: lineas-panorama-bajas.html ===================== -->
+      <!-- ===================== Ventas: lineas-panorama-bajas.html ===================== -->
       <div data-tab-panel="ventas" hidden><div id="lnp-ventas"><p class="ln-tenue">Cargando…</p></div></div>
-      <div data-tab-panel="donaciones" hidden><div id="lnp-donaciones"><p class="ln-tenue">Cargando…</p></div></div>
-      <div data-tab-panel="desechos" hidden><div id="lnp-desechos"><p class="ln-tenue">Cargando…</p></div></div>
     </div>
     <p class="ln-tenue lnp-generado" id="lnp-generado"></p>
   </section>
