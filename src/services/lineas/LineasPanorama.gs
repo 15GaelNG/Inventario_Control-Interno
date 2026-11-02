@@ -17,7 +17,7 @@ const LineasPanorama = (function () {
   // v3 (1-oct): registros en columnas y estatus por mes comprimidos (la respuesta pesaba ~10 veces más)
   // v4 (30-oct): cada línea trae si su número viene en una carta de cancelación (columna k)
   // v5 (30-oct): los equipos que ya salieron (ventas, donaciones, desechos y extravíos)
-  const CLAVE_CACHE = 'ln_panorama_v5';
+  const CLAVE_CACHE = 'ln_panorama_v6'; // v6 (2-nov): en cancelación ya no cuenta como activa en la comparación con la factura
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -196,8 +196,9 @@ const LineasPanorama = (function () {
   const MAX_LISTA = 300;
   const digitos10 = (v) => txt(v).replace(/\D/g, '').slice(-10);
   const redondo = (n) => Math.round(n * 100) / 100;
-  /** Grupos de estatus de línea que no son activas (los mismos que la portada: canceladas y sin línea). */
-  const NO_ACTIVA = ['CANCELADA', 'CANCELADO', 'SIN LINEA', 'SIN ESTATUS', ''];
+  /** Estatus de línea que no son activas (los mismos que la portada): canceladas, sin línea y, como en el reporte de Líneas
+   *  (2-nov), las que van en cancelación: ya son una baja pedida y se cuentan aparte. */
+  const NO_ACTIVA = ['CANCELADA', 'CANCELADO', 'SIN LINEA', 'SIN ESTATUS', 'EN PROCESO DE CANCELACION', ''];
   const esActiva = (e) => NO_ACTIVA.indexOf(estatus(e) === 'SIN ESTATUS' ? '' : estatus(e)) < 0;
 
   /** Mes ('yyyy-MM') del corte: la celda es fecha; un texto dd/mm/aaaa también se acepta. */
@@ -490,5 +491,5 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_ };
+  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_ };
 })();

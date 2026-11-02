@@ -39,7 +39,6 @@
     const COMPOSICION_LINEAS = [
       { clave: 'uso', nombre: 'En uso', color: 'var(--lnp-s1)', estatus: 'USO' },
       { clave: 'disponible', nombre: 'Disponibles', color: 'var(--lnp-s2)', estatus: 'DISPONIBLE' },
-      { clave: 'cancelacion', nombre: 'En cancelación', color: 'var(--lnp-s3)', estatus: 'EN PROCESO DE CANCELACION' },
       { clave: 'revisar', nombre: 'Por revisar', color: 'var(--lnp-s4)', estatus: '' },
     ];
     const GRUPO_EQUIPO = {
@@ -119,11 +118,11 @@
         const R = est.datos.registros;
         const dic = R.dic;
         const r = {
-          activas: 0, planes: 0, basicos: 0, renta: 0, grupos: { uso: 0, disponible: 0, cancelacion: 0, revisar: 0 },
+          activas: 0, planes: 0, basicos: 0, renta: 0, grupos: { uso: 0, disponible: 0, revisar: 0 },
           porCuenta: {}, porDepto: {}, vig: { vencido: 0, pronto: 0, vigente: 0, sinFecha: 0 },
           equipos: { total: 0, uso: 0, guardado: 0, baja: 0, revisar: 0 },
           // Cómo termina una línea: canceladas con y sin carta o correo, las que van en camino y las que tienen carta y siguen activas
-          bajas: { canceladas: 0, conCarta: 0, sinCarta: 0, sinDato: 0, proceso: 0, procesoConCarta: 0, procesoSinCarta: 0, activasConCarta: 0 },
+          bajas: { canceladas: 0, conCarta: 0, sinCarta: 0, sinDato: 0, proceso: 0, procesoRenta: 0, procesoConCarta: 0, procesoSinCarta: 0, activasConCarta: 0 },
         };
         const hoy = corte(k);
         const en30 = sumarDias(hoy, 30);
@@ -134,8 +133,15 @@
           const g = GRUPO_LINEA[dic[s]] || 'revisar';
           if (g === 'cancelada') { b.canceladas++; b[l.k === 1 ? 'conCarta' : l.k === 0 ? 'sinCarta' : 'sinDato']++; }
           if (g === 'cancelada' || g === 'sin') return;
-          if (g === 'cancelacion') { b.proceso++; if (l.k === 1) b.procesoConCarta++; else if (l.k === 0) b.procesoSinCarta++; }
-          else if (l.k === 1 && (g === 'uso' || g === 'disponible')) b.activasConCarta++;
+          // Activas = en uso, disponibles (y por revisar), como el reporte de Líneas (2-nov): las que van en cancelación ya son
+          // una baja pedida y se cuentan aparte en todo el Panorama, con lo que se sigue pagando por ellas mientras salen
+          if (g === 'cancelacion') {
+            b.proceso++;
+            if (l.k === 1) b.procesoConCarta++; else if (l.k === 0) b.procesoSinCarta++;
+            if (!l.b) b.procesoRenta += l.p || 0;
+            return;
+          }
+          if (l.k === 1) b.activasConCarta++;
           r.activas++;
           r.grupos[g]++;
           const dep = R.deps[l.d];
@@ -185,6 +191,14 @@
 
       // ---------------- Portada ----------------
 
+      /** El cuadre de siempre, para rectificar a simple vista: activas + en cancelación + canceladas = todas las del inventario. */
+      function cuadreLineas(r) {
+        const b = r.bajas;
+        return '<p class="lnp-nota lnp-cuadre">' + ico('equal') + ' <span>' + fuerte(miles(r.activas)) + ' activas + ' + fuerte(miles(b.proceso)) + ' en cancelación + ' +
+          fuerte(miles(b.canceladas)) + ' canceladas = ' + fuerte(miles(r.activas + b.proceso + b.canceladas)) + ' líneas en el inventario' +
+          (b.procesoRenta ? '. Las que van en cancelación se siguen pagando mientras salen: ' + fuerte(dinero(b.procesoRenta)) + ' al mes' : '') + '.</span></p>';
+      }
+
       function pintarPortada() {
         const r = resumen(est.k);
         const previo = est.k > 0 ? resumen(est.k - 1) : null;
@@ -207,7 +221,8 @@
             grupos.map((g) => '<button type="button" class="lnp-leyenda-item"' + (g.estatus && esHoy() ? ' data-lnp-ir="lineas" data-estatus="' + esc(g.estatus) + '" title="Ver en Líneas Telefónicas"' : ' disabled') + '>' +
               '<span class="lnp-leyenda-marca" style="background:' + g.color + '"></span><span class="lnp-leyenda-nombre">' + esc(g.nombre) + '</span>' +
               '<strong>' + miles(r.grupos[g.clave]) + '</strong><span class="lnp-leyenda-pct">' + pct(r.grupos[g.clave], r.activas) + '</span></button>').join('') +
-          '</div>' + (r.grupos.revisar ? '<p class="lnp-nota">"Por revisar": estatus que ya no existen (por ejemplo SUSPENDIDA). Líneas los corrige en Correcciones de líneas.</p>' : '');
+          '</div>' + (r.grupos.revisar ? '<p class="lnp-nota">"Por revisar": estatus que ya no existen (por ejemplo SUSPENDIDA). Líneas los corrige en Correcciones de líneas.</p>' : '') +
+          cuadreLineas(r);
 
         // Dinero por cuenta: lo que más pregunta dirección. Los SIM básicos van aparte, solo con su número.
         $('#lnp-renta', raiz).textContent = dinero(r.renta);
@@ -283,7 +298,7 @@
           '<div class="lnp-paso-sub">' + sub + '</div></div>';
         const flecha = '<div class="lnp-flecha" aria-hidden="true">' + ico('chevron-right') + '</div>';
         $('#lnp-flujo', raiz).innerHTML =
-          paso('card-sim', 'Activas', r.activas - b.proceso, 'en uso, disponibles o por revisar', '') + flecha +
+          paso('card-sim', 'Activas', r.activas, 'en uso o disponibles', '') + flecha +
           paso('hourglass', 'En cancelación', b.proceso, conCartas ? fuerte(miles(b.procesoConCarta)) + ' con carta o correo · ' + fuerte(miles(b.procesoSinCarta)) + ' sin' : 'se pidió o se va a pedir la baja',
             'EN PROCESO DE CANCELACION') + flecha +
           paso('circle-x', 'Canceladas', b.canceladas, conCartas ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan', 'CANCELADA', ' lnp-paso-fin');
@@ -338,7 +353,7 @@
           '(un cambio de número, una baja reciente) sale como diferencia hasta que se cargue la factura siguiente.';
         const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase, filtros: false, titulo: titulo });
         tilesKpi($('#lnp-factura-kpis', raiz), [
-          tile('card-sim', c.activas, 'Activas en el inventario (hoy)', '', 'USO, disponibles, en cancelación y por revisar'),
+          tile('card-sim', c.activas, 'Activas en el inventario (hoy)', '', 'En uso o disponibles; las que van en cancelación se cuentan aparte'),
           tile('receipt', c.cobradas, 'Aparecen en la factura de ' + mes, '', 'Líneas que vienen en la factura, con cargo o con saldo a favor o $0'),
           tile('circle-check', c.activasCobradas, 'Activas y en la factura · ' + pct(c.activasCobradas, c.activas), 'stat-tile-ok'),
           tile('circle-alert', c.totalActivasSinCobro, 'Activas que no aparecen en la factura', c.totalActivasSinCobro ? 'stat-tile-warn' : 'stat-tile-ok', 'Activas en el inventario que no vienen en la factura de ' + mes),
@@ -448,6 +463,7 @@
           '<span class="lnp-puerta-sub">' + sub + '</span><span class="lnp-puerta-ir">Ver ' + ico('arrow-right') + '</span></button>';
         $('#lnp-puertas', raiz).innerHTML =
           puerta('lineas', 'card-sim', 'Líneas activas', miles(r.activas), 'Sus planes cuestan ' + fuerte(dinero(r.renta)) + ' al mes') +
+          puerta('lineas', 'hourglass', 'En cancelación', miles(b.proceso), 'Baja ya pedida; se pagan ' + fuerte(dinero(b.procesoRenta)) + ' al mes mientras salen') +
           puerta('lineas', 'circle-x', 'Líneas canceladas', miles(b.canceladas), est.datos.conCartas
             ? fuerte(miles(b.conCarta)) + ' con carta o correo · ' + fuerte(miles(b.sinCarta + b.sinDato)) + ' sin' : 'ya no se usan') +
           (f ? puerta('factura', 'receipt', 'Última factura (' + mesLargo(f.comparacion.ultimo) + ')', esc(dineroCorto(f.meses[f.meses.length - 1].total)),

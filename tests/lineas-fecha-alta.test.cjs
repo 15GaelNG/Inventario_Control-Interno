@@ -60,5 +60,6 @@ test('ya nadie escribe FECHA DE ALTA; Corregir no muestra la fecha; la línea nu
   const reg = read('src/services/lineas/LineasRegistros.gs');
   assert.doesNotMatch(reg, /'Fecha de alta'/);
   assert.match(reg, /\(guardado\.altas \|\| \[\]\)\.forEach\(\(idLinea\) => \{/);
-  assert.match(read('src/services/lineas/LineasLectura.gs'), /\.concat\(\['ln_panorama_v3', 'ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS\]\)/);
+  // La caché del Panorama se borra con la clave que use hoy (2-nov: estaba fija en v3)
+  assert.match(read('src/services/lineas/LineasLectura.gs'), /\[LineasPanorama\.CLAVE_CACHE\][\s\S]*\.concat\(panorama, \['ln_panorama_eventos_v1', 'ln_notif_revision_v2', CLAVE_ALTAS\]\)/);
 });

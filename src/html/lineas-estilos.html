@@ -993,7 +993,10 @@
   .lnp-nota-historial { display: flex; align-items: center; gap: 7px; margin: 0 0 16px; }
   .lnp-nota-historial svg { width: 15px; height: 15px; }
   /* Resumen: una puerta por tema */
-  .lnp-puertas { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  /* 3 por renglón: arriba las líneas (activas, en cancelación, canceladas), abajo la factura y los equipos */
+  .lnp-puertas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1024px) { .lnp-puertas { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .lnp-puertas { grid-template-columns: 1fr; } }
   .ln-panorama button.lnp-puerta {
     display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 4px; width: auto; min-height: 0; margin: 0;
     padding: 16px 18px; text-align: left; cursor: pointer; color: var(--color-text); font-weight: 400;
