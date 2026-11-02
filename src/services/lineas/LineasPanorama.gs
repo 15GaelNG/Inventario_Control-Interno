@@ -4,8 +4,9 @@
  * había al cierre de cada mes.
  *
  * El histórico se reconstruye hacia atrás desde el estatus actual de cada fila de LINEAS TELEFONICAS con los cambios
- * de ESTATUS EQUIPO / ESTATUS LINEA de la bitácora CAMBIOS LINEAS TELEFONICAS (ANTES de cada cambio posterior al
- * cierre del mes). Supuestos, que la interfaz explica:
+ * de ESTATUS EQUIPO / ESTATUS LINEA (ANTES de cada cambio posterior al cierre del mes) de dos bitácoras: CAMBIOS LINEAS
+ * TELEFONICAS (AppSheet, hasta el 30-sep-2026) y MOVIMIENTOS (el sistema nuevo, desde octubre). Supuestos, que la
+ * interfaz explica:
  *  - Antes del primer cambio registrado (abril de 2025 en producción) no hay bitácora: cada registro conserva hacia
  *    atrás el estatus que tenía antes de su primer cambio.
  *  - Un registro cuenta desde su FECHA REGISTRO (si la trae y es posterior al 2000).
@@ -17,7 +18,8 @@ const LineasPanorama = (function () {
   // v3 (1-oct): registros en columnas y estatus por mes comprimidos (la respuesta pesaba ~10 veces más)
   // v4 (30-oct): cada línea trae si su número viene en una carta de cancelación (columna k)
   // v5 (30-oct): los equipos que ya salieron (ventas, donaciones, desechos y extravíos)
-  const CLAVE_CACHE = 'ln_panorama_v6'; // v6 (2-nov): en cancelación ya no cuenta como activa en la comparación con la factura
+  // v6 (2-nov): en cancelación ya no cuenta como activa en la comparación con la factura
+  const CLAVE_CACHE = 'ln_panorama_v7'; // v7 (2-nov): los cambios de estatus de MOVIMIENTOS (desde octubre)
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -190,6 +192,39 @@ const LineasPanorama = (function () {
     return acc;
   }
 
+  /**
+   * Los cambios de estatus del sistema nuevo (2-nov). Desde octubre de 2026 la bitácora de AppSheet ya no se escribe:
+   * cada cambio queda en MOVIMIENTOS, con su CAMBIOS ([{ campo, antes, despues }]), su FECHA y el ID LINEA o ID EQUIPO.
+   * Sin esto, ningún cambio de octubre se deshacía y el cierre de septiembre salía igual a hoy (menos las altas).
+   * → { eventos: { equipos|lineas: { id: [[ms, antes]] } }, altas: { id: ms } (su primer ALTA con fecha), primera, total }
+   */
+  function eventosDeMovimientos_(movimientos) {
+    const acc = { eventos: { equipos: {}, lineas: {} }, altas: {}, primera: null, total: 0 };
+    const idsDe = (v) => txt(v).split(',').map((x) => x.trim()).filter(Boolean);
+    movimientos.forEach((m) => {
+      const cuando = m['FECHA'];
+      if (!(cuando instanceof Date) || isNaN(cuando.getTime())) return;
+      const t = cuando.getTime();
+      if (txt(m['ACCION']).toUpperCase() === 'ALTA') {
+        idsDe(m['ID LINEA']).concat(idsDe(m['ID EQUIPO'])).forEach((id) => { if (!acc.altas[id] || t < acc.altas[id]) acc.altas[id] = t; });
+      }
+      let cambios = [];
+      try { cambios = JSON.parse(txt(m['CAMBIOS']) || '[]'); } catch (e) { cambios = []; }
+      if (!Array.isArray(cambios)) return;
+      cambios.forEach((c) => {
+        const campo = c ? LineasDatos.normCol(c.campo) : '';
+        const tipo = campo === 'ESTATUS EQUIPO' ? 'equipos' : (campo === 'ESTATUS LINEA' ? 'lineas' : null);
+        if (!tipo) return;
+        idsDe(tipo === 'lineas' ? m['ID LINEA'] : m['ID EQUIPO']).forEach((id) => {
+          (acc.eventos[tipo][id] = acc.eventos[tipo][id] || []).push([t, estatus(c.antes)]);
+        });
+        if (acc.primera === null || t < acc.primera) acc.primera = t;
+        acc.total++;
+      });
+    });
+    return acc;
+  }
+
   // ---------------- Contra la factura del proveedor (usuario, 29-oct: «info que podamos comparar más fácil y directo») ----------------
   const COLS_FACTURAS = ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO'];
   const CUENTA_SIM_BASICOS = '643495915';
@@ -332,7 +367,7 @@ const LineasPanorama = (function () {
    * Agregados de los equipos que ya salieron, para las pestañas Ventas, Donaciones y Desechos. Solo conteos: sin
    * IMEI, NUCO ni nombres de quien compró 1 o 2 equipos. "sinDato": el sistema no tiene un movimiento que lo explique.
    */
-  function bajasEquipos_() {
+  function bajasEquipos_(movimientos) {
     if (!LineasDatos.existeTabla('EQUIPOS') || !LineasDatos.existeTabla('MOVIMIENTOS')) return null;
     const estatusDe = {};
     LineasDatos.leerTabla('EQUIPOS').forEach((e) => {
@@ -341,7 +376,7 @@ const LineasPanorama = (function () {
     });
     // El último movimiento que dejó a cada equipo en su estatus de hoy
     const ultimo = {};
-    LineasDatos.leerTabla('MOVIMIENTOS').forEach((m) => {
+    (movimientos || LineasDatos.leerTabla('MOVIMIENTOS')).forEach((m) => {
       const id = txt(m['ID EQUIPO']);
       const s = estatusDe[id];
       if (!s) return;
@@ -435,13 +470,18 @@ const LineasPanorama = (function () {
       // FECHA REGISTRO válida: después del 2000 y no en el futuro (hay capturas con 1969 y 2027)
       const altaMs = alta instanceof Date && !isNaN(alta.getTime()) && alta.getFullYear() >= 2000 && alta.getTime() <= ahora ? alta.getTime() : null;
       const ids = [txt(r.id)].concat(LineasDatos.idsDeFila(f)).filter((k, i, a) => k && a.indexOf(k) === i);
+      // El renglón lleva el ID del equipo (o de la línea sola); MOVIMIENTOS anota cada cambio con el de la línea o el del
+      // equipo, así que cada uno se busca también por el suyo
+      const conId = (id) => (id && ids.indexOf(id) < 0 ? ids.concat([id]) : ids);
+      const idEquipo = txt(LineasUtil.col(f, 'ID EQUIPO'));
+      const idLinea = txt(LineasUtil.col(f, 'ID LINEA'));
       const depto = txt(LineasUtil.col(f, 'DEPARTAMENTO')).toUpperCase() || 'SIN DEPARTAMENTO';
-      if (r.equipo) regs.equipos.push({ ids: ids, actual: estatus(r.equipo.estatus), alta: altaMs, depto: depto });
+      if (r.equipo) regs.equipos.push({ ids: conId(idEquipo), actual: estatus(r.equipo.estatus), alta: altaMs, depto: depto, idAlta: idEquipo });
       if (r.linea) {
         const fin = r.linea.finPlan instanceof Date && !isNaN(r.linea.finPlan.getTime()) && r.linea.finPlan.getFullYear() >= 2000
           ? diaDe(r.linea.finPlan) : '';
         regs.lineas.push({
-          ids: ids, actual: estatus(r.linea.estatus), alta: altaMs, depto: depto, fin: fin,
+          ids: conId(idLinea), actual: estatus(r.linea.estatus), alta: altaMs, idAlta: idLinea, depto: depto, fin: fin,
           cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
           costo: Number(r.linea.costoPlan) || 0,
           carta: cartaDe && cartaDe[digitos10(r.linea.numero)] !== undefined ? cartaDe[digitos10(r.linea.numero)] : -1,
@@ -453,12 +493,24 @@ const LineasPanorama = (function () {
     tomar('convertir');
     const bit = eventosDeEstatus_();
     tomar('leerCambios');
+    const movimientos = LineasDatos.existeTabla('MOVIMIENTOS') ? LineasDatos.leerTabla('MOVIMIENTOS') : [];
+    const mov = eventosDeMovimientos_(movimientos);
+    tomar('leerMovimientos');
+    // Las dos bitácoras: la de AppSheet (hasta el 30-sep) y MOVIMIENTOS (desde octubre)
     const eventos = { equipos: {}, lineas: {} };
-    ['equipos', 'lineas'].forEach((tipo) => {
-      Object.keys(bit.eventos[tipo]).forEach((id) => { eventos[tipo][id] = bit.eventos[tipo][id].map((e) => ({ t: e[0], antes: e[1] })); });
-    });
-    const primera = bit.primera === null ? null : new Date(bit.primera);
-    const total = bit.total;
+    [bit, mov].forEach((fuente) => ['equipos', 'lineas'].forEach((tipo) => {
+      Object.keys(fuente.eventos[tipo]).forEach((id) => {
+        eventos[tipo][id] = (eventos[tipo][id] || []).concat(fuente.eventos[tipo][id].map((e) => ({ t: e[0], antes: e[1] })));
+      });
+    }));
+    // Cada uno cuenta desde su propia alta: una línea nueva puesta en un equipo viejo no existía antes de su ALTA
+    ['equipos', 'lineas'].forEach((tipo) => regs[tipo].forEach((r) => {
+      const t = mov.altas[r.idAlta];
+      if (t && t <= ahora) r.alta = t;
+    }));
+    const primeras = [bit.primera, mov.primera].filter((x) => x !== null);
+    const primera = primeras.length ? new Date(Math.min.apply(null, primeras)) : null;
+    const total = bit.total + mov.total;
 
     const meses = mesesEntre(mesDe(primera || new Date(ahora)), mesDe(new Date(ahora)));
     const bloque = (tipo) => ({
@@ -474,7 +526,7 @@ const LineasPanorama = (function () {
     tomar('calcular');
     salida.factura = factura_(lineasHoy);
     tomar('factura');
-    salida.equiposBajas = bajasEquipos_();
+    salida.equiposBajas = bajasEquipos_(movimientos);
     tomar('bajas');
     salida.ms = ms;
     return salida;
@@ -491,5 +543,6 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_ };
+  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_,
+    _eventosDeMovimientos: eventosDeMovimientos_ };
 })();
