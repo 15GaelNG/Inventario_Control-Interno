@@ -146,13 +146,14 @@
     async function enviarRecordatorio(p) {
       const ok = await Confirmar.pedir({
         titulo: 'Enviar recordatorio',
-        mensaje: `Se le manda un correo a ${p.RESPONSABLE || 'el responsable'} recordándole "${p.ASUNTO}". ¿Continuar?`,
+        mensaje: `Se le manda un correo a ${p.RESPONSABLE || 'el responsable'} recordándole "${p.ASUNTO}" (y los demás pendientes sin cargar de esta misma inspección, si hay). ¿Continuar?`,
         textoConfirmar: 'Enviar recordatorio',
       });
       if (!ok) return;
       try {
         const res = await callServer('apiInspeccionEnviarRecordatorioPendiente', state.token, p.ID);
-        Notificar.exito('Recordatorio enviado a ' + res.correo);
+        Notificar.exito('Recordatorio enviado a ' + res.correo +
+          (res.incluidos && res.incluidos.length > 1 ? ' (' + res.incluidos.length + ' pendientes en el mismo correo)' : ''));
         await cargar();
       } catch (err) {
         Notificar.error('No se pudo enviar el recordatorio: ' + err.message);

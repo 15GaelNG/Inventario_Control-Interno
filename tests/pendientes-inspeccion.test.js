@@ -154,7 +154,8 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   const { e, P } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'el-de-capital-humano@x.com' }], correos);
   const creados = P.agregar(FILA_INSPECCION, '2026_25_1',
     [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], 'el-que-se-avisco@x.com',
-    ['inspector@x.com', 'el-que-se-avisco@x.com', 'otro@x.com']);
+    ['inspector@x.com', 'el-que-se-avisco@x.com', 'otro@x.com'],
+    'INSPECCION: 25-HONDA 150XR 12/10/2026');
   const res = P.enviarRecordatorio('token', creados[0]['ID']);
   ok(res.enviado === true && res.correo === 'el-que-se-avisco@x.com',
     'usa el correo guardado del aviso original, no el de Capital Humano: ' + res.correo);
@@ -163,9 +164,52 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
     'y también en cc a los demás que ya habían recibido el aviso original, sin repetir al responsable: ' + correos[0].cc);
   ok(res.cc.slice().sort().join(',') === 'inspector@x.com,otro@x.com', 'y lo regresa también en el resultado: ' + res.cc);
   ok(/2026_25_1 - Reparaci.n de faro/.test(correos[0].htmlBody), 'con el asunto exacto que debe pegar en Help Desk');
+  ok(correos[0].subject === 'Re: INSPECCION: 25-HONDA 150XR 12/10/2026',
+    'el ASUNTO del correo lleva "Re:" + el del aviso original, para quedar en la misma conversación: ' + correos[0].subject);
   const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
   const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
   ok(/^\d{4}-\d{2}-\d{2}T/.test(filas[0][col('ULTIMO RECORDATORIO')]), 'y queda anotado cuándo se mandó el recordatorio');
+
+  console.log('7a2. Sin asunto de aviso guardado (pendiente de antes de este campo), cae al título genérico');
+  const correosSinAsunto = [];
+  const { P: Pg } = entorno([], [], correosSinAsunto);
+  const creadosG = Pg.agregar(FILA_INSPECCION, '2026_25_1',
+    [{ asunto: 'Otro', familia: 'OTROS', prioridad: 'URGENTE' }], 'resp@x.com');
+  Pg.enviarRecordatorio('token', creadosG[0]['ID']);
+  ok(correosSinAsunto[0].subject === 'Recordatorio: pendiente de subir Ticket a Help Desk por inspección.',
+    'sin el asunto original guardado, usa el título genérico: ' + correosSinAsunto[0].subject);
+
+  console.log('7e. Si la MISMA inspección tiene otro pendiente SIN CARGAR, se manda junto en el mismo correo');
+  const correosJuntos = [];
+  const { e: e5, P: P5 } = entorno([], [], correosJuntos);
+  const creados5 = P5.agregar(FILA_INSPECCION, 'INS-AAA',
+    [
+      { asunto: 'OLI', familia: 'HOJALATERIA Y PINTURA', prioridad: 'NO URGENTE' },
+      { asunto: 'PAPPUS', familia: 'HOJALATERIA Y PINTURA', prioridad: 'URGENTE' },
+    ], 'resp@x.com', ['inspector@x.com'], 'INSPECCION: 1-CONSTRUCCION-HONDA 150XR-808077 03/11/2026');
+  ok(creados5.length === 2, 'se crean los dos pendientes de la misma inspección');
+  const res5 = P5.enviarRecordatorio('token', creados5[0]['ID']);
+  ok(correosJuntos.length === 1, 'manda un solo correo, no dos');
+  ok(/OLI/.test(correosJuntos[0].htmlBody) && /PAPPUS/.test(correosJuntos[0].htmlBody), 'con los dos asuntos en el mismo cuerpo');
+  ok(res5.incluidos.length === 2 && res5.incluidos.indexOf(creados5[0]['ID']) !== -1 && res5.incluidos.indexOf(creados5[1]['ID']) !== -1,
+    'regresa los dos IDs incluidos');
+  const filas5 = e5.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
+  const col5 = (nombre) => P5.ENCABEZADOS.indexOf(nombre);
+  ok(/^\d{4}-\d{2}-\d{2}T/.test(filas5[0][col5('ULTIMO RECORDATORIO')]) && /^\d{4}-\d{2}-\d{2}T/.test(filas5[1][col5('ULTIMO RECORDATORIO')]),
+    'y los dos quedan anotados, no solo el que se clickeó');
+
+  console.log('7f. Si alguno de los dos ya está CARGADO, solo se incluye el que sigue SIN CARGAR');
+  const correosParcial = [];
+  const { P: P6 } = entorno([{ 'ID TICKET HD': 55, TITULO: 'INS-BBB - YA RESUELTO', DESCRIPCION: '' }], [], correosParcial);
+  const creados6 = P6.agregar(FILA_INSPECCION, 'INS-BBB',
+    [
+      { asunto: 'YA RESUELTO', familia: 'OTROS', prioridad: 'NO URGENTE' },
+      { asunto: 'SIGUE PENDIENTE', familia: 'OTROS', prioridad: 'URGENTE' },
+    ], 'resp2@x.com');
+  P6.revisarCargaHelpdesk();
+  const res6 = P6.enviarRecordatorio('token', creados6[1]['ID']);
+  ok(res6.incluidos.length === 1 && res6.incluidos[0] === creados6[1]['ID'], 'solo incluye el que sigue sin cargar, no el ya resuelto');
+  ok(!/YA RESUELTO/.test(correosParcial[0].htmlBody), 'y no menciona al que ya se cargó: ' + correosParcial[0].htmlBody);
 
   console.log('7b. Sin correo guardado (pendiente de antes, o no se validó ninguno), cae a Capital Humano y sin cc');
   const { P: P2 } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }]);

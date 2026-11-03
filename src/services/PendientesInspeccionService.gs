@@ -43,7 +43,7 @@ const PendientesInspeccionService = (function () {
   const ENCABEZADOS = [
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
     'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'ESTATUS HELPDESK',
-    'FECHA CARGADO', 'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC',
+    'FECHA CARGADO', 'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC', 'ASUNTO AVISO ORIGINAL',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
@@ -104,9 +104,12 @@ const PendientesInspeccionService = (function () {
    *   llegue a la MISMA persona, aunque el inspector lo haya corregido a mano al capturar
    * @param {Array<string>} [correosCc] los demás correos (inspector, asistente, otros) que SÍ
    *   recibieron el aviso original en copia -- el recordatorio se los manda también en cc
+   * @param {string} [asuntoAviso] el ASUNTO exacto del correo de aviso original
+   *   (InspeccionesService.asuntoAviso_) -- enviarRecordatorio lo reutiliza con un "Re:" al
+   *   frente para que el recordatorio quede en la MISMA conversación de correo que el aviso
    * @return {Array} los pendientes creados (mismas columnas que la hoja), para el correo
    */
-  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc) {
+  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso) {
     const limpios = (items || [])
       .map((it) => ({
         asunto: limpiar_(it && it.asunto),
@@ -140,6 +143,7 @@ const PendientesInspeccionService = (function () {
         'ULTIMO RECORDATORIO': '',
         'CORREO RESPONSABLE': limpiar_(correoResponsable),
         'CORREOS CC': (correosCc || []).map(limpiar_).filter(Boolean).join(', '),
+        'ASUNTO AVISO ORIGINAL': limpiar_(asuntoAviso),
       };
       hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
       return fila;
@@ -245,13 +249,16 @@ const PendientesInspeccionService = (function () {
 
   /**
    * Le manda al responsable un recordatorio de un pendiente que sigue SIN CARGAR -- Kike lo
-   * dispara a mano desde su vista. Va al MISMO correo que recibió el aviso original de esa
-   * inspección (CORREO RESPONSABLE, guardado por agregar()); si ese pendiente es de antes de que
-   * existiera esa columna (o nunca se capturó un correo válido), se busca por su nombre en
-   * Capital Humano, como antes. También va en cc a los demás que ya habían recibido ese mismo
-   * aviso original (CORREOS CC: inspector, asistente, otros) -- si el correo del responsable se
-   * tuvo que buscar en Capital Humano, no hay cc porque no hay forma de saber quiénes eran.
-   * @return {{enviado: true, correo: string, cc: Array<string>}}
+   * dispara a mano desde su vista. Si esa MISMA inspección tiene otros pendientes que también
+   * sigan SIN CARGAR, se incluyen todos en el mismo correo (pedido de Jorge, 3-nov-2026): el
+   * responsable no tiene por qué recibir uno por cada observación de una sola visita. Va al
+   * MISMO correo que recibió el aviso original de esa inspección (CORREO RESPONSABLE, guardado
+   * por agregar()); si ese pendiente es de antes de que existiera esa columna (o nunca se
+   * capturó un correo válido), se busca por su nombre en Capital Humano, como antes. También va
+   * en cc a los demás que ya habían recibido ese mismo aviso original (CORREOS CC: inspector,
+   * asistente, otros) -- si el correo del responsable se tuvo que buscar en Capital Humano, no
+   * hay cc porque no hay forma de saber quiénes eran.
+   * @return {{enviado: true, correo: string, cc: Array<string>, incluidos: Array<string>}}
    */
   function enviarRecordatorio(token, id) {
     Permisos.puedeEditar(token, MODULO);
@@ -262,6 +269,12 @@ const PendientesInspeccionService = (function () {
     if (normalizar_(fila['ESTATUS']) !== ESTATUS_SIN_CARGAR) {
       throw new Error('Ese pendiente ya está cargado en Help Desk: no hace falta recordarlo.');
     }
+    // Hermanos: los demás pendientes de la MISMA inspección que también sigan sin cargar
+    // (comparten correo/cc/asunto de aviso porque nacieron juntos en el mismo agregar()).
+    const hermanos = SheetUtils.getAll(ssId(), HOJA)
+      .filter((r) => r['ID INSPECCION'] === fila['ID INSPECCION'] && normalizar_(r['ESTATUS']) === ESTATUS_SIN_CARGAR);
+    const pendientes = hermanos.length ? hermanos : [fila];
+
     let correo = limpiar_(fila['CORREO RESPONSABLE']);
     let cc = [];
     if (!correo) {
@@ -277,21 +290,45 @@ const PendientesInspeccionService = (function () {
       cc = limpiar_(fila['CORREOS CC']).split(',').map(limpiar_)
         .filter((c) => c && c.toLowerCase() !== correo.toLowerCase());
     }
-    const asunto = 'Recordatorio: pendiente de inspección sin subir a Help Desk';
+    // Mismo asunto que el correo de aviso original, con "Re:" al frente: así Gmail agrupa el
+    // recordatorio en la MISMA conversación en vez de abrir un hilo nuevo (pedido de Jorge,
+    // 3-nov-2026). Un pendiente de antes de este campo (o si en su momento no se pudo calcular
+    // el asunto del aviso) cae al título genérico de siempre.
+    const asuntoOriginal = limpiar_(fila['ASUNTO AVISO ORIGINAL']);
+    const asunto = asuntoOriginal ? 'Re: ' + asuntoOriginal : 'Recordatorio: pendiente de subir Ticket a Help Desk por inspección.';
+    const unidad = fila['VEHICULO']
+      ? ' (<b>' + escaparHtml_(fila['VEHICULO']) + ' · ' + escaparHtml_(fila['PLACAS'] || 'SIN PLACA') + '</b>)'
+      : '';
+    const tarjetas = pendientes.map((p) =>
+      '<div style="margin:0 0 10px;padding:8px 10px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
+      '<div style="margin:0 0 3px"><span style="color:#92400e">Asunto:</span> <code>' + escaparHtml_(p['ASUNTO']) + '</code></div>' +
+      '<div style="margin:0 0 3px"><span style="color:#92400e">Familia o grupo a reportar:</span> ' +
+        escaparHtml_(p['FAMILIA O GRUPO A REPORTAR']) + '</div>' +
+      '<div><span style="color:#92400e">Prioridad:</span> <b>' + escaparHtml_(p['PRIORIDAD']) + '</b></div>' +
+      '</div>').join('');
     const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
-      '<h2 style="margin:0 0 12px;font-size:18px">Pendiente sin subir a Help Desk</h2>' +
-      '<p style="margin:0 0 10px">Hola, este pendiente de una inspección a tu unidad ' +
-      (fila['VEHICULO'] ? '(<b>' + escaparHtml_(fila['VEHICULO']) + (fila['PLACAS'] ? ' · ' + escaparHtml_(fila['PLACAS']) : '') + '</b>) ' : '') +
-      'todavía no aparece como ticket en el Help Desk:</p>' +
-      '<p style="margin:0 0 6px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
-      '<code>' + escaparHtml_(fila['ASUNTO']) + '</code></p>' +
-      '<p style="margin:10px 0 0">Da de alta el ticket en Help Desk usando EXACTAMENTE ese texto como asunto, ' +
-      'para que quede ligado a esta inspección.</p>' +
+      '<p style="margin:0 0 10px">Hola:</p>' +
+      '<p style="margin:0 0 10px">Te recordamos que continúa pendiente subir a Help Desk lo identificado durante ' +
+      'la inspección de tu unidad' + unidad + '.</p>' +
+      '<p style="margin:0 0 6px"><b>Esto es lo que falta subir a Help Desk:</b></p>' +
+      tarjetas +
+      '<p style="margin:0 0 10px">Por favor, genera cada ticket en Help Desk utilizando EXACTAMENTE el texto de ' +
+      '«Asunto» indicado arriba, ya que esto permitirá que el sistema lo vincule automáticamente con la ' +
+      'inspección correspondiente.</p>' +
+      '<p style="margin:0 0 10px">Si ya generaste alguno de estos tickets, te pedimos responder a este correo ' +
+      'compartiendo el número de folio asignado en Help Desk, ya que en caso de que no hayas utilizado el folio ' +
+      'de inspección en el asunto, será necesario realizar la vinculación manualmente.</p>' +
+      '<p style="margin:0 0 10px">Recordemos que el cuidado y mantenimiento de las unidades es responsabilidad de ' +
+      'todos. Atender oportunamente estas observaciones nos permite garantizar su correcto funcionamiento y ' +
+      'contribuir al aprovechamiento adecuado de los recursos de la empresa.</p>' +
+      '<p style="margin:0 0 10px">Agradecemos tu apoyo y atención para dar seguimiento a lo anterior.</p>' +
+      '<p style="margin-top:16px">¡Saludos! 🙌</p>' +
       '</div>';
     MailApp.sendEmail({ to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo });
-    SheetUtils.update(ssId(), HOJA, id, { 'ULTIMO RECORDATORIO': new Date() }, 'ID');
+    const ahora = new Date();
+    pendientes.forEach((p) => SheetUtils.update(ssId(), HOJA, p['ID'], { 'ULTIMO RECORDATORIO': ahora }, 'ID'));
     CacheHojas.tocarHoja(hoja);
-    return { enviado: true, correo: correo, cc: cc };
+    return { enviado: true, correo: correo, cc: cc, incluidos: pendientes.map((p) => p['ID']) };
   }
 
   /**
