@@ -474,7 +474,7 @@ const InspeccionesService = (function () {
       // folio de negocio en COL_ID (2026_649_314): dos inspecciones de un mismo vehículo el mismo
       // año pueden mezclarse en el folio, nunca en el ID.
       const dest = destinatariosNotificar_(p.NOTIFICAR);
-      pendientes = PendientesInspeccionService.agregar(fila, fila['ID'], p.PENDIENTES, dest.para, dest.cc);
+      pendientes = PendientesInspeccionService.agregar(fila, fila['ID'], p.PENDIENTES, dest.para, dest.cc, asuntoAviso_(fila));
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -729,6 +729,16 @@ const InspeccionesService = (function () {
    * @param {Array} [pendientes] los pendientes de Help Desk que ya se dieron de alta (PendientesInspeccionService.agregar):
    *   van en su propia sección de color -- el responsable los sube como ticket con la MISMA familia
    */
+  /**
+   * El ASUNTO del correo de aviso, calculado aparte para que también lo use
+   * PendientesInspeccionService.agregar() (el recordatorio lo reutiliza con un "Re:" al frente,
+   * para que Gmail lo agrupe en la misma conversación que el aviso original).
+   */
+  function asuntoAviso_(fila) {
+    const fecha = Utilities.formatDate(fila['FECHA'], Session.getScriptTimeZone(), 'dd/MM/yyyy');
+    return 'INSPECCION: ' + [fila['NUCO'], fila['DEPARTAMENTO'], fila['TIPO'], fila['NO SERIE']].filter(Boolean).join('-') + ' ' + fecha;
+  }
+
   function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes) {
     if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
     const dest = destinatariosNotificar_(notificar);
@@ -745,21 +755,21 @@ const InspeccionesService = (function () {
     const dato = (etiqueta, valor) => (valor
       ? '<tr><td style="padding:3px 14px 3px 0;color:#666">' + etiqueta + '</td><td><b>' + escaparHtml_(valor) + '</b></td></tr>'
       : '');
-    const listaHallazgos = (hallazgos || []).length
-      ? '<ul style="margin:4px 0 0;padding-left:18px">' + hallazgos.map((h) =>
-          '<li>' + escaparHtml_(h.pieza) + (h.seccion ? ' <span style="color:#888">(' + escaparHtml_(h.seccion) + ')</span>' : '') +
-          ': <b>' + escaparHtml_(h.estado) + '</b></li>').join('') + '</ul>'
-      : '<p style="margin:4px 0 0">Ninguno: todo lo revisado salió bien.</p>';
-
     // Sección de color propia (ámbar): lo que el inspector dijo que hay que subir a Help Desk.
     // El ASUNTO ya trae el folio de esta inspección al frente (PendientesInspeccionService.agregar):
     // usar ese mismo texto como asunto del ticket es lo que hace que el sistema lo detecte solo.
     const seccionPendientes = (pendientes || []).length
       ? '<div style="margin-top:16px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
-        '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Tickets por generar en Help Desk</h3>' +
-        '<p style="margin:0 0 10px;font-size:13px;color:#78350f">Registra cada pendiente como un ticket en Help Desk, ' +
-        'utilizando exactamente el texto del campo "Asunto", ya que incluye el folio de la inspección correspondiente. ' +
-        'De esta manera, el sistema podrá identificarlo automáticamente, sin necesidad de realizar búsquedas manuales.</p>' +
+        '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Instrucciones para generar tickets en Help Desk</h3>' +
+        '<p style="margin:0 0 8px;font-size:13px;color:#78350f">Por cada observación identificada durante la inspección, ' +
+        'genera un ticket independiente en Help Desk.</p>' +
+        '<p style="margin:0 0 8px;font-size:13px;color:#78350f">Copia y pega el texto indicado en el campo «Asunto» de ' +
+        'cada solicitud; en descripción indica el folio de inspección, la descripción del servicio y cualquier otro dato ' +
+        'proporcionado.</p>' +
+        '<p style="margin:0 0 8px;font-size:13px;color:#78350f">No modifiques, resumas ni omitas información, ya que esto ' +
+        'permitirá identificar y dar seguimiento a cada solicitud.</p>' +
+        '<p style="margin:0 0 10px;font-size:13px;color:#78350f">Registra también la familia o grupo de servicio y la ' +
+        'prioridad indicados para cada ticket.</p>' +
         pendientes.map((pe) =>
           '<div style="margin:0 0 8px;padding:8px 10px;background:#fff;border:1px solid #f0b429;border-radius:4px">' +
           '<div style="margin:0 0 3px"><span style="color:#92400e">Asunto:</span> <code>' + escaparHtml_(pe['ASUNTO']) + '</code></div>' +
@@ -769,9 +779,7 @@ const InspeccionesService = (function () {
           '</div>').join('') + '</div>'
       : '';
 
-    const fechaInspeccion = Utilities.formatDate(fila['FECHA'], Session.getScriptTimeZone(), 'dd/MM/yyyy');
-    const asunto = 'INSPECCION: ' +
-      [fila['NUCO'], fila['DEPARTAMENTO'], fila['TIPO'], fila['NO SERIE']].filter(Boolean).join('-') + ' ' + fechaInspeccion;
+    const asunto = asuntoAviso_(fila);
     const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
       '<h2 style="margin:0 0 12px;font-size:18px">Inspección vehicular</h2>' +
       '<table style="border-collapse:collapse">' +
@@ -780,9 +788,9 @@ const InspeccionesService = (function () {
         dato('Inspector', fila['NOMBRE INSPECTOR']) + dato('Puntaje final', fila['PUNTAJE FINAL INSPECCION']) +
       '</table>' +
       (fila['OBSERVACIONES'] ? '<p><b>Observaciones:</b> ' + escaparHtml_(fila['OBSERVACIONES']) + '</p>' : '') +
-      '<h3 style="font-size:15px;margin:16px 0 0">Piezas con hallazgo (REGULAR o MALO)</h3>' + listaHallazgos +
       seccionPendientes +
       (pdfUrl ? '<p style="margin-top:16px"><a href="' + pdfUrl + '">Ver el formato en PDF</a></p>' : '') +
+      '<p style="margin-top:18px">Saludos 🙌</p>' +
       '</div>';
 
     try {

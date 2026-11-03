@@ -203,8 +203,9 @@ ok(conCorreo.correo.enviado === true && correos.length === 1, 'con un correo vá
 ok(correos[0].to === 'responsable@x.com', 'va "para" el responsable');
 ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
   'en copia el inspector y los demás -- sin el asistente (correo inválido) ni repetir al responsable: ' + correos[0].cc);
-ok(/PARABRISAS/.test(correos[0].htmlBody) && /MALO/.test(correos[0].htmlBody), 'el cuerpo lleva el hallazgo');
+ok(!/Piezas con hallazgo/.test(correos[0].htmlBody), 'ya no lleva la lista de piezas con hallazgo (se quitó a pedido)');
 ok(correos[0].htmlBody.indexOf('Se firmó en ausencia del responsable') !== -1, 'y las observaciones');
+ok(/Saludos\s*🙌/.test(correos[0].htmlBody), 'cierra con un saludo');
 ok(correos[0].subject === 'INSPECCION: HONDA 150XR 12/10/2026 12:00',
   'asunto: INSPECCION: nuco-departamento-clase-no de serie y la fecha (los vacíos del vehículo de prueba se omiten): ' + correos[0].subject);
 
@@ -240,7 +241,7 @@ ok(pendientesRegistrados.correosCc.slice().sort().join(',') === 'inspector@x.com
   'y los demás que SÍ se notificaron en copia -- sin el asistente (correo inválido) ni repetir al responsable: ' + pendientesRegistrados.correosCc);
 ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
   'el correo trae su propia sección con lo que hay que subir a Help Desk');
-ok(/Tickets por generar en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
+ok(/Instrucciones para generar tickets en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
 ok(/Asunto:.*<code>[^<]*Reparaci.n de faro/.test(correos[0].htmlBody),
   'el asunto va en su propia línea, con su etiqueta: ' + correos[0].htmlBody);
 ok(/Familia o grupo a reportar:.*ELECTRICO Y LUCES/.test(correos[0].htmlBody),
@@ -252,7 +253,7 @@ const sinPendientes = contexto.InspeccionesService.registrar('token', {
   FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
   NOTIFICAR: { responsable: 'responsable@x.com', inspector: '', asistente: '', otros: [] },
 }, {});
-ok(!/Tickets por generar en Help Desk/.test(correos[0].htmlBody), 'sin PENDIENTES, el correo no trae esa sección');
+ok(!/Instrucciones para generar tickets en Help Desk/.test(correos[0].htmlBody), 'sin PENDIENTES, el correo no trae esa sección');
 void sinPendientes;
 
 console.log('8. La calificación va en porcentaje en todos lados (27-oct: las secciones salían en decimal)');
