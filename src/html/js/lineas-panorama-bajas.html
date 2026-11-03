@@ -1,0 +1,179 @@
+<script>
+  /**
+   * lineas-panorama-bajas.html — la pestaña Ventas del Panorama de Líneas (30-oct; Donaciones y Desechos se quitaron el 2-nov).
+   * Viven aparte de lineas-panorama.html para que initPanorama no pase de 700 líneas.
+   *
+   * Con la hoja VENTAS (2-nov, `ventas` de LineasPanorama → ventasRegistradas_) pinta las ventas tal cual el reporte de
+   * líneas (equipos, importe, mes en que el reporte las cuenta) y cuántos equipos de cada una tiene ligados el inventario
+   * (EQUIPOS.ID VENTA): la diferencia es lo que todavía no tiene evidencia. Sin esa hoja, lo de antes: `equiposBajas`
+   * (bajasEquipos_), solo conteos con la fecha que viene en el comentario del movimiento de cada equipo.
+   *
+   *   Lineas.panoramaBajas.pintar(raiz, equiposBajas, { esHoy, ventas })
+   */
+  (function () {
+    'use strict';
+    const { $, dinero, esc, ico, miles, tablaLineas, tilesKpi } = Lineas.comun;
+
+    const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const mesCorto = (ym) => MESES[Number(ym.slice(5, 7)) - 1] + ' ' + ym.slice(2, 4);
+    const dia = (f) => (f ? Number(f.slice(8, 10)) + ' ' + MESES[Number(f.slice(5, 7)) - 1] + ' ' + f.slice(0, 4) : '—');
+    const pct = (v, t) => (t ? Formato.miles(v / t * 100, { decimales: 1 }) + '%' : '—');
+    const tile = (icono, valor, etiqueta, clase, titulo) => ({ icono: icono, valor: miles(valor), etiqueta: etiqueta, clase: clase || '', filtros: false, titulo: titulo });
+    const tarjeta = (icono, titulo, total, cuerpo, nota) => '<div class="card lnp-tarjeta"><div class="lnp-cabeza"><h4>' + ico(icono) + ' ' + esc(titulo) + '</h4>' +
+      (total ? '<span class="lnp-total">' + total + '</span>' : '') + '</div>' + cuerpo + (nota ? '<p class="lnp-nota">' + nota + '</p>' : '') + '</div>';
+    const vacio = (texto) => '<p class="ln-tenue lnp-vacio">' + esc(texto) + '</p>';
+
+    /** Las tablas de las pestañas (para destruirlas al volver a pintar) */
+    const tablas = new WeakMap();
+
+    /**
+     * Barras por mes, de un mes al otro sin huecos (los meses sin eventos salen en 0): { 'yyyy-MM': n } → SVG. El número va
+     * encima de cada barra, así no hace falta eje.
+     */
+    function barrasPorMes(porMes, etiqueta) {
+      const claves = Object.keys(porMes || {}).sort();
+      if (!claves.length) return vacio('Sin fechas registradas.');
+      const meses = [];
+      let y = Number(claves[0].slice(0, 4));
+      let m = Number(claves[0].slice(5, 7));
+      const fin = claves[claves.length - 1];
+      while (y + '-' + ('0' + m).slice(-2) <= fin) { meses.push(y + '-' + ('0' + m).slice(-2)); m++; if (m > 12) { m = 1; y++; } }
+      const max = Math.max(1, ...meses.map((k) => porMes[k] || 0));
+      const ancho = Math.max(480, meses.length * 52);
+      const alto = 190;
+      const base = alto - 28;
+      const paso = ancho / meses.length;
+      const barra = Math.min(34, paso * 0.62);
+      // Con su ancho en pixeles: pocas barras no se estiran (la letra crecía con la gráfica); muchas se deslizan de lado
+      let svg = '<svg class="lnp-svg lnp-meses" viewBox="0 0 ' + ancho + ' ' + alto + '" width="' + ancho + '" height="' + alto + '" role="img" aria-label="' +
+        esc(etiqueta + ': ' + meses.map((k) => mesCorto(k) + ' ' + (porMes[k] || 0)).join(', ')) + '">';
+      svg += '<line class="lnp-rejilla" x1="0" x2="' + ancho + '" y1="' + base + '" y2="' + base + '"></line>';
+      meses.forEach((k, i) => {
+        const v = porMes[k] || 0;
+        const h = v ? Math.max(3, (v / max) * (base - 26)) : 0;
+        const x = i * paso + (paso - barra) / 2;
+        if (v) {
+          svg += '<rect class="lnp-mes-barra" x="' + x.toFixed(1) + '" y="' + (base - h).toFixed(1) + '" width="' + barra.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="3"></rect>' +
+            '<text class="lnp-etiqueta-valor lnp-mes-valor" x="' + (x + barra / 2).toFixed(1) + '" y="' + (base - h - 6).toFixed(1) + '" text-anchor="middle">' + miles(v) + '</text>';
+        }
+        svg += '<text class="lnp-eje" x="' + (x + barra / 2).toFixed(1) + '" y="' + (alto - 8) + '" text-anchor="middle">' + esc(mesCorto(k)) + '</text>';
+      });
+      return '<div class="lnp-meses-caja" data-scroll-x>' + svg + '</svg></div>';
+    }
+
+    /** Barras horizontales de { nombre: n }, de mayor a menor */
+    function barrasDe(conteo, total) {
+      const filas = Object.keys(conteo || {}).map((k) => [k, conteo[k]]).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+      if (!filas.length) return vacio('Sin datos.');
+      const max = filas[0][1];
+      return '<div class="lnp-barras">' + filas.map(([k, v]) => '<div class="lnp-barra lnp-barra-fija"><span class="lnp-barra-nombre" title="' + esc(k) + '">' + esc(k) + '</span>' +
+        '<span class="lnp-barra-pista"><span class="lnp-barra-valor" style="width:' + Math.max(1.5, (v / max) * 100) + '%"></span></span>' +
+        '<span class="lnp-barra-num">' + miles(v) + '</span><span class="lnp-barra-pct">' + pct(v, total) + '</span></div>').join('') + '</div>';
+    }
+
+    function tabla(cont, cfg, filas) {
+      const previa = tablas.get(cont);
+      if (previa) previa.destruir();
+      cont.innerHTML = '<div></div>';
+      const t = tablaLineas(cont.firstChild, Object.assign({ seleccionable: false, detalle: false }, cfg));
+      t.setDatos(filas);
+      tablas.set(cont, t);
+    }
+
+    // ---------------- Ventas ----------------
+
+    function pintarVentas(raiz, v) {
+      const caja = $('#lnp-ventas', raiz);
+      if (!v || !v.total) { caja.innerHTML = vacio('No hay equipos vendidos.'); return; }
+      const sinRecibo = v.total - v.conRecibo - v.sinDato;
+      const primera = v.recibos.find((r) => r.recibo === 'Primera venta');
+      caja.innerHTML =
+        '<div class="stat-row" id="lnp-ventas-kpis"></div>' +
+        '<div class="lnp-dos">' +
+          tarjeta('calendar-range', 'Vendidos por mes', miles(v.total - v.sinFecha - v.sinDato) + ' con fecha', barrasPorMes(v.porMes, 'Equipos vendidos por mes'),
+            'Por la fecha de la venta que dice el sistema.' + (v.sinFecha ? ' ' + miles(v.sinFecha) + ' vendidos no traen fecha.' : '')) +
+          tarjeta('users', 'Por comprador', '', barrasDe(v.porComprador, v.total - v.sinDato),
+            'Quien compró 1 o 2 equipos cuenta como "colaboradores (venta individual)".') +
+        '</div>' +
+        tarjeta('receipt-text', 'Por recibo de venta', miles(v.recibos.length) + ' recibos', '<div class="lnp-tabla" id="lnp-ventas-tabla"></div>',
+          'El sistema no guarda el importe de cada venta: los montos están en los recibos.' +
+          (primera ? ' La «Primera venta» (' + dia(primera.fecha) + ') tiene ' + miles(primera.equipos) + ' equipos ligados por la decisión de la Dirección del 30-oct; ' +
+            'esa cifra está en revisión contra el correo de la venta.' : ''));
+      tilesKpi($('#lnp-ventas-kpis', raiz), [
+        tile('hand-coins', v.total, 'Equipos vendidos'),
+        tile('receipt-text', v.conRecibo, 'Con recibo · en ' + miles(v.recibos.length) + ' recibos', 'stat-tile-ok'),
+        tile('receipt', sinRecibo, 'Con comprador pero sin recibo en el sistema'),
+        tile('circle-help', v.sinDato, 'Sin dato en el sistema', v.sinDato ? 'stat-tile-warn' : '', 'Vendidos sin un movimiento que diga cuándo ni a quién'),
+      ], () => null);
+      tabla($('#lnp-ventas-tabla', raiz), {
+        idCampo: '_id', idTabla: 'lineas-panorama-ventas-v1',
+        columnas: [
+          { campo: 'recibo', titulo: 'Recibo', tipo: 'texto' },
+          { campo: 'fecha', titulo: 'Fecha', tipo: 'texto', render: (f) => esc(dia(f)) },
+          { campo: 'comprador', titulo: 'Comprador', tipo: 'texto' },
+          { campo: 'equipos', titulo: 'Equipos', tipo: 'numero' },
+        ],
+        ordenInicial: { campo: 'fecha', dir: 'desc' },
+        exportar: { nombreArchivo: 'Panorama ventas por recibo', nombreHoja: 'Ventas' },
+        textoVacio: 'Sin recibos en el sistema.',
+      }, v.recibos.map((r, i) => Object.assign({ _id: String(i) }, r)));
+    }
+
+    /** Las ventas de la hoja VENTAS: lo del reporte manda en cantidades e importes; lo ligado dice cuánto respalda el inventario */
+    function pintarVentasRegistradas(raiz, r) {
+      const caja = $('#lnp-ventas', raiz);
+      const porMes = {};
+      const porComprador = {};
+      r.ventas.forEach((v) => {
+        if (v.mes) porMes[v.mes] = (porMes[v.mes] || 0) + v.equipos;
+        porComprador[v.comprador] = (porComprador[v.comprador] || 0) + v.equipos;
+      });
+      const faltan = r.equipos - r.ligados;
+      caja.innerHTML =
+        '<div class="stat-row" id="lnp-ventas-kpis"></div>' +
+        '<div class="lnp-dos">' +
+          tarjeta('calendar-range', 'Vendidos por mes', miles(r.equipos) + ' equipos', barrasPorMes(porMes, 'Equipos vendidos por mes'),
+            'Por el mes en que el reporte de líneas cuenta cada venta (su ciclo de facturación).') +
+          tarjeta('users', 'Por comprador', '', barrasDe(porComprador, r.equipos),
+            'Quien compró 1 o 2 equipos cuenta como "colaboradores (venta individual)".') +
+        '</div>' +
+        tarjeta('receipt-text', 'Ventas', miles(r.ventas.length) + ' ventas · ' + dinero(r.importe), '<div class="lnp-tabla" id="lnp-ventas-tabla"></div>',
+          'Cantidades e importes tal cual el reporte de líneas. «Ligados» son los equipos del inventario que ya dicen de qué venta salieron; ' +
+          'los que faltan esperan su evidencia (el recibo con la lista de equipos).' +
+          (r.vendidosSinVenta ? ' En el inventario hay ' + miles(r.vendidos) + ' equipos VENDIDO; ' + miles(r.vendidosSinVenta) + ' todavía no están ligados a una venta.' : ''));
+      tilesKpi($('#lnp-ventas-kpis', raiz), [
+        tile('hand-coins', r.equipos, 'Equipos vendidos'),
+        { icono: 'banknote', valor: dinero(r.importe), etiqueta: 'Importe de las ventas', clase: '', filtros: false },
+        tile('receipt-text', r.ventas.length, 'Ventas'),
+        tile('link', r.ligados, 'Ligados a su venta · faltan ' + miles(faltan), faltan ? 'stat-tile-warn' : 'stat-tile-ok',
+          'Equipos del inventario con su ID VENTA; los que faltan no tienen todavía un documento que diga cuál equipo fue'),
+      ], () => null);
+      tabla($('#lnp-ventas-tabla', raiz), {
+        idCampo: 'id', idTabla: 'lineas-panorama-ventas-v2',
+        columnas: [
+          { campo: 'referencia', titulo: 'Venta', tipo: 'texto' },
+          { campo: 'fecha', titulo: 'Fecha', tipo: 'texto', render: (f) => esc(dia(f)) },
+          { campo: 'comprador', titulo: 'Comprador', tipo: 'texto' },
+          { campo: 'equipos', titulo: 'Equipos', tipo: 'numero' },
+          { campo: 'ligados', titulo: 'Ligados', tipo: 'numero',
+            render: (n, v) => (n < v.equipos ? '<span class="lnp-falta">' + miles(n) + ' de ' + miles(v.equipos) + '</span>' : miles(n)) },
+          { campo: 'importe', titulo: 'Importe', tipo: 'numero', render: (n) => esc(dinero(n)) },
+          { campo: 'evidencia', titulo: 'Evidencia', tipo: 'texto',
+            render: (u) => (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + ico('external-link') + ' Ver</a>' : '<span class="ln-tenue">—</span>') },
+        ],
+        ordenInicial: { campo: 'fecha', dir: 'desc' },
+        exportar: { nombreArchivo: 'Panorama ventas', nombreHoja: 'Ventas' },
+        textoVacio: 'Sin ventas.',
+      }, r.ventas);
+    }
+
+    function pintar(raiz, bajas, opciones) {
+      const o = opciones || {};
+      if (o.ventas && o.ventas.ventas && o.ventas.ventas.length) { pintarVentasRegistradas(raiz, o.ventas); return; }
+      const b = bajas || {};
+      pintarVentas(raiz, b.ventas);
+    }
+
+    Object.assign(Lineas, { panoramaBajas: { pintar: pintar } });
+  })();
+</script>

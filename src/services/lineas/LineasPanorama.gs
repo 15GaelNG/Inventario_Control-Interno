@@ -4,8 +4,9 @@
  * había al cierre de cada mes.
  *
  * El histórico se reconstruye hacia atrás desde el estatus actual de cada fila de LINEAS TELEFONICAS con los cambios
- * de ESTATUS EQUIPO / ESTATUS LINEA de la bitácora CAMBIOS LINEAS TELEFONICAS (ANTES de cada cambio posterior al
- * cierre del mes). Supuestos, que la interfaz explica:
+ * de ESTATUS EQUIPO / ESTATUS LINEA (ANTES de cada cambio posterior al cierre del mes) de dos bitácoras: CAMBIOS LINEAS
+ * TELEFONICAS (AppSheet, hasta el 30-sep-2026) y MOVIMIENTOS (el sistema nuevo, desde octubre). Supuestos, que la
+ * interfaz explica:
  *  - Antes del primer cambio registrado (abril de 2025 en producción) no hay bitácora: cada registro conserva hacia
  *    atrás el estatus que tenía antes de su primer cambio.
  *  - Un registro cuenta desde su FECHA REGISTRO (si la trae y es posterior al 2000).
@@ -15,7 +16,10 @@
  */
 const LineasPanorama = (function () {
   // v3 (1-oct): registros en columnas y estatus por mes comprimidos (la respuesta pesaba ~10 veces más)
-  const CLAVE_CACHE = 'ln_panorama_v3';
+  // v4 (30-oct): cada línea trae si su número viene en una carta de cancelación (columna k)
+  // v5 (30-oct): los equipos que ya salieron (ventas, donaciones, desechos y extravíos)
+  // v6 (2-nov): en cancelación ya no cuenta como activa en la comparación con la factura
+  const CLAVE_CACHE = 'ln_panorama_v8'; // v8 (2-nov): las ventas de la hoja VENTAS; v7: los cambios de estatus de MOVIMIENTOS
   const SEG_CACHE = 30 * 60;
   const MAX_MESES = 36;
 
@@ -115,7 +119,8 @@ const LineasPanorama = (function () {
   /**
    * Los registros para que el Panorama calcule todo para el mes que se elija, en columnas (sin repetir nombres de
    * campo en cada uno de los ~2,600 renglones) y con textos repetidos como índices a una lista. Líneas: cuenta,
-   * SIM básico, departamento, costo de plan, fin del adendum y estatus al cierre de cada mes (índices a `dic`).
+   * SIM básico, departamento, costo de plan, fin del adendum, si viene en una carta de cancelación (k: 1 sí, 0 no,
+   * -1 sin el dato) y estatus al cierre de cada mes (índices a `dic`).
    * El departamento, la cuenta y el costo son los de HOY (la bitácora no los reconstruye). La interfaz lo
    * desempaca con Lineas → expandirRegistros.
    */
@@ -136,7 +141,7 @@ const LineasPanorama = (function () {
       dic: dic, deps: deps, cuentas: cuentas, fechas: fechas,
       lineas: columnas(regs.lineas, {
         c: (r) => indice(cuentas, r.cuenta), b: (r) => (r.basico ? 1 : 0), d: (r) => indice(deps, r.depto),
-        p: (r) => r.costo, f: (r) => indice(fechas, r.fin), s: estados,
+        p: (r) => r.costo, f: (r) => indice(fechas, r.fin), k: (r) => (r.carta === 1 || r.carta === 0 ? r.carta : -1), s: estados,
       }),
       equipos: columnas(regs.equipos, { d: (r) => indice(deps, r.depto), s: estados }),
     };
@@ -187,14 +192,48 @@ const LineasPanorama = (function () {
     return acc;
   }
 
+  /**
+   * Los cambios de estatus del sistema nuevo (2-nov). Desde octubre de 2026 la bitácora de AppSheet ya no se escribe:
+   * cada cambio queda en MOVIMIENTOS, con su CAMBIOS ([{ campo, antes, despues }]), su FECHA y el ID LINEA o ID EQUIPO.
+   * Sin esto, ningún cambio de octubre se deshacía y el cierre de septiembre salía igual a hoy (menos las altas).
+   * → { eventos: { equipos|lineas: { id: [[ms, antes]] } }, altas: { id: ms } (su primer ALTA con fecha), primera, total }
+   */
+  function eventosDeMovimientos_(movimientos) {
+    const acc = { eventos: { equipos: {}, lineas: {} }, altas: {}, primera: null, total: 0 };
+    const idsDe = (v) => txt(v).split(',').map((x) => x.trim()).filter(Boolean);
+    movimientos.forEach((m) => {
+      const cuando = m['FECHA'];
+      if (!(cuando instanceof Date) || isNaN(cuando.getTime())) return;
+      const t = cuando.getTime();
+      if (txt(m['ACCION']).toUpperCase() === 'ALTA') {
+        idsDe(m['ID LINEA']).concat(idsDe(m['ID EQUIPO'])).forEach((id) => { if (!acc.altas[id] || t < acc.altas[id]) acc.altas[id] = t; });
+      }
+      let cambios = [];
+      try { cambios = JSON.parse(txt(m['CAMBIOS']) || '[]'); } catch (e) { cambios = []; }
+      if (!Array.isArray(cambios)) return;
+      cambios.forEach((c) => {
+        const campo = c ? LineasDatos.normCol(c.campo) : '';
+        const tipo = campo === 'ESTATUS EQUIPO' ? 'equipos' : (campo === 'ESTATUS LINEA' ? 'lineas' : null);
+        if (!tipo) return;
+        idsDe(tipo === 'lineas' ? m['ID LINEA'] : m['ID EQUIPO']).forEach((id) => {
+          (acc.eventos[tipo][id] = acc.eventos[tipo][id] || []).push([t, estatus(c.antes)]);
+        });
+        if (acc.primera === null || t < acc.primera) acc.primera = t;
+        acc.total++;
+      });
+    });
+    return acc;
+  }
+
   // ---------------- Contra la factura del proveedor (usuario, 29-oct: «info que podamos comparar más fácil y directo») ----------------
   const COLS_FACTURAS = ['NUMERO EN FACTURA', 'FECHA DE CORTE', 'COMPAÑIA', 'CUENTA PADRE', 'TOTAL CON IVA', 'ARCHIVO'];
   const CUENTA_SIM_BASICOS = '643495915';
   const MAX_LISTA = 300;
   const digitos10 = (v) => txt(v).replace(/\D/g, '').slice(-10);
   const redondo = (n) => Math.round(n * 100) / 100;
-  /** Grupos de estatus de línea que no son activas (los mismos que la portada: canceladas y sin línea). */
-  const NO_ACTIVA = ['CANCELADA', 'CANCELADO', 'SIN LINEA', 'SIN ESTATUS', ''];
+  /** Estatus de línea que no son activas (los mismos que la portada): canceladas, sin línea y, como en el reporte de Líneas
+   *  (2-nov), las que van en cancelación: ya son una baja pedida y se cuentan aparte. */
+  const NO_ACTIVA = ['CANCELADA', 'CANCELADO', 'SIN LINEA', 'SIN ESTATUS', 'EN PROCESO DE CANCELACION', ''];
   const esActiva = (e) => NO_ACTIVA.indexOf(estatus(e) === 'SIN ESTATUS' ? '' : estatus(e)) < 0;
 
   /** Mes ('yyyy-MM') del corte: la celda es fecha; un texto dd/mm/aaaa también se acepta. */
@@ -286,6 +325,178 @@ const LineasPanorama = (function () {
     return { meses: porMes, comparacion: comp };
   }
 
+  // ---------------- Equipos que ya salieron: ventas, donaciones, desechos y extravíos (30-oct) ----------------
+  // El sistema no guarda importes de venta: lo que sí sabe está en el comentario del movimiento que dejó al equipo en ese
+  // estatus (la fecha real del evento, el comprador, el recibo, la factura de donación, el depósito del desecho).
+  const RE_VENTA = /Vendido el (\d{1,2})\/(\d{1,2})\/(\d{4}) a (.+?) · venta (\S+)/i;
+  const RE_PRIMERA_VENTA = /primera venta de celulares \((\d{1,2})\/(\d{1,2})\/(\d{4})\)/i;
+  const RE_VENDIDO_A = /VENDIDO A ([A-ZÁÉÍÓÚÑ]+)/;
+  const RE_DONADO = /Donado a (.+?) · salida de CI el (\d{1,2})\/(\d{1,2})\/(\d{4})(?:.*?factura (\S+))?/i;
+  const RE_DESECHO = /Desechado el (\d{1,2})\/(\d{1,2})\/(\d{4})(?:.*?depósito de \$([\d,]+(?:\.\d+)?))?/i;
+  const RE_COBRO = /DESCUENTO|COBRO|ABOGAD|MULTA/i;
+  const ESTATUS_BAJA = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+  /** Un comprador con 1 o 2 equipos es un colaborador: en la pantalla de dirección no viaja su nombre */
+  const MAX_INDIVIDUAL = 2;
+  const COLABORADORES = 'Colaboradores (venta individual)';
+  const ymd = (d, m, y) => y + '-' + ('0' + m).slice(-2) + '-' + ('0' + d).slice(-2);
+  const sumar = (o, k, n) => { o[k] = (o[k] || 0) + (n === undefined ? 1 : n); };
+
+  /** Interpreta el comentario del movimiento de un equipo que ya salió: { fecha 'yyyy-MM-dd'|'', … } por estatus */
+  function leerBaja_(estatus, comentario) {
+    const t = txt(comentario);
+    let m;
+    if (estatus === 'VENDIDO') {
+      if ((m = t.match(RE_VENTA))) return { fecha: ymd(m[1], m[2], m[3]), comprador: m[4].trim().toUpperCase(), recibo: m[5] };
+      if ((m = t.match(RE_PRIMERA_VENTA))) return { fecha: ymd(m[1], m[2], m[3]), comprador: '', recibo: 'Primera venta' };
+      if ((m = t.match(RE_VENDIDO_A))) return { fecha: '', comprador: m[1] + ' (sin recibo en el sistema)', recibo: '' };
+      return null;
+    }
+    if (estatus === 'DONADO') {
+      if ((m = t.match(RE_DONADO))) return { fecha: ymd(m[2], m[3], m[4]), destino: /merced/i.test(m[1]) ? 'Fundación Merced' : m[1].trim(), factura: m[5] || '' };
+      if (/DONADO A FUNDACION MERCED/i.test(t)) return { fecha: '', destino: 'Fundación Merced', factura: '' };
+      return null;
+    }
+    if (estatus === 'DESECHADO') {
+      if ((m = t.match(RE_DESECHO))) return { fecha: ymd(m[1], m[2], m[3]), deposito: m[4] ? Number(m[4].replace(/,/g, '')) : null };
+      return /DESECHO/i.test(t) ? { fecha: '', deposito: null } : null;
+    }
+    return { conCobro: RE_COBRO.test(t) };
+  }
+
+  /**
+   * Agregados de los equipos que ya salieron, para las pestañas Ventas, Donaciones y Desechos. Solo conteos: sin
+   * IMEI, NUCO ni nombres de quien compró 1 o 2 equipos. "sinDato": el sistema no tiene un movimiento que lo explique.
+   */
+  function bajasEquipos_(movimientos) {
+    if (!LineasDatos.existeTabla('EQUIPOS') || !LineasDatos.existeTabla('MOVIMIENTOS')) return null;
+    const estatusDe = {};
+    LineasDatos.leerTabla('EQUIPOS').forEach((e) => {
+      const s = txt(e['ESTATUS EQUIPO']).toUpperCase();
+      if (ESTATUS_BAJA.indexOf(s) >= 0) estatusDe[txt(e['ID'])] = s;
+    });
+    // El último movimiento que dejó a cada equipo en su estatus de hoy
+    const ultimo = {};
+    (movimientos || LineasDatos.leerTabla('MOVIMIENTOS')).forEach((m) => {
+      const id = txt(m['ID EQUIPO']);
+      const s = estatusDe[id];
+      if (!s) return;
+      let cambios = [];
+      try { cambios = JSON.parse(txt(m['CAMBIOS']) || '[]'); } catch (e) { cambios = []; }
+      if (!Array.isArray(cambios) || !cambios.some((c) => c && txt(c.campo).toUpperCase() === 'ESTATUS EQUIPO' && txt(c.despues).toUpperCase() === s)) return;
+      ultimo[id] = txt(m['COMENTARIO']);
+    });
+    const v = { total: 0, sinDato: 0, sinFecha: 0, porMes: {}, porComprador: {}, recibos: {} };
+    const d = { total: 0, sinDato: 0, sinFecha: 0, porMes: {}, porDestino: {}, facturas: {} };
+    const x = { total: 0, sinDato: 0, sinFecha: 0, porMes: {}, depositos: {} };
+    const r = { total: 0, sinDato: 0, conCobro: 0 };
+    const ventas = [];
+    Object.keys(estatusDe).forEach((id) => {
+      const s = estatusDe[id];
+      const b = ultimo[id] === undefined ? null : leerBaja_(s, ultimo[id]);
+      if (s === 'VENDIDO') { v.total++; if (b) ventas.push(b); else v.sinDato++; }
+      if (s === 'DONADO') {
+        d.total++;
+        if (!b) { d.sinDato++; return; }
+        if (b.fecha) sumar(d.porMes, b.fecha.slice(0, 7)); else d.sinFecha++;
+        sumar(d.porDestino, b.destino);
+        if (b.factura) sumar(d.facturas, b.factura);
+      }
+      if (s === 'DESECHADO') {
+        x.total++;
+        if (!b) { x.sinDato++; return; }
+        if (b.fecha) sumar(x.porMes, b.fecha.slice(0, 7)); else x.sinFecha++;
+        // Un depósito por fecha y monto (el comentario lo repite en cada equipo del mismo lote)
+        if (b.deposito !== null) { const k = b.fecha + '|' + b.deposito; x.depositos[k] = x.depositos[k] || { fecha: b.fecha, monto: b.deposito, equipos: 0 }; x.depositos[k].equipos++; }
+      }
+      if (s === 'EXTRAVIO-ROBO') { r.total++; if (ultimo[id] === undefined) r.sinDato++; else if (b.conCobro) r.conCobro++; }
+    });
+    // Ventas: los compradores de 1–2 equipos se juntan; un recibo de un colaborador sale con esa etiqueta
+    const porPersona = {};
+    ventas.forEach((b) => { if (b.comprador) sumar(porPersona, b.comprador); });
+    const quien = (c) => (!c ? 'Sin comprador en el sistema' : porPersona[c] <= MAX_INDIVIDUAL && !/sin recibo/.test(c) ? COLABORADORES : c);
+    ventas.forEach((b) => {
+      if (b.fecha) sumar(v.porMes, b.fecha.slice(0, 7)); else v.sinFecha++;
+      sumar(v.porComprador, quien(b.comprador));
+      if (b.recibo) {
+        const k = b.recibo;
+        v.recibos[k] = v.recibos[k] || { recibo: k, fecha: b.fecha, comprador: quien(b.comprador), equipos: 0 };
+        v.recibos[k].equipos++;
+        if (b.fecha && (!v.recibos[k].fecha || b.fecha < v.recibos[k].fecha)) v.recibos[k].fecha = b.fecha;
+      }
+    });
+    v.recibos = Object.keys(v.recibos).map((k) => v.recibos[k]).sort((a, c) => (a.fecha || '').localeCompare(c.fecha || '') || a.recibo.localeCompare(c.recibo));
+    v.conRecibo = v.recibos.reduce((t, k) => t + k.equipos, 0);
+    x.depositos = Object.keys(x.depositos).map((k) => x.depositos[k]).sort((a, c) => a.fecha.localeCompare(c.fecha));
+    return { ventas: v, donaciones: d, desechos: x, extravios: r };
+  }
+
+  const MESES_CORTOS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+  /** "nov-2025" (el mes del reporte, por su ciclo de facturación) → '2025-11'; si no se entiende, el de la fecha */
+  function mesReporte_(texto, fecha) {
+    const m = /^([a-z]{3})\w*[-\s/]+(\d{4})$/i.exec(txt(texto));
+    const i = m ? MESES_CORTOS.indexOf(m[1].toUpperCase()) : -1;
+    if (i >= 0) return m[2] + '-' + ('0' + (i + 1)).slice(-2);
+    return fecha instanceof Date && !isNaN(fecha.getTime()) ? Utilities.formatDate(fecha, zona(), 'yyyy-MM') : '';
+  }
+
+  /**
+   * Las ventas de la hoja VENTAS (LineasVentas.gs, 2-nov), tal cual el reporte, con cuántos equipos de cada una tiene ligados
+   * el inventario (EQUIPOS.ID VENTA). Sin la hoja, null: la pestaña Ventas sigue con lo que dicen los movimientos
+   * (bajasEquipos_). Quien compró 1 o 2 equipos en todas sus ventas sale como colaborador (no viaja su nombre).
+   */
+  function ventasRegistradas_() {
+    if (!LineasDatos.existeTabla('VENTAS')) return null;
+    const filas = LineasDatos.leerTabla('VENTAS').filter((v) => txt(v['ID']));
+    if (!filas.length) return null;
+    const ligados = {};
+    let vendidos = 0;
+    let vendidosSinVenta = 0;
+    LineasDatos.leerTabla('EQUIPOS').forEach((e) => {
+      const id = txt(e['ID VENTA']);
+      if (id) ligados[id] = (ligados[id] || 0) + 1;
+      if (txt(e['ESTATUS EQUIPO']).toUpperCase() === 'VENDIDO') { vendidos++; if (!id) vendidosSinVenta++; }
+    });
+    const porPersona = {};
+    filas.forEach((v) => sumar(porPersona, txt(v['COMPRADOR']).toUpperCase(), Number(v['EQUIPOS']) || 0));
+    const ventas = filas.map((v) => {
+      const comprador = txt(v['COMPRADOR']).toUpperCase();
+      const f = v['FECHA'] instanceof Date && !isNaN(v['FECHA'].getTime()) ? Utilities.formatDate(v['FECHA'], zona(), 'yyyy-MM-dd') : '';
+      const evidencia = txt(v['EVIDENCIA']);
+      return {
+        id: txt(v['ID']), referencia: txt(v['REFERENCIA REPORTE']), fecha: f, mes: mesReporte_(v['MES REPORTE'], v['FECHA']),
+        comprador: !comprador ? 'Sin comprador' : porPersona[comprador] <= MAX_INDIVIDUAL ? COLABORADORES : comprador,
+        equipos: Number(v['EQUIPOS']) || 0, importe: Number(v['IMPORTE']) || 0, ligados: ligados[txt(v['ID'])] || 0,
+        evidencia: /^https:\/\//i.test(evidencia) ? evidencia : '',
+      };
+    });
+    const total = (k) => ventas.reduce((t, v) => t + v[k], 0);
+    return {
+      ventas: ventas, equipos: total('equipos'), importe: total('importe'),
+      // Una venta con más ligados que equipos no suma de más (la carga no lo permite; por si alguien la edita a mano)
+      ligados: ventas.reduce((t, v) => t + Math.min(v.ligados, v.equipos), 0),
+      vendidos: vendidos, vendidosSinVenta: vendidosSinVenta,
+    };
+  }
+
+  /**
+   * Número → 1 si viene en una carta de cancelación al proveedor, 0 si no: la columna CARTA DE CANCELACION de la hoja
+   * LINEAS (la llena lineasCartaAplicar, LineasCartaCancelacion.gs). Sin la hoja o sin la columna, null.
+   */
+  function cartas_() {
+    if (!LineasDatos.existeTabla('LINEAS')) return null;
+    const filas = LineasDatos.leerTabla('LINEAS');
+    if (!filas.some((f) => txt(f['CARTA DE CANCELACION']))) return null;
+    const de = {};
+    filas.forEach((f) => {
+      const n = digitos10(f['NUMERO TELEFONO']);
+      const v = txt(f['CARTA DE CANCELACION']).toUpperCase();
+      if (!n || (v !== 'SI' && v !== 'NO')) return;
+      // Un número con varios registros: basta con que uno diga SI (la carta es del número, no del registro)
+      de[n] = de[n] === 1 || v === 'SI' ? 1 : 0;
+    });
+    return de;
+  }
+
   function calcular() {
     const ahora = Date.now();
     const ms = {}; // tiempos de cada paso (diagnóstico: se ven en la respuesta)
@@ -298,6 +509,8 @@ const LineasPanorama = (function () {
     const diaDe = (d) => dias[d.getTime()] || (dias[d.getTime()] = Utilities.formatDate(d, zona(), 'yyyy-MM-dd'));
     const filasLineas = LineasDatos.leerTabla(LineasRepo.TAB.LINEAS);
     tomar('leerLineas');
+    const cartaDe = cartas_();
+    tomar('leerCartas');
     filasLineas.forEach((f) => {
       const r = LineasRepo.convertirRegistro(f);
       if (!r) return;
@@ -305,15 +518,21 @@ const LineasPanorama = (function () {
       // FECHA REGISTRO válida: después del 2000 y no en el futuro (hay capturas con 1969 y 2027)
       const altaMs = alta instanceof Date && !isNaN(alta.getTime()) && alta.getFullYear() >= 2000 && alta.getTime() <= ahora ? alta.getTime() : null;
       const ids = [txt(r.id)].concat(LineasDatos.idsDeFila(f)).filter((k, i, a) => k && a.indexOf(k) === i);
+      // El renglón lleva el ID del equipo (o de la línea sola); MOVIMIENTOS anota cada cambio con el de la línea o el del
+      // equipo, así que cada uno se busca también por el suyo
+      const conId = (id) => (id && ids.indexOf(id) < 0 ? ids.concat([id]) : ids);
+      const idEquipo = txt(LineasUtil.col(f, 'ID EQUIPO'));
+      const idLinea = txt(LineasUtil.col(f, 'ID LINEA'));
       const depto = txt(LineasUtil.col(f, 'DEPARTAMENTO')).toUpperCase() || 'SIN DEPARTAMENTO';
-      if (r.equipo) regs.equipos.push({ ids: ids, actual: estatus(r.equipo.estatus), alta: altaMs, depto: depto });
+      if (r.equipo) regs.equipos.push({ ids: conId(idEquipo), actual: estatus(r.equipo.estatus), alta: altaMs, depto: depto, idAlta: idEquipo });
       if (r.linea) {
         const fin = r.linea.finPlan instanceof Date && !isNaN(r.linea.finPlan.getTime()) && r.linea.finPlan.getFullYear() >= 2000
           ? diaDe(r.linea.finPlan) : '';
         regs.lineas.push({
-          ids: ids, actual: estatus(r.linea.estatus), alta: altaMs, depto: depto, fin: fin,
+          ids: conId(idLinea), actual: estatus(r.linea.estatus), alta: altaMs, idAlta: idLinea, depto: depto, fin: fin,
           cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || ''),
           costo: Number(r.linea.costoPlan) || 0,
+          carta: cartaDe && cartaDe[digitos10(r.linea.numero)] !== undefined ? cartaDe[digitos10(r.linea.numero)] : -1,
         });
         lineasHoy.push({ numero: digitos10(r.linea.numero), estatus: r.linea.estatus, cuenta: cuentaDe(r.linea.compania, r.linea.razonSocial), basico: /B[AÁ]SIC[OA]/.test(r.tipo || '') });
       }
@@ -322,12 +541,24 @@ const LineasPanorama = (function () {
     tomar('convertir');
     const bit = eventosDeEstatus_();
     tomar('leerCambios');
+    const movimientos = LineasDatos.existeTabla('MOVIMIENTOS') ? LineasDatos.leerTabla('MOVIMIENTOS') : [];
+    const mov = eventosDeMovimientos_(movimientos);
+    tomar('leerMovimientos');
+    // Las dos bitácoras: la de AppSheet (hasta el 30-sep) y MOVIMIENTOS (desde octubre)
     const eventos = { equipos: {}, lineas: {} };
-    ['equipos', 'lineas'].forEach((tipo) => {
-      Object.keys(bit.eventos[tipo]).forEach((id) => { eventos[tipo][id] = bit.eventos[tipo][id].map((e) => ({ t: e[0], antes: e[1] })); });
-    });
-    const primera = bit.primera === null ? null : new Date(bit.primera);
-    const total = bit.total;
+    [bit, mov].forEach((fuente) => ['equipos', 'lineas'].forEach((tipo) => {
+      Object.keys(fuente.eventos[tipo]).forEach((id) => {
+        eventos[tipo][id] = (eventos[tipo][id] || []).concat(fuente.eventos[tipo][id].map((e) => ({ t: e[0], antes: e[1] })));
+      });
+    }));
+    // Cada uno cuenta desde su propia alta: una línea nueva puesta en un equipo viejo no existía antes de su ALTA
+    ['equipos', 'lineas'].forEach((tipo) => regs[tipo].forEach((r) => {
+      const t = mov.altas[r.idAlta];
+      if (t && t <= ahora) r.alta = t;
+    }));
+    const primeras = [bit.primera, mov.primera].filter((x) => x !== null);
+    const primera = primeras.length ? new Date(Math.min.apply(null, primeras)) : null;
+    const total = bit.total + mov.total;
 
     const meses = mesesEntre(mesDe(primera || new Date(ahora)), mesDe(new Date(ahora)));
     const bloque = (tipo) => ({
@@ -336,13 +567,17 @@ const LineasPanorama = (function () {
       historico: historico(regs[tipo], eventos[tipo], meses, ahora),
     });
     const salida = {
-      generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses,
+      generadoEn: new Date(ahora), desde: primera, cambiosDeEstatus: total, meses: meses, conCartas: !!cartaDe,
       equipos: bloque('equipos'), lineas: bloque('lineas'),
       registros: registros(regs, eventos, meses),
     };
     tomar('calcular');
     salida.factura = factura_(lineasHoy);
     tomar('factura');
+    salida.equiposBajas = bajasEquipos_(movimientos);
+    tomar('bajas');
+    salida.ventas = ventasRegistradas_();
+    tomar('ventas');
     salida.ms = ms;
     return salida;
   }
@@ -358,5 +593,6 @@ const LineasPanorama = (function () {
     return r;
   }
 
-  return { panorama, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_ };
+  return { panorama, CLAVE_CACHE, _historico: historico, _mesesEntre: mesesEntre, _registros: registros, _cuentaDe: cuentaDe, _factura: factura_, _bajasEquipos: bajasEquipos_, _ventasRegistradas: ventasRegistradas_,
+    _eventosDeMovimientos: eventosDeMovimientos_ };
 })();

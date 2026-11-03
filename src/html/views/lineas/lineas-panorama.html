@@ -3,135 +3,138 @@
     <div class="page-header">
       <div>
         <h2><i data-lucide="layout-dashboard" class="ico"></i> Panorama de Líneas</h2>
-        <p class="page-subtitle">Cuántas líneas y equipos hay, cuánto cuestan y cómo han cambiado mes a mes.</p>
+        <p class="page-subtitle">Líneas, equipos y ventas: un tema por pestaña.</p>
       </div>
       <div class="page-header-actions">
         <button type="button" class="secondary" id="lnp-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
       </div>
     </div>
 
-    <!-- Un solo filtro arriba: todo lo de abajo se calcula al cierre del mes elegido -->
-    <div class="lnp-filtros">
-      <label for="lnp-mes"><i data-lucide="calendar-days" class="ico"></i> Ver al cierre de</label>
-      <select id="lnp-mes" disabled><option>Cargando…</option></select>
-      <span class="lnp-filtro-nota" id="lnp-filtro-nota"></span>
-    </div>
+    <!-- Pestañas por tema (30-oct, para la Dirección). Los ids de adentro son los de siempre: cada sección se pinta igual -->
+    <div data-tabs id="lnp-pestanas">
+      <div class="tabs-lista" role="tablist" aria-label="Temas del panorama">
+        <button type="button" class="tab-btn activa" data-tab="resumen"><i data-lucide="sparkles" class="ico"></i> Resumen</button>
+        <button type="button" class="tab-btn" data-tab="lineas"><i data-lucide="card-sim" class="ico"></i> Líneas</button>
+        <button type="button" class="tab-btn" data-tab="factura" id="lnp-tab-factura" hidden><i data-lucide="receipt" class="ico"></i> Facturación</button>
+        <button type="button" class="tab-btn" data-tab="equipos"><i data-lucide="smartphone" class="ico"></i> Equipos</button>
+        <button type="button" class="tab-btn" data-tab="ventas"><i data-lucide="hand-coins" class="ico"></i> Ventas</button>
+      </div>
 
-    <div class="lnp-portada">
-      <div class="card lnp-heroe">
-        <div class="lnp-etiqueta-grande"><i data-lucide="card-sim" class="ico"></i> Líneas activas</div>
-        <div class="lnp-heroe-fila">
-          <div class="lnp-heroe-num" id="lnp-activas">…</div>
-          <div class="lnp-heroe-delta" id="lnp-delta"></div>
+      <!-- Un solo filtro: lo de Resumen, Líneas y Equipos se calcula al cierre del mes elegido. Las ventas son eventos
+           con su propia fecha: ahí se oculta. Donaciones y Desechos se quitaron (usuario, 2-nov) -->
+      <div class="lnp-filtros" id="lnp-filtros">
+        <label for="lnp-mes"><i data-lucide="calendar-days" class="ico"></i> Ver al cierre de</label>
+        <select id="lnp-mes" disabled><option>Cargando…</option></select>
+        <span class="lnp-filtro-nota" id="lnp-filtro-nota"></span>
+      </div>
+      <p class="lnp-nota lnp-nota-historial" id="lnp-nota-historial" hidden><i data-lucide="history" class="ico"></i> Todo el historial que registra el sistema, por la fecha en que pasó cada cosa.</p>
+
+      <!-- ===================== Resumen: el recap para dirección ===================== -->
+      <div data-tab-panel="resumen">
+        <!-- Cuatro puertas: cada una abre su pestaña -->
+        <div class="lnp-puertas" id="lnp-puertas"></div>
+      </div>
+
+      <!-- ===================== Líneas ===================== -->
+      <div data-tab-panel="lineas" hidden>
+        <div class="lnp-portada">
+          <div class="card lnp-heroe">
+            <div class="lnp-etiqueta-grande"><i data-lucide="card-sim" class="ico"></i> Líneas activas (Uso y Disponible)</div>
+            <div class="lnp-heroe-fila">
+              <div class="lnp-heroe-num" id="lnp-activas">…</div>
+            </div>
+            <div class="lnp-heroe-sub" id="lnp-activas-sub"></div>
+            <div class="lnp-composicion" id="lnp-composicion" aria-label="Cómo están las líneas activas"></div>
+          </div>
+          <div class="card lnp-dinero">
+            <div class="lnp-etiqueta-grande"><i data-lucide="banknote" class="ico"></i> Renta mensual de los planes</div>
+            <div class="lnp-dinero-num" id="lnp-renta">…</div>
+            <div class="lnp-heroe-sub" id="lnp-renta-sub"></div>
+            <div class="lnp-cuentas" id="lnp-cuentas"></div>
+          </div>
         </div>
-        <div class="lnp-heroe-sub" id="lnp-activas-sub"></div>
-        <div class="lnp-composicion" id="lnp-composicion" aria-label="Cómo están las líneas activas"></div>
-        <p class="lnp-aviso"><i data-lucide="info" class="ico"></i> Es lo que dice el inventario del sistema. Puede no coincidir con lo que factura el proveedor hasta que Líneas termine sus correcciones.</p>
+
+        <h3 class="lnp-seccion"><i data-lucide="route" class="ico"></i> Cómo termina una línea</h3>
+        <div class="card lnp-tarjeta lnp-ciclo" id="lnp-ciclo">
+          <div class="lnp-flujo" id="lnp-flujo"></div>
+          <div class="lnp-cartas" id="lnp-cartas"></div>
+          <div class="lnp-alertas" id="lnp-alertas"></div>
+        </div>
+
+        <h3 class="lnp-seccion"><i data-lucide="calendar-clock" class="ico"></i> Adendums de los planes activos</h3>
+        <div class="stat-row lnp-vigencia" id="lnp-vigencia"></div>
+
+        <div class="lnp-hoy">
+          <div class="card lnp-tarjeta">
+            <div class="lnp-cabeza">
+              <h4><i data-lucide="building-2" class="ico"></i> Líneas activas por departamento (Uso y Disponible)</h4>
+              <span class="lnp-total" id="lnp-deptos-total"></span>
+            </div>
+            <div class="lnp-deptos" id="lnp-deptos"></div>
+            <button type="button" class="secondary lnp-ver-todos" id="lnp-deptos-mas" hidden></button>
+          </div>
+          <div class="card lnp-tarjeta">
+            <div class="lnp-cabeza"><h4><i data-lucide="card-sim" class="ico"></i> Líneas por estatus</h4><span class="lnp-total" id="lnp-total-lineas"></span></div>
+            <div class="lnp-barras" id="lnp-barras-lineas"><p class="ln-tenue">Cargando…</p></div>
+          </div>
+        </div>
       </div>
 
-      <div class="card lnp-dinero">
-        <div class="lnp-etiqueta-grande"><i data-lucide="banknote" class="ico"></i> Renta mensual de los planes</div>
-        <div class="lnp-dinero-num" id="lnp-renta">…</div>
-        <div class="lnp-heroe-sub" id="lnp-renta-sub"></div>
-        <div class="lnp-cuentas" id="lnp-cuentas"></div>
+      <!-- ===================== Facturación: solo con la sección "Plan y facturación" (el servidor la quita si no) ===================== -->
+      <div data-tab-panel="factura" hidden>
+        <div class="lnp-factura" id="lnp-factura" hidden>
+          <h3 class="lnp-seccion"><i data-lucide="receipt" class="ico"></i> Contra la factura del proveedor</h3>
+          <p class="lnp-nota lnp-factura-nota" id="lnp-factura-nota"></p>
+          <div class="stat-row" id="lnp-factura-kpis"></div>
+          <div class="lnp-dos">
+            <div class="card lnp-tarjeta">
+              <div class="lnp-cabeza"><h4><i data-lucide="scale" class="ico"></i> Por cuenta</h4><span class="lnp-total" id="lnp-factura-mes"></span></div>
+              <div class="lnp-cuentas" id="lnp-factura-cuentas" data-scroll-x></div>
+            </div>
+            <div class="card lnp-tarjeta">
+              <div class="lnp-cabeza"><h4><i data-lucide="calendar-range" class="ico"></i> Facturado por mes</h4><span class="lnp-total" id="lnp-factura-total"></span></div>
+              <div class="lnp-cuentas" id="lnp-factura-meses" data-scroll-x></div>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <!-- Contra la factura del proveedor (29-oct): solo con la sección "Plan y facturación"; el servidor la quita si no -->
-    <div class="lnp-factura" id="lnp-factura" hidden>
-      <h3 class="lnp-seccion"><i data-lucide="receipt" class="ico"></i> Contra la factura del proveedor</h3>
-      <p class="lnp-nota lnp-factura-nota" id="lnp-factura-nota"></p>
-      <div class="stat-row" id="lnp-factura-kpis"></div>
-      <div class="lnp-dos">
+      <!-- ===================== Equipos ===================== -->
+      <div data-tab-panel="equipos" hidden>
+        <div class="stat-row" id="lnp-kpis-equipos"></div>
+        <!-- Por grupos (30-oct): "1,586 en total" sonaba a "tenemos 1,586"; ahora lo que tenemos y lo que ya salió van aparte -->
         <div class="card lnp-tarjeta">
-          <div class="lnp-cabeza"><h4><i data-lucide="scale" class="ico"></i> Por cuenta</h4><span class="lnp-total" id="lnp-factura-mes"></span></div>
-          <div class="lnp-cuentas" id="lnp-factura-cuentas" data-scroll-x></div>
+          <div class="lnp-cabeza"><h4><i data-lucide="smartphone" class="ico"></i> Equipos (celulares y módems) por estatus</h4><span class="lnp-total" id="lnp-total-equipos"></span></div>
+          <div class="lnp-grupos" id="lnp-equipos-grupos"><p class="ln-tenue">Cargando…</p></div>
+          <p class="lnp-nota">Cada equipo cuenta una vez. No son líneas: una línea es el número; el equipo, el teléfono o módem.</p>
         </div>
-        <div class="card lnp-tarjeta">
-          <div class="lnp-cabeza"><h4><i data-lucide="calendar-range" class="ico"></i> Facturado por mes</h4><span class="lnp-total" id="lnp-factura-total"></span></div>
-          <div class="lnp-cuentas" id="lnp-factura-meses" data-scroll-x></div>
-        </div>
-      </div>
-      <div class="card lnp-tarjeta lnp-diferencias">
-        <div class="lnp-cabeza"><h4><i data-lucide="list-checks" class="ico"></i> Diferencias, número por número</h4></div>
-        <div class="lnp-controles">
-          <div class="ln-segmentado" id="lnp-dif" role="group" aria-label="Qué diferencia ver">
-            <button type="button" class="secondary activo" data-valor="activasSinCobro" aria-pressed="true">Activas sin cobro</button>
-            <button type="button" class="secondary" data-valor="cobradasNoActivas" aria-pressed="false">Cobradas sin estar activas</button>
+
+        <h3 class="lnp-seccion"><i data-lucide="chart-spline" class="ico"></i> Detalle por estatus, mes a mes</h3>
+        <div class="card lnp-tarjeta lnp-evolucion">
+          <div class="lnp-controles">
+            <div class="ln-segmentado" id="lnp-conjunto" role="group" aria-label="Qué contar">
+              <button type="button" class="secondary activo" data-valor="equipos" aria-pressed="true"><i data-lucide="smartphone" class="ico"></i> Equipos</button>
+              <button type="button" class="secondary" data-valor="lineas" aria-pressed="false"><i data-lucide="card-sim" class="ico"></i> Líneas</button>
+            </div>
+            <div class="ln-segmentado" id="lnp-rango" role="group" aria-label="Periodo">
+              <button type="button" class="secondary" data-valor="6" aria-pressed="false">6 meses</button>
+              <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
+              <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
+            </div>
+            <div class="ln-segmentado" id="lnp-forma" role="group" aria-label="Forma de ver">
+              <button type="button" class="secondary activo" data-valor="grafica" aria-pressed="true"><i data-lucide="chart-line" class="ico"></i> Gráfica</button>
+              <button type="button" class="secondary" data-valor="tabla" aria-pressed="false"><i data-lucide="table" class="ico"></i> Tabla</button>
+            </div>
           </div>
-        </div>
-        <p class="lnp-nota" id="lnp-dif-nota"></p>
-        <div class="lnp-tabla" id="lnp-dif-tabla"></div>
-      </div>
-    </div>
-
-    <h3 class="lnp-seccion"><i data-lucide="calendar-clock" class="ico"></i> Adendums de los planes activos</h3>
-    <div class="stat-row lnp-vigencia" id="lnp-vigencia"></div>
-
-    <div class="lnp-dos">
-      <div class="card lnp-tarjeta">
-        <div class="lnp-cabeza">
-          <h4 id="lnp-tendencia-titulo"><i data-lucide="chart-line" class="ico"></i> Líneas activas al cierre de cada mes</h4>
-        </div>
-        <div class="lnp-controles">
-          <div class="ln-segmentado" id="lnp-medida" role="group" aria-label="Qué medir">
-            <button type="button" class="secondary activo" data-valor="lineas" aria-pressed="true">Líneas</button>
-            <button type="button" class="secondary" data-valor="renta" aria-pressed="false">Renta</button>
-          </div>
-          <div class="ln-segmentado" id="lnp-rango-tendencia" role="group" aria-label="Periodo">
-            <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
-            <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
-          </div>
-        </div>
-        <div class="lnp-grafica" id="lnp-tendencia"></div>
-        <p class="lnp-nota">Clic en un mes de la gráfica para ver todo el Panorama al cierre de ese mes.</p>
-      </div>
-
-      <div class="card lnp-tarjeta">
-        <div class="lnp-cabeza">
-          <h4><i data-lucide="building-2" class="ico"></i> Líneas activas por departamento</h4>
-          <span class="lnp-total" id="lnp-deptos-total"></span>
-        </div>
-        <div class="lnp-deptos" id="lnp-deptos"></div>
-        <button type="button" class="secondary lnp-ver-todos" id="lnp-deptos-mas" hidden></button>
-      </div>
-    </div>
-
-    <h3 class="lnp-seccion"><i data-lucide="smartphone" class="ico"></i> Equipos</h3>
-    <div class="stat-row" id="lnp-kpis-equipos"></div>
-
-    <div class="lnp-hoy">
-      <div class="card lnp-tarjeta">
-        <div class="lnp-cabeza"><h4><i data-lucide="smartphone" class="ico"></i> Equipos por estatus</h4><span class="lnp-total" id="lnp-total-equipos"></span></div>
-        <div class="lnp-barras" id="lnp-barras-equipos"><p class="ln-tenue">Cargando…</p></div>
-      </div>
-      <div class="card lnp-tarjeta">
-        <div class="lnp-cabeza"><h4><i data-lucide="card-sim" class="ico"></i> Líneas por estatus</h4><span class="lnp-total" id="lnp-total-lineas"></span></div>
-        <div class="lnp-barras" id="lnp-barras-lineas"><p class="ln-tenue">Cargando…</p></div>
-      </div>
-    </div>
-
-    <h3 class="lnp-seccion"><i data-lucide="chart-spline" class="ico"></i> Detalle por estatus, mes a mes</h3>
-    <div class="card lnp-tarjeta lnp-evolucion">
-      <div class="lnp-controles">
-        <div class="ln-segmentado" id="lnp-conjunto" role="group" aria-label="Qué contar">
-          <button type="button" class="secondary activo" data-valor="equipos" aria-pressed="true"><i data-lucide="smartphone" class="ico"></i> Equipos</button>
-          <button type="button" class="secondary" data-valor="lineas" aria-pressed="false"><i data-lucide="card-sim" class="ico"></i> Líneas</button>
-        </div>
-        <div class="ln-segmentado" id="lnp-rango" role="group" aria-label="Periodo">
-          <button type="button" class="secondary" data-valor="6" aria-pressed="false">6 meses</button>
-          <button type="button" class="secondary activo" data-valor="12" aria-pressed="true">12 meses</button>
-          <button type="button" class="secondary" data-valor="0" aria-pressed="false">Todo</button>
-        </div>
-        <div class="ln-segmentado" id="lnp-forma" role="group" aria-label="Forma de ver">
-          <button type="button" class="secondary activo" data-valor="grafica" aria-pressed="true"><i data-lucide="chart-line" class="ico"></i> Gráfica</button>
-          <button type="button" class="secondary" data-valor="tabla" aria-pressed="false"><i data-lucide="table" class="ico"></i> Tabla</button>
+          <div class="lnp-chips" id="lnp-chips" role="group" aria-label="Estatus en la gráfica"></div>
+          <div class="lnp-grafica" id="lnp-grafica"></div>
+          <div class="lnp-tabla" id="lnp-tabla" hidden></div>
+          <p class="lnp-nota" id="lnp-nota"></p>
         </div>
       </div>
-      <div class="lnp-chips" id="lnp-chips" role="group" aria-label="Estatus en la gráfica"></div>
-      <div class="lnp-grafica" id="lnp-grafica"></div>
-      <div class="lnp-tabla" id="lnp-tabla" hidden></div>
-      <p class="lnp-nota" id="lnp-nota"></p>
+
+      <!-- ===================== Ventas: lineas-panorama-bajas.html ===================== -->
+      <div data-tab-panel="ventas" hidden><div id="lnp-ventas"><p class="ln-tenue">Cargando…</p></div></div>
     </div>
     <p class="ln-tenue lnp-generado" id="lnp-generado"></p>
   </section>

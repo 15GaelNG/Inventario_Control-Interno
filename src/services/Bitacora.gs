@@ -90,7 +90,9 @@ const Bitacora = (function () {
   function texto_(v) {
     if (v === null || v === undefined) return '';
     if (v instanceof Date) return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd HH:mm:ss');
-    const s = typeof v === 'object' ? JSON.stringify(v) : String(v);
+    // Los saltos de línea como los guarda Sheets (LF): uno de Windows (CRLF) cambiaba al escribirse y la huella del
+    // renglón ya no correspondía al leerlo (31-oct)
+    const s = (typeof v === 'object' ? JSON.stringify(v) : String(v)).replace(/\r\n?/g, '\n');
     return s.length > MAX_TEXTO ? s.slice(0, MAX_TEXTO) + '…' : s;
   }
   /** Un registro completo como texto, sin vacíos y con los secretos tapados */
@@ -377,10 +379,15 @@ const Bitacora = (function () {
     if (!hoja || hoja.getLastRow() < 2) return { renglones: 0, rota: null };
     const datos = hoja.getRange(2, 1, hoja.getLastRow() - 1, COLUMNAS.length).getValues();
     let previa = 'INICIO|' + nombre;
+    const col = (c) => COLUMNAS.indexOf(c);
     for (let i = 0; i < datos.length; i++) {
       const valores = datos[i].slice(0, COLUMNAS.length - 1).map((v) => (v instanceof Date ? texto_(v) : String(v)));
-      if (huella_(previa, valores) !== String(datos[i][COLUMNAS.length - 1])) {
-        return { renglones: datos.length, rota: { fila: i + 2, motivo: 'la huella no corresponde: se editó o borró desde aquí' } };
+      const escrita = String(datos[i][COLUMNAS.length - 1]);
+      // Un renglón de antes del 2-nov con un salto de línea de Windows: su huella se sacó con CRLF y Sheets guardó LF
+      const conWindows = valores.some((v) => v.indexOf('\n') >= 0) ? valores.map((v) => v.replace(/\n/g, '\r\n')) : null;
+      if (huella_(previa, valores) !== escrita && !(conWindows && huella_(previa, conWindows) === escrita)) {
+        const de = [valores[col('ACCION')], valores[col('HOJA')] && 'en ' + valores[col('HOJA')], valores[col('FECHA')]].filter(Boolean).join(' ');
+        return { renglones: datos.length, rota: { fila: i + 2, motivo: 'la huella no corresponde: se editó o borró desde aquí' + (de ? ' (' + de + ')' : '') } };
       }
       previa = String(datos[i][COLUMNAS.length - 1]);
     }
@@ -486,6 +493,28 @@ function instalarBitacora() {
   const raiz = DriveApp.getFolderById(Config.DRIVE_FOLDERS.RAIZ());
   if (!DriveUtils.carpetaEnRaizSiExiste(raiz, Bitacora.CARPETA)) DriveUtils.crearCarpeta(raiz, Bitacora.CARPETA);
   return 'Bitácora lista: ' + Bitacora.instalar();
+}
+
+/**
+ * Desde el editor, solo lee: revisa la cadena de huellas de un mes ('2026-10'; sin nada, el mes pasado y el actual,
+ * porque el editor no pasa argumentos) y dice dónde se rompe y cuántos renglones hay. Para saber qué pasó después de un
+ * aviso de la revisión diaria.
+ */
+function revisarBitacora(mes) {
+  soloEditor_();
+  const zona = Session.getScriptTimeZone();
+  const hoy = new Date();
+  const actual = Utilities.formatDate(hoy, zona, 'yyyy-MM');
+  const pasado = Utilities.formatDate(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1), zona, 'yyyy-MM');
+  const meses = typeof mes === 'string' && mes ? [mes] : [pasado, actual];
+  let cola = 0;
+  try { cola = JSON.parse(PropertiesService.getScriptProperties().getProperty('BITACORA_COLA') || '[]').length; } catch (e) { /* sin cola */ }
+  const texto = meses.map((m) => {
+    const r = Bitacora.revisarCadena(m);
+    return m + ': ' + r.renglones + ' renglones · ' + (r.rota ? 'se rompe en el renglón ' + r.rota.fila + ': ' + r.rota.motivo : 'la cadena verifica');
+  }).join(' | ') + ' · pendientes en la cola: ' + cola + ' · hoy se escribe en la pestaña ' + actual;
+  Logger.log(texto);
+  return texto;
 }
 
 /** Desde el editor: vuelve a pintar la pestaña del mes con el formato vigente (colores por acción, filtros…) */

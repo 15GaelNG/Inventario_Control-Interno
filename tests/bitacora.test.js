@@ -137,6 +137,27 @@ console.log('5. Huellas encadenadas');
   ok(B.revisarCadena().rota && /faltan/.test(B.revisarCadena().rota.motivo), 'si borra el último, también se nota');
 }
 
+console.log('5b. Saltos de línea de Windows (31-oct): Sheets guarda \\n y la huella tiene que seguir correspondiendo');
+{
+  const { e, S, B, renglones, archivos } = entorno();
+  B.sesion({ correo: 'ana@x.com' });
+  S.update('libro', 'TICKETS', 'TCK-1', { NOTA: 'uno\r\ndos' });
+  ok(renglones()[0].DESPUES === 'uno\ndos', 'se anota con \\n, como lo guarda Sheets');
+  ok(B.revisarCadena().rota === null, 'y la cadena verifica');
+  // Un renglón de antes del arreglo: su huella se sacó con \r\n, pero en la hoja quedó \n
+  const hoja = e.libros[archivos[0].getId()].getSheets()[0];
+  const crypto = require('crypto');
+  const fila = hoja._datos[1];
+  const conWindows = fila.slice(0, B.COLUMNAS.length - 1).map((v) => String(v).replace(/\n/g, '\r\n'));
+  fila[B.COLUMNAS.length - 1] = crypto.createHash('sha256').update('INICIO|' + hoja.getName() + '|' + conWindows.join('␟'), 'utf8').digest('hex');
+  const clave = Array.from(e.propiedades.keys()).find((k) => /^BITACORA_HUELLA_/.test(k));
+  e.propiedades.set(clave, fila[B.COLUMNAS.length - 1]);
+  ok(B.revisarCadena().rota === null, 'un renglón viejo que solo difiere en el salto de línea no rompe la cadena');
+  fila[11] = 'uno\ntres';
+  const rota = B.revisarCadena().rota;
+  ok(rota && rota.fila === 2 && /CAMBIAR en TICKETS/.test(rota.motivo), 'editarlo sí la rompe, y el aviso dice qué renglón es');
+}
+
 console.log('6. Si el libro falla, el guardado no truena y queda en la cola');
 {
   const { e, S, B, renglones } = entorno({ appendFalla: true });
