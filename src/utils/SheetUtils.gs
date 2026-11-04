@@ -594,6 +594,50 @@ const SheetUtils = (function () {
     });
   }
 
+  /**
+   * Actualiza (merge) varias filas por ID en una sola pasada: una lectura y una escritura
+   * para TODAS, no un viaje de lectura + uno de escritura por cada una como update() --
+   * carísimo si cambian muchas filas de un jalón (el extinto UberService.sincronizarBajas,
+   * que ponía BAJA automático en Uber: su primera corrida, con el atraso de quien había
+   * dejado la empresa sin darse de baja ahí, tardó casi un minuto por llamar a update()
+   * renglón por renglón -- hoy UberService ya no cambia el estatus solo, ver
+   * UberService.detectarBajasPendientes). Bloquea mientras actualiza, igual que removeMany,
+   * para no pisar una escritura concurrente.
+   * @param {Array<{id: *, changes: Object}>} updates
+   * @return {number} cuántas filas encontró y cambió
+   */
+  function updateMany(spreadsheetId, sheetName, updates, idColumn) {
+    idColumn = idColumn || 'ID';
+    if (!updates || !updates.length) return 0;
+
+    return Candado.con(() => {
+      const sheet = getSheet(spreadsheetId, sheetName);
+      const headers = getHeaders_(sheet);
+      const idCol = columnaId_(headers, idColumn, sheetName);
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) return 0;
+
+      const porId = {};
+      updates.forEach((u) => { porId[String(u.id)] = u.changes; });
+
+      const rango = sheet.getRange(2, 1, lastRow - 1, headers.length);
+      const valores = rango.getValues();
+      let cambiadas = 0;
+      valores.forEach((row, i) => {
+        const cambios = porId[String(row[idCol])];
+        if (!cambios) return;
+        const merged = Object.assign({}, rowToObject_(headers, row), cambios);
+        valores[i] = objectToRow_(headers, merged);
+        cambiadas++;
+      });
+      if (cambiadas) {
+        rango.setValues(valores);
+        tocar_(spreadsheetId, sheetName);
+      }
+      return cambiadas;
+    });
+  }
+
   /** Elimina físicamente una fila por ID (usar con cuidado; preferir "baja lógica"). Bajo el candado, como update. */
   function remove(spreadsheetId, sheetName, id, idColumn) {
     idColumn = idColumn || 'ID';
@@ -761,7 +805,7 @@ const SheetUtils = (function () {
     // CambiosVehiculosService/ListasService/ReasignacionesVehicularesService/TicketsService/
     // UberService/VehiculosService — misma firma (hoja, columnas).
     leerColumnasDeHoja: leerColumnas,
-    findById, insert, update, remove, removeMany,
+    findById, insert, update, updateMany, remove, removeMany,
     indiceDeColumnas, normalizarEncabezado_, objectToRow_,
     // Escribir (28-oct): toda escritura de una hoja pasa por aquí
     tabla, agregarFilas, cambiarCeldas, borrarFilas, reemplazarFilas, cambiarColumna,
