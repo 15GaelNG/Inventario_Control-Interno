@@ -963,9 +963,17 @@ const InspeccionesService = (function () {
    * Se recalcula desde las respuestas crudas con la plantilla del tipo, igual que puntajesMaximos --
    * por eso correr esto más de una vez no vuelve a tocar lo que ya quedó bien: solo escribe donde el
    * recálculo da distinto de lo guardado (tolerancia de 0.01 puntos, por redondeo).
-   * @param {boolean} aplicar  false = solo contar
+   *
+   * Con `regenerarPdf` (3-nov-2026): a cada inspección que de verdad se corrige también se le
+   * regenera el PDF (mismo mecanismo que actualizar(): regenerarPdfDeFila_, que relee de Drive las
+   * imágenes ya guardadas en vez de pedirlas de nuevo). Sin esto, la hoja queda bien pero el PDF
+   * descargable se queda con el número viejo. Mejor esfuerzo: si el PDF de una fila no se pudo
+   * regenerar (plantilla movida, carpeta sin permiso…), esa fila igual se queda con el PUNTAJE
+   * FINAL corregido en la hoja -- el error se reporta en pdfErrores, sin frenar a las demás.
+   * @param {boolean} aplicar        false = solo contar
+   * @param {boolean} [regenerarPdf] además de corregir la hoja, regenerar el PDF de cada corregida
    */
-  function puntajesRelativos(aplicar) {
+  function puntajesRelativos(aplicar, regenerarPdf) {
     const hoja = hoja_();
     const datos = hoja.getDataRange().getValues();
     const encabezados = datos[0];
@@ -973,8 +981,12 @@ const InspeccionesService = (function () {
     const col = (nombre) => encabezados.findIndex((e) => norm(e) === norm(nombre));
     const iTipo = col('TIPO');
     const iFinal = col('PUNTAJE FINAL INSPECCION');
+    const iId = col(COL_ID);
     const estructuras = {};
-    const r = { filas: datos.length - 1, corregidas: 0, yaCorrectas: 0, sinCalificar: 0, sinRespuestas: 0, sinTipo: 0, errores: {} };
+    const r = {
+      filas: datos.length - 1, corregidas: 0, yaCorrectas: 0, sinCalificar: 0, sinRespuestas: 0, sinTipo: 0,
+      errores: {}, pdfRegenerados: 0, pdfErrores: {},
+    };
     let huboCambios = false;
     const nuevos = datos.slice(1).map((row) => {
       const actual = iFinal === -1 ? '' : row[iFinal];
@@ -999,6 +1011,18 @@ const InspeccionesService = (function () {
       if (actualPorcentaje !== null && Math.abs(actualPorcentaje - puntaje.final) < 0.01) { r.yaCorrectas++; return [actual]; }
       r.corregidas++;
       huboCambios = true;
+      if (aplicar && regenerarPdf && iId !== -1) {
+        const idFila = limpiar_(row[iId]);
+        const filaReal = {};
+        encabezados.forEach((e, j) => { filaReal[e] = row[j]; });
+        filaReal['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
+        try {
+          regenerarPdfDeFila_(idFila, filaReal, estructura);
+          r.pdfRegenerados++;
+        } catch (err) {
+          r.pdfErrores[idFila] = err.message;
+        }
+      }
       return [puntaje.final / 100];
     });
     if (aplicar && huboCambios) {
@@ -1009,6 +1033,42 @@ const InspeccionesService = (function () {
       CacheHojas.tocarHoja(hoja);
     }
     return r;
+  }
+
+  /**
+   * El mismo mecanismo de PDF que actualizar(): releer de Drive las imágenes que esa inspección ya
+   * tenía guardadas (blobDeImagenGuardada_, sin pedirlas de nuevo a nadie) y regenerar con
+   * PdfService.generar, usando el PUNTAJE FINAL ya corregido que trae filaReal. Deja la liga nueva
+   * en FORMATO INSPECCION VEHICULAR; si algo truena (plantilla movida, sin permiso…), se propaga tal
+   * cual para que la llamada lo cuente como error de ESA fila sin tocar la columna.
+   */
+  function regenerarPdfDeFila_(idFila, filaReal, estructura) {
+    const paraPdf = {};
+    COLUMNAS_IMAGEN.forEach(([columna]) => {
+      const blob = blobDeImagenGuardada_(filaReal[columna]);
+      if (blob) paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({ blob: blob }, FIRMA_PDF) : { blob: blob };
+    });
+    const nucco = filaReal['NUCO'];
+    const enNuco = ExpedienteNuco.tieneNuco(nucco);
+    const pdf = PdfService.generar({
+      plantillaId: estructura.plantillaId,
+      datos: Object.assign({}, filaReal, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+        if (!paraPdf[columna]) vacias[columna] = '';
+        return vacias;
+      }, {})),
+      imagenes: paraPdf,
+      formato: FORMATO_PDF,
+      carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, filaReal['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
+      subcarpeta: enNuco ? undefined : estructura.carpeta,
+      nombre: (filaReal[COL_PDF] || '').replace(/^.*\//, '').replace(/\.pdf$/i, '') ||
+        PdfService.nombreArchivo(['INSPECCION', filaReal['RESPONSABLE'], filaReal['PLACAS'], PdfService.fechaParaNombre(new Date())]),
+    });
+    if (enNuco) ExpedienteNuco.olvidar(nucco);
+    SheetUtils.update(ssId(), hoja_().getName(), idFila,
+      { [COL_PDF]: enNuco ? pdf.url
+        : estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
+      COL_ID);
+    return pdf.url;
   }
 
   // ---------- puntaje ----------
@@ -1584,13 +1644,19 @@ function inspeccionesRelativoRevisar() {
 /**
  * Desde el editor (30-oct): escribe el PUNTAJE FINAL corregido de las inspecciones que lo tenían mal (correr
  * antes inspeccionesRelativoRevisar). En PROD no corre sin inspeccionesRelativoCalcular('SI, EN PROD').
+ *
+ * Desde el 3-nov-2026 también regenera el PDF de cada inspección que corrige (mismo PUNTAJE FINAL
+ * ya impreso, con las imágenes que ya tenía guardadas -- ver regenerarPdfDeFila_): sin esto, la hoja
+ * quedaba bien pero el formato descargable se quedaba con el número viejo.
  */
 function inspeccionesRelativoCalcular(confirmacion) {
   soloEditor_();
   if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
     throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesRelativoCalcular('SI, EN PROD').");
   }
-  const r = InspeccionesService.puntajesRelativos(true);
-  Logger.log('PUNTAJE FINAL corregido: ' + r.corregidas + ' de ' + r.filas + ' inspecciones (ya estaban bien: ' + r.yaCorrectas + ').');
+  const r = InspeccionesService.puntajesRelativos(true, true);
+  Logger.log('PUNTAJE FINAL corregido: ' + r.corregidas + ' de ' + r.filas + ' inspecciones (ya estaban bien: ' + r.yaCorrectas + ')' +
+    ' · PDF regenerado: ' + r.pdfRegenerados +
+    (Object.keys(r.pdfErrores).length ? ' · no se pudo regenerar el PDF de: ' + JSON.stringify(r.pdfErrores) : '') + '.');
   return r;
 }
