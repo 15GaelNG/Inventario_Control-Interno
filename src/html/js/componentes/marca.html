@@ -1,0 +1,107 @@
+<style>
+  /* Marca: uno o dos logos (o sus iniciales) donde antes iba el de Control Interno */
+  [data-marca-logo] { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .marca-iniciales {
+    display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+    font-weight: 800; letter-spacing: .5px; line-height: 1; color: #fff; background: #1f3b57; border-radius: 999px;
+    font-size: var(--texto-2xs);
+  }
+  .marca-iniciales[data-marca="FT"] { background: #0f5e6e; }
+  .marca-iniciales[data-marca="CM"] { background: #1f3b57; color: #e8dcc0; }
+  /* Las insignias del login y de la carga, con dos logos: más anchas, no más chicas */
+  .login-brand-badge[data-marca-actual="AMBAS"], .login-icon-badge[data-marca-actual="AMBAS"],
+  .loading-badge[data-marca-actual="AMBAS"] { width: fit-content; padding: 0 12px; }
+  .login-icon-badge [data-marca-logo], .login-brand-badge [data-marca-logo] { gap: 10px; }
+  .login-icon-badge .marca-iniciales { width: 72px; height: 72px; font-size: var(--texto-xl); }
+  .login-brand-badge .marca-iniciales { width: 44px; height: 44px; font-size: var(--texto-s); }
+  .loading-badge .marca-iniciales { width: 52px; height: 52px; font-size: var(--texto-l); }
+  .sidebar-brand-logos { flex-shrink: 0; gap: 4px; }
+  .sidebar-brand-icon.marca-iniciales { padding: 0; font-size: var(--texto-2xs); }
+</style>
+<script>
+  /**
+   * Marca — Control Interno (CI), Flotillas (FT), Ciudad Maderas (CM, neutra) o las dos (AMBAS) (4-nov-2026; Marcas.gs).
+   *
+   * Dos reglas, como en el servidor:
+   *   - EL MARCO VA POR LA PERSONA: login, carga y menú. `Marca.persona('FT')` pinta cada contenedor de la página:
+   *       <span data-marca-logo="clase"></span>      el logo (o sus iniciales) con esa clase; con AMBAS, los dos
+   *       <span data-marca-nombre></span>            'Flotillas' ("mayusculas" como valor: 'FLOTILLAS')
+   *     Lo que se monta después (una plantilla) se pinta con `Marca.pintar(raiz)`.
+   *   - EL CONTENIDO VA POR EL MÓDULO: `Marca.deModulo('lineas-telefonicas')` → 'FT' y `Marca.textoDe('…')` →
+   *     'Flotillas' (AMBAS: 'Control Interno y Flotillas'), para textos como «Firma de Flotillas».
+   *
+   * Lo inicial lo pone el servidor en el body (Router.gs): data-marca (la de la cuenta de Google que abre),
+   * data-marcas (nombre y logo de cada una) y data-marcas-modulos. `Marca.modulos(mapa)` lo actualiza (apiMisPermisos).
+   */
+  const Marca = (function () {
+    const AMBAS = 'AMBAS';
+    const NEUTRA = 'CM';
+    const esc = Formato.esc;
+    const leer_ = (clave, vacio) => {
+      try { return JSON.parse(document.body.dataset[clave] || '') || vacio; } catch (e) { return vacio; }
+    };
+    const lista = leer_('marcas', {});
+    let modulos = leer_('marcasModulos', {});
+    const delServidor = () => document.body.dataset.marca || AMBAS;
+    let actual = delServidor();
+
+    const de = (id) => lista[id] || { id: id, nombre: id, logo: '' };
+    const valida = (m) => (m === AMBAS || lista[m] ? m : NEUTRA);
+    const cuales = (m) => (m === AMBAS ? ['CI', 'FT'] : [m]);
+
+    /** El nombre del marco: AMBAS → 'Control Interno · Flotillas' */
+    function nombre(m) {
+      return cuales(valida(m || actual)).map((id) => de(id).nombre).join(' · ');
+    }
+    /** El nombre para un texto de contenido: AMBAS → 'Control Interno y Flotillas' */
+    function texto(m) {
+      return cuales(valida(m)).map((id) => de(id).nombre).join(' y ');
+    }
+
+    function logoHtml(id, clase) {
+      const x = de(id);
+      if (x.logo) return '<img class="' + esc(clase) + '" src="' + esc(x.logo) + '" alt="' + esc(x.nombre) + '" />';
+      return '<span class="' + esc(clase) + ' marca-iniciales" data-marca="' + esc(id) + '" role="img" aria-label="' +
+        esc(x.nombre) + '">' + esc(id) + '</span>';
+    }
+
+    /** Pinta los contenedores de `raiz` (la página entera si no se dice) con la marca actual */
+    function pintar(raiz) {
+      const r = raiz || document;
+      r.querySelectorAll('[data-marca-logo]').forEach((el) => {
+        el.innerHTML = cuales(actual).map((id) => logoHtml(id, el.getAttribute('data-marca-logo') || '')).join('');
+        // La insignia que lo contiene se ensancha con dos logos (marca.html, estilos)
+        const insignia = el.parentElement;
+        if (insignia) insignia.setAttribute('data-marca-actual', actual);
+      });
+      r.querySelectorAll('[data-marca-nombre]').forEach((el) => {
+        const t = nombre(actual);
+        el.textContent = el.getAttribute('data-marca-nombre') === 'mayusculas' ? t.toUpperCase() : t;
+      });
+    }
+
+    /** El marco de la persona (o el del servidor si no se dice): CI, FT, CM o AMBAS */
+    function persona(m) {
+      actual = valida(m || delServidor());
+      pintar();
+      return actual;
+    }
+
+    /** La marca de un módulo (o de su sección: 'vehiculos.responsiva'); sin dato, FT, como en el servidor */
+    function deModulo(id) {
+      const modulo = String(id || '').split('.')[0];
+      return modulos[modulo] || 'FT';
+    }
+
+    return {
+      AMBAS, NEUTRA,
+      persona,
+      pintar,
+      actual: () => actual,
+      nombre,
+      modulos: (mapa) => { if (mapa && typeof mapa === 'object') modulos = mapa; },
+      deModulo,
+      textoDe: (modulo) => texto(deModulo(modulo)),
+    };
+  })();
+</script>

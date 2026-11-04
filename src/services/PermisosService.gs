@@ -391,7 +391,17 @@ const Permisos = (function () {
     const grupos = Modulos.GRUPOS
       .map((g) => Object.assign({}, g, { modulos: g.modulos.filter((m) => permisos[m.id]) }))
       .filter((g) => g.modulos.length);
-    return { correo: sesion.correo, permisos: permisos, grupos: grupos };
+    // La marca (Marcas.gs, 4-nov): la de la persona y la de cada módulo. La de la persona es la de su sesión (se leyó de
+    // USUARIOS al entrar, como su rol y su área: un cambio de DEPARTAMENTO se ve al volver a entrar); la de USUARIOS en
+    // caché solo para las sesiones de antes de la marca: si no, una caché de hasta 10 min pisaría la recién leída.
+    // Si falla, la pantalla se queda con la de su sesión; los permisos no esperan por esto
+    let marca = null;
+    try {
+      marca = Object.assign({ persona: sesion.marca || Marcas.deCorreo(sesion.correo) }, Marcas.paraPantalla());
+    } catch (e) {
+      console.warn('Marcas: ' + e.message);
+    }
+    return { correo: sesion.correo, permisos: permisos, grupos: grupos, marca: marca };
   }
 
   /**

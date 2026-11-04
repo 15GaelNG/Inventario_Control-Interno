@@ -960,10 +960,10 @@
       aplicarBloqueo(cuerpo, false);
     }
 
-    /** Caja de firma: marco dorado para el responsable y azul para Control Interno; el lienzo lo pone crearFirma. */
+    /** Caja de firma: marco dorado para el responsable y azul para quien firma por el área (Marca: Flotillas); el lienzo lo pone crearFirma. */
     function htmlFirma(rol, idLienzo) {
       return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
-        (rol === 'ci' ? 'Firma de Control Interno' : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
+        (rol === 'ci' ? 'Firma de ' + Marca.textoDe('lineas-telefonicas') : 'Firma del responsable') + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
     }
 
     /**

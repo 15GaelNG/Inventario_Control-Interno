@@ -148,6 +148,11 @@ con poca memoria y de una en una (en el celular, abrir fotos de cámara completa
   marques "auto" un campo que se bloquea por otra razón (permisos, lo que se
   eligió, guardando).
 - **Elegir un vehículo por Folio o Nucco → `FolioNucco.ligar`.**
+- **Control Interno o Flotillas → `Marca` / `Marcas.gs`** (4-nov). El marco (login, carga, menú, título, correos) va
+  por la PERSONA: DEPARTAMENTO de USUARIOS (CI, FT o CM neutra); el contenido de un módulo (sus textos, como «Firma de
+  Flotillas») va por el MÓDULO: pestaña MODULOS (`Marca.textoDe('lineas-telefonicas')`, `Marcas.deModulo(…)`). Nunca
+  escribas «Control Interno» fijo como nombre del sistema: un logo o nombre nuevo va en un contenedor `data-marca-logo` /
+  `data-marca-nombre`; un correo, con `Correos.sistema(para)`. «Avisa a Control Interno» (el equipo) sí se queda.
 - **Cómo se ve el sistema (modo claro/oscuro/auto, color, ancho, letra) → `Apariencia`**, el engrane de la
   barra (`componentes/apariencia.html`). Una opción de la temporada u otra preferencia de la persona va como
   sección de ese panel (como `Temporada.opciones(cont)`), no como otro botón en la barra.

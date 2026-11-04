@@ -41,6 +41,8 @@ function pasosCalentador_() {
     ['Uber', () => UberService.calentar()],
     ['Uber (todas las columnas)', () => UberService.calentarCompleto()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
+    // La pestaña MODULOS (CI / FT): la crea y le agrega los módulos nuevos; casi siempre solo la lee
+    ['Marcas (MODULOS)', () => { Marcas.sincronizar(); Marcas.mapa(); }],
     ['Líneas (índice)', () => LineasRepo.indice(true)],
     // Las fotos de perfil del directorio: se rehacen cada 3 h (casi nunca cambian)
     ['Fotos del directorio', () => FotosDirectorio.calentar()],

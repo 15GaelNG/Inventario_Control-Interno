@@ -73,7 +73,7 @@
               botonesDocumento('RESPONSIVA', d, r),
               deDrive
                 ? [['NUCO', d.nuco || (e && e.nuco)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
-                : [['Responsable', s.responsable], ['Control Interno', d.responsableCI], ['Identificación', s.identificacion]]) +
+                : [['Responsable', s.responsable], [Marca.textoDe('lineas-telefonicas'), d.responsableCI], ['Identificación', s.identificacion]]) +
             (deDrive
               ? ''
               : '<div class="ln-grid-2">' +
