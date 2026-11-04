@@ -65,14 +65,7 @@ const UberService = (function () {
   const ETIQUETA_ADVERTENCIA = 'Baja, quitar de Uber';
 
   function hojaDeteccion_() {
-    const ss = SpreadsheetApp.openById(Config.SPREADSHEET_IDS.VEHICULOS());
-    let hoja = ss.getSheetByName(HOJA_DETECCION);
-    if (!hoja) {
-      hoja = ss.insertSheet(HOJA_DETECCION);
-      hoja.getRange(1, 1, 1, ENCABEZADOS_DETECCION.length).setValues([ENCABEZADOS_DETECCION]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
-    return hoja;
+    return SheetUtils.asegurarPestana(Config.SPREADSHEET_IDS.VEHICULOS(), HOJA_DETECCION, ENCABEZADOS_DETECCION, { soloCrear: true });
   }
 
   /**

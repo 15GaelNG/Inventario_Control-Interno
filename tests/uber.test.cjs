@@ -26,18 +26,10 @@ function crearContexto({ filasUber = [], activosCH = [], filasDeteccion = [], fi
       // Mismo criterio tolerante a acentos/mayúsculas que el real (simplificado para la prueba).
       nombreComparable: (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase(),
     },
-    // La hoja de detección se crea sola (insertSheet) la primera vez; a la prueba no le
-    // importa su contenido real, solo que no truene.
-    SpreadsheetApp: {
-      openById: () => ({
-        getSheetByName: () => null,
-        insertSheet: () => ({
-          getRange: () => ({ setValues: () => ({ setFontWeight: () => {} }) }),
-          setFrozenRows: () => {},
-        }),
-      }),
-    },
     SheetUtils: {
+      // La hoja de detección se asegura sola (asegurarPestana) la primera vez; a la prueba no
+      // le importa su contenido real, solo que no truene.
+      asegurarPestana: () => ({}),
       getAll: (ssId, nombreHoja) => {
         if (nombreHoja === HOJA_UBER) return hojaUber;
         if (nombreHoja === HOJA_DETECCION) return deteccion;
