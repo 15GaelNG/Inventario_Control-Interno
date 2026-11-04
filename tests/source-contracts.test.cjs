@@ -710,7 +710,7 @@ test('letra, esquinas y colores de la pantalla salen de la escala de styles.html
   const PAGINA_APARTE = ['FirmaExterna.html'];   // no incluye styles.html
   // Colores que no son de la pantalla: gráficas (Chart.js no lee variables), tinta de los lienzos, la firma sobre
   // blanco, la herramienta de medir y la ventana nueva que abre Líneas mientras busca un documento
-  const COLOR_FIJO = ['app-panorama-cajachica.html', 'app-panorama-vehiculos.html', 'componentes/lienzo.html',
+  const COLOR_FIJO = ['app-panorama-cajachica.html', 'app-panorama-vehiculos.html', 'app-panorama-uber.html', 'componentes/lienzo.html',
     'modulos/inspecciones.html', 'componentes/campos-hoja.html', 'lineas-medidor.html'];
   const COLOR = /(?:^|[\s;"'{])(color|background(?:-color)?|border(?:-color)?)\s*:\s*['"]?#[0-9a-f]{3,8}\b/i;
   const fuera = [];

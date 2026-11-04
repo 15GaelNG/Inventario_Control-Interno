@@ -163,6 +163,22 @@
     }),
   };
 
+  // ---------- Panorama de Uber (UberPanorama.gs): viajes de la hoja externa, de mentira ----------
+  const UBER_CATEGORIAS = ['EVENTOS', 'SIN CATEGORÍA', 'VIATICOS EN OTRA SEDE', 'APOYO TRANSPORTE', 'BANCO', 'NOTARIA', 'COMPRAS', 'REUNIONES'];
+  const UBER_MESES = ['JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE'];
+  const UBER_ESTATUS = ['JUSTIFICADO', 'JUSTIFICADO', 'JUSTIFICADO', 'SIN ESTATUS', 'REVISAR', 'COBRADO/DEVUELTO'];
+  const UBER_AUTORIZACION = ['SÍ', 'SÍ', 'SÍ', 'SIN DATO', 'AUTORIZADO POR DA', 'NO'];
+  const UBER_PANORAMA = {
+    generadoEn: hace(0.1), total: 90,
+    filas: filas(90, (i) => ({
+      CLAVE: de(DEPTOS, i) + ' ' + de(SEDES, i), DEPARTAMENTO: de(DEPTOS, i), SEDE: de(SEDES, i),
+      NOMBRE_COMPLETO: de(PERSONAS, i), CATEGORIA: de(UBER_CATEGORIAS, i), ESTATUS: de(UBER_ESTATUS, i),
+      AUTORIZACION: de(UBER_AUTORIZACION, i), MES: de(UBER_MESES, Math.floor(i / 6)), SEMANA: 'SEM ' + (28 + Math.floor(i / 3)),
+      MONTO: 60 + (i * 37 % 280), VEHICULO_DISPONIBLE: de(['SI', 'NO', 'NO'], i), CANTIDAD_VEHICULOS: de([0, 1, 2, 3], i),
+      FECHA_PEDIDO: hace(90 - i),
+    })),
+  };
+
   // ---------- Fichas (Vehículo, Caja Chica): lo que piden al abrir un registro ----------
   const CAJA = Object.assign({}, LISTAS.apiListarCajasChicasResumen[0], {
     'PUESTO DE RESPONSABLE': 'COORDINADOR', 'JEFE INMEDIATO DEL REPSONSABLE': PERSONAS[3], 'ADMINISTRADA POR': 'CONTROL INTERNO',
@@ -225,6 +241,7 @@
     apiOfrendaApagar: () => respuestas.apiOfrenda(),
     ...LISTAS,
     ...FICHAS,
+    apiUberPanorama: UBER_PANORAMA,
     apiPermisosPanel: PERMISOS_PANEL,
     apiRelacionesMapa: JSON.stringify(REL_MAPA),
     // Datos conectados: el mismo mapa (sin Capital Humano, que se calcula aparte) con COLOR → HOLOGRAMAS puesto desde la pantalla
@@ -1001,6 +1018,7 @@
     'incidencias-detalle': async () => { await abrir('incidencias'); await abrirPrimeraFila(); },
     'cambios-vehiculos': () => abrir('cambios-vehiculos'),
     'reasignaciones': () => abrir('reasignaciones-vehiculares'),
+    'panorama-uber': async () => { await abrir('panorama-uber'); await esperar(700); },
     'uber': () => abrir('uber'),
     'uber-detalle': async () => { await abrir('uber'); await abrirPrimeraFila(); },
     'tickets': () => abrir('tickets'),

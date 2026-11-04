@@ -38,6 +38,11 @@ function pasosCalentador_() {
     ['Reasignaciones (todas las columnas)', () => ReasignacionesVehicularesService.calentarCompleto()],
     ['Sensores', () => SensoresService.calentar()],
     ['Hologramas', () => HologramasService.calentar()],
+    // Ya NO pone BAJA sola (el usuario pidió que nunca se toque el estatus automáticamente,
+    // 23-oct-2026): solo detecta y anota la etiqueta "Baja, quitar de Uber" en la hoja aparte
+    // UBER BAJAS DETECTADAS -- alguien la revisa y decide a mano. La etiqueta se deja de
+    // mostrar sola a la semana de detectada (UberService.advertenciasVigentes_).
+    ['Uber (detecta bajas pendientes)', () => UberService.detectarBajasPendientes()],
     ['Uber', () => UberService.calentar()],
     ['Uber (todas las columnas)', () => UberService.calentarCompleto()],
     ['Colaboradores', () => CapitalHumano.calentarColaboradores()],
