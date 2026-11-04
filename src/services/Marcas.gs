@@ -151,35 +151,64 @@ const Marcas = (function () {
     paraPantalla, sincronizar };
 })();
 
+/** Las plantillas de PDF de Flotillas (las de revisionPlantillas_, sin la de Arqueo, que es de CI): [{ nombre, id }] */
+function marcasPlantillasFlotillas_() {
+  return revisionPlantillas_().filter((p) => /^(Responsiva vehicular|Adherente vehicular|Líneas |Inspección )/.test(p.nombre));
+}
+
 /**
- * Desde el editor: copia cada plantilla de PDF de los módulos de Flotillas (Responsiva y Adherente vehicular, Líneas e
- * Inspecciones; las de revisionPlantillas_, sin la de Arqueo, que es de CI) a «<nombre> (FLOTILLAS)» en su misma
- * carpeta, para cambiarles ahí el logo y el texto sin tocar las que usa producción. Después se ponen sus IDs: las
- * constantes (ResponsivaVehicularService.PLANTILLA, AdherenteVehicularService.PLANTILLA, LineasPdf.PLANTILLAS) y la hoja
- * MODELOS INSPECCION. Una que ya tiene su copia no se vuelve a copiar. → una línea por plantilla, con el ID de su copia
+ * Desde el editor, SOLO LEE: en cada plantilla de PDF de Flotillas (Responsiva y Adherente vehicular, Líneas e
+ * Inspecciones; producción y los DEV usan las mismas), dónde dice «Control Interno» o «CI» escrito (en el cuerpo, el
+ * encabezado o el pie, con un poco del texto de alrededor) y qué imágenes tiene (dónde y de qué tamaño), para decidir qué
+ * se cambia por Flotillas CM y dónde va su logo. → el reporte (también en el registro de ejecución)
  */
-function marcasCopiarPlantillas() {
+function marcasRevisarPlantillas() {
   soloEditor_();
-  const lineas = revisionPlantillas_()
-    .filter((p) => /^(Responsiva vehicular|Adherente vehicular|Líneas |Inspección )/.test(p.nombre))
-    .map((p) => {
-      if (!p.id) return p.nombre + ': ' + (p.error || 'sin ID');
-      try {
-        const original = DriveApp.getFileById(p.id);
-        const padres = original.getParents();
-        if (!padres.hasNext()) return p.nombre + ': no tiene carpeta, cópiala a mano';
-        const carpeta = padres.next();
-        const nombre = original.getName() + ' (FLOTILLAS)';
-        const yaEstaba = carpeta.getFilesByName(nombre);
-        const copia = yaEstaba.hasNext() ? yaEstaba.next() : DriveUtils.copiar(original, nombre, carpeta);
-        return p.nombre + ': ' + copia.getId() + ' (' + nombre + ')';
-      } catch (e) {
-        return p.nombre + ': ' + e.message;
-      }
-    });
-  const texto = lineas.join('\n');
-  Logger.log(texto);
-  return texto;
+  // «CI» suelto o pegado a un número o guion (F-CI04-039), nunca dentro de una palabra (CIUDAD, CIERRE)
+  const BUSCA = /control\s+interno|(?<![A-Za-zÀ-ÿ])C\.?\s?I(?![A-Za-zÀ-ÿ])/gi;
+  const contexto = (texto, i, largo) => texto.slice(Math.max(0, i - 35), i + largo + 35).replace(/\s+/g, ' ').trim();
+  function imagenes_(seccion) {
+    const r = [];
+    let hallado = null;
+    while ((hallado = seccion.findElement(DocumentApp.ElementType.INLINE_IMAGE, hallado))) {
+      const img = hallado.getElement().asInlineImage();
+      r.push('en línea ' + Math.round(img.getWidth()) + '×' + Math.round(img.getHeight()) + ' px');
+    }
+    seccion.getParagraphs().forEach((p) => p.getPositionedImages()
+      .forEach((img) => r.push('flotante ' + Math.round(img.getWidth()) + '×' + Math.round(img.getHeight()) + ' px')));
+    return r;
+  }
+  const bloques = marcasPlantillasFlotillas_().map((p) => {
+    if (!p.id) return '■ ' + p.nombre + ': ' + (p.error || 'sin ID');
+    try {
+      const doc = DocumentApp.openById(p.id);
+      const partes = [['cuerpo', doc.getBody()], ['encabezado', doc.getHeader()], ['pie', doc.getFooter()]].filter(([, s]) => s);
+      const lineas = ['■ ' + p.nombre + ' — «' + doc.getName() + '» (' + p.id + ')'];
+      const padres = DriveApp.getFileById(p.id).getParents();
+      if (padres.hasNext()) { const c = padres.next(); lineas.push('   carpeta: «' + c.getName() + '» ' + c.getUrl()); }
+      partes.forEach(([donde, s]) => {
+        const texto = s.getText();
+        let m;
+        BUSCA.lastIndex = 0;
+        while ((m = BUSCA.exec(texto))) lineas.push('   texto en ' + donde + ': «' + m[0] + '» → …' + contexto(texto, m.index, m[0].length) + '…');
+        const imgs = imagenes_(s);
+        if (imgs.length) lineas.push('   imágenes en ' + donde + ': ' + imgs.join(', '));
+      });
+      if (lineas.length === 1) lineas.push('   sin «Control Interno» ni «CI» escrito, y sin imágenes');
+      Logger.log(lineas.join('\n'));
+      return lineas.join('\n');
+    } catch (e) {
+      Logger.log('■ ' + p.nombre + ': no se pudo abrir (' + e.message + ')');
+      return '■ ' + p.nombre + ': no se pudo abrir (' + e.message + ')';
+    }
+  });
+  const reporte = bloques.join('\n');
+  // El registro del editor se corta si es largo: el reporte completo va también a un Doc en Mi unidad de quien lo corre
+  const doc = DocumentApp.create('Revisión plantillas Flotillas ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH.mm'));
+  doc.getBody().setText(bloques.length + ' plantillas\n\n' + reporte);
+  doc.saveAndClose();
+  Logger.log('Reporte completo (' + bloques.length + ' plantillas): ' + doc.getUrl());
+  return reporte;
 }
 
 /** Desde el editor: crea la pestaña MODULOS (o le agrega los módulos nuevos) con su marca por omisión */
