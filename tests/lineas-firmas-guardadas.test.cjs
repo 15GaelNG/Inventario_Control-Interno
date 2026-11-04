@@ -78,6 +78,26 @@ test('quitar borra todas sus partes; reemplazar no deja partes viejas', () => {
   assert.deepEqual(Object.keys(guardadas), ['LINEAS_FIRMAS_CLAVE']);
 });
 
+test('cambiarCorreo pasa la firma del .ci al .ft sin cambiarla y no pisa una que ya exista (4-nov)', () => {
+  const { F, guardadas } = cargar();
+  const png = conSigno(crypto.randomBytes(15000));
+  F.guardar('ejecutivotelefonia.ci@ciudadmaderas.com', png);
+  const original = F.png('ejecutivotelefonia.ci@ciudadmaderas.com');
+  F.cambiarCorreo('ejecutivotelefonia.ci@ciudadmaderas.com', 'Ejecutivotelefonia.FT@ciudadmaderas.com');
+  assert.equal(F.png('ejecutivotelefonia.ft@ciudadmaderas.com'), original, 'la misma imagen con el correo nuevo');
+  assert.equal(F.tiene('ejecutivotelefonia.ci@ciudadmaderas.com'), false, 'el viejo ya no la tiene');
+  assert.deepEqual(F.lista().map((x) => x.correo), ['ejecutivotelefonia.ft@ciudadmaderas.com']);
+  assert.ok(Object.keys(guardadas).every((k) => !/@/.test(k)));
+  F.guardar('otro.ci@ciudadmaderas.com', conSigno(crypto.randomBytes(100)));
+  assert.throws(() => F.cambiarCorreo('otro.ci@ciudadmaderas.com', 'ejecutivotelefonia.ft@ciudadmaderas.com'), /no se pisa/);
+  assert.equal(F.png('ejecutivotelefonia.ft@ciudadmaderas.com'), original, 'la que ya estaba sigue igual');
+  assert.equal(F.tiene('otro.ci@ciudadmaderas.com'), true, 'y la otra no se perdió');
+  assert.throws(() => F.cambiarCorreo('nadie@ciudadmaderas.com', 'x@ciudadmaderas.com'), /no tiene firma/);
+  const admin = read('src/services/lineas/LineasAdmin.gs');
+  assert.match(admin, /function lineasFirmasCambiarCorreoRevisar\(\) \{\r?\n  soloEditor_\(\);\r?\n  return firmasCambiarCorreo_\(false\);/);
+  assert.match(admin, /function lineasFirmasCambiarCorreo\(\) \{\r?\n  soloEditor_\(\);\r?\n  return firmasCambiarCorreo_\(true\);/);
+});
+
 test('la imagen solo la usa el servidor, con el correo de la sesión; la pantalla solo sabe que hay una', () => {
   const todo = fs.readdirSync(path.join(__dirname, '../src'), { recursive: true }).filter((f) => /\.(gs|html)$/.test(f))
     .map((f) => [f.replace(/\\/g, '/'), read('src/' + f)]);

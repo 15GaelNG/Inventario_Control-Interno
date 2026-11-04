@@ -120,5 +120,21 @@ const LineasFirmas = (function () {
       .filter(Boolean);
   }
 
-  return { tiene, png, guardar, quitar, lista };
+  /**
+   * Pasa la firma de un correo a otro (4-nov: los correos de Flotillas cambiaron de .ci a .ft y la firma, que se busca por
+   * correo, dejó de salir). La imagen no sale de aquí: se descifra, se guarda con el correo nuevo, se revisa que regrese
+   * igual y solo entonces se quita la del viejo. No pisa una firma que el correo nuevo ya tenga.
+   */
+  function cambiarCorreo(viejo, nuevo) {
+    if (!norm(viejo) || !norm(nuevo) || norm(viejo) === norm(nuevo)) throw new Error('Faltan los dos correos (distintos).');
+    if (!meta_(viejo)) throw new Error(norm(viejo) + ' no tiene firma guardada.');
+    if (meta_(nuevo)) throw new Error(norm(nuevo) + ' ya tiene firma guardada: no se pisa.');
+    const antes = png(viejo);
+    if (!antes) throw new Error('No se pudo leer la firma de ' + norm(viejo) + ' (falta la clave del proyecto).');
+    guardar(nuevo, Utilities.base64Decode(antes));
+    if (png(nuevo) !== antes) { quitar(nuevo); throw new Error('La firma copiada a ' + norm(nuevo) + ' no quedó igual: no se cambió nada.'); }
+    quitar(viejo);
+  }
+
+  return { tiene, png, guardar, quitar, lista, cambiarCorreo };
 })();
