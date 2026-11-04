@@ -92,6 +92,16 @@ const CajasChicasService = (function () {
       fila[ID_COLUMN] = generarIdCch_(ctx.hoja);
       fila['ESTATUS'] = 'VIGENTE';
     },
+    /**
+     * Al pasar a CERRADA (desde cualquier otro estatus), la Fecha de cierre es la de hoy: si la
+     * pantalla ya la llenó sola (CampoAuto, app-cajachica.html) se respeta esa fecha; si llega
+     * vacía (otro origen, p. ej. la consola), se pone hoy aquí también.
+     */
+    alActualizar: (cambios, ctx) => {
+      if (cambios['ESTATUS'] === 'CERRADA' && (ctx.actual || {})['ESTATUS'] !== 'CERRADA') {
+        cambios['FECHA DE CIERRE'] = HojaServicio.fechaDeEntrada(cambios['FECHA DE CIERRE']) || new Date();
+      }
+    },
     // ID PERSONA del responsable (y su correo): se calcula al crear y al cambiarlo (CapitalHumano, 01/10/2026)
     persona: true,
   };

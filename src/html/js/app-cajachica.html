@@ -149,6 +149,15 @@
       });
     });
 
+    // Estatus → Fecha de cierre (solo en Editar: Fecha de cierre es soloEdicion, no existe en
+    // Registrar). Al pasar a CERRADA se llena sola con hoy (CampoAuto: queda marcada "auto" y se
+    // puede corregir a mano); no se toca si ya estaba en CERRADA o si se elige otro estatus.
+    document.getElementById('editar-cajachica-estatus').addEventListener('change', (ev) => {
+      if (ev.target.value === 'CERRADA') {
+        CampoAuto.llenar(document.getElementById('editar-cajachica-fecha-de-cierre'), hoyISO());
+      }
+    });
+
     // Departamento / Sede / Oficina: catálogos reales de la hoja
     // "DEPARTAMENTOS" (distinta de "LISTAS VEHICULOS" — es la que usan
     // Vehículos/Uber/Tickets), mismas opciones en Registrar y Editar. Son
@@ -343,6 +352,24 @@
       document.getElementById('cch-ver-registro-cuerpo').innerHTML = '';
     }
 
+    /** "Generar liga de firma" (Responsable/Asistente) para un arqueo dentro de la ficha de Caja
+     *  Chica -- mismo botón que accionesFichaRegistro, pero su par regenerarLiga/regenerarLigaJefe
+     *  está pensado para el vocabulario principal/jefe de Responsiva/Adherente (app.html); Arqueos
+     *  usa responsable/asistente, así que se arma aparte, reusando generarLigaArqueoFicha_
+     *  (app-arqueos.html) -- la misma llamada que ya usa la tabla principal de Arqueos. */
+    function botonesLigaArqueoFicha_(a) {
+      // Ya no se esconde cuando esa firma existe -- ver el comentario largo de
+      // generarLigaArqueoFicha_ en app-arqueos.html (recuperar una firma guardada pero
+      // rota/dañada). data-ya-firmado viaja para que el clic sepa qué aviso mostrar.
+      let html = '<button type="button" class="ficha-btn-fila" data-arqueo-liga="responsable" data-ya-firmado="' +
+        (a.FIRMA_RESPONSABLE ? '1' : '') + '" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Responsable)">' + Iconos.svg('link') + '</button>';
+      if (a.CUENTA_CON_FIRMA_ASISTENTE === 'SI') {
+        html += '<button type="button" class="ficha-btn-fila" data-arqueo-liga="asistente" data-ya-firmado="' +
+          (a.FIRMA_ASISTENTE ? '1' : '') + '" data-id="' + escaparHtml(a.ID) + '" title="Generar liga de firma (Asistente)">' + Iconos.svg('link') + '</button>';
+      }
+      return '<div class="ficha-acciones-fila">' + html + '</div>';
+    }
+
     const TAB_FICHA_CAJACHICA_POR_TIPO = { arqueo: 'arqueos', 'cambio-monto': 'cambios-monto' };
     const API_ELIMINAR_FICHA_CAJACHICA = {
       arqueo: { api: 'apiEliminarArqueo', lista: 'apiListarArqueosResumen' },
@@ -423,7 +450,9 @@
               { t: 'Calificación', r: (a) => { const n = normalizarCalificacion_(a.CALIFICACION); return n === null ? '—' : escaparHtml(n.toFixed(2) + '%'); } },
               { t: 'Archivo', r: (a) => a.FORMATO_ARQUEO ? '<a href="' + escaparHtml(a.FORMATO_ARQUEO) + '" target="_blank" rel="noopener">📎 Ver PDF</a>' : '<span class="empty-state" style="margin:0">Sin archivo</span>' },
               { t: 'Evidencia', r: (a) => a.EVIDENCIAS ? '<a href="' + escaparHtml(a.EVIDENCIAS) + '" target="_blank" rel="noopener">📎 Ver evidencia</a>' : '<span class="empty-state" style="margin:0">Sin evidencia</span>' },
-              { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) },
+              { t: 'Firma', r: (a) => badgeFirmaArqueo(a) },
+              { t: '', r: (a) => accionesFichaRegistro('arqueo', a.ID, { editar: puedeEditarModulo('arqueos'), eliminar: puedeEditarModulo('arqueos') }) +
+                (puedeEditarModulo('arqueos') ? botonesLigaArqueoFicha_(a) : '') },
             ], arqueos, 'Sin arqueos registrados para esta caja chica.',
             puedeEditarModulo('arqueos') ? { tipo: 'arqueo', texto: 'Agregar' } : null),
           },
@@ -468,6 +497,18 @@
         });
         detalle.querySelectorAll('[data-ficha-eliminar]').forEach((btn) => {
           btn.addEventListener('click', () => eliminarRegistroFichaCajaChica(btn.dataset.fichaEliminar, btn.dataset.id, cResumen));
+        });
+        detalle.querySelectorAll('[data-arqueo-liga]').forEach((btn) => {
+          const quien = btn.dataset.arqueoLiga;
+          const etiqueta = quien === 'asistente' ? 'el Asistente' : 'el Responsable';
+          btn.addEventListener('click', () => generarLigaArqueoFicha_(btn.dataset.id, quien, etiqueta, !!btn.dataset.yaFirmado, () => {
+            // invalidarCacheLista arma su llave con los MISMOS argumentos que la llamada real
+            // (ver llaveLista_, api.html): sin el id aquí, invalida una entrada que no es la
+            // de esta ficha, y el repintado de abajo lee la copia vieja en caché (bug latente,
+            // corregido de paso -- usuario, 20-oct, lo encontró en Caja Chica al cerrarla).
+            invalidarCacheLista('apiFichaCajaChica', state.token, cResumen['ID CCH']);
+            abrirFichaCajaChica(cResumen, 'arqueos', true);
+          }));
         });
         refreshIcons();
       } catch (err) {
@@ -643,11 +684,21 @@
       btn.innerHTML = '<span class="spinner"></span> Guardando…';
       toastCargando('Guardando cambios…');
       try {
+        const id = document.getElementById('editar-cajachica-id').value;
         const datos = recolectarDatosCajaChica('editar-cajachica');
-        await callServer('apiActualizarCajaChica', state.token, document.getElementById('editar-cajachica-id').value, datos);
+        await callServer('apiActualizarCajaChica', state.token, id, datos);
         cerrarEditarCajaChica();
         invalidarCacheLista('apiListarCajasChicasResumen', state.token);
         await cargar();
+        // Si se cerró (o se editó cualquier cosa) desde el botón "Editar" de la ficha, esta
+        // se queda abierta y mostraba el estatus viejo (VIGENTE) hasta recargar la página --
+        // la tabla ya se repintaba sola, pero la ficha no (usuario, 20-oct). Mismo patrón que
+        // ya usa generarLigaArqueoFicha_ para repintarse con lo fresco -- la llave de
+        // invalidarCacheLista lleva el id, si no invalida la entrada equivocada.
+        if (fichaCajaAbierta && String(fichaCajaAbierta['ID CCH']) === String(id)) {
+          invalidarCacheLista('apiFichaCajaChica', state.token, id);
+          abrirFichaCajaChica(fichaCajaAbierta, Tabs.actual(document.getElementById('cch-detalle')) || undefined, true);
+        }
         toastExito('Actualizado exitosamente');
       } catch (err) {
         errorBox.textContent = err.message;
