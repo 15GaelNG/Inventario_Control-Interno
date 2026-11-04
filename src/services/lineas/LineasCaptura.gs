@@ -34,6 +34,10 @@
 const LineasCaptura = (function () {
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   const ZONA = 'America/Mexico_City';
+  // Quien firma por el área en Líneas: el nombre de la marca del módulo (Marcas.gs, 4-nov; hoy FLOTILLAS). Solo la
+  // etiqueta: las columnas siguen siendo NOMBRE CI y FIRMA CI
+  const MARCA_LINEAS_ = () => (typeof Marcas === 'undefined' ? 'CONTROL INTERNO'
+    : Marcas.nombreDe(Marcas.deModulo('lineas-telefonicas')).toUpperCase());
   /** Marca de tiempo del medidor del DEV (TelefoniaService.conPasosEnDev_); afuera no hace nada. */
   const marca_ = (que, desde) => { if (typeof LineasDatos.tiempo === 'function') LineasDatos.tiempo(que, desde); };
 
@@ -455,8 +459,8 @@ const LineasCaptura = (function () {
       campo_('COMENTARIO', 'Comentario', 'area', { valor: '', requerido: 'SIEMPRE', valida: 'COMENTARIOS' }),
       titulo_('FIRMAS', 'signature'),
       campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
-      ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE CONTROL INTERNO', usuario.nombre || ''),
-      campo_('FIRMA CI', 'FIRMA RESPONSABLE DE CONTROL INTERNO', 'firma', { valor: '', requerido: 'SIEMPRE' }),
+      ro('NOMBRE CI', 'NOMBRE RESPONSABLE DE ' + MARCA_LINEAS_(), usuario.nombre || ''),
+      campo_('FIRMA CI', 'FIRMA RESPONSABLE DE ' + MARCA_LINEAS_(), 'firma', { valor: '', requerido: 'SIEMPRE' }),
     ]);
   }
 
@@ -683,7 +687,7 @@ const LineasCaptura = (function () {
     const ref = accion ? accion.ref : { equipoId: datos.equipoId || null, lineaId: datos.equipoId ? null : datos.lineaId };
     if (datos.usarFirmaGuardada) datos.firmaCiBase64 = firmaPropia_(usuario);
     if (datos.usarFirmaGuardadaResponsable) datos.firmaResponsableBase64 = firmaResponsablePropia_(usuario, (datos.valores || {})['RESPONSABLE']);
-    if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE CONTROL INTERNO es obligatorio');
+    if (!datos.firmaCiBase64) throw new Error('FIRMA RESPONSABLE DE ' + MARCA_LINEAS_() + ' es obligatorio');
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.RESP);
     // Identificación de cada responsable (usuario, 9-oct): se escribe antes, en la carpeta de la responsiva; si la
     // responsiva no se guarda, se manda a la papelera

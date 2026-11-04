@@ -122,7 +122,7 @@
         const responsable = crearFirma(document.getElementById('pdf-firma-responsable'), nombres.responsable);
         const ci = soloResponsable ? null : crearFirma(document.getElementById('pdf-firma-ci'), esInspeccion ? nombres.inspector : nombres.ci);
         $('#cap-guardar', raiz).addEventListener('click', () => {
-          if (ci && ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de Control Interno.'); return; }
+          if (ci && ci.estaVacia()) { mostrarErrorCaptura('Falta la firma de ' + Marca.textoDe('lineas-telefonicas') + '.'); return; }
           $('#cap-error', raiz).hidden = true;
           mostrarEspera('Generando tu PDF');
           // Sin la de Control Interno (soloResponsable) el servidor usa la que ya tiene

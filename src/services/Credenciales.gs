@@ -310,14 +310,14 @@ const Credenciales = (function () {
     escribirPorCorreo_(fila.CORREO, { [COL.BLOQUEO]: '' });
     if (typeof Accesos !== 'undefined') Accesos.anotar(fila.CORREO, 'admin', 'desbloqueo-seguridad', '', 'por ' + sesion.correo);
     try {
-      MailApp.sendEmail(Correos.mensaje(fila.CORREO, 'Se quitó el bloqueo de seguridad de tu cuenta de Control Interno', {
+      MailApp.sendEmail(Correos.mensaje(fila.CORREO, 'Se quitó el bloqueo de seguridad de tu cuenta de ' + Correos.sistema(fila.CORREO), {
         preencabezado: 'Ya puedes volver a recuperar tu contraseña por correo.',
         etiqueta: 'Seguridad de tu cuenta',
         titulo: 'Se quitó el bloqueo de seguridad',
         parrafos: ['Tu cuenta estuvo en revisión de seguridad. Ya se quitó: puedes entrar como siempre y, si olvidas tu contraseña, ' +
           'recuperarla desde "¿Olvidaste tu contraseña?".'],
         detalle: [['Cuenta', fila.CORREO], ['Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')], ['Lo hizo', sesion.correo]],
-        aviso: 'Te recomendamos activar la verificación en dos pasos de tu correo y no usar ahí la misma contraseña que en Control Interno.',
+        aviso: 'Te recomendamos activar la verificación en dos pasos de tu correo y no usar ahí la misma contraseña que en ' + Correos.sistema(fila.CORREO) + '.',
       }));
     } catch (e) {
       console.warn('aviso de desbloqueo: ' + e.message);
@@ -334,8 +334,8 @@ const Credenciales = (function () {
     try {
       const cuando = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
       const restablecida = motivo === 'restablecida';
-      MailApp.sendEmail(Correos.mensaje(fila.CORREO, restablecida ? 'Un administrador restableció tu contraseña de Control Interno'
-        : 'Tu contraseña de Control Interno se cambió', {
+      MailApp.sendEmail(Correos.mensaje(fila.CORREO, restablecida ? 'Un administrador restableció tu contraseña de ' + Correos.sistema(fila.CORREO)
+        : 'Tu contraseña de ' + Correos.sistema(fila.CORREO) + ' se cambió', {
         preencabezado: restablecida ? 'Te darán una contraseña temporal por otro medio.' : 'Si no fuiste tú, avisa a Control Interno.',
         etiqueta: 'Seguridad de tu cuenta',
         titulo: restablecida ? 'Tu contraseña se restableció' : 'Tu contraseña se cambió',

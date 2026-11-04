@@ -437,6 +437,7 @@ const Bitacora = (function () {
       const para = Session.getEffectiveUser().getEmail();
       if (!para) return;
       MailApp.sendEmail(Correos.mensaje(para, 'Control Interno: revisar la bitácora', {
+        marca: 'CI',   // un aviso para quien administra (Marcas.gs)
         preencabezado: problemas[0],
         etiqueta: 'Bitácora',
         titulo: 'La revisión diaria de la bitácora encontró algo',

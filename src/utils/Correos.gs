@@ -26,6 +26,27 @@ const Correos = (function () {
   const LETRA = "'Poppins','Segoe UI',Roboto,Helvetica,Arial,sans-serif";
   const LOGO = 'https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png';
 
+  // ---- La marca (Marcas.gs, 4-nov): el marco del correo es el de quien lo recibe (CI, Flotillas o Ciudad Maderas).
+  // Varios destinatarios (los avisos a los ADMIN) o sin Marcas (la vista previa): Control Interno. `o.marca` la fija
+  const CI = { id: 'CI', nombre: 'Control Interno', logo: LOGO };
+  const lista_ = () => (typeof Marcas !== 'undefined' ? Marcas.LISTA : { CI: CI });
+  function marcaDe_(para, o) {
+    if (o && o.marca) return o.marca;
+    if (String(para || '').indexOf(',') !== -1 || typeof Marcas === 'undefined') return 'CI';
+    return Marcas.deCorreo(para);
+  }
+  const marca_ = (o) => lista_()[o && o.marca] || CI;
+  /** El nombre del sistema para esa persona: 'Flotillas', 'Control Interno' o 'Ciudad Maderas' */
+  const sistema = (para) => marca_({ marca: marcaDe_(para) }).nombre;
+  /** La línea del pie: 'Ciudad Maderas · Flotillas' (la neutra, solo 'Ciudad Maderas') */
+  const firma_ = (m) => (m.id === 'CM' ? m.nombre : 'Ciudad Maderas · ' + m.nombre);
+  /** El logo de la barra; sin archivo, sus iniciales en una insignia blanca */
+  function logo_(m) {
+    if (m.logo) return '<img src="' + m.logo + '" width="34" height="34" alt="' + esc(m.id) + '" style="display:block;border:0;border-radius:8px;background:#FFFFFF">';
+    return '<div style="width:34px;height:34px;line-height:34px;border-radius:8px;background:#FFFFFF;text-align:center;font-family:' + LETRA +
+      ';font-size:13px;font-weight:700;color:' + C.marino + '">' + esc(m.id) + '</div>';
+  }
+
   /** Texto seguro dentro del HTML */
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -61,7 +82,8 @@ const Correos = (function () {
 
   /** El HTML completo */
   function html(o) {
-    const p = (t) => '<p style="margin:0 0 14px;font-family:' + LETRA + ';font-size:15px;line-height:1.6;color:' + C.texto + '" class="ci-texto">' + t + '</p>';
+    const m = marca_(o);
+    const p =(t) => '<p style="margin:0 0 14px;font-family:' + LETRA + ';font-size:15px;line-height:1.6;color:' + C.texto + '" class="ci-texto">' + t + '</p>';
     return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark">' +
       '<meta name="supported-color-schemes" content="light dark"><title>' + esc(o.titulo) + '</title>' +
@@ -81,8 +103,8 @@ const Correos = (function () {
         // Barra: el logo y el nombre, como en el login
         '<tr><td bgcolor="' + C.marino + '" style="padding:18px 28px;border-radius:12px 12px 0 0">' +
           '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
-          '<td style="padding-right:12px"><img src="' + LOGO + '" width="34" height="34" alt="CI" style="display:block;border:0;border-radius:8px;background:#FFFFFF"></td>' +
-          '<td style="font-family:' + LETRA + ';font-size:14px;font-weight:700;letter-spacing:2px;color:#FFFFFF">CONTROL INTERNO' +
+          '<td style="padding-right:12px">' + logo_(m) + '</td>' +
+          '<td style="font-family:' + LETRA + ';font-size:14px;font-weight:700;letter-spacing:2px;color:#FFFFFF">' + esc(m.nombre.toUpperCase()) +
             '<div style="font-size:10px;font-weight:600;letter-spacing:3px;color:' + C.dorado + '">CIUDAD MADERAS</div></td>' +
           '</tr></table></td></tr>' +
         // La tarjeta
@@ -98,7 +120,7 @@ const Correos = (function () {
         '</td></tr>' +
         // Pie
         '<tr><td style="padding:18px 8px 0;text-align:center;font-family:' + LETRA + ';font-size:12px;line-height:1.6;color:' + C.tenue + '" class="ci-tenue">' +
-          'Este correo lo mandó Control Interno automáticamente; no lo respondas.<br>Ciudad Maderas · Control Interno</td></tr>' +
+          'Este correo lo mandó ' + esc(m.nombre) + ' automáticamente; no lo respondas.<br>' + esc(firma_(m)) + '</td></tr>' +
       '</table>' +
       '<!--[if mso]></td></tr></table><![endif]-->' +
       '</td></tr></table></body></html>';
@@ -114,14 +136,15 @@ const Correos = (function () {
       .concat((o.detalle || []).map(([k, v]) => k + ': ' + v))
       .concat(o.boton ? ['', o.boton.texto + ': ' + o.boton.url] : [])
       .concat(o.aviso ? ['', sinHtml(o.aviso)] : [])
-      .concat(['', '— Control Interno · Ciudad Maderas (correo automático, no lo respondas)'])
+      .concat(['', '— ' + firma_(marca_(o)) + ' (correo automático, no lo respondas)'])
       .join('\n');
   }
 
   /** Lo que recibe MailApp.sendEmail */
   function mensaje(para, asunto, o) {
-    return { to: para, subject: asunto, name: 'Control Interno', htmlBody: html(o), body: texto(o) };
+    const conMarca = Object.assign({}, o, { marca: marcaDe_(para, o) });
+    return { to: para, subject: asunto, name: marca_(conMarca).nombre, htmlBody: html(conMarca), body: texto(conMarca) };
   }
 
-  return { mensaje, html, texto, esc };
+  return { mensaje, html, texto, esc, sistema };
 })();

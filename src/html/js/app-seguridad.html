@@ -145,7 +145,12 @@
     const POR_QUE_CAMBIAR = {
       temporal: 'Entraste con una contraseña temporal.',
       vieja: 'Por seguridad, cambia la contraseña que usabas.',
-      google: 'Por seguridad, elige una contraseña para Control Interno; te servirá para entrar con tu correo.',
+      // El nombre del sistema, el de la marca de quien entra (componentes/marca.html): se arma al pintarse
+      google: () => 'Por seguridad, elige una contraseña para ' + Marca.nombre() + '; te servirá para entrar con tu correo.',
+    };
+    const porQueCambiar_ = (motivo) => {
+      const t = POR_QUE_CAMBIAR[motivo] || POR_QUE_CAMBIAR.temporal;
+      return typeof t === 'function' ? t() : t;
     };
 
     /** Entró con una contraseña temporal (o la vieja, o con Google sin haber elegido una): pone una nueva y con eso entra */
@@ -153,7 +158,7 @@
       paso.innerHTML =
         '<div class="login-icon-badge"><i data-lucide="key-round" class="ico"></i></div>' +
         '<h2>Seguridad</h2><p class="login-system-name">Pon tu contraseña nueva</p>' +
-        '<p class="login-sub">' + esc(POR_QUE_CAMBIAR[r.motivo] || POR_QUE_CAMBIAR.temporal) + ' Elige una de al menos ' + esc(r.minimo) +
+        '<p class="login-sub">' + esc(porQueCambiar_(r.motivo)) + ' Elige una de al menos ' + esc(r.minimo) +
           ' caracteres con mayúscula, minúscula, número y símbolo, por ejemplo <b>Mar1posa!</b>, que solo tú sepas.</p>' +
         '<div class="login-divider"></div>' +
         campoClave_('seg-nueva', 'Contraseña nueva', 'new-password') +

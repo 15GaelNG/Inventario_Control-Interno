@@ -584,8 +584,9 @@ test('lo que repetían los servicios de una hoja vive en HojaServicio, no en otr
   // DatosConectados, lo conectado desde la pantalla, que Relaciones lee en cada propagación (es configuración);
   // AdquisicionVehicularService, el índice propio de Adquisición Vehicular (AdquisicionVehicularIndice.gs lo
   // llena) -- no es la lista de un módulo, es una búsqueda por serie; y TemporadaService la ofrenda de Día
-  // de Muertos (no es un módulo: cualquiera con sesión enciende su vela)
-  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'AdquisicionVehicularService.gs', 'TemporadaService.gs'];
+  // de Muertos (no es un módulo: cualquiera con sesión enciende su vela); Marcas, la marca de cada módulo (MODULOS) y de
+  // cada persona (CI / Flotillas, 4-nov): es configuración de lo que se ve, no la lista de un módulo
+  const CON_CACHE_PROPIA = ['ListasService.gs', 'CapitalHumano.gs', 'PermisosService.gs', 'DatosConectados.gs', 'AdquisicionVehicularService.gs', 'TemporadaService.gs', 'Marcas.gs'];
   const problemas = [];
   servicios.forEach((a) => {
     const texto = read('src/services/' + a);
