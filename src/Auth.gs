@@ -86,6 +86,8 @@ const Auth = (function () {
       rol: mapearRol_(found.ROL),
       departamento: found.AREA || found.COORDINACION || '',
       dptosPermitidos: found['DPTOS PERMITIDOS'] || '',
+      // CI, FT o CM (Marcas.gs, 4-nov): el marco (logo y nombre) que ve después de entrar
+      marca: typeof Marcas === 'undefined' ? '' : Marcas.dePersona(found),
       v: versionDe_(found.CORREO),
       creada: ahora,
       renovada: ahora,
@@ -229,18 +231,21 @@ const Auth = (function () {
    */
   function identidadGoogle() {
     const correoDetectado = Session.getActiveUser().getEmail();
-    if (!correoDetectado) return { coincide: false };
+    // El logo del login (Marcas.gs, 4-nov): el de su departamento; sin cuenta o sin usuario, los dos
+    const AMBAS = 'AMBAS';
+    if (!correoDetectado) return { coincide: false, marca: AMBAS };
 
     const found = buscarUsuarioPorCorreo_(correoDetectado);
+    const marca = found && typeof Marcas !== 'undefined' ? Marcas.dePersona(found) : AMBAS;
     if (!found || String(found.ACTIVO).toUpperCase() !== 'TRUE') {
-      return { coincide: false, correo: correoDetectado };
+      return { coincide: false, correo: correoDetectado, marca: marca };
     }
     // Bloqueada por seguridad (se sospecha que tomaron su cuenta de Google): sin "Continuar como…"
-    if (Credenciales.bloqueado(found)) return { coincide: false, correo: correoDetectado };
+    if (Credenciales.bloqueado(found)) return { coincide: false, correo: correoDetectado, marca: marca };
     // La foto, solo si ya está guardada (FotosDirectorio.de no llama a Google: la entrada no espera)
     let foto = '';
     try { foto = FotosDirectorio.de(correoDetectado); } catch (e) { /* sin foto: iniciales */ }
-    return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE, foto: foto };
+    return { coincide: true, correo: correoDetectado, nombre: found.NOMBRE, foto: foto, marca: marca };
   }
 
   function loginConGoogle(dispositivo) {

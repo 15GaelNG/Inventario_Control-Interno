@@ -20,8 +20,12 @@ function doGet(e) {
     // encuentra nada ("liga no válida"), sin necesidad de una lista fija aquí.
     t.quien = String(e.parameter.quien || '');
     t.token = e.parameter.token || '';
+    // La marca del módulo del documento (responsiva y adherente son de Vehículos: Flotillas; Marcas.gs)
+    let marcaFirma = 'Control Interno';
+    try { marcaFirma = Marcas.nombreDe(Marcas.deModulo('vehiculos')); } catch (err) { /* la de siempre */ }
+    t.marcaNombre = marcaFirma;
     return t.evaluate()
-      .setTitle('Firmar documento — Control Interno')
+      .setTitle('Firmar documento — ' + marcaFirma)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');
   }
   return Router.renderShell(e);

@@ -192,7 +192,7 @@ test('la pantalla: «Regenerar PDF» en inspecciones y responsivas del sistema c
   assert.match(cliente, /llamar\('apiLineasGenerarPdf', tipo, nuevoId, !!regenerar, sesionCaptura\.pdfFirmas \|\| null\)/);
   assert.match(cliente, /if \(pdf && pdf\.faltanFirmas\) \{ pedirFirmasPdf\(sesionCaptura, tipo, pdf\.nombres \|\| \{\}, generar, !!pdf\.soloResponsable\); return; \}/);
   const fn = cliente.slice(cliente.indexOf('function pedirFirmasPdf('), cliente.indexOf('/** `regenerar`'));
-  assert.match(fn, /if \(ci && ci\.estaVacia\(\)\) \{ mostrarErrorCaptura\('Falta la firma de Control Interno\.'\); return; \}/);
+  assert.match(fn, /if \(ci && ci\.estaVacia\(\)\) \{ mostrarErrorCaptura\('Falta la firma de ' \+ Marca\.textoDe\('lineas-telefonicas'\) \+ '\.'\); return; \}/);
   assert.match(fn, /patron: null/);
   assert.match(cliente, /'PDF regenerado': 'refresh-ccw'/);
 });

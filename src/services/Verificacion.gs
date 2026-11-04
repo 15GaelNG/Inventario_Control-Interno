@@ -217,11 +217,11 @@ const Verificacion = (function () {
   const ahora_ = () => Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm');
 
   function correoCodigo_(r, codigo) {
-    return Correos.mensaje(r.correo, codigo + ' es tu código para entrar a Control Interno', {
+    return Correos.mensaje(r.correo, codigo + ' es tu código para entrar a ' + Correos.sistema(r.correo), {
       preencabezado: 'Vence en 10 minutos. Nadie de Control Interno te lo va a pedir.',
       etiqueta: 'Verificación',
       titulo: 'Tu código para entrar',
-      parrafos: [(r.nombre ? 'Hola, ' + Correos.esc(r.nombre) + '. ' : '') + 'Escribe este código en Control Interno para terminar de iniciar sesión.'],
+      parrafos: [(r.nombre ? 'Hola, ' + Correos.esc(r.nombre) + '. ' : '') + 'Escribe este código en ' + Correos.sistema(r.correo) + ' para terminar de iniciar sesión.'],
       codigo,
       detalle: [['Dispositivo', r.dispositivo.nombre], ['Solicitado', ahora_()], ['Vence', 'En 10 minutos']],
       aviso: '<b>¿No fuiste tú?</b> Alguien tiene tu contraseña: cámbiala en Mi perfil o pide a Control Interno que la ' +
@@ -230,7 +230,7 @@ const Verificacion = (function () {
   }
 
   function correoDispositivo_(r) {
-    return Correos.mensaje(r.correo, 'Nuevo dispositivo en Control Interno: ' + r.dispositivo.nombre, {
+    return Correos.mensaje(r.correo, 'Nuevo dispositivo en ' + Correos.sistema(r.correo) + ': ' + r.dispositivo.nombre, {
       preencabezado: 'Se recordó ' + r.dispositivo.nombre + ' para tu cuenta.',
       etiqueta: 'Seguridad de tu cuenta',
       titulo: 'Se recordó un dispositivo nuevo',
@@ -320,7 +320,7 @@ const Verificacion = (function () {
     Auth.cerrarSesiones(correo);
     if (typeof Credenciales !== 'undefined' && Credenciales.bloqueadoCorreo(correo)) return n;   // bloqueada: sin aviso
     try {
-      MailApp.sendEmail(Correos.mensaje(correo, 'Se cerraron tus sesiones de Control Interno', {
+      MailApp.sendEmail(Correos.mensaje(correo, 'Se cerraron tus sesiones de ' + Correos.sistema(correo), {
         preencabezado: 'La próxima vez que entres te pediremos un código.',
         etiqueta: 'Seguridad de tu cuenta',
         titulo: 'Se cerraron tus sesiones',

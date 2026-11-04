@@ -3,7 +3,7 @@
 <head>
 <base target="_top">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Firmar documento — Control Interno</title>
+<title>Firmar documento — <?= marcaNombre ?></title>
 <style>
   :root {
     --color-primary: #06263A; --color-bg: #F5F6F5; --color-surface: #ffffff;
@@ -74,7 +74,7 @@
 <body data-tipo="<?= tipo ?>" data-quien="<?= quien ?>" data-token="<?= token ?>">
   <div class="firex-card">
     <h1 id="firex-titulo">Firmar documento</h1>
-    <p class="firex-sub">Control Interno — Ciudad Maderas</p>
+    <p class="firex-sub"><?= marcaNombre ?> — Ciudad Maderas</p>
 
     <p id="firex-cargando">Cargando…</p>
 

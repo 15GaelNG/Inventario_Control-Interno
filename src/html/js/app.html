@@ -442,6 +442,8 @@
       initLogin();
       return;
     }
+    // El marco con la marca de quien entró (su DEPARTAMENTO; apiMisPermisos la trae fresca): componentes/marca.html
+    Marca.persona(state.sesion.marca);
     // El usuario al pie del menú: nombre y, debajo, su puesto de Capital Humano (de Mi perfil; mientras, rol y área)
     document.getElementById('user-name').textContent = state.sesion.nombre;
     document.getElementById('user-avatar').innerHTML = Avatar.html(state.sesion.correo, state.sesion.nombre, { tam: 34 });
@@ -462,6 +464,14 @@
     callServer('apiMisPermisos', state.token).then((info) => {
       state.permisos = (info && info.permisos) || {};
       guardarPermisos_(state.permisos);
+      if (info && info.marca) {
+        Marca.modulos(info.marca.modulos);
+        if (info.marca.persona && info.marca.persona !== state.sesion.marca) {
+          state.sesion.marca = info.marca.persona;
+          try { sessionStorage.setItem('sesion', JSON.stringify(state.sesion)); } catch (e) { /* solo esta pestaña */ }
+        }
+        Marca.persona(state.sesion.marca);
+      }
       renderNavGrupos();
       precargarListas();
       // Sin permisos de la visita anterior se abrió el Inicio: con los de verdad, la pantalla de su área
@@ -509,6 +519,7 @@
 
     const container = document.getElementById('loading-screen-container');
     montarVista('tpl-loading', null, container);
+    Marca.persona(state.sesion && state.sesion.marca);
 
     const pasos = [
       { icono: 'loading-icon-0', mensaje: 'Sincronizando vehículos…' },
@@ -571,6 +582,7 @@
     // Las pestañas de la vista anterior (Tabs.iniciar sobre #view-container) no son de la nueva
     container.removeAttribute('data-tabs');
     container.appendChild(tpl.content.cloneNode(true));
+    Marca.pintar(container);   // los logos y nombres de la marca que traiga la plantilla (componentes/marca.html)
     refreshIcons();
     if (initFn) initFn();
   }
@@ -940,6 +952,8 @@
   function initLogin() {
     const login = document.getElementById('login-screen-container');
     montarVista('tpl-login', null, login);
+    // La marca de la cuenta de Google que abre (la puso el servidor; sin cuenta, las dos): componentes/marca.html
+    Marca.persona();
 
     marcarTemaActual();
     initLoginHeroSlideshow();
@@ -1006,6 +1020,7 @@
     const divisor = document.getElementById('login-or-divider');
     try {
       const identidad = await callServer('apiIdentidadGoogle');
+      if (identidad && identidad.marca) Marca.persona(identidad.marca);
       if (!identidad || !identidad.coincide) return; // se queda solo el formulario manual
 
       document.getElementById('google-account-avatar').innerHTML =

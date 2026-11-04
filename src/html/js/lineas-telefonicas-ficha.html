@@ -78,7 +78,7 @@
             d.pdfId ? enlaceDrive(d.pdfId, 'Ver PDF', true) : '',
             esInspeccion
               ? [['Responsable', d.responsable], ['Inspector', d.inspector], ['Calificación', porcentaje(d.calificacion)], ['Fotos', miles(d.fotos || 0)]]
-              : [['Responsable', d.responsable], ['Control Interno', d.inspector]]) +
+              : [['Responsable', d.responsable], [Marca.textoDe('lineas-telefonicas'), d.inspector]]) +
           '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
       }
 

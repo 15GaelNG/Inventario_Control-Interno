@@ -2,7 +2,7 @@
 <html>
 <head>
   <base target="_top">
-  <link rel="icon" type="image/png" href="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png">
+  <link rel="icon" type="image/png" href="<?= marcaIcono ?>">
   <script src="https://unpkg.com/lucide@0.513.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
@@ -10,8 +10,11 @@
   <?!= include('html/styles'); ?>
 </head>
 <!-- data-apagados: lo que este proyecto tiene apagado (Config.apagados); el menú no lo pinta.
-     data-temporada: la decoración de temporada encendida (TemporadaService; html/temporada.html) -->
-<body data-apagados="<?= apagados ?>" data-temporada="<?= temporada ?>" data-recuperar="<?= recuperar ?>">
+     data-temporada: la decoración de temporada encendida (TemporadaService; html/temporada.html)
+     data-marca, data-marcas, data-marcas-modulos: la marca de quien abre, nombre y logo de cada una y la de cada módulo
+     (Marcas.gs; componentes/marca.html) -->
+<body data-apagados="<?= apagados ?>" data-temporada="<?= temporada ?>" data-recuperar="<?= recuperar ?>"
+      data-marca="<?= marca ?>" data-marcas="<?= marcas ?>" data-marcas-modulos="<?= marcasModulos ?>">
 
   <div id="login-screen-container"></div>
   <div id="loading-screen-container"></div>
@@ -22,8 +25,9 @@
       <nav id="sidebar" class="collapsed">
         <div class="sidebar-header">
           <div class="sidebar-brand">
-            <img class="sidebar-brand-icon" src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/logo.png" alt="Control Interno" />
-            <h1 class="sidebar-title">Control Interno</h1>
+            <!-- La marca de quien entró (componentes/marca.html) -->
+            <span class="sidebar-brand-logos" data-marca-logo="sidebar-brand-icon"></span>
+            <h1 class="sidebar-title" data-marca-nombre></h1>
           </div>
         </div>
 
@@ -74,7 +78,7 @@
          ya hay tour. Picarle lanza el de la pantalla en la que estés, o avisa que ahí todavía
          no hay uno. -->
     <button type="button" id="asistente-flotante" title="¿Dudas de esta pantalla? Pícame">
-      <img src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/mascota-asistente.png" alt="Asistente de Control Interno" />
+      <img src="https://raw.githubusercontent.com/15GaelNG/Inventario_Control-Interno/master/assets/mascota-asistente.png" alt="Asistente" />
     </button>
   </div>
 
@@ -123,6 +127,8 @@
 
   <!-- Formato: esc, fechas, moneda, normal. Antes que todo: lo usan los componentes y los módulos. -->
   <?!= include('html/js/componentes/formato'); ?>
+  <!-- Marca: CI, Flotillas o neutra (el logo y el nombre del login, la carga y el menú). Después de Formato -->
+  <?!= include('html/js/componentes/marca'); ?>
   <!-- Imagen: reducir una foto antes de subirla (Firma, Líneas, Arqueos…). Antes que quien la usa. -->
   <?!= include('html/js/componentes/imagen'); ?>
   <!-- Partes: una pantalla grande abierta en archivos (Vehículos, Líneas Telefónicas). Antes que esas pantallas. -->

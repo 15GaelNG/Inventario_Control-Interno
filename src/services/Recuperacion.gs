@@ -57,12 +57,12 @@ const Recuperacion = (function () {
     const h = huella_(enlace);
     cache_().put('recuperar_t_' + h, JSON.stringify({ correo: fila.CORREO }), SEG_ENLACE);
     cache_().put('recuperar_vigente_' + c, h, SEG_ENLACE);   // pedir otro anula este
-    MailApp.sendEmail(Correos.mensaje(fila.CORREO, 'Crea tu contraseña nueva de Control Interno', {
+    MailApp.sendEmail(Correos.mensaje(fila.CORREO, 'Crea tu contraseña nueva de ' + Correos.sistema(fila.CORREO), {
       preencabezado: 'El enlace vence en 30 minutos y sirve una sola vez.',
       etiqueta: 'Seguridad de tu cuenta',
       titulo: 'Crea tu contraseña nueva',
       parrafos: [(fila.NOMBRE ? 'Hola, ' + Correos.esc(fila.NOMBRE) + '. ' : '') +
-        'Pediste recuperar el acceso a Control Interno. Con este botón pones una contraseña nueva.'],
+        'Pediste recuperar el acceso a ' + Correos.sistema(fila.CORREO) + '. Con este botón pones una contraseña nueva.'],
       boton: { texto: 'Crear contraseña nueva', url: Config.urlApp() + '?recuperar=' + enlace },
       detalle: [['Cuenta', fila.CORREO], ['Vence', 'En 30 minutos'],
         ['Solicitado', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')]],
