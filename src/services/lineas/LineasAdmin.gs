@@ -193,6 +193,42 @@ function firmasGuardadas_(aplicar, sinQuitar) {
   return salida;
 }
 
+/**
+ * Firmas guardadas cuyo correo ya no está en USUARIOS (4-nov: Flotillas pasó de «.ci@» a «.ft@»): si el mismo correo con
+ * «.ft@» sí está, la firma pasa a ese (LineasFirmas.cambiarCorreo, sin sacar la imagen del proyecto). Lo que no se pueda
+ * resolver solo se reporta. → { mover: [{ de, a, nombre }], sinResolver: [...], yaBien: [...], errores: [...] }
+ */
+function firmasCambiarCorreo_(aplicar) {
+  const usuarios = {};
+  SheetUtils.getAll(Config.SPREADSHEET_IDS.USUARIOS(), 'USUARIOS').forEach((u) => {
+    usuarios[String(u.CORREO || '').trim().toLowerCase()] = String(u.NOMBRE || '').trim();
+  });
+  const salida = { proyecto: ScriptApp.getScriptId(), aplicado: !!aplicar, mover: [], sinResolver: [], yaBien: [], errores: [] };
+  LineasFirmas.lista().forEach((g) => {
+    if (g.correo in usuarios) { salida.yaBien.push(g.correo + ' (' + usuarios[g.correo] + ')'); return; }
+    const nuevo = g.correo.replace(/\.ci@/, '.ft@');
+    if (nuevo === g.correo || !(nuevo in usuarios)) { salida.sinResolver.push(g.correo + ': no está en USUARIOS y no hay un «.ft@» que le corresponda'); return; }
+    if (LineasFirmas.tiene(nuevo)) { salida.errores.push(nuevo + ' ya tiene firma guardada: no se pisa (la de ' + g.correo + ' se queda)'); return; }
+    salida.mover.push({ de: g.correo, a: nuevo, nombre: usuarios[nuevo] });
+    if (!aplicar) return;
+    try { LineasFirmas.cambiarCorreo(g.correo, nuevo); } catch (e) { salida.errores.push(g.correo + ' → ' + nuevo + ': ' + e.message); }
+  });
+  salida.guardadas = LineasFirmas.lista();
+  console.log(JSON.stringify(salida, null, 2));
+  return salida;
+}
+
+/** Desde el editor, solo dice qué firmas se pasarían de su correo .ci al .ft (no cambia nada) */
+function lineasFirmasCambiarCorreoRevisar() {
+  soloEditor_();
+  return firmasCambiarCorreo_(false);
+}
+/** Desde el editor: pasa cada firma guardada de su correo .ci al .ft que está en USUARIOS */
+function lineasFirmasCambiarCorreo() {
+  soloEditor_();
+  return firmasCambiarCorreo_(true);
+}
+
 function lineasFirmasGuardadas_revisar() {
   soloEditor_();
   return firmasGuardadas_(false);
