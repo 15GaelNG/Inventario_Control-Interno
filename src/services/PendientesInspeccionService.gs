@@ -44,7 +44,6 @@ const PendientesInspeccionService = (function () {
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
     'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'ESTATUS HELPDESK',
     'FECHA CARGADO', 'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC', 'ASUNTO AVISO ORIGINAL',
-    'NOMBRE INSPECTOR', 'CORREO INSPECTOR',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
@@ -90,12 +89,9 @@ const PendientesInspeccionService = (function () {
    * @param {string} [asuntoAviso] el ASUNTO exacto del correo de aviso original
    *   (InspeccionesService.asuntoAviso_) -- enviarRecordatorio lo reutiliza con un "Re:" al
    *   frente para que el recordatorio quede en la MISMA conversación de correo que el aviso
-   * @param {string} [correoInspector] el correo de quien capturó la inspección (sesion.correo en
-   *   InspeccionesService.registrar) -- enviarRecordatorio lo usa como replyTo, igual que el
-   *   aviso original, para que la respuesta le llegue a él y no a quien desplegó la app
    * @return {Array} los pendientes creados (mismas columnas que la hoja), para el correo
    */
-  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso, correoInspector) {
+  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso) {
     const limpios = (items || [])
       .map((it) => ({
         asunto: limpiar_(it && it.asunto),
@@ -130,8 +126,6 @@ const PendientesInspeccionService = (function () {
         'CORREO RESPONSABLE': limpiar_(correoResponsable),
         'CORREOS CC': (correosCc || []).map(limpiar_).filter(Boolean).join(', '),
         'ASUNTO AVISO ORIGINAL': limpiar_(asuntoAviso),
-        'NOMBRE INSPECTOR': limpiar_(filaInspeccion['NOMBRE INSPECTOR']),
-        'CORREO INSPECTOR': limpiar_(correoInspector),
       };
       SheetUtils.insert(ssId(), HOJA, fila);
       return fila;
@@ -234,9 +228,7 @@ const PendientesInspeccionService = (function () {
    * capturó un correo válido), se busca por su nombre en Capital Humano, como antes. También va
    * en cc a los demás que ya habían recibido ese mismo aviso original (CORREOS CC: inspector,
    * asistente, otros) -- si el correo del responsable se tuvo que buscar en Capital Humano, no
-   * hay cc porque no hay forma de saber quiénes eran. Quien inspeccionó SIEMPRE va en cc, de
-   * primera mano (CORREO INSPECTOR, su correo real al capturar -- no el que se haya tecleado a
-   * mano en "Notificar"), con o sin CORREOS CC; además queda como replyTo.
+   * hay cc porque no hay forma de saber quiénes eran.
    * @return {{enviado: true, correo: string, cc: Array<string>, incluidos: Array<string>}}
    */
   function enviarRecordatorio(token, id) {
@@ -267,14 +259,6 @@ const PendientesInspeccionService = (function () {
     } else {
       cc = limpiar_(fila['CORREOS CC']).split(',').map(limpiar_)
         .filter((c) => c && c.toLowerCase() !== correo.toLowerCase());
-    }
-    // Quien inspeccionó va en cc siempre, de primera mano -- no solo como replyTo (más abajo):
-    // CORREOS CC viene de lo que el inspector tecleó a mano en "Notificar" (puede traer un correo
-    // distinto, o quedar vacío), CORREO INSPECTOR es el de su sesión real al capturar, confiable.
-    const correoInspector = limpiar_(fila['CORREO INSPECTOR']);
-    if (correoInspector && correoInspector.toLowerCase() !== correo.toLowerCase() &&
-      !cc.some((c) => c.toLowerCase() === correoInspector.toLowerCase())) {
-      cc.push(correoInspector);
     }
     // Mismo asunto que el correo de aviso original, con "Re:" al frente: así Gmail agrupa el
     // recordatorio en la MISMA conversación en vez de abrir un hilo nuevo (pedido de Jorge,
@@ -310,13 +294,7 @@ const PendientesInspeccionService = (function () {
       '<p style="margin:0 0 10px">Agradecemos tu apoyo y atención para dar seguimiento a lo anterior.</p>' +
       '<p style="margin-top:16px">¡Saludos! 🙌</p>' +
       '</div>';
-    // La app manda desde la cuenta de quien la desplegó (executeAs: USER_DEPLOYING); name/replyTo
-    // no cambian eso, pero el responsable ve el nombre del inspector y, si responde, le llega a
-    // él directo -- mismo criterio que el correo de aviso original (InspeccionesService.avisarInspeccion_).
-    const opciones = { to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo };
-    if (limpiar_(fila['NOMBRE INSPECTOR'])) opciones.name = fila['NOMBRE INSPECTOR'];
-    if (limpiar_(fila['CORREO INSPECTOR'])) opciones.replyTo = fila['CORREO INSPECTOR'];
-    MailApp.sendEmail(opciones);
+    MailApp.sendEmail({ to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo });
     const ahora = new Date();
     pendientes.forEach((p) => SheetUtils.update(ssId(), HOJA, p['ID'], { 'ULTIMO RECORDATORIO': ahora }, 'ID'));
     return { enviado: true, correo: correo, cc: cc, incluidos: pendientes.map((p) => p['ID']) };

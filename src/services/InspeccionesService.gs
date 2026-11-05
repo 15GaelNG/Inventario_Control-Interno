@@ -474,7 +474,7 @@ const InspeccionesService = (function () {
       // folio de negocio en COL_ID (2026_649_314): dos inspecciones de un mismo vehículo el mismo
       // año pueden mezclarse en el folio, nunca en el ID.
       const dest = destinatariosNotificar_(p.NOTIFICAR);
-      pendientes = PendientesInspeccionService.agregar(fila, fila['ID'], p.PENDIENTES, dest.para, dest.cc, asuntoAviso_(fila), sesion.correo);
+      pendientes = PendientesInspeccionService.agregar(fila, fila['ID'], p.PENDIENTES, dest.para, dest.cc, asuntoAviso_(fila));
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -512,7 +512,7 @@ const InspeccionesService = (function () {
         puntaje: puntaje.final,
         pdf: null,
         aviso: 'La inspección se guardó, pero no se pudo generar el PDF: ' + err.message,
-        correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, null, pendientes, sesion.correo),
+        correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, null, pendientes),
       };
     }
 
@@ -522,7 +522,7 @@ const InspeccionesService = (function () {
         ? 'El PDF salió sin estos dibujos porque no están en Drive: ' + sinDibujo.join(', ') +
           '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
         : '',
-      correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, pdf.url, pendientes, sesion.correo),
+      correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, pdf.url, pendientes),
     };
   }
 
@@ -739,7 +739,7 @@ const InspeccionesService = (function () {
     return 'INSPECCION: ' + [fila['NUCO'], fila['DEPARTAMENTO'], fila['TIPO'], fila['NO SERIE']].filter(Boolean).join('-') + ' ' + fecha;
   }
 
-  function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes, correoInspector) {
+  function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes) {
     if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
     const dest = destinatariosNotificar_(notificar);
     const para = dest.para;
@@ -793,14 +793,8 @@ const InspeccionesService = (function () {
       '<p style="margin-top:18px">Saludos 🙌</p>' +
       '</div>';
 
-    // La app manda el correo desde la cuenta de quien la desplegó (executeAs: USER_DEPLOYING,
-    // appsscript.json) -- nunca desde la del inspector. name/replyTo no cambian eso, pero el
-    // destinatario ve el nombre de quien inspeccionó y, si responde, le llega a él directo.
-    const opciones = { to: destinatario, cc: copia.join(','), subject: asunto, htmlBody: cuerpo };
-    if (limpiar_(fila['NOMBRE INSPECTOR'])) opciones.name = fila['NOMBRE INSPECTOR'];
-    if (limpiar_(correoInspector)) opciones.replyTo = correoInspector;
     try {
-      MailApp.sendEmail(opciones);
+      MailApp.sendEmail({ to: destinatario, cc: copia.join(','), subject: asunto, htmlBody: cuerpo });
       return { enviado: true, para: destinatario, cc: copia };
     } catch (err) {
       return { enviado: false, motivo: 'No se pudo mandar el correo: ' + err.message };
