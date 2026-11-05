@@ -26,5 +26,6 @@ function apiSubirArchivoUber(token, nombreArchivo, mimeType, base64Data) {
   return UberService.subirArchivo(token, nombreArchivo, mimeType, base64Data);
 }
 function apiUberPanorama(token, forzar) {
+  Config.exigirEncendido('panorama-uber');
   return UberPanorama.panorama(token, forzar);
 }
