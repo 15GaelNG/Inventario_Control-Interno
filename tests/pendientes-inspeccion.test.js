@@ -11,8 +11,8 @@ const { crearEntorno } = require('./apps-script-simulado');
 let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
 
-function entorno(ticketsHelpdesk, colaboradores, correos, helpdeskApi) {
-  const e = crearEntorno({ libros: { libro: {} } });
+function entorno(ticketsHelpdesk, colaboradores, correos, helpdeskApi, hojasExtra) {
+  const e = crearEntorno({ libros: { libro: hojasExtra || {} } });
   const tocados = [];
   const contexto = {
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'libro' } },
@@ -63,6 +63,28 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
   const { P: P2 } = entorno();
   const sinCorreo = P2.agregar(FILA_INSPECCION, '2026_25_2', [{ asunto: 'Algo', familia: 'OTROS', prioridad: 'URGENTE' }]);
   ok(sinCorreo[0]['CORREO RESPONSABLE'] === '', 'queda vacío, no "undefined" ni null: "' + sinCorreo[0]['CORREO RESPONSABLE'] + '"');
+
+  console.log('1c. Una hoja YA EXISTENTE de antes de NOMBRE INSPECTOR/CORREO INSPECTOR: se agregan solas, sin tronar ni perder lo viejo');
+  const ENCABEZADOS_VIEJOS = [
+    'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
+    'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'ESTATUS HELPDESK',
+    'FECHA CARGADO', 'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC', 'ASUNTO AVISO ORIGINAL',
+  ];
+  const filaVieja = ['PDI-VIEJO1', '2026_10_1', '', 'VEH-X', 'AAA111', '10', 'KWID', 'ALGUIEN',
+    'Algo de antes', 'OTROS', 'NO URGENTE', 'CARGADO EN HELPDESK', 61000, 'Resuelto', '', '', 'viejo@x.com', '', ''];
+  const { e: e9, P: P9 } = entorno(null, null, null, null, { 'PENDIENTES INSPECCION': [ENCABEZADOS_VIEJOS, filaVieja] });
+  const creados9 = P9.agregar(FILA_INSPECCION, '2026_25_9', [{ asunto: 'Algo nuevo', familia: 'MECANICA', prioridad: 'URGENTE' }],
+    'resp@x.com', [], '', 'ayrton@x.com');
+  ok(creados9[0]['NOMBRE INSPECTOR'] === 'AYRTON SEPULVEDA' && creados9[0]['CORREO INSPECTOR'] === 'ayrton@x.com',
+    'el renglón nuevo sí trae las columnas nuevas, aunque la hoja ya existiera sin ellas');
+  const filasHoja = e9.hojaComoTexto('libro', 'PENDIENTES INSPECCION');
+  const encabezadosHoja = filasHoja[0];
+  ok(encabezadosHoja.indexOf('NOMBRE INSPECTOR') !== -1 && encabezadosHoja.indexOf('CORREO INSPECTOR') !== -1,
+    'las columnas se agregaron solas al final: ' + encabezadosHoja.join(','));
+  const colId = encabezadosHoja.indexOf('ID');
+  const vieja = filasHoja.find((f) => f[colId] === 'PDI-VIEJO1');
+  ok(vieja && vieja[encabezadosHoja.indexOf('ASUNTO')] === 'Algo de antes',
+    'el renglón viejo sigue intacto, solo con las columnas nuevas vacías');
 }
 
 console.log('2. agregar(): sin items reales no crea la hoja ni nada');
