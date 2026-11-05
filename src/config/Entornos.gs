@@ -27,7 +27,8 @@ const ENTORNOS = {
     // Vínculos de Líneas (vinculos-lineas): una idea de Emmanuel que se queda así (8-oct-2026); en producción no se
     // enseña el modo Vínculos de Líneas telefónicas (lineas.html), en los DEV sí.
     // Correcciones de líneas (no está terminado) y Sistemas de Líneas (no tiene enlaces): apagados (12-oct-2026).
-    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas',
+    // Panorama de Uber: se sube el código pero no se enseña todavía (pedido del usuario, 4-nov-2026).
+    MODULOS_APAGADOS: 'helpdesk,vinculos-lineas,correcciones-lineas,sistemas-lineas,panorama-uber',
 
     // El código por correo al entrar desde un dispositivo nuevo (Verificacion.gs): encendido aquí desde el 26-oct-2026, como
     // en los DEV. Para apagarlo de emergencia: VERIFICACION_DOS_PASOS: 'APAGADA' (y desplegar). Solo lo del dispositivo
