@@ -9,6 +9,9 @@
     --ln-ambar-bg: #EBE5D1;  --ln-ambar-tx: #9c8a58;
     --ln-rojo-bg: #F3ECD6;   --ln-rojo-tx: #8a6d3a;
     --ln-neutro-bg: #eef0f1; --ln-neutro-tx: #5c6b72;
+    /* Compañías (usuario, 5-nov): azul y naranja para que no se confundan */
+    --ln-telcel-bg: #1f4fa8; --ln-telcel-tx: #ffffff;
+    --ln-att-bg: #c2410c;    --ln-att-tx: #ffffff;
   }
   :root[data-theme="dark"] {
     --ln-verde-bg: #163a2a;  --ln-verde-tx: #86dcae;
@@ -16,6 +19,8 @@
     --ln-ambar-bg: #2e2a1a;  --ln-ambar-tx: #e0cf9a;
     --ln-rojo-bg: #3d1f1c;   --ln-rojo-tx: #f8b4ae;
     --ln-neutro-bg: #1c313c; --ln-neutro-tx: #b3c3cb;
+    --ln-telcel-bg: #8fb4ff; --ln-telcel-tx: #0b1f45;
+    --ln-att-bg: #ffa463;    --ln-att-tx: #3d1503;
   }
 
   /* Íconos Lucide (SVG en línea, heredan el color del texto) */
@@ -58,6 +63,9 @@
   .ln-chip.azul { background: var(--ln-azul-bg); color: var(--ln-azul-tx); }
   .ln-chip.ambar { background: var(--ln-ambar-bg); color: var(--ln-ambar-tx); }
   .ln-chip.rojo { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); }
+  .ln-chip.telcel { background: var(--ln-telcel-bg); color: var(--ln-telcel-tx); }
+  .ln-chip.att { background: var(--ln-att-bg); color: var(--ln-att-tx); }
+  .ln-chip.compania { background: var(--ln-neutro-bg); color: var(--ln-neutro-tx); box-shadow: inset 0 0 0 1px var(--color-border); }
   .ln-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 
 

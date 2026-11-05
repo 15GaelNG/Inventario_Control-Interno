@@ -559,14 +559,16 @@
         const estatus = resp ? ESTATUS[i % 4] : ESTATUS[4 + (i % 2)];
         const tipo = conLinea ? 'EQUIPO + SIM' : 'EQUIPO';
         equipos.push(['EQU-' + i, nuco, tipo, MODELOS[i % MODELOS.length], '35' + String(1234567890123 + i).slice(0, 13), estatus, resp, depto, sede,
-          conLinea ? 'LIN-' + i : '', conLinea ? numero : '', conLinea ? (i % 3 ? 'TELCEL' : 'AT&T') : '', conLinea ? 'USO' : '', tipo]);
+          conLinea ? 'LIN-' + i : '', conLinea ? numero : '', conLinea ? (i % 3 ? 'TELCEL' : 'AT&T') : '', conLinea ? 'USO' : '', tipo, null, false,
+          // Sin línea: la compañía de la última que tuvo (5-nov); una sin historia
+          conLinea || i === 4 ? null : (i % 2 ? 'TELCEL' : 'AT&T')]);
         if (conLinea) {
           lineas.push(['LIN-' + i, numero, '8952' + String(100000 + i), i % 3 ? 'TELCEL' : 'AT&T', 'USO', 'EQU-' + i, nuco, resp, depto, false, 'LINEA', []]);
         }
         vista.push(['EQU-' + i, conLinea ? numero : '', nuco, tipo, estatus, resp, depto, sede, MODELOS[i % MODELOS.length]]);
       }
       return {
-        equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja'], filas: equipos, generadoEn: hace(0) },
+        equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel', 'dg', 'ultimaCompania'], filas: equipos, generadoEn: hace(0) },
         lineas: { columnas: ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja', 'numerosAnteriores'], filas: lineas },
         vista: { columnas: ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'RESPONSABLE', 'DEPARTAMENTO', 'SEDE', 'EQUIPO'], secretas: [], filas: vista },
       };

@@ -6,7 +6,7 @@
   (function () {
     'use strict';
     const { $, CATALOGOS_LINEAS, COLOR_ESTATUS, REGLAS_FORMATO, abrirPanelLateral, alternarMulti, aviso, bloqueadoDG,
-      cargarIndice, chip, colorAppSheet, elegirPastilla, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion,
+      cargarIndice, chip, chipCompania, colorAppSheet, elegirPastilla, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion,
       ico, icono, llamar, memoria, mensajeError, miles, montaje, panelActual, pintarIconos, precargarUltimosNucos,
       puedeOperar, quitarDelPanel, tablaLineas, vacio, veDocumentos, veHistorial, verFotoEnGrande } = Lineas.comun;
 
@@ -95,9 +95,9 @@
           { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
-          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista', render: (v) => chipCompania(v) || vacio },
           // Sin línea: la compañía de la última que tuvo, por compatibilidad (usuario, 5-nov)
-          { campo: 'ultimaCompania', titulo: 'Última compañía', tipo: 'lista', visible: false },
+          { campo: 'ultimaCompania', titulo: 'Última compañía', tipo: 'lista', visible: false, render: (v) => chipCompania(v) || vacio },
           { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
           { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
@@ -638,7 +638,7 @@
           seccion('card-sim', 'Línea', [
             campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
             // Equipo sin línea: la compañía de la última que tuvo (usuario, 5-nov)
-            ...(tipo === 'equipo' && !numero && r.ultimaCompania ? [campo('Última compañía', r.ultimaCompania)] : []),
+            ...(tipo === 'equipo' && !numero && r.ultimaCompania ? [campo('Última línea', chipCompania(r.ultimaCompania), true)] : []),
             campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', Formato.moneda(v('COSTO PLAN'))),
             campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
           ]) +
@@ -667,10 +667,11 @@
             '<div class="ln-cuadro-depto">' + depto + '</div>' +
             '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
             '<div class="ln-cuadro-secundario">' + guion(r.modelo) + '</div>' +
-            // La compañía junto al número; sin línea, la de la última que tuvo (usuario, 5-nov: no todos vienen liberados)
-            pie(icono('phone') + ' ' + (r.numero ? '<span class="ln-mono">' + esc(r.numero) + '</span>' + (r.compania ? ' · ' + esc(r.compania) : '')
-              : 'Sin línea' + (r.ultimaCompania ? ' <span class="ln-tenue">· antes ' + esc(r.ultimaCompania) + '</span>' : '')), icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
-            pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
+            pie(icono('phone') + ' <span class="ln-mono">' + (r.numero ? esc(r.numero) : 'Sin línea') + '</span>', icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
+            // Junto al estatus, la compañía en un badge (usuario, 5-nov): la de hoy o, sin línea, la de la última que tuvo
+            // (no todos los equipos vienen liberados)
+            pie('<span class="ln-chips">' + chip(r.estatus) + (r.numero ? chipCompania(r.compania) : chipCompania(r.ultimaCompania, 'ÚLTIMA LÍNEA: ')) + '</span>',
+              'Ver ficha ' + icono('chevron-right')) + '</button>';
         }
         return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="linea" data-id="' + esc(r.id) + '" aria-label="Abrir línea ' + esc(r.numero || '') + '">' +
           '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + guion(r.numero) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
