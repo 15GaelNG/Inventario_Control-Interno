@@ -162,9 +162,9 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   ok(res.enviado === true && res.correo === 'el-que-se-avisco@x.com',
     'usa el correo guardado del aviso original, no el de Capital Humano: ' + res.correo);
   ok(correos.length === 1 && correos[0].to === 'el-que-se-avisco@x.com', 'de verdad se mandó ahí');
-  ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
-    'y también en cc a los demás que ya habían recibido el aviso original, sin repetir al responsable: ' + correos[0].cc);
-  ok(res.cc.slice().sort().join(',') === 'inspector@x.com,otro@x.com', 'y lo regresa también en el resultado: ' + res.cc);
+  ok(correos[0].cc.split(',').sort().join(',') === 'ayrton@x.com,inspector@x.com,otro@x.com',
+    'y también en cc a los demás que ya habían recibido el aviso original, sin repetir al responsable, y a quien inspeccionó de primera mano: ' + correos[0].cc);
+  ok(res.cc.slice().sort().join(',') === 'ayrton@x.com,inspector@x.com,otro@x.com', 'y lo regresa también en el resultado: ' + res.cc);
   ok(/2026_25_1 - Reparaci.n de faro/.test(correos[0].htmlBody), 'con el asunto exacto que debe pegar en Help Desk');
   ok(correos[0].subject === 'Re: INSPECCION: 25-HONDA 150XR 12/10/2026',
     'el ASUNTO del correo lleva "Re:" + el del aviso original, para quedar en la misma conversación: ' + correos[0].subject);
@@ -224,6 +224,13 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   const res2 = P2.enviarRecordatorio('token', creados2[0]['ID']);
   ok(res2.correo === 'jorge@x.com', 'cae al de Capital Humano por nombre, como antes: ' + res2.correo);
   ok(res2.cc.length === 0, 'sin cc: no hay forma de saber quiénes más se habían notificado');
+
+  console.log('7b2. Aunque caiga a Capital Humano (sin CORREOS CC), quien inspeccionó sí llega en cc si se guardó su correo');
+  const { P: P2b } = entorno([], [{ NOMBRE: 'JORGE AVECILLA', CORREO: 'jorge@x.com' }]);
+  const creados2b = P2b.agregar(FILA_INSPECCION, '2026_25_1',
+    [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], '', [], '', 'ayrton@x.com');
+  const res2b = P2b.enviarRecordatorio('token', creados2b[0]['ID']);
+  ok(res2b.cc.join(',') === 'ayrton@x.com', 'de primera mano, aunque no haya CORREOS CC: ' + res2b.cc);
 
   console.log('7c. No se puede recordar uno que ya está cargado en Help Desk');
   const { e: e3, P: P3 } = entorno([{ 'ID TICKET HD': 1, TITULO: '2026_25_1 - Reparación de faro', DESCRIPCION: '' }],

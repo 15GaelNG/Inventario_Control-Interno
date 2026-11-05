@@ -234,7 +234,9 @@ const PendientesInspeccionService = (function () {
    * capturó un correo válido), se busca por su nombre en Capital Humano, como antes. También va
    * en cc a los demás que ya habían recibido ese mismo aviso original (CORREOS CC: inspector,
    * asistente, otros) -- si el correo del responsable se tuvo que buscar en Capital Humano, no
-   * hay cc porque no hay forma de saber quiénes eran.
+   * hay cc porque no hay forma de saber quiénes eran. Quien inspeccionó SIEMPRE va en cc, de
+   * primera mano (CORREO INSPECTOR, su correo real al capturar -- no el que se haya tecleado a
+   * mano en "Notificar"), con o sin CORREOS CC; además queda como replyTo.
    * @return {{enviado: true, correo: string, cc: Array<string>, incluidos: Array<string>}}
    */
   function enviarRecordatorio(token, id) {
@@ -265,6 +267,14 @@ const PendientesInspeccionService = (function () {
     } else {
       cc = limpiar_(fila['CORREOS CC']).split(',').map(limpiar_)
         .filter((c) => c && c.toLowerCase() !== correo.toLowerCase());
+    }
+    // Quien inspeccionó va en cc siempre, de primera mano -- no solo como replyTo (más abajo):
+    // CORREOS CC viene de lo que el inspector tecleó a mano en "Notificar" (puede traer un correo
+    // distinto, o quedar vacío), CORREO INSPECTOR es el de su sesión real al capturar, confiable.
+    const correoInspector = limpiar_(fila['CORREO INSPECTOR']);
+    if (correoInspector && correoInspector.toLowerCase() !== correo.toLowerCase() &&
+      !cc.some((c) => c.toLowerCase() === correoInspector.toLowerCase())) {
+      cc.push(correoInspector);
     }
     // Mismo asunto que el correo de aviso original, con "Re:" al frente: así Gmail agrupa el
     // recordatorio en la MISMA conversación en vez de abrir un hilo nuevo (pedido de Jorge,
