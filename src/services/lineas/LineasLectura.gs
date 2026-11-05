@@ -26,7 +26,7 @@
 const LineasLectura = (function () {
   const HOJA_VIEJA = 'LINEAS TELEFONICAS';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v9'; // v9: ULTIMA COMPAÑIA del equipo sin línea (5-nov). v8: sin ubicación en estatus finales (22-oct). v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v10'; // v10: y si no, COMPAÑIA ANTERIOR de EQUIPOS (5-nov). v9: ULTIMA COMPAÑIA del equipo sin línea (5-nov). v8: sin ubicación en estatus finales (22-oct). v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
   /** Responsables adicionales (6-oct): número de empleado y nombre del segundo al quinto. */
@@ -178,7 +178,9 @@ const LineasLectura = (function () {
       if (kl && masNueva(a, ultimaPorLinea[kl])) ultimaPorLinea[kl] = a;
     });
     // La última asignación de cada equipo que llevaba línea (la más reciente en empezar): de ahí sale la compañía que
-    // muestra el equipo cuando se queda sin línea. Lo de antes de la migración (4-oct) no tiene asignación: queda vacío
+    // muestra el equipo cuando se queda sin línea. Lo de antes de la migración (4-oct) no tiene asignación: sale de la
+    // columna COMPAÑIA ANTERIOR de EQUIPOS, que llenó una vez tools/lineas-datos/compania-anterior.py con la bitácora de
+    // AppSheet (CAMBIOS LINEAS TELEFONICAS) y la última inspección; lo del sistema nuevo siempre gana
     const ultimaConLinea = {};
     asignaciones.forEach((a) => {
       const ke = String(a['ID EQUIPO'] || '');
@@ -227,7 +229,7 @@ const LineasLectura = (function () {
         PERSONA_SIN_ASIGNACION.forEach((c) => { o[c] = v(ultima, c); });
       }
       const conLineaAntes = e && !l ? ultimaConLinea[String(e['ID'])] : null;
-      o['ULTIMA COMPAÑIA'] = conLineaAntes ? v(lineaPorId[String(conLineaAntes['ID LINEA'])], 'COMPAÑIA') : '';
+      o['ULTIMA COMPAÑIA'] = !e || l ? '' : (conLineaAntes ? v(lineaPorId[String(conLineaAntes['ID LINEA'])], 'COMPAÑIA') : '') || v(e, 'COMPAÑIA ANTERIOR');
       if (esFinal_(e, l)) PERSONA_FINAL.forEach((c) => { o[c] = ''; });
       return o;
     };

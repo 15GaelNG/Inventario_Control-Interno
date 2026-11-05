@@ -95,6 +95,12 @@ test('equipo sin línea: ULTIMA COMPAÑIA es la de la última línea que tuvo (u
   assert.strictEqual(f.find((x) => x['ID'] === 'EQU-3')['ULTIMA COMPAÑIA'], 'TELCEL');
   assert.strictEqual(f.find((x) => x['ID'] === 'EQU-1')['ULTIMA COMPAÑIA'], '', 'con línea, su compañía es la de hoy');
   assert.strictEqual(f.find((x) => x['ID'] === 'EQU-2')['ULTIMA COMPAÑIA'], '', 'sin historia (antes de la migración), vacía');
+  // Lo de antes de la migración, de la columna COMPAÑIA ANTERIOR (tools/lineas-datos/compania-anterior.py); lo nuevo gana
+  const viejas = Object.assign({}, hojas, { EQUIPOS: hojas.EQUIPOS.map((e) => Object.assign({}, e, { 'COMPAÑIA ANTERIOR': 'AT&T' })) });
+  const g = cargar(viejas).filas();
+  assert.strictEqual(g.find((x) => x['ID'] === 'EQU-3')['ULTIMA COMPAÑIA'], 'TELCEL', 'gana ASIGNACIONES');
+  assert.strictEqual(g.find((x) => x['ID'] === 'EQU-2')['ULTIMA COMPAÑIA'], 'AT&T');
+  assert.strictEqual(g.find((x) => x['ID'] === 'EQU-1')['ULTIMA COMPAÑIA'], '', 'con línea, vacía aunque traiga COMPAÑIA ANTERIOR');
 });
 
 test('buscar por columna y por ID anterior', () => {

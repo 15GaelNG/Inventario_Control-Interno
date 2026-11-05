@@ -204,6 +204,14 @@
       const ayuda = significado(estatus);
       return '<span class="ln-chip ' + (clase || COLOR_ESTATUS[String(estatus).toUpperCase()] || '') + '"' + (ayuda ? ' title="' + esc(ayuda) + '"' : '') + '>' + esc(estatus) + '</span>';
     };
+    // La compañía como badge (usuario, 5-nov): Telcel azul y AT&T naranja, porque sus colores de marca se parecen; otra,
+    // gris. prefijo: «ÚLTIMA LÍNEA: » en el equipo sin línea
+    const chipCompania = (compania, prefijo) => {
+      const c = String(compania || '').trim().toUpperCase();
+      if (!c) return '';
+      const clase = /TELCEL/.test(c) ? 'telcel' : /ATs*&s*T|^ATT$/.test(c) ? 'att' : 'compania';
+      return '<span class="ln-chip ' + clase + '">' + esc((prefijo || '') + c) + '</span>';
+    };
     const TIPO_EQUIPO = { CELULAR: 'Celular', CELULAR_BASICO: 'Celular básico', MODEM: 'Módem', BANDA_ANCHA: 'Banda ancha', CAMARA: 'Cámara' };
 
     // ---------------- Tablas y KPIs con los componentes del sistema (rama jorge) ----------------
@@ -2589,7 +2597,7 @@
       // La base para las pantallas (lineas-*.html, fase 6.2) y para los módulos en su propio archivo (p. ej. el temporal
       // de correcciones, html/js/lineas-correcciones.html). Cada pantalla agrega su init… con Object.assign(Lineas, …).
       comun: {
-        $: $, esc: esc, guion: guion, miles: miles, ico: ico, chip: chip, fechaTabla: fechaTabla,
+        $: $, esc: esc, guion: guion, miles: miles, ico: ico, chip: chip, chipCompania: chipCompania, fechaTabla: fechaTabla,
         tablaLineas: tablaLineas, tilesKpi: tilesKpi, aviso: aviso, icono: icono, mensajeError: mensajeError,
         llamar: llamar, pedirDatos: pedirDatos, CALIFICACION_DESEMPENO: CALIFICACION_DESEMPENO,
         CALIFICACION_SI: CALIFICACION_SI, CATALOGOS_LINEAS: CATALOGOS_LINEAS, COLOR_ESTATUS: COLOR_ESTATUS,
