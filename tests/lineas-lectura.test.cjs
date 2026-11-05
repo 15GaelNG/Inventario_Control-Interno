@@ -76,6 +76,27 @@ test('sin asignación vigente ni asignación cerrada: sin persona; vendido sin d
   assert.strictEqual(r2['TIPO'], 'EQUIPO');
 });
 
+test('equipo sin línea: ULTIMA COMPAÑIA es la de la última línea que tuvo (usuario, 5-nov); con línea, vacía', () => {
+  const d = (s) => new Date(s);
+  const hojas = Object.assign({}, HOJAS, {
+    LINEAS: HOJAS.LINEAS.concat([
+      { 'ID': 'LIN-T', 'NUMERO TELEFONO': '4420000001', 'TIPO DE LINEA': 'PLAN', 'ESTATUS LINEA': 'CANCELADA', 'COMPAÑIA': 'TELCEL' },
+      { 'ID': 'LIN-V', 'NUMERO TELEFONO': '4420000002', 'TIPO DE LINEA': 'PLAN', 'ESTATUS LINEA': 'CANCELADA', 'COMPAÑIA': 'AT&T' },
+    ]),
+    EQUIPOS: HOJAS.EQUIPOS.concat([{ 'ID': 'EQU-3', 'NUCO': '2356', 'TIPO DE EQUIPO': 'CELULAR', 'ESTATUS EQUIPO': 'RESGUARDO' }]),
+    ASIGNACIONES: HOJAS.ASIGNACIONES.concat([
+      // Primero AT&T, luego TELCEL y al final guardado sin línea: manda TELCEL
+      { 'ID': 'ASG-3', 'TIPO': 'PERSONA', 'ID EQUIPO': 'EQU-3', 'ID LINEA': 'LIN-V', 'FECHA INICIO': d('2026-10-05'), 'FECHA FIN': d('2026-10-10') },
+      { 'ID': 'ASG-4', 'TIPO': 'PERSONA', 'ID EQUIPO': 'EQU-3', 'ID LINEA': 'LIN-T', 'FECHA INICIO': d('2026-10-10'), 'FECHA FIN': d('2026-10-20') },
+      { 'ID': 'ASG-5', 'TIPO': 'RESGUARDO', 'ID EQUIPO': 'EQU-3', 'ID LINEA': '', 'FECHA INICIO': d('2026-10-20'), 'FECHA FIN': '' },
+    ]),
+  });
+  const f = cargar(hojas).filas();
+  assert.strictEqual(f.find((x) => x['ID'] === 'EQU-3')['ULTIMA COMPAÑIA'], 'TELCEL');
+  assert.strictEqual(f.find((x) => x['ID'] === 'EQU-1')['ULTIMA COMPAÑIA'], '', 'con línea, su compañía es la de hoy');
+  assert.strictEqual(f.find((x) => x['ID'] === 'EQU-2')['ULTIMA COMPAÑIA'], '', 'sin historia (antes de la migración), vacía');
+});
+
 test('buscar por columna y por ID anterior', () => {
   const L = cargar(HOJAS);
   assert.deepStrictEqual(L.buscar('ID ANTERIOR', 'lin-viejo1').map((n) => L.porNumero(n)['ID']), ['EQU-1']);
