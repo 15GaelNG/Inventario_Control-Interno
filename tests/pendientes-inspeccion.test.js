@@ -31,7 +31,7 @@ function entorno(ticketsHelpdesk, colaboradores, correos, helpdeskApi) {
 
 const FILA_INSPECCION = {
   'ID VEHICULO': 'VEH-00000000AAAAAA', 'PLACAS': 'ggr658f', 'NUCO': '25',
-  'VEHICULO': 'HONDA 150XR', 'RESPONSABLE': 'JORGE AVECILLA',
+  'VEHICULO': 'HONDA 150XR', 'RESPONSABLE': 'JORGE AVECILLA', 'NOMBRE INSPECTOR': 'AYRTON SEPULVEDA',
 };
 
 console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el folio de la inspección');
@@ -42,7 +42,7 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
     { asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' },
     { asunto: '   ', familia: 'OTROS', prioridad: 'NO URGENTE' },
     { asunto: 'Cambio de llanta', familia: 'ACCESORIOS', prioridad: 'raro' },
-  ], 'responsable@x.com', ['inspector@x.com', 'otro@x.com']);
+  ], 'responsable@x.com', ['inspector@x.com', 'otro@x.com'], 'INSPECCION: HONDA 150XR', 'ayrton@x.com');
   ok(e.libros.libro.getSheetByName('PENDIENTES INSPECCION') !== null, 'se crea sola al primer uso');
   ok(creados.length === 2, 'el renglón sin asunto real se ignora: ' + creados.length);
   ok(creados[0]['ID'] && /^PDI-/.test(creados[0]['ID']), 'cada pendiente nace con su propio ID (prefijo PDI): ' + creados[0]['ID']);
@@ -55,6 +55,8 @@ console.log('1. agregar(): nace la hoja sola, ignora los sin asunto, antepone el
     'guarda el correo YA VALIDADO del aviso original, el mismo para todos los pendientes de esa inspección');
   ok(creados[0]['CORREOS CC'] === 'inspector@x.com, otro@x.com',
     'y también los demás que recibieron ese aviso en copia: ' + creados[0]['CORREOS CC']);
+  ok(creados[0]['NOMBRE INSPECTOR'] === 'AYRTON SEPULVEDA', 'y el nombre de quien inspeccionó, para el remitente visible del recordatorio');
+  ok(creados[0]['CORREO INSPECTOR'] === 'ayrton@x.com', 'y su correo, para el replyTo del recordatorio');
   ok(tocados.indexOf('PENDIENTES INSPECCION') !== -1, 'invalida la caché de la hoja al escribir');
 
   console.log('1b. Sin correo validado al capturar (p. ej. no se llenó el aviso), se guarda vacío');
@@ -155,7 +157,7 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   const creados = P.agregar(FILA_INSPECCION, '2026_25_1',
     [{ asunto: 'Reparación de faro', familia: 'MECANICA', prioridad: 'URGENTE' }], 'el-que-se-avisco@x.com',
     ['inspector@x.com', 'el-que-se-avisco@x.com', 'otro@x.com'],
-    'INSPECCION: 25-HONDA 150XR 12/10/2026');
+    'INSPECCION: 25-HONDA 150XR 12/10/2026', 'ayrton@x.com');
   const res = P.enviarRecordatorio('token', creados[0]['ID']);
   ok(res.enviado === true && res.correo === 'el-que-se-avisco@x.com',
     'usa el correo guardado del aviso original, no el de Capital Humano: ' + res.correo);
@@ -166,6 +168,8 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   ok(/2026_25_1 - Reparaci.n de faro/.test(correos[0].htmlBody), 'con el asunto exacto que debe pegar en Help Desk');
   ok(correos[0].subject === 'Re: INSPECCION: 25-HONDA 150XR 12/10/2026',
     'el ASUNTO del correo lleva "Re:" + el del aviso original, para quedar en la misma conversación: ' + correos[0].subject);
+  ok(correos[0].name === 'AYRTON SEPULVEDA', 'el remitente visible es quien inspeccionó, no quien desplegó: ' + correos[0].name);
+  ok(correos[0].replyTo === 'ayrton@x.com', 'y responder le llega a él: ' + correos[0].replyTo);
   const filas = e.hojaComoTexto('libro', 'PENDIENTES INSPECCION').slice(1);
   const col = (nombre) => P.ENCABEZADOS.indexOf(nombre);
   ok(/^\d{4}-\d{2}-\d{2}T/.test(filas[0][col('ULTIMO RECORDATORIO')]), 'y queda anotado cuándo se mandó el recordatorio');
@@ -178,6 +182,8 @@ console.log('7. enviarRecordatorio(): manda al correo GUARDADO del aviso origina
   Pg.enviarRecordatorio('token', creadosG[0]['ID']);
   ok(correosSinAsunto[0].subject === 'Recordatorio: pendiente de subir Ticket a Help Desk por inspección.',
     'sin el asunto original guardado, usa el título genérico: ' + correosSinAsunto[0].subject);
+  ok(correosSinAsunto[0].name === 'AYRTON SEPULVEDA', 'el nombre del inspector sí llega aunque no se mande su correo');
+  ok(correosSinAsunto[0].replyTo === undefined, 'pero sin su correo no hay replyTo que poner: ' + correosSinAsunto[0].replyTo);
 
   console.log('7e. Si la MISMA inspección tiene otro pendiente SIN CARGAR, se manda junto en el mismo correo');
   const correosJuntos = [];

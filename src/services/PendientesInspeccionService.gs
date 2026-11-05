@@ -44,6 +44,7 @@ const PendientesInspeccionService = (function () {
     'ID', 'ID INSPECCION', 'FECHA', 'ID VEHICULO', 'PLACAS', 'NUCO', 'VEHICULO', 'RESPONSABLE',
     'ASUNTO', 'FAMILIA O GRUPO A REPORTAR', 'PRIORIDAD', 'ESTATUS', 'ID TICKET HELPDESK', 'ESTATUS HELPDESK',
     'FECHA CARGADO', 'ULTIMO RECORDATORIO', 'CORREO RESPONSABLE', 'CORREOS CC', 'ASUNTO AVISO ORIGINAL',
+    'NOMBRE INSPECTOR', 'CORREO INSPECTOR',
   ];
   const ESTATUS_SIN_CARGAR = 'SIN CARGAR EN HELPDESK';
   const ESTATUS_CARGADO = 'CARGADO EN HELPDESK';
@@ -89,9 +90,12 @@ const PendientesInspeccionService = (function () {
    * @param {string} [asuntoAviso] el ASUNTO exacto del correo de aviso original
    *   (InspeccionesService.asuntoAviso_) -- enviarRecordatorio lo reutiliza con un "Re:" al
    *   frente para que el recordatorio quede en la MISMA conversación de correo que el aviso
+   * @param {string} [correoInspector] el correo de quien capturó la inspección (sesion.correo en
+   *   InspeccionesService.registrar) -- enviarRecordatorio lo usa como replyTo, igual que el
+   *   aviso original, para que la respuesta le llegue a él y no a quien desplegó la app
    * @return {Array} los pendientes creados (mismas columnas que la hoja), para el correo
    */
-  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso) {
+  function agregar(filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso, correoInspector) {
     const limpios = (items || [])
       .map((it) => ({
         asunto: limpiar_(it && it.asunto),
@@ -126,6 +130,8 @@ const PendientesInspeccionService = (function () {
         'CORREO RESPONSABLE': limpiar_(correoResponsable),
         'CORREOS CC': (correosCc || []).map(limpiar_).filter(Boolean).join(', '),
         'ASUNTO AVISO ORIGINAL': limpiar_(asuntoAviso),
+        'NOMBRE INSPECTOR': limpiar_(filaInspeccion['NOMBRE INSPECTOR']),
+        'CORREO INSPECTOR': limpiar_(correoInspector),
       };
       SheetUtils.insert(ssId(), HOJA, fila);
       return fila;
@@ -294,7 +300,13 @@ const PendientesInspeccionService = (function () {
       '<p style="margin:0 0 10px">Agradecemos tu apoyo y atención para dar seguimiento a lo anterior.</p>' +
       '<p style="margin-top:16px">¡Saludos! 🙌</p>' +
       '</div>';
-    MailApp.sendEmail({ to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo });
+    // La app manda desde la cuenta de quien la desplegó (executeAs: USER_DEPLOYING); name/replyTo
+    // no cambian eso, pero el responsable ve el nombre del inspector y, si responde, le llega a
+    // él directo -- mismo criterio que el correo de aviso original (InspeccionesService.avisarInspeccion_).
+    const opciones = { to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo };
+    if (limpiar_(fila['NOMBRE INSPECTOR'])) opciones.name = fila['NOMBRE INSPECTOR'];
+    if (limpiar_(fila['CORREO INSPECTOR'])) opciones.replyTo = fila['CORREO INSPECTOR'];
+    MailApp.sendEmail(opciones);
     const ahora = new Date();
     pendientes.forEach((p) => SheetUtils.update(ssId(), HOJA, p['ID'], { 'ULTIMO RECORDATORIO': ahora }, 'ID'));
     return { enviado: true, correo: correo, cc: cc, incluidos: pendientes.map((p) => p['ID']) };
