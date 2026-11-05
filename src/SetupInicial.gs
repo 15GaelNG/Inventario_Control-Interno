@@ -750,4 +750,3 @@ function revisarRelacionesYCorregir() {
   Logger.log(mensaje);
   return mensaje;
 }
-
