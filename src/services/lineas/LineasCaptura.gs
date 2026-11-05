@@ -232,9 +232,10 @@ const LineasCaptura = (function () {
   const columnaFicha_ = (c) => COLUMNA_FICHA[c] || c;
   /**
    * Lo que cada hoja del AppSheet no tenía: la inspección no pedía número ni director y la responsiva, jefe directo. La
-   * inspección pide los accesorios con la lista de la responsiva desde el 22-oct (usuario).
+   * inspección pide los accesorios con la lista de la responsiva desde el 22-oct (usuario). La responsiva guarda su TICKET
+   * desde el 5-nov: antes solo iba al historial y el PDF (que se arma con la fila) lo dejaba en blanco.
    */
-  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'], RESPONSIVA: ['JEFE DIRECTO'] };
+  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'], RESPONSIVA: ['JEFE DIRECTO', 'TICKET'] };
   /**
    * Valor y opciones del campo ACCESORIOS, el mismo en la responsiva y la inspección (usuario, 22-oct): la lista única
    * (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma), CARGADOR como CABLE y CUBO (usuario,
@@ -452,7 +453,7 @@ const LineasCaptura = (function () {
       // Paso de firmas en tres partes, como la inspección (usuario, 4-oct)
       titulo_('DATOS DE LA RESPONSIVA', 'calendar-check'),
       campo_('FECHA RESPONSIVA', 'Fecha de la responsiva', 'fechaHora', { valor: Utilities.formatDate(ahora, ZONA, "yyyy-MM-dd'T'HH:mm"), requerido: 'SIEMPRE' }),
-      // Sin columna en RESPONSIVAS: va al historial con el comentario
+      // Se guarda en TICKET (COLUMNAS_NUEVAS: la crea la primera que lo trae) para el PDF, y va al historial con el comentario
       campo_('TICKET', 'Ticket', 'texto', { valor: '' }),
       // Un solo COMENTARIO (plan §5.2): se guarda en COMENTARIO (lo que imprime el PDF) y en el historial
       titulo_('COMENTARIO', 'message-square-text'),

@@ -145,25 +145,6 @@ const HelpdeskService = (function () {
   }
 
   /**
-   * Solo TITULO, DESCRIPCION, ESTATUS e ID TICKET HD de la copia local, sin permiso -- para
-   * PendientesInspeccionService.revisarCargaHelpdesk() (la llama el Calentador, sin sesión de
-   * nadie). Vacío si la hoja todavía no existe (nadie ha abierto Help Desk en esta app).
-   */
-  function copiaLocal_() {
-    const hoja = hoja_(false);
-    if (!hoja) return [];
-    const { filas, datos } = SheetUtils.leerColumnas(hoja, [COL_HD, 'TITULO', 'DESCRIPCION', 'ESTATUS']);
-    const lista = [];
-    for (let i = 0; i < filas; i++) {
-      lista.push({
-        'ID TICKET HD': datos[COL_HD][i], 'TITULO': datos['TITULO'][i], 'DESCRIPCION': datos['DESCRIPCION'][i],
-        'ESTATUS': datos['ESTATUS'][i],
-      });
-    }
-    return lista;
-  }
-
-  /**
    * Registra un ticket del helpdesk en nuestra bitácora de Tickets (quien puede editar Tickets).
    * `datos` son los campos del formulario de Tickets ya prellenados por la pantalla; TICKET es
    * siempre el número del helpdesk. No se registra dos veces: ni si la copia ya tiene su
@@ -398,5 +379,5 @@ const HelpdeskService = (function () {
     });
   }
 
-  return { sincronizar_, listarGuardados, copiaLocal_, registrarEnTickets, registrados, contexto, catalogo, ENCABEZADOS, MODULO_POR_FORMULARIO };
+  return { sincronizar_, listarGuardados, registrarEnTickets, registrados, contexto, catalogo, ENCABEZADOS, MODULO_POR_FORMULARIO };
 })();
