@@ -21,7 +21,7 @@ name: Subir a Apps Script
 
 on:
   push:
-    branches: [ayrton, common]
+    branches: [ayrton, common, LineasResponsivasEinspecciones]
   workflow_dispatch:
     inputs:
       accion:

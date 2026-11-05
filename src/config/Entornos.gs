@@ -154,6 +154,31 @@ const ENTORNOS = {
     LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
   },
 
+  // ---------------------------------------------------------------- DEV de Líneas: Responsivas e Inspecciones
+  // (rama LineasResponsivasEinspecciones, 5-nov-2026). Mismo libro que el DEV de Ayrton (lo compartió para este
+  // trabajo): "Nueva" — https://docs.google.com/spreadsheets/d/1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo
+  '1Kqz1eJrIhZ7_fr82bXr4AScFIKgj99xzd00OO0BXpSxS9PSD4YNLXBLf': {
+    ENTORNO: 'DEV',
+
+    // La copia trae los USUARIOS reales y el sistema no frena los correos en un DEV: sin el código por correo al entrar
+    VERIFICACION_DOS_PASOS: 'APAGADA',
+
+    SS_ID_USUARIOS: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_VEHICULOS: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_TELEFONIA: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_ACCESORIOS: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+    SS_ID_CAJACHICA: '1BXrDRAKXzc31N7ggmu5FwliVV_WTSJAKPfROIKA7aGo',
+
+    // Solo lectura: los archivos que cita la copia viven en las carpetas de producción. Nunca se escribe ahí.
+    DRIVE_FOLDER_ID_VERIFICACIONES_LECTURA: '1iGrxuqmUKKUV9UFIjEOSJ0TEibab3K7C',
+    DRIVE_FOLDER_ID_ARQUEOS_HISTORICO: '1D3m1H3C_Is2Bol9IBPdnV6ugJiXizSCN',
+    LINEAS_DRIVE_APPSHEET_LECTURA: '1WPFFd4imLiui6zIpAa3OL62ZEu_a5BJn',
+
+    // Líneas lee las hojas nuevas, igual que producción
+    LINEAS_LECTURA: 'ESTRUCTURA',
+    LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+  },
+
   // ---------------------------------------------------------------- DEV de la homologación (rama common)
   // docs/homologacion-codigo.md. Lo que escribe va a la carpeta de pruebas "DEV COMMON".
   '1WXvJaGJl1ACfisfibb__FCxzljexGfbpL5yjrUEjog82O0Uyq1YZ_7as': {
