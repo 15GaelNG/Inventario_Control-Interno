@@ -110,7 +110,7 @@ function captura(fila, opciones) {
       },
     },
   });
-  vm.runInContext(read('src/services/lineas/LineasPatronPng.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
+  vm.runInContext(read('src/utils/Cronometro.gs') + '\n' + read('src/services/lineas/LineasPatronPng.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
   return { C: ctx.C, hechos };
 }
 
