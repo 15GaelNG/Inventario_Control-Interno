@@ -36,7 +36,8 @@ const SECCIONES = [
 
 console.log('1. Todo bien = puntaje completo');
 let r = puntaje(SECCIONES, { PARABRISAS: 'BUENO', MEDALLON: 'BUENO', 'CRISTALES PUERTAS': 'BUENO', RINES: 'BUENO', TAPONES: 'BUENO' });
-igual(r.final, 25, 'las dos secciones dan sus 10% + 15%');
+igual(r.final, 100, 'con las dos secciones evaluadas y completas, el total es 100% de lo aplicable');
+igual(r.maximo, 25, 'el máximo es la suma de los pesos de las secciones evaluadas (10% + 15%)');
 igual(r.secciones[0].valor, 0.1, 'la sección se guarda como fracción (0.1 = 10%), como en la hoja');
 igual(r.evaluadas, 5, 'cuenta las piezas evaluadas');
 
@@ -45,7 +46,7 @@ r = puntaje(SECCIONES, { PARABRISAS: 'MALO', MEDALLON: 'BUENO', 'CRISTALES PUERT
 igual(r.secciones[0].valor, 0.0667, 'un MALO de tres piezas deja la sección en dos tercios');
 r = puntaje(SECCIONES, { PARABRISAS: 'REGULAR', MEDALLON: 'BUENO', 'CRISTALES PUERTAS': 'BUENO', RINES: 'BUENO', TAPONES: 'BUENO' });
 igual(r.secciones[0].valor, 0.0833, 'un REGULAR vale medio punto');
-igual(r.final, 23.33, 'el total es la suma de las secciones');
+igual(r.final, 93.32, 'el total es relativo al máximo (23.33 de 25 posibles), no a 100 fijo');
 
 console.log('3. Lo que no aplica no cuenta (ni a favor ni en contra)');
 r = puntaje(SECCIONES, { PARABRISAS: 'BUENO', MEDALLON: 'N/A', 'CRISTALES PUERTAS': 'BUENO', RINES: 'BUENO', TAPONES: 'BUENO' });
@@ -61,9 +62,9 @@ const BATERIA = [{
     pieza('BATERIA INFLADA', ['SI', 'NO'])],
 }];
 r = puntaje(BATERIA, { 'TERMINALES CON SARRO': 'NO', 'DERRAME LIQUIDO / MAL OLOR': 'NO', 'BATERIA INFLADA': 'NO' });
-igual(r.final, 5, 'sin ningún defecto, la sección vale completa');
+igual(r.final, 100, 'sin ningún defecto, la única sección evaluada vale el 100% de lo aplicable');
 r = puntaje(BATERIA, { 'TERMINALES CON SARRO': 'SI', 'DERRAME LIQUIDO / MAL OLOR': 'NO', 'BATERIA INFLADA': 'NO' });
-igual(r.final, 3.33, 'un defecto presente baja el puntaje');
+igual(r.final, 66.6, 'un defecto presente baja el puntaje (3.33 de 5 posibles)');
 igual(InspeccionesService.valorDeRespuesta_('NO', ['SI', 'NO']), 1, 'NO suma en una pieza de defecto');
 igual(InspeccionesService.valorDeRespuesta_('NO PRESENTA', ['PRESENTA', 'NO PRESENTA', 'N/A']), 0,
   'pero en documentación, NO PRESENTA sí resta');
@@ -73,8 +74,8 @@ const DOCS = [{
   titulo: 'Documentación', peso: 5,
   campos: [pieza('GAFETTE', ['PRESENTA', 'NO PRESENTA', 'N/A']), pieza('LICENCIA', ['PRESENTA', 'NO PRESENTA', 'N/A'])],
 }];
-igual(puntaje(DOCS, { GAFETTE: 'PRESENTA', LICENCIA: 'PRESENTA' }).final, 5, 'ambos presentes = sección completa');
-igual(puntaje(DOCS, { GAFETTE: 'PRESENTA', LICENCIA: 'NO PRESENTA' }).final, 2.5, 'falta uno = la mitad');
+igual(puntaje(DOCS, { GAFETTE: 'PRESENTA', LICENCIA: 'PRESENTA' }).final, 100, 'ambos presentes = 100% de lo aplicable');
+igual(puntaje(DOCS, { GAFETTE: 'PRESENTA', LICENCIA: 'NO PRESENTA' }).final, 50, 'falta uno = la mitad de lo aplicable');
 
 console.log('6. Casos límite');
 r = puntaje(SECCIONES, {});
@@ -82,7 +83,7 @@ igual(r.final, 0, 'sin responder nada, el puntaje es 0');
 igual(r.secciones[0].evaluadas, 0, 'y no hay piezas evaluadas');
 r = puntaje(SECCIONES, { PARABRISAS: 'N/A', MEDALLON: 'N/A', 'CRISTALES PUERTAS': 'N/A', RINES: 'BUENO', TAPONES: 'BUENO' });
 igual(r.secciones[0].valor, 0, 'una sección entera N/A no gana su peso…');
-igual(r.final, 15, '…pero tampoco arrastra a las demás: el resto conserva el suyo');
+igual(r.final, 100, '…y tampoco le resta al total: Neumáticos (lo único evaluado) salió perfecto, 100% de lo aplicable (30-oct)');
 igual(puntaje([], {}).final, 0, 'sin secciones no truena');
 igual(puntaje(null, {}).final, 0, 'ni con secciones nulas');
 igual(puntaje(SECCIONES, { PARABRISAS: 'basura', MEDALLON: 'BUENO', 'CRISTALES PUERTAS': 'BUENO', RINES: 'BUENO', TAPONES: 'BUENO' }).secciones[0].valor,
