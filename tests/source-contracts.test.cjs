@@ -2890,7 +2890,7 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
 });
 
 test('cada grupo de CAMPOS_VEHICULO está en VEH_GRUPOS_PASO (si no, ese campo nunca se ve en Registrar/Editar)', () => {
-  // 15-oct-2026: "Accesorios del vehículo" se agregó a CAMPOS_VEHICULO pero no a VEH_GRUPOS_PASO
+  // 15-oct-2026: un grupo nuevo se agregó a CAMPOS_VEHICULO pero no a VEH_GRUPOS_PASO
   // (renderCamposVehiculo solo pinta los pasos de esa lista) -- la sección quedó invisible en el
   // formulario aunque sí existiera en seccionesFichaVehiculo (esa sí deriva los grupos solita).
   const app = APP;

@@ -30,21 +30,6 @@ const VehiculosService = (function () {
   // se sube uno (asegurarColumnasDocumento_). ADJUNTAR FACTURA ya existía (como texto, vacía en los 648).
   const COLUMNAS_DOCUMENTO_NUEVAS = ['TARJETA CIRCULACION', 'ALTA PLACAS'];
 
-  // Lo que el vehículo trae puesto ahora mismo (sección "Accesorios del vehículo" de la ficha, usuario
-  // 15-oct-2026) -- mismos 13 nombres que ResponsivaVehicularService.ACCESORIOS / RESV_ACCESORIOS en
-  // app.html (es el mismo objeto físico), pero vive en su PROPIA hoja (ACCESORIOS_SHEET, abajo), no en
-  // VEHICULOS: a propósito una copia independiente de lo que quedó firmado en la Responsiva, y para no
-  // seguir engordando la hoja grande con 13 columnas más. Se edita libremente (cualquiera con EDICIÓN en
-  // Vehículos) y nunca toca la hoja RESPONSIVA ni dispara una firma nueva. Se junta sola al leer la ficha
-  // (buscarPor_ -> obtenerAccesoriosVehiculo_) y se reparte sola al guardar (despues ->
-  // guardarAccesoriosVehiculo_): para quien usa la ficha es invisible que sea otra hoja.
-  const ACCESORIOS_VEHICULO = [
-    'GATO HIDRAULICO', 'GATO MECANICO', 'LLAVE CRUZ', 'MANERAL', 'LLANTA REFACCION',
-    'KIT SEGURIDAD', 'PARASOL', 'TAPETES RUDO', 'TAPETES ALFOMBRA', 'CUBRE VOLANTE',
-    'CUBRE ASIENTOS', 'BED LINER', 'CUBIERTA BATEA',
-  ];
-  const ACCESORIOS_SHEET = 'ACCESORIOS VEHICULO';
-  const ENCABEZADOS_ACCESORIOS = ['ID VEHICULO'].concat(ACCESORIOS_VEHICULO);
   // Etiqueta corta para el nombre de archivo en Drive, por columna ("<ID>_<ETIQUETA>_<fecha>.ext")
   const ETIQUETA_ARCHIVO = {
     'RESPONSIVA': 'RESPONSIVA',
@@ -84,9 +69,6 @@ const VehiculosService = (function () {
     persona: true,
     alCrear: (fila, ctx) => {
       asegurarColumnasDocumento_(fila);
-      // Se guarda aparte (despues, más abajo): aquí solo se saca de fila lo que va a la hoja de
-      // accesorios, para que nunca llegue a VEHICULOS ni a la bitácora de Cambios Vehículos.
-      ctx.accesoriosVehiculo = extraerAccesorios_(fila);
       // Las columnas que manda otra hoja (SERIE SENSOR y SENSOR, que manda Instalación de
       // Sensores) no se capturan aquí: un vehículo nuevo nace "sin sensor".
       const ajenas = Relaciones.deOtraHoja(SHEET_VEHICULOS);
@@ -112,14 +94,12 @@ const VehiculosService = (function () {
     deOtroModulo: { 'instalacion-sensores': ['ACCESORIOS', 'ADITAMENTOS', 'ACTIVADOR', '$ Costo del Sensor', 'LLAVE DUPLICADA'] },
     alActualizar: (cambios, ctx) => {
       asegurarColumnasDocumento_(cambios);
-      ctx.accesoriosVehiculo = extraerAccesorios_(cambios);
       // Las que manda otra hoja: editarlas aquí se perdería en la siguiente sincronización.
       // Se cambian desde su dueña (SERIE SENSOR y SENSOR: el módulo de Sensores).
       Relaciones.deOtraHoja(SHEET_VEHICULOS).columnas.forEach((c) => { delete cambios[c]; });
     },
     despues: (registro, ctx) => {
       archivarEnExpediente_(registro, ctx.accion === 'actualizar' ? ctx.cambios : registro);
-      if (ctx.accesoriosVehiculo) guardarAccesoriosVehiculo_(registro[ID_COLUMN], ctx.accesoriosVehiculo);
       if (ctx.accion !== 'actualizar') return;
       CambiosVehiculosService.registrarCambios(ctx.actual.FOLIO, ctx.actual, ctx.cambios, ctx.sesion.nombre);
       // El vehículo YA se guardó: si propagar falla no se revierte nada, solo se avisa en los
@@ -331,10 +311,6 @@ const VehiculosService = (function () {
       }
     });
 
-    // Lo que el vehículo trae puesto ahora (hoja ACCESORIOS VEHICULO aparte, ver su comentario
-    // arriba): se junta aquí para que la ficha lo vea como si fuera una columna más de VEHICULOS.
-    Object.assign(limpio, obtenerAccesoriosVehiculo_(token, limpio[ID_COLUMN]));
-
     return limpio;
   }
 
@@ -448,76 +424,6 @@ const VehiculosService = (function () {
     if (!faltan.length) return;
     hoja.getRange(1, encabezados.length + 1, 1, faltan.length).setValues([faltan]);
     CacheHojas.tocarHoja(hoja);
-  }
-
-  /** Saca de `datos` las claves de ACCESORIOS_VEHICULO (y las quita de ahí): lo que regresa es lo
-   *  que se guarda en la hoja aparte; lo que se queda en `datos` nunca llega a VEHICULOS ni a la
-   *  bitácora de Cambios Vehículos, que no sabría qué hacer con una columna que no tiene. */
-  function extraerAccesorios_(datos) {
-    const encontrados = {};
-    ACCESORIOS_VEHICULO.forEach((c) => {
-      if (datos[c] !== undefined) { encontrados[c] = datos[c]; delete datos[c]; }
-    });
-    return encontrados;
-  }
-
-  /** La hoja ACCESORIOS VEHICULO, creándola (con sus encabezados) la primera vez que haga falta
-   *  -- mismo patrón que PermisosService.anotarHistorial_ / MigracionPipeline con su hoja de log. */
-  function hojaAccesorios_() {
-    const ss = SpreadsheetApp.openById(ssId());
-    let hoja = ss.getSheetByName(ACCESORIOS_SHEET);
-    if (!hoja) {
-      hoja = ss.insertSheet(ACCESORIOS_SHEET);
-      hoja.getRange(1, 1, 1, ENCABEZADOS_ACCESORIOS.length).setValues([ENCABEZADOS_ACCESORIOS]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-    }
-    return hoja;
-  }
-
-  /** Los accesorios de un vehículo ({columna: 'SI'|'NO'}), o {} si todavía no tiene renglón (o la
-   *  hoja ni siquiera existe: nadie ha guardado accesorios de nadie todavía). */
-  function obtenerAccesoriosVehiculo_(token, idVehiculo) {
-    if (!idVehiculo) return {};
-    try {
-      const encontrado = SheetUtils.findById(ssId(), ACCESORIOS_SHEET, idVehiculo, 'ID VEHICULO');
-      if (encontrado) return encontrado.data;
-    } catch (e) {
-      // La hoja propia todavía no existe: sigue abajo, a precargar de la Responsiva.
-    }
-    return accesoriosDeResponsivaMasReciente_(token, idVehiculo);
-  }
-
-  /**
-   * Mientras el vehículo no tenga su propio renglón en ACCESORIOS VEHICULO (nadie ha guardado
-   * nada ahí todavía), se precarga con lo que diga su Responsiva más reciente -- "el vehículo se
-   * entrega con..." es la entrada original de estos datos (usuario, 15-oct-2026); las
-   * inspecciones periódicas son harina de otro costal (su checklist de "Inventarios" no tiene
-   * los mismos 13 nombres ni la misma granularidad -- CRUCETA/TAPETES ahí, LLAVE CRUZ/TAPETES
-   * RUDO+ALFOMBRA aquí -- así que no se intenta mapear). En cuanto se guarde aquí una vez, el
-   * vehículo ya tiene su propio renglón y esto deja de consultarse para él. Sin acceso a
-   * Responsiva (ResponsivaVehicularService ya revisa el permiso) o sin ninguna responsiva
-   * todavía: se deja en blanco, nunca truena la ficha por esto.
-   */
-  function accesoriosDeResponsivaMasReciente_(token, idVehiculo) {
-    try {
-      const responsivas = ResponsivaVehicularService.listarPorVehiculo(token, idVehiculo);
-      if (!responsivas.length) return {};
-      const completa = ResponsivaVehicularService.buscarPorId(token, responsivas[0].ID);
-      const datos = {};
-      ACCESORIOS_VEHICULO.forEach((c) => { if (completa && completa[c]) datos[c] = completa[c]; });
-      return datos;
-    } catch (e) {
-      return {};
-    }
-  }
-
-  /** Upsert de los accesorios de un vehículo: si ya tiene renglón lo actualiza, si no lo crea */
-  function guardarAccesoriosVehiculo_(idVehiculo, cambios) {
-    if (!idVehiculo || !cambios || !Object.keys(cambios).length) return;
-    hojaAccesorios_();   // se asegura de que la hoja ya exista antes de buscar/escribir
-    const existente = SheetUtils.findById(ssId(), ACCESORIOS_SHEET, idVehiculo, 'ID VEHICULO');
-    if (existente) SheetUtils.update(ssId(), ACCESORIOS_SHEET, idVehiculo, cambios, 'ID VEHICULO');
-    else SheetUtils.insert(ssId(), ACCESORIOS_SHEET, Object.assign({ 'ID VEHICULO': idVehiculo }, cambios));
   }
 
   /**

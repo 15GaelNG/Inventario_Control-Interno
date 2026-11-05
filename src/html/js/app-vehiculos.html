@@ -120,24 +120,6 @@
       opciones: ['SI', 'NO'], ...DE_SENSORES,
     },
 
-    // Lo que el vehículo trae puesto ahora mismo (usuario, 15-oct-2026): mismos 13 accesorios que
-    // "El vehículo se entrega con" de la Responsiva (ver RESV_ACCESORIOS, más abajo en este archivo),
-    // pero en su propia columna de VEHICULOS -- edita quien tenga EDICIÓN en Vehículos, igual que
-    // cualquier otro campo de la ficha (sin deOtroModulo), y nunca toca la Responsiva ya firmada.
-    { grupo: 'Accesorios del vehículo', clave: 'GATO HIDRAULICO', etiqueta: 'Gato hidráulico', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'GATO MECANICO', etiqueta: 'Gato mecánico', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'LLAVE CRUZ', etiqueta: 'Llave de cruz', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'MANERAL', etiqueta: 'Maneral', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'LLANTA REFACCION', etiqueta: 'Llanta de refacción', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'KIT SEGURIDAD', etiqueta: 'Kit de seguridad', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'PARASOL', etiqueta: 'Parasol', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'TAPETES RUDO', etiqueta: 'Tapetes uso rudo', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'TAPETES ALFOMBRA', etiqueta: 'Tapetes alfombra', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'CUBRE VOLANTE', etiqueta: 'Cubre volante', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'CUBRE ASIENTOS', etiqueta: 'Cubre asientos', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'BED LINER', etiqueta: 'Bed liner', tipo: 'sino' },
-    { grupo: 'Accesorios del vehículo', clave: 'CUBIERTA BATEA', etiqueta: 'Cubierta de batea', tipo: 'sino' },
-
     { grupo: 'Ubicación y registro', clave: 'SEDE', etiqueta: 'Sede', tipo: 'select', catalogo: true },
     // La columna se llamaba UBICACION; se homologó al nombre que usa el resto de la base
     // (limpieza #23). La etiqueta para la gente sigue siendo "Ubicación".
@@ -157,7 +139,7 @@
   // ya tenía CAMPOS_VEHICULO, en su mismo orden, así que la ficha de solo lectura
   // (seccionesFichaVehiculo, que usa esos mismos grupos) no cambia. Sin candado entre
   // pasos (igual que Responsiva/Adherente): se puede ir y venir libremente.
-  const VEH_GRUPOS_PASO = ['Vehículo', 'Identificación', 'Documentación y seguro', 'Accesorios y sensor', 'Accesorios del vehículo', 'Ubicación y registro'];
+  const VEH_GRUPOS_PASO = ['Vehículo', 'Identificación', 'Documentación y seguro', 'Accesorios y sensor', 'Ubicación y registro'];
 
   /** Los campos del formulario de vehículo (componente CamposHoja), repartidos en los
    * pasos de VEH_GRUPOS_PASO con el `soloGrupos` que CamposHoja.html ya trae para esto --
@@ -174,10 +156,6 @@
           '<div class="form-rejilla" data-columnas="' + (columnas || 3) + '">' +
             CamposHoja.html(CAMPOS_VEHICULO, { prefijo, esEdicion, soloGrupos: [g] }) +
           '</div>' +
-          // Cuando no hay nada que precargar (ni propio ni de la Responsiva): referencia directa
-          // a la responsiva ESCANEADA de este vehículo (pestaña Documentación y seguro, campo
-          // RESPONSIVA) para capturar a mano sin tener que ir a buscarla aparte (usuario, 16-oct).
-          (g === 'Accesorios del vehículo' ? '<p class="form-ayuda" id="' + prefijo + '-accesorios-vehiculo-ayuda" hidden></p>' : '') +
         '</section>').join('');
   }
 
@@ -228,30 +206,6 @@
     CamposHoja.poblar(CAMPOS_VEHICULO, prefijo, datos, {
       antes: { 'OFICINA / DESARROLLO': llenarUbicacionesSegunSede },
     });
-    actualizarAyudaAccesoriosVehiculo_(prefijo, datos);
-  }
-
-  /** Si "Accesorios del vehículo" llegó vacío (ni propio ni precargado de la Responsiva), ofrece
-   *  la responsiva escaneada de este vehículo (campo RESPONSIVA, pestaña Documentación y seguro)
-   *  como referencia para capturarlo a mano -- ver poblarFormularioVehiculo. */
-  function actualizarAyudaAccesoriosVehiculo_(prefijo, datos) {
-    const ayuda = document.getElementById(prefijo + '-accesorios-vehiculo-ayuda');
-    if (!ayuda) return;
-    const clavesAccesorios = CAMPOS_VEHICULO.filter((c) => c.grupo === 'Accesorios del vehículo').map((c) => c.clave);
-    const yaHayAlgo = clavesAccesorios.some((c) => datos[c]);
-    if (yaHayAlgo || !datos['RESPONSIVA']) {
-      ayuda.hidden = true;
-      ayuda.innerHTML = '';
-      return;
-    }
-    ayuda.hidden = false;
-    const link = document.createElement('a');
-    link.href = datos['RESPONSIVA'];
-    link.target = '_blank';
-    link.rel = 'noopener';
-    link.textContent = 'ver documento';
-    ayuda.textContent = 'No hay accesorios precargados. Puedes revisar la responsiva escaneada de este vehículo para capturarlos a mano: ';
-    ayuda.appendChild(link);
   }
 
   /**
