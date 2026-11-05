@@ -2481,7 +2481,7 @@
             '<div class="modal-header"><div><h3 style="margin:0">' + esc(titulo) + '</h3>' + (mensaje ? '<p class="modal-subtitle">' + esc(mensaje) + '</p>' : '') + '</div>' + cerrarX + '</div>') +
           (detalle.length ? '<ul class="confirmar-detalle">' + detalle.slice(0, 50).map((d) => '<li>' + esc(d) + '</li>').join('') +
             (detalle.length > 50 ? '<li><em>…y ' + miles(detalle.length - 50) + ' más</em></li>' : '') + '</ul>' : '') +
-          (o.cuerpo ? '<div data-cuerpo><p class="empty-state"><span class="ln-spinner"></span> Cargando…</p></div>' : '') +
+          (o.cuerpo ? '<div data-cuerpo>' + Carga.html('bloque', { n: 5 }) + '</div>' : '') +
           campos.map((c, i) => '<div class="field"><label for="lnr-dato-' + i + '">' + esc(c.etiqueta) + (c.requerido ? ' *' : '') + '</label>' +
             // elegir: la lista empieza sin nada elegido («Selecciona…»), como las de los formularios
             (c.opciones ? '<select id="lnr-dato-' + i + '" data-clave="' + esc(c.clave) + '">' + (c.elegir ? '<option value="">Selecciona…</option>' : '') +

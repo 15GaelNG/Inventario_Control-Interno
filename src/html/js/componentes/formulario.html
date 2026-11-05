@@ -98,7 +98,7 @@
   .form-ficha-dato .form-ficha-valor { font-size: var(--texto-s); color: var(--color-text); word-break: break-word; }
   .form-ficha-extra { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--color-border); }
   .form-ficha-mas {
-    background: transparent; border: none; color: var(--color-primary); padding: 8px 0 0;
+    background: transparent; border: none; color: var(--color-primary-texto); padding: 8px 0 0;
     font-size: var(--texto-s); text-decoration: underline;
   }
   :root[data-theme="dark"] .form-ficha-mas { color: var(--color-accent); }
@@ -124,9 +124,10 @@
     border-radius: 50%; background: var(--color-border); color: var(--color-text); font-size: var(--texto-xs);
   }
   .form-paso-chip.completado { border-color: var(--color-success); color: var(--color-success); }
-  .form-paso-chip.completado .form-paso-num { background: var(--color-success); color: #fff; }
+  .form-paso-chip.completado .form-paso-num { background: var(--color-success); color: var(--color-on-success); }
   .form-paso-chip.activo { border-color: var(--color-accent); background: var(--color-primary-soft); color: var(--color-text); }
   .form-paso-chip.activo .form-paso-num { background: var(--color-accent); color: #fff; }
+  :root[data-theme="dark"] .form-paso-chip.activo .form-paso-num { color: var(--color-on-accent); }
   /* Celular: los pasos que no son el actual muestran solo su número (o la palomita), así
      caben en un renglón; con 8 pasos con nombre eran 4 renglones antes del primer campo.
      El nombre sigue ahí (font-size 0), así que un lector de pantalla lo lee igual. Si aun así

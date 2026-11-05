@@ -50,7 +50,7 @@
     lista.innerHTML = sistemas.map((s, i) => {
       const oro = i % 2 === 1;
       const fondo = oro ? 'var(--color-accent-soft)' : 'var(--color-primary-soft)';
-      const color = oro ? 'var(--color-accent-hover)' : 'var(--color-primary)';
+      const color = oro ? 'var(--color-accent-hover)' : 'var(--color-primary-texto)';
       return `
       <div class="sistema-card-wrap">
         <a href="${escaparHtml(s.url)}" target="_blank" rel="noopener" class="sistema-card">

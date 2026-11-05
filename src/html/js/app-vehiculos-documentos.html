@@ -106,7 +106,7 @@
     ];
     async function abrirEditarResponsivaVehicularFicha(id, vResumen) {
       const cuerpo = abrirCapturaVehiculo('file-signature', 'RESPONSIVA', 'Editar responsiva', 'Folio ' + vResumen.FOLIO);
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let completo;
       try {
         completo = JSON.parse(await callServer('apiBuscarResponsivaVehicularPorId', state.token, id));
@@ -393,7 +393,7 @@
     ];
     async function abrirEditarAdherenteVehicularFicha(id, vResumen) {
       const cuerpo = abrirCapturaVehiculo('users', 'ADHERENTE', 'Editar adherente', 'Folio ' + vResumen.FOLIO);
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let completo;
       try {
         completo = JSON.parse(await callServer('apiBuscarAdherenteVehicularPorId', state.token, id));

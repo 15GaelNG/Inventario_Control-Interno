@@ -140,6 +140,8 @@
           { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          // La compañía de su línea (usuario, 5-nov); ya venía en el renglón, como en Cancelaciones
+          { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista', render: (v) => guion(v) },
           { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
           { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },

@@ -96,6 +96,8 @@
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          // Sin línea: la compañía de la última que tuvo, por compatibilidad (usuario, 5-nov)
+          { campo: 'ultimaCompania', titulo: 'Última compañía', tipo: 'lista', visible: false },
           { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
           { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
@@ -635,6 +637,8 @@
           ]) +
           seccion('card-sim', 'Línea', [
             campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
+            // Equipo sin línea: la compañía de la última que tuvo (usuario, 5-nov)
+            ...(tipo === 'equipo' && !numero && r.ultimaCompania ? [campo('Última compañía', r.ultimaCompania)] : []),
             campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', Formato.moneda(v('COSTO PLAN'))),
             campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
           ]) +
@@ -663,7 +667,9 @@
             '<div class="ln-cuadro-depto">' + depto + '</div>' +
             '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
             '<div class="ln-cuadro-secundario">' + guion(r.modelo) + '</div>' +
-            pie(icono('phone') + ' <span class="ln-mono">' + (r.numero ? esc(r.numero) : 'Sin línea') + '</span>', icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
+            // La compañía junto al número; sin línea, la de la última que tuvo (usuario, 5-nov: no todos vienen liberados)
+            pie(icono('phone') + ' ' + (r.numero ? '<span class="ln-mono">' + esc(r.numero) + '</span>' + (r.compania ? ' · ' + esc(r.compania) : '')
+              : 'Sin línea' + (r.ultimaCompania ? ' <span class="ln-tenue">· antes ' + esc(r.ultimaCompania) + '</span>' : '')), icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
             pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
         }
         return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="linea" data-id="' + esc(r.id) + '" aria-label="Abrir línea ' + esc(r.numero || '') + '">' +
@@ -682,7 +688,7 @@
         const visibles = Math.min(tarjetasVisibles[modulo], filas.length);
         cont.innerHTML = (filas.length
           ? '<div class="ln-cuadros-grid">' + filas.slice(0, visibles).map((r) => tarjetaInventario(modulo, r)).join('') + '</div>'
-          : '<p class="empty-state">' + (memoria.indice ? 'No hay registros que coincidan con la búsqueda o los filtros.' : '<span class="ln-spinner"></span> Cargando…') + '</p>') +
+          : (memoria.indice ? '<p class="empty-state">No hay registros que coincidan con la búsqueda o los filtros.</p>' : Carga.html('kpis', { n: 6 }))) +
           '<div class="ln-cuadros-mas"><span class="ln-tenue">Mostrando ' + miles(visibles) + ' de ' + miles(filas.length) + '</span>' +
           (visibles < filas.length ? '<button type="button" class="secondary" data-ln-mas-tarjetas="' + modulo + '">Mostrar más</button>' : '') + '</div>';
         marcarTarjetasSeleccionadas(modulo);

@@ -35,7 +35,7 @@
         soltarDocumentos();
         const detalle = $('#ln-detalle', raiz);
         detalle.hidden = false;
-        detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
+        detalle.innerHTML = migas() + Carga.html('ficha', { tarjeta: true, n: 8 });
         if (tipo === 'inspeccion' || tipo === 'responsiva') pintarDocumentoPrevio(detalle, tipo, id);
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);
@@ -79,7 +79,7 @@
             esInspeccion
               ? [['Responsable', d.responsable], ['Inspector', d.inspector], ['Calificación', porcentaje(d.calificacion)], ['Fotos', miles(d.fotos || 0)]]
               : [['Responsable', d.responsable], [Marca.textoDe('lineas-telefonicas'), d.inspector]]) +
-          '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
+          Carga.html('lista', { tarjeta: true, n: 3 });
       }
 
       /** Abre un registro sabiendo solo su ID (equipo si existe como equipo; si no, línea). */
@@ -290,7 +290,7 @@
         // Dirección General a quien no es ADMIN, solo General (pendiente 8.20; el servidor tampoco da documentos ni historial)
         const pasado = conDocumentos && veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
-        const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
+        const cargando = Carga.html('bloque', { tarjeta: true });
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
         return Tabs.html([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },

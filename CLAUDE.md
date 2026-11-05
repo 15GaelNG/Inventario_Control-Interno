@@ -120,6 +120,12 @@ encabezado de una ficha), `FiltroTipo` (el filtro rápido por tipo/estatus) y `P
 por pasos: `Pasos.htmlChips` + `Pasos.navegar`; `libre`, `guardarAlFinal`). El error de un campo, fuera de un
 `Formulario`: `Formulario.marcarError(caja, mensaje)`. Cada uno tiene su contrato: una copia nueva hace fallar las pruebas.
 
+**Lo que está cargando → `Carga`** (5-nov): el esqueleto de lo que va a llegar, nunca otro «Cargando…» a mano.
+`Carga.html('bloque' | 'lista' | 'kpis' | 'ficha' | 'barras' | 'caja', { n, texto, tarjeta, columnas, alto })` para
+innerHTML, o `<div data-carga="lista" data-carga-n="4">` en el HTML fijo de una vista. Toma los colores del tema, respeta
+"reducir movimiento" y DataTable usa la misma pieza (`.carga-hueso`). Se quedan `toastCargando` (una acción) y el botón
+ocupado. Contrato en `source-contracts`.
+
 También `Partes` (una pantalla grande abierta en archivos, 6.1b) e `Imagen` (22-oct): **reducir una foto antes de
 subirla** es `Imagen.reducir(archivo, { lado | ancho, calidad })`, nunca otra copia con `new Image()` + lienzo — la abre
 con poca memoria y de una en una (en el celular, abrir fotos de cámara completas dejaba la pantalla en blanco).
