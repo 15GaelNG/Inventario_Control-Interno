@@ -56,29 +56,11 @@ const PendientesInspeccionService = (function () {
     return Config.SPREADSHEET_IDS.VEHICULOS();
   }
 
-  /**
-   * La hoja (o null si no existe y no se pide crearla) -- mismo patrón que SolicitudCompraService.hoja_.
-   * Si ya existe pero le falta alguna columna (un ENCABEZADOS que creció después), se la agrega sola
-   * al final, como HelpdeskService.hoja_.
-   */
-  function hoja_(crear) {
-    const ss = SpreadsheetApp.openById(ssId());
-    let hoja = ss.getSheetByName(HOJA);
-    if (!hoja) {
-      if (!crear) return null;
-      hoja = ss.insertSheet(HOJA);
-      hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-      return hoja;
-    }
-    const enc = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => String(h).trim());
-    const indices = SheetUtils.indiceDeColumnas(enc, ENCABEZADOS);
-    const faltan = ENCABEZADOS.filter((c) => indices[c] === -1);
-    if (faltan.length && crear) {
-      const desde = enc.filter(Boolean).length + 1;
-      hoja.getRange(1, desde, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
-    }
-    return hoja;
+  /** Solo para leer: null si la hoja todavía no existe (nadie ha agregado un pendiente todavía).
+   *  Nunca crea ni corrige columnas -- eso es trabajo de SheetUtils.asegurarPestana, y solo
+   *  agregar() (la única que escribe de verdad) lo necesita. */
+  function existeHoja_() {
+    return SpreadsheetApp.openById(ssId()).getSheetByName(HOJA);
   }
 
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
@@ -119,7 +101,7 @@ const PendientesInspeccionService = (function () {
       .filter((it) => it.asunto);
     if (!limpios.length) return [];
 
-    const hoja = hoja_(true);
+    SheetUtils.asegurarPestana(ssId(), HOJA, ENCABEZADOS);
     const ahora = new Date();
     const creados = limpios.map((it) => {
       const fila = {
@@ -145,10 +127,9 @@ const PendientesInspeccionService = (function () {
         'CORREOS CC': (correosCc || []).map(limpiar_).filter(Boolean).join(', '),
         'ASUNTO AVISO ORIGINAL': limpiar_(asuntoAviso),
       };
-      hoja.appendRow(ENCABEZADOS.map((c) => fila[c]));
+      SheetUtils.insert(ssId(), HOJA, fila);
       return fila;
     });
-    CacheHojas.tocarHoja(hoja);
     return creados;
   }
 
@@ -177,19 +158,10 @@ const PendientesInspeccionService = (function () {
    * @return {{revisados: number, encontrados: number}}
    */
   function revisarCargaHelpdesk() {
-    const hoja = hoja_(false);
-    if (!hoja || hoja.getLastRow() < 2) return { revisados: 0, encontrados: 0 };
-    const valores = hoja.getRange(2, 1, hoja.getLastRow() - 1, ENCABEZADOS.length).getValues();
-    const colEstatus = ENCABEZADOS.indexOf('ESTATUS');
-    const colAsunto = ENCABEZADOS.indexOf('ASUNTO');
-    const colIdTicket = ENCABEZADOS.indexOf('ID TICKET HELPDESK');
-    const colEstatusHelpdesk = ENCABEZADOS.indexOf('ESTATUS HELPDESK');
-    const pendientes = [];
-    const cargados = [];
-    valores.forEach((fila, i) => {
-      if (normalizar_(fila[colEstatus]) === ESTATUS_SIN_CARGAR) pendientes.push(i);
-      else if (fila[colIdTicket]) cargados.push(i);
-    });
+    if (!existeHoja_()) return { revisados: 0, encontrados: 0 };
+    const filas = SheetUtils.getAll(ssId(), HOJA);
+    const pendientes = filas.filter((f) => normalizar_(f['ESTATUS']) === ESTATUS_SIN_CARGAR);
+    const cargados = filas.filter((f) => normalizar_(f['ESTATUS']) !== ESTATUS_SIN_CARGAR && f['ID TICKET HELPDESK']);
     if (!pendientes.length && !cargados.length) return { revisados: 0, encontrados: 0 };
 
     // APP_HELPDESK todavía podría no existir (nadie ha abierto Help Desk en esta app)
@@ -203,32 +175,32 @@ const PendientesInspeccionService = (function () {
     const porIdTicket = {};
     textosDeTicket.forEach((t) => { porIdTicket[String(t.idTicket)] = t; });
 
-    return Candado.con(() => {
-      let encontrados = 0;
-      let tocado = false;
-      const colFechaCargado = ENCABEZADOS.indexOf('FECHA CARGADO');
-      const ahora = new Date();
-      pendientes.forEach((i) => {
-        const asunto = normalizar_(valores[i][colAsunto]);
-        if (!asunto) return;
-        const match = textosDeTicket.find((t) => t.texto.indexOf(asunto) !== -1);
-        if (!match) return;
-        hoja.getRange(i + 2, colEstatus + 1, 1, 1).setValue(ESTATUS_CARGADO);
-        hoja.getRange(i + 2, colIdTicket + 1, 1, 1).setValue(match.idTicket);
-        hoja.getRange(i + 2, colEstatusHelpdesk + 1, 1, 1).setValue(match.estatus);
-        hoja.getRange(i + 2, colFechaCargado + 1, 1, 1).setValue(ahora);
-        encontrados++;
-        tocado = true;
+    // Una sola lectura + una sola escritura para TODOS los renglones que cambien (SheetUtils.updateMany,
+    // bajo su propio candado), en vez de un setValue por celda como antes.
+    const ahora = new Date();
+    const updates = [];
+    let encontrados = 0;
+    pendientes.forEach((f) => {
+      const asunto = normalizar_(f['ASUNTO']);
+      if (!asunto) return;
+      const match = textosDeTicket.find((t) => t.texto.indexOf(asunto) !== -1);
+      if (!match) return;
+      updates.push({
+        id: f['ID'],
+        changes: {
+          'ESTATUS': ESTATUS_CARGADO, 'ID TICKET HELPDESK': match.idTicket,
+          'ESTATUS HELPDESK': match.estatus, 'FECHA CARGADO': ahora,
+        },
       });
-      cargados.forEach((i) => {
-        const ticket = porIdTicket[String(valores[i][colIdTicket])];
-        if (!ticket || ticket.estatus === limpiar_(valores[i][colEstatusHelpdesk])) return;
-        hoja.getRange(i + 2, colEstatusHelpdesk + 1, 1, 1).setValue(ticket.estatus);
-        tocado = true;
-      });
-      if (tocado) CacheHojas.tocarHoja(hoja);
-      return { revisados: pendientes.length, encontrados: encontrados };
+      encontrados++;
     });
+    cargados.forEach((f) => {
+      const ticket = porIdTicket[String(f['ID TICKET HELPDESK'])];
+      if (!ticket || ticket.estatus === limpiar_(f['ESTATUS HELPDESK'])) return;
+      updates.push({ id: f['ID'], changes: { 'ESTATUS HELPDESK': ticket.estatus } });
+    });
+    if (updates.length) SheetUtils.updateMany(ssId(), HOJA, updates, 'ID');
+    return { revisados: pendientes.length, encontrados: encontrados };
   }
 
   /**
@@ -238,8 +210,7 @@ const PendientesInspeccionService = (function () {
    */
   function listar(token) {
     Permisos.puedeLeer(token, MODULO);
-    const hoja = hoja_(false);
-    if (!hoja) return [];
+    if (!existeHoja_()) return [];
     return SheetUtils.getAll(ssId(), HOJA).map((r) => Object.assign({}, r, {
       FECHA: HojaServicio.fechaISO(r['FECHA']),
       'FECHA CARGADO': HojaServicio.fechaISO(r['FECHA CARGADO']),
@@ -262,8 +233,7 @@ const PendientesInspeccionService = (function () {
    */
   function enviarRecordatorio(token, id) {
     Permisos.puedeEditar(token, MODULO);
-    const hoja = hoja_(false);
-    const encontrado = hoja && SheetUtils.findById(ssId(), HOJA, id, 'ID');
+    const encontrado = existeHoja_() && SheetUtils.findById(ssId(), HOJA, id, 'ID');
     if (!encontrado) throw new Error('No se encontró ese pendiente.');
     const fila = encontrado.data;
     if (normalizar_(fila['ESTATUS']) !== ESTATUS_SIN_CARGAR) {
@@ -327,7 +297,6 @@ const PendientesInspeccionService = (function () {
     MailApp.sendEmail({ to: correo, cc: cc.join(','), subject: asunto, htmlBody: cuerpo });
     const ahora = new Date();
     pendientes.forEach((p) => SheetUtils.update(ssId(), HOJA, p['ID'], { 'ULTIMO RECORDATORIO': ahora }, 'ID'));
-    CacheHojas.tocarHoja(hoja);
     return { enviado: true, correo: correo, cc: cc, incluidos: pendientes.map((p) => p['ID']) };
   }
 
@@ -347,8 +316,7 @@ const PendientesInspeccionService = (function () {
    */
   function vincularManual(token, id, idTicketHelpdesk) {
     Permisos.puedeEditar(token, MODULO);
-    const hoja = hoja_(false);
-    const encontrado = hoja && SheetUtils.findById(ssId(), HOJA, id, 'ID');
+    const encontrado = existeHoja_() && SheetUtils.findById(ssId(), HOJA, id, 'ID');
     if (!encontrado) throw new Error('No se encontró ese pendiente.');
     if (normalizar_(encontrado.data['ESTATUS']) !== ESTATUS_SIN_CARGAR) {
       throw new Error('Ese pendiente ya está cargado en Help Desk.');
@@ -373,7 +341,6 @@ const PendientesInspeccionService = (function () {
       'ESTATUS HELPDESK': estatusHelpdesk,
       'FECHA CARGADO': new Date(),
     }, 'ID');
-    CacheHojas.tocarHoja(hoja);
     return { vinculado: true, idTicketHelpdesk: ticket['ID TICKET HD'], estatusHelpdesk: estatusHelpdesk };
   }
 

@@ -16,7 +16,7 @@ function entorno(ticketsHelpdesk, colaboradores, correos, helpdeskApi) {
   const tocados = [];
   const contexto = {
     Config: { SPREADSHEET_IDS: { VEHICULOS: () => 'libro' } },
-    CacheHojas: { tocarHoja: (hoja) => tocados.push(hoja.getName()), tocar: () => {} },
+    CacheHojas: { tocar: (ssId, hojaNombre) => tocados.push(hojaNombre) },
     HelpdeskService: { copiaLocal_: () => ticketsHelpdesk || [] },
     Permisos: { puedeLeer: () => ({ nombre: 'KIKE' }), puedeEditar: () => ({ nombre: 'KIKE' }) },
     HojaServicio: { fechaISO: (v) => (v instanceof Date ? v.toISOString() : (v || '')) },
