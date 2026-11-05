@@ -234,7 +234,7 @@ const LineasPdf = (function () {
    * `crono` (opcional): el Cronometro de quien llama, para que sus pasos y los de aquí queden en una sola medición.
    */
   function generarPdfDesdePlantilla(plantillaId, registro, imagenes, carpeta, nombrePdf, sinCompartir, crono) {
-    const c = crono || Cronometro.iniciar('pdf ' + nombrePdf);
+    const c = crono || Cronometro.iniciar('pdf celular ' + nombrePdf);
     const avisos = [];
     const copia = DriveUtils.copiar(DriveApp.getFileById(plantillaId), 'TMP ' + nombrePdf, carpeta, { temporal: true });
     c.marcar('copiar');

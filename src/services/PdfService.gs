@@ -319,7 +319,8 @@ const PdfService = (function () {
   function generar(p) {
     if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
     const cuenta = () => Session.getEffectiveUser().getEmail();
-    const crono = Cronometro.iniciar('pdf ' + (p.nombre || p.plantillaId));
+    // El nombre empieza con el tipo («pdf vehicular-INSPECCION …»): cronometroResumen() agrupa por las dos primeras palabras
+    const crono = Cronometro.iniciar('pdf vehicular-' + String(p.nombre || 'DOCUMENTO').split(' ')[0] + ' ' + (p.nombre || p.plantillaId));
     let carpeta;
     try {
       carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
@@ -421,7 +422,7 @@ const PdfService = (function () {
    */
   function generarVistaPrevia(p) {
     if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
-    const crono = Cronometro.iniciar('pdf vista previa ' + p.plantillaId);
+    const crono = Cronometro.iniciar('pdf vista-previa ' + p.plantillaId);
     const carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
     crono.marcar('carpeta');
     const copia = DriveUtils.copiar(DriveApp.getFileById(p.plantillaId), 'vista previa ' + Utilities.getUuid(), carpeta, { temporal: true });

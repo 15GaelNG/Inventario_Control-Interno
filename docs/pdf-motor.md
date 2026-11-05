@@ -34,8 +34,10 @@ ejecuciones de Apps Script:
   («SERVIDOR apiLineasGenerarPdf»).
 - **Arqueos**: `ArqueosService.generarPdfArqueo_`.
 
-Para verlas: editor de Apps Script del DEV → **Ejecuciones** → la ejecución de la llamada (p. ej.
-`apiLineasGenerarPdf`) → registros → la línea `[tiempo]`.
+Para verlas todas juntas: en el editor de Apps Script del DEV, archivo `utils/Cronometro.gs`, correr
+**`cronometroResumen()`**: deja en el registro una línea por PDF de las últimas 6 h (las últimas 60) y el promedio de
+cada paso por tipo de documento (`pdf celular-RESPONSIVA`, `pdf vehicular-INSPECCION`, `pdf ARQUEO`…), listo para
+copiar. Una por una: **Ejecuciones** → la ejecución (p. ej. `apiLineasGenerarPdf`) → la línea `[tiempo]`.
 
 ## Tabla base (llenar con 3 PDF de cada tipo en el DEV)
 

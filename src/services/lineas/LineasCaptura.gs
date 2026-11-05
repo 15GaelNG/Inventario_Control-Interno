@@ -965,7 +965,7 @@ const LineasCaptura = (function () {
     const esInspeccion = tipo === 'INSPECCION';
     if (!esInspeccion && tipo !== 'RESPONSIVA') throw new Error('Tipo de PDF inválido.');
     // Cada paso queda en Ejecuciones ([tiempo] …) y en el medidor de Líneas del DEV (marca_): fase 0 del motor único de PDF
-    const crono = Cronometro.iniciar('pdf ' + tipo + ' ' + id, (paso, ms) => marca_('pdf · ' + paso, Date.now() - ms));
+    const crono = Cronometro.iniciar('pdf celular-' + tipo + ' ' + id, (paso, ms) => marca_('pdf · ' + paso, Date.now() - ms));
     const tabla = esInspeccion ? LineasRepo.TAB.INSP : LineasRepo.TAB.RESP;
     const fila = leerFilaPorId_(tabla, id);
     if (!fila) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
