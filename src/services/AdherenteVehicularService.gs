@@ -48,8 +48,9 @@ const AdherenteVehicularService = (function () {
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
 
-  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva.
-  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
+  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva. Empezó en 5
+  // días; a 15 días a petición del usuario (15-oct-2026, mismo plazo que ya se le puso a Arqueos).
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 15;
 
   // [campo del PDF, columna …TEMP en la hoja] de las tres firmas -- una sola lista para
   // imagenesDesdeTemp_, regenerarLiga y completarFirma/completarFirmaJefe (migrarFirmaTempLegacySiHaceFalta_).
@@ -290,8 +291,32 @@ const AdherenteVehicularService = (function () {
    * mismo sin importar si las firmas se capturaron en persona (crear) o llegaron por una o dos
    * ligas (completarFirma/completarFirmaJefe). Si algo de esto falla, el renglón ya estaba
    * guardado desde antes: se regresa el aviso en vez de perder la captura.
+   *
+   * Antes de cerrar el documento como FIRMADO, revisa que CADA …TEMP que sí tiene algo guardado
+   * haya llegado a `imagenesPdf` -- si a alguna no se le pudo leer la imagen (imagenesDesdeTemp_
+   * la salta en silencio si el archivo de Drive ya no existe o no se pudo leer), NO se cierra el
+   * documento: generaría un PDF incompleto marcado como Firmado, sin ningún aviso, y ya no se
+   * podría volver a mandar una liga (bug real, visto en producción 14-oct-2026 con una firma de
+   * adherente que nunca se guardó). Se persiste el estado actual de `fila` tal cual lo dejó quien
+   * llamó (su propia firma recién completada incluida -- nunca queda huérfana) y se avisa,
+   * dejando el documento PENDIENTE para poder reintentar.
    */
   function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra) {
+    const faltantes = CAMPOS_FIRMA_.filter(([campo, columna]) => fila[columna] && !imagenesPdf[campo]).map(([campo]) => campo);
+    if (faltantes.length) {
+      const cambiosParciales = {};
+      CAMPOS_FIRMA_.forEach(([, columna]) => { cambiosParciales[columna] = fila[columna]; });
+      ['TOKEN FIRMA', 'TOKEN FIRMA EXPIRA', 'TOKEN FIRMA JEFE', 'TOKEN FIRMA JEFE EXPIRA', 'FIRMADO POR', 'FIRMADO POR JEFE']
+        .forEach((columna) => { cambiosParciales[columna] = fila[columna]; });
+      try {
+        SheetUtils.update(ssId(), hoja_().getName(), id, cambiosParciales, ID_COLUMN);
+      } catch (e) { /* mejor esfuerzo: si ni esto se guarda, se avisa igual */ }
+      return {
+        ID: id, PDF: null, pendiente: true,
+        aviso: 'No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
+          '. Lo demás quedó guardado, pero el documento sigue pendiente -- avisa a soporte para recuperar esa firma.',
+      };
+    }
     const avisos = [];
     let pdf = null;
     try {
@@ -620,14 +645,20 @@ const AdherenteVehicularService = (function () {
   }
 
   /** ACTIVO/BAJA: para saber qué adherentes siguen usando el vehículo sin perder el historial
-   *  de los demás (no se eliminan solo porque ya no aplican). No toca ninguna otra columna. */
+   *  de los demás (no se eliminan solo porque ya no aplican). No toca ninguna otra columna a
+   *  propósito -- salvo que alguna …TEMP siga con el base64 crudo de antes del 9-oct, que se
+   *  migra de paso (mismo motivo que en regenerarLiga: SheetUtils.update reescribe el renglón
+   *  completo y este registro puede seguir PENDIENTE de firma cuando se da de baja). */
   function cambiarEstatus(token, id, estatus) {
     Permisos.puedeEditar(token, MODULO);
     const limpio = String(estatus || '').trim().toUpperCase();
     if (ESTATUS_VALIDOS.indexOf(limpio) === -1) {
       throw new Error('Estatus inválido: "' + estatus + '" (debe ser ACTIVO o BAJA).');
     }
-    SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS': limpio }, ID_COLUMN);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    SheetUtils.update(ssId(), hoja_().getName(), id,
+      Object.assign({ 'ESTATUS': limpio }, migrarOtrasFirmasTempSiHaceFalta_(encontrado.data, null)), ID_COLUMN);
     return { ID: id, ESTATUS: limpio };
   }
 
@@ -638,8 +669,38 @@ const AdherenteVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
+  /** Campos que SÍ se pueden corregir después de capturado: datos administrativos/de contacto.
+   *  Nunca el adherente, el vehículo, ni lo que ya se generó (PDF, firmas, tokens) -- mismo
+   *  criterio que ResponsivaVehicularService.actualizar (gemelo). ESTATUS tiene su propio
+   *  endpoint (cambiarEstatus) y no se toca aquí. */
+  const CAMPOS_EDITABLES = [
+    'NO EMPLEADO', 'DEPARTAMENTO', 'AREA', 'PUESTO', 'SEDE', 'OFICINA / DESARROLLO',
+    'LUGAR DE RESGUARDO', 'ESTADO DE ENTREGA', 'TARJETA DE CIRCULACION', 'LICENCIA',
+    'VIGENCIA LICENCIA', 'INE', 'NO DE INVENTARIO', 'POLIZA DE SEGURO', 'VIGENCIA POLIZA',
+    'NOMBRE JEFE', 'NOMBRE CI',
+  ];
+
+  /** Corrige datos de un adherente que TODAVÍA no se firmó del todo (ESTADO FIRMA=PENDIENTE) --
+   *  ver el comentario largo de ResponsivaVehicularService.actualizar (gemelo): no hace falta
+   *  regenerar nada aquí, el PDF sale con el dato corregido en cuanto se complete la última
+   *  firma. Una vez firmado, ya no se puede editar (usuario, 15-oct-2026). */
+  function actualizar(token, id, datos) {
+    Permisos.puedeEditar(token, MODULO);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    if (String(encontrado.data['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+      throw new Error('Este adherente ya quedó firmado; ya no se puede editar.');
+    }
+    const cambios = {};
+    CAMPOS_EDITABLES.forEach((clave) => {
+      if ((datos || {})[clave] !== undefined) cambios[clave] = datos[clave];
+    });
+    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+    return { ID: id };
+  }
+
   return {
-    listarPorFolio, listarPorVehiculo, buscarPorId, crear, cambiarEstatus, eliminar, ligaDeToken, regenerarLiga,
+    listarPorFolio, listarPorVehiculo, buscarPorId, crear, actualizar, cambiarEstatus, eliminar, ligaDeToken, regenerarLiga,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
     PLANTILLA,
   };

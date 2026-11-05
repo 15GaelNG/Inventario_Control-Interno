@@ -13,7 +13,8 @@
     const { abrirAgregarHolograma, abrirAgregarIncidencia, abrirAgregarInspeccion, abrirAgregarSensor,
       abrirAgregarVerificacion, abrirEditarHologramaFicha, abrirEditarIncidenciaFicha, abrirEditarInspeccionFicha,
       abrirEditarSensorFicha, abrirEditarVerificacionFicha, abrirSubirFormatoInspeccionFicha } = T.de('capturas');
-    const { abrirAgregarAdherenteVehicular, abrirAgregarResponsivaVehicular } = T.de('documentos');
+    const { abrirAgregarAdherenteVehicular, abrirAgregarResponsivaVehicular, abrirEditarAdherenteVehicularFicha,
+      abrirEditarResponsivaVehicularFicha } = T.de('documentos');
 
     function cerrarFichaVehiculo() {
       T.fichaVehiculoAbierta = null;
@@ -266,6 +267,9 @@
               { t: 'Estado', r: (r) => badgeEstadoFirma(r, 'responsable') },
               { t: 'PDF', r: (r) => (r.PDF ? TablaFicha.boton({ href: r.PDF }) : '—') },
               { t: '', r: (r) => accionesFichaRegistro('responsiva', r.ID, {
+                // Solo mientras sigue PENDIENTE de firma -- en cuanto se firma del todo (PDF
+                // generado) desaparece: el documento ya quedó impreso con esos datos.
+                editar: puedeEditarModulo('vehiculos.responsiva') && r.ESTADO_FIRMA === 'PENDIENTE',
                 eliminar: puedeEditarModulo('vehiculos.responsiva'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
@@ -289,6 +293,9 @@
               { t: '', r: (r) => accionesFichaRegistro('adherente', r.ID, {
                 // Dar de baja / reactivar escribe: solo con edición (antes se veía y el servidor lo negaba)
                 estatus: puedeEditarModulo('vehiculos.adherente') ? r.ESTATUS || 'ACTIVO' : null,
+                // Solo mientras sigue PENDIENTE de firma -- en cuanto se firma del todo (PDF
+                // generado) desaparece: el documento ya quedó impreso con esos datos.
+                editar: puedeEditarModulo('vehiculos.adherente') && r.ESTADO_FIRMA === 'PENDIENTE',
                 eliminar: puedeEditarModulo('vehiculos.adherente'),
                 copiarLiga: r.TOKEN_FIRMA || null,
                 copiarLigaJefe: r.TOKEN_FIRMA_JEFE || null,
@@ -339,6 +346,10 @@
         detalle.querySelectorAll('[data-ficha-editar]').forEach((btn) => {
           btn.addEventListener('click', () => {
             const tipo = btn.dataset.fichaEditar;
+            // Responsiva/Adherente piden el registro COMPLETO (la lista de la ficha solo trae
+            // el resumen, sin Área/Puesto/Sede/documentación) -- lo cargan ellas mismas.
+            if (tipo === 'responsiva') { abrirEditarResponsivaVehicularFicha(btn.dataset.id, vResumen); return; }
+            if (tipo === 'adherente') { abrirEditarAdherenteVehicularFicha(btn.dataset.id, vResumen); return; }
             // Inspección NO se conecta aquí: InspeccionesFicha pinta su tabla aparte (ver el
             // comentario en alPintar, arriba) y esta pasada genérica corre antes de que sus
             // botones existan -- conectarla aquí también duplicaría el clic si Inspecciones

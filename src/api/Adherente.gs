@@ -13,6 +13,11 @@ function apiBuscarAdherenteVehicularPorId(token, id) {
 function apiCrearAdherenteVehicular(token, datos, imagenes, opciones) {
   return AdherenteVehicularService.crear(token, datos, imagenes, opciones);
 }
+// Mientras sigue PENDIENTE de firma (ver el comentario de AdherenteVehicularService.actualizar);
+// una vez firmado, ya no se puede.
+function apiActualizarAdherenteVehicular(token, id, datos) {
+  return AdherenteVehicularService.actualizar(token, id, datos);
+}
 function apiCambiarEstatusAdherenteVehicular(token, id, estatus) {
   return AdherenteVehicularService.cambiarEstatus(token, id, estatus);
 }
