@@ -360,23 +360,6 @@
       { ID: '2026_25_291', FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', FECHA: hace(3), PLACAS: 'GGR658F', PUNTAJE: 84.5, RESPONSABLE: 'JORGE LUIS AVECILLA', INSPECTOR: 'AYRTON SEPULVEDA', PDF: '' },
       { ID: '2026_30_290', FOLIO: 'AUT0030', TIPO: 'L200', FECHA: hace(40), PLACAS: 'UNK093H', PUNTAJE: 71, RESPONSABLE: 'MOISÉS MALDONADO', INSPECTOR: 'J. ENRIQUE MORA', PDF: 'x.pdf' },
     ],
-    // Pestaña "Pendientes" (vista de Kike, punto C): mezcla de sin cargar/cargados y urgente/no urgente
-    apiListarPendientesInspeccion: [
-      { ID: 'PDI-1', FECHA: hace(6), VEHICULO: 'HONDA 150XR', PLACAS: 'GGR658F', RESPONSABLE: 'JORGE LUIS AVECILLA',
-        ASUNTO: '2026_25_291 - Reparación de faro delantero', 'FAMILIA O GRUPO A REPORTAR': 'ELECTRICO Y LUCES', PRIORIDAD: 'URGENTE',
-        ESTATUS: 'SIN CARGAR EN HELPDESK', 'ID TICKET HELPDESK': '', 'ESTATUS HELPDESK': '', 'FECHA CARGADO': '', 'ULTIMO RECORDATORIO': '' },
-      { ID: 'PDI-2', FECHA: hace(6), VEHICULO: 'HONDA 150XR', PLACAS: 'GGR658F', RESPONSABLE: 'JORGE LUIS AVECILLA',
-        ASUNTO: '2026_25_291 - Cambio de amortiguador trasero', 'FAMILIA O GRUPO A REPORTAR': 'MECANICA', PRIORIDAD: 'NO URGENTE',
-        ESTATUS: 'SIN CARGAR EN HELPDESK', 'ID TICKET HELPDESK': '', 'ESTATUS HELPDESK': '', 'FECHA CARGADO': '', 'ULTIMO RECORDATORIO': hace(1) },
-      { ID: 'PDI-3', FECHA: hace(20), VEHICULO: 'RIFTER', PLACAS: 'GGY886F', RESPONSABLE: 'JUAN MANUEL FULGENCIO',
-        ASUNTO: '2026_24_292 - Golpe en la puerta del piloto', 'FAMILIA O GRUPO A REPORTAR': 'HOJALATERIA Y PINTURA', PRIORIDAD: 'URGENTE',
-        ESTATUS: 'CARGADO EN HELPDESK', 'ID TICKET HELPDESK': 61802, 'ESTATUS HELPDESK': 'Abierto', 'FECHA CARGADO': hace(18), 'ULTIMO RECORDATORIO': '' },
-      { ID: 'PDI-4', FECHA: hace(25), VEHICULO: 'KWID', PLACAS: 'GGZ120F', RESPONSABLE: 'ANA LUCIA REYES',
-        ASUNTO: '2026_24_190 - Fuga de aceite en el motor', 'FAMILIA O GRUPO A REPORTAR': 'MECANICA', PRIORIDAD: 'URGENTE',
-        ESTATUS: 'CARGADO EN HELPDESK', 'ID TICKET HELPDESK': 61790, 'ESTATUS HELPDESK': 'Resuelto', 'FECHA CARGADO': hace(23), 'ULTIMO RECORDATORIO': '' },
-    ],
-    apiInspeccionEnviarRecordatorioPendiente: { enviado: true, correo: 'juan.fulgencio@ejemplo.com' },
-    apiInspeccionVincularTicketHelpdesk: { vinculado: true, idTicketHelpdesk: 61850, estatusHelpdesk: 'Abierto' },
     // Un folio AUT… solo ofrece KWID y AUTOS (TIPOS_POR_PREFIJO_FOLIO en modulos/inspecciones.html)
     apiTiposInspeccion: [{ tipo: 'AUTOS', listo: true }, { tipo: 'KWID', listo: true }, { tipo: 'L200', listo: true }, { tipo: 'PIPA', listo: true }],
     apiEstructuraInspeccion: {
@@ -1133,31 +1116,6 @@
     'hologramas': () => abrir('hologramas'),
     'hologramas-form': async () => { await abrir('hologramas', 'nuevo'); },
     'inspecciones': () => abrir('inspeccion-vehicular'),
-    'pendientes-inspeccion': async () => { await abrir('pendientes-inspeccion'); await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio'); await esperar(300); },
-    'pendientes-inspeccion-urgentes': async () => {
-      await abrir('pendientes-inspeccion');
-      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
-      (await hasta('#pdi-kpi-urgentes')).click();
-      await esperar(300);
-    },
-    'pendientes-inspeccion-recordatorio': async () => {
-      await abrir('pendientes-inspeccion');
-      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
-      (await hasta('#pdi-tabla .dt-acciones-fila button[title^="Enviar recordatorio"]')).click();
-      await esperar(300);
-    },
-    'pendientes-inspeccion-vincular': async () => {
-      await abrir('pendientes-inspeccion');
-      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
-      (await hasta('#pdi-tabla .dt-acciones-fila button[title^="Vincular a un ticket de Help Desk"]')).click();
-      await esperar(300);
-    },
-    'pendientes-inspeccion-resueltos': async () => {
-      await abrir('pendientes-inspeccion');
-      await hasta('#pdi-tabla table, #pdi-tabla .dt-vacio');
-      (await hasta('#pdi-kpi-resueltos')).click();
-      await esperar(300);
-    },
     'inspecciones-form': async () => { await abrir('inspeccion-vehicular', 'nueva'); await elegirVehiculo('#ins-folio'); },
     'inspecciones-checklist': async () => {
       await iniciarInspeccion();
@@ -1174,31 +1132,6 @@
       await esperar(300);
       firmar(await hasta('[data-firma="FIRMA INSPECTOR"] canvas'));
       const f = $('.ins-firmas'); if (f) f.scrollIntoView({ block: 'end' });
-    },
-    'inspecciones-correos': async () => {
-      await iniciarInspeccion();
-      // Las secciones de todos los pasos ya existen en el DOM (ocultas) en cuanto carga la
-      // estructura: hay que esperar a que la de "Revisar" quede visible, no solo a que exista
-      const visible = (el) => el && el.offsetParent !== null;
-      for (let i = 0; i < 15 && !visible($('#ins-correo-responsable')); i++) { $('#ins-siguiente').click(); await esperar(400); }
-      await esperar(400);
-      const f = $('#ins-correo-agregar'); if (f) f.scrollIntoView({ block: 'center' });
-    },
-    'inspecciones-tickets-a-generar': async () => {
-      await iniciarInspeccion();
-      const visible = (el) => el && el.offsetParent !== null;
-      for (let i = 0; i < 15 && !visible($('#ins-ticket-agregar')); i++) { $('#ins-siguiente').click(); await esperar(400); }
-      await esperar(400);
-      $('#ins-ticket-agregar').click();
-      $('#ins-ticket-agregar').click();
-      await esperar(200);
-      const filas = document.querySelectorAll('.ins-ticket-extra-fila');
-      filas[0].querySelector('.ins-ticket-asunto').value = 'Reparación de faro delantero';
-      filas[0].querySelector('.ins-ticket-familia').value = 'HOJALATERIA Y PINTURA';
-      filas[0].querySelector('.ins-ticket-prioridad').value = 'URGENTE';
-      filas[1].querySelector('.ins-ticket-asunto').value = 'Cambio de llanta trasera';
-      const tit = Array.from(document.querySelectorAll('.ins-revision-titulo')).find((h) => /Tickets a generar/.test(h.textContent));
-      if (tit) tit.scrollIntoView({ block: 'start' });
     },
   };
 

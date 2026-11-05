@@ -33,23 +33,6 @@ function apiOlvidarTipoInspeccion(token, tipo) {
 function apiRegistrarInspeccion(token, datos, imagenes) {
   return InspeccionesService.registrar(token, datos, imagenes);
 }
-// Editar una inspección ya guardada: checklist/llantas/voltaje/encabezado. No toca firmas ni
-// diagramas (se quedan como se firmaron/dibujaron) ni reenvía el aviso por correo. `archivoFormato`
-// es opcional: un PDF/foto ya corregido a mano por fuera del sistema, para subirlo tal cual en vez
-// de que el sistema regenere el PDF desde la plantilla.
-function apiActualizarInspeccion(token, id, datos, archivoFormato) {
-  return InspeccionesService.actualizar(token, id, datos, archivoFormato);
-}
-// Vista de Kike (punto C): pendientes de inspección sin cargar en Help Desk, y su recordatorio
-function apiListarPendientesInspeccion(token) {
-  return PendientesInspeccionService.listar(token);
-}
-function apiInspeccionEnviarRecordatorioPendiente(token, id) {
-  return PendientesInspeccionService.enviarRecordatorio(token, id);
-}
-function apiInspeccionVincularTicketHelpdesk(token, id, idTicketHelpdesk) {
-  return PendientesInspeccionService.vincularManual(token, id, idTicketHelpdesk);
-}
 
 // --- Para la ficha de Vehículos (y el expediente del NUCO) ---
 /**
