@@ -8,7 +8,7 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 | Fase | Qué | Estado |
 |---|---|---|
 | 0 | Medir cada paso de los tres motores (`Cronometro`) | hecha en código; falta la tabla base |
-| 1 | Inventario de marcadores de cada plantilla + prueba diferencial | pendiente |
+| 1 | Inventario de marcadores de cada plantilla + prueba diferencial | en código; falta correr el inventario |
 | 2 | `Plantilla` entiende todo lo de Líneas (analizador) | pendiente |
 | 3 | Motor de documento en `PdfService` + comparador en el DEV | pendiente |
 | 4 | Líneas sobre `PdfService` (ID de plantilla por entorno) | pendiente |
@@ -49,3 +49,15 @@ copiar. Una por una: **Ejecuciones** → la ejecución (p. ej. `apiLineasGenerar
 | Responsiva vehicular | | |
 | Adherente vehicular | | |
 | Arqueo | | |
+
+## Fase 1: inventario y prueba diferencial
+
+- `node tools/pdf/inventario.js` (dev | lab | prod) le pide a la app en `/dev?revisar=plantillas`
+  (`src/PdfHerramientas.gs`, solo para quien desplegó, solo lee) los marcadores de cada plantilla en uso y los guarda en
+  `tests/fixtures/plantillas-marcadores.json`: cuántas veces aparece cada uno, los `If` que cruzan párrafos, párrafos y
+  tablas. Solo nombres de columnas y fórmulas.
+- `tests/referencia/`: copias congeladas de cómo resuelven hoy los marcadores `Plantilla.gs` (Vehículos) y el
+  evaluador de `LineasPdf.gs`. No se editan; se borran al terminar las fases 4 y 5.
+- `tests/pdf-expresiones-diferencial.test.cjs`: cada marcador real × 7 juegos de datos (vacío, valores comparados,
+  minúsculas y espacios, números, fechas). Vehículos debe dar lo mismo siempre; Líneas es la meta de la fase 2 (todo).
+  Arqueo se compara en la fase 5. Una diferencia aceptada va en `ACEPTADAS` con su razón.
