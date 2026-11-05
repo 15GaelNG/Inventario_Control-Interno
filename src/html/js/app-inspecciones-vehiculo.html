@@ -142,7 +142,7 @@
         d.pdfs.map((p) => TablaFicha.boton({ texto: p.nombre, icono: 'file-text', href: p.url })).join('') +
         (d.url && puede('vehiculos.carpetas') ? TablaFicha.boton({ texto: 'Carpeta', icono: 'folder-open', href: d.url }) : '') + '</div>' +
         '<div class="insp-fotos-datos">' + datos.map((x) => '<span>' + escaparHtml(x) + '</span>').join('') + '</div></div></div>' +
-        '<div class="card ln-card" data-insp-galeria><p class="ln-tenue"><span class="spinner"></span> Cargando ' + d.fotos + ' fotos…</p></div>';
+        '<div class="card ln-card" data-insp-galeria>' + Carga.html('caja', { alto: 160, texto: 'Cargando ' + d.fotos + ' fotos…' }) + '</div>';
       const caja = contenedor.querySelector('[data-insp-galeria]');
       try {
         const r = await pedirFotos(nucco, d.id);

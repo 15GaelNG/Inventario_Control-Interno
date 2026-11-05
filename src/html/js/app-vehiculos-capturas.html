@@ -84,7 +84,7 @@
 
     async function abrirAgregarSensor(vResumen) {
       const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO);
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let datos;
       try {
         datos = await callServer('apiDatosVehiculoParaSensor', state.token, vResumen.ID_VEHICULO || vResumen.FOLIO);
@@ -131,7 +131,7 @@
 
     async function abrirAgregarHolograma(vResumen, completo) {
       const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let catalogos;
       try {
         catalogos = await callServer('apiCatalogosHologramas', state.token);
@@ -233,7 +233,7 @@
      *  reasignar a otro vehículo, igual que en su módulo), actualiza campo por campo. */
     async function abrirEditarSensorFicha(s, vResumen) {
       const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Editar sensor', 'Folio ' + (s.FOLIO || vResumen.FOLIO));
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let datos;
       try {
         datos = await callServer('apiDatosVehiculoParaSensor', state.token, s.ID_VEHICULO || vResumen.ID_VEHICULO || s.FOLIO || vResumen.FOLIO);
@@ -279,7 +279,7 @@
      *  bloquean -- igual que en Hologramas, se sincronizan solos desde Vehículos. */
     async function abrirEditarHologramaFicha(h, vResumen) {
       const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Editar holograma', 'Folio ' + (h.FOLIO || vResumen.FOLIO));
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let catalogos;
       try {
         catalogos = await callServer('apiCatalogosHologramas', state.token);

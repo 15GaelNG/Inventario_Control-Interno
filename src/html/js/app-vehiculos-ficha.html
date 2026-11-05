@@ -94,7 +94,7 @@
       listado.hidden = true;
       detalle.hidden = false;
       if (!repintar) {
-        detalle.innerHTML = migasVehiculo() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        detalle.innerHTML = migasVehiculo() + Carga.html('ficha', { tarjeta: true, n: 8 });
         wireMigasVehiculo();
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);

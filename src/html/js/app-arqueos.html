@@ -653,7 +653,7 @@
    * llama a alGuardado() en vez de "listo para el siguiente".
    */
   async function construirCapturaArqueo(contenedor, prefijo, caja, alGuardado, idEditar) {
-    contenedor.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+    contenedor.innerHTML = Carga.html('bloque', { n: 5 });
     let auditItems, completo;
     try {
       const resultados = await Promise.all([
@@ -931,7 +931,7 @@
      *  resumen) — las columnas de la tabla van con enDetalle:false para no
      *  repetir esos mismos campos arriba. Mismo patrón que Vehículos. */
     async function mostrarDetalleArqueoEnPanel(resumen, contenedor) {
-      contenedor.innerHTML = '<div class="loading-inline"><span class="spinner"></span> Cargando…</div>';
+      contenedor.innerHTML = Carga.html('ficha', { n: 8 });
       try {
         const completo = await callServer('apiBuscarArqueoPorId', state.token, resumen.ID);
         if (!completo) {

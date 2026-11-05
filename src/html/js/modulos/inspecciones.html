@@ -127,7 +127,7 @@
 
     // ----- Panel de detalle: la inspección completa se pide solo al abrirla -----
     async function pintarDetalle(inspeccion, contenedor) {
-      contenedor.innerHTML = '<span class="dt-skel" style="height:120px; width:100%; border-radius:var(--radio-l)"></span>';
+      contenedor.innerHTML = Carga.html('caja', { alto: 120 });
       let d;
       try {
         d = await callServer('apiDetalleInspeccion', state.token, inspeccion.ID);
@@ -181,7 +181,7 @@
         vista.style.marginTop = '10px';
         caja.appendChild(vista);
       }
-      vista.innerHTML = '<span class="dt-skel" style="height:160px; width:100%; border-radius:var(--radio-l)"></span>';
+      vista.innerHTML = Carga.html('caja', { alto: 160 });
       try {
         const imagen = await callServer('apiPrevisualizarImagenInspeccion', state.token, ruta);
         vista.innerHTML = (imagen.base64
@@ -876,7 +876,7 @@
                 <button type="button" class="secondary" data-borrar disabled>${Iconos.svg('cancelar')} Borrar</button>
               </span>
             </div>
-            <div class="ins-diagrama-lienzo"><span class="dt-skel" style="height:220px; width:100%; border-radius:var(--radio-l)"></span></div>
+            <div class="ins-diagrama-lienzo">${Carga.html('caja', { alto: 220 })}</div>
           </div>`).join('')}</div>`;
       }
       // Revisión (se llena al llegar al paso) y, debajo, las firmas: se firma viendo el

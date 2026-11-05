@@ -23,7 +23,7 @@
     display: inline-flex; background: transparent; color: var(--color-text-muted); border: none; padding: 3px 5px; font-size: var(--texto-xs); border-radius: 999px;
   }
   .dt-chip button:hover { background: var(--color-surface); color: var(--color-danger); }
-  .dt-link { background: transparent; border: none; color: var(--color-primary); padding: 2px 4px; font-size: var(--texto-s); text-decoration: underline; }
+  .dt-link { background: transparent; border: none; color: var(--color-primary-texto); padding: 2px 4px; font-size: var(--texto-s); text-decoration: underline; }
   :root[data-theme="dark"] .dt-link { color: var(--color-accent); }
   .dt-link:hover { background: transparent; }
 
@@ -54,6 +54,7 @@
   }
   .dt-btn-filtro:hover { background: var(--color-bg); color: var(--color-text); }
   .dt-btn-filtro.activo { background: var(--color-accent); color: #fff; }
+  :root[data-theme="dark"] .dt-btn-filtro.activo { color: var(--color-on-accent); }
   .dt thead th[draggable="true"] { cursor: grab; }
   .dt thead th.dt-arrastrando { opacity: .45; }
   .dt thead th.dt-drop-antes { box-shadow: inset 3px 0 0 var(--color-accent); }
@@ -198,13 +199,8 @@
   .dt-vacio { text-align: center; color: var(--color-text-muted); padding: 28px 0 !important; white-space: normal !important; }
   .dt-vacio.dt-error { color: var(--color-danger); }
 
-  /* ---- Carga: skeleton (sin datos) y barra superior (refrescando con datos a la vista) ---- */
-  .dt-skel {
-    display: block; height: 10px; border-radius: var(--radio-s); width: 70%;
-    background: linear-gradient(90deg, var(--color-border) 25%, var(--color-bg) 50%, var(--color-border) 75%);
-    background-size: 200% 100%; animation: dt-brillo 1.2s ease-in-out infinite;
-  }
-  @keyframes dt-brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+  /* ---- Carga: renglones grises (sin datos) y barra superior (refrescando con datos a la vista) ---- */
+  /* Los renglones grises usan .carga-hueso (componentes/carga.html) */
   .dt-barra-carga { position: sticky; top: 0; left: 0; height: 3px; z-index: 5; overflow: hidden; margin-bottom: -3px; }
   .dt-barra-carga::before {
     content: ''; position: absolute; top: 0; bottom: 0; width: 35%; background: var(--color-accent);
@@ -269,7 +265,7 @@
   .dt-lista-valores label:hover { background: var(--color-bg); }
   .dt-lista-valores input { width: auto; }
   .dt-lista-valores .dt-conteo { margin-left: auto; color: var(--color-text-muted); font-size: var(--texto-xs); }
-  .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary); padding: 0 4px; font-size: var(--texto-xs); text-decoration: underline; }
+  .dt-lista-valores .dt-solo { visibility: hidden; background: transparent; border: none; color: var(--color-primary-texto); padding: 0 4px; font-size: var(--texto-xs); text-decoration: underline; }
   .dt-lista-valores label:hover .dt-solo, .dt-lista-valores .dt-solo:focus-visible { visibility: visible; }
 
   .dt-columnas { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
@@ -1228,7 +1224,7 @@
         if (st.cargando) {
           const celdas = Array.from({ length: nColumnas }, (_, i) => {
             const sistema = (cfg.seleccionable && i === 0) || (hayAccionesFila && i === nColumnas - 1);
-            return `<td><span class="dt-skel" style="width:${sistema ? 14 : 40 + ((i * 37) % 50)}px"></span></td>`;
+            return `<td><span class="carga-hueso" style="width:${sistema ? 14 : 40 + ((i * 37) % 50)}px"></span></td>`;
           }).join('');
           tbody.innerHTML = `<tr>${celdas}</tr>`.repeat(FILAS_SKELETON);
           return;

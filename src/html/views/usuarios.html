@@ -19,31 +19,31 @@
   .usr-permiso-ico .ico { width: 16px; height: 16px; }
   .usr-permiso-nombre { flex: 1; min-width: 0; font-weight: 600; font-size: var(--texto-m); }
   .usr-permiso-origen { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 3px; font-weight: 400; font-size: var(--texto-xs); color: var(--color-text-muted); }
-  .usr-permiso.excepcion .usr-permiso-ico { background: var(--color-accent); color: var(--color-primary); }
+  .usr-permiso.excepcion .usr-permiso-ico { background: var(--color-accent); color: var(--color-on-accent); }
 
   .usr-nivel { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: var(--texto-s); font-weight: 700; }
   .usr-nivel .ico { width: 13px; height: 13px; }
   /* Nivel: Editar verde, Ver azul de la empresa, Sin acceso rojo (el sistema no tiene un rojo
      propio: --color-danger es bronce, por eso va aquí) */
-  .usr-nivel.EDICION { background: var(--color-success); color: #fff; }
+  .usr-nivel.EDICION { background: var(--color-success); color: var(--color-on-success); }
   .usr-nivel.LECTURA { background: var(--color-primary); color: #fff; }
   .usr-nivel.NINGUNO { background: #b42318; color: #fff; }
 
   /* De dónde viene el permiso: por su área (azul de la empresa) o excepción (dorado) */
   .usr-origen { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 600; white-space: nowrap; }
   .usr-origen .ico { width: 12px; height: 12px; }
-  .usr-origen.area { background: var(--color-primary-soft); color: var(--color-primary); }
-  .usr-origen.excepcion { background: var(--color-accent); color: var(--color-primary); }
+  .usr-origen.area { background: var(--color-primary-soft); color: var(--color-primary-texto); }
+  .usr-origen.excepcion { background: var(--color-accent); color: var(--color-on-accent); }
   .usr-origen.rol { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
 
   .usr-aviso { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; margin-bottom: 14px; border-radius: var(--radio-l); background: var(--color-note-bg); font-size: var(--texto-s); }
-  .usr-aviso .ico { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--color-primary); }
+  .usr-aviso .ico { flex: none; width: 16px; height: 16px; margin-top: 1px; color: var(--color-primary-texto); }
 
   .usr-plegado summary { cursor: pointer; color: var(--color-text-muted); font-size: var(--texto-s); font-weight: 600; padding: 2px 0; }
   .usr-plegado summary:hover { color: var(--color-text); }
   .usr-plegado[open] summary { margin-bottom: 6px; }
 
-  .usr-enlace { background: none; border: none; padding: 0; color: var(--color-primary); font: inherit; cursor: pointer; text-align: left; }
+  .usr-enlace { background: none; border: none; padding: 0; color: var(--color-primary-texto); font: inherit; cursor: pointer; text-align: left; }
   .usr-enlace:hover { text-decoration: underline; }
   .usr-chip-enlace { cursor: pointer; border: none; font: inherit; }
   .usr-chip-enlace:hover { text-decoration: underline; }
@@ -77,7 +77,7 @@
   .usr-editor-grupo .ico { width: 16px; height: 16px; color: var(--color-text-muted); flex: none; }
   .usr-editor-grupo:hover { background: var(--color-bg); }
   .usr-editor-grupo.activa { background: var(--color-primary-soft); border-color: var(--color-primary); font-weight: 600; }
-  .usr-editor-grupo.activa .ico { color: var(--color-primary); }
+  .usr-editor-grupo.activa .ico { color: var(--color-primary-texto); }
   .usr-editor-grupo-nombre { flex: 1; min-width: 0; }
   .usr-editor-grupo-cuenta { font-size: var(--texto-xs); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
   .usr-editor-grupo.cambiada .usr-editor-grupo-cuenta::after {
@@ -154,7 +154,7 @@
   .usr-op.activa { color: #fff; }
   .usr-op.activa.NINGUNO { background: #b42318; }
   .usr-op.activa.LECTURA { background: var(--color-primary); }
-  .usr-op.activa.EDICION { background: var(--color-success); }
+  .usr-op.activa.EDICION { background: var(--color-success); color: var(--color-on-success); }
 
   .usr-restablecer {
     flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0; padding: 0;
@@ -176,7 +176,7 @@
   .usr-implica ul { list-style: none; margin: 0; padding: 0; }
   .usr-implica li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; font-size: var(--texto-s); line-height: 1.45; }
   .usr-implica li + li { border-top: 1px solid var(--color-border); }
-  .usr-implica li .ico { flex: none; width: 15px; height: 15px; margin-top: 2px; color: var(--color-primary); }
+  .usr-implica li .ico { flex: none; width: 15px; height: 15px; margin-top: 2px; color: var(--color-primary-texto); }
   #usr-modal-cuerpo .usr-implica { margin-top: 16px; }
 
   /* Matriz por área: módulos (renglones, por grupo) contra áreas (columnas, el nombre de lado).
@@ -203,7 +203,7 @@
     white-space: nowrap; margin: 0 auto; padding: 0; border: 0; background: none; box-shadow: none;
     color: var(--color-text); font: inherit; font-size: var(--texto-s); font-weight: 600; cursor: pointer;
   }
-  .usr-matriz-area:hover { color: var(--color-primary); text-decoration: underline; }
+  .usr-matriz-area:hover { color: var(--color-primary-texto); text-decoration: underline; }
   .usr-matriz-grupo th { padding: 14px 12px 4px; font-size: var(--texto-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--color-text-muted); }
   .usr-matriz-grupo td { border-bottom: 0; }
   .usr-matriz tbody td { padding: 2px 3px; text-align: center; }
@@ -214,8 +214,8 @@
     border: 0; border-radius: var(--radio-s); box-shadow: none; cursor: pointer; vertical-align: middle;
   }
   .usr-celda svg, .usr-celda .ico { width: 14px; height: 14px; }
-  .usr-celda.EDICION { background: var(--color-success); color: #fff; }
-  .usr-celda.LECTURA { background: var(--color-primary-soft); color: var(--color-primary); }
+  .usr-celda.EDICION { background: var(--color-success); color: var(--color-on-success); }
+  .usr-celda.LECTURA { background: var(--color-primary-soft); color: var(--color-primary-texto); }
   .usr-celda.NINGUNO { background: rgba(180, 35, 24, .07); color: rgba(180, 35, 24, .55); }
   :root[data-theme="dark"] .usr-celda.LECTURA { background: rgba(96, 165, 250, .22); color: #93c5fd; }
   :root[data-theme="dark"] .usr-celda.NINGUNO { background: rgba(248, 113, 113, .10); color: rgba(248, 113, 113, .6); }
@@ -243,7 +243,7 @@
     display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font: inherit; font-size: var(--texto-s);
     border: 1px solid var(--color-border); background: var(--color-bg); color: var(--color-text); cursor: pointer;
   }
-  .usr-chip-perfil:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .usr-chip-perfil:hover { border-color: var(--color-primary); color: var(--color-primary-texto); }
   .usr-chip-perfil .ico, .usr-asignar .ico { width: 14px; height: 14px; }
   .usr-asignar-lista { display: flex; flex-direction: column; border: 1px solid var(--color-border); border-radius: var(--radio-l); overflow: hidden; }
   .usr-asignar {
@@ -252,7 +252,7 @@
   }
   .usr-asignar + .usr-asignar { border-top: 1px solid var(--color-border); }
   .usr-asignar:hover { background: var(--color-bg); }
-  .usr-asignar.activa .ico { color: var(--color-primary); }
+  .usr-asignar.activa .ico { color: var(--color-primary-texto); }
   .usr-asignar.cambiada .usr-asignar-nombre { font-weight: 600; }
   .usr-asignar-nombre { flex: 1; font-size: var(--texto-m); }
   .usr-asignar-detalle { font-size: var(--texto-xs); color: var(--color-text-muted); }

@@ -342,7 +342,7 @@
     // ---------------------------------------------------------------- Mi perfil: las pestañas Contraseña, Dispositivos y Actividad
     // Como las cuentas de Google o Microsoft: cada pestaña con su encabezado y renglones de ajuste (ícono, qué es, su
     // estado y la acción). Seguridad.pestana(nombre, caja) la pinta; la pide app-perfil.html al cambiar de pestaña.
-    const CARGANDO = '<p class="perfil-cargando">Cargando…</p>';
+    const CARGANDO = Carga.html('lista', { n: 3 });
     const fallo_ = (err) => '<p class="error-msg">' + esc((err && err.message) || String(err)) + '</p>';
     const encabezado_ = (titulo, texto) => '<div class="seg-cabeza"><h3>' + esc(titulo) + '</h3><p>' + texto + '</p></div>';
     function fila_(icono, titulo, detalle, accion, tono) {

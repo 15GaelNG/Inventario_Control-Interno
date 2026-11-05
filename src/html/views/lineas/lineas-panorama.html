@@ -75,7 +75,7 @@
           </div>
           <div class="card lnp-tarjeta">
             <div class="lnp-cabeza"><h4><i data-lucide="card-sim" class="ico"></i> Líneas por estatus</h4><span class="lnp-total" id="lnp-total-lineas"></span></div>
-            <div class="lnp-barras" id="lnp-barras-lineas"><p class="ln-tenue">Cargando…</p></div>
+            <div class="lnp-barras" id="lnp-barras-lineas"><div data-carga="barras"></div></div>
           </div>
         </div>
       </div>
@@ -105,7 +105,7 @@
         <!-- Por grupos (30-oct): "1,586 en total" sonaba a "tenemos 1,586"; ahora lo que tenemos y lo que ya salió van aparte -->
         <div class="card lnp-tarjeta">
           <div class="lnp-cabeza"><h4><i data-lucide="smartphone" class="ico"></i> Equipos (celulares y módems) por estatus</h4><span class="lnp-total" id="lnp-total-equipos"></span></div>
-          <div class="lnp-grupos" id="lnp-equipos-grupos"><p class="ln-tenue">Cargando…</p></div>
+          <div class="lnp-grupos" id="lnp-equipos-grupos"><div data-carga="barras" data-carga-n="4"></div></div>
           <p class="lnp-nota">Cada equipo cuenta una vez. No son líneas: una línea es el número; el equipo, el teléfono o módem.</p>
         </div>
 
@@ -134,7 +134,7 @@
       </div>
 
       <!-- ===================== Ventas: lineas-panorama-bajas.html ===================== -->
-      <div data-tab-panel="ventas" hidden><div id="lnp-ventas"><p class="ln-tenue">Cargando…</p></div></div>
+      <div data-tab-panel="ventas" hidden><div id="lnp-ventas"><div data-carga="kpis" data-carga-n="3"></div></div></div>
     </div>
     <p class="ln-tenue lnp-generado" id="lnp-generado"></p>
   </section>

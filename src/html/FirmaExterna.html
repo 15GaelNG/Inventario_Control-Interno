@@ -9,12 +9,15 @@
     --color-primary: #06263A; --color-bg: #F5F6F5; --color-surface: #ffffff;
     --color-text: #1c2b33; --color-text-muted: #5c6b72; --color-border: #E7E7E7;
     --color-danger: #8a6d3a; --color-success: #1e7d4f;
+    --color-primary-texto: var(--color-primary); --color-on-success: #fff;
     --shadow-lg: 0 24px 48px -16px rgba(6,38,58,.35);
   }
+  /* Los mismos valores que el modo oscuro de styles.html (docs/modo-oscuro.md) */
   @media (prefers-color-scheme: dark) {
     :root {
-      --color-primary: #2f7bb0; --color-bg: #0b1a23; --color-surface: #142732;
-      --color-text: #edf1f3; --color-text-muted: #9db0b8; --color-border: #26404c;
+      --color-primary: #2a72a3; --color-bg: #0a161d; --color-surface: #15262f;
+      --color-text: #f2f5f7; --color-text-muted: #b3c3cb; --color-border: #2c4653;
+      --color-primary-texto: #8fcdf3; --color-danger: #e8b86e; --color-success: #62d68e; --color-on-success: #0a1a12;
     }
   }
   * { box-sizing: border-box; }
@@ -43,7 +46,7 @@
   button[type="submit"]:disabled { opacity: .6; cursor: default; }
   .firex-btn-secundario {
     width: 100%; padding: 9px; font-size: 13px; font-weight: 600; border: 1px solid var(--color-border);
-    border-radius: 9px; background: transparent; color: var(--color-primary); cursor: pointer; margin-bottom: 14px;
+    border-radius: 9px; background: transparent; color: var(--color-primary-texto); cursor: pointer; margin-bottom: 14px;
   }
   .firex-btn-secundario:disabled { opacity: .6; cursor: default; }
   .firex-error {
@@ -52,11 +55,11 @@
   }
   .firex-exito { text-align: center; padding: 8px 0; }
   .firex-exito .firex-ok {
-    width: 46px; height: 46px; border-radius: 50%; background: var(--color-success); color: #fff;
+    width: 46px; height: 46px; border-radius: 50%; background: var(--color-success); color: var(--color-on-success);
     display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 12px;
   }
   .firex-oculto { display: none; }
-  a.firex-pdf { color: var(--color-primary); font-weight: 600; }
+  a.firex-pdf { color: var(--color-primary-texto); font-weight: 600; }
   .firex-spinner {
     display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,.5);
     border-top-color: #fff; border-radius: 50%; vertical-align: -2px; margin-right: 6px;

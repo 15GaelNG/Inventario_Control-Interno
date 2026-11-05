@@ -1395,7 +1395,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, bitácoras, historial y Excel)', 
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v13';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v14';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -2440,6 +2440,29 @@ test('la etiqueta "auto" y el par Folio/Nucco solo viven en sus componentes', ()
   const pos = (n) => index.indexOf("componentes/" + n + "'");
   assert.ok(pos('campo-auto') > 0 && pos('campo-auto') < pos('folio-nucco') && pos('folio-nucco') < pos('formulario'),
     'campo-auto y folio-nucco se incluyen antes de formulario (que los usa)');
+});
+
+test('lo que está cargando se pinta con Carga (el esqueleto), no con otro "Cargando…" a mano', () => {
+  // 5-nov-2026: había ~40 "Cargando…" escritos a mano (spinner + texto) y tres esqueletos propios (DataTable, Help
+  // Desk, Líneas). Ahora: Carga.html(forma) o data-carga en una vista (componentes/carga.html). Lo que sí se queda:
+  // el aviso de una acción (toastCargando('Guardando…')), un botón ocupado (btn….innerHTML), un <option> de un select
+  // y una nota junto a datos que ya se ven (un <span>). FirmaExterna.html es una página aparte, sin los componentes.
+  const exentos = [path.join('componentes', 'carga.html'), 'FirmaExterna.html'];
+  const html = filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html') && !exentos.some((e) => f.endsWith(e)));
+  const malos = [];
+  html.forEach((f) => {
+    fs.readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/\b(btn|boton)\w*\.innerHTML\s*=/.test(linea)) return;
+      if (/spinner"><\/span>\s*Cargando|>\s*Cargando[^<'"]*…\s*<\/(p|div)>|class="(dt-skel|hd-esqueleto)"/.test(linea)) {
+        malos.push(path.relative(root, f) + ':' + (i + 1));
+      }
+    });
+  });
+  assert.deepEqual(malos, [], 'usa Carga.html(forma) o <div data-carga="forma"> (componentes/carga.html)');
+  // Carga va justo después de Formato: los componentes y los módulos ya lo pueden usar al pintar
+  const index = read('src/html/Index.html');
+  const pos = (n) => index.indexOf("componentes/" + n + "'");
+  assert.ok(pos('formato') > 0 && pos('carga') > pos('formato') && pos('carga') < pos('datatable'), 'carga se incluye después de formato y antes de datatable');
 });
 
 test('los formularios por columnas usan un solo motor (CamposHoja)', () => {

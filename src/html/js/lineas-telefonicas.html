@@ -682,7 +682,7 @@
         const visibles = Math.min(tarjetasVisibles[modulo], filas.length);
         cont.innerHTML = (filas.length
           ? '<div class="ln-cuadros-grid">' + filas.slice(0, visibles).map((r) => tarjetaInventario(modulo, r)).join('') + '</div>'
-          : '<p class="empty-state">' + (memoria.indice ? 'No hay registros que coincidan con la búsqueda o los filtros.' : '<span class="ln-spinner"></span> Cargando…') + '</p>') +
+          : (memoria.indice ? '<p class="empty-state">No hay registros que coincidan con la búsqueda o los filtros.</p>' : Carga.html('kpis', { n: 6 }))) +
           '<div class="ln-cuadros-mas"><span class="ln-tenue">Mostrando ' + miles(visibles) + ' de ' + miles(filas.length) + '</span>' +
           (visibles < filas.length ? '<button type="button" class="secondary" data-ln-mas-tarjetas="' + modulo + '">Mostrar más</button>' : '') + '</div>';
         marcarTarjetasSeleccionadas(modulo);

@@ -74,8 +74,8 @@ test('DG: sin Documentos, Historial ni «Última responsiva / inspección» a qu
 
   // Las pestañas, armadas como en la ficha: ADMIN (o registro que no es DG) las tres; DG oculto, solo General
   const fuente = cliente.match(/function pestanasFicha\(general, conDocumentos\) \{[\s\S]*?\n {6}\}/)[0];
-  const armar = new Function('veHistorial', 'veDocumentos', 'Tabs', 'pila', fuente + '; return pestanasFicha;');
-  const pestanas = (con) => armar(() => true, () => true, { html: (t) => t.filter(Boolean).map((p) => p.id) }, [])('g', con);
+  const armar = new Function('veHistorial', 'veDocumentos', 'Tabs', 'pila', 'Carga', fuente + '; return pestanasFicha;');
+  const pestanas = (con) => armar(() => true, () => true, { html: (t) => t.filter(Boolean).map((p) => p.id) }, [], { html: () => '' })('g', con);
   assert.deepEqual(pestanas(true), ['general', 'documentos', 'historial']);
   assert.deepEqual(pestanas(false), ['general']);
 });
