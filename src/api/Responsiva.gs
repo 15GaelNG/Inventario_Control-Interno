@@ -15,6 +15,11 @@ function apiBuscarResponsivaVehicularPorId(token, id) {
 function apiCrearResponsivaVehicular(token, datos, imagenes, opciones) {
   return ResponsivaVehicularService.crear(token, datos, imagenes, opciones);
 }
+// Mientras sigue PENDIENTE de firma (ver el comentario de ResponsivaVehicularService.actualizar);
+// una vez firmada, ya no se puede.
+function apiActualizarResponsivaVehicular(token, id, datos) {
+  return ResponsivaVehicularService.actualizar(token, id, datos);
+}
 function apiEliminarResponsivaVehicular(token, id) {
   return ResponsivaVehicularService.eliminar(token, id);
 }

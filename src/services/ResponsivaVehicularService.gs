@@ -57,8 +57,9 @@ const ResponsivaVehicularService = (function () {
   // Caja de las firmas en el PDF: la misma que usa InspeccionesService (150 × 60 pt).
   const FIRMA_PDF = { ancho: 150, alto: 60 };
 
-  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva.
-  const FIRMA_REMOTA_DIAS_VIGENCIA = 5;
+  // Firma a distancia: cuánto dura cada liga antes de que haya que mandar una nueva. Empezó en 5
+  // días; a 15 días a petición del usuario (15-oct-2026, mismo plazo que ya se le puso a Arqueos).
+  const FIRMA_REMOTA_DIAS_VIGENCIA = 15;
 
   // [campo del PDF, columna …TEMP en la hoja] de las tres firmas -- una sola lista para
   // imagenesDesdeTemp_, regenerarLiga y completarFirma/completarFirmaJefe (migrarFirmaTempLegacySiHaceFalta_).
@@ -315,8 +316,32 @@ const ResponsivaVehicularService = (function () {
    * mismo sin importar si las firmas se capturaron en persona (crear) o llegaron por una o dos
    * ligas (completarFirma/completarFirmaJefe). Si algo de esto falla, el renglón ya estaba
    * guardado desde antes: se regresa el aviso en vez de perder la captura.
+   *
+   * Antes de cerrar el documento como FIRMADO, revisa que CADA …TEMP que sí tiene algo guardado
+   * haya llegado a `imagenesPdf` -- si a alguna no se le pudo leer la imagen (imagenesDesdeTemp_
+   * la salta en silencio si el archivo de Drive ya no existe o no se pudo leer), NO se cierra el
+   * documento: generaría un PDF incompleto marcado como Firmado, sin ningún aviso, y ya no se
+   * podría volver a mandar una liga (bug real, visto en producción 14-oct-2026 con una firma de
+   * adherente que nunca se guardó). Se persiste el estado actual de `fila` tal cual lo dejó quien
+   * llamó (su propia firma recién completada incluida -- nunca queda huérfana) y se avisa,
+   * dejando el documento PENDIENTE para poder reintentar.
    */
   function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra) {
+    const faltantes = CAMPOS_FIRMA_.filter(([campo, columna]) => fila[columna] && !imagenesPdf[campo]).map(([campo]) => campo);
+    if (faltantes.length) {
+      const cambiosParciales = {};
+      CAMPOS_FIRMA_.forEach(([, columna]) => { cambiosParciales[columna] = fila[columna]; });
+      ['TOKEN FIRMA', 'TOKEN FIRMA EXPIRA', 'TOKEN FIRMA JEFE', 'TOKEN FIRMA JEFE EXPIRA', 'FIRMADO POR', 'FIRMADO POR JEFE']
+        .forEach((columna) => { cambiosParciales[columna] = fila[columna]; });
+      try {
+        SheetUtils.update(ssId(), hoja_().getName(), id, cambiosParciales, ID_COLUMN);
+      } catch (e) { /* mejor esfuerzo: si ni esto se guarda, se avisa igual */ }
+      return {
+        ID: id, PDF: null, pendiente: true,
+        aviso: 'No se pudo leer ' + (faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + faltantes.join(' y ') +
+          '. Lo demás quedó guardado, pero el documento sigue pendiente -- avisa a soporte para recuperar esa firma.',
+      };
+    }
     const avisos = [];
     const esPrestamo = String(fila['TIPO RESPONSIVA'] || '').trim().toUpperCase() === TIPO_PRESTAMO;
     let pdf = null;
@@ -717,7 +742,11 @@ const ResponsivaVehicularService = (function () {
           'DEPARTAMENTO': fila['DEPARTAMENTO ANTERIOR'] || '',
         });
       }
-      SheetUtils.update(ssId(), hoja_().getName(), id, { 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, ID_COLUMN);
+      // Este préstamo puede seguir PENDIENTE de firma cuando se devuelve (se entrega antes de
+      // que se termine el papeleo): si alguna …TEMP se quedó con el base64 crudo de antes del
+      // 9-oct, se migra de paso (mismo motivo que en regenerarLiga).
+      SheetUtils.update(ssId(), hoja_().getName(), id,
+        Object.assign({ 'ESTATUS PRESTAMO': PRESTAMO_DEVUELTO }, migrarOtrasFirmasTempSiHaceFalta_(fila, null)), ID_COLUMN);
       return { ID: id, ESTATUS_PRESTAMO: PRESTAMO_DEVUELTO };
     });
   }
@@ -729,8 +758,47 @@ const ResponsivaVehicularService = (function () {
     return HojaServicio.eliminar(HOJA, token, id);
   }
 
+  /** Campos que SÍ se pueden corregir después de capturada: datos administrativos/de contacto
+   *  y los accesorios entregados. Nunca el responsable (dispara reasignación al crear, no aquí),
+   *  el vehículo, el tipo/préstamo, ni nada de lo que ya se generó (PDF, firmas, tokens) --
+   *  mismo criterio que noEditables en HojaServicio (lo "fotografiado" al capturar no se toca). */
+  const CAMPOS_EDITABLES = [
+    'NO EMPLEADO', 'DEPARTAMENTO', 'AREA', 'PUESTO', 'SEDE', 'OFICINA / DESARROLLO',
+    'LUGAR DE RESGUARDO', 'ESTADO DE ENTREGA', 'TARJETA DE CIRCULACION', 'LICENCIA',
+    'VIGENCIA LICENCIA', 'INE', 'NO DE INVENTARIO', 'POLIZA DE SEGURO', 'VIGENCIA POLIZA',
+    'OTROS', 'OBSERVACIONES', 'NOMBRE JEFE', 'NOMBRE CI',
+  ].concat(ACCESORIOS);
+
+  /**
+   * Corrige datos de una responsiva que TODAVÍA no se firmó del todo (ESTADO FIRMA=PENDIENTE --
+   * alguna liga sigue sin completarse). En cuanto se complete la última firma,
+   * generarPdfYGuardar_ usa lo que haya en ESE momento en la hoja (lee el renglón de nuevo, ver
+   * completarFirma/completarFirmaJefe) -- así que corregir aquí no necesita regenerar nada, el
+   * PDF va a salir ya con el dato corregido. Una vez firmada (PDF generado) ya no se puede
+   * editar: el documento ya quedó impreso con esos datos -- el comentario del archivo explica
+   * por qué una responsiva FIRMADA es de solo alta; ese riesgo de desincronizar el documento del
+   * historial real solo existe DESPUÉS de firmar, nunca antes (usuario, 15-oct-2026).
+   */
+  function actualizar(token, id, datos) {
+    Permisos.puedeEditar(token, MODULO);
+    const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, ID_COLUMN);
+    if (!encontrado) throw new Error('No se encontró el registro.');
+    if (String(encontrado.data['ESTADO FIRMA'] || '') !== 'PENDIENTE') {
+      throw new Error('Esta responsiva ya quedó firmada; ya no se puede editar.');
+    }
+    const cambios = {};
+    CAMPOS_EDITABLES.forEach((clave) => {
+      if ((datos || {})[clave] === undefined) return;
+      cambios[clave] = ACCESORIOS.indexOf(clave) !== -1
+        ? (String(datos[clave] || '').trim().toUpperCase() === 'SI' ? 'SI' : 'NO')
+        : datos[clave];
+    });
+    SheetUtils.update(ssId(), hoja_().getName(), id, cambios, ID_COLUMN);
+    return { ID: id };
+  }
+
   return {
-    listarPorFolio, listarPorVehiculo, buscarPorId, crear, eliminar, ligaDeToken, regenerarLiga,
+    listarPorFolio, listarPorVehiculo, buscarPorId, crear, actualizar, eliminar, ligaDeToken, regenerarLiga,
     obtenerPendientePorToken, obtenerPendienteJefePorToken, vistaPrevia, completarFirma, completarFirmaJefe,
     devolverPrestamo,
     PLANTILLA,
