@@ -38,7 +38,7 @@ const contexto = vm.createContext({
     SPREADSHEET_IDS: { VEHICULOS: () => 'libro' },
     DRIVE_FOLDERS: { INSPECCIONES_IMAGENES: () => 'imagenes', RAIZ: () => 'raiz-pruebas', REPORTES: () => 'formatos', MODELOS: () => 'raiz-prod' },
   },
-  Permisos: { puedeEditar: () => ({ nombre: 'INSPECTOR PRUEBA' }), puedeLeer: () => ({}) },
+  Permisos: { puedeEditar: () => ({ nombre: 'INSPECTOR PRUEBA', correo: 'inspector-prueba@x.com' }), puedeLeer: () => ({}) },
   CacheService: { getScriptCache: () => ({ get: () => JSON.stringify(ESTRUCTURA), put: () => {} }) },
   SheetUtils: {
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
@@ -98,7 +98,7 @@ const contexto = vm.createContext({
   // aquí solo importa que registrar() le pase lo que escribió el inspector, el correo YA VALIDADO
   // del aviso original, y meta lo que regresa en el correo.
   PendientesInspeccionService: {
-    agregar: (filaInspeccion, idInspeccion, items, correoResponsable, correosCc) => {
+    agregar: (filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso, correoInspector) => {
       const limpios = (items || [])
         .map((it) => ({
           asunto: String((it && it.asunto) || '').trim(),
@@ -106,7 +106,7 @@ const contexto = vm.createContext({
           prioridad: /^URGENTE$/i.test(String((it && it.prioridad) || '').trim()) ? 'URGENTE' : 'NO URGENTE',
         }))
         .filter((it) => it.asunto);
-      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios, correoResponsable, correosCc };
+      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios, correoResponsable, correosCc, asuntoAviso, correoInspector };
       return limpios.map((it) => ({
         ASUNTO: it.asunto, 'FAMILIA O GRUPO A REPORTAR': it.familia, PRIORIDAD: it.prioridad,
       }));
@@ -208,6 +208,8 @@ ok(correos[0].htmlBody.indexOf('Se firmó en ausencia del responsable') !== -1, 
 ok(/Saludos\s*🙌/.test(correos[0].htmlBody), 'cierra con un saludo');
 ok(correos[0].subject === 'INSPECCION: HONDA 150XR 12/10/2026 12:00',
   'asunto: INSPECCION: nuco-departamento-clase-no de serie y la fecha (los vacíos del vehículo de prueba se omiten): ' + correos[0].subject);
+ok(correos[0].name === 'INSPECTOR PRUEBA', 'el remitente visible es el nombre de quien inspeccionó, no el de quien desplegó: ' + correos[0].name);
+ok(correos[0].replyTo === 'inspector-prueba@x.com', 'y responder le llega a él, aunque la app mande el correo desde otra cuenta: ' + correos[0].replyTo);
 
 correos.length = 0;
 const sinResponsable = contexto.InspeccionesService.registrar('token', {
@@ -239,6 +241,8 @@ ok(pendientesRegistrados.correoResponsable === 'responsable@x.com',
   'le pasa el correo YA VALIDADO del aviso (no el de Capital Humano, no el del inspector): ' + pendientesRegistrados.correoResponsable);
 ok(pendientesRegistrados.correosCc.slice().sort().join(',') === 'inspector@x.com,otro@x.com',
   'y los demás que SÍ se notificaron en copia -- sin el asistente (correo inválido) ni repetir al responsable: ' + pendientesRegistrados.correosCc);
+ok(pendientesRegistrados.correoInspector === 'inspector-prueba@x.com',
+  'y el correo de quien inspeccionó (sesion.correo), para el replyTo del recordatorio: ' + pendientesRegistrados.correoInspector);
 ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
   'el correo trae su propia sección con lo que hay que subir a Help Desk');
 ok(/Instrucciones para generar tickets en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
