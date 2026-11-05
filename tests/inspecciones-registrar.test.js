@@ -91,7 +91,7 @@ const contexto = vm.createContext({
   },
   Plantilla: {}, DocumentApp: {},
   Session: { getScriptTimeZone: () => 'America/Mexico_City' },
-  Utilities: { formatDate: () => '12/10/2026 12:00' },
+  Utilities: { formatDate: (fecha, zona, patron) => (patron === 'dd/MM/yyyy' ? '12/10/2026' : patron === 'HH:mm' ? '12:00' : '12/10/2026 12:00') },
   MailApp: { sendEmail: (opciones) => { correos.push(opciones); } },
   Candado: { con: (fn) => { candados++; return fn(); } },
   // El match con Help Desk (revisarCargaHelpdesk) se prueba aparte (tests/pendientes-inspeccion.test.js);
@@ -205,8 +205,10 @@ ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
   'en copia el inspector y los demás -- sin el asistente (correo inválido) ni repetir al responsable: ' + correos[0].cc);
 ok(!/Piezas con hallazgo/.test(correos[0].htmlBody), 'ya no lleva la lista de piezas con hallazgo (se quitó a pedido)');
 ok(correos[0].htmlBody.indexOf('Se firmó en ausencia del responsable') !== -1, 'y las observaciones');
+ok(/Hola, buenos días\. Se comparte la inspecci.n llevada a cabo el día <b>\d{2}\/\d{2}\/\d{4}<\/b>/.test(correos[0].htmlBody),
+  'abre con un saludo formal y la fecha: ' + correos[0].htmlBody.slice(0, 200));
 ok(/Saludos\s*🙌/.test(correos[0].htmlBody), 'cierra con un saludo');
-ok(correos[0].subject === 'INSPECCION: HONDA 150XR 12/10/2026 12:00',
+ok(correos[0].subject === 'INSPECCION: HONDA 150XR 12/10/2026',
   'asunto: INSPECCION: nuco-departamento-clase-no de serie y la fecha (los vacíos del vehículo de prueba se omiten): ' + correos[0].subject);
 ok(correos[0].name === 'INSPECTOR PRUEBA', 'el remitente visible es el nombre de quien inspeccionó, no el de quien desplegó: ' + correos[0].name);
 ok(correos[0].replyTo === 'inspector-prueba@x.com', 'y responder le llega a él, aunque la app mande el correo desde otra cuenta: ' + correos[0].replyTo);
