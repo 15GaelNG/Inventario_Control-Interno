@@ -83,7 +83,7 @@
     });
 
     let h = '<div class="perfil-modulos-cabeza"><div><h3>Mis módulos</h3><p>Lo que puedes ver y editar en el sistema.</p></div></div>';
-    if (cargando) h += '<p class="perfil-cargando">Cargando…</p>';
+    if (cargando) h += Carga.html('lista', { n: 4 });
     else if (!totalModulos) {
       h += '<div class="perfil-vacio"><i data-lucide="lock" class="ico"></i><p>Todavía no tienes módulos. Pídeselos a quien administra los permisos.</p></div>';
     } else {

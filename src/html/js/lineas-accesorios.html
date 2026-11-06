@@ -47,7 +47,7 @@
       /** Panel de detalle de DataTable: movimientos del artículo, del más reciente al más antiguo. */
       function movimientosEnPanel(a, cont) {
         const turno = ++movimientoActual;
-        cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos</div><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p>';
+        cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos</div>' + Carga.html('lista', { n: 3 });
         llamar('apiLineasAccesoriosMovimientos', a.id).then((movs) => {
           if (!vigente() || turno !== movimientoActual || !document.body.contains(cont)) return;
           cont.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Movimientos (' + movs.length + ')</div>' + (movs.length

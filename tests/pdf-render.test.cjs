@@ -27,7 +27,7 @@ test('el PDF sustituye etiquetas repetidas, expresiones y tablas sin búsquedas 
     DocumentApp: { ElementType: { TEXT: 'TEXT' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => grupo(cabecera), getFooter: () => null, saveAndClose: () => { cerrado = true; } }) },
   });
   const fuente = fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8');
-  vm.runInContext(fuente + '\nthis.pdf = LineasPdf;', contexto);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/utils/Cronometro.gs'), 'utf8') + '\n' + fuente + '\nthis.pdf = LineasPdf;', contexto);
   const carpeta = { createFile: () => ({ getId: () => 'pdf', getName: () => 'documento.pdf', getUrl: () => 'url', setSharing: () => {} }) };
   const resultado = contexto.pdf.generarPdfDesdePlantilla('plantilla', { NOMBRE: 'Ana', ESTADO: 'SI' }, {}, carpeta, 'documento.pdf');
   assert.equal(a.valor, 'Ana / Ana / ');
@@ -36,4 +36,7 @@ test('el PDF sustituye etiquetas repetidas, expresiones y tablas sin búsquedas 
   assert.equal(lecturas, 3);
   assert.equal(resultado.id, 'pdf');
   assert.ok(limpiado);
+  // Fase 0 del motor único de PDF (5-nov): cada paso medido, en orden
+  assert.deepEqual([...resultado.tiempos.map((t) => t.paso)],
+    ['copiar', 'abrir', 'bloques If', 'etiquetas e imágenes', 'guardar', 'convertir', 'crear archivo', 'compartir']);
 });

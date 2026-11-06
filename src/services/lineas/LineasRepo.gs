@@ -86,12 +86,12 @@ const LineasRepo = (function () {
 
   // dg: de Dirección General (pendiente 8.16; LineasDG): su responsable dice DG y solo ADMIN ve lo demás (TelefoniaService)
   const COLS_INDICE_EQUIPOS = ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel',
-    'dg'];
+    'dg', 'ultimaCompania'];
   // numerosAnteriores: los que tuvo la línea por un cambio de número (8-oct); la búsqueda de la tabla los encuentra
   const COLS_INDICE_LINEAS = ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja',
     'numerosAnteriores', 'dg'];
   const SEG_CACHE_INDICE = 30 * 60;
-  const CLAVE_INDICE = 'indice_telefonia_v13'; // v13: sin ubicación en estatus finales (22-oct); v12: dg, Dirección General (21-oct; pendiente 8.16); v11: sin ESTATUS GENERAL en la vista (21-oct); v10: panel (su renglón abierto en Resguardos, 20-oct; pendiente 3.12); v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
+  const CLAVE_INDICE = 'indice_telefonia_v14'; // v14: ultimaCompania del equipo sin línea (5-nov); v13: sin ubicación en estatus finales (22-oct); v12: dg, Dirección General (21-oct; pendiente 8.16); v11: sin ESTATUS GENERAL en la vista (21-oct); v10: panel (su renglón abierto en Resguardos, 20-oct; pendiente 3.12); v9: responsable en blanco en estatus finales (16-oct); v8: «Antes D-004» con su texto, no «004» (13-oct); v7: SIM BASICO en vez de LINEA BASICA (12-oct); v6: numerosAnteriores en las líneas (8-oct); v5: oficinas AGS / MTY / SLP (3-oct)
   /**
    * Vista de tabla LINEAS TELEFONICAS del AppSheet: sus columnas en su orden (ViewDefinition.ColumnOrder; ID va
    * oculta y "No EMPLEADO" / "NO EMPLEADO" es la misma columna). FOLIO es fórmula del AppSheet. Sin ESTATUS GENERAL (usuario,
@@ -176,6 +176,8 @@ const LineasRepo = (function () {
       // El PIN de WhatsApp es del equipo (pendiente 2.25); sin línea no tiene
       pinWhatsapp: tieneLinea ? texto('PIN WHATSAPP') : null,
       estatus: txt(col(f, 'ESTATUS EQUIPO')), lineaId: tieneLinea ? id : null, responsable: datosResponsable,
+      // Sin línea: la compañía de la última que tuvo (LineasLectura, ULTIMA COMPAÑIA; usuario, 5-nov)
+      ultimaCompania: tieneLinea ? null : txt(col(f, 'ULTIMA COMPAÑIA')) || null,
       carpetaDriveId: nuco && carpetas ? (carpetas[nuco] || null) : null, legado: legado,
       actualizadoEn: legado.fechaRegistro,
     } : null;
@@ -230,7 +232,7 @@ const LineasRepo = (function () {
     return [equipo._id, equipo.nuco || null, equipo.tipo || null, equipo.modelo || null, equipo.imei || null, equipo.estatus || null,
       dg ? LineasDG.ETIQUETA : r.nombre || null, r.departamento || null, r.sede || null,
       equipo.lineaId || null, linea ? linea.numero || null : null, linea ? linea.compania || null : null, linea ? linea.estatus || null : null,
-      (equipo.legado || {}).tipo || null, panel || null, dg]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
+      (equipo.legado || {}).tipo || null, panel || null, dg, equipo.ultimaCompania || null]; // tipoHoja: TIPO tal cual en la hoja (reglas de formato del AppSheet)
   }
 
   function filaIndiceLinea_(linea, equipo, cambiosNumero) {

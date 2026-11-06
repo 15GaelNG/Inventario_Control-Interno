@@ -349,8 +349,6 @@ const InspeccionesService = (function () {
    * @param {Object} p.checklist   { 'PIEZA': 'BUENO' }
    * @param {Object} p.llantas     { 'LLANTA DD': 7 }
    * @param {Object} [p.imagenes]  { 'INS FRONTAL': {base64, mimeType}, 'FIRMA INSPECTOR': {…} }
-   * @param {Array} [p.PENDIENTES] [{asunto, familia, prioridad}] -- lo que el inspector dice que hay
-   *   que subir a Help Desk (PendientesInspeccionService.agregar); se ignoran los sin asunto
    * @return {{ID, puntaje, pdf, url}}
    */
   function registrar(token, p, imagenes) {
@@ -425,7 +423,6 @@ const InspeccionesService = (function () {
     const subidas = [];
     const paraPdf = {};
     const sinDibujo = [];   // diagramas en blanco que no están en Drive
-    let pendientes = [];    // lo que el inspector dijo que hay que subir a Help Desk (si hubo)
     try {
       COLUMNAS_IMAGEN.forEach(([columna]) => {
         const imagen = (imagenes || {})[columna];
@@ -466,15 +463,7 @@ const InspeccionesService = (function () {
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('INSPECCION VEHICULAR', fila, fila);
       const hoja = hoja_();
       asegurarColumna_(hoja, COL_MAXIMO);
-      SheetUtils.insert(ssId(), hoja.getName(), fila);   // aquí nace fila['ID'] (prefijo INS), aparte del folio en COL_ID
-      // Los MISMOS correos validados que recibieron el aviso original (no los de Capital Humano):
-      // así el recordatorio de un pendiente le llega exactamente a quien ya se avisó -- responsable
-      // y copia -- aunque el inspector lo haya corregido a mano al capturar.
-      // El ID que antepone el folio al asunto es fila['ID'] (INS-xxxxx, único de verdad), NO el
-      // folio de negocio en COL_ID (2026_649_314): dos inspecciones de un mismo vehículo el mismo
-      // año pueden mezclarse en el folio, nunca en el ID.
-      const dest = destinatariosNotificar_(p.NOTIFICAR);
-      pendientes = PendientesInspeccionService.agregar(fila, fila['ID'], p.PENDIENTES, dest.para, dest.cc, asuntoAviso_(fila), sesion.correo);
+      SheetUtils.insert(ssId(), hoja.getName(), fila);
     } catch (err) {
       subidas.forEach((fileId) => DriveUtils.eliminar(fileId));   // no dejar imágenes huérfanas
       throw err;
@@ -512,7 +501,6 @@ const InspeccionesService = (function () {
         puntaje: puntaje.final,
         pdf: null,
         aviso: 'La inspección se guardó, pero no se pudo generar el PDF: ' + err.message,
-        correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, null, pendientes, sesion.correo),
       };
     }
 
@@ -522,292 +510,7 @@ const InspeccionesService = (function () {
         ? 'El PDF salió sin estos dibujos porque no están en Drive: ' + sinDibujo.join(', ') +
           '. Súbelos a esa ruta para que aparezcan en las siguientes inspecciones.'
         : '',
-      correo: avisarInspeccion_(p.NOTIFICAR, fila, p.HALLAZGOS, pdf.url, pendientes, sesion.correo),
     };
-  }
-
-  /**
-   * El blob de una imagen YA guardada (firma o diagrama), para volver a armar el PDF sin que el
-   * cliente tenga que reenviarla -- actualizar() no toca firmas ni diagramas, así que para
-   * regenerar el PDF hay que releer de Drive lo que ya está en la fila. `valor` es lo que guarda
-   * la columna: una URL completa (expediente del NUCO, ExpedienteNuco.guardar) o una ruta relativa
-   * (legado sin NUCCO, o el dibujo en blanco del tipo). Mismo patrón que extraerIdDrive_ de
-   * ArqueosService.gs (generarLigaArqueo). null si no hay nada guardado o no se pudo leer.
-   */
-  function blobDeImagenGuardada_(valor) {
-    const v = limpiar_(valor);
-    if (!v) return null;
-    try {
-      if (/^https?:/i.test(v)) {
-        const m = v.match(/\/d\/([a-zA-Z0-9_-]+)/) || v.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-        return m ? DriveApp.getFileById(m[1]).getBlob() : null;
-      }
-      const archivo = DriveUtils.archivoDeRutaProfunda(v, raizDe_(v));
-      return archivo ? archivo.getBlob() : null;
-    } catch (e) { return null; }   // mejor esfuerzo: el PDF sale sin esa imagen, no truena la edición
-  }
-
-  /**
-   * Sube el PDF (o foto) que alguien ya corrigió a mano, por fuera del sistema, y lo deja donde
-   * normalmente queda el formato generado -- mismo criterio de carpeta y nombre que PdfService.generar
-   * usa en registrar()/actualizar(), nada más que aquí el archivo YA viene hecho, no se genera.
-   * @return {{guardar: string, url: string}}  `guardar` es lo que va en FORMATO INSPECCION VEHICULAR
-   *   (URL completa en el expediente del NUCO, o ruta relativa en el legado); `url` es siempre la
-   *   liga real (para regresarle algo al cliente, igual que PdfService.generar.url).
-   */
-  function subirFormatoManual_(archivo, fila, estructura) {
-    const revisado = DriveUtils.blobRevisado(archivo, ['application/pdf', 'image/png', 'image/jpeg'], 'el formato de la inspección');
-    const nucco = fila['NUCO'];
-    if (ExpedienteNuco.tieneNuco(nucco)) {
-      const subido = ExpedienteNuco.guardar(revisado.blob, ExpedienteNuco.carpetaInspeccion(nucco, fila['FECHA']),
-        'INSPECCION', nucco, new Date(), revisado.extension);
-      ExpedienteNuco.olvidar(nucco);
-      return { guardar: subido.getUrl(), url: subido.getUrl() };
-    }
-    let carpeta = DriveApp.getFolderById(Config.DRIVE_FOLDERS.REPORTES());
-    if (estructura.carpeta) carpeta = DriveUtils.subcarpeta(carpeta, estructura.carpeta);
-    const nombre = PdfService.nombreArchivo(['INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(new Date())]) +
-      revisado.extension;
-    const subido = DriveUtils.crearArchivo(carpeta, revisado.blob, nombre);
-    DriveUtils.compartirLoMasAmplioPosible(subido);
-    return {
-      guardar: estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + nombre : nombre,
-      url: subido.getUrl(),
-    };
-  }
-
-  /**
-   * Edita una inspección ya guardada: checklist, llantas, voltaje y los datos de encabezado que
-   * captura el inspector (conductor, jefe directo, holograma, fecha de último servicio,
-   * observaciones). A propósito NO toca firmas ni diagramas (se quedan tal como se firmaron/
-   * dibujaron la primera vez) ni manda el aviso por correo (eso solo pasa al registrar). El PDF SÍ
-   * se regenera, con las imágenes que ya estaban guardadas (ver blobDeImagenGuardada_).
-   *
-   * @param {Object} p   mismas llaves que registrar() acepta en CAPTURADOS, más `checklist` y
-   *   `llantas` -- lo que no venga se queda con el valor que ya tenía la fila.
-   * @param {{base64: string, mimeType: string}} [archivoFormato]  si alguien ya corrigió el PDF
-   *   (o una foto) POR FUERA del sistema (p. ej. a mano en Acrobat) y lo quiere subir tal cual en
-   *   vez de que el sistema regenere uno desde la plantilla -- ese archivo reemplaza al de la
-   *   columna FORMATO INSPECCION VEHICULAR. Sin esto, el PDF se regenera como siempre.
-   * @return {{ID, puntaje, pdf}}
-   */
-  function actualizar(token, id, p, archivoFormato) {
-    Permisos.puedeEditar(token, MODULO);
-    const datos = Candado.con(() => {
-      const encontrado = SheetUtils.findById(ssId(), hoja_().getName(), id, COL_ID);
-      if (!encontrado) throw new Error('No se encontró la inspección ' + id);
-      const actual = encontrado.data;
-      const estructura = estructuraDeTipo(token, actual['TIPO']);
-
-      // Lo que ya estaba + lo que mandó el cliente: calcularPuntaje_ necesita el checklist
-      // COMPLETO, no solo lo que cambió.
-      const checklist = {};
-      estructura.secciones.forEach((s) => s.campos.forEach((c) => {
-        checklist[c.campo] = (p.checklist && p.checklist[c.campo] !== undefined) ? p.checklist[c.campo] : actual[c.campo];
-      }));
-      const llantas = {};
-      estructura.llantas.forEach((l) => {
-        llantas[l.campo] = (p.llantas && p.llantas[l.campo] !== undefined) ? p.llantas[l.campo] : actual[l.campo];
-      });
-      const voltaje = p.VOLTAJE !== undefined ? p.VOLTAJE : actual['VOLTAJE'];
-      const puntaje = puntajeDe_(estructura, checklist, voltaje, llantas);
-      if (!puntaje.evaluadas) throw new Error('Responde al menos una pieza del checklist antes de guardar');
-
-      const cambios = {};
-      // Solo estos CAPTURADOS son editables -- sin INSPECTOR: quién inspeccionó no cambia después.
-      ['CONDUCTOR', 'JEFE_DIRECTO', 'AREA', 'HOLOGRAMA', 'VOLTAJE', 'OBSERVACIONES'].forEach((campo) => {
-        if (p[campo] !== undefined) cambios[CAPTURADOS[campo]] = p[campo];
-      });
-      const servicio = /^(\d{4})-(\d{2})-(\d{2})$/.exec(limpiar_(p.ULTIMO_SERVICIO));
-      if (servicio) cambios['FECHA ULTIMO SERVICIO'] = new Date(+servicio[1], +servicio[2] - 1, +servicio[3]);
-
-      // Solo las piezas que ese tipo pide (si el cliente manda de más, se ignoran -- igual que registrar)
-      estructura.secciones.forEach((s) => s.campos.forEach((c) => {
-        if (p.checklist && p.checklist[c.campo] !== undefined) cambios[c.campo] = p.checklist[c.campo];
-      }));
-      estructura.llantas.forEach((l) => {
-        if (p.llantas && p.llantas[l.campo] !== undefined) cambios[l.campo] = p.llantas[l.campo];
-      });
-      puntaje.secciones.forEach((s) => {
-        const columna = columnaPuntuacion_(s.titulo);
-        if (columna) cambios[columna] = (s.valor * 100).toFixed(2) + '%';
-      });
-      cambios['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
-      cambios[COL_MAXIMO] = puntaje.maximo.toFixed(2) + '%';
-
-      const registro = SheetUtils.update(ssId(), hoja_().getName(), id, cambios, COL_ID);
-      return { registro: registro, estructura: estructura, puntaje: puntaje };
-    });
-
-    // ---- el PDF, fuera del candado (como registrar(): copiar/llenar/exportar tarda) ----
-    const fila = datos.registro;
-    const estructura = datos.estructura;
-
-    // Alguien ya corrigió el formato por fuera del sistema y lo quiere subir tal cual: ese
-    // archivo reemplaza al que el sistema generaría, sin pasar por la plantilla.
-    if (archivoFormato && archivoFormato.base64) {
-      try {
-        const subido = subirFormatoManual_(archivoFormato, fila, estructura);
-        SheetUtils.update(ssId(), hoja_().getName(), id, { [COL_PDF]: subido.guardar }, COL_ID);
-        return { ID: id, puntaje: datos.puntaje.final, pdf: subido.url };
-      } catch (err) {
-        return { ID: id, puntaje: datos.puntaje.final, pdf: null,
-          aviso: 'Se guardaron los cambios, pero no se pudo subir el formato: ' + err.message };
-      }
-    }
-
-    const paraPdf = {};
-    COLUMNAS_IMAGEN.forEach(([columna]) => {
-      const blob = blobDeImagenGuardada_(fila[columna]);
-      if (blob) paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({ blob: blob }, FIRMA_PDF) : { blob: blob };
-    });
-    const nucco = fila['NUCO'];
-    const enNuco = ExpedienteNuco.tieneNuco(nucco);
-    try {
-      const pdf = PdfService.generar({
-        plantillaId: estructura.plantillaId,
-        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
-          if (!paraPdf[columna]) vacias[columna] = '';
-          return vacias;
-        }, {})),
-        imagenes: paraPdf,
-        formato: FORMATO_PDF,
-        carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, fila['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
-        subcarpeta: enNuco ? undefined : estructura.carpeta,
-        nombre: (fila[COL_PDF] || '').replace(/^.*\//, '').replace(/\.pdf$/i, '') ||
-          PdfService.nombreArchivo(['INSPECCION', fila['RESPONSABLE'], fila['PLACAS'], PdfService.fechaParaNombre(new Date())]),
-      });
-      if (enNuco) ExpedienteNuco.olvidar(nucco);
-      SheetUtils.update(ssId(), hoja_().getName(), id,
-        { [COL_PDF]: enNuco ? pdf.url
-          : estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
-        COL_ID);
-      return { ID: id, puntaje: datos.puntaje.final, pdf: pdf.url };
-    } catch (err) {
-      return { ID: id, puntaje: datos.puntaje.final, pdf: null,
-        aviso: 'Se guardaron los cambios, pero no se pudo regenerar el PDF: ' + err.message };
-    }
-  }
-
-  // ---------- aviso por correo ----------
-  /** Suficiente para no mandar correos basura; no hace falta validar contra el RFC completo */
-  function correoValido_(correo) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(limpiar_(correo));
-  }
-
-  function escaparHtml_(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  }
-
-  /**
-   * Separa lo que el inspector capturó en NOTIFICAR en "para" (el responsable, si su correo es
-   * válido) y "cc" (inspector + asistente + otros, validados, sin duplicar al responsable). La usan
-   * avisarInspeccion_ (el aviso original) y registrar() (para guardarlos en PendientesInspeccionService
-   * y que el recordatorio le llegue a la MISMA gente que ya se avisó).
-   * @param {Object} notificar  { responsable, inspector, asistente, otros: [] } -- puede venir undefined
-   * @return {{para: string, cc: Array<string>}}
-   */
-  function destinatariosNotificar_(notificar) {
-    if (!notificar) return { para: '', cc: [] };
-    const para = correoValido_(notificar.responsable) ? limpiar_(notificar.responsable) : '';
-    const cc = Array.from(new Set([notificar.inspector, notificar.asistente].concat(notificar.otros || [])
-      .map(limpiar_)
-      .filter((c) => c && correoValido_(c) && c.toLowerCase() !== para.toLowerCase())));
-    return { para: para, cc: cc };
-  }
-
-  /**
-   * El aviso que arma el inspector en el paso "Revisar y firmar": nunca bloquea el guardado
-   * de la inspección, un fallo aquí solo queda en lo que regresa `registrar` (igual que el
-   * aviso de diagramas faltantes). Los correos no se guardan en la hoja: son solo para
-   * mandar este aviso, no quedan como dato de la inspección.
-   * @param {Object} notificar  { responsable, inspector, asistente, otros: [] } -- puede venir undefined
-   * @param {Object} fila       la fila ya armada de la inspección (vehículo, puntaje, observaciones…)
-   * @param {Array} hallazgos   [{pieza, estado, seccion}], lo mismo que ya vio el inspector en "Revisar"
-   * @param {string|null} pdfUrl
-   * @param {Array} [pendientes] los pendientes de Help Desk que ya se dieron de alta (PendientesInspeccionService.agregar):
-   *   van en su propia sección de color -- el responsable los sube como ticket con la MISMA familia
-   */
-  /**
-   * El ASUNTO del correo de aviso, calculado aparte para que también lo use
-   * PendientesInspeccionService.agregar() (el recordatorio lo reutiliza con un "Re:" al frente,
-   * para que Gmail lo agrupe en la misma conversación que el aviso original).
-   */
-  function asuntoAviso_(fila) {
-    const fecha = Utilities.formatDate(fila['FECHA'], Session.getScriptTimeZone(), 'dd/MM/yyyy');
-    return 'INSPECCION: ' + [fila['NUCO'], fila['DEPARTAMENTO'], fila['TIPO'], fila['NO SERIE']].filter(Boolean).join('-') + ' ' + fecha;
-  }
-
-  function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes, correoInspector) {
-    if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
-    const dest = destinatariosNotificar_(notificar);
-    const para = dest.para;
-    const cc = dest.cc;
-    let destinatario = para;
-    let copia = cc;
-    if (!destinatario) {
-      if (!cc.length) return { enviado: false, motivo: 'No se capturó ningún correo válido' };
-      destinatario = cc[0];
-      copia = cc.slice(1);
-    }
-
-    const dato = (etiqueta, valor) => (valor
-      ? '<tr><td style="padding:3px 14px 3px 0;color:#666">' + etiqueta + '</td><td><b>' + escaparHtml_(valor) + '</b></td></tr>'
-      : '');
-    // Sección de color propia (ámbar): lo que el inspector dijo que hay que subir a Help Desk.
-    // El ASUNTO ya trae el folio de esta inspección al frente (PendientesInspeccionService.agregar):
-    // usar ese mismo texto como asunto del ticket es lo que hace que el sistema lo detecte solo.
-    const seccionPendientes = (pendientes || []).length
-      ? '<div style="margin-top:16px;padding:10px 14px;background:#fff4e5;border:1px solid #f0b429;border-radius:6px">' +
-        '<h3 style="font-size:15px;margin:0 0 6px;color:#92400e">Instrucciones para generar tickets en Help Desk</h3>' +
-        '<p style="margin:0 0 8px;font-size:13px;color:#78350f">Por cada observación identificada durante la inspección, ' +
-        'genera un ticket independiente en Help Desk.</p>' +
-        '<p style="margin:0 0 8px;font-size:13px;color:#78350f">Copia y pega el texto indicado en el campo «Asunto» de ' +
-        'cada solicitud; en descripción indica el folio de inspección, la descripción del servicio y cualquier otro dato ' +
-        'proporcionado.</p>' +
-        '<p style="margin:0 0 8px;font-size:13px;color:#78350f">No modifiques, resumas ni omitas información, ya que esto ' +
-        'permitirá identificar y dar seguimiento a cada solicitud.</p>' +
-        '<p style="margin:0 0 10px;font-size:13px;color:#78350f">Registra también la familia o grupo de servicio y la ' +
-        'prioridad indicados para cada ticket.</p>' +
-        pendientes.map((pe) =>
-          '<div style="margin:0 0 8px;padding:8px 10px;background:#fff;border:1px solid #f0b429;border-radius:4px">' +
-          '<div style="margin:0 0 3px"><span style="color:#92400e">Asunto:</span> <code>' + escaparHtml_(pe['ASUNTO']) + '</code></div>' +
-          '<div style="margin:0 0 3px"><span style="color:#92400e">Familia o grupo a reportar:</span> ' +
-            escaparHtml_(pe['FAMILIA O GRUPO A REPORTAR']) + '</div>' +
-          '<div><span style="color:#92400e">Prioridad:</span> <b>' + escaparHtml_(pe['PRIORIDAD']) + '</b></div>' +
-          '</div>').join('') + '</div>'
-      : '';
-
-    const asunto = asuntoAviso_(fila);
-    const fechaCorta = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy');
-    const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
-      '<p style="margin:0 0 12px">Hola, buenos días. Se comparte la inspección llevada a cabo el día ' +
-        '<b>' + fechaCorta + '</b>.</p>' +
-      '<h2 style="margin:0 0 12px;font-size:18px">Inspección vehicular</h2>' +
-      '<table style="border-collapse:collapse">' +
-        dato('Vehículo', fila['VEHICULO']) + dato('Placas', fila['PLACAS']) + dato('Folio', fila['FOLIO']) +
-        dato('Fecha', fechaCorta + ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HH:mm')) +
-        dato('Inspector', fila['NOMBRE INSPECTOR']) + dato('Puntaje final', fila['PUNTAJE FINAL INSPECCION']) +
-      '</table>' +
-      (fila['OBSERVACIONES'] ? '<p><b>Observaciones:</b> ' + escaparHtml_(fila['OBSERVACIONES']) + '</p>' : '') +
-      seccionPendientes +
-      (pdfUrl ? '<p style="margin-top:16px"><a href="' + pdfUrl + '">Ver el formato en PDF</a></p>' : '') +
-      '<p style="margin-top:18px">Saludos 🙌</p>' +
-      '</div>';
-
-    // La app manda el correo desde la cuenta de quien la desplegó (executeAs: USER_DEPLOYING,
-    // appsscript.json) -- nunca desde la del inspector. name/replyTo no cambian eso, pero el
-    // destinatario ve el nombre de quien inspeccionó y, si responde, le llega a él directo.
-    const opciones = { to: destinatario, cc: copia.join(','), subject: asunto, htmlBody: cuerpo };
-    if (limpiar_(fila['NOMBRE INSPECTOR'])) opciones.name = fila['NOMBRE INSPECTOR'];
-    if (limpiar_(correoInspector)) opciones.replyTo = correoInspector;
-    try {
-      MailApp.sendEmail(opciones);
-      return { enviado: true, para: destinatario, cc: copia };
-    } catch (err) {
-      return { enviado: false, motivo: 'No se pudo mandar el correo: ' + err.message };
-    }
   }
 
   /**
@@ -966,120 +669,6 @@ const InspeccionesService = (function () {
     return r;
   }
 
-  /**
-   * Recalcula el PUNTAJE FINAL INSPECCION de las inspecciones ya guardadas con la fórmula corregida
-   * (30-oct): el total ahora es relativo a lo aplicable, no sobre 100 fijo (ver calcularPuntaje_).
-   * Se recalcula desde las respuestas crudas con la plantilla del tipo, igual que puntajesMaximos --
-   * por eso correr esto más de una vez no vuelve a tocar lo que ya quedó bien: solo escribe donde el
-   * recálculo da distinto de lo guardado (tolerancia de 0.01 puntos, por redondeo).
-   *
-   * Con `regenerarPdf` (3-nov-2026): a cada inspección que de verdad se corrige también se le
-   * regenera el PDF (mismo mecanismo que actualizar(): regenerarPdfDeFila_, que relee de Drive las
-   * imágenes ya guardadas en vez de pedirlas de nuevo). Sin esto, la hoja queda bien pero el PDF
-   * descargable se queda con el número viejo. Mejor esfuerzo: si el PDF de una fila no se pudo
-   * regenerar (plantilla movida, carpeta sin permiso…), esa fila igual se queda con el PUNTAJE
-   * FINAL corregido en la hoja -- el error se reporta en pdfErrores, sin frenar a las demás.
-   * @param {boolean} aplicar        false = solo contar
-   * @param {boolean} [regenerarPdf] además de corregir la hoja, regenerar el PDF de cada corregida
-   */
-  function puntajesRelativos(aplicar, regenerarPdf) {
-    const hoja = hoja_();
-    const datos = hoja.getDataRange().getValues();
-    const encabezados = datos[0];
-    const norm = SheetUtils.normalizarEncabezado_;
-    const col = (nombre) => encabezados.findIndex((e) => norm(e) === norm(nombre));
-    const iTipo = col('TIPO');
-    const iFinal = col('PUNTAJE FINAL INSPECCION');
-    const iId = col(COL_ID);
-    const estructuras = {};
-    const r = {
-      filas: datos.length - 1, corregidas: 0, yaCorrectas: 0, sinCalificar: 0, sinRespuestas: 0, sinTipo: 0,
-      errores: {}, pdfRegenerados: 0, pdfErrores: {},
-    };
-    let huboCambios = false;
-    const nuevos = datos.slice(1).map((row) => {
-      const actual = iFinal === -1 ? '' : row[iFinal];
-      if (limpiar_(actual) === '') { r.sinCalificar++; return [actual]; }
-      const tipo = limpiar_(row[iTipo]);
-      if (!tipo) { r.sinTipo++; return [actual]; }
-      if (!(tipo in estructuras)) {
-        try { estructuras[tipo] = estructura_(tipo); } catch (err) { estructuras[tipo] = null; r.errores[tipo] = err.message; }
-      }
-      const estructura = estructuras[tipo];
-      if (!estructura) return [actual];
-      const valor = {};
-      encabezados.forEach((e, j) => { valor[norm(e)] = row[j]; });
-      const deColumna = (campo) => valor[norm(campo)];
-      const checklist = {};
-      estructura.secciones.forEach((s) => s.campos.forEach((c) => { checklist[c.campo] = deColumna(c.campo); }));
-      const llantas = {};
-      estructura.llantas.forEach((l) => { llantas[l.campo] = deColumna(l.campo); });
-      const puntaje = puntajeDe_(estructura, checklist, deColumna('VOLTAJE'), llantas);
-      if (!puntaje.evaluadas) { r.sinRespuestas++; return [actual]; }
-      const actualPorcentaje = enCien_(actual);
-      if (actualPorcentaje !== null && Math.abs(actualPorcentaje - puntaje.final) < 0.01) { r.yaCorrectas++; return [actual]; }
-      r.corregidas++;
-      huboCambios = true;
-      if (aplicar && regenerarPdf && iId !== -1) {
-        const idFila = limpiar_(row[iId]);
-        const filaReal = {};
-        encabezados.forEach((e, j) => { filaReal[e] = row[j]; });
-        filaReal['PUNTAJE FINAL INSPECCION'] = puntaje.final.toFixed(2) + '%';
-        try {
-          regenerarPdfDeFila_(idFila, filaReal, estructura);
-          r.pdfRegenerados++;
-        } catch (err) {
-          r.pdfErrores[idFila] = err.message;
-        }
-      }
-      return [puntaje.final / 100];
-    });
-    if (aplicar && huboCambios) {
-      const columna = iFinal + 1;
-      const rango = hoja.getRange(2, columna, nuevos.length, 1);
-      rango.setValues(nuevos);
-      rango.setNumberFormat('0.00%');
-      CacheHojas.tocarHoja(hoja);
-    }
-    return r;
-  }
-
-  /**
-   * El mismo mecanismo de PDF que actualizar(): releer de Drive las imágenes que esa inspección ya
-   * tenía guardadas (blobDeImagenGuardada_, sin pedirlas de nuevo a nadie) y regenerar con
-   * PdfService.generar, usando el PUNTAJE FINAL ya corregido que trae filaReal. Deja la liga nueva
-   * en FORMATO INSPECCION VEHICULAR; si algo truena (plantilla movida, sin permiso…), se propaga tal
-   * cual para que la llamada lo cuente como error de ESA fila sin tocar la columna.
-   */
-  function regenerarPdfDeFila_(idFila, filaReal, estructura) {
-    const paraPdf = {};
-    COLUMNAS_IMAGEN.forEach(([columna]) => {
-      const blob = blobDeImagenGuardada_(filaReal[columna]);
-      if (blob) paraPdf[columna] = /^FIRMA /.test(columna) ? Object.assign({ blob: blob }, FIRMA_PDF) : { blob: blob };
-    });
-    const nucco = filaReal['NUCO'];
-    const enNuco = ExpedienteNuco.tieneNuco(nucco);
-    const pdf = PdfService.generar({
-      plantillaId: estructura.plantillaId,
-      datos: Object.assign({}, filaReal, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
-        if (!paraPdf[columna]) vacias[columna] = '';
-        return vacias;
-      }, {})),
-      imagenes: paraPdf,
-      formato: FORMATO_PDF,
-      carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, filaReal['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
-      subcarpeta: enNuco ? undefined : estructura.carpeta,
-      nombre: (filaReal[COL_PDF] || '').replace(/^.*\//, '').replace(/\.pdf$/i, '') ||
-        PdfService.nombreArchivo(['INSPECCION', filaReal['RESPONSABLE'], filaReal['PLACAS'], PdfService.fechaParaNombre(new Date())]),
-    });
-    if (enNuco) ExpedienteNuco.olvidar(nucco);
-    SheetUtils.update(ssId(), hoja_().getName(), idFila,
-      { [COL_PDF]: enNuco ? pdf.url
-        : estructura.carpeta ? 'INSPECCIONES VEHICULARES/' + estructura.carpeta + '/' + pdf.nombre : pdf.nombre },
-      COL_ID);
-    return pdf.url;
-  }
-
   // ---------- puntaje ----------
   /**
    * Cuánto suma cada respuesta.
@@ -1106,12 +695,7 @@ const InspeccionesService = (function () {
 
   /**
    * Puntaje por sección y total, a partir del checklist capturado.
-   * Cada sección vale su peso; el total es relativo a lo aplicable, no a 100 fijo (30-oct): una
-   * sección entera N/A (p. ej. unas herramientas que esa unidad no carga) no resta su peso del
-   * total, igual que ya no lo resta de `maximo` -- antes, el total SÍ se calculaba sobre 100 aunque
-   * `maximo` dijera que lo más que se podía sacar era menos, y una unidad en buen estado salía con
-   * una calificación baja y engañosa solo por tener secciones que no le aplican (usuario, 30-oct,
-   * caso real: moto NUCO 395, 83.13% con un 90% de máximo real -- 92.37% de lo aplicable).
+   * Cada sección vale su peso; el total es la suma de las 12. Función pura: se prueba sola.
    *
    * @param {Array} secciones   las de la plantilla (ver Plantilla.seccionesDe)
    * @param {Object} respuestas { 'PIEZA': 'BUENO' }
@@ -1139,14 +723,11 @@ const InspeccionesService = (function () {
       };
     });
 
-    const finalNominal = detalle.reduce((suma, s) => suma + s.valor, 0) * 100;
+    const final = detalle.reduce((suma, s) => suma + s.valor, 0) * 100;
     const maximo = detalle.reduce((suma, s) => suma + (s.evaluadas ? s.peso : 0), 0);
-    // Relativo a `maximo`, no a 100: lo que no aplica no cuenta en contra del total, solo en lo
-    // que de verdad se evaluó. Sin nada evaluado (maximo = 0) el total es 0, no una división por cero.
-    const final = maximo ? Math.round((finalNominal / maximo) * 10000) / 100 : 0;
     return {
       secciones: detalle,
-      final: final,
+      final: Math.round(final * 100) / 100,
       maximo: maximo,
       evaluadas: detalle.reduce((n, s) => n + s.evaluadas, 0),
     };
@@ -1472,11 +1053,7 @@ const InspeccionesService = (function () {
         return porPieza[clave];
       }).filter(Boolean);
       return { titulo: grupo.titulo, peso: grupo.peso, campos: campos };
-    })
-      // Si NINGUNA pieza del grupo calzó con la plantilla real (se editó el documento y los
-      // nombres de REAGRUPAR_SECCIONES quedaron viejos), no deja un grupo fantasma con
-      // campos: [] -- el mismo problema que una "sección" sin piezas de Plantilla.seccionesDe.
-      .filter((g) => g.campos.length > 0);
+    });
 
     // Si la plantilla real trae una pieza que este mapa no contempla (se agregó
     // después, o falta en la lista de arriba), no se pierde en silencio: se deja
@@ -1577,8 +1154,8 @@ const InspeccionesService = (function () {
      *  la ficha de Vehículos; distinto de detalle(), que ya viene agrupado/calculado) */
     buscarPorId: (token, id) => conPorcentajes_(HojaServicio.buscarPorId(INSPECCIONES, token, id)),
     completo: (token) => HojaServicio.completo(INSPECCIONES, token).map(conPorcentajes_),
-    puntajesAPorcentaje, puntajesMaximos, puntajesRelativos,
-    detalle, registrar, actualizar, urlFormato, previsualizarImagen,
+    puntajesAPorcentaje, puntajesMaximos,
+    detalle, registrar, urlFormato, previsualizarImagen,
     estructuraDeTipo, olvidarTipo, tipos, plantillas,
     nombrePlantilla_, carpetaDe_,   // las usa configurarInspecciones
     calcularPuntaje_, valorDeRespuesta_,   // expuestas para las pruebas
@@ -1631,41 +1208,5 @@ function inspeccionesMaximosCalcular(confirmacion) {
   }
   const r = InspeccionesService.puntajesMaximos(true);
   Logger.log('PUNTAJE MAXIMO calculado: ' + r.calculadas + ' de ' + r.filas + ' inspecciones (ya lo tenían: ' + r.yaTenian + ').');
-  return r;
-}
-
-/**
- * Desde el editor (30-oct): a cuántas inspecciones ya guardadas les cambiaría el PUNTAJE FINAL con la
- * fórmula corregida (relativo a lo aplicable, no sobre 100 fijo -- ver calcularPuntaje_). No cambia nada;
- * correr inspeccionesMaximosCalcular antes si hace falta (este no depende de PUNTAJE MAXIMO: lo recalcula
- * todo desde las respuestas crudas).
- */
-function inspeccionesRelativoRevisar() {
-  soloEditor_();
-  const r = InspeccionesService.puntajesRelativos(false);
-  Logger.log('Inspecciones: ' + r.filas + ' · se corregirían: ' + r.corregidas + ' · ya estaban bien: ' + r.yaCorrectas +
-    ' · sin calificar: ' + r.sinCalificar + ' · sin respuestas: ' + r.sinRespuestas + ' · sin tipo: ' + r.sinTipo +
-    (Object.keys(r.errores).length ? ' · tipos que no se pudieron leer: ' + JSON.stringify(r.errores) : '') +
-    ' (entorno: ' + (leerConfig_('ENTORNO') || '?') + ')');
-  return r;
-}
-
-/**
- * Desde el editor (30-oct): escribe el PUNTAJE FINAL corregido de las inspecciones que lo tenían mal (correr
- * antes inspeccionesRelativoRevisar). En PROD no corre sin inspeccionesRelativoCalcular('SI, EN PROD').
- *
- * Desde el 3-nov-2026 también regenera el PDF de cada inspección que corrige (mismo PUNTAJE FINAL
- * ya impreso, con las imágenes que ya tenía guardadas -- ver regenerarPdfDeFila_): sin esto, la hoja
- * quedaba bien pero el formato descargable se quedaba con el número viejo.
- */
-function inspeccionesRelativoCalcular(confirmacion) {
-  soloEditor_();
-  if (String(leerConfig_('ENTORNO') || '').toUpperCase() === 'PROD' && confirmacion !== 'SI, EN PROD') {
-    throw new Error("Esto es PRODUCCIÓN. Si de verdad es aquí, corre inspeccionesRelativoCalcular('SI, EN PROD').");
-  }
-  const r = InspeccionesService.puntajesRelativos(true, true);
-  Logger.log('PUNTAJE FINAL corregido: ' + r.corregidas + ' de ' + r.filas + ' inspecciones (ya estaban bien: ' + r.yaCorrectas + ')' +
-    ' · PDF regenerado: ' + r.pdfRegenerados +
-    (Object.keys(r.pdfErrores).length ? ' · no se pudo regenerar el PDF de: ' + JSON.stringify(r.pdfErrores) : '') + '.');
   return r;
 }

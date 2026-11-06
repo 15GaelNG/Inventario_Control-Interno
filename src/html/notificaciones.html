@@ -13,9 +13,9 @@
     --ntf-info: var(--color-primary); --ntf-info-bg: var(--color-primary-soft);
   }
   :root[data-theme="dark"] {
-    --ntf-pronto: #fdb022; --ntf-pronto-bg: #4e2d0a;
-    --ntf-vencida: #f97066; --ntf-vencida-bg: #55160c;
-    --ntf-info: #9fc6e4; --ntf-info-bg: #163041;
+    --ntf-pronto: #fdbf4a; --ntf-pronto-bg: #4a2c0c;
+    --ntf-vencida: #ff9a90; --ntf-vencida-bg: #4f1a12;
+    --ntf-info: #a8d3f0; --ntf-info-bg: #173447;
   }
 
   .ntf-campana-caja { position: relative; }
@@ -30,6 +30,8 @@
     background: var(--ntf-vencida); color: #fff; font-size: var(--texto-2xs); font-weight: 700; line-height: 18px; text-align: center;
     border: 2px solid var(--color-surface);
   }
+  /* En oscuro el rojo de texto es claro: el contador conserva un rojo de relleno con número blanco (4.6:1) */
+  :root[data-theme="dark"] .ntf-contador { background: #d92d20; }
   .ntf-contador[hidden] { display: none; }
 
   /* Fijo y acomodado por JS debajo de la campana (colocarPanel): con position absolute quedaba bajo el menú lateral */
@@ -45,7 +47,7 @@
   }
   .ntf-panel-cabeza strong { font-size: var(--texto-m); color: var(--color-text); }
   .ntf-enlace {
-    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary); font-size: var(--texto-s); font-weight: 600;
+    background: transparent; border: none; padding: 4px 6px; color: var(--color-primary-texto); font-size: var(--texto-s); font-weight: 600;
     cursor: pointer; border-radius: var(--radio-s);
   }
   :root[data-theme="dark"] .ntf-enlace { color: var(--color-accent); }
@@ -106,7 +108,7 @@
   }
   .ntf-mas {
     display: block; width: 100%; padding: 9px 18px; text-align: left; font-size: var(--texto-s); font-weight: 600;
-    background: transparent; border: none; border-bottom: 1px solid var(--color-border); color: var(--color-primary); cursor: pointer;
+    background: transparent; border: none; border-bottom: 1px solid var(--color-border); color: var(--color-primary-texto); cursor: pointer;
   }
   :root[data-theme="dark"] .ntf-mas { color: var(--color-accent); }
   .ntf-mas:hover { background: var(--color-bg); }
@@ -134,7 +136,7 @@
     <div class="tabs-lista ntf-modulos" id="ntf-modulo" role="tablist" aria-label="Módulo"></div>
     <!-- Una tarjeta por tipo: clic = ver solo ese tipo -->
     <div class="stat-row" id="ntf-kpis">
-      <div class="stat-tile"><div class="stat-icon"><i data-lucide="loader-circle" class="ico"></i></div><div><div class="stat-value">…</div><div class="stat-label">Cargando</div></div></div>
+      <div data-carga="kpis" data-carga-n="3" style="grid-column: 1 / -1"></div>
     </div>
 
     <div class="ntf-controles">
@@ -145,7 +147,7 @@
       <div class="ntf-filtro-tipo" id="ntf-filtro-tipo" hidden></div>
     </div>
 
-    <div class="card ntf-lista" id="ntf-lista"><div class="ntf-vacio">Cargando…</div></div>
+    <div class="card ntf-lista" id="ntf-lista"><div data-carga="lista" data-carga-n="4"></div></div>
   </div>
 </template>
 
@@ -318,7 +320,7 @@
       const lista = panel.querySelector('.ntf-panel-lista');
       const r = ultima;
       panel.querySelector('[data-ntf-todas-leidas]').disabled = !(r && (r.porModulo.lineas || r.porModulo.vehiculos));
-      if (!r) { lista.innerHTML = '<div class="ntf-vacio">Cargando…</div>'; return; }
+      if (!r) { lista.innerHTML = Carga.html('lista', { n: 4 }); return; }
       const html = MODULOS.map((m) => {
         const del = r.items.filter((n) => n.modulo === m.clave);
         if (!del.length) return '';

@@ -229,33 +229,54 @@ const LineasPdf = (function () {
    * Copia la plantilla, la rellena y guarda el PDF en `carpeta`.
    *   registro: { 'COLUMNA APPSHEET': valor, ... }
    *   imagenes: { 'FIRMA RESPONSABLE': Blob, ... }  (etiquetas que se sustituyen por imagen)
-   * Devuelve { id, nombre, url, avisos[] }.
+   * Devuelve { id, nombre, url, avisos[], tiempos[] }.
    * `sinCompartir`: no abrir el PDF al dominio (en NUCOS cada archivo toma los permisos de su carpeta).
+   * `crono` (opcional): el Cronometro de quien llama, para que sus pasos y los de aquí queden en una sola medición.
    */
-  function generarPdfDesdePlantilla(plantillaId, registro, imagenes, carpeta, nombrePdf, sinCompartir) {
+  function generarPdfDesdePlantilla(plantillaId, registro, imagenes, carpeta, nombrePdf, sinCompartir, crono) {
+    const c = crono || Cronometro.iniciar('pdf celular ' + nombrePdf);
     const avisos = [];
     const copia = DriveUtils.copiar(DriveApp.getFileById(plantillaId), 'TMP ' + nombrePdf, carpeta, { temporal: true });
+    c.marcar('copiar');
     try {
       const doc = DocumentApp.openById(copia.getId());
       const secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean);
-      if (NOMBRES_BAJO_FIRMA[plantillaId]) achicarNombresBajoFirma_(doc.getBody(), NOMBRES_BAJO_FIRMA[plantillaId], registro);
-      secciones.forEach((seccion) => {
-        procesarBloquesIf_(seccion, registro, avisos);
-        reemplazarEtiquetas_(seccion, registro, imagenes || {}, avisos);
-      });
+      c.marcar('abrir');
+      if (NOMBRES_BAJO_FIRMA[plantillaId]) {
+        achicarNombresBajoFirma_(doc.getBody(), NOMBRES_BAJO_FIRMA[plantillaId], registro);
+        c.marcar('letra chica');
+      }
+      secciones.forEach((seccion) => procesarBloquesIf_(seccion, registro, avisos));
+      c.marcar('bloques If');
+      secciones.forEach((seccion) => reemplazarEtiquetas_(seccion, registro, imagenes || {}, avisos));
+      c.marcar('etiquetas e imágenes');
       const ajuste = COMO_APPSHEET[plantillaId];
-      if (ajuste) ajustarComoAppSheet_(doc.getBody(), ajuste, avisos);
+      if (ajuste) {
+        ajustarComoAppSheet_(doc.getBody(), ajuste, avisos);
+        c.marcar('interlineado');
+      }
       doc.saveAndClose();
+      c.marcar('guardar');
       let blob = copia.getAs('application/pdf');
+      c.marcar('convertir');
       // La hoja 1 no alcanzó (p. ej. muchos responsables): sin el salto, las sanciones siguen donde termina y no queda
       // una hoja en blanco
-      if (ajuste && ajuste.hojas && paginas_(blob) > ajuste.hojas && quitarSalto_(copia.getId())) blob = copia.getAs('application/pdf');
+      if (ajuste && ajuste.hojas && paginas_(blob) > ajuste.hojas && quitarSalto_(copia.getId())) {
+        blob = copia.getAs('application/pdf');
+        c.marcar('quitar salto y convertir otra vez');
+      }
       const pdf = DriveUtils.crearArchivo(carpeta, blob, nombrePdf);
+      c.marcar('crear archivo');
       // Fuera de NUCOS y LINEAS se abre al dominio; si Drive no lo deja, se queda con los permisos de su carpeta
-      if (!sinCompartir) LineasArchivos.compartirEnDominio(pdf);
-      return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos };
+      if (!sinCompartir) {
+        LineasArchivos.compartirEnDominio(pdf);
+        c.marcar('compartir');
+      }
+      return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos, tiempos: c.tiempos() };
     } finally {
       DriveUtils.aPapelera(copia, { temporal: true }); // la copia temporal es nuestra; la plantilla original no se toca
+      c.marcar('papelera');
+      if (!crono) c.anotar();
     }
   }
 

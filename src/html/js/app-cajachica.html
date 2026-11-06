@@ -333,7 +333,7 @@
       document.getElementById('cch-ver-registro-titulo').textContent = cfg.titulo;
       document.getElementById('cch-ver-registro-subtitulo').textContent = 'ID: ' + id;
       const cuerpo = document.getElementById('cch-ver-registro-cuerpo');
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       document.getElementById('cch-modal-ver-registro').hidden = false;
       try {
         const registro = await callServer(cfg.api, state.token, id);
@@ -404,7 +404,7 @@
       listado.hidden = true;
       detalle.hidden = false;
       if (!repintar) {
-        detalle.innerHTML = migasCajaChica() + '<div class="card ln-card"><p class="ln-tenue"><span class="spinner"></span> Cargando…</p></div>';
+        detalle.innerHTML = migasCajaChica() + Carga.html('ficha', { tarjeta: true, n: 8 });
         wireMigasCajaChica();
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);

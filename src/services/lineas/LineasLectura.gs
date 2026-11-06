@@ -26,7 +26,7 @@
 const LineasLectura = (function () {
   const HOJA_VIEJA = 'LINEAS TELEFONICAS';
   const HOJAS = { LINEAS: 'LINEAS', EQUIPOS: 'EQUIPOS', ASIGNACIONES: 'ASIGNACIONES', ADENDUMS: 'ADENDUMS' };
-  const CLAVE_CACHE = 'estructura_virtual_v8'; // v8: sin ubicación en estatus finales (22-oct). v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
+  const CLAVE_CACHE = 'estructura_virtual_v10'; // v10: y si no, COMPAÑIA ANTERIOR de EQUIPOS (5-nov). v9: ULTIMA COMPAÑIA del equipo sin línea (5-nov). v8: sin ubicación en estatus finales (22-oct). v7: sin ESTATUS GENERAL (21-oct). v6: FECHA REGISTRO del movimiento ALTA (16-oct). v5: responsable en blanco en estatus finales (16-oct). v4: cuenta, plan y su origen; PIN de WhatsApp del equipo (13-oct). v3: SIM BASICO (12-oct)
 
   /** Columnas de los renglones armados: las de la hoja vieja que el sistema lee, más las referencias nuevas. */
   /** Responsables adicionales (6-oct): número de empleado y nombre del segundo al quinto. */
@@ -40,7 +40,9 @@ const LineasLectura = (function () {
     // Referencias de la estructura nueva
     'ID EQUIPO', 'ID LINEA', 'ID ASIGNACION', 'TIPO ASIGNACION', 'TIPO DE LINEA', 'TIPO DE EQUIPO',
     // Cuenta y plan del proveedor (usuario, 13-oct: la pestaña General de la línea los muestra)
-    'CUENTA PADRE', 'CUENTA', 'PLAN', 'FUENTE PLAN', 'ORIGEN PLAN']);
+    'CUENTA PADRE', 'CUENTA', 'PLAN', 'FUENTE PLAN', 'ORIGEN PLAN',
+    // El equipo sin línea: la compañía de la última línea que tuvo (usuario, 5-nov: no todos vienen liberados)
+    'ULTIMA COMPAÑIA']);
   // Del equipo o, si no hay, de la línea: las rutas del AppSheet y el comentario
   const DEL_EQUIPO_O_LINEA = ['COMENTARIOS', 'RESPONSIVA', 'FORMATO INSPECCION', 'FECHA INSPECCION'];
   const PERSONA_SIN_ASIGNACION = ['NO EMPLEADO', 'RESPONSABLE', 'PUESTO', 'SEDE',
@@ -175,6 +177,18 @@ const LineasLectura = (function () {
       if (ke && masNueva(a, ultimaPorEquipo[ke])) ultimaPorEquipo[ke] = a;
       if (kl && masNueva(a, ultimaPorLinea[kl])) ultimaPorLinea[kl] = a;
     });
+    // La última asignación de cada equipo que llevaba línea (la más reciente en empezar): de ahí sale la compañía que
+    // muestra el equipo cuando se queda sin línea. Lo de antes de la migración (4-oct) no tiene asignación: sale de la
+    // columna COMPAÑIA ANTERIOR de EQUIPOS, que llenó una vez tools/lineas-datos/compania-anterior.py con la bitácora de
+    // AppSheet (CAMBIOS LINEAS TELEFONICAS) y la última inspección; lo del sistema nuevo siempre gana
+    const ultimaConLinea = {};
+    asignaciones.forEach((a) => {
+      const ke = String(a['ID EQUIPO'] || '');
+      if (!ke || !a['ID LINEA'] || !lineaPorId[String(a['ID LINEA'])]) return;
+      const actual = ultimaConLinea[ke];
+      if (!actual || ms(a['FECHA INICIO']) > ms(actual['FECHA INICIO']) ||
+        (ms(a['FECHA INICIO']) === ms(actual['FECHA INICIO']) && ms(a['FECHA FIN']) > ms(actual['FECHA FIN']))) ultimaConLinea[ke] = a;
+    });
     // El adendum que se muestra de cada línea (esAdendumMasReciente)
     const adendumPorLinea = {};
     adendums.forEach((d) => {
@@ -214,6 +228,8 @@ const LineasLectura = (function () {
         // Ya pasó por el sistema nuevo: la última asignación (ya cerrada) es su historia
         PERSONA_SIN_ASIGNACION.forEach((c) => { o[c] = v(ultima, c); });
       }
+      const conLineaAntes = e && !l ? ultimaConLinea[String(e['ID'])] : null;
+      o['ULTIMA COMPAÑIA'] = !e || l ? '' : (conLineaAntes ? v(lineaPorId[String(conLineaAntes['ID LINEA'])], 'COMPAÑIA') : '') || v(e, 'COMPAÑIA ANTERIOR');
       if (esFinal_(e, l)) PERSONA_FINAL.forEach((c) => { o[c] = ''; });
       return o;
     };

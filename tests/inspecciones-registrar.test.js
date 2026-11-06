@@ -14,9 +14,6 @@ const guardados = [];      // lo que se guardó en el expediente del NUCO
 const buscadas = [];       // en qué carpeta raíz se buscó cada dibujo en blanco
 let actualizado = null;    // lo que se escribió después (la liga del PDF)
 let nuccoVehiculo = '25';
-const correos = [];        // lo que se mandó por MailApp.sendEmail
-let pendientesRegistrados = null;   // lo último que recibió PendientesInspeccionService.agregar
-let idsGenerados = 0;       // para el ID (prefijo INS) que simula poner SheetUtils.insert
 const encabezadosHoja = ['ID INSPECCION', 'FOLIO', 'TIPO', 'PUNTAJE FINAL INSPECCION'];
 let candados = 0;
 const carpetaFalsa = (ruta) => ({ ruta, getId: () => 'id:' + ruta });
@@ -38,7 +35,7 @@ const contexto = vm.createContext({
     SPREADSHEET_IDS: { VEHICULOS: () => 'libro' },
     DRIVE_FOLDERS: { INSPECCIONES_IMAGENES: () => 'imagenes', RAIZ: () => 'raiz-pruebas', REPORTES: () => 'formatos', MODELOS: () => 'raiz-prod' },
   },
-  Permisos: { puedeEditar: () => ({ nombre: 'INSPECTOR PRUEBA', correo: 'inspector-prueba@x.com' }), puedeLeer: () => ({}) },
+  Permisos: { puedeEditar: () => ({ nombre: 'INSPECTOR PRUEBA' }), puedeLeer: () => ({}) },
   CacheService: { getScriptCache: () => ({ get: () => JSON.stringify(ESTRUCTURA), put: () => {} }) },
   SheetUtils: {
     normalizarEncabezado_: (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase(),
@@ -56,9 +53,7 @@ const contexto = vm.createContext({
     // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
     // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).
     findById: () => ({ data: { ID: 'VEH-00000000AAAAAA', FOLIO: 'AUT0025', NUCCO: nuccoVehiculo, 'RESPONSABLE VEHICULO': 'JORGE AVECILLA', PLACA: 'GGR658F' } }),
-    // La hoja real sí tiene columna 'ID' (prefijo INS), aparte del folio de ID INSPECCION:
-    // SheetUtils.insert se la pone sola, como en producción (ver docs/ids-asignacion.md).
-    insert: (id, hoja, datos) => { datos.ID = 'INS-FAKE' + (++idsGenerados); fila = datos; },
+    insert: (id, hoja, datos) => { fila = datos; },
     update: (libro, hoja, id, cambios) => { actualizado = cambios; },
   },
   ExpedienteNuco: {
@@ -89,29 +84,8 @@ const contexto = vm.createContext({
     nombreArchivo: (partes) => partes.join(' '),
     fechaParaNombre: () => '2026-09-18',
   },
-  Plantilla: {}, DocumentApp: {},
-  Session: { getScriptTimeZone: () => 'America/Mexico_City' },
-  Utilities: { formatDate: (fecha, zona, patron) => (patron === 'dd/MM/yyyy' ? '12/10/2026' : patron === 'HH:mm' ? '12:00' : '12/10/2026 12:00') },
-  MailApp: { sendEmail: (opciones) => { correos.push(opciones); } },
+  Plantilla: {}, DocumentApp: {}, Utilities: {},
   Candado: { con: (fn) => { candados++; return fn(); } },
-  // El match con Help Desk (revisarCargaHelpdesk) se prueba aparte (tests/pendientes-inspeccion.test.js);
-  // aquí solo importa que registrar() le pase lo que escribió el inspector, el correo YA VALIDADO
-  // del aviso original, y meta lo que regresa en el correo.
-  PendientesInspeccionService: {
-    agregar: (filaInspeccion, idInspeccion, items, correoResponsable, correosCc, asuntoAviso, correoInspector) => {
-      const limpios = (items || [])
-        .map((it) => ({
-          asunto: String((it && it.asunto) || '').trim(),
-          familia: String((it && it.familia) || '').trim(),
-          prioridad: /^URGENTE$/i.test(String((it && it.prioridad) || '').trim()) ? 'URGENTE' : 'NO URGENTE',
-        }))
-        .filter((it) => it.asunto);
-      pendientesRegistrados = { filaInspeccion, idInspeccion, items: limpios, correoResponsable, correosCc, asuntoAviso, correoInspector };
-      return limpios.map((it) => ({
-        ASUNTO: it.asunto, 'FAMILIA O GRUPO A REPORTAR': it.familia, PRIORIDAD: it.prioridad,
-      }));
-    },
-  },
 });
 vm.runInContext(
   fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'InspeccionesService.gs'), 'utf8') +
@@ -189,80 +163,7 @@ ok(/^INSPECCION VEHICULAR_Images\/.+\.INS FRONTAL\.\d+\.png$/.test(fila['INS FRO
 ok(paraPdf.carpetaId === 'formatos' && paraPdf.subcarpeta === ESTRUCTURA.carpeta, 'y el PDF a REPORTES, como antes');
 ok(actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/' + ESTRUCTURA.carpeta + '/INSPECCION.pdf', 'con su ruta');
 
-console.log('6. Notificar por correo (paso "Revisar y firmar")');
-ok(resultado.correo && resultado.correo.enviado === false && resultado.correo.motivo === 'No se capturó ningún correo' && correos.length === 0,
-  'sin NOTIFICAR no se manda nada, y no truena el guardado');
-
-const conCorreo = contexto.InspeccionesService.registrar('token', {
-  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'MALO' }, llantas: {},
-  OBSERVACIONES: 'Se firmó en ausencia del responsable',
-  NOTIFICAR: { responsable: 'responsable@x.com', inspector: 'inspector@x.com', asistente: 'no-es-correo', otros: ['otro@x.com', 'responsable@x.com', ''] },
-  HALLAZGOS: [{ pieza: 'PARABRISAS', estado: 'MALO', seccion: 'Cristalería' }],
-}, { 'FIRMA INSPECTOR': { base64: 'FIRMA', mimeType: 'image/png' } });
-ok(conCorreo.correo.enviado === true && correos.length === 1, 'con un correo válido para el responsable, se manda');
-ok(correos[0].to === 'responsable@x.com', 'va "para" el responsable');
-ok(correos[0].cc.split(',').sort().join(',') === 'inspector@x.com,otro@x.com',
-  'en copia el inspector y los demás -- sin el asistente (correo inválido) ni repetir al responsable: ' + correos[0].cc);
-ok(!/Piezas con hallazgo/.test(correos[0].htmlBody), 'ya no lleva la lista de piezas con hallazgo (se quitó a pedido)');
-ok(correos[0].htmlBody.indexOf('Se firmó en ausencia del responsable') !== -1, 'y las observaciones');
-ok(/Hola, buenos días\. Se comparte la inspecci.n llevada a cabo el día <b>\d{2}\/\d{2}\/\d{4}<\/b>/.test(correos[0].htmlBody),
-  'abre con un saludo formal y la fecha: ' + correos[0].htmlBody.slice(0, 200));
-ok(/Saludos\s*🙌/.test(correos[0].htmlBody), 'cierra con un saludo');
-ok(correos[0].subject === 'INSPECCION: HONDA 150XR 12/10/2026',
-  'asunto: INSPECCION: nuco-departamento-clase-no de serie y la fecha (los vacíos del vehículo de prueba se omiten): ' + correos[0].subject);
-ok(correos[0].name === 'INSPECTOR PRUEBA', 'el remitente visible es el nombre de quien inspeccionó, no el de quien desplegó: ' + correos[0].name);
-ok(correos[0].replyTo === 'inspector-prueba@x.com', 'y responder le llega a él, aunque la app mande el correo desde otra cuenta: ' + correos[0].replyTo);
-
-correos.length = 0;
-const sinResponsable = contexto.InspeccionesService.registrar('token', {
-  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
-  NOTIFICAR: { responsable: '', inspector: 'inspector@x.com', asistente: '', otros: [] },
-}, {});
-ok(sinResponsable.correo.enviado === true && correos[0].to === 'inspector@x.com' && !correos[0].cc,
-  'sin correo del responsable, se manda al primero que sí sea válido');
-
-console.log('7. Tickets a generar (pendientes de inspección)');
-correos.length = 0;
-pendientesRegistrados = null;
-const conPendientes = contexto.InspeccionesService.registrar('token', {
-  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
-  NOTIFICAR: { responsable: 'responsable@x.com', inspector: 'inspector@x.com', asistente: 'no-es-correo', otros: ['otro@x.com', 'responsable@x.com', ''] },
-  PENDIENTES: [
-    { asunto: 'Reparación de faro', familia: 'ELECTRICO Y LUCES', prioridad: 'URGENTE' },
-    { asunto: '  ', familia: 'MOTOR', prioridad: 'NO URGENTE' },   // sin asunto real: se ignora
-  ],
-}, {});
-ok(pendientesRegistrados && pendientesRegistrados.idInspeccion === fila['ID'] && /^INS-/.test(pendientesRegistrados.idInspeccion),
-  'se le pasa a PendientesInspeccionService.agregar el ID real de la inspección (prefijo INS), no el folio: ' + pendientesRegistrados.idInspeccion);
-ok(pendientesRegistrados.idInspeccion !== conPendientes.ID,
-  'y es distinto del folio de negocio que regresa la API (ID INSPECCION): ' + conPendientes.ID);
-ok(pendientesRegistrados.filaInspeccion['PLACAS'] === 'GGR658F', 'y la fila ya armada (placas, nuco, etc.)');
-ok(pendientesRegistrados.items.length === 1 && pendientesRegistrados.items[0].asunto === 'Reparación de faro',
-  'el renglón sin asunto real se ignora');
-ok(pendientesRegistrados.correoResponsable === 'responsable@x.com',
-  'le pasa el correo YA VALIDADO del aviso (no el de Capital Humano, no el del inspector): ' + pendientesRegistrados.correoResponsable);
-ok(pendientesRegistrados.correosCc.slice().sort().join(',') === 'inspector@x.com,otro@x.com',
-  'y los demás que SÍ se notificaron en copia -- sin el asistente (correo inválido) ni repetir al responsable: ' + pendientesRegistrados.correosCc);
-ok(pendientesRegistrados.correoInspector === 'inspector-prueba@x.com',
-  'y el correo de quien inspeccionó (sesion.correo), para el replyTo del recordatorio: ' + pendientesRegistrados.correoInspector);
-ok(/Reparaci.n de faro/.test(correos[0].htmlBody) && /ELECTRICO Y LUCES/.test(correos[0].htmlBody) && /URGENTE/.test(correos[0].htmlBody),
-  'el correo trae su propia sección con lo que hay que subir a Help Desk');
-ok(/Instrucciones para generar tickets en Help Desk/.test(correos[0].htmlBody), 'con su propio título (va en un color aparte, no mezclado con los hallazgos)');
-ok(/Asunto:.*<code>[^<]*Reparaci.n de faro/.test(correos[0].htmlBody),
-  'el asunto va en su propia línea, con su etiqueta: ' + correos[0].htmlBody);
-ok(/Familia o grupo a reportar:.*ELECTRICO Y LUCES/.test(correos[0].htmlBody),
-  'la familia va en otra línea, aparte (ya no entre paréntesis pegada al asunto)');
-ok(/Prioridad:.*<b>URGENTE<\/b>/.test(correos[0].htmlBody), 'y la prioridad en la suya');
-
-correos.length = 0;
-const sinPendientes = contexto.InspeccionesService.registrar('token', {
-  FOLIO: 'AUT0025', TIPO: 'HONDA 150XR', checklist: { PARABRISAS: 'BUENO' }, llantas: {},
-  NOTIFICAR: { responsable: 'responsable@x.com', inspector: '', asistente: '', otros: [] },
-}, {});
-ok(!/Instrucciones para generar tickets en Help Desk/.test(correos[0].htmlBody), 'sin PENDIENTES, el correo no trae esa sección');
-void sinPendientes;
-
-console.log('8. La calificación va en porcentaje en todos lados (27-oct: las secciones salían en decimal)');
+console.log('6. La calificación va en porcentaje en todos lados (27-oct: las secciones salían en decimal)');
 ok(fila['PUNTUACION_CRISTALERIA'] === '100.00%' && fila['PUNTAJE FINAL INSPECCION'] === '100.00%',
   'la sección se escribe igual que el total: "100.00%", no 1');
 
@@ -270,14 +171,13 @@ ok(fila['PUNTAJE MAXIMO'] === '100.00%', 'guarda lo más que podía sacar esa un
 ok(encabezadosHoja.filter((e) => e === 'PUNTAJE MAXIMO').length === 1 && candados === 1,
   'la columna se crea una sola vez, bajo el candado, aunque se registren varias');
 
-console.log('9. El máximo no cuenta las secciones todas N/A');
+console.log('7. El máximo no cuenta las secciones todas N/A');
 const DOS = [
   { titulo: 'Cristalería', peso: 10, campos: [{ campo: 'PARABRISAS', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
   { titulo: 'Inventarios', peso: 10, campos: [{ campo: 'GATO', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
 ];
 const conNA = contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'BUENO', GATO: 'N/A' });
-ok(conNA.final === 100 && conNA.maximo === 10,
-  'Inventarios toda N/A: sacó 10 de 10 posibles -- el total ya no se divide entre 20 (30-oct)');
+ok(conNA.final === 10 && conNA.maximo === 10, 'Inventarios toda N/A: sacó 10 de 10 posibles, no de 20');
 ok(contexto.InspeccionesService.calcularPuntaje_(DOS, { PARABRISAS: 'MALO', GATO: 'BUENO' }).maximo === 20,
   'con algo evaluado en las dos, el máximo es la suma de sus pesos');
 
@@ -321,7 +221,7 @@ ok(JSON.stringify(escrito['PUNTAJE FINAL INSPECCION']) === JSON.stringify([[0.84
   escrito['PUNTUACION_NEUMATICOS formato'] === '0.00%' && tocada,
   'aplicar deja la fracción con formato 0.00%, no toca lo vacío ni lo que no es número, e invalida la caché');
 
-console.log('10. PUNTAJE MAXIMO de las ya guardadas, con sus respuestas (también las de AppSheet)');
+console.log('8. PUNTAJE MAXIMO de las ya guardadas, con sus respuestas (también las de AppSheet)');
 // La estructura del tipo sale de la caché simulada (ESTRUCTURA: Cristalería con PARABRISAS)
 const tabla = [
   ['ID INSPECCION', 'TIPO', 'PARABRISAS', 'VOLTAJE'],
@@ -347,55 +247,6 @@ ok(tabla[0][4] === 'PUNTAJE MAXIMO' && escritoMax.col === 5 && JSON.stringify(es
 tabla[1][4] = 0.9;
 const otraVez = contexto.InspeccionesService.puntajesMaximos(false);
 ok(otraVez.yaTenian === 1 && otraVez.calculadas === 0, 'la que ya tiene máximo no se recalcula');
-
-console.log('11. Corrige el PUNTAJE FINAL de las ya guardadas con la fórmula relativa (30-oct)');
-// Dos secciones (no una, como ESTRUCTURA): así se puede mostrar la diferencia entre "entre 100 fijo" y "entre lo aplicable"
-const ESTRUCTURA_DOS = {
-  tipo: 'HONDA 150XR', plantillaId: 'doc', carpeta: 'x',
-  secciones: [
-    { titulo: 'Cristalería', peso: 50, campos: [{ campo: 'PARABRISAS', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
-    { titulo: 'Inventarios', peso: 50, campos: [{ campo: 'GATO', opciones: ['BUENO', 'REGULAR', 'MALO', 'N/A'] }] },
-  ],
-  llantas: [], diagramas: [], piezas: 2,
-};
-contexto.CacheService.getScriptCache = () => ({ get: () => JSON.stringify(ESTRUCTURA_DOS), put: () => {} });
-const tablaRel = [
-  ['ID INSPECCION', 'TIPO', 'PARABRISAS', 'GATO', 'PUNTAJE FINAL INSPECCION'],
-  ['R1', 'HONDA 150XR', 'BUENO', 'N/A', 0.5],   // vieja fórmula: Inventarios N/A restaba su 50% del total -- debería quedar en 100%
-  ['R2', 'HONDA 150XR', 'BUENO', 'BUENO', 1],   // las dos aplicaron: 100% con cualquiera de las dos fórmulas, no se toca
-  ['R3', 'HONDA 150XR', '', '', ''],            // sin calificar, no se toca
-];
-let escritoRel = null;
-contexto.SheetUtils.getSheetByColumns = () => ({
-  getName: () => 'INSPECCION VEHICULAR',
-  getLastColumn: () => tablaRel[0].length,
-  getDataRange: () => ({ getValues: () => tablaRel.map((f) => f.slice()) }),
-  getRange: (fila1, col) => ({ setValues: (v) => { escritoRel = { col, v }; }, setNumberFormat: () => {} }),
-});
-const revRel = contexto.InspeccionesService.puntajesRelativos(false);
-ok(revRel.corregidas === 1 && revRel.yaCorrectas === 1 && revRel.sinCalificar === 1 && !escritoRel,
-  'revisar cuenta sin escribir: ' + JSON.stringify(revRel));
-ok(revRel.pdfRegenerados === 0, 'solo revisar: tampoco toca ningún PDF');
-paraPdf = null;
-contexto.InspeccionesService.puntajesRelativos(true);
-ok(escritoRel.col === 5 && JSON.stringify(escritoRel.v) === JSON.stringify([[1], [1], ['']]),
-  'aplicar corrige solo R1 (de 50% a 100%: Inventarios N/A ya no le resta) y deja las demás igual');
-ok(paraPdf === null, 'sin pedir regenerarPdf, aplicar tampoco toca ningún PDF');
-
-console.log('11b. Con regenerarPdf: a la que de verdad se corrige también se le regenera el PDF');
-paraPdf = null;
-actualizado = null;
-tablaRel[1][4] = 0.5;   // regresa R1 a como estaba, para que vuelva a contar como corregida
-const conPdf = contexto.InspeccionesService.puntajesRelativos(true, true);
-ok(conPdf.corregidas === 1 && conPdf.pdfRegenerados === 1 && Object.keys(conPdf.pdfErrores).length === 0,
-  'una regenerada, sin errores: ' + JSON.stringify(conPdf));
-ok(paraPdf && paraPdf.datos['PUNTAJE FINAL INSPECCION'] === '100.00%',
-  'el PDF se regenera con el PUNTAJE FINAL YA corregido, aunque la hoja todavía no se haya escrito: ' + JSON.stringify(paraPdf && paraPdf.datos));
-ok(actualizado && actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/x/INSPECCION.pdf',
-  'y deja la liga nueva en FORMATO INSPECCION VEHICULAR: ' + JSON.stringify(actualizado));
-tablaRel[1][4] = 1;
-const otraVezRel = contexto.InspeccionesService.puntajesRelativos(false);
-ok(otraVezRel.corregidas === 0 && otraVezRel.yaCorrectas === 2, 'correr otra vez no vuelve a tocar lo que ya quedó corregido (idempotente)');
 
 console.log(fallas ? `\n${fallas} FALLA(S)` : '\nTODO OK');
 process.exit(fallas ? 1 : 0);

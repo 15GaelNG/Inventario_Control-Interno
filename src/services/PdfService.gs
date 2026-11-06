@@ -262,9 +262,11 @@ const PdfService = (function () {
    * generado antes de tiempo, para que se vea igual que el final salvo por ese aviso).
    * Separado de generar() para que generarVistaPrevia() lo reuse sin guardar nada en Drive.
    */
-  function llenarCopia_(copiaId, p, aviso) {
+  function llenarCopia_(copiaId, p, aviso, crono) {
+    const marcar = (paso) => { if (crono) crono.marcar(paso); };
     const doc = DocumentApp.openById(copiaId);
     const body = doc.getBody();
+    marcar('abrir');
 
     // Primero las imágenes: si no, el paso de texto borraría sus marcadores
     Object.keys(p.imagenes || {}).forEach((campo) => {
@@ -281,15 +283,21 @@ const PdfService = (function () {
         insertarImagen_(body, '<<' + campo + '>>', blob, caja);
       }
     });
+    marcar('imágenes');
 
     const resultado = llenarTexto_(body, datosParaPlantilla_(p.datos));
-    if (p.formato) aplicarFormato_(body, p.formato);
+    marcar('texto');
+    if (p.formato) {
+      aplicarFormato_(body, p.formato);
+      marcar('formato');
+    }
     if (aviso) {
       const parrafo = body.insertParagraph(0, aviso);
       parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
       parrafo.editAsText().setBold(true).setForegroundColor('#8a6d3a').setFontSize(14);
     }
     doc.saveAndClose();
+    marcar('guardar');
     return resultado;
   }
 
@@ -305,11 +313,14 @@ const PdfService = (function () {
    * @param {string} [p.subcarpeta]  subcarpeta dentro de la anterior, ej. 'INSPECCIONES L200'
    * @param {Object} [p.formato]     ajustes a la COPIA (la plantilla no se toca, ver aplicarFormato_):
    *                                 { fuente: 'Arial', margenes: { arriba, abajo, izquierda, derecha } }
-   * @return {{url: string, fileId: string, marcadores: number, sinResolver: string[]}}
+   * @return {{url: string, fileId: string, marcadores: number, sinResolver: string[], tiempos: Array<{paso, ms}>}}
+   *   `tiempos`: cuánto tardó cada paso (Cronometro.gs); también queda una línea [tiempo] en Ejecuciones.
    */
   function generar(p) {
     if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
     const cuenta = () => Session.getEffectiveUser().getEmail();
+    // El nombre empieza con el tipo («pdf vehicular-INSPECCION …»): cronometroResumen() agrupa por las dos primeras palabras
+    const crono = Cronometro.iniciar('pdf vehicular-' + String(p.nombre || 'DOCUMENTO').split(' ')[0] + ' ' + (p.nombre || p.plantillaId));
     let carpeta;
     try {
       carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
@@ -332,6 +343,7 @@ const PdfService = (function () {
         );
       }
     }
+    crono.marcar('carpeta');
 
     let nombre = p.nombre || ('Documento ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd HH.mm.ss'));
     // Dos inspecciones de la misma unidad el mismo día: se distingue con la hora, en vez
@@ -339,6 +351,7 @@ const PdfService = (function () {
     if (carpeta.getFilesByName(nombre + '.pdf').hasNext()) {
       nombre += ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HH.mm');
     }
+    crono.marcar('nombre único');
 
     let copia;
     try {
@@ -350,13 +363,19 @@ const PdfService = (function () {
       );
     }
 
+    crono.marcar('copiar');
+
     let resultado;
+    let salida = null;
     try {
-      resultado = llenarCopia_(copia.getId(), p);
+      resultado = llenarCopia_(copia.getId(), p, null, crono);
 
       let pdf;
       try {
-        pdf = DriveUtils.crearArchivo(carpeta, DriveApp.getFileById(copia.getId()).getAs('application/pdf'), nombre + '.pdf');
+        const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+        crono.marcar('convertir');
+        pdf = DriveUtils.crearArchivo(carpeta, blob, nombre + '.pdf');
+        crono.marcar('crear archivo');
       } catch (err) {
         throw new Error(
           'Se armó el documento, pero no se pudo guardar el PDF en la carpeta. La cuenta ' + cuenta() +
@@ -372,16 +391,22 @@ const PdfService = (function () {
         console.warn('No se pudo compartir explícitamente el PDF (cuenta ' + cuenta() +
           '); se deja como quedó por default de la carpeta. Archivo: ' + pdf.getUrl());
       }
-      return {
+      crono.marcar('compartir');
+      salida = {
         url: pdf.getUrl(),
         fileId: pdf.getId(),
         nombre: pdf.getName(),
         marcadores: resultado.marcadores,
         sinResolver: resultado.sinResolver,
       };
+      return salida;
     } finally {
       // La copia del Doc ya no se necesita: lo que queda es el PDF
       try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op */ }
+      crono.marcar('papelera');
+      // El mismo objeto que ya se regresó: así `tiempos` incluye la papelera
+      if (salida) salida.tiempos = crono.tiempos();
+      crono.anotar();
     }
   }
 
@@ -397,14 +422,20 @@ const PdfService = (function () {
    */
   function generarVistaPrevia(p) {
     if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
+    const crono = Cronometro.iniciar('pdf vista-previa ' + p.plantillaId);
     const carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
+    crono.marcar('carpeta');
     const copia = DriveUtils.copiar(DriveApp.getFileById(p.plantillaId), 'vista previa ' + Utilities.getUuid(), carpeta, { temporal: true });
+    crono.marcar('copiar');
     try {
-      llenarCopia_(copia.getId(), p, 'VISTA PREVIA — AÚN SIN FIRMAR');
+      llenarCopia_(copia.getId(), p, 'VISTA PREVIA — AÚN SIN FIRMAR', crono);
       const blob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+      crono.marcar('convertir');
       return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
     } finally {
       try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op */ }
+      crono.marcar('papelera');
+      crono.anotar();
     }
   }
 

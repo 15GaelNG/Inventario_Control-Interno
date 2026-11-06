@@ -22,13 +22,13 @@
     color: var(--color-text); font-size: var(--texto-s); font-weight: 500; cursor: pointer;
   }
   .ch-zona:hover, .ch-zona:focus-within { border-color: var(--color-accent); }
-  .ch-zona .ico { width: 20px; height: 20px; color: var(--color-primary); flex-shrink: 0; }
+  .ch-zona .ico { width: 20px; height: 20px; color: var(--color-primary-texto); flex-shrink: 0; }
   .ch-zona input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
   .ch-zona-nombre { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ch-zona-nombre.vacio { color: var(--color-text-muted); }
   .ch-zona-boton {
     flex-shrink: 0; padding: 6px 12px; border-radius: var(--radio-m); border: 1px solid var(--color-border);
-    background: var(--color-surface); color: var(--color-primary); font-weight: 600; font-size: var(--texto-s);
+    background: var(--color-surface); color: var(--color-primary-texto); font-weight: 600; font-size: var(--texto-s);
   }
 
   /* El ensayo: las cifras en fichas, lo demás debajo y el botón al final */
@@ -79,6 +79,6 @@
 
   <div class="card ch-tarjeta">
     <h3><i data-lucide="history" class="ico"></i> Cargas anteriores</h3>
-    <div id="ch-historial"><p class="ch-tenue"><span class="spinner"></span> Cargando…</p></div>
+    <div id="ch-historial"><div data-carga="lista" data-carga-n="3"></div></div>
   </div>
 </template>
