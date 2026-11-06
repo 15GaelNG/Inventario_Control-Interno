@@ -17,6 +17,11 @@
 
       let tablaDocumentos = null; // DataTable de Documentos (inspecciones y responsivas) de la ficha abierta
 
+      // Estatus de firma de una Responsiva (ESTADO FIRMA): '' = nunca usó firma a distancia (como antes); las
+      // Inspecciones nunca traen este dato (usuario, 6-nov: quiere verlo como etiqueta en la tabla de documentos)
+      const ETIQUETA_ESTADO_FIRMA_DOC = { PENDIENTE: 'Pendiente de firma', FIRMADO: 'Firmado' };
+      const COLOR_ESTADO_FIRMA_DOC = { PENDIENTE: 'ambar', FIRMADO: 'verde' };
+
       function copiarConAviso(boton, texto, mensaje) {
         copiarTexto(texto).then((ok) => {
           if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
@@ -338,6 +343,8 @@
             { campo: 'documento', titulo: 'Documento', tipo: 'lista', ancho: 150,
               render: (v) => '<span class="ln-movimiento">' + ico(v === 'Inspección' ? 'clipboard-check' : 'signature') + ' ' + esc(v) + '</span>' },
             { campo: 'origenTexto', titulo: 'Origen', tipo: 'lista', ancho: 150, render: (v) => chip(v, COLOR_ORIGEN_DOCUMENTO[v] || 'neutro') },
+            { campo: 'estadoFirma', titulo: 'Estatus', tipo: 'lista', ancho: 140,
+              render: (v) => (v ? chip(ETIQUETA_ESTADO_FIRMA_DOC[v] || v, COLOR_ESTADO_FIRMA_DOC[v]) : vacio) },
             { campo: 'responsable', titulo: 'Responsable', tipo: 'texto', ancho: 230 },
             { campo: 'inspector', titulo: 'Realizó', tipo: 'texto', ancho: 210 },
             // En la ficha de la línea: el equipo en que la firmó (pendiente 2.45)
