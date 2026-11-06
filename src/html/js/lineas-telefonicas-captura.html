@@ -238,6 +238,11 @@
           const f = captura.firmas[col];
           const origen = NOMBRE_DE_FIRMA[col] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[col]) + '"]');
           if (f && f.setNombre && origen) f.setNombre(origen.value);
+          // La firma de un responsable adicional nace oculta (RESPONSABLES ADICIONALES empieza en 0) y el
+          // ResizeObserver del componente debería medirla sola al mostrarse -- pero por si acaso (usuario,
+          // 6-nov: firmas de adicionales saliendo en blanco incluso firmando dentro del sistema), se fuerza
+          // aquí también, como ya hace alMostrar con los pasos (esta llamada no hace nada si no cambió el ancho).
+          if (f && f.ajustar) f.ajustar();
         });
         if (captura.revisarFirmaResponsable) captura.revisarFirmaResponsable();
       }
