@@ -843,7 +843,7 @@
         // firman presencial) -- ya no hay lienzo aquí ni selector "Firma aquí ahora" (usuario, 6-nov: se quitó esa
         // opción por el bug de las firmas en blanco al firmar un responsable dentro del sistema).
         control = e.remoto
-          ? '<div class="ln-nota">' + icono('send', 'ln-icon-sm') + ' Se le va a mandar una liga para que firme a distancia.</div>'
+          ? '<div class="ln-nota">' + icono('send', 'ln-icon-sm') + ' Al guardar se genera una liga para que firme a distancia -- tú se la compartes (no se manda sola).</div>'
           : htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', ETIQUETA_FIRMA[e.columna]);
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
