@@ -319,6 +319,8 @@ const TelefoniaService = (function () {
         fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
         // Firmada dentro de un equipo, vista desde la línea (pendiente 2.45): su NUCO y el registro del equipo
         enNuco: d.enEquipo ? (d.nuco || '—') : null, registroId: d.enEquipo ? d.registroId || null : null,
+        // Firma a distancia de la responsiva (LineasFirmaRemota.gs): 'PENDIENTE' mientras falte alguna liga
+        estadoFirma: d.estadoFirma || null,
       };
     }).sort((a, b) => new Date(b.fecha || 0) - new Date(a.fecha || 0));
   }

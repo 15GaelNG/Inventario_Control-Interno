@@ -27,3 +27,6 @@ function apiLineasFirmaRemotaLiga(token, responsivaId, rol) {
 function apiLineasFirmaRemotaRegenerarLiga(token, responsivaId, rol) {
   return LineasFirmaRemota.regenerarLiga(token, responsivaId, rol);
 }
+function apiLineasFirmaRemotaEstado(token, responsivaId) {
+  return LineasFirmaRemota.estadoLigas(token, responsivaId);
+}

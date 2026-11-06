@@ -761,6 +761,9 @@ const LineasRepo = (function () {
         razonSocial: txt(col(f, 'RAZON SOCIAL')),
       },
       accesorios: txt(col(f, 'ACCESORIOS')), comentario: txt(col(f, 'COMENTARIO')),
+      // Firma a distancia (LineasFirmaRemota.gs): 'PENDIENTE' mientras falte alguna liga por completarse -- la
+      // ficha (Documentos) solo ofrece "Ver ligas de firma" mientras diga eso (usuario, 6-nov)
+      estadoFirma: txt(col(f, 'ESTADO FIRMA')) || null,
     };
   }
 

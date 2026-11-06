@@ -270,6 +270,23 @@ test('copiarLiga: la liga siempre se arma en el servidor (Config.urlFirmaPublica
   assert.throws(() => F.copiarLiga('tok-ses', 'RES-404', 'SEGUNDO'), /No se encontró/);
 });
 
+// Usuario, 6-nov: "Ver ligas de firma" en Documentos -- con el nombre de cada quien (no "Responsable (segundo)"),
+// para volver a copiar o regenerar una liga después de cerrar el recuadro que aparece al guardar.
+test('estadoLigas: el nombre y el estado de cada rol que SÍ se difirió; el que firmó presencial no sale', () => {
+  const vence = new Date(Date.now() + 86400000);
+  const { F } = entorno([{
+    ID: 'RES-1', RESPONSABLE: 'ANA PEREZ', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence,
+    'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON SEPULVEDA', 'FIRMADO POR SEGUNDO': 'ayrton@x.com', // ya firmó por su liga
+    'NOMBRE TERCER RESPONSABLE': 'EMMANUEL CHAVEZ', // nunca tuvo liga: firmó presencial
+  }]);
+  const estados = JSON.parse(JSON.stringify(F.estadoLigas('tok-ses', 'RES-1')));
+  assert.deepEqual(estados, [
+    { rol: 'PRINCIPAL', nombre: 'ANA PEREZ', estado: 'PENDIENTE' },
+    { rol: 'SEGUNDO', nombre: 'AYRTON SEPULVEDA', estado: 'FIRMADO' },
+  ]);
+  assert.throws(() => F.estadoLigas('tok-ses', 'RES-404'), /No se encontró/);
+});
+
 // ---------------------------------------------------------------------------------------------
 // La integración dentro de LineasCaptura.gs (guardarResponsiva/guardarResponsivaEnCandado_): sin
 // simular todo su entorno (identificaciones, Drive, catálogos…), se revisa en el código fuente

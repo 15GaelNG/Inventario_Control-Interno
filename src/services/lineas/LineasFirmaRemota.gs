@@ -276,6 +276,24 @@ const LineasFirmaRemota = (function () {
     });
   }
 
+  /**
+   * El estado de cada rol que SÍ se difirió alguna vez (tiene o tuvo liga), con su nombre -- para
+   * "Ver ligas de firma" en Documentos (usuario, 6-nov: mostrar el nombre de cada quien, no
+   * "Responsable (segundo)", y poder volver a copiar o regenerar una liga después de cerrar el
+   * recuadro que aparece al guardar, como ya hace la Responsiva/Adherente Vehicular). Un rol que
+   * firmó presencial (nunca tuvo token ni quedó "FIRMADO POR") no sale aquí: no hay nada que ver.
+   */
+  function estadoLigas(token, responsivaId) {
+    Permisos.puedeEditar(token, 'lineas-telefonicas');
+    const filas = LineasDatos.buscarFilasPorId(TAB_RESP(), responsivaId);
+    if (!filas.length) throw new Error('No se encontró la responsiva.');
+    const fila = LineasDatos.leerFilas([{ tabla: TAB_RESP(), filas: filas.slice(0, 1) }])[0][0];
+    return ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]).map((rol) => ({
+      rol: rol, nombre: fila[columnaNombre_(rol)] || '',
+      estado: fila[colToken_(rol)] ? 'PENDIENTE' : 'FIRMADO',
+    }));
+  }
+
   /** "Copiar liga de nuevo" desde la ficha: SIEMPRE se arma aquí, nunca en el navegador (mismo motivo que Vehicular). */
   function copiarLiga(token, responsivaId, rol) {
     Permisos.puedeEditar(token, 'lineas-telefonicas');
@@ -316,7 +334,7 @@ const LineasFirmaRemota = (function () {
   return {
     ROLES_DIFERIBLES: ROLES_DIFERIBLES, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
     obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma,
-    copiarLiga: copiarLiga, regenerarLiga: regenerarLiga,
+    copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
     _base64DeImagen: base64DeImagen_,
