@@ -741,8 +741,14 @@ const LineasCaptura = (function () {
         identificaciones: escritos ? escritos.archivos.length : 0 };
     }
 
-    firmasCache_('RESPONSIVA', id, { responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null,
-      sinResponsable: !datos.firmaResponsableBase64 });
+    // Responsables adicionales que firmaron aquí mismo (datos.firmasAdicionales, { SEGUNDO: base64, ... }): sin esto se
+    // perdían en silencio -- nadie difirió nada (diferir.length === 0, el caso de siempre), así que nunca llegaban a
+    // LineasFirmaRemota.generarPendientes_ (eso solo corre con diferir.length > 0) y generarPdf no encontraba nada en
+    // caché para 'segundo'/'tercer'/'cuarto'/'quinto': esa casilla salía en blanco en el PDF (usuario, 6-nov).
+    const firmasAdicionalesCache = {};
+    ORDEN_ADICIONALES.forEach((rol) => { if (datos.firmasAdicionales && datos.firmasAdicionales[rol]) firmasAdicionalesCache[rol.toLowerCase()] = datos.firmasAdicionales[rol]; });
+    firmasCache_('RESPONSIVA', id, Object.assign({ responsable: datos.firmaResponsableBase64 || null, ci: datos.firmaCiBase64, patron: datos.patronBase64 || null,
+      sinResponsable: !datos.firmaResponsableBase64 }, firmasAdicionalesCache));
     return { id: id, pdfPendiente: true, filas: filas, hecho: res.hecho, registroId: res.obj.reg.id,
       identificaciones: escritos ? escritos.archivos.length : 0 };
   }
