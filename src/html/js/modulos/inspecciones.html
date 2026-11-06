@@ -731,11 +731,10 @@
       // queda disponible de inmediato, pero el formulario TODAVÍA tiene los valores en blanco").
       const bloqueo = document.createElement('div');
       bloqueo.className = 'ins-bloqueo-carga';
-      bloqueo.innerHTML = '<span class="spinner"></span> Cargando la inspección…';
+      bloqueo.innerHTML = Carga.html('ficha', { columnas: 2, n: 6, texto: 'Cargando la inspección…' });
       Object.assign(bloqueo.style, {
-        position: 'absolute', inset: '0', zIndex: '5', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', gap: '8px', background: 'var(--color-surface)', opacity: '0.95',
-        fontSize: 'var(--texto-s)', color: 'var(--color-text-muted)',
+        position: 'absolute', inset: '0', zIndex: '5', padding: '20px', overflow: 'auto',
+        background: 'var(--color-surface)', opacity: '0.95',
       });
       if (getComputedStyle(contenedor).position === 'static') contenedor.style.position = 'relative';
       contenedor.appendChild(bloqueo);
