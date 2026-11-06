@@ -8,6 +8,20 @@
   .chk-tabla th, .chk-tabla td { text-align: center; }
   .chk-tabla th:first-child, .chk-tabla td:first-child { text-align: left; }
   .chk-tabla td input[type="radio"] { width: auto; }
+
+  /* Renglones libres de "Notificar por correo" (paso Revisar y firmar): un input que
+     ocupa el ancho y un botón angosto para quitarlo, uno debajo del otro. */
+  .ins-correo-extra-fila { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .ins-correo-extra-fila input { flex: 1; }
+  .ins-correo-extra-fila button { flex-shrink: 0; padding: 6px 10px; }
+
+  /* Renglones de "Tickets a generar" (mismo paso): asunto libre + familia + prioridad + quitar.
+     En celular se apilan en una sola columna (regla de responsivo: dos cortes, 640/1024). */
+  .ins-ticket-extra-fila { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; align-items: center; margin-top: 8px; }
+  .ins-ticket-extra-fila button { flex-shrink: 0; padding: 6px 10px; }
+  @media (max-width: 640px) {
+    .ins-ticket-extra-fila { grid-template-columns: 1fr; }
+  }
 </style>
 <script>
   /**
@@ -114,10 +128,12 @@
             : '—'),
         },
       ],
-      accionesFila: [{ icono: 'car', titulo: 'Ver vehículo', alHacer: (i) => verFichaVehiculoDesdeOtroModulo(i.FOLIO) }],
+      accionesFila: [
+        { icono: 'car', titulo: 'Ver vehículo', alHacer: (i) => verFichaVehiculoDesdeOtroModulo(i.FOLIO) },
+      ].concat(puedeEditar ? [{ icono: 'pencil', titulo: 'Editar', alHacer: (i) => abrirEditarInspeccion(i.ID, i) }] : []),
       seleccionable: true,
-      // Una inspección es un acta firmada: no se corrige, se levanta otra
-      motivoSinEliminar: 'Una inspección firmada no se edita: si algo cambió, levanta una nueva',
+      // Se puede corregir (checklist/llantas/voltaje/encabezado), pero no borrar: es un acta firmada
+      motivoSinEliminar: 'Una inspección firmada no se elimina: si algo cambió, corrígela con Editar',
     });
 
     document.getElementById('ins-tabla').addEventListener('click', (ev) => {
@@ -269,6 +285,26 @@
       if (puedeEditar && !captura) captura = prepararCaptura(document.getElementById('ins-form'), { tabs: tabs, recargar: cargar });
     };
 
+    /** Editar una inspección ya guardada: checklist/llantas/voltaje/encabezado, en un modal
+     *  aparte (no la pestaña "Nueva inspección" -- esa sigue siendo solo para crear). Firmas y
+     *  diagramas no se tocan (se quedan tal como se firmaron/dibujaron la primera vez). */
+    function cerrarEditarInspeccion() {
+      document.getElementById('modal-editar-inspeccion').hidden = true;
+      document.getElementById('editar-inspeccion-cuerpo').innerHTML = '';
+    }
+    document.getElementById('btn-cancelar-editar-inspeccion').addEventListener('click', cerrarEditarInspeccion);
+    function abrirEditarInspeccion(id, i) {
+      document.getElementById('editar-inspeccion-label').textContent =
+        [i && i.FOLIO, i && i.PLACAS, i && formatearFecha(i.FECHA)].filter(Boolean).join(' · ');
+      const cuerpo = document.getElementById('editar-inspeccion-cuerpo');
+      cuerpo.innerHTML = '';
+      document.getElementById('modal-editar-inspeccion').hidden = false;
+      prepararCaptura(cuerpo, {
+        idEditar: id,
+        alGuardado: async () => { cerrarEditarInspeccion(); invalidarCacheLista('apiListarInspecciones', state.token); await cargar(); },
+      });
+    }
+
     const tabs = Tabs.iniciar(document.getElementById('ins-tabs'), {
       inicial: 'registros',
       alCambiar: (nombre) => {
@@ -304,6 +340,16 @@
 
   /** Alto máximo de un diagrama en pantalla: una moto de frente a todo lo ancho mediría 700 px */
   const ALTO_DIAGRAMA = 340;
+
+  /**
+   * Catálogo cerrado de "a qué familia o grupo pertenece" un pendiente de inspección (20-oct-2026).
+   * Solo sirve para que Kike filtre y dé seguimiento (punto C): el match automático con Help
+   * Desk (PendientesInspeccionService.revisarCargaHelpdesk) es por el ASUNTO, no por esto -- el
+   * responsable es un tercero sin acceso a este sistema y no elige ninguna familia.
+   */
+  const FAMILIAS_PENDIENTE_INSPECCION = [
+    'MECANICA', 'HOJALATERIA Y PINTURA', 'ACCESORIOS', 'OTROS', 'CERRAJERIA, CRISTALERIA Y TAPICERIA',
+  ];
 
   /**
    * Cómo se reparten las secciones del formato en pasos: en el orden en que el inspector
@@ -453,6 +499,9 @@
     const campoTipo = $('#ins-tipo');
     const cajaPasos = $('#ins-pasos-checklist');
     $('form').addEventListener('submit', (ev) => ev.preventDefault());
+    if (opciones.idEditar) {
+      $('#ins-guardar').innerHTML = Iconos.svg('guardar') + ' Guardar cambios';
+    }
 
     const error = (campo, mensaje) => {
       const caja = contenedor.querySelector(`[data-campo="${campo}"]`);
@@ -510,7 +559,35 @@
       alResolver: (v) => { if (v) buscarVehiculo(); },
     });
 
+    const colaboradoresPorNombre = {};
+    // A quién le toca de "jefe directo" alguien cuyo puesto es de asistente (Capital Humano no
+    // lleva "asiste a X", pero si le damos la vuelta a Jefe Directo -- el único reporte directo
+    // de este jefe que es asistente -- sale lo mismo sin pedirle un dato nuevo a nadie). Uno por
+    // jefe (el primero que aparezca, si por algún motivo tuviera más de uno).
+    const asistentePorJefe = {};
+    /** Si el Conductor coincide con alguien de Capital Humano, sugiere su Jefe directo (igual
+     *  que ya hace Responsiva Vehicular): se puede corregir, y deja de ser "auto" en cuanto se
+     *  toca. soloSiVacio evita pisar lo que ya haya escrito el inspector mientras cargaba el
+     *  catálogo (una carrera: el catálogo llega después de que ya se armó el paso). */
+    function sugerirJefe_(soloSiVacio) {
+      const campoConductor = $('#ins-conductor');
+      const campoJefe = $('#ins-jefe');
+      if (!campoConductor || !campoJefe) return;
+      if (soloSiVacio && campoJefe.value) return;
+      const colaborador = colaboradoresPorNombre[String(campoConductor.value || '').trim().toUpperCase()];
+      if (colaborador && colaborador.JEFE_DIRECTO) CampoAuto.llenar(campoJefe, colaborador.JEFE_DIRECTO);
+    }
     const catalogos = Promise.all([
+      callServerCacheado('apiListarColaboradores', state.token).then((colaboradores) => {
+        (colaboradores || []).forEach((c) => {
+          const clave = String(c.NOMBRE || '').trim().toUpperCase();
+          if (clave) colaboradoresPorNombre[clave] = c;
+          const jefe = String(c.JEFE_DIRECTO || '').trim().toUpperCase();
+          if (jefe && /ASISTENTE/i.test(c.PUESTO || '') && !asistentePorJefe[jefe]) asistentePorJefe[jefe] = c;
+        });
+        sugerirJefe_(true);
+      }).catch(() => {}),   // si falla, el correo del responsable, el jefe y el asistente sugeridos simplemente quedan vacíos
+
       callServerCacheado('apiListarVehiculosBasico', state.token).then((vehiculos) => {
         FolioNucco.indexar(vehiculos, vehiculoPorClave);
         Combobox.crear(campoNucco, { opciones: FolioNucco.opcionesLista(vehiculos) });
@@ -568,7 +645,12 @@
       borradorTimer = setTimeout(guardarBorrador_, 800);
     }
 
-    ['input', 'change', 'click'].forEach((ev) => contenedor.addEventListener(ev, programarGuardarBorrador_));
+    // Editar no guarda borrador: es sobre una inspección que ya existe, y usa la MISMA llave de
+    // localStorage que "Nueva inspección" -- guardarlo aquí pisaría (o se dejaría pisar por) el
+    // borrador real de una captura nueva que esta persona tenga a medias.
+    if (!opciones.idEditar) {
+      ['input', 'change', 'click'].forEach((ev) => contenedor.addEventListener(ev, programarGuardarBorrador_));
+    }
 
     /**
      * Si hay un borrador de esta persona sin terminar, ofrece continuarlo -- y si se acepta,
@@ -634,6 +716,72 @@
         const v = vehiculoPorClave[opciones.folioFijo];
         if (v && v.NUCO) CampoAuto.llenar(campoNucco, v.NUCO);
         buscarVehiculo();
+      }
+    }
+
+    /**
+     * Editar (opciones.idEditar): trae la fila completa (195 columnas, por nombre de pieza) y
+     * precarga el checklist, llantas, voltaje y los datos de encabezado -- el Folio/Nucco/Tipo
+     * quedan bloqueados (cambiar el tipo invalidaría el checklist entero) y firmas/diagramas no
+     * se piden ni se muestran aquí (se quedan como ya están; verlos sigue siendo "Ver completo").
+     */
+    async function precargarEdicion_() {
+      // Bloquea TODO el formulario mientras llega la fila real -- si no, "Siguiente" ya se podía
+      // tocar con el paso 0 todavía en blanco (el mismo bug que ya tuvo Arqueos: "se abre y Guardar
+      // queda disponible de inmediato, pero el formulario TODAVÍA tiene los valores en blanco").
+      const bloqueo = document.createElement('div');
+      bloqueo.className = 'ins-bloqueo-carga';
+      bloqueo.innerHTML = '<span class="spinner"></span> Cargando la inspección…';
+      Object.assign(bloqueo.style, {
+        position: 'absolute', inset: '0', zIndex: '5', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', gap: '8px', background: 'var(--color-surface)', opacity: '0.95',
+        fontSize: 'var(--texto-s)', color: 'var(--color-text-muted)',
+      });
+      if (getComputedStyle(contenedor).position === 'static') contenedor.style.position = 'relative';
+      contenedor.appendChild(bloqueo);
+      const boton = $('#ins-guardar');
+      boton.disabled = true;
+      try {
+        let fila;
+        try {
+          fila = await callServer('apiBuscarInspeccionPorId', state.token, opciones.idEditar);
+        } catch (err) {
+          errorGeneral('No se pudo cargar la inspección: ' + err.message);
+          return;
+        }
+        await catalogos;
+        campoFolio.value = fila['FOLIO'] || '';
+        if (fila['NUCO']) campoNucco.value = fila['NUCO'];
+        await buscarVehiculo();
+        campoTipo.value = fila['TIPO'] || '';
+        campoFolio.disabled = true;
+        campoNucco.disabled = true;
+        campoTipo.disabled = true;
+        await cargarChecklist();
+        if (!estructura) return;
+        estructura.secciones.forEach((s) => s.campos.forEach((c) => {
+          if (fila[c.campo] === undefined || fila[c.campo] === '') return;
+          const radio = cajaPasos.querySelector(`input[name="chk-${CSS.escape(c.campo)}"][value="${CSS.escape(fila[c.campo])}"]`);
+          if (radio) radio.checked = true;
+        }));
+        estructura.llantas.forEach((l) => {
+          const el = cajaPasos.querySelector(`[data-llanta="${CSS.escape(l.campo)}"]`);
+          if (el && fila[l.campo] !== undefined && fila[l.campo] !== '') el.value = fila[l.campo];
+        });
+        const campo = (id, valor) => { const el = $('#' + id); if (el && valor !== undefined && valor !== '') el.value = valor; };
+        campo('ins-conductor', fila['CONDUCTOR']);
+        campo('ins-jefe', fila['JEFE DIRECTO']);
+        campo('ins-holograma', fila['HOLOGRAMA']);
+        campo('ins-voltaje', fila['VOLTAJE']);
+        campo('ins-observaciones', fila['OBSERVACIONES']);
+        if (fila['FECHA ULTIMO SERVICIO']) {
+          const f = new Date(fila['FECHA ULTIMO SERVICIO']);
+          if (!isNaN(f.getTime())) campo('ins-servicio', Formato.dia(f));
+        }
+        actualizarAvance();
+      } finally {
+        boton.disabled = false;
+        bloqueo.remove();
       }
     }
 
@@ -722,6 +870,7 @@
             `${estructura.secciones.length} secciones</p>`;
           armarPasos();
         } catch (err) {
+          console.error('cargarChecklist', tipo, err);
           if (campoTipo.value === tipo) error('TIPO', err.message);
           aviso.innerHTML = '';
         } finally {
@@ -757,6 +906,10 @@
           .forEach((g) => pasos.push(Object.assign({ id: 'checklist' }, g)));
         PASOS_FINALES
           .filter((p) => p.id !== 'danos' || estructura.diagramas.length)
+          // Editar no toca firmas ni diagramas (se quedan tal como se firmaron/dibujaron la
+          // primera vez): solo queda el paso "Cierre" (los datos de encabezado), sin "Daños"
+          // ni "Revisar y firmar" (ese es el que pide firmas, tickets y el correo de aviso).
+          .filter((p) => !opciones.idEditar || p.id === 'cierre')
           .forEach((p) => pasos.push(Object.assign({}, p)));
 
         cajaPasos.innerHTML = pasos.slice(1).map((p, k) => `
@@ -768,6 +921,8 @@
         conectarChecklist();
         prepararDiagramas();
         prepararFirmas();
+        prepararTicketsAGenerar();
+        prepararCorreos();
         // Conductor/Holograma del paso "Cierre": si la ficha de Vehículos ya sabe quién es
         // el responsable o qué holograma tiene la unidad, se sugieren (el campo se puede
         // seguir editando; no viene con soloLectura porque puede no ser el conductor real),
@@ -778,6 +933,11 @@
         if (opciones.hologramaSugerido && $('#ins-holograma') && !$('#ins-holograma').value) {
           CampoAuto.llenar($('#ins-holograma'), opciones.hologramaSugerido);
         }
+        // Jefe directo: se sugiere con el de Capital Humano en cuanto se sabe el Conductor (ya
+        // sea el sugerido de arriba o el que escriba a mano el inspector), y se corrige solo si
+        // cambia el Conductor -- igual que ya hace Responsiva Vehicular con su "quien entrega".
+        sugerirJefe_(true);
+        $('#ins-conductor').addEventListener('input', () => sugerirJefe_(false));
       }
       $('#ins-panel-avance').hidden = !estructura;
       mostrarPaso(0);
@@ -863,7 +1023,15 @@
               <input type="number" id="ins-voltaje" step="0.01" min="0" max="20" inputmode="decimal" /></div>`}
             <div class="field form-completo"><label for="ins-observaciones">Observaciones</label>
               <textarea id="ins-observaciones" rows="7"></textarea></div>
-          </div>`;
+          </div>
+          ${opciones.idEditar ? `
+          <div class="field" style="margin-top:12px">
+            <label for="ins-formato-manual">¿Ya corregiste el formato por fuera del sistema?</label>
+            <input type="file" id="ins-formato-manual" accept="application/pdf,image/png,image/jpeg" />
+            <span class="form-ayuda">Opcional. Si subes un PDF o foto aquí, reemplaza al formato tal cual lo subas
+              (no se vuelve a generar desde la plantilla). Si lo dejas vacío, el PDF se regenera solo con los
+              cambios de arriba.</span>
+          </div>` : ''}`;
       }
       if (p.id === 'danos') {
         return `<div class="ins-diagramas">${estructura.diagramas.map((d) => `
@@ -892,7 +1060,28 @@
             <label class="requerido">Firma del inspector</label>
             <div data-firma="FIRMA INSPECTOR"></div>
           </div>
-        </div>`;
+        </div>
+        <h4 class="ins-revision-titulo">Tickets a generar (Help Desk)</h4>
+        <p class="form-paso-desc" style="margin-top:-8px">Anota lo que el responsable debe subir como ticket
+          en el Help Desk de TI. Va en el correo en su propia sección, con instrucciones de usar ese mismo
+          texto como asunto del ticket (el folio de esta inspección se le agrega solo, para que el sistema
+          lo detecte en automático). La familia es solo para dar seguimiento, no participa en el match.
+          Déjalo vacío si no hace falta ningún ticket.</p>
+        <div id="ins-tickets-extra"></div>
+        <button type="button" class="secondary" id="ins-ticket-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar ticket a generar</button>
+        <h4 class="ins-revision-titulo">Notificar por correo</h4>
+        <p class="form-paso-desc" style="margin-top:-8px">Al guardar se les avisa con el resumen de la
+          inspección y lo que salió mal. Déjalo vacío si no hay a quién avisar.</p>
+        <div class="form-campos" style="--form-columnas:2">
+          <div class="field"><label for="ins-correo-inspector">Tu correo (quien inspecciona)</label>
+            <input type="email" id="ins-correo-inspector" autocomplete="off" /></div>
+          <div class="field"><label for="ins-correo-responsable">Correo del responsable</label>
+            <input type="email" id="ins-correo-responsable" autocomplete="off" /></div>
+          <div class="field"><label for="ins-correo-asistente">Correo del asistente</label>
+            <input type="email" id="ins-correo-asistente" autocomplete="off" /></div>
+        </div>
+        <div id="ins-correos-extra"></div>
+        <button type="button" class="secondary" id="ins-correo-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar otro correo</button>`;
     }
 
     // Azul: el mismo con el que se marcaba en AppSheet (sigue siendo el color por default).
@@ -952,6 +1141,62 @@
           alCambiar: () => errorGeneral(null),
         });
       });
+    }
+
+    /** Un renglón más de "ticket a generar": asunto libre + familia (catálogo) + prioridad */
+    function agregarTicketExtra(valores) {
+      const cont = $('#ins-tickets-extra');
+      if (!cont) return;
+      const fila = document.createElement('div');
+      fila.className = 'ins-ticket-extra-fila';
+      fila.innerHTML = `
+        <input type="text" class="ins-ticket-asunto" placeholder="Qué debe reportar (ej. Reparación de faro)" aria-label="Asunto del ticket" autocomplete="off" />
+        <select class="ins-ticket-familia" aria-label="Familia o grupo a reportar">
+          <option value="">Familia…</option>
+          ${FAMILIAS_PENDIENTE_INSPECCION.map((f) => `<option value="${escaparHtml(f)}">${escaparHtml(f)}</option>`).join('')}
+        </select>
+        <select class="ins-ticket-prioridad" aria-label="Prioridad">
+          <option value="NO URGENTE">No urgente</option>
+          <option value="URGENTE">Urgente</option>
+        </select>
+        <button type="button" class="secondary" aria-label="Quitar este ticket">${Iconos.svg('cancelar')}</button>`;
+      if (valores) {
+        fila.querySelector('.ins-ticket-asunto').value = valores.asunto || '';
+        fila.querySelector('.ins-ticket-familia').value = valores.familia || '';
+        fila.querySelector('.ins-ticket-prioridad').value = valores.prioridad || 'NO URGENTE';
+      }
+      fila.querySelector('button').addEventListener('click', () => fila.remove());
+      cont.appendChild(fila);
+    }
+
+    /** Conecta el botón "Agregar ticket a generar" (sin precarga: la lista nace vacía) */
+    function prepararTicketsAGenerar() {
+      const btnAgregar = $('#ins-ticket-agregar');
+      if (btnAgregar) btnAgregar.addEventListener('click', () => agregarTicketExtra());
+    }
+
+    /** Un renglón más de correo libre, para "los demás involucrados" */
+    function agregarCorreoExtra(valor) {
+      const cont = $('#ins-correos-extra');
+      if (!cont) return;
+      const fila = document.createElement('div');
+      fila.className = 'ins-correo-extra-fila';
+      fila.innerHTML = `<input type="email" class="ins-correo-extra" placeholder="correo@dominio.com" autocomplete="off" />
+        <button type="button" class="secondary" aria-label="Quitar este correo">${Iconos.svg('cancelar')}</button>`;
+      if (valor) fila.querySelector('input').value = valor;
+      fila.querySelector('button').addEventListener('click', () => fila.remove());
+      cont.appendChild(fila);
+    }
+
+    /** El correo de quien inspecciona se precarga solo (ya lo sabemos de la sesión), pero se
+        puede corregir; el del responsable se intenta en pintarRevision() (ahí ya hay vehículo). */
+    function prepararCorreos() {
+      const campoInspector = $('#ins-correo-inspector');
+      if (campoInspector && !campoInspector.value && state.sesion && state.sesion.correo) {
+        CampoAuto.llenar(campoInspector, state.sesion.correo);
+      }
+      const btnAgregar = $('#ins-correo-agregar');
+      if (btnAgregar) btnAgregar.addEventListener('click', () => agregarCorreoExtra());
     }
 
     const marcados = () => Object.keys(lienzos).filter((campo) => !lienzos[campo].vacio());
@@ -1182,6 +1427,19 @@
       const r = calcular();
       if (firmas['FIRMA RESPONSABLE']) firmas['FIRMA RESPONSABLE'].setNombre((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '');
       if (firmas['FIRMA INSPECTOR']) firmas['FIRMA INSPECTOR'].setNombre((state.sesion && state.sesion.nombre) || '');
+      const nombreResponsable = String((vehiculo && vehiculo['RESPONSABLE VEHICULO']) || '').trim().toUpperCase();
+      const campoCorreoResponsable = $('#ins-correo-responsable');
+      if (campoCorreoResponsable && !campoCorreoResponsable.value) {
+        const colaborador = colaboradoresPorNombre[nombreResponsable];
+        if (colaborador && colaborador.CORREO) CampoAuto.llenar(campoCorreoResponsable, colaborador.CORREO);
+      }
+      // El asistente DE ESE responsable (no del Conductor): a quien se avisa es al responsable,
+      // y es su asistente el que tiene sentido copiar.
+      const campoCorreoAsistente = $('#ins-correo-asistente');
+      if (campoCorreoAsistente && !campoCorreoAsistente.value) {
+        const asistente = asistentePorJefe[nombreResponsable];
+        if (asistente && asistente.CORREO) CampoAuto.llenar(campoCorreoAsistente, asistente.CORREO);
+      }
       const faltantes = estructura.secciones
         .map((s, i) => ({ s, i, a: r.porSeccion[i] }))
         .filter((x) => x.a.contestadas < x.a.total);
@@ -1229,6 +1487,46 @@
       if (!(await validarUnidad())) { mostrarPaso(0); return; }
       const r = calcular();
       if (!Object.keys(r.dadas).length) { errorGeneral('Responde al menos una pieza del checklist'); return; }
+
+      if (opciones.idEditar) {
+        const llantasEditar = {};
+        cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => { if (el.value !== '') llantasEditar[el.dataset.llanta] = Number(el.value); });
+        const htmlBotonEditar = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<span class="spinner"></span> Guardando…';
+        try {
+          // Opcional: un PDF/foto ya corregido a mano por fuera del sistema, para subirlo tal
+          // cual en vez de que el servidor regenere el PDF desde la plantilla.
+          const campoFormatoManual = $('#ins-formato-manual');
+          const archivoFormatoManual = campoFormatoManual && campoFormatoManual.files[0];
+          const archivoFormato = archivoFormatoManual
+            ? { base64: await leerArchivoBase64(archivoFormatoManual), mimeType: archivoFormatoManual.type }
+            : undefined;
+          const res = await callServer('apiActualizarInspeccion', state.token, opciones.idEditar, {
+            checklist: r.dadas,
+            llantas: llantasEditar,
+            CONDUCTOR: valorDe('ins-conductor'),
+            JEFE_DIRECTO: valorDe('ins-jefe'),
+            HOLOGRAMA: valorDe('ins-holograma'),
+            VOLTAJE: valorDe('ins-voltaje'),
+            ULTIMO_SERVICIO: valorDe('ins-servicio'),
+            OBSERVACIONES: valorDe('ins-observaciones'),
+          }, archivoFormato);
+          if (res.aviso) Notificar.error(res.aviso);
+          else Notificar.exito(`Inspección actualizada · puntaje ${res.puntaje}%`, {
+            duracion: 9000,
+            accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
+          });
+          if (opciones.alGuardado) await opciones.alGuardado(res);
+        } catch (err) {
+          errorGeneral(err.message);
+        } finally {
+          boton.disabled = false;
+          boton.innerHTML = htmlBotonEditar;
+        }
+        return;
+      }
+
       const faltan = estructura.piezas - r.respondidas;
       if (faltan > 0) {
         const ok = await Confirmar.pedir({
@@ -1261,6 +1559,16 @@
         if (!ok) { irAFirmas(); return; }
       }
 
+      const ticketsAGenerar = Array.from(cajaPasos.querySelectorAll('.ins-ticket-extra-fila')).map((fila) => ({
+        asunto: fila.querySelector('.ins-ticket-asunto').value.trim(),
+        familia: fila.querySelector('.ins-ticket-familia').value,
+        prioridad: fila.querySelector('.ins-ticket-prioridad').value,
+      })).filter((it) => it.asunto);
+      if (ticketsAGenerar.some((it) => !it.familia)) {
+        errorGeneral('Falta elegir la familia o grupo en algún "ticket a generar"');
+        return;
+      }
+
       const llantas = {};
       cajaPasos.querySelectorAll('[data-llanta]').forEach((el) => {
         if (el.value !== '') llantas[el.dataset.llanta] = Number(el.value);
@@ -1279,6 +1587,14 @@
           if (firma) imagenes[campo] = firma;
         });
 
+        // Lo mismo que ya se le mostró en "Lo que salió mal" -- no se vuelve a calcular en
+        // el servidor, es solo texto para el correo
+        const hallazgos = [];
+        r.porSeccion.forEach((a, i) => a.problemas.forEach((p) =>
+          hallazgos.push({ pieza: p.pieza, estado: p.valor, seccion: estructura.secciones[i].titulo })));
+        const otrosCorreos = Array.from(cajaPasos.querySelectorAll('.ins-correo-extra'))
+          .map((el) => el.value.trim()).filter(Boolean);
+
         const res = await callServer('apiRegistrarInspeccion', state.token, {
           // El vehículo va por su ID; el folio solo se queda para el mensaje
           ID_VEHICULO: (vehiculoPorClave[campoFolio.value.trim()] || {}).ID || '',
@@ -1292,6 +1608,14 @@
           VOLTAJE: valorDe('ins-voltaje'),
           ULTIMO_SERVICIO: valorDe('ins-servicio'),
           OBSERVACIONES: valorDe('ins-observaciones'),
+          NOTIFICAR: {
+            responsable: valorDe('ins-correo-responsable'),
+            inspector: valorDe('ins-correo-inspector'),
+            asistente: valorDe('ins-correo-asistente'),
+            otros: otrosCorreos,
+          },
+          HALLAZGOS: hallazgos,
+          PENDIENTES: ticketsAGenerar,
         }, imagenes);
 
         if (res.aviso) Notificar.error(res.aviso);
@@ -1300,6 +1624,9 @@
           accion: res.pdf ? { texto: 'Ver PDF', alHacer: () => window.open(res.pdf, '_blank') } : null,
         });
         if (res.advertencia) Notificar.info(res.advertencia, { duracion: 12000 });
+        if (res.correo && !res.correo.enviado && res.correo.motivo !== 'No se capturó ningún correo') {
+          Notificar.info('No se pudo avisar por correo: ' + res.correo.motivo, { duracion: 10000 });
+        }
         invalidarCacheLista('apiListarInspecciones', state.token);
         limpiarBorrador_();
         if (opciones.alGuardado) {
@@ -1329,7 +1656,11 @@
     });
 
     armarPasos();
-    restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
+    if (opciones.idEditar) {
+      precargarEdicion_();
+    } else {
+      restaurarBorrador_().catch((err) => Notificar.error('No se pudo recuperar el borrador: ' + err.message));
+    }
     return { catalogos };
   }
 

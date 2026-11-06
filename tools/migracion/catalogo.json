@@ -280,6 +280,19 @@
       "migrable": true
     },
     {
+      "hoja": "PENDIENTES INSPECCION",
+      "prefijo": "PDI",
+      "llaveAnterior": "ID",
+      "columnaAnterior": 0,
+      "familia": "vehiculos",
+      "llaveEsDato": false,
+      "delSistemaNuevo": true,
+      "externa": false,
+      "modulo": "",
+      "pisaLlaveAnterior": true,
+      "migrable": false
+    },
+    {
       "hoja": "COLABORADORES",
       "prefijo": "COL",
       "llaveAnterior": "No EMPLEADO",
