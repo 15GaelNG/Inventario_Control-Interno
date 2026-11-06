@@ -30,7 +30,10 @@ const LineasPdf = (function () {
   const PLANTILLAS = {
     INSPECCION_CELULAR: '101CtfZbTXpgu_4vB0vCV-USfHSWP-O3G-2VGLuR3saU',
     INSPECCION_CELULAR_CHECKLIST: '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',
-    RESPONSIVA_CELULAR: '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ',
+    // Desde el 6-nov («PRUEBA RESPONSABLE 05-nov», usuario): cada responsable adicional ya tiene su propia casilla
+    // de firma y su nombre en su propio renglón, con marcadores numerados <<FIRMA RESPONSABLE 2..5>> / <<RESPONSABLE 1..5>>
+    // (antes solo existía <<FIRMA RESPONSABLE>> y los nombres se concatenaban en <<RESPONSABLE>>).
+    RESPONSIVA_CELULAR: '18tQWdwdrR8pvl369SbxO3O4Ok5mr3IikLH6sippZQ44',
   };
   /**
    * La plantilla de una inspección: la de antes si se capturó con CUBO, CABLE, FUNDA o MICA (SI/NO/N/A) o es de una línea

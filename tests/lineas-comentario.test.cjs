@@ -81,7 +81,7 @@ test('las plantillas del AppSheet quedan aparte de las del sistema', () => {
   // La inspección, con los accesorios en lista (usuario, 22-oct); la del 19-oct queda para las inspecciones de antes
   assert.equal(P.PLANTILLAS.INSPECCION_CELULAR, '101CtfZbTXpgu_4vB0vCV-USfHSWP-O3G-2VGLuR3saU');
   assert.equal(P.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST, '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA');
-  assert.equal(P.PLANTILLAS.RESPONSIVA_CELULAR, '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ');
+  assert.equal(P.PLANTILLAS.RESPONSIVA_CELULAR, '18tQWdwdrR8pvl369SbxO3O4Ok5mr3IikLH6sippZQ44');
   assert.match(read('src/services/lineas/LineasPdf.gs'), /\[PLANTILLAS\.RESPONSIVA_CELULAR\]: \{ altoFuente/);
   // Las funciones de una sola vez (renombrar columnas, copiar plantillas) ya se corrieron y se quitaron (7-oct)
   const admin = read('src/services/lineas/LineasAdmin.gs');

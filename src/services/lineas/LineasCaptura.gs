@@ -905,6 +905,10 @@ const LineasCaptura = (function () {
   function registroPlantilla_(fila) {
     const registro = {};
     Object.keys(fila).forEach((k) => { if (k !== '_fila') registro[k] = fila[k]; });
+    // Cada responsable firma su propia casilla: <<RESPONSABLE 1>> es el principal, <<RESPONSABLE 2>>..<<RESPONSABLE 5>>
+    // los adicionales (plantilla «PRUEBA RESPONSABLE 05-nov»), antes de que <<RESPONSABLE>> se sobreescriba abajo.
+    registro['RESPONSABLE 1'] = String(fila['RESPONSABLE'] || '').trim();
+    ORDEN_ADICIONALES.forEach((n, i) => { registro['RESPONSABLE ' + (i + 2)] = String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim(); });
     // Responsiva con más de un responsable: como el AppSheet, los nombres y los números de empleado juntos con « / »
     const nombres = ORDEN_ADICIONALES.map((n) => String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim()).filter(Boolean);
     if (nombres.length) {
@@ -1060,9 +1064,10 @@ const LineasCaptura = (function () {
       ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }
       : Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
         'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron },
-        // Firma a distancia de un responsable adicional (LineasFirmaRemota.gs): su propia casilla, una vez que la
-        // plantilla tenga su marcador <<FIRMA SEGUNDO RESPONSABLE>> (etc.) -- sin ese marcador, no pasa nada (como hoy).
-        ORDEN_ADICIONALES.reduce((o, n) => Object.assign(o, { ['FIRMA ' + n + ' RESPONSABLE']: imagen(n.toLowerCase(), 'FIRMA ' + n + ' RESPONSABLE', 'firma-' + n.toLowerCase() + '.png') }), {}));
+        // Firma a distancia de un responsable adicional (LineasFirmaRemota.gs): su propia casilla numerada
+        // (<<FIRMA RESPONSABLE 2>>..<<FIRMA RESPONSABLE 5>>, plantilla «PRUEBA RESPONSABLE 05-nov»); la columna de la
+        // hoja sigue con su palabra (FIRMA SEGUNDO RESPONSABLE, etc.), solo el marcador del Doc es numerado.
+        ORDEN_ADICIONALES.reduce((o, n, i) => Object.assign(o, { ['FIRMA RESPONSABLE ' + (i + 2)]: imagen(n.toLowerCase(), 'FIRMA ' + n + ' RESPONSABLE', 'firma-' + n.toLowerCase() + '.png') }), {}));
     const anterior = forzar ? pdfVigente_(ev) : null;
     try {
       const tp = Date.now();
