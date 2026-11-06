@@ -527,10 +527,21 @@
        * La misma pantalla sirve para el resultado (usuario, 4-oct): o = { tono: 'listo' | 'error', icono, texto,
        * detalle (HTML ya escapado), acciones (HTML de botones) }. Sin `o`, es la espera con su círculo girando.
        */
+      /**
+       * Mientras la espera gira (guardando, generando el PDF), cerrar o recargar la pestaña pide confirmación al navegador
+       * («¿Salir del sitio? Es posible que no se guarden los cambios»; usuario, 6-nov). El resultado (listo o error) y
+       * ocultar la espera la quitan. El texto lo pone el navegador: no se puede cambiar.
+       */
+      const avisarAlSalir = (ev) => { ev.preventDefault(); ev.returnValue = ''; return ''; };
+      function vigilarSalida(activo) {
+        window[activo ? 'addEventListener' : 'removeEventListener']('beforeunload', avisarAlSalir);
+      }
+
       function mostrarEspera(titulo, o) {
         const espera = $('#ln-captura-espera', raiz);
         if (!espera) return;
         o = o || {};
+        vigilarSalida(!o.tono);
         espera.className = 'ln-espera' + (o.tono ? ' ln-espera-' + o.tono : '');
         espera.setAttribute('role', o.tono === 'error' ? 'alert' : 'status');
         $('#ln-espera-circulo', raiz).innerHTML = o.icono ? icono(o.icono) : '<span class="ln-spinner"></span>';
@@ -555,6 +566,7 @@
           detalle: mensajeError(e), acciones: '<button type="button" class="primary" data-espera-volver>Volver</button>' });
       }
       function ocultarEspera() {
+        vigilarSalida(false);
         const espera = $('#ln-captura-espera', raiz);
         if (espera) espera.hidden = true;
       }
