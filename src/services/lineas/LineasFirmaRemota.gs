@@ -269,6 +269,9 @@ const LineasFirmaRemota = (function () {
       }
 
       const resultado = LineasCaptura.generarPdf('RESPONSIVA', fila['ID'], false, { nombre: 'Firma a distancia', correo: '' }, imagenesPdf);
+      if (resultado && resultado.avisos && resultado.avisos.length) {
+        console.error('completarFirma ' + fila['ID'] + ': ' + resultado.avisos.join(' | '));
+      }
       TODOS_LOS_ROLES.forEach((r) => borrarFirmaTempSiHay_(fila[colTemp_(r)]));
       LineasDatos.actualizarFila(TAB_RESP(), fila._fila, Object.assign({ 'ESTADO FIRMA': 'FIRMADO' },
         TODOS_LOS_ROLES.reduce((o, r) => Object.assign(o, { [colTemp_(r)]: '' }), {})));

@@ -113,7 +113,12 @@ test('guardarResponsiva sin nada diferido: la firma de un responsable adicional 
   assert.equal(r.pdfPendiente, true);
   assert.equal(r.pendiente, undefined, 'nada se difirió: no hay ligas que esperar');
 
-  const pdf = C.generarPdf('RESPONSIVA', 'RES-99', false, USUARIO, null);
+  // El camino REAL del cliente (refrescarDespuesDeCaptura, lineas-telefonicas-captura.html): después de guardar,
+  // pide el PDF con sesionCaptura.pdfFirmas = { responsable, ci, patron } -- SIN 'segundo' (ese objeto nunca lo
+  // tuvo, solo se armó con lo del principal/CI/patrón). Si firmasCache_ no conservara lo que ya se cacheó al
+  // guardar, este segundo llamado lo borraría otra vez.
+  const pdf = C.generarPdf('RESPONSIVA', 'RES-99', false, USUARIO,
+    { responsable: datos.firmaResponsableBase64, ci: datos.firmaCiBase64, patron: null });
   assert.equal(pdf.faltanFirmas, undefined);
   const img = hechos.generados[0].imagenes;
   assert.equal(img['FIRMA RESPONSABLE'].nombre, 'firma-principal.png');

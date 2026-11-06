@@ -461,6 +461,13 @@ const LineasPdf = (function () {
               img.setHeight(Math.max(1, Math.round(alto * escala)));
             }
           } catch (e) {
+            // Se atrapa a propósito (una firma ilegible no debe tirar todo el PDF), pero sin esto quedaba en
+            // silencio total -- nadie veía `avisos` y no había pista de qué pasó (usuario, 6-nov: NUCO 0067/0669,
+            // la firma de quien firmó en el formulario salía en blanco sin ningún error visible en ningún lado).
+            let bytes = -1;
+            try { bytes = blob.getBytes().length; } catch (e2) { /* no-op */ }
+            console.error('reemplazarEtiquetas_: no se pudo insertar ' + nombreImagen + ' (' + (blob.getName ? blob.getName() : '?') +
+              ', ' + bytes + ' bytes, ' + (blob.getContentType ? blob.getContentType() : '?') + '): ' + e.message);
             avisos.push('No se pudo insertar la imagen ' + nombreImagen + ': ' + e.message);
           }
         }
