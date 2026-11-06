@@ -156,6 +156,29 @@ test('completarFirma: con 2 pendientes, completar el primero solo guarda y esper
   assert.equal(F._buscarPorToken('tok-b').rol, 'SEGUNDO');
 });
 
+test('_base64DeImagen: acepta el string plano de Líneas y el { base64, mimeType } de FirmaExterna.html/Vehicular', () => {
+  const { F } = entorno([]);
+  assert.equal(F._base64DeImagen('abc123'), 'abc123');
+  assert.equal(F._base64DeImagen({ base64: 'abc123', mimeType: 'image/png' }), 'abc123');
+  assert.equal(F._base64DeImagen(null), null);
+});
+
+test('completarFirma: bug real (6-nov) -- FirmaExterna.html manda { base64, mimeType } (como Vehicular), no un string plano', () => {
+  const vence = new Date(Date.now() + 86400000);
+  const { F, drive } = entorno([
+    { ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence,
+      'TOKEN FIRMA SEGUNDO': 'tok-b', 'TOKEN FIRMA SEGUNDO EXPIRA': vence, 'FIRMA CI TEMP': '' },
+  ]);
+  const trazo = (texto) => Buffer.from(texto).toString('base64');
+  const r = F.completarFirma('tok-a', { base64: trazo('trazo-de-verdad'), mimeType: 'image/png' });
+  assert.equal(r.pendiente, true);
+  // Antes del arreglo esto guardaba Utilities.base64Decode("[object Object]") -- bytes que no son una
+  // imagen real pero que no truenan al guardarse, solo hasta que algo intenta insertarlas en el PDF
+  const guardado = [...drive.values()][0];
+  assert.ok(guardado, 'se guardó un archivo en el Drive de mentira');
+  assert.equal(guardado.bytes.toString('utf8'), 'trazo-de-verdad', 'son los bytes reales del trazo, no "[object Object]"');
+});
+
 test('completarFirma: al completar el ÚLTIMO pendiente, se arma firmasNuevas y se genera el PDF una sola vez', () => {
   const vence = new Date(Date.now() + 86400000);
   const { F, llamadasGenerarPdf, filas } = entorno([]);

@@ -59,6 +59,20 @@ const LineasFirmaRemota = (function () {
     return cols;
   }
 
+  /**
+   * FirmaExterna.html es la misma página que usa Vehicular (firma.exportar() ahí SIEMPRE regresa
+   * { base64, mimeType }, su convención) -- aquí todo lo demás trabaja con el base64 plano de
+   * Líneas, así que se desenvuelve en el único punto de entrada (completarFirma). Sin esto,
+   * Utilities.base64Decode(String({...})) decodifica "[object Object]" sin truenar (Apps Script
+   * ignora los caracteres que no son base64) y el archivo queda guardado con bytes que no son una
+   * imagen real -- se ve "bien" hasta que algo intenta INSERTARLA (vista previa o el PDF final),
+   * donde Docs sí truena al no poder leerla como imagen (usuario, 6-nov: "No se pudo descifrar la
+   * cadena").
+   */
+  function base64DeImagen_(imagen) {
+    return imagen && typeof imagen === 'object' ? imagen.base64 : imagen;
+  }
+
   /** La firma de la pantalla: PNG, o JPEG si era una foto que se achicó para caber (igual que blobBase64_ de LineasCaptura.gs). */
   function blobDeBase64_(base64, nombre) {
     if (!base64) return null;
@@ -220,7 +234,8 @@ const LineasFirmaRemota = (function () {
    * queda otro rol pendiente, solo se guarda y se espera -- el PDF se genera hasta que el ÚLTIMO
    * pendiente se completa (como Vehicular).
    */
-  function completarFirma(tokenFirma, imagenBase64) {
+  function completarFirma(tokenFirma, imagen) {
+    const imagenBase64 = base64DeImagen_(imagen);
     if (!imagenBase64) throw new Error('Falta la firma.');
     return LineasDatos.conCandado(() => {
       const hallado = buscarPorToken_(tokenFirma);
@@ -304,5 +319,6 @@ const LineasFirmaRemota = (function () {
     copiarLiga: copiarLiga, regenerarLiga: regenerarLiga,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
+    _base64DeImagen: base64DeImagen_,
   };
 })();
