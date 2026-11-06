@@ -165,7 +165,7 @@ test('al guardar: «NO APLICA» en lo del equipo, NUCO vacío, nada al inventari
   assert.match(cap, /if \(ev\.carpetaId && LineasArchivos\.enLineas\(ev\.carpetaId\)\) \{/);
   // El PDF: una columna con valor fijo sale tal cual aunque la etiqueta sea una fórmula
   const pdf = read('src/services/lineas/LineasPdf.gs');
-  assert.match(pdf, /valor = fija \? String\(fijas\[fija\]\) : aTexto_\(/);
+  assert.match(pdf, /return fija \? String\(fijas\[fija\]\) : aTexto_\(/);   // valorDeEtiqueta_: la misma regla para el lote (DocsLote) y una por una
 });
 
 test('la pantalla: la línea solo ofrece la Responsiva y su carpeta en Drive', () => {

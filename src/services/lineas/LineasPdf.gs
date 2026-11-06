@@ -239,6 +239,7 @@ const LineasPdf = (function () {
     const copia = DriveUtils.copiar(DriveApp.getFileById(plantillaId), 'TMP ' + nombrePdf, carpeta, { temporal: true });
     c.marcar('copiar');
     try {
+      llenarEnLote_(copia.getId(), plantillaId, registro, imagenes, c);
       const doc = DocumentApp.openById(copia.getId());
       const secciones = [doc.getBody(), doc.getHeader(), doc.getFooter()].filter(Boolean);
       c.marcar('abrir');
@@ -441,11 +442,65 @@ const LineasPdf = (function () {
     }
   }
 
+  /** `registro._fijas` con las columnas en mayúsculas. */
+  function fijasDe_(registro) {
+    const fijas = {};
+    Object.keys(registro._fijas || {}).forEach((k) => { fijas[k.toUpperCase()] = registro._fijas[k]; });
+    return fijas;
+  }
+
+  /**
+   * El texto de una etiqueta de texto (`interior`: lo de dentro de << >>). Una sola regla para el lote (DocsLote) y para
+   * el camino de DocumentApp. Un error de la expresión va a `avisos` y da ''.
+   */
+  function valorDeEtiqueta_(interior, registro, fijas, avisos) {
+    const esColumnaSimple = /^[^\[\]"()&*+<>=]+$/.test(interior) && !/^[\d.]+$/.test(interior);
+    // `registro._fijas` { COLUMNA: texto }: la etiqueta que usa esa columna sale con ese texto aunque sea una fórmula
+    // (la responsiva de la línea sin equipo: «NO APLICA» en RIGHT("000" & [NUCO], 4), no «000»; pendiente 2.45)
+    const usadas = esColumnaSimple ? [interior] : (interior.match(/\[[^\]]+\]/g) || []).map((c) => c.slice(1, -1));
+    const fija = usadas.map((c) => c.trim().toUpperCase()).filter((c) => Object.prototype.hasOwnProperty.call(fijas, c))[0];
+    try {
+      return fija ? String(fijas[fija]) : aTexto_(esColumnaSimple ? valorColumna_(registro, interior) : evaluarExpresion_(interior, registro));
+    } catch (e) {
+      avisos.push(e.message);
+      return '';
+    }
+  }
+
+  /**
+   * Las etiquetas de texto en un solo lote (DocsLote), sobre la copia y antes de abrirla con DocumentApp. Se quedan para
+   * el camino de siempre: imágenes, If/EndIf/End/Start, la etiqueta que busca achicarNombresBajoFirma_, la que da error
+   * (si el bloque If que la contiene se borra, no debe avisar) y un valor con salto de línea. Nunca truena.
+   */
+  function llenarEnLote_(docId, plantillaId, registro, imagenes, crono) {
+    if (typeof DocsLote === 'undefined' || !DocsLote.disponible()) return 0;
+    try {
+      const imagen = {};
+      Object.keys(imagenes || {}).forEach((k) => { imagen[k.toUpperCase()] = true; });
+      const bajoFirma = NOMBRES_BAJO_FIRMA[plantillaId] ? NOMBRES_BAJO_FIRMA[plantillaId].etiqueta : null;
+      const fijas = fijasDe_(registro);
+      const pares = [];
+      DocsLote.marcadores(docId, crono).forEach((marcador) => {
+        const interior = marcador.slice(2, -2).trim();
+        if (marcador === bajoFirma || /^(If:|End|Start:)/i.test(interior)) return;
+        if (interior.replace(/^\[|\]$/g, '').toUpperCase() in imagen) return;
+        const errores = [];
+        const valor = valorDeEtiqueta_(interior, registro, fijas, errores);
+        if (errores.length || /[\r\n]/.test(valor)) return;
+        pares.push({ marcador: marcador, valor: valor });
+      });
+      return pares.length ? DocsLote.reemplazar(docId, pares, crono).hechos : 0;
+    } catch (e) {
+      // El camino de siempre hace lo que falte: el PDF sale igual, solo más lento
+      console.warn('LineasPdf: el lote de etiquetas falló, sigue una por una: ' + e.message);
+      return 0;
+    }
+  }
+
   function reemplazarEtiquetas_(seccion, registro, imagenes, avisos) {
     const clavesImagen = {};
     Object.keys(imagenes).forEach((k) => { clavesImagen[k.toUpperCase()] = imagenes[k]; });
-    const fijas = {};
-    Object.keys(registro._fijas || {}).forEach((k) => { fijas[k.toUpperCase()] = registro._fijas[k]; });
+    const fijas = fijasDe_(registro);
     const coincidencias = buscarTodas_(seccion, '<<[^<>]*>>');
     for (let i = coincidencias.length - 1; i >= 0; i--) {
       const m = coincidencias[i];
@@ -483,17 +538,7 @@ const LineasPdf = (function () {
         }
         continue;
       }
-      let valor = '';
-      const esColumnaSimple = /^[^\[\]"()&*+<>=]+$/.test(interior) && !/^[\d.]+$/.test(interior);
-      // `registro._fijas` { COLUMNA: texto }: la etiqueta que usa esa columna sale con ese texto aunque sea una fórmula
-      // (la responsiva de la línea sin equipo: «NO APLICA» en RIGHT("000" & [NUCO], 4), no «000»; pendiente 2.45)
-      const usadas = esColumnaSimple ? [interior] : (interior.match(/\[[^\]]+\]/g) || []).map((c) => c.slice(1, -1));
-      const fija = usadas.map((c) => c.trim().toUpperCase()).filter((c) => Object.prototype.hasOwnProperty.call(fijas, c))[0];
-      try {
-        valor = fija ? String(fijas[fija]) : aTexto_(esColumnaSimple ? valorColumna_(registro, interior) : evaluarExpresion_(interior, registro));
-      } catch (e) {
-        avisos.push(e.message);
-      }
+      const valor = valorDeEtiqueta_(interior, registro, fijas, avisos);
       // El valor lleva el formato de la etiqueta (fondo azul, negritas…): insertado solo, tomaba el del carácter vecino
       const formato = formatoDe_(m.elemento, m.inicio);
       m.elemento.deleteText(m.inicio, m.fin);

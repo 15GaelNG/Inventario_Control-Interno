@@ -163,6 +163,36 @@ const PdfService = (function () {
   }
 
   /**
+   * Los marcadores de texto en un solo lote (DocsLote), sobre la copia y antes de abrirla con DocumentApp: lo de
+   * llenarTexto_ sin una llamada por marcador. Se quedan para el camino de siempre las imágenes (`p.imagenes`, con o sin
+   * corchetes), los bloques If/EndIf, el que da error (si su bloque If se borra no debe contar en sinResolver) y un valor
+   * con salto de línea. Devuelve cuántos sustituyó. Nunca truena: si falla, llenarTexto_ hace todo.
+   */
+  function llenarEnLote_(copiaId, p, datos, crono) {
+    if (typeof DocsLote === 'undefined' || !DocsLote.disponible()) return 0;
+    try {
+      const imagen = {};
+      Object.keys(p.imagenes || {}).forEach((campo) => { imagen['<<[' + campo + ']>>'] = true; imagen['<<' + campo + '>>'] = true; });
+      const pares = [];
+      DocsLote.marcadores(copiaId, crono).forEach((marcador) => {
+        if (imagen[marcador] || /^<<\s*(If:|EndIf)/i.test(marcador)) return;
+        let valor;
+        try {
+          valor = String(Plantilla.resolver(marcador, datos));
+        } catch (e) {
+          return;
+        }
+        if (/[\r\n]/.test(valor)) return;
+        pares.push({ marcador: marcador, valor: valor });
+      });
+      return pares.length ? DocsLote.reemplazar(copiaId, pares, crono).hechos : 0;
+    } catch (e) {
+      console.warn('PdfService: el lote de marcadores falló, sigue uno por uno: ' + e.message);
+      return 0;
+    }
+  }
+
+  /**
    * OJO con las unidades: Docs mide las imágenes en PIXELES (96 por pulgada) y el PDF en
    * PUNTOS (72 por pulgada). 1 pt = 4/3 px. Antes se pasaban puntos a setWidth y todo salía
    * a 3/4 del tamaño: los diagramas de 200 "pt" quedaban de 150.
@@ -264,6 +294,8 @@ const PdfService = (function () {
    */
   function llenarCopia_(copiaId, p, aviso, crono) {
     const marcar = (paso) => { if (crono) crono.marcar(paso); };
+    const datos = datosParaPlantilla_(p.datos);
+    const enLote = llenarEnLote_(copiaId, p, datos, crono);
     const doc = DocumentApp.openById(copiaId);
     const body = doc.getBody();
     marcar('abrir');
@@ -285,7 +317,8 @@ const PdfService = (function () {
     });
     marcar('imágenes');
 
-    const resultado = llenarTexto_(body, datosParaPlantilla_(p.datos));
+    const resultado = llenarTexto_(body, datos);
+    resultado.marcadores += enLote;
     marcar('texto');
     if (p.formato) {
       aplicarFormato_(body, p.formato);
@@ -447,6 +480,6 @@ const PdfService = (function () {
 
   return {
     generar, generarVistaPrevia, camposDePlantilla, nombreArchivo, fechaParaNombre, subcarpeta_,
-    datosParaPlantilla_, aplicarFormato_, medidaDeImagen_, anchoDeCelda_,   // expuestas para las pruebas
+    datosParaPlantilla_, aplicarFormato_, medidaDeImagen_, anchoDeCelda_, llenarTexto_, llenarEnLote_,   // expuestas para las pruebas
   };
 })();

@@ -474,6 +474,17 @@ function revisionEntorno_() {
     exigir(x, p.id, 'canCopy', 'no puede copiarla: ese PDF no se va a generar (necesita ser Editor, o que la plantilla deje copiar)');
   });
 
+  // ---- llenado de PDF en lote (DocsLote): sin la API de Docs los PDF salen igual, solo más lentos → aviso, nunca error
+  if (typeof DocsLote === 'undefined' || !DocsLote.disponible()) {
+    avisos.push('PDF: el llenado en lote está apagado (sin el servicio avanzado Docs o con PDF_SIN_LOTE = 1): los PDF salen igual, más lentos');
+  } else {
+    try {
+      Docs.Documents.get(LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR, { fields: 'documentId' });
+    } catch (e) {
+      avisos.push('PDF: la API de Docs no responde (' + e.message + '): los PDF salen igual, más lentos');
+    }
+  }
+
   // ---- hojas y calentador
   const hojasQueFaltan = Object.keys(abiertos).length
     ? Entidades.todas().filter((e) => !(e.modulo && Config.apagado(e.modulo)) && !noSePide_(e.hoja)).map((e) => e.hoja).concat(['USUARIOS', 'PERMISOS'])
