@@ -58,8 +58,9 @@ test('Editar, la responsiva y la inspección piden los adicionales; Editar no gu
   assert.doesNotMatch(cap, /MAS DE UN RESPONSABLE/);
   // Responsiva e inspección (fuera de Mandar a resguardo; en Reasignar, fijos)
   assert.equal((cap.match(/LineasRegistros\.camposAdicionales\(/g) || []).length, 2);
-  assert.match(cap, /enAccion \? \[\] : LineasRegistros\.camposAdicionales\(/);
-  // En el sistema solo firma el principal (usuario, 6-oct): los adicionales firman el PDF impreso
+  // Desde el 6-nov, cada adicional presente de la inspección también gana su propia firma a distancia
+  // (conFirmaAdicional_, igual que ya tiene la Responsiva con conIdentificacionAdicional_)
+  assert.match(cap, /enAccion \? \[\] : conFirmaAdicional_\(LineasRegistros\.camposAdicionales\(/);
   assert.doesNotMatch(cap, /FIRMAS_ADICIONALES|firmasAdicionales_|'Firma del responsable ' \+/);
   assert.equal((cap.match(/campo_\('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma'/g) || []).length, 2);
   // Los bloques quitados se borran; las columnas se agregan cuando hace falta
@@ -137,7 +138,7 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   const lineas = LINEAS;
   assert.doesNotMatch(lineas, /function unirFirmas|function firmasDeResponsables|FIRMAS_RESPONSABLES/);
   assert.match(cap, /'firma-principal\.png' : 'firma-responsable\.png'/);
-  assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable\), 'FIRMA INSPECTOR'/);
+  assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable\),\s*'FIRMA INSPECTOR'/);
   const pdf = read('src/services/lineas/LineasPdf.gs');
   assert.match(pdf, /const chica = \/\^firma-principal\/\.test/);
   // 6-nov: firmas más chicas (115×50 / 65×30) para que caben en las casillas angostas de la plantilla nueva

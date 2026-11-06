@@ -719,6 +719,9 @@ const LineasRepo = (function () {
       pdfRuta: txt(col(f, 'FORMATO INSPECCIONES LINEAS')),
       drive: driveDeEvidencia_(ev),
       pdf: ev && ev.pdfs && ev.pdfs.length ? { id: ev.pdfs[0].id, nombre: ev.pdfs[0].nombre } : null,
+      // Firma a distancia (LineasFirmaRemota.gs): 'PENDIENTE' mientras falte alguna liga por completarse -- la
+      // ficha (Documentos) solo ofrece "Ver ligas de firma" mientras diga eso (usuario, 6-nov: igual que Responsiva)
+      estadoFirma: txt(col(f, 'ESTADO FIRMA')) || null,
     };
   }
 

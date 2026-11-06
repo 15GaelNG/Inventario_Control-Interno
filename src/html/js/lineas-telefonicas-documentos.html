@@ -191,11 +191,11 @@
       }
 
       /**
-       * "Ver ligas de firma" (responsiva con ESTADO FIRMA = PENDIENTE): el nombre de cada responsable que se
-       * difirió, si ya firmó o sigue pendiente, y "Copiar liga" / "Generar liga de nuevo" por cada uno -- lo mismo
-       * que ya ofrece la Responsiva/Adherente Vehicular en su ficha. Aparte del recuadro que aparece al guardar
-       * (mostrarLigasFirmaRemota, lineas-telefonicas-captura.html): ese se cierra solo y aquí se puede volver
-       * (usuario, 6-nov).
+       * "Ver ligas de firma" (una Responsiva o una Inspección con ESTADO FIRMA = PENDIENTE, usuario 6-nov: las
+       * dos firman las mismas personas): el nombre de cada responsable que se difirió, si ya firmó o sigue
+       * pendiente, y "Copiar liga" / "Generar liga de nuevo" por cada uno -- lo mismo que ya ofrece la
+       * Responsiva/Adherente Vehicular en su ficha. Aparte del recuadro que aparece al guardar
+       * (mostrarLigasFirmaRemota, lineas-telefonicas-captura.html): ese se cierra solo y aquí se puede volver.
        */
       function verLigasFirma(d) {
         T.captura = { guardada: true, firmas: {}, carpetaId: d.carpetaId || '' };
@@ -204,13 +204,13 @@
         $('#ln-captura-subtitulo', raiz).textContent = [fecha(d.fecha), d.responsable].filter(Boolean).join(' · ');
         $('#ln-captura-cuerpo', raiz).innerHTML = '';
         mostrarEspera('Ligas de firma a distancia');
-        llamar('apiLineasFirmaRemotaEstado', d.id).then((estados) => pintarLigasFirma(d.id, estados)).catch((e) => {
+        llamar('apiLineasFirmaRemotaEstado', d.tipoPdf, d.id).then((estados) => pintarLigasFirma(d.id, d.tipoPdf, estados)).catch((e) => {
           mostrarEspera('No se pudieron cargar las ligas', { tono: 'error', icono: 'triangle-alert', texto: '', detalle: mensajeError(e),
             acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
         });
       }
 
-      function pintarLigasFirma(responsivaId, estados) {
+      function pintarLigasFirma(responsivaId, tipoPdf, estados) {
         if (!estados.length) {
           mostrarEspera('Ligas de firma a distancia', { tono: 'listo', icono: 'info', texto: 'Esta responsiva ya no tiene ninguna liga pendiente.',
             acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
@@ -234,7 +234,7 @@
         detalle.querySelectorAll('[data-ver-liga-copiar]').forEach((boton) => {
           boton.addEventListener('click', () => {
             boton.disabled = true;
-            llamar('apiLineasFirmaRemotaLiga', responsivaId, boton.dataset.verLigaCopiar)
+            llamar('apiLineasFirmaRemotaLiga', tipoPdf, responsivaId, boton.dataset.verLigaCopiar)
               .then((liga) => copiarConAviso(boton, liga, 'Liga copiada'))
               .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 6000))
               .finally(() => { boton.disabled = false; });
@@ -251,9 +251,9 @@
             }).then((ok) => {
               if (!ok) return;
               boton.disabled = true;
-              return llamar('apiLineasFirmaRemotaRegenerarLiga', responsivaId, boton.dataset.verLigaRegenerar)
-                .then((liga) => llamar('apiLineasFirmaRemotaEstado', responsivaId).then((estados) => {
-                  pintarLigasFirma(responsivaId, estados);
+              return llamar('apiLineasFirmaRemotaRegenerarLiga', tipoPdf, responsivaId, boton.dataset.verLigaRegenerar)
+                .then((liga) => llamar('apiLineasFirmaRemotaEstado', tipoPdf, responsivaId).then((estados) => {
+                  pintarLigasFirma(responsivaId, tipoPdf, estados);
                   const nuevo = $('#ln-espera-detalle [data-ver-liga-copiar="' + CSS.escape(boton.dataset.verLigaRegenerar) + '"]', raiz);
                   if (nuevo) copiarConAviso(nuevo, liga, 'Liga nueva copiada');
                 }))
@@ -327,7 +327,7 @@
               (d) => window.open('https:\/\/drive.google.com/file/d/' + encodeURIComponent(d.pdfId) + '/view', '_blank', 'noopener')),
             doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente && !pdfsEnCurso[d.id], (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Mientras falte alguna firma a distancia por completarse (usuario, 6-nov; como la Responsiva/Adherente Vehicular)
-            doc('send', 'Ver ligas de firma', 'pdf', false, (d) => operar && d.documento === 'Responsiva' && d.estadoFirma === 'PENDIENTE', (d) => verLigasFirma(d)),
+            doc('send', 'Ver ligas de firma', 'pdf', false, (d) => operar && d.estadoFirma === 'PENDIENTE', (d) => verLigasFirma(d)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
             // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
             doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),

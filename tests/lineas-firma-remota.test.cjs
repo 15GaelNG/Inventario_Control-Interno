@@ -1,8 +1,10 @@
 /**
- * Pruebas de LineasFirmaRemota.gs (firma a distancia de la Responsiva de Líneas, varios firmantes):
- * guardar con 0/1/varios roles diferidos, completar en cualquier orden, el PDF se genera hasta que
- * el ÚLTIMO pendiente se completa, token vencido/reusado y el resguardo de no cerrar si falta leer
- * una imagen temp. Con Apps Script simulado (Drive y la hoja de RESPONSIVAS LINEAS en memoria).
+ * Pruebas de LineasFirmaRemota.gs (firma a distancia de la Responsiva y la Inspección de Líneas,
+ * varios firmantes): guardar con 0/1/varios roles diferidos, completar en cualquier orden, el PDF
+ * se genera hasta que el ÚLTIMO pendiente se completa, token vencido/reusado y el resguardo de no
+ * cerrar si falta leer una imagen temp. Con Apps Script simulado (Drive y la hoja de RESPONSIVAS
+ * LINEAS en memoria). Las pruebas usan el documento RESPONSIVA; `lineas-firma-remota-inspeccion`
+ * (si existe) cubre que el mismo motor también sirva a INSPECCIONES LINEAS.
  */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -51,7 +53,7 @@ function entorno(filasIniciales) {
     ScriptApp: { getService: () => ({ getUrl: () => 'https://dev.exec' }) },
     Session: { getActiveUser: () => ({ getEmail: () => 'quien-firma@x.com' }) },
     Permisos: { puedeEditar: () => ({ nombre: 'OPERADOR' }) },
-    LineasRepo: { TAB: { RESP: 'RESPONSIVAS LINEAS' } },
+    LineasRepo: { TAB: { RESP: 'RESPONSIVAS LINEAS', INSP: 'INSPECCIONES LINEAS' } },
     LineasDatos: {
       leerTabla: (nombre) => { if (nombre !== 'RESPONSIVAS LINEAS') throw new Error('tabla inesperada'); return filas; },
       actualizarFila: (nombre, numFila, cambios) => {
@@ -66,6 +68,7 @@ function entorno(filasIniciales) {
     },
     LineasPdf: {
       PLANTILLAS: { RESPONSIVA_CELULAR: 'plantilla-resp' },
+      plantillaInspeccion: () => 'plantilla-insp',
       generarPdfDesdePlantilla: (plantillaId, registro, imagenes, carpeta, nombre) => {
         const id = 'pdf-' + (siguienteId++);
         drive.set(id, { bytes: Buffer.from('PDF-FALSO'), mimeType: 'application/pdf' });
@@ -81,12 +84,12 @@ function entorno(filasIniciales) {
     },
   });
   vm.runInContext(read('src/services/lineas/LineasFirmaRemota.gs') + '\nthis.F = LineasFirmaRemota;', ctx);
-  return { F: ctx.F, filas: filas, drive: drive, llamadasGenerarPdf: llamadasGenerarPdf };
+  return { F: ctx.F, DOC: ctx.F.DOCUMENTOS.RESPONSIVA, filas: filas, drive: drive, llamadasGenerarPdf: llamadasGenerarPdf };
 }
 
 test('generarPendientes_: sin diferir nada no hay nada que hacer (0 roles)', () => {
-  const { F } = entorno([]);
-  const cambios = F.generarPendientes_([], { CI: 'base64-ci' });
+  const { F, DOC } = entorno([]);
+  const cambios = F.generarPendientes_(DOC, [], { CI: 'base64-ci' });
   assert.equal(cambios['ESTADO FIRMA'], 'PENDIENTE');
   // CI siempre se guarda en TEMP aunque no se difiera nada más (igual que Vehicular guarda FIRMA CI TEMP)
   assert.ok(cambios['FIRMA CI TEMP']);
@@ -94,8 +97,8 @@ test('generarPendientes_: sin diferir nada no hay nada que hacer (0 roles)', () 
 });
 
 test('generarPendientes_: 1 rol diferido (PRINCIPAL) genera su token y dura 15 días', () => {
-  const { F } = entorno([]);
-  const cambios = F.generarPendientes_(['PRINCIPAL'], { CI: 'base64-ci' });
+  const { F, DOC } = entorno([]);
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL'], { CI: 'base64-ci' });
   assert.ok(cambios['TOKEN FIRMA']);
   assert.ok(cambios['TOKEN FIRMA EXPIRA'] instanceof Date);
   const dias = (cambios['TOKEN FIRMA EXPIRA'].getTime() - Date.now()) / 86400000;
@@ -104,56 +107,57 @@ test('generarPendientes_: 1 rol diferido (PRINCIPAL) genera su token y dura 15 d
 });
 
 test('generarPendientes_: varios roles diferidos (PRINCIPAL, SEGUNDO, TERCER) generan un token cada uno', () => {
-  const { F } = entorno([]);
-  const cambios = F.generarPendientes_(['PRINCIPAL', 'SEGUNDO', 'TERCER'], { CI: 'ci64' });
+  const { F, DOC } = entorno([]);
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL', 'SEGUNDO', 'TERCER'], { CI: 'ci64' });
   ['TOKEN FIRMA', 'TOKEN FIRMA SEGUNDO', 'TOKEN FIRMA TERCER'].forEach((c) => assert.ok(cambios[c], c));
   assert.notEqual(cambios['TOKEN FIRMA'], cambios['TOKEN FIRMA SEGUNDO']);
   assert.equal(cambios['TOKEN FIRMA CUARTO'], undefined);
 });
 
 test('buscarPorToken_ encuentra la fila y el rol correctos; ninguno si el token no existe', () => {
-  const { F } = entorno([
+  const { F, DOC } = entorno([
     { ID: 'RES-1', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA SEGUNDO': 'tok-b' },
     { ID: 'RES-2', 'TOKEN FIRMA TERCER': 'tok-c' },
   ]);
-  assert.deepEqual([F._buscarPorToken('tok-a').fila.ID, F._buscarPorToken('tok-a').rol], ['RES-1', 'PRINCIPAL']);
-  assert.deepEqual([F._buscarPorToken('tok-b').fila.ID, F._buscarPorToken('tok-b').rol], ['RES-1', 'SEGUNDO']);
-  assert.deepEqual([F._buscarPorToken('tok-c').fila.ID, F._buscarPorToken('tok-c').rol], ['RES-2', 'TERCER']);
-  assert.equal(F._buscarPorToken('no-existe'), null);
+  assert.deepEqual([F._buscarPorToken(DOC, 'tok-a').fila.ID, F._buscarPorToken(DOC, 'tok-a').rol], ['RES-1', 'PRINCIPAL']);
+  assert.deepEqual([F._buscarPorToken(DOC, 'tok-b').fila.ID, F._buscarPorToken(DOC, 'tok-b').rol], ['RES-1', 'SEGUNDO']);
+  assert.deepEqual([F._buscarPorToken(DOC, 'tok-c').fila.ID, F._buscarPorToken(DOC, 'tok-c').rol], ['RES-2', 'TERCER']);
+  assert.equal(F._buscarPorToken(DOC, 'no-existe'), null);
 });
 
 test('obtenerPendientePorToken: liga vigente trae nombre y detalles; vencida o inexistente avisa el motivo', () => {
   const vence = new Date(Date.now() + 15 * 86400000);
   const vencio = new Date(Date.now() - 1000);
-  const { F } = entorno([
+  const { F, DOC } = entorno([
     { ID: 'RES-1', RESPONSABLE: 'ANA TORRES', 'No TELEFONO': '4421234567', MODELO: 'MOTO G', NUCO: '12', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence },
     { ID: 'RES-2', 'NOMBRE SEGUNDO RESPONSABLE': 'LUIS', 'TOKEN FIRMA SEGUNDO': 'tok-b', 'TOKEN FIRMA SEGUNDO EXPIRA': vencio },
   ]);
-  const a = F.obtenerPendientePorToken('tok-a');
+  const a = F.obtenerPendientePorToken(DOC, 'tok-a');
   assert.equal(a.vigente, true);
   assert.equal(a.nombre, 'ANA TORRES');
+  assert.equal(a.documento, DOC.documento);
   assert.ok(Array.isArray(a.detalles));
   assert.ok(a.detalles.some((d) => d.etiqueta === 'Número' && d.valor === '4421234567'));
-  const b = F.obtenerPendientePorToken('tok-b');
+  const b = F.obtenerPendientePorToken(DOC, 'tok-b');
   assert.equal(b.vigente, false);
   assert.equal(b.motivo, 'vencido');
-  const c = F.obtenerPendientePorToken('nada');
+  const c = F.obtenerPendientePorToken(DOC, 'nada');
   assert.equal(c.vigente, false);
   assert.equal(c.motivo, 'no-existe');
 });
 
 test('completarFirma: con 2 pendientes, completar el primero solo guarda y espera -- no genera PDF', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F, llamadasGenerarPdf } = entorno([
+  const { F, DOC, llamadasGenerarPdf } = entorno([
     { ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence,
       'TOKEN FIRMA SEGUNDO': 'tok-b', 'TOKEN FIRMA SEGUNDO EXPIRA': vence, 'FIRMA CI TEMP': '' },
   ]);
-  const r = F.completarFirma('tok-a', 'base64-firma-principal');
+  const r = F.completarFirma(DOC, 'tok-a', 'base64-firma-principal');
   assert.equal(r.pendiente, true);
   assert.equal(llamadasGenerarPdf.length, 0, 'todavía falta SEGUNDO: no se genera el PDF');
-  assert.equal(F.obtenerPendientePorToken('tok-a').motivo, 'no-existe', 'el token ya se limpió, no se puede reusar');
+  assert.equal(F.obtenerPendientePorToken(DOC, 'tok-a').motivo, 'no-existe', 'el token ya se limpió, no se puede reusar');
   // El segundo (el que sigue pendiente) debe seguir encontrándose
-  assert.equal(F._buscarPorToken('tok-b').rol, 'SEGUNDO');
+  assert.equal(F._buscarPorToken(DOC, 'tok-b').rol, 'SEGUNDO');
 });
 
 test('_base64DeImagen: acepta el string plano de Líneas y el { base64, mimeType } de FirmaExterna.html/Vehicular', () => {
@@ -165,12 +169,12 @@ test('_base64DeImagen: acepta el string plano de Líneas y el { base64, mimeType
 
 test('completarFirma: bug real (6-nov) -- FirmaExterna.html manda { base64, mimeType } (como Vehicular), no un string plano', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F, drive } = entorno([
+  const { F, DOC, drive } = entorno([
     { ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence,
       'TOKEN FIRMA SEGUNDO': 'tok-b', 'TOKEN FIRMA SEGUNDO EXPIRA': vence, 'FIRMA CI TEMP': '' },
   ]);
   const trazo = (texto) => Buffer.from(texto).toString('base64');
-  const r = F.completarFirma('tok-a', { base64: trazo('trazo-de-verdad'), mimeType: 'image/png' });
+  const r = F.completarFirma(DOC, 'tok-a', { base64: trazo('trazo-de-verdad'), mimeType: 'image/png' });
   assert.equal(r.pendiente, true);
   // Antes del arreglo esto guardaba Utilities.base64Decode("[object Object]") -- bytes que no son una
   // imagen real pero que no truenan al guardarse, solo hasta que algo intenta insertarlas en el PDF
@@ -180,18 +184,17 @@ test('completarFirma: bug real (6-nov) -- FirmaExterna.html manda { base64, mime
 });
 
 test('completarFirma: al completar el ÚLTIMO pendiente, se arma firmasNuevas y se genera el PDF una sola vez', () => {
-  const vence = new Date(Date.now() + 86400000);
-  const { F, llamadasGenerarPdf, filas } = entorno([]);
+  const { F, DOC, llamadasGenerarPdf, filas } = entorno([]);
   const trazo = (texto) => Buffer.from(texto).toString('base64'); // un "trazo" cualquiera, como base64 válido
   // CI firmó en vivo al guardar (como siempre): su imagen ya quedó en TEMP por generarPendientes_
-  const cambiosIniciales = F.generarPendientes_(['PRINCIPAL', 'SEGUNDO'], { CI: trazo('trazo-ci') });
+  const cambiosIniciales = F.generarPendientes_(DOC, ['PRINCIPAL', 'SEGUNDO'], { CI: trazo('trazo-ci') });
   filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, cambiosIniciales));
 
-  const r1 = F.completarFirma(cambiosIniciales['TOKEN FIRMA'], trazo('trazo-principal'));
+  const r1 = F.completarFirma(DOC, cambiosIniciales['TOKEN FIRMA'], trazo('trazo-principal'));
   assert.equal(r1.pendiente, true);
   assert.equal(llamadasGenerarPdf.length, 0);
 
-  const r2 = F.completarFirma(cambiosIniciales['TOKEN FIRMA SEGUNDO'], trazo('trazo-segundo'));
+  const r2 = F.completarFirma(DOC, cambiosIniciales['TOKEN FIRMA SEGUNDO'], trazo('trazo-segundo'));
   assert.equal(r2.pendiente, false);
   assert.equal(llamadasGenerarPdf.length, 1);
   const llamada = llamadasGenerarPdf[0];
@@ -209,24 +212,23 @@ test('completarFirma: al completar el ÚLTIMO pendiente, se arma firmasNuevas y 
 });
 
 test('completarFirma: token vencido o ya usado truena, sin tocar nada', () => {
-  const { F } = entorno([
+  const { F, DOC } = entorno([
     { ID: 'RES-1', 'TOKEN FIRMA': 'tok-vencido', 'TOKEN FIRMA EXPIRA': new Date(Date.now() - 1000) },
   ]);
-  assert.throws(() => F.completarFirma('tok-vencido', 'firma'), /venció/);
-  assert.throws(() => F.completarFirma('no-existe', 'firma'), /no es válida/);
-  assert.throws(() => F.completarFirma('tok-a', ''), /Falta la firma/);
+  assert.throws(() => F.completarFirma(DOC, 'tok-vencido', 'firma'), /venció/);
+  assert.throws(() => F.completarFirma(DOC, 'no-existe', 'firma'), /no es válida/);
+  assert.throws(() => F.completarFirma(DOC, 'tok-a', ''), /Falta la firma/);
 });
 
 test('completarFirma: si una TEMP ya guardada no se puede leer (archivo borrado), NO cierra el documento', () => {
-  const vence = new Date(Date.now() + 86400000);
-  const { F, llamadasGenerarPdf, filas, drive } = entorno([]);
-  const cambiosIniciales = F.generarPendientes_(['PRINCIPAL'], { CI: 'ci-base64' });
+  const { F, DOC, llamadasGenerarPdf, filas, drive } = entorno([]);
+  const cambiosIniciales = F.generarPendientes_(DOC, ['PRINCIPAL'], { CI: 'ci-base64' });
   filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, cambiosIniciales));
   // El archivo de CI "se perdió" en Drive antes de que el principal complete su liga
   const idCi = JSON.parse(cambiosIniciales['FIRMA CI TEMP']).archivoId;
   drive.delete(idCi);
 
-  const r = F.completarFirma(cambiosIniciales['TOKEN FIRMA'], 'firma-principal-base64');
+  const r = F.completarFirma(DOC, cambiosIniciales['TOKEN FIRMA'], 'firma-principal-base64');
   assert.equal(r.pendiente, true);
   assert.match(r.aviso, /no se pudo leer otra firma/);
   assert.equal(llamadasGenerarPdf.length, 0, 'no se cierra el documento con una firma ilegible');
@@ -236,75 +238,97 @@ test('completarFirma: si una TEMP ya guardada no se puede leer (archivo borrado)
 
 test('vistaPrevia: arma un PDF con lo que ya hay, sin guardar nada (se tira enseguida)', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F, drive } = entorno([
+  const { F, DOC, drive } = entorno([
     { ID: 'RES-1', COMENTARIO: 'un comentario', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence },
   ]);
   const antes = drive.size;
-  const pdf = F.vistaPrevia('tok-a');
+  const pdf = F.vistaPrevia(DOC, 'tok-a');
   assert.equal(pdf.mimeType, 'application/pdf');
   assert.ok(pdf.base64);
   assert.equal(drive.size, antes, 'el PDF de la vista previa se tira enseguida, no queda en Drive');
-  assert.throws(() => F.vistaPrevia('no-existe'), /no es válida/);
+  assert.throws(() => F.vistaPrevia(DOC, 'no-existe'), /no es válida/);
 });
 
-test('regenerarLiga: solo si ese rol tenía liga (no presencial) y la responsiva sigue PENDIENTE', () => {
+test('regenerarLiga: solo si ese rol tenía liga (no presencial) y el documento sigue PENDIENTE', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F, filas } = entorno([
+  const { F, DOC, filas } = entorno([
     { ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-viejo', 'TOKEN FIRMA EXPIRA': vence },
     { ID: 'RES-2', 'ESTADO FIRMA': 'FIRMADO' },
     { ID: 'RES-3', 'ESTADO FIRMA': 'PENDIENTE' }, // SEGUNDO nunca tuvo liga (firmó presencial)
   ]);
-  const ligaNueva = F.regenerarLiga('tok-ses', 'RES-1', 'PRINCIPAL');
+  const ligaNueva = F.regenerarLiga(DOC, 'tok-ses', 'RES-1', 'PRINCIPAL');
   assert.match(ligaNueva, /tipo=lineas-responsiva/);
   assert.notEqual(filas[0]['TOKEN FIRMA'], 'tok-viejo', 'el token viejo ya no sirve');
-  assert.throws(() => F.regenerarLiga('tok-ses', 'RES-2', 'PRINCIPAL'), /ya quedó firmada/);
-  assert.throws(() => F.regenerarLiga('tok-ses', 'RES-3', 'SEGUNDO'), /firmó presencial/);
-  assert.throws(() => F.regenerarLiga('tok-ses', 'RES-1', 'CI'), /Rol inválido/);
+  assert.throws(() => F.regenerarLiga(DOC, 'tok-ses', 'RES-2', 'PRINCIPAL'), /ya quedó firmado/);
+  assert.throws(() => F.regenerarLiga(DOC, 'tok-ses', 'RES-3', 'SEGUNDO'), /firmó presencial/);
+  assert.throws(() => F.regenerarLiga(DOC, 'tok-ses', 'RES-1', 'CI'), /Rol inválido/);
 });
 
 test('copiarLiga: la liga siempre se arma en el servidor (Config.urlFirmaPublica), nunca en el navegador', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F } = entorno([{ ID: 'RES-1', 'TOKEN FIRMA SEGUNDO': 'tok-b', 'TOKEN FIRMA SEGUNDO EXPIRA': vence }]);
-  const liga = F.copiarLiga('tok-ses', 'RES-1', 'SEGUNDO');
+  const { F, DOC } = entorno([{ ID: 'RES-1', 'TOKEN FIRMA SEGUNDO': 'tok-b', 'TOKEN FIRMA SEGUNDO EXPIRA': vence }]);
+  const liga = F.copiarLiga(DOC, 'tok-ses', 'RES-1', 'SEGUNDO');
   assert.equal(liga, 'https://firma.publica/exec?firmar=1&tipo=lineas-responsiva&token=tok-b');
-  assert.throws(() => F.copiarLiga('tok-ses', 'RES-404', 'SEGUNDO'), /No se encontró/);
+  assert.throws(() => F.copiarLiga(DOC, 'tok-ses', 'RES-404', 'SEGUNDO'), /No se encontró/);
 });
 
 // Usuario, 6-nov: "Ver ligas de firma" en Documentos -- con el nombre de cada quien (no "Responsable (segundo)"),
 // para volver a copiar o regenerar una liga después de cerrar el recuadro que aparece al guardar.
 test('estadoLigas: el nombre y el estado de cada rol que SÍ se difirió; el que firmó presencial no sale', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F } = entorno([{
+  const { F, DOC } = entorno([{
     ID: 'RES-1', RESPONSABLE: 'ANA PEREZ', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence,
     'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON SEPULVEDA', 'FIRMADO POR SEGUNDO': 'ayrton@x.com', // ya firmó por su liga
     'NOMBRE TERCER RESPONSABLE': 'EMMANUEL CHAVEZ', // nunca tuvo liga: firmó presencial
   }]);
-  const estados = JSON.parse(JSON.stringify(F.estadoLigas('tok-ses', 'RES-1')));
+  const estados = JSON.parse(JSON.stringify(F.estadoLigas(DOC, 'tok-ses', 'RES-1')));
   assert.deepEqual(estados, [
     { rol: 'PRINCIPAL', nombre: 'ANA PEREZ', estado: 'PENDIENTE' },
     { rol: 'SEGUNDO', nombre: 'AYRTON SEPULVEDA', estado: 'FIRMADO' },
   ]);
-  assert.throws(() => F.estadoLigas('tok-ses', 'RES-404'), /No se encontró/);
+  assert.throws(() => F.estadoLigas(DOC, 'tok-ses', 'RES-404'), /No se encontró/);
+});
+
+test('DOCUMENTOS.INSPECCION: su rol CI usa NOMBRE INSPECTOR/FIRMA INSPECTOR y la clave "inspector" para generarPdf', () => {
+  const { F } = entorno([]);
+  const DOC_INSP = F.DOCUMENTOS.INSPECCION;
+  assert.equal(DOC_INSP.tipoPdf, 'INSPECCION');
+  assert.equal(DOC_INSP.tipoLiga, 'lineas-inspeccion');
+  assert.equal(DOC_INSP.colNombreCI, 'NOMBRE INSPECTOR');
+  assert.equal(DOC_INSP.marcadorCI, 'FIRMA INSPECTOR');
+  const cambios = F.generarPendientes_(DOC_INSP, ['PRINCIPAL'], { CI: 'base64-inspector' });
+  assert.ok(cambios['FIRMA INSPECTOR TEMP'], 'CI de Inspección se guarda en su propia columna TEMP');
 });
 
 // ---------------------------------------------------------------------------------------------
-// La integración dentro de LineasCaptura.gs (guardarResponsiva/guardarResponsivaEnCandado_): sin
-// simular todo su entorno (identificaciones, Drive, catálogos…), se revisa en el código fuente
-// -- mismo estilo que tests/lineas-responsiva-unica.test.cjs para esa misma función.
+// La integración dentro de LineasCaptura.gs (guardarResponsiva/guardarResponsivaEnCandado_ y
+// guardarInspeccion): sin simular todo su entorno (identificaciones, Drive, catálogos…), se
+// revisa en el código fuente -- mismo estilo que tests/lineas-responsiva-unica.test.cjs.
 test('guardarResponsiva/guardarResponsivaEnCandado_: diferir no afecta el camino de hoy; CI sigue obligatorio', () => {
   const cap = read('src/services/lineas/LineasCaptura.gs');
   // CI nunca se agrega a diferir (sigue firmando presencial, como antes) y su firma sigue obligatoria
   assert.match(cap, /if \(!datos\.firmaCiBase64\) throw new Error\('FIRMA RESPONSABLE DE ' \+ MARCA_LINEAS_\(\) \+ ' es obligatorio'\);/);
   const rolesFn = cap.slice(cap.indexOf('function rolesADiferir_('), cap.indexOf('function guardarResponsiva('));
   assert.match(rolesFn, /LineasFirmaRemota\.ROLES_DIFERIBLES\.filter/);
-  // Un adicional sin nombre en esta responsiva no se puede diferir (nada que firmar)
-  assert.match(rolesFn, /rol === 'PRINCIPAL' \|\| String\(valores\['NOMBRE ' \+ rol \+ ' RESPONSABLE'\] \|\| ''\)\.trim\(\)/);
+  // Compartida por Responsiva e Inspección: PRINCIPAL se ignora igual que un adicional sin nombre
+  assert.match(rolesFn, /valores\[rol === 'PRINCIPAL' \? 'RESPONSABLE' : \('NOMBRE ' \+ rol \+ ' RESPONSABLE'\)\]/);
   const candado = cap.slice(cap.indexOf('function guardarResponsivaEnCandado_('), cap.indexOf('function exigirInspeccion('));
   // El insert de la fila (contrato de lineas-responsiva-unica.test.cjs) no cambió: el parche de firma va DESPUÉS
   assert.match(candado, /LineasDatos\.agregarFilas\(LineasRepo\.TAB\.RESP, \[fila\]\);\s*\/\/ Firma a distancia/);
   assert.match(candado, /if \(diferir && diferir\.length\) \{/);
-  assert.match(candado, /LineasFirmaRemota\.generarPendientes_\(diferir, imagenesYaCapturadas\)/);
-  assert.match(candado, /LineasDatos\.asegurarColumnas\(LineasRepo\.TAB\.RESP, LineasFirmaRemota\.columnasNuevas_\(\)\)/);
-  assert.match(candado, /ligas = LineasFirmaRemota\.ligasDe_\(cambiosFirma\)/);
+  assert.match(candado, /LineasFirmaRemota\.generarPendientes_\(DOC, diferir, imagenesYaCapturadas\)/);
+  assert.match(candado, /LineasDatos\.asegurarColumnas\(LineasRepo\.TAB\.RESP, LineasFirmaRemota\.columnasNuevas_\(DOC\)\)/);
+  assert.match(candado, /ligas = LineasFirmaRemota\.ligasDe_\(DOC, cambiosFirma\)/);
   assert.match(candado, /return \{ obj: obj, hecho: hecho, ligas: ligas \};/);
+});
+
+test('guardarInspeccion: mismo mecanismo de diferir que la Responsiva (usuario, 6-nov)', () => {
+  const cap = read('src/services/lineas/LineasCaptura.gs');
+  const fn = cap.slice(cap.indexOf('function guardarInspeccion('), cap.indexOf('function rolesADiferir_('));
+  assert.match(fn, /const diferir = rolesADiferir_\(datos, datos\.valores \|\| \{\}\);/);
+  assert.match(fn, /LineasFirmaRemota\.DOCUMENTOS\.INSPECCION/);
+  assert.match(fn, /LineasFirmaRemota\.generarPendientes_\(DOC, diferir, imagenesYaCapturadas\)/);
+  assert.match(fn, /if \(diferir\.length\) \{[\s\S]*?return \{ id: id, pendiente: true, ligas: res\.ligas \|\| \{\}, filas: filas \};/);
+  // El camino de siempre (nada diferido) sigue exactamente igual
+  assert.match(fn, /firmasCache_\('INSPECCION', id, \{ inspector: datos\.firmaInspectorBase64, responsable: datos\.firmaResponsableBase64 \|\| null, patron: datos\.patronBase64 \|\| null,/);
 });

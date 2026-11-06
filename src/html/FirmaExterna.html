@@ -103,25 +103,28 @@
 
   <script>
     (function () {
-      const tipo = ['adherente', 'arqueo', 'lineas-responsiva'].indexOf(document.body.dataset.tipo) !== -1 ? document.body.dataset.tipo : 'responsiva';
+      const tipo = ['adherente', 'arqueo', 'lineas-responsiva', 'lineas-inspeccion'].indexOf(document.body.dataset.tipo) !== -1 ? document.body.dataset.tipo : 'responsiva';
+      const esLineas = String(tipo).indexOf('lineas-') === 0;
       // El "otro" firmante de cada tipo (el que no es quien se captura siempre presencial): el
       // jefe directo en Vehicular, el asistente en Arqueos -- cualquier otro valor cae al
       // principal (responsable/adherente) de ese tipo. Líneas no usa `quien` (el token mismo ya
       // dice de quién es, LineasFirmaRemota.buscarPorToken_): no tiene "otro", siempre principal.
-      const QUIEN_OTRO = { responsiva: 'jefe', adherente: 'jefe', arqueo: 'asistente', 'lineas-responsiva': '' };
-      const QUIEN_PRINCIPAL = { responsiva: 'principal', adherente: 'principal', arqueo: 'responsable', 'lineas-responsiva': 'principal' };
+      const QUIEN_OTRO = { responsiva: 'jefe', adherente: 'jefe', arqueo: 'asistente', 'lineas-responsiva': '', 'lineas-inspeccion': '' };
+      const QUIEN_PRINCIPAL = { responsiva: 'principal', adherente: 'principal', arqueo: 'responsable', 'lineas-responsiva': 'principal', 'lineas-inspeccion': 'principal' };
       const quien = document.body.dataset.quien === QUIEN_OTRO[tipo] ? QUIEN_OTRO[tipo] : QUIEN_PRINCIPAL[tipo];
       const token = document.body.dataset.token || '';
-      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente', arqueo: 'Responsable', 'lineas-responsiva': 'Responsable' };
-      const ETIQUETA_OTRO = { responsiva: 'jefe directo', adherente: 'jefe directo', arqueo: 'asistente', 'lineas-responsiva': '' };
+      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente', arqueo: 'Responsable', 'lineas-responsiva': 'Responsable', 'lineas-inspeccion': 'Responsable' };
+      const ETIQUETA_OTRO = { responsiva: 'jefe directo', adherente: 'jefe directo', arqueo: 'asistente', 'lineas-responsiva': '', 'lineas-inspeccion': '' };
       // Mismas llaves que ETIQUETA_OTRO, pero ya con mayúscula inicial para el resumen (que no
       // va dentro de una oración, a diferencia del título/la etiqueta de arriba).
-      const ETIQUETA_OTRO_RESUMEN = { responsiva: 'Jefe directo de', adherente: 'Jefe directo de', arqueo: 'Asistente', 'lineas-responsiva': '' };
+      const ETIQUETA_OTRO_RESUMEN = { responsiva: 'Jefe directo de', adherente: 'Jefe directo de', arqueo: 'Asistente', 'lineas-responsiva': '', 'lineas-inspeccion': '' };
 
       // Líneas tiene su propia superficie (api/LineasFirmaRemota.gs, aparte de api/FirmaRemota.gs
       // de Vehicular/Arqueos -- LineasFirmaRemota.gs documenta por qué): mismo nombre de función
       // base, con el prefijo que toque. Las tres aceptan (tipo, quien, token[, imagen]) por igual.
-      const nombreFn_ = (base) => (tipo === 'lineas-responsiva' ? 'apiLineas' + base : 'api' + base);
+      // Responsiva e Inspección de Líneas comparten la misma superficie (el propio `tipo` ya dice
+      // a cuál de las dos tablas pertenece, LineasFirmaRemota.gs/docDeTipoLiga_).
+      const nombreFn_ = (base) => (esLineas ? 'apiLineas' + base : 'api' + base);
 
       function llamar(base) {
         return new Promise((resolver, rechazar) => {

@@ -1,11 +1,18 @@
 /**
  * LineasFirmaRemota.gs
- * Firma a distancia de la Responsiva de Líneas (liga por token, sin sesión) — aparte del mecanismo
+ * Firma a distancia de documentos de Líneas (liga por token, sin sesión) — aparte del mecanismo
  * de la Responsiva/Adherente Vehicular (api/FirmaRemota.gs, ResponsivaVehicularService.gs), que está
  * armado para exactamente 2 roles diferibles con columnas fijas. Aquí el número de firmantes varía:
- * siempre quien entrega por Flotillas/CI (NUNCA se difiere, firma siempre al capturar) y el
- * responsable principal, más de 0 a 4 responsables adicionales (SEGUNDO…QUINTO) que puede traer esa
- * misma responsiva — cada uno puede firmar presencial o, si no está, por su propia liga.
+ * siempre quien entrega por Flotillas/CI (Responsiva) o el Inspector (Inspección) -- NUNCA se
+ * difiere, firma siempre al capturar -- y el responsable principal, más de 0 a 4 responsables
+ * adicionales (SEGUNDO…QUINTO) que puede traer ese documento — cada uno puede firmar presencial o,
+ * si no está, por su propia liga.
+ *
+ * Sirve a dos documentos (Responsiva e Inspección, 6-nov: "me comentan que igual firman las mismas
+ * personas") con el mismo motor: cada función recibe un `doc` (uno de `DOCUMENTOS`, abajo) que dice
+ * su tabla, su rol "CI" (NOMBRE CI/FIRMA CI en Responsiva, NOMBRE INSPECTOR/FIRMA INSPECTOR en
+ * Inspección) y su carpeta temporal -- todo lo demás (los 5 roles diferibles, sus columnas
+ * TOKEN FIRMA.../FIRMA...TEMP/FIRMADO POR..., el patrón de liga) es idéntico entre las dos tablas.
  *
  * Mismo patrón de columnas que Vehicular (`ResponsivaVehicularService.gs`: TOKEN FIRMA, …EXPIRA,
  * FIRMA … TEMP), repetido por cada rol diferible en vez de solo 2. Las firmas de espera se guardan
@@ -22,40 +29,57 @@
  * el archivo de Drive), pero lo que entra y sale de aquí hacia generarPdf es siempre el string.
  *
  * Cuando NADA se difiere (el caso de hoy, el más común), nada de este archivo se usa: guardarResponsiva
- * sigue exactamente igual que antes.
+ * y guardarInspeccion siguen exactamente igual que antes.
  */
 
 const LineasFirmaRemota = (function () {
-  const TAB_RESP = () => LineasRepo.TAB.RESP;
-  const CARPETA_TEMP = 'RESPONSIVAS LINEAS_FirmasTemp';
   const FIRMA_REMOTA_DIAS_VIGENCIA = 15;
 
   // Los 4 adicionales (como ORDEN_ADICIONALES de LineasCaptura.gs) + el principal
   const ROLES_DIFERIBLES = ['PRINCIPAL', 'SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'];
   const TODOS_LOS_ROLES = ROLES_DIFERIBLES.concat(['CI']);
 
-  /** El nombre de ese responsable en la fila de la responsiva (para pintar la liga y el PDF). */
-  function columnaNombre_(rol) {
-    return rol === 'PRINCIPAL' ? 'RESPONSABLE' : rol === 'CI' ? 'NOMBRE CI' : 'NOMBRE ' + rol + ' RESPONSABLE';
+  /**
+   * Lo que cambia entre Responsiva e Inspección -- todo lo demás (roles, columnas de los
+   * adicionales, el patrón de liga) es igual en las dos tablas. `claveCI` es la clave que entiende
+   * LineasCaptura.generarPdf para el firmante que nunca se difiere (`ci` o `inspector`, como ya
+   * distinguía generarPdf con su `rolCI`).
+   */
+  const DOCUMENTOS = {
+    RESPONSIVA: {
+      tabla: () => LineasRepo.TAB.RESP, tipoLiga: 'lineas-responsiva', tipoPdf: 'RESPONSIVA', claveCI: 'ci',
+      colNombreCI: 'NOMBRE CI', marcadorCI: 'FIRMA CI', carpetaTemp: 'RESPONSIVAS LINEAS_FirmasTemp',
+      documento: 'Responsiva de línea telefónica',
+    },
+    INSPECCION: {
+      tabla: () => LineasRepo.TAB.INSP, tipoLiga: 'lineas-inspeccion', tipoPdf: 'INSPECCION', claveCI: 'inspector',
+      colNombreCI: 'NOMBRE INSPECTOR', marcadorCI: 'FIRMA INSPECTOR', carpetaTemp: 'INSPECCIONES LINEAS_FirmasTemp',
+      documento: 'Inspección de línea telefónica',
+    },
+  };
+
+  /** El nombre de ese responsable en la fila del documento (para pintar la liga y el PDF). */
+  function columnaNombre_(doc, rol) {
+    return rol === 'PRINCIPAL' ? 'RESPONSABLE' : rol === 'CI' ? doc.colNombreCI : 'NOMBRE ' + rol + ' RESPONSABLE';
   }
   /** El marcador de imagen que ya espera (o esperará, una vez que la plantilla lo tenga) el PDF. */
-  function marcadorFirma_(rol) {
-    return rol === 'PRINCIPAL' ? 'FIRMA RESPONSABLE' : rol === 'CI' ? 'FIRMA CI' : 'FIRMA ' + rol + ' RESPONSABLE';
+  function marcadorFirma_(doc, rol) {
+    return rol === 'PRINCIPAL' ? 'FIRMA RESPONSABLE' : rol === 'CI' ? doc.marcadorCI : 'FIRMA ' + rol + ' RESPONSABLE';
   }
   /** La clave que ya entiende (o entenderá) LineasCaptura.generarPdf dentro de `firmasNuevas`. */
-  function claveGenerarPdf_(rol) {
-    return rol === 'PRINCIPAL' ? 'responsable' : rol === 'CI' ? 'ci' : rol.toLowerCase();
+  function claveGenerarPdf_(doc, rol) {
+    return rol === 'PRINCIPAL' ? 'responsable' : rol === 'CI' ? doc.claveCI : rol.toLowerCase();
   }
   function colToken_(rol) { return rol === 'PRINCIPAL' ? 'TOKEN FIRMA' : 'TOKEN FIRMA ' + rol; }
   function colTokenExpira_(rol) { return colToken_(rol) + ' EXPIRA'; }
-  function colTemp_(rol) { return marcadorFirma_(rol) + ' TEMP'; }
+  function colTemp_(doc, rol) { return marcadorFirma_(doc, rol) + ' TEMP'; }
   function colFirmadoPor_(rol) { return rol === 'PRINCIPAL' ? 'FIRMADO POR' : 'FIRMADO POR ' + rol; }
 
-  /** Todas las columnas que puede llegar a usar una responsiva con firma a distancia (para asegurarColumnas). */
-  function columnasNuevas_() {
+  /** Todas las columnas que puede llegar a usar un documento con firma a distancia (para asegurarColumnas). */
+  function columnasNuevas_(doc) {
     const cols = ['ESTADO FIRMA'];
-    ROLES_DIFERIBLES.forEach((rol) => { cols.push(colToken_(rol), colTokenExpira_(rol), colTemp_(rol), colFirmadoPor_(rol)); });
-    cols.push(colTemp_('CI'));
+    ROLES_DIFERIBLES.forEach((rol) => { cols.push(colToken_(rol), colTokenExpira_(rol), colTemp_(doc, rol), colFirmadoPor_(rol)); });
+    cols.push(colTemp_(doc, 'CI'));
     return cols;
   }
 
@@ -84,11 +108,11 @@ const LineasFirmaRemota = (function () {
    * Una columna …TEMP nunca guarda el base64 directo (ver el comentario del archivo): se guarda
    * como archivo chico, temporal, en su propia carpeta — en la celda solo va su ID.
    */
-  function guardarFirmaTemp_(rol, base64) {
+  function guardarFirmaTemp_(doc, rol, base64) {
     const mimeType = String(base64).indexOf('/9j/') === 0 ? 'image/jpeg' : 'image/png';
     const nombreImagen = 'firma-' + rol.toLowerCase() + '-' + Utilities.getUuid() + (mimeType === 'image/jpeg' ? '.jpg' : '.png');
     const blob = Utilities.newBlob(Utilities.base64Decode(String(base64)), mimeType, nombreImagen);
-    const archivo = DriveUtils.crearArchivo(DriveUtils.carpetaEnRaiz(CARPETA_TEMP), blob, nombreImagen, { temporal: true });
+    const archivo = DriveUtils.crearArchivo(DriveUtils.carpetaEnRaiz(doc.carpetaTemp), blob, nombreImagen, { temporal: true });
     return JSON.stringify({ archivoId: archivo.getId(), mimeType: mimeType });
   }
 
@@ -116,12 +140,13 @@ const LineasFirmaRemota = (function () {
   }
 
   /**
-   * Al guardar (guardarResponsivaEnCandado_ de LineasCaptura.gs): `roles` son los que se difieren
-   * (ya validados: tienen nombre en la responsiva); `imagenesYaCapturadas` = { rol: base64 }
-   * de los que SÍ firmaron ahora (incluido CI, siempre, y cualquier diferible que no se haya
-   * diferido). Regresa los cambios a fusionar en la fila antes de `LineasDatos.agregarFilas`.
+   * Al guardar (guardarResponsivaEnCandado_/guardarInspeccion de LineasCaptura.gs): `roles` son los
+   * que se difieren (ya validados: tienen nombre en el documento); `imagenesYaCapturadas` = { rol:
+   * base64 } de los que SÍ firmaron ahora (incluido CI/INSPECTOR, siempre, y cualquier diferible
+   * que no se haya diferido). Regresa los cambios a fusionar en la fila antes de
+   * `LineasDatos.agregarFilas`.
    */
-  function generarPendientes_(roles, imagenesYaCapturadas) {
+  function generarPendientes_(doc, roles, imagenesYaCapturadas) {
     const cambios = { 'ESTADO FIRMA': 'PENDIENTE' };
     const expira = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
     roles.forEach((rol) => {
@@ -130,32 +155,33 @@ const LineasFirmaRemota = (function () {
     });
     TODOS_LOS_ROLES.forEach((rol) => {
       const base64 = imagenesYaCapturadas && imagenesYaCapturadas[rol];
-      if (base64) cambios[colTemp_(rol)] = guardarFirmaTemp_(rol, base64);
+      if (base64) cambios[colTemp_(doc, rol)] = guardarFirmaTemp_(doc, rol, base64);
     });
     return cambios;
   }
 
   /**
-   * La liga pública (FirmaExterna.html: tipo=lineas-responsiva). Se arma siempre en el servidor
-   * (dentro de la app, location.origin es el sandbox de Apps Script, no la URL real -- mismo
-   * motivo que ya documenta ResponsivaVehicularService.gs sobre construirLiga_/ligaDeToken).
+   * La liga pública (FirmaExterna.html: tipo=lineas-responsiva / lineas-inspeccion). Se arma
+   * siempre en el servidor (dentro de la app, location.origin es el sandbox de Apps Script, no la
+   * URL real -- mismo motivo que ya documenta ResponsivaVehicularService.gs sobre
+   * construirLiga_/ligaDeToken).
    */
-  function construirLiga_(tokenFirma) {
+  function construirLiga_(doc, tokenFirma) {
     const base = Config.urlFirmaPublica() || ScriptApp.getService().getUrl();
-    return base + '?firmar=1&tipo=lineas-responsiva&token=' + encodeURIComponent(tokenFirma);
+    return base + '?firmar=1&tipo=' + encodeURIComponent(doc.tipoLiga) + '&token=' + encodeURIComponent(tokenFirma);
   }
   /** Las ligas recién generadas, { rol: liga }, para mostrarlas a quien capturó. */
-  function ligasDe_(cambios) {
+  function ligasDe_(doc, cambios) {
     const ligas = {};
-    ROLES_DIFERIBLES.forEach((rol) => { if (cambios[colToken_(rol)]) ligas[rol] = construirLiga_(cambios[colToken_(rol)]); });
+    ROLES_DIFERIBLES.forEach((rol) => { if (cambios[colToken_(rol)]) ligas[rol] = construirLiga_(doc, cambios[colToken_(rol)]); });
     return ligas;
   }
 
-  /** La fila de RESPONSIVAS LINEAS y el rol a los que pertenece ese token, o null. */
-  function buscarPorToken_(tokenFirma) {
+  /** La fila del documento (RESPONSIVAS LINEAS o INSPECCIONES LINEAS) y el rol a los que pertenece ese token, o null. */
+  function buscarPorToken_(doc, tokenFirma) {
     const limpio = String(tokenFirma || '').trim();
     if (!limpio) return null;
-    const filas = LineasDatos.leerTabla(TAB_RESP());
+    const filas = LineasDatos.leerTabla(doc.tabla());
     for (let i = 0; i < filas.length; i++) {
       for (let j = 0; j < ROLES_DIFERIBLES.length; j++) {
         const rol = ROLES_DIFERIBLES[j];
@@ -171,28 +197,28 @@ const LineasFirmaRemota = (function () {
   }
 
   /** Las firmas que ya se tienen guardadas en las columnas TEMP, como base64 con las claves que entiende generarPdf. */
-  function imagenesDesdeTemp_(fila) {
+  function imagenesDesdeTemp_(doc, fila) {
     const imagenes = {};
     TODOS_LOS_ROLES.forEach((rol) => {
-      const guardada = fila[colTemp_(rol)];
+      const guardada = fila[colTemp_(doc, rol)];
       if (!guardada) return;
       const base64 = leerFirmaTemp_(guardada);
-      if (base64) imagenes[claveGenerarPdf_(rol)] = base64;
+      if (base64) imagenes[claveGenerarPdf_(doc, rol)] = base64;
     });
     return imagenes;
   }
 
   /** Lo mínimo para pintar la página de firma a distancia (sin exponer el renglón completo). */
-  function obtenerPendientePorToken(tokenFirma) {
-    const hallado = buscarPorToken_(tokenFirma);
+  function obtenerPendientePorToken(doc, tokenFirma) {
+    const hallado = buscarPorToken_(doc, tokenFirma);
     if (!hallado) return { vigente: false, motivo: 'no-existe' };
     const fila = hallado.fila, rol = hallado.rol;
     const expira = fila[colTokenExpira_(rol)] ? new Date(fila[colTokenExpira_(rol)]) : null;
     if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) return { vigente: false, motivo: 'vencido' };
     return {
       vigente: true,
-      documento: 'Responsiva de línea telefónica',
-      nombre: fila[columnaNombre_(rol)] || '',
+      documento: doc.documento,
+      nombre: fila[columnaNombre_(doc, rol)] || '',
       // Igual que obtenerPendienteArqueoPorToken: FirmaExterna.html ya sabe pintar esta forma
       // genérica (Array.isArray(info.detalles)), sin bifurcar su JS por tipo.
       detalles: [
@@ -204,8 +230,8 @@ const LineasFirmaRemota = (function () {
   }
 
   /** PDF con lo que ya hay (otras firmas ya capturadas o llegadas por liga) + aviso de VISTA PREVIA, sin guardar nada. */
-  function vistaPrevia(tokenFirma) {
-    const hallado = buscarPorToken_(tokenFirma);
+  function vistaPrevia(doc, tokenFirma) {
+    const hallado = buscarPorToken_(doc, tokenFirma);
     if (!hallado) throw new Error('Esta liga no es válida.');
     const fila = hallado.fila, rol = hallado.rol;
     const expira = fila[colTokenExpira_(rol)] ? new Date(fila[colTokenExpira_(rol)]) : null;
@@ -213,14 +239,15 @@ const LineasFirmaRemota = (function () {
       throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
     }
     const registro = Object.assign({}, LineasCaptura._registroPlantilla(fila), { 'COMENTARIO': (fila['COMENTARIO'] || '') + ' (VISTA PREVIA — AÚN SIN FIRMAR)' });
-    const imagenesBase64 = imagenesDesdeTemp_(fila);
+    const imagenesBase64 = imagenesDesdeTemp_(doc, fila);
     const imagenesBlob = {};
     TODOS_LOS_ROLES.forEach((r) => {
-      const base64 = imagenesBase64[claveGenerarPdf_(r)];
-      if (base64) imagenesBlob[marcadorFirma_(r)] = blobDeBase64_(base64, 'firma-' + r.toLowerCase() + '.png');
+      const base64 = imagenesBase64[claveGenerarPdf_(doc, r)];
+      if (base64) imagenesBlob[marcadorFirma_(doc, r)] = blobDeBase64_(base64, 'firma-' + r.toLowerCase() + '.png');
     });
-    const carpeta = DriveUtils.carpetaEnRaiz(CARPETA_TEMP);
-    const pdf = LineasPdf.generarPdfDesdePlantilla(LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR, registro, imagenesBlob, carpeta, 'vista previa ' + Utilities.getUuid() + '.pdf', true);
+    const carpeta = DriveUtils.carpetaEnRaiz(doc.carpetaTemp);
+    const plantilla = doc.tipoPdf === 'INSPECCION' ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR;
+    const pdf = LineasPdf.generarPdfDesdePlantilla(plantilla, registro, imagenesBlob, carpeta, 'vista previa ' + Utilities.getUuid() + '.pdf', true);
     try {
       const blob = DriveApp.getFileById(pdf.id).getBlob();
       return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
@@ -234,11 +261,11 @@ const LineasFirmaRemota = (function () {
    * queda otro rol pendiente, solo se guarda y se espera -- el PDF se genera hasta que el ÚLTIMO
    * pendiente se completa (como Vehicular).
    */
-  function completarFirma(tokenFirma, imagen) {
+  function completarFirma(doc, tokenFirma, imagen) {
     const imagenBase64 = base64DeImagen_(imagen);
     if (!imagenBase64) throw new Error('Falta la firma.');
     return LineasDatos.conCandado(() => {
-      const hallado = buscarPorToken_(tokenFirma);
+      const hallado = buscarPorToken_(doc, tokenFirma);
       if (!hallado) throw new Error('Esta liga no es válida.');
       const fila = hallado.fila, rol = hallado.rol;
       const expira = fila[colTokenExpira_(rol)] ? new Date(fila[colTokenExpira_(rol)]) : null;
@@ -246,35 +273,35 @@ const LineasFirmaRemota = (function () {
         throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
       }
 
-      fila[colTemp_(rol)] = guardarFirmaTemp_(rol, imagenBase64);
+      fila[colTemp_(doc, rol)] = guardarFirmaTemp_(doc, rol, imagenBase64);
       fila[colToken_(rol)] = '';
       fila[colTokenExpira_(rol)] = '';
       fila[colFirmadoPor_(rol)] = Session.getActiveUser().getEmail() || '';
-      const cambiosDeEsteRol = { [colTemp_(rol)]: fila[colTemp_(rol)], [colToken_(rol)]: '', [colTokenExpira_(rol)]: '', [colFirmadoPor_(rol)]: fila[colFirmadoPor_(rol)] };
+      const cambiosDeEsteRol = { [colTemp_(doc, rol)]: fila[colTemp_(doc, rol)], [colToken_(rol)]: '', [colTokenExpira_(rol)]: '', [colFirmadoPor_(rol)]: fila[colFirmadoPor_(rol)] };
 
       if (!listoParaFinalizar_(fila)) {
-        LineasDatos.actualizarFila(TAB_RESP(), fila._fila, cambiosDeEsteRol);
+        LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambiosDeEsteRol);
         return { ID: fila['ID'], pendiente: true, aviso: 'Tu firma quedó registrada. Falta que alguien más firme para generar el documento.' };
       }
 
       // Antes de cerrar el documento como FIRMADO: cada …TEMP que sí tiene algo guardado debe poder
       // leerse (si el archivo de Drive ya no existe, NO se cierra -- se avisa y se queda PENDIENTE
       // para reintentar; el mismo resguardo del bug real que corrigió Vehicular el 14-oct).
-      const imagenesPdf = imagenesDesdeTemp_(fila);
-      const faltantes = TODOS_LOS_ROLES.filter((r) => fila[colTemp_(r)] && !imagenesPdf[claveGenerarPdf_(r)]);
-      LineasDatos.actualizarFila(TAB_RESP(), fila._fila, cambiosDeEsteRol);
+      const imagenesPdf = imagenesDesdeTemp_(doc, fila);
+      const faltantes = TODOS_LOS_ROLES.filter((r) => fila[colTemp_(doc, r)] && !imagenesPdf[claveGenerarPdf_(doc, r)]);
+      LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambiosDeEsteRol);
       if (faltantes.length) {
         return { ID: fila['ID'], pendiente: true,
           aviso: 'Tu firma quedó registrada, pero no se pudo leer otra firma ya guardada. El documento sigue pendiente -- avisa a soporte.' };
       }
 
-      const resultado = LineasCaptura.generarPdf('RESPONSIVA', fila['ID'], false, { nombre: 'Firma a distancia', correo: '' }, imagenesPdf);
+      const resultado = LineasCaptura.generarPdf(doc.tipoPdf, fila['ID'], false, { nombre: 'Firma a distancia', correo: '' }, imagenesPdf);
       if (resultado && resultado.avisos && resultado.avisos.length) {
         console.error('completarFirma ' + fila['ID'] + ': ' + resultado.avisos.join(' | '));
       }
-      TODOS_LOS_ROLES.forEach((r) => borrarFirmaTempSiHay_(fila[colTemp_(r)]));
-      LineasDatos.actualizarFila(TAB_RESP(), fila._fila, Object.assign({ 'ESTADO FIRMA': 'FIRMADO' },
-        TODOS_LOS_ROLES.reduce((o, r) => Object.assign(o, { [colTemp_(r)]: '' }), {})));
+      TODOS_LOS_ROLES.forEach((r) => borrarFirmaTempSiHay_(fila[colTemp_(doc, r)]));
+      LineasDatos.actualizarFila(doc.tabla(), fila._fila, Object.assign({ 'ESTADO FIRMA': 'FIRMADO' },
+        TODOS_LOS_ROLES.reduce((o, r) => Object.assign(o, { [colTemp_(doc, r)]: '' }), {})));
       return { ID: fila['ID'], pendiente: false, PDF: resultado && resultado.url ? resultado.url : null };
     });
   }
@@ -286,27 +313,27 @@ const LineasFirmaRemota = (function () {
    * recuadro que aparece al guardar, como ya hace la Responsiva/Adherente Vehicular). Un rol que
    * firmó presencial (nunca tuvo token ni quedó "FIRMADO POR") no sale aquí: no hay nada que ver.
    */
-  function estadoLigas(token, responsivaId) {
+  function estadoLigas(doc, token, documentoId) {
     Permisos.puedeEditar(token, 'lineas-telefonicas');
-    const filas = LineasDatos.buscarFilasPorId(TAB_RESP(), responsivaId);
-    if (!filas.length) throw new Error('No se encontró la responsiva.');
-    const fila = LineasDatos.leerFilas([{ tabla: TAB_RESP(), filas: filas.slice(0, 1) }])[0][0];
+    const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
+    if (!filas.length) throw new Error('No se encontró el documento.');
+    const fila = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
     return ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]).map((rol) => ({
-      rol: rol, nombre: fila[columnaNombre_(rol)] || '',
+      rol: rol, nombre: fila[columnaNombre_(doc, rol)] || '',
       estado: fila[colToken_(rol)] ? 'PENDIENTE' : 'FIRMADO',
     }));
   }
 
   /** "Copiar liga de nuevo" desde la ficha: SIEMPRE se arma aquí, nunca en el navegador (mismo motivo que Vehicular). */
-  function copiarLiga(token, responsivaId, rol) {
+  function copiarLiga(doc, token, documentoId, rol) {
     Permisos.puedeEditar(token, 'lineas-telefonicas');
     if (ROLES_DIFERIBLES.indexOf(rol) < 0) throw new Error('Rol inválido.');
-    const filas = LineasDatos.buscarFilasPorId(TAB_RESP(), responsivaId);
-    if (!filas.length) throw new Error('No se encontró la responsiva.');
-    const fila = LineasDatos.leerFilas([{ tabla: TAB_RESP(), filas: filas.slice(0, 1) }])[0][0];
+    const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
+    if (!filas.length) throw new Error('No se encontró el documento.');
+    const fila = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
     const token2 = fila[colToken_(rol)];
     if (!token2) throw new Error('Ese rol no tiene una liga pendiente.');
-    return construirLiga_(token2);
+    return construirLiga_(doc, token2);
   }
 
   /**
@@ -314,28 +341,28 @@ const LineasFirmaRemota = (function () {
    * perdió, sin crear otro registro -- el link viejo deja de servir solo (buscarPorToken_ ya no lo
    * encuentra en cuanto se sobrescribe). Si ese rol firmó presencial (nunca tuvo liga), truena.
    */
-  function regenerarLiga(token, responsivaId, rol) {
+  function regenerarLiga(doc, token, documentoId, rol) {
     Permisos.puedeEditar(token, 'lineas-telefonicas');
     if (ROLES_DIFERIBLES.indexOf(rol) < 0) throw new Error('Rol inválido.');
     return LineasDatos.conCandado(() => {
-      const filas = LineasDatos.buscarFilasPorId(TAB_RESP(), responsivaId);
-      if (!filas.length) throw new Error('No se encontró la responsiva.');
-      const fila = LineasDatos.leerFilas([{ tabla: TAB_RESP(), filas: filas.slice(0, 1) }])[0][0];
-      if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE') throw new Error('Esta responsiva ya quedó firmada; no se puede generar una liga nueva.');
+      const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
+      if (!filas.length) throw new Error('No se encontró el documento.');
+      const fila = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
+      if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE') throw new Error('Este documento ya quedó firmado; no se puede generar una liga nueva.');
       if (!fila[colToken_(rol)] && !fila[colFirmadoPor_(rol)]) throw new Error('Esa persona firmó presencial, no a distancia; no hay liga que regenerar.');
-      borrarFirmaTempSiHay_(fila[colTemp_(rol)]);
+      borrarFirmaTempSiHay_(fila[colTemp_(doc, rol)]);
       const tokenNuevo = Utilities.getUuid();
       const cambios = {
         [colToken_(rol)]: tokenNuevo, [colTokenExpira_(rol)]: new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000),
-        [colTemp_(rol)]: '', [colFirmadoPor_(rol)]: '',
+        [colTemp_(doc, rol)]: '', [colFirmadoPor_(rol)]: '',
       };
-      LineasDatos.actualizarFila(TAB_RESP(), fila._fila, cambios);
-      return construirLiga_(tokenNuevo);
+      LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambios);
+      return construirLiga_(doc, tokenNuevo);
     });
   }
 
   return {
-    ROLES_DIFERIBLES: ROLES_DIFERIBLES, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
+    ROLES_DIFERIBLES: ROLES_DIFERIBLES, DOCUMENTOS: DOCUMENTOS, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
     obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma,
     copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas,
     // Para pruebas

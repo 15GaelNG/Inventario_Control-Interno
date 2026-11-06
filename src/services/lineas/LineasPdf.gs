@@ -28,7 +28,11 @@ const LineasPdf = (function () {
    * queda para volver a hacer el PDF de una inspección de antes (plantillaInspeccion).
    */
   const PLANTILLAS = {
-    INSPECCION_CELULAR: '101CtfZbTXpgu_4vB0vCV-USfHSWP-O3G-2VGLuR3saU',
+    // Desde el 6-nov (usuario: "igual firman las mismas personas" que la Responsiva): cada
+    // responsable adicional ya tiene su propia casilla de firma y su nombre en su propio renglón,
+    // con marcadores numerados <<FIRMA RESPONSABLE 2..5>> / <<RESPONSABLE 2..5>> (antes solo
+    // existía <<FIRMA RESPONSABLE>> y los nombres se concatenaban en <<RESPONSABLE>>).
+    INSPECCION_CELULAR: '1QWF7-b4sAP8oOgiulUk51MCe58Gakh5eKOJnWrwcCLc',
     INSPECCION_CELULAR_CHECKLIST: '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',
     // Desde el 6-nov («PRUEBA RESPONSABLE 05-nov», usuario): cada responsable adicional ya tiene su propia casilla
     // de firma y su nombre en su propio renglón, con marcadores numerados <<FIRMA RESPONSABLE 2..5>> / <<RESPONSABLE 1..5>>

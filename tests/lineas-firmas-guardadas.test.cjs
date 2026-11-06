@@ -152,13 +152,14 @@ test('la firma guardada también va como FIRMA RESPONSABLE si el responsable es 
   // Al guardar, el servidor revisa que el responsable sea quien captura antes de poner su firma
   assert.match(cap, /if \(nombresPropios_\(usuario\)\.indexOf\(nombreDeFirma_\(responsable\)\) < 0\) throw/);
   // El del servidor sigue en los dos (inspección y responsiva: la firma guardada todavía puede llegar por ahí si
-  // algo la manda), pero la responsiva ya no tiene lienzo para su RESPONSABLE (usuario, 6-nov: siempre se difiere
-  // por liga), así que la pantalla solo la pide en la inspección.
+  // algo la manda directamente, p. ej. desde la consola), aunque desde el 6-nov ninguna de las dos tiene ya
+  // lienzo para su RESPONSABLE -- siempre se difiere por liga -- así que la pantalla nunca manda este campo.
   assert.equal((cap.match(/if \(datos\.usarFirmaGuardadaResponsable\) datos\.firmaResponsableBase64 = firmaResponsablePropia_\(usuario, \(datos\.valores \|\| \{\}\)\['RESPONSABLE'\]\);/g) || []).length, 2);
   // Al regenerar, solo si ya está la de Control Interno (sin ella se piden las firmas)
   assert.match(cap, /if \(firmas && firmas\[rolCI\] && !firmas\.responsable && usuario && nombresPropios_\(usuario\)/);
-  // La pantalla cambia el recuadro al elegir a otra persona (solo aplica a la inspección: la responsiva ya no
-  // tiene lienzo para su RESPONSABLE -- usuario, 6-nov, siempre se difiere por liga -- así que solo manda esto una vez)
-  assert.match(lineas, /if \(captura\.revisarFirmaResponsable\) captura\.revisarFirmaResponsable\(\);/);
-  assert.equal((lineas.match(/usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\)/g) || []).length, 1);
+  // La pantalla ya no tiene el recuadro de "firma guardada automática" para el RESPONSABLE en ningún documento
+  // (usuario, 6-nov: la Inspección se sumó a la Responsiva -- las dos siempre difieren esa firma por liga), así
+  // que ni el ajuste al cambiar de persona (revisarFirmaResponsable) ni el campo que lo acompañaba existen ya.
+  assert.doesNotMatch(lineas, /revisarFirmaResponsable/);
+  assert.equal((lineas.match(/usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\)/g) || []).length, 0);
 });

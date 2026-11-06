@@ -156,7 +156,7 @@ test('mixto: un adicional firma en el formulario y otro por liga -- al completar
   const tokenTercer = filaResp['TOKEN FIRMA TERCER'];
   assert.ok(tokenTercer);
 
-  const resultado = F.completarFirma(tokenTercer, Buffer.from('firma-emmanuel').toString('base64'));
+  const resultado = F.completarFirma(F.DOCUMENTOS.RESPONSIVA, tokenTercer, Buffer.from('firma-emmanuel').toString('base64'));
   assert.equal(resultado.pendiente, false, 'TERCER era el último pendiente: el documento se cierra');
   assert.equal(hechos.generados.length, 1);
   const img = hechos.generados[0].imagenes;
@@ -193,12 +193,12 @@ test('mixto: SEGUNDO firma en el formulario; TERCER y CUARTO se difieren y compl
   const tokenCuarto = filaResp['TOKEN FIRMA CUARTO'];
 
   // TERCER firma primero: NO es el último, solo se guarda (pendiente)
-  const r1 = F.completarFirma(tokenTercer, Buffer.from('firma-emmanuel').toString('base64'));
+  const r1 = F.completarFirma(F.DOCUMENTOS.RESPONSIVA, tokenTercer, Buffer.from('firma-emmanuel').toString('base64'));
   assert.equal(r1.pendiente, true);
   assert.equal(hechos.generados.length, 0, 'todavía falta CUARTO: no se genera el PDF');
 
   // CUARTO firma al final: ahora sí se genera el PDF, con los TRES (SEGUNDO del formulario, TERCER y CUARTO por liga)
-  const r2 = F.completarFirma(tokenCuarto, Buffer.from('firma-dafne').toString('base64'));
+  const r2 = F.completarFirma(F.DOCUMENTOS.RESPONSIVA, tokenCuarto, Buffer.from('firma-dafne').toString('base64'));
   assert.equal(r2.pendiente, false);
   assert.equal(hechos.generados.length, 1);
   const img = hechos.generados[0].imagenes;

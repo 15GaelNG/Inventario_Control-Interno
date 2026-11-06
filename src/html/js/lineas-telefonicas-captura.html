@@ -12,7 +12,7 @@
       calificacionAppSheet, cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, copiarTexto, crearFirma, cumpleCondicion,
       enlaceDrive, errorPinBloqueo, erroresFormularioEn, esPuntosPatron, esc, firmaGuardadaEn, flechasPatron,
       htmlAccionesPasos, htmlPasosAppSheet, icono, leerArchivosEn, leerFormularioEn, leerIdentificaciones, llamar,
-      marcarErroresEn, memoria, mensajeError, nombreDeFirma, olvidarFicha, pedirDatos, pintarIconos,
+      marcarErroresEn, memoria, mensajeError, olvidarFicha, pedirDatos, pintarIconos,
       redimensionarImagen } = Lineas.comun;
     Lineas.telefonicas.registrar('captura', (T) => {
       const { CANCELACION_LINEA, ESTATUS_EQUIPO_FINAL, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_PANEL,
@@ -244,7 +244,6 @@
           // aquí también, como ya hace alMostrar con los pasos (esta llamada no hace nada si no cambió el ancho).
           if (f && f.ajustar) f.ajustar();
         });
-        if (captura.revisarFirmaResponsable) captura.revisarFirmaResponsable();
       }
       const actualizarProgresoChecklist = actualizarFormularioAppSheet;
 
@@ -308,8 +307,11 @@
        * solas. Una tarjeta por rol, con su nombre debajo (usuario, 6-nov: dos responsables con el mismo nombre no
        * se distinguían sin el rol). Si se cierra este recuadro, "Ver ligas de firma" en Documentos las vuelve a
        * mostrar (lineas-telefonicas-documentos.html), con lo mismo que ya ofrece la Responsiva/Adherente Vehicular.
+       * `alContinuar` (la Inspección dentro de Reasignar, usuario 6-nov): si se da, el botón dice "Continuar" y lo
+       * llama en vez de cerrar el modal -- el llamador sigue al siguiente paso (la Responsiva) hasta que la persona
+       * ya vio sus ligas, en vez de que ese paso repinte el modal encima sin que le haya dado tiempo de copiarlas.
        */
-      function mostrarLigasFirmaRemota(ligas, valores) {
+      function mostrarLigasFirmaRemota(ligas, valores, alContinuar) {
         const filas = Object.keys(ligas || {}).map((rol) => {
           const nombre = nombreDelRol_(rol, valores);
           return '<div class="ln-liga-remota"><div class="ln-liga-remota-cabecera">' +
@@ -319,13 +321,16 @@
         }).join('');
         mostrarEspera('Liga(s) de firma enviada(s)', { tono: 'listo', icono: 'send',
           texto: 'Lo demás ya quedó guardado. Comparte cada liga con quien falta por firmar; el PDF se genera solo cuando todas se completen.',
-          detalle: filas, acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          detalle: filas, acciones: alContinuar
+            ? '<button type="button" class="primary ln-btn-icono" id="ln-ligas-continuar">' + icono('arrow-right') + ' Continuar</button>'
+            : '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
         Array.from($('#ln-espera-detalle', raiz).querySelectorAll('[data-copiar-liga]')).forEach((boton) => {
           boton.addEventListener('click', () => {
             const input = $('#ln-espera-detalle', raiz).querySelector('input[data-liga="' + CSS.escape(boton.dataset.copiarLiga) + '"]');
             if (input) copiarConAviso_(boton, input.value);
           });
         });
+        if (alContinuar) { const b = $('#ln-ligas-continuar', raiz); if (b) b.addEventListener('click', alContinuar); }
       }
       function copiarConAviso_(boton, texto) {
         copiarTexto(texto).then((ok) => {
@@ -341,9 +346,10 @@
         (captura.contexto.formulario || []).forEach((e) => {
           if (e.tipo !== 'campo') return;
           const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-          // remoto (FIRMA RESPONSABLE y las de los adicionales de la RESPONSIVA): siempre se difiere por liga,
-          // nunca tiene lienzo aquí (usuario, 6-nov; antes se podía firmar en el formulario). La FIRMA RESPONSABLE
-          // de la INSPECCIÓN no es remoto y sigue exactamente igual (incluida su firma guardada automática).
+          // remoto (FIRMA RESPONSABLE y las de los adicionales, de la RESPONSIVA y de la INSPECCIÓN): siempre se
+          // difiere por liga, nunca tiene lienzo aquí (usuario, 6-nov; antes se podía firmar en el formulario).
+          // Solo FIRMA CI/FIRMA INSPECTOR (quien entrega, siempre presencial) sigue con su lienzo y su firma
+          // guardada automática.
           if (e.control === 'firma' && !e.remoto) {
             const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
             const lienzo = document.getElementById(id + '-firma');
@@ -355,24 +361,7 @@
             // La de quien captura (inspector o Control Interno) puede ser su firma guardada
             const propia = sesion.contexto.firmaGuardada && e.columna === (sesion.tipo === 'INSPECCION' ? 'FIRMA INSPECTOR' : 'FIRMA CI');
             if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
-            else if (e.columna === 'FIRMA RESPONSABLE' && origen && (sesion.contexto.nombresPropios || []).length) {
-              // También la del responsable, cuando el responsable es quien captura (usuario, 19-oct: en Mandar a resguardo
-              // recibe procesos). Cambia sola al elegir a otra persona; «Firmar a mano» queda mientras siga siendo ella.
-              // Solo aplica aquí: la FIRMA RESPONSABLE de la responsiva nunca entra a este bloque (remoto: true, arriba)
-              let aManoElegido = false;
-              sesion.revisarFirmaResponsable = () => {
-                const suya = (sesion.contexto.nombresPropios || []).indexOf(nombreDeFirma(origen.value)) >= 0;
-                if (!suya) aManoElegido = false;
-                const actual = sesion.firmas[e.columna];
-                if (suya && !aManoElegido && !(actual && actual.guardada)) {
-                  sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen.value, () => { aManoElegido = true; aMano(); });
-                } else if (!suya && (!actual || actual.guardada)) {
-                  lienzo.innerHTML = '';
-                  aMano();
-                }
-              };
-              sesion.revisarFirmaResponsable();
-            } else aMano();
+            else aMano();
           }
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
@@ -738,7 +727,6 @@
         if (!validarFormularioAppSheet()) return;
         if (raiz.querySelector('.ln-foto-subiendo')) { mostrarErrorCaptura('Espera a que terminen de subir las imágenes.', '#cap-fotos-lista'); return; }
         const firmaInspector = captura.firmas['FIRMA INSPECTOR'];
-        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
@@ -746,16 +734,34 @@
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF'));
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
-        Promise.all([firmaInspector.base64('#ddebf7'), firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ddebf7') : null, sesion.carpetaPromesa || null]).then(([inspector, responsable]) => {
-          sesion.pdfFirmas = { inspector: inspector, responsable: responsable, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
+        Promise.all([firmaInspector.base64('#ddebf7'), sesion.carpetaPromesa || null]).then(([inspector]) => {
+          sesion.pdfFirmas = { inspector: inspector, responsable: null, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
+          // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
+          // "igual firman las mismas personas" que la Responsiva). El servidor ignora los roles sin nombre en la
+          // inspección (rolesADiferir_, LineasCaptura.gs): sin responsable, no se genera ninguna liga.
+          const rolesDiferidos = ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
-            firmaInspectorBase64: sesion.pdfFirmas.inspector, firmaResponsableBase64: sesion.pdfFirmas.responsable, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaInspector.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada),
+            firmaInspectorBase64: sesion.pdfFirmas.inspector, patronBase64: sesion.pdfFirmas.patron,
+            usarFirmaGuardada: !!firmaInspector.guardada,
+            diferir: rolesDiferidos,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
         }).then((r) => {
+          if (r && r.pendiente) {
+            // Falta al menos una liga por completarse: nada de PDF todavía (igual que en la Responsiva). NO se llama
+            // a refrescarDespuesDeCaptura/terminarFlujo: esas generan el PDF de una vez y repintarían encima de las
+            // ligas que se acaban de mostrar. Dentro de una acción (Reasignar, usuario 6-nov) el siguiente paso
+            // (la Responsiva) espera a que la persona le dé "Continuar" aquí, para no repintar el modal encima de
+            // las ligas antes de que le haya dado tiempo de copiarlas.
+            sesion.guardada = true;
+            sesion.guardando = false;
+            memoria.cargadoEn = 0;
+            if (sesion.flujo && sesion.flujo.resolver) mostrarLigasFirmaRemota(r.ligas, valores, () => sesion.flujo.resolver(r));
+            else mostrarLigasFirmaRemota(r.ligas, valores);
+            return;
+          }
           if (sesion.flujo) terminarFlujo(sesion, 'INSPECCION', r);
           else refrescarDespuesDeCaptura(idAbierto, 'INSPECCION', r.id);
         }).catch(errorAlGuardar);

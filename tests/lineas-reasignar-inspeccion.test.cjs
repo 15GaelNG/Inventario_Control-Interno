@@ -20,7 +20,7 @@ test('la inspección de Reasignar se llena con la responsiva, también el jefe d
   assert.match(form, /deResponsiva\.patron !== undefined && deResponsiva\.patron !== null \? String\(deResponsiva\.patron\)/);
   // Es una inspección normal: lo de la responsiva llega llenado y se puede cambiar (usuario, 6-oct en la tarde)
   assert.doesNotMatch(form, /bloquear|soloLectura: true, requerido: 'NUNCA'/);
-  assert.match(form, /\(c\) => \(resp \? deResp\(c, ''\) : v\(c\)\)\)\);/, 'los adicionales de la responsiva, editables');
+  assert.match(form, /\(c\) => \(resp \? deResp\(c, ''\) : v\(c\)\)\)\)\);/, 'los adicionales de la responsiva, editables');
   assert.match(captura, /if \(datos\.patron !== undefined && datos\.patron !== null\) valores\['PATRON'\] = String\(datos\.patron\);/);
   // Contexto y guardado arman el mismo formulario
   assert.match(captura, /ref && ref\.reasignar \? ref\.desdeResponsiva : null/);

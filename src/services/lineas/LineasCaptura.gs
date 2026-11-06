@@ -307,9 +307,10 @@ const LineasCaptura = (function () {
       titulo_('RESPONSABLE', 'user'),
     ].concat(camposResponsable_(catalogos, persona, { soloProcesos: !!enAccion }),
       // Los responsables adicionales (usuario, 6-oct): los del registro o, en Reasignar, los de la responsiva; se pueden
-      // quitar o agregar. Al mandar a resguardo no hay (recibe procesos)
-      enAccion ? [] : LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra),
-        (c) => (resp ? deResp(c, '') : v(c))));
+      // quitar o agregar. Al mandar a resguardo no hay (recibe procesos). Cada uno presente gana su propia firma a
+      // distancia (usuario, 6-nov: conFirmaAdicional_, igual que ya tiene la Responsiva)
+      enAccion ? [] : conFirmaAdicional_(LineasRegistros.camposAdicionales((columna, etiqueta, control, extra) => campo_(columna, etiqueta, control, extra),
+        (c) => (resp ? deResp(c, '') : v(c)))));
     const agregarSeccion = (nombre) => {
       const s = LineasChecklist.secciones().filter((x) => x.seccion === nombre)[0];
       elementos.push(titulo_(s.seccion));
@@ -345,9 +346,10 @@ const LineasCaptura = (function () {
       titulo_('COMENTARIO', 'message-square-text'),
       campo_('COMENTARIO', 'Comentario', 'area', { valor: deResp('COMENTARIO', ''), requerido: enAccion || resp ? 'NUNCA' : 'SIEMPRE', valida: 'COMENTARIOS' }),
       titulo_('FIRMAS', 'signature'),
-      // En el sistema solo firma el responsable principal (el de Capital Humano); los adicionales firman el PDF impreso
-      // (usuario, 6-oct)
-      campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '' }),
+      // El responsable principal y cada adicional presente firman siempre a distancia, por liga
+      // (usuario, 6-nov: "igual firman las mismas personas" que la Responsiva; remoto: true, como
+      // quedó en Responsiva). El Inspector (Flotillas/CI) sigue firmando siempre presencial.
+      campo_('FIRMA RESPONSABLE', 'FIRMA RESPONSABLE', 'firma', { valor: '', remoto: true }),
       campo_('NOMBRE INSPECTOR', 'NOMBRE INSPECTOR', 'texto', { valor: usuario.nombre || '', soloLectura: true }),
       campo_('FIRMA INSPECTOR', 'FIRMA INSPECTOR', 'firma', Object.assign({ valor: '' }, req))
     );
@@ -387,13 +389,26 @@ const LineasCaptura = (function () {
    * No es obligatoria server-side (como FIRMA RESPONSABLE): si no se firma ni se difiere, se queda en blanco.
    */
   const firmaAdicional_ = (rol, mostrar) => campo_('FIRMA ' + rol + ' RESPONSABLE', 'FIRMA ' + rol + ' RESPONSABLE', 'firma', { valor: '', mostrar: mostrar || 'SIEMPRE', remoto: true });
-  function conIdentificacionAdicional_(elementos) {
+  /** Tras cada "NOMBRE <ROL> RESPONSABLE" inserta lo que pide `extra(rol, mostrar)` (una o varias piezas). */
+  function conAdicional_(elementos, extra) {
     return elementos.reduce((a, e) => {
       a.push(e);
       const m = e.tipo === 'campo' && String(e.columna).match(/^NOMBRE (SEGUNDO|TERCER|CUARTO|QUINTO) RESPONSABLE$/);
-      if (m) a.push(archivoIdentificacion_(ORDEN_ADICIONALES.indexOf(m[1]) + 1, e.mostrar), firmaAdicional_(m[1], e.mostrar));
+      if (m) a.push.apply(a, extra(m[1], e.mostrar));
       return a;
     }, []);
+  }
+  /** Responsiva: cada adicional con su identificación (LineasIdentificaciones) y su firma a distancia. */
+  function conIdentificacionAdicional_(elementos) {
+    return conAdicional_(elementos, (rol, mostrar) => [archivoIdentificacion_(ORDEN_ADICIONALES.indexOf(rol) + 1, mostrar), firmaAdicional_(rol, mostrar)]);
+  }
+  /**
+   * Inspección (usuario, 6-nov: "igual firman las mismas personas" que la Responsiva): cada
+   * adicional presente gana su propia casilla de firma a distancia, pero sin identificación (eso
+   * sigue siendo solo de la Responsiva).
+   */
+  function conFirmaAdicional_(elementos) {
+    return conAdicional_(elementos, (rol, mostrar) => [firmaAdicional_(rol, mostrar)]);
   }
 
   /** Columnas de la línea en la responsiva: con Vincular / Cambiar línea salen de la línea que se pone. */
@@ -600,6 +615,7 @@ const LineasCaptura = (function () {
     if (datos.usarFirmaGuardada) datos.firmaInspectorBase64 = firmaPropia_(usuario);
     if (datos.usarFirmaGuardadaResponsable) datos.firmaResponsableBase64 = firmaResponsablePropia_(usuario, (datos.valores || {})['RESPONSABLE']);
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
+    const diferir = rolesADiferir_(datos, datos.valores || {});
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
     // Las fotos son opcionales: la carpeta existe solo si se subió alguna
     if (datos.carpetaId) LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
@@ -635,6 +651,25 @@ const LineasCaptura = (function () {
       if (nuevas.length) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, nuevas);
       LineasDatos.agregarFilas(LineasRepo.TAB.INSP, [fila]);
 
+      // Firma a distancia (LineasFirmaRemota.gs): si algo se difiere, Inspector (siempre) y lo que no se difirió
+      // quedan en sus columnas …TEMP hasta que la última liga pendiente se complete -- ahí, y solo ahí, se genera
+      // el PDF (usuario, 6-nov: "igual firman las mismas personas" que la Responsiva). Se parcha aparte (no en la
+      // misma `fila` del insert) para no estorbar el contrato de arriba.
+      let ligas = {};
+      if (diferir.length) {
+        const imagenesYaCapturadas = { CI: datos.firmaInspectorBase64 };
+        if (diferir.indexOf('PRINCIPAL') < 0 && datos.firmaResponsableBase64) imagenesYaCapturadas.PRINCIPAL = datos.firmaResponsableBase64;
+        ORDEN_ADICIONALES.forEach((rol) => {
+          if (diferir.indexOf(rol) < 0 && datos.firmasAdicionales && datos.firmasAdicionales[rol]) imagenesYaCapturadas[rol] = datos.firmasAdicionales[rol];
+        });
+        const DOC = LineasFirmaRemota.DOCUMENTOS.INSPECCION;
+        const cambiosFirma = LineasFirmaRemota.generarPendientes_(DOC, diferir, imagenesYaCapturadas);
+        LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, LineasFirmaRemota.columnasNuevas_(DOC));
+        const filasNuevas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.INSP, id);
+        LineasDatos.actualizarFila(LineasRepo.TAB.INSP, filasNuevas[0], cambiosFirma);
+        ligas = LineasFirmaRemota.ligasDe_(DOC, cambiosFirma);
+      }
+
       // 2) Bot ACTUALIZAR DESDE INSPECCION: copia a la línea (la bitácora la deja guardarCambiosRegistro).
       // FECHA INSPECCION es Date (sin hora) en LINEAS TELEFONICAS
       const fr = fila['FECHA DE REGISTRO'];
@@ -669,15 +704,23 @@ const LineasCaptura = (function () {
         despues: { calificacion: calificacion },
         detalle: Object.assign(detalleCambios_([g]), { inspeccionId: id }),
       });
-      return { obj: obj, calificacion: calificacion };
+      return { obj: obj, calificacion: calificacion, ligas: ligas };
     });
+
+    const t2 = Date.now();
+    const filas = opciones && opciones.sinIndice ? null : LineasRepo.refrescarIndice([res.obj.reg.id]);
+    marca_('inspección · refrescar el índice', t2);
+
+    if (diferir.length) {
+      // Las firmas que sí llegaron ahora (Inspector siempre, y cualquier diferible que no se haya diferido) ya
+      // quedaron en sus columnas …TEMP (ver arriba, con LineasFirmaRemota.generarPendientes_): no hay nada que
+      // cachear en memoria, el documento no está listo hasta que la(s) liga(s) se completen.
+      return { id: id, pendiente: true, ligas: res.ligas || {}, filas: filas };
+    }
 
     // sinResponsable: no firmó al capturar; al generar el PDF después no se le pide (usuario, 22-oct)
     firmasCache_('INSPECCION', id, { inspector: datos.firmaInspectorBase64, responsable: datos.firmaResponsableBase64 || null, patron: datos.patronBase64 || null,
       sinResponsable: !datos.firmaResponsableBase64 });
-    const t2 = Date.now();
-    const filas = opciones && opciones.sinIndice ? null : LineasRepo.refrescarIndice([res.obj.reg.id]);
-    marca_('inspección · refrescar el índice', t2);
     return { id: id, calificacion: res.calificacion, pdfPendiente: true, filas: filas };
   }
 
@@ -692,14 +735,18 @@ const LineasCaptura = (function () {
    */
   /**
    * Roles a diferir (firma a distancia, LineasFirmaRemota.gs): subconjunto válido de
-   * LineasFirmaRemota.ROLES_DIFERIBLES que además tienen nombre en esta responsiva (un adicional
-   * que no está en la captura no puede diferirse — nada que firmar). Flotillas/CI nunca se difiere:
-   * si `datos.diferir` lo trae, se ignora (no es un rol de la lista).
+   * LineasFirmaRemota.ROLES_DIFERIBLES que además tienen nombre en este documento (un adicional que
+   * no está en la captura no puede diferirse — nada que firmar). Compartida por Responsiva e
+   * Inspección (usuario, 6-nov): en Responsiva el principal (RESPONSABLE) siempre tiene nombre (es
+   * obligatorio), así que esto no le cambia nada; en Inspección puede venir vacío (sin responsable
+   * asignado) y entonces PRINCIPAL se ignora igual que cualquier adicional sin nombre — ni firma
+   * presencial ni a distancia, como ya pasaba con `sinResponsable`. Flotillas/CI/Inspector nunca se
+   * difiere: si `datos.diferir` lo trae, se ignora (no es un rol de la lista).
    */
   function rolesADiferir_(datos, valores) {
     const pedidos = Array.isArray(datos.diferir) ? datos.diferir : [];
     return LineasFirmaRemota.ROLES_DIFERIBLES.filter((rol) => pedidos.indexOf(rol) >= 0 &&
-      (rol === 'PRINCIPAL' || String(valores['NOMBRE ' + rol + ' RESPONSABLE'] || '').trim()));
+      String(valores[rol === 'PRINCIPAL' ? 'RESPONSABLE' : ('NOMBRE ' + rol + ' RESPONSABLE')] || '').trim());
   }
 
   function guardarResponsiva(datos, usuario, puedeVerSecretos, accion) {
@@ -809,11 +856,12 @@ const LineasCaptura = (function () {
         ORDEN_ADICIONALES.forEach((rol) => {
           if (diferir.indexOf(rol) < 0 && datos.firmasAdicionales && datos.firmasAdicionales[rol]) imagenesYaCapturadas[rol] = datos.firmasAdicionales[rol];
         });
-        const cambiosFirma = LineasFirmaRemota.generarPendientes_(diferir, imagenesYaCapturadas);
-        LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, LineasFirmaRemota.columnasNuevas_());
+        const DOC = LineasFirmaRemota.DOCUMENTOS.RESPONSIVA;
+        const cambiosFirma = LineasFirmaRemota.generarPendientes_(DOC, diferir, imagenesYaCapturadas);
+        LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, LineasFirmaRemota.columnasNuevas_(DOC));
         const filasNuevas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.RESP, id);
         LineasDatos.actualizarFila(LineasRepo.TAB.RESP, filasNuevas[0], cambiosFirma);
-        ligas = LineasFirmaRemota.ligasDe_(cambiosFirma);
+        ligas = LineasFirmaRemota.ligasDe_(DOC, cambiosFirma);
       }
       // Todo lo de la responsiva pasa a la ficha (usuario, 16-oct, L2; pendiente 2.49): la persona y, en un equipo, el
       // modelo, el IMEI, los accesorios, el color, el bloqueo y el PIN de WhatsApp. Si firmó otra persona, la acción ya la
@@ -1067,14 +1115,16 @@ const LineasCaptura = (function () {
     const d = destinoPdf_(tipo, fila, ev, id);
     const carpeta = d.carpeta;
     const nombre = d.nombre;
+    // Firma a distancia de un responsable adicional (LineasFirmaRemota.gs): su propia casilla numerada
+    // (<<FIRMA RESPONSABLE 2>>..<<FIRMA RESPONSABLE 5>>); la columna de la hoja sigue con su palabra
+    // (FIRMA SEGUNDO RESPONSABLE, etc.), solo el marcador del Doc es numerado. Igual en Responsiva (plantilla
+    // «PRUEBA RESPONSABLE 05-nov») y en Inspección (usuario, 6-nov: "igual firman las mismas personas").
+    const firmasAdicionales = ORDEN_ADICIONALES.reduce((o, n, i) => Object.assign(o, { ['FIRMA RESPONSABLE ' + (i + 2)]: imagen(n.toLowerCase(), 'FIRMA ' + n + ' RESPONSABLE', 'firma-' + n.toLowerCase() + '.png') }), {});
     const imagenes = esInspeccion
-      ? { 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable), 'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }
+      ? Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
+          'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }, firmasAdicionales)
       : Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
-        'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron },
-        // Firma a distancia de un responsable adicional (LineasFirmaRemota.gs): su propia casilla numerada
-        // (<<FIRMA RESPONSABLE 2>>..<<FIRMA RESPONSABLE 5>>, plantilla «PRUEBA RESPONSABLE 05-nov»); la columna de la
-        // hoja sigue con su palabra (FIRMA SEGUNDO RESPONSABLE, etc.), solo el marcador del Doc es numerado.
-        ORDEN_ADICIONALES.reduce((o, n, i) => Object.assign(o, { ['FIRMA RESPONSABLE ' + (i + 2)]: imagen(n.toLowerCase(), 'FIRMA ' + n + ' RESPONSABLE', 'firma-' + n.toLowerCase() + '.png') }), {}));
+        'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron }, firmasAdicionales);
     const anterior = forzar ? pdfVigente_(ev) : null;
     try {
       const tp = Date.now();
