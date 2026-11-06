@@ -839,9 +839,12 @@
         const anterior = !e.valorOculto && valor && !esPuntosPatron(valor) && rutaPatronAppSheet(valor) ? vistaPatron(valor) : '';
         control = (nota ? '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' ' + esc(nota) + '</div>' : '') + anterior + htmlPatron(id + '-patron', false);
       } else if (e.control === 'firma') {
-        // remoto (LineasFirmaRemota.gs): esta firma se puede diferir por una liga (nunca CI/INSPECTOR, que siempre
-        // firman presencial) -- el selector vive junto a la firma, aquí, no en otra copia por pantalla.
-        control = htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', ETIQUETA_FIRMA[e.columna]) + (e.remoto ? htmlFirmaADistancia_(e.columna) : '');
+        // remoto (LineasFirmaRemota.gs): esta firma SIEMPRE se difiere por liga (nunca CI/INSPECTOR, que siempre
+        // firman presencial) -- ya no hay lienzo aquí ni selector "Firma aquí ahora" (usuario, 6-nov: se quitó esa
+        // opción por el bug de las firmas en blanco al firmar un responsable dentro del sistema).
+        control = e.remoto
+          ? '<div class="ln-nota">' + icono('send', 'ln-icon-sm') + ' Se le va a mandar una liga para que firme a distancia.</div>'
+          : htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', ETIQUETA_FIRMA[e.columna]);
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -971,21 +974,6 @@
     function htmlFirma(rol, idLienzo, etiqueta) {
       return '<div class="ln-firma ln-firma-' + rol + '"><div class="ln-firma-cabecera">' + icono(rol === 'ci' ? 'shield-check' : 'user') + ' ' +
         (etiqueta || (rol === 'ci' ? 'Firma de ' + Marca.textoDe('lineas-telefonicas') : 'Firma del responsable')) + '</div><div class="ln-firma-lienzo" id="' + idLienzo + '"></div></div>';
-    }
-
-    /**
-     * Firma a distancia (LineasFirmaRemota.gs, usuario): junto a cada firma que lo admite (campo con `remoto: true`
-     * en LineasCaptura.gs -- CI/INSPECTOR nunca), un selector "Aquí" / "A distancia". Al elegir "A distancia" se
-     * oculta el lienzo (no se pide firmar) y queda marcado en data-remoto-estado para que el guardado arme
-     * `datos.diferir` (lineas-telefonicas-captura.html, activarFirmasADistancia/firmasDiferidas). "Aquí" es lo de
-     * siempre: la responsiva no cambia en nada si nadie toca este selector.
-     */
-    function htmlFirmaADistancia_(columna) {
-      return '<div class="ln-firma-remoto" data-firma-remoto="' + esc(columna) + '" data-remoto-estado="0">' +
-        '<div class="ln-pastillas">' +
-          '<button type="button" class="ln-pastilla activa" data-remoto-valor="0">' + icono('pen-line', 'ln-icon-sm') + ' Firma aquí ahora</button>' +
-          '<button type="button" class="ln-pastilla" data-remoto-valor="1">' + icono('send', 'ln-icon-sm') + ' Firma a distancia (enviar liga)</button>' +
-        '</div></div>';
     }
 
     /**

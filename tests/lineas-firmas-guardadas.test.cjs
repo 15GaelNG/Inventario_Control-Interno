@@ -151,10 +151,14 @@ test('la firma guardada también va como FIRMA RESPONSABLE si el responsable es 
   assert.equal((cap.match(/nombresPropios: nombresConFirma_\(usuario\),/g) || []).length, 2);
   // Al guardar, el servidor revisa que el responsable sea quien captura antes de poner su firma
   assert.match(cap, /if \(nombresPropios_\(usuario\)\.indexOf\(nombreDeFirma_\(responsable\)\) < 0\) throw/);
+  // El del servidor sigue en los dos (inspección y responsiva: la firma guardada todavía puede llegar por ahí si
+  // algo la manda), pero la responsiva ya no tiene lienzo para su RESPONSABLE (usuario, 6-nov: siempre se difiere
+  // por liga), así que la pantalla solo la pide en la inspección.
   assert.equal((cap.match(/if \(datos\.usarFirmaGuardadaResponsable\) datos\.firmaResponsableBase64 = firmaResponsablePropia_\(usuario, \(datos\.valores \|\| \{\}\)\['RESPONSABLE'\]\);/g) || []).length, 2);
   // Al regenerar, solo si ya está la de Control Interno (sin ella se piden las firmas)
   assert.match(cap, /if \(firmas && firmas\[rolCI\] && !firmas\.responsable && usuario && nombresPropios_\(usuario\)/);
-  // La pantalla cambia el recuadro al elegir a otra persona
+  // La pantalla cambia el recuadro al elegir a otra persona (solo aplica a la inspección: la responsiva ya no
+  // tiene lienzo para su RESPONSABLE -- usuario, 6-nov, siempre se difiere por liga -- así que solo manda esto una vez)
   assert.match(lineas, /if \(captura\.revisarFirmaResponsable\) captura\.revisarFirmaResponsable\(\);/);
-  assert.equal((lineas.match(/usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\)/g) || []).length, 2);
+  assert.equal((lineas.match(/usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\)/g) || []).length, 1);
 });

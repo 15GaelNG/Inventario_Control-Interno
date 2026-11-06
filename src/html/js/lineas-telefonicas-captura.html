@@ -278,8 +278,9 @@
           if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.valorOculto || e.virtual) return;
           if (!cumpleCondicion(e.mostrar, tipo) || !cumpleCondicion(e.requerido, tipo)) return;
           if (e.control === 'firma') {
-            // Diferida a distancia (LineasFirmaRemota.gs): no se pide aquí, se manda por liga al guardar
-            if (captura.diferir && captura.diferir[e.columna]) return;
+            // Firma a distancia (LineasFirmaRemota.gs): esta siempre se difiere por liga, no se pide aquí
+            // (usuario, 6-nov; antes era elegible "Firma aquí ahora" y se revisaba con captura.diferir)
+            if (e.remoto) return;
             const f = captura.firmas[e.columna];
             if (!f || f.estaVacia()) faltan.push(e);
             return;
@@ -291,31 +292,6 @@
       }
 
       // -- Firma a distancia (LineasFirmaRemota.gs) --
-
-      /** Columna del formulario → rol que entiende el servidor (LineasFirmaRemota.ROLES_DIFERIBLES). Solo responsiva. */
-      const ROL_DIFERIBLE = Object.assign({ 'FIRMA RESPONSABLE': 'PRINCIPAL' },
-        ORDEN_ADICIONALES.reduce((o, rol) => Object.assign(o, { ['FIRMA ' + rol + ' RESPONSABLE']: rol }), {}));
-
-      /**
-       * El selector "Firma aquí ahora" / "Firma a distancia" de una firma (htmlFirmaADistancia_, lineas.html): oculta o
-       * muestra su lienzo y marca/desmarca `captura.diferir[columna]`, que el guardado (guardarResponsivaDesdeFormulario)
-       * usa para no pedirla ni mandarla, y en su lugar incluir ese rol en `datos.diferir`. `boton` ya trae `.activa`
-       * puesta por elegirPastilla (raiz.addEventListener('click') en lineas-telefonicas.html).
-       */
-      function alternarFirmaRemoto(boton) {
-        if (!captura) return;
-        const envoltura = boton.closest('[data-firma-remoto]');
-        if (!envoltura) return;
-        const columna = envoltura.dataset.firmaRemoto;
-        const aDistancia = boton.dataset.remotoValor === '1';
-        envoltura.dataset.remotoEstado = aDistancia ? '1' : '0';
-        captura.diferir = captura.diferir || {};
-        captura.diferir[columna] = aDistancia;
-        const caja = envoltura.closest('.ln-af-campo');
-        const lienzo = caja && caja.querySelector('.ln-firma');
-        if (lienzo) lienzo.hidden = aDistancia;
-        actualizarFormularioAppSheet();
-      }
 
       /** El nombre de ese responsable en el formulario recién guardado (`valores`), o la etiqueta genérica si no llegó. */
       function nombreDelRol_(rol, valores) {
@@ -360,7 +336,10 @@
         (captura.contexto.formulario || []).forEach((e) => {
           if (e.tipo !== 'campo') return;
           const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
-          if (e.control === 'firma') {
+          // remoto (FIRMA RESPONSABLE y las de los adicionales de la RESPONSIVA): siempre se difiere por liga,
+          // nunca tiene lienzo aquí (usuario, 6-nov; antes se podía firmar en el formulario). La FIRMA RESPONSABLE
+          // de la INSPECCIÓN no es remoto y sigue exactamente igual (incluida su firma guardada automática).
+          if (e.control === 'firma' && !e.remoto) {
             const origen = NOMBRE_DE_FIRMA[e.columna] && cuerpo.querySelector('[data-columna="' + CSS.escape(NOMBRE_DE_FIRMA[e.columna]) + '"]');
             const lienzo = document.getElementById(id + '-firma');
             const sesion = captura;
@@ -373,7 +352,8 @@
             if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
             else if (e.columna === 'FIRMA RESPONSABLE' && origen && (sesion.contexto.nombresPropios || []).length) {
               // También la del responsable, cuando el responsable es quien captura (usuario, 19-oct: en Mandar a resguardo
-              // recibe procesos). Cambia sola al elegir a otra persona; «Firmar a mano» queda mientras siga siendo ella
+              // recibe procesos). Cambia sola al elegir a otra persona; «Firmar a mano» queda mientras siga siendo ella.
+              // Solo aplica aquí: la FIRMA RESPONSABLE de la responsiva nunca entra a este bloque (remoto: true, arriba)
               let aManoElegido = false;
               sesion.revisarFirmaResponsable = () => {
                 const suya = (sesion.contexto.nombresPropios || []).indexOf(nombreDeFirma(origen.value)) >= 0;
@@ -806,37 +786,27 @@
           return;
         }
         const firmaCi = captura.firmas['FIRMA CI'];
-        const firmaResponsable = captura.firmas['FIRMA RESPONSABLE'];
         const idAbierto = captura.idObjetivo;
         const patron = patronParaGuardar();
         const valores = leerFormularioAppSheet();
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
-        const diferir = sesion.diferir || {};
-        // Responsables adicionales presentes que SÍ van a firmar aquí (ni vacíos ni diferidos a distancia)
-        const adicionalesAFirmar = ORDEN_ADICIONALES.filter((rol) => {
-          const f = sesion.firmas['FIRMA ' + rol + ' RESPONSABLE'];
-          return f && !diferir['FIRMA ' + rol + ' RESPONSABLE'] && !f.estaVacia();
-        });
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
         // pdfAqui (la Responsiva, 16-oct): true, o una función con lo que contestó el guardado (la reasignación de un equipo
         // sigue a la inspección: su PDF sale después)
         const pdfAqui = (r) => !!sesion.flujo && (typeof sesion.flujo.pdfAqui === 'function' ? sesion.flujo.pdfAqui(r) : !!sesion.flujo.pdfAqui);
-        Promise.all([firmaResponsable && !diferir['FIRMA RESPONSABLE'] && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null,
-          firmaCi.base64('#ffffff'), leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores),
-          Promise.all(adicionalesAFirmar.map((rol) => sesion.firmas['FIRMA ' + rol + ' RESPONSABLE'].base64('#ffffff')))])
-          .then(([responsable, ci, identificaciones, firmasAdic]) => {
-          sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
-          const firmasAdicionales = {};
-          adicionalesAFirmar.forEach((rol, i) => { firmasAdicionales[rol] = firmasAdic[i]; });
-          // Firma a distancia (LineasFirmaRemota.gs): los roles marcados "A distancia" en pantalla, con nombre en la
-          // responsiva (un selector sin adicional detrás no manda nada -- ver ROL_DIFERIBLE/htmlFirmaADistancia_)
-          const rolesDiferidos = Object.keys(diferir).filter((col) => diferir[col] && ROL_DIFERIBLE[col]).map((col) => ROL_DIFERIBLE[col]);
+        Promise.all([firmaCi.base64('#ffffff'), leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores)])
+          .then(([ci, identificaciones]) => {
+          sesion.pdfFirmas = { responsable: null, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
+          // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
+          // se quitó la opción de firmarlos aquí mismo, por el bug de las firmas en blanco al capturarlas en el
+          // formulario). El servidor ignora los roles sin nombre en la responsiva (rolesADiferir_, LineasCaptura.gs).
+          const rolesDiferidos = ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
-            firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaCi.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada), identificaciones: identificaciones,
-            firmasAdicionales: firmasAdicionales, diferir: rolesDiferidos,
+            firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
+            usarFirmaGuardada: !!firmaCi.guardada, identificaciones: identificaciones,
+            diferir: rolesDiferidos,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
@@ -965,7 +935,7 @@
 
       return {
         abrirCaptura: abrirCaptura, abrirEditor: abrirEditor,
-        actualizarProgresoChecklist: actualizarProgresoChecklist, alternarFirmaRemoto: alternarFirmaRemoto,
+        actualizarProgresoChecklist: actualizarProgresoChecklist,
         capturarEnFlujo: capturarEnFlujo,
         cerrarCaptura: cerrarCaptura, errorAlGuardar: errorAlGuardar, estadoGuardado: estadoGuardado,
         htmlSubirFotos: htmlSubirFotos, manejarSubidaArchivo: manejarSubidaArchivo,

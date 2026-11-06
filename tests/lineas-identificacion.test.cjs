@@ -166,11 +166,11 @@ test('pantalla: fotos o PDF por responsable, se ven antes de guardar y viajan co
   assert.match(pantalla, /accept="image\/\*,application\/pdf" multiple data-ine-archivo/);
   assert.match(pantalla, /if \(pdfs\.length && fotos\.length\) return error\('Elige fotos o un PDF, no los dos\.'\);/);
   assert.match(pantalla, /activarIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\)\);/);
-  // Firma a distancia (LineasFirmaRemota.gs, usuario): se agregó un 4o elemento (las firmas de los adicionales que
-  // firman aquí) al mismo Promise.all, sin romper fotos/PDF/identificación de arriba
-  assert.match(pantalla, /leerIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\), valores\),\s*\n\s*Promise\.all\(adicionalesAFirmar\.map/);
-  assert.match(pantalla, /\.then\(\(\[responsable, ci, identificaciones, firmasAdic\]\) => \{/);
-  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\), identificaciones: identificaciones,/);
+  // Firma a distancia (LineasFirmaRemota.gs, usuario, 6-nov): el responsable principal y los adicionales ya
+  // siempre firman por liga (se quitó "Firma aquí ahora"), así que el Promise.all solo trae CI e identificaciones
+  assert.match(pantalla, /Promise\.all\(\[firmaCi\.base64\('#ffffff'\), leerIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\), valores\)\]\)/);
+  assert.match(pantalla, /\.then\(\(\[ci, identificaciones\]\) => \{/);
+  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, identificaciones: identificaciones,/);
   // Las listas del cuerpo del modal se escuchan una sola vez (el cuerpo se reutiliza)
   assert.match(pantalla, /if \(cuerpo\._identificacionesActivas\) return;/);
 });
