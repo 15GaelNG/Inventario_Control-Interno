@@ -81,6 +81,9 @@ const LineasAcciones = (function () {
       ref: ref, modo: 'RESPONSIVA',
       aplicar: (ahora, valores) => aplicarResponsiva_(ref, valores, inspeccionId, usuario, ahora, !!d.desdeCorregir),
     });
+    // Firma a distancia (LineasFirmaRemota.gs): si algo quedó pendiente, se avisa tal cual -- sin esto, el cliente
+    // nunca se entera de las ligas y pide el PDF de una vez (usuario, 6-nov)
+    if (r.pendiente) return { id: r.id, registroId: r.registroId, pendiente: true, ligas: r.ligas || {}, filas: r.filas };
     return { id: r.id, registroId: r.registroId, pdfPendiente: true, filas: r.filas, reasignado: !!(r.hecho && r.hecho.reasignado) };
   }
 
@@ -142,6 +145,8 @@ const LineasAcciones = (function () {
     const conResponsiva = !!lineaId && may(LineasUtil.col(fE, 'ESTATUS EQUIPO')) === 'USO';
     let hecho = null;
     let responsivaId = null;
+    let responsivaPendiente = false;
+    let responsivaLigas = {};
     let comentario = '';
     let ticket = '';
     if (conResponsiva) {
@@ -157,6 +162,9 @@ const LineasAcciones = (function () {
         },
       });
       responsivaId = r.id;
+      // Firma a distancia (LineasFirmaRemota.gs): igual que en responsiva() -- sin esto se pierde al pasar por Vincular
+      responsivaPendiente = !!r.pendiente;
+      responsivaLigas = r.ligas || {};
     } else {
       comentario = txt(d.comentario);
       ticket = txt(d.ticket);
@@ -170,6 +178,7 @@ const LineasAcciones = (function () {
         { motivoDelAdendum: true, nucos: { [hecho.anteriorACancelar]: hecho.nuco } });
     }
     const filas = LineasRepo.refrescarIndice([equipoId].concat(hecho.tocados));
+    if (responsivaPendiente) return { id: responsivaId, responsivaId: responsivaId, equipoId: equipoId, pendiente: true, ligas: responsivaLigas, filas: filas };
     return { id: responsivaId || equipoId, responsivaId: responsivaId, equipoId: equipoId, pdfPendiente: !!responsivaId, filas: filas };
   }
 
