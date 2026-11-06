@@ -5,7 +5,7 @@
    */
   (function () {
     'use strict';
-    const { $, aplicarCambiosIndice, aviso, chip, elegirPastilla, esc, fechaTabla, formularioResguardo, guion, icono,
+    const { $, aplicarCambiosIndice, aviso, chip, chipCompania, elegirPastilla, esc, fechaTabla, formularioResguardo, guion, icono,
       llamar, memoria, mensajeError, miles, montaje, pedirDatos, quitarDelPanel, tablaLineas, tablaRegreso, tilesKpi } = Lineas.comun;
     const { irARegistro } = Lineas;
 
@@ -141,7 +141,11 @@
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
           // La compañía de su línea (usuario, 5-nov); ya venía en el renglón, como en Cancelaciones
-          { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista', render: (v) => guion(v) },
+          // Sin línea: badge con la compañía de la última que tuvo (ULTIMA_COMPANIA, usuario, 6-nov)
+          // El valor también (no solo el badge): el detalle no la manda a «sin dato» y el filtro y el Excel dicen lo mismo
+          { campo: 'COMPANIA', titulo: 'Compañía', tipo: 'lista',
+            valor: (f) => f.COMPANIA || (f.ULTIMA_COMPANIA ? 'ÚLTIMA LÍNEA: ' + f.ULTIMA_COMPANIA : ''),
+            render: (v, f) => (f.COMPANIA ? chipCompania(f.COMPANIA) : chipCompania(f.ULTIMA_COMPANIA, 'ÚLTIMA LÍNEA: ')) || guion('') },
           { campo: 'SEDE', titulo: 'Sede', tipo: 'lista' },
           { campo: 'OFICINA', titulo: 'Oficina / desarrollo', tipo: 'lista' },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista' },
