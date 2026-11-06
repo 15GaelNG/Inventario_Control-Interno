@@ -13,7 +13,7 @@
       const { MOTIVOS_CANCELACION, pdfsEnCurso, pila, pintarIndicadores, pintarListado, raiz, tablas, vigente } = T;
       const { abrir } = T.de('ficha');
       const { capturarEnFlujo, cerrarCaptura, errorAlGuardar, estadoGuardado, mostrarErrorCaptura, mostrarEspera,
-        mostrarModalCaptura, refrescarDespuesDeCaptura } = T.de('captura');
+        mostrarLigasFirmaRemota, mostrarModalCaptura, refrescarDespuesDeCaptura } = T.de('captura');
 
       /**
        * Responsiva (pendiente 2.49, usuario 16-oct: «una reasignación es lo mismo que una responsiva»), del equipo o de la
@@ -76,7 +76,17 @@
         mostrarEspera('Guardando la responsiva');
         llamar('apiLineasGuardarResponsiva', Object.assign({}, d, { inspeccionId: inspeccionId })).then((r) => {
           if (!vigente() || T.captura !== sesion) return;
-          refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id, false, pdfInspeccion ? { promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' } : null);
+          if (r && r.pendiente) {
+            // La responsiva ya no se firma aquí (usuario, 6-nov): el responsable y sus adicionales siempre quedan
+            // pendientes de su liga. Antes de seguir (y antes de que nada intente generar un PDF que todavía no
+            // tiene firmas que mostrar), se enseñan las ligas para compartir -- un paso antes de cerrar.
+            sesion.guardando = false;
+            modal.removeAttribute('aria-busy');
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+            mostrarLigasFirmaRemota(r.ligas, d.valores);
+          } else {
+            refrescarDespuesDeCaptura(fila.id, 'RESPONSIVA', r.id, false, pdfInspeccion ? { promesa: pdfInspeccion, texto: 'Ver PDF de la inspección' } : null);
+          }
           listo(r).then(() => {
             // La ficha abierta se vuelve a pintar con la persona y los estatus nuevos (como Mandar a resguardo, 4-oct)
             const actual = pila[pila.length - 1];
