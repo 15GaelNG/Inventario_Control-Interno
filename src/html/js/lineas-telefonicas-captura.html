@@ -825,8 +825,11 @@
         }).then((r) => {
           if (r && r.pendiente) {
             // Falta al menos una liga por completarse: nada de PDF todavía (LineasFirmaRemota.completarFirma lo genera
-            // hasta que la última se complete). Lo guardado ya se refleja en la ficha.
-            refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
+            // hasta que la última se complete). NO se llama a refrescarDespuesDeCaptura: esa función genera el PDF de
+            // una vez (apiLineasGenerarPdf) y su "Generando tu PDF" / "Tu PDF está listo" se repinta encima de las
+            // ligas unos segundos después, cerrando el recuadro que se acaba de mostrar (usuario, 6-nov).
+            sesion.guardada = true;
+            memoria.cargadoEn = 0;
             mostrarLigasFirmaRemota(r.ligas);
             if (sesion.flujo && sesion.flujo.resolver) sesion.flujo.resolver(r);
             return;

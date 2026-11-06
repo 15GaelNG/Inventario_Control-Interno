@@ -177,6 +177,11 @@ const ENTORNOS = {
     // Líneas lee las hojas nuevas, igual que producción
     LINEAS_LECTURA: 'ESTRUCTURA',
     LINEAS_HOJA_VIEJA_RETIRADA: '2026-10-04T00:00:00.000Z',
+
+    // Despliegue aparte del mismo proyecto, con acceso "Cualquier usuario" (sin pedir cuenta de dominio) -- lo usa la
+    // liga de firma a distancia de la Responsiva de Líneas (LineasFirmaRemota.gs). Creado a mano (clasp deploy, 6-nov):
+    // el link de /dev de siempre exige tener acceso de EDITOR al proyecto, por eso Google pedía "solicitar acceso".
+    URL_FIRMA_PUBLICA: 'https://script.google.com/macros/s/AKfycbxfOOtXEg-PNyIlq6CBAQKt9xUmvuaWJJZ9PkyS3tnKfnQcRONZwO-PztGEbE1x_5RbEw/exec',
   },
 
   // ---------------------------------------------------------------- DEV de la homologación (rama common)
