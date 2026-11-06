@@ -780,11 +780,14 @@ const InspeccionesService = (function () {
       : '';
 
     const asunto = asuntoAviso_(fila);
+    const fechaCorta = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy');
     const cuerpo = '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;max-width:560px">' +
+      '<p style="margin:0 0 12px">Hola, buenos días. Se comparte la inspección llevada a cabo el día ' +
+        '<b>' + fechaCorta + '</b>.</p>' +
       '<h2 style="margin:0 0 12px;font-size:18px">Inspección vehicular</h2>' +
       '<table style="border-collapse:collapse">' +
         dato('Vehículo', fila['VEHICULO']) + dato('Placas', fila['PLACAS']) + dato('Folio', fila['FOLIO']) +
-        dato('Fecha', Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy HH:mm')) +
+        dato('Fecha', fechaCorta + ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HH:mm')) +
         dato('Inspector', fila['NOMBRE INSPECTOR']) + dato('Puntaje final', fila['PUNTAJE FINAL INSPECCION']) +
       '</table>' +
       (fila['OBSERVACIONES'] ? '<p><b>Observaciones:</b> ' + escaparHtml_(fila['OBSERVACIONES']) + '</p>' : '') +
