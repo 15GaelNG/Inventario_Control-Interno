@@ -117,8 +117,17 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   assert.equal(r.RESPONSABLE, 'ANA / LUIS / EVA');
   assert.equal(r['No EMPLEADO'], 'AC1 / AC2');
   assert.equal(r._fila, undefined);
+  // Cada responsable en su propio renglón numerado (plantilla «PRUEBA RESPONSABLE 05-nov»); el que no se
+  // ocupó queda «N/A», no en blanco (usuario, 6-nov)
+  assert.equal(r['RESPONSABLE 1'], 'ANA');
+  assert.equal(r['RESPONSABLE 2'], 'LUIS');
+  assert.equal(r['RESPONSABLE 3'], 'EVA');
+  assert.equal(r['RESPONSABLE 4'], 'N/A');
+  assert.equal(r['RESPONSABLE 5'], 'N/A');
   const solo = conOrden({ RESPONSABLE: 'ANA', 'No EMPLEADO': 'AC1' });
   assert.equal(solo.RESPONSABLE, 'ANA');
+  assert.equal(solo['RESPONSABLE 1'], 'ANA');
+  ['RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5'].forEach((c) => assert.equal(solo[c], 'N/A', c));
   // Responsiva: «<<[CONTRASEÑA]>><<[PIN EQUIPO]>>»; con patrón, solo la imagen (usuario, 6-oct)
   assert.equal(conOrden({ CONTRASEÑA: '1-5-9', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], '');
   assert.equal(conOrden({ CONTRASEÑA: '', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], 'PATRON');

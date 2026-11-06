@@ -829,6 +829,10 @@
             // una vez (apiLineasGenerarPdf) y su "Generando tu PDF" / "Tu PDF está listo" se repinta encima de las
             // ligas unos segundos después, cerrando el recuadro que se acaba de mostrar (usuario, 6-nov).
             sesion.guardada = true;
+            // estadoGuardado (al inicio de esta función) dejó sesion.guardando = true; sin esto, cerrarCaptura()
+            // se niega a cerrar el recuadro de ligas (su guarda: "if (captura.guardando && !guardada) return")
+            // y el botón "Cerrar" parece no hacer nada (usuario, 6-nov).
+            sesion.guardando = false;
             memoria.cargadoEn = 0;
             mostrarLigasFirmaRemota(r.ligas);
             if (sesion.flujo && sesion.flujo.resolver) sesion.flujo.resolver(r);

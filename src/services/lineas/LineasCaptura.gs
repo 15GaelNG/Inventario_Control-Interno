@@ -906,9 +906,10 @@ const LineasCaptura = (function () {
     const registro = {};
     Object.keys(fila).forEach((k) => { if (k !== '_fila') registro[k] = fila[k]; });
     // Cada responsable firma su propia casilla: <<RESPONSABLE 1>> es el principal, <<RESPONSABLE 2>>..<<RESPONSABLE 5>>
-    // los adicionales (plantilla «PRUEBA RESPONSABLE 05-nov»), antes de que <<RESPONSABLE>> se sobreescriba abajo.
-    registro['RESPONSABLE 1'] = String(fila['RESPONSABLE'] || '').trim();
-    ORDEN_ADICIONALES.forEach((n, i) => { registro['RESPONSABLE ' + (i + 2)] = String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim(); });
+    // los adicionales (plantilla «PRUEBA RESPONSABLE 05-nov»), antes de que <<RESPONSABLE>> se sobreescriba abajo. El
+    // que no se ocupó queda «N/A», no en blanco (usuario, 6-nov).
+    registro['RESPONSABLE 1'] = String(fila['RESPONSABLE'] || '').trim() || 'N/A';
+    ORDEN_ADICIONALES.forEach((n, i) => { registro['RESPONSABLE ' + (i + 2)] = String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim() || 'N/A'; });
     // Responsiva con más de un responsable: como el AppSheet, los nombres y los números de empleado juntos con « / »
     const nombres = ORDEN_ADICIONALES.map((n) => String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim()).filter(Boolean);
     if (nombres.length) {
