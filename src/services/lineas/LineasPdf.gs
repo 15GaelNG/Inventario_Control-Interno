@@ -452,10 +452,11 @@ const LineasPdf = (function () {
               img.setHeight(Math.max(1, Math.round(alto * escala)));
               parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
             } else {
-              // Firmas: llegan recortadas al trazo (componente Firma); caben en 160 × 70 sin deformarse. Con responsables
-              // adicionales, la del principal cabe en 90 × 40 y deja lugar para que los demás firmen el impreso (6-oct)
+              // Firmas: llegan recortadas al trazo (componente Firma); caben en 115 × 50 sin deformarse (6-nov: más chicas
+              // que antes, para las casillas angostas de la plantilla con varios responsables). Con responsables
+              // adicionales, la del principal cabe en 65 × 30 y deja lugar para que los demás firmen el impreso (6-oct)
               const chica = /^firma-principal/.test(String(blob.getName ? blob.getName() : ''));
-              const escala = Math.min(1, (chica ? 90 : 160) / ancho, (chica ? 40 : 70) / alto);
+              const escala = Math.min(1, (chica ? 65 : 115) / ancho, (chica ? 30 : 50) / alto);
               img.setWidth(Math.max(1, Math.round(ancho * escala)));
               img.setHeight(Math.max(1, Math.round(alto * escala)));
             }

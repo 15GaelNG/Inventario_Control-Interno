@@ -1101,9 +1101,8 @@ test('inspección y responsiva: bloqueo en lista, firmas del sistema, acomodo, f
   assert.match(lineas, /const cargarCatalogos = \(forzar\) => catalogoLineas_\('apiLineasCatalogos', forzar\);/);
   assert.match(lineas, /return callServerCacheado\(fn, state\.token, \.\.\.version\);/);
   assert.doesNotMatch(lineas, /VIGENCIA_CATALOGO_MS|catalogosPendientes|colaboradoresPendientes|accesoriosPendientes/);
-  // PDF: la firma recortada cabe en 160 × 70
-  // Una firma cabe en 160 × 70; las de varios responsables juntas (responsiva, 6-oct), hasta 300 de ancho
-  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
+  // PDF: la firma recortada cabe en 115 × 50 (6-nov: más chica, para las casillas angostas de la plantilla nueva)
+  assert.match(read('src/services/lineas/LineasPdf.gs'), /Math\.min\(1, \(chica \? 65 : 115\) \/ ancho, \(chica \? 30 : 50\) \/ alto\)/);
 });
 
 test('la sección de fotos de la inspección no se oculta con las condiciones del AppSheet', () => {

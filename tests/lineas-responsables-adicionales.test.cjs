@@ -131,7 +131,8 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable\), 'FIRMA INSPECTOR'/);
   const pdf = read('src/services/lineas/LineasPdf.gs');
   assert.match(pdf, /const chica = \/\^firma-principal\/\.test/);
-  assert.match(pdf, /Math\.min\(1, \(chica \? 90 : 160\) \/ ancho, \(chica \? 40 : 70\) \/ alto\)/);
+  // 6-nov: firmas más chicas (115×50 / 65×30) para que caben en las casillas angostas de la plantilla nueva
+  assert.match(pdf, /Math\.min\(1, \(chica \? 65 : 115\) \/ ancho, \(chica \? 30 : 50\) \/ alto\)/);
 });
 
 test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus columnas se borraron: DEV 6-oct, producción 7-oct)', () => {
