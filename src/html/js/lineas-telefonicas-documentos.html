@@ -12,7 +12,7 @@
       const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, raiz,
         resumenDocumentos, vigente } = T;
       const { abrir, contarEnPestana, precargarDocumento, tarjeta } = T.de('ficha');
-      const { mostrarErrorCaptura, mostrarEspera, mostrarModalCaptura, ocultarEspera, refrescarDespuesDeCaptura } = T.de('captura');
+      const { ETIQUETA_ROL_FIRMA, mostrarErrorCaptura, mostrarEspera, mostrarModalCaptura, ocultarEspera, refrescarDespuesDeCaptura } = T.de('captura');
       const { cargarHistorial } = T.de('historial');
 
       let tablaDocumentos = null; // DataTable de Documentos (inspecciones y responsivas) de la ficha abierta
@@ -213,9 +213,11 @@
         }
         const filas = estados.map((e) => {
           const pendiente = e.estado === 'PENDIENTE';
-          return '<div class="ln-liga-remota"><label>' + esc(e.nombre || e.rol) + ' ' +
-            chip(pendiente ? 'Pendiente de firmar' : 'Ya firmó', pendiente ? 'ambar' : 'verde') + '</label>' +
-            '<div class="ln-liga-remota-fila">' +
+          return '<div class="ln-liga-remota"><div class="ln-liga-remota-cabecera">' +
+            '<span class="ln-liga-remota-rol">' + esc(ETIQUETA_ROL_FIRMA[e.rol] || e.rol) + '</span>' +
+            (e.nombre ? '<span class="ln-liga-remota-nombre">' + esc(e.nombre) + '</span>' : '') +
+            '<span class="ln-liga-remota-estado">' + chip(pendiente ? 'Pendiente de firmar' : 'Ya firmó', pendiente ? 'ambar' : 'verde') + '</span>' +
+            '</div><div class="ln-liga-remota-fila">' +
             '<button type="button" class="secondary" data-ver-liga-copiar="' + esc(e.rol) + '">' + icono('copy') + ' Copiar liga</button>' +
             '<button type="button" class="secondary" data-ver-liga-regenerar="' + esc(e.rol) + '">' + icono('refresh-ccw') + ' Generar liga de nuevo</button>' +
             '</div></div>';

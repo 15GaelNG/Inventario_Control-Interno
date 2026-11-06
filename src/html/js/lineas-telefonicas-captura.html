@@ -293,23 +293,28 @@
 
       // -- Firma a distancia (LineasFirmaRemota.gs) --
 
-      /** El nombre de ese responsable en el formulario recién guardado (`valores`), o la etiqueta genérica si no llegó. */
+      /** Rol diferible (LineasFirmaRemota.ROLES_DIFERIBLES) → cómo se lee en la tarjeta de su liga. */
+      const ETIQUETA_ROL_FIRMA_ = { PRINCIPAL: 'Responsable principal', SEGUNDO: 'Segundo responsable',
+        TERCER: 'Tercer responsable', CUARTO: 'Cuarto responsable', QUINTO: 'Quinto responsable' };
+
+      /** El nombre de ese responsable en el formulario recién guardado (`valores`), o '' si no llegó. */
       function nombreDelRol_(rol, valores) {
         const columna = rol === 'PRINCIPAL' ? 'RESPONSABLE' : 'NOMBRE ' + rol + ' RESPONSABLE';
-        const nombre = valores && String(valores[columna] || '').trim();
-        return nombre || (rol === 'PRINCIPAL' ? 'Responsable' : 'Responsable (' + rol.toLowerCase() + ')');
+        return (valores && String(valores[columna] || '').trim()) || '';
       }
 
       /**
        * Las ligas recién generadas (una por rol diferido): se muestran para copiar y compartir, nunca se mandan
-       * solas. `valores` (el formulario que se acaba de guardar): el nombre de cada quien, no "Responsable (segundo)"
-       * (usuario, 6-nov). Si se cierra este recuadro, "Ver ligas de firma" en Documentos las vuelve a mostrar
-       * (lineas-telefonicas-documentos.html), con lo mismo que ya ofrece la Responsiva/Adherente Vehicular.
+       * solas. Una tarjeta por rol, con su nombre debajo (usuario, 6-nov: dos responsables con el mismo nombre no
+       * se distinguían sin el rol). Si se cierra este recuadro, "Ver ligas de firma" en Documentos las vuelve a
+       * mostrar (lineas-telefonicas-documentos.html), con lo mismo que ya ofrece la Responsiva/Adherente Vehicular.
        */
       function mostrarLigasFirmaRemota(ligas, valores) {
         const filas = Object.keys(ligas || {}).map((rol) => {
-          const etiqueta = nombreDelRol_(rol, valores);
-          return '<div class="ln-liga-remota"><label>' + esc(etiqueta) + '</label>' +
+          const nombre = nombreDelRol_(rol, valores);
+          return '<div class="ln-liga-remota"><div class="ln-liga-remota-cabecera">' +
+            '<span class="ln-liga-remota-rol">' + esc(ETIQUETA_ROL_FIRMA_[rol] || rol) + '</span>' +
+            (nombre ? '<span class="ln-liga-remota-nombre">' + esc(nombre) + '</span>' : '') + '</div>' +
             '<div class="ln-liga-remota-fila"><input type="text" readonly value="' + esc(ligas[rol]) + '" data-liga="' + esc(rol) + '" /><button type="button" class="secondary" data-copiar-liga="' + esc(rol) + '">' + icono('copy') + ' Copiar</button></div></div>';
         }).join('');
         mostrarEspera('Liga(s) de firma enviada(s)', { tono: 'listo', icono: 'send',
@@ -936,7 +941,7 @@
       return {
         abrirCaptura: abrirCaptura, abrirEditor: abrirEditor,
         actualizarProgresoChecklist: actualizarProgresoChecklist,
-        capturarEnFlujo: capturarEnFlujo,
+        capturarEnFlujo: capturarEnFlujo, ETIQUETA_ROL_FIRMA: ETIQUETA_ROL_FIRMA_,
         cerrarCaptura: cerrarCaptura, errorAlGuardar: errorAlGuardar, estadoGuardado: estadoGuardado,
         htmlSubirFotos: htmlSubirFotos, manejarSubidaArchivo: manejarSubidaArchivo,
         mostrarErrorCaptura: mostrarErrorCaptura, mostrarEspera: mostrarEspera,

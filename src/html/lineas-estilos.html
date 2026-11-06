@@ -722,14 +722,17 @@
   .ln-firma .firma-caja canvas { height: 240px; }
   .ln-af-campo.form-campo-error .ln-firma { border-color: var(--color-danger); }
   /* Firma a distancia (LineasFirmaRemota.gs): el selector "Aquí" / "A distancia" junto a cada firma que lo admite */
-  .ln-firma-remoto { margin-top: 8px; }
-  .ln-firma-remoto .ln-pastillas { display: flex; flex-wrap: wrap; gap: 6px; }
-  .ln-firma-remoto .ln-pastilla { font-size: var(--texto-xs); padding: 5px 10px; }
-  /* Las ligas que se mandan al terminar de guardar con alguna firma diferida */
-  .ln-liga-remota { margin-bottom: 12px; text-align: left; }
-  .ln-liga-remota label { display: block; font-size: var(--texto-s); font-weight: 700; margin-bottom: 4px; }
+  /* Las ligas que se mandan al terminar de guardar una responsiva (todas las firmas de responsables son a
+     distancia): una tarjeta por rol, con su nombre, para no confundir a dos personas con el mismo nombre */
+  .ln-liga-remota { margin-bottom: 10px; padding: 10px 12px; text-align: left; border: 1px solid var(--color-border);
+    border-radius: var(--radio-l); background: var(--color-note-bg); }
+  .ln-liga-remota:last-child { margin-bottom: 0; }
+  .ln-liga-remota-cabecera { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .ln-liga-remota-rol { font-size: var(--texto-s); font-weight: 700; }
+  .ln-liga-remota-nombre { font-size: var(--texto-s); color: var(--color-text-muted); }
+  .ln-liga-remota-estado { margin-left: auto; }
   .ln-liga-remota-fila { display: flex; gap: 6px; }
-  .ln-liga-remota-fila input { flex: 1; min-width: 0; font-size: var(--texto-xs); }
+  .ln-liga-remota-fila input { flex: 1; min-width: 0; font-size: var(--texto-xs); background: var(--color-surface); }
   /* Fotos: cámara (solo en pantallas táctiles) y galería */
   .ln-fotos-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   @media (hover: hover) and (pointer: fine) { .ln-solo-tactil { display: none !important; } }
@@ -1168,7 +1171,7 @@
   .ln-captura-modal { position: relative; }
   .ln-espera { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 6px; padding: 24px; text-align: center; background: color-mix(in srgb, var(--color-surface) 94%, transparent); backdrop-filter: blur(2px); outline: none;
-    border-radius: inherit; }
+    border-radius: inherit; overflow-y: auto; }
   .ln-espera[hidden] { display: none; }
   /* Regenerar, Generar PDF pendiente y Subir PDF firmado abren la ventana sin cuerpo: la espera necesita su alto */
   .ln-captura-modal:has(> .ln-espera:not([hidden])) { min-height: 340px; }
@@ -1176,6 +1179,9 @@
   .modal-card:not(.ln-captura-modal):has(> .ln-espera:not([hidden])) { min-height: 280px; }
   /* …y sin transparencia: en una ventana chica el título y los botones quedaban detrás del círculo (13-oct) */
   .modal-card:not(.ln-captura-modal) > .ln-espera { background: var(--color-surface); backdrop-filter: none; }
+  /* Un resultado (listo/error), no la espera girando: se ve la ficha de atrás transparentada detrás de los
+     botones y las ligas, se ve descuidado (usuario, 6-nov). Opaca en cuanto hay algo que leer o con qué interactuar. */
+  .ln-espera-listo, .ln-espera-error { background: var(--color-surface) !important; backdrop-filter: none !important; }
   .ln-espera-circulo { width: 72px; height: 72px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
     background: var(--color-accent-soft); margin-bottom: 10px; }
   .ln-espera-circulo .ln-spinner { width: 34px; height: 34px; border-width: 3px; }
