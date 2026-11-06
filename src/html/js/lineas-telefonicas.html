@@ -145,7 +145,7 @@
       const { abrir, abrirMenuFicha, abrirRegistro, alAbrirPestanaFicha, cerrarDetalle, volver } = T.de('ficha');
       const { copiarConAviso, textoTarjeta } = T.de('documentos');
       const { abrirCancelacion, abrirResguardo, abrirResponsiva, abrirVinculo, filaDelIndice, trasQuitar } = T.de('acciones');
-      const { abrirCaptura, abrirEditor, actualizarProgresoChecklist, cerrarCaptura, ocultarEspera } = T.de('captura');
+      const { abrirCaptura, abrirEditor, actualizarProgresoChecklist, alternarFirmaRemoto, cerrarCaptura, ocultarEspera } = T.de('captura');
       pintarIconos(raiz);
       document.addEventListener('app:before-navigate', () => { if (vigente() && T.captura) cerrarCaptura(); }, { once: true });
 
@@ -262,6 +262,9 @@
         }
         const multi = ev.target.closest('.ln-pastilla-multi');
         if (multi) { alternarMulti(multi); actualizarProgresoChecklist(); return; }
+        // Firma a distancia (LineasFirmaRemota.gs, htmlFirmaADistancia_): antes del genérico de abajo, mismo botón
+        const remoto = ev.target.closest('[data-remoto-valor]');
+        if (remoto) { elegirPastilla(remoto); alternarFirmaRemoto(remoto); return; }
         const pastilla = ev.target.closest('.ln-pastilla');
         if (pastilla) {
           if (pastilla.disabled) return;

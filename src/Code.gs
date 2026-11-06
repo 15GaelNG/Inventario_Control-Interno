@@ -14,15 +14,18 @@ function doGet(e) {
   // sistema, así que no pasa por el login ni por el resto de la app (ver ClientApi.apiFirmaRemota*).
   if (e && e.parameter && e.parameter.firmar) {
     const t = HtmlService.createTemplateFromFile('html/FirmaExterna');
-    t.tipo = (e.parameter.tipo === 'adherente' || e.parameter.tipo === 'arqueo') ? e.parameter.tipo : 'responsiva';
+    const TIPOS = ['adherente', 'arqueo', 'lineas-responsiva'];
+    t.tipo = TIPOS.indexOf(e.parameter.tipo) >= 0 ? e.parameter.tipo : 'responsiva';
     // 'jefe'/'principal' (Vehicular) o 'asistente'/'responsable' (Arqueos) -- cada servicio
     // valida su propio token por columna, así que un valor que no reconozca simplemente no
-    // encuentra nada ("liga no válida"), sin necesidad de una lista fija aquí.
+    // encuentra nada ("liga no válida"), sin necesidad de una lista fija aquí. Líneas no usa
+    // `quien`: el token mismo ya dice de quién es (LineasFirmaRemota.buscarPorToken_).
     t.quien = String(e.parameter.quien || '');
     t.token = e.parameter.token || '';
-    // La marca del módulo del documento (responsiva y adherente son de Vehículos: Flotillas; Marcas.gs)
+    // La marca del módulo del documento (responsiva y adherente son de Vehículos: Flotillas; la de
+    // Líneas es la de ese módulo -- Marca.textoDe/Marcas.deModulo, CLAUDE.md)
     let marcaFirma = 'Control Interno';
-    try { marcaFirma = Marcas.nombreDe(Marcas.deModulo('vehiculos')); } catch (err) { /* la de siempre */ }
+    try { marcaFirma = Marcas.nombreDe(Marcas.deModulo(t.tipo === 'lineas-responsiva' ? 'lineas-telefonicas' : 'vehiculos')); } catch (err) { /* la de siempre */ }
     t.marcaNombre = marcaFirma;
     return t.evaluate()
       .setTitle('Firmar documento — ' + marcaFirma)

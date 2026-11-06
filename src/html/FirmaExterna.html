@@ -103,23 +103,29 @@
 
   <script>
     (function () {
-      const tipo = ['adherente', 'arqueo'].indexOf(document.body.dataset.tipo) !== -1 ? document.body.dataset.tipo : 'responsiva';
+      const tipo = ['adherente', 'arqueo', 'lineas-responsiva'].indexOf(document.body.dataset.tipo) !== -1 ? document.body.dataset.tipo : 'responsiva';
       // El "otro" firmante de cada tipo (el que no es quien se captura siempre presencial): el
       // jefe directo en Vehicular, el asistente en Arqueos -- cualquier otro valor cae al
-      // principal (responsable/adherente) de ese tipo.
-      const QUIEN_OTRO = { responsiva: 'jefe', adherente: 'jefe', arqueo: 'asistente' };
-      const QUIEN_PRINCIPAL = { responsiva: 'principal', adherente: 'principal', arqueo: 'responsable' };
+      // principal (responsable/adherente) de ese tipo. Líneas no usa `quien` (el token mismo ya
+      // dice de quién es, LineasFirmaRemota.buscarPorToken_): no tiene "otro", siempre principal.
+      const QUIEN_OTRO = { responsiva: 'jefe', adherente: 'jefe', arqueo: 'asistente', 'lineas-responsiva': '' };
+      const QUIEN_PRINCIPAL = { responsiva: 'principal', adherente: 'principal', arqueo: 'responsable', 'lineas-responsiva': 'principal' };
       const quien = document.body.dataset.quien === QUIEN_OTRO[tipo] ? QUIEN_OTRO[tipo] : QUIEN_PRINCIPAL[tipo];
       const token = document.body.dataset.token || '';
-      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente', arqueo: 'Responsable' };
-      const ETIQUETA_OTRO = { responsiva: 'jefe directo', adherente: 'jefe directo', arqueo: 'asistente' };
+      const NOMBRE_PRINCIPAL = { responsiva: 'Responsable', adherente: 'Adherente', arqueo: 'Responsable', 'lineas-responsiva': 'Responsable' };
+      const ETIQUETA_OTRO = { responsiva: 'jefe directo', adherente: 'jefe directo', arqueo: 'asistente', 'lineas-responsiva': '' };
       // Mismas llaves que ETIQUETA_OTRO, pero ya con mayúscula inicial para el resumen (que no
       // va dentro de una oración, a diferencia del título/la etiqueta de arriba).
-      const ETIQUETA_OTRO_RESUMEN = { responsiva: 'Jefe directo de', adherente: 'Jefe directo de', arqueo: 'Asistente' };
+      const ETIQUETA_OTRO_RESUMEN = { responsiva: 'Jefe directo de', adherente: 'Jefe directo de', arqueo: 'Asistente', 'lineas-responsiva': '' };
 
-      function llamar(fn) {
+      // Líneas tiene su propia superficie (api/LineasFirmaRemota.gs, aparte de api/FirmaRemota.gs
+      // de Vehicular/Arqueos -- LineasFirmaRemota.gs documenta por qué): mismo nombre de función
+      // base, con el prefijo que toque. Las tres aceptan (tipo, quien, token[, imagen]) por igual.
+      const nombreFn_ = (base) => (tipo === 'lineas-responsiva' ? 'apiLineas' + base : 'api' + base);
+
+      function llamar(base) {
         return new Promise((resolver, rechazar) => {
-          google.script.run.withSuccessHandler(resolver).withFailureHandler(rechazar)[fn](tipo, quien, token);
+          google.script.run.withSuccessHandler(resolver).withFailureHandler(rechazar)[nombreFn_(base)](tipo, quien, token);
         });
       }
 
@@ -140,7 +146,7 @@
         document.getElementById('firex-firma-label').textContent = 'Tu firma (' + ETIQUETA_OTRO[tipo] + ')';
       }
 
-      llamar('apiFirmaRemotaObtener').then((info) => {
+      llamar('FirmaRemotaObtener').then((info) => {
         if (!info || !info.vigente) {
           document.getElementById('firex-invalido-msg').textContent =
             (info && MOTIVOS[info.motivo]) || 'Esta liga no es válida.';
@@ -192,7 +198,7 @@
             const error = document.getElementById('firex-error');
             error.textContent = 'No se pudo generar la vista previa: ' + ((err && err.message) || String(err));
             error.classList.remove('firex-oculto');
-          }).apiFirmaRemotaVistaPrevia(tipo, quien, token);
+          })[nombreFn_('FirmaRemotaVistaPrevia')](tipo, quien, token);
         });
 
         document.getElementById('firex-form').addEventListener('submit', (ev) => {
@@ -221,7 +227,7 @@
             error.classList.remove('firex-oculto');
             boton.disabled = false;
             boton.innerHTML = textoOriginal;
-          }).apiFirmaRemotaCompletar(tipo, quien, token, firma.exportar());
+          })[nombreFn_('FirmaRemotaCompletar')](tipo, quien, token, firma.exportar());
         });
       }).catch((err) => {
         document.getElementById('firex-invalido-msg').textContent = (err && err.message) || String(err);

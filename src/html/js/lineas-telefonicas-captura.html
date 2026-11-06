@@ -6,10 +6,10 @@
    */
   (function () {
     'use strict';
-    const { $, CALIFICACION_DESEMPENO, CALIFICACION_SI, NOMBRE_DE_FIRMA, NOTA_SIN_PANEL, PASOS_FORMULARIO,
+    const { $, CALIFICACION_DESEMPENO, CALIFICACION_SI, NOMBRE_DE_FIRMA, NOTA_SIN_PANEL, ORDEN_ADICIONALES, PASOS_FORMULARIO,
       POSICIONES_PATRON, activarAdicionales, activarBloqueo, activarCombosEn, activarIdentificaciones, activarPasos,
       alternarMulti, aplicarBloqueo, aplicarCambiosIndice, aplicarReglasEn, aviso, bloqueoElegido,
-      calificacionAppSheet, cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, crearFirma, cumpleCondicion,
+      calificacionAppSheet, cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, copiarTexto, crearFirma, cumpleCondicion,
       enlaceDrive, errorPinBloqueo, erroresFormularioEn, esPuntosPatron, esc, firmaGuardadaEn, flechasPatron,
       htmlAccionesPasos, htmlPasosAppSheet, icono, leerArchivosEn, leerFormularioEn, leerIdentificaciones, llamar,
       marcarErroresEn, memoria, mensajeError, nombreDeFirma, olvidarFicha, pedirDatos, pintarIconos,
@@ -273,6 +273,8 @@
           if (e.tipo !== 'campo' || e.soloLectura || e.control === 'calculado' || e.valorOculto || e.virtual) return;
           if (!cumpleCondicion(e.mostrar, tipo) || !cumpleCondicion(e.requerido, tipo)) return;
           if (e.control === 'firma') {
+            // Diferida a distancia (LineasFirmaRemota.gs): no se pide aquí, se manda por liga al guardar
+            if (captura.diferir && captura.diferir[e.columna]) return;
             const f = captura.firmas[e.columna];
             if (!f || f.estaVacia()) faltan.push(e);
             return;
@@ -281,6 +283,59 @@
           if (!valores[e.columna]) faltan.push(e);
         });
         return faltan;
+      }
+
+      // -- Firma a distancia (LineasFirmaRemota.gs) --
+
+      /** Columna del formulario → rol que entiende el servidor (LineasFirmaRemota.ROLES_DIFERIBLES). Solo responsiva. */
+      const ROL_DIFERIBLE = Object.assign({ 'FIRMA RESPONSABLE': 'PRINCIPAL' },
+        ORDEN_ADICIONALES.reduce((o, rol) => Object.assign(o, { ['FIRMA ' + rol + ' RESPONSABLE']: rol }), {}));
+
+      /**
+       * El selector "Firma aquí ahora" / "Firma a distancia" de una firma (htmlFirmaADistancia_, lineas.html): oculta o
+       * muestra su lienzo y marca/desmarca `captura.diferir[columna]`, que el guardado (guardarResponsivaDesdeFormulario)
+       * usa para no pedirla ni mandarla, y en su lugar incluir ese rol en `datos.diferir`. `boton` ya trae `.activa`
+       * puesta por elegirPastilla (raiz.addEventListener('click') en lineas-telefonicas.html).
+       */
+      function alternarFirmaRemoto(boton) {
+        if (!captura) return;
+        const envoltura = boton.closest('[data-firma-remoto]');
+        if (!envoltura) return;
+        const columna = envoltura.dataset.firmaRemoto;
+        const aDistancia = boton.dataset.remotoValor === '1';
+        envoltura.dataset.remotoEstado = aDistancia ? '1' : '0';
+        captura.diferir = captura.diferir || {};
+        captura.diferir[columna] = aDistancia;
+        const caja = envoltura.closest('.ln-af-campo');
+        const lienzo = caja && caja.querySelector('.ln-firma');
+        if (lienzo) lienzo.hidden = aDistancia;
+        actualizarFormularioAppSheet();
+      }
+
+      /** Las ligas recién generadas (una por rol diferido): se muestran para copiar y compartir, nunca se mandan solas. */
+      function mostrarLigasFirmaRemota(ligas) {
+        const filas = Object.keys(ligas || {}).map((rol) => {
+          const etiqueta = rol === 'PRINCIPAL' ? 'Responsable' : 'Responsable (' + rol.toLowerCase() + ')';
+          return '<div class="ln-liga-remota"><label>' + esc(etiqueta) + '</label>' +
+            '<div class="ln-liga-remota-fila"><input type="text" readonly value="' + esc(ligas[rol]) + '" data-liga="' + esc(rol) + '" /><button type="button" class="secondary" data-copiar-liga="' + esc(rol) + '">' + icono('copy') + ' Copiar</button></div></div>';
+        }).join('');
+        mostrarEspera('Liga(s) de firma enviada(s)', { tono: 'listo', icono: 'send',
+          texto: 'Lo demás ya quedó guardado. Comparte cada liga con quien falta por firmar; el PDF se genera solo cuando todas se completen.',
+          detalle: filas, acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+        Array.from($('#ln-espera-detalle', raiz).querySelectorAll('[data-copiar-liga]')).forEach((boton) => {
+          boton.addEventListener('click', () => {
+            const input = $('#ln-espera-detalle', raiz).querySelector('input[data-liga="' + CSS.escape(boton.dataset.copiarLiga) + '"]');
+            if (input) copiarConAviso_(boton, input.value);
+          });
+        });
+      }
+      function copiarConAviso_(boton, texto) {
+        copiarTexto(texto).then((ok) => {
+          if (!ok) { aviso(icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar. Selecciona el texto y cópialo con Ctrl+C.', 8000); return; }
+          const original = boton.innerHTML;
+          boton.innerHTML = icono('check') + ' Copiada';
+          setTimeout(() => { if (document.body.contains(boton)) boton.innerHTML = original; }, 1800);
+        });
       }
 
       function iniciarFormularioAppSheet() {
@@ -740,20 +795,42 @@
         const valores = leerFormularioAppSheet();
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
+        const diferir = sesion.diferir || {};
+        // Responsables adicionales presentes que SÍ van a firmar aquí (ni vacíos ni diferidos a distancia)
+        const adicionalesAFirmar = ORDEN_ADICIONALES.filter((rol) => {
+          const f = sesion.firmas['FIRMA ' + rol + ' RESPONSABLE'];
+          return f && !diferir['FIRMA ' + rol + ' RESPONSABLE'] && !f.estaVacia();
+        });
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo && !sesion.flujo.pdfAqui ? 'Guardando la responsiva' : 'Generando tu PDF'));
         // pdfAqui (la Responsiva, 16-oct): true, o una función con lo que contestó el guardado (la reasignación de un equipo
         // sigue a la inspección: su PDF sale después)
         const pdfAqui = (r) => !!sesion.flujo && (typeof sesion.flujo.pdfAqui === 'function' ? sesion.flujo.pdfAqui(r) : !!sesion.flujo.pdfAqui);
-        Promise.all([firmaResponsable && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null, firmaCi.base64('#ffffff'),
-          leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores)]).then(([responsable, ci, identificaciones]) => {
+        Promise.all([firmaResponsable && !diferir['FIRMA RESPONSABLE'] && !firmaResponsable.estaVacia() ? firmaResponsable.base64('#ffffff') : null,
+          firmaCi.base64('#ffffff'), leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores),
+          Promise.all(adicionalesAFirmar.map((rol) => sesion.firmas['FIRMA ' + rol + ' RESPONSABLE'].base64('#ffffff')))])
+          .then(([responsable, ci, identificaciones, firmasAdic]) => {
           sesion.pdfFirmas = { responsable: responsable, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
+          const firmasAdicionales = {};
+          adicionalesAFirmar.forEach((rol, i) => { firmasAdicionales[rol] = firmasAdic[i]; });
+          // Firma a distancia (LineasFirmaRemota.gs): los roles marcados "A distancia" en pantalla, con nombre en la
+          // responsiva (un selector sin adicional detrás no manda nada -- ver ROL_DIFERIBLE/htmlFirmaADistancia_)
+          const rolesDiferidos = Object.keys(diferir).filter((col) => diferir[col] && ROL_DIFERIBLE[col]).map((col) => ROL_DIFERIBLE[col]);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaResponsableBase64: sesion.pdfFirmas.responsable, firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
             usarFirmaGuardada: !!firmaCi.guardada, usarFirmaGuardadaResponsable: !!(firmaResponsable && firmaResponsable.guardada), identificaciones: identificaciones,
+            firmasAdicionales: firmasAdicionales, diferir: rolesDiferidos,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);
         }).then((r) => {
+          if (r && r.pendiente) {
+            // Falta al menos una liga por completarse: nada de PDF todavía (LineasFirmaRemota.completarFirma lo genera
+            // hasta que la última se complete). Lo guardado ya se refleja en la ficha.
+            refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
+            mostrarLigasFirmaRemota(r.ligas);
+            if (sesion.flujo && sesion.flujo.resolver) sesion.flujo.resolver(r);
+            return;
+          }
           if (sesion.flujo && !pdfAqui(r)) terminarFlujo(sesion, 'RESPONSIVA', r);
           else {
             refrescarDespuesDeCaptura(idAbierto, 'RESPONSIVA', r.id);
@@ -811,7 +888,7 @@
         $('#ln-captura-titulo', raiz).textContent = tipo === 'INSPECCION' ? 'Inspección' : 'Responsiva';
         $('#ln-captura-subtitulo', raiz).textContent = 'Preparando datos y carpeta de evidencia…';
         $('#ln-captura-cuerpo', raiz).innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
-        captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {}, flujo: flujo || null };
+        captura = { tipo: tipo, ref: ref, idObjetivo: ref.equipoId || ref.lineaId, fotos: [], patronId: null, firmas: {}, diferir: {}, flujo: flujo || null };
         $('#ln-calif-vivo', raiz).hidden = true; // aparece cuando la inspección ya está en pantalla
 
         const pedirContexto = tipo === 'INSPECCION' ? llamar('apiLineasContextoInspeccion', ref) : llamar('apiLineasContextoResponsiva', ref);
@@ -864,7 +941,8 @@
 
       return {
         abrirCaptura: abrirCaptura, abrirEditor: abrirEditor,
-        actualizarProgresoChecklist: actualizarProgresoChecklist, capturarEnFlujo: capturarEnFlujo,
+        actualizarProgresoChecklist: actualizarProgresoChecklist, alternarFirmaRemoto: alternarFirmaRemoto,
+        capturarEnFlujo: capturarEnFlujo,
         cerrarCaptura: cerrarCaptura, errorAlGuardar: errorAlGuardar, estadoGuardado: estadoGuardado,
         htmlSubirFotos: htmlSubirFotos, manejarSubidaArchivo: manejarSubidaArchivo,
         mostrarErrorCaptura: mostrarErrorCaptura, mostrarEspera: mostrarEspera,

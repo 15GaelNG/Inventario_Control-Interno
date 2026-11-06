@@ -721,6 +721,15 @@
   :root[data-theme="dark"] .ln-firma-ci .ln-firma-cabecera { color: var(--color-text); }
   .ln-firma .firma-caja canvas { height: 240px; }
   .ln-af-campo.form-campo-error .ln-firma { border-color: var(--color-danger); }
+  /* Firma a distancia (LineasFirmaRemota.gs): el selector "Aquí" / "A distancia" junto a cada firma que lo admite */
+  .ln-firma-remoto { margin-top: 8px; }
+  .ln-firma-remoto .ln-pastillas { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ln-firma-remoto .ln-pastilla { font-size: var(--texto-xs); padding: 5px 10px; }
+  /* Las ligas que se mandan al terminar de guardar con alguna firma diferida */
+  .ln-liga-remota { margin-bottom: 12px; text-align: left; }
+  .ln-liga-remota label { display: block; font-size: var(--texto-s); font-weight: 700; margin-bottom: 4px; }
+  .ln-liga-remota-fila { display: flex; gap: 6px; }
+  .ln-liga-remota-fila input { flex: 1; min-width: 0; font-size: var(--texto-xs); }
   /* Fotos: cámara (solo en pantallas táctiles) y galería */
   .ln-fotos-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   @media (hover: hover) and (pointer: fine) { .ln-solo-tactil { display: none !important; } }
