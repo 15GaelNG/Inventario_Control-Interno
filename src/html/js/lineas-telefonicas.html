@@ -621,6 +621,8 @@
             (v('ESTATUS EQUIPO') ? chip('Equipo: ' + v('ESTATUS EQUIPO'), COLOR_ESTATUS[String(v('ESTATUS EQUIPO')).toUpperCase()]) : '') +
             (v('ESTATUS LINEA') ? chip('Línea: ' + v('ESTATUS LINEA'), COLOR_ESTATUS[String(v('ESTATUS LINEA')).toUpperCase()]) : '') +
             (formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || (r.tipoHoja ? chip(r.tipoHoja) : '')) +
+            // La compañía en badge; el equipo sin línea, la de su última línea (usuario, 6-nov)
+            (numero ? chipCompania(r.compania || v('COMPAÑIA')) : tipo === 'equipo' ? chipCompania(r.ultimaCompania || v('ULTIMA COMPAÑIA'), 'ÚLTIMA LÍNEA: ') : '') +
           '</div><div class="ln-vr-acciones">' +
             '<button type="button" class="ln-btn-icono" data-vr-ficha>' + icono('maximize-2') + ' Abrir ficha completa</button>' +
             (conUltimo(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
@@ -637,8 +639,6 @@
           ]) +
           seccion('card-sim', 'Línea', [
             campo('Número', celdaNumero, !!suLinea && !!numero), campo('SIM', v('NUMERO SIM') || r.sim), campo('Compañía', r.compania || v('COMPAÑIA')),
-            // Equipo sin línea: la compañía de la última que tuvo (usuario, 5-nov)
-            ...(tipo === 'equipo' && !numero && r.ultimaCompania ? [campo('Última línea', chipCompania(r.ultimaCompania), true)] : []),
             campo('Razón social', v('RAZON SOCIAL')), campo('Costo del plan', Formato.moneda(v('COSTO PLAN'))),
             campo('Fin del adendum', finPlan ? esc(fecha(finPlan) || finPlan) + ' ' + chipAdendum(finPlan) : '', true),
           ]) +
