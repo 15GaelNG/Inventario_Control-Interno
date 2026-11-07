@@ -56,13 +56,18 @@ const PdfService = (function () {
    */
   function fechaParaNombre(valor) {
     if (!valor) return '';
-    let f = valor instanceof Date ? valor : null;
-    if (!f) {
+    if (!(valor instanceof Date)) {
+      // "dd/mm/aaaa" es solo un día, sin hora: se reordena tal cual, sin pasar por Date (que en
+      // Apps Script V8 construye y lee en UTC, no en la zona del proyecto -- ver más abajo).
       const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(valor).trim());
-      f = m ? new Date(+m[3], +m[2] - 1, +m[1]) : new Date(valor);
+      if (m) return [m[3], m[2].padStart(2, '0'), m[1].padStart(2, '0')].join('-');
     }
+    const f = valor instanceof Date ? valor : new Date(valor);
     if (isNaN(f.getTime())) return '';
-    return [f.getFullYear(), String(f.getMonth() + 1).padStart(2, '0'), String(f.getDate()).padStart(2, '0')].join('-');
+    // getFullYear/getMonth/getDate son del reloj de la máquina (V8 corre en UTC): con la zona
+    // del proyecto detrás (America/Mexico_City, UTC-6) una captura después de las 18:00 local
+    // ya caía en el día siguiente en UTC y el nombre salía fechado un día adelante.
+    return Utilities.formatDate(f, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   }
 
   /** Texto literal → patrón de búsqueda (replaceText y findText usan expresiones regulares) */
@@ -90,7 +95,9 @@ const PdfService = (function () {
    * Sin esto un Date llega a la plantilla como "Fri Sep 18 2026 09:19:53 GMT-0600 (…)".
    */
   function textoDeFecha_(fecha, zona) {
-    const conHora = fecha.getHours() || fecha.getMinutes() || fecha.getSeconds();
+    // getHours/getMinutes/getSeconds son del reloj de la máquina (UTC en Apps Script V8), no de
+    // `zona`: con eso, una fecha sin hora (medianoche en `zona`) podía verse "con hora" aquí.
+    const conHora = Utilities.formatDate(fecha, zona, 'HHmmss') !== '000000';
     return Utilities.formatDate(fecha, zona, conHora ? 'dd/MM/yyyy HH:mm:ss' : 'dd/MM/yyyy');
   }
 
