@@ -88,7 +88,7 @@ function entorno() {
       agregarFilas: () => {}, asegurarColumnas: () => {}, nuevoId: () => 'RES-99',
     },
   });
-  vm.runInContext(read('src/services/lineas/LineasPatronPng.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
+  vm.runInContext(read('src/utils/Cronometro.gs') + '\n' + read('src/services/lineas/LineasPatronPng.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') + '\nthis.C = LineasCaptura;', ctx);
   return { C: ctx.C, hechos };
 }
 

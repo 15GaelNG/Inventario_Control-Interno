@@ -120,7 +120,7 @@ function entorno() {
       nuevoId: () => 'RES-99',
     },
   });
-  vm.runInContext(read('src/services/lineas/LineasPatronPng.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') +
+  vm.runInContext(read('src/utils/Cronometro.gs') + '\n' + read('src/services/lineas/LineasPatronPng.gs') + '\n' + read('src/services/lineas/LineasCaptura.gs') +
     '\nthis.C = LineasCaptura;', ctx);
   vm.runInContext(read('src/services/lineas/LineasFirmaRemota.gs') + '\nthis.F = LineasFirmaRemota;', ctx);
   return { C: ctx.C, F: ctx.F, hechos: hechos, tablas: tablas };
