@@ -369,7 +369,27 @@ const TelefoniaService = (function () {
       if (mismoDia) mismoDia.drive = n.doc.drive;
       else lista.push(n.doc);
     });
-    return LineasUtil.paraCliente({ inspecciones: resumirEvidencias_(ev.inspecciones), responsivas: resumirEvidencias_(ev.responsivas) });
+    const salida = { inspecciones: resumirEvidencias_(ev.inspecciones), responsivas: resumirEvidencias_(ev.responsivas) };
+    if (puedeOperar_(sesion)) ponerLigasDeFirma_(salida);
+    return LineasUtil.paraCliente(salida);
+  }
+
+  /**
+   * Firma a distancia pendiente (usuario, 9-nov): las ligas de cada quien que falta, para copiarlas o generar otra
+   * (si pasaron los días de vigencia) desde la tabla de Documentos. Solo con EDICIÓN (quien las comparte); una lectura
+   * nunca recibe un token. Si algo falla, la tabla sale igual, sin las ligas.
+   */
+  function ponerLigasDeFirma_(salida) {
+    [['INSPECCION', salida.inspecciones], ['RESPONSIVA', salida.responsivas]].forEach(([tipoPdf, docs]) => {
+      const pendientes = docs.filter((d) => d.estadoFirma === 'PENDIENTE' && d.origen === 'SISTEMA');
+      if (!pendientes.length) return;
+      try {
+        const ligas = LineasFirmaRemota.ligasDeDocumentos(tipoPdf, pendientes.map((d) => d.id));
+        pendientes.forEach((d) => { d.ligas = ligas[d.id] || []; });
+      } catch (e) {
+        console.warn('ligas de firma (' + tipoPdf + '): ' + e.message);
+      }
+    });
   }
 
   /**

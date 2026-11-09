@@ -741,6 +741,12 @@
   .ln-liga-remota-fila { display: flex; gap: 6px; }
   .ln-liga-remota-fila input { flex: 1; min-width: 0; font-size: var(--texto-xs); background: var(--color-surface); }
   .ln-liga-remota-fila button { flex-shrink: 0; }
+  .ln-liga-remota-aviso { margin: 0 0 8px; font-size: var(--texto-s); color: var(--ln-rojo-tx); }
+  /* La celda "Ligas de firma" de Documentos (9-nov): un botón por quien falta; el nombre se corta si no cabe */
+  .ln-ligas-celda { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0; }
+  .ln-ligas-celda .ln-liga-celda { min-height: 26px; padding: 3px 8px; max-width: 100%; font-size: var(--texto-xs); }
+  .ln-ligas-celda .ln-liga-celda span { overflow: hidden; text-overflow: ellipsis; }
+  .ln-ligas-celda .ln-liga-celda.vencida { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); border-color: transparent; }
   /* En el celular la liga va sola en su renglón y los botones debajo (Copiar y Generar de nuevo no caben al lado) */
   @media (max-width: 640px) {
     .ln-liga-remota-fila { flex-wrap: wrap; }

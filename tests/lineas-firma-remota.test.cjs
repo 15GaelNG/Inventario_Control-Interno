@@ -283,10 +283,34 @@ test('estadoLigas: el nombre y el estado de cada rol que SÍ se difirió; el que
   }]);
   const estados = JSON.parse(JSON.stringify(F.estadoLigas(DOC, 'tok-ses', 'RES-1')));
   assert.deepEqual(estados, [
-    { rol: 'PRINCIPAL', nombre: 'ANA PEREZ', estado: 'PENDIENTE', liga: 'https://firma.publica/exec?firmar=1&tipo=lineas-responsiva&token=tok-a' },
-    { rol: 'SEGUNDO', nombre: 'AYRTON SEPULVEDA', estado: 'FIRMADO', liga: '' },
+    { rol: 'PRINCIPAL', nombre: 'ANA PEREZ', estado: 'PENDIENTE', liga: 'https://firma.publica/exec?firmar=1&tipo=lineas-responsiva&token=tok-a', vencida: false },
+    { rol: 'SEGUNDO', nombre: 'AYRTON SEPULVEDA', estado: 'FIRMADO', liga: '', vencida: false },
   ]);
   assert.throws(() => F.estadoLigas(DOC, 'tok-ses', 'RES-404'), /No se encontró/);
+});
+
+// Usuario, 9-nov: si pasan los 15 días, la tabla de Documentos ofrece "Nueva liga" en vez de copiar la que ya no sirve.
+test('estadoLigas: la liga que pasó sus días sale vencida (y la que no tiene fecha también)', () => {
+  const ayer = new Date(Date.now() - 86400000);
+  const { F, DOC } = entorno([{
+    ID: 'RES-1', RESPONSABLE: 'ANA PEREZ', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': ayer,
+    'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON SEPULVEDA', 'TOKEN FIRMA SEGUNDO': 'tok-b', // sin fecha de vencimiento
+  }]);
+  const estados = JSON.parse(JSON.stringify(F.estadoLigas(DOC, 'tok-ses', 'RES-1')));
+  assert.deepEqual(estados.map((e) => [e.rol, e.estado, e.vencida]), [['PRINCIPAL', 'PENDIENTE', true], ['SEGUNDO', 'PENDIENTE', true]]);
+});
+
+test('ligasDeDocumentos: las de varios documentos de una vez, por ID; el que no existe no sale', () => {
+  const vence = new Date(Date.now() + 86400000);
+  const { F } = entorno([
+    { ID: 'RES-1', RESPONSABLE: 'ANA PEREZ', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence },
+    { ID: 'RES-2', RESPONSABLE: 'LUIS GARCIA', 'TOKEN FIRMA': 'tok-c', 'TOKEN FIRMA EXPIRA': vence },
+  ]);
+  const ligas = JSON.parse(JSON.stringify(F.ligasDeDocumentos('RESPONSIVA', ['RES-2', 'RES-404', 'RES-1'])));
+  assert.deepEqual(Object.keys(ligas).sort(), ['RES-1', 'RES-2']);
+  assert.equal(ligas['RES-1'][0].nombre, 'ANA PEREZ');
+  assert.equal(ligas['RES-2'][0].liga, 'https://firma.publica/exec?firmar=1&tipo=lineas-responsiva&token=tok-c');
+  assert.deepEqual(JSON.parse(JSON.stringify(F.ligasDeDocumentos('RESPONSIVA', []))), {});
 });
 
 test('DOCUMENTOS.INSPECCION: su rol CI usa NOMBRE INSPECTOR/FIRMA INSPECTOR y la clave "inspector" para generarPdf', () => {

@@ -318,13 +318,46 @@ const LineasFirmaRemota = (function () {
     const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
     if (!filas.length) throw new Error('No se encontró el documento.');
     const fila = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
-    // La liga de quien falta va incluida (usuario, 9-nov: el recuadro para copiarla en la página de la inspección o
-    // responsiva y en "Ver ligas de firma"), armada aquí como en copiarLiga; quien ya firmó no la lleva.
-    return ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]).map((rol) => ({
-      rol: rol, nombre: fila[columnaNombre_(doc, rol)] || '',
-      estado: fila[colToken_(rol)] ? 'PENDIENTE' : 'FIRMADO',
-      liga: fila[colToken_(rol)] ? construirLiga_(doc, fila[colToken_(rol)]) : '',
-    }));
+    return estadosDeFila_(doc, fila);
+  }
+
+  /**
+   * Cada rol que se difirió en esa fila: { rol, nombre, estado, liga, vencida }. La liga de quien falta va incluida
+   * (usuario, 9-nov: para copiarla desde la tabla de Documentos, la página del documento y "Ver ligas de firma"),
+   * armada aquí como en copiarLiga; quien ya firmó no la lleva. `vencida`: pasaron los FIRMA_REMOTA_DIAS_VIGENCIA
+   * días; la liga ya no sirve y se ofrece "Generar liga de nueva" (regenerarLiga).
+   */
+  function estadosDeFila_(doc, fila) {
+    const ahora = Date.now();
+    return ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]).map((rol) => {
+      const token = fila[colToken_(rol)];
+      const expira = token && fila[colTokenExpira_(rol)] ? new Date(fila[colTokenExpira_(rol)]) : null;
+      return {
+        rol: rol, nombre: fila[columnaNombre_(doc, rol)] || '',
+        estado: token ? 'PENDIENTE' : 'FIRMADO',
+        liga: token ? construirLiga_(doc, token) : '',
+        vencida: !!token && (!expira || isNaN(expira.getTime()) || expira.getTime() < ahora),
+      };
+    });
+  }
+
+  /**
+   * Las ligas de varios documentos pendientes de un mismo tipo, { id: estados }, para la tabla de Documentos (una sola
+   * lectura por tipo). NO revisa permisos: quien llama ya lo hizo (TelefoniaService.evidencias, solo con EDICIÓN).
+   */
+  function ligasDeDocumentos(tipoPdf, ids) {
+    const salida = {};
+    if (!ids || !ids.length) return salida;
+    const doc = tipoPdf === 'INSPECCION' ? DOCUMENTOS.INSPECCION : DOCUMENTOS.RESPONSIVA;
+    const porFila = [];
+    ids.forEach((id) => {
+      const filas = LineasDatos.buscarFilasPorId(doc.tabla(), id);
+      if (filas.length) porFila.push({ id: id, fila: filas[0] });
+    });
+    if (!porFila.length) return salida;
+    const leidas = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: porFila.map((x) => x.fila) }])[0];
+    porFila.forEach((x, i) => { if (leidas[i]) salida[x.id] = estadosDeFila_(doc, leidas[i]); });
+    return salida;
   }
 
   /** "Copiar liga de nuevo" desde la ficha: SIEMPRE se arma aquí, nunca en el navegador (mismo motivo que Vehicular). */
@@ -367,7 +400,7 @@ const LineasFirmaRemota = (function () {
   return {
     ROLES_DIFERIBLES: ROLES_DIFERIBLES, DOCUMENTOS: DOCUMENTOS, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
     obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma,
-    copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas,
+    copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
     _base64DeImagen: base64DeImagen_,

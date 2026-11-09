@@ -21,6 +21,64 @@
       // Inspecciones nunca traen este dato (usuario, 6-nov: quiere verlo como etiqueta en la tabla de documentos)
       const ETIQUETA_ESTADO_FIRMA_DOC = { PENDIENTE: 'Pendiente de firma', FIRMADO: 'Firmado' };
       const COLOR_ESTADO_FIRMA_DOC = { PENDIENTE: 'ambar', FIRMADO: 'verde' };
+      // Días que sirve una liga de firma a distancia (FIRMA_REMOTA_DIAS_VIGENCIA de LineasFirmaRemota.gs; el servidor
+      // es quien decide si venció, aquí solo se dice en el aviso)
+      const DIAS_LIGA = 15;
+
+      /**
+       * La celda "Ligas de firma" de la tabla de Documentos (usuario, 9-nov: copiar las ligas desde la tabla, y generar
+       * otra si pasaron los días): un botón por cada quien falta. Las ligas llegan con la lista (TelefoniaService,
+       * ponerLigasDeFirma_), solo para quien opera.
+       */
+      function htmlLigasCelda(d) {
+        const pendientes = (d.ligas || []).filter((e) => e.estado === 'PENDIENTE');
+        if (!pendientes.length) return vacio;
+        return '<div class="ln-ligas-celda">' + pendientes.map((e) => {
+          const quien = e.nombre || ETIQUETA_ROL_FIRMA[e.rol] || e.rol;
+          const de = (ETIQUETA_ROL_FIRMA[e.rol] || e.rol) + (e.nombre ? ': ' + e.nombre : '');
+          return e.vencida
+            ? '<button type="button" class="ln-btn-chico ln-liga-celda vencida" data-doc="' + esc(d._clave) + '" data-doc-liga-nueva="' + esc(e.rol) + '" title="' +
+              esc('La liga venció (' + de + '). Generar otra') + '">' + icono('refresh-ccw') + '<span>Nueva liga · ' + esc(quien) + '</span></button>'
+            : '<button type="button" class="ln-btn-chico ln-liga-celda" data-doc="' + esc(d._clave) + '" data-doc-liga-copiar="' + esc(e.rol) + '" title="' +
+              esc('Copiar la liga (' + de + ')') + '">' + icono('copy') + '<span>' + esc(quien) + '</span></button>';
+        }).join('') + '</div>';
+      }
+
+      /** Los botones de htmlLigasCelda: copiar, o generar otra si venció (la tabla se vuelve a pintar con la nueva). */
+      function activarLigasCelda(contenedor, porClave, tabla) {
+        // En captura: antes de que la tabla tome el clic como "seleccionar la fila"
+        contenedor.addEventListener('click', (ev) => {
+          const boton = ev.target.closest('[data-doc-liga-copiar], [data-doc-liga-nueva]');
+          if (!boton) return;
+          ev.stopPropagation();
+          ev.preventDefault();
+          const d = porClave[boton.dataset.doc];
+          if (!d) return;
+          if (boton.dataset.docLigaCopiar) {
+            const e = (d.ligas || []).filter((x) => x.rol === boton.dataset.docLigaCopiar)[0];
+            if (e && e.liga) copiarConAviso(boton, e.liga, 'Liga copiada' + (e.nombre ? ' (' + e.nombre + ')' : ''));
+            return;
+          }
+          const rol = boton.dataset.docLigaNueva;
+          Confirmar.pedir({
+            titulo: 'Generar liga nueva',
+            mensaje: 'La liga anterior ya venció. Se genera otra que sirve ' + DIAS_LIGA + ' días; compártela con quien falta por firmar.',
+            textoConfirmar: 'Generar liga nueva',
+          }).then((ok) => {
+            if (!ok) return;
+            boton.disabled = true;
+            return llamar('apiLineasFirmaRemotaRegenerarLiga', d.tipoPdf, d.id, rol)
+              .then((liga) => llamar('apiLineasFirmaRemotaEstado', d.tipoPdf, d.id).then((estados) => {
+                d.ligas = estados;
+                tabla.setDatos(tabla.getDatos());
+                return copiarTexto(liga);
+              }))
+              .then((copiada) => aviso(copiada ? 'Liga nueva copiada.' : 'Liga nueva generada: cópiala con el botón de la tabla.', 5000))
+              .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 6000))
+              .finally(() => { boton.disabled = false; });
+          });
+        }, true);
+      }
 
       function copiarConAviso(boton, texto, mensaje) {
         copiarTexto(texto).then((ok) => {
@@ -219,16 +277,20 @@
       function htmlLigasFirma(estados) {
         return estados.map((e) => {
           const pendiente = e.estado === 'PENDIENTE';
+          const vencida = pendiente && e.vencida;
           return '<div class="ln-liga-remota"><div class="ln-liga-remota-cabecera">' +
             '<span class="ln-liga-remota-rol">' + esc(ETIQUETA_ROL_FIRMA[e.rol] || e.rol) + '</span>' +
             (e.nombre ? '<span class="ln-liga-remota-nombre">' + esc(e.nombre) + '</span>' : '') +
-            '<span class="ln-liga-remota-estado">' + chip(pendiente ? 'Pendiente de firmar' : 'Ya firmó', pendiente ? 'ambar' : 'verde') + '</span>' +
-            '</div><div class="ln-liga-remota-fila">' +
-            (pendiente && e.liga
+            '<span class="ln-liga-remota-estado">' + (vencida ? chip('Liga vencida', 'rojo')
+              : chip(pendiente ? 'Pendiente de firmar' : 'Ya firmó', pendiente ? 'ambar' : 'verde')) + '</span>' +
+            '</div>' +
+            (vencida ? '<p class="ln-liga-remota-aviso">Pasaron los ' + DIAS_LIGA + ' días de la liga y ya no sirve: genera otra y compártela.</p>' : '') +
+            '<div class="ln-liga-remota-fila">' +
+            (pendiente && e.liga && !vencida
               ? '<input type="text" readonly value="' + esc(e.liga) + '" data-liga="' + esc(e.rol) + '" aria-label="Liga de ' + esc(e.nombre || e.rol) + '" />' +
                 '<button type="button" class="secondary" data-ver-liga-copiar="' + esc(e.rol) + '">' + icono('copy') + ' Copiar</button>'
               : '') +
-            '<button type="button" class="secondary" data-ver-liga-regenerar="' + esc(e.rol) + '">' + icono('refresh-ccw') + ' Generar liga de nuevo</button>' +
+            '<button type="button" class="' + (vencida ? 'primary' : 'secondary') + '" data-ver-liga-regenerar="' + esc(e.rol) + '">' + icono('refresh-ccw') + (vencida ? ' Generar liga nueva' : ' Generar liga de nuevo') + '</button>' +
             '</div></div>';
         }).join('');
       }
@@ -322,6 +384,7 @@
         if (!filas.length) return;
         soltarDocumentos();
         const operar = puedeOperar();
+        const conLigas = filas.some((d) => (d.ligas || []).some((e) => e.estado === 'PENDIENTE'));
         // Una acción de un documento: con una fila seleccionada, en la barra (enBarra) o solo en el ⋮ y el clic derecho
         const doc = (ic, texto, grupo, enBarra, visible, alHacer) => ({ icono: ic, texto: texto, maximo: 1, grupo: grupo, enBarra: enBarra,
           visible: (f) => visible(f[0]), alHacer: (f) => alHacer(f[0]) });
@@ -367,6 +430,9 @@
             { campo: 'origenTexto', titulo: 'Origen', tipo: 'lista', ancho: 150, render: (v) => chip(v, COLOR_ORIGEN_DOCUMENTO[v] || 'neutro') },
             { campo: 'estadoFirma', titulo: 'Estatus', tipo: 'lista', ancho: 140,
               render: (v) => (v ? chip(ETIQUETA_ESTADO_FIRMA_DOC[v] || v, COLOR_ESTADO_FIRMA_DOC[v]) : vacio) },
+            // Solo si alguno trae ligas (quien opera y hay firmas pendientes): si no, la columna ni aparece
+            conLigas ? { campo: 'ligas', titulo: 'Ligas de firma', filtrable: false, ordenable: false, exportable: false, ancho: 280,
+              render: (v, d) => htmlLigasCelda(d) } : null,
             { campo: 'responsable', titulo: 'Responsable', tipo: 'texto', ancho: 230 },
             { campo: 'inspector', titulo: 'Realizó', tipo: 'texto', ancho: 210 },
             // En la ficha de la línea: el equipo en que la firmó (pendiente 2.45)
@@ -379,6 +445,7 @@
         // Doble clic en la fila: la página de la inspección o de la responsiva (usuario, 6-oct)
         const porClave = {};
         filas.forEach((d) => { porClave[d._clave] = d; });
+        if (conLigas) activarLigasCelda($('.ln-docs-tabla', cont), porClave, tabla);
         $('.ln-docs-tabla', cont).addEventListener('dblclick', (ev) => {
           const tr = ev.target.closest('tbody tr[data-id]');
           const d = tr && !ev.target.closest('button, input, a') ? porClave[tr.dataset.id] : null;
