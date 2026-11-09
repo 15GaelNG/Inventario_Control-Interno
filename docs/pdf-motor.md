@@ -9,7 +9,7 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 |---|---|---|
 | 0 | Medir cada paso de los tres motores (`Cronometro`) | hecha en código; falta la tabla base |
 | 1 | Inventario de marcadores de cada plantilla + prueba diferencial | hecha (9-nov): ver «Resultado de la fase 1» |
-| 2 | `Plantilla` entiende todo lo de Líneas (analizador) | pendiente |
+| 2 | `Plantilla` entiende todo lo de Líneas (analizador) | hecha (9-nov): ver «Resultado de la fase 2» |
 | 3 | Motor de documento en `PdfService` + comparador en el DEV | pendiente |
 | 4 | Líneas sobre `PdfService` (ID de plantilla por entorno) | pendiente |
 | 5 | Arqueos sobre `PdfService` (avisar a Jorge antes) | pendiente |
@@ -38,6 +38,21 @@ llena cada marcador real con 7 juegos de datos:
 
 Fuera de esta prueba (son del documento, no de un marcador; fase 3): de `LineasPdf`, la letra chica bajo la firma, el
 interlineado como AppSheet y el formato de cada etiqueta; de `PdfService`, Arial en todo el texto.
+
+## Resultado de la fase 2 (9-nov)
+
+`Plantilla.gs` dejó de ser una lista de formas reconocidas con expresiones regulares: ahora es **un analizador** (piezas +
+precedencia, como el de `LineasPdf`) con las reglas de Vehículos. Entiende comparaciones, `&`, `+ - * /`, paréntesis y
+16 funciones (`IF AND OR NOT UPPER LOWER RIGHT LEFT LEN CONCATENATE ISBLANK ISNOTBLANK ROUND TEXT TODAY NOW`). Lo que no
+entiende sigue lanzando error. Su API no cambió (`resolver`, `evaluarCondicion`, `evaluarExpresion`…); `seccionesDe` y
+`camposDe` no se tocaron.
+
+Reglas decididas por el usuario: al comparar se ignoran los espacios de más; la fecha la formatea cada módulo (Líneas:
+solo el día; Vehículos: `PdfService.textoDeFecha_`), no el motor.
+
+Con las 24 plantillas reales (`tests/pdf-expresiones-diferencial.test.cjs`): **las 21 de Vehículos dan exactamente lo
+mismo que antes** y **las 3 de Líneas dan lo mismo que `LineasPdf`**, `RIGHT` incluido; la única diferencia es la
+decidida (espacios de más). `LineasPdf` todavía no usa este analizador: eso es la fase 4.
 
 ## Cómo se mide (fase 0)
 
