@@ -36,65 +36,38 @@
  * Nada corre al cargar el archivo.
  */
 const ExpedienteNuco = (function () {
-  const RAIZ_NOMBRE = 'NUCOS VEHICULOS';
-  const DOCUMENTACION = '1.-DOCUMENTACIÓN';
-  const OTRAS = ['2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES'];
-  /** Cada documento: su carpeta, el prefijo del nombre y dónde van las versiones anteriores (null: se quedan junto) */
-  const DOCUMENTOS = {
-    FACTURA: { carpeta: '1.-FACTURA', prefijo: 'FACTURA', anteriores: null },
-    SEGURO: { carpeta: '2.-SEGURO', prefijo: 'SEGURO', anteriores: 'SEGUROS ANTERIORES' },
-    ALTA: { carpeta: '3.-ALTA DE PLACAS', prefijo: 'ALTA DE PLACAS', anteriores: null },
-    TARJETA: { carpeta: '4.-TARJETA DE CIRCULACIÓN', prefijo: 'TARJETA DE CIRCULACION', anteriores: null },
-    RESPONSIVA: { carpeta: '5.-RESPONSIVA', prefijo: 'RESPONSIVA', anteriores: 'RESPONSIVAS ANTERIORES' },
-    TENENCIA: { carpeta: '6.-TENENCIA', prefijo: 'TENENCIA', anteriores: 'TENENCIAS ANTERIORES' },
-  };
+  // La estructura (carpetas, documentos, periodos) y el buscador viven en Expediente.gs, tipo 'vehiculo' (6-nov): aquí
+  // queda lo propio de Vehículos (archivar con anteriores, nombres SEGURO-0088, leer la pestaña Documentos).
+  const TIPO = 'vehiculo';
+  const def_ = () => Expediente.TIPOS[TIPO];
   const ADHERENTES = 'ADHERENTES';
   const PRESTAMOS = 'PRESTAMOS';
   const SENSORES = 'SENSORES';
   const FIRMAS = 'FIRMAS';
   const FIRMAS_Y_DIAGRAMAS = 'FIRMAS Y DIAGRAMAS';
-  const ORDINAL = ['', '1ER', '2DO', '3ER', '4TO', '5TO', '6TO'];
-
-  function raiz_() {
-    const id = Config.DRIVE_FOLDERS.NUCOS_VEHICULOS();
-    return id ? DriveApp.getFolderById(id) : DriveUtils.carpetaEnRaiz(RAIZ_NOMBRE);
-  }
 
   // Reconocer una carpeta aunque su nombre traiga espacios o acentos de más: DriveUtils (la misma regla en todo el sistema)
   const clave_ = (nombre) => DriveUtils.claveCarpeta(nombre);
   const subcarpeta_ = (padre, nombre) => DriveUtils.subcarpeta(padre, nombre);
 
   /** "88", "0088" y 88 son el mismo NUCO; la carpeta se llama sin ceros, como las que ya existen */
-  function nombreNuco_(nucco) {
-    const n = String(nucco == null ? '' : nucco).trim();
-    if (!/^\d+$/.test(n)) throw new Error('El vehículo no tiene NUCCO: no se puede guardar en su expediente');
-    return String(Number(n));
-  }
+  const nombreNuco_ = (nucco) => def_().clave(nucco);
 
   /** La carpeta del NUCO; si no existe (un vehículo nuevo), se crea con toda la estructura */
   function carpetaNuco(nucco) {
-    const nombre = nombreNuco_(nucco);
-    const nucos = raiz_();
-    const hay = nucos.getFoldersByName(nombre);
-    if (hay.hasNext()) return hay.next();
-    const nueva = DriveUtils.crearCarpeta(nucos, nombre);
-    const doc = DriveUtils.crearCarpeta(nueva, DOCUMENTACION);
-    Object.keys(DOCUMENTOS).forEach((k) => DriveUtils.crearCarpeta(doc, DOCUMENTOS[k].carpeta));
-    OTRAS.forEach((o) => DriveUtils.crearCarpeta(nueva, o));
-    return nueva;
+    return Expediente.carpetaActivo(TIPO, nucco);
   }
 
   function definicion_(documento) {
-    const d = DOCUMENTOS[documento];
+    const d = def_().archivos[documento];
     if (!d) throw new Error('Documento desconocido para el expediente: ' + documento);
     return d;
   }
 
   /** La carpeta de un documento ("RESPONSIVA" → <NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA), más subcarpetas si se piden */
   function carpeta(nucco, documento, subcarpetas) {
-    let c = subcarpeta_(subcarpeta_(carpetaNuco(nucco), DOCUMENTACION), definicion_(documento).carpeta);
-    (subcarpetas || []).forEach((s) => { c = subcarpeta_(c, s); });
-    return c;
+    definicion_(documento);
+    return Expediente.carpetaDocumento(TIPO, nucco, documento, null, subcarpetas).carpeta;
   }
 
   function extension_(nombre) {
@@ -113,27 +86,16 @@ const ExpedienteNuco = (function () {
 
   const fecha_ = (f, formato) => Utilities.formatDate(f || new Date(), Session.getScriptTimeZone(), formato);
 
-  /** Periodo de una inspección: desde 2026 trimestre, antes bimestre ("4TO TRIMESTRE", "3ER BIMESTRE") */
-  function periodoInspeccion(fecha) {
-    const anio = Number(fecha_(fecha, 'yyyy'));
-    const mes = Number(fecha_(fecha, 'M'));
-    return anio >= 2026 ? ORDINAL[Math.floor((mes - 1) / 3) + 1] + ' TRIMESTRE' : ORDINAL[Math.floor((mes - 1) / 2) + 1] + ' BIMESTRE';
-  }
+  /** Periodo de una inspección (trimestre desde 2026) y semestre de una verificación: las reglas de Expediente.gs */
+  const periodoInspeccion = (fecha) => Expediente.periodoInspeccion(fecha);
+  const semestreVerificacion = (fecha) => Expediente.semestreVerificacion(fecha);
 
-  /** Semestre de una verificación ("1ER SEMESTRE" enero-junio, "2DO SEMESTRE" julio-diciembre) */
-  function semestreVerificacion(fecha) {
-    return (Number(fecha_(fecha, 'M')) <= 6 ? ORDINAL[1] : ORDINAL[2]) + ' SEMESTRE';
-  }
-
-  /** <NUCO>/<2.-, 3.- o 4.-…>/<año>/<periodo> (las crea si faltan; reconoce las que ya están aunque varíen espacios) */
-  function carpetaDePeriodo_(nucco, otra, fecha, periodo) {
-    return subcarpeta_(subcarpeta_(subcarpeta_(carpetaNuco(nucco), otra), fecha_(fecha, 'yyyy')), periodo);
-  }
+  /** <NUCO>/4.-INSPECCIONES/<año>/<trimestre> y <NUCO>/3.-VERIFICACIONES/<año>/<semestre> (las crea si faltan) */
   function carpetaInspeccion(nucco, fecha) {
-    return carpetaDePeriodo_(nucco, OTRAS[2], fecha, periodoInspeccion(fecha));
+    return Expediente.carpetaDocumento(TIPO, nucco, 'INSPECCION', fecha).carpeta;
   }
   function carpetaVerificacion(nucco, fecha) {
-    return carpetaDePeriodo_(nucco, OTRAS[1], fecha, semestreVerificacion(fecha));
+    return Expediente.carpetaDocumento(TIPO, nucco, 'VERIFICACION', fecha).carpeta;
   }
 
   /** PREFIJO-0088 2026-06-11.ext; si ya existe, (2), (3)… Para lo que se acumula por fecha (inspecciones, verificaciones) */
@@ -232,7 +194,6 @@ const ExpedienteNuco = (function () {
   // ---- Leer el expediente rápido (12-oct-2026): la API de Drive por NIVELES (una consulta trae los hijos de hasta 40
   // carpetas) en vez de DriveApp carpeta por carpeta, y una copia de 10 min en CacheService (se borra al archivar).
   const CACHE_MIN = 600;
-  const CLAVE_NUCOS = 'exp_nucos_ids_v1';
   const claveDocs_ = (n) => 'exp_docs_v1_' + n;
   const claveInsp_ = (n) => 'exp_insp_v1_' + n;
   const enCache_ = (clave) => { try { const v = CacheService.getScriptCache().get(clave); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
@@ -244,17 +205,8 @@ const ExpedienteNuco = (function () {
     try { CacheService.getScriptCache().removeAll([claveDocs_(nombreNuco_(nucco)), claveInsp_(nombreNuco_(nucco))]); } catch (e) { /* no-op */ }
   }
 
-  /** El ID de la carpeta de un NUCO (mapa de NUCOS VEHICULOS guardado 6 h; uno nuevo lo vuelve a leer) o null */
-  function nucoId_(nucco) {
-    const nombre = nombreNuco_(nucco);
-    let mapa = enCache_(CLAVE_NUCOS);
-    if (!mapa || !mapa[nombre]) {
-      mapa = {};
-      hijosDrive_([raiz_().getId()]).forEach((f) => { if (f.mimeType === CARPETA_MIME) mapa[f.name.trim()] = f.id; });
-      guardar_(CLAVE_NUCOS, mapa, 21600);
-    }
-    return mapa[nombre] || null;
-  }
+  /** El ID de la carpeta de un NUCO (el mapa de Expediente, 6 h; uno nuevo lo vuelve a leer) o null */
+  const nucoId_ = (nucco) => Expediente.idActivo(TIPO, nucco);
 
   /** El árbol bajo una carpeta, una consulta por nivel → { hijos: {padre: [carpeta]}, archivos: {padre: [archivo]} } */
   function arbol_(raizId, niveles) {
@@ -302,6 +254,7 @@ const ExpedienteNuco = (function () {
     if (guardado) return guardado;
     const id = nucoId_(nucco);
     if (!id) return { existe: false, documentos: [], otros: [], carpetas: [] };
+    const { documentacion: DOCUMENTACION, otras: OTRAS, archivos: DOCUMENTOS } = def_();
     const nivel1 = { hijos: {} };
     nivel1.hijos[id] = hijosDrive_([id]).filter((f) => f.mimeType === CARPETA_MIME).map((f) => ({ id: f.id, nombre: f.name, url: f.webViewLink }));
     const doc = hija_(nivel1, id, DOCUMENTACION);
@@ -337,27 +290,9 @@ const ExpedienteNuco = (function () {
 
   const CARPETA_MIME = 'application/vnd.google-apps.folder';
 
-  /** Hijos de varias carpetas a la vez (Drive API, una consulta por cada 40 padres), con miniatura */
-  const CAMPOS_COMPLETOS = 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,createdTime)';
+  /** Hijos de varias carpetas a la vez (Expediente.hijos: una consulta por cada 40 padres), con miniatura */
   const CAMPOS_CONTAR = 'nextPageToken,files(id,mimeType,parents)';
-  function hijosDrive_(padres, campos) {
-    const out = [];
-    for (let i = 0; i < padres.length; i += 40) {
-      const grupo = padres.slice(i, i + 40);
-      let pagina = null;
-      do {
-        const r = Drive.Files.list({
-          q: '(' + grupo.map((p) => "'" + p + "' in parents").join(' or ') + ') and trashed = false',
-          pageSize: 1000, orderBy: 'name', supportsAllDrives: true, includeItemsFromAllDrives: true,
-          fields: campos || CAMPOS_COMPLETOS,
-          pageToken: pagina || undefined,
-        });
-        (r.files || []).forEach((f) => out.push(f));
-        pagina = r.nextPageToken;
-      } while (pagina);
-    }
-    return out;
-  }
+  const hijosDrive_ = (padres, campos) => Expediente.hijos(padres, { campos: campos });
 
   /** "INSPECCION-0024 2026-07-09.pdf" o "POR BAJA 2025-06-23" → "2026-07-09" */
   const fechaEnNombre_ = (n) => ((/(20\d\d-\d\d-\d\d)/.exec(n || '') || [])[1] || '');
@@ -375,7 +310,7 @@ const ExpedienteNuco = (function () {
     if (guardado) return guardado;
     const id = nucoId_(nucco);
     if (!id) return [];
-    const raiz = hijosDrive_([id]).find((f) => f.mimeType === CARPETA_MIME && clave_(f.name) === clave_(OTRAS[2]));
+    const raiz = hijosDrive_([id]).find((f) => f.mimeType === CARPETA_MIME && clave_(f.name) === clave_(def_().otras[2]));
     if (!raiz) return [];
     const anios = hijosDrive_([raiz.id]).filter((f) => f.mimeType === CARPETA_MIME && /^\s*20\d\d\s*$/.test(f.name));
     const insp = hijosDrive_(anios.map((a) => a.id)).filter((f) => f.mimeType === CARPETA_MIME);
@@ -451,7 +386,7 @@ const ExpedienteNuco = (function () {
   /** El ID de Drive dentro de una liga (o null): el mismo de DriveUtils */
   const idDeLiga = (liga) => DriveUtils.idDeLiga(liga);
 
-  return { DOCUMENTOS, PRESTAMOS, ADHERENTES, SENSORES, FIRMAS, FIRMAS_Y_DIAGRAMAS, listar, inspecciones, fotosInspeccion,
+  return { get DOCUMENTOS() { return def_().archivos; }, PRESTAMOS, ADHERENTES, SENSORES, FIRMAS, FIRMAS_Y_DIAGRAMAS, listar, inspecciones, fotosInspeccion,
     olvidar, carpetaNuco, carpeta, archivar, nombreLibre, idDeLiga, tieneNuco, periodoInspeccion, semestreVerificacion,
     carpetaInspeccion, carpetaVerificacion, nombreConFecha, guardar, subcarpeta: subcarpeta_ };
 })();

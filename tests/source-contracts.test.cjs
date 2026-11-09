@@ -1220,7 +1220,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
     // quién lo subió: aquí no importa; la carpeta por nombre en la raíz: su nombre hace de ID
     DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a, carpetaEnRaiz: (n) => ({ getId: () => 'RAIZ/' + n }) },
   };
-  const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
+  const LA = new Function(...Object.keys(globales), read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/no-existe.jpg', false), null);
   assert.equal(LA.resolver('https://www.appsheet.com/template/gettablefileurl?appName=X&tableName=Y&fileName=BITACORA%20DE%20DESECHO_Files_%2Fa1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -1244,10 +1244,13 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(captura, /const ruta = d\.enNucos \? 'https:\/\/drive\.google\.com\/file\/d\/' \+ pdf\.id \+ '\/view' : destino\.carpeta \+ '\/' \+ nombre;/);
   assert.match(captura, /ligarPdf_\(tabla, destino\.columna, ids, pdf, ruta\)/);
   const arch = read('src/services/lineas/LineasArchivos.gs');
-  assert.match(arch, /ramas = \['INSPECCIONES', anio, CUATRIMESTRES_\[Math\.floor\(\(mes - 1\) \/ 4\)\], MESES_\[mes - 1\]\];/);
-  assert.match(arch, /carpetaUnica_\(ramas\.reduce\(\(c, nombre\) => subcarpeta_\(c, nombre\), raizNuco\), 'INSP ' \+ ddmm\);/);
-  assert.match(arch, /ramas = \['CARTA RESPONSIVA', anio\];/);
-  assert.match(arch, /nombrePdf: \(tipo === 'INSPECCION' \? 'INSP ' : 'RESP '\) \+ n4 \+ ' ' \+ ddmm \+ '\.pdf'/);
+  // La estructura de NUCOS TELEFONICOS vive en el motor de expedientes (Expediente.gs, tipo 'equipo', 6-nov)
+  const motor = read('src/utils/Expediente.gs');
+  assert.match(motor, /return \['INSPECCIONES', fecha_\(f, ZONA_LINEAS, 'yyyy'\), CUATRIMESTRES\[Math\.floor\(\(mes - 1\) \/ 4\)\], MESES\[mes - 1\]\];/);
+  assert.match(motor, /RESPONSIVA: \(f\) => \['CARTA RESPONSIVA', fecha_\(f, ZONA_LINEAS, 'yyyy'\)\],/);
+  assert.match(motor, /delDia: \{ INSPECCION: \{ prefijo: 'INSP ', fotos: 'FOTOS' \}, RESPONSIVA: \{ prefijo: 'RESP ' \} \},/);
+  assert.match(arch, /const d = Expediente\.carpetaDelDia\('equipo', nuco, tipo, f\);/);
+  assert.match(arch, /nombrePdf: \(tipo === 'INSPECCION' \? 'INSP ' : 'RESP '\) \+ n4 \+ ' ' \+ d\.ddmm \+ '\.pdf'/);
   // Solo se escribe en la carpeta de la app o en NUCOS
   assert.match(arch, /if \(!carpetaId \|\| !\(estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\) \|\| enNucos\(carpetaId\) \|\| enLineas\(carpetaId\)\)\)/);
   // Fotos de inspección: en NUCOS si hay NUCO, si no en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
@@ -2824,7 +2827,9 @@ test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.
 test('NUCOS de Líneas: un DEV nunca escribe en la de producción; una sola "subcarpeta" (fase 5.7)', () => {
   const archivos = read('src/services/lineas/LineasArchivos.gs');
   // Sin la clave de producción, una de pruebas en la raíz del proyecto (como ExpedienteNuco), nunca el ID de producción
-  assert.match(archivos, /function carpetaNucosId\(\) \{ return prop_\('LINEAS_DRIVE_NUCOS'\) \|\| DriveUtils\.carpetaEnRaiz\(NUCOS_PRUEBAS\)\.getId\(\); \}/);
+  // (desde el 6-nov la raíz la resuelve el motor de expedientes, tipo 'equipo')
+  assert.match(archivos, /function carpetaNucosId\(\) \{ return Expediente\.raiz\('equipo'\); \}/);
+  assert.match(read('src/utils/Expediente.gs'), /raiz: \(\) => leerConfig_\('LINEAS_DRIVE_NUCOS'\) \|\| DriveUtils\.carpetaEnRaiz\('NUCOS TELEFONICOS'\)\.getId\(\),/);
   assert.doesNotMatch(archivos, /12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-/);
   // configurarLineasDev ya no le da a un DEV la de producción (ahí se escribe desde el 2-oct)
   const admin = read('src/services/lineas/LineasAdmin.gs');
