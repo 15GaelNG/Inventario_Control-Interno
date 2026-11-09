@@ -210,38 +210,44 @@
         });
       }
 
-      function pintarLigasFirma(responsivaId, tipoPdf, estados) {
-        if (!estados.length) {
-          mostrarEspera('Ligas de firma a distancia', { tono: 'listo', icono: 'info', texto: 'Esta responsiva ya no tiene ninguna liga pendiente.',
-            acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
-          return;
-        }
-        const filas = estados.map((e) => {
+      /**
+       * Las tarjetas de las ligas de un documento (usuario, 9-nov: "en cada inspección o responsiva los recuadros para
+       * copiar los links"): rol, nombre y estatus; quien falta trae su liga en una caja, a la vista, con Copiar; todos
+       * con "Generar liga de nuevo". Las usan la ventana "Ver ligas de firma" y la página del documento
+       * (lineas-telefonicas-paginas.html). `estados` viene de apiLineasFirmaRemotaEstado (ya trae la liga).
+       */
+      function htmlLigasFirma(estados) {
+        return estados.map((e) => {
           const pendiente = e.estado === 'PENDIENTE';
           return '<div class="ln-liga-remota"><div class="ln-liga-remota-cabecera">' +
             '<span class="ln-liga-remota-rol">' + esc(ETIQUETA_ROL_FIRMA[e.rol] || e.rol) + '</span>' +
             (e.nombre ? '<span class="ln-liga-remota-nombre">' + esc(e.nombre) + '</span>' : '') +
             '<span class="ln-liga-remota-estado">' + chip(pendiente ? 'Pendiente de firmar' : 'Ya firmó', pendiente ? 'ambar' : 'verde') + '</span>' +
             '</div><div class="ln-liga-remota-fila">' +
-            '<button type="button" class="secondary" data-ver-liga-copiar="' + esc(e.rol) + '">' + icono('copy') + ' Copiar liga</button>' +
+            (pendiente && e.liga
+              ? '<input type="text" readonly value="' + esc(e.liga) + '" data-liga="' + esc(e.rol) + '" aria-label="Liga de ' + esc(e.nombre || e.rol) + '" />' +
+                '<button type="button" class="secondary" data-ver-liga-copiar="' + esc(e.rol) + '">' + icono('copy') + ' Copiar</button>'
+              : '') +
             '<button type="button" class="secondary" data-ver-liga-regenerar="' + esc(e.rol) + '">' + icono('refresh-ccw') + ' Generar liga de nuevo</button>' +
             '</div></div>';
         }).join('');
-        mostrarEspera('Ligas de firma a distancia', { tono: 'listo', icono: 'send',
-          texto: 'Copia una liga para compartirla de nuevo, o genera una nueva (la anterior deja de servir, y si esa parte ya había firmado, se le pide firmar otra vez).',
-          detalle: filas, acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
-        const detalle = $('#ln-espera-detalle', raiz);
-        detalle.querySelectorAll('[data-ver-liga-copiar]').forEach((boton) => {
+      }
+
+      /**
+       * Copiar y "Generar liga de nuevo" dentro de `cont` (lo que pintó htmlLigasFirma). `repintar(estados)` vuelve a
+       * pintar con la liga nueva; después se copia sola.
+       */
+      function activarLigasFirma(cont, tipoPdf, documentoId, repintar) {
+        cont.querySelectorAll('input[data-liga]').forEach((input) => input.addEventListener('focus', () => input.select()));
+        cont.querySelectorAll('[data-ver-liga-copiar]').forEach((boton) => {
           boton.addEventListener('click', () => {
-            boton.disabled = true;
-            llamar('apiLineasFirmaRemotaLiga', tipoPdf, responsivaId, boton.dataset.verLigaCopiar)
-              .then((liga) => copiarConAviso(boton, liga, 'Liga copiada'))
-              .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 6000))
-              .finally(() => { boton.disabled = false; });
+            const input = cont.querySelector('input[data-liga="' + CSS.escape(boton.dataset.verLigaCopiar) + '"]');
+            if (input) copiarConAviso(boton, input.value, 'Liga copiada');
           });
         });
-        detalle.querySelectorAll('[data-ver-liga-regenerar]').forEach((boton) => {
+        cont.querySelectorAll('[data-ver-liga-regenerar]').forEach((boton) => {
           boton.addEventListener('click', () => {
+            const rol = boton.dataset.verLigaRegenerar;
             Confirmar.pedir({
               titulo: 'Generar nueva liga',
               mensaje: 'La liga anterior deja de funcionar en cuanto generes la nueva -- y si esa parte ya había ' +
@@ -251,16 +257,32 @@
             }).then((ok) => {
               if (!ok) return;
               boton.disabled = true;
-              return llamar('apiLineasFirmaRemotaRegenerarLiga', tipoPdf, responsivaId, boton.dataset.verLigaRegenerar)
-                .then((liga) => llamar('apiLineasFirmaRemotaEstado', tipoPdf, responsivaId).then((estados) => {
-                  pintarLigasFirma(responsivaId, tipoPdf, estados);
-                  const nuevo = $('#ln-espera-detalle [data-ver-liga-copiar="' + CSS.escape(boton.dataset.verLigaRegenerar) + '"]', raiz);
+              return llamar('apiLineasFirmaRemotaRegenerarLiga', tipoPdf, documentoId, rol)
+                .then((liga) => llamar('apiLineasFirmaRemotaEstado', tipoPdf, documentoId).then((estados) => {
+                  const nuevoCont = repintar(estados) || cont;
+                  const nuevo = nuevoCont.querySelector('[data-ver-liga-copiar="' + CSS.escape(rol) + '"]');
                   if (nuevo) copiarConAviso(nuevo, liga, 'Liga nueva copiada');
                 }))
                 .catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 6000))
                 .finally(() => { boton.disabled = false; });
             });
           });
+        });
+      }
+
+      function pintarLigasFirma(documentoId, tipoPdf, estados) {
+        if (!estados.length) {
+          mostrarEspera('Ligas de firma a distancia', { tono: 'listo', icono: 'info',
+            texto: (tipoPdf === 'INSPECCION' ? 'Esta inspección' : 'Esta responsiva') + ' ya no tiene ninguna liga pendiente.',
+            acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+          return;
+        }
+        mostrarEspera('Ligas de firma a distancia', { tono: 'listo', icono: 'send',
+          texto: 'Copia una liga para compartirla de nuevo, o genera una nueva (la anterior deja de servir, y si esa parte ya había firmado, se le pide firmar otra vez).',
+          detalle: htmlLigasFirma(estados), acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+        activarLigasFirma($('#ln-espera-detalle', raiz), tipoPdf, documentoId, (nuevos) => {
+          pintarLigasFirma(documentoId, tipoPdf, nuevos);
+          return $('#ln-espera-detalle', raiz);
         });
       }
 
@@ -370,6 +392,7 @@
 
       return {
         cargarEvidencias: cargarEvidencias, copiarConAviso: copiarConAviso, generarPdfPendiente: generarPdfPendiente,
+        htmlLigasFirma: htmlLigasFirma, activarLigasFirma: activarLigasFirma,
         pedirFirmasPdf: pedirFirmasPdf, ponerCopiarTarjetas: ponerCopiarTarjetas, regenerarPdf: regenerarPdf,
         soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado, textoTarjeta: textoTarjeta,
       };

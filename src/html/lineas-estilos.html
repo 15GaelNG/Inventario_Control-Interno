@@ -740,6 +740,13 @@
   .ln-liga-remota-estado { margin-left: auto; }
   .ln-liga-remota-fila { display: flex; gap: 6px; }
   .ln-liga-remota-fila input { flex: 1; min-width: 0; font-size: var(--texto-xs); background: var(--color-surface); }
+  .ln-liga-remota-fila button { flex-shrink: 0; }
+  /* En el celular la liga va sola en su renglón y los botones debajo (Copiar y Generar de nuevo no caben al lado) */
+  @media (max-width: 640px) {
+    .ln-liga-remota-fila { flex-wrap: wrap; }
+    .ln-liga-remota-fila input { flex-basis: 100%; }
+    .ln-liga-remota-fila button { flex: 1; }
+  }
   /* Fotos: cámara (solo en pantallas táctiles) y galería */
   .ln-fotos-botones { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   @media (hover: hover) and (pointer: fine) { .ln-solo-tactil { display: none !important; } }

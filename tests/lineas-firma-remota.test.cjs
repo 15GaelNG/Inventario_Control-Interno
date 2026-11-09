@@ -283,8 +283,8 @@ test('estadoLigas: el nombre y el estado de cada rol que SÍ se difirió; el que
   }]);
   const estados = JSON.parse(JSON.stringify(F.estadoLigas(DOC, 'tok-ses', 'RES-1')));
   assert.deepEqual(estados, [
-    { rol: 'PRINCIPAL', nombre: 'ANA PEREZ', estado: 'PENDIENTE' },
-    { rol: 'SEGUNDO', nombre: 'AYRTON SEPULVEDA', estado: 'FIRMADO' },
+    { rol: 'PRINCIPAL', nombre: 'ANA PEREZ', estado: 'PENDIENTE', liga: 'https://firma.publica/exec?firmar=1&tipo=lineas-responsiva&token=tok-a' },
+    { rol: 'SEGUNDO', nombre: 'AYRTON SEPULVEDA', estado: 'FIRMADO', liga: '' },
   ]);
   assert.throws(() => F.estadoLigas(DOC, 'tok-ses', 'RES-404'), /No se encontró/);
 });

@@ -318,9 +318,12 @@ const LineasFirmaRemota = (function () {
     const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
     if (!filas.length) throw new Error('No se encontró el documento.');
     const fila = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
+    // La liga de quien falta va incluida (usuario, 9-nov: el recuadro para copiarla en la página de la inspección o
+    // responsiva y en "Ver ligas de firma"), armada aquí como en copiarLiga; quien ya firmó no la lleva.
     return ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]).map((rol) => ({
       rol: rol, nombre: fila[columnaNombre_(doc, rol)] || '',
       estado: fila[colToken_(rol)] ? 'PENDIENTE' : 'FIRMADO',
+      liga: fila[colToken_(rol)] ? construirLiga_(doc, fila[colToken_(rol)]) : '',
     }));
   }
 

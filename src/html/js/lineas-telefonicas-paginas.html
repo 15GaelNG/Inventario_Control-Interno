@@ -11,7 +11,7 @@
     Lineas.telefonicas.registrar('paginas', (T) => {
       const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, vigente } = T;
       const { abrir, campos, encabezado, migas, pedirDocumento, tarjeta } = T.de('ficha');
-      const { generarPdfPendiente, regenerarPdf, subirPdfFirmado } = T.de('documentos');
+      const { activarLigasFirma, generarPdfPendiente, htmlLigasFirma, regenerarPdf, subirPdfFirmado } = T.de('documentos');
       const { htmlSubirFotos, manejarSubidaArchivo } = T.de('captura');
 
       // ---- Inspección y responsiva: su página ----
@@ -57,6 +57,32 @@
         if (mas) mas.addEventListener('click', () => menuFlotante(mas, opcionesDocumento(x, r)));
       }
 
+      /**
+       * Firma a distancia pendiente (usuario, 9-nov): en la página de la inspección o la responsiva, un recuadro con la
+       * liga de cada quien que falta, para copiarla sin ir a Documentos. Solo quien opera (el servidor pide EDICIÓN).
+       */
+      function htmlRecuadroLigas(d, r) {
+        return r.puedeOperar && d.estadoFirma === 'PENDIENTE'
+          ? tarjeta(icono('send') + ' Ligas de firma a distancia', '<div data-ln-ligas-pagina>' + Carga.html('bloque', { n: 2 }) + '</div>')
+          : '';
+      }
+      function cargarRecuadroLigas(detalle, tipoPdf, id, tipo) {
+        const cont = detalle.querySelector('[data-ln-ligas-pagina]');
+        if (!cont) return;
+        const sigueAbierta = () => vigente() && pila.length && pila[pila.length - 1].tipo === tipo && pila[pila.length - 1].id === id && document.body.contains(cont);
+        const pintar = (estados) => {
+          if (!sigueAbierta()) return null;
+          cont.innerHTML = estados.length
+            ? '<p class="ln-tenue">Comparte cada liga con quien falta por firmar; el PDF se genera solo cuando todas se completen.</p>' + htmlLigasFirma(estados)
+            : '<p class="ln-tenue">Ya no hay ninguna liga pendiente.</p>';
+          activarLigasFirma(cont, tipoPdf, id, pintar);
+          return cont;
+        };
+        llamar('apiLineasFirmaRemotaEstado', tipoPdf, id).then(pintar).catch((e) => {
+          if (sigueAbierta()) cont.innerHTML = '<p class="ln-tenue">' + icono('triangle-alert', 'ln-alerta') + ' No se pudieron cargar las ligas: ' + esc(mensajeError(e)) + '</p>';
+        });
+      }
+
       /** Responsiva (usuario, 6-oct): su propia página, como la inspección; lo que dice la responsiva de ese día. */
       function pintarResponsiva(detalle, id) {
         return pedirDocumento('responsiva', id).then((r) => {
@@ -74,6 +100,7 @@
               deDrive
                 ? [['NUCO', d.nuco || (e && e.nuco)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
                 : [['Responsable', s.responsable], [Marca.textoDe('lineas-telefonicas'), d.responsableCI], ['Identificación', s.identificacion]]) +
+            htmlRecuadroLigas(d, r) +
             (deDrive
               ? ''
               : '<div class="ln-grid-2">' +
@@ -87,6 +114,7 @@
                   : '<p class="ln-tenue">Sin accesorios registrados.</p>') +
                 tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(d.comentario || 'Sin comentario registrado.') + '</p>'));
           activarBotonesDocumento(detalle, 'RESPONSIVA', d, r);
+          cargarRecuadroLigas(detalle, 'RESPONSIVA', id, 'responsiva');
         });
       }
 
@@ -119,6 +147,7 @@
               deDrive
                 ? [['NUCO', i.nuco || (e && e.nuco)], ['Fotos', miles(fotos.length)], ['PDF', (r.pdfs || []).length ? 'Sí' : 'No']]
                 : [['Responsable', s.responsable], ['Inspector', i.inspector], ['Calificación', porcentaje(i.calificacion)], ['Fotos', miles(fotos.length)], ['Ticket', i.ticket]]) +
+            htmlRecuadroLigas(i, r) +
             (deDrive
               ? ''
               : '<div class="ln-grid-2">' +
@@ -131,6 +160,7 @@
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos') + '</div>' : ''));
           activarBotonesDocumento(detalle, 'INSPECCION', i, r);
+          cargarRecuadroLigas(detalle, 'INSPECCION', id, 'inspeccion');
           const enGaleria = fotos.filter(enVisor);
           // Quitar una foto: a la papelera de Drive y al historial, sin comentario ni detalle (usuario, 13-oct); la página se
           // vuelve a pintar
