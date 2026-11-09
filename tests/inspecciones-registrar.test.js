@@ -365,32 +365,37 @@ const tablaRel = [
   ['R2', 'HONDA 150XR', 'BUENO', 'BUENO', 1],   // las dos aplicaron: 100% con cualquiera de las dos fórmulas, no se toca
   ['R3', 'HONDA 150XR', '', '', ''],            // sin calificar, no se toca
 ];
-let escritoRel = null;
+let escriturasRel = [];
 contexto.SheetUtils.getSheetByColumns = () => ({
   getName: () => 'INSPECCION VEHICULAR',
   getLastColumn: () => tablaRel[0].length,
   getDataRange: () => ({ getValues: () => tablaRel.map((f) => f.slice()) }),
-  getRange: (fila1, col) => ({ setValues: (v) => { escritoRel = { col, v }; }, setNumberFormat: () => {} }),
+  getRange: (fila1, col) => {
+    const rango = { setValue: (v) => { escriturasRel.push({ fila: fila1, col, v }); return rango; }, setNumberFormat: () => rango };
+    return rango;
+  },
 });
 const revRel = contexto.InspeccionesService.puntajesRelativos(false);
-ok(revRel.corregidas === 1 && revRel.yaCorrectas === 1 && revRel.sinCalificar === 1 && !escritoRel,
+ok(revRel.corregidas === 1 && revRel.yaCorrectas === 1 && revRel.sinCalificar === 1 && !escriturasRel.length,
   'revisar cuenta sin escribir: ' + JSON.stringify(revRel));
 ok(revRel.pdfRegenerados === 0, 'solo revisar: tampoco toca ningún PDF');
 paraPdf = null;
 contexto.InspeccionesService.puntajesRelativos(true);
-ok(escritoRel.col === 5 && JSON.stringify(escritoRel.v) === JSON.stringify([[1], [1], ['']]),
-  'aplicar corrige solo R1 (de 50% a 100%: Inventarios N/A ya no le resta) y deja las demás igual');
+ok(escriturasRel.length === 1 && escriturasRel[0].fila === 2 && escriturasRel[0].col === 5 && escriturasRel[0].v === 1,
+  'aplicar escribe YA la fila que corrige (R1, de 50% a 100%: Inventarios N/A ya no le resta), fila por fila, sin esperar a las demás');
 ok(paraPdf === null, 'sin pedir regenerarPdf, aplicar tampoco toca ningún PDF');
 
 console.log('11b. Con regenerarPdf: a la que de verdad se corrige también se le regenera el PDF');
 paraPdf = null;
 actualizado = null;
+escriturasRel = [];
 tablaRel[1][4] = 0.5;   // regresa R1 a como estaba, para que vuelva a contar como corregida
 const conPdf = contexto.InspeccionesService.puntajesRelativos(true, true);
 ok(conPdf.corregidas === 1 && conPdf.pdfRegenerados === 1 && Object.keys(conPdf.pdfErrores).length === 0,
   'una regenerada, sin errores: ' + JSON.stringify(conPdf));
+ok(escriturasRel.length === 1 && escriturasRel[0].v === 1, 'la hoja se corrige (fila por fila), no solo el PDF');
 ok(paraPdf && paraPdf.datos['PUNTAJE FINAL INSPECCION'] === '100.00%',
-  'el PDF se regenera con el PUNTAJE FINAL YA corregido, aunque la hoja todavía no se haya escrito: ' + JSON.stringify(paraPdf && paraPdf.datos));
+  'el PDF se regenera con el PUNTAJE FINAL YA corregido: ' + JSON.stringify(paraPdf && paraPdf.datos));
 ok(actualizado && actualizado['FORMATO INSPECCION VEHICULAR'] === 'INSPECCIONES VEHICULARES/x/INSPECCION.pdf',
   'y deja la liga nueva en FORMATO INSPECCION VEHICULAR: ' + JSON.stringify(actualizado));
 tablaRel[1][4] = 1;

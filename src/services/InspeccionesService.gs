@@ -997,16 +997,16 @@ const InspeccionesService = (function () {
       errores: {}, pdfRegenerados: 0, pdfErrores: {},
     };
     let huboCambios = false;
-    const nuevos = datos.slice(1).map((row) => {
+    datos.slice(1).forEach((row, i) => {
       const actual = iFinal === -1 ? '' : row[iFinal];
-      if (limpiar_(actual) === '') { r.sinCalificar++; return [actual]; }
+      if (limpiar_(actual) === '') { r.sinCalificar++; return; }
       const tipo = limpiar_(row[iTipo]);
-      if (!tipo) { r.sinTipo++; return [actual]; }
+      if (!tipo) { r.sinTipo++; return; }
       if (!(tipo in estructuras)) {
         try { estructuras[tipo] = estructura_(tipo); } catch (err) { estructuras[tipo] = null; r.errores[tipo] = err.message; }
       }
       const estructura = estructuras[tipo];
-      if (!estructura) return [actual];
+      if (!estructura) return;
       const valor = {};
       encabezados.forEach((e, j) => { valor[norm(e)] = row[j]; });
       const deColumna = (campo) => valor[norm(campo)];
@@ -1015,11 +1015,16 @@ const InspeccionesService = (function () {
       const llantas = {};
       estructura.llantas.forEach((l) => { llantas[l.campo] = deColumna(l.campo); });
       const puntaje = puntajeDe_(estructura, checklist, deColumna('VOLTAJE'), llantas);
-      if (!puntaje.evaluadas) { r.sinRespuestas++; return [actual]; }
+      if (!puntaje.evaluadas) { r.sinRespuestas++; return; }
       const actualPorcentaje = enCien_(actual);
-      if (actualPorcentaje !== null && Math.abs(actualPorcentaje - puntaje.final) < 0.01) { r.yaCorrectas++; return [actual]; }
+      if (actualPorcentaje !== null && Math.abs(actualPorcentaje - puntaje.final) < 0.01) { r.yaCorrectas++; return; }
       r.corregidas++;
       huboCambios = true;
+      // Se escribe ESTA fila ya, no se junta para un solo setValues al final: con cientos de
+      // filas que además regeneran su PDF, la ejecución se puede cortar a la mitad (el límite
+      // de 6 min de Apps Script) -- juntar todo para el final perdía lo ya corregido y una
+      // corrida siguiente no avanzaba nada. Así, lo que ya se escribió queda aunque se corte.
+      if (aplicar) hoja.getRange(i + 2, iFinal + 1).setValue(puntaje.final / 100).setNumberFormat('0.00%');
       if (aplicar && regenerarPdf && iId !== -1) {
         const idFila = limpiar_(row[iId]);
         const filaReal = {};
@@ -1032,15 +1037,8 @@ const InspeccionesService = (function () {
           r.pdfErrores[idFila] = err.message;
         }
       }
-      return [puntaje.final / 100];
     });
-    if (aplicar && huboCambios) {
-      const columna = iFinal + 1;
-      const rango = hoja.getRange(2, columna, nuevos.length, 1);
-      rango.setValues(nuevos);
-      rango.setNumberFormat('0.00%');
-      CacheHojas.tocarHoja(hoja);
-    }
+    if (aplicar && huboCambios) CacheHojas.tocarHoja(hoja);
     return r;
   }
 
