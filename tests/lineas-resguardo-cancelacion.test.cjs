@@ -882,3 +882,32 @@ test('las fechas de las canceladas anteriores: una caché por bitácora (MOVIMIE
   assert.match(fuente, /eventosCancelacion_\(LineasRepo\.TAB\.MOV, 'lineas_canceladas_sistema_v1'/);
   assert.match(fuente, /return LineasDatos\.recordar\(clave, \[tab\], \(\) => \{/, 'cada caché depende solo de su pestaña');
 });
+
+test('Cancelaciones trae la carta de cada línea (LINK CARTA DE CANCELACION de LINEAS): trámite, anterior y varias cartas', () => {
+  const linea = (id, n, estatus) => ({ 'ID': id, 'ID LINEA': id, 'TIPO': 'LINEA', 'NUMERO TELEFONO': n, 'ESTATUS LINEA': estatus, 'COMPAÑIA': 'TELCEL' });
+  const t = cargar([
+    linea('LIN-A', '4420000001', 'CANCELADA'),
+    linea('LIN-B', '4420000002', 'EN PROCESO DE CANCELACION'),
+    linea('LIN-C', '4420000003', 'CANCELADA'),
+    linea('LIN-D', '4420000004', 'CANCELADA'),
+  ], [{ 'ID': 'RSG-1', 'FECHA': new Date(2026, 9, 1), 'NUMERO': '4420000002', 'ID_LINEA': 'LIN-B', 'CANCELACION': 'CARTA ENVIADA' }]);
+  t.tablas.LINEAS = [
+    { 'ID': 'LIN-A', 'NUMERO TELEFONO': '4420000001', 'LINK CARTA DE CANCELACION': 'https://drive.google.com/file/d/a1/view\nhttps://drive.google.com/file/d/a2/view' },
+    { 'ID': 'LIN-B', 'NUMERO TELEFONO': '4420000002', 'LINK CARTA DE CANCELACION': 'https://drive.google.com/file/d/b1/view' },
+    { 'ID': 'LIN-C', 'NUMERO TELEFONO': '4420000003', 'LINK CARTA DE CANCELACION': 'javascript:alert(1)' },
+    { 'ID': 'LIN-D', 'NUMERO TELEFONO': '4420000004', 'LINK CARTA DE CANCELACION': '' },
+  ];
+  const de = (id) => t.R.bandeja({ puedeAprobar: true }).filas.filter((x) => x.ID_LINEA === id)[0];
+  assert.strictEqual(de('LIN-B').CARTAS, 'https://drive.google.com/file/d/b1/view', 'el trámite guardado trae su carta');
+  assert.strictEqual(de('LIN-A').ORIGEN, 'ANTERIOR AL SISTEMA');
+  assert.strictEqual(de('LIN-A').CARTAS.split('\n').length, 2, 'la cancelada sin trámite también, con sus dos cartas');
+  assert.strictEqual(de('LIN-C').CARTAS, '', 'una liga que no es https no llega a la pantalla');
+  assert.strictEqual(de('LIN-D').CARTAS, '', 'sin carta, vacío');
+  // Sin la hoja LINEAS (un DEV viejo), la bandeja no truena
+  delete t.tablas.LINEAS;
+  assert.strictEqual(de('LIN-B').CARTAS, '');
+  // La pantalla: columna Carta y acción Ver carta, solo en Cancelaciones
+  const pantalla = read('src/html/js/lineas-resguardos.html');
+  assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v\) => ligasCarta\(v\) \}/);
+  assert.match(pantalla, /vista === 'CANCELACIONES' \? \[\{ icono: 'file-text', titulo: 'Ver carta'/);
+});
