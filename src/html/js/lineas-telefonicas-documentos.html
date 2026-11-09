@@ -174,7 +174,8 @@
        */
       function pedirFirmasPdf(sesion, tipo, nombres, continuar, soloResponsable) {
         const esInspeccion = tipo === 'INSPECCION';
-        const fondo = esInspeccion ? '#ddebf7' : '#ffffff';
+        // Las firmas van en blanco también en la inspección (usuario, 9-nov: su casilla ya no es azul en la plantilla)
+        const fondo = '#ffffff';
         ocultarEspera();
         $('#ln-captura-cuerpo', raiz).innerHTML =
           '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + (soloResponsable ? ' La firma del responsable ya no está disponible.' : ' Las firmas de la captura ya no están disponibles.') + '</div>' +

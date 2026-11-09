@@ -746,7 +746,7 @@
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF'));
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
-        Promise.all([firmaInspector.base64('#ddebf7'), sesion.carpetaPromesa || null]).then(([inspector]) => {
+        Promise.all([firmaInspector.base64('#ffffff'), sesion.carpetaPromesa || null]).then(([inspector]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: null, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
           // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
           // "igual firman las mismas personas" que la Responsiva). El servidor ignora los roles sin nombre en la
