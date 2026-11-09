@@ -182,8 +182,11 @@ const Expediente = (function () {
   //    raizDe al subir; la siguiente subida va por la memoria sin preguntarle a Drive.
   // Caso aceptado: una carpeta movida a mano en Drive se sigue creyendo en su lugar anterior hasta 6 h.
   const SEG_MEMORIA = 21600;
-  let memoria_ = true;
-  /** Para medir (PruebasDev): apaga (false) o prende la memoria en ESTA ejecución; apagada no lee ni escribe */
+  // APAGADA por omisión (9-nov): cada carpeta usa unas 5 entradas de CacheService durante 6 h. La caché tiene un tope de
+  // 1,000 elementos para toda la app y, al pasarse, Google conserva los más lejanos de vencer: con 296 PDF regenerados en
+  // una mañana, las sesiones (60 min) fueron las primeras en perderse. Antes de encenderla: que ocupe pocas entradas.
+  let memoria_ = false;
+  /** Para medir (PruebasDev): prende (true) o apaga la memoria en ESTA ejecución; apagada no lee ni escribe */
   function memoria(si) { memoria_ = si !== false; }
   const memLeer_ = (claves) => {
     if (!memoria_ || !claves.length) return {};

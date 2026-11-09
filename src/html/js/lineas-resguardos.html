@@ -163,9 +163,13 @@
           { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se quitó', tipo: 'texto', visible: false },
         ],
         CANCELACIONES: [
-          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
+          // Las canceladas antes del sistema (ORIGEN ANTERIOR AL SISTEMA, usuario 9-nov) casi nunca tienen fecha: al final
+          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true,
+            render: (v, f) => (v ? esc(fechaTabla(v)) : (f && f.ANTERIOR ? 'Sin fecha' : guion(''))) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
           { campo: 'CANCELACION', titulo: 'Cancelación', tipo: 'lista', render: (v) => chip(v) },
+          // SISTEMA (pasó por el panel) o ANTERIOR AL SISTEMA (cancelada antes, o directo sin panel): solo se muestra
+          { campo: 'ORIGEN', titulo: 'Origen', tipo: 'lista' },
           // LINEA VENCIDA o CANCELACION ANTICIPADA (usuario, 13-oct)
           { campo: 'MOTIVO_CANCELACION', titulo: 'Motivo', tipo: 'lista' },
           { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
@@ -296,6 +300,8 @@
           { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
           { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
           { icono: 'undo-2', valor: miles(cuenta('CANCELACION', 'RETIRADA')), etiqueta: 'Retiradas', filtros: { CANCELACION: { valores: ['RETIRADA'] } } },
+          // Las canceladas antes del sistema (o directo, sin panel): solo para verlas (usuario, 9-nov)
+          { icono: 'history', valor: miles(cuenta('ORIGEN', 'ANTERIOR AL SISTEMA')), etiqueta: 'Anteriores al sistema', filtros: { ORIGEN: { valores: ['ANTERIOR AL SISTEMA'] } } },
         ];
         marcarKpi = tilesKpi($('#lnr-kpis', raiz), defs, () => tabla);
         marcarKpi(filtros);
