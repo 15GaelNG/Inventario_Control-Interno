@@ -39,10 +39,12 @@ function ordenar(inv) {
     entorno: inv.entorno,
     fecha: inv.fecha,
     plantillas: inv.plantillas.slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => {
-      if (!p.marcadores) return p;
+      // Sin el ID ni el título del documento (el repo es público y la prueba no los usa): solo nombres y fórmulas
+      const { id, titulo, ...resto } = p;   // eslint-disable-line no-unused-vars
+      if (!resto.marcadores) return resto;
       const marcadores = {};
-      Object.keys(p.marcadores).sort().forEach((m) => { marcadores[m] = p.marcadores[m]; });
-      return Object.assign({}, p, { marcadores });
+      Object.keys(resto.marcadores).sort().forEach((m) => { marcadores[m] = resto.marcadores[m]; });
+      return Object.assign({}, resto, { marcadores });
     }),
   };
 }

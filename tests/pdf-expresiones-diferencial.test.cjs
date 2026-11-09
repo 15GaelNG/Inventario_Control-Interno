@@ -33,12 +33,13 @@ function cargarPlantillaNueva() {
   return ctx.P;
 }
 
-/** Como PdfService.datosParaPlantilla_: las fechas ya como texto (con hora si la traen) */
+/** Como PdfService.datosParaPlantilla_ / textoDeFecha_: las fechas ya como texto (con hora si la traen, 6-nov) */
 function comoVehiculos(datos) {
   const salida = {};
   Object.keys(datos).forEach((k) => {
     const v = datos[k];
-    salida[k] = v instanceof Date ? Utilities.formatDate(v, '', v.getHours() || v.getMinutes() ? 'dd/MM/yyyy HH:mm:ss' : 'dd/MM/yyyy') : v;
+    const conHora = v instanceof Date && Utilities.formatDate(v, '', 'HHmmss') !== '000000';
+    salida[k] = v instanceof Date ? Utilities.formatDate(v, '', conHora ? 'dd/MM/yyyy HH:mm:ss' : 'dd/MM/yyyy') : v;
   });
   return salida;
 }

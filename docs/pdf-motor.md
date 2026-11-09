@@ -8,7 +8,7 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 | Fase | Qué | Estado |
 |---|---|---|
 | 0 | Medir cada paso de los tres motores (`Cronometro`) | hecha en código; falta la tabla base |
-| 1 | Inventario de marcadores de cada plantilla + prueba diferencial | en código; falta correr el inventario |
+| 1 | Inventario de marcadores de cada plantilla + prueba diferencial | hecha (9-nov): ver «Resultado de la fase 1» |
 | 2 | `Plantilla` entiende todo lo de Líneas (analizador) | pendiente |
 | 3 | Motor de documento en `PdfService` + comparador en el DEV | pendiente |
 | 4 | Líneas sobre `PdfService` (ID de plantilla por entorno) | pendiente |
@@ -17,6 +17,27 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 
 Reglas acordadas: se queda la sintaxis `<< >>`; un marcador que el motor no entiende **queda visible en el PDF y
 se avisa**; producción sigue con las plantillas de siempre hasta comprobar las nuevas.
+
+## Resultado de la fase 1 (9-nov)
+
+`node tools/pdf/inventario.js` (DEV) bajó las 24 plantillas en uso: 21 de Vehículos (Responsiva, Adherente y las 19
+de MODELOS INSPECCION), 3 de Líneas y la de Arqueo, a `tests/fixtures/plantillas-marcadores.json` (solo marcadores: sin
+ID ni título del documento). Ninguna tiene un `<<If:>>` que cruce párrafos. `tests/pdf-expresiones-diferencial.test.cjs`
+llena cada marcador real con 7 juegos de datos:
+
+- **Vehículos:** las 21 dan lo mismo que hoy con `Plantilla.gs`.
+- **Líneas, `LineasPdf` contra `Plantilla`:** los dos leen la misma notación de AppSheet y coinciden en casi todo. Lo
+  que cambia, y hay que decidir en la fase 2:
+
+| Qué | `LineasPdf` (Líneas) | `Plantilla` (Vehículos) | Dónde aparece |
+|---|---|---|---|
+| `RIGHT(…)` | lo entiende | no lo entiende (queda visible) | `<<RIGHT("000" & [NUCO], 4)>>` de la responsiva de celular |
+| Espacios alrededor del valor al comparar (`" bueno "` = `"BUENO"`) | no los quita: no coincide | los quita: coincide | todos los `IF([X] = "…")` (mayúsculas: los dos las ignoran) |
+| Una fecha con hora en una columna sola | solo el día (`05/11/2026`) | día y hora (`05/11/2026 09:30:00`) | `<<FECHA DE REGISTRO>>` (Líneas), `<<[FECHA ULTIMO SERVICIO]>>` (Vehículos) |
+| Un número vacío comparado (`<<If:([LLANTA DD] <= 1.6)>>`) | vacío = 0: el bloque sale | vacío no cumple: no sale | las llantas de las 19 inspecciones vehiculares |
+
+Fuera de esta prueba (son del documento, no de un marcador; fase 3): de `LineasPdf`, la letra chica bajo la firma, el
+interlineado como AppSheet y el formato de cada etiqueta; de `PdfService`, Arial en todo el texto.
 
 ## Cómo se mide (fase 0)
 
