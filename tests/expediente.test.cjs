@@ -12,7 +12,7 @@ const CARPETA = 'application/vnd.google-apps.folder';
 function driveFalso() {
   const c = {};
   let n = 0;
-  const llamadas = { getParents: 0, list: 0 };
+  const llamadas = { getParents: 0, list: 0, porNombre: 0 };
   const iter = (l) => { let i = 0; return { hasNext: () => i < l.length, next: () => l[i++] }; };
   const hijos = (id) => Object.values(c).filter((x) => x.padre === id && !x.trashed);
   const nueva = (nombre, padre, props) => {
@@ -23,7 +23,7 @@ function driveFalso() {
   const envolver = (x) => ({
     getId: () => x.id, getName: () => x.name, setName: (v) => { x.name = v; }, isTrashed: () => x.trashed,
     setTrashed: (v) => { x.trashed = v; },
-    getFoldersByName: (v) => iter(hijos(x.id).filter((h) => h.name === v).map(envolver)),
+    getFoldersByName: (v) => { llamadas.porNombre++; return iter(hijos(x.id).filter((h) => h.name === v).map(envolver)); },
     getFolders: () => iter(hijos(x.id).map(envolver)),
     createFolder: (v) => envolver(c[nueva(v, x.id)]),
     getParents: () => { llamadas.getParents++; return iter(x.padre ? [envolver(c[x.padre])] : []); },
@@ -57,6 +57,11 @@ function cargar(drive, opciones) {
     LineasUtil: { nuco4: (v) => { const d = String(v || '').replace(/\D/g, ''); return d ? ('0000' + d).slice(-Math.max(4, d.length)) : null; } },
     Utilities: { formatDate: (d, z, f) => fmt[f](d) },
     Session: { getScriptTimeZone: () => 'America/Mexico_City' },
+    // La memoria (fase 2): CacheService de mentira solo si la prueba lo pide
+    CacheService: op.memoria ? { getScriptCache: () => ({
+      getAll: (ks) => ks.reduce((m, k) => { if (k in op.memoria) m[k] = op.memoria[k]; return m; }, {}),
+      putAll: (pares) => Object.assign(op.memoria, pares),
+    }) } : undefined,
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Expediente.gs'), 'utf8') + '\nthis.E = Expediente;', ctx);
   return { E: ctx.E, raices };
@@ -69,9 +74,9 @@ test('vehículo: un NUCO nuevo nace con su estructura y la inspección va a su a
   const { E } = cargar(d);
   const r = E.carpetaDocumento('vehiculo', '0088', 'INSPECCION', NOV);
   assert.equal(d.ruta(r.carpeta.getId()), 'NUCOS VEHICULOS/88/4.-INSPECCIONES/2026/4TO TRIMESTRE');
-  assert.deepEqual(d.hijos(r.activo.getId()).map((x) => x.name).sort(), ['1.-DOCUMENTACIÓN', '2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES']);
+  assert.deepEqual(d.hijos(r.activoId).map((x) => x.name).sort(), ['1.-DOCUMENTACIÓN', '2.-SERVICIOS', '3.-VERIFICACIONES', '4.-INSPECCIONES']);
   // La segunda vez usa la misma carpeta del NUCO (no crea otra al lado)
-  assert.equal(E.carpetaActivo('vehiculo', 88).getId(), r.activo.getId());
+  assert.equal(E.carpetaActivo('vehiculo', 88).getId(), r.activoId);
   assert.equal(d.ruta(E.carpetaDocumento('vehiculo', 88, 'SEGURO').carpeta.getId()), 'NUCOS VEHICULOS/88/1.-DOCUMENTACIÓN/2.-SEGURO');
   assert.throws(() => E.carpetaDocumento('vehiculo', 88, 'OTRA'), /Documento desconocido para el expediente: OTRA/);
   assert.throws(() => E.carpetaActivo('vehiculo', 'X'), /no tiene NUCCO/);
@@ -82,7 +87,7 @@ test('equipo: "599" ya existente se reconoce como 0599; la inspección del día 
   const { E, raices } = cargar(d);
   const vieja = d.nueva('599', raices.tel);
   const a = E.carpetaDelDia('equipo', '0599', 'INSPECCION', NOV);
-  assert.equal(a.activo.getId(), vieja);
+  assert.equal(a.activoId, vieja);
   assert.equal(d.ruta(a.carpeta.getId()), 'NUCOS TELEFONICOS/599/INSPECCIONES/2026/3ER CUATRIMESTRE/NOVIEMBRE/INSP 06 11');
   assert.equal(d.ruta(a.fotos.getId()), d.ruta(a.carpeta.getId()) + '/FOTOS');
   assert.equal(d.ruta(E.carpetaDelDia('equipo', 599, 'INSPECCION', NOV).carpeta.getId()).split('/').pop(), 'INSP 06 11 (2)');
@@ -109,8 +114,9 @@ test('línea: se reconoce por su idLinea, se crea con el número y se renombra s
   const a = E.carpetaDelDia('linea', 'LIN-1', 'RESPONSIVA', NOV, { numero: '442 123 4567' });
   assert.equal(d.ruta(a.carpeta.getId()), 'LINEAS/4421234567/CARTA RESPONSIVA/2026/RESP 06 11');
   assert.equal(E.carpetaActivo('linea', 'LIN-2', { numero: '4421234567' }).getName(), '4421234567 (2)');
-  assert.equal(E.carpetaActivo('linea', 'LIN-1', { numero: '4429999999' }).getId(), a.activo.getId());
-  assert.equal(a.activo.getName(), '4429999999');
+  const renombrada = E.carpetaActivo('linea', 'LIN-1', { numero: '4429999999' });
+  assert.equal(renombrada.getId(), a.activoId);
+  assert.equal(renombrada.getName(), '4429999999');
   assert.throws(() => E.carpetaActivo('linea', 'LIN-1', { numero: '' }), /La línea no tiene número/);
   assert.throws(() => E.carpetaActivo('linea', '', { numero: '1' }), /Falta la línea/);
 });
@@ -166,4 +172,56 @@ test('contrato: nadie más sube por los padres para saber dónde está una carpe
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), /in parents and mimeType = 'application\/vnd\.google-apps\.folder'/, f));
   const { E } = cargar(driveFalso());
   assert.deepEqual([...Object.keys(E.TIPOS)], ['vehiculo', 'equipo', 'linea']);
+});
+
+// ---- Fase 2 (9-nov): memoria de rutas (hacia abajo) y de padres (hacia arriba)
+
+test('memoria: la segunda vez la ruta sale de la memoria (sin bajar por Drive); si su carpeta está en la papelera, se rehace', () => {
+  const d = driveFalso();
+  const memoria = {};
+  const { E } = cargar(d, { memoria });
+  const a = E.carpetaDocumento('equipo', '0599', 'RESPONSIVA', NOV);
+  d.llamadas.porNombre = 0;
+  d.llamadas.list = 0;
+  const b = E.carpetaDocumento('equipo', 599, 'RESPONSIVA', NOV);
+  assert.equal(b.carpeta.getId(), a.carpeta.getId());
+  assert.equal(b.activoNombre, '0599');
+  assert.equal(d.llamadas.porNombre + d.llamadas.list, 0, 'ni una búsqueda en Drive');
+  d.c[a.carpeta.getId()].trashed = true;
+  const c = E.carpetaDocumento('equipo', '0599', 'RESPONSIVA', NOV);
+  assert.notEqual(c.carpeta.getId(), a.carpeta.getId());
+  assert.equal(d.ruta(c.carpeta.getId()), 'NUCOS TELEFONICOS/0599/CARTA RESPONSIVA/2026');
+});
+
+test('memoria: la carpeta del día ya sabe en qué raíz está (sin subir por Drive); una subida anota lo que recorre', () => {
+  const d = driveFalso();
+  const memoria = {};
+  const { E, raices } = cargar(d, { memoria });
+  const dia = E.carpetaDelDia('equipo', '0599', 'INSPECCION', NOV);
+  d.llamadas.getParents = 0;
+  assert.equal(E.raizDe(dia.fotos.getId(), { equipo: raices.tel, linea: raices.lin }), 'equipo');
+  assert.equal(d.llamadas.getParents, 0);
+  // Una carpeta que el motor no creó: la primera subida pregunta y anota; la segunda ya no
+  const suelta = d.nueva('X', d.nueva('Y', raices.app));
+  assert.equal(E.dentroDe(suelta, raices.app), true);
+  const primera = d.llamadas.getParents;
+  assert.ok(primera > 0);
+  assert.equal(E.dentroDe(suelta, raices.app), true);
+  assert.equal(d.llamadas.getParents, primera);
+});
+
+test('memoria: una línea con otro número no usa la ruta guardada (se renombra); apagada no lee ni escribe', () => {
+  const d = driveFalso();
+  const memoria = {};
+  const { E } = cargar(d, { memoria });
+  const a = E.carpetaDocumento('linea', 'LIN-1', 'RESPONSIVA', NOV, null, { numero: '4421234567' });
+  const b = E.carpetaDocumento('linea', 'LIN-1', 'RESPONSIVA', NOV, null, { numero: '4429999999' });
+  assert.equal(b.activoId, a.activoId);
+  assert.equal(b.activoNombre, '4429999999');
+  const antes = Object.keys(memoria).length;
+  E.memoria(false);
+  d.llamadas.porNombre = 0;
+  E.carpetaDocumento('linea', 'LIN-1', 'RESPONSIVA', NOV, null, { numero: '4429999999' });
+  assert.ok(d.llamadas.porNombre > 0, 'apagada baja por Drive');
+  assert.equal(Object.keys(memoria).length, antes, 'apagada no escribe');
 });
