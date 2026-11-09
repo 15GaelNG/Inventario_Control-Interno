@@ -740,6 +740,12 @@ const InspeccionesService = (function () {
   }
 
   function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes, correoInspector) {
+    // Apagado temporal, solo por configuración (sin tocar código): AVISO_INSPECCION_VEHICULAR = 'APAGADA'
+    // como Script Property del proyecto (o aquí, en Entornos.gs, para que aplique a todos los DEV también).
+    const avisoApagado_ = typeof leerConfig_ === 'function' && leerConfig_('AVISO_INSPECCION_VEHICULAR');
+    if (String(avisoApagado_ || '').trim().toUpperCase() === 'APAGADA') {
+      return { enviado: false, motivo: 'Avisos por correo de Inspección Vehicular apagados temporalmente' };
+    }
     if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
     const dest = destinatariosNotificar_(notificar);
     const para = dest.para;
