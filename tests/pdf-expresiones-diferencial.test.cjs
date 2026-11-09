@@ -108,19 +108,46 @@ conMarcadores.filter((p) => !/^Líneas |^Arqueo$/.test(p.nombre)).forEach((p) =>
 });
 
 const L = require('./referencia/lineas-expresiones-antes')(Utilities);
+
+/** Como prepara Líneas sus datos (usuario, 9-nov): una fecha, solo el día; lo demás tal cual */
+function comoLineas(datos) {
+  const salida = {};
+  Object.keys(datos).forEach((k) => { salida[k] = datos[k] instanceof Date ? Utilities.formatDate(datos[k], '', 'dd/MM/yyyy') : datos[k]; });
+  return salida;
+}
+const sinEspacios = (datos) => {
+  const salida = {};
+  Object.keys(datos).forEach((k) => { salida[k] = typeof datos[k] === 'string' ? datos[k].trim() : datos[k]; });
+  return salida;
+};
+const deLineas = (m, datos) => {
+  const antes = /^<<If:/i.test(m) ? L.condicionIf(m, datos) : L.resolverMarcador(m, datos);
+  return antes.error ? { error: true } : { texto: String('valor' in antes ? antes.valor : antes.texto) };
+};
+const delUnico = (m, datos) => {
+  const d = comoLineas(datos);
+  if (/^<<If:/i.test(m)) return intentar(() => Nueva.evaluarCondicion(m.replace(/^<<If:/i, '').replace(/>>$/, ''), d));
+  return intentar(() => Nueva.resolver(m, d));
+};
+
+// Fase 2 (9-nov): el analizador de Plantilla llena las plantillas de Líneas igual que LineasPdf. La única diferencia
+// aceptada es la que decidió el usuario: al comparar se ignoran los espacios de más (LineasPdf no los quitaba). Se
+// comprueba en cada caso: LineasPdf con los valores sin espacios a los lados debe dar lo mismo que el analizador.
 conMarcadores.filter((p) => /^Líneas /.test(p.nombre)).forEach((p) => {
-  test('Líneas · ' + p.nombre + ': el motor único llena cada marcador igual que LineasPdf', { todo: 'fase 2: Plantilla aprende lo de LineasPdf' }, () => {
+  test('Líneas · ' + p.nombre + ': el motor único llena cada marcador igual que LineasPdf (salvo los espacios de más)', () => {
     const marcadores = Object.keys(p.marcadores).filter((m) => !/^<<\s*EndIf\s*>>$/i.test(m));
     const diferencias = [];
+    let porEspacios = 0;
     juegosDeDatos(marcadores).forEach(([juego, datos]) => {
       marcadores.forEach((m) => {
         if (ACEPTADAS[m]) return;
-        const antes = /^<<If:/i.test(m) ? L.condicionIf(m, datos) : L.resolverMarcador(m, datos);
-        const ahora = vehiculos(Nueva, m, datos);
-        const a = antes.error ? { error: true } : { texto: String('valor' in antes ? antes.valor : antes.texto) };
-        if (JSON.stringify(a) !== JSON.stringify(ahora)) diferencias.push(juego + ' · ' + m + ' · LineasPdf ' + JSON.stringify(a) + ' · único ' + JSON.stringify(ahora));
+        const a = deLineas(m, datos);
+        const ahora = delUnico(m, datos);
+        if (JSON.stringify(a) === JSON.stringify(ahora)) return;
+        if (JSON.stringify(deLineas(m, sinEspacios(datos))) === JSON.stringify(ahora)) { porEspacios++; return; }
+        diferencias.push(juego + ' · ' + m + ' · LineasPdf ' + JSON.stringify(a) + ' · único ' + JSON.stringify(ahora));
       });
     });
-    assert.deepEqual(diferencias.slice(0, 20), [], diferencias.length + ' diferencias');
+    assert.deepEqual(diferencias.slice(0, 20), [], diferencias.length + ' diferencias (y ' + porEspacios + ' solo por espacios)');
   });
 });
