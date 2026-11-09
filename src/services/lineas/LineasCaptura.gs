@@ -1113,8 +1113,6 @@ const LineasCaptura = (function () {
     const patron = firmas && firmas.patron ? blobBase64_(firmas.patron, 'patron.png')
       : (rutaPatron ? LineasPatronPng.blob(rutaPatron, esInspeccion ? '#ddebf7' : '#ffffff') || LineasArchivos.blob(rutaPatron) : null);
     crono.marcar('patrón');
-    // Con responsables adicionales, la firma del principal va más chica: los demás firman el PDF impreso en la misma línea
-    const nombreFirmaResponsable = ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firma-principal.png' : 'firma-responsable.png';
     const destino = PDF[tipo];
     const deFiles = esInspeccion ? '' : pasarALineas_(fila, ev, id);
     const d = destinoPdf_(tipo, fila, ev, id);
@@ -1127,9 +1125,9 @@ const LineasCaptura = (function () {
     // «PRUEBA RESPONSABLE 05-nov») y en Inspección (usuario, 6-nov: "igual firman las mismas personas").
     const firmasAdicionales = ORDEN_ADICIONALES.reduce((o, n, i) => Object.assign(o, { ['FIRMA RESPONSABLE ' + (i + 2)]: imagen(n.toLowerCase(), 'FIRMA ' + n + ' RESPONSABLE', 'firma-' + n.toLowerCase() + '.png') }), {});
     const imagenes = esInspeccion
-      ? Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
+      ? Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'),
           'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }, firmasAdicionales)
-      : Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
+      : Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', 'firma-responsable.png'),
         'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron }, firmasAdicionales);
     // La casilla del principal se llama distinto según la plantilla: <<FIRMA RESPONSABLE>> en la Responsiva y en las
     // inspecciones de antes, <<FIRMA RESPONSABLE 1>> en la Inspección del 6-nov (usuario, 9-nov: «la firma del

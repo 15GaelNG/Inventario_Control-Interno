@@ -121,7 +121,7 @@ test('guardarResponsiva sin nada diferido: la firma de un responsable adicional 
     { responsable: datos.firmaResponsableBase64, ci: datos.firmaCiBase64, patron: null });
   assert.equal(pdf.faltanFirmas, undefined);
   const img = hechos.generados[0].imagenes;
-  assert.equal(img['FIRMA RESPONSABLE'].nombre, 'firma-principal.png');
+  assert.equal(img['FIRMA RESPONSABLE'].nombre, 'firma-responsable.png'); // 9-nov: ya no va más chica con adicionales
   assert.ok(img['FIRMA RESPONSABLE 2'], 'la firma de Ayrton (SEGUNDO) no debe salir en blanco');
   assert.equal(img['FIRMA RESPONSABLE 2'].nombre, 'firma-segundo.png');
   assert.equal(Buffer.from(img['FIRMA RESPONSABLE 2'].bytes).toString('utf8'), 'firma-ayrton');

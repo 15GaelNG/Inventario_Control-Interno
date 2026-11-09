@@ -103,7 +103,7 @@ test('la pantalla: «Agregar responsable», «Quitar» (los de abajo suben) y la
   assert.match(read('src/html/lineas-estilos.html'), /\.ln-af-campo\[data-af-columna="RESPONSABLES ADICIONALES"\]/);
 });
 
-test('el PDF: nombres y números de empleado con « / », la firma del principal más chica y sin la palabra PATRON', () => {
+test('el PDF: nombres y números de empleado con « / », todas las firmas de 90 × 40 y sin la palabra PATRON', () => {
   const cap = read('src/services/lineas/LineasCaptura.gs');
   const reg = cap.slice(cap.indexOf('function registroPlantilla_('), cap.indexOf('function ligarPdf_('));
   // registroPlantilla_ usa ORDEN_ADICIONALES del archivo
@@ -134,15 +134,17 @@ test('el PDF: nombres y números de empleado con « / », la firma del principal
   assert.equal(conOrden({ CONTRASEÑA: '', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], 'PATRON');
   assert.equal(conOrden({ CONTRASEÑA: '', 'PIN EQUIPO': '1234' })['PIN EQUIPO'], '1234');
   assert.equal(conOrden({ PATRON: '1-5-9', 'PIN EQUIPO': 'PATRON' })['PIN EQUIPO'], 'PATRON', 'la inspección no cambia');
-  // Solo firma el principal; con adicionales su firma va más chica para que los demás firmen el impreso (usuario, 6-oct)
   const lineas = LINEAS;
   assert.doesNotMatch(lineas, /function unirFirmas|function firmasDeResponsables|FIRMAS_RESPONSABLES/);
-  assert.match(cap, /'firma-principal\.png' : 'firma-responsable\.png'/);
-  assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable\),\s*'FIRMA INSPECTOR'/);
+  // Usuario, 9-nov: todas las firmas del mismo tamaño, 90 × 40 (el punto medio de 115 × 50 y 65 × 30). La del principal ya
+  // no va más chica con adicionales (eso era para que firmaran el impreso a su lado; desde el 6-nov cada uno tiene casilla)
+  assert.doesNotMatch(cap, /firma-principal\.png|nombreFirmaResponsable/);
+  assert.match(cap, /imagen\('responsable', 'FIRMA RESPONSABLE', 'firma-responsable\.png'\),\s*'FIRMA INSPECTOR'/);
   const pdf = read('src/services/lineas/LineasPdf.gs');
-  assert.match(pdf, /const chica = \/\^firma-principal\/\.test/);
-  // 6-nov: firmas más chicas (115×50 / 65×30) para que caben en las casillas angostas de la plantilla nueva
-  assert.match(pdf, /Math\.min\(1, \(chica \? 65 : 115\) \/ ancho, \(chica \? 30 : 50\) \/ alto\)/);
+  assert.doesNotMatch(pdf, /const chica/);
+  assert.match(pdf, /const FIRMA_ANCHO = 90;/);
+  assert.match(pdf, /const FIRMA_ALTO = 40;/);
+  assert.match(pdf, /Math\.min\(1, FIRMA_ANCHO \/ ancho, FIRMA_ALTO \/ alto\)/);
 });
 
 test('«quien lo usa» se quitó por completo: ni se lee ni se escribe (sus columnas se borraron: DEV 6-oct, producción 7-oct)', () => {

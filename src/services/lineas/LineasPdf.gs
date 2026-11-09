@@ -27,6 +27,10 @@ const LineasPdf = (function () {
    * 22-oct» cambia los renglones Cubo, Cable, Funda y Mica (SI/NO/N/A) por «Accesorios: <<ACCESORIOS>>». La del 19-oct
    * queda para volver a hacer el PDF de una inspección de antes (plantillaInspeccion).
    */
+  /** Lo más que mide una firma en el PDF (todas: responsables, Flotillas e inspector), sin deformarla. */
+  const FIRMA_ANCHO = 90;
+  const FIRMA_ALTO = 40;
+
   const PLANTILLAS = {
     // Desde el 6-nov (usuario: "igual firman las mismas personas" que la Responsiva): cada
     // responsable adicional ya tiene su propia casilla de firma y su nombre en su propio renglón,
@@ -477,11 +481,10 @@ const LineasPdf = (function () {
               img.setHeight(Math.max(1, Math.round(alto * escala)));
               parrafo.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
             } else {
-              // Firmas: llegan recortadas al trazo (componente Firma); caben en 115 × 50 sin deformarse (6-nov: más chicas
-              // que antes, para las casillas angostas de la plantilla con varios responsables). Con responsables
-              // adicionales, la del principal cabe en 65 × 30 y deja lugar para que los demás firmen el impreso (6-oct)
-              const chica = /^firma-principal/.test(String(blob.getName ? blob.getName() : ''));
-              const escala = Math.min(1, (chica ? 65 : 115) / ancho, (chica ? 30 : 50) / alto);
+              // Firmas: llegan recortadas al trazo (componente Firma); todas caben en 90 × 40 sin deformarse (usuario,
+              // 9-nov: el punto medio entre 115 × 50 y 65 × 30). Antes la del principal iba más chica cuando había
+              // adicionales, para que firmaran el impreso a su lado (6-oct); desde el 6-nov cada uno tiene su casilla.
+              const escala = Math.min(1, FIRMA_ANCHO / ancho, FIRMA_ALTO / alto);
               img.setWidth(Math.max(1, Math.round(ancho * escala)));
               img.setHeight(Math.max(1, Math.round(alto * escala)));
             }
