@@ -1528,6 +1528,9 @@ const LineasRepo = (function () {
     ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6', 'indice_colaboradores_v7',
       'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8', 'catalogos_telefonia_v9',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
+    // El mapa de carpetas de NUCOS y LINEAS vive en Expediente.gs
+    Expediente.olvidarActivos('equipo');
+    Expediente.olvidarActivos('linea');
     equivalencias_ = null;
   }
 

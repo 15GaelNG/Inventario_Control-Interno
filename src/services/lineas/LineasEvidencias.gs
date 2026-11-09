@@ -11,12 +11,8 @@
 const LineasEvidencias = (function () {
   const CARPETA_FOTOS = 'INSPECCIONES LINEAS_Images';
 
-  /** Crea una carpeta con nombre único (agrega " (2)", " (3)"… si ya existe). */
-  function carpetaUnica_(padre, nombre) {
-    let candidato = nombre;
-    for (let n = 2; padre.getFoldersByName(candidato).hasNext(); n++) candidato = nombre + ' (' + n + ')';
-    return DriveUtils.crearCarpeta(padre, candidato);
-  }
+  /** Crea una carpeta con nombre único (agrega " (2)", " (3)"… si ya existe): la de Expediente, una sola copia. */
+  const carpetaUnica_ = (padre, nombre) => Expediente.carpetaUnica(padre, nombre);
 
   const claveSubida_ = (correo, id) => 'ln_subida_' + correo + '_' + id;
   const claveBorrador_ = (correo, id) => 'ln_borrador_' + correo + '_' + id;
