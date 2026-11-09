@@ -135,13 +135,14 @@
         return renglones.join('\n');
       }
 
+      /** Los Documentos de la ficha. Regresa la promesa (el botón "Actualizar" espera a que termine). */
       function cargarEvidencias(id) {
         if (!veDocumentos()) return;
         const pila0 = pila.length;
         // La ficha de la línea pide las suyas, sin las de su equipo y con las que firmó dentro de un equipo (pendiente 2.45)
         const arriba = pila[pila.length - 1];
         const vista = arriba && arriba.tipo === 'linea' && arriba.id === id ? 'linea' : '';
-        llamar('apiLineasEvidencias', id, vista).then((ev) => {
+        return llamar('apiLineasEvidencias', id, vista).then((ev) => {
           const cont = $('#ln-evidencias', raiz);
           if (!vigente() || !cont || pila.length !== pila0) return;
           pintarDocumentos(cont, ev.inspecciones || [], ev.responsivas || [], id, vista);
@@ -441,7 +442,9 @@
         const ultimaResp = responsivas[0];
         cont.innerHTML = '<div class="stat-row ln-docs-kpis"></div>' +
           '<div class="card ln-card ln-historial">' +
-          '<div class="ln-historial-cabecera"><h3>' + icono('folder-check') + ' Inspecciones y responsivas (' + miles(filas.length) + ')</h3></div>' +
+          '<div class="ln-historial-cabecera"><h3>' + icono('folder-check') + ' Inspecciones y responsivas (' + miles(filas.length) + ')</h3>' +
+          // Volver a pedir solo esta tabla, sin salir de la pestaña (usuario, 9-nov: ver si ya firmaron por su liga)
+          '<button type="button" class="secondary ln-btn-chico ln-btn-icono" data-docs-actualizar title="Volver a cargar los documentos">' + icono('refresh-cw') + ' Actualizar</button></div>' +
           (filas.length ? '<div class="ln-docs-tabla"></div>' : '<p class="empty-state">Este registro no tiene inspecciones ni responsivas.</p>') + '</div>';
         const conFecha = (d) => (d ? fecha(d.fecha) || 'Sin fecha' : 'Ninguna');
         const marcar = tilesKpi($('.ln-docs-kpis', cont), [
@@ -452,6 +455,17 @@
             filtros: { documento: { valores: ['Responsiva'] } }, calcular: (f) => miles(f.filter((d) => d.documento === 'Responsiva').length) },
           { icono: 'calendar-check', valor: conFecha(ultimaResp), etiqueta: 'Última responsiva', filtros: false },
         ], () => tablaDocumentos);
+        const actualizar = cont.querySelector('[data-docs-actualizar]');
+        actualizar.addEventListener('click', () => {
+          actualizar.disabled = true;
+          actualizar.innerHTML = '<span class="ln-spinner"></span> Actualizando';
+          Promise.resolve(cargarEvidencias(id)).finally(() => {
+            // Si se volvió a pintar, este botón ya no está; si falló, regresa a como estaba
+            if (!document.body.contains(actualizar)) return;
+            actualizar.disabled = false;
+            actualizar.innerHTML = icono('refresh-cw') + ' Actualizar';
+          });
+        });
         if (!filas.length) return;
         soltarDocumentos();
         const operar = puedeOperar();
