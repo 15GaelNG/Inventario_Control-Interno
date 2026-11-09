@@ -58,7 +58,7 @@ const PruebasDev = (function () {
 /** Todas las pruebas del editor, una tras otra */
 function pruebasTodas() {
   soloEditor_();
-  return [pruebaExpediente].map((f) => f()).join('\n\n');
+  return [pruebaExpediente, pruebaSesiones].map((f) => f()).join('\n\n');
 }
 
 /**
@@ -130,5 +130,32 @@ function pruebaExpediente() {
     }).join(', ') || 'nada (ya existían)');
     ExpedienteNuco.olvidar(NUCO);
     LineasArchivos.olvidarNuco(NUCO);
+  });
+}
+
+/**
+ * La copia de respaldo de las sesiones (Auth.gs, 9-nov): crea una sesión de prueba, le borra su entrada de la caché (lo
+ * que hace Google cuando la pierde) y revisa que se rescate y que cerrar sesión la quite. No toca hojas ni a ninguna persona.
+ */
+function pruebaSesiones() {
+  soloEditor_();
+  return PruebasDev.correr('Sesiones (copia de respaldo)', (paso) => {
+    const cache = CacheService.getScriptCache();
+    let s = null;
+    paso('una sesión nueva sirve', () => {
+      s = Auth.construirSesion_({ CORREO: 'prueba.sesion@ciudadmaderas.com', NOMBRE: 'PRUEBA SESION', ROL: 'USER' });
+      return Auth.validarSesion(s.token).correo;
+    }, /^prueba.sesion@/);
+    if (!s) return;
+    paso('la caché la pierde: se rescata de la copia', () => {
+      cache.remove('sesion_' + s.token);
+      return Auth.validarSesion(s.token).correo;
+    }, /^prueba.sesion@/);
+    paso('y volvió a la caché', () => (cache.get('sesion_' + s.token) ? 'sí' : 'no'), /^sí$/);
+    paso('cerrar sesión también borra la copia', () => {
+      Auth.logout(s.token);
+      try { Auth.validarSesion(s.token); return 'siguió sirviendo'; } catch (e) { return e.message; }
+    }, /Sesión expirada/);
+    paso('copias y espacio', () => JSON.stringify(Auth.estadoCopias()));
   });
 }
