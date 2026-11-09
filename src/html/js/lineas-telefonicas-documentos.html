@@ -36,11 +36,14 @@
         return '<div class="ln-ligas-celda">' + pendientes.map((e) => {
           const quien = e.nombre || ETIQUETA_ROL_FIRMA[e.rol] || e.rol;
           const de = (ETIQUETA_ROL_FIRMA[e.rol] || e.rol) + (e.nombre ? ': ' + e.nombre : '');
-          return e.vencida
+          // Junto a cada liga, "Firmar aquí" (usuario, 9-nov): la persona firma presencial en este equipo
+          const firmar = '<button type="button" class="ln-btn-chico ln-liga-celda ln-liga-celda-firmar" data-doc="' + esc(d._clave) + '" data-doc-firmar="' +
+            esc(e.rol) + '" title="' + esc('Firmar aquí (' + de + ')') + '" aria-label="' + esc('Firmar aquí (' + de + ')') + '">' + icono('pen-line') + '</button>';
+          return '<span class="ln-liga-celda-par">' + (e.vencida
             ? '<button type="button" class="ln-btn-chico ln-liga-celda vencida" data-doc="' + esc(d._clave) + '" data-doc-liga-nueva="' + esc(e.rol) + '" title="' +
               esc('La liga venció (' + de + '). Generar otra') + '">' + icono('refresh-ccw') + '<span>Nueva liga · ' + esc(quien) + '</span></button>'
             : '<button type="button" class="ln-btn-chico ln-liga-celda" data-doc="' + esc(d._clave) + '" data-doc-liga-copiar="' + esc(e.rol) + '" title="' +
-              esc('Copiar la liga (' + de + ')') + '">' + icono('copy') + '<span>' + esc(quien) + '</span></button>';
+              esc('Copiar la liga (' + de + ')') + '">' + icono('copy') + '<span>' + esc(quien) + '</span></button>') + firmar + '</span>';
         }).join('') + '</div>';
       }
 
@@ -48,12 +51,17 @@
       function activarLigasCelda(contenedor, porClave, tabla) {
         // En captura: antes de que la tabla tome el clic como "seleccionar la fila"
         contenedor.addEventListener('click', (ev) => {
-          const boton = ev.target.closest('[data-doc-liga-copiar], [data-doc-liga-nueva]');
+          const boton = ev.target.closest('[data-doc-liga-copiar], [data-doc-liga-nueva], [data-doc-firmar]');
           if (!boton) return;
           ev.stopPropagation();
           ev.preventDefault();
           const d = porClave[boton.dataset.doc];
           if (!d) return;
+          if (boton.dataset.docFirmar) {
+            const e = (d.ligas || []).filter((x) => x.rol === boton.dataset.docFirmar)[0];
+            if (e) firmarAqui(d.tipoPdf, d.id, e);
+            return;
+          }
           if (boton.dataset.docLigaCopiar) {
             const e = (d.ligas || []).filter((x) => x.rol === boton.dataset.docLigaCopiar)[0];
             if (e && e.liga) copiarConAviso(boton, e.liga, 'Liga copiada' + (e.nombre ? ' (' + e.nombre + ')' : ''));
@@ -292,6 +300,7 @@
                 '<button type="button" class="secondary" data-ver-liga-copiar="' + esc(e.rol) + '">' + icono('copy') + ' Copiar</button>'
               : '') +
             '<button type="button" class="' + (vencida ? 'primary' : 'secondary') + '" data-ver-liga-regenerar="' + esc(e.rol) + '">' + icono('refresh-ccw') + (vencida ? ' Generar liga nueva' : ' Generar liga de nuevo') + '</button>' +
+            (pendiente ? '<button type="button" class="secondary" data-ver-liga-firmar="' + esc(e.rol) + '" data-nombre="' + esc(e.nombre || '') + '">' + icono('pen-line') + ' Firmar aquí</button>' : '') +
             '</div></div>';
         }).join('');
       }
@@ -307,6 +316,9 @@
             const input = cont.querySelector('input[data-liga="' + CSS.escape(boton.dataset.verLigaCopiar) + '"]');
             if (input) copiarConAviso(boton, input.value, 'Liga copiada');
           });
+        });
+        cont.querySelectorAll('[data-ver-liga-firmar]').forEach((boton) => {
+          boton.addEventListener('click', () => firmarAqui(tipoPdf, documentoId, { rol: boton.dataset.verLigaFirmar, nombre: boton.dataset.nombre }));
         });
         cont.querySelectorAll('[data-ver-liga-regenerar]').forEach((boton) => {
           boton.addEventListener('click', () => {
@@ -331,6 +343,64 @@
             });
           });
         });
+      }
+
+      /**
+       * "Firmar aquí" (usuario, 9-nov: poder firmar presencial lo que quedó a distancia): quien falta firma en este
+       * equipo, sin abrir su liga, aunque ya haya vencido. Su liga deja de servir; si era la última firma, el servidor
+       * genera el PDF (LineasFirmaRemota.firmarPresencial). e = { rol, nombre }.
+       */
+      function firmarAqui(tipoPdf, documentoId, e) {
+        const sesion = T.captura = { guardada: true, firmas: {}, carpetaId: '' };
+        const rol = ETIQUETA_ROL_FIRMA[e.rol] || e.rol;
+        mostrarModalCaptura();
+        ocultarEspera();
+        $('#ln-captura-titulo', raiz).textContent = 'Firmar aquí';
+        $('#ln-captura-subtitulo', raiz).textContent = [tipoPdf === 'INSPECCION' ? 'Inspección' : 'Responsiva', rol, e.nombre].filter(Boolean).join(' · ');
+        $('#ln-captura-cuerpo', raiz).innerHTML =
+          '<div class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Firma presencial: al guardarla, su liga deja de servir. Si es la última firma que falta, se genera el PDF.</div>' +
+          '<div class="ln-firmas">' + htmlFirma('responsable', 'pres-firma', 'Firma de ' + (e.nombre || rol)) + '</div>' +
+          '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' +
+          '<div class="ln-captura-acciones"><button type="button" class="secondary" data-cerrar-modal>Cancelar</button>' +
+          '<button type="button" class="primary ln-btn-icono" id="cap-guardar">' + icono('circle-check') + ' Guardar firma</button></div>';
+        const firma = crearFirma(document.getElementById('pres-firma'), e.nombre);
+        $('#cap-guardar', raiz).addEventListener('click', () => {
+          if (!firma || firma.estaVacia()) { mostrarErrorCaptura('Falta la firma.'); return; }
+          $('#cap-error', raiz).hidden = true;
+          const modal = $('#ln-modal-captura', raiz);
+          sesion.guardando = true;
+          modal.setAttribute('aria-busy', 'true');
+          modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = true; });
+          mostrarEspera('Guardando la firma');
+          firma.base64('#ffffff').then((b64) => llamar('apiLineasFirmaRemotaFirmarAqui', tipoPdf, documentoId, e.rol, b64)).then((r) => {
+            if (!vigente() || T.captura !== sesion) return;
+            if (r.pendiente) {
+              mostrarEspera('Firma guardada', { tono: 'listo', icono: 'circle-check',
+                texto: r.aviso || 'Falta que firmen los demás; el PDF se genera cuando todos firmen.',
+                acciones: '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+            } else {
+              mostrarEspera('Documento firmado', { tono: 'listo', icono: 'circle-check', texto: 'Ya firmaron todos: el PDF quedó generado.',
+                acciones: (r.pdfId ? enlaceDrive(r.pdfId, 'Ver PDF', true) : '') + '<button type="button" class="secondary" data-cerrar-modal>Cerrar</button>' });
+            }
+            refrescarTrasFirma(documentoId);
+          }).catch((err) => {
+            if (!vigente() || T.captura !== sesion) return;
+            ocultarEspera();
+            mostrarErrorCaptura(mensajeError(err));
+          }).finally(() => {
+            sesion.guardando = false;
+            modal.removeAttribute('aria-busy');
+            modal.querySelectorAll('[data-cerrar-modal]').forEach((b) => { b.disabled = false; });
+          });
+        });
+      }
+
+      /** Después de "Firmar aquí": la página del documento (si es la que está abierta) o los Documentos de la ficha. */
+      function refrescarTrasFirma(documentoId) {
+        const arriba = pila[pila.length - 1];
+        if (!arriba) return;
+        if (arriba.id === documentoId && ETIQUETA_DOCUMENTO[arriba.tipo]) { abrir(arriba.tipo, arriba.id, true, true); return; }
+        if (arriba.tipo === 'linea' || arriba.tipo === 'equipo') { cargarEvidencias(arriba.id); cargarHistorial(arriba.id); }
       }
 
       function pintarLigasFirma(documentoId, tipoPdf, estados) {

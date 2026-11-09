@@ -356,3 +356,38 @@ test('guardarInspeccion: mismo mecanismo de diferir que la Responsiva (usuario, 
   // El camino de siempre (nada diferido) sigue exactamente igual
   assert.match(fn, /firmasCache_\('INSPECCION', id, \{ inspector: datos\.firmaInspectorBase64, responsable: datos\.firmaResponsableBase64 \|\| null, patron: datos\.patronBase64 \|\| null,/);
 });
+
+test('firmarPresencial ("Firmar aquí", 9-nov): firma sin la liga, aunque haya vencido, y con la última genera el PDF', () => {
+  const { F, DOC, llamadasGenerarPdf, filas } = entorno([]);
+  const trazo = (texto) => Buffer.from(texto).toString('base64');
+  const cambiosIniciales = F.generarPendientes_(DOC, ['PRINCIPAL', 'SEGUNDO'], { CI: trazo('trazo-ci') });
+  // La liga del principal ya venció: presencial sí puede firmar (la persona está ahí)
+  cambiosIniciales['TOKEN FIRMA EXPIRA'] = new Date(Date.now() - 1000);
+  filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, cambiosIniciales));
+
+  const r1 = F.firmarPresencial(DOC, 'sesion', 'RES-1', 'PRINCIPAL', trazo('trazo-principal'));
+  assert.equal(r1.pendiente, true);
+  const fila = filas.find((f) => f.ID === 'RES-1');
+  assert.equal(fila['TOKEN FIRMA'], '', 'su liga deja de servir');
+  assert.equal(fila['FIRMADO POR'], 'PRESENCIAL: OPERADOR');
+  assert.equal(llamadasGenerarPdf.length, 0);
+  // Ya firmó: ni otra vez presencial ni por la liga vieja
+  assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-1', 'PRINCIPAL', trazo('otra')), /ya firmó/);
+  assert.throws(() => F.completarFirma(DOC, cambiosIniciales['TOKEN FIRMA'], trazo('otra')), /no es válida/);
+
+  // La última (SEGUNDO) cierra el documento igual que por liga
+  const r2 = F.firmarPresencial(DOC, 'sesion', 'RES-1', 'SEGUNDO', { base64: trazo('trazo-segundo'), mimeType: 'image/png' });
+  assert.equal(r2.pendiente, false);
+  assert.equal(llamadasGenerarPdf.length, 1);
+  assert.equal(Buffer.from(llamadasGenerarPdf[0].firmasNuevas.responsable, 'base64').toString(), 'trazo-principal');
+  assert.equal(Buffer.from(llamadasGenerarPdf[0].firmasNuevas.segundo, 'base64').toString(), 'trazo-segundo');
+  assert.equal(fila['ESTADO FIRMA'], 'FIRMADO');
+  assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-1', 'SEGUNDO', trazo('x')), /ya quedó firmado/);
+});
+
+test('firmarPresencial: rol inválido, sin firma o documento inexistente truenan sin tocar nada', () => {
+  const { F, DOC } = entorno([{ ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-a' }]);
+  assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-1', 'CI', 'x'), /Rol inválido/);
+  assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-1', 'PRINCIPAL', ''), /Falta la firma/);
+  assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-9', 'PRINCIPAL', 'eA=='), /No se encontró/);
+});

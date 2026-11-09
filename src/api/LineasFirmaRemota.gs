@@ -40,3 +40,7 @@ function apiLineasFirmaRemotaRegenerarLiga(token, tipoDoc, documentoId, rol) {
 function apiLineasFirmaRemotaEstado(token, tipoDoc, documentoId) {
   return LineasFirmaRemota.estadoLigas(docDeTipoPdf_(tipoDoc), token, documentoId);
 }
+/** "Firmar aquí": quien falta firma presencial en el equipo de quien opera (con sesión; la liga puede estar vencida). */
+function apiLineasFirmaRemotaFirmarAqui(token, tipoDoc, documentoId, rol, imagen) {
+  return LineasFirmaRemota.firmarPresencial(docDeTipoPdf_(tipoDoc), token, documentoId, rol, imagen);
+}

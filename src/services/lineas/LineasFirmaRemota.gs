@@ -274,38 +274,67 @@ const LineasFirmaRemota = (function () {
       if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
         throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
       }
-
-      fila[colTemp_(doc, rol)] = guardarFirmaTemp_(doc, rol, imagenBase64);
-      fila[colToken_(rol)] = '';
-      fila[colTokenExpira_(rol)] = '';
-      fila[colFirmadoPor_(rol)] = Session.getActiveUser().getEmail() || '';
-      const cambiosDeEsteRol = { [colTemp_(doc, rol)]: fila[colTemp_(doc, rol)], [colToken_(rol)]: '', [colTokenExpira_(rol)]: '', [colFirmadoPor_(rol)]: fila[colFirmadoPor_(rol)] };
-
-      if (!listoParaFinalizar_(fila)) {
-        LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambiosDeEsteRol);
-        return { ID: fila['ID'], pendiente: true, aviso: 'Tu firma quedó registrada. Falta que alguien más firme para generar el documento.' };
-      }
-
-      // Antes de cerrar el documento como FIRMADO: cada …TEMP que sí tiene algo guardado debe poder
-      // leerse (si el archivo de Drive ya no existe, NO se cierra -- se avisa y se queda PENDIENTE
-      // para reintentar; el mismo resguardo del bug real que corrigió Vehicular el 14-oct).
-      const imagenesPdf = imagenesDesdeTemp_(doc, fila);
-      const faltantes = TODOS_LOS_ROLES.filter((r) => fila[colTemp_(doc, r)] && !imagenesPdf[claveGenerarPdf_(doc, r)]);
-      LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambiosDeEsteRol);
-      if (faltantes.length) {
-        return { ID: fila['ID'], pendiente: true,
-          aviso: 'Tu firma quedó registrada, pero no se pudo leer otra firma ya guardada. El documento sigue pendiente -- avisa a soporte.' };
-      }
-
-      const resultado = LineasCaptura.generarPdf(doc.tipoPdf, fila['ID'], false, { nombre: 'Firma a distancia', correo: '' }, imagenesPdf);
-      if (resultado && resultado.avisos && resultado.avisos.length) {
-        console.error('completarFirma ' + fila['ID'] + ': ' + resultado.avisos.join(' | '));
-      }
-      TODOS_LOS_ROLES.forEach((r) => borrarFirmaTempSiHay_(fila[colTemp_(doc, r)]));
-      LineasDatos.actualizarFila(doc.tabla(), fila._fila, Object.assign({ 'ESTADO FIRMA': 'FIRMADO' },
-        TODOS_LOS_ROLES.reduce((o, r) => Object.assign(o, { [colTemp_(doc, r)]: '' }), {})));
-      return { ID: fila['ID'], pendiente: false, PDF: resultado && resultado.url ? resultado.url : null };
+      return registrarFirma_(doc, fila, rol, imagenBase64, Session.getActiveUser().getEmail() || '');
     });
+  }
+
+  /**
+   * "Firmar aquí" (usuario, 9-nov: que quien falta pueda firmar presencial, en el equipo de quien opera, sin abrir su
+   * liga): la misma firma que llega por la liga, pero con sesión y aunque la liga ya haya vencido (la persona está
+   * ahí). FIRMADO POR guarda "PRESENCIAL: " + quien la recibió. Si era la última que faltaba, se genera el PDF.
+   */
+  function firmarPresencial(doc, token, documentoId, rol, imagen) {
+    const sesion = Permisos.puedeEditar(token, 'lineas-telefonicas');
+    if (ROLES_DIFERIBLES.indexOf(rol) < 0) throw new Error('Rol inválido.');
+    const imagenBase64 = base64DeImagen_(imagen);
+    if (!imagenBase64) throw new Error('Falta la firma.');
+    return LineasDatos.conCandado(() => {
+      const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
+      if (!filas.length) throw new Error('No se encontró el documento.');
+      const fila = LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
+      if (String(fila['ESTADO FIRMA'] || '') !== 'PENDIENTE') throw new Error('Este documento ya quedó firmado.');
+      if (!fila[colToken_(rol)]) throw new Error('Esa persona ya firmó.');
+      const quien = (sesion && (sesion.correo || sesion.nombre)) || '';
+      return registrarFirma_(doc, fila, rol, imagenBase64, 'PRESENCIAL' + (quien ? ': ' + quien : ''));
+    });
+  }
+
+  /**
+   * Guarda la firma de `rol` en su TEMP y le quita la liga; si ya no falta nadie, genera el PDF y cierra el documento
+   * como FIRMADO. Dentro del candado; lo comparten la liga (completarFirma) y "Firmar aquí" (firmarPresencial).
+   */
+  function registrarFirma_(doc, fila, rol, imagenBase64, firmadoPor) {
+    fila[colTemp_(doc, rol)] = guardarFirmaTemp_(doc, rol, imagenBase64);
+    fila[colToken_(rol)] = '';
+    fila[colTokenExpira_(rol)] = '';
+    fila[colFirmadoPor_(rol)] = firmadoPor;
+    const cambiosDeEsteRol = { [colTemp_(doc, rol)]: fila[colTemp_(doc, rol)], [colToken_(rol)]: '', [colTokenExpira_(rol)]: '', [colFirmadoPor_(rol)]: fila[colFirmadoPor_(rol)] };
+
+    if (!listoParaFinalizar_(fila)) {
+      LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambiosDeEsteRol);
+      return { ID: fila['ID'], pendiente: true, aviso: 'Tu firma quedó registrada. Falta que alguien más firme para generar el documento.' };
+    }
+
+    // Antes de cerrar el documento como FIRMADO: cada …TEMP que sí tiene algo guardado debe poder
+    // leerse (si el archivo de Drive ya no existe, NO se cierra -- se avisa y se queda PENDIENTE
+    // para reintentar; el mismo resguardo del bug real que corrigió Vehicular el 14-oct).
+    const imagenesPdf = imagenesDesdeTemp_(doc, fila);
+    const faltantes = TODOS_LOS_ROLES.filter((r) => fila[colTemp_(doc, r)] && !imagenesPdf[claveGenerarPdf_(doc, r)]);
+    LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambiosDeEsteRol);
+    if (faltantes.length) {
+      return { ID: fila['ID'], pendiente: true,
+        aviso: 'Tu firma quedó registrada, pero no se pudo leer otra firma ya guardada. El documento sigue pendiente -- avisa a soporte.' };
+    }
+
+    const resultado = LineasCaptura.generarPdf(doc.tipoPdf, fila['ID'], false, { nombre: 'Firma a distancia', correo: '' }, imagenesPdf);
+    if (resultado && resultado.avisos && resultado.avisos.length) {
+      console.error('completarFirma ' + fila['ID'] + ': ' + resultado.avisos.join(' | '));
+    }
+    TODOS_LOS_ROLES.forEach((r) => borrarFirmaTempSiHay_(fila[colTemp_(doc, r)]));
+    LineasDatos.actualizarFila(doc.tabla(), fila._fila, Object.assign({ 'ESTADO FIRMA': 'FIRMADO' },
+      TODOS_LOS_ROLES.reduce((o, r) => Object.assign(o, { [colTemp_(doc, r)]: '' }), {})));
+    return { ID: fila['ID'], pendiente: false, PDF: resultado && resultado.url ? resultado.url : null,
+      pdfId: resultado && resultado.id ? resultado.id : null };
   }
 
   /**
@@ -401,7 +430,7 @@ const LineasFirmaRemota = (function () {
 
   return {
     ROLES_DIFERIBLES: ROLES_DIFERIBLES, DOCUMENTOS: DOCUMENTOS, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
-    obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma,
+    obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma, firmarPresencial: firmarPresencial,
     copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,

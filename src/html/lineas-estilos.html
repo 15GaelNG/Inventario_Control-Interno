@@ -746,6 +746,8 @@
   .ln-ligas-celda { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 0; }
   .ln-ligas-celda .ln-liga-celda { min-height: 26px; padding: 3px 8px; max-width: 100%; font-size: var(--texto-xs); }
   .ln-ligas-celda .ln-liga-celda span { overflow: hidden; text-overflow: ellipsis; }
+  .ln-liga-celda-par { display: inline-flex; gap: 2px; max-width: 100%; min-width: 0; }
+  .ln-ligas-celda .ln-liga-celda.ln-liga-celda-firmar { padding: 3px 6px; flex-shrink: 0; }
   .ln-ligas-celda .ln-liga-celda.vencida { background: var(--ln-rojo-bg); color: var(--ln-rojo-tx); border-color: transparent; }
   /* En el celular la liga va sola en su renglón y los botones debajo (Copiar y Generar de nuevo no caben al lado) */
   @media (max-width: 640px) {
