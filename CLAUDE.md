@@ -247,8 +247,9 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   y dice en qué raíz está una carpeta (`raizDe`, `dentroDe`). `ExpedienteNuco` y `LineasArchivos` son sus fachadas (no
   cambiaron de firma). Las carpetas en Drive no cambian: un activo nuevo (o una estructura nueva) es una entrada en
   `TIPOS`, no otro buscador. Contrato en `tests/expediente.test.cjs`: nadie más sube por los padres ni arma su mapa.
-  **Memoria** (9-nov, fase 2): la ruta completa → su ID y el padre de cada carpeta quedan 6 h en CacheService; la segunda
-  vez no se baja ni se sube por Drive (solo se comprueba la última carpeta). Medir: `pruebaExpediente()` en
+  **Memoria** (9-nov, fase 2; **APAGADA por omisión** desde ese día: llenó el tope de 1,000 elementos de CacheService y se
+  perdieron sesiones): la ruta completa → su ID y el padre de cada carpeta, 6 h en CacheService; la segunda vez no se baja ni
+  se sube por Drive. Medir: `pruebaExpediente()` en
   `src/pruebas/PruebasDev.gs` (el editor de un DEV; corre la captura sin y con memoria).
 
 - **Copiar un dato de una hoja a otra (y mantenerlo al día) → Datos conectados**, no código a mano en el servicio: el

@@ -64,6 +64,7 @@ function cargar(drive, opciones) {
     }) } : undefined,
   });
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Expediente.gs'), 'utf8') + '\nthis.E = Expediente;', ctx);
+  if (op.memoria && !op.sinEncender) ctx.E.memoria(true);   // apagada por omisión desde el 9-nov
   return { E: ctx.E, raices };
 }
 
@@ -224,4 +225,15 @@ test('memoria: una línea con otro número no usa la ruta guardada (se renombra)
   E.carpetaDocumento('linea', 'LIN-1', 'RESPONSIVA', NOV, null, { numero: '4429999999' });
   assert.ok(d.llamadas.porNombre > 0, 'apagada baja por Drive');
   assert.equal(Object.keys(memoria).length, antes, 'apagada no escribe');
+});
+
+test('memoria: apagada por omisión (9-nov): no escribe en la caché y baja por Drive cada vez', () => {
+  const d = driveFalso();
+  const memoria = {};
+  const { E } = cargar(d, { memoria, sinEncender: true });
+  E.carpetaDocumento('equipo', '0599', 'RESPONSIVA', NOV);
+  d.llamadas.porNombre = 0;
+  E.carpetaDocumento('equipo', '0599', 'RESPONSIVA', NOV);
+  assert.ok(d.llamadas.porNombre > 0);
+  assert.equal(Object.keys(memoria).length, 0);
 });
