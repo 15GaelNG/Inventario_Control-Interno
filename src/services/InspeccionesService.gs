@@ -1669,3 +1669,13 @@ function inspeccionesRelativoCalcular(confirmacion) {
     (Object.keys(r.pdfErrores).length ? ' · no se pudo regenerar el PDF de: ' + JSON.stringify(r.pdfErrores) : '') + '.');
   return r;
 }
+
+/**
+ * Atajo temporal (9-nov-2026): el botón "Ejecutar" del editor llama a la función elegida sin
+ * parámetros, así que no hay forma de pasarle la confirmación de PROD a inspeccionesRelativoCalcular
+ * desde ahí. Esta solo le pone el argumento. Borrarla después de correrla una vez.
+ */
+function _correrInspeccionesRelativoCalcular() {
+  soloEditor_();
+  inspeccionesRelativoCalcular('SI, EN PROD');
+}
