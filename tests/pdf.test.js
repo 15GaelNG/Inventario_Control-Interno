@@ -17,6 +17,24 @@ vm.runInContext(
 );
 const { PdfService } = contexto;
 
+// Utilities.formatDate de verdad (con Intl, no con los getters de Date: en Apps Script V8 esos
+// getters leen en UTC sin importar la zona del proyecto -- justo el bug que se está probando).
+contexto.Session.getScriptTimeZone = () => 'America/Mexico_City';
+contexto.Utilities.formatDate = (f, zona, patron) => {
+  const dtf = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zona, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const p = {};
+  dtf.formatToParts(f).forEach((x) => { p[x.type] = x.value; });
+  const hh = p.hour === '24' ? '00' : p.hour;
+  return patron.replace('yyyy', p.year).replace('MM', p.month).replace('dd', p.day)
+    .replace('HH', hh).replace('mm', p.minute).replace('ss', p.second);
+};
+// Una hora de Ciudad de México (fija en UTC-6, sin horario de verano) como instante exacto, sin
+// depender de en qué zona corra esta prueba -- new Date(aaaa, mm, dd, hh) sí depende de esa zona.
+const mx = (anio, mes, dia, hora, min, seg) => new Date(Date.UTC(anio, mes - 1, dia, (hora || 0) + 6, min || 0, seg || 0));
+
 let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
 const igual = (a, b, texto) => ok(a === b, `${texto}${a === b ? '' : `  (dio "${a}", se esperaba "${b}")`}`);
@@ -41,8 +59,10 @@ igual(nombre(['INSPECCION', 'JOSÉ MUÑOZ ÁVILA', 'ST0443E', '2026-09-17']),
 ok(nombre(['INSPECCION', 'X'.repeat(300), 'ST0443E']).length === 180, 'un nombre larguísimo se recorta');
 
 console.log('3. Fecha para el nombre (así la carpeta queda en orden cronológico)');
-igual(PdfService.fechaParaNombre(new Date(2026, 8, 17)), '2026-09-17', 'desde una fecha');
-igual(PdfService.fechaParaNombre('17/09/2026'), '2026-09-17', 'desde "dd/mm/aaaa", como lo deja AppSheet');
+igual(PdfService.fechaParaNombre(mx(2026, 9, 17, 10, 0, 0)), '2026-09-17', 'desde una fecha, en la mañana');
+igual(PdfService.fechaParaNombre(mx(2026, 7, 29, 23, 30, 0)), '2026-07-29',
+  'capturada ya noche (23:30 en México) sigue fechada ESE día -- antes, al leerla en UTC, salía ya al día siguiente');
+igual(PdfService.fechaParaNombre('17/09/2026'), '2026-09-17', 'desde "dd/mm/aaaa", como lo deja AppSheet (sin hora: no depende de la zona)');
 igual(PdfService.fechaParaNombre('2026-09-17T12:30:00Z').slice(0, 4), '2026', 'desde texto ISO');
 igual(PdfService.fechaParaNombre(''), '', 'sin fecha, queda vacío y el nombre se arma sin ella');
 igual(PdfService.fechaParaNombre('no es fecha'), '', 'un texto que no es fecha tampoco rompe el nombre');
@@ -59,14 +79,9 @@ ok(archivos[0].includes('ANA RUIZ') && archivos[0].includes('2025-11-03'),
 ok(archivos[3].includes('BETO SOLIS'), 'y los responsables quedan en orden alfabético');
 
 console.log('5. Fechas en el documento: como las imprimía AppSheet');
-contexto.Session.getScriptTimeZone = () => 'America/Mexico_City';
-const dos = (n) => String(n).padStart(2, '0');
-contexto.Utilities.formatDate = (f, zona, patron) => patron
-  .replace('dd', dos(f.getDate())).replace('MM', dos(f.getMonth() + 1)).replace('yyyy', f.getFullYear())
-  .replace('HH', dos(f.getHours())).replace('mm', dos(f.getMinutes())).replace('ss', dos(f.getSeconds()));
 const datos = PdfService.datosParaPlantilla_({
-  FECHA: new Date(2026, 8, 18, 9, 19, 53),
-  'FECHA ULTIMO SERVICIO': new Date(2026, 8, 14),
+  FECHA: mx(2026, 9, 18, 9, 19, 53),
+  'FECHA ULTIMO SERVICIO': mx(2026, 9, 14, 0, 0, 0),
   PLACAS: 'GGR658F', VOLTAJE: 12.6, VACIO: '',
 });
 igual(datos.FECHA, '18/09/2026 09:19:53', 'fecha con hora: "dd/mm/aaaa hh:mm:ss" (antes salía "Fri Sep 18 2026 … GMT-0600")');

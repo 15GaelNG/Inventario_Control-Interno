@@ -656,7 +656,7 @@
       function pintar() {
         cont.querySelectorAll('[data-vn-solo]').forEach((el) => { el.classList.toggle('vn-oculto', el.dataset.vnSolo !== modo); });
         const ix = cfg.indice();
-        if (!ix) { $('[data-vn-vacio]').innerHTML = '<span class="ln-spinner"></span> Cargando…'; return; }
+        if (!ix) { $('[data-vn-vacio]').innerHTML = Carga.html('lista', { n: 3 }); return; }
         catalogo = red(ix);
         cont.querySelectorAll('[data-vn-modo]').forEach((b) => {
           b.classList.toggle('activo', b.dataset.vnModo === modo);

@@ -910,10 +910,14 @@ const ArqueosService = (function () {
    */
   function generarPdfArqueo_(fila) {
     const cuenta = () => Session.getEffectiveUser().getEmail();
+    // Cuánto tarda cada paso, en Ejecuciones ([tiempo] …): fase 0 del motor único de PDF (5-nov)
+    const crono = Cronometro.iniciar('pdf ARQUEO ' + (fila['ID ARQUEO'] || ''));
     const { copia, carpeta } = llenarPlantillaArqueo_(fila);
+    crono.marcar('copiar y llenar');
     let pdfBlob;
     try {
       pdfBlob = DriveApp.getFileById(copia.getId()).getAs('application/pdf');
+      crono.marcar('convertir');
     } catch (e) {
       throw new Error('El documento se llenó bien, pero no se pudo exportar a PDF. La cuenta ' + cuenta() +
         ' necesita permiso de editor en la carpeta de Arqueos. Error original: ' + e.message);
@@ -923,6 +927,7 @@ const ArqueosService = (function () {
       const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       const nombrePdf = (fila['ID ARQUEO'] || copia.getName()) + '_ARQUEO_' + fecha + '.pdf';
       pdfFile = DriveUtils.marcarAutor(carpeta.createFile(pdfBlob).setName(nombrePdf));
+      crono.marcar('crear archivo');
     } catch (e) {
       throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (' + carpeta.getName() +
         '). La cuenta ' + cuenta() + ' necesita permiso de editor ahí. Error original: ' + e.message);
@@ -936,12 +941,15 @@ const ArqueosService = (function () {
       console.warn('No se pudo compartir explícitamente el PDF de Arqueo (cuenta ' + cuenta() +
         '); se deja como quedó por default de la carpeta. Archivo: ' + pdfFile.getUrl());
     }
+    crono.marcar('compartir');
     try {
       DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
     } catch (e) {
       // Mejor esfuerzo: el PDF ya se generó y se compartió bien -- que sobreviva el Doc
       // temporal (mínimo) no vale la pena tronar el registro por esto.
     }
+    crono.marcar('papelera');
+    crono.anotar();
 
     return pdfFile.getUrl();
   }

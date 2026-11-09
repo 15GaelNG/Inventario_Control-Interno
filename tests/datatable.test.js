@@ -60,13 +60,13 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   });
 
   console.log('1. Estado de carga');
-  ok($$('.dt-skel').length > 0, 'muestra filas skeleton antes de tener datos');
+  ok($$('.carga-hueso').length > 0, 'muestra filas skeleton antes de tener datos');
   ok(!$('tbody').textContent.includes('Sin registros'), 'NO dice "Sin registros" mientras carga');
   ok($('.dt-resumen').textContent === 'Cargando…', 'pie dice "Cargando…"');
   tabla.setError('Falló la red');
   ok($('.dt-vacio.dt-error') && $('.dt-vacio').textContent.includes('Falló la red'), 'setError muestra el error en la tabla');
   tabla.setDatos(datos);
-  ok($$('.dt-skel').length === 0 && $$('tbody tr').length === 25, 'setDatos quita skeleton y pinta 25 filas');
+  ok($$('.carga-hueso').length === 0 && $$('tbody tr').length === 25, 'setDatos quita skeleton y pinta 25 filas');
 
   console.log('2. Seleccionar todo (patrón Gmail)');
   cambiar($('.dt-check-pagina'), true);
@@ -310,6 +310,7 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   buscarCompletas.value = ''; buscarCompletas.dispatchEvent(new window.Event('input', { bubbles: true }));
   tCompletas.destruir();
 
+
   console.log('13. Atajos de fecha y "solo este valor"');
   click($('.dt-btn-filtro[data-campo="FECHA"]'));
   ok($$('.dt-popover [data-preset]').length === 6, 'filtro de fecha ofrece 6 atajos');
@@ -368,7 +369,7 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   click($('.dt-primera'));
   ok($('.dt-pagina').textContent.startsWith('1 /'), '« lleva a la primera página');
   tabla.setCargando(true);
-  ok(!$('.dt-barra-carga').hidden && $$('.dt-skel').length === 0 && $$('tbody tr[data-id]').length > 0, 'refrescar con datos: barra de carga, SIN borrar las filas');
+  ok(!$('.dt-barra-carga').hidden && $$('.carga-hueso').length === 0 && $$('tbody tr[data-id]').length > 0, 'refrescar con datos: barra de carga, SIN borrar las filas');
   tabla.setDatos(tabla.getDatos());
   ok($('.dt-barra-carga').hidden, 'la barra se quita al llegar los datos');
 

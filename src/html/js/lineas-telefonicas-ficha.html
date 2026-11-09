@@ -6,7 +6,7 @@
    */
   (function () {
     'use strict';
-    const { $, TIPO_EQUIPO, abrirUltimoDesdeMenu, bloqueadoDG, cargarPatronesAppSheet, chip, enlaceDrive, esc, fecha,
+    const { $, TIPO_EQUIPO, abrirUltimoDesdeMenu, bloqueadoDG, cargarPatronesAppSheet, chip, chipCompania, enlaceDrive, esc, fecha,
       formatoAppSheet, guion, ico, icono, llamar, memoria, mensajeError, menuFlotante, miles, porcentaje,
       precargarUltimosNucos, puedeOperar, quitarDelPanel, vacio, veDocumentos, veHistorial, veSeccion, vistaPatron } = Lineas.comun;
     const { tieneNuco } = Lineas.telefonicas.comun;
@@ -35,7 +35,7 @@
         soltarDocumentos();
         const detalle = $('#ln-detalle', raiz);
         detalle.hidden = false;
-        detalle.innerHTML = migas() + '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
+        detalle.innerHTML = migas() + Carga.html('ficha', { tarjeta: true, n: 8 });
         if (tipo === 'inspeccion' || tipo === 'responsiva') pintarDocumentoPrevio(detalle, tipo, id);
         document.getElementById('view-container').scrollTop = 0;
         window.scrollTo(0, 0);
@@ -79,7 +79,7 @@
             esInspeccion
               ? [['Responsable', d.responsable], ['Inspector', d.inspector], ['Calificación', porcentaje(d.calificacion)], ['Fotos', miles(d.fotos || 0)]]
               : [['Responsable', d.responsable], [Marca.textoDe('lineas-telefonicas'), d.inspector]]) +
-          '<div class="card ln-cargando"><span class="ln-spinner"></span> Cargando…</div>';
+          Carga.html('lista', { tarjeta: true, n: 3 });
       }
 
       /** Abre un registro sabiendo solo su ID (equipo si existe como equipo; si no, línea). */
@@ -290,7 +290,7 @@
         // Dirección General a quien no es ADMIN, solo General (pendiente 8.20; el servidor tampoco da documentos ni historial)
         const pasado = conDocumentos && veHistorial();
         conDocumentos = conDocumentos && veDocumentos();
-        const cargando = '<div class="card ln-card"><p class="ln-tenue"><span class="ln-spinner"></span> Cargando…</p></div>';
+        const cargando = Carga.html('bloque', { tarjeta: true });
         // Al regresar a esta ficha (Volver o migas) se abre en la pestaña donde se estaba, no siempre en General
         return Tabs.html([
           { id: 'general', titulo: 'General', icono: 'layout-grid', contenido: general },
@@ -324,7 +324,9 @@
           if (e.nuco && !e._dgOculto) precargarUltimosNucos(id);
           detalle.innerHTML = migas() +
             encabezado('smartphone', 'NUCO ' + esc(e.nuco || '—'),
-              chip(e.estatus) + (e.dg ? chip('DG', 'neutro') : '') + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar')),
+              chip(e.estatus) + (e.dg ? chip('DG', 'neutro') : '') + chip(TIPO_EQUIPO[e.tipo] || e.tipo, 'neutro') + (l ? chip('Con línea', 'verde') + usoTemporalVencido(l) : chip('Sin línea', 'ambar') +
+                // La compañía de la última línea que tuvo (usuario, 5-nov: no todos vienen liberados)
+                chipCompania(e.ultimaCompania, 'ÚLTIMA LÍNEA: ')),
               botonesFicha('data-equipo-id', id, 'equipo', operarEquipo && conDocumentos('equipo', e.estatus, filaDelIndice('equipo', id).panel), '', true),
               [['Responsable', resp.nombre], ['Modelo', e.modelo], ['IMEI', e.imei],
                 ['Línea', l ? '<a href="#" class="ln-enlace ln-mono" data-ln-ir="linea" data-id="' + esc(l._id) + '">' + esc(l.numero || '(sin número)') + '</a>' + (l.compania ? ' · ' + esc(l.compania) : '') : '<span class="ln-tenue">Sin línea</span>', true],

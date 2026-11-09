@@ -23,6 +23,20 @@
     --color-badge-bg: #ffffff; /* fijo: el logo (navy+dorado) siempre necesita fondo claro, en cualquier tema */
     --color-neutro-fuerte: #212121; /* etiquetas "neutras" (ej. Clase Camión/Motocicleta) */
 
+    /* Papeles de color (docs/modo-oscuro.md). Un color de relleno no siempre sirve como texto: en oscuro el azul de
+       un botón es medio (texto blanco encima) y el azul de un texto o enlace es claro. Por eso:
+       - texto o ícono azul → --color-primary-texto (nunca --color-primary: un contrato lo revisa);
+       - texto encima de un relleno → su "on-": --color-on-primary, -on-accent, -on-success, -on-danger;
+       - el borde de un campo o botón (lo que se toca) → --color-borde-control; --color-border es el divisor. */
+    --color-primary-texto: var(--color-primary);
+    --color-on-primary: #ffffff;
+    --color-on-accent: #06263A;
+    --color-on-success: #ffffff;
+    --color-on-danger: #ffffff;
+    --color-borde-control: var(--color-border);
+    --color-success-soft: #e5f6ec;
+    --color-danger-soft: #F3ECD6;
+
     /* Sidebar: fondo navy fijo de marca, NO cambia con el tema claro/oscuro. */
     --color-sidebar-bg: #06263A;
     --color-sidebar-text: #b7c8d2;
@@ -76,41 +90,59 @@
     --shadow-lg: 0 24px 48px -16px rgba(6,38,58,.35);
   }
 
+  /* Modo oscuro (rehecho el 5-nov-2026 para subir el contraste; docs/modo-oscuro.md). Reglas:
+     - Fondos en escalones del mismo azul pizarra, sin negro puro: más arriba = más claro (la sombra no se ve en
+       oscuro, la separación la da el escalón). Página #0a161d → tarjeta #15262f.
+     - Texto: casi blanco, no blanco puro (deslumbra). El secundario llega a APCA Lc 60+ sobre una tarjeta (lo que
+       pide un texto de 12–14 px), no solo a 4.5:1 de WCAG 2, que en oscuro se queda corto.
+     - Colores de estado y de marca: más claros y menos saturados que en claro (un color saturado vibra sobre oscuro).
+     - Cada texto se mide con tools/vista-previa/contraste.js (APCA sobre todas las escenas de la vista previa). */
   :root[data-theme="dark"] {
-    --color-primary: #2f7bb0;
-    --color-primary-hover: #3f91cb;
-    --color-primary-soft: #163041;
-    --color-accent: #c4b280;
-    --color-accent-hover: #d4c393;
-    --color-accent-soft: #2a2718;
+    --color-primary: #2a72a3;          /* relleno de botón: texto blanco encima, 5.2:1 */
+    --color-primary-hover: #3584ba;
+    --color-primary-soft: #173447;
+    --color-primary-texto: #8fcdf3;    /* texto, enlace e ícono azul */
+    --color-accent: #d6c590;
+    --color-accent-hover: #e3d4a4;
+    --color-accent-soft: #2e2a1a;
 
-    --color-bg: #0b1a23;
-    --color-surface: #142732;
-    --color-text: #edf1f3;
-    --color-text-muted: #9db0b8;
-    --color-border: #26404c;
-    --color-note-bg: #16344450;
-    --color-neutro-fuerte: #c9ccd1; /* casi negro en claro se perdía contra el fondo oscuro */
+    --color-bg: #0a161d;
+    --color-surface: #15262f;
+    --color-text: #f2f5f7;
+    --color-text-muted: #b3c3cb;
+    --color-border: #2c4653;
+    --color-borde-control: #56737f;    /* campos y botones secundarios: 3:1 sobre la tarjeta */
+    --color-danger: #e8b86e;           /* el bronce de marca, aclarado */
+    --color-success: #62d68e;
+    --color-on-danger: #1f1606;
+    --color-on-success: #0a1a12;
+    --color-success-soft: #143526;
+    --color-danger-soft: #3a2c14;
+    --color-note-bg: #17344750;
+    --color-neutro-fuerte: #d3d6da; /* casi negro en claro se perdía contra el fondo oscuro */
 
-    --tono-verde: #5fd07e;
-    --tono-verde-oscuro: #4cbb5c;
-    --tono-ambar: #f0b94a;
-    --tono-naranja: #f5a442;
-    --tono-amarillo: #e0c84a;
-    --tono-rojo: #f07070;
-    --tono-rojo-oscuro: #e06a6a;
-    --tono-rosa: #ec8cb6;
-    --tono-morado: #c77dd6;
-    --tono-azul: #6ea2ff;
-    --tono-azul-marino: #8fb0ea;
-    --tono-azul-petroleo: #5fb6dd;
-    --tono-turquesa: #72cdb6;
-    --tono-bosque: #4fae8f;
-    --tono-arena: #cbbb9d;
-    --tono-bronce: #c7b383;
-    --tono-cobre: #d8a580;
-    --tono-pizarra: #9fb3bd;
+    --tono-verde: #62d68e;
+    --tono-verde-oscuro: #6dd47c;
+    --tono-ambar: #f2bf55;
+    --tono-naranja: #f7ad55;
+    --tono-amarillo: #e6cf55;
+    --tono-rojo: #ffa69e;
+    --tono-rojo-oscuro: #ffa3a3;
+    --tono-rosa: #f4a3c6;
+    --tono-morado: #dfabea;
+    --tono-azul: #9cc2ff;
+    --tono-azul-marino: #a9c3f0;
+    --tono-azul-petroleo: #82cbeb;
+    --tono-turquesa: #7ed6c0;
+    --tono-bosque: #74d0ae;
+    --tono-arena: #d3c4a8;
+    --tono-bronce: #d2bf92;
+    --tono-cobre: #e8b996;
+    --tono-pizarra: #b2c3cc;
     --tono-alerta-fondo: #3a3410;
+
+    --shadow: 0 1px 3px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.25);
+    --shadow-lg: 0 24px 48px -16px rgba(0,0,0,.6);
   }
 
   /* Transición suave al cambiar de tema (no anima layout, solo color/fondo) */
@@ -133,7 +165,7 @@
 
   /* Enlaces (ej. "Ver archivo" de PDFs/imágenes adjuntos): sin esto usan el azul
      por default del navegador, que en modo oscuro casi no se distingue del fondo. */
-  a { color: var(--color-primary); }
+  a { color: var(--color-primary-texto); }
   a:hover { color: var(--color-primary-hover); }
 
   /* #app ocupa exactamente el alto de la pantalla y no se desplaza — el
@@ -210,7 +242,7 @@
   }
   /* Seleccionado: como el encabezado de un grupo abierto (fondo dorado tenue, placa dorada), no la fila dorada entera */
   .nav-item.active { background: rgba(180,161,105,.14); color: var(--color-sidebar-text-strong); }
-  .nav-item.active .nav-icon { background: var(--color-accent); color: var(--color-primary); box-shadow: none; }
+  .nav-item.active .nav-icon { background: var(--color-accent); color: var(--color-on-accent); box-shadow: none; }
 
   #sidebar.collapsed .sidebar-title,
   #sidebar.collapsed .nav-label { display: none; }
@@ -253,7 +285,7 @@
   }
   .nav-group-header .nav-icon .ico { width: 15px; height: 15px; }
   .nav-group.expanded .nav-group-header .nav-icon {
-    background: var(--color-accent); color: var(--color-primary);
+    background: var(--color-accent); color: var(--color-on-accent);
   }
   .nav-group-header .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
   .nav-group-chevron {
@@ -293,7 +325,7 @@
     transform: translateX(3px);
     box-shadow: 0 0 0 1px rgba(180,161,105,.3), 0 2px 10px rgba(180,161,105,.3);
   }
-  .nav-subitem.active { background: var(--color-accent); color: var(--color-primary); font-weight: 700; }
+  .nav-subitem.active { background: var(--color-accent); color: var(--color-on-accent); font-weight: 700; }
 
   /* En modo colapsado, los grupos se reducen a solo el ícono del encabezado */
   #sidebar.collapsed .nav-group-header .nav-label,
@@ -361,7 +393,7 @@
     background: transparent; border: 1px solid var(--color-sidebar-border); color: var(--color-sidebar-text);
     width: 32px; height: 32px; border-radius: 999px; padding: 0; flex-shrink: 0;
   }
-  .sidebar-logout:hover { background: var(--color-danger); color: #fff; border-color: transparent; }
+  .sidebar-logout:hover { background: var(--color-danger); color: var(--color-on-danger); border-color: transparent; }
   #sidebar.collapsed .sidebar-logout { display: none; }
   #sidebar.collapsed .sidebar-usuario-tarjeta { justify-content: center; padding: 6px 0; }
 
@@ -409,7 +441,7 @@
     text-decoration: none; cursor: pointer;
   }
   .tabla-actions a.secondary {
-    background: transparent; color: var(--color-primary); border: 1px solid var(--color-border);
+    background: transparent; color: var(--color-primary-texto); border: 1px solid var(--color-borde-control);
   }
   .tabla-actions a.secondary:hover { background: var(--color-bg); }
 
@@ -427,7 +459,7 @@
      (otro borde, otro redondeo, otra tipografía) y desentona al lado de los inputs. */
   input, select, textarea, button {
     font: inherit; padding: 9px 12px; border-radius: var(--radio-m);
-    border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text);
+    border: 1px solid var(--color-borde-control); background: var(--color-surface); color: var(--color-text);
   }
   input, select, textarea { width: 100%; }
   /* Solo hacia abajo: a lo ancho rompería la columna del formulario */
@@ -454,11 +486,11 @@
   .field-sino { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .field-sino label { margin: 0; }
   .sino-toggle {
-    display: flex; flex: 0 0 auto; border: 1px solid var(--color-border);
+    display: flex; flex: 0 0 auto; border: 1px solid var(--color-borde-control);
     border-radius: var(--radio-m); overflow: hidden;
   }
   .sino-btn {
-    background: #fff; color: var(--color-text-muted); border: none; border-radius: 0;
+    background: var(--color-surface); color: var(--color-text-muted); border: none; border-radius: 0;
     padding: 7px 18px; font-size: var(--texto-s); font-weight: 600; cursor: pointer;
   }
   .sino-btn + .sino-btn { border-left: 1px solid var(--color-border); }
@@ -488,7 +520,7 @@
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   }
   button:hover { background: var(--color-primary-hover); }
-  button.secondary { background: transparent; color: var(--color-primary); border: 1px solid var(--color-border); }
+  button.secondary { background: transparent; color: var(--color-primary-texto); border: 1px solid var(--color-borde-control); }
 
   /* Íconos (Lucide) — data-lucide se reemplaza por un <svg>, que hereda estas
      reglas vía la clase .ico. stroke="currentColor" en el SVG hace que tome
@@ -498,12 +530,12 @@
     stroke-width: 2;
   }
   h2 .ico, h3 .ico { vertical-align: -0.1em; }
-  button.danger { background: var(--color-danger); }
+  button.danger { background: var(--color-danger); color: var(--color-on-danger); }
 
   .error-msg { color: var(--color-danger); font-size: var(--texto-s); margin-top: 8px; }
   .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 600; }
-  .badge.ok { background: #e5f6ec; color: var(--color-success); }
-  .badge.low { background: #F3ECD6; color: var(--color-danger); }
+  .badge.ok { background: var(--color-success-soft); color: var(--color-success); }
+  .badge.low { background: var(--color-danger-soft); color: var(--color-danger); }
 
   [hidden] { display: none !important; }
 
@@ -538,7 +570,7 @@
   .stat-icon {
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     width: 40px; height: 40px; border-radius: var(--radio-l);
-    background: var(--color-primary-soft); color: var(--color-primary);
+    background: var(--color-primary-soft); color: var(--color-primary-texto);
   }
   .stat-icon .ico { width: 20px; height: 20px; }
   .stat-tile > div:last-child { display: flex; flex-direction: column; gap: 2px; }
@@ -547,8 +579,7 @@
   .stat-tile-warn { border-left-color: var(--color-danger); }
   .stat-tile-warn .stat-icon { background: var(--color-accent-soft); color: var(--color-danger); }
   .stat-tile-ok { border-left-color: var(--color-success); }
-  .stat-tile-ok .stat-icon { background: #DCF1E6; color: var(--color-success); }
-  :root[data-theme="dark"] .stat-tile-ok .stat-icon { background: #123024; }
+  .stat-tile-ok .stat-icon { background: var(--color-success-soft); color: var(--color-success); }
 
   /* Anillo de progreso de las tarjetas de Inicio (dash-kpis/dash-alertas) --
      solo ahí, no toca .stat-icon (compartido con Vehículos/Incidencias/Panorama).
@@ -621,6 +652,50 @@
     box-shadow: 0 0 0 3px var(--color-primary-soft);
   }
 
+  /* ========== Brillo en modo oscuro (KPIs y tarjetas principales; docs/modo-oscuro.md) ==========
+     En oscuro la sombra no se ve: la profundidad la dan (1) un filo de luz arriba, como luz que cae, y (2) un halo
+     del color del KPI, tenue y poco saturado (luz ambiente, no neón; el color saturado "vibra" sobre oscuro).
+     --kpi-brillo es el color del halo: azul por defecto, verde en -ok, bronce en -warn/-danger. Solo en oscuro:
+     en claro la sombra de siempre ya funciona. Sin animación propia: solo la transición del hover. */
+  :root[data-theme="dark"] {
+    --brillo-filo: inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  :root[data-theme="dark"] .stat-tile, :root[data-theme="dark"] .kpi-chip,
+  :root[data-theme="dark"] .ln-panorama button.lnp-puerta {
+    --kpi-brillo: var(--color-primary-texto);
+    background-image: radial-gradient(130% 120% at 0% 0%, color-mix(in srgb, var(--kpi-brillo) 9%, transparent), transparent 62%);
+    box-shadow: var(--brillo-filo), 0 0 0 1px color-mix(in srgb, var(--kpi-brillo) 6%, transparent),
+      0 8px 24px -12px color-mix(in srgb, var(--kpi-brillo) 30%, transparent);
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+  }
+  :root[data-theme="dark"] .stat-tile-ok { --kpi-brillo: var(--color-success); }
+  :root[data-theme="dark"] .stat-tile-warn, :root[data-theme="dark"] .kpi-chip.kpi-warn,
+  :root[data-theme="dark"] .kpi-chip.kpi-danger { --kpi-brillo: var(--color-danger); }
+  /* Al pasar el cursor o elegido: el halo sube un poco */
+  :root[data-theme="dark"] .stat-tile-clickable:hover, :root[data-theme="dark"] .kpi-chip:not(:disabled):hover,
+  :root[data-theme="dark"] .ln-panorama button.lnp-puerta:hover {
+    box-shadow: var(--brillo-filo), 0 0 0 1px color-mix(in srgb, var(--kpi-brillo) 18%, transparent),
+      0 10px 32px -10px color-mix(in srgb, var(--kpi-brillo) 45%, transparent);
+  }
+  :root[data-theme="dark"] .stat-tile-clickable.stat-tile-activo, :root[data-theme="dark"] .kpi-chip.activo {
+    box-shadow: var(--brillo-filo), 0 0 0 3px var(--color-primary-soft),
+      0 10px 32px -10px color-mix(in srgb, var(--kpi-brillo) 50%, transparent);
+  }
+  /* El ícono del KPI: un halo chico de su propio color */
+  :root[data-theme="dark"] .stat-icon { box-shadow: 0 0 18px -4px color-mix(in srgb, currentColor 45%, transparent); }
+  :root[data-theme="dark"] .stat-ring { filter: drop-shadow(0 0 6px color-mix(in srgb, var(--stat-color) 40%, transparent)); }
+  /* El número grande: un resplandor apenas perceptible, que lo separa del fondo sin volverlo borroso */
+  :root[data-theme="dark"] .stat-value, :root[data-theme="dark"] .kpi-chip-value,
+  :root[data-theme="dark"] .lnp-puerta-num { text-shadow: 0 0 18px rgba(255,255,255,.12); }
+  /* Las demás tarjetas: solo el filo de luz (sin halo de color, para no competir con los KPIs) */
+  :root[data-theme="dark"] .card { box-shadow: var(--brillo-filo), var(--shadow); }
+  /* El botón principal: un halo azul suave al pasar el cursor */
+  :root[data-theme="dark"] .page-header-actions button:not(.secondary):not(.danger):hover,
+  :root[data-theme="dark"] .form-acciones button:not(.secondary):not(.danger):hover,
+  :root[data-theme="dark"] button.externo:hover, :root[data-theme="dark"] a.externo:hover {
+    box-shadow: 0 0 0 1px rgba(143,205,243,.18), 0 6px 20px -8px rgba(143,205,243,.45);
+  }
+
   /* Celular: los KPIs (.stat-row y .kpi-chips, de cualquier módulo) pasan a una franja que se
      desliza de lado. En rejilla, 9 tarjetas eran 5 filas y empujaban la tabla fuera de la
      pantalla. Cada tarjeta mide ~55% del ancho (cabe una palabra como "Verificaciones"), así
@@ -691,8 +766,8 @@
     display: inline-flex; align-items: center; gap: 4px;
     padding: 4px 10px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 600;
   }
-  .badge-estado.abierta { background: #F3ECD6; color: var(--color-danger); }
-  .badge-estado.cerrada { background: #e5f6ec; color: var(--color-success); }
+  .badge-estado.abierta { background: var(--color-danger-soft); color: var(--color-danger); }
+  .badge-estado.cerrada { background: var(--color-success-soft); color: var(--color-success); }
 
   /* Estatus tal cual AppSheet (Caja Chica): sin fondo de pastilla, solo
      ícono + texto en mayúsculas/negritas/itálicas del color del estatus. */
@@ -724,9 +799,9 @@
   .vehiculo-actions { display: flex; gap: 6px; flex-shrink: 0; }
   .vehiculo-actions button { padding: 7px 10px; }
 
-  .badge-estado.activo { background: #e5f6ec; color: var(--color-success); }
-  .badge-estado.baja { background: #F3ECD6; color: var(--color-danger); }
-  .badge-estado.pendiente { background: var(--color-primary-soft); color: var(--color-primary); }
+  .badge-estado.activo { background: var(--color-success-soft); color: var(--color-success); }
+  .badge-estado.baja { background: var(--color-danger-soft); color: var(--color-danger); }
+  .badge-estado.pendiente { background: var(--color-primary-soft); color: var(--color-primary-texto); }
 
   /* ========== "Sistemas" (accesos directos a otros sistemas, por módulo) ========== */
   .sistemas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
@@ -747,7 +822,7 @@
     background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text-muted);
     box-shadow: var(--shadow);
   }
-  .sistema-card-copiar:hover { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); }
+  .sistema-card-copiar:hover { background: var(--color-primary-soft); color: var(--color-primary-texto); border-color: var(--color-primary); }
   .sistema-card-copiar .ico { width: 15px; height: 15px; }
   .sistema-card-icono {
     width: 52px; height: 52px; border-radius: var(--radio-2xl); flex-shrink: 0;
@@ -756,7 +831,7 @@
   .sistema-card-icono .ico { width: 24px; height: 24px; }
   .sistema-card-texto { min-width: 0; }
   .sistema-card-texto h3 { margin: 0 0 4px; font-size: var(--texto-m); line-height: 1.3; color: var(--color-text); }
-  .sistema-card-abrir { display: inline-flex; align-items: center; gap: 4px; font-size: var(--texto-s); font-weight: 600; color: var(--color-primary); }
+  .sistema-card-abrir { display: inline-flex; align-items: center; gap: 4px; font-size: var(--texto-s); font-weight: 600; color: var(--color-primary-texto); }
   :root[data-theme="dark"] .sistema-card-abrir { color: var(--color-accent); }
   .sistema-card-abrir .ico { width: 13px; height: 13px; }
   .sistema-card:hover .sistema-card-abrir { text-decoration: underline; }
@@ -772,7 +847,7 @@
   }
   .historial-item:hover { background: var(--color-bg); border-color: var(--color-accent); }
   .historial-icon {
-    width: 32px; height: 32px; border-radius: var(--radio-m); background: var(--color-primary-soft); color: var(--color-primary);
+    width: 32px; height: 32px; border-radius: var(--radio-m); background: var(--color-primary-soft); color: var(--color-primary-texto);
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .historial-icon .ico { width: 15px; height: 15px; }
@@ -806,7 +881,7 @@
     padding: 8px 10px;
   }
   .th-interactivo-label .ico { width: .8em; height: .8em; opacity: .5; flex-shrink: 0; }
-  th.th-interactivo.activo { color: var(--color-primary); }
+  th.th-interactivo.activo { color: var(--color-primary-texto); }
   th.th-interactivo.activo .ico { opacity: 1; }
 
   .th-popover {
@@ -818,7 +893,7 @@
   .th-popover-titulo { font-weight: 700; font-size: var(--texto-s); }
   .th-popover-orden { display: flex; gap: 8px; }
   .th-popover-orden button { flex: 1; padding: 7px 0; font-size: var(--texto-s); }
-  .th-popover-orden button.activo { background: var(--color-primary-soft); color: var(--color-primary); border-color: transparent; }
+  .th-popover-orden button.activo { background: var(--color-primary-soft); color: var(--color-primary-texto); border-color: transparent; }
   .th-popover select, .th-popover input[type="text"] { font-size: var(--texto-s); padding: 7px 9px; }
   .th-popover-acciones { display: flex; gap: 8px; }
   .th-popover-acciones button { flex: 1; padding: 7px 0; font-size: var(--texto-s); white-space: nowrap; }
@@ -828,7 +903,7 @@
      en vez del cuadro de texto genérico. */
   .th-popover-lista-acciones { display: flex; gap: 10px; }
   .th-popover-lista-acciones button {
-    background: none; border: none; padding: 0; color: var(--color-primary);
+    background: none; border: none; padding: 0; color: var(--color-primary-texto);
     font-size: var(--texto-xs); font-weight: 600; cursor: pointer; text-decoration: underline;
   }
   .th-popover-lista {
@@ -860,7 +935,7 @@
     display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px;
     font-size: var(--texto-xs); font-weight: 700; white-space: nowrap; letter-spacing: .2px;
   }
-  .tag-navy { background: var(--color-primary-soft); color: var(--color-primary); }
+  .tag-navy { background: var(--color-primary-soft); color: var(--color-primary-texto); }
   .tag-gold { background: var(--color-accent-soft); color: var(--color-accent-hover); }
   .tag-green { background: #e5f6ec; color: var(--color-success); }
   .tag-brown { background: #F3ECD6; color: var(--color-danger); }
@@ -913,7 +988,7 @@
   .info-value { font-size: var(--texto-s); font-weight: 500; word-break: break-word; }
   .info-vacio { color: var(--color-text-muted); font-weight: 400; }
   .info-section-title {
-    grid-column: 1 / -1; font-size: var(--texto-s); font-weight: 700; color: var(--color-primary);
+    grid-column: 1 / -1; font-size: var(--texto-s); font-weight: 700; color: var(--color-primary-texto);
     text-transform: uppercase; letter-spacing: .4px; margin: 10px 0 -2px;
     padding-bottom: 6px; border-bottom: 1px solid var(--color-border);
   }
@@ -993,11 +1068,6 @@
     #toast-container { top: 10px; left: 10px; right: 10px; }
     .toast { min-width: 0; max-width: none; }
   }
-  .loading-inline {
-    grid-column: 1 / -1; display: flex; align-items: center; gap: 10px;
-    color: var(--color-text-muted); font-size: var(--texto-s); padding: 14px 4px;
-  }
-
   /* ===== Transición corta al cambiar de módulo en el sidebar ===== */
   /* flex:1 + overflow-y:auto: esta es la única zona que hace scroll —
      sidebar y topbar quedan fijos (ver #app/#sidebar/#main arriba). */
@@ -1072,7 +1142,7 @@
     font-size: var(--texto-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
     color: var(--color-text-muted);
   }
-  .calif-badge-valor { font-size: var(--texto-xl); font-weight: 700; color: var(--color-primary); line-height: 1; }
+  .calif-badge-valor { font-size: var(--texto-xl); font-weight: 700; color: var(--color-primary-texto); line-height: 1; }
   .calif-badge-barra { width: 100%; height: 5px; border-radius: 999px; overflow: hidden; background: rgba(0,0,0,.08); }
   :root[data-theme="dark"] .calif-badge-barra { background: rgba(255,255,255,.12); }
   .calif-badge-barra-fill { height: 100%; border-radius: 999px; background: var(--color-primary); transition: width .2s ease; }
@@ -1184,7 +1254,7 @@
     margin: 0;
   }
   .login-form-card .login-system-name {
-    text-align: center; font-size: var(--texto-xl); font-weight: 700; color: var(--color-primary); margin: 2px 0 6px;
+    text-align: center; font-size: var(--texto-xl); font-weight: 700; color: var(--color-primary-texto); margin: 2px 0 6px;
   }
   .login-sub { text-align: center; color: var(--color-text-muted); font-size: var(--texto-s); margin: 0 0 16px; }
   .login-divider { width: 40px; height: 3px; background: var(--color-accent); border-radius: var(--radio-xs); margin: 0 auto 22px; }
@@ -1257,7 +1327,7 @@
   .campo-codigo { display: flex; justify-content: center; gap: 8px; margin: 4px 0 14px; }
   .campo-codigo input {
     width: 46px; height: 56px; padding: 0; text-align: center; font-size: var(--texto-xl); font-weight: 700;
-    color: var(--color-primary); border-radius: var(--radio-l); background: var(--color-bg); caret-color: var(--color-accent);
+    color: var(--color-primary-texto); border-radius: var(--radio-l); background: var(--color-bg); caret-color: var(--color-accent);
   }
   .campo-codigo input:focus { background: var(--color-surface); border-color: var(--color-accent); }
   @media (max-width: 640px) { .campo-codigo { gap: 6px; } .campo-codigo input { width: 40px; height: 50px; } }
@@ -1279,7 +1349,7 @@
   /* "¿Olvidaste tu contraseña?" (Seguridad, js/app-seguridad.html): un enlace, no otro botón grande */
   .login-olvide {
     display: block; margin: -6px 0 4px auto; padding: 2px 0; background: none; border: none; box-shadow: none;
-    color: var(--color-primary); font-size: var(--texto-xs); font-weight: 600; cursor: pointer;
+    color: var(--color-primary-texto); font-size: var(--texto-xs); font-weight: 600; cursor: pointer;
   }
   .login-olvide:hover { background: none; text-decoration: underline; }
 
@@ -1347,7 +1417,7 @@
   .loading-icon:nth-child(3) { animation-delay: .31s; }
   .loading-icon:nth-child(4) { animation-delay: .44s; }
   .loading-icon.active {
-    background: var(--color-accent); border-color: var(--color-accent); color: var(--color-primary);
+    background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent);
     transform: translateY(0) scale(1.12);
     box-shadow: 0 0 0 6px rgba(180,161,105,.22);
   }

@@ -6,7 +6,8 @@ carpeta por NUCO. Cada una trae `1.-DOCUMENTACIÓN`, `2.-SERVICIOS`, `3.-VERIFIC
 > **Nombres fijos (11-oct-2026):** sin espacio después del guion, en los 649 NUCO. `tools/nucos/raices.py` renombró 1,513
 > carpetas (`2.- SERVICIOS`, `3.- VERIFICACIONES`, `4.- INSPECCIONES` y variantes) y creó vacías las 313 que faltaban;
 > bitácoras `20261011-185803-raices.jsonl` (piloto 1, 2, 113) y `20261011-185843-raices.jsonl`. La app
-> (`ExpedienteNuco.gs`) usa los mismos nombres y reconoce una carpeta aunque traiga espacios o acentos de diferencia.
+> (`ExpedienteNuco.gs`, que desde el 6-nov es la fachada de `Expediente.gs`, tipo `vehiculo`) usa los mismos nombres y
+> reconoce una carpeta aunque traiga espacios o acentos de diferencia.
 > En los demás docs, los nombres con espacio son de antes de este cambio.
 
 > `4.- INSPECCIONES` se homologa aparte desde el 9-oct-2026: [nucos-inspecciones.md](nucos-inspecciones.md). Ahí también

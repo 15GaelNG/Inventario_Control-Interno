@@ -48,3 +48,13 @@ tools/migracion/corridas/
 
 # Expediente por NUCO: lo leído de Drive y la hoja (datos de unidades)
 tools/nucos/.cache/
+
+# Planes y bitácoras de la carga de accesorios (traen datos de unidades)
+tools/accesorios/.cache/
+
+# Prototipos de .gs sueltos (se pegan a mano en un libro; pueden traer IDs de produccion): no van al repo
+prototipos/
+
+# Respaldo de Líneas para el cuadre (estados de cuenta, facturas, ventas: datos reales). Nunca al repo (es público)
+emergencia/
+REPORTE L*NEAS.xlsx

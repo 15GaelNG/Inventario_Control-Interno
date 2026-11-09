@@ -26,9 +26,8 @@
 
 const LineasArchivos = (function () {
   const APPSHEET_POR_OMISION = '1FsC5mloJNhi_TR7pBX1KMEjUZfN_M9OM';
-  // Sin LINEAS_DRIVE_NUCOS (un DEV): una "NUCOS TELEFONICOS" de pruebas en la raíz de ESE proyecto, como ExpedienteNuco.
-  // Antes caía al ID de NUCOS de producción y un DEV sin la clave escribía ahí sus inspecciones y responsivas (15-oct).
-  const NUCOS_PRUEBAS = 'NUCOS TELEFONICOS';
+  // NUCOS TELEFONICOS y LINEAS: su raíz, su estructura y su buscador viven en Expediente.gs (tipos 'equipo' y 'linea',
+  // 6-nov). Sin LINEAS_DRIVE_NUCOS (un DEV) la raíz es una "NUCOS TELEFONICOS" de pruebas en la raíz de ESE proyecto.
   const ZONA = 'America/Mexico_City';
   const SEG_CACHE = 21600;
   // Archivos con secretos (patrón, contraseña) y firmas: solo quien puede ver secretos
@@ -38,7 +37,7 @@ const LineasArchivos = (function () {
 
   const prop_ = (clave) => leerConfig_(clave);   // config/Entornos.gs o Script Properties
   function carpetaAppSheetId() { return prop_('LINEAS_DRIVE_APPSHEET') || APPSHEET_POR_OMISION; }
-  function carpetaNucosId() { return prop_('LINEAS_DRIVE_NUCOS') || DriveUtils.carpetaEnRaiz(NUCOS_PRUEBAS).getId(); }
+  function carpetaNucosId() { return Expediente.raiz('equipo'); }
   /**
    * Dónde se buscan los archivos del AppSheet: la carpeta de la app y, si está configurada, otra solo para leer
    * (el DEV escribe en una carpeta de pruebas, pero su libro es copia de producción y sus rutas son de la app real).
@@ -193,25 +192,9 @@ const LineasArchivos = (function () {
     return Drive.Files.list(parametros);
   }
 
-  /** NUCO → id de su carpeta dentro de NUCOS (subcarpetas con nombre numérico). Caché 6 h. */
+  /** NUCO → id de su carpeta dentro de NUCOS (subcarpetas con nombre numérico). El mapa de Expediente, 6 h. */
   function carpetasNucos() {
-    const enCache = LineasDatos.cacheLeer('carpetas_nucos_v2');
-    if (enCache) return enCache;
-    const mapa = {};
-    let pagina = null;
-    do {
-      const r = listarDrive({
-        q: "'" + carpetaNucosId() + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-        pageSize: 1000, fields: 'nextPageToken,files(id,name)', pageToken: pagina || undefined,
-      });
-      (r.files || []).forEach((f) => {
-        const nombre = String(f.name || '').trim();
-        if (/^\d+$/.test(nombre)) mapa[LineasUtil.nuco4(nombre)] = f.id;
-      });
-      pagina = r.nextPageToken || null;
-    } while (pagina);
-    LineasDatos.cacheGuardar('carpetas_nucos_v2', mapa, SEG_CACHE);
-    return mapa;
+    return Expediente.activos('equipo');
   }
 
   /**
@@ -221,7 +204,7 @@ const LineasArchivos = (function () {
    */
   function archivosNuco(nuco, soloTipo) {
     const n4 = nuco ? LineasUtil.nuco4(nuco) : null;
-    const raiz = n4 && carpetasNucos()[n4];
+    const raiz = n4 && Expediente.activos('equipo')[n4];
     if (!raiz) return { carpetaId: null, grupos: [] };
     const rutas = {};
     rutas[raiz] = '';
@@ -232,39 +215,26 @@ const LineasArchivos = (function () {
     let nivel = [raiz];
     for (let profundidad = 0; nivel.length && profundidad < 8; profundidad++) {
       const siguiente = [];
-      for (let i = 0; i < nivel.length; i += 40) {
-        const padres = nivel.slice(i, i + 40);
-        let pagina = null;
-        do {
-          const r = listarDrive({
-            q: '(' + padres.map((p) => "'" + p + "' in parents").join(' or ') + ') and trashed = false',
-            pageSize: 1000, orderBy: 'name',
-            fields: 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,modifiedTime)',
-            pageToken: pagina || undefined,
-          });
-          (r.files || []).forEach((f) => {
-            const padre = (f.parents || []).filter((p) => p in rutas)[0];
-            if (padre === undefined) return;
-            const ruta = (rutas[padre] ? rutas[padre] + '/' : '') + f.name;
-            if (f.mimeType === 'application/vnd.google-apps.folder') {
-              if (ramaPermitida && padre === raiz && !ramaPermitida.test(f.name.trim())) return;
-              rutas[f.id] = ruta;
-              siguiente.push(f.id);
-              return;
-            }
-            if (ramaPermitida && padre === raiz) return; // archivos sueltos del NUCO: no son de esa rama
-            if (!grupos[padre]) {
-              const tipo = /(^|\/)(INSPECCIONES)(\/|$)/i.test(rutas[padre]) ? 'INSPECCION' : (/(^|\/)CARTA RESPONSIVA(\/|$)/i.test(rutas[padre]) ? 'RESPONSIVA' : 'OTRO');
-              grupos[padre] = { carpetaId: padre, ruta: rutas[padre], tipo: tipo, archivos: [] };
-            }
-            grupos[padre].archivos.push({
-              id: f.id, nombre: f.name, mime: f.mimeType, miniatura: f.thumbnailLink || null, enlace: f.webViewLink,
-              video: /^video\//.test(f.mimeType), fecha: f.modifiedTime || null,
-            });
-          });
-          pagina = r.nextPageToken || null;
-        } while (pagina);
-      }
+      Expediente.hijos(nivel, { campos: 'nextPageToken,files(id,name,mimeType,parents,thumbnailLink,webViewLink,modifiedTime)' }).forEach((f) => {
+        const padre = (f.parents || []).filter((p) => p in rutas)[0];
+        if (padre === undefined) return;
+        const ruta = (rutas[padre] ? rutas[padre] + '/' : '') + f.name;
+        if (f.mimeType === Expediente.CARPETA) {
+          if (ramaPermitida && padre === raiz && !ramaPermitida.test(f.name.trim())) return;
+          rutas[f.id] = ruta;
+          siguiente.push(f.id);
+          return;
+        }
+        if (ramaPermitida && padre === raiz) return; // archivos sueltos del NUCO: no son de esa rama
+        if (!grupos[padre]) {
+          const tipo = /(^|\/)(INSPECCIONES)(\/|$)/i.test(rutas[padre]) ? 'INSPECCION' : (/(^|\/)CARTA RESPONSIVA(\/|$)/i.test(rutas[padre]) ? 'RESPONSIVA' : 'OTRO');
+          grupos[padre] = { carpetaId: padre, ruta: rutas[padre], tipo: tipo, archivos: [] };
+        }
+        grupos[padre].archivos.push({
+          id: f.id, nombre: f.name, mime: f.mimeType, miniatura: f.thumbnailLink || null, enlace: f.webViewLink,
+          video: /^video\//.test(f.mimeType), fecha: f.modifiedTime || null,
+        });
+      });
       nivel = siguiente;
     }
     // Fecha de cada carpeta: la de su ruta (".../2025/.../INSP 02 10" = 2 de octubre de 2025); si la ruta no la trae,
@@ -283,30 +253,8 @@ const LineasArchivos = (function () {
   }
 
   // ---------------- Escritura en NUCOS: carpeta de cada inspección / responsiva ----------------
-
-  const MESES_ = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-  const CUATRIMESTRES_ = ['1ER CUATRIMESTRE', '2DO CUATRIMESTRE', '3ER CUATRIMESTRE'];
-
-  /** Crea una carpeta con nombre único (agrega " (2)", " (3)"… si ya existe). */
-  function carpetaUnica_(padre, nombre) {
-    let candidato = nombre;
-    for (let n = 2; padre.getFoldersByName(candidato).hasNext(); n++) candidato = nombre + ' (' + n + ')';
-    return DriveUtils.crearCarpeta(padre, candidato);
-  }
-
-  /** Carpeta del NUCO dentro de NUCOS ("0599" o "599", la que ya exista); si no hay, la crea a 4 dígitos. */
-  function carpetaDelNuco_(nuco) {
-    const n4 = LineasUtil.nuco4(nuco);
-    if (!n4) throw new Error('El registro no tiene NUCO.');
-    const id = carpetasNucos()[n4];
-    if (id) {
-      try { const c = DriveApp.getFolderById(id); if (!c.isTrashed()) return c; } catch (e) { /* se borró: se vuelve a buscar */ }
-    }
-    LineasDatos.cacheBorrar('carpetas_nucos_v2');
-    const raiz = DriveApp.getFolderById(carpetaNucosId());
-    const otra = carpetasNucos()[n4];
-    return otra ? DriveApp.getFolderById(otra) : DriveUtils.crearCarpeta(raiz, n4);
-  }
+  // La estructura (INSPECCIONES/<año>/<cuatrimestre>/<mes>/INSP DD MM, CARTA RESPONSIVA/<año>/RESP DD MM) está en
+  // Expediente.TIPOS.equipo; la carpeta del NUCO es "0599" o "599" (la que ya exista) y, si no hay, se crea a 4 dígitos.
 
   /** Olvida lo que se tenía en caché del NUCO (Documentos, "Última inspección / responsiva"). */
   function olvidarNuco(nuco) {
@@ -322,28 +270,14 @@ const LineasArchivos = (function () {
    * Si ya hay una del mismo día, la nueva es "INSP DD MM (2)". Regresa { carpetaId, fotosCarpetaId, ruta, nombrePdf }.
    */
   function carpetaEvidenciaNuco(tipo, nuco, fecha) {
-    const n4 = LineasUtil.nuco4(nuco);
     const f = fecha instanceof Date && !isNaN(fecha) ? fecha : new Date();
-    const anio = Utilities.formatDate(f, ZONA, 'yyyy');
-    const mes = Number(Utilities.formatDate(f, ZONA, 'M'));
-    const ddmm = Utilities.formatDate(f, ZONA, 'dd MM');
-    const raizNuco = carpetaDelNuco_(n4);
-    let carpeta, fotos = null, ramas;
-    if (tipo === 'INSPECCION') {
-      ramas = ['INSPECCIONES', anio, CUATRIMESTRES_[Math.floor((mes - 1) / 4)], MESES_[mes - 1]];
-      carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizNuco), 'INSP ' + ddmm);
-      fotos = DriveUtils.crearCarpeta(carpeta, 'FOTOS');
-    } else if (tipo === 'RESPONSIVA') {
-      ramas = ['CARTA RESPONSIVA', anio];
-      carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizNuco), 'RESP ' + ddmm);
-    } else {
-      throw new Error('Tipo de evidencia inválido.');
-    }
+    const d = Expediente.carpetaDelDia('equipo', nuco, tipo, f);
+    const n4 = LineasUtil.nuco4(nuco);
     olvidarNuco(n4);
     return {
-      carpetaId: carpeta.getId(), fotosCarpetaId: fotos ? fotos.getId() : null,
-      ruta: [raizNuco.getName()].concat(ramas, [carpeta.getName()]).join('/'),
-      nombrePdf: (tipo === 'INSPECCION' ? 'INSP ' : 'RESP ') + n4 + ' ' + ddmm + '.pdf',
+      carpetaId: d.carpeta.getId(), fotosCarpetaId: d.fotos ? d.fotos.getId() : null,
+      ruta: [d.activoNombre].concat(d.ramas, [d.carpeta.getName()]).join('/'),
+      nombrePdf: (tipo === 'INSPECCION' ? 'INSP ' : 'RESP ') + n4 + ' ' + d.ddmm + '.pdf',
     };
   }
 
@@ -354,85 +288,22 @@ const LineasArchivos = (function () {
    * NUCOS y su ID va en LINEAS_DRIVE_LINEAS); en un DEV, «LINEAS» dentro de la carpeta de pruebas.
    */
   function carpetaLineasId() {
-    const id = prop_('LINEAS_DRIVE_LINEAS');
-    if (id) return id;
-    if (Config.ENTORNO === 'PROD') throw new Error('Falta la carpeta LINEAS en Drive (LINEAS_DRIVE_LINEAS en Entornos.gs).');
-    return subcarpeta_(DriveApp.getFolderById(carpetaNucosId()), 'LINEAS').getId();
+    return Expediente.raiz('linea');
   }
 
   /**
-   * ID de la línea → { id, nombre } de su carpeta dentro de LINEAS. La carpeta se reconoce por la propiedad `idLinea` de
-   * Drive, no por su nombre: el número cambia (Editar, Cambiar línea, la carga del proveedor) y la compañía lo recicla
-   * para otra línea. Caché 6 h.
+   * ID de la línea → id de su carpeta dentro de LINEAS. La carpeta se reconoce por la propiedad `idLinea` de Drive, no
+   * por su nombre: el número cambia (Editar, Cambiar línea, la carga del proveedor) y la compañía lo recicla para otra
+   * línea. El mapa de Expediente, 6 h.
    */
   function carpetasLineas() {
-    const enCache = LineasDatos.cacheLeer('carpetas_lineas_v1');
-    if (enCache) return enCache;
-    const mapa = {};
-    let pagina = null;
-    do {
-      const r = listarDrive({
-        q: "'" + carpetaLineasId() + "' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false",
-        pageSize: 1000, fields: 'nextPageToken,files(id,name,properties)', pageToken: pagina || undefined,
-      });
-      (r.files || []).forEach((f) => {
-        const idLinea = f.properties && f.properties.idLinea;
-        if (idLinea) mapa[idLinea] = { id: f.id, nombre: f.name };
-      });
-      pagina = r.nextPageToken || null;
-    } while (pagina);
-    LineasDatos.cacheGuardar('carpetas_lineas_v1', mapa, SEG_CACHE);
-    return mapa;
-  }
-
-  /** «4421234567» o, si ya hay otra carpeta con ese nombre (un número reciclado), «4421234567 (2)». */
-  function nombreLibre_(padre, nombre, propiaId) {
-    const ocupado = (n) => {
-      const it = padre.getFoldersByName(n);
-      while (it.hasNext()) { if (it.next().getId() !== propiaId) return true; }
-      return false;
-    };
-    let candidato = nombre;
-    for (let n = 2; ocupado(candidato); n++) candidato = nombre + ' (' + n + ')';
-    return candidato;
-  }
-
-  /**
-   * Carpeta de la línea en LINEAS, con el número de hoy como nombre. Se crea con su primera responsiva (no todas de
-   * golpe; usuario, 15-oct) y, si el número cambió desde entonces, se renombra al usarla.
-   */
-  function carpetaDeLinea_(lineaId, numero) {
-    const nombre = LineasUtil.digitos(numero);
-    if (!lineaId) throw new Error('Falta la línea.');
-    if (!nombre) throw new Error('La línea no tiene número: captúralo con Corregir.');
-    let carpeta = null;
-    const abrir = (x) => {
-      try { const c = x ? DriveApp.getFolderById(x.id) : null; return c && !c.isTrashed() ? c : null; } catch (e) { return null; }
-    };
-    carpeta = abrir(carpetasLineas()[lineaId]);
-    if (!carpeta) {
-      LineasDatos.cacheBorrar('carpetas_lineas_v1');
-      carpeta = abrir(carpetasLineas()[lineaId]);
-    }
-    const raiz = DriveApp.getFolderById(carpetaLineasId());
-    if (!carpeta) {
-      const nueva = DriveUtils.crearConApi({ name: nombreLibre_(raiz, nombre, null), mimeType: 'application/vnd.google-apps.folder',
-        parents: [raiz.getId()], properties: { idLinea: String(lineaId) } }, null, { supportsAllDrives: true, fields: 'id' });
-      LineasDatos.cacheBorrar('carpetas_lineas_v1');
-      return DriveApp.getFolderById(nueva.id);
-    }
-    if (carpeta.getName().replace(/ \(\d+\)$/, '') !== nombre) {
-      DriveUtils.renombrar(carpeta, nombreLibre_(raiz, nombre, carpeta.getId()));
-      LineasDatos.cacheBorrar('carpetas_lineas_v1');
-    }
-    return carpeta;
+    return Expediente.activos('linea');
   }
 
   /** Id de la carpeta de la línea, si ya tiene (la ficha: «Ver carpeta en Drive»), o null. Sin LINEAS, null. */
   function carpetaLineaId(lineaId) {
     try {
-      const x = lineaId ? carpetasLineas()[lineaId] : null;
-      return x ? x.id : null;
+      return lineaId ? carpetasLineas()[lineaId] || null : null;
     } catch (e) {
       return null;
     }
@@ -441,28 +312,30 @@ const LineasArchivos = (function () {
   /**
    * Carpeta nueva de una responsiva de la línea sin equipo, del día `fecha`:
    *   LINEAS/<NÚMERO>/CARTA RESPONSIVA/<AÑO>/RESP DD MM   (el PDF «RESP <NÚMERO> DD MM.pdf» y las identificaciones)
+   * La carpeta de la línea se crea con su primera responsiva (no todas de golpe; usuario, 15-oct) con el número de hoy
+   * y, si el número cambió desde entonces, se renombra al usarla (Expediente.TIPOS.linea).
    * Regresa { carpetaId, ruta, nombrePdf }, como carpetaEvidenciaNuco.
    */
   function carpetaEvidenciaLinea(lineaId, numero, fecha) {
     const f = fecha instanceof Date && !isNaN(fecha) ? fecha : new Date();
-    const anio = Utilities.formatDate(f, ZONA, 'yyyy');
-    const ddmm = Utilities.formatDate(f, ZONA, 'dd MM');
-    const raizLinea = carpetaDeLinea_(lineaId, numero);
-    const ramas = ['CARTA RESPONSIVA', anio];
-    const carpeta = carpetaUnica_(ramas.reduce((c, nombre) => subcarpeta_(c, nombre), raizLinea), 'RESP ' + ddmm);
+    const d = Expediente.carpetaDelDia('linea', lineaId, 'RESPONSIVA', f, { numero: numero });
     return {
-      carpetaId: carpeta.getId(),
-      ruta: ['LINEAS', raizLinea.getName()].concat(ramas, [carpeta.getName()]).join('/'),
-      nombrePdf: 'RESP ' + LineasUtil.digitos(numero) + ' ' + ddmm + '.pdf',
+      carpetaId: d.carpeta.getId(),
+      ruta: ['LINEAS', d.activoNombre].concat(d.ramas, [d.carpeta.getName()]).join('/'),
+      nombrePdf: 'RESP ' + LineasUtil.digitos(numero) + ' ' + d.ddmm + '.pdf',
     };
+  }
+
+  /** LINEAS, o null si no está configurada (un PROD sin LINEAS_DRIVE_LINEAS). */
+  function lineasIdSiHay_() {
+    try { return carpetaLineasId(); } catch (e) { return null; }
   }
 
   /** ¿La carpeta está dentro de LINEAS? Sin LINEAS configurada, no. */
   function enLineas(carpetaId) {
     if (!carpetaId) return false;
-    let raiz;
-    try { raiz = carpetaLineasId(); } catch (e) { return false; }
-    return estaDentroDe(carpetaId, raiz);
+    const raiz = lineasIdSiHay_();
+    return !!raiz && estaDentroDe(carpetaId, raiz);
   }
 
   /**
@@ -487,7 +360,7 @@ const LineasArchivos = (function () {
         DriveUtils.aPapelera(padre);
         padre = siguiente;
       }
-      LineasDatos.cacheBorrar('carpetas_lineas_v1');
+      Expediente.olvidarActivos('linea');
       return;
     }
     if (!dentroDeNucos) return;
@@ -505,19 +378,9 @@ const LineasArchivos = (function () {
 
   // ---------------- Escritura: carpeta de la app o NUCOS ----------------
 
-  /** ¿La carpeta está dentro de `raizId`? (sube hasta 12 niveles). */
+  /** ¿La carpeta está dentro de `raizId`? (sube hasta 12 niveles: Expediente.dentroDe). */
   function estaDentroDe(carpetaId, raizId) {
-    let actual = [DriveApp.getFolderById(carpetaId)];
-    for (let nivel = 0; nivel < 12 && actual.length; nivel++) {
-      const siguiente = [];
-      for (let i = 0; i < actual.length; i++) {
-        if (actual[i].getId() === raizId) return true;
-        const padres = actual[i].getParents();
-        while (padres.hasNext()) siguiente.push(padres.next());
-      }
-      actual = siguiente;
-    }
-    return false;
+    return Expediente.dentroDe(carpetaId, raizId);
   }
 
   /** ¿La carpeta está dentro de NUCOS? */

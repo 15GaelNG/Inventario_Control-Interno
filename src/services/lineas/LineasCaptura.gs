@@ -1067,6 +1067,8 @@ const LineasCaptura = (function () {
   function generarPdf(tipo, id, forzar, usuario, firmasNuevas) {
     const esInspeccion = tipo === 'INSPECCION';
     if (!esInspeccion && tipo !== 'RESPONSIVA') throw new Error('Tipo de PDF inválido.');
+    // Cada paso queda en Ejecuciones ([tiempo] …) y en el medidor de Líneas del DEV (marca_): fase 0 del motor único de PDF
+    const crono = Cronometro.iniciar('pdf celular-' + tipo + ' ' + id, (paso, ms) => marca_('pdf · ' + paso, Date.now() - ms));
     const tabla = esInspeccion ? LineasRepo.TAB.INSP : LineasRepo.TAB.RESP;
     const fila = leerFilaPorId_(tabla, id);
     if (!fila) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
@@ -1074,6 +1076,7 @@ const LineasCaptura = (function () {
     const ev = evidenciaSistema_(ids);
     if (!ev) throw new Error('Solo se generan PDF de registros capturados en el sistema.');
     if (!forzar && ev.pdfs && ev.pdfs.length) return ev.pdfs[0];
+    crono.marcar('leer fila y evidencia');
 
     let firmas = firmasCache_(tipo, id, firmasNuevas);
     const col = (c) => LineasUtil.col(fila, c);
@@ -1100,6 +1103,7 @@ const LineasCaptura = (function () {
     if (!firmasNuevas && firmas && firmas[rolCI] && !firmas.responsable && !firmas.sinResponsable && col('RESPONSABLE') && !col('FIRMA RESPONSABLE')) {
       return { faltanFirmas: true, soloResponsable: true, nombres: { responsable: col('RESPONSABLE') || '' } };
     }
+    crono.marcar('firmas de la caché');
     // Firmas: las de la captura o las nuevas; si la fila trae una ruta de imagen (AppSheet), se busca en la carpeta de la app
     const archivo = (c) => LineasArchivos.blob(col(c));
     const imagen = (clave, c, nombre) => (firmas && firmas[clave] ? blobBase64_(firmas[clave], nombre) : archivo(c));
@@ -1108,11 +1112,13 @@ const LineasCaptura = (function () {
     const rutaPatron = LineasUtil.patronVigente(col('PIN EQUIPO'), col(colPatron));
     const patron = firmas && firmas.patron ? blobBase64_(firmas.patron, 'patron.png')
       : (rutaPatron ? LineasPatronPng.blob(rutaPatron, esInspeccion ? '#ddebf7' : '#ffffff') || LineasArchivos.blob(rutaPatron) : null);
+    crono.marcar('patrón');
     // Con responsables adicionales, la firma del principal va más chica: los demás firman el PDF impreso en la misma línea
     const nombreFirmaResponsable = ORDEN_ADICIONALES.some((n) => col('NOMBRE ' + n + ' RESPONSABLE')) ? 'firma-principal.png' : 'firma-responsable.png';
     const destino = PDF[tipo];
     const deFiles = esInspeccion ? '' : pasarALineas_(fila, ev, id);
     const d = destinoPdf_(tipo, fila, ev, id);
+    crono.marcar('carpeta destino');
     const carpeta = d.carpeta;
     const nombre = d.nombre;
     // Firma a distancia de un responsable adicional (LineasFirmaRemota.gs): su propia casilla numerada
@@ -1126,12 +1132,11 @@ const LineasCaptura = (function () {
       : Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
         'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron }, firmasAdicionales);
     const anterior = forzar ? pdfVigente_(ev) : null;
+    crono.marcar('firmas a imagen');
     try {
-      const tp = Date.now();
       const pdf = LineasPdf.generarPdfDesdePlantilla(
         esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
-        registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos);
-      marca_('pdf · copiar la plantilla y convertir', tp);
+        registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos, crono);
       if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
       if (anterior) {
         const nuevo = DriveApp.getFileById(pdf.id);
@@ -1141,7 +1146,8 @@ const LineasCaptura = (function () {
           refs: [col('ID LINEA')], nuco: col('NUCO'),
           detalle: Object.assign(esInspeccion ? { inspeccionId: id } : { responsivaId: id }, { cambios: [{ campo: 'PDF', antes: '', despues: anterior.getName() }] }),
         }));
-        return { id: anterior.getId(), nombre: anterior.getName(), url: anterior.getUrl(), avisos: pdf.avisos };
+        crono.marcar('reemplazar el PDF anterior');
+        return { id: anterior.getId(), nombre: anterior.getName(), url: anterior.getUrl(), avisos: pdf.avisos, tiempos: crono.tiempos() };
       }
       const ruta = d.enNucos ? 'https://drive.google.com/file/d/' + pdf.id + '/view' : destino.carpeta + '/' + nombre;
       LineasDatos.conCandado(() => {
@@ -1152,10 +1158,14 @@ const LineasCaptura = (function () {
           detalle: { responsivaId: id, cambios: [{ campo: 'PDF', antes: deFiles, despues: (ev.ruta || '') + '/' + pdf.nombre }] },
         });
       });
+      crono.marcar('ligar a la hoja');
+      pdf.tiempos = crono.tiempos();
       return pdf;
     } catch (e) {
       console.error('generarPdf ' + tipo + ' (' + id + '): ' + e.message);
       throw new Error('No se pudo generar el PDF de la ' + (esInspeccion ? 'inspección' : 'responsiva') + ': ' + e.message);
+    } finally {
+      crono.anotar();
     }
   }
 

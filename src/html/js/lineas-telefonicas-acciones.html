@@ -174,7 +174,7 @@
         $('#ln-captura-titulo', raiz).textContent = accion.texto;
         $('#ln-captura-subtitulo', raiz).textContent = miles(filas.length) + ' ' + unidad + ' seleccionados · cada cambio queda en su historial';
         const cuerpo = $('#ln-captura-cuerpo', raiz);
-        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
         const sesion = T.captura = { tipo: 'MASIVA', firmas: {} };
         let form;
         try {
@@ -352,7 +352,7 @@
         $('#ln-captura-tipo', raiz).textContent = 'RESGUARDO';
         $('#ln-captura-titulo', raiz).textContent = accionTexto;
         const cuerpo = $('#ln-captura-cuerpo', raiz);
-        cuerpo.innerHTML = '<p class="empty-state"><span class="ln-spinner"></span> Cargando…</p>';
+        cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
         const sesion = T.captura = { tipo: 'RESGUARDO', firmas: {} };
         let form;
         try {

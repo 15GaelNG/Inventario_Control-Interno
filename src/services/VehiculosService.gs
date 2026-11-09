@@ -29,6 +29,7 @@ const VehiculosService = (function () {
   // Columnas de documento que la hoja vieja no traía (9-oct-2026): si faltan, se agregan al final la primera vez que
   // se sube uno (asegurarColumnasDocumento_). ADJUNTAR FACTURA ya existía (como texto, vacía en los 648).
   const COLUMNAS_DOCUMENTO_NUEVAS = ['TARJETA CIRCULACION', 'ALTA PLACAS'];
+
   // Etiqueta corta para el nombre de archivo en Drive, por columna ("<ID>_<ETIQUETA>_<fecha>.ext")
   const ETIQUETA_ARCHIVO = {
     'RESPONSIVA': 'RESPONSIVA',

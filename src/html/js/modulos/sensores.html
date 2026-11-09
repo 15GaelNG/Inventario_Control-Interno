@@ -228,7 +228,7 @@
       if (btn) {
         btn.addEventListener('click', async () => {
           const caja = contenedor.querySelector('#sen-actividad');
-          caja.innerHTML = '<span class="dt-skel" style="height:60px; width:100%; border-radius:var(--radio-m)"></span>';
+          caja.innerHTML = Carga.html('caja', { alto: 60 });
           try {
             const r = await callServer('apiResumenGeotabSensor', state.token, sensor.ID, DIAS_ACTIVIDAD);
             caja.innerHTML =

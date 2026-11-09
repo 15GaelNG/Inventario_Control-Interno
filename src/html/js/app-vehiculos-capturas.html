@@ -84,7 +84,7 @@
 
     async function abrirAgregarSensor(vResumen) {
       const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Instalar sensor', 'Folio ' + vResumen.FOLIO);
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let datos;
       try {
         datos = await callServer('apiDatosVehiculoParaSensor', state.token, vResumen.ID_VEHICULO || vResumen.FOLIO);
@@ -131,7 +131,7 @@
 
     async function abrirAgregarHolograma(vResumen, completo) {
       const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Nuevo holograma', 'Folio ' + vResumen.FOLIO);
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let catalogos;
       try {
         catalogos = await callServer('apiCatalogosHologramas', state.token);
@@ -200,6 +200,41 @@
       });
     }
 
+    /** Editar una inspección ya guardada, desde la ficha del vehículo: mismo wizard, en modo
+     *  edición (prepararCaptura trae la fila completa sola -- aquí solo hace falta el ID).
+     *  Checklist/llantas/voltaje/encabezado; firmas y diagramas no se tocan. */
+    function abrirEditarInspeccionFicha(id, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('clipboard-list', 'INSPECCIÓN', 'Editar inspección', 'Folio ' + vResumen.FOLIO);
+      prepararCaptura(cuerpo, {
+        idEditar: id,
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
+      });
+    }
+
+    /** Subir un PDF/foto ya corregido a mano por fuera del sistema, SIN entrar al wizard completo
+     *  de Editar: reemplaza tal cual el formato de esa inspección (checklist y puntaje no cambian
+     *  -- InspeccionesService.actualizar los vuelve a calcular con lo que ya había en la fila). */
+    function abrirSubirFormatoInspeccionFicha(id, vResumen) {
+      const cuerpo = abrirCapturaVehiculo('file-up', 'INSPECCIÓN', 'Subir formato corregido', 'Folio ' + vResumen.FOLIO);
+      Formulario.crear(cuerpo, {
+        ancho: 'medio', columnas: 1,
+        campos: [
+          { id: 'FORMATO', etiqueta: 'PDF o foto ya corregido', tipo: 'archivo', acepta: 'application/pdf,image/png,image/jpeg',
+            maxMB: 10, requerido: true, vistaPrevia: true,
+            ayuda: 'Reemplaza tal cual al formato actual de esta inspección. El checklist y el puntaje no cambian.' },
+        ],
+        textoGuardar: 'Subir', iconoGuardar: 'file-up',
+        alGuardar: async (valores, archivos) => {
+          const res = await callServer('apiActualizarInspeccion', state.token, id, {}, {
+            base64: await leerArchivoBase64(archivos.FORMATO), mimeType: archivos.FORMATO.type,
+          });
+          if (res.aviso) throw new Error(res.aviso);
+        },
+        textoExito: () => 'Formato actualizado',
+        alGuardado: () => { cerrarCapturaVehiculo(); abrirFichaVehiculo(vResumen, 'inspecciones'); },
+      });
+    }
+
     /** Editar verificación: 3 campos, actualiza campo por campo (mismo que su
      *  módulo -- guardarCambiosCampoPorCampo + apiActualizarCampoVerificacion). */
     function abrirEditarVerificacionFicha(v, vResumen) {
@@ -233,7 +268,7 @@
      *  reasignar a otro vehículo, igual que en su módulo), actualiza campo por campo. */
     async function abrirEditarSensorFicha(s, vResumen) {
       const cuerpo = abrirCapturaVehiculo('radio', 'SENSOR', 'Editar sensor', 'Folio ' + (s.FOLIO || vResumen.FOLIO));
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let datos;
       try {
         datos = await callServer('apiDatosVehiculoParaSensor', state.token, s.ID_VEHICULO || vResumen.ID_VEHICULO || s.FOLIO || vResumen.FOLIO);
@@ -279,7 +314,7 @@
      *  bloquean -- igual que en Hologramas, se sincronizan solos desde Vehículos. */
     async function abrirEditarHologramaFicha(h, vResumen) {
       const cuerpo = abrirCapturaVehiculo('credit-card', 'HOLOGRAMA', 'Editar holograma', 'Folio ' + (h.FOLIO || vResumen.FOLIO));
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       let catalogos;
       try {
         catalogos = await callServer('apiCatalogosHologramas', state.token);
@@ -371,7 +406,8 @@
       abrirAgregarInspeccion: abrirAgregarInspeccion, abrirAgregarSensor: abrirAgregarSensor,
       abrirAgregarVerificacion: abrirAgregarVerificacion, abrirCapturaVehiculo: abrirCapturaVehiculo,
       abrirEditarHologramaFicha: abrirEditarHologramaFicha, abrirEditarIncidenciaFicha: abrirEditarIncidenciaFicha,
-      abrirEditarSensorFicha: abrirEditarSensorFicha, abrirEditarVerificacionFicha: abrirEditarVerificacionFicha,
+      abrirEditarInspeccionFicha: abrirEditarInspeccionFicha, abrirEditarSensorFicha: abrirEditarSensorFicha,
+      abrirEditarVerificacionFicha: abrirEditarVerificacionFicha, abrirSubirFormatoInspeccionFicha: abrirSubirFormatoInspeccionFicha,
       cerrarCapturaVehiculo: cerrarCapturaVehiculo,
     };
   });

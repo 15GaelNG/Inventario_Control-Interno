@@ -158,7 +158,7 @@
       const id = dueno + '>' + copia;
       const cont = raiz.querySelector(`[data-dc-agregar="${CSS.escape(id)}"]`);
       cont.hidden = false;
-      cont.innerHTML = '<p class="dc-sutil">Cargando columnas…</p>';
+      cont.innerHTML = Carga.html('bloque', { n: 4, texto: 'Cargando columnas…' });
       try {
         const [cd, cc] = await Promise.all([columnasDe(dueno), columnasDe(copia)]);
         const opcion = (col) => `<option value="${esc(col.nombre)}"${col.secreto || col.esId ? ' disabled' : ''}>${esc(nombreDato(col.nombre))}${col.ejemplos.length ? ' · ej. ' + esc(col.ejemplos.join(', ')) : ''}${col.secreto ? ' (secreto)' : col.esId ? ' (ID)' : ''}</option>`;
@@ -378,7 +378,7 @@
 
     async function iniciar(contenedor) {
       raiz = contenedor;
-      raiz.innerHTML = '<p class="empty-state">Cargando conexiones…</p>';
+      raiz.innerHTML = Carga.html('lista', { n: 4, texto: 'Cargando conexiones…' });
       raiz.addEventListener('click', alClic);
       try {
         await recargar();

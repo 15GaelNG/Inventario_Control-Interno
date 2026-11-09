@@ -168,7 +168,7 @@
      *  esto solo agrega, abajo, lo que trae el catálogo de Vehículos. */
     async function mostrarVehiculoEnPanel(inc, contenedor) {
       const titulo = '<div class="dt-campo-titulo" style="margin:14px 0 6px">Vehículo</div>';
-      contenedor.innerHTML = titulo + '<div class="loading-inline"><span class="spinner"></span> Buscando en el catálogo de vehículos…</div>';
+      contenedor.innerHTML = titulo + Carga.html('bloque', { n: 3, texto: 'Buscando en el catálogo de vehículos…' });
       try {
         const vehiculo = await callServer('apiBuscarVehiculoPorFolio', state.token, inc.FOLIO);
         if (!vehiculo) {

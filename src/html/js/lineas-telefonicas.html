@@ -6,7 +6,7 @@
   (function () {
     'use strict';
     const { $, CATALOGOS_LINEAS, COLOR_ESTATUS, REGLAS_FORMATO, abrirPanelLateral, alternarMulti, aviso, bloqueadoDG,
-      cargarIndice, chip, colorAppSheet, elegirPastilla, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion,
+      cargarIndice, chip, chipCompania, colorAppSheet, elegirPastilla, esc, exportarBase, fecha, fechaHora, formatoAppSheet, guion,
       ico, icono, llamar, memoria, mensajeError, miles, montaje, panelActual, pintarIconos, precargarUltimosNucos,
       puedeOperar, quitarDelPanel, tablaLineas, vacio, veDocumentos, veHistorial, verFotoEnGrande } = Lineas.comun;
 
@@ -95,7 +95,9 @@
           { campo: 'imei', titulo: 'IMEI', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'estatus', titulo: 'Estatus', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'numero', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
-          { campo: 'compania', titulo: 'Compañía', tipo: 'lista' },
+          { campo: 'compania', titulo: 'Compañía', tipo: 'lista', render: (v) => chipCompania(v) || vacio },
+          // Sin línea: la compañía de la última que tuvo, por compatibilidad (usuario, 5-nov)
+          { campo: 'ultimaCompania', titulo: 'Última compañía', tipo: 'lista', visible: false, render: (v) => chipCompania(v) || vacio },
           { campo: 'estatusLinea', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'responsable', titulo: 'Responsable', tipo: 'texto' },
           { campo: 'departamento', titulo: 'Departamento', tipo: 'lista' },
@@ -619,6 +621,8 @@
             (v('ESTATUS EQUIPO') ? chip('Equipo: ' + v('ESTATUS EQUIPO'), COLOR_ESTATUS[String(v('ESTATUS EQUIPO')).toUpperCase()]) : '') +
             (v('ESTATUS LINEA') ? chip('Línea: ' + v('ESTATUS LINEA'), COLOR_ESTATUS[String(v('ESTATUS LINEA')).toUpperCase()]) : '') +
             (formatoAppSheet('LINEAS', 'TIPO', r.tipoHoja) || (r.tipoHoja ? chip(r.tipoHoja) : '')) +
+            // La compañía en badge; el equipo sin línea, la de su última línea (usuario, 6-nov)
+            (numero ? chipCompania(r.compania || v('COMPAÑIA')) : tipo === 'equipo' ? chipCompania(r.ultimaCompania || v('ULTIMA COMPAÑIA'), 'ÚLTIMA LÍNEA: ') : '') +
           '</div><div class="ln-vr-acciones">' +
             '<button type="button" class="ln-btn-icono" data-vr-ficha>' + icono('maximize-2') + ' Abrir ficha completa</button>' +
             (conUltimo(r) ? botonUltimoNucos('RESPONSIVA', r.id).replace(' Ver</button>', ' Última responsiva</button>') +
@@ -664,7 +668,10 @@
             '<div class="ln-cuadro-principal">' + guion(r.responsable) + '</div>' +
             '<div class="ln-cuadro-secundario">' + guion(r.modelo) + '</div>' +
             pie(icono('phone') + ' <span class="ln-mono">' + (r.numero ? esc(r.numero) : 'Sin línea') + '</span>', icono('scan-line') + ' <span class="ln-mono">' + guion(r.imei) + '</span>') +
-            pie(chip(r.estatus), 'Ver ficha ' + icono('chevron-right')) + '</button>';
+            // Junto al estatus, la compañía en un badge (usuario, 5-nov): la de hoy o, sin línea, la de la última que tuvo
+            // (no todos los equipos vienen liberados)
+            pie('<span class="ln-chips">' + chip(r.estatus) + (r.numero ? chipCompania(r.compania) : chipCompania(r.ultimaCompania, 'ÚLTIMA LÍNEA: ')) + '</span>',
+              'Ver ficha ' + icono('chevron-right')) + '</button>';
         }
         return '<button type="button" class="card ln-cuadro ln-cuadro-activo" data-ln-ir="linea" data-id="' + esc(r.id) + '" aria-label="Abrir línea ' + esc(r.numero || '') + '">' +
           '<div class="ln-cuadro-superior"><span class="ln-cuadro-folio ln-mono">' + guion(r.numero) + '</span><span class="ln-cuadro-tipo">' + tipo + '</span></div>' +
@@ -682,7 +689,7 @@
         const visibles = Math.min(tarjetasVisibles[modulo], filas.length);
         cont.innerHTML = (filas.length
           ? '<div class="ln-cuadros-grid">' + filas.slice(0, visibles).map((r) => tarjetaInventario(modulo, r)).join('') + '</div>'
-          : '<p class="empty-state">' + (memoria.indice ? 'No hay registros que coincidan con la búsqueda o los filtros.' : '<span class="ln-spinner"></span> Cargando…') + '</p>') +
+          : (memoria.indice ? '<p class="empty-state">No hay registros que coincidan con la búsqueda o los filtros.</p>' : Carga.html('kpis', { n: 6 }))) +
           '<div class="ln-cuadros-mas"><span class="ln-tenue">Mostrando ' + miles(visibles) + ' de ' + miles(filas.length) + '</span>' +
           (visibles < filas.length ? '<button type="button" class="secondary" data-ln-mas-tarjetas="' + modulo + '">Mostrar más</button>' : '') + '</div>';
         marcarTarjetasSeleccionadas(modulo);

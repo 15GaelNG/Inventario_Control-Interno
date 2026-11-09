@@ -145,7 +145,7 @@
         return;
       }
       contenedor.innerHTML = '<div class="dt-campo-titulo" style="margin-bottom:8px">Comprobante</div>' +
-        '<span class="dt-skel" style="height:180px; width:100%; border-radius:var(--radio-l)"></span>';
+        Carga.html('caja', { alto: 180 });
       try {
         const vista = await callServer('apiPrevisualizarComprobanteVerificacion', state.token, v.COMPROBANTE);
         if (!document.body.contains(contenedor)) return;   // el panel se cerró mientras cargaba

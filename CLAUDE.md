@@ -120,6 +120,12 @@ encabezado de una ficha), `FiltroTipo` (el filtro rápido por tipo/estatus) y `P
 por pasos: `Pasos.htmlChips` + `Pasos.navegar`; `libre`, `guardarAlFinal`). El error de un campo, fuera de un
 `Formulario`: `Formulario.marcarError(caja, mensaje)`. Cada uno tiene su contrato: una copia nueva hace fallar las pruebas.
 
+**Lo que está cargando → `Carga`** (5-nov): el esqueleto de lo que va a llegar, nunca otro «Cargando…» a mano.
+`Carga.html('bloque' | 'lista' | 'kpis' | 'ficha' | 'barras' | 'caja', { n, texto, tarjeta, columnas, alto })` para
+innerHTML, o `<div data-carga="lista" data-carga-n="4">` en el HTML fijo de una vista. Toma los colores del tema, respeta
+"reducir movimiento" y DataTable usa la misma pieza (`.carga-hueso`). Se quedan `toastCargando` (una acción) y el botón
+ocupado. Contrato en `source-contracts`.
+
 También `Partes` (una pantalla grande abierta en archivos, 6.1b) e `Imagen` (22-oct): **reducir una foto antes de
 subirla** es `Imagen.reducir(archivo, { lado | ancho, calidad })`, nunca otra copia con `new Image()` + lienzo — la abre
 con poca memoria y de una en una (en el celular, abrir fotos de cámara completas dejaba la pantalla en blanco).
@@ -234,6 +240,16 @@ ganchos: `ArqueosService.gs` y `VehiculosService.gs`. La guía completa está al
   `5.-RESPONSIVA/FIRMAS`. Sin NUCCO, la carpeta de antes. Los lectores de `DriveUtils` abren liga o ruta vieja. Producción apunta a la real con
   `DRIVE_FOLDER_ID_NUCOS_VEHICULOS` (Entornos.gs); un DEV sin esa clave usa una "NUCOS VEHICULOS" de pruebas en su raíz.
   No guardes un documento del vehículo en una carpeta suelta de la raíz (contrato).
+- **Las carpetas de un activo en Drive → `Expediente`** (`src/utils/Expediente.gs`, 6-nov, homologación 5.7). Un solo
+  motor para NUCOS VEHICULOS (`vehiculo`), NUCOS TELEFONICOS (`equipo`) y LINEAS (`linea`): cada tipo declara en
+  `Expediente.TIPOS` su raíz, cómo se llama la carpeta del activo y las ramas de cada documento; el motor busca o crea
+  (`carpetaActivo`, `carpetaDocumento`, `carpetaDelDia`), guarda el mapa activo → carpeta (6 h), lista en lote (`hijos`)
+  y dice en qué raíz está una carpeta (`raizDe`, `dentroDe`). `ExpedienteNuco` y `LineasArchivos` son sus fachadas (no
+  cambiaron de firma). Las carpetas en Drive no cambian: un activo nuevo (o una estructura nueva) es una entrada en
+  `TIPOS`, no otro buscador. Contrato en `tests/expediente.test.cjs`: nadie más sube por los padres ni arma su mapa.
+  **Memoria** (9-nov, fase 2): la ruta completa → su ID y el padre de cada carpeta quedan 6 h en CacheService; la segunda
+  vez no se baja ni se sube por Drive (solo se comprueba la última carpeta). Medir: `pruebaExpediente()` en
+  `src/pruebas/PruebasDev.gs` (el editor de un DEV; corre la captura sin y con memoria).
 
 - **Copiar un dato de una hoja a otra (y mantenerlo al día) → Datos conectados**, no código a mano en el servicio: el
   `MAPA` de `Relaciones.gs` o, desde la pantalla, `DatosConectados.gs` (docs/relaciones.md, "Conectar datos desde la

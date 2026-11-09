@@ -771,7 +771,12 @@ const LineasResguardos = (function () {
       // la región por la lada. No se guardan: se leen del inventario
       filas = filas.map((r) => {
         const o = espejo_(r, ix, hoy);
-        if (!o['CANCELACION']) return o;
+        if (!o['CANCELACION']) {
+          // Equipo sin línea hoy: la compañía de la última que tuvo, para su badge (LineasLectura, ULTIMA COMPAÑIA; usuario, 6-nov)
+          const fe = ix.porId[txt(o['REGISTRO_ID'])];
+          const ultima = fe ? txt(LineasUtil.col(fe, 'ULTIMA COMPAÑIA')) : '';
+          return ultima ? Object.assign(o === r ? Object.assign({}, r) : o, { 'ULTIMA_COMPANIA': ultima }) : o;
+        }
         const fl = registroDeLinea_(o, ix);
         return Object.assign(o === r ? Object.assign({}, r) : o, {
           'CUENTA_PADRE': fl ? txt(LineasUtil.col(fl, 'CUENTA PADRE')) : '', 'REGION': LineasUtil.regionDeNumero(o['NUMERO']),

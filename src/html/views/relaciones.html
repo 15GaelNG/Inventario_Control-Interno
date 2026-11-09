@@ -17,14 +17,14 @@
   .rel-calc { font-size: var(--texto-2xs); padding: 1px 6px; border-radius: 999px; background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); margin-left: 4px; }
   .rel-nota { font-size: var(--texto-s); color: var(--color-text-muted); margin: 0; }
   .rel-tipo { font-size: var(--texto-xs); padding: 2px 8px; border-radius: 999px; font-weight: 600; white-space: nowrap; }
-  .rel-tipo.cache { background: var(--color-primary-soft); color: var(--color-primary); }
+  .rel-tipo.cache { background: var(--color-primary-soft); color: var(--color-primary-texto); }
   .rel-tipo.bitacora { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
 
   /* ---- Vista sencilla (para todos): pestaña Avisos + una por familia ---- */
   .rel-switch { display: inline-flex; align-items: center; gap: 8px; font-size: var(--texto-s); color: var(--color-text-muted); cursor: pointer; user-select: none; white-space: nowrap; }
   .rel-switch input { width: auto; margin: 0; }
   .rel-s { max-width: 1040px; }
-  .rel-s-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: var(--texto-xs); background: var(--color-danger); color: #fff; }
+  .rel-s-badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; font-size: var(--texto-xs); background: var(--color-danger); color: var(--color-on-danger); }
   .rel-s-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
   .rel-s-cabeza button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; font-size: var(--texto-s); }
   .rel-s-cuando { font-size: var(--texto-s); color: var(--color-text-muted); }
@@ -56,10 +56,10 @@
   .rel-s-tabla td { padding: 9px 10px; border-bottom: 1px solid var(--color-border); vertical-align: top; }
   .rel-s-tabla tr:last-child td { border-bottom: none; }
   .rel-s-sutil { color: var(--color-text-muted); font-size: var(--texto-s); margin-top: 3px; max-width: 420px; }
-  .rel-s-nada { color: var(--color-border); }
+  .rel-s-nada { color: var(--color-text-muted); opacity: .6; }
   .rel-s-ayuda-td { width: 36px; text-align: center; }
   .rel-s-ayuda { background: transparent; border: none; padding: 2px; color: var(--color-text-muted); cursor: help; display: inline-flex; }
-  .rel-s-ayuda:hover { color: var(--color-primary); background: transparent; }
+  .rel-s-ayuda:hover { color: var(--color-primary-texto); background: transparent; }
   /* En celular la tabla se apila: un dato por tarjeta, cada valor con su etiqueta */
   @media (max-width: 720px) {
     .rel-s-tabla thead { display: none; }
@@ -79,7 +79,7 @@
   .dc-cabeza { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
   .dc-filtros { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .dc-chip { padding: 5px 12px; border-radius: 999px; font-size: var(--texto-s); background: var(--color-surface); border: 1px solid var(--color-border); color: var(--color-text); }
-  .dc-chip.activo { background: var(--color-primary-soft); color: var(--color-primary); border-color: var(--color-primary); font-weight: 600; }
+  .dc-chip.activo { background: var(--color-primary-soft); color: var(--color-primary-texto); border-color: var(--color-primary); font-weight: 600; }
   .dc-nueva { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
   .dc-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
   .dc-tarjeta { border: 1px solid var(--color-border); border-radius: var(--radio-xl); padding: 14px; background: var(--color-surface); display: flex; flex-direction: column; gap: 10px; }
@@ -95,8 +95,8 @@
   .dc-dato { display: grid; grid-template-columns: 1fr auto 1fr 28px; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--radio-m); background: var(--color-bg); font-size: var(--texto-s); }
   .dc-de, .dc-a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .dc-flecha { color: var(--color-text-muted); display: inline-flex; }
-  .dc-flecha.grande { color: var(--color-primary); }
-  .dc-mas { align-self: flex-start; background: transparent; border: none; padding: 4px 8px; color: var(--color-primary); font-size: var(--texto-s); font-weight: 600; }
+  .dc-flecha.grande { color: var(--color-primary-texto); }
+  .dc-mas { align-self: flex-start; background: transparent; border: none; padding: 4px 8px; color: var(--color-primary-texto); font-size: var(--texto-s); font-weight: 600; }
   .dc-mas:hover { background: transparent; text-decoration: underline; }
   .dc-quitar { background: transparent; border: none; padding: 2px; color: var(--color-text-muted); display: inline-flex; justify-content: center; }
   .dc-quitar:hover { color: var(--color-danger); background: transparent; }

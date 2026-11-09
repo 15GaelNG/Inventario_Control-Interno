@@ -57,7 +57,7 @@ function archivos(drive) {
     LineasDatos: { cacheLeer: (k) => cache[k] || null, cacheGuardar: (k, v) => { cache[k] = v; }, cacheBorrar: (k) => { delete cache[k]; } },
     LineasUtil: { digitos: (v) => String(v || '').replace(/\D/g, '') },
   });
-  vm.runInContext(read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
+  vm.runInContext(read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
   return ctx.A;
 }
 
@@ -92,7 +92,7 @@ test('carpeta de la línea: sin número no hay responsiva; en producción sin LI
   const d = driveFalso();
   assert.throws(() => archivos(d).carpetaEvidenciaLinea('LIN-1', '', new Date()), /La línea no tiene número: captúralo con Corregir\./);
   const ctx = vm.createContext({ leerConfig_: () => '', Config: { ENTORNO: 'PROD' } });
-  vm.runInContext(read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
+  vm.runInContext(read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
   assert.throws(() => ctx.A.carpetaLineasId(), /Falta la carpeta LINEAS en Drive/);
   assert.equal(ctx.A.enLineas('X'), false);
 });

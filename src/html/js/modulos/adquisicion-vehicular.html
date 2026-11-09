@@ -15,7 +15,7 @@
       contenedor.innerHTML = '<p class="empty-state">Este expediente todavía no tiene carpeta ligada.</p>';
       return;
     }
-    contenedor.innerHTML = '<span class="dt-skel" style="height:90px; width:100%; border-radius:var(--radio-m)"></span>';
+    contenedor.innerHTML = Carga.html('caja', { alto: 90 });
     try {
       const r = JSON.parse(await callServer('apiAdquisicionVehicularArchivos', state.token, fila.liga));
       if (!r.soportado) {

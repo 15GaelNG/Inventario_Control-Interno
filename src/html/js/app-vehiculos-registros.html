@@ -7,9 +7,10 @@
   Vehiculos.registrar('registros', (T) => {
     const { abrirFichaVehiculo } = T.de('ficha');
 
-    // ---------- Ver completo / Editar / Eliminar de un registro de las 5 pestañas,
-    // sin salir de la ficha del vehículo. Inspección solo lleva "Ver completo": es un
-    // acta firmada, misma regla de negocio que ya rige su propio módulo. ----------
+    // ---------- Ver completo / Editar / Eliminar de un registro de las 6 pestañas,
+    // sin salir de la ficha del vehículo. Inspección (30-oct) sí se puede editar --
+    // checklist/llantas/voltaje/encabezado, nunca firmas ni diagramas -- pero sigue sin
+    // Eliminar: si algo cambió, se corrige, no se borra una inspección firmada. ----------
 
     const API_VER_FICHA_REGISTRO = {
       verificacion: { api: 'apiBuscarVerificacionPorId', titulo: 'Verificación' },
@@ -29,7 +30,7 @@
       document.getElementById('veh-ver-registro-titulo').textContent = cfg.titulo;
       document.getElementById('veh-ver-registro-subtitulo').textContent = 'ID: ' + id;
       const cuerpo = document.getElementById('veh-ver-registro-cuerpo');
-      cuerpo.innerHTML = '<p class="empty-state"><span class="spinner"></span> Cargando…</p>';
+      cuerpo.innerHTML = Carga.html('bloque', { n: 5 });
       document.getElementById('veh-modal-ver-registro').hidden = false;
       try {
         const resultado = await callServer(cfg.api, state.token, id);
@@ -158,7 +159,7 @@
         (liga ? '<span style="margin-left:auto">' + TablaFicha.boton({ texto: 'Abrir carpeta', icono: 'externo', href: liga }) + '</span>' : boton) + '</h3>' +
         '<dl class="ficha-resumen"><div><dt>Folio</dt><dd>' + escaparHtml(folio) + '</dd></div></dl>' +
         (liga ? '<div data-adq-ficha-archivos data-liga="' + escaparHtml(liga) + '" style="margin-top:12px">' +
-          '<p class="ln-tenue"><span class="spinner"></span> Cargando archivos…</p></div>'
+          Carga.html('lista', { n: 3, texto: 'Cargando archivos…' }) + '</div>'
           : '<p class="empty-state" style="margin-top:12px">No se encontró la carpeta en Drive.</p>') +
         '</div>';
     }

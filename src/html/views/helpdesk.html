@@ -13,7 +13,7 @@
     --hd-nota: #fff6e0; --hd-nota-borde: #e9c46a;
   }
   :root[data-theme="dark"] .hd-tema {
-    --hd: #a3a3f5; --hd-fuerte: #c0c0fa; --hd-suave: rgba(163, 163, 245, .13); --hd-borde: rgba(163, 163, 245, .32);
+    --hd: #b4b4f7; --hd-fuerte: #cdcdfb; --hd-suave: rgba(163, 163, 245, .13); --hd-borde: rgba(163, 163, 245, .32);
     --hd-nota: #2d2716; --hd-nota-borde: #8a7434;
   }
   .hd-tema .hd-boton-acento { background: var(--hd); border-color: var(--hd); color: #fff; }
@@ -23,6 +23,10 @@
   .hd-marca .ico { width: 18px; height: 18px; }
   .hd-punto { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--color-border); }
   .hd-estado { display: inline-flex; align-items: center; gap: 5px; font-size: var(--texto-xs); font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--color-bg); white-space: nowrap; }
+  /* El color de un estatus viene del helpdesk de TI (--hd-c en línea): en oscuro se aclara para que se lea */
+  .hd-estado[style*="--hd-c"] { color: var(--hd-c); background: color-mix(in srgb, var(--hd-c) 12%, transparent); }
+  :root[data-theme="dark"] .hd-estado[style*="--hd-c"] { color: color-mix(in oklab, var(--hd-c) 50%, #fff); background: color-mix(in srgb, var(--hd-c) 18%, transparent); }
+  .hd-carga { padding: 4px 14px; }
   .hd-vacio { display: grid; place-items: center; text-align: center; padding: 40px 20px; color: var(--color-text-muted); font-size: var(--texto-s); height: 100%; }
   .hd-vacio .ico { width: 34px; height: 34px; color: var(--hd); opacity: .7; }
   .hd-vacio h3 { margin: 8px 0 4px; color: var(--color-text); font-size: var(--texto-l); }
@@ -117,8 +121,6 @@
   :root[data-theme="dark"] .hd-reg.falta { color: var(--color-accent); }
   .hd-lista-pie { padding: 10px; text-align: center; font-size: var(--texto-s); color: var(--color-text-muted); border-top: 1px solid var(--color-border); }
   .hd-lista-pie button { font-size: var(--texto-s); padding: 6px 12px; }
-  .hd-esqueleto { height: 64px; margin: 8px 12px; border-radius: var(--radio-l); background: linear-gradient(90deg, var(--color-bg), var(--color-border), var(--color-bg)); background-size: 200% 100%; animation: hdBrillo 1.2s infinite; }
-  @keyframes hdBrillo { to { background-position: -200% 0; } }
 
   /* Ticket abierto */
   .hd-ticket { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--color-bg); }
@@ -175,7 +177,6 @@
   .hd-ci-ticket:hover span { color: var(--hd); }
   .hd-ci-ticket span, .hd-ci-ticket small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hd-ci-ticket small { color: var(--color-text-muted); font-size: var(--texto-xs); }
-  .hd-esqueleto.hd-esqueleto-chico { height: 44px; margin: 0; }
   /* Tiempo sin respuesta: ámbar al pasar la meta del helpdesk (2 h), rojo con más de un día */
   .hd-espera { flex: none; display: inline-flex; align-items: center; gap: 3px; font-size: var(--texto-xs); font-weight: 600; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
   .hd-espera .ico { width: 12px; height: 12px; }
@@ -229,7 +230,7 @@
   .hd-paso { display: flex; gap: 10px; align-items: flex-start; margin: 0 0 10px; font-size: var(--texto-s); }
   .hd-paso-num {
     flex: 0 0 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
-    background: var(--hd-suave); color: var(--hd); font-weight: 700; font-size: var(--texto-s);
+    background: var(--hd-suave); color: var(--hd-fuerte); font-weight: 700; font-size: var(--texto-s);
   }
   .hd-marcador {
     display: block; width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: var(--texto-xs);
@@ -345,7 +346,7 @@
     <div class="hd-form-lista">
       <div class="card card-compacta" style="padding:0; overflow:hidden">
         <div style="padding:10px"><input type="search" id="hd-form-buscar" placeholder="Buscar formulario o campo…" aria-label="Buscar formulario" /></div>
-        <div class="hd-form-items" id="hd-form-items"><p class="empty-state">Cargando…</p></div>
+        <div class="hd-form-items" id="hd-form-items"><div data-carga="lista" data-carga-n="4"></div></div>
       </div>
       <div class="card" id="hd-form-detalle"><p class="empty-state">Elige un formulario</p></div>
     </div>

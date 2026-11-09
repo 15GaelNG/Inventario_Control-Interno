@@ -79,7 +79,7 @@ function generar(plantillaId, elemento, cuerpoArmado, registro, hojas) {
     LineasArchivos: { compartirEnDominio: () => true },
     DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => cuerpo, getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
   });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8') + '\nthis.pdf = LineasPdf;', contexto);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/utils/Cronometro.gs'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '../src/services/lineas/LineasPdf.gs'), 'utf8') + '\nthis.pdf = LineasPdf;', contexto);
   const carpeta = { createFile: () => ({ getId: () => 'pdf', getName: () => 'r.pdf', getUrl: () => 'url', setSharing: () => {} }) };
   contexto.pdf.generarPdfDesdePlantilla(plantillaId(contexto.pdf.PLANTILLAS), registro || { 'No TELEFONO': '4421234567' }, {}, carpeta, 'r.pdf');
   pagina.exportados = exportados;
@@ -187,7 +187,7 @@ test('si Drive no deja compartir el PDF con el dominio, el PDF se entrega igual 
     DocumentApp: { ElementType: TIPOS, Attribute: { FONT_SIZE: 'FONT_SIZE' }, openById: () => ({ getBody: () => contenedor('BODY_SECTION', []), getHeader: () => null, getFooter: () => null, saveAndClose: () => {} }) },
   });
   const fuente = (r) => fs.readFileSync(path.join(__dirname, '../src/services/lineas/' + r), 'utf8');
-  vm.runInContext(fuente('LineasArchivos.gs') + '\n' + fuente('LineasPdf.gs') + '\nthis.pdf = LineasPdf; this.archivos = LineasArchivos;', contexto);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/utils/Cronometro.gs'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '../src/utils/Expediente.gs'), 'utf8') + '\n' + fuente('LineasArchivos.gs') + '\n' + fuente('LineasPdf.gs') + '\nthis.pdf = LineasPdf; this.archivos = LineasArchivos;', contexto);
   const pdf = { getId: () => 'pdf', getName: () => 'RESPONSIVARLI-1.pdf', getUrl: () => 'url', setSharing: () => { throw new Error('Acceso denegado: DriveApp'); } };
   const carpeta = { createFile: () => pdf };
   const r = contexto.pdf.generarPdfDesdePlantilla(contexto.pdf.PLANTILLAS.RESPONSIVA_CELULAR, { 'No TELEFONO': '4461456715' }, {}, carpeta, 'RESPONSIVARLI-1.pdf');

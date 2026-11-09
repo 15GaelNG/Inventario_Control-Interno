@@ -608,6 +608,8 @@ test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se co
     'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
     'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
     'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
+    // UberService.gs y PendientesInspeccionService.gs ya se integraron (hojaDeteccion_ y
+    // agregar_/revisarCargaHelpdesk ya usan SheetUtils.asegurarPestana/insert/updateMany).
   };
   const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
   // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
@@ -1217,7 +1219,7 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
     // quién lo subió: aquí no importa; la carpeta por nombre en la raíz: su nombre hace de ID
     DriveUtils: { ...require('./drive-utils-real')(), marcarAutor: (a) => a, carpetaEnRaiz: (n) => ({ getId: () => 'RAIZ/' + n }) },
   };
-  const LA = new Function(...Object.keys(globales), read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
+  const LA = new Function(...Object.keys(globales), read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(...Object.values(globales));
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/a1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
   assert.equal(LA.resolver('BITACORA DE DESECHO_Files_/no-existe.jpg', false), null);
   assert.equal(LA.resolver('https://www.appsheet.com/template/gettablefileurl?appName=X&tableName=Y&fileName=BITACORA%20DE%20DESECHO_Files_%2Fa1.EVIDENCIA.1.jpg', false).id, 'ARCH1');
@@ -1241,10 +1243,13 @@ test('Drive: carpeta de la app con sus rutas; inspecciones y responsivas con NUC
   assert.match(captura, /const ruta = d\.enNucos \? 'https:\/\/drive\.google\.com\/file\/d\/' \+ pdf\.id \+ '\/view' : destino\.carpeta \+ '\/' \+ nombre;/);
   assert.match(captura, /ligarPdf_\(tabla, destino\.columna, ids, pdf, ruta\)/);
   const arch = read('src/services/lineas/LineasArchivos.gs');
-  assert.match(arch, /ramas = \['INSPECCIONES', anio, CUATRIMESTRES_\[Math\.floor\(\(mes - 1\) \/ 4\)\], MESES_\[mes - 1\]\];/);
-  assert.match(arch, /carpetaUnica_\(ramas\.reduce\(\(c, nombre\) => subcarpeta_\(c, nombre\), raizNuco\), 'INSP ' \+ ddmm\);/);
-  assert.match(arch, /ramas = \['CARTA RESPONSIVA', anio\];/);
-  assert.match(arch, /nombrePdf: \(tipo === 'INSPECCION' \? 'INSP ' : 'RESP '\) \+ n4 \+ ' ' \+ ddmm \+ '\.pdf'/);
+  // La estructura de NUCOS TELEFONICOS vive en el motor de expedientes (Expediente.gs, tipo 'equipo', 6-nov)
+  const motor = read('src/utils/Expediente.gs');
+  assert.match(motor, /return \['INSPECCIONES', fecha_\(f, ZONA_LINEAS, 'yyyy'\), CUATRIMESTRES\[Math\.floor\(\(mes - 1\) \/ 4\)\], MESES\[mes - 1\]\];/);
+  assert.match(motor, /RESPONSIVA: \(f\) => \['CARTA RESPONSIVA', fecha_\(f, ZONA_LINEAS, 'yyyy'\)\],/);
+  assert.match(motor, /delDia: \{ INSPECCION: \{ prefijo: 'INSP ', fotos: 'FOTOS' \}, RESPONSIVA: \{ prefijo: 'RESP ' \} \},/);
+  assert.match(arch, /const d = Expediente\.carpetaDelDia\('equipo', nuco, tipo, f\);/);
+  assert.match(arch, /nombrePdf: \(tipo === 'INSPECCION' \? 'INSP ' : 'RESP '\) \+ n4 \+ ' ' \+ d\.ddmm \+ '\.pdf'/);
   // Solo se escribe en la carpeta de la app o en NUCOS
   assert.match(arch, /if \(!carpetaId \|\| !\(estaDentroDe\(carpetaId, carpetaAppSheetId\(\)\) \|\| enNucos\(carpetaId\) \|\| enLineas\(carpetaId\)\)\)/);
   // Fotos de inspección: en NUCOS si hay NUCO, si no en la carpeta de la app; cancelar solo borra la carpeta que creó el mismo usuario
@@ -1394,7 +1399,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, bitácoras, historial y Excel)', 
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v13';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v14';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -2441,6 +2446,29 @@ test('la etiqueta "auto" y el par Folio/Nucco solo viven en sus componentes', ()
     'campo-auto y folio-nucco se incluyen antes de formulario (que los usa)');
 });
 
+test('lo que está cargando se pinta con Carga (el esqueleto), no con otro "Cargando…" a mano', () => {
+  // 5-nov-2026: había ~40 "Cargando…" escritos a mano (spinner + texto) y tres esqueletos propios (DataTable, Help
+  // Desk, Líneas). Ahora: Carga.html(forma) o data-carga en una vista (componentes/carga.html). Lo que sí se queda:
+  // el aviso de una acción (toastCargando('Guardando…')), un botón ocupado (btn….innerHTML), un <option> de un select
+  // y una nota junto a datos que ya se ven (un <span>). FirmaExterna.html es una página aparte, sin los componentes.
+  const exentos = [path.join('componentes', 'carga.html'), 'FirmaExterna.html'];
+  const html = filesBelow(path.join(root, 'src', 'html')).filter((f) => f.endsWith('.html') && !exentos.some((e) => f.endsWith(e)));
+  const malos = [];
+  html.forEach((f) => {
+    fs.readFileSync(f, 'utf8').split('\n').forEach((linea, i) => {
+      if (/\b(btn|boton)\w*\.innerHTML\s*=/.test(linea)) return;
+      if (/spinner"><\/span>\s*Cargando|>\s*Cargando[^<'"]*…\s*<\/(p|div)>|class="(dt-skel|hd-esqueleto)"/.test(linea)) {
+        malos.push(path.relative(root, f) + ':' + (i + 1));
+      }
+    });
+  });
+  assert.deepEqual(malos, [], 'usa Carga.html(forma) o <div data-carga="forma"> (componentes/carga.html)');
+  // Carga va justo después de Formato: los componentes y los módulos ya lo pueden usar al pintar
+  const index = read('src/html/Index.html');
+  const pos = (n) => index.indexOf("componentes/" + n + "'");
+  assert.ok(pos('formato') > 0 && pos('carga') > pos('formato') && pos('carga') < pos('datatable'), 'carga se incluye después de formato y antes de datatable');
+});
+
 test('los formularios por columnas usan un solo motor (CamposHoja)', () => {
   // Vehículos, Caja Chica y Arqueos traían cada uno su copia de pintar/leer/llenar campos
   // (y tres copias de llenarSelect). Ahora delegan en componentes/campos-hoja.html.
@@ -2798,7 +2826,9 @@ test('cada archivo que la gente sube o genera dice quién lo subió (DriveUtils.
 test('NUCOS de Líneas: un DEV nunca escribe en la de producción; una sola "subcarpeta" (fase 5.7)', () => {
   const archivos = read('src/services/lineas/LineasArchivos.gs');
   // Sin la clave de producción, una de pruebas en la raíz del proyecto (como ExpedienteNuco), nunca el ID de producción
-  assert.match(archivos, /function carpetaNucosId\(\) \{ return prop_\('LINEAS_DRIVE_NUCOS'\) \|\| DriveUtils\.carpetaEnRaiz\(NUCOS_PRUEBAS\)\.getId\(\); \}/);
+  // (desde el 6-nov la raíz la resuelve el motor de expedientes, tipo 'equipo')
+  assert.match(archivos, /function carpetaNucosId\(\) \{ return Expediente\.raiz\('equipo'\); \}/);
+  assert.match(read('src/utils/Expediente.gs'), /raiz: \(\) => leerConfig_\('LINEAS_DRIVE_NUCOS'\) \|\| DriveUtils\.carpetaEnRaiz\('NUCOS TELEFONICOS'\)\.getId\(\),/);
   assert.doesNotMatch(archivos, /12SRBi1nZlIzfNx0d2y1fAtzOydA2QrT-/);
   // configurarLineasDev ya no le da a un DEV la de producción (ahí se escribe desde el 2-oct)
   const admin = read('src/services/lineas/LineasAdmin.gs');
@@ -2882,6 +2912,18 @@ test('cada documento del vehículo es campo de archivo en la ficha, con su nombr
   assert.deepEqual(nuevas.filter((c) => !archivos.includes(c)), [], 'las columnas que se agregan solas son de archivo');
   assert.match(veh, /alCrear: \(fila, ctx\) => \{\s*asegurarColumnasDocumento_\(fila\);/, 'al crear se asegura la columna');
   assert.match(veh, /alActualizar: \(cambios, ctx\) => \{\s*asegurarColumnasDocumento_\(cambios\);/, 'al editar también');
+});
+
+test('cada grupo de CAMPOS_VEHICULO está en VEH_GRUPOS_PASO (si no, ese campo nunca se ve en Registrar/Editar)', () => {
+  // 15-oct-2026: un grupo nuevo se agregó a CAMPOS_VEHICULO pero no a VEH_GRUPOS_PASO
+  // (renderCamposVehiculo solo pinta los pasos de esa lista) -- la sección quedó invisible en el
+  // formulario aunque sí existiera en seccionesFichaVehiculo (esa sí deriva los grupos solita).
+  const app = APP;
+  const bloqueCampos = /const CAMPOS_VEHICULO = \[([\s\S]*?)\n  \];/.exec(app)[1];
+  const gruposUsados = [...new Set([...bloqueCampos.matchAll(/grupo: '([^']+)'/g)].map((m) => m[1]))];
+  const pasos = /const VEH_GRUPOS_PASO = \[([^\]]*)\];/.exec(app)[1].match(/'[^']+'/g).map((x) => x.slice(1, -1));
+  assert.deepEqual(gruposUsados.filter((g) => !pasos.includes(g)), [], 'grupo en CAMPOS_VEHICULO sin su paso en VEH_GRUPOS_PASO');
+  assert.deepEqual(pasos.filter((g) => !gruposUsados.includes(g)), [], 'paso en VEH_GRUPOS_PASO sin ningún campo que lo use');
 });
 
 test('Menú lateral (usuario, 12-oct): se abre al pasar el cursor, sin botón de colapsar, etiquetas en oración', () => {

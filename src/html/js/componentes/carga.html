@@ -1,0 +1,124 @@
+<style>
+  /* ============ Carga: el esqueleto de lo que va a llegar (componentes/carga.html) ============
+     Mientras llegan los datos se ve la forma gris de lo que viene (renglones, tarjetas, una ficha) con un brillo
+     que la recorre, en vez de un "Cargando…" que luego brinca. Toma los colores del tema (claro y oscuro). */
+  .carga { display: block; animation: carga-aparece .25s ease .15s both; }   /* si llega rápido, ni se nota */
+  @keyframes carga-aparece { from { opacity: 0; } to { opacity: 1; } }
+  .carga-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* El hueso: un bloque gris con un brillo que lo cruza (transform: no repinta, se mueve en la tarjeta gráfica) */
+  .carga-hueso {
+    display: block; position: relative; overflow: hidden; height: 11px; border-radius: var(--radio-s);
+    background: color-mix(in srgb, var(--color-text) 9%, transparent);
+  }
+  .carga-hueso::after {
+    content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-surface) 55%, transparent), transparent);
+    animation: carga-brillo 1.5s ease-in-out infinite;
+  }
+  :root[data-theme="dark"] .carga-hueso { background: color-mix(in srgb, var(--color-text) 8%, transparent); }
+  :root[data-theme="dark"] .carga-hueso::after {
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-text) 7%, transparent), transparent);
+  }
+  @keyframes carga-brillo { to { transform: translateX(100%); } }
+  /* Quien pidió menos movimiento en su sistema: el esqueleto se queda quieto */
+  @media (prefers-reduced-motion: reduce) {
+    .carga { animation: none; }
+    .carga-hueso::after { animation: none; display: none; }
+  }
+
+  .carga-hueso.titulo { height: 16px; }
+  .carga-hueso.grande { height: 26px; }
+  .carga-hueso.redondo { border-radius: 50%; flex: none; }
+  .carga-hueso.cuadro { border-radius: var(--radio-l); flex: none; }
+  .carga-hueso.pastilla { height: 20px; border-radius: 999px; }
+
+  /* Formas */
+  .carga-bloque { display: flex; flex-direction: column; gap: 10px; padding: 8px 0; }
+  .carga-fila { display: flex; align-items: center; gap: 12px; }
+  .carga-col { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+  .carga-lista { display: flex; flex-direction: column; }
+  .carga-lista > .carga-fila { padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+  .carga-lista > .carga-fila:last-child { border-bottom: none; }
+  .carga-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .carga-kpis .stat-tile { box-shadow: none; }
+  .carga-ficha-cabeza { display: flex; align-items: center; gap: 14px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--color-border); }
+  .carga-ficha-campos { display: grid; grid-template-columns: repeat(var(--carga-columnas, 2), minmax(0, 1fr)); gap: 16px 20px; }
+  .carga-barras { display: flex; flex-direction: column; gap: 12px; padding: 4px 0; }
+  .carga-barras .carga-fila .carga-hueso:first-child { width: 22%; flex: none; }
+  @media (max-width: 640px) {
+    .carga-ficha-campos { --carga-columnas: 1; }
+  }
+</style>
+<script>
+  /**
+   * Carga — el esqueleto de lo que va a aparecer mientras llegan los datos. Un solo lugar para "cargando":
+   * nadie escribe otro «<span class="spinner"></span> Cargando…» a mano (contrato en source-contracts).
+   *
+   *   Carga.html(forma, { n, texto, tarjeta, columnas, alto })   → HTML para innerHTML
+   *     forma:
+   *       'bloque'  (por defecto) unos renglones de texto: el cuerpo de una ventana, una sección chica
+   *       'lista'   renglones con ícono y dos líneas: actividad, notificaciones, historial, archivos
+   *       'kpis'    tarjetas de KPI (la forma de .stat-tile)
+   *       'ficha'   la cabeza de una ficha y sus campos en rejilla (`columnas`, 2 por defecto)
+   *       'barras'  una gráfica de barras horizontales (Panoramas)
+   *       'caja'    un solo bloque del alto que se pida (`alto` en px): una foto, un diagrama, una galería
+   *     n        cuántos renglones / tarjetas / campos (cada forma tiene el suyo)
+   *     texto    lo que oye un lector de pantalla ("Cargando colaboradores…"; por defecto "Cargando…")
+   *     tarjeta  true: lo envuelve en una .card (una ficha que todavía no llega)
+   *
+   *   En HTML fijo (una vista): <div data-carga="lista" data-carga-n="4"></div>; Carga.montar(raiz) lo llena
+   *   (corre solo al cargar la página). Cuando llegan los datos, se reemplaza el contenido y listo.
+   *
+   * Los anchos de los huesos varían en un patrón fijo (no al azar): la misma pantalla se ve igual cada vez.
+   * DataTable usa la misma pieza (.carga-hueso) en sus renglones grises.
+   */
+  const Carga = (function () {
+    const esc = Formato.esc;
+    const ANCHOS = [92, 74, 86, 60, 80, 68, 96, 54];
+    const ancho = (i, base) => (base || ANCHOS)[i % (base || ANCHOS).length];
+    const hueso = (clase, estilo) => '<span class="carga-hueso' + (clase ? ' ' + clase : '') + '"' + (estilo ? ' style="' + estilo + '"' : '') + '></span>';
+    const veces = (n, fn) => Array.from({ length: n }, (_, i) => fn(i)).join('');
+
+    const FORMAS = {
+      bloque: (n) => '<div class="carga-bloque">' + veces(n || 3, (i) => hueso('', 'width:' + ancho(i) + '%')) + '</div>',
+      lista: (n) => '<div class="carga-lista">' + veces(n || 4, (i) =>
+        '<div class="carga-fila">' + hueso('cuadro', 'width:34px;height:34px') +
+        '<div class="carga-col">' + hueso('', 'width:' + ancho(i, [42, 30, 50, 36]) + '%') + hueso('', 'width:' + ancho(i, [70, 82, 64, 76]) + '%') + '</div>' +
+        hueso('', 'width:64px;flex:none') + '</div>') + '</div>',
+      kpis: (n) => '<div class="carga-kpis">' + veces(n || 4, (i) =>
+        '<div class="stat-tile">' + hueso('cuadro', 'width:40px;height:40px') +
+        '<div class="carga-col">' + hueso('grande', 'width:' + ancho(i, [40, 30, 46, 34]) + '%') + hueso('', 'width:' + ancho(i, [72, 60, 80, 66]) + '%') + '</div></div>') + '</div>',
+      ficha: (n, o) => '<div class="carga-ficha-cabeza">' + hueso('redondo', 'width:42px;height:42px') +
+        '<div class="carga-col">' + hueso('titulo', 'width:180px;max-width:60%') + hueso('pastilla', 'width:72px') + '</div></div>' +
+        '<div class="carga-ficha-campos" style="--carga-columnas:' + (Number(o.columnas) || 2) + '">' + veces(n || 6, (i) =>
+          '<div class="carga-col">' + hueso('', 'width:' + ancho(i, [34, 26, 40, 30]) + '%;height:9px') + hueso('', 'width:' + ancho(i, [70, 56, 84, 62]) + '%') + '</div>') + '</div>',
+      caja: (n, o) => hueso('cuadro', 'display:block;width:100%;height:' + (Number(o.alto) || 120) + 'px'),
+      barras: (n) => '<div class="carga-barras">' + veces(n || 5, (i) =>
+        '<div class="carga-fila">' + hueso('') + hueso('', 'height:14px;width:' + ancho(i, [88, 64, 46, 30, 18]) + '%') + '</div>') + '</div>',
+    };
+
+    function html(forma, op) {
+      const o = op || {};
+      const pintar = FORMAS[forma] || FORMAS.bloque;
+      const cuerpo = '<span class="carga-sr">' + esc(o.texto || 'Cargando…') + '</span>' + pintar(Number(o.n) || 0, o);
+      const caja = '<div class="carga carga-' + (FORMAS[forma] ? forma : 'bloque') + '" role="status" aria-busy="true">' + cuerpo + '</div>';
+      return o.tarjeta ? '<div class="card">' + caja + '</div>' : caja;
+    }
+
+    /** Llena los [data-carga] de `raiz` (lo escrito fijo en una vista) */
+    function montar(raiz) {
+      (raiz || document).querySelectorAll('[data-carga]').forEach((el) => {
+        if (el.querySelector(':scope > .carga')) return;
+        el.innerHTML = html(el.getAttribute('data-carga'), { n: el.getAttribute('data-carga-n'), texto: el.getAttribute('data-carga-texto') });
+      });
+    }
+
+    if (typeof document !== 'undefined') {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => montar());
+      else montar();
+    }
+
+    return { html, montar, FORMAS: Object.keys(FORMAS) };
+  })();
+</script>

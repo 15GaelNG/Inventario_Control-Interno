@@ -14,7 +14,13 @@
  *    108  <<CAMPO>>                             igual, sin corchetes
  *     12  <<[CAMPO] * 0.50>>                    multiplicación (arqueos)
  *      3  <<UPPER([CAMPO])>>                    a mayúsculas
- *   Funciones: IF, AND, UPPER · Operadores: = <= >= *
+ *
+ * Desde el 9-nov (fase 2 del motor único de PDF, docs/pdf-motor.md) es UN analizador para las plantillas de Vehículos
+ * y de Líneas: la estructura del de LineasPdf (piezas + precedencia) con las reglas de aquí. Entiende comparaciones
+ * (= <> < > <= >=), & para unir textos, + - * /, paréntesis y las funciones IF AND OR NOT UPPER LOWER RIGHT LEFT LEN
+ * CONCATENATE ISBLANK ISNOTBLANK ROUND TEXT TODAY NOW. Reglas: al comparar texto no importan los espacios de más ni
+ * las mayúsculas; < > <= >= solo con números (un vacío no cumple: la llanta sin medir); una cuenta con un vacío da
+ * vacío. Las fechas las formatea cada módulo antes (PdfService.textoDeFecha_); el motor solo llena.
  *
  * Regla importante: si aparece algo que este motor NO entiende, LANZA ERROR en vez de
  * dejarlo en blanco. Un documento con datos silenciosamente incompletos es peor que uno
@@ -35,19 +41,19 @@ const Plantilla = (function () {
   }
 
   const limpiar_ = (v) => String(v == null ? '' : v).trim();
-  const sinComillas_ = (v) => limpiar_(v).replace(/^"([\s\S]*)"$/, '$1');
 
-  /** Nombre de campo → valor de los datos. Acepta "[CAMPO]" y "CAMPO", sin importar mayúsculas. */
+  /** Nombre de campo → valor de los datos. Acepta "[CAMPO]" y "CAMPO", sin importar mayúsculas ni espacios a los lados. */
   function valorCampo(nombre, datos) {
-    const clave = limpiar_(nombre).replace(/^\[|\]$/g, '');
+    const clave = limpiar_(nombre).replace(/^\[|\]$/g, '').trim();
     if (Object.prototype.hasOwnProperty.call(datos, clave)) return datos[clave];
     // Búsqueda tolerante: las plantillas y las hojas no siempre coinciden en mayúsculas
     const buscado = clave.toUpperCase();
-    const encontrada = Object.keys(datos).find((k) => k.toUpperCase() === buscado);
+    const encontrada = Object.keys(datos).find((k) => k.toUpperCase().trim() === buscado);
     return encontrada === undefined ? '' : datos[encontrada];
   }
 
   const aNumero_ = (v) => {
+    if (typeof v === 'number') return isNaN(v) ? null : v;
     const texto = String(v == null ? '' : v).replace(/[$,\s]/g, '');
     // Ojo: Number('') es 0, no NaN. Sin esta guarda, una llanta sin medir se compararía
     // como 0 mm y saldría en el documento como desgastada al límite.
@@ -60,86 +66,205 @@ const Plantilla = (function () {
     return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
   }
 
+  /** Una fecha que llegó sin formatear: solo el día (cada módulo manda sus fechas ya como texto, PdfService.textoDeFecha_) */
+  function textoDeFecha_(f) {
+    if (typeof Utilities !== 'undefined') return Utilities.formatDate(f, 'America/Mexico_City', 'dd/MM/yyyy');
+    const d = (n) => String(n).padStart(2, '0');
+    return d(f.getDate()) + '/' + d(f.getMonth() + 1) + '/' + f.getFullYear();
+  }
+
+  /** El resultado de una expresión como texto: número con a lo más 2 decimales, sí/no como Y/N (AppSheet) */
+  function aTexto_(v) {
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) return textoDeFecha_(v);
+    if (typeof v === 'boolean') return v ? 'Y' : 'N';
+    if (typeof v === 'number') return formatearNumero_(v);
+    return String(v);
+  }
+
+  // ---------------- El analizador (fase 2 del motor único de PDF, 9-nov) ----------------
+  // Uno solo para todas las plantillas: la estructura del de Líneas (piezas + precedencia) con las reglas de aquí
+  // (espacios de más, número vacío, lo desconocido lanza error).
+
+  /** Parte una expresión en piezas: texto "…", columna […], número, paréntesis, coma, operador o nombre */
+  function tokenizar_(s) {
+    const piezas = [];
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (/\s/.test(c)) { i++; continue; }
+      if (c === '"') {
+        const j = s.indexOf('"', i + 1);
+        if (j < 0) throw new Error('Comillas sin cerrar en: ' + s);
+        piezas.push({ tipo: 'str', valor: s.slice(i + 1, j) }); i = j + 1; continue;
+      }
+      if (c === '[') {
+        const j = s.indexOf(']', i);
+        if (j < 0) throw new Error('Corchete sin cerrar en: ' + s);
+        piezas.push({ tipo: 'col', valor: s.slice(i + 1, j) }); i = j + 1; continue;
+      }
+      if (/[0-9]/.test(c) || (c === '.' && /[0-9]/.test(s[i + 1] || ''))) {
+        let j = i;
+        while (j < s.length && /[0-9.]/.test(s[j])) j++;
+        piezas.push({ tipo: 'num', valor: Number(s.slice(i, j)), texto: s.slice(i, j) }); i = j; continue;
+      }
+      if (c === '(' || c === ')') { piezas.push({ tipo: 'par', valor: c }); i++; continue; }
+      if (c === ',') { piezas.push({ tipo: 'coma' }); i++; continue; }
+      const dos = s.slice(i, i + 2);
+      if (dos === '<>' || dos === '<=' || dos === '>=') { piezas.push({ tipo: 'op', valor: dos }); i += 2; continue; }
+      if ('=<>&+-*/'.indexOf(c) >= 0) { piezas.push({ tipo: 'op', valor: c }); i++; continue; }
+      if (/[A-Za-z_ÁÉÍÓÚÑáéíóúñÜü]/.test(c)) {
+        let j = i;
+        while (j < s.length && /[A-Za-z0-9_ÁÉÍÓÚÑáéíóúñÜü]/.test(s[j])) j++;
+        piezas.push({ tipo: 'id', valor: s.slice(i, j) }); i = j; continue;
+      }
+      throw new Error('Carácter no soportado "' + c + '" en: ' + s);
+    }
+    return piezas;
+  }
+
+  /** Cuántas partes pide cada función: [mínimo, máximo] */
+  const FUNCIONES = {
+    IF: [3, 3], AND: [1, 99], OR: [1, 99], NOT: [1, 1], UPPER: [1, 1], LOWER: [1, 1], RIGHT: [2, 2], LEFT: [2, 2],
+    LEN: [1, 1], CONCATENATE: [1, 99], ISBLANK: [1, 1], ISNOTBLANK: [1, 1], ROUND: [1, 2], TEXT: [1, 1], TODAY: [0, 0],
+    NOW: [0, 0],
+  };
+  const esSiNo_ = (v) => typeof v === 'boolean';
+
+  function funcion_(nombre, a, texto) {
+    const partes = FUNCIONES[nombre];
+    if (!partes) throw new Error('Marcador no soportado: <<' + texto + '>> (la función ' + nombre + ' no se conoce)');
+    if (a.length < partes[0] || a.length > partes[1]) {
+      throw new Error(nombre === 'IF' ? 'IF necesita 3 partes (condición, sí, no): ' + texto : nombre + ' no lleva ' + a.length + ' partes en: ' + texto);
+    }
+    const siNo = (v) => { if (!esSiNo_(v)) throw new Error(nombre + ' necesita una condición en: ' + texto); return v; };
+    switch (nombre) {
+      case 'IF': return siNo(a[0]) ? a[1] : a[2];
+      case 'AND': return a.map(siNo).every(Boolean);
+      case 'OR': return a.map(siNo).some(Boolean);
+      case 'NOT': return !siNo(a[0]);
+      case 'UPPER': return limpiar_(aTexto_(a[0])).toUpperCase();
+      case 'LOWER': return limpiar_(aTexto_(a[0])).toLowerCase();
+      case 'RIGHT': { const t = aTexto_(a[0]); return t.slice(Math.max(0, t.length - (aNumero_(a[1]) || 0))); }
+      case 'LEFT': return aTexto_(a[0]).slice(0, aNumero_(a[1]) || 0);
+      case 'LEN': return aTexto_(a[0]).length;
+      case 'CONCATENATE': return a.map(aTexto_).join('');
+      case 'ISBLANK': return limpiar_(aTexto_(a[0])) === '';
+      case 'ISNOTBLANK': return limpiar_(aTexto_(a[0])) !== '';
+      case 'ROUND': {
+        const n = aNumero_(a[0]);
+        const p = Math.pow(10, aNumero_(a[1]) || 0);
+        return n === null ? '' : Math.round(n * p) / p;
+      }
+      case 'TEXT': return aTexto_(a[0]);
+      default: return new Date();   // TODAY, NOW
+    }
+  }
+
   /**
-   * Un término de una condición: campo, texto entre comillas o número.
-   * @return {{valor: *, esNumero: boolean}}
+   * Compara como AppSheet, con las reglas de aquí: = y <> comparan números si los dos lo son (y uno es número de
+   * verdad: un literal o una cuenta), si no, texto sin espacios de más ni mayúsculas; < > <= >= solo con números, y
+   * un lado vacío o que no es número no cumple (la llanta sin medir no sale como desgastada).
    */
-  function termino_(texto, datos) {
-    const t = limpiar_(texto);
-    if (/^".*"$/.test(t)) return { valor: sinComillas_(t), esNumero: false };
-    if (/^-?[\d.]+$/.test(t)) return { valor: Number(t), esNumero: true };
-    return { valor: valorCampo(t, datos), esNumero: false };
+  function comparar_(a, op, b) {
+    if (op === '=' || op === '<>') {
+      const numericos = (typeof a === 'number' || typeof b === 'number') && aNumero_(a) !== null && aNumero_(b) !== null;
+      const igual = numericos ? aNumero_(a) === aNumero_(b) : limpiar_(aTexto_(a)).toUpperCase() === limpiar_(aTexto_(b)).toUpperCase();
+      return op === '=' ? igual : !igual;
+    }
+    const x = aNumero_(a);
+    const y = aNumero_(b);
+    if (x === null || y === null) return false;
+    if (op === '<=') return x <= y;
+    if (op === '>=') return x >= y;
+    if (op === '<') return x < y;
+    return x > y;
   }
 
-  /** Separa por comas que estén FUERA de comillas y de paréntesis */
-  function partirArgumentos_(texto) {
-    const partes = [];
-    let actual = '';
-    let nivel = 0;
-    let enComillas = false;
-    for (let i = 0; i < texto.length; i++) {
-      const c = texto[i];
-      if (c === '"') enComillas = !enComillas;
-      if (!enComillas) {
-        if (c === '(') nivel++;
-        if (c === ')') nivel--;
-        if (c === ',' && nivel === 0) { partes.push(actual); actual = ''; continue; }
-      }
-      actual += c;
-    }
-    partes.push(actual);
-    return partes.map(limpiar_);
+  /** Aritmética: con un vacío (o algo que no es número) el resultado es vacío, como hoy con [X] * 0.50 */
+  function cuenta_(a, op, b) {
+    const x = aNumero_(a);
+    const y = aNumero_(b);
+    if (x === null || y === null) return '';
+    if (op === '+') return x + y;
+    if (op === '-') return x - y;
+    if (op === '*') return x * y;
+    return y === 0 ? '' : x / y;
   }
 
-  /** Quita un par de paréntesis que envuelva TODA la expresión */
-  function sinParentesis_(texto) {
-    let t = limpiar_(texto);
-    while (/^\(/.test(t)) {
-      let nivel = 0;
-      let cierraAlFinal = true;
-      for (let i = 0; i < t.length; i++) {
-        if (t[i] === '(') nivel++;
-        if (t[i] === ')') nivel--;
-        if (nivel === 0 && i < t.length - 1) { cierraAlFinal = false; break; }
+  /** Evalúa una expresión completa (descenso recursivo): comparación → & → + - → * / → - → valor */
+  function analizar_(texto, datos) {
+    const piezas = tokenizar_(texto);
+    let pos = 0;
+    const ver = () => piezas[pos];
+    const esOp = (...ops) => ver() && ver().tipo === 'op' && ops.indexOf(ver().valor) >= 0;
+    const esPar = (v) => ver() && ver().tipo === 'par' && ver().valor === v;
+    const cerrar = () => { if (!esPar(')')) throw new Error('Falta cerrar un paréntesis en: ' + texto); pos++; };
+    const comparacion = () => {
+      let izq = concatenacion();
+      while (esOp('=', '<>', '<', '>', '<=', '>=')) { const op = piezas[pos++].valor; izq = comparar_(izq, op, concatenacion()); }
+      return izq;
+    };
+    const concatenacion = () => {
+      let izq = suma();
+      while (esOp('&')) { pos++; izq = aTexto_(izq) + aTexto_(suma()); }
+      return izq;
+    };
+    const suma = () => {
+      let izq = producto();
+      while (esOp('+', '-')) { const op = piezas[pos++].valor; izq = cuenta_(izq, op, producto()); }
+      return izq;
+    };
+    const producto = () => {
+      let izq = unario();
+      while (esOp('*', '/')) { const op = piezas[pos++].valor; izq = cuenta_(izq, op, unario()); }
+      return izq;
+    };
+    const unario = () => {
+      if (esOp('-')) { pos++; return cuenta_(0, '-', unario()); }
+      return valor();
+    };
+    const valor = () => {
+      const t = ver();
+      if (!t) throw new Error('Expresión incompleta: ' + texto);
+      if (t.tipo === 'num' || t.tipo === 'str') { pos++; return t.valor; }
+      if (t.tipo === 'col') { pos++; return valorCampo(t.valor, datos); }
+      if (esPar('(')) { pos++; const v = comparacion(); cerrar(); return v; }
+      if (t.tipo === 'id') {
+        pos++;
+        if (esPar('(')) {
+          pos++;
+          const args = [];
+          if (!esPar(')')) {
+            args.push(comparacion());
+            while (ver() && ver().tipo === 'coma') { pos++; args.push(comparacion()); }
+          }
+          cerrar();
+          return funcion_(t.valor.toUpperCase(), args, texto);
+        }
+        if (/^TRUE$/i.test(t.valor)) return true;
+        if (/^FALSE$/i.test(t.valor)) return false;
+        // Columna sin corchetes: puede tener varias palabras ("LLANTA DD"), como en AppSheet
+        const nombre = [t.valor];
+        while (ver() && (ver().tipo === 'id' || ver().tipo === 'num') &&
+          !(piezas[pos + 1] && piezas[pos + 1].tipo === 'par' && piezas[pos + 1].valor === '(')) {
+          nombre.push(ver().tipo === 'num' ? ver().texto : ver().valor);
+          pos++;
+        }
+        return valorCampo(nombre.join(' '), datos);
       }
-      if (!cierraAlFinal) break;
-      t = limpiar_(t.slice(1, -1));
-    }
-    return t;
+      throw new Error('No se entiende la expresión: ' + texto);
+    };
+    const resultado = comparacion();
+    if (pos < piezas.length) throw new Error('Marcador no soportado: <<' + texto + '>>');
+    return resultado;
   }
 
   /** @return {boolean} ¿se cumple la condición? */
   function evaluarCondicion(texto, datos) {
-    const t = sinParentesis_(texto);
-
-    const logica = /^(AND|OR)\s*\(([\s\S]*)\)$/i.exec(t);
-    if (logica) {
-      const partes = partirArgumentos_(logica[2]).map((p) => evaluarCondicion(p, datos));
-      return logica[1].toUpperCase() === 'AND' ? partes.every(Boolean) : partes.some(Boolean);
-    }
-
-    // El orden importa: <= y >= antes que < y >
-    const comparacion = /^([\s\S]+?)\s*(<=|>=|<>|=|<|>)\s*([\s\S]+)$/.exec(t);
-    if (!comparacion) throw new Error('No se entiende la condición: ' + texto);
-
-    const izq = termino_(comparacion[1], datos);
-    const operador = comparacion[2];
-    const der = termino_(comparacion[3], datos);
-
-    if (operador === '=' || operador === '<>') {
-      // Comparación de texto sin importar mayúsculas ni espacios (como AppSheet)
-      const a = limpiar_(izq.valor).toUpperCase();
-      const b = limpiar_(der.valor).toUpperCase();
-      return operador === '=' ? a === b : a !== b;
-    }
-
-    const a = aNumero_(izq.valor);
-    const b = aNumero_(der.valor);
-    if (a === null || b === null) return false;   // sin número que comparar, no se cumple
-    if (operador === '<=') return a <= b;
-    if (operador === '>=') return a >= b;
-    if (operador === '<') return a < b;
-    return a > b;
+    const r = analizar_(limpiar_(texto), datos);
+    if (!esSiNo_(r)) throw new Error('No se entiende la condición: ' + texto);
+    return r;
   }
 
   /**
@@ -148,30 +273,13 @@ const Plantilla = (function () {
    */
   function evaluarExpresion(texto, datos) {
     const t = limpiar_(texto);
-
-    const si = /^IF\s*\(([\s\S]*)\)$/i.exec(t);
-    if (si) {
-      const args = partirArgumentos_(si[1]);
-      if (args.length !== 3) throw new Error('IF necesita 3 partes (condición, sí, no): ' + texto);
-      return sinComillas_(evaluarCondicion(args[0], datos) ? args[1] : args[2]);
-    }
-
-    const mayusculas = /^UPPER\s*\(([\s\S]*)\)$/i.exec(t);
-    if (mayusculas) return limpiar_(valorCampo(mayusculas[1], datos)).toUpperCase();
-
-    const multiplicacion = /^(\[[^\]]+\])\s*\*\s*([\d.]+)$/.exec(t);
-    if (multiplicacion) {
-      const n = aNumero_(valorCampo(multiplicacion[1], datos));
-      return n === null ? '' : formatearNumero_(n * Number(multiplicacion[2]));
-    }
-
-    // Campo suelto: "[CAMPO]" o "CAMPO"
-    if (/^\[[^\]]+\]$/.test(t) || /^[^()<>*"]+$/.test(t)) {
+    // Campo suelto: "[CAMPO]" o "CAMPO" (con espacios: «PUNTAJE FINAL INSPECCION»), tal cual está en los datos
+    if (/^\[[^\]]+\]$/.test(t) || (/^[^()<>*"[\]&=+]+$/.test(t) && !/^[\d.]+$/.test(t))) {
       const v = valorCampo(t, datos);
-      return v === null || v === undefined ? '' : String(v);
+      if (v === null || v === undefined) return '';
+      return v instanceof Date ? textoDeFecha_(v) : String(v);
     }
-
-    throw new Error('Marcador no soportado: <<' + texto + '>>');
+    return aTexto_(analizar_(t, datos));
   }
 
   /**
@@ -242,7 +350,12 @@ const Plantilla = (function () {
         porCampo[e.campo].opciones.push(e.opcion);
       }
     });
-    return secciones;
+    // Un "Palabra 5%" que haya en el documento sin ninguna pieza <<IF(...)>> detrás antes del
+    // siguiente encabezado real no es una sección -- es ruido del propio texto (otro número con
+    // signo de porcentaje que la expresión regular confunde con un título). Dejarla pasar con
+    // campos: [] rompe a cualquiera que asuma que toda sección tiene al menos una pieza
+    // (campos[0], como el botón "Todo bien" de la captura).
+    return secciones.filter((s) => s.campos.length > 0);
   }
 
   /** Campos que pide una plantilla (para saber qué hay que capturar) */

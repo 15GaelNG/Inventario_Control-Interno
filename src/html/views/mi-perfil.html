@@ -56,7 +56,7 @@
   .perfil-grupo h4 { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: var(--texto-m); }
   .perfil-grupo-ico {
     width: 28px; height: 28px; border-radius: var(--radio-m); display: grid; place-items: center;
-    background: var(--color-primary-soft); color: var(--color-primary);
+    background: var(--color-primary-soft); color: var(--color-primary-texto);
   }
   .perfil-grupo-ico .ico { width: 15px; height: 15px; }
   .perfil-modulos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
@@ -65,12 +65,11 @@
     border: 1px solid var(--color-border); border-radius: var(--radio-l); font-size: var(--texto-s);
   }
   .perfil-nivel { flex: none; padding: 2px 8px; border-radius: 999px; font-size: var(--texto-xs); font-weight: 700; }
-  .perfil-nivel-EDICION { background: var(--color-primary-soft); color: var(--color-primary); }
+  .perfil-nivel-EDICION { background: var(--color-primary-soft); color: var(--color-primary-texto); }
   :root[data-theme="dark"] .perfil-nivel-EDICION { color: var(--color-text); }
   .perfil-nivel-LECTURA { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
   .perfil-vacio { padding: 40px 12px; text-align: center; color: var(--color-text-muted); }
-  .perfil-vacio .ico { width: 36px; height: 36px; margin-bottom: 8px; color: var(--color-primary); }
-  .perfil-cargando { color: var(--color-text-muted); }
+  .perfil-vacio .ico { width: 36px; height: 36px; margin-bottom: 8px; color: var(--color-primary-texto); }
 
   /* ============ Pestañas de la cuenta: Contraseña, Dispositivos, Actividad (js/app-seguridad.html) ============
      Como las cuentas de Google o Microsoft: un encabezado por pestaña y renglones de ajuste (ícono, qué es, su estado
@@ -96,7 +95,7 @@
   }
   .seg-insignia.seg-ok { background: color-mix(in srgb, var(--color-success) 14%, transparent); color: var(--color-success); }
   .seg-insignia.seg-neutro { background: var(--color-bg); color: var(--color-text-muted); border: 1px solid var(--color-border); }
-  .seg-insignia.seg-info { background: var(--color-primary-soft); color: var(--color-primary); }
+  .seg-insignia.seg-info { background: var(--color-primary-soft); color: var(--color-primary-texto); }
   .seg-insignia.seg-mal { background: color-mix(in srgb, var(--color-danger) 14%, transparent); color: var(--color-danger); }
 
   /* Bloqueo por seguridad (Usuarios y permisos): el aviso de la ficha, la casilla de Restablecer y la nota de la temporal */

@@ -100,7 +100,7 @@
     const colorPrioridad = (t) => t.COLOR_PRIORIDAD || ((catalogo.prioridades || []).find((p) => p.nombre === t.PRIORIDAD) || {}).color || '';
     const estado = (t) => {
       const c = colorEstatus(t);
-      return t.ESTATUS ? `<span class="hd-estado" style="${c ? 'color:' + c + ';background:' + c + '1f' : ''}"><span class="hd-punto" style="${c ? 'background:' + c : ''}"></span>${e(t.ESTATUS)}</span>` : '';
+      return t.ESTATUS ? `<span class="hd-estado" style="${c ? '--hd-c:' + c : ''}"><span class="hd-punto" style="${c ? 'background:' + c : ''}"></span>${e(t.ESTATUS)}</span>` : '';
     };
     const prioridad = (t) => {
       const c = colorPrioridad(t);
@@ -298,7 +298,7 @@
     async function cargar(forzar) {
       const mia = ++consulta;
       const b = bandejaActual();
-      $('hd-filas').innerHTML = '<div class="hd-esqueleto"></div><div class="hd-esqueleto"></div><div class="hd-esqueleto"></div><div class="hd-esqueleto"></div>';
+      $('hd-filas').innerHTML = '<div class="hd-carga">' + Carga.html('lista', { n: 5 }) + '</div>';
       $('hd-lista-pie').textContent = '';
       $('hd-lista-titulo').textContent = b.etiqueta;
       $('hd-lista-total').textContent = '';
@@ -424,7 +424,7 @@
       const deQuienPide = (m) => (m.CORREO && t.CORREO_SOLICITANTE ? m.CORREO === t.CORREO_SOLICITANTE : m.AUTOR === t.SOLICITANTE);
       const mensajes = (t.MENSAJES || []).slice().sort((a, b) => String(a.FECHA).localeCompare(String(b.FECHA)));
       const conversacion = cargando
-        ? '<div class="hd-esqueleto"></div><div class="hd-esqueleto"></div>'
+        ? '<div class="hd-carga">' + Carga.html('bloque', { n: 4 }) + '</div>'
         : (mensajes.length ? mensajes : [{ AUTOR: t.SOLICITANTE, CORREO: t.CORREO_SOLICITANTE, FECHA: t.FECHA_CREACION, TEXTO: t.DESCRIPCION, ARCHIVOS: [], ADJUNTOS: [] }])
           .map((m) => {
             const archivos = m.ARCHIVOS || [];
@@ -465,7 +465,7 @@
                 <dl class="hd-persona-datos" id="hd-t-persona">${datosPersona(t, null)}</dl>
               </div>
             </div>
-            <div id="hd-t-contexto">${cargando ? '' : '<div class="hd-lado-titulo">En Control Interno</div><div class="hd-esqueleto hd-esqueleto-chico"></div>'}</div>
+            <div id="hd-t-contexto">${cargando ? '' : '<div class="hd-lado-titulo">En Control Interno</div>' + Carga.html('bloque', { n: 2 })}</div>
             <div>
               <div class="hd-lado-titulo">Propiedades</div>
               <dl class="hd-props">

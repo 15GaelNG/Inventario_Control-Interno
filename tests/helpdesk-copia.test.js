@@ -123,6 +123,15 @@ console.log('1. La copia se llena sola, sin llamar de más al helpdesk');
   ok(fila(950)[col('CORREO SOLICITANTE')] === '', 'completo (lista o detalle): lo vacío sí cuenta');
 }
 
+console.log('\n1b. copiaLocal_(): también trae el ESTATUS real del ticket (PendientesInspeccionService lo usa)');
+{
+  const { srv } = entorno();
+  srv.sincronizar_([{ ID: 950, TITULO: 'Uno', DESCRIPCION: 'Algo', ESTATUS: 'Abierto' }], 'ana@ejemplo.com');
+  const copia = srv.copiaLocal_();
+  ok(copia.length === 1, 'un renglón, el que se sincronizó');
+  ok(copia[0]['ESTATUS'] === 'Abierto', 'con su ESTATUS real, no solo título y descripción: ' + copia[0]['ESTATUS']);
+}
+
 // ---------------------------------------------------------------------------------- 2
 console.log('\n2. Registrar en Tickets');
 {
