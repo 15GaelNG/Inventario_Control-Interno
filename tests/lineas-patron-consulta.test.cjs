@@ -69,7 +69,7 @@ test('cliente: General y las capturas muestran el patrón', () => {
 
 test('servidor: rutaAppSheet quita el enlace y la tabla delante', () => {
   const LA = new Function('PropertiesService', 'leerConfig_', 'CacheService', 'Utilities', 'DriveApp',
-    read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')({}, () => null, {}, {}, {});
+    read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')({}, () => null, {}, {}, {});
   assert.equal(LA.rutaAppSheet(RUTA), RUTA);
   assert.equal(LA.rutaAppSheet('INSPECCIONES LINEAS::' + RUTA), RUTA);
   assert.equal(LA.rutaAppSheet('https://www.appsheet.com/image/getimageurl?appName=X&fileName=INSPECCIONES%20LINEAS_Images%2Fb8c7bc14.PATRON.204214.png&signature=abc'), RUTA);
@@ -120,7 +120,7 @@ test('servidor: el archivo del AppSheet se busca en la carpeta de la app, en la 
   const busquedas = [];
   const memoria = {};
   const LA = new Function('PropertiesService', 'leerConfig_', 'CacheService', 'Utilities', 'DriveApp',
-    read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(
+    read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nreturn LineasArchivos;')(
     {}, (k) => ({ LINEAS_DRIVE_APPSHEET: 'PRUEBAS', LINEAS_DRIVE_APPSHEET_LECTURA: 'PROD' })[k] || null,
     { getScriptCache: () => ({ get: (k) => memoria[k] || null, put: (k, v) => { memoria[k] = v; } }) },
     { base64EncodeWebSafe: (b) => String(b), computeDigest: (a, t) => t, DigestAlgorithm: {}, Charset: {} },

@@ -65,7 +65,9 @@ function cargar(drive, opciones) {
     } },
     console,
   });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'ExpedienteNuco.gs'), 'utf8') +
+  // El motor (Expediente.gs) y su fachada de Vehículos, como en Apps Script
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Expediente.gs'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'ExpedienteNuco.gs'), 'utf8') +
     '\nthis.ExpedienteNuco = ExpedienteNuco;', ctx);
   return { E: ctx.ExpedienteNuco, nucos, pruebas };
 }

@@ -35,7 +35,7 @@ function archivosCon(archivos, carpetas, opciones) {
     } } },
     leerConfig_: () => null,
   });
-  vm.runInContext(read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
+  vm.runInContext(read('src/utils/Expediente.gs') + '\n' + read('src/services/lineas/LineasArchivos.gs') + '\nthis.A = LineasArchivos;', ctx);
   return { A: ctx.A, pedidas };
 }
 
