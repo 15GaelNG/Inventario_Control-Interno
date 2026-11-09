@@ -770,7 +770,17 @@
             sesion.guardada = true;
             sesion.guardando = false;
             memoria.cargadoEn = 0;
-            if (sesion.flujo && sesion.flujo.resolver) mostrarLigasFirmaRemota(r.ligas, valores, () => sesion.flujo.resolver(r));
+            // "Continuar" cierra esta ventana antes de seguir, como terminarFlujo: en Mandar a resguardo nadie más la cerraba
+            // y el recuadro de las ligas se quedaba encima, sin responder (usuario, 9-nov). Una sola vez.
+            if (sesion.flujo && sesion.flujo.resolver) {
+              let seguido = false;
+              mostrarLigasFirmaRemota(r.ligas, valores, () => {
+                if (seguido) return;
+                seguido = true;
+                if (captura === sesion) cerrarCaptura(true);
+                sesion.flujo.resolver(r);
+              });
+            }
             else mostrarLigasFirmaRemota(r.ligas, valores);
             return;
           }
