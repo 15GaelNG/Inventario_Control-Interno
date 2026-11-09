@@ -739,13 +739,18 @@ const InspeccionesService = (function () {
     return 'INSPECCION: ' + [fila['NUCO'], fila['DEPARTAMENTO'], fila['TIPO'], fila['NO SERIE']].filter(Boolean).join('-') + ' ' + fecha;
   }
 
+  /**
+   * Apagado temporal, solo por configuración (sin tocar código): AVISO_INSPECCION_VEHICULAR = 'APAGADA'
+   * como Script Property del proyecto (o aquí, en Entornos.gs, para que aplique a todos los DEV también).
+   * La usan avisarInspeccion_ (para no mandar el correo) y estructuraDeTipo (para que la pantalla
+   * oculte la sección "Notificar por correo" mientras esté apagado).
+   */
+  function avisoCorreoActivo_() {
+    const valor = typeof leerConfig_ === 'function' && leerConfig_('AVISO_INSPECCION_VEHICULAR');
+    return String(valor || '').trim().toUpperCase() !== 'APAGADA';
+  }
+
   function avisarInspeccion_(notificar, fila, hallazgos, pdfUrl, pendientes, correoInspector) {
-    // Apagado temporal, solo por configuración (sin tocar código): AVISO_INSPECCION_VEHICULAR = 'APAGADA'
-    // como Script Property del proyecto (o aquí, en Entornos.gs, para que aplique a todos los DEV también).
-    const avisoApagado_ = typeof leerConfig_ === 'function' && leerConfig_('AVISO_INSPECCION_VEHICULAR');
-    if (String(avisoApagado_ || '').trim().toUpperCase() === 'APAGADA') {
-      return { enviado: false, motivo: 'Avisos por correo de Inspección Vehicular apagados temporalmente' };
-    }
     if (!notificar) return { enviado: false, motivo: 'No se capturó ningún correo' };
     const dest = destinatariosNotificar_(notificar);
     const para = dest.para;
@@ -756,6 +761,11 @@ const InspeccionesService = (function () {
       if (!cc.length) return { enviado: false, motivo: 'No se capturó ningún correo válido' };
       destinatario = cc[0];
       copia = cc.slice(1);
+    }
+    // Apagado temporal, solo por configuración: después de validar que SÍ había algo que mandar
+    // (si no, el motivo de siempre -- "No se capturó..." -- ya es silencioso para el cliente).
+    if (!avisoCorreoActivo_()) {
+      return { enviado: false, motivo: 'Avisos por correo de Inspección Vehicular apagados temporalmente' };
     }
 
     const dato = (etiqueta, valor) => (valor
@@ -1494,7 +1504,9 @@ const InspeccionesService = (function () {
 
   function estructuraDeTipo(token, tipo) {
     Permisos.puedeLeer(token, MODULO);
-    return estructura_(tipo);
+    // avisoCorreoActivo aparte de lo cacheado (6h): así el apagado/encendido de AVISO_INSPECCION_VEHICULAR
+    // se ve de inmediato en la pantalla, sin esperar a que venza la caché de la estructura del tipo.
+    return Object.assign({}, estructura_(tipo), { avisoCorreoActivo: avisoCorreoActivo_() });
   }
 
   /** Lo mismo sin sesión, para lo que corre desde el editor (puntajesMaximos) */

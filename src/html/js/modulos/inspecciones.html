@@ -1068,6 +1068,7 @@
           Déjalo vacío si no hace falta ningún ticket.</p>
         <div id="ins-tickets-extra"></div>
         <button type="button" class="secondary" id="ins-ticket-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar ticket a generar</button>
+        ${estructura.avisoCorreoActivo === false ? '' : `
         <h4 class="ins-revision-titulo">Notificar por correo</h4>
         <p class="form-paso-desc" style="margin-top:-8px">Al guardar se les avisa con el resumen de la
           inspección y lo que salió mal. Déjalo vacío si no hay a quién avisar.</p>
@@ -1080,7 +1081,7 @@
             <input type="email" id="ins-correo-asistente" autocomplete="off" /></div>
         </div>
         <div id="ins-correos-extra"></div>
-        <button type="button" class="secondary" id="ins-correo-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar otro correo</button>`;
+        <button type="button" class="secondary" id="ins-correo-agregar" style="margin-top:8px">${Iconos.svg('plus')} Agregar otro correo</button>`}`;
     }
 
     // Azul: el mismo con el que se marcaba en AppSheet (sigue siendo el color por default).
@@ -1607,7 +1608,9 @@
           VOLTAJE: valorDe('ins-voltaje'),
           ULTIMO_SERVICIO: valorDe('ins-servicio'),
           OBSERVACIONES: valorDe('ins-observaciones'),
-          NOTIFICAR: {
+          // Con el aviso apagado (estructura.avisoCorreoActivo === false) la sección ni se pinta:
+          // nunca manda NOTIFICAR, igual que cuando alguien la deja vacía a propósito.
+          NOTIFICAR: estructura.avisoCorreoActivo === false ? null : {
             responsable: valorDe('ins-correo-responsable'),
             inspector: valorDe('ins-correo-inspector'),
             asistente: valorDe('ins-correo-asistente'),
