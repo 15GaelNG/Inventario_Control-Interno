@@ -9,6 +9,11 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.revisar === 'entorno') {
     return ContentService.createTextOutput(JSON.stringify(revisionEntorno_())).setMimeType(ContentService.MimeType.JSON);
   }
+  // ?revisar=plantillas: los marcadores de cada plantilla de PDF, para tools/pdf/inventario.js (PdfHerramientas.gs;
+  // también solo para quien desplegó)
+  if (e && e.parameter && e.parameter.revisar === 'plantillas') {
+    return ContentService.createTextOutput(JSON.stringify(pdfInventarioMarcadores_())).setMimeType(ContentService.MimeType.JSON);
+  }
   // ?firmar=1&tipo=...&token=...: liga de firma a distancia (Responsiva/Adherente Vehicular,
   // Arqueos). Página aparte, nunca la SPA completa -- quien la abre puede no tener usuario en el
   // sistema, así que no pasa por el login ni por el resto de la app (ver ClientApi.apiFirmaRemota*).
