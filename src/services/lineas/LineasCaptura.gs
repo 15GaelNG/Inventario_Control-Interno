@@ -1131,6 +1131,10 @@ const LineasCaptura = (function () {
           'FIRMA INSPECTOR': imagen('inspector', 'FIRMA INSPECTOR', 'firma-inspector.png'), 'PATRON': patron }, firmasAdicionales)
       : Object.assign({ 'FIRMA RESPONSABLE': imagen('responsable', 'FIRMA RESPONSABLE', nombreFirmaResponsable),
         'FIRMA CI': imagen('ci', 'FIRMA CI', 'firma-ci.png'), 'CONTRASEÑA': patron }, firmasAdicionales);
+    // La casilla del principal se llama distinto según la plantilla: <<FIRMA RESPONSABLE>> en la Responsiva y en las
+    // inspecciones de antes, <<FIRMA RESPONSABLE 1>> en la Inspección del 6-nov (usuario, 9-nov: «la firma del
+    // responsable 1 no se está guardando»: con un solo nombre nunca entraba al PDF). Va con los dos.
+    imagenes['FIRMA RESPONSABLE 1'] = imagenes['FIRMA RESPONSABLE'];
     const anterior = forzar ? pdfVigente_(ev) : null;
     crono.marcar('firmas a imagen');
     try {

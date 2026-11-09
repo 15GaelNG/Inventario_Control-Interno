@@ -245,6 +245,8 @@ const LineasFirmaRemota = (function () {
       const base64 = imagenesBase64[claveGenerarPdf_(doc, r)];
       if (base64) imagenesBlob[marcadorFirma_(doc, r)] = blobDeBase64_(base64, 'firma-' + r.toLowerCase() + '.png');
     });
+    // El principal: <<FIRMA RESPONSABLE>> o <<FIRMA RESPONSABLE 1>> según la plantilla (igual que LineasCaptura.generarPdf)
+    if (imagenesBlob['FIRMA RESPONSABLE']) imagenesBlob['FIRMA RESPONSABLE 1'] = imagenesBlob['FIRMA RESPONSABLE'];
     const carpeta = DriveUtils.carpetaEnRaiz(doc.carpetaTemp);
     const plantilla = doc.tipoPdf === 'INSPECCION' ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR;
     const pdf = LineasPdf.generarPdfDesdePlantilla(plantilla, registro, imagenesBlob, carpeta, 'vista previa ' + Utilities.getUuid() + '.pdf', true);

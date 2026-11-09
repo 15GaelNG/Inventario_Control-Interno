@@ -164,6 +164,10 @@ test('mixto: un adicional firma en el formulario y otro por liga -- al completar
   assert.equal(Buffer.from(img['FIRMA RESPONSABLE 2'].bytes).toString('utf8'), 'firma-ayrton');
   assert.ok(img['FIRMA RESPONSABLE 3'], 'TERCER (firmó por liga) tampoco debe salir en blanco');
   assert.equal(Buffer.from(img['FIRMA RESPONSABLE 3'].bytes).toString('utf8'), 'firma-emmanuel');
+  // Usuario, 9-nov: la Inspección del 6-nov llama a la casilla del principal <<FIRMA RESPONSABLE 1>> y la Responsiva
+  // <<FIRMA RESPONSABLE>>; la firma del principal va con los dos nombres o en la Inspección no entraba
+  assert.equal(Buffer.from(img['FIRMA RESPONSABLE'].bytes).toString('utf8'), 'firma-principal');
+  assert.equal(Buffer.from(img['FIRMA RESPONSABLE 1'].bytes).toString('utf8'), 'firma-principal');
 });
 
 // El usuario dijo "los que firmaron a distancia" (plural): varios diferidos, completados uno por uno, no uno solo.
