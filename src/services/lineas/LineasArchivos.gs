@@ -276,7 +276,7 @@ const LineasArchivos = (function () {
     olvidarNuco(n4);
     return {
       carpetaId: d.carpeta.getId(), fotosCarpetaId: d.fotos ? d.fotos.getId() : null,
-      ruta: [d.activo.getName()].concat(d.ramas, [d.carpeta.getName()]).join('/'),
+      ruta: [d.activoNombre].concat(d.ramas, [d.carpeta.getName()]).join('/'),
       nombrePdf: (tipo === 'INSPECCION' ? 'INSP ' : 'RESP ') + n4 + ' ' + d.ddmm + '.pdf',
     };
   }
@@ -321,7 +321,7 @@ const LineasArchivos = (function () {
     const d = Expediente.carpetaDelDia('linea', lineaId, 'RESPONSIVA', f, { numero: numero });
     return {
       carpetaId: d.carpeta.getId(),
-      ruta: ['LINEAS', d.activo.getName()].concat(d.ramas, [d.carpeta.getName()]).join('/'),
+      ruta: ['LINEAS', d.activoNombre].concat(d.ramas, [d.carpeta.getName()]).join('/'),
       nombrePdf: 'RESP ' + LineasUtil.digitos(numero) + ' ' + d.ddmm + '.pdf',
     };
   }
