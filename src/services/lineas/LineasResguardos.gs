@@ -806,7 +806,7 @@ const LineasResguardos = (function () {
    * las de antes del sistema nuevo y las que se cancelaron directo, sin pasar por el panel. Solo se MUESTRAN: no se
    * escriben en APP_RESGUARDOS ni llevan botones (su trámite ya terminó). ORIGEN = ANTERIOR AL SISTEMA.
    */
-  function canceladasSinRenglon_(filas, ix) {
+  function canceladasSinRenglon_(filas, ix, cartas) {
     const enPanelId = {};
     const enPanelNumero = {};
     filas.forEach((r) => {
@@ -831,17 +831,46 @@ const LineasResguardos = (function () {
         'NUMERO': numero, 'COMPANIA': txt(LineasUtil.col(f, 'COMPAÑIA')), 'RAZON_SOCIAL': txt(LineasUtil.col(f, 'RAZON SOCIAL')),
         'CUENTA_PADRE': txt(LineasUtil.col(f, 'CUENTA PADRE')), 'REGION': LineasUtil.regionDeNumero(numero),
         'CANCELACION': FASE.CANCELADA, 'ESTATUS_LINEA': 'CANCELADA', 'ORIGEN': ORIGEN_ANTERIOR, 'ANTERIOR': true,
+        'CARTAS': cartasDe_(cartas, idLinea, numero),
       });
     });
     return salida;
   }
   const ORIGEN_ANTERIOR = 'ANTERIOR AL SISTEMA';
 
+  /**
+   * Las cartas de cancelación de cada línea (usuario, 9-nov: «que los usuarios la puedan visualizar»): la columna LINK CARTA
+   * DE CANCELACION de la hoja LINEAS, una liga por renglón si el número se pidió en varias (la llena lineasCartaAplicar,
+   * LineasCartaCancelacion.gs; el inventario armado no la trae, como CARTA DE CANCELACION en el Panorama).
+   * → { idLinea: [ligas], número: [ligas] }, en la caché mientras LINEAS no cambie. Sin la hoja, {}.
+   */
+  function cartas_() {
+    if (!LineasDatos.existeTabla('LINEAS')) return {};
+    return LineasDatos.recordar('lineas_cartas_cancelacion_v1', ['LINEAS'], () => {
+      const de = {};
+      LineasDatos.leerTabla('LINEAS').forEach((f) => {
+        // Solo ligas web: el texto de la celda llega a la pantalla como href
+        const ligas = String(f['LINK CARTA DE CANCELACION'] || '').split(/\s+/).filter((x) => /^https:\/\/[^\s"'<>]+$/i.test(x));
+        if (!ligas.length) return;
+        const id = txt(f['ID']);
+        const n = LineasUtil.digitos(f['NUMERO TELEFONO']);
+        if (id) de[id] = ligas;
+        if (n && !de[n]) de[n] = ligas;
+      });
+      return de;
+    }, 21600) || {};
+  }
+
+  /** Las ligas de la carta de una línea, por su ID o, si no, por su número; separadas por salto de línea ('' sin carta). */
+  const cartasDe_ = (cartas, idLinea, numero) =>
+    ((cartas || {})[txt(idLinea)] || (cartas || {})[LineasUtil.digitos(numero)] || []).join('\n');
+
   /** Todos los renglones de la bandeja, del más reciente al más antiguo, y lo que la persona puede hacer. */
   function bandeja(usuario) {
     let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
     // El inventario se lee siempre: Cancelaciones también muestra las líneas canceladas sin renglón (9-nov)
     const ix = indices_();
+    const cartas = cartas_();
     // Lo cerrado de Resguardos también se lee: sigue a su línea (espejo_)
     if (filas.some((r) => abierto_(r) || r['CANCELACION'] || r['LINEA_AL_MANDAR'])) {
       const hoy = dia(new Date());
@@ -859,10 +888,11 @@ const LineasResguardos = (function () {
         return Object.assign(o === r ? Object.assign({}, r) : o, {
           'CUENTA_PADRE': fl ? txt(LineasUtil.col(fl, 'CUENTA PADRE')) : '', 'REGION': LineasUtil.regionDeNumero(o['NUMERO']),
           'ORIGEN': 'SISTEMA',
+          'CARTAS': cartasDe_(cartas, o['ID_LINEA'] || (fl ? LineasUtil.col(fl, 'ID LINEA') : ''), o['NUMERO']),
         });
       });
     }
-    filas = filas.concat(canceladasSinRenglon_(filas, ix));
+    filas = filas.concat(canceladasSinRenglon_(filas, ix, cartas));
     filas.sort((a, b) => (b.FECHA instanceof Date ? b.FECHA.getTime() : 0) - (a.FECHA instanceof Date ? a.FECHA.getTime() : 0));
     // Dirección General: quien no es ADMIN ve el renglón con DG, sus estados y el área (pendiente 8.16; auditoría del 23-oct)
     if (typeof LineasDG !== 'undefined' && !(usuario && usuario.esAdmin)) {
