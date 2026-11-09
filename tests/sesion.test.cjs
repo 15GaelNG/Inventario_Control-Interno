@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 
-function cargar() {
+function cargar(op) {
   const reloj = { ahora: Date.UTC(2026, 9, 23, 9, 0) };
   class Fecha extends Date {
     constructor(...a) { if (a.length) super(...a); else super(reloj.ahora); }
@@ -15,6 +15,7 @@ function cargar() {
   const cache = {};
   const escrituras = [];
   const props = {};
+  const avisos = [];
   let n = 0;
   // Una ejecución de Apps Script: contexto nuevo, misma caché, propiedades y reloj
   const crearCtx = () => vm.createContext({
@@ -26,8 +27,11 @@ function cargar() {
       put: (k, v, seg) => { if (k.startsWith('sesion_') && !k.startsWith('sesion_version_')) escrituras.push(k); cache[k] = { v, vence: reloj.ahora + seg * 1000 }; },
       remove: (k) => { delete cache[k]; },
     }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
-    Utilities: { getUuid: () => 'token-' + (++n), sleep: () => {} },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: (k) => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; },
+      deleteProperty: (k) => { delete props[k]; }, getProperties: () => Object.assign({}, props) }) },
+    Utilities: { getUuid: () => 'token-' + (++n), sleep: () => {}, computeDigest: (a, t) => { if (op && op.copiaFalla) throw new Error('sin copia'); return t; }, DigestAlgorithm: { SHA_256: 1 }, Charset: { UTF_8: 1 },
+      base64EncodeWebSafe: (b) => 'huella-' + b },
+    console: { log: (m) => avisos.push(m), warn: (m) => avisos.push(m), error: () => {} },
     SheetUtils: { getSheet: () => ({ getName: () => 'USUARIOS' }), getAll: () => [{ CORREO: 'ana@gph.com', NOMBRE: 'Ana', ROL: 'CLIENT', ACTIVO: 'TRUE', 'CONTRASEÑA': 'x' }] },
     Credenciales: { verificar: () => ({ ok: true, migrar: false }), MINIMO: 10 },
     Verificacion: { decidir: () => null },
@@ -39,7 +43,7 @@ function cargar() {
   const A = nueva();
   const minutos = (m) => { reloj.ahora += m * 60000; };
   const vale = (Auth, token) => { try { Auth.validarSesion(token); return true; } catch (e) { return e.message; } };
-  return { A, nueva, minutos, vale, escrituras, reloj, cache };
+  return { A, nueva, minutos, vale, escrituras, reloj, cache, props, avisos };
 }
 
 test('60 min sin usar la app: vence; usarla la renueva', () => {
@@ -105,4 +109,91 @@ test('una sesión de antes del cambio (sin versión ni fecha) sigue sirviendo al
   for (let i = 0; i < 47; i++) { minutos(10); assert.equal(vale(A, 'vieja'), true); }
   minutos(11);
   assert.match(vale(A, 'vieja'), /Sesión expirada/, 'desde su primera llamada ya tiene sus 8 h');
+});
+
+// 9-nov: CacheService perdió sesiones recién creadas («Sesión expirada» en Auth:268). Cada una tiene una copia.
+const perder = (cache, token) => { delete cache['sesion_' + token]; };
+const COPIA = (token) => 'sesion_copia_huella-' + token;
+
+test('copia: si la caché pierde la sesión, se rescata, se restaura y nadie sale', () => {
+  const { A, nueva, vale, cache, props, avisos } = cargar();
+  const { token } = A.login('ana@gph.com', 'x');
+  assert.ok(props[COPIA(token)], 'se guarda bajo la huella del token');
+  assert.equal(Object.keys(props).some((k) => k.includes('sesion_copia_' + token)), false, 'la clave no es el token');
+  perder(cache, token);
+  assert.equal(vale(nueva(), token), true);
+  assert.ok(cache['sesion_' + token], 'vuelve a la caché');
+  assert.ok(avisos.some((m) => m.includes('[sesion] rescatada') && m.includes('ana@gph.com')), 'queda en el registro');
+});
+
+test('copia: no alarga la sesión: vence a los 60 min sin uso, aunque la caché la haya perdido', () => {
+  const { A, nueva, minutos, vale, cache, props } = cargar();
+  const { token } = A.login('ana@gph.com', 'x');
+  minutos(61);
+  perder(cache, token);
+  assert.match(vale(nueva(), token), /Sesión expirada/);
+  assert.equal(props[COPIA(token)], undefined, 'la copia vencida se quita');
+});
+
+test('copia: las llamadas automáticas tampoco la renuevan', () => {
+  const { A, nueva, minutos, vale, cache, reloj, props } = cargar();
+  const { token } = A.login('ana@gph.com', 'x');
+  const vence = JSON.parse(props[COPIA(token)]).e;
+  minutos(30);
+  perder(cache, token);
+  const auto = nueva();
+  auto.automatica();
+  assert.equal(vale(auto, token), true);
+  assert.equal(JSON.parse(props[COPIA(token)]).e, vence, 'sigue venciendo a la misma hora');
+  assert.ok(cache['sesion_' + token].vence <= vence, 'y en la caché, lo mismo');
+  assert.ok(reloj.ahora < vence);
+});
+
+test('copia: el máximo de 8 h y cerrar sesiones siguen valiendo', () => {
+  const { A, nueva, minutos, vale, cache } = cargar();
+  const { token } = A.login('ana@gph.com', 'x');
+  for (let i = 0; i < 47; i++) { minutos(10); assert.equal(vale(nueva(), token), true); }
+  minutos(11);
+  perder(cache, token);
+  assert.match(vale(nueva(), token), /Sesión expirada/, 'pasadas las 8 h no se rescata');
+  const otra = cargar();
+  const s = otra.A.login('ana@gph.com', 'x');
+  otra.A.cerrarSesiones('ana@gph.com');
+  perder(otra.cache, s.token);
+  assert.match(otra.vale(otra.nueva(), s.token), /Sesión expirada: se cerró/, 'con otra versión, la copia no sirve');
+});
+
+test('copia: cerrar sesión la borra; un token desconocido no entra y deja su línea en el registro', () => {
+  const { A, nueva, vale, props, avisos } = cargar();
+  const { token } = A.login('ana@gph.com', 'x');
+  A.logout(token);
+  assert.equal(props[COPIA(token)], undefined);
+  assert.match(vale(nueva(), token), /Sesión expirada/, 'cerrada no se rescata');
+  assert.match(vale(nueva(), 'inventado'), /Sesión expirada/);
+  assert.ok(avisos.some((m) => m.includes('[sesion] no encontrada: ni en la caché ni en su copia')));
+});
+
+test('copia: las vencidas se limpian al entrar, a lo más cada hora', () => {
+  const { A, minutos, vale, props, cache } = cargar();
+  const a = A.login('ana@gph.com', 'x');
+  assert.equal(vale(A, a.token), true);
+  props['sesion_copia_vieja'] = JSON.stringify({ e: 1, s: {} });
+  delete cache['copias_de_sesion_limpias'];
+  minutos(1);
+  A.login('ana@gph.com', 'x');
+  assert.equal(props['sesion_copia_vieja'], undefined, 'la vencida se fue');
+  assert.ok(props[COPIA(a.token)], 'la vigente sigue');
+  props['sesion_copia_vieja2'] = JSON.stringify({ e: 1, s: {} });
+  A.login('ana@gph.com', 'x');
+  assert.ok(props['sesion_copia_vieja2'], 'no limpia dos veces en la misma hora');
+  const e = A.estadoCopias();
+  assert.equal(e.vigentes, 3);
+  assert.equal(e.copias, 4);
+});
+
+test('copia: si la copia falla, entrar y usar la app sigue funcionando como antes', () => {
+  const { A, vale, avisos } = cargar({ copiaFalla: true });
+  const { token } = A.login('ana@gph.com', 'x');
+  assert.equal(vale(A, token), true);
+  assert.ok(avisos.some((m) => m.includes('no se pudo guardar la copia')));
 });
