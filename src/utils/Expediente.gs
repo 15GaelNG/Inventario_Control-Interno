@@ -175,6 +175,32 @@ const Expediente = (function () {
   const guardar_ = (k, v) => { try { CacheHojas.guardar(k, v, SEG_MAPA); } catch (e) { /* sin copia: no pasa nada */ } };
   const borrar_ = (k) => { try { CacheHojas.borrar(k); } catch (e) { /* no-op */ } };
 
+  // ---- Memoria (fase 2, 9-nov): lo que ya se comprobó en Drive no se vuelve a preguntar (6 h, CacheService).
+  //  · Hacia abajo: la ruta completa (tipo, raíz, activo, ramas) → el ID de su carpeta. Al usarla se comprueba solo esa
+  //    carpeta (que exista y no esté en la papelera; si un padre se borró, ella también está en la papelera).
+  //  · Hacia arriba: el padre de cada carpeta (el «puntero» de la lista enlazada). Lo anota el motor al bajar o crear, y
+  //    raizDe al subir; la siguiente subida va por la memoria sin preguntarle a Drive.
+  // Caso aceptado: una carpeta movida a mano en Drive se sigue creyendo en su lugar anterior hasta 6 h.
+  const SEG_MEMORIA = 21600;
+  let memoria_ = true;
+  /** Para medir (PruebasDev): apaga (false) o prende la memoria en ESTA ejecución; apagada no lee ni escribe */
+  function memoria(si) { memoria_ = si !== false; }
+  const memLeer_ = (claves) => {
+    if (!memoria_ || !claves.length) return {};
+    try { return CacheService.getScriptCache().getAll(claves) || {}; } catch (e) { return {}; }
+  };
+  const memGuardar_ = (pares) => {
+    if (!memoria_ || !Object.keys(pares).length) return;
+    try { CacheService.getScriptCache().putAll(pares, SEG_MEMORIA); } catch (e) { /* sin memoria: no pasa nada */ }
+  };
+  const clavePadres_ = (id) => 'exp_padres_v1_' + id;
+  /** Anota los padres de una cadena de carpetas, de arriba abajo: [raíz, activo, rama, …] */
+  function anotarCadena_(ids) {
+    const pares = {};
+    for (let i = 1; i < ids.length; i++) pares[clavePadres_(ids[i])] = JSON.stringify([ids[i - 1]]);
+    memGuardar_(pares);
+  }
+
   /**
    * Hijos de varias carpetas a la vez (API de Drive, una consulta por cada 40 padres), lo que no está en la papelera.
    * opciones: { campos, soloCarpetas }. Por omisión trae miniatura, liga y fecha.
@@ -267,15 +293,35 @@ const Expediente = (function () {
 
   /**
    * La carpeta de un documento del activo (la crea si falta; reconoce las que ya están aunque varíen espacios o acentos:
-   * DriveUtils.subcarpeta). `subcarpetas`: más niveles debajo (['SENSORES'], ['ADHERENTES']).
-   * → { carpeta, activo, ramas }
+   * DriveUtils.subcarpeta). `subcarpetas`: más niveles debajo (['SENSORES'], ['ADHERENTES']). Si la ruta ya se conoce
+   * (memoria), solo se comprueba su última carpeta.
+   * → { carpeta, activoId, activoNombre, ramas }
    */
   function carpetaDocumento(tipo, valor, documento, fecha, subcarpetas, datos) {
     const t = tipo_(tipo);
     const ramas = ramas_(t, documento, fecha).concat(subcarpetas || []);
+    const clave = t.clave(valor, datos);
+    const raizId = t.raiz();
+    // El número va en la clave de una línea: si cambió, se toma el camino largo y la carpeta se renombra
+    const k = ['exp_ruta_v1', tipo, raizId, clave, digitos_(datos && datos.numero)].join('|') + '|' +
+      ramas.map((r) => DriveUtils.claveCarpeta(r)).join('/');
+    const guardada = memLeer_([k])[k];
+    if (guardada) {
+      const m = JSON.parse(guardada);
+      const carpeta = abrir_(m.id);
+      if (carpeta) return { carpeta: carpeta, activoId: m.activoId, activoNombre: m.activoNombre, ramas: ramas };
+    }
     const activo = carpetaActivo(tipo, valor, datos);
-    const carpeta = ramas.reduce((c, nombre) => DriveUtils.subcarpeta(c, nombre), activo);
-    return { carpeta: carpeta, activo: activo, ramas: ramas };
+    const cadena = [raizId, activo.getId()];
+    const carpeta = ramas.reduce((c, nombre) => {
+      const hija = DriveUtils.subcarpeta(c, nombre);
+      cadena.push(hija.getId());
+      return hija;
+    }, activo);
+    anotarCadena_(cadena);
+    const r = { carpeta: carpeta, activoId: activo.getId(), activoNombre: activo.getName(), ramas: ramas };
+    memGuardar_({ [k]: JSON.stringify({ id: carpeta.getId(), activoId: r.activoId, activoNombre: r.activoNombre }) });
+    return r;
   }
 
   /** Crea una carpeta con nombre único (agrega " (2)", " (3)"… si ya existe). */
@@ -299,7 +345,8 @@ const Expediente = (function () {
 
   /**
    * La carpeta NUEVA de un documento del día ("RESP 06 11"; si ya hay una ese día, "RESP 06 11 (2)"), con su FOTOS si el
-   * tipo la lleva. → { carpeta, fotos, activo, ramas, ddmm }
+   * tipo la lleva. Su padre queda anotado: saber después en qué raíz está no le pregunta nada a Drive.
+   * → { carpeta, fotos, activoId, activoNombre, ramas, ddmm }
    */
   function carpetaDelDia(tipo, valor, documento, fecha, datos) {
     const t = tipo_(tipo);
@@ -309,26 +356,45 @@ const Expediente = (function () {
     const d = carpetaDocumento(tipo, valor, documento, fecha, null, datos);
     const carpeta = carpetaUnica(d.carpeta, dia.prefijo + ddmm);
     const fotos = dia.fotos ? DriveUtils.crearCarpeta(carpeta, dia.fotos) : null;
-    return { carpeta: carpeta, fotos: fotos, activo: d.activo, ramas: d.ramas, ddmm: ddmm };
+    anotarCadena_([d.carpeta.getId(), carpeta.getId()].concat(fotos ? [fotos.getId()] : []));
+    return { carpeta: carpeta, fotos: fotos, activoId: d.activoId, activoNombre: d.activoNombre, ramas: d.ramas, ddmm: ddmm };
   }
 
   /**
    * ¿En cuál de estas raíces está la carpeta? `raices` = { nombre: id }. UNA subida por los padres (hasta 12 niveles) que
    * compara contra todas a la vez y se detiene en la primera que encuentra (la más cercana): antes se subía una vez por
-   * raíz. → el nombre de la raíz o null.
+   * raíz. Cada padre sale de la memoria si ya se conoce (lo anotó el motor al crear la carpeta, u otra subida); si no, se
+   * le pregunta a Drive y se anota. → el nombre de la raíz o null.
    */
   function raizDe(carpetaId, raices) {
     const porId = {};
     Object.keys(raices || {}).forEach((k) => { if (raices[k]) porId[raices[k]] = k; });
-    let actual = [DriveApp.getFolderById(carpetaId)];
+    // Cada nodo: { id, carpeta } (la carpeta solo si ya se tiene de Drive; si no, se abre al necesitarla)
+    let actual = [{ id: carpetaId, carpeta: null }];
+    const vistos = {};
     for (let nivel = 0; nivel < 12 && actual.length; nivel++) {
+      for (let i = 0; i < actual.length; i++) if (porId[actual[i].id]) return porId[actual[i].id];
+      const guardados = memLeer_(actual.map((n) => clavePadres_(n.id)));
+      const nuevos = {};
       const siguiente = [];
-      for (let i = 0; i < actual.length; i++) {
-        const id = actual[i].getId();
-        if (porId[id]) return porId[id];
-        const padres = actual[i].getParents();
-        while (padres.hasNext()) siguiente.push(padres.next());
-      }
+      actual.forEach((n) => {
+        if (vistos[n.id]) return;
+        vistos[n.id] = true;
+        const g = guardados[clavePadres_(n.id)];
+        if (g) {
+          JSON.parse(g).forEach((p) => siguiente.push({ id: p, carpeta: null }));
+          return;
+        }
+        const padres = (n.carpeta || DriveApp.getFolderById(n.id)).getParents();
+        const ids = [];
+        while (padres.hasNext()) {
+          const p = padres.next();
+          ids.push(p.getId());
+          siguiente.push({ id: p.getId(), carpeta: p });
+        }
+        nuevos[clavePadres_(n.id)] = JSON.stringify(ids);
+      });
+      memGuardar_(nuevos);
       actual = siguiente;
     }
     return null;
@@ -340,5 +406,5 @@ const Expediente = (function () {
   }
 
   return { TIPOS, CARPETA, raiz, hijos, activos, olvidarActivos, idActivo, carpetaActivo, carpetaDocumento, carpetaDelDia,
-    carpetaUnica, raizDe, dentroDe, periodoInspeccion, semestreVerificacion };
+    carpetaUnica, raizDe, dentroDe, periodoInspeccion, semestreVerificacion, memoria };
 })();

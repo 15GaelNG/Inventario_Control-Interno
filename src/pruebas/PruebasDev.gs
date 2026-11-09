@@ -65,7 +65,8 @@ function pruebasTodas() {
  * Expediente.gs (carpetas de Drive de Vehículos y Líneas): con un NUCO 9999 y una línea de prueba crea lo que crean las
  * capturas (inspección y responsiva de un equipo, responsiva de una línea sin equipo, inspección de un vehículo y dos
  * responsivas vehiculares para ver que la vieja pase a RESPONSIVAS ANTERIORES), revisa las rutas, mide cada paso y al
- * final manda a la papelera lo que creó. No toca hojas ni genera PDF.
+ * final manda a la papelera lo que creó. No toca hojas ni genera PDF. Repite la captura con el NUCO ya existente, sin y
+ * con la memoria del motor (fase 2): ese par de tiempos es el antes y el después.
  */
 function pruebaExpediente() {
   soloEditor_();
@@ -98,6 +99,26 @@ function pruebaExpediente() {
       const r = ExpedienteNuco.listar(NUCO).documentos.filter((d) => d.clave === 'RESPONSIVA')[0];
       return 'vigentes ' + r.vigentes.length + ', anteriores ' + r.anteriores.reduce((k, g) => k + g.archivos.length, 0);
     }, /^vigentes 1, anteriores 1$/);
+    // La captura de todos los días: el NUCO, su año y su rama ya existen. Primero sin memoria (como antes de la fase 2)
+    // y luego con ella; «y su raíz» es lo que pregunta el PDF de Líneas antes de guardar (enLineas / enNucos).
+    [false, true].forEach((conMemoria) => {
+      const como = conMemoria ? 'con memoria' : 'sin memoria';
+      Expediente.memoria(conMemoria);
+      try {
+        paso('otra vez, ' + como + ': responsiva de equipo y su raíz', () => {
+          const c = LineasArchivos.carpetaEvidenciaNuco('RESPONSIVA', NUCO, new Date());
+          return (LineasArchivos.enLineas(c.carpetaId) ? 'LINEAS' : LineasArchivos.enNucos(c.carpetaId) ? 'NUCOS' : '¿?') + ' · ' + c.ruta;
+        }, /^NUCOS · /);
+        paso('otra vez, ' + como + ': responsiva de línea y su raíz', () => {
+          const c = LineasArchivos.carpetaEvidenciaLinea(LINEA, NUMERO, new Date());
+          return (LineasArchivos.enLineas(c.carpetaId) ? 'LINEAS' : '¿?') + ' · ' + c.ruta;
+        }, /^LINEAS · /);
+        paso('otra vez, ' + como + ': carpeta de la inspección del vehículo', () =>
+          PruebasDev.ruta(ExpedienteNuco.carpetaInspeccion(NUCO, new Date())), /\/9999\/4\.-INSPECCIONES\//);
+      } finally {
+        Expediente.memoria(true);
+      }
+    });
     paso('mapa: los tres activos se encuentran', () => ['equipo', 'vehiculo'].map((t) => t + ' ' + (Expediente.idActivo(t, NUCO) ? 'sí' : 'NO'))
       .concat('linea ' + (Expediente.idActivo('linea', LINEA) ? 'sí' : 'NO')).join(', '), /^equipo sí, vehiculo sí, linea sí$/);
     // Limpieza: a la papelera solo lo que creó la prueba
