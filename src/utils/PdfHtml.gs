@@ -45,16 +45,14 @@ const PdfHtml = (function () {
     'responsiva-vehicular': { dev: true, prod: false },
     'adherente-vehicular': { dev: true, prod: false },
     'arqueo': { dev: true, prod: false },
-    // Igual en 9 de 10 contra prod en el Chrome local (tools/pdf/html/local.js); se enciende en DEV al confirmarla con
-    // el convertidor de Apps Script (pedir.js)
-    'responsiva-celular': { dev: false, prod: false },
-    // Las dos variantes de la inspección de celular (LineasCaptura.documentoInspeccionHtml_): igual en 10 de 10 en el Chrome
-    // local; se encienden con la responsiva, al confirmarlas con el convertidor
-    'inspeccion-celular': { dev: false, prod: false },
-    'inspeccion-celular-checklist': { dev: false, prod: false },
-    // Una plantilla para los 18 tipos de unidad (InspeccionHtml.gs + InspeccionFormatos.gs): probada en el Chrome local
-    // contra 36 inspecciones reales (2 por tipo); se enciende al confirmarla con el convertidor
-    'inspeccion-vehicular': { dev: false, prod: false },
+    // Confirmadas con el convertidor de Apps Script (pedir.js) y encendidas en DEV el 10-nov para probarlas desde la app:
+    // la responsiva de celular (10 de 10 en 2 hojas), las dos variantes de la inspección de celular
+    // (LineasCaptura.documentoInspeccionHtml_; 10 de 10 en 1 hoja) y la inspección vehicular, una plantilla para los 18
+    // tipos (InspeccionHtml.gs + InspeccionFormatos.gs; 36 de 36 en 2 hojas)
+    'responsiva-celular': { dev: true, prod: false },
+    'inspeccion-celular': { dev: true, prod: false },
+    'inspeccion-celular-checklist': { dev: true, prod: false },
+    'inspeccion-vehicular': { dev: true, prod: false },
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];
