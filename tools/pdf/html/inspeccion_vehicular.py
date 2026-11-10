@@ -195,7 +195,23 @@ def imagen_png(tipo, src):
     return out.getvalue()
 
 
+# Imágenes del Doc que tienen una versión mejor en el repo: el logo de Flotillas CM Inspecciones del Doc es un JPG con
+# fondo gris claro (247, 247, 247); el de assets/ (Marca CI/FT) es el mismo, transparente y a mayor resolución
+# El alto máximo (pt) de cada lugar de diagrama, para que el bloque 2, el Vector y las firmas quepan en la hoja 2:
+# 1–4 el Vector 2 × 2; 5–8 el de moto (frontal y trasera altas, de dos renglones; izquierda y derecha, uno cada una)
+ALTO_DIAGRAMA = {1: 135, 2: 135, 3: 135, 4: 135, 5: 280, 6: 280, 7: 135, 8: 135}
+
+MEJORES = {'inspeccion-d75ffa': comun.RAIZ / 'assets' / 'logo-ft-inspecciones-light.png'}
+
+
 def guardar_logo(nombre, png):
+    if nombre in MEJORES:   # a 1000 px de ancho: sobra para imprimirlo a 300 dpi (va a 180 pt) y no infla cada PDF
+        from PIL import Image
+        im = Image.open(MEJORES[nombre])
+        im = im.resize((1000, round(im.height * 1000 / im.width)), Image.LANCZOS)
+        b = io.BytesIO()
+        im.save(b, 'PNG', optimize=True)
+        png = b.getvalue()
     (comun.carpeta('recursos') / f'logo-{nombre}.png').write_bytes(png)
 
 
@@ -394,7 +410,18 @@ def despues_regla(s):
         w = float(re.search(r'(?<![-\w])width:([\d.]+)pt', td).group(1))
         p = re.search(r'padding:([-\d.]+)pt ([-\d.]+)pt ([-\d.]+)pt ([-\d.]+)pt', td)
         w -= (max(float(p.group(2)), 0) + max(float(p.group(4)), 0)) if p else 0
-        s = s.replace('{{DIAGRAMA LUGAR %d}}' % k, '{{IMG:=DIAGRAMA %d:%.1fx2000:tope}}' % ((k - 1) % 4 + 1, w))
+        s = s.replace('{{DIAGRAMA LUGAR %d}}' % k, '{{IMG:=DIAGRAMA %d:%.1fx%d:tope}}' % ((k - 1) % 4 + 1, w, ALTO_DIAGRAMA[k]))
+
+    # 7. Siempre dos hojas, sin renglones sueltos (11-nov, lo pidió el usuario): la hoja 1 es el encabezado y el bloque 1;
+    # la hoja 2, el bloque 2 entero (antes se partía donde cayera: «Intermitentes» solo en la hoja siguiente, o en la moto
+    # el bloque 2 pegado bajo el ícono), el Vector, las observaciones y las firmas
+    i = s.find('{{#CADA SISTEMAS INTERIORES}}')
+    a = [x for x, y in tablas_nivel(s) if x < i < y][0]
+    s = s[:a] + '<table style="break-before:page;page-break-before:always;' + s[a + len('<table style="'):]
+    # El encabezado: los dos logos y la calificación centrados a la misma altura
+    a, b = tablas_nivel(s, s.find('<body'))[0]
+    fila = re.search(r'<tr\b.*?</tr>', s[a:b], re.S)
+    s = s[:a + fila.start()] + fila.group(0).replace('vertical-align:top', 'vertical-align:middle') + s[a + fila.end():]
     return s
 
 
