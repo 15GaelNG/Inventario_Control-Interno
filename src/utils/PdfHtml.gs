@@ -42,17 +42,18 @@ const PdfHtml = (function () {
    * autorización. Con false, el documento sigue saliendo del Google Doc de siempre.
    */
   const DOCUMENTOS = {
-    'responsiva-vehicular': { dev: true, prod: false },
-    'adherente-vehicular': { dev: true, prod: false },
-    'arqueo': { dev: true, prod: false },
+    'responsiva-vehicular': { dev: true, prod: true },
+    'adherente-vehicular': { dev: true, prod: true },
+    'arqueo': { dev: true, prod: true },
     // Confirmadas con el convertidor de Apps Script (pedir.js) y encendidas en DEV el 10-nov para probarlas desde la app:
     // la responsiva de celular (10 de 10 en 2 hojas), las dos variantes de la inspección de celular
     // (LineasCaptura.documentoInspeccionHtml_; 10 de 10 en 1 hoja) y la inspección vehicular, una plantilla para los 18
     // tipos (InspeccionHtml.gs + InspeccionFormatos.gs; 36 de 36 en 2 hojas)
-    'responsiva-celular': { dev: true, prod: false },
-    'inspeccion-celular': { dev: true, prod: false },
-    'inspeccion-celular-checklist': { dev: true, prod: false },
-    'inspeccion-vehicular': { dev: true, prod: false },
+    'responsiva-celular': { dev: true, prod: true },
+    'inspeccion-celular': { dev: true, prod: true },
+    'inspeccion-celular-checklist': { dev: true, prod: true },
+    'inspeccion-vehicular': { dev: true, prod: true },
+    // Encendidos en producción el 10-nov (usuario), después de armarlos ahí con pdfHtmlProbarAqui: 8 de 8 iguales al DEV
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];

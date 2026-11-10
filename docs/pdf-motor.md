@@ -49,6 +49,8 @@ Las tipografías (comerciales) y los logos **no van en el repo**: viven en `RECU
 
 **Encendido por documento:** `PdfHtml.DOCUMENTOS` (`{ dev, prod }`). En un DEV en cuanto pasa su comparación; en
 producción solo con autorización (un contrato cuenta los encendidos en prod). Apagado, sale del Doc como siempre.
+**Los 7 encendidos en producción el 10-nov** (autorizó el usuario), tras armarlos ahí con `pdfHtmlProbarAqui` (8 de 8
+iguales al DEV; 1.4–2.6 s cada uno, el primero ~11 s por la caché de tipografías).
 
 ### Replicar un documento (el proceso)
 
