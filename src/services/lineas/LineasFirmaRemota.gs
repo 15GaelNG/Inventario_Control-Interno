@@ -437,9 +437,10 @@ const LineasFirmaRemota = (function () {
 
   /**
    * Panel "Firmas pendientes" (usuario, 10-nov: ver las responsivas e inspecciones que siguen esperando firma y cuántos
-   * días le quedan a cada liga, para darles seguimiento). Un renglón por persona que falta: su liga, el documento y los
-   * días que le quedan (negativos = ya venció). Nunca regresa el token: copiar o regenerar la liga va por copiarLiga /
-   * regenerarLiga, que piden EDICIÓN en Líneas Telefónicas.
+   * días le quedan a cada liga, para darles seguimiento). Un renglón por documento (usuario, 10-nov: "agrupadas", no
+   * cada persona suelta) con quienes faltan en PENDIENTES (sus días y el estado de su liga); el documento toma la liga
+   * que vence primero. Nunca regresa el token: copiar o regenerar la liga va por copiarLiga / regenerarLiga, que piden
+   * EDICIÓN en Líneas Telefónicas.
    */
   function pendientes(token) {
     Permisos.puedeLeer(token, 'firmas-lineas');
@@ -451,27 +452,33 @@ const LineasFirmaRemota = (function () {
         if (String(fila['ESTADO FIRMA'] || '').trim().toUpperCase() !== 'PENDIENTE') return;
         const diferidos = ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]);
         const faltan = diferidos.filter((rol) => fila[colToken_(rol)]);
-        faltan.forEach((rol) => {
+        if (!faltan.length) return;
+        const personas = faltan.map((rol) => {
           const expira = fila[colTokenExpira_(rol)] ? new Date(fila[colTokenExpira_(rol)]) : null;
-          const valida = expira && !isNaN(expira.getTime());
+          const valida = !!expira && !isNaN(expira.getTime());
           const restante = valida ? expira.getTime() - ahora : -1;
-          const dias = valida ? (restante > 0 ? Math.ceil(restante / DIA) : -Math.floor(-restante / DIA)) : null;
-          salida.push({
-            _clave: doc.tipoPdf + '|' + fila['ID'] + '|' + rol, _tipo: doc.tipoPdf, _id: String(fila['ID'] || ''), _rol: rol,
-            _idLinea: String(fila['ID LINEA'] || ''),
-            'DOCUMENTO': doc.corto,
-            'NUCO': LineasUtil.nucoVisible(fila['NUCO']) || '',
-            'RESPONSABLE': String(fila[columnaNombre_(doc, 'PRINCIPAL')] || '').trim(),
-            'FALTA FIRMAR': String(fila[columnaNombre_(doc, rol)] || '').trim() || ETIQUETA_ROL[rol],
-            'ROL': ETIQUETA_ROL[rol],
-            'DIAS RESTANTES': restante > 0 ? dias : 0,
-            'ESTADO': restante <= 0 ? 'VENCIDA' : dias <= DIAS_POR_VENCER ? 'POR VENCER' : 'VIGENTE',
-            'VENCE': valida ? expira.toISOString() : '',
-            'FIRMAS': (diferidos.length - faltan.length) + ' de ' + diferidos.length,
-            'ENVIADO POR': String(fila[COL_ENVIADO_POR] || ''),
-            'FECHA': fechaIso_(fila[doc.colFecha]),
-            'FOLIO': String(fila['ID'] || ''),
-          });
+          const dias = restante > 0 ? Math.ceil(restante / DIA) : 0;
+          return {
+            rol: rol, etiqueta: ETIQUETA_ROL[rol], nombre: String(fila[columnaNombre_(doc, rol)] || '').trim() || ETIQUETA_ROL[rol],
+            dias: dias, estado: restante <= 0 ? 'VENCIDA' : dias <= DIAS_POR_VENCER ? 'POR VENCER' : 'VIGENTE',
+            vence: valida ? expira.toISOString() : '',
+          };
+        }).sort((a, b) => (a.vence || '').localeCompare(b.vence || ''));
+        const primera = personas[0];
+        salida.push({
+          _clave: doc.tipoPdf + '|' + fila['ID'], _tipo: doc.tipoPdf, _id: String(fila['ID'] || ''),
+          _idLinea: String(fila['ID LINEA'] || ''), _pendientes: personas,
+          'DOCUMENTO': doc.corto,
+          'NUCO': LineasUtil.nucoVisible(fila['NUCO']) || '',
+          'RESPONSABLE': String(fila[columnaNombre_(doc, 'PRINCIPAL')] || '').trim(),
+          'FALTA FIRMAR': personas.map((p) => p.nombre).join(', '),
+          'DIAS RESTANTES': primera.dias,
+          'ESTADO': primera.estado,
+          'VENCE': primera.vence,
+          'FIRMAS': (diferidos.length - faltan.length) + ' de ' + diferidos.length,
+          'ENVIADO POR': String(fila[COL_ENVIADO_POR] || ''),
+          'FECHA': fechaIso_(fila[doc.colFecha]),
+          'FOLIO': String(fila['ID'] || ''),
         });
       });
     });

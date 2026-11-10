@@ -457,13 +457,14 @@ test('aviso por correo: no sale sin quién capturó (documentos de antes), ni si
   assert.equal(e.filas[0]['ESTADO FIRMA'], 'FIRMADO');
 });
 
-test('pendientes (panel "Firmas pendientes", 10-nov): una fila por persona que falta, con los días de su liga, sin el token', () => {
+test('pendientes (panel "Firmas pendientes", 10-nov): una fila por documento con quienes faltan y los días de cada liga, sin el token', () => {
   const DIA = 86400000, ahora = Date.now();
   const pedidos = [];
   const { F, ctx } = entorno([
-    { ID: 'RES-1', NUCO: 669, RESPONSABLE: 'ANDREA', 'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON', 'ESTADO FIRMA': 'PENDIENTE',
-      'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': new Date(ahora + 10 * DIA + 1000),
+    { ID: 'RES-1', NUCO: 669, RESPONSABLE: 'ANDREA', 'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON', 'NOMBRE TERCER RESPONSABLE': 'TERE',
+      'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': new Date(ahora + 10 * DIA + 1000),
       'TOKEN FIRMA SEGUNDO': '', 'FIRMADO POR SEGUNDO': 'ayrton@x.com', 'ENVIADO A FIRMA POR': 'eje@x.com',
+      'TOKEN FIRMA TERCER': 'tok-t', 'TOKEN FIRMA TERCER EXPIRA': new Date(ahora + 12 * DIA),
       'FECHA RESPONSIVA': new Date('2026-11-01T10:00:00'), 'ID LINEA': 'IMEI-1' },
     { ID: 'RES-2', RESPONSABLE: 'BETO', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-b', 'TOKEN FIRMA EXPIRA': new Date(ahora + 2 * DIA) },
     { ID: 'RES-3', RESPONSABLE: 'CARLA', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-c', 'TOKEN FIRMA EXPIRA': new Date(ahora - 3 * DIA) },
@@ -477,13 +478,15 @@ test('pendientes (panel "Firmas pendientes", 10-nov): una fila por persona que f
   const r = F.pendientes('sesion');
   assert.deepEqual(pedidos, ['firmas-lineas']);
   assert.equal(r.diasVigencia, 15);
-  assert.deepEqual([...r.filas.map((f) => f._clave)], ['RESPONSIVA|RES-3|PRINCIPAL', 'RESPONSIVA|RES-2|PRINCIPAL', 'INSPECCION|INS-1|PRINCIPAL', 'RESPONSIVA|RES-1|PRINCIPAL'],
-    'la que vence primero, arriba; lo firmado y lo que nunca se difirió no sale');
+  assert.deepEqual([...r.filas.map((f) => f._clave)], ['RESPONSIVA|RES-3', 'RESPONSIVA|RES-2', 'INSPECCION|INS-1', 'RESPONSIVA|RES-1'],
+    'agrupadas por documento, la que vence primero arriba; lo firmado y lo que nunca se difirió no sale');
   const porId = Object.fromEntries(r.filas.map((f) => [f._id, f]));
   assert.equal(porId['RES-1']['DIAS RESTANTES'], 11);
   assert.equal(porId['RES-1'].ESTADO, 'VIGENTE');
-  assert.equal(porId['RES-1'].FIRMAS, '1 de 2', 'AYRTON ya firmó, falta ANDREA');
-  assert.equal(porId['RES-1']['FALTA FIRMAR'], 'ANDREA');
+  assert.equal(porId['RES-1'].FIRMAS, '1 de 3', 'AYRTON ya firmó; faltan ANDREA y TERE');
+  assert.equal(porId['RES-1']['FALTA FIRMAR'], 'ANDREA, TERE');
+  const personas = JSON.parse(JSON.stringify(porId['RES-1']._pendientes));
+  assert.deepEqual(personas.map((p) => [p.rol, p.nombre, p.dias, p.estado]), [['PRINCIPAL', 'ANDREA', 11, 'VIGENTE'], ['TERCER', 'TERE', 12, 'VIGENTE']]);
   assert.equal(porId['RES-1'].NUCO, '0669');
   assert.equal(porId['RES-1']['ENVIADO POR'], 'eje@x.com');
   assert.equal(porId['RES-1']._idLinea, 'IMEI-1');
@@ -502,7 +505,7 @@ test('panel "Firmas pendientes": su módulo, su vista en el menú y su pantalla'
   assert.match(read('src/api/LineasFirmaRemota.gs'), /function apiLineasFirmaRemotaPendientes\(token\) \{\s+return LineasFirmaRemota\.pendientes\(token\);/);
   const js = read('src/html/js/lineas-firmas.html');
   assert.match(js, /llamar\('apiLineasFirmaRemotaPendientes'\)/);
-  assert.match(js, /llamar\('apiLineasFirmaRemotaLiga', f\._tipo, f\._id, f\._rol\)/);
-  assert.match(js, /llamar\('apiLineasFirmaRemotaRegenerarLiga', f\._tipo, f\._id, f\._rol\)/);
-  assert.match(js, /visible: \(f\) => opera && f\.ESTADO !== 'VENCIDA'/, 'copiar solo con EDICIÓN y liga vigente');
+  assert.match(js, /llamar\('apiLineasFirmaRemotaLiga', f\._tipo, f\._id, p\.rol\)/);
+  assert.match(js, /llamar\('apiLineasFirmaRemotaRegenerarLiga', f\._tipo, f\._id, p\.rol\)/);
+  assert.match(js, /if \(!opera \|\| !tabla\) return/, 'copiar y regenerar solo con EDICIÓN en Líneas Telefónicas');
 });

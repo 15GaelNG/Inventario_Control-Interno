@@ -1,9 +1,9 @@
 <script>
   /**
    * lineas-firmas.html — Firmas pendientes (usuario, 10-nov): las responsivas e inspecciones que se mandaron a firmar a
-   * distancia y siguen esperando, una fila por persona que falta, con los días que le quedan a su liga
-   * (LineasFirmaRemota.pendientes). Desde aquí se copia la liga, se genera una nueva si ya venció o se abre la ficha
-   * (ahí está "Firmar aquí"). Copiar y regenerar piden EDICIÓN en Líneas Telefónicas, igual que en Documentos.
+   * distancia y siguen esperando (LineasFirmaRemota.pendientes). Una fila por documento (usuario, 10-nov: agrupadas) y,
+   * dentro, cada persona que falta con los días de su liga y su botón: copiar la liga o, si ya venció, generar otra. La
+   * fila abre la ficha (ahí está "Firmar aquí"). Copiar y regenerar piden EDICIÓN en Líneas Telefónicas, como en Documentos.
    */
   (function () {
     'use strict';
@@ -12,11 +12,12 @@
 
     const COLOR_ESTADO = { VENCIDA: 'rojo', 'POR VENCER': 'ambar', VIGENTE: 'verde' };
 
-    function textoDias(f) {
-      if (f.ESTADO === 'VENCIDA') return 'Vencida';
-      const d = Number(f['DIAS RESTANTES']) || 0;
+    function textoDias(estado, dias) {
+      if (estado === 'VENCIDA') return 'Vencida';
+      const d = Number(dias) || 0;
       return d <= 1 ? 'Vence hoy' : d + ' días';
     }
+    const chipDias = (estado, dias) => '<span class="ln-chip ' + (COLOR_ESTADO[estado] || '') + '">' + esc(textoDias(estado, dias)) + '</span>';
 
     function initFirmas() {
       const n = ++montaje.n;
@@ -31,41 +32,69 @@
 
       function avisoError(e) { aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 6000); }
 
-      function copiarLiga(f) {
-        return llamar('apiLineasFirmaRemotaLiga', f._tipo, f._id, f._rol).then((liga) => copiarTexto(liga)).then((ok) => {
-          aviso(ok ? esc('Liga copiada (' + f['FALTA FIRMAR'] + ')') : icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar.', 5000);
+      function copiarLiga(f, p) {
+        return llamar('apiLineasFirmaRemotaLiga', f._tipo, f._id, p.rol).then((liga) => copiarTexto(liga)).then((ok) => {
+          aviso(ok ? esc('Liga copiada (' + p.nombre + ')') : icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar.', 5000);
         }).catch(avisoError);
       }
 
-      function ligaNueva(f) {
+      function ligaNueva(f, p) {
         return Confirmar.pedir({
           titulo: 'Generar liga nueva',
-          mensaje: 'Se genera otra liga para ' + f['FALTA FIRMAR'] + ' que sirve ' + diasVigencia + ' días; la anterior deja de servir.',
+          mensaje: 'Se genera otra liga para ' + p.nombre + ' que sirve ' + diasVigencia + ' días; la anterior deja de servir.',
           textoConfirmar: 'Generar liga nueva',
         }).then((ok) => {
           if (!ok) return;
-          return llamar('apiLineasFirmaRemotaRegenerarLiga', f._tipo, f._id, f._rol)
+          return llamar('apiLineasFirmaRemotaRegenerarLiga', f._tipo, f._id, p.rol)
             .then((liga) => copiarTexto(liga))
             .then((copiada) => { aviso(copiada ? 'Liga nueva copiada.' : 'Liga nueva generada: cópiala con «Copiar liga».', 5000); cargar(); })
             .catch(avisoError);
         });
       }
 
+      /** Quienes faltan en el documento: los días de cada liga y su botón (copiar o, vencida, generar otra). */
+      function htmlPersonas(f) {
+        return '<div class="ln-ligas-celda ln-fir-personas">' + (f._pendientes || []).map((p) => {
+          const titulo = p.etiqueta + (p.nombre !== p.etiqueta ? ': ' + p.nombre : '');
+          const boton = !opera ? '<span class="ln-fir-nombre" title="' + esc(titulo) + '">' + esc(p.nombre) + '</span>'
+            : p.estado === 'VENCIDA'
+              ? '<button type="button" class="ln-btn-chico ln-liga-celda vencida" data-fir="' + esc(f._clave) + '" data-fir-nueva="' + esc(p.rol) + '" title="' +
+                esc('La liga venció (' + titulo + '). Generar otra') + '">' + icono('refresh-ccw') + '<span>Nueva liga · ' + esc(p.nombre) + '</span></button>'
+              : '<button type="button" class="ln-btn-chico ln-liga-celda" data-fir="' + esc(f._clave) + '" data-fir-copiar="' + esc(p.rol) + '" title="' +
+                esc('Copiar la liga (' + titulo + ')') + '">' + icono('copy') + '<span>' + esc(p.nombre) + '</span></button>';
+          return '<span class="ln-liga-celda-par ln-fir-persona">' + chipDias(p.estado, p.dias) + boton + '</span>';
+        }).join('') + '</div>';
+      }
+
+      // Los botones de cada persona, en captura: antes de que la tabla tome el clic como "seleccionar la fila"
+      $('#ln-fir-tabla', raiz).addEventListener('click', (ev) => {
+        const boton = ev.target.closest('[data-fir-copiar], [data-fir-nueva]');
+        if (!boton) return;
+        ev.stopPropagation();
+        ev.preventDefault();
+        if (!opera || !tabla) return;
+        const f = tabla.getDatos().filter((x) => x._clave === boton.dataset.fir)[0];
+        const rol = boton.dataset.firCopiar || boton.dataset.firNueva;
+        const p = f && (f._pendientes || []).filter((x) => x.rol === rol)[0];
+        if (!p) return;
+        boton.disabled = true;
+        Promise.resolve(boton.dataset.firCopiar ? copiarLiga(f, p) : ligaNueva(f, p)).finally(() => { boton.disabled = false; });
+      }, true);
+
       function crearTabla() {
         tabla = tablaLineas($('#ln-fir-tabla', raiz), {
           idCampo: '_clave',
-          idTabla: 'lineas-firmas-pendientes-v1',
+          idTabla: 'lineas-firmas-pendientes-v2',
           columnas: [
-            { campo: 'ESTADO', titulo: 'Liga', tipo: 'lista', fijada: true,
-              render: (v, f) => '<span class="ln-chip ' + (COLOR_ESTADO[v] || '') + '">' + esc(textoDias(f)) + '</span>',
+            { campo: 'ESTADO', titulo: 'Vence primero', tipo: 'lista', fijada: true,
+              render: (v, f) => chipDias(v, f['DIAS RESTANTES']),
               renderFiltro: (v) => '<span class="ln-chip ' + (COLOR_ESTADO[v] || '') + '">' + esc(v) + '</span>' },
-            { campo: 'DIAS RESTANTES', titulo: 'Días restantes', tipo: 'numero' },
-            { campo: 'VENCE', titulo: 'Vence', tipo: 'lnFechaHora' },
             { campo: 'DOCUMENTO', titulo: 'Documento', tipo: 'lista' },
             { campo: 'NUCO', titulo: 'NUCO' },
-            { campo: 'FALTA FIRMAR', titulo: 'Falta firmar' },
-            { campo: 'ROL', titulo: 'Firma como', tipo: 'lista' },
+            { campo: 'FALTA FIRMAR', titulo: 'Falta firmar', render: (v, f) => htmlPersonas(f) },
             { campo: 'RESPONSABLE', titulo: 'Responsable' },
+            { campo: 'DIAS RESTANTES', titulo: 'Días restantes', tipo: 'numero', visible: false },
+            { campo: 'VENCE', titulo: 'Vence', tipo: 'lnFechaHora', visible: false },
             { campo: 'FIRMAS', titulo: 'Firmas a distancia' },
             { campo: 'ENVIADO POR', titulo: 'Enviado por', tipo: 'lista' },
             { campo: 'FECHA', titulo: 'Fecha del documento', tipo: 'lnFechaHora' },
@@ -76,8 +105,6 @@
           etiquetaFila: (f) => [f.DOCUMENTO, f.NUCO && 'NUCO ' + f.NUCO, f['FALTA FIRMAR']].filter(Boolean).join(' · '),
           detalle: { titulo: (f) => f.DOCUMENTO + (f.NUCO ? ' · NUCO ' + f.NUCO : '') },
           accionesFila: [
-            { icono: 'copy', titulo: 'Copiar liga', visible: (f) => opera && f.ESTADO !== 'VENCIDA', alHacer: copiarLiga },
-            { icono: 'refresh-ccw', titulo: 'Generar liga nueva', visible: () => opera, alHacer: ligaNueva },
             { icono: 'circle-chevron-right', titulo: 'Abrir ficha (ahí está «Firmar aquí»)', visible: (f) => !!f._idLinea,
               alHacer: (f) => Lineas.irARegistro(f._idLinea) },
           ],
@@ -87,8 +114,9 @@
 
       function pintarKpis(filas) {
         const contar = (estado) => (lista) => miles(lista.filter((f) => f.ESTADO === estado).length);
+        // Por documento: su estado es el de la liga que vence primero
         marcarKpi = tilesKpi($('#ln-fir-kpis', raiz), [
-          { icono: 'pen-line', valor: miles(filas.length), etiqueta: 'Firmas pendientes', calcular: (l) => miles(l.length) },
+          { icono: 'pen-line', valor: miles(filas.length), etiqueta: 'Documentos por firmar', calcular: (l) => miles(l.length) },
           { icono: 'circle-check', valor: contar('VIGENTE')(filas), etiqueta: 'Vigentes', clase: 'stat-tile-ok',
             filtros: { ESTADO: { valores: ['VIGENTE'] } }, calcular: contar('VIGENTE') },
           { icono: 'clock', valor: contar('POR VENCER')(filas), etiqueta: 'Por vencer (3 días o menos)',
