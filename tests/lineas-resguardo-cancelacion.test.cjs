@@ -26,6 +26,7 @@ function cargar(inventario, bandeja, movimientos, conDG) {
     buscarFilas: (n, c, v, parcial) => (tablas[n] || []).map((f, i) => (parcial ? String(f[c] || '').indexOf(v) >= 0 : String(f[c]) === String(v)) ? i + 2 : 0).filter(Boolean),
     buscarFilasVarios: (n, c, vs, parcial) => vs.reduce((a, v) => a.concat(LineasDatos.buscarFilas(n, c, v, parcial)), []),
     leerFilas: (ps) => ps.map((p) => p.filas.map((x) => tablas[p.tabla][x - 2])),
+    recordar: (clave, nombres, armar) => armar(),   // sin caché: se arma cada vez
   };
   const LineasUtil = new Function('LineasDatos', 'LineasArchivos', read('src/services/lineas/LineasUtil.gs') + '\nreturn LineasUtil;')(LineasDatos, {});
   const porId = (id) => tablas['LINEAS TELEFONICAS'].filter((f) => f['ID'] === id)[0];
@@ -838,4 +839,75 @@ test('Dirección General en el panel: quien no es ADMIN no la manda, no la quita
   assert.deepEqual([oculto.NUCO, oculto.NUMERO, oculto.MODELO, oculto.SEDE, oculto.DEPARTAMENTO, oculto.ESTADO, oculto.dg],
     ['11002', 'DG', '', '', 'DIRECCION GENERAL', 'PENDIENTE DE RECEPCION', true]);
   assert.equal(t.R.bandeja(admin).filas[0].MODELO, 'IPHONE');
+});
+
+// Usuario, 9-nov: «centralizar todas las líneas canceladas en Cancelaciones». Las CANCELADAS del inventario sin renglón en
+// el panel (de antes del sistema, o canceladas directo) se muestran ahí, sin escribir nada y sin botones.
+test('Cancelaciones muestra también las líneas canceladas sin renglón: una sola vez, con su fecha si la bitácora la tiene', () => {
+  const linea = (id, numero, estatus) => ({ 'ID': id, 'ID LINEA': id, 'TIPO': 'LINEA', 'NUMERO TELEFONO': numero, 'ESTATUS LINEA': estatus,
+    'COMPAÑIA': 'TELCEL', 'CUENTA PADRE': 'CP-1', 'RAZON SOCIAL': 'RS', 'NUCO': '0077' });
+  const inventario = [
+    linea('LIN-1', '4421000001', 'CANCELADA'),   // con su renglón del panel: no se repite
+    linea('LIN-2', '4421000002', 'CANCELADA'),   // sin renglón, con fecha en MOVIMIENTOS
+    linea('LIN-3', '4421000003', 'CANCELADA'),   // sin renglón ni fecha
+    linea('LIN-4', '4421000004', 'USO'),         // activa: no va
+  ];
+  const panel = [{ 'ID': 'RSG-1', 'FECHA': new Date(2026, 9, 20), 'REGISTRO_ID': 'LIN-1', 'ID_LINEA': 'LIN-1', 'NUMERO': '4421000001', 'ESTADO': '', 'CANCELACION': 'CANCELADA' }];
+  const movimientos = [{ 'ACCION': 'CANCELACION_LINEA', 'ID LINEA': 'LIN-2', 'FECHA': new Date(2026, 3, 15) },
+    { 'ACCION': 'EDITAR', 'ID LINEA': 'LIN-3', 'FECHA': new Date(2026, 4, 1) }];
+  const t = cargar(inventario, panel, movimientos);
+  const filas = t.R.bandeja({ puedeAprobar: true }).filas;
+  const enCancelaciones = filas.filter((f) => f.CANCELACION);
+  assert.deepEqual(enCancelaciones.map((f) => f.NUMERO), ['4421000001', '4421000002', '4421000003'], 'la del panel, luego la de abril y al final la sin fecha');
+  assert.deepEqual(enCancelaciones.map((f) => f.ORIGEN), ['SISTEMA', 'ANTERIOR AL SISTEMA', 'ANTERIOR AL SISTEMA']);
+  const [, conFecha, sinFecha] = enCancelaciones;
+  assert.equal(conFecha.FECHA.getTime(), new Date(2026, 3, 15).getTime());
+  assert.equal(conFecha.CANCELADA_EN.getTime(), new Date(2026, 3, 15).getTime());
+  assert.equal(sinFecha.FECHA, null, 'sin fecha en las bitácoras: «Sin fecha» al final');
+  assert.deepEqual([sinFecha.CANCELACION, sinFecha.ANTERIOR, sinFecha.REGISTRO_ID, sinFecha.CUENTA_PADRE, sinFecha.NUCO],
+    ['CANCELADA', true, 'LIN-3', 'CP-1', '0077']);
+  assert.equal(t.escritas.agregadas.length + t.escritas.actualizadas.length, 0, 'solo se muestran: no se escribe nada');
+});
+
+test('pantalla: Cancelaciones tiene Origen, «Sin fecha» y el mosaico «Anteriores al sistema»', () => {
+  const pantalla = read('src/html/js/lineas-resguardos.html');
+  assert.match(pantalla, /\{ campo: 'ORIGEN', titulo: 'Origen', tipo: 'lista' \}/);
+  assert.match(pantalla, /f && f\.ANTERIOR \? 'Sin fecha'/);
+  assert.match(pantalla, /etiqueta: 'Anteriores al sistema', filtros: \{ ORIGEN: \{ valores: \['ANTERIOR AL SISTEMA'\] \} \}/);
+});
+
+test('las fechas de las canceladas anteriores: una caché por bitácora (MOVIMIENTOS cambia seguido; la del AppSheet, casi nunca)', () => {
+  const fuente = read('src/services/lineas/LineasResguardos.gs');
+  assert.match(fuente, /eventosCancelacion_\(LineasRepo\.TAB\.CAMBIOS, 'lineas_canceladas_appsheet_v1'/);
+  assert.match(fuente, /eventosCancelacion_\(LineasRepo\.TAB\.MOV, 'lineas_canceladas_sistema_v1'/);
+  assert.match(fuente, /return LineasDatos\.recordar\(clave, \[tab\], \(\) => \{/, 'cada caché depende solo de su pestaña');
+});
+
+test('Cancelaciones trae la carta de cada línea (LINK CARTA DE CANCELACION de LINEAS): trámite, anterior y varias cartas', () => {
+  const linea = (id, n, estatus) => ({ 'ID': id, 'ID LINEA': id, 'TIPO': 'LINEA', 'NUMERO TELEFONO': n, 'ESTATUS LINEA': estatus, 'COMPAÑIA': 'TELCEL' });
+  const t = cargar([
+    linea('LIN-A', '4420000001', 'CANCELADA'),
+    linea('LIN-B', '4420000002', 'EN PROCESO DE CANCELACION'),
+    linea('LIN-C', '4420000003', 'CANCELADA'),
+    linea('LIN-D', '4420000004', 'CANCELADA'),
+  ], [{ 'ID': 'RSG-1', 'FECHA': new Date(2026, 9, 1), 'NUMERO': '4420000002', 'ID_LINEA': 'LIN-B', 'CANCELACION': 'CARTA ENVIADA' }]);
+  t.tablas.LINEAS = [
+    { 'ID': 'LIN-A', 'NUMERO TELEFONO': '4420000001', 'LINK CARTA DE CANCELACION': 'https://drive.google.com/file/d/a1/view\nhttps://drive.google.com/file/d/a2/view' },
+    { 'ID': 'LIN-B', 'NUMERO TELEFONO': '4420000002', 'LINK CARTA DE CANCELACION': 'https://drive.google.com/file/d/b1/view' },
+    { 'ID': 'LIN-C', 'NUMERO TELEFONO': '4420000003', 'LINK CARTA DE CANCELACION': 'javascript:alert(1)' },
+    { 'ID': 'LIN-D', 'NUMERO TELEFONO': '4420000004', 'LINK CARTA DE CANCELACION': '' },
+  ];
+  const de = (id) => t.R.bandeja({ puedeAprobar: true }).filas.filter((x) => x.ID_LINEA === id)[0];
+  assert.strictEqual(de('LIN-B').CARTAS, 'https://drive.google.com/file/d/b1/view', 'el trámite guardado trae su carta');
+  assert.strictEqual(de('LIN-A').ORIGEN, 'ANTERIOR AL SISTEMA');
+  assert.strictEqual(de('LIN-A').CARTAS.split('\n').length, 2, 'la cancelada sin trámite también, con sus dos cartas');
+  assert.strictEqual(de('LIN-C').CARTAS, '', 'una liga que no es https no llega a la pantalla');
+  assert.strictEqual(de('LIN-D').CARTAS, '', 'sin carta, vacío');
+  // Sin la hoja LINEAS (un DEV viejo), la bandeja no truena
+  delete t.tablas.LINEAS;
+  assert.strictEqual(de('LIN-B').CARTAS, '');
+  // La pantalla: columna Carta y acción Ver carta, solo en Cancelaciones
+  const pantalla = read('src/html/js/lineas-resguardos.html');
+  assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v\) => ligasCarta\(v\) \}/);
+  assert.match(pantalla, /vista === 'CANCELACIONES' \? \[\{ icono: 'file-text', titulo: 'Ver carta'/);
 });

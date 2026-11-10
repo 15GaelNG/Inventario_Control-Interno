@@ -8,6 +8,18 @@
     const { $, aplicarCambiosIndice, aviso, chip, chipCompania, elegirPastilla, esc, fechaTabla, formularioResguardo, guion, icono,
       llamar, memoria, mensajeError, miles, montaje, pedirDatos, quitarDelPanel, tablaLineas, tablaRegreso, tilesKpi } = Lineas.comun;
     const { irARegistro } = Lineas;
+    /** Las ligas de la carta de cancelación de un renglón (CARTAS: una por renglón; el servidor solo deja https). */
+    const ligasDe = (v) => String(v || '').split('\n').filter((x) => /^https:/i.test(x));
+    /**
+     * El botón azul de Líneas que abre Drive (externo, como enlaceDrive de lineas.html), del tamaño chico de las tablas
+     * (ln-btn-chico, como el «Ver» de la INE): «Ver carta», o «Carta 1» y «Carta 2» si se pidió en varias; «—» sin carta.
+     */
+    function ligasCarta(v) {
+      const ligas = ligasDe(v);
+      if (!ligas.length) return '<span class="ln-tenue">—</span>';
+      return ligas.map((u, i) => '<a class="externo ln-btn-chico" href="' + esc(u) + '" target="_blank" rel="noopener" title="Abrir la carta en Drive">' +
+        icono('file-text') + ' ' + (ligas.length > 1 ? 'Carta ' + (i + 1) : 'Ver carta') + ' ' + icono('external-link', 'ln-icon-sm') + '</a>').join(' ');
+    }
 
     /** Retirar cancelación (pendiente 3.14): la línea vuelve a como estaba antes de mandarla a cancelar. */
     function vistaRetiro(ids) {
@@ -163,9 +175,13 @@
           { campo: 'RETIRO_MOTIVO', titulo: 'Por qué se quitó', tipo: 'texto', visible: false },
         ],
         CANCELACIONES: [
-          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true },
+          // Las canceladas antes del sistema (ORIGEN ANTERIOR AL SISTEMA, usuario 9-nov) casi nunca tienen fecha: al final
+          { campo: 'FECHA', titulo: 'Mandado', tipo: 'lnFechaHora', fijada: true,
+            render: (v, f) => (v ? esc(fechaTabla(v)) : (f && f.ANTERIOR ? 'Sin fecha' : guion(''))) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
           { campo: 'CANCELACION', titulo: 'Cancelación', tipo: 'lista', render: (v) => chip(v) },
+          // SISTEMA (pasó por el panel) o ANTERIOR AL SISTEMA (cancelada antes, o directo sin panel): solo se muestra
+          { campo: 'ORIGEN', titulo: 'Origen', tipo: 'lista' },
           // LINEA VENCIDA o CANCELACION ANTICIPADA (usuario, 13-oct)
           { campo: 'MOTIVO_CANCELACION', titulo: 'Motivo', tipo: 'lista' },
           { campo: 'NUCO', titulo: 'NUCO', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
@@ -180,6 +196,9 @@
           { campo: 'CARTA_ENVIADA_EN', titulo: 'Carta enviada', tipo: 'lnFechaHora' },
           { campo: 'CANCELADA_EN', titulo: 'Cancelada', tipo: 'lnFechaHora' },
           { campo: 'CANCELACION_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto' },
+          // La carta al proveedor (LINK CARTA DE CANCELACION del inventario; usuario, 9-nov): «Carta 1 · Carta 2» si se pidió
+          // en varias. Como «Evidencia» en el Panorama de Líneas
+          { campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: (v) => ligasCarta(v) },
           { campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto', visible: false },
           { campo: 'ESTADO', titulo: 'Equipo (resguardo)', tipo: 'lista', render: (v) => chip(v), visible: false },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista', visible: false },
@@ -296,6 +315,8 @@
           { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
           { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
           { icono: 'undo-2', valor: miles(cuenta('CANCELACION', 'RETIRADA')), etiqueta: 'Retiradas', filtros: { CANCELACION: { valores: ['RETIRADA'] } } },
+          // Las canceladas antes del sistema (o directo, sin panel): solo para verlas (usuario, 9-nov)
+          { icono: 'history', valor: miles(cuenta('ORIGEN', 'ANTERIOR AL SISTEMA')), etiqueta: 'Anteriores al sistema', filtros: { ORIGEN: { valores: ['ANTERIOR AL SISTEMA'] } } },
         ];
         marcarKpi = tilesKpi($('#lnr-kpis', raiz), defs, () => tabla);
         marcarKpi(filtros);
@@ -316,7 +337,10 @@
           exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
           detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
-          accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }],
+          accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }]
+            // Como «Ver PDF» del historial: abre la carta (la primera, si se pidió en varias; las demás, en la columna Carta)
+            .concat(vista === 'CANCELACIONES' ? [{ icono: 'file-text', titulo: 'Ver carta', visible: (f) => !!ligasDe(f.CARTAS).length,
+              alHacer: (f) => window.open(ligasDe(f.CARTAS)[0], '_blank', 'noopener') }] : []),
           accionesSeleccion: (puede ? ACCIONES[vista] : []).concat(opera && vista === 'RESGUARDOS' ? ACCIONES_LINEAS : []),
           alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
         });

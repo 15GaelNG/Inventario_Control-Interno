@@ -68,7 +68,86 @@ const Auth = (function () {
     const seg = Math.min(inactividadSeg_(), restanteSeg);
     if (seg < 1) return false;
     CacheService.getScriptCache().put('sesion_' + token, JSON.stringify(sesion), seg);
+    guardarCopia_(token, sesion, seg);
     return true;
+  }
+
+  // ---- La copia de la sesión (9-nov). CacheService puede perder una entrada antes de que venza: el 9-nov hubo sesiones
+  // recién creadas que ya no estaban segundos después («Sesión expirada» en Auth:268, 32 reingresos en menos de 5 min).
+  // Cada sesión tiene una copia en ScriptProperties, bajo la huella del token (no el token), con su vencimiento: solo se
+  // lee si la caché no la tiene, y entonces se restaura. Las reglas no cambian: la copia vence igual que la caché (60 min
+  // sin uso), y validarSesion sigue revisando las 8 h y la versión. Si algo de la copia falla, todo sigue como antes.
+  // En Cloud Logging, cada caso deja una línea «[sesion] …»: rescatada, no encontrada o vencida.
+  const PREFIJO_COPIA = 'sesion_copia_';
+  const propsSesion_ = () => PropertiesService.getScriptProperties();
+  const claveCopia_ = (token) => PREFIJO_COPIA + Utilities.base64EncodeWebSafe(
+    Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(token), Utilities.Charset.UTF_8));
+
+  function guardarCopia_(token, sesion, seg) {
+    try {
+      propsSesion_().setProperty(claveCopia_(token), JSON.stringify({ e: Date.now() + seg * 1000, s: sesion }));
+    } catch (e) {
+      console.warn('[sesion] no se pudo guardar la copia: ' + e.message);
+    }
+  }
+
+  function borrarCopia_(token) {
+    try { propsSesion_().deleteProperty(claveCopia_(token)); } catch (e) { /* sin copia: no hay qué borrar */ }
+  }
+
+  /** La caché no tiene la sesión: la busca en su copia y, si sigue vigente, la restaura. → el JSON de la sesión o null */
+  function rescatarDeCopia_(token) {
+    if (!token) { console.warn('[sesion] no encontrada: la llamada llegó sin token'); return null; }
+    let guardada = null;
+    try {
+      guardada = propsSesion_().getProperty(claveCopia_(token));
+    } catch (e) {
+      console.warn('[sesion] no se pudo leer la copia: ' + e.message);
+      return null;
+    }
+    if (!guardada) { console.warn('[sesion] no encontrada: ni en la caché ni en su copia'); return null; }
+    const copia = JSON.parse(guardada);
+    const seg = Math.floor((copia.e - Date.now()) / 1000);
+    if (seg < 1) {
+      borrarCopia_(token);
+      console.log('[sesion] vencida por inactividad: ' + copia.s.correo);
+      return null;
+    }
+    const texto = JSON.stringify(copia.s);
+    try { CacheService.getScriptCache().put('sesion_' + token, texto, seg); } catch (e) { /* la próxima llamada la vuelve a rescatar */ }
+    console.warn('[sesion] rescatada de la copia: ' + copia.s.correo + ' (la caché ya no la tenía)');
+    return texto;
+  }
+
+  /** Quita las copias vencidas, a lo más una vez por hora (al entrar alguien). Nunca truena. */
+  function limpiarCopias_() {
+    try {
+      const cache = CacheService.getScriptCache();
+      if (cache.get('copias_de_sesion_limpias')) return;
+      cache.put('copias_de_sesion_limpias', '1', 3600);
+      const props = propsSesion_();
+      const todas = props.getProperties();
+      const ahora = Date.now();
+      Object.keys(todas).forEach((k) => {
+        if (k.indexOf(PREFIJO_COPIA) !== 0) return;
+        let vence = 0;
+        try { vence = JSON.parse(todas[k]).e; } catch (e) { /* ilegible: se quita */ }
+        if (!(vence > ahora)) props.deleteProperty(k);
+      });
+    } catch (e) {
+      console.warn('[sesion] no se pudieron limpiar las copias: ' + e.message);
+    }
+  }
+
+  /** Para sesionesRevisar(): cuántas copias hay y cuánto ocupan todas las propiedades (el límite de Google: 500 KB) */
+  function estadoCopias() {
+    const todas = propsSesion_().getProperties();
+    const ahora = Date.now();
+    const claves = Object.keys(todas);
+    const copias = claves.filter((k) => k.indexOf(PREFIJO_COPIA) === 0);
+    const vigentes = copias.filter((k) => { try { return JSON.parse(todas[k]).e > ahora; } catch (e) { return false; } }).length;
+    const bytes = claves.reduce((n, k) => n + k.length + String(todas[k]).length, 0);
+    return { copias: copias.length, vigentes: vigentes, propiedades: claves.length, kb: Math.round(bytes / 1024) };
   }
 
   // Global por ejecución: cada llamada de google.script.run empieza sin marca
@@ -93,6 +172,7 @@ const Auth = (function () {
       renovada: ahora,
     };
     guardarSesion_(token, sesion);
+    limpiarCopias_();
     return Object.assign({ token: token }, sesion);
   }
 
@@ -295,9 +375,15 @@ const Auth = (function () {
   function leerSesion_(token) {
     for (let intento = 1; ; intento++) {
       try {
-        return CacheService.getScriptCache().get('sesion_' + token);
+        const raw = CacheService.getScriptCache().get('sesion_' + token);
+        return raw || rescatarDeCopia_(token);
       } catch (e) {
-        if (intento >= 3) throw e;
+        if (intento >= 3) {
+          // La caché no contesta: si la copia la tiene, la llamada sigue
+          const rescatada = rescatarDeCopia_(token);
+          if (rescatada) return rescatada;
+          throw e;
+        }
         Utilities.sleep(250 * intento);
       }
     }
@@ -313,8 +399,19 @@ const Auth = (function () {
 
   function logout(token) {
     CacheService.getScriptCache().remove('sesion_' + token);
+    borrarCopia_(token);
   }
 
   return { login, identidadGoogle, loginConGoogle, cambiarContrasenaInicial, verificarCodigo, validarSesion, requiereRol, logout,
-    crearHashParaUsuario, cerrarSesiones, automatica };
+    crearHashParaUsuario, cerrarSesiones, automatica, estadoCopias, construirSesion_ };
 })();
+
+/** Desde el editor (también en prod; solo lee): cuántas copias de sesión hay y cuánto ocupan las propiedades del proyecto */
+function sesionesRevisar() {
+  soloEditor_();
+  const e = Auth.estadoCopias();
+  const texto = 'Copias de sesión: ' + e.copias + ' (' + e.vigentes + ' vigentes) · propiedades del proyecto: ' + e.propiedades +
+    ' · ' + e.kb + ' KB de 500 KB';
+  console.log(texto);
+  return texto;
+}

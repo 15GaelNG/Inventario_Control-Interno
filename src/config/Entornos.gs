@@ -36,6 +36,11 @@ const ENTORNOS = {
     // (nuevo, vencido, otro navegador), dejando el código por contraseñas malas y por alerta: VERIFICACION_DISPOSITIVOS:
     // 'APAGADA' (29-oct). Los dos también como propiedad del proyecto, sin desplegar, si aquí no están.
 
+    // El aviso por correo de Inspección Vehicular (InspeccionesService.gs, avisarInspeccion_): para pausarlo
+    // sin desplegar, poner AVISO_INSPECCION_VEHICULAR = 'APAGADA' como Script Property de ESTE proyecto
+    // (Configuración del proyecto > Propiedades del script). Quitarla (o cambiarle el valor) lo reactiva,
+    // también sin desplegar.
+
     // El link que usa el equipo (CLAUDE.md, "dos links"): a él lleva el enlace de "¿Olvidaste tu contraseña?" (23-oct)
     // La forma general (/macros/s/…), no la del dominio (/a/macros/ciudadmaderas.com/…): esa pide cuenta del dominio y POST VENTA es de gph
     URL_APP: 'https://script.google.com/macros/s/AKfycbx_53Gz2VfBXhFvLmjnoM2qVzJYmk9kuQD74mUCpOQzeYPaQ1COR8LB_l69sSQb5RJB/exec',

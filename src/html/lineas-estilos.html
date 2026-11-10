@@ -560,6 +560,9 @@
     display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 10px; font-size: var(--texto-s); font-weight: 600; border-radius: var(--radio-m); white-space: nowrap;
   }
   a.ln-boton.externo, a.ln-boton.externo:hover { color: #fff; }
+  /* El botón chico que es liga (la carta en Cancelaciones, el «Ver» de la INE): sin subrayado; azul con texto blanco si es externo */
+  a.ln-btn-chico, a.ln-btn-chico:hover { text-decoration: none; }
+  a.ln-btn-chico.externo, a.ln-btn-chico.externo:hover { color: #fff; }
 
   /* Selector Tabla / Tarjetas de Líneas Telefónicas */
   .ln-tabs-fila { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
