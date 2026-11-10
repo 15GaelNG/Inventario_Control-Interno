@@ -19,6 +19,7 @@ import zipfile
 
 import comun
 import inspeccion_vehicular
+import retoques
 
 
 def regla_arqueo(m):
@@ -94,6 +95,7 @@ DOCUMENTOS = {
         # El Chromium de AppSheet redondeaba el avance de cada letra: a 8 pt (los datos) le salía 0.11 pt más ancha por
         # letra (comparar.py, mediana de 213 renglones); sin esto un nombre o las observaciones parten distinto
         'espaciado': {8: 0.11},
+        'retoque': retoques.arqueo,
     },
     'responsiva-celular': {
         'regla': regla_responsiva_celular, 'logo': 'ciudad-maderas-celular', 'hoja': 'size: 612pt 792pt',
@@ -114,6 +116,7 @@ DOCUMENTOS = {
         'sin_cortar': ['F-CI04-039'],
         # El texto ocupa 591 pt desde x = 14.2 (como en los PDF reales; la exportación dice 583.7) y empieza 12 pt más abajo
         'cuerpo': 'padding:26pt 0 0 14.2pt;width:591pt',
+        'retoque': retoques.responsiva_celular,
     },
     # La inspección: Docs la pinta tal cual (LineasPdf no la ajusta como AppSheet), A4 horizontal
     'inspeccion-celular': {
@@ -124,6 +127,7 @@ DOCUMENTOS = {
         'css': 'td { padding: 0; } html, body { overflow: hidden; }',
         # Docs la pinta 16.7 pt más abajo (márgenes de la exportación: 12.8 a la izquierda, 2.8 a la derecha)
         'cuerpo': 'max-width:826.3pt;padding:16.7pt 2.8pt 0 12.8pt',
+        'retoque': retoques.inspeccion_celular,
     },
     'inspeccion-celular-checklist': {
         'regla': regla_inspeccion_celular, 'logos_prefijo': 'inspeccion-celular', 'hoja': 'size: 841.9pt 595.3pt',
@@ -133,6 +137,7 @@ DOCUMENTOS = {
         'css': 'td { padding: 0; } html, body { overflow: hidden; }',
         # Docs la pinta 16.7 pt más abajo (márgenes de la exportación: 12.8 a la izquierda, 2.8 a la derecha)
         'cuerpo': 'max-width:826.3pt;padding:16.7pt 2.8pt 0 12.8pt',
+        'retoque': retoques.inspeccion_celular,
     },
 }
 
@@ -362,6 +367,18 @@ def main():
     # Los párrafos vacíos al final no se ven y, con la última hoja llena, empujaban una hoja en blanco
     s = re.sub(r'(?:<p [^>]*>(?:<span[^>]*>(?:&nbsp;)?</span>)*</p>)+(?=</body>)', '', s)
     s = cabeza + s.replace('</body></html>', '\n</body>\n</html>\n')
+    if cfg.get('retoque'):   # ajustes de forma acordados con el usuario (11-nov): márgenes, alineación, el pie; nunca texto
+        # Cada pieza de texto (entre etiquetas), sin marcadores ni espacios: puede cambiar de lugar (un cuadro que pasa a
+        # otro renglón), no de palabras. Un renglón vacío de separación («&nbsp;») no es texto
+        from collections import Counter
+        piezas = lambda t: Counter(x for x in (re.sub(r'\s|&nbsp;', '', re.sub(r'\{\{[^{}]*\}\}', '', p))
+                                               for p in re.split(r'<[^>]+>', t)) if x)
+        antes = piezas(s)
+        s = cfg['retoque'](s)
+        despues = piezas(s)
+        if despues != antes:
+            raise SystemExit('El retoque cambió algún texto (solo debe tocar la forma): de menos %s; de más %s'
+                             % (dict(antes - despues), dict(despues - antes)))
     for prohibido in ('//', '/*', '<?', '?>'):
         if prohibido in s:
             raise SystemExit(f'La plantilla quedó con "{prohibido}": en un .html del repo rompe la app (CLAUDE.md)')
