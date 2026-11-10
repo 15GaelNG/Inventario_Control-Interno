@@ -552,7 +552,6 @@ test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin 
   // 22-oct: había 5 copias; en el celular abrir fotos de cámara completas (y varias a la vez) dejaba la pantalla en
   // blanco. Imagen las abre con poca memoria y de una en una. Una copia nueva no tendría eso.
   const QUEDAN = {
-    'src/html/js/app-arqueos.html': 'Evidencias: se pasa a Imagen al integrar la rama de Jorge (él la cambió: aviso HEIC)',
     'src/html/js/lineas.html': 'una PÁGINA de PDF dibujada con pdf.js y firmaAchicada (una firma ya dibujada de 600 px, ' +
       'hasta que quepa en la caché; Emmanuel, 22-oct): ninguna abre una foto de cámara',
   };
