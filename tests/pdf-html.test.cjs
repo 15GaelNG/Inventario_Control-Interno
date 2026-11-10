@@ -32,6 +32,12 @@ test('las casillas SI / NO ponen la palomita solo en la que corresponde', () => 
   assert.strictEqual(PdfHtml.llenar(p, { GATO: 'SI', CRUZ: ' no ', OTRO: '' }), '✓|||✓||');
 });
 
+test('{{ES:CAMPO:VALOR}} pone la palomita si el valor es ese, y una columna se encuentra sin distinguir mayúsculas', () => {
+  const p = '{{ES:DESEMPEÑO:BUENO}}|{{ES:DESEMPEÑO:MALO}}|{{ES:GPS:N/A}}|{{ES:WHATSAPP:INSTALADA}}|{{No EMPLEADO}}';
+  assert.strictEqual(PdfHtml.llenar(p, { 'DESEMPEÑO': 'bueno', GPS: 'N/A', WHATSAPP: '', 'NO EMPLEADO': 'A1' }), '✓||✓||A1');
+  assert.deepStrictEqual(Array.from(PdfHtml.faltantes(p, { 'DESEMPEÑO': 'x', GPS: '', 'no  empleado': 'A1' })), ['WHATSAPP']);
+});
+
 test('bloques según el campo: {{#SI}} si trae algo, {{#VACIO}} si no', () => {
   const p = '[{{#SI OBS}}obs: {{OBS}}{{/SI}}{{#VACIO OBS}}sin obs{{/VACIO}}]';
   assert.strictEqual(PdfHtml.llenar(p, { OBS: 'raspón' }), '[obs: raspón]');
@@ -92,8 +98,8 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
     const archivo = path.join(raiz, 'src/html/pdf', d + '.html');
     assert.ok(fs.existsSync(archivo), d + ': falta src/html/pdf/' + d + '.html');
     const html = fs.readFileSync(archivo, 'utf8');
-    // Carta (responsiva, adherente) o A4 (el arqueo, como lo imprimía AppSheet)
-    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt); margin: 0; \}/, d);
+    // Carta (responsivas, adherente), A4 (el arqueo, como lo imprimía AppSheet) o A4 horizontal (la inspección de celular)
+    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt|841\.9pt 595\.3pt); margin: 0; \}/, d);
     assert.match(html, /text-rendering: geometricPrecision/, d);
     // Un marcador dentro del CSS lo tira el compresor: las tipografías las pone llenar()
     assert.doesNotMatch(html.slice(html.indexOf('<style>'), html.indexOf('</style>')), /\{\{/, d + ': un marcador dentro del CSS');
@@ -129,4 +135,15 @@ test('la responsiva de celular: sus campos, y los valores como los ponía Lineas
   const sola = c.L.datosHtml({ 'FECHA RESPONSIVA': new Date(), 'NUCO': '', 'MODELO': 'NO APLICA', 'IMEI': 'NO APLICA', 'RESPONSABLE': 'ANA' });
   assert.strictEqual(sola['NUCO4'], 'NO APLICA');
   assert.strictEqual(sola['ADICIONALES'], '');
+});
+
+test('la inspección de celular (sus dos variantes): las casillas de la plantilla de Docs y sus imágenes', () => {
+  ['inspeccion-celular', 'inspeccion-celular-checklist'].forEach((doc) => {
+    const html = fs.readFileSync(path.join(raiz, 'src/html/pdf', doc + '.html'), 'utf8');
+    ['ES:DESEMPEÑO:BUENO', 'ES:GPS:N/A', 'ES:WHATSAPP:INSTALADA', 'IMG:FIRMA RESPONSABLE:120x52.5:tope', 'IMG:FIRMA INSPECTOR:120x52.5:tope',
+      'IMG:PATRON:42x42:tope', 'CALIFICACION', 'FECHA DE REGISTRO', 'NUCO', 'LOGO:inspeccion-celular-1']
+      .forEach((m) => assert.ok(html.includes('{{' + m + '}}'), doc + ': ' + m));
+    assert.doesNotMatch(html, /&lt;&lt;|translateZ/, doc);
+  });
+  assert.ok(fs.readFileSync(path.join(raiz, 'src/html/pdf/inspeccion-celular-checklist.html'), 'utf8').includes('{{ES:CUBO:SI}}'));
 });

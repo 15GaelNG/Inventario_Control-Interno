@@ -45,7 +45,30 @@ DOCUMENTOS = {
         # Sus imágenes por zona de la hoja 1 (campo, x0, y0, x1, y1 en pt): el patrón en su recuadro, las firmas abajo
         'zonas': [('CONTRASEÑA', 440, 330, 612, 470), ('FIRMA RESPONSABLE', 0, 560, 306, 792), ('FIRMA CI', 306, 560, 612, 792)],
     },
+    # La inspección de celular: dos plantillas según el registro (LineasPdf.plantillaInspeccion): la actual (accesorios con
+    # la lista de la responsiva) y la «de antes» (CUBO, CABLE, FUNDA y MICA con SI/NO/N/A, o una línea sola)
+    'inspeccion-celular': {
+        'libro': LIBRO_VEHICULOS, 'hoja': 'INSPECCIONES LINEAS', 'pdf': 'FORMATO INSPECCIONES LINEAS', 'fecha': 'FECHA DE REGISTRO',
+        'plantilla': '101CtfZbTXpgu_4vB0vCV-USfHSWP-O3G-2VGLuR3saU',   # LineasPdf.PLANTILLAS.INSPECCION_CELULAR
+        'firmas': [], 'pagina_firmas': 0,
+        'zonas': [('FIRMA RESPONSABLE', 480, 380, 680, 490), ('FIRMA INSPECTOR', 680, 380, 842, 490), ('PATRON', 340, 455, 480, 560)],
+        'filtro': lambda f: not de_antes(f),
+    },
+    'inspeccion-celular-checklist': {
+        'libro': LIBRO_VEHICULOS, 'hoja': 'INSPECCIONES LINEAS', 'pdf': 'FORMATO INSPECCIONES LINEAS', 'fecha': 'FECHA DE REGISTRO',
+        'plantilla': '1TcIyGtyEDm_Ied2nBxSuCzBd0uNQzKM9QyiqBf1QkOA',   # LineasPdf.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST
+        'firmas': [], 'pagina_firmas': 0,
+        'zonas': [('FIRMA RESPONSABLE', 480, 380, 680, 490), ('FIRMA INSPECTOR', 680, 380, 842, 490), ('PATRON', 340, 455, 480, 560)],
+        'filtro': lambda f: de_antes(f),
+    },
 }
+
+
+def de_antes(f):
+    """La inspección de celular «de antes» (LineasPdf.plantillaInspeccion): CUBO, CABLE, FUNDA o MICA capturados, o una
+    línea sola"""
+    v = lambda c: str(f.get(c, '') or '').strip().upper()
+    return any(v(c) for c in ('CUBO', 'CABLE', 'FUNDA', 'MICA')) or v('TIPO') in ('LINEA', 'LINEA BASICA', 'SIM BASICO')
 
 
 def carpeta(documento):

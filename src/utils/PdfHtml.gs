@@ -9,6 +9,7 @@
  * Marcadores (dentro del HTML):
  *   {{CAMPO}}              el valor de la columna, escapado (una fecha: dd/mm/aaaa)
  *   {{SI:CAMPO}}           ✓ si el valor es SI (casillas)            {{NO:CAMPO}}  ✓ si es NO
+ *   {{ES:CAMPO:VALOR}}     ✓ si el valor es VALOR (sin distinguir mayúsculas): BUENO / REGULAR / MALO, N/A, INSTALADA…
  *   {{IMG:CAMPO:AxB}}      la imagen (firma, diagrama), a lo más A × B pt, sin deformar (agranda o achica, como Docs)
  *   {{IMG:CAMPO:AxB:tope}} igual, pero nunca más grande que su tamaño natural (1 pixel = 0.75 pt): como insertaba Docs una
  *                          imagen suelta que luego solo se achicaba (Líneas, LineasPdf)
@@ -17,6 +18,7 @@
  *   {{LOGO:nombre}}        el logo (data URI) del archivo logo-<nombre>.png de RECURSOS PDF
  *   {{HTML:CLAVE}}         un pedazo de HTML que ya armó (y escapó) el servicio del documento: tablas que dependen del tipo
  *   {{#SI CAMPO}}…{{/SI}}  el bloque solo si el campo trae algo         {{#VACIO CAMPO}}…{{/VACIO}}  solo si viene vacío
+ * Un CAMPO que no viene tal cual se busca sin distinguir mayúsculas ni espacios de más (como LineasPdf: «No EMPLEADO»).
  *
  * Lo que el convertidor exige (medido el 10-nov contra 10 responsivas reales; docs/pdf-motor.md):
  *   - la tipografía INCRUSTADA (no tiene fuentes instaladas ni carga URLs): llenar() pone las @font-face en su propio
@@ -43,6 +45,10 @@ const PdfHtml = (function () {
     // Igual en 9 de 10 contra prod en el Chrome local (tools/pdf/html/local.js); se enciende en DEV al confirmarla con
     // el convertidor de Apps Script (pedir.js)
     'responsiva-celular': { dev: false, prod: false },
+    // Las dos variantes de la inspección de celular (LineasCaptura.documentoInspeccionHtml_): igual en 10 de 10 en el Chrome
+    // local; se encienden con la responsiva, al confirmarlas con el convertidor
+    'inspeccion-celular': { dev: false, prod: false },
+    'inspeccion-celular-checklist': { dev: false, prod: false },
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];
@@ -115,7 +121,7 @@ const PdfHtml = (function () {
     const d = datos || {};
     const r = recursos || {};
     const o = opciones || {};
-    const valor = (c) => (d[c] === undefined ? '' : texto(d[c]));
+    const valor = (c) => { const v = campo_(d, c); return v === undefined ? '' : texto(v); };
     const lleno = (c) => String(valor(c)).trim() !== '';
     let html = plantilla
       .replace(/\{\{#SI ([^{}]+)\}\}([\s\S]*?)\{\{\/SI\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? bloque : ''))
@@ -137,6 +143,8 @@ const PdfHtml = (function () {
       }
       x = /^(SI|NO):(.+)$/.exec(m);
       if (x) return String(valor(x[2].trim())).trim().toUpperCase() === x[1] ? PALOMITA : '';
+      x = /^ES:(.+):(.+)$/.exec(m);
+      if (x) return String(valor(x[1].trim())).trim().toUpperCase() === x[2].trim().toUpperCase() ? PALOMITA : '';
       x = /^IMG:(.+?):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)((?::(?:tope|linea))*)$/.exec(m);
       if (x) return imagen((imagenes || {})[x[1].trim()], Number(x[2]), Number(x[3]), /:tope/.test(x[4]), /:linea/.test(x[4]));
       x = /^HTML:(.+)$/.exec(m);
@@ -145,14 +153,22 @@ const PdfHtml = (function () {
     });
   }
 
+  /** El valor de un campo: tal cual o, si no, sin distinguir mayúsculas ni espacios de más (undefined si no viene) */
+  function campo_(d, c) {
+    if (d[c] !== undefined) return d[c];
+    const b = String(c).toUpperCase().replace(/\s+/g, ' ').trim();
+    const k = Object.keys(d).filter((x) => String(x).toUpperCase().replace(/\s+/g, ' ').trim() === b)[0];
+    return k === undefined ? undefined : d[k];
+  }
+
   /** Los campos que la plantilla pide y no llegaron en `datos` (como sinResolver del motor de Docs) */
   function faltantes(plantilla, datos) {
     const d = datos || {};
     const vistos = {};
     (plantilla.match(/\{\{[^{}]+\}\}/g) || []).forEach((t) => {
-      const m = t.slice(2, -2).trim().replace(/^#(SI|VACIO) /, '').replace(/^(SI|NO|HTML):/, '');
+      const m = t.slice(2, -2).trim().replace(/^#(SI|VACIO) /, '').replace(/^(SI|NO|HTML):/, '').replace(/^ES:(.+):.+$/, '$1').trim();
       if (/^(LOGO|IMG:|\/)/.test(m)) return;
-      if (d[m] === undefined) vistos[m] = true;
+      if (campo_(d, m) === undefined) vistos[m] = true;
     });
     return Object.keys(vistos);
   }

@@ -31,13 +31,22 @@ const ctx = vm.createContext({ Buffer, Utilities, console });
 vm.runInContext(leer('src/utils/PdfHtml.gs') + '\nthis.PdfHtml = PdfHtml;', ctx);
 
 // El adaptador de cada documento: el mismo del servicio (como ADAPTADORES de src/pruebas/PruebasPdfHtml.gs)
-const ADAPTADORES = {
-  'responsiva-celular': () => {
-    vm.runInContext(leer('src/services/lineas/LineasUtil.gs') + '\n' + leer('src/services/lineas/LineasCaptura.gs') +
+// Líneas lee la hoja con las abreviaturas de CH completas («QRO» → «QUERETARO») y las fechas como Date (LineasDatos)
+function lineas(metodo) {
+  return () => {
+    vm.runInContext(['LineasUtil', 'LineasChecklist', 'LineasCaptura'].map((m) => leer('src/services/lineas/' + m + '.gs')).join('\n') +
       '\nthis.LineasCaptura = LineasCaptura; this.LineasUtil = LineasUtil;', ctx);
-    // Líneas lee la hoja con las abreviaturas de CH completas (LineasDatos: «QRO» → «QUERETARO»)
-    return (d) => ctx.LineasCaptura.datosHtml(Object.keys(d).reduce((o, k) => { o[k] = ctx.LineasUtil.mostrarCH(k, d[k]); return o; }, {}));
-  },
+    const fecha = (v) => {
+      const f = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?: (\d{1,2}):(\d{2}))?/.exec(typeof v === 'string' ? v : '');
+      return f ? new Date(+f[3], +f[2] - 1, +f[1], +(f[4] || 0), +(f[5] || 0)) : v;
+    };
+    return (d) => ctx.LineasCaptura[metodo](Object.keys(d).reduce((o, k) => { o[k] = fecha(ctx.LineasUtil.mostrarCH(k, d[k])); return o; }, {}));
+  };
+}
+const ADAPTADORES = {
+  'responsiva-celular': lineas('datosHtml'),
+  'inspeccion-celular': lineas('datosInspeccionHtml'),
+  'inspeccion-celular-checklist': lineas('datosInspeccionHtml'),
 };
 
 function recursos() {

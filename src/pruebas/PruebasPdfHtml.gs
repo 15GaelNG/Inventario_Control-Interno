@@ -27,11 +27,17 @@ function pdfHtmlPrueba_(e) {
   const paquete = JSON.parse(archivos.next().getBlob().getDataAsString());
 
   // Lo que el servicio del documento hace con el renglón antes de llenarlo (por omisión, las fechas como texto)
-  // (Líneas lee la hoja con las abreviaturas de CH completas, como LineasDatos: «QRO» → «QUERETARO»)
-  const comoLineas = (d) => Object.keys(d).reduce((o, k) => { o[k] = LineasUtil.mostrarCH(k, d[k]); return o; }, {});
+  // (Líneas lee la hoja con las abreviaturas de CH completas, «QRO» → «QUERETARO», y las fechas como Date: LineasDatos)
+  const fecha = (v) => {
+    const f = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?: (\d{1,2}):(\d{2}))?/.exec(typeof v === 'string' ? v : '');
+    return f ? new Date(+f[3], +f[2] - 1, +f[1], +(f[4] || 0), +(f[5] || 0)) : v;
+  };
+  const comoLineas = (d) => Object.keys(d).reduce((o, k) => { o[k] = fecha(LineasUtil.mostrarCH(k, d[k])); return o; }, {});
   const ADAPTADORES = {
     arqueo: (d) => ArqueosService.datosHtml(d),
     'responsiva-celular': (d) => LineasCaptura.datosHtml(comoLineas(d)),
+    'inspeccion-celular': (d) => LineasCaptura.datosInspeccionHtml(comoLineas(d)),
+    'inspeccion-celular-checklist': (d) => LineasCaptura.datosInspeccionHtml(comoLineas(d)),
   };
   const adaptar = ADAPTADORES[p.documento] || PdfService.datosParaPlantilla_;
   const salida = [];

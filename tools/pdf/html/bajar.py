@@ -94,7 +94,8 @@ def main():
     # El PDF: una liga de Drive (lo que guarda la app) o la ruta de AppSheet ("ARQUEOS/2026/ARQUEO….pdf"), que se busca
     # por el nombre del archivo
     tiene_pdf = lambda f: re.search(r'/d/([\w-]{20,})', f.get(cfg['pdf'], '')) or re.search(r'\.pdf$', f.get(cfg['pdf'], ''), re.I)
-    con = sorted([f for f in filas if tiene_pdf(f)], key=lambda f: clave_fecha(f, cfg['fecha']))
+    filtro = cfg.get('filtro') or (lambda f: True)   # p. ej. la variante de la plantilla
+    con = sorted([f for f in filas if tiene_pdf(f) and filtro(f)], key=lambda f: clave_fecha(f, cfg['fecha']))
     print(f'{len(filas)} renglones, {len(con)} con PDF; se toman los {n} más recientes que no sean escaneo')
     for viejo in dir_.glob('r[0-9][0-9].pdf'):
         viejo.unlink()

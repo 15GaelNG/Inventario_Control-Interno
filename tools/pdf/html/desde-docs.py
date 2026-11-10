@@ -56,6 +56,21 @@ def regla_responsiva_celular(m):
     raise SystemExit('Marcador que no sé traducir: <<' + m + '>>')
 
 
+def regla_inspeccion_celular(m):
+    """<<…>> de la inspección de celular (las dos variantes) → marcador de PdfHtml (valores: LineasCaptura.datosHtml_)"""
+    x = re.fullmatch(r'IF\(\[([^\]]+)\]\s*=\s*"([^"]+)"\s*,\s*"✓"\s*,\s*""\)', m)   # la palomita de una casilla
+    if x:
+        return '{{ES:%s:%s}}' % (x.group(1), x.group(2))
+    if m in ('FIRMA RESPONSABLE', 'FIRMA INSPECTOR'):   # como LineasPdf: a su tamaño, a lo más 160 × 70 px
+        return '{{IMG:%s:120x52.5:tope}}' % m
+    if m == 'PATRON':                                    # 56 px y centrado
+        return '<span style="display:block;text-align:center">{{IMG:PATRON:42x42:tope}}</span>'
+    x = re.fullmatch(r'\[?([^\[\]"()&]+?)\]?', m)
+    if x:
+        return '{{' + x.group(1) + '}}'
+    raise SystemExit('Marcador que no sé traducir: <<' + m + '>>')
+
+
 DOCUMENTOS = {
     'arqueo': {
         'regla': regla_arqueo, 'logo': 'arqueo', 'hoja': 'size: 595.3pt 841.9pt',
@@ -90,6 +105,25 @@ DOCUMENTOS = {
         'sin_cortar': ['F-CI04-039'],
         # El texto ocupa 591 pt desde x = 14.2 (como en los PDF reales; la exportación dice 583.7) y empieza 12 pt más abajo
         'cuerpo': 'padding:26pt 0 0 14.2pt;width:591pt',
+    },
+    # La inspección: Docs la pinta tal cual (LineasPdf no la ajusta como AppSheet), A4 horizontal
+    'inspeccion-celular': {
+        'regla': regla_inspeccion_celular, 'logos_prefijo': 'inspeccion-celular', 'hoja': 'size: 841.9pt 595.3pt',
+        'interlineado': 'docs', 'saltos': [], 'columnas_html': True,
+        # En el .docx sus celdas no tienen margen; y un párrafo vacío con sangría negativa (llega a 858 pt) hacía que
+        # Chromium encogiera toda la hoja al 97.7 % para que cupiera: lo que sobresale se corta, como en Docs
+        'css': 'td { padding: 0; } html, body { overflow: hidden; }',
+        # Docs la pinta 16.7 pt más abajo (márgenes de la exportación: 12.8 a la izquierda, 2.8 a la derecha)
+        'cuerpo': 'max-width:826.3pt;padding:16.7pt 2.8pt 0 12.8pt',
+    },
+    'inspeccion-celular-checklist': {
+        'regla': regla_inspeccion_celular, 'logos_prefijo': 'inspeccion-celular', 'hoja': 'size: 841.9pt 595.3pt',
+        'interlineado': 'docs', 'saltos': [], 'columnas_html': True,
+        # En el .docx sus celdas no tienen margen; y un párrafo vacío con sangría negativa (llega a 858 pt) hacía que
+        # Chromium encogiera toda la hoja al 97.7 % para que cupiera: lo que sobresale se corta, como en Docs
+        'css': 'td { padding: 0; } html, body { overflow: hidden; }',
+        # Docs la pinta 16.7 pt más abajo (márgenes de la exportación: 12.8 a la izquierda, 2.8 a la derecha)
+        'cuerpo': 'max-width:826.3pt;padding:16.7pt 2.8pt 0 12.8pt',
     },
 }
 
@@ -156,6 +190,40 @@ def encoger(s, area):
     return s
 
 
+def columnas_html(s, borde=0.0):
+    """Cada tabla de primer nivel con las columnas que dicen sus propias celdas: se acomoda cada celda en la rejilla
+    (contando las que bajan con rowspan) y una celda de una sola columna da el ancho de esa columna (width + relleno).
+    Para una plantilla cuya cuadrícula del .docx no es la de la exportación (la inspección de celular: 16 contra 18)"""
+    def una(t):
+        ocupado, anchos, n = set(), {}, 0
+        for r, fila in enumerate(re.findall(r'<tr[^>]*>(.*?)</tr>', t, flags=re.S)):
+            c = 0
+            for td in re.findall(r'<td[^>]*>', fila):
+                while (r, c) in ocupado:
+                    c += 1
+                cs = int(re.search(r'colspan="(\d+)"', td).group(1))
+                rs = int(re.search(r'rowspan="(\d+)"', td).group(1))
+                w = re.search(r'(?<![-\w])width:([\d.]+)pt', td)
+                if cs == 1 and w and c not in anchos:
+                    anchos[c] = float(w.group(1)) + relleno(td) + borde
+                for i in range(rs):
+                    for j in range(cs):
+                        ocupado.add((r + i, c + j))
+                c += cs
+                n = max(n, c)
+        if len(anchos) != n:
+            raise SystemExit(f'columnas sin ancho: {sorted(set(range(n)) - set(anchos))}')
+        return [anchos[c] for c in range(n)]
+    for d, a, b in reversed([r for r in tablas(s) if r[0] == 0]):
+        t = s[a:b]
+        cols = una(t)
+        abre = re.match(r'<table[^>]*>', t).group(0)
+        nueva = abre.replace('style="', 'style="table-layout:fixed;width:%.2fpt;' % sum(cols), 1)
+        grupo = '<colgroup>' + ''.join('<col style="width:%.2fpt">' % c for c in cols) + '</colgroup>'
+        s = s[:a] + nueva + grupo + t[len(abre):] + s[b:]
+    return s
+
+
 def columnas_docx(s, dir_):
     """Cada tabla de primer nivel con las columnas de su cuadrícula en el .docx (w:tblGrid, en vigésimos de punto), en
     el mismo orden; con table-layout fijo el convertidor ya no las reparte"""
@@ -189,12 +257,17 @@ def main():
     s = re.sub(r'<style type="text/css">\s*@import url\([^)]*\);\s*</style>', '', s)
     s = s.replace('&quot;Century Gothic&quot;', '&quot;CenturyGothic&quot;')
     s = re.sub(r'&lt;&lt;(.*?)&gt;&gt;', lambda x: cfg['regla'](html_mod.unescape(x.group(1))), s)
-    s = re.sub(r'<img [^>]*src="images/image1\.png"([^>]*)>', lambda x: '<img src="{{LOGO:' + cfg['logo'] + '}}"' + x.group(1) + '>', s)
+    if cfg.get('logos_prefijo'):   # varias imágenes fijas: logo-<prefijo>-<n>.png
+        s = re.sub(r'<img ([^>]*)src="images/image(\d+)\.png"', lambda x: '<img ' + x.group(1) + 'src="{{LOGO:%s-%s}}"' % (cfg['logos_prefijo'], x.group(2)), s)
+    else:
+        s = re.sub(r'<img [^>]*src="images/image1\.png"([^>]*)>', lambda x: '<img src="{{LOGO:' + cfg['logo'] + '}}"' + x.group(1) + '>', s)
     # El transform de cada imagen (rotate 0 + translateZ) la subía a su propia capa, encima del texto: el logo tapaba
     # «NU» de «NUCO» (en Docs el texto va encima)
     s = re.sub(r' ?(?:-webkit-)?transform: rotate\([^)]*\) translateZ\([^)]*\);', '', s)
     if cfg.get('columnas_docx'):
         s = columnas_docx(s, dir_)
+    if cfg.get('columnas_html'):
+        s = columnas_html(s, cfg.get('borde_columna', 0.0))
     if cfg.get('area'):
         s = encoger(s, cfg['area'])
     if cfg.get('chica'):
@@ -211,10 +284,21 @@ def main():
         tams = [float(t) for t in re.findall(r'<span[^>]*font-size:([\d.]+)pt', x.group(0))]
         if not tams:
             return x.group(0)
+        # Con texto, el renglón lo miden sus tramos con texto: uno vacío (p. ej. un <span> de 11 pt junto a la etiqueta de
+        # 6) no cuenta en Docs
+        con_texto = [float(t) for t, txt in re.findall(r'<span[^>]*font-size:([\d.]+)pt[^>]*>([^<]*)</span>', x.group(0))
+                     if txt.replace('&nbsp;', '').strip()]
+        if con_texto and cfg.get('interlineado') == 'docs':
+            tams = con_texto
         original = float(re.search(r'font-size:([\d.]+)pt', x.group(0)).group(1))
         t = re.sub(r'font-size:[\d.]+pt', 'font-size:%gpt' % max(tams), x.group(0), count=1)
         # Un interlineado de 1.0 mide lo de su letra; uno mayor (1.15, 1.5) sí se mide sobre los 11 pt del párrafo
         base = lambda m: original if float(m.group(1)) > 1 and cfg.get('interlineado') != 'letra' else max(tams)
+        if cfg.get('interlineado') == 'docs':
+            # La exportación les pone height:11pt a los párrafos vacíos; en Docs miden lo de su letra
+            t = re.sub(r'(?<![-\w])height:[\d.]+pt;', '', t, count=1)
+            # Docs mide el interlineado sobre la altura natural de la letra: Century Gothic, 1.211 veces su tamaño
+            return re.sub(r'line-height:([\d.]+)(?=[;"])', lambda m: 'line-height:%.2fpt' % (float(m.group(1)) * max(tams) * 1.211), t, count=1)
         if cfg.get('vacio') and not re.sub(r'<[^>]+>|&nbsp;|\s', '', x.group(0)):
             return re.sub(r'line-height:([\d.]+)(?=[;"])', 'line-height:%gpt' % cfg['vacio'], t, count=1)
         return re.sub(r'line-height:([\d.]+)(?=[;"])', lambda m: 'line-height:%.2fpt' % (float(m.group(1)) * base(m)), t, count=1)
@@ -256,8 +340,12 @@ def main():
             raise SystemExit(f'La plantilla quedó con "{prohibido}": en un .html del repo rompe la app (CLAUDE.md)')
     destino = comun.RAIZ / 'src' / 'html' / 'pdf' / f'{documento}.html'
     destino.write_text(s, encoding='utf-8', newline='\n')
+    if cfg.get('logos_prefijo'):
+        for im in (dir_ / 'html' / 'images').glob('image*.png'):
+            n = re.search(r'(\d+)', im.name).group(1)
+            (comun.carpeta('recursos') / f'logo-{cfg["logos_prefijo"]}-{n}.png').write_bytes(im.read_bytes())
     imagen = dir_ / 'html' / 'images' / 'image1.png'
-    if imagen.exists():
+    if imagen.exists() and not cfg.get('logos_prefijo'):
         (comun.carpeta('recursos') / f'logo-{cfg["logo"]}.png').write_bytes(imagen.read_bytes())
     print(f'{destino} ({len(s) // 1024} KB); marcadores:', len(re.findall(r'\{\{', s)))
 

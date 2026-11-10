@@ -911,6 +911,32 @@ const LineasCaptura = (function () {
     return d;
   }
 
+  /**
+   * La inspección en HTML: src/html/pdf/inspeccion-celular.html o, para una «de antes» (LineasPdf.plantillaInspeccion),
+   * inspeccion-celular-checklist.html.
+   */
+  function documentoInspeccionHtml_(fila) {
+    return LineasPdf.plantillaInspeccion(fila) === LineasPdf.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST
+      ? 'inspeccion-celular-checklist' : 'inspeccion-celular';
+  }
+  /**
+   * Los valores de la inspección para la plantilla HTML: lo mismo que ponía LineasPdf (registroPlantilla_, una fecha
+   * como dd/mm/aaaa). Las casillas las resuelve la plantilla ({{ES:CAMPO:VALOR}}) y PdfHtml busca cada columna sin
+   * distinguir mayúsculas, como LineasPdf.
+   */
+  function datosInspeccionHtml_(fila) {
+    const r = registroPlantilla_(fila);
+    const d = {};
+    Object.keys(r).forEach((k) => {
+      if (k === '_fijas') return;
+      const v = r[k];
+      d[k] = v === null || v === undefined ? ''
+        : Object.prototype.toString.call(v) === '[object Date]' ? (isNaN(v.getTime()) ? '' : Utilities.formatDate(v, ZONA, 'dd/MM/yyyy'))
+          : typeof v === 'boolean' ? (v ? 'Y' : 'N') : String(v);
+    });
+    return d;
+  }
+
   /** Escribe la ruta del PDF en la fila (columna File del AppSheet, igual que su acción GUARDAR) y en APP_EVIDENCIAS. */
   function ligarPdf_(tabla, columnaPdf, ids, pdf, ruta) {
     const filas = LineasDatos.buscarFilasPorId(tabla, ids[0]);
@@ -1059,9 +1085,10 @@ const LineasCaptura = (function () {
     const anterior = forzar ? pdfVigente_(ev) : null;
     crono.marcar('firmas a imagen');
     try {
-      // La responsiva, en HTML cuando ya está encendida para este entorno (PdfHtml.DOCUMENTOS); si no, el Doc de siempre
-      const pdf = !esInspeccion && PdfHtml.encendido(DOCUMENTO_HTML)
-        ? LineasPdf.generarPdfHtml(DOCUMENTO_HTML, datosHtml_(fila), imagenes, carpeta, nombre, d.enNucos, crono)
+      // En HTML cuando el documento ya está encendido para este entorno (PdfHtml.DOCUMENTOS); si no, el Doc de siempre
+      const docHtml = esInspeccion ? documentoInspeccionHtml_(fila) : DOCUMENTO_HTML;
+      const pdf = PdfHtml.encendido(docHtml)
+        ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? datosInspeccionHtml_(fila) : datosHtml_(fila), imagenes, carpeta, nombre, d.enNucos, crono)
         : LineasPdf.generarPdfDesdePlantilla(
           esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
           registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos, crono);
@@ -1242,6 +1269,6 @@ const LineasCaptura = (function () {
     _formularioInspeccion: formularioInspeccion_, _formularioResponsiva: formularioResponsiva_, _validar: validarFormulario_,
     _accesoriosDeInspeccion: accesoriosDeInspeccion_,
     /** Los valores del PDF en HTML (la comparación con los PDF reales, src/pruebas/PruebasPdfHtml.gs) */
-    datosHtml: (fila) => datosHtml_(fila),
+    datosHtml: (fila) => datosHtml_(fila), datosInspeccionHtml: (fila) => datosInspeccionHtml_(fila),
   };
 })();
