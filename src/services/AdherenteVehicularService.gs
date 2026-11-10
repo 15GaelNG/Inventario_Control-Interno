@@ -36,6 +36,8 @@ const AdherenteVehicularService = (function () {
 
   // Doc de Google con los marcadores <<CAMPO>> (formato F-CI01-047, corregido por el área).
   const PLANTILLA = '1vwDs6mtcGHGVF1RdirqC6Um30QGRclmJXMDoDO0LhMQ';
+  // La misma carta en HTML (src/html/pdf/adherente-vehicular.html, PdfHtml.gs): la usa cuando está encendida
+  const DOCUMENTO_HTML = 'adherente-vehicular';
 
   // Carpetas de Drive (decisión del usuario, 06-oct-2026): las firmas van a la MISMA carpeta
   // que ya usa Responsiva Vehicular (ResponsivaVehicularService.CARPETA_IMAGENES); el PDF
@@ -209,7 +211,7 @@ const AdherenteVehicularService = (function () {
   function guardarFirmaTemp_(campo, imagen) {
     const nombreImagen = PdfService.nombreArchivo([campo, 'temp', Utilities.getUuid()]) + (imagen.mimeType === 'image/jpeg' ? '.jpg' : '.png');
     const blob = Utilities.newBlob(Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', nombreImagen);
-    const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+    const archivo = DriveUtils.crearArchivo(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES), blob);
     return JSON.stringify({ archivoId: archivo.getId(), mimeType: imagen.mimeType || 'image/png' });
   }
 
@@ -268,7 +270,7 @@ const AdherenteVehicularService = (function () {
     if (!valor) return;
     try {
       const datos = JSON.parse(valor);
-      if (datos && datos.archivoId) DriveApp.getFileById(datos.archivoId).setTrashed(true);
+      if (datos && datos.archivoId) DriveUtils.aPapelera(DriveApp.getFileById(datos.archivoId));
     } catch (e) { /* no-op: si no se pudo borrar, queda un archivo suelto en Drive, nada más */ }
   }
 
@@ -331,7 +333,7 @@ const AdherenteVehicularService = (function () {
           const archivo = ExpedienteNuco.tieneNuco(fila['NUCCO'])
             ? ExpedienteNuco.guardar(blob, ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', [ExpedienteNuco.FIRMAS]),
               'ADHERENTE ' + campo, fila['NUCCO'], ahora, img.mimeType === 'image/jpeg' ? '.jpg' : '.png')
-            : DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+            : DriveUtils.crearArchivo(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES), blob);
           DriveUtils.compartirLoMasAmplioPosible(archivo);
         } catch (e) {
           avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
@@ -345,6 +347,7 @@ const AdherenteVehicularService = (function () {
       });
       pdf = PdfService.generar({
         plantillaId: PLANTILLA,
+        html: PdfHtml.encendido(DOCUMENTO_HTML) ? DOCUMENTO_HTML : undefined,
         datos: datosPdf,
         imagenes: imagenesPdf,
         // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA/ADHERENTES)
@@ -568,7 +571,8 @@ const AdherenteVehicularService = (function () {
       'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
     });
     return PdfService.generarVistaPrevia({
-      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
+      plantillaId: PLANTILLA, html: PdfHtml.encendido(DOCUMENTO_HTML) ? DOCUMENTO_HTML : undefined,
+      datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
     });
   }
 

@@ -101,6 +101,8 @@ function captura(fila, opciones) {
       blob: () => null, enNucos: () => true, enLineas: () => false, olvidarNuco: () => {},
       reemplazarPdf: (id, bytes) => { hechos.reemplazos.push([id, bytes.length]); return { id, name: 'RESP 0012 05 10.pdf' }; },
     },
+    // Estas pruebas son del camino del Google Doc (el HTML tiene las suyas en pdf-html.test.cjs)
+    PdfHtml: { encendido: () => false },
     LineasPdf: {
       PLANTILLAS: { RESPONSIVA_CELULAR: 'R', INSPECCION_CELULAR: 'I' },
       plantillaInspeccion: (registro) => (registro.CUBO ? 'I-CHECKLIST' : 'I'),

@@ -50,7 +50,9 @@ function crearContexto() {
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
     },
+    // Las primitivas de escritura de verdad (crearArchivo, aPapelera…) sobre el Drive de mentira
     DriveUtils: {
+      ...require('./drive-utils-real')(),
       compartirLoMasAmplioPosible: () => 'DOMAIN',
       marcarAutor: (archivo) => archivo,
       // Las carpetas se buscan por nombre en la raíz de la app: aquí el nombre hace de ID
@@ -100,6 +102,8 @@ function crearContexto() {
       },
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }); },
     },
+    // El documento en HTML apagado: aquí se prueba el camino de siempre (el HTML, en pdf-html.test.cjs)
+    PdfHtml: { encendido: () => false },
     PdfService: {
       generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'a.pdf', url: 'https://drive/a.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },

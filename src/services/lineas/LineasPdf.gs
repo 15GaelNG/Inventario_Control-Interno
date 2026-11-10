@@ -280,6 +280,40 @@ const LineasPdf = (function () {
     }
   }
 
+  /**
+   * El PDF desde la plantilla HTML (src/html/pdf/<documento>.html, PdfHtml; 10-nov-2026): sin copiar el Doc. Mismo
+   * resultado que generarPdfDesdePlantilla: { id, nombre, url, avisos[], tiempos[] }.
+   *   datos: ya listos para la plantilla (LineasCaptura.datosHtml_); `SALTO` = 'salto' pone las sanciones en la hoja 2
+   *   imagenes: { 'FIRMA RESPONSABLE': Blob, … } como en la plantilla de Docs
+   * Si la hoja 1 no alcanza (más hojas que las de COMO_APPSHEET), se arma otra vez sin el salto, como con el Doc.
+   */
+  function generarPdfHtml(documento, datos, imagenes, carpeta, nombrePdf, sinCompartir, crono) {
+    const c = crono || Cronometro.iniciar('pdf celular ' + nombrePdf);
+    try {
+      const imgs = {};
+      Object.keys(imagenes || {}).forEach((k) => { if (imagenes[k]) imgs[k] = { blob: imagenes[k] }; });
+      let hecho = PdfHtml.pdf(documento, datos, imgs);
+      let blob = hecho.blob;
+      c.marcar('armar y convertir');
+      const hojas = (COMO_APPSHEET[PLANTILLAS.RESPONSIVA_CELULAR] || {}).hojas;
+      if (datos && datos.SALTO && hojas && paginas_(blob) > hojas) {
+        hecho = PdfHtml.pdf(documento, Object.assign({}, datos, { SALTO: '' }), imgs);
+        blob = hecho.blob;
+        c.marcar('sin salto y convertir otra vez');
+      }
+      const pdf = DriveUtils.crearArchivo(carpeta, blob, nombrePdf);
+      c.marcar('crear archivo');
+      if (!sinCompartir) {
+        LineasArchivos.compartirEnDominio(pdf);
+        c.marcar('compartir');
+      }
+      const avisos = hecho.sinResolver.length ? ['Sin dato en el PDF: ' + hecho.sinResolver.join(', ')] : [];
+      return { id: pdf.getId(), nombre: pdf.getName(), url: pdf.getUrl(), avisos: avisos, tiempos: c.tiempos() };
+    } finally {
+      if (!crono) c.anotar();
+    }
+  }
+
   /** Párrafo sin texto ni imágenes (el salto de página tampoco cuenta como contenido). */
   function vacio_(p) {
     if (p.getText().trim() !== '') return false;
@@ -516,5 +550,5 @@ const LineasPdf = (function () {
     }
   }
 
-  return { PLANTILLAS, PLANTILLAS_APPSHEET, plantillaInspeccion, generarPdfDesdePlantilla };
+  return { PLANTILLAS, PLANTILLAS_APPSHEET, plantillaInspeccion, generarPdfDesdePlantilla, generarPdfHtml };
 })();

@@ -82,6 +82,7 @@ const contexto = vm.createContext({
     crearArchivo: (carpeta, blob, nombre) => ({ getId: () => 'manual-legado', getUrl: () => 'https://drive.google.com/file/d/MANUAL-LEGADO/view', nombre: nombre, carpeta: carpeta }),
     compartirLoMasAmplioPosible: () => true,
   },
+  PdfHtml: { encendido: () => false },   // el documento de siempre (el HTML se prueba en pdf-html.test.cjs)
   PdfService: {
     generar: (p) => { llamadasPdf.push(p); return { url: 'https://pdf/nuevo.pdf', nombre: 'INSPECCION.pdf', sinResolver: [] }; },
     nombreArchivo: (partes) => partes.join(' '),

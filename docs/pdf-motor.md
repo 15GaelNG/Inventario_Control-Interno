@@ -12,11 +12,79 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 | 2 | `Plantilla` entiende todo lo de Líneas (analizador) | hecha (9-nov): ver «Resultado de la fase 2» |
 | 3 | Motor de documento en `PdfService` + comparador en el DEV | pendiente |
 | 4 | Líneas sobre `PdfService` (ID de plantilla por entorno) | pendiente |
-| 5 | Arqueos sobre `PdfService` (avisar a Jorge antes) | pendiente |
+| 5 | Arqueos sobre `PdfService` (avisar a Jorge antes) | en HTML (10-nov, encendido en DEV): ya no copia la plantilla |
 | 6 | Optimizar con los números (plantilla preparada solo en DEV hasta autorizar prod) | pendiente |
 
 Reglas acordadas: se queda la sintaxis `<< >>`; un marcador que el motor no entiende **queda visible en el PDF y
 se avisa**; producción sigue con las plantillas de siempre hasta comprobar las nuevas.
+
+## El giro: los documentos en HTML, sin Google Docs (10-nov)
+
+El usuario decidió dejar los Docs (los formatos solo los cambiamos nosotros). Cada documento pasa a ser un HTML con
+medidas en puntos (`src/html/pdf/<documento>.html`), lo llena `PdfHtml.llenar` (`src/utils/PdfHtml.gs`) y lo convierte
+Apps Script (`Utilities.newBlob(html, 'text/html').getAs('application/pdf')`): sin copiar ninguna plantilla. Entra por
+el mismo `PdfService.generar` / `generarVistaPrevia` con `p.html = '<documento>'`, así los servicios no cambian de
+forma. Las fases 3 a 6 de arriba (motor sobre el Doc) se reemplazan por esto; `Plantilla` sigue para lo que aún sale
+del Doc.
+
+**Responsiva vehicular** (la primera): contra 10 responsivas reales de producción, **mismos cortes de renglón** en
+todas y desfase de 0.5 pt o menos; **1.1–1.7 s por PDF** (contra 10–30 s del Doc).
+
+Lo que exige el convertidor (medido; vale para todos los documentos):
+
+| Hallazgo | Qué se hace |
+|---|---|
+| No tiene tipografías instaladas ni carga URLs (`@font-face` con `https:` no carga) | se **incrustan** (data URI; ttf, woff y woff2 sirven) |
+| El compresor de `npm run push` tira un marcador dentro del CSS | `llenar()` pone las `@font-face` en su propio `<style>` |
+| Sin más, redondea el ancho de cada letra a pixeles: el texto sale 2–5 % más angosto y los renglones cortan distinto | `text-rendering: geometricPrecision` (con eso, 0.05 % de error); `zoom` o `transform` no sirven |
+| Redondea posiciones a 0.75 pt (pixeles de 96 dpi) | el límite de precisión es ±0.4 pt |
+| `@page { size: 612pt 792pt; margin: 0 }` sí lo respeta | cada hoja es un `div` de 612 × 792 pt con posiciones absolutas |
+| Tiene MS PGothic (la de las ✓ de Docs) | las casillas usan esa |
+| El justificado de Docs es irregular (estira unos espacios sí y otros no) y su regla de corte es fina | no se imita el justificado; el **ancho** de cada párrafo se calibra con los PDF reales hasta que corte igual (`comparar.py --anchos`) |
+
+Las tipografías (comerciales) y los logos **no van en el repo**: viven en `RECURSOS PDF` de la raíz de cada proyecto
+(`<Familia>-<regular|bold|italic|boldItalic>.ttf`, `logo-<nombre>.png`), recortadas al español y sin kerning
+(`tools/pdf/html/recursos.py`), y se guardan en la caché por trozos. Se instalan con `pdfRecursosInstalar(<carpeta>)`
+(editor, `utils/PdfHtml.gs`) o, en un DEV, `node tools/pdf/html/pedir.js instalar`.
+
+**Encendido por documento:** `PdfHtml.DOCUMENTOS` (`{ dev, prod }`). En un DEV en cuanto pasa su comparación; en
+producción solo con autorización (un contrato cuenta los encendidos en prod). Apagado, sale del Doc como siempre.
+
+### Replicar un documento (el proceso)
+
+1. `uv run … python tools/pdf/html/bajar.py <documento> 10`: los 10 más recientes de producción (solo lectura) con su
+   PDF, la plantilla (.docx: medidas, tipografía, logo) y sus firmas, en `tools/pdf/.cache/<documento>/` (fuera de git);
+   sube `casos.json` a «PRUEBA PDF HTML/<documento>». El documento se declara en `tools/pdf/html/comun.py`.
+2. Con la geometría del PDF real (posición, letra y color de cada texto y rectángulo) se escribe
+   `src/html/pdf/<documento>.html`; lo que hacían las fórmulas `<<IF(…)>>` va en el servicio (datos ya listos).
+3. `npm run push`, `node tools/pdf/html/pedir.js <documento>` (arma los PDF en el DEV por el camino real) y
+   `uv run … python tools/pdf/html/comparar.py <documento> --imagenes`.
+4. Criterio de «igual»: **0 renglones distintos** en los 10 casos, **0.5 pt** o menos de desfase y las imágenes lado a
+   lado revisadas por el usuario. Entonces se enciende en el DEV y se prueba desde la app. **Regla del usuario
+   (10-nov):** basta con que quede ~95 % igual y se genere bien en Apps Script; una diferencia menor (un renglón que
+   parte una palabra antes) no se persigue, y un error obvio del original se corrige.
+
+**Desde la exportación HTML de Docs** (el arqueo, que AppSheet imprimía con Chromium desde esa exportación):
+`tools/pdf/html/desde-docs.py <documento>` la baja y la convierte en la plantilla (marcadores `<<…>>` → `{{…}}`, logo,
+saltos de hoja). Lo que hace falta para que el convertidor la pinte como AppSheet:
+- el convertidor ignora el `line-height: 1.0` sin unidad: el renglón va en pt, medido sobre la letra del texto (un
+  interlineado mayor, 1.15 o 1.5, sobre los 11 pt del párrafo, como lo medía AppSheet);
+- la tabla que envuelve todo y las que no caben se encogen al área (498 pt) contando el relleno de cada celda; las que
+  caben se quedan de su tamaño;
+- los párrafos vacíos antes de un salto de hoja se quitan (empujaban una hoja en blanco);
+- a 8 pt el Chromium de AppSheet daba cada letra 0.11 pt más ancha: `letter-spacing` a esa letra.
+- (responsiva de celular) las columnas de cada tabla salen de la cuadrícula del .docx (`columnas_docx`: la exportación no las trae y el convertidor repartía las celdas combinadas a su modo); el `transform` de las imágenes se quita (subía el logo encima del texto); los párrafos vacíos del final se quitan.
+
+**Sin un DEV:** `node tools/pdf/html/local.js <documento>` llena la plantilla con el mismo `PdfHtml.llenar` y el adaptador del servicio y la imprime con el Chrome de la máquina (el convertidor de Apps Script también es Chromium); `comparar.py <documento> --local` compara esos. Sirve para calibrar; antes de encender se confirma con `pedir.js`.
+
+| Documento | Estado |
+|---|---|
+| Responsiva vehicular | igual en 10 de 10; encendida en DEV |
+| Adherente vehicular | igual en 10 de 10 (también con 5 renglones de introducción); encendida en DEV. Corregido del Doc: el nombre del jefe salía 9 pt fuera de centro (compartía párrafo con un correo en blanco) |
+| Responsiva de celular | igual en 9 de 10 (r01 es de la plantilla de antes del 5-nov, «Control Interno») en el Chrome local; **apagada** hasta confirmarla con el convertidor (`pedir.js`). Imágenes como LineasPdf (`:tope`, `:linea`); el logo ya no tapa «NU» de NUCO; la hoja 3 en blanco (párrafos vacíos al final) ya no sale |
+| Inspección de celular (2 variantes) | las dos (`inspeccion-celular` y la «de antes», `-checklist`) iguales en 10 de 10 en el Chrome local: mismos renglones, de lado < 2 pt, de alto 7–14 pt (las filas de encabezado quedan un poco más bajas). **Apagadas** hasta confirmarlas con el convertidor. Docs la pinta tal cual: interlineado sobre la altura natural de la letra (`interlineado: 'docs'`), columnas de la propia exportación (`columnas_html`: la cuadrícula del .docx trae 16 y la exportación 18) y `overflow: hidden` (un párrafo con sangría negativa hacía que Chromium encogiera la hoja al 97.7 %) |
+| Inspección vehicular (una plantilla para los 18 tipos) | hecha en el Chrome local contra 36 inspecciones reales (las 2 más recientes de cada tipo, `bajar-inspecciones.py`): mismo contenido en las 36 (palabra por palabra, sin importar la hoja), sin campos faltantes. **Apagada** hasta confirmarla con el convertidor. Las 18 plantillas comparten esqueleto: `inspeccion_vehicular.py` toma la de L200 como plantilla única (`src/html/pdf/inspeccion-vehicular.html`, cada sección un molde `{{#CADA}}`) y lo que cambia por tipo va al catálogo generado `src/config/InspeccionFormatos.gs` (piezas de cada sección y su columna, llantas, ícono, barra de voltaje, orden de los diagramas); `InspeccionHtml.datos` lo vuelve datos. Dos acomodos, según el número de llantas: con 4 o más, semáforo vertical en Neumáticos y Vector 2 × 2; motos y motocarros, semáforo horizontal bajo Inventarios y Vector de moto (frontal y trasera altas lado a lado), en su propia tabla anidada porque sus columnas no coinciden. Diferencias a propósito: la hoja de hoy (logo FT, N/A en todas las secciones; los PDF de AppSheet usaban plantillas viejas), los colores de llanta y voltaje sin huecos entre rangos (en Docs un voltaje de 12.67 o una llanta de 1.65 no se imprimían) y el flujo natural (Docs mandaba el bloque entero a la hoja siguiente: hasta 4 hojas, la última solo con los nombres; aquí 2 o 3). Pendiente menor: a veces un encabezado de sección queda solo al pie de la hoja 1 |
+| Arqueo | ~95 % en 12 casos (A4, como AppSheet); encendido en DEV. Quedan unos renglones de las observaciones o de un nombre que parten una palabra antes o después (el redondeo por letra de AppSheet). Corregido del original: el título del desglose se quedaba solo al pie de la hoja 2; subtotales siempre con centavos ($80.00, no $80); el total de piezas sale aunque el renglón de AppSheet no lo trajera; la calificación de AppSheet (fracción, 0.985) sale como «98.5 %» |
 
 ## Resultado de la fase 1 (9-nov)
 
@@ -97,3 +165,11 @@ copiar. Una por una: **Ejecuciones** → la ejecución (p. ej. `apiLineasGenerar
 - `tests/pdf-expresiones-diferencial.test.cjs`: cada marcador real × 7 juegos de datos (vacío, valores comparados,
   minúsculas y espacios, números, fechas). Vehículos debe dar lo mismo siempre; Líneas es la meta de la fase 2 (todo).
   Arqueo se compara en la fase 5. Una diferencia aceptada va en `ACEPTADAS` con su razón.
+
+**Regla del usuario (10-nov):** basta con que el formato sea igual a la vista (~95 %), no idéntico al punto: los errores
+obvios de las plantillas viejas (un texto descentrado, un encabezado que desplaza todo, un correo en blanco escondido)
+se corrigen en vez de copiarse, y se anotan en la tabla.
+
+**La introducción fluye como en el Doc:** en la responsiva y el adherente vive en una fila de 83.25 pt de alto mínimo,
+centrada; con un nombre o puesto largo crece y empuja todo lo de abajo (pie incluido). La plantilla HTML hace lo mismo
+(`.intro` + `.debajo`): lo de abajo se posiciona contra el final de esa fila, no contra la hoja.
