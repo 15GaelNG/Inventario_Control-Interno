@@ -328,7 +328,10 @@ const ResponsivaVehicularService = (function () {
    * llamó (su propia firma recién completada incluida -- nunca queda huérfana) y se avisa,
    * dejando el documento PENDIENTE para poder reintentar.
    */
-  function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra) {
+  function generarPdfYGuardar_(id, fila, imagenesPdf, ahora, camposExtra, cronoDe) {
+    // Cuánto tarda cada paso (Ejecuciones, [tiempo] responsiva …): el PDF es solo uno (10-nov: 59 s en un DEV, 4 del PDF)
+    const crono = cronoDe || Cronometro.iniciar('responsiva ' + id);
+    const marcar = (paso) => crono.marcar(paso);
     const faltantes = CAMPOS_FIRMA_.filter(([campo, columna]) => fila[columna] && !imagenesPdf[campo]).map(([campo]) => campo);
     if (faltantes.length) {
       const cambiosParciales = {};
@@ -364,6 +367,7 @@ const ResponsivaVehicularService = (function () {
         } catch (e) {
           avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);
         }
+        marcar('respaldar ' + campo.toLowerCase());
       });
 
       const datosPdf = Object.assign({}, fila, {
@@ -371,6 +375,8 @@ const ResponsivaVehicularService = (function () {
         'MES': MESES[Number(Utilities.formatDate(ahora, ZONA, 'M')) - 1],
         'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
       });
+      const carpetaPdf = ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', esPrestamo ? [ExpedienteNuco.PRESTAMOS] : undefined).getId();
+      marcar('carpeta del expediente');
       pdf = PdfService.generar({
         plantillaId: PLANTILLA,
         // En HTML cuando el documento ya está encendido para este entorno (PdfHtml.DOCUMENTOS); si no, el Doc de siempre
@@ -379,7 +385,7 @@ const ResponsivaVehicularService = (function () {
         imagenes: imagenesPdf,
         // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA; un préstamo,
         // en 5.-RESPONSIVA/PRESTAMOS: no es la responsiva del dueño y no la desplaza)
-        carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', esPrestamo ? [ExpedienteNuco.PRESTAMOS] : undefined).getId(),
+        carpetaId: carpetaPdf,
         nombre: PdfService.nombreArchivo([
           'RESPONSIVA VEHICULAR', fila['RESPONSABLE'], fila['PLACA'] || fila['FOLIO VEHICULO'], PdfService.fechaParaNombre(ahora),
         ]),
@@ -387,10 +393,12 @@ const ResponsivaVehicularService = (function () {
       // Su nombre en el expediente (RESPONSIVA-0088.pdf) y, si es responsiva, la vigente pasa a RESPONSIVAS ANTERIORES.
       // Si esto falla el PDF ya existe y queda ligado: solo se avisa.
       try {
+        marcar('pdf');
         ExpedienteNuco.archivar(DriveApp.getFileById(pdf.fileId), fila['NUCCO'], 'RESPONSIVA', { prestamo: esPrestamo });
       } catch (e) {
         avisos.push('El PDF se generó, pero no se pudo acomodar en el expediente del NUCO: ' + e.message);
       }
+      marcar('archivar en el expediente');
       SheetUtils.update(ssId(), hoja_().getName(), id, Object.assign({
         'PDF': pdf.url, 'ESTADO FIRMA': 'FIRMADO',
         'TOKEN FIRMA': '', 'TOKEN FIRMA EXPIRA': '', 'TOKEN FIRMA JEFE': '', 'TOKEN FIRMA JEFE EXPIRA': '',
@@ -400,9 +408,11 @@ const ResponsivaVehicularService = (function () {
       // su propia firma respaldada arriba. Si alguno no se pudo borrar, queda un archivo suelto
       // en Drive -- no afecta nada más.
       ['FIRMA RESPONSABLE TEMP', 'FIRMA JEFE TEMP', 'FIRMA CI TEMP'].forEach((columna) => borrarFirmaTempSiHay_(fila[columna]));
+      marcar('ligar y limpiar');
     } catch (e) {
       avisos.push('Se guardó, pero no se pudo generar el PDF: ' + e.message);
     }
+    crono.anotar();
     return { ID: id, PDF: pdf ? pdf.url : null, aviso: avisos.join(' ') };
   }
 
@@ -441,8 +451,11 @@ const ResponsivaVehicularService = (function () {
       throw new Error('Falta la firma de quien entrega.');
     }
 
+    const crono = Cronometro.iniciar('responsiva crear ' + folio);
     return Candado.con(() => {
+      crono.marcar('candado');
       const vehiculo = VehiculosService.buscar(token, folio);
+      crono.marcar('buscar vehículo');
       if (!vehiculo) throw new Error('No se encontró el vehículo ' + folio);
       const idVehiculo = vehiculo['ID'];
       if (!idVehiculo) throw new Error('El vehículo ' + folio + ' no tiene ID.');
@@ -552,7 +565,9 @@ const ResponsivaVehicularService = (function () {
 
       // ID PERSONA de la persona capturada, calculado de su nombre (CapitalHumano.LIGAS)
       if (typeof CapitalHumano !== 'undefined') CapitalHumano.conPersona('RESPONSIVA VEHICULAR', fila, fila);
+      crono.marcar('persona');
       SheetUtils.insert(ssId(), hoja_().getName(), fila);
+      crono.marcar('guardar renglón');
 
       // Enganche con reasignación: si el responsable que firma es distinto al actual del
       // vehículo, se actualiza en la misma operación. Corre siempre aquí (presencial o a
@@ -565,9 +580,11 @@ const ResponsivaVehicularService = (function () {
           'NO EMPLEADO': fila['NO EMPLEADO'],
           'DEPARTAMENTO': fila['DEPARTAMENTO'] || vehiculo['DEPARTAMENTO'],
         });
+        crono.marcar('reasignar vehículo');
       }
 
       if (remoto || remotoJefe) {
+        crono.anotar();
         const resultado = { ID: id };
         if (liga) resultado.liga = liga;
         if (ligaJefe) resultado.ligaJefe = ligaJefe;
@@ -581,7 +598,7 @@ const ResponsivaVehicularService = (function () {
         // no tiene de dónde más sacar un tope y la firma se estira a lo ancho de la celda.
         if (img && img.base64) imagenesPdf[campo] = Object.assign({}, img, FIRMA_PDF);
       });
-      return generarPdfYGuardar_(id, fila, imagenesPdf, ahora, {});
+      return generarPdfYGuardar_(id, fila, imagenesPdf, ahora, {}, crono);
     });
   }
 

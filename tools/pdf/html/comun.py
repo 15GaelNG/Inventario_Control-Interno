@@ -38,6 +38,11 @@ DOCUMENTOS = {
         'firmas': ['FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE'], 'pagina_firmas': -1,
         'crudo': True,   # los montos como números (los formatea ArqueosService.datosHtml_, como en la app)
     },
+    'responsiva-celular': {
+        'libro': LIBRO_VEHICULOS, 'hoja': 'RESPONSIVAS LINEAS', 'pdf': 'FORMATO RESPONSIVA', 'fecha': 'FECHA RESPONSIVA',
+        'plantilla': '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ',   # LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR
+        'firmas': [], 'pagina_firmas': 0,   # sus imágenes las saca bajar.py por posición (firmas_responsiva)
+    },
 }
 
 
