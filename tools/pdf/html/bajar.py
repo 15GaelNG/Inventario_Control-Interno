@@ -60,9 +60,15 @@ def imagenes_por_zona(pdf, zonas):
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         for campo, a, b, c, d in zonas:
             if a <= cx <= c and b <= cy <= d and campo not in salida:
-                if not im['xref']:   # incrustada sin xref: se recorta de la hoja
-                    pix = pdf[0].get_pixmap(clip=im['bbox'], dpi=300)
-                    salida[campo] = {'mimeType': 'image/png', 'base64': base64.b64encode(pix.tobytes('png')).decode()}
+                if not im['xref']:   # incrustada sin xref: la imagen misma, de los bloques de la hoja (recortar la
+                    # hoja se llevaba el texto de alrededor: el nombre bajo la raya salía cortado dentro de la firma)
+                    bloque = next((bl for bl in pdf[0].get_text('dict')['blocks'] if bl['type'] == 1 and
+                                   all(abs(p - q) < 0.5 for p, q in zip(bl['bbox'], im['bbox']))), None)
+                    if bloque:
+                        pix = pymupdf.Pixmap(bloque['image'])
+                        if bloque.get('mask'):   # la transparencia viene aparte: sin ella el trazo sale en un cuadro negro
+                            pix = pymupdf.Pixmap(pix, pymupdf.Pixmap(bloque['mask']))
+                        salida[campo] = {'mimeType': 'image/png', 'base64': base64.b64encode(pix.tobytes('png')).decode()}
                     continue
                 x = pdf.extract_image(im['xref'])
                 if x.get('smask'):
