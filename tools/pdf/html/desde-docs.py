@@ -18,6 +18,7 @@ import sys
 import zipfile
 
 import comun
+import inspeccion_vehicular
 
 
 def regla_arqueo(m):
@@ -72,6 +73,14 @@ def regla_inspeccion_celular(m):
 
 
 DOCUMENTOS = {
+    # Una plantilla para los 18 tipos (inspeccion_vehicular.py): el esqueleto de L200 con cada sección como molde; lo de
+    # cada tipo va a src/config/InspeccionFormatos.gs. Carta con los márgenes que le pone la app (PdfService, FORMATO_PDF)
+    'inspeccion-vehicular': {
+        'regla': inspeccion_vehicular.regla, 'html': lambda: inspeccion_vehicular.exportacion(inspeccion_vehicular.BASE),
+        'despues_regla': inspeccion_vehicular.despues_regla,
+        'hoja': 'size: 612pt 792pt; margin: 27pt 20pt', 'cuerpo': 'margin:0;padding:0',
+        'interlineado': 'docs', 'saltos': [], 'etiquetas_arial': True,
+    },
     'arqueo': {
         'regla': regla_arqueo, 'logo': 'arqueo', 'hoja': 'size: 595.3pt 841.9pt',
         # Cada hoja empieza donde la deja la plantilla; en AppSheet el título del desglose se quedaba solo al pie de la
@@ -248,22 +257,37 @@ def main():
     documento = sys.argv[1]
     cfg = DOCUMENTOS[documento]
     dir_ = comun.carpeta(documento)
-    if not (dir_ / 'html').exists():
+    if cfg.get('html'):   # la exportación la da el documento (la inspección vehicular: la de un tipo como esqueleto)
+        s = cfg['html']()
+    elif not (dir_ / 'html').exists():
         _, dr = comun.servicios()
         comun.bajar(dr, comun.DOCUMENTOS[documento]['plantilla'], dir_ / 'plantilla_html.zip', 'application/zip')
         zipfile.ZipFile(dir_ / 'plantilla_html.zip').extractall(dir_ / 'html')
-    s = next((dir_ / 'html').glob('*.html')).read_text(encoding='utf-8')
+    if not cfg.get('html'):
+        s = next((dir_ / 'html').glob('*.html')).read_text(encoding='utf-8')
 
     s = re.sub(r'<style type="text/css">\s*@import url\([^)]*\);\s*</style>', '', s)
     s = s.replace('&quot;Century Gothic&quot;', '&quot;CenturyGothic&quot;')
     s = re.sub(r'&lt;&lt;(.*?)&gt;&gt;', lambda x: cfg['regla'](html_mod.unescape(x.group(1))), s)
+    if cfg.get('despues_regla'):   # lo propio del documento (la inspección vehicular: moldes de renglón y su catálogo)
+        s = cfg['despues_regla'](s)
     if cfg.get('logos_prefijo'):   # varias imágenes fijas: logo-<prefijo>-<n>.png
         s = re.sub(r'<img ([^>]*)src="images/image(\d+)\.png"', lambda x: '<img ' + x.group(1) + 'src="{{LOGO:%s-%s}}"' % (cfg['logos_prefijo'], x.group(2)), s)
-    else:
+    elif cfg.get('logo'):
         s = re.sub(r'<img [^>]*src="images/image1\.png"([^>]*)>', lambda x: '<img src="{{LOGO:' + cfg['logo'] + '}}"' + x.group(1) + '>', s)
     # El transform de cada imagen (rotate 0 + translateZ) la subía a su propia capa, encima del texto: el logo tapaba
     # «NU» de «NUCO» (en Docs el texto va encima)
     s = re.sub(r' ?(?:-webkit-)?transform: rotate\([^)]*\) translateZ\([^)]*\);', '', s)
+    if cfg.get('etiquetas_arial'):
+        # La app le cambia la letra a la plantilla (PdfService.aplicarFormato_: Arial) antes de poner los valores, que
+        # quedan en la de la plantilla: lo fijo en Arial, cada valor en Century Gothic (la etiqueta de un renglón molde
+        # también es texto fijo)
+        def fuente(x):
+            valor = re.sub(r'\{\{(etiqueta|LLANTA1 ETIQUETA)\}\}', '', x.group(2))
+            if '{{' in valor or not x.group(2).strip():
+                return x.group(0)
+            return x.group(1).replace('&quot;CenturyGothic&quot;', '&quot;Arial&quot;') + x.group(2) + x.group(3)
+        s = re.sub(r'(<span style="[^"]*">)([^<]*)(</span>)', fuente, s)
     if cfg.get('columnas_docx'):
         s = columnas_docx(s, dir_)
     if cfg.get('columnas_html'):
@@ -298,7 +322,10 @@ def main():
             # La exportación les pone height:11pt a los párrafos vacíos; en Docs miden lo de su letra
             t = re.sub(r'(?<![-\w])height:[\d.]+pt;', '', t, count=1)
             # Docs mide el interlineado sobre la altura natural de la letra: Century Gothic, 1.211 veces su tamaño
-            return re.sub(r'line-height:([\d.]+)(?=[;"])', lambda m: 'line-height:%.2fpt' % (float(m.group(1)) * max(tams) * 1.211), t, count=1)
+            # (Arial: 1.15)
+            alto = 1.15 if 'Arial' in x.group(0) and 'CenturyGothic' not in ''.join(
+                re.findall(r'<span style="[^"]*">[^<]*\S[^<]*</span>', x.group(0))) else 1.211
+            return re.sub(r'line-height:([\d.]+)(?=[;"])', lambda m: 'line-height:%.2fpt' % (float(m.group(1)) * max(tams) * alto), t, count=1)
         if cfg.get('vacio') and not re.sub(r'<[^>]+>|&nbsp;|\s', '', x.group(0)):
             return re.sub(r'line-height:([\d.]+)(?=[;"])', 'line-height:%gpt' % cfg['vacio'], t, count=1)
         return re.sub(r'line-height:([\d.]+)(?=[;"])', lambda m: 'line-height:%.2fpt' % (float(m.group(1)) * base(m)), t, count=1)
@@ -324,7 +351,7 @@ def main():
     cabeza = ('<!DOCTYPE html>\n<html lang="es">\n<head>\n<meta charset="utf-8">\n'
               '<!-- ' + documento + ': exportación HTML de su plantilla de Docs (tools/pdf/html/desde-docs.py, 10-nov-2026) -->\n'
               '<style>\n'
-              '  @page { ' + cfg['hoja'] + '; margin: 0; }\n'
+              '  @page { ' + cfg['hoja'] + ('' if 'margin' in cfg['hoja'] else '; margin: 0') + '; }\n'
               '  html, body { margin: 0; }\n'
               '  body { color: #000; font-kerning: none; font-variant-ligatures: none; text-rendering: geometricPrecision;'
               ' -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n'

@@ -47,7 +47,31 @@ const ADAPTADORES = {
   'responsiva-celular': lineas('datosHtml'),
   'inspeccion-celular': lineas('datosInspeccionHtml'),
   'inspeccion-celular-checklist': lineas('datosInspeccionHtml'),
+  'inspeccion-vehicular': inspeccionVehicular,
 };
+
+// La inspección vehicular: el catálogo del tipo (InspeccionHtml.datos) y, como hace InspeccionesService, el dibujo en
+// blanco del tipo (.cache/inspeccion-vehicular/diagramas/<TIPO>) para la vista que no se rayó. Las fechas como las
+// escribe PdfService con un Date (dd/MM/yyyy, y HH:mm:ss si traen hora), que en el texto de la hoja vienen sin ceros
+function inspeccionVehicular() {
+  vm.runInContext(leer('src/config/InspeccionFormatos.gs') + '\n' + leer('src/services/InspeccionHtml.gs') +
+    '\nthis.InspeccionHtml = InspeccionHtml;', ctx);
+  const dos = (n) => ('0' + n).slice(-2);
+  const fecha = (v) => {
+    const f = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?: (\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(typeof v === 'string' ? v.trim() : '');
+    return f ? dos(f[1]) + '/' + dos(f[2]) + '/' + f[3] + (f[4] ? ' ' + dos(f[4]) + ':' + f[5] + ':' + (f[6] || '00') : '') : v;
+  };
+  return (d, c) => {
+    ['FRONTAL', 'TRASERA', 'IZQUIERDA', 'DERECHA'].forEach((v) => {
+      const blanco = path.join(cache, 'inspeccion-vehicular', 'diagramas', c.tipo, v + '.png');
+      // Sin rayar, la hoja guarda la ruta del dibujo del tipo («MODELOS INSPECCION/AUTOS/IZQUIERDA.png»)
+      if ((!c.firmas['INS ' + v] || /^MODELOS INSPECCION\//i.test(d['INS ' + v] || '')) && fs.existsSync(blanco)) {
+        c.firmas['INS ' + v] = { base64: fs.readFileSync(blanco).toString('base64'), mimeType: 'image/png' };
+      }
+    });
+    return ctx.InspeccionHtml.datos(Object.keys(d).reduce((o, k) => { o[k] = fecha(d[k]); return o; }, {}), c.tipo);
+  };
+}
 
 function recursos() {
   const dir = path.join(cache, 'recursos');
@@ -75,7 +99,7 @@ function recursos() {
   try {
     const pagina = await nav.newPage();
     for (const c of casos) {
-      const datos = adaptar(c.datos);
+      const datos = adaptar(c.datos, c);
       let html = ctx.PdfHtml.llenar(plantilla, datos, c.firmas, r);
       // Lo que hace LineasPdf.generarPdfHtml: si la hoja 1 no alcanza, otra vez sin el salto
       await pagina.setContent(html, { waitUntil: 'load' });

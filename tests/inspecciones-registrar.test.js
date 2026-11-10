@@ -101,6 +101,7 @@ const contexto = vm.createContext({
     previsualizarRutaProfunda: (ruta, raiz) => ({ raiz: raiz }),
     eliminar: () => {},
   },
+  PdfHtml: { encendido: () => false },   // el documento de siempre (el HTML se prueba en pdf-html.test.cjs)
   PdfService: {
     generar: (p) => { paraPdf = p; return { url: 'https://pdf', nombre: 'INSPECCION.pdf', sinResolver: [] }; },
     nombreArchivo: (partes) => partes.join(' '),

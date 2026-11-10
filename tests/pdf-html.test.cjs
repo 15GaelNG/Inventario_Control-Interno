@@ -44,6 +44,10 @@ test('bloques según el campo: {{#SI}} si trae algo, {{#VACIO}} si no', () => {
   assert.strictEqual(PdfHtml.llenar(p, { OBS: '  ' }), '[sin obs]');
 });
 
+test('un salto de renglón del dato sale como renglón aparte (las observaciones), igual que en Docs', () => {
+  assert.strictEqual(PdfHtml.llenar('<p>{{OBS}}</p>', { OBS: '-UNO\r\n-<DOS>\n-' }), '<p>-UNO<br>-&lt;DOS&gt;<br>-</p>');
+});
+
 test('{{HTML:CLAVE}} pega lo que armó el servicio, sin volver a escapar', () => {
   assert.strictEqual(PdfHtml.llenar('<div>{{HTML:TABLA}}</div>', { TABLA: '<tr><td>a &amp; b</td></tr>' }), '<div><tr><td>a &amp; b</td></tr></div>');
 });
@@ -98,8 +102,9 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
     const archivo = path.join(raiz, 'src/html/pdf', d + '.html');
     assert.ok(fs.existsSync(archivo), d + ': falta src/html/pdf/' + d + '.html');
     const html = fs.readFileSync(archivo, 'utf8');
-    // Carta (responsivas, adherente), A4 (el arqueo, como lo imprimía AppSheet) o A4 horizontal (la inspección de celular)
-    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt|841\.9pt 595\.3pt); margin: 0; \}/, d);
+    // Carta (responsivas, adherente), A4 (el arqueo, como lo imprimía AppSheet) o A4 horizontal (la inspección de celular);
+    // la inspección vehicular con los márgenes de AppSheet (27 pt arriba y abajo, 20 a los lados): corre a varias hojas
+    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt|841\.9pt 595\.3pt); margin: (0|27pt 20pt); \}/, d);
     assert.match(html, /text-rendering: geometricPrecision/, d);
     // Un marcador dentro del CSS lo tira el compresor: las tipografías las pone llenar()
     assert.doesNotMatch(html.slice(html.indexOf('<style>'), html.indexOf('</style>')), /\{\{/, d + ': un marcador dentro del CSS');
@@ -146,4 +151,44 @@ test('la inspección de celular (sus dos variantes): las casillas de la plantill
     assert.doesNotMatch(html, /&lt;&lt;|translateZ/, doc);
   });
   assert.ok(fs.readFileSync(path.join(raiz, 'src/html/pdf/inspeccion-celular-checklist.html'), 'utf8').includes('{{ES:CUBO:SI}}'));
+});
+
+test('la inspección vehicular: una plantilla para los 18 tipos, con el formato de cada uno (InspeccionHtml.datos)', () => {
+  const html = fs.readFileSync(path.join(raiz, 'src/html/pdf/inspeccion-vehicular.html'), 'utf8');
+  const c = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(raiz, 'src/config/InspeccionFormatos.gs'), 'utf8') + '\n' +
+    fs.readFileSync(path.join(raiz, 'src/services/InspeccionHtml.gs'), 'utf8') + '\nthis.F = InspeccionFormatos; this.H = InspeccionHtml;', c);
+  assert.strictEqual(c.F.tipos().length, 18);
+  assert.doesNotMatch(html, /&lt;&lt;|base64,/, 'quedó algo de Docs o un dato');
+  // Lo que viene de la fila tal cual (encabezado, firmas); lo demás lo pone InspeccionHtml.datos
+  const fila = {};
+  ['NUCO', 'FECHA', 'RESPONSABLE', 'DEPARTAMENTO', 'AREA', 'SEDE', 'OFICINA / DESARROLLO', 'CONDUCTOR', 'JEFE DIRECTO', 'VEHICULO',
+    'NO SERIE', 'MODELO / AÑO', 'PLACAS', 'FECHA ULTIMO SERVICIO', 'HOLOGRAMA', 'TIPO COMBUSTIBLE', 'PUNTAJE FINAL INSPECCION',
+    'OBSERVACIONES', 'NOMBRE INSPECTOR', 'VOLTAJE'].forEach((k) => { fila[k] = 'x'; });
+  c.F.tipos().forEach((t) => {
+    const f = c.F.de(t);
+    const d = c.H.datos(Object.assign({}, fila, { VOLTAJE: '12.5' }), t);
+    assert.deepStrictEqual(Array.from(PdfHtml.faltantes(html, d)), [], t);
+    ['DOCUMENTACION', 'CRISTALERIA', 'NEUMATICOS', 'LATONERIA', 'INVENTARIOS', 'SISTEMAS INTERIORES', 'BATERIA'].forEach((s) =>
+      assert.ok(d[s].length > 0, t + ': ' + s));
+    assert.strictEqual(d['DIAGRAMA 1'], 'INS FRONTAL', t);
+    assert.strictEqual(d['SEMAFORO VERTICAL'], f.llantas.length >= 4 ? 'SI' : '', t);
+    assert.strictEqual(d['VOLTAJE COLOR'], '#fcd618', t);
+  });
+  // Las llantas: el color por profundidad, sin huecos entre rangos (en Docs un 1.65 salía sin color)
+  const d = c.H.datos({ 'LLANTA DD': '1,5', 'llanta di': '4', 'LLANTA TD': '4.1', 'LLANTA TI': '' }, 'L200');
+  assert.strictEqual(d['LLANTA1 ETIQUETA'], 'Delantera derecha');
+  assert.strictEqual(d['LLANTA1 COLOR'], '#ff0000');
+  assert.strictEqual(d['LLANTAS RESTO'].map((l) => l.color).join(' '), '#fcd618 #000000 #38761d');
+  assert.strictEqual(d['FILAS SEMAFORO'], 11);   // como el rowspan del Doc: 4 llantas + 5 piezas de Neumáticos + 2
+  assert.strictEqual(c.H.colorLlanta('1.65'), '#ff0000');
+  assert.strictEqual(c.H.colorVoltaje('12.3'), '#ff0000');
+  assert.strictEqual(c.H.colorVoltaje('12.7'), '#38761d');
+  assert.strictEqual(d['DOCUMENTACION'][0].etiqueta, 'Gafette');
+  // Moto: las llantas en su lista, sin semáforo vertical; los diagramas en el orden de su Vector (frontal y trasera arriba)
+  const m = c.H.datos({ 'LLANTA D': '3' }, 'honda 150xr');
+  assert.strictEqual(m['SEMAFORO VERTICAL'], '');
+  assert.strictEqual(m['LLANTAS'][0].valor, '3');
+  assert.strictEqual(m['DIAGRAMA 2'], 'INS TRASERA');
+  assert.throws(() => c.H.datos({}, 'TRACTOR'), /no tiene formato HTML/);
 });

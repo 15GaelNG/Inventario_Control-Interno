@@ -7,7 +7,7 @@
  * el proceso para replicar un documento y comprobarlo contra los PDF reales está en docs/pdf-motor.md.
  *
  * Marcadores (dentro del HTML):
- *   {{CAMPO}}              el valor de la columna, escapado (una fecha: dd/mm/aaaa)
+ *   {{CAMPO}}              el valor de la columna, escapado (una fecha: dd/mm/aaaa; un salto de renglón, <br>)
  *   {{SI:CAMPO}}           ✓ si el valor es SI (casillas)            {{NO:CAMPO}}  ✓ si es NO
  *   {{ES:CAMPO:VALOR}}     ✓ si el valor es VALOR (sin distinguir mayúsculas): BUENO / REGULAR / MALO, N/A, INSTALADA…
  *   {{IMG:CAMPO:AxB}}      la imagen (firma, diagrama), a lo más A × B pt, sin deformar (agranda o achica, como Docs)
@@ -17,6 +17,9 @@
  *                          Docs con el interlineado de AppSheet que le pone LineasPdf: una firma no empuja la hoja
  *   {{LOGO:nombre}}        el logo (data URI) del archivo logo-<nombre>.png de RECURSOS PDF
  *   {{HTML:CLAVE}}         un pedazo de HTML que ya armó (y escapó) el servicio del documento: tablas que dependen del tipo
+ *   {{#CADA LISTA}}…{{/CADA}}  el molde una vez por elemento de la lista (un arreglo de objetos en datos); dentro, cada
+ *                          marcador se busca primero en el elemento y luego en el documento (no se anidan)
+ *   {{LOGO:=CAMPO}}        el logo cuyo nombre trae el dato         {{IMG:=CAMPO:AxB}}  la imagen cuyo nombre trae el dato
  *   {{#SI CAMPO}}…{{/SI}}  el bloque solo si el campo trae algo         {{#VACIO CAMPO}}…{{/VACIO}}  solo si viene vacío
  * Un CAMPO que no viene tal cual se busca sin distinguir mayúsculas ni espacios de más (como LineasPdf: «No EMPLEADO»).
  *
@@ -49,6 +52,9 @@ const PdfHtml = (function () {
     // local; se encienden con la responsiva, al confirmarlas con el convertidor
     'inspeccion-celular': { dev: false, prod: false },
     'inspeccion-celular-checklist': { dev: false, prod: false },
+    // Una plantilla para los 18 tipos de unidad (InspeccionHtml.gs + InspeccionFormatos.gs): probada en el Chrome local
+    // contra 36 inspecciones reales (2 por tipo); se enciende al confirmarla con el convertidor
+    'inspeccion-vehicular': { dev: false, prod: false },
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];
@@ -121,11 +127,11 @@ const PdfHtml = (function () {
     const d = datos || {};
     const r = recursos || {};
     const o = opciones || {};
-    const valor = (c) => { const v = campo_(d, c); return v === undefined ? '' : texto(v); };
-    const lleno = (c) => String(valor(c)).trim() !== '';
-    let html = plantilla
-      .replace(/\{\{#SI ([^{}]+)\}\}([\s\S]*?)\{\{\/SI\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? bloque : ''))
-      .replace(/\{\{#VACIO ([^{}]+)\}\}([\s\S]*?)\{\{\/VACIO\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? '' : bloque));
+    // Las listas primero: cada renglón con los datos del documento más los suyos (los suyos mandan)
+    let html = plantilla.replace(/\{\{#CADA ([^{}]+)\}\}([\s\S]*?)\{\{\/CADA\}\}/g, (t, c, molde) => {
+      const lista = campo_(d, c.trim());
+      return (Array.isArray(lista) ? lista : []).map((e) => rellenar_(molde, Object.assign({}, d, e), imagenes, r)).join('');
+    });
     // Las @font-face en su propio <style> al inicio del <head>: un marcador dentro del CSS lo tira el compresor
     const caras = fuentes(r.fuentes, html);
     if (caras) html = html.replace(/<head>/i, '<head><style>' + caras + '</style>');
@@ -133,24 +139,40 @@ const PdfHtml = (function () {
       html = html.replace(/<body([^>]*)>/i, '<body$1><div style="position:absolute;left:0;top:2pt;width:612pt;text-align:center;' +
         'font-weight:700;font-size:14pt;color:#8a6d3a;z-index:9">' + esc(o.aviso) + '</div>');
     }
-    return html.replace(/\{\{(?![#/])([^{}]+)\}\}/g, (todo, marcador) => {
-      const m = marcador.trim();
-      let x = /^LOGO(?::(.+))?$/.exec(m);
-      if (x) {
-        const logos = r.logos || {};
-        const l = logos[(x[1] || '').trim()] || logos[Object.keys(logos)[0]];
-        return l ? 'data:' + (l.mimeType || 'image/png') + ';base64,' + l.base64 : '';
-      }
-      x = /^(SI|NO):(.+)$/.exec(m);
-      if (x) return String(valor(x[2].trim())).trim().toUpperCase() === x[1] ? PALOMITA : '';
-      x = /^ES:(.+):(.+)$/.exec(m);
-      if (x) return String(valor(x[1].trim())).trim().toUpperCase() === x[2].trim().toUpperCase() ? PALOMITA : '';
-      x = /^IMG:(.+?):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)((?::(?:tope|linea))*)$/.exec(m);
-      if (x) return imagen((imagenes || {})[x[1].trim()], Number(x[2]), Number(x[3]), /:tope/.test(x[4]), /:linea/.test(x[4]));
-      x = /^HTML:(.+)$/.exec(m);
-      if (x) return String(d[x[1].trim()] == null ? '' : d[x[1].trim()]);
-      return esc(valor(m));
-    });
+    return rellenar_(html, d, imagenes, r);
+  }
+
+  /** Los bloques {{#SI}} / {{#VACIO}} y los marcadores de un pedazo de plantilla, con estos datos */
+  function rellenar_(txt, d, imagenes, r) {
+    const valor = (c) => { const v = campo_(d, c); return v === undefined ? '' : texto(v); };
+    const lleno = (c) => String(valor(c)).trim() !== '';
+    return txt
+      .replace(/\{\{#SI ([^{}]+)\}\}([\s\S]*?)\{\{\/SI\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? bloque : ''))
+      .replace(/\{\{#VACIO ([^{}]+)\}\}([\s\S]*?)\{\{\/VACIO\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? '' : bloque))
+      .replace(/\{\{(?![#/])([^{}]+)\}\}/g, (todo, marcador) => {
+        const m = marcador.trim();
+        let x = /^LOGO(?::(=)?(.+))?$/.exec(m);
+        if (x) {
+          const logos = r.logos || {};
+          const nombre = x[1] ? valor(x[2].trim()) : (x[2] || '').trim();   // {{LOGO:=CAMPO}}: el nombre sale del dato
+          const l = logos[nombre] || (x[1] ? null : logos[Object.keys(logos)[0]]);
+          return l ? 'data:' + (l.mimeType || 'image/png') + ';base64,' + l.base64 : '';
+        }
+        x = /^(SI|NO):(.+)$/.exec(m);
+        if (x) return String(valor(x[2].trim())).trim().toUpperCase() === x[1] ? PALOMITA : '';
+        x = /^ES:(.+):(.+)$/.exec(m);
+        if (x) return String(valor(x[1].trim())).trim().toUpperCase() === x[2].trim().toUpperCase() ? PALOMITA : '';
+        x = /^IMG:(.+?):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)((?::(?:tope|linea))*)$/.exec(m);
+        if (x) return imagen((imagenes || {})[valorImagen_(d, x[1].trim())], Number(x[2]), Number(x[3]), /:tope/.test(x[4]), /:linea/.test(x[4]));
+        x = /^HTML:(.+)$/.exec(m);
+        if (x) return String(d[x[1].trim()] == null ? '' : d[x[1].trim()]);
+        return esc(valor(m)).replace(/\r?\n/g, '<br>');   // un salto de renglón del dato, como en Docs
+      });
+  }
+
+  /** {{IMG:=CAMPO:…}}: la imagen cuyo nombre trae el dato (un diagrama según el orden del tipo); si no, el nombre tal cual */
+  function valorImagen_(d, c) {
+    return c.charAt(0) === '=' ? String(campo_(d, c.slice(1).trim()) || '') : c;
   }
 
   /** El valor de un campo: tal cual o, si no, sin distinguir mayúsculas ni espacios de más (undefined si no viene) */
@@ -165,7 +187,9 @@ const PdfHtml = (function () {
   function faltantes(plantilla, datos) {
     const d = datos || {};
     const vistos = {};
-    (plantilla.match(/\{\{[^{}]+\}\}/g) || []).forEach((t) => {
+    // Lo de dentro de una lista se busca en cada renglón, no aquí
+    const fuera = plantilla.replace(/\{\{#CADA ([^{}]+)\}\}[\s\S]*?\{\{\/CADA\}\}/g, '{{$1}}');
+    (fuera.match(/\{\{[^{}]+\}\}/g) || []).forEach((t) => {
       const m = t.slice(2, -2).trim().replace(/^#(SI|VACIO) /, '').replace(/^(SI|NO|HTML):/, '').replace(/^ES:(.+):.+$/, '$1').trim();
       if (/^(LOGO|IMG:|\/)/.test(m)) return;
       if (campo_(d, m) === undefined) vistos[m] = true;

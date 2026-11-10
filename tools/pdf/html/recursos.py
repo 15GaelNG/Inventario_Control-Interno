@@ -40,8 +40,14 @@ def main():
     fuentes = sorted((dir_ / 'docx' / 'word' / 'fonts').glob('*.ttf'))
     salida = comun.carpeta('recursos')
     listos = []
+    # La inspección vehicular sale en Arial (como la imprimía AppSheet) y Docs no la incrusta: la de Windows
+    if documento == 'inspeccion-vehicular':
+        win = Path('C:/Windows/Fonts')
+        fuentes += [(win / n, f'Arial-{c}.ttf') for n, c in
+                    (('arial.ttf', 'regular'), ('arialbd.ttf', 'bold'), ('ariali.ttf', 'italic'), ('arialbi.ttf', 'boldItalic'))]
     for f in fuentes:
-        destino = salida / f.name    # <Familia>-<regular|bold|italic|boldItalic>.ttf, como los nombra Docs
+        f, nombre = f if isinstance(f, tuple) else (f, f.name)
+        destino = salida / nombre    # <Familia>-<regular|bold|italic|boldItalic>.ttf, como los nombra Docs
         recortar(f, destino)
         listos.append(destino)
         print(f'{f.name}: {f.stat().st_size // 1024} KB → {destino.stat().st_size // 1024} KB')

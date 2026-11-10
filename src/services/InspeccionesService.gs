@@ -327,6 +327,17 @@ const InspeccionesService = (function () {
    */
   const FORMATO_PDF = { fuente: 'Arial', margenes: { arriba: 27, abajo: 27, izquierda: 20, derecha: 20 } };
 
+  /**
+   * El documento en HTML (src/html/pdf/inspeccion-vehicular.html, una plantilla para todos los tipos) cuando está
+   * encendido para este entorno (PdfHtml.DOCUMENTOS) y el tipo tiene su formato (InspeccionFormatos.gs, generado de las
+   * plantillas de Docs); si no, el Doc del tipo, como siempre. → lo que va a PdfService.generar en vez de solo datos
+   */
+  const DOCUMENTO_HTML = 'inspeccion-vehicular';
+  function documentoPdf_(estructura, datos) {
+    if (!PdfHtml.encendido(DOCUMENTO_HTML) || !InspeccionFormatos.de(estructura.tipo)) return { datos: datos };
+    return { html: DOCUMENTO_HTML, datos: InspeccionHtml.datos(datos, estructura.tipo) };
+  }
+
   /** Lo que captura el inspector además del checklist */
   const CAPTURADOS = {
     CONDUCTOR: 'CONDUCTOR',
@@ -486,10 +497,10 @@ const InspeccionesService = (function () {
         plantillaId: estructura.plantillaId,
         // Una imagen que no llegó deja su marcador vacío: si no, el PDF imprimiría la ruta
         // del archivo ("MODELOS INSPECCION/HONDA 150XR/IZQUIERDA.png") en lugar del dibujo
-        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+        ...documentoPdf_(estructura, Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
           if (!paraPdf[columna]) vacias[columna] = '';
           return vacias;
-        }, {})),
+        }, {}))),
         imagenes: paraPdf,
         formato: FORMATO_PDF,
         carpetaId: enNuco ? carpetaInspeccion_().getId() : Config.DRIVE_FOLDERS.REPORTES(),
@@ -665,10 +676,10 @@ const InspeccionesService = (function () {
     try {
       const pdf = PdfService.generar({
         plantillaId: estructura.plantillaId,
-        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+        ...documentoPdf_(estructura, Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
           if (!paraPdf[columna]) vacias[columna] = '';
           return vacias;
-        }, {})),
+        }, {}))),
         imagenes: paraPdf,
         formato: FORMATO_PDF,
         carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, fila['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
@@ -1072,10 +1083,10 @@ const InspeccionesService = (function () {
     const enNuco = ExpedienteNuco.tieneNuco(nucco);
     const pdf = PdfService.generar({
       plantillaId: estructura.plantillaId,
-      datos: Object.assign({}, filaReal, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+      ...documentoPdf_(estructura, Object.assign({}, filaReal, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
         if (!paraPdf[columna]) vacias[columna] = '';
         return vacias;
-      }, {})),
+      }, {}))),
       imagenes: paraPdf,
       formato: FORMATO_PDF,
       carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, filaReal['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
