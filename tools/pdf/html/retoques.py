@@ -66,8 +66,12 @@ def responsiva_celular(s):
 
     # 3. Hoja 2: la firma del responsable se encimaba sobre el último renglón de las sanciones (con :linea cuenta solo
     #    1/1.211 de su alto); aquí cuenta entera y su renglón crece lo que necesita (hay ~38 pt libres al pie)
+    #    Y 8 pt de aire bajo la tabla: pegada a su borde, una firma cortada arriba parecía metida detrás (10-nov)
     def sanciones(t):
-        return t.replace(':tope:linea}}', ':tope}}')
+        t = t.replace(':tope:linea}}', ':tope}}')
+        i = t.find('{{#SI ADICIONALES}}{{IMG:FIRMA RESPONSABLE')
+        a = t.rfind('<td ', 0, i)
+        return t[:a] + t[a:].replace('style="', 'style="padding-top:8pt;', 1)
     s = _cambiar_tabla(s, 'Sucesos', sanciones)
     return s
 
