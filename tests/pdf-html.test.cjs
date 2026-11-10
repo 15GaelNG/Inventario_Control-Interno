@@ -85,13 +85,19 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
     const archivo = path.join(raiz, 'src/html/pdf', d + '.html');
     assert.ok(fs.existsSync(archivo), d + ': falta src/html/pdf/' + d + '.html');
     const html = fs.readFileSync(archivo, 'utf8');
-    assert.match(html, /@page \{ size: 612pt 792pt; margin: 0; \}/, d);
+    // Carta (responsiva, adherente) o A4 (el arqueo, como lo imprimía AppSheet)
+    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt); margin: 0; \}/, d);
     assert.match(html, /text-rendering: geometricPrecision/, d);
     // Un marcador dentro del CSS lo tira el compresor: las tipografías las pone llenar()
     assert.doesNotMatch(html.slice(html.indexOf('<style>'), html.indexOf('</style>')), /\{\{/, d + ': un marcador dentro del CSS');
   });
   ['ADHERENTE', 'IMG:FIRMA ADHERENTE:150x60', 'NOMBRE JEFE', 'ESTADO DE ENTREGA'].forEach((m) =>
     assert.ok(fs.readFileSync(path.join(raiz, 'src/html/pdf/adherente-vehicular.html'), 'utf8').includes('{{' + m + '}}'), 'adherente: ' + m));
+  const arqueo = fs.readFileSync(path.join(raiz, 'src/html/pdf/arqueo.html'), 'utf8');
+  ['ID ARQUEO', 'OBSERVACIONES FINALES', 'CALIFICACION_AUDITORIA_FINAL', 'SUBTOTAL B 500,00', 'IMG:FIRMA RESPONSABLE:100x100',
+    'FIRMA ASISTENTE TEXTO'].forEach((m) => assert.ok(arqueo.includes('{{' + m + '}}'), 'arqueo: ' + m));
+  // Sin tipografía ni datos en el repo: solo marcadores
+  assert.doesNotMatch(arqueo, /&lt;&lt;|@import|base64,/, 'arqueo: quedó algo de Docs o un dato');
   // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza
   assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 0);
 });

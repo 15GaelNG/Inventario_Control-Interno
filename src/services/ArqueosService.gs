@@ -913,6 +913,21 @@ const ArqueosService = (function () {
     const cuenta = () => Session.getEffectiveUser().getEmail();
     // Cuánto tarda cada paso, en Ejecuciones ([tiempo] …): fase 0 del motor único de PDF (5-nov)
     const crono = Cronometro.iniciar('pdf ARQUEO ' + (fila['ID ARQUEO'] || ''));
+    if (PdfHtml.encendido(DOCUMENTO_HTML)) {
+      // En HTML: sin copia de la plantilla ni papelera; el mismo nombre, carpeta y compartir que el camino de siempre
+      const carpetaHtml = carpetaDelAnio_();
+      const blob = pdfHtml_(fila);
+      crono.marcar('armar y convertir');
+      const fechaHtml = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+      const archivo = DriveUtils.crearArchivo(carpetaHtml, blob, (fila['ID ARQUEO'] || 'Arqueo') + '_ARQUEO_' + fechaHtml + '.pdf');
+      crono.marcar('crear archivo');
+      if (!DriveUtils.compartirLoMasAmplioPosible(archivo)) {
+        console.warn('No se pudo compartir explícitamente el PDF de Arqueo (cuenta ' + cuenta() + '). Archivo: ' + archivo.getUrl());
+      }
+      crono.marcar('compartir');
+      crono.anotar();
+      return archivo.getUrl();
+    }
     const { copia, carpeta } = llenarPlantillaArqueo_(fila);
     crono.marcar('copiar y llenar');
     let pdfBlob;
@@ -963,6 +978,10 @@ const ArqueosService = (function () {
    * FORMATO ARQUEO/ESTADO PDF -- es solo para que quien va a firmar vea cómo va a quedar.
    */
   function vistaPreviaArqueo_(fila) {
+    if (PdfHtml.encendido(DOCUMENTO_HTML)) {
+      const blob = pdfHtml_(fila, { aviso: 'VISTA PREVIA — AÚN SIN FIRMAR' });
+      return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };
+    }
     const cuenta = () => Session.getEffectiveUser().getEmail();
     const { copia } = llenarPlantillaArqueo_(fila, 'VISTA PREVIA — AÚN SIN FIRMAR');
     try {
@@ -974,6 +993,79 @@ const ArqueosService = (function () {
     } finally {
       try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op: mejor esfuerzo */ }
     }
+  }
+
+  // ------------------------------------------------------------------ el arqueo en HTML (PdfHtml, 10-nov-2026)
+  // src/html/pdf/arqueo.html: la exportación HTML de la misma plantilla F-CI03-009 (como la imprimía AppSheet). Los
+  // valores salen igual que en llenarPlantillaArqueo_; la diferencia es que no se copia ningún Doc.
+  const DOCUMENTO_HTML = 'arqueo';
+
+  /** Los valores ya escritos como los pone el documento: { marcador: texto } */
+  function datosHtml_(fila) {
+    const moneda = (v) => num_(v).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+    const numero = (v) => num_(v).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const texto = (v) => (v === undefined || v === null ? '' : String(v));
+    const d = {};
+    ['ID ARQUEO', 'ID CCH', 'RESPONSABLE', 'PUESTO', 'AREA / DEPARTAMENTO', 'RAZON SOCIAL', 'METODO REEMBOLSO', 'QUIEN REGISTRO',
+      'NOMBRE ASISTENTE'].forEach((c) => { d[c] = texto(fila[c]); });
+    ['MONTO CAJA', 'DIFERENCIA', 'TOTAL EFECTIVO', 'DISPONIBLE CUENTA BANCARIA', 'TOTAL CHEQUES',
+      'TOTAL CAJA CHICA CON FACTURAS / XML', 'TOTAL CAJA CHICA GASTOS NO DEDUCIBLES', 'TOTAL VIATICOS CON FACTURAS / XML',
+      'TOTAL VIATICOS NO DEDUCIBLES', 'TOTAL CAJA CHICA CON FACTURAS (PENDIENTES)', 'TOTAL VIATICOS CON FACTURAS (PENDIENTES)',
+      'TOTAL CAJA CHICA NO DEDUCIBLES (PENDIENTES)', 'TOTAL VIATICOS NO DEDUCIBLES (PENDIENTES)', 'OTROS', 'TOTAL GENERAL',
+      'TOTAL M', 'TOTAL B'].forEach((c) => { d[c] = moneda(fila[c]); });
+    // Piezas: siempre un número (en AppSheet una denominación sin capturar salía en blanco)
+    const DENOMINACIONES = { 'M 0,50': 0.5, 'M 1,00': 1, 'M 2,00': 2, 'M 5,00': 5, 'M 10,00': 10, 'M 20,00': 20,
+      'B 20,00': 20, 'B 50,00': 50, 'B 100,00': 100, 'B 200,00': 200, 'B 500,00': 500, 'B 1000,00': 1000 };
+    ['CANTIDAD M', 'CANTIDAD B'].concat(Object.keys(DENOMINACIONES)).forEach((c) => { d[c] = texto(num_(fila[c])); });
+    // Las piezas en total: la app las guarda (calcularCampos_); en los renglones de AppSheet venían vacías
+    ['M', 'B'].forEach((t) => {
+      if (texto(fila['CANTIDAD ' + t]) !== '') return;
+      d['CANTIDAD ' + t] = texto(Object.keys(DENOMINACIONES).filter((c) => c[0] === t).reduce((s, c) => s + num_(fila[c]), 0));
+    });
+    // El subtotal de cada denominación (la plantilla trae el "$" escrito): siempre con dos decimales
+    Object.keys(DENOMINACIONES).forEach((c) => { d['SUBTOTAL ' + c] = numero(num_(fila[c]) * DENOMINACIONES[c]); });
+    ['OBSERVACIONES FINALES', 'DESCRIPCION CUENTA BANCARIA', 'Nombre_Fintech'].forEach((c) => { d[c] = texto(fila[c]).toUpperCase(); });
+    // Como la imprimía AppSheet ("98.5 %"). La app la guarda ya en por ciento (un promedio de 0/50/75/100: o es 0 o pasa
+    // de 2.9); los renglones de AppSheet, como fracción (0.985): un valor entre 0 y 1 solo puede ser de esos
+    const calificacion = num_(fila['CALIFICACION_AUDITORIA_FINAL']);
+    d['CALIFICACION_AUDITORIA_FINAL'] = texto(fila['CALIFICACION_AUDITORIA_FINAL']) === '' ? ''
+      : (calificacion > 0 && calificacion <= 1 ? calificacion * 100 : calificacion).toFixed(1) + ' %';
+    const inicio = fila['FECHA INICIO'];
+    d['FECHA INICIO'] = Object.prototype.toString.call(inicio) === '[object Date]'
+      ? Utilities.formatDate(inicio, 'America/Mexico_City', 'dd/MM/yyyy')
+      : (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(texto(inicio)) ? texto(inicio).slice(0, 10)
+        : (inicio ? Utilities.formatDate(new Date(inicio), 'America/Mexico_City', 'dd/MM/yyyy') : ''));
+    AUDIT_ITEMS.forEach((item) => { d[item.clave] = texto(fila[item.clave]); });
+    // Sin firma del asistente porque el arqueo no tiene uno: "N/A" (no que se olvidó pedirla)
+    ['FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE'].forEach((c) => { d[c + ' TEXTO'] = ''; });
+    if (!fila['FIRMA ASISTENTE'] && fila['CUENTA CON FIRMA ASISTENTE'] !== 'SI') d['FIRMA ASISTENTE TEXTO'] = 'N/A';
+    return d;
+  }
+
+  /** Las firmas como imagen: { imagenes, faltantes } (faltantes: la había pero su archivo ya no se pudo leer) */
+  function firmasHtml_(fila) {
+    const imagenes = {};
+    const faltantes = [];
+    [['FIRMA RESPONSABLE', 'Responsable'], ['FIRMA ESPECIALISTA', 'Especialista'], ['FIRMA ASISTENTE', 'Asistente']].forEach(([c, quien]) => {
+      const id = extraerIdDrive_(fila[c]);
+      if (!id) return;
+      try {
+        const blob = DriveApp.getFileById(id).getBlob();
+        if (String(blob.getContentType() || '').indexOf('image/') === 0) imagenes[c] = { blob: blob };
+      } catch (err) {
+        faltantes.push(quien + ' (' + err.message + ')');
+      }
+    });
+    return { imagenes, faltantes };
+  }
+
+  function pdfHtml_(fila, opciones) {
+    const f = firmasHtml_(fila);
+    if (f.faltantes.length) {
+      throw new Error('No se pudo leer ' + (f.faltantes.length > 1 ? 'las firmas de ' : 'la firma de ') + f.faltantes.join(' y ') +
+        ' en Drive -- avisa a soporte para recuperar esa firma.');
+    }
+    return PdfHtml.pdf(DOCUMENTO_HTML, datosHtml_(fila), f.imagenes, opciones).blob;
   }
 
   /** Genera el PDF y guarda su URL (+ "Generado") en la fila; si algo falla,
@@ -999,6 +1091,8 @@ const ArqueosService = (function () {
 
   return {
     AUDIT_ITEMS,
+    /** Los valores del PDF en HTML (la comparación con los PDF reales, src/pruebas/PruebasPdfHtml.gs) */
+    datosHtml: (fila) => datosHtml_(fila),
     /** La plantilla del PDF (la revisa revisarEntorno: la cuenta que despliega tiene que poder copiarla) */
     PLANTILLA: PLANTILLA_ARQUEO_DOC_ID,
     listarResumen: (token) => HojaServicio.listar(ARQUEOS, token),

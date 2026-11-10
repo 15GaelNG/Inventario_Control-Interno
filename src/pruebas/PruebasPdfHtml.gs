@@ -26,10 +26,13 @@ function pdfHtmlPrueba_(e) {
   if (!archivos.hasNext()) return { error: 'La carpeta no tiene casos.json' };
   const paquete = JSON.parse(archivos.next().getBlob().getDataAsString());
 
+  // Lo que el servicio del documento hace con el renglón antes de llenarlo (por omisión, las fechas como texto)
+  const ADAPTADORES = { arqueo: (d) => ArqueosService.datosHtml(d) };
+  const adaptar = ADAPTADORES[p.documento] || PdfService.datosParaPlantilla_;
   const salida = [];
   paquete.casos.filter((c) => !p.caso || c.nombre === p.caso).forEach((c) => {
     const t0 = Date.now();
-    const hecho = PdfHtml.pdf(p.documento, PdfService.datosParaPlantilla_(c.datos), c.firmas);
+    const hecho = PdfHtml.pdf(p.documento, adaptar(c.datos), c.firmas);
     const bytes = hecho.blob.getBytes();   // aquí es donde de verdad convierte
     const t1 = Date.now();
     const nombre = 'HTML ' + c.nombre + '.pdf';
@@ -37,7 +40,7 @@ function pdfHtmlPrueba_(e) {
     while (viejos.hasNext()) DriveUtils.aPapelera(viejos.next(), { temporal: true });
     const archivo = DriveUtils.crearArchivo(carpeta, Utilities.newBlob(bytes, 'application/pdf'), nombre, { temporal: true });
     if (p.html) {
-      const html = PdfHtml.llenar(PdfHtml.plantilla(p.documento), PdfService.datosParaPlantilla_(c.datos), c.firmas, PdfHtml.recursos());
+      const html = PdfHtml.llenar(PdfHtml.plantilla(p.documento), adaptar(c.datos), c.firmas, PdfHtml.recursos());
       const viejosHtml = carpeta.getFilesByName(c.nombre + '.html');
       while (viejosHtml.hasNext()) DriveUtils.aPapelera(viejosHtml.next(), { temporal: true });
       DriveUtils.crearArchivo(carpeta, Utilities.newBlob(html, 'text/html'), c.nombre + '.html', { temporal: true });

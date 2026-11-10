@@ -35,7 +35,7 @@ def recortar(origen, destino):
 
 def main():
     comun.salida_utf8()
-    documento, logo = sys.argv[1], sys.argv[2]
+    documento, logo = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else None)
     dir_ = comun.carpeta(documento)
     fuentes = sorted((dir_ / 'docx' / 'word' / 'fonts').glob('*.ttf'))
     salida = comun.carpeta('recursos')
@@ -46,14 +46,16 @@ def main():
         listos.append(destino)
         print(f'{f.name}: {f.stat().st_size // 1024} KB → {destino.stat().st_size // 1024} KB')
     imagen = dir_ / 'docx' / 'word' / 'media' / 'image1.png'
-    if imagen.exists():
+    if logo and imagen.exists():
         destino = salida / f'logo-{logo}.png'
         destino.write_bytes(imagen.read_bytes())
         listos.append(destino)
     _, dr = comun.servicios()
     carpeta = comun.carpeta_prueba(dr, 'RECURSOS')
-    for r in listos:
-        comun.subir(dr, carpeta, r, mime='font/ttf' if r.suffix == '.ttf' else 'image/png')
+    # Todo lo de .cache/recursos (también los logos que dejó desde-docs.py)
+    for r in sorted(salida.glob('*')):
+        if r.suffix in ('.ttf', '.png'):
+            comun.subir(dr, carpeta, r, mime='font/ttf' if r.suffix == '.ttf' else 'image/png')
     (comun.CACHE / 'recursos' / 'carpeta.txt').write_text(carpeta)
     print('subidos a PRUEBA PDF HTML/RECURSOS:', carpeta)
 

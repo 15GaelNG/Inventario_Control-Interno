@@ -65,6 +65,8 @@ function crearContexto(filas) {
       }),
     },
     // Las primitivas de escritura de verdad (crearArchivo, copiar, aPapelera…) sobre el Drive de mentira
+    // Estas pruebas son del camino del Google Doc (el HTML tiene las suyas en pdf-html.test.cjs)
+    PdfHtml: { encendido: () => false },
     DriveUtils: {
       ...require('./drive-utils-real')(),
       marcarAutor: (archivo) => archivo,

@@ -7,6 +7,7 @@ Por cada caso, renglón por renglón (mismas palabras en el mismo renglón) y cu
 Criterio de "igual" (docs/pdf-motor.md): 0 renglones distintos y 0.5 pt o menos de desfase. Ojo: un renglón justificado
 con pocas palabras, pymupdf lo parte en pedazos y sale "distinto" sin serlo; esos se revisan con --imagenes.
   --imagenes   lado a lado (real | HTML) de cada hoja en .cache/<documento>/lado-a-lado/
+  --todos      todos los renglones distintos (si no, los primeros 5)
   --anchos     de los PDF reales, el renglón más largo que aceptó cada párrafo y el más corto que rechazó (para calibrar
                el ancho de un párrafo justificado: el bueno está entre los dos)
 """
@@ -120,7 +121,7 @@ def main():
         nR, nA, dist, dx, dy, dfin = comparar(dir_ / f'{caso}.pdf', dir_ / f'H{caso}.pdf')
         total += len(dist)
         print(f'{caso}: renglones {nR}/{nA} · distintos {len(dist)} · desfase máx inicio {dx:.2f} fin {dfin:.2f} alto {dy:.2f} pt')
-        for r in dist[:5]:
+        for r in (dist if "--todos" in sys.argv else dist[:5]):
             print(f'    real hoja {r[0] + 1} y{r[1]:.1f}: {r[4][:100]}')
         if '--imagenes' in sys.argv:
             lado_a_lado(documento, caso)

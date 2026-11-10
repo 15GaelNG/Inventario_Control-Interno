@@ -26,6 +26,16 @@ def clave_fecha(f, col):
     return (m.group(3), m.group(2).zfill(2), m.group(1).zfill(2)) if m else ('0',)
 
 
+def id_del_pdf(dr, valor):
+    m = re.search(r'/d/([\w-]{20,})', valor)
+    if m:
+        return m.group(1)
+    nombre = valor.replace('\\', '/').split('/')[-1].replace("'", "\\'")
+    r = dr.files().list(q=f"name='{nombre}' and trashed=false", fields='files(id)', supportsAllDrives=True,
+                        includeItemsFromAllDrives=True).execute()['files']
+    return r[0]['id'] if r else None
+
+
 def firmas_de(pdf, pagina, campos):
     """Las imágenes de la hoja de firmas, de izquierda a derecha, con su transparencia"""
     import pymupdf
@@ -50,10 +60,14 @@ def main():
     dir_ = comun.carpeta(documento)
     sh, dr = comun.servicios()
     v = sh.values().get(spreadsheetId=cfg['libro'], range=f"'{cfg['hoja']}'!A1:ZZ",
-                        valueRenderOption='FORMATTED_VALUE').execute()['values']
+                        valueRenderOption='UNFORMATTED_VALUE' if cfg.get('crudo') else 'FORMATTED_VALUE',
+                        dateTimeRenderOption='FORMATTED_STRING').execute()['values']
     enc = [x.strip() for x in v[0]]
-    filas = [dict(zip(enc, r + [''] * (len(enc) - len(r)))) for r in v[1:]]
-    con = sorted([f for f in filas if re.search(r'/d/([\w-]{20,})', f.get(cfg['pdf'], ''))], key=lambda f: clave_fecha(f, cfg['fecha']))
+    filas = [dict(zip(enc, [x if isinstance(x, (int, float)) else str(x) for x in r] + [''] * (len(enc) - len(r)))) for r in v[1:]]
+    # El PDF: una liga de Drive (lo que guarda la app) o la ruta de AppSheet ("ARQUEOS/2026/ARQUEO….pdf"), que se busca
+    # por el nombre del archivo
+    tiene_pdf = lambda f: re.search(r'/d/([\w-]{20,})', f.get(cfg['pdf'], '')) or re.search(r'\.pdf$', f.get(cfg['pdf'], ''), re.I)
+    con = sorted([f for f in filas if tiene_pdf(f)], key=lambda f: clave_fecha(f, cfg['fecha']))
     sel = con[-n:]
     print(f'{len(filas)} renglones, {len(con)} con PDF; se toman {len(sel)}')
     json.dump(sel, open(dir_ / 'filas.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
@@ -61,7 +75,10 @@ def main():
     casos = []
     for i, f in enumerate(sel, 1):
         nombre = f'r{i:02d}'
-        fid = re.search(r'/d/([\w-]{20,})', f[cfg['pdf']]).group(1)
+        fid = id_del_pdf(dr, f[cfg['pdf']])
+        if not fid:
+            print(nombre, 'no se encontró el PDF', f[cfg['pdf']])
+            continue
         comun.bajar(dr, fid, dir_ / f'{nombre}.pdf')
         pdf = pymupdf.open(dir_ / f'{nombre}.pdf')
         datos = dict(f)

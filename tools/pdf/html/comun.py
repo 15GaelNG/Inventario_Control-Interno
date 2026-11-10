@@ -32,6 +32,12 @@ DOCUMENTOS = {
         'firmas': ['FIRMA ADHERENTE', 'FIRMA JEFE', 'FIRMA CI'], 'pagina_firmas': -1,   # la última hoja
         'fecha_en_pdf': True,
     },
+    'arqueo': {
+        'libro': LIBRO_VEHICULOS, 'hoja': 'ARQUEOS', 'pdf': 'FORMATO ARQUEO', 'fecha': 'FECHA INICIO',
+        'plantilla': '1ZIhyDvbG5WENKL73lyGPZWDehAPXRf9yu3-en5vhX-w',
+        'firmas': ['FIRMA RESPONSABLE', 'FIRMA ESPECIALISTA', 'FIRMA ASISTENTE'], 'pagina_firmas': -1,
+        'crudo': True,   # los montos como números (los formatea ArqueosService.datosHtml_, como en la app)
+    },
 }
 
 

@@ -12,7 +12,7 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 | 2 | `Plantilla` entiende todo lo de Líneas (analizador) | hecha (9-nov): ver «Resultado de la fase 2» |
 | 3 | Motor de documento en `PdfService` + comparador en el DEV | pendiente |
 | 4 | Líneas sobre `PdfService` (ID de plantilla por entorno) | pendiente |
-| 5 | Arqueos sobre `PdfService` (avisar a Jorge antes) | pendiente |
+| 5 | Arqueos sobre `PdfService` (avisar a Jorge antes) | en HTML (10-nov, encendido en DEV): ya no copia la plantilla |
 | 6 | Optimizar con los números (plantilla preparada solo en DEV hasta autorizar prod) | pendiente |
 
 Reglas acordadas: se queda la sintaxis `<< >>`; un marcador que el motor no entiende **queda visible en el PDF y
@@ -60,7 +60,19 @@ producción solo con autorización (un contrato cuenta los encendidos en prod). 
 3. `npm run push`, `node tools/pdf/html/pedir.js <documento>` (arma los PDF en el DEV por el camino real) y
    `uv run … python tools/pdf/html/comparar.py <documento> --imagenes`.
 4. Criterio de «igual»: **0 renglones distintos** en los 10 casos, **0.5 pt** o menos de desfase y las imágenes lado a
-   lado revisadas por el usuario. Entonces se enciende en el DEV y se prueba desde la app.
+   lado revisadas por el usuario. Entonces se enciende en el DEV y se prueba desde la app. **Regla del usuario
+   (10-nov):** basta con que quede ~95 % igual y se genere bien en Apps Script; una diferencia menor (un renglón que
+   parte una palabra antes) no se persigue, y un error obvio del original se corrige.
+
+**Desde la exportación HTML de Docs** (el arqueo, que AppSheet imprimía con Chromium desde esa exportación):
+`tools/pdf/html/desde-docs.py <documento>` la baja y la convierte en la plantilla (marcadores `<<…>>` → `{{…}}`, logo,
+saltos de hoja). Lo que hace falta para que el convertidor la pinte como AppSheet:
+- el convertidor ignora el `line-height: 1.0` sin unidad: el renglón va en pt, medido sobre la letra del texto (un
+  interlineado mayor, 1.15 o 1.5, sobre los 11 pt del párrafo, como lo medía AppSheet);
+- la tabla que envuelve todo y las que no caben se encogen al área (498 pt) contando el relleno de cada celda; las que
+  caben se quedan de su tamaño;
+- los párrafos vacíos antes de un salto de hoja se quitan (empujaban una hoja en blanco);
+- a 8 pt el Chromium de AppSheet daba cada letra 0.11 pt más ancha: `letter-spacing` a esa letra.
 
 | Documento | Estado |
 |---|---|
@@ -69,7 +81,7 @@ producción solo con autorización (un contrato cuenta los encendidos en prod). 
 | Responsiva de celular | pendiente |
 | Inspección de celular (2 variantes) | pendiente |
 | Inspección vehicular (una plantilla para los 18 tipos) | pendiente |
-| Arqueo | pendiente |
+| Arqueo | ~95 % en 12 casos (A4, como AppSheet); encendido en DEV. Quedan unos renglones de las observaciones o de un nombre que parten una palabra antes o después (el redondeo por letra de AppSheet). Corregido del original: el título del desglose se quedaba solo al pie de la hoja 2; subtotales siempre con centavos ($80.00, no $80); el total de piezas sale aunque el renglón de AppSheet no lo trajera; la calificación de AppSheet (fracción, 0.985) sale como «98.5 %» |
 
 ## Resultado de la fase 1 (9-nov)
 
