@@ -16,7 +16,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relative) => fs.readFileSync(path.join(root, relative), 'utf8');
 
 /** Entorno de Apps Script simulado: una tabla RESPONSIVAS LINEAS en memoria y un "Drive" de archivos. */
-function entorno(filasIniciales) {
+function entorno(filasIniciales, filasInsp) {
   const filas = (filasIniciales || []).map((f, i) => Object.assign({ _fila: i + 2 }, f));
   const drive = new Map(); // id -> { bytes: Buffer, mimeType }
   let siguienteId = 1;
@@ -61,7 +61,7 @@ function entorno(filasIniciales) {
     },
     LineasRepo: { TAB: { RESP: 'RESPONSIVAS LINEAS', INSP: 'INSPECCIONES LINEAS' } },
     LineasDatos: {
-      leerTabla: (nombre) => { if (nombre !== 'RESPONSIVAS LINEAS') throw new Error('tabla inesperada'); return filas; },
+      leerTabla: (nombre) => { if (nombre === 'INSPECCIONES LINEAS' && filasInsp) return filasInsp; if (nombre !== 'RESPONSIVAS LINEAS') throw new Error('tabla inesperada'); return filas; },
       actualizarFila: (nombre, numFila, cambios) => {
         const fila = filas.find((f) => f._fila === numFila);
         if (!fila) throw new Error('fila no encontrada: ' + numFila);
@@ -455,4 +455,54 @@ test('aviso por correo: no sale sin quién capturó (documentos de antes), ni si
   const r = e.F.completarFirma(e.DOC, c4['TOKEN FIRMA'], trazo('p'));
   assert.equal(r.pendiente, false);
   assert.equal(e.filas[0]['ESTADO FIRMA'], 'FIRMADO');
+});
+
+test('pendientes (panel "Firmas pendientes", 10-nov): una fila por persona que falta, con los días de su liga, sin el token', () => {
+  const DIA = 86400000, ahora = Date.now();
+  const pedidos = [];
+  const { F, ctx } = entorno([
+    { ID: 'RES-1', NUCO: 669, RESPONSABLE: 'ANDREA', 'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON', 'ESTADO FIRMA': 'PENDIENTE',
+      'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': new Date(ahora + 10 * DIA + 1000),
+      'TOKEN FIRMA SEGUNDO': '', 'FIRMADO POR SEGUNDO': 'ayrton@x.com', 'ENVIADO A FIRMA POR': 'eje@x.com',
+      'FECHA RESPONSIVA': new Date('2026-11-01T10:00:00'), 'ID LINEA': 'IMEI-1' },
+    { ID: 'RES-2', RESPONSABLE: 'BETO', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-b', 'TOKEN FIRMA EXPIRA': new Date(ahora + 2 * DIA) },
+    { ID: 'RES-3', RESPONSABLE: 'CARLA', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-c', 'TOKEN FIRMA EXPIRA': new Date(ahora - 3 * DIA) },
+    { ID: 'RES-4', RESPONSABLE: 'YA FIRMÓ', 'ESTADO FIRMA': 'FIRMADO' },
+    { ID: 'RES-5', RESPONSABLE: 'NUNCA SE DIFIRIÓ' },
+  ], [
+    { ID: 'INS-1', NUCO: 12, RESPONSABLE: 'DANI', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 'tok-d', 'TOKEN FIRMA EXPIRA': new Date(ahora + 5 * DIA),
+      'FECHA DE REGISTRO': new Date('2026-11-02T09:00:00'), 'ID LINEA': 'LIN-9' },
+  ]);
+  ctx.Permisos.puedeLeer = (token, modulo) => { pedidos.push(modulo); return {}; };
+  const r = F.pendientes('sesion');
+  assert.deepEqual(pedidos, ['firmas-lineas']);
+  assert.equal(r.diasVigencia, 15);
+  assert.deepEqual([...r.filas.map((f) => f._clave)], ['RESPONSIVA|RES-3|PRINCIPAL', 'RESPONSIVA|RES-2|PRINCIPAL', 'INSPECCION|INS-1|PRINCIPAL', 'RESPONSIVA|RES-1|PRINCIPAL'],
+    'la que vence primero, arriba; lo firmado y lo que nunca se difirió no sale');
+  const porId = Object.fromEntries(r.filas.map((f) => [f._id, f]));
+  assert.equal(porId['RES-1']['DIAS RESTANTES'], 11);
+  assert.equal(porId['RES-1'].ESTADO, 'VIGENTE');
+  assert.equal(porId['RES-1'].FIRMAS, '1 de 2', 'AYRTON ya firmó, falta ANDREA');
+  assert.equal(porId['RES-1']['FALTA FIRMAR'], 'ANDREA');
+  assert.equal(porId['RES-1'].NUCO, '0669');
+  assert.equal(porId['RES-1']['ENVIADO POR'], 'eje@x.com');
+  assert.equal(porId['RES-1']._idLinea, 'IMEI-1');
+  assert.equal(porId['RES-2'].ESTADO, 'POR VENCER');
+  assert.equal(porId['RES-2']['DIAS RESTANTES'], 2);
+  assert.equal(porId['RES-3'].ESTADO, 'VENCIDA');
+  assert.equal(porId['RES-3']['DIAS RESTANTES'], 0);
+  assert.equal(porId['INS-1'].DOCUMENTO, 'Inspección');
+  assert.equal(porId['INS-1'].FECHA, new Date('2026-11-02T09:00:00').toISOString());
+  assert.doesNotMatch(JSON.stringify(r), /tok-/, 'el token (la liga) nunca va en la lista');
+});
+
+test('panel "Firmas pendientes": su módulo, su vista en el menú y su pantalla', () => {
+  assert.match(read('src/config/Modulos.gs'), /\{ id: 'firmas-lineas', etiqueta: 'Firmas pendientes' \}/);
+  assert.match(read('src/html/js/app.html'), /vista: 'firmas-lineas'[^\n]*requiere: 'firmas-lineas'[^\n]*plantilla: 'tpl-lineas-firmas'[^\n]*Lineas\.initFirmas\(\)/);
+  assert.match(read('src/api/LineasFirmaRemota.gs'), /function apiLineasFirmaRemotaPendientes\(token\) \{\s+return LineasFirmaRemota\.pendientes\(token\);/);
+  const js = read('src/html/js/lineas-firmas.html');
+  assert.match(js, /llamar\('apiLineasFirmaRemotaPendientes'\)/);
+  assert.match(js, /llamar\('apiLineasFirmaRemotaLiga', f\._tipo, f\._id, f\._rol\)/);
+  assert.match(js, /llamar\('apiLineasFirmaRemotaRegenerarLiga', f\._tipo, f\._id, f\._rol\)/);
+  assert.match(js, /visible: \(f\) => opera && f\.ESTADO !== 'VENCIDA'/, 'copiar solo con EDICIÓN y liga vigente');
 });

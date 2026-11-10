@@ -1,0 +1,18 @@
+<!-- Firmas pendientes (usuario, 10-nov): responsivas e inspecciones que esperan firma a distancia y los días de cada liga -->
+<template id="tpl-lineas-firmas">
+  <div class="ln-modulo" id="ln-firmas">
+    <div class="page-header">
+      <div>
+        <h2><i data-lucide="pen-line" class="ico"></i> Firmas pendientes</h2>
+        <p class="page-subtitle" id="ln-fir-subtitulo">Responsivas e inspecciones que mandaste a firmar a distancia y siguen esperando: cuántos días le quedan a cada liga antes de dejar de servir.</p>
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="secondary" id="ln-fir-actualizar"><i data-lucide="refresh-cw" class="ico"></i> Actualizar</button>
+      </div>
+    </div>
+
+    <div class="stat-row" id="ln-fir-kpis" data-carga="kpis" data-carga-n="4"></div>
+
+    <div class="card card-compacta"><div id="ln-fir-tabla"></div></div>
+  </div>
+</template>

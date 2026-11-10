@@ -1,0 +1,127 @@
+<script>
+  /**
+   * lineas-firmas.html — Firmas pendientes (usuario, 10-nov): las responsivas e inspecciones que se mandaron a firmar a
+   * distancia y siguen esperando, una fila por persona que falta, con los días que le quedan a su liga
+   * (LineasFirmaRemota.pendientes). Desde aquí se copia la liga, se genera una nueva si ya venció o se abre la ficha
+   * (ahí está "Firmar aquí"). Copiar y regenerar piden EDICIÓN en Líneas Telefónicas, igual que en Documentos.
+   */
+  (function () {
+    'use strict';
+    const { $, copiarTexto, esc, icono, llamar, mensajeError, miles, montaje, puedeOperar,
+      tablaLineas, tilesKpi, aviso } = Lineas.comun;
+
+    const COLOR_ESTADO = { VENCIDA: 'rojo', 'POR VENCER': 'ambar', VIGENTE: 'verde' };
+
+    function textoDias(f) {
+      if (f.ESTADO === 'VENCIDA') return 'Vencida';
+      const d = Number(f['DIAS RESTANTES']) || 0;
+      return d <= 1 ? 'Vence hoy' : d + ' días';
+    }
+
+    function initFirmas() {
+      const n = ++montaje.n;
+      const raiz = document.getElementById('ln-firmas');
+      const vigente = () => n === montaje.n && document.body.contains(raiz);
+      let tabla = null;
+      let filtros = {};
+      let marcarKpi = null;
+      let solicitud = 0;
+      let diasVigencia = 15;
+      const opera = puedeOperar();
+
+      function avisoError(e) { aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 6000); }
+
+      function copiarLiga(f) {
+        return llamar('apiLineasFirmaRemotaLiga', f._tipo, f._id, f._rol).then((liga) => copiarTexto(liga)).then((ok) => {
+          aviso(ok ? esc('Liga copiada (' + f['FALTA FIRMAR'] + ')') : icono('triangle-alert', 'ln-alerta') + ' El navegador no permitió copiar.', 5000);
+        }).catch(avisoError);
+      }
+
+      function ligaNueva(f) {
+        return Confirmar.pedir({
+          titulo: 'Generar liga nueva',
+          mensaje: 'Se genera otra liga para ' + f['FALTA FIRMAR'] + ' que sirve ' + diasVigencia + ' días; la anterior deja de servir.',
+          textoConfirmar: 'Generar liga nueva',
+        }).then((ok) => {
+          if (!ok) return;
+          return llamar('apiLineasFirmaRemotaRegenerarLiga', f._tipo, f._id, f._rol)
+            .then((liga) => copiarTexto(liga))
+            .then((copiada) => { aviso(copiada ? 'Liga nueva copiada.' : 'Liga nueva generada: cópiala con «Copiar liga».', 5000); cargar(); })
+            .catch(avisoError);
+        });
+      }
+
+      function crearTabla() {
+        tabla = tablaLineas($('#ln-fir-tabla', raiz), {
+          idCampo: '_clave',
+          idTabla: 'lineas-firmas-pendientes-v1',
+          columnas: [
+            { campo: 'ESTADO', titulo: 'Liga', tipo: 'lista', fijada: true,
+              render: (v, f) => '<span class="ln-chip ' + (COLOR_ESTADO[v] || '') + '">' + esc(textoDias(f)) + '</span>',
+              renderFiltro: (v) => '<span class="ln-chip ' + (COLOR_ESTADO[v] || '') + '">' + esc(v) + '</span>' },
+            { campo: 'DIAS RESTANTES', titulo: 'Días restantes', tipo: 'numero' },
+            { campo: 'VENCE', titulo: 'Vence', tipo: 'lnFechaHora' },
+            { campo: 'DOCUMENTO', titulo: 'Documento', tipo: 'lista' },
+            { campo: 'NUCO', titulo: 'NUCO' },
+            { campo: 'FALTA FIRMAR', titulo: 'Falta firmar' },
+            { campo: 'ROL', titulo: 'Firma como', tipo: 'lista' },
+            { campo: 'RESPONSABLE', titulo: 'Responsable' },
+            { campo: 'FIRMAS', titulo: 'Firmas a distancia' },
+            { campo: 'ENVIADO POR', titulo: 'Enviado por', tipo: 'lista' },
+            { campo: 'FECHA', titulo: 'Fecha del documento', tipo: 'lnFechaHora' },
+            { campo: 'FOLIO', titulo: 'Folio', visible: false },
+          ],
+          ordenInicial: { campo: 'VENCE', dir: 'asc' },
+          textoVacio: 'No hay firmas pendientes',
+          etiquetaFila: (f) => [f.DOCUMENTO, f.NUCO && 'NUCO ' + f.NUCO, f['FALTA FIRMAR']].filter(Boolean).join(' · '),
+          detalle: { titulo: (f) => f.DOCUMENTO + (f.NUCO ? ' · NUCO ' + f.NUCO : '') },
+          accionesFila: [
+            { icono: 'copy', titulo: 'Copiar liga', visible: (f) => opera && f.ESTADO !== 'VENCIDA', alHacer: copiarLiga },
+            { icono: 'refresh-ccw', titulo: 'Generar liga nueva', visible: () => opera, alHacer: ligaNueva },
+            { icono: 'circle-chevron-right', titulo: 'Abrir ficha (ahí está «Firmar aquí»)', visible: (f) => !!f._idLinea,
+              alHacer: (f) => Lineas.irARegistro(f._idLinea) },
+          ],
+          alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
+        });
+      }
+
+      function pintarKpis(filas) {
+        const contar = (estado) => (lista) => miles(lista.filter((f) => f.ESTADO === estado).length);
+        marcarKpi = tilesKpi($('#ln-fir-kpis', raiz), [
+          { icono: 'pen-line', valor: miles(filas.length), etiqueta: 'Firmas pendientes', calcular: (l) => miles(l.length) },
+          { icono: 'circle-check', valor: contar('VIGENTE')(filas), etiqueta: 'Vigentes', clase: 'stat-tile-ok',
+            filtros: { ESTADO: { valores: ['VIGENTE'] } }, calcular: contar('VIGENTE') },
+          { icono: 'clock', valor: contar('POR VENCER')(filas), etiqueta: 'Por vencer (3 días o menos)',
+            filtros: { ESTADO: { valores: ['POR VENCER'] } }, calcular: contar('POR VENCER') },
+          { icono: 'triangle-alert', valor: contar('VENCIDA')(filas), etiqueta: 'Vencidas',
+            filtros: { ESTADO: { valores: ['VENCIDA'] } }, calcular: contar('VENCIDA') },
+        ], () => tabla);
+        marcarKpi(filtros);
+      }
+
+      function cargar() {
+        const turno = ++solicitud;
+        const boton = $('#ln-fir-actualizar', raiz);
+        boton.disabled = true;
+        if (tabla) tabla.setCargando(true);
+        return llamar('apiLineasFirmaRemotaPendientes').then((r) => {
+          if (!vigente() || turno !== solicitud) return;
+          diasVigencia = r.diasVigencia || diasVigencia;
+          if (!tabla) crearTabla();
+          pintarKpis(r.filas);
+          tabla.setDatos(r.filas);
+        }).catch((e) => {
+          if (!vigente() || turno !== solicitud) return;
+          if (!tabla) crearTabla();
+          tabla.setError('No se pudieron cargar las firmas pendientes: ' + mensajeError(e));
+        }).finally(() => { if (vigente()) boton.disabled = false; });
+      }
+
+      $('#ln-fir-actualizar', raiz).addEventListener('click', cargar);
+      refreshIcons();
+      cargar();
+    }
+
+    Object.assign(Lineas, { initFirmas: initFirmas });
+  })();
+</script>

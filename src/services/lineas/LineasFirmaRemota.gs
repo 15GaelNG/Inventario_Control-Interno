@@ -49,12 +49,12 @@ const LineasFirmaRemota = (function () {
     RESPONSIVA: {
       tabla: () => LineasRepo.TAB.RESP, tipoLiga: 'lineas-responsiva', tipoPdf: 'RESPONSIVA', claveCI: 'ci',
       colNombreCI: 'NOMBRE CI', marcadorCI: 'FIRMA CI', carpetaTemp: 'RESPONSIVAS LINEAS_FirmasTemp',
-      documento: 'Responsiva de línea telefónica',
+      documento: 'Responsiva de línea telefónica', colFecha: 'FECHA RESPONSIVA', corto: 'Responsiva',
     },
     INSPECCION: {
       tabla: () => LineasRepo.TAB.INSP, tipoLiga: 'lineas-inspeccion', tipoPdf: 'INSPECCION', claveCI: 'inspector',
       colNombreCI: 'NOMBRE INSPECTOR', marcadorCI: 'FIRMA INSPECTOR', carpetaTemp: 'INSPECCIONES LINEAS_FirmasTemp',
-      documento: 'Inspección de línea telefónica',
+      documento: 'Inspección de línea telefónica', colFecha: 'FECHA DE REGISTRO', corto: 'Inspección',
     },
   };
 
@@ -430,6 +430,55 @@ const LineasFirmaRemota = (function () {
     return salida;
   }
 
+  /** Cuántos días le quedan a una liga para que deje de servir ("Por vencer" desde aquí). */
+  const DIAS_POR_VENCER = 3;
+  const ETIQUETA_ROL = { PRINCIPAL: 'Responsable', SEGUNDO: 'Responsable 2', TERCER: 'Responsable 3', CUARTO: 'Responsable 4', QUINTO: 'Responsable 5' };
+  const fechaIso_ = (v) => { const d = v instanceof Date ? v : (v ? new Date(v) : null); return d && !isNaN(d.getTime()) ? d.toISOString() : ''; };
+
+  /**
+   * Panel "Firmas pendientes" (usuario, 10-nov: ver las responsivas e inspecciones que siguen esperando firma y cuántos
+   * días le quedan a cada liga, para darles seguimiento). Un renglón por persona que falta: su liga, el documento y los
+   * días que le quedan (negativos = ya venció). Nunca regresa el token: copiar o regenerar la liga va por copiarLiga /
+   * regenerarLiga, que piden EDICIÓN en Líneas Telefónicas.
+   */
+  function pendientes(token) {
+    Permisos.puedeLeer(token, 'firmas-lineas');
+    const ahora = Date.now();
+    const DIA = 24 * 60 * 60 * 1000;
+    const salida = [];
+    [DOCUMENTOS.RESPONSIVA, DOCUMENTOS.INSPECCION].forEach((doc) => {
+      LineasDatos.leerTabla(doc.tabla()).forEach((fila) => {
+        if (String(fila['ESTADO FIRMA'] || '').trim().toUpperCase() !== 'PENDIENTE') return;
+        const diferidos = ROLES_DIFERIBLES.filter((rol) => fila[colToken_(rol)] || fila[colFirmadoPor_(rol)]);
+        const faltan = diferidos.filter((rol) => fila[colToken_(rol)]);
+        faltan.forEach((rol) => {
+          const expira = fila[colTokenExpira_(rol)] ? new Date(fila[colTokenExpira_(rol)]) : null;
+          const valida = expira && !isNaN(expira.getTime());
+          const restante = valida ? expira.getTime() - ahora : -1;
+          const dias = valida ? (restante > 0 ? Math.ceil(restante / DIA) : -Math.floor(-restante / DIA)) : null;
+          salida.push({
+            _clave: doc.tipoPdf + '|' + fila['ID'] + '|' + rol, _tipo: doc.tipoPdf, _id: String(fila['ID'] || ''), _rol: rol,
+            _idLinea: String(fila['ID LINEA'] || ''),
+            'DOCUMENTO': doc.corto,
+            'NUCO': LineasUtil.nucoVisible(fila['NUCO']) || '',
+            'RESPONSABLE': String(fila[columnaNombre_(doc, 'PRINCIPAL')] || '').trim(),
+            'FALTA FIRMAR': String(fila[columnaNombre_(doc, rol)] || '').trim() || ETIQUETA_ROL[rol],
+            'ROL': ETIQUETA_ROL[rol],
+            'DIAS RESTANTES': restante > 0 ? dias : 0,
+            'ESTADO': restante <= 0 ? 'VENCIDA' : dias <= DIAS_POR_VENCER ? 'POR VENCER' : 'VIGENTE',
+            'VENCE': valida ? expira.toISOString() : '',
+            'FIRMAS': (diferidos.length - faltan.length) + ' de ' + diferidos.length,
+            'ENVIADO POR': String(fila[COL_ENVIADO_POR] || ''),
+            'FECHA': fechaIso_(fila[doc.colFecha]),
+            'FOLIO': String(fila['ID'] || ''),
+          });
+        });
+      });
+    });
+    salida.sort((a, b) => (a['VENCE'] || '').localeCompare(b['VENCE'] || ''));
+    return { filas: salida, diasVigencia: FIRMA_REMOTA_DIAS_VIGENCIA, diasPorVencer: DIAS_POR_VENCER };
+  }
+
   /** "Copiar liga de nuevo" desde la ficha: SIEMPRE se arma aquí, nunca en el navegador (mismo motivo que Vehicular). */
   function copiarLiga(doc, token, documentoId, rol) {
     Permisos.puedeEditar(token, 'lineas-telefonicas');
@@ -470,7 +519,7 @@ const LineasFirmaRemota = (function () {
   return {
     ROLES_DIFERIBLES: ROLES_DIFERIBLES, DOCUMENTOS: DOCUMENTOS, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
     obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma, firmarPresencial: firmarPresencial,
-    copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos,
+    copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos, pendientes: pendientes,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
     _base64DeImagen: base64DeImagen_, COL_ENVIADO_POR: COL_ENVIADO_POR,

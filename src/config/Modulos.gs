@@ -111,6 +111,8 @@ const Modulos = (function () {
           ],
         },
         { id: 'resguardos-lineas', etiqueta: 'Resguardos y cancelaciones' },
+        // Las responsivas e inspecciones que esperan firma a distancia y los días que le quedan a cada liga (usuario, 10-nov)
+        { id: 'firmas-lineas', etiqueta: 'Firmas pendientes' },
         // TEMPORAL (30-sep): Líneas corrige los casos de la conciliación y después se elimina (LineasCorrecciones.gs)
         { id: 'correcciones-lineas', etiqueta: 'Correcciones de Líneas' },
         { id: 'accesorios-lineas', etiqueta: 'Inventario de Accesorios' },
