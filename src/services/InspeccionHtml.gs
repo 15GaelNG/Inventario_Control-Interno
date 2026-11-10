@@ -61,6 +61,9 @@ const InspeccionHtml = (function () {
       d[s] = f.secciones[s].map(([etiqueta, columna]) => ({ etiqueta: etiqueta, valor: valor_(fila, columna) }));
     });
 
+    // Motos y motocarros: Sistemas interiores completo (las dos columnas) en la hoja 1, bajo Interiores
+    d['SISTEMAS INTERIORES TODO'] = (d['SISTEMAS INTERIORES'] || []).concat(d['SISTEMAS INTERIORES 2'] || []);
+
     const llantas = f.llantas.map(([etiqueta, columna]) => {
       const v = valor_(fila, columna);
       return { etiqueta: etiqueta, valor: v, color: colorLlanta(v) };

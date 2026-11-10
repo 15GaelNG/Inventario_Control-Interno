@@ -200,7 +200,7 @@ def imagen_png(tipo, src):
 # El alto máximo (pt) de cada lugar de diagrama, para que el bloque 2, el Vector y las firmas quepan en la hoja 2:
 # 1–4 el Vector 2 × 2; 5–8 el de moto (frontal y trasera altas, de dos renglones; izquierda y derecha, uno cada una)
 ESCALA_LOGO_FT = 0.85
-ALTO_DIAGRAMA = {1: 135, 2: 135, 3: 135, 4: 135, 5: 280, 6: 280, 7: 135, 8: 135}
+ALTO_DIAGRAMA = {1: 135, 2: 135, 3: 135, 4: 135, 5: 360, 6: 360, 7: 175, 8: 175}
 
 MEJORES = {'inspeccion-d75ffa': comun.RAIZ / 'assets' / 'logo-ft-inspecciones-light.png'}
 
@@ -412,6 +412,29 @@ def despues_regla(s):
         p = re.search(r'padding:([-\d.]+)pt ([-\d.]+)pt ([-\d.]+)pt ([-\d.]+)pt', td)
         w -= (max(float(p.group(2)), 0) + max(float(p.group(4)), 0)) if p else 0
         s = s.replace('{{DIAGRAMA LUGAR %d}}' % k, '{{IMG:=DIAGRAMA %d:%.1fx%d:tope}}' % ((k - 1) % 4 + 1, w, ALTO_DIAGRAMA[k]))
+
+    # 8. Motos y motocarros (sin semáforo vertical): su bloque 1 es corto a la izquierda y la hoja 1 quedaba medio vacía,
+    # así que Sistemas interiores (completo: lo de las dos columnas, InspeccionHtml lo junta en SISTEMAS INTERIORES TODO)
+    # sube a la hoja 1, bajo Interiores; en la hoja 2 se esconde (11-nov, lo pidió el usuario)
+    i = s.find('{{#CADA SISTEMAS INTERIORES}}')
+    t2 = [(x, y) for x, y in tablas_nivel(s) if x < i < y][0]
+    (ia, ib), (da, db) = celdas_nivel(s, *t2)[:2]
+    si_a, si_b = tablas_nivel(s, ia, ib)[0]
+    sm_a = tablas_nivel(s, ia, ib)[1][0]
+    si2_a, si2_b = tablas_nivel(s, da, db)[0]
+    if '{{#CADA SISTEMAS INTERIORES 2}}' not in s[si2_a:si2_b]:
+        raise SystemExit('la primera tabla de la derecha del bloque 2 no es Sistemas interiores 2')
+    separador = s[si_b:sm_a]   # el párrafo de aire entre dos secciones
+    copia = s[si_a:si_b].replace('{{#CADA SISTEMAS INTERIORES}}', '{{#CADA SISTEMAS INTERIORES TODO}}')
+    t1 = tablas_nivel(s, s.find('<body'))[1]
+    ca, cb = celdas_nivel(s, *t1)[0]
+    fin_interiores = tablas_nivel(s, ca, cb)[-1][1]
+    if '{{#CADA INTERIORES}}' not in s[tablas_nivel(s, ca, cb)[-1][0]:fin_interiores]:
+        raise SystemExit('la última tabla de la izquierda del bloque 1 no es Interiores')
+    # De atrás hacia adelante, así no se mueven los índices
+    s = s[:si2_a] + '{{#SI SEMAFORO VERTICAL}}' + s[si2_a:si2_b] + '{{/SI}}' + s[si2_b:]
+    s = s[:si_a] + '{{#SI SEMAFORO VERTICAL}}' + s[si_a:sm_a] + '{{/SI}}' + s[sm_a:]
+    s = s[:fin_interiores] + '{{#VACIO SEMAFORO VERTICAL}}' + separador + copia + '{{/VACIO}}' + s[fin_interiores:]
 
     # 7. Siempre dos hojas, sin renglones sueltos (11-nov, lo pidió el usuario): la hoja 1 es el encabezado y el bloque 1;
     # la hoja 2, el bloque 2 entero (antes se partía donde cayera: «Intermitentes» solo en la hoja siguiente, o en la moto
