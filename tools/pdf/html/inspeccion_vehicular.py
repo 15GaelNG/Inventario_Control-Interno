@@ -199,6 +199,7 @@ def imagen_png(tipo, src):
 # fondo gris claro (247, 247, 247); el de assets/ (Marca CI/FT) es el mismo, transparente y a mayor resolución
 # El alto máximo (pt) de cada lugar de diagrama, para que el bloque 2, el Vector y las firmas quepan en la hoja 2:
 # 1–4 el Vector 2 × 2; 5–8 el de moto (frontal y trasera altas, de dos renglones; izquierda y derecha, uno cada una)
+ESCALA_LOGO_FT = 0.85
 ALTO_DIAGRAMA = {1: 135, 2: 135, 3: 135, 4: 135, 5: 280, 6: 280, 7: 135, 8: 135}
 
 MEJORES = {'inspeccion-d75ffa': comun.RAIZ / 'assets' / 'logo-ft-inspecciones-light.png'}
@@ -422,6 +423,11 @@ def despues_regla(s):
     a, b = tablas_nivel(s, s.find('<body'))[0]
     fila = re.search(r'<tr\b.*?</tr>', s[a:b], re.S)
     s = s[:a + fila.start()] + fila.group(0).replace('vertical-align:top', 'vertical-align:middle') + s[a + fila.end():]
+    # El logo de Flotillas un poco más chico (lo pidió el usuario, 11-nov): su caja y su imagen al 85 %
+    i = s.find('{{LOGO:inspeccion-d75ffa}}')
+    a, b = s.rfind('<span', 0, i), s.find('</span>', i)
+    s = s[:a] + re.sub(r'(width|height): ([\d.]+)px',
+                       lambda x: '%s: %.2fpx' % (x.group(1), float(x.group(2)) * ESCALA_LOGO_FT), s[a:b]) + s[b:]
     return s
 
 
