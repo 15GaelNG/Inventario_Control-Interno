@@ -52,6 +52,23 @@ const contexto = vm.createContext({
       }),
     }),
     indiceDeColumnas: (enc, nombres) => nombres.reduce((m, n) => (m[n] = enc.indexOf(n), m), {}),
+    // Las primitivas (10-nov: el servicio ya no escribe a mano), sobre la hoja simulada de cada prueba; como las de
+    // verdad, avisan a la caché
+    tabla: (hoja) => ({ hoja }),
+    asegurarColumnas: (t, columnas) => {
+      const enc = t.hoja.getRange(1, 1, 1, t.hoja.getLastColumn()).getValues()[0];
+      const faltan = columnas.filter((c) => !enc.includes(c));
+      faltan.forEach((c) => t.hoja.getRange(1, t.hoja.getLastColumn() + 1).setValue(c));
+      return faltan;
+    },
+    cambiarColumna: (t, i, valores) => {
+      t.hoja.getRange(2, i + 1, valores.length, 1).setValues(valores.map((v) => [v]));
+      if (contexto.CacheHojas) contexto.CacheHojas.tocarHoja(t.hoja);
+    },
+    cambiarCeldas: (t, lista) => {
+      lista.forEach((x) => x.columnas.forEach((c) => t.hoja.getRange(x.fila, c.i + 1).setValue(c.valor)));
+      if (contexto.CacheHojas) contexto.CacheHojas.tocarHoja(t.hoja);
+    },
     leerColumnas: () => ({ filas: 0, datos: { 'ID INSPECCION': [] } }),
     // 'ID' va aquí porque la inspección nueva guarda la llave foránea del vehículo, y el
     // servicio se niega a registrar si el vehículo no tiene ID (libro sin migrar).

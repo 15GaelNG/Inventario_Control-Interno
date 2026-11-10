@@ -30,22 +30,8 @@ const HelpdeskService = (function () {
   /** La hoja (o null si todavía no existe y no se pide crearla), con todas las ENCABEZADOS */
   function hoja_(crear) {
     const ss = SpreadsheetApp.openById(libro_());
-    let hoja = ss.getSheetByName(HOJA);
-    if (!hoja) {
-      if (!crear) return null;
-      hoja = ss.insertSheet(HOJA);
-      hoja.getRange(1, 1, 1, ENCABEZADOS.length).setValues([ENCABEZADOS]).setFontWeight('bold');
-      hoja.setFrozenRows(1);
-      return hoja;
-    }
-    const enc = hoja.getRange(1, 1, 1, Math.max(1, hoja.getLastColumn())).getValues()[0].map((h) => String(h).trim());
-    const indices = SheetUtils.indiceDeColumnas(enc, ENCABEZADOS);
-    const faltan = ENCABEZADOS.filter((c) => indices[c] === -1);
-    if (faltan.length && crear) {
-      const desde = enc.filter(Boolean).length + 1;
-      hoja.getRange(1, desde, 1, faltan.length).setValues([faltan]).setFontWeight('bold');
-    }
-    return hoja;
+    // Crearla, o agregarle las columnas que le falten, va por SheetUtils (la bitácora y la caché se enteran)
+    return crear ? SheetUtils.asegurarPestana(ss, HOJA, ENCABEZADOS) : ss.getSheetByName(HOJA);
   }
 
   /** Un ticket ya en nuestro formato (HelpdeskApi.normalizar_) → las columnas de la hoja */
@@ -94,7 +80,7 @@ const HelpdeskService = (function () {
 
       const ahora = new Date();
       const nuevos = [];
-      let actualizados = 0;
+      const cambios = [];
       lista.forEach((t) => {
         const datos = columnasDe_(t);
         const clave = comoTexto_(t.ID);
@@ -115,15 +101,16 @@ const HelpdeskService = (function () {
         const columnas = parcial ? DEL_HELPDESK.filter((c) => comoTexto_(datos[c]) !== '') : DEL_HELPDESK;
         const cambio = columnas.some((c) => comoTexto_(fila[pos[c]]) !== comoTexto_(datos[c]));
         if (!cambio) return;
-        columnas.forEach((c) => { fila[pos[c]] = datos[c]; });
-        fila[pos['ACTUALIZADO']] = ahora;
-        fila[pos['ACTUALIZADO POR']] = correo || '';
-        hoja.getRange(i + 2, 1, 1, enc.length).setValues([fila]);
-        actualizados++;
+        // Solo las columnas del helpdesk y las de "actualizado": nunca el renglón completo
+        const antes = enc.reduce((o, h, k) => { o[h] = fila[k]; return o; }, {});
+        const valores = Object.assign({}, ...columnas.map((c) => ({ [c]: datos[c] })),
+          { 'ACTUALIZADO': ahora, 'ACTUALIZADO POR': correo || '' });
+        cambios.push({ fila: i + 2, antes: antes, columnas: Object.keys(valores).map((c) => ({ i: pos[c], valor: valores[c] })) });
       });
-      if (nuevos.length) hoja.getRange(ultima + 1, 1, nuevos.length, enc.length).setValues(nuevos);
-      if (nuevos.length || actualizados) CacheHojas.tocarHoja(hoja);
-      return { nuevos: nuevos.length, actualizados: actualizados };
+      const t = SheetUtils.tabla(hoja, { encabezados: enc });
+      if (nuevos.length) SheetUtils.agregarFilas(t, nuevos);
+      if (cambios.length) SheetUtils.cambiarCeldas(t, cambios);
+      return { nuevos: nuevos.length, actualizados: cambios.length };
     }, { siOcupado: () => ({ saltado: true }) });
   }
 

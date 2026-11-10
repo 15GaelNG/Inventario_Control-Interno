@@ -417,13 +417,7 @@ const VehiculosService = (function () {
   function asegurarColumnasDocumento_(datos) {
     const quiere = COLUMNAS_DOCUMENTO_NUEVAS.filter((c) => datos && datos[c]);
     if (!quiere.length) return;
-    const hoja = SheetUtils.getSheet(ssId(), SHEET_VEHICULOS);
-    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
-    const indices = SheetUtils.indiceDeColumnas(encabezados, quiere);
-    const faltan = quiere.filter((c) => indices[c] === -1);
-    if (!faltan.length) return;
-    hoja.getRange(1, encabezados.length + 1, 1, faltan.length).setValues([faltan]);
-    CacheHojas.tocarHoja(hoja);
+    SheetUtils.asegurarColumnas(SheetUtils.tabla(ssId(), SHEET_VEHICULOS), quiere, { negritas: false });
   }
 
   /**
@@ -494,9 +488,9 @@ const VehiculosService = (function () {
       llenados++;
     }
     if (llenados) {
-      hoja.getRange(2, colFolio, nFilas, 1).setValues(folios);
-      hoja.getRange(2, colLiga, nFilas, 1).setValues(ligas);
-      CacheHojas.tocar(ssId(), SHEET_VEHICULOS);
+      const t = SheetUtils.tabla(hoja, { encabezados: encabezados });
+      SheetUtils.cambiarColumna(t, colFolio - 1, folios.map((x) => x[0]));
+      SheetUtils.cambiarColumna(t, colLiga - 1, ligas.map((x) => x[0]));
     }
     return llenados;
   }

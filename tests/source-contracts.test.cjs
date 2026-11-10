@@ -604,13 +604,8 @@ test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se co
   // Scripts que corre un editor (no la app): las migraciones, el arranque y la lectura de INE (solo en un DEV,
   // pestañas de análisis que se rehacen completas)
   const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
-  const QUEDAN = {   // solo puede encoger
-    'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    // UberService.gs y PendientesInspeccionService.gs ya se integraron (hojaDeteccion_ y
-    // agregar_/revisarCargaHelpdesk ya usan SheetUtils.asegurarPestana/insert/updateMany).
-  };
+  // Ya no queda ninguno (10-nov): Help Desk, Inspecciones y Vehículos se pasaron al integrar la rama de Jorge
+  const QUEDAN = {};   // solo puede encoger
   const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
   // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
   // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
