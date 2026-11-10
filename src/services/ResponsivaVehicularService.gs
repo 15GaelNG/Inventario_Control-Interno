@@ -234,7 +234,7 @@ const ResponsivaVehicularService = (function () {
   function guardarFirmaTemp_(campo, imagen) {
     const nombreImagen = PdfService.nombreArchivo([campo, 'temp', Utilities.getUuid()]) + (imagen.mimeType === 'image/jpeg' ? '.jpg' : '.png');
     const blob = Utilities.newBlob(Utilities.base64Decode(imagen.base64), imagen.mimeType || 'image/png', nombreImagen);
-    const archivo = DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+    const archivo = DriveUtils.crearArchivo(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES), blob);
     return JSON.stringify({ archivoId: archivo.getId(), mimeType: imagen.mimeType || 'image/png' });
   }
 
@@ -293,7 +293,7 @@ const ResponsivaVehicularService = (function () {
     if (!valor) return;
     try {
       const datos = JSON.parse(valor);
-      if (datos && datos.archivoId) DriveApp.getFileById(datos.archivoId).setTrashed(true);
+      if (datos && datos.archivoId) DriveUtils.aPapelera(DriveApp.getFileById(datos.archivoId));
     } catch (e) { /* no-op: si no se pudo borrar, queda un archivo suelto en Drive, nada más */ }
   }
 
@@ -357,7 +357,7 @@ const ResponsivaVehicularService = (function () {
           const archivo = ExpedienteNuco.tieneNuco(fila['NUCCO'])
             ? ExpedienteNuco.guardar(blob, ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', [ExpedienteNuco.FIRMAS]),
               '' + campo, fila['NUCCO'], ahora, img.mimeType === 'image/jpeg' ? '.jpg' : '.png')
-            : DriveUtils.marcarAutor(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES).createFile(blob));
+            : DriveUtils.crearArchivo(DriveUtils.carpetaEnRaiz(CARPETA_IMAGENES), blob);
           DriveUtils.compartirLoMasAmplioPosible(archivo);
         } catch (e) {
           avisos.push('No se pudo respaldar ' + campo.toLowerCase() + ' en Drive: ' + e.message);

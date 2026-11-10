@@ -59,12 +59,14 @@ function crearContexto(filas) {
       getFileById: (id) => ({
         getId: () => id,
         makeCopy: (nombre) => ({ getId: () => 'copia-' + id, getName: () => nombre }),
-        getAs: () => ({ getBytes: () => 'pdf-bytes', mimeType: 'application/pdf' }),
+        getAs: () => { const b = { getBytes: () => 'pdf-bytes', mimeType: 'application/pdf', setName: (n) => { b.nombre = n; return b; } }; return b; },
         setTrashed: (v) => { llamadas.trasheados.push({ id, v }); },
         getBlob: () => ({ getBytes: () => 'bytes', getContentType: () => 'image/png' }),
       }),
     },
+    // Las primitivas de escritura de verdad (crearArchivo, copiar, aPapelera…) sobre el Drive de mentira
     DriveUtils: {
+      ...require('./drive-utils-real')(),
       marcarAutor: (archivo) => archivo,
       compartirLoMasAmplioPosible: () => true,
       carpetaEnRaiz: (nombre) => ({ getId: () => nombre, getName: () => nombre }),
@@ -72,7 +74,7 @@ function crearContexto(filas) {
         getName: () => 'ARQUEOS/2026',
         createFile: (blob) => {
           llamadas.carpetaCreateFile.push(blob);
-          return { setName: (nombre) => ({ getUrl: () => 'https://drive/' + nombre, getName: () => nombre }) };
+          return { getUrl: () => 'https://drive/' + blob.nombre, getName: () => blob.nombre };
         },
       }),
     },

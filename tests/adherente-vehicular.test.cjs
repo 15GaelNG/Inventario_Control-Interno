@@ -50,7 +50,9 @@ function crearContexto() {
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
     },
+    // Las primitivas de escritura de verdad (crearArchivo, aPapelera…) sobre el Drive de mentira
     DriveUtils: {
+      ...require('./drive-utils-real')(),
       compartirLoMasAmplioPosible: () => 'DOMAIN',
       marcarAutor: (archivo) => archivo,
       // Las carpetas se buscan por nombre en la raíz de la app: aquí el nombre hace de ID

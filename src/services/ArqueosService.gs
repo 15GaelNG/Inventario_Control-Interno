@@ -567,7 +567,7 @@ const ArqueosService = (function () {
       // Si ya había una firma por liga (completa o pendiente) para este lado, se descarta.
       if (fila[col.firma]) {
         const fileId = extraerIdDrive_(fila[col.firma]);
-        if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ } }
+        if (fileId) { try { DriveUtils.aPapelera(DriveApp.getFileById(fileId)); } catch (e) { /* no-op: mejor esfuerzo */ } }
       }
       const tokenNuevo = Utilities.getUuid();
       const cambios = {};
@@ -797,7 +797,8 @@ const ArqueosService = (function () {
     }
     let copia;
     try {
-      copia = plantilla.makeCopy((marcaAgua ? 'Vista previa Arqueo_' : 'Arqueo_') + (fila['ID ARQUEO'] || Utilities.getUuid()), carpeta);
+      copia = DriveUtils.copiar(plantilla, (marcaAgua ? 'Vista previa Arqueo_' : 'Arqueo_') + (fila['ID ARQUEO'] || Utilities.getUuid()),
+        carpeta, { temporal: true });
     } catch (e) {
       throw new Error('Se pudo abrir la plantilla y la carpeta de Arqueos, pero no copiar el documento ahí. La ' +
         'cuenta ' + cuenta() + ' necesita permiso de editor (no solo lector) en la carpeta. Error original: ' + e.message);
@@ -926,7 +927,7 @@ const ArqueosService = (function () {
     try {
       const fecha = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
       const nombrePdf = (fila['ID ARQUEO'] || copia.getName()) + '_ARQUEO_' + fecha + '.pdf';
-      pdfFile = DriveUtils.marcarAutor(carpeta.createFile(pdfBlob).setName(nombrePdf));
+      pdfFile = DriveUtils.crearArchivo(carpeta, pdfBlob, nombrePdf);
       crono.marcar('crear archivo');
     } catch (e) {
       throw new Error('Se generó el PDF pero no se pudo guardar en la carpeta de Arqueos en Drive (' + carpeta.getName() +
@@ -943,7 +944,7 @@ const ArqueosService = (function () {
     }
     crono.marcar('compartir');
     try {
-      DriveApp.getFileById(copia.getId()).setTrashed(true); // ya no se necesita el Doc, solo el PDF
+      DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); // ya no se necesita el Doc, solo el PDF
     } catch (e) {
       // Mejor esfuerzo: el PDF ya se generó y se compartió bien -- que sobreviva el Doc
       // temporal (mínimo) no vale la pena tronar el registro por esto.
@@ -971,7 +972,7 @@ const ArqueosService = (function () {
       throw new Error('El documento se llenó bien, pero no se pudo exportar la vista previa a PDF. La cuenta ' + cuenta() +
         ' necesita permiso de editor en la carpeta de Arqueos. Error original: ' + e.message);
     } finally {
-      try { DriveApp.getFileById(copia.getId()).setTrashed(true); } catch (e) { /* no-op: mejor esfuerzo */ }
+      try { DriveUtils.aPapelera(DriveApp.getFileById(copia.getId()), { temporal: true }); } catch (e) { /* no-op: mejor esfuerzo */ }
     }
   }
 

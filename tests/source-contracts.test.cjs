@@ -624,11 +624,8 @@ test('toda escritura en Drive pasa por DriveUtils (sus primitivas avisan a la bi
   // 28-oct: crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido y las de la API
   // (crearConApi, copiarConApi, reemplazarConApi). Lo temporal (copias de plantillas y de OCR) va con { temporal: true }.
   const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
-  const QUEDAN = {   // solo puede encoger
-    'src/services/AdherenteVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/ArqueosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/ResponsivaVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-  };
+  // Ya no queda ninguno (10-nov): Adherente, Arqueos y Responsiva vehicular se pasaron al integrar la rama de Jorge
+  const QUEDAN = {};   // solo puede encoger
   const ESCRIBE = /\.(createFile|makeCopy|setTrashed|moveTo|createFolder|setContent)\(|Drive\.Files\.(create|update|copy|remove|delete|insert)\(/;
   const sinComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))
