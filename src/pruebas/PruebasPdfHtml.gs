@@ -38,12 +38,18 @@ function pdfHtmlPrueba_(e) {
     'responsiva-celular': (d) => LineasCaptura.datosHtml(comoLineas(d)),
     'inspeccion-celular': (d) => LineasCaptura.datosInspeccionHtml(comoLineas(d)),
     'inspeccion-celular-checklist': (d) => LineasCaptura.datosInspeccionHtml(comoLineas(d)),
+    // La inspección vehicular: el formato de su tipo y las fechas como Date (con segundos), como las lee la app
+    'inspeccion-vehicular': (d, c) => InspeccionHtml.datos(PdfService.datosParaPlantilla_(Object.keys(d).reduce((o, k) => {
+      const f = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?: (\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(typeof d[k] === 'string' ? d[k].trim() : '');
+      o[k] = f ? new Date(+f[3], +f[2] - 1, +f[1], +(f[4] || 0), +(f[5] || 0), +(f[6] || 0)) : d[k];
+      return o;
+    }, {})), c.tipo),
   };
   const adaptar = ADAPTADORES[p.documento] || PdfService.datosParaPlantilla_;
   const salida = [];
   paquete.casos.filter((c) => !p.caso || c.nombre === p.caso).forEach((c) => {
     const t0 = Date.now();
-    const hecho = PdfHtml.pdf(p.documento, adaptar(c.datos), c.firmas);
+    const hecho = PdfHtml.pdf(p.documento, adaptar(c.datos, c), c.firmas);
     const bytes = hecho.blob.getBytes();   // aquí es donde de verdad convierte
     const t1 = Date.now();
     const nombre = 'HTML ' + c.nombre + '.pdf';
@@ -51,7 +57,7 @@ function pdfHtmlPrueba_(e) {
     while (viejos.hasNext()) DriveUtils.aPapelera(viejos.next(), { temporal: true });
     const archivo = DriveUtils.crearArchivo(carpeta, Utilities.newBlob(bytes, 'application/pdf'), nombre, { temporal: true });
     if (p.html) {
-      const html = PdfHtml.llenar(PdfHtml.plantilla(p.documento), adaptar(c.datos), c.firmas, PdfHtml.recursos());
+      const html = PdfHtml.llenar(PdfHtml.plantilla(p.documento), adaptar(c.datos, c), c.firmas, PdfHtml.recursos());
       const viejosHtml = carpeta.getFilesByName(c.nombre + '.html');
       while (viejosHtml.hasNext()) DriveUtils.aPapelera(viejosHtml.next(), { temporal: true });
       DriveUtils.crearArchivo(carpeta, Utilities.newBlob(html, 'text/html'), c.nombre + '.html', { temporal: true });

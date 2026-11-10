@@ -85,6 +85,24 @@ def b64(dr, fid):
     return {'mimeType': meta['mimeType'], 'base64': base64.b64encode(b.getvalue()).decode()}
 
 
+def subir_con_blancos(dr, dir_):
+    """casos.json a la carpeta de prueba con el dibujo en blanco de su tipo en cada vista sin rayar (como hace
+    InspeccionesService con la ruta MODELOS INSPECCION/<TIPO>/<VISTA>.png): así el DEV arma lo mismo que la app"""
+    casos = json.load(open(dir_ / 'casos.json', encoding='utf-8'))
+    for c in casos['casos']:
+        for vista in ('FRONTAL', 'TRASERA', 'IZQUIERDA', 'DERECHA'):
+            col = 'INS ' + vista
+            blanco = dir_ / 'diagramas' / c['tipo'] / f'{vista}.png'
+            if (col not in c['firmas'] or c['datos'].get(col, '').upper().startswith('MODELOS INSPECCION/')) \
+                    and blanco.exists():
+                c['firmas'][col] = {'mimeType': 'image/png', 'base64': base64.b64encode(blanco.read_bytes()).decode()}
+    json.dump(casos, open(dir_ / 'casos.json', 'w', encoding='utf-8'), ensure_ascii=False)
+    destino = comun.carpeta_prueba(dr, DOC)
+    comun.subir(dr, destino, dir_ / 'casos.json', mime='application/json')
+    (dir_ / 'carpeta.txt').write_text(destino)
+    print('casos.json (con los dibujos en blanco) en Drive:', destino)
+
+
 def diagramas(dr, dir_, tipo, t):
     d = dir_ / 'diagramas' / tipo
     d.mkdir(parents=True, exist_ok=True)
@@ -105,6 +123,7 @@ def main():
         for tipo, t in json.load(open(dir_ / 'tipos.json', encoding='utf-8')).items():
             diagramas(dr, dir_, tipo, t)
             print('diagramas:', tipo)
+        subir_con_blancos(dr, dir_)
         return
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 2
     dir_ = comun.carpeta(DOC)
