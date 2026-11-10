@@ -34,6 +34,7 @@ const PdfHtml = (function () {
    */
   const DOCUMENTOS = {
     'responsiva-vehicular': { dev: true, prod: false },
+    'adherente-vehicular': { dev: true, prod: false },
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];

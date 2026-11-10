@@ -36,6 +36,8 @@ const AdherenteVehicularService = (function () {
 
   // Doc de Google con los marcadores <<CAMPO>> (formato F-CI01-047, corregido por el área).
   const PLANTILLA = '1vwDs6mtcGHGVF1RdirqC6Um30QGRclmJXMDoDO0LhMQ';
+  // La misma carta en HTML (src/html/pdf/adherente-vehicular.html, PdfHtml.gs): la usa cuando está encendida
+  const DOCUMENTO_HTML = 'adherente-vehicular';
 
   // Carpetas de Drive (decisión del usuario, 06-oct-2026): las firmas van a la MISMA carpeta
   // que ya usa Responsiva Vehicular (ResponsivaVehicularService.CARPETA_IMAGENES); el PDF
@@ -345,6 +347,7 @@ const AdherenteVehicularService = (function () {
       });
       pdf = PdfService.generar({
         plantillaId: PLANTILLA,
+        html: PdfHtml.encendido(DOCUMENTO_HTML) ? DOCUMENTO_HTML : undefined,
         datos: datosPdf,
         imagenes: imagenesPdf,
         // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA/ADHERENTES)
@@ -568,7 +571,8 @@ const AdherenteVehicularService = (function () {
       'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
     });
     return PdfService.generarVistaPrevia({
-      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
+      plantillaId: PLANTILLA, html: PdfHtml.encendido(DOCUMENTO_HTML) ? DOCUMENTO_HTML : undefined,
+      datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA', ['ADHERENTES']).getId(),
     });
   }
 

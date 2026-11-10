@@ -65,7 +65,7 @@ producción solo con autorización (un contrato cuenta los encendidos en prod). 
 | Documento | Estado |
 |---|---|
 | Responsiva vehicular | igual en 10 de 10; encendida en DEV |
-| Adherente vehicular | pendiente |
+| Adherente vehicular | igual en 10 de 10 (también con 5 renglones de introducción); encendida en DEV. Corregido del Doc: el nombre del jefe salía 9 pt fuera de centro (compartía párrafo con un correo en blanco) |
 | Responsiva de celular | pendiente |
 | Inspección de celular (2 variantes) | pendiente |
 | Inspección vehicular (una plantilla para los 18 tipos) | pendiente |
@@ -150,3 +150,11 @@ copiar. Una por una: **Ejecuciones** → la ejecución (p. ej. `apiLineasGenerar
 - `tests/pdf-expresiones-diferencial.test.cjs`: cada marcador real × 7 juegos de datos (vacío, valores comparados,
   minúsculas y espacios, números, fechas). Vehículos debe dar lo mismo siempre; Líneas es la meta de la fase 2 (todo).
   Arqueo se compara en la fase 5. Una diferencia aceptada va en `ACEPTADAS` con su razón.
+
+**Regla del usuario (10-nov):** basta con que el formato sea igual a la vista (~95 %), no idéntico al punto: los errores
+obvios de las plantillas viejas (un texto descentrado, un encabezado que desplaza todo, un correo en blanco escondido)
+se corrigen en vez de copiarse, y se anotan en la tabla.
+
+**La introducción fluye como en el Doc:** en la responsiva y el adherente vive en una fila de 83.25 pt de alto mínimo,
+centrada; con un nombre o puesto largo crece y empuja todo lo de abajo (pie incluido). La plantilla HTML hace lo mismo
+(`.intro` + `.debajo`): lo de abajo se posiciona contra el final de esa fila, no contra la hoja.

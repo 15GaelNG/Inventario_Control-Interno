@@ -19,6 +19,11 @@
   .palomita { position: absolute; font-size: 9.5pt; line-height: 1; font-family: "MS PGothic", "Segoe UI Symbol", "DejaVu Sans", sans-serif; }
   .pie { position: absolute; left: 0; width: 612pt; background: #05253a; color: #fff; }
   .pie .a { color: #fff; }
+  .flujo { position: absolute; left: 0; width: 612pt; }
+  .intro { margin-left: 14.2pt; width: 588.6pt; height: 83.25pt; border-collapse: collapse; }
+  .intro td { padding: 0; vertical-align: middle; }
+  .parrafo-flujo { text-align: justify; white-space: pre-wrap; }
+  .debajo { position: relative; height: 0; }
   .parrafo { position: absolute; font-size: 9pt; line-height: 16.5pt; text-align: justify; white-space: pre-wrap; }
   .clausulas { position: absolute; left: 50.2pt; width: 547.68pt; top: 40.125pt; font-size: 7pt; line-height: 12.75pt; text-align: justify; }
   .clausulas .c { position: relative; }
@@ -41,84 +46,90 @@
   <div class="a f10" style="right:9.1pt;top:82.5pt">Querétaro, Qro. a <span class="v">{{DIA}}</span> de <span class="v">{{MES}}</span> de <span class="v">{{AÑO}}</span><span class="f11">.</span></div>
   <div class="a f9" style="left:179.2pt;top:102.2pt">NUCO:<span class="f10" style="line-height:0"> </span><span class="f8 v">{{NUCCO}}</span><span class="f10" style="line-height:0"> </span>Sede y oficina:<span class="f10" style="line-height:0"> </span><span class="f8 v">{{SEDE}}</span> / <span class="f8 v">{{OFICINA / DESARROLLO}}</span></div>
 
-  <div class="parrafo" style="left:14.2pt;width:588.6pt;top:131.05pt">Yo, <span class="v">{{RESPONSABLE}}</span>  colaborador (a) del departamento  de <span class="v">{{DEPARTAMENTO}}</span> en el área de <span class="v">{{AREA}}</span>, en función de mi puesto como  <span class="v">{{PUESTO}}</span>, para el grupo comercial denominado Ciudad Maderas y/o cualquier otra razón social perteneciente a dicho grupo comercial, acepto y firmo de conformidad la presente responsabilidad vehicular en el tenor de los siguientes compromisos e información detallada.</div>
+  <!-- La introducción vive en una fila de 83.25 pt de alto mínimo, centrada (como en el Doc): con más renglones crece
+       y empuja todo lo de abajo, que cuelga del final de esta fila -->
+  <div class="flujo" style="top:122.425pt">
+    <table class="intro"><tr><td><div class="parrafo-flujo" style="font-size:9pt;line-height:16.5pt">Yo, <span class="v">{{RESPONSABLE}}</span>  colaborador (a) del departamento  de <span class="v">{{DEPARTAMENTO}}</span> en el área de <span class="v">{{AREA}}</span>, en función de mi puesto como  <span class="v">{{PUESTO}}</span>, para el grupo comercial denominado Ciudad Maderas y/o cualquier otra razón social perteneciente a dicho grupo comercial, acepto y firmo de conformidad la presente responsabilidad vehicular en el tenor de los siguientes compromisos e información detallada.</div></td></tr></table>
+    <div class="debajo">
 
-  <div class="a f9 b" style="left:17.2pt;top:210pt">INFORMACIÓN DEL VEHÍCULO</div>
-  <div class="a f9" style="left:17.2pt;top:226.5pt">Marca: <span class="v">{{MARCA}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:243pt">Tipo: <span class="v">{{CLASE}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:259.5pt">Año: <span class="v">{{MODELO}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:276pt">Color: <span class="v">{{COLOR}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:295.1pt">No. de Serie: <span class="v">{{SERIE VEHICULO}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:315pt">Placa: <span class="v">{{PLACA}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:334.5pt">Lugar de resguardo: <span class="v">{{LUGAR DE RESGUARDO}}</span></div>
-  <div class="a f9" style="left:17.2pt;top:355.5pt">Razón Social: <span class="v">{{RAZON SOCIAL}}</span></div>
+    <div class="a f9 b" style="left:17.2pt;top:4.325pt">INFORMACIÓN DEL VEHÍCULO</div>
+    <div class="a f9" style="left:17.2pt;top:20.825pt">Marca: <span class="v">{{MARCA}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:37.325pt">Tipo: <span class="v">{{CLASE}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:53.825pt">Año: <span class="v">{{MODELO}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:70.325pt">Color: <span class="v">{{COLOR}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:89.425pt">No. de Serie: <span class="v">{{SERIE VEHICULO}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:109.325pt">Placa: <span class="v">{{PLACA}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:128.825pt">Lugar de resguardo: <span class="v">{{LUGAR DE RESGUARDO}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:149.825pt">Razón Social: <span class="v">{{RAZON SOCIAL}}</span></div>
 
-  <div class="a f9 b" style="left:294.7pt;top:210pt">DOCUMENTACIÓN</div>
-  <div class="a f9" style="left:294.7pt;top:226.5pt">Tarjeta de circulación : <span class="v">{{TARJETA DE CIRCULACION}}</span></div>
-  <div class="a f9" style="left:294.7pt;top:243pt">Licencia : <span class="v">{{LICENCIA}}</span></div>
-  <div class="a f9" style="left:294.7pt;top:259.5pt">Vigencia: <span class="v">{{VIGENCIA LICENCIA}}</span></div>
-  <div class="a f9" style="left:294.7pt;top:276pt">INE : <span class="v">{{INE}}</span></div>
-  <div class="a f9" style="left:294.7pt;top:295.1pt">No. de Inventario : <span class="v">{{NO DE INVENTARIO}}</span></div>
-  <div class="a f9" style="left:294.7pt;top:315pt">Póliza de seguro : <span class="v">{{POLIZA DE SEGURO}}</span></div>
-  <div class="a f9" style="left:294.7pt;top:335.6pt">Vigencia de poliza : <span class="v">{{VIGENCIA POLIZA}}</span></div>
+    <div class="a f9 b" style="left:294.7pt;top:4.325pt">DOCUMENTACIÓN</div>
+    <div class="a f9" style="left:294.7pt;top:20.825pt">Tarjeta de circulación : <span class="v">{{TARJETA DE CIRCULACION}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:37.325pt">Licencia : <span class="v">{{LICENCIA}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:53.825pt">Vigencia: <span class="v">{{VIGENCIA LICENCIA}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:70.325pt">INE : <span class="v">{{INE}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:89.425pt">No. de Inventario : <span class="v">{{NO DE INVENTARIO}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:109.325pt">Póliza de seguro : <span class="v">{{POLIZA DE SEGURO}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:129.925pt">Vigencia de poliza : <span class="v">{{VIGENCIA POLIZA}}</span></div>
 
-  <div class="a f9" style="left:19.4pt;top:391.5pt">El vehículo se entrega</div>
-  <div class="a f8" style="left:150.8pt;top:391.6pt">SI</div>
-  <div class="a f8" style="left:192.2pt;top:391.6pt">NO</div>
-  <div class="a f8" style="left:298.4pt;top:391.6pt">Observaciones adicionales</div>
+    <div class="a f9" style="left:19.4pt;top:185.825pt">El vehículo se entrega</div>
+    <div class="a f8" style="left:150.8pt;top:185.925pt">SI</div>
+    <div class="a f8" style="left:192.2pt;top:185.925pt">NO</div>
+    <div class="a f8" style="left:298.4pt;top:185.925pt">Observaciones adicionales</div>
 
-  <!-- Casillas: 13 renglones de 24 pt desde 408.7 pt; la raya blanca de 1 pt entre celdas queda como hueco -->
-  <div class="celda" style="left:132pt;top:409pt"></div><div class="celda" style="left:177pt;top:409pt"></div>
-  <div class="celda" style="left:132pt;top:433pt"></div><div class="celda" style="left:177pt;top:433pt"></div>
-  <div class="celda" style="left:132pt;top:457pt"></div><div class="celda" style="left:177pt;top:457pt"></div>
-  <div class="celda" style="left:132pt;top:481pt"></div><div class="celda" style="left:177pt;top:481pt"></div>
-  <div class="celda" style="left:132pt;top:505pt"></div><div class="celda" style="left:177pt;top:505pt"></div>
-  <div class="celda" style="left:132pt;top:529pt"></div><div class="celda" style="left:177pt;top:529pt"></div>
-  <div class="celda" style="left:132pt;top:553pt"></div><div class="celda" style="left:177pt;top:553pt"></div>
-  <div class="celda" style="left:132pt;top:577pt"></div><div class="celda" style="left:177pt;top:577pt"></div>
-  <div class="celda" style="left:132pt;top:601pt"></div><div class="celda" style="left:177pt;top:601pt"></div>
-  <div class="celda" style="left:132pt;top:625pt"></div><div class="celda" style="left:177pt;top:625pt"></div>
-  <div class="celda" style="left:132pt;top:649pt"></div><div class="celda" style="left:177pt;top:649pt"></div>
-  <div class="celda" style="left:132pt;top:673pt"></div><div class="celda" style="left:177pt;top:673pt"></div>
-  <div class="celda" style="left:132pt;top:697pt"></div><div class="celda" style="left:177pt;top:697pt"></div>
-  <div class="caja" style="left:132pt;top:721pt;width:161.2pt;height:29pt;background:#ddebf6"></div>
-  <div class="caja" style="left:293.2pt;top:432.7pt;width:306pt;height:288pt;background:#ddebf6"></div>
+    <!-- Casillas: 13 renglones de 24 pt desde 408.7 pt; la raya blanca de 1 pt entre celdas queda como hueco -->
+    <div class="celda" style="left:132pt;top:203.325pt"></div><div class="celda" style="left:177pt;top:203.325pt"></div>
+    <div class="celda" style="left:132pt;top:227.325pt"></div><div class="celda" style="left:177pt;top:227.325pt"></div>
+    <div class="celda" style="left:132pt;top:251.325pt"></div><div class="celda" style="left:177pt;top:251.325pt"></div>
+    <div class="celda" style="left:132pt;top:275.325pt"></div><div class="celda" style="left:177pt;top:275.325pt"></div>
+    <div class="celda" style="left:132pt;top:299.325pt"></div><div class="celda" style="left:177pt;top:299.325pt"></div>
+    <div class="celda" style="left:132pt;top:323.325pt"></div><div class="celda" style="left:177pt;top:323.325pt"></div>
+    <div class="celda" style="left:132pt;top:347.325pt"></div><div class="celda" style="left:177pt;top:347.325pt"></div>
+    <div class="celda" style="left:132pt;top:371.325pt"></div><div class="celda" style="left:177pt;top:371.325pt"></div>
+    <div class="celda" style="left:132pt;top:395.325pt"></div><div class="celda" style="left:177pt;top:395.325pt"></div>
+    <div class="celda" style="left:132pt;top:419.325pt"></div><div class="celda" style="left:177pt;top:419.325pt"></div>
+    <div class="celda" style="left:132pt;top:443.325pt"></div><div class="celda" style="left:177pt;top:443.325pt"></div>
+    <div class="celda" style="left:132pt;top:467.325pt"></div><div class="celda" style="left:177pt;top:467.325pt"></div>
+    <div class="celda" style="left:132pt;top:491.325pt"></div><div class="celda" style="left:177pt;top:491.325pt"></div>
+    <div class="caja" style="left:132pt;top:515.325pt;width:161.2pt;height:29pt;background:#ddebf6"></div>
+    <div class="caja" style="left:293.2pt;top:227.025pt;width:306pt;height:288pt;background:#ddebf6"></div>
 
-  <div class="a f8" style="left:19.4pt;top:412.6pt">Gato hidráulico</div>
-  <div class="a f8" style="left:19.4pt;top:436.6pt">Gato mecanico</div>
-  <div class="a f8" style="left:19.4pt;top:460.6pt">Llave de cruz</div>
-  <div class="a f8" style="left:19.4pt;top:484.6pt">Maneral</div>
-  <div class="a f8" style="left:19.4pt;top:508.6pt">Llanta de refacción</div>
-  <div class="a f8" style="left:19.4pt;top:532.6pt">Kit de seguridad</div>
-  <div class="a f8" style="left:19.4pt;top:556.6pt">Parasol</div>
-  <div class="a f8" style="left:19.4pt;top:580.6pt">Tapetes uso rudo</div>
-  <div class="a f8" style="left:19.4pt;top:604.6pt">Tapetes alfombra</div>
-  <div class="a f8" style="left:19.4pt;top:628.6pt">Cubre volante</div>
-  <div class="a f8" style="left:19.4pt;top:652.6pt">Cubre asientos</div>
-  <div class="a f8" style="left:19.4pt;top:676.6pt">Bed liner</div>
-  <div class="a f8" style="left:19.4pt;top:700.6pt">Cubierta de batea</div>
-  <div class="a f8" style="left:19.4pt;top:724.6pt">Otros:</div>
-  <div class="a f7" style="left:136.4pt;top:725.5pt">{{OTROS}}</div>
-  <div class="a f8" style="left:298.4pt;top:436.7pt;width:296pt;white-space:pre-wrap">{{OBSERVACIONES}}</div>
+    <div class="a f8" style="left:19.4pt;top:206.925pt">Gato hidráulico</div>
+    <div class="a f8" style="left:19.4pt;top:230.925pt">Gato mecanico</div>
+    <div class="a f8" style="left:19.4pt;top:254.925pt">Llave de cruz</div>
+    <div class="a f8" style="left:19.4pt;top:278.925pt">Maneral</div>
+    <div class="a f8" style="left:19.4pt;top:302.925pt">Llanta de refacción</div>
+    <div class="a f8" style="left:19.4pt;top:326.925pt">Kit de seguridad</div>
+    <div class="a f8" style="left:19.4pt;top:350.925pt">Parasol</div>
+    <div class="a f8" style="left:19.4pt;top:374.925pt">Tapetes uso rudo</div>
+    <div class="a f8" style="left:19.4pt;top:398.925pt">Tapetes alfombra</div>
+    <div class="a f8" style="left:19.4pt;top:422.925pt">Cubre volante</div>
+    <div class="a f8" style="left:19.4pt;top:446.925pt">Cubre asientos</div>
+    <div class="a f8" style="left:19.4pt;top:470.925pt">Bed liner</div>
+    <div class="a f8" style="left:19.4pt;top:494.925pt">Cubierta de batea</div>
+    <div class="a f8" style="left:19.4pt;top:518.925pt">Otros:</div>
+    <div class="a f7" style="left:136.4pt;top:519.825pt">{{OTROS}}</div>
+    <div class="a f8" style="left:298.4pt;top:231.025pt;width:296pt;white-space:pre-wrap">{{OBSERVACIONES}}</div>
 
-  <div class="palomita" style="left:148.8pt;top:415.6pt">{{SI:GATO HIDRAULICO}}</div><div class="palomita" style="left:193.8pt;top:415.6pt">{{NO:GATO HIDRAULICO}}</div>
-  <div class="palomita" style="left:148.8pt;top:439.6pt">{{SI:GATO MECANICO}}</div><div class="palomita" style="left:193.8pt;top:439.6pt">{{NO:GATO MECANICO}}</div>
-  <div class="palomita" style="left:148.8pt;top:463.6pt">{{SI:LLAVE CRUZ}}</div><div class="palomita" style="left:193.8pt;top:463.6pt">{{NO:LLAVE CRUZ}}</div>
-  <div class="palomita" style="left:148.8pt;top:487.6pt">{{SI:MANERAL}}</div><div class="palomita" style="left:193.8pt;top:487.6pt">{{NO:MANERAL}}</div>
-  <div class="palomita" style="left:148.8pt;top:511.6pt">{{SI:LLANTA REFACCION}}</div><div class="palomita" style="left:193.8pt;top:511.6pt">{{NO:LLANTA REFACCION}}</div>
-  <div class="palomita" style="left:148.8pt;top:535.6pt">{{SI:KIT SEGURIDAD}}</div><div class="palomita" style="left:193.8pt;top:535.6pt">{{NO:KIT SEGURIDAD}}</div>
-  <div class="palomita" style="left:148.8pt;top:559.6pt">{{SI:PARASOL}}</div><div class="palomita" style="left:193.8pt;top:559.6pt">{{NO:PARASOL}}</div>
-  <div class="palomita" style="left:148.8pt;top:583.6pt">{{SI:TAPETES RUDO}}</div><div class="palomita" style="left:193.8pt;top:583.6pt">{{NO:TAPETES RUDO}}</div>
-  <div class="palomita" style="left:148.8pt;top:607.6pt">{{SI:TAPETES ALFOMBRA}}</div><div class="palomita" style="left:193.8pt;top:607.6pt">{{NO:TAPETES ALFOMBRA}}</div>
-  <div class="palomita" style="left:148.8pt;top:631.6pt">{{SI:CUBRE VOLANTE}}</div><div class="palomita" style="left:193.8pt;top:631.6pt">{{NO:CUBRE VOLANTE}}</div>
-  <div class="palomita" style="left:148.8pt;top:655.6pt">{{SI:CUBRE ASIENTOS}}</div><div class="palomita" style="left:193.8pt;top:655.6pt">{{NO:CUBRE ASIENTOS}}</div>
-  <div class="palomita" style="left:148.8pt;top:679.6pt">{{SI:BED LINER}}</div><div class="palomita" style="left:193.8pt;top:679.6pt">{{NO:BED LINER}}</div>
-  <div class="palomita" style="left:148.8pt;top:703.6pt">{{SI:CUBIERTA BATEA}}</div><div class="palomita" style="left:193.8pt;top:703.6pt">{{NO:CUBIERTA BATEA}}</div>
+    <div class="palomita" style="left:148.8pt;top:209.925pt">{{SI:GATO HIDRAULICO}}</div><div class="palomita" style="left:193.8pt;top:209.925pt">{{NO:GATO HIDRAULICO}}</div>
+    <div class="palomita" style="left:148.8pt;top:233.925pt">{{SI:GATO MECANICO}}</div><div class="palomita" style="left:193.8pt;top:233.925pt">{{NO:GATO MECANICO}}</div>
+    <div class="palomita" style="left:148.8pt;top:257.925pt">{{SI:LLAVE CRUZ}}</div><div class="palomita" style="left:193.8pt;top:257.925pt">{{NO:LLAVE CRUZ}}</div>
+    <div class="palomita" style="left:148.8pt;top:281.925pt">{{SI:MANERAL}}</div><div class="palomita" style="left:193.8pt;top:281.925pt">{{NO:MANERAL}}</div>
+    <div class="palomita" style="left:148.8pt;top:305.925pt">{{SI:LLANTA REFACCION}}</div><div class="palomita" style="left:193.8pt;top:305.925pt">{{NO:LLANTA REFACCION}}</div>
+    <div class="palomita" style="left:148.8pt;top:329.925pt">{{SI:KIT SEGURIDAD}}</div><div class="palomita" style="left:193.8pt;top:329.925pt">{{NO:KIT SEGURIDAD}}</div>
+    <div class="palomita" style="left:148.8pt;top:353.925pt">{{SI:PARASOL}}</div><div class="palomita" style="left:193.8pt;top:353.925pt">{{NO:PARASOL}}</div>
+    <div class="palomita" style="left:148.8pt;top:377.925pt">{{SI:TAPETES RUDO}}</div><div class="palomita" style="left:193.8pt;top:377.925pt">{{NO:TAPETES RUDO}}</div>
+    <div class="palomita" style="left:148.8pt;top:401.925pt">{{SI:TAPETES ALFOMBRA}}</div><div class="palomita" style="left:193.8pt;top:401.925pt">{{NO:TAPETES ALFOMBRA}}</div>
+    <div class="palomita" style="left:148.8pt;top:425.925pt">{{SI:CUBRE VOLANTE}}</div><div class="palomita" style="left:193.8pt;top:425.925pt">{{NO:CUBRE VOLANTE}}</div>
+    <div class="palomita" style="left:148.8pt;top:449.925pt">{{SI:CUBRE ASIENTOS}}</div><div class="palomita" style="left:193.8pt;top:449.925pt">{{NO:CUBRE ASIENTOS}}</div>
+    <div class="palomita" style="left:148.8pt;top:473.925pt">{{SI:BED LINER}}</div><div class="palomita" style="left:193.8pt;top:473.925pt">{{NO:BED LINER}}</div>
+    <div class="palomita" style="left:148.8pt;top:497.925pt">{{SI:CUBIERTA BATEA}}</div><div class="palomita" style="left:193.8pt;top:497.925pt">{{NO:CUBIERTA BATEA}}</div>
 
-  <div class="pie" style="top:758pt;height:26pt;left:6pt;width:606pt"></div>
-  <div class="a f10 b" style="left:38.9pt;top:762.6pt;color:#fff;white-space:pre">CONTÁCTENOS:  442 103 4451</div>
-  <div class="a f10" style="left:295.4pt;top:762.6pt;color:#fff">gestorvehicular.ft@ciudadmaderas.com</div>
-  <div class="a f10 b" style="left:531.7pt;top:762.6pt;color:#fff;white-space:pre">        F-CI01-045</div>
+    <div class="pie" style="top:552.325pt;height:26pt;left:6pt;width:606pt"></div>
+    <div class="a f10 b" style="left:38.9pt;top:556.925pt;color:#fff;white-space:pre">CONTÁCTENOS:  442 103 4451</div>
+    <div class="a f10" style="left:295.4pt;top:556.925pt;color:#fff">gestorvehicular.ft@ciudadmaderas.com</div>
+    <div class="a f10 b" style="left:531.7pt;top:556.925pt;color:#fff;white-space:pre">        F-CI01-045</div>
+    </div>
+  </div>
 </div>
 
 <div class="hoja">

@@ -80,10 +80,18 @@ test('la plantilla de la responsiva vehicular: carta, sin redondeo de letras, su
     .forEach((m) => assert.ok(html.includes('{{' + m + '}}'), m));
 });
 
-test('cada documento encendido tiene su plantilla, y en producción ninguno se enciende sin autorización', () => {
+test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras), y en producción ninguno sin autorización', () => {
   Object.keys(PdfHtml.DOCUMENTOS).forEach((d) => {
-    assert.ok(fs.existsSync(path.join(raiz, 'src/html/pdf', d + '.html')), d + ': falta src/html/pdf/' + d + '.html');
+    const archivo = path.join(raiz, 'src/html/pdf', d + '.html');
+    assert.ok(fs.existsSync(archivo), d + ': falta src/html/pdf/' + d + '.html');
+    const html = fs.readFileSync(archivo, 'utf8');
+    assert.match(html, /@page \{ size: 612pt 792pt; margin: 0; \}/, d);
+    assert.match(html, /text-rendering: geometricPrecision/, d);
+    // Un marcador dentro del CSS lo tira el compresor: las tipografías las pone llenar()
+    assert.doesNotMatch(html.slice(html.indexOf('<style>'), html.indexOf('</style>')), /\{\{/, d + ': un marcador dentro del CSS');
   });
+  ['ADHERENTE', 'IMG:FIRMA ADHERENTE:150x60', 'NOMBRE JEFE', 'ESTADO DE ENTREGA'].forEach((m) =>
+    assert.ok(fs.readFileSync(path.join(raiz, 'src/html/pdf/adherente-vehicular.html'), 'utf8').includes('{{' + m + '}}'), 'adherente: ' + m));
   // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza
   assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 0);
 });

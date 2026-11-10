@@ -26,6 +26,12 @@ DOCUMENTOS = {
         'firmas': ['FIRMA RESPONSABLE', 'FIRMA JEFE', 'FIRMA CI'], 'pagina_firmas': 1,
         'fecha_en_pdf': True,   # DIA / MES / AÑO salen del día en que se firmó (el que dice el PDF)
     },
+    'adherente-vehicular': {
+        'libro': LIBRO_VEHICULOS, 'hoja': 'ADHERENTE VEHICULAR', 'pdf': 'PDF', 'fecha': 'FECHA',
+        'plantilla': '1vwDs6mtcGHGVF1RdirqC6Um30QGRclmJXMDoDO0LhMQ',
+        'firmas': ['FIRMA ADHERENTE', 'FIRMA JEFE', 'FIRMA CI'], 'pagina_firmas': -1,   # la última hoja
+        'fecha_en_pdf': True,
+    },
 }
 
 
