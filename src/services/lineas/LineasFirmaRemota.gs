@@ -74,12 +74,14 @@ const LineasFirmaRemota = (function () {
   function colTokenExpira_(rol) { return colToken_(rol) + ' EXPIRA'; }
   function colTemp_(doc, rol) { return marcadorFirma_(doc, rol) + ' TEMP'; }
   function colFirmadoPor_(rol) { return rol === 'PRINCIPAL' ? 'FIRMADO POR' : 'FIRMADO POR ' + rol; }
+  /** El correo de quien capturó y mandó a firmar: a él le llega el aviso cuando ya firmaron todos (usuario, 10-nov). */
+  const COL_ENVIADO_POR = 'ENVIADO A FIRMA POR';
 
   /** Todas las columnas que puede llegar a usar un documento con firma a distancia (para asegurarColumnas). */
   function columnasNuevas_(doc) {
     const cols = ['ESTADO FIRMA'];
     ROLES_DIFERIBLES.forEach((rol) => { cols.push(colToken_(rol), colTokenExpira_(rol), colTemp_(doc, rol), colFirmadoPor_(rol)); });
-    cols.push(colTemp_(doc, 'CI'));
+    cols.push(colTemp_(doc, 'CI'), COL_ENVIADO_POR);
     return cols;
   }
 
@@ -146,8 +148,9 @@ const LineasFirmaRemota = (function () {
    * que no se haya diferido). Regresa los cambios a fusionar en la fila antes de
    * `LineasDatos.agregarFilas`.
    */
-  function generarPendientes_(doc, roles, imagenesYaCapturadas) {
+  function generarPendientes_(doc, roles, imagenesYaCapturadas, correoCapturo) {
     const cambios = { 'ESTADO FIRMA': 'PENDIENTE' };
+    if (correoCapturo) cambios[COL_ENVIADO_POR] = String(correoCapturo).trim().toLowerCase();
     const expira = new Date(Date.now() + FIRMA_REMOTA_DIAS_VIGENCIA * 24 * 60 * 60 * 1000);
     roles.forEach((rol) => {
       cambios[colToken_(rol)] = Utilities.getUuid();
@@ -333,8 +336,44 @@ const LineasFirmaRemota = (function () {
     TODOS_LOS_ROLES.forEach((r) => borrarFirmaTempSiHay_(fila[colTemp_(doc, r)]));
     LineasDatos.actualizarFila(doc.tabla(), fila._fila, Object.assign({ 'ESTADO FIRMA': 'FIRMADO' },
       TODOS_LOS_ROLES.reduce((o, r) => Object.assign(o, { [colTemp_(doc, r)]: '' }), {})));
+    avisarFirmado_(doc, fila, resultado, firmadoPor);
     return { ID: fila['ID'], pendiente: false, PDF: resultado && resultado.url ? resultado.url : null,
       pdfId: resultado && resultado.id ? resultado.id : null };
+  }
+
+  /**
+   * Ya firmaron todos: aviso por correo a quien capturó y mandó a firmar (ENVIADO A FIRMA POR), con el PDF. No se manda
+   * si la última firma la recibió esa misma persona con "Firmar aquí" (ya lo está viendo en su pantalla), ni a los
+   * documentos que se mandaron a firmar antes de existir la columna. Nunca truena: la firma ya quedó guardada.
+   */
+  function avisarFirmado_(doc, fila, resultado, firmadoPor) {
+    try {
+      const para = String(fila[COL_ENVIADO_POR] || '').trim().toLowerCase();
+      if (!para || para.indexOf('@') < 0) return;
+      if (String(firmadoPor || '').toLowerCase() === 'presencial: ' + para) return;
+      const esc = Correos.esc;
+      const nuco = LineasUtil.nucoVisible(fila['NUCO']) || '';
+      const quien = String(fila[columnaNombre_(doc, 'PRINCIPAL')] || '').trim();
+      const firmaron = ROLES_DIFERIBLES.filter((rol) => fila[colFirmadoPor_(rol)])
+        .map((rol) => String(fila[columnaNombre_(doc, rol)] || '').trim()).filter(Boolean);
+      const detalle = [['Documento', doc.documento]];
+      if (nuco) detalle.push(['NUCO', nuco]);
+      if (quien) detalle.push(['Responsable', quien]);
+      if (firmaron.length) detalle.push([firmaron.length > 1 ? 'Firmaron a distancia' : 'Firmó a distancia', firmaron.join(', ')]);
+      detalle.push(['Folio', String(fila['ID'] || '')]);
+      const que = doc.tipoPdf === 'INSPECCION' ? 'La inspección' : 'La responsiva';
+      MailApp.sendEmail(Correos.mensaje(para, que + (nuco ? ' del NUCO ' + nuco : '') + ' ya está firmada', {
+        preencabezado: 'Ya firmaron todos; el PDF quedó generado.',
+        etiqueta: 'Firma a distancia',
+        titulo: que + ' ya está firmada',
+        parrafos: [que + ' que mandaste a firmar' + (quien ? ' a <b>' + esc(quien) + '</b>' : '') +
+          ' ya tiene todas sus firmas. El PDF quedó generado y guardado en su carpeta.'],
+        detalle: detalle,
+        boton: resultado && resultado.url ? { texto: 'Ver PDF', url: resultado.url } : undefined,
+      }));
+    } catch (e) {
+      console.error('avisarFirmado_ ' + fila['ID'] + ': ' + (e && e.message ? e.message : e));
+    }
   }
 
   /**
@@ -434,6 +473,6 @@ const LineasFirmaRemota = (function () {
     copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
-    _base64DeImagen: base64DeImagen_,
+    _base64DeImagen: base64DeImagen_, COL_ENVIADO_POR: COL_ENVIADO_POR,
   };
 })();

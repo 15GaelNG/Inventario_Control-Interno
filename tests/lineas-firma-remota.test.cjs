@@ -21,6 +21,7 @@ function entorno(filasIniciales) {
   const drive = new Map(); // id -> { bytes: Buffer, mimeType }
   let siguienteId = 1;
   const llamadasGenerarPdf = [];
+  const correos = [];
 
   const archivo = (id) => {
     const a = drive.get(id);
@@ -53,6 +54,11 @@ function entorno(filasIniciales) {
     ScriptApp: { getService: () => ({ getUrl: () => 'https://dev.exec' }) },
     Session: { getActiveUser: () => ({ getEmail: () => 'quien-firma@x.com' }) },
     Permisos: { puedeEditar: () => ({ nombre: 'OPERADOR' }) },
+    MailApp: { sendEmail: (m) => correos.push(m) },
+    Correos: {
+      esc: (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'),
+      mensaje: (para, asunto, o) => ({ to: para, subject: asunto, o: o }),
+    },
     LineasRepo: { TAB: { RESP: 'RESPONSIVAS LINEAS', INSP: 'INSPECCIONES LINEAS' } },
     LineasDatos: {
       leerTabla: (nombre) => { if (nombre !== 'RESPONSIVAS LINEAS') throw new Error('tabla inesperada'); return filas; },
@@ -84,7 +90,7 @@ function entorno(filasIniciales) {
     },
   });
   vm.runInContext(read('src/services/lineas/LineasFirmaRemota.gs') + '\nthis.F = LineasFirmaRemota;', ctx);
-  return { F: ctx.F, DOC: ctx.F.DOCUMENTOS.RESPONSIVA, filas: filas, drive: drive, llamadasGenerarPdf: llamadasGenerarPdf };
+  return { F: ctx.F, DOC: ctx.F.DOCUMENTOS.RESPONSIVA, filas: filas, drive: drive, llamadasGenerarPdf: llamadasGenerarPdf, correos: correos, ctx: ctx };
 }
 
 test('generarPendientes_: sin diferir nada no hay nada que hacer (0 roles)', () => {
@@ -340,7 +346,7 @@ test('guardarResponsiva/guardarResponsivaEnCandado_: diferir no afecta el camino
   // El insert de la fila (contrato de lineas-responsiva-unica.test.cjs) no cambió: el parche de firma va DESPUÉS
   assert.match(candado, /LineasDatos\.agregarFilas\(LineasRepo\.TAB\.RESP, \[fila\]\);\s*\/\/ Firma a distancia/);
   assert.match(candado, /if \(diferir && diferir\.length\) \{/);
-  assert.match(candado, /LineasFirmaRemota\.generarPendientes_\(DOC, diferir, imagenesYaCapturadas\)/);
+  assert.match(candado, /LineasFirmaRemota\.generarPendientes_\(DOC, diferir, imagenesYaCapturadas, usuario && usuario\.correo\)/);
   assert.match(candado, /LineasDatos\.asegurarColumnas\(LineasRepo\.TAB\.RESP, LineasFirmaRemota\.columnasNuevas_\(DOC\)\)/);
   assert.match(candado, /ligas = LineasFirmaRemota\.ligasDe_\(DOC, cambiosFirma\)/);
   assert.match(candado, /return \{ obj: obj, hecho: hecho, ligas: ligas \};/);
@@ -351,7 +357,7 @@ test('guardarInspeccion: mismo mecanismo de diferir que la Responsiva (usuario, 
   const fn = cap.slice(cap.indexOf('function guardarInspeccion('), cap.indexOf('function rolesADiferir_('));
   assert.match(fn, /const diferir = rolesADiferir_\(datos, datos\.valores \|\| \{\}\);/);
   assert.match(fn, /LineasFirmaRemota\.DOCUMENTOS\.INSPECCION/);
-  assert.match(fn, /LineasFirmaRemota\.generarPendientes_\(DOC, diferir, imagenesYaCapturadas\)/);
+  assert.match(fn, /LineasFirmaRemota\.generarPendientes_\(DOC, diferir, imagenesYaCapturadas, usuario && usuario\.correo\)/);
   assert.match(fn, /if \(diferir\.length\) \{[\s\S]*?return \{ id: id, pendiente: true, ligas: res\.ligas \|\| \{\}, filas: filas \};/);
   // El camino de siempre (nada diferido) sigue exactamente igual
   assert.match(fn, /firmasCache_\('INSPECCION', id, \{ inspector: datos\.firmaInspectorBase64, responsable: datos\.firmaResponsableBase64 \|\| null, patron: datos\.patronBase64 \|\| null,/);
@@ -390,4 +396,63 @@ test('firmarPresencial: rol inválido, sin firma o documento inexistente truenan
   assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-1', 'CI', 'x'), /Rol inválido/);
   assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-1', 'PRINCIPAL', ''), /Falta la firma/);
   assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-9', 'PRINCIPAL', 'eA=='), /No se encontró/);
+});
+
+test('aviso por correo (usuario, 10-nov): cuando ya firmaron todos, a quien capturó y mandó a firmar, con el PDF', () => {
+  const { F, DOC, filas, correos } = entorno([]);
+  const trazo = (texto) => Buffer.from(texto).toString('base64');
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL', 'SEGUNDO'], { CI: trazo('ci') }, ' Ejecutivo@CiudadMaderas.com ');
+  assert.equal(cambios[F.COL_ENVIADO_POR], 'ejecutivo@ciudadmaderas.com');
+  assert.ok(F.columnasNuevas_(DOC).indexOf(F.COL_ENVIADO_POR) >= 0, 'asegurarColumnas la crea');
+  filas.push(Object.assign({ _fila: 2, ID: 'RES-1', NUCO: 669, RESPONSABLE: 'ANDREA <LOPEZ>', 'NOMBRE SEGUNDO RESPONSABLE': 'AYRTON',
+    'ESTADO FIRMA': 'PENDIENTE' }, cambios));
+
+  // Falta alguien: no sale nada
+  F.completarFirma(DOC, cambios['TOKEN FIRMA'], trazo('p'));
+  assert.equal(correos.length, 0);
+  // La última firma: un correo, a quien capturó
+  F.completarFirma(DOC, cambios['TOKEN FIRMA SEGUNDO'], trazo('s'));
+  assert.equal(correos.length, 1);
+  const m = correos[0];
+  assert.equal(m.to, 'ejecutivo@ciudadmaderas.com');
+  assert.match(m.subject, /responsiva del NUCO 0669 ya está firmada/);
+  assert.equal(m.o.boton.url, 'https://drive/pdf-final-RES-1');
+  assert.match(m.o.parrafos[0], /ANDREA &lt;LOPEZ&gt;/, 'el nombre va escapado');
+  const detalle = Object.fromEntries(m.o.detalle);
+  assert.equal(detalle['Firmaron a distancia'], 'ANDREA <LOPEZ>, AYRTON');
+  assert.equal(detalle.Folio, 'RES-1');
+});
+
+test('aviso por correo: no sale sin quién capturó (documentos de antes), ni si la última firma la recibió esa persona; si el correo falla, la firma queda', () => {
+  const trazo = (texto) => Buffer.from(texto).toString('base64');
+  // Antes de la columna: nada
+  const a = entorno([]);
+  const c1 = a.F.generarPendientes_(a.DOC, ['PRINCIPAL'], { CI: trazo('ci') });
+  a.filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, c1));
+  assert.equal(a.F.completarFirma(a.DOC, c1['TOKEN FIRMA'], trazo('p')).pendiente, false);
+  assert.equal(a.correos.length, 0);
+
+  // "Firmar aquí" con la sesión de quien capturó: ya lo ve en su pantalla
+  const b = entorno([]);
+  b.ctx.Permisos.puedeEditar = () => ({ correo: 'ejecutivo@x.com', nombre: 'EJECUTIVO' });
+  const c2 = b.F.generarPendientes_(b.DOC, ['PRINCIPAL'], { CI: trazo('ci') }, 'ejecutivo@x.com');
+  b.filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, c2));
+  b.F.firmarPresencial(b.DOC, 'sesion', 'RES-1', 'PRINCIPAL', trazo('p'));
+  assert.equal(b.correos.length, 0);
+
+  // "Firmar aquí" con otra sesión: sí le avisa
+  const d = entorno([]);
+  const c3 = d.F.generarPendientes_(d.DOC, ['PRINCIPAL'], { CI: trazo('ci') }, 'ejecutivo@x.com');
+  d.filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, c3));
+  d.F.firmarPresencial(d.DOC, 'sesion', 'RES-1', 'PRINCIPAL', trazo('p'));
+  assert.equal(d.correos.length, 1);
+
+  // Sin cuota de correo: la firma y el PDF quedan igual
+  const e = entorno([]);
+  e.ctx.MailApp.sendEmail = () => { throw new Error('Service invoked too many times: email'); };
+  const c4 = e.F.generarPendientes_(e.DOC, ['PRINCIPAL'], { CI: trazo('ci') }, 'ejecutivo@x.com');
+  e.filas.push(Object.assign({ _fila: 2, ID: 'RES-1', 'ESTADO FIRMA': 'PENDIENTE' }, c4));
+  const r = e.F.completarFirma(e.DOC, c4['TOKEN FIRMA'], trazo('p'));
+  assert.equal(r.pendiente, false);
+  assert.equal(e.filas[0]['ESTADO FIRMA'], 'FIRMADO');
 });

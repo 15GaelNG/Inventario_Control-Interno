@@ -663,7 +663,7 @@ const LineasCaptura = (function () {
           if (diferir.indexOf(rol) < 0 && datos.firmasAdicionales && datos.firmasAdicionales[rol]) imagenesYaCapturadas[rol] = datos.firmasAdicionales[rol];
         });
         const DOC = LineasFirmaRemota.DOCUMENTOS.INSPECCION;
-        const cambiosFirma = LineasFirmaRemota.generarPendientes_(DOC, diferir, imagenesYaCapturadas);
+        const cambiosFirma = LineasFirmaRemota.generarPendientes_(DOC, diferir, imagenesYaCapturadas, usuario && usuario.correo);
         LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, LineasFirmaRemota.columnasNuevas_(DOC));
         const filasNuevas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.INSP, id);
         LineasDatos.actualizarFila(LineasRepo.TAB.INSP, filasNuevas[0], cambiosFirma);
@@ -857,7 +857,7 @@ const LineasCaptura = (function () {
           if (diferir.indexOf(rol) < 0 && datos.firmasAdicionales && datos.firmasAdicionales[rol]) imagenesYaCapturadas[rol] = datos.firmasAdicionales[rol];
         });
         const DOC = LineasFirmaRemota.DOCUMENTOS.RESPONSIVA;
-        const cambiosFirma = LineasFirmaRemota.generarPendientes_(DOC, diferir, imagenesYaCapturadas);
+        const cambiosFirma = LineasFirmaRemota.generarPendientes_(DOC, diferir, imagenesYaCapturadas, usuario && usuario.correo);
         LineasDatos.asegurarColumnas(LineasRepo.TAB.RESP, LineasFirmaRemota.columnasNuevas_(DOC));
         const filasNuevas = LineasDatos.buscarFilasPorId(LineasRepo.TAB.RESP, id);
         LineasDatos.actualizarFila(LineasRepo.TAB.RESP, filasNuevas[0], cambiosFirma);
