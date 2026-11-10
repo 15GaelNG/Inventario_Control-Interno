@@ -51,6 +51,33 @@ def firmas_de(pdf, pagina, campos):
     return salida
 
 
+def imagenes_por_zona(pdf, zonas):
+    """Las imágenes de la hoja 1 que caen (por su centro) en cada zona, con su transparencia"""
+    import pymupdf
+    salida = {}
+    for im in pdf[0].get_image_info(xrefs=True):
+        x0, y0, x1, y1 = im['bbox']
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        for campo, a, b, c, d in zonas:
+            if a <= cx <= c and b <= cy <= d and campo not in salida:
+                if not im['xref']:   # incrustada sin xref: se recorta de la hoja
+                    pix = pdf[0].get_pixmap(clip=im['bbox'], dpi=300)
+                    salida[campo] = {'mimeType': 'image/png', 'base64': base64.b64encode(pix.tobytes('png')).decode()}
+                    continue
+                x = pdf.extract_image(im['xref'])
+                if x.get('smask'):
+                    pix = pymupdf.Pixmap(pymupdf.Pixmap(pdf, im['xref']), pymupdf.Pixmap(pdf, x['smask']))
+                    salida[campo] = {'mimeType': 'image/png', 'base64': base64.b64encode(pix.tobytes('png')).decode()}
+                else:
+                    salida[campo] = {'mimeType': 'image/' + x['ext'], 'base64': base64.b64encode(x['image']).decode()}
+    return salida
+
+
+def escaneo(pdf):
+    """Un PDF escaneado (una imagen del tamaño de la hoja): no sirve de referencia"""
+    return any((im['bbox'][2] - im['bbox'][0]) > 0.8 * p.rect.width for p in pdf for im in p.get_image_info())
+
+
 def main():
     import pymupdf
     comun.salida_utf8()
@@ -68,27 +95,44 @@ def main():
     # por el nombre del archivo
     tiene_pdf = lambda f: re.search(r'/d/([\w-]{20,})', f.get(cfg['pdf'], '')) or re.search(r'\.pdf$', f.get(cfg['pdf'], ''), re.I)
     con = sorted([f for f in filas if tiene_pdf(f)], key=lambda f: clave_fecha(f, cfg['fecha']))
-    sel = con[-n:]
-    print(f'{len(filas)} renglones, {len(con)} con PDF; se toman {len(sel)}')
+    print(f'{len(filas)} renglones, {len(con)} con PDF; se toman los {n} más recientes que no sean escaneo')
+    for viejo in dir_.glob('r[0-9][0-9].pdf'):
+        viejo.unlink()
+
+    # Del más reciente hacia atrás, hasta juntar n (un escaneo no cuenta); luego se numeran del más viejo al más nuevo
+    juntos = []
+    for f in reversed(con):
+        if len(juntos) >= n:
+            break
+        fid = id_del_pdf(dr, f[cfg['pdf']])
+        if not fid:
+            print('no se encontró el PDF', f[cfg['pdf']])
+            continue
+        tmp = dir_ / 'tmp.pdf'
+        comun.bajar(dr, fid, tmp)
+        if escaneo(pymupdf.open(tmp)):
+            print('escaneo, se salta:', f[cfg['pdf']])
+            continue
+        juntos.append((f, tmp.read_bytes()))
+    juntos.reverse()
+    sel = [f for f, _ in juntos]
     json.dump(sel, open(dir_ / 'filas.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
 
     casos = []
-    for i, f in enumerate(sel, 1):
+    for i, (f, contenido) in enumerate(juntos, 1):
         nombre = f'r{i:02d}'
-        fid = id_del_pdf(dr, f[cfg['pdf']])
-        if not fid:
-            print(nombre, 'no se encontró el PDF', f[cfg['pdf']])
-            continue
-        comun.bajar(dr, fid, dir_ / f'{nombre}.pdf')
+        (dir_ / f'{nombre}.pdf').write_bytes(contenido)
         pdf = pymupdf.open(dir_ / f'{nombre}.pdf')
         datos = dict(f)
         if cfg.get('fecha_en_pdf'):
             m = re.search(r'a\s+(\d+)\s+de\s+(' + MESES + r')\s+de\s+(\d{4})', pdf[0].get_text())
             if m:
                 datos.update({'DIA': m.group(1), 'MES': m.group(2), 'AÑO': m.group(3)})
-        casos.append({'nombre': nombre, 'datos': datos, 'firmas': firmas_de(pdf, cfg['pagina_firmas'], cfg['firmas'])})
+        firmas = imagenes_por_zona(pdf, cfg['zonas']) if cfg.get('zonas') else firmas_de(pdf, cfg['pagina_firmas'], cfg['firmas'])
+        casos.append({'nombre': nombre, 'datos': datos, 'firmas': firmas})
         print(nombre, f[cfg['fecha']], 'páginas', pdf.page_count)
 
+    (dir_ / 'tmp.pdf').unlink(missing_ok=True)
     comun.bajar(dr, cfg['plantilla'], dir_ / 'plantilla.pdf', 'application/pdf')
     comun.bajar(dr, cfg['plantilla'], dir_ / 'plantilla.docx',
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')

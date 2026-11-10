@@ -73,12 +73,15 @@ saltos de hoja). Lo que hace falta para que el convertidor la pinte como AppShee
   caben se quedan de su tamaño;
 - los párrafos vacíos antes de un salto de hoja se quitan (empujaban una hoja en blanco);
 - a 8 pt el Chromium de AppSheet daba cada letra 0.11 pt más ancha: `letter-spacing` a esa letra.
+- (responsiva de celular) las columnas de cada tabla salen de la cuadrícula del .docx (`columnas_docx`: la exportación no las trae y el convertidor repartía las celdas combinadas a su modo); el `transform` de las imágenes se quita (subía el logo encima del texto); los párrafos vacíos del final se quitan.
+
+**Sin un DEV:** `node tools/pdf/html/local.js <documento>` llena la plantilla con el mismo `PdfHtml.llenar` y el adaptador del servicio y la imprime con el Chrome de la máquina (el convertidor de Apps Script también es Chromium); `comparar.py <documento> --local` compara esos. Sirve para calibrar; antes de encender se confirma con `pedir.js`.
 
 | Documento | Estado |
 |---|---|
 | Responsiva vehicular | igual en 10 de 10; encendida en DEV |
 | Adherente vehicular | igual en 10 de 10 (también con 5 renglones de introducción); encendida en DEV. Corregido del Doc: el nombre del jefe salía 9 pt fuera de centro (compartía párrafo con un correo en blanco) |
-| Responsiva de celular | pendiente |
+| Responsiva de celular | igual en 9 de 10 (r01 es de la plantilla de antes del 5-nov, «Control Interno») en el Chrome local; **apagada** hasta confirmarla con el convertidor (`pedir.js`). Imágenes como LineasPdf (`:tope`, `:linea`); el logo ya no tapa «NU» de NUCO; la hoja 3 en blanco (párrafos vacíos al final) ya no sale |
 | Inspección de celular (2 variantes) | pendiente |
 | Inspección vehicular (una plantilla para los 18 tipos) | pendiente |
 | Arqueo | ~95 % en 12 casos (A4, como AppSheet); encendido en DEV. Quedan unos renglones de las observaciones o de un nombre que parten una palabra antes o después (el redondeo por letra de AppSheet). Corregido del original: el título del desglose se quedaba solo al pie de la hoja 2; subtotales siempre con centavos ($80.00, no $80); el total de piezas sale aunque el renglón de AppSheet no lo trajera; la calificación de AppSheet (fracción, 0.985) sale como «98.5 %» |

@@ -41,7 +41,9 @@ DOCUMENTOS = {
     'responsiva-celular': {
         'libro': LIBRO_VEHICULOS, 'hoja': 'RESPONSIVAS LINEAS', 'pdf': 'FORMATO RESPONSIVA', 'fecha': 'FECHA RESPONSIVA',
         'plantilla': '1sbV_lv6-U8xxGU0Gbcsmtw4iKBfKfIfNdaQ_li4ioBQ',   # LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR
-        'firmas': [], 'pagina_firmas': 0,   # sus imágenes las saca bajar.py por posición (firmas_responsiva)
+        'firmas': [], 'pagina_firmas': 0,
+        # Sus imágenes por zona de la hoja 1 (campo, x0, y0, x1, y1 en pt): el patrón en su recuadro, las firmas abajo
+        'zonas': [('CONTRASEÑA', 440, 330, 612, 470), ('FIRMA RESPONSABLE', 0, 560, 306, 792), ('FIRMA CI', 306, 560, 612, 792)],
     },
 }
 

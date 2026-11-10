@@ -7,6 +7,7 @@ Por cada caso, renglón por renglón (mismas palabras en el mismo renglón) y cu
 Criterio de "igual" (docs/pdf-motor.md): 0 renglones distintos y 0.5 pt o menos de desfase. Ojo: un renglón justificado
 con pocas palabras, pymupdf lo parte en pedazos y sale "distinto" sin serlo; esos se revisan con --imagenes.
   --imagenes   lado a lado (real | HTML) de cada hoja en .cache/<documento>/lado-a-lado/
+  --local      los PDF que armó local.js (sin bajar nada del DEV)
   --todos      todos los renglones distintos (si no, los primeros 5)
   --anchos     de los PDF reales, el renglón más largo que aceptó cada párrafo y el más corto que rechazó (para calibrar
                el ancho de un párrafo justificado: el bueno está entre los dos)
@@ -37,7 +38,9 @@ def renglones(ruta):
             ls.setdefault((n, w[5], w[6]), []).append(w)
         for ws in ls.values():
             ws.sort(key=lambda w: w[0])
-            out.append((n, round(ws[0][1], 2), ws[0][0], ws[-1][2], ' '.join(w[4].replace('​', '') for w in ws)))
+            # un espacio duro (&nbsp; de la exportación de Docs) cuenta como espacio
+            texto = ' '.join(w[4].replace('​', '').replace(' ', ' ') for w in ws)
+            out.append((n, round(ws[0][1], 2), ws[0][0], ws[-1][2], ' '.join(texto.split())))
     return sorted(out)
 
 
@@ -113,7 +116,10 @@ def main():
         anchos(documento)
         return
     dir_ = comun.carpeta(documento)
-    casos = bajar_generados(documento)
+    if '--local' in sys.argv:   # los que armó tools/pdf/html/local.js en esta máquina (no se baja nada)
+        casos = sorted(p.stem[1:] for p in dir_.glob('Hr[0-9][0-9].pdf'))
+    else:
+        casos = bajar_generados(documento)
     total = 0
     for caso in casos:
         if not (dir_ / f'{caso}.pdf').exists():

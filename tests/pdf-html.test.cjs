@@ -47,6 +47,13 @@ test('la firma cabe en su caja sin deformarse (agranda o achica, como Docs) y si
   assert.match(PdfHtml.llenar(caja, {}, { FIRMA: { base64: png(600, 100), mimeType: 'image/png' } }), /width:150\.00pt;height:25\.00pt/);
   assert.match(PdfHtml.llenar(caja, {}, { FIRMA: { base64: png(40, 30) } }), /width:80\.00pt;height:60\.00pt/);
   assert.strictEqual(PdfHtml.llenar(caja, {}, {}), '');
+  // :tope (Líneas): nunca más grande que su tamaño natural, 1 pixel = 0.75 pt; si no cabe, igual se achica
+  const tope = '{{IMG:PATRON:42x42:tope}}';
+  assert.match(PdfHtml.llenar(tope, {}, { PATRON: { base64: png(20, 20) } }), /width:15\.00pt;height:15\.00pt/);
+  assert.match(PdfHtml.llenar(tope, {}, { PATRON: { base64: png(300, 300) } }), /width:42\.00pt;height:42\.00pt/);
+  // :linea: en su renglón cuenta su alto ÷ 1.211 (margen negativo arriba), como en Docs con el interlineado de AppSheet
+  assert.match(PdfHtml.llenar('{{IMG:F:120x52.5:tope:linea}}', {}, { F: { base64: png(400, 175) } }),
+    /width:120\.00pt;height:52\.50pt;margin-top:-9\.15pt/);
 });
 
 test('tipografías: solo las familias que el documento nombra, en su propio <style> al inicio del <head>', () => {
@@ -100,4 +107,26 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
   assert.doesNotMatch(arqueo, /&lt;&lt;|@import|base64,/, 'arqueo: quedó algo de Docs o un dato');
   // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza
   assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 0);
+});
+
+test('la responsiva de celular: sus campos, y los valores como los ponía LineasPdf (LineasCaptura.datosHtml)', () => {
+  const html = fs.readFileSync(path.join(raiz, 'src/html/pdf/responsiva-celular.html'), 'utf8');
+  ['NUCO4', 'RESPONSABLE', 'No EMPLEADO', 'OFICINA / DESARROLLO', 'PIN EQUIPO', 'TICKET', 'IMG:CONTRASEÑA:42x42:tope',
+    'IMG:FIRMA CI:120x52.5:tope:linea', '#SI ADICIONALES', 'LOGO:ciudad-maderas-celular'].forEach((m) => assert.ok(html.includes('{{' + m + '}}'), m));
+  assert.match(html, /class="\{\{SALTO\}\}"/);
+  const c = vm.createContext({ Utilities: { formatDate: () => '04/11/2026' } });
+  vm.runInContext(fs.readFileSync(path.join(raiz, 'src/services/lineas/LineasCaptura.gs'), 'utf8') + '\nthis.L = LineasCaptura;', c);
+  // Columnas sin distinguir mayúsculas, el NUCO a 4 cifras, varios responsables juntos con « / »
+  const d = c.L.datosHtml({ 'NUCO': 83, 'No EMPLEADO': 'A1', 'RESPONSABLE': 'ANA', 'NOMBRE SEGUNDO RESPONSABLE': 'LUIS',
+    'NO EMPLEADO SEGUNDO RESPONSABLE': 'B2', 'FECHA RESPONSIVA': new Date(2026, 10, 4), 'MODELO': 'G15', 'IMEI': '1' });
+  assert.strictEqual(d['NUCO4'], '0083');
+  assert.strictEqual(d['No EMPLEADO'], 'A1 / B2');
+  assert.strictEqual(d['RESPONSABLE'], 'ANA / LUIS');
+  assert.strictEqual(d['ADICIONALES'], 'SI');
+  assert.strictEqual(d['SALTO'], 'salto');
+  assert.deepStrictEqual(Array.from(PdfHtml.faltantes(html, d)), []);
+  // La línea sin equipo: «NO APLICA», no «000»
+  const sola = c.L.datosHtml({ 'FECHA RESPONSIVA': new Date(), 'NUCO': '', 'MODELO': 'NO APLICA', 'IMEI': 'NO APLICA', 'RESPONSABLE': 'ANA' });
+  assert.strictEqual(sola['NUCO4'], 'NO APLICA');
+  assert.strictEqual(sola['ADICIONALES'], '');
 });

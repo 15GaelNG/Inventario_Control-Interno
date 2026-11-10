@@ -10,6 +10,10 @@
  *   {{CAMPO}}              el valor de la columna, escapado (una fecha: dd/mm/aaaa)
  *   {{SI:CAMPO}}           ✓ si el valor es SI (casillas)            {{NO:CAMPO}}  ✓ si es NO
  *   {{IMG:CAMPO:AxB}}      la imagen (firma, diagrama), a lo más A × B pt, sin deformar (agranda o achica, como Docs)
+ *   {{IMG:CAMPO:AxB:tope}} igual, pero nunca más grande que su tamaño natural (1 pixel = 0.75 pt): como insertaba Docs una
+ *                          imagen suelta que luego solo se achicaba (Líneas, LineasPdf)
+ *   {{IMG:CAMPO:AxB:tope:linea}}  además, en su renglón cuenta solo su alto ÷ 1.211 (lo de arriba se encima), como en
+ *                          Docs con el interlineado de AppSheet que le pone LineasPdf: una firma no empuja la hoja
  *   {{LOGO:nombre}}        el logo (data URI) del archivo logo-<nombre>.png de RECURSOS PDF
  *   {{HTML:CLAVE}}         un pedazo de HTML que ya armó (y escapó) el servicio del documento: tablas que dependen del tipo
  *   {{#SI CAMPO}}…{{/SI}}  el bloque solo si el campo trae algo         {{#VACIO CAMPO}}…{{/VACIO}}  solo si viene vacío
@@ -36,6 +40,9 @@ const PdfHtml = (function () {
     'responsiva-vehicular': { dev: true, prod: false },
     'adherente-vehicular': { dev: true, prod: false },
     'arqueo': { dev: true, prod: false },
+    // Igual en 9 de 10 contra prod en el Chrome local (tools/pdf/html/local.js); se enciende en DEV al confirmarla con
+    // el convertidor de Apps Script (pedir.js)
+    'responsiva-celular': { dev: false, prod: false },
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];
@@ -65,13 +72,15 @@ const PdfHtml = (function () {
     return Array.from(Buffer.from(limpio, 'base64'));
   }
 
-  function imagen(img, maxAncho, maxAlto) {
+  function imagen(img, maxAncho, maxAlto, tope, linea) {
     if (!img || !img.base64) return '';
     const m = medidas(img.base64);
     let estilo = 'max-width:' + maxAncho + 'pt;max-height:' + maxAlto + 'pt';
     if (m && m.w && m.h) {
-      const k = Math.min(maxAncho / m.w, maxAlto / m.h);
+      const k = Math.min(maxAncho / m.w, maxAlto / m.h, tope ? 0.75 : Infinity);
       estilo = 'width:' + (m.w * k).toFixed(2) + 'pt;height:' + (m.h * k).toFixed(2) + 'pt';
+      // Una imagen en el renglón cuenta con su margen: uno negativo arriba hace que cuente menos y se encime
+      if (linea) estilo += ';margin-top:-' + (m.h * k * (1 - 1 / 1.211)).toFixed(2) + 'pt';
     }
     return '<img src="data:' + (img.mimeType || 'image/png') + ';base64,' + img.base64 + '" style="' + estilo + '">';
   }
@@ -128,8 +137,8 @@ const PdfHtml = (function () {
       }
       x = /^(SI|NO):(.+)$/.exec(m);
       if (x) return String(valor(x[2].trim())).trim().toUpperCase() === x[1] ? PALOMITA : '';
-      x = /^IMG:(.+):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(m);
-      if (x) return imagen((imagenes || {})[x[1].trim()], Number(x[2]), Number(x[3]));
+      x = /^IMG:(.+?):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)((?::(?:tope|linea))*)$/.exec(m);
+      if (x) return imagen((imagenes || {})[x[1].trim()], Number(x[2]), Number(x[3]), /:tope/.test(x[4]), /:linea/.test(x[4]));
       x = /^HTML:(.+)$/.exec(m);
       if (x) return String(d[x[1].trim()] == null ? '' : d[x[1].trim()]);
       return esc(valor(m));
