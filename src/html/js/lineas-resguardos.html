@@ -10,12 +10,15 @@
     const { irARegistro } = Lineas;
     /** Las ligas de la carta de cancelación de un renglón (CARTAS: una por renglón; el servidor solo deja https). */
     const ligasDe = (v) => String(v || '').split('\n').filter((x) => /^https:/i.test(x));
-    /** «Ver» con su ícono, o «Carta 1 · Carta 2» si se pidió en varias; «—» sin carta. */
+    /**
+     * El botón azul de Líneas que abre Drive (externo, como enlaceDrive de lineas.html), del tamaño chico de las tablas
+     * (ln-btn-chico, como el «Ver» de la INE): «Ver carta», o «Carta 1» y «Carta 2» si se pidió en varias; «—» sin carta.
+     */
     function ligasCarta(v) {
       const ligas = ligasDe(v);
       if (!ligas.length) return '<span class="ln-tenue">—</span>';
-      return ligas.map((u, i) => '<a href="' + esc(u) + '" target="_blank" rel="noopener" title="Abrir la carta en Drive">' +
-        icono('file-text', 'ln-icon-sm') + ' ' + (ligas.length > 1 ? 'Carta ' + (i + 1) : 'Ver') + '</a>').join(' · ');
+      return ligas.map((u, i) => '<a class="externo ln-btn-chico" href="' + esc(u) + '" target="_blank" rel="noopener" title="Abrir la carta en Drive">' +
+        icono('file-text') + ' ' + (ligas.length > 1 ? 'Carta ' + (i + 1) : 'Ver carta') + ' ' + icono('external-link', 'ln-icon-sm') + '</a>').join(' ');
     }
 
     /** Retirar cancelación (pendiente 3.14): la línea vuelve a como estaba antes de mandarla a cancelar. */
