@@ -18,6 +18,59 @@ plantilla. Se mide antes de cambiar nada, para optimizar con números. Reabre la
 Reglas acordadas: se queda la sintaxis `<< >>`; un marcador que el motor no entiende **queda visible en el PDF y
 se avisa**; producción sigue con las plantillas de siempre hasta comprobar las nuevas.
 
+## El giro: los documentos en HTML, sin Google Docs (10-nov)
+
+El usuario decidió dejar los Docs (los formatos solo los cambiamos nosotros). Cada documento pasa a ser un HTML con
+medidas en puntos (`src/html/pdf/<documento>.html`), lo llena `PdfHtml.llenar` (`src/utils/PdfHtml.gs`) y lo convierte
+Apps Script (`Utilities.newBlob(html, 'text/html').getAs('application/pdf')`): sin copiar ninguna plantilla. Entra por
+el mismo `PdfService.generar` / `generarVistaPrevia` con `p.html = '<documento>'`, así los servicios no cambian de
+forma. Las fases 3 a 6 de arriba (motor sobre el Doc) se reemplazan por esto; `Plantilla` sigue para lo que aún sale
+del Doc.
+
+**Responsiva vehicular** (la primera): contra 10 responsivas reales de producción, **mismos cortes de renglón** en
+todas y desfase de 0.5 pt o menos; **1.1–1.7 s por PDF** (contra 10–30 s del Doc).
+
+Lo que exige el convertidor (medido; vale para todos los documentos):
+
+| Hallazgo | Qué se hace |
+|---|---|
+| No tiene tipografías instaladas ni carga URLs (`@font-face` con `https:` no carga) | se **incrustan** (data URI; ttf, woff y woff2 sirven) |
+| El compresor de `npm run push` tira un marcador dentro del CSS | `llenar()` pone las `@font-face` en su propio `<style>` |
+| Sin más, redondea el ancho de cada letra a pixeles: el texto sale 2–5 % más angosto y los renglones cortan distinto | `text-rendering: geometricPrecision` (con eso, 0.05 % de error); `zoom` o `transform` no sirven |
+| Redondea posiciones a 0.75 pt (pixeles de 96 dpi) | el límite de precisión es ±0.4 pt |
+| `@page { size: 612pt 792pt; margin: 0 }` sí lo respeta | cada hoja es un `div` de 612 × 792 pt con posiciones absolutas |
+| Tiene MS PGothic (la de las ✓ de Docs) | las casillas usan esa |
+| El justificado de Docs es irregular (estira unos espacios sí y otros no) y su regla de corte es fina | no se imita el justificado; el **ancho** de cada párrafo se calibra con los PDF reales hasta que corte igual (`comparar.py --anchos`) |
+
+Las tipografías (comerciales) y los logos **no van en el repo**: viven en `RECURSOS PDF` de la raíz de cada proyecto
+(`<Familia>-<regular|bold|italic|boldItalic>.ttf`, `logo-<nombre>.png`), recortadas al español y sin kerning
+(`tools/pdf/html/recursos.py`), y se guardan en la caché por trozos. Se instalan con `pdfRecursosInstalar(<carpeta>)`
+(editor, `utils/PdfHtml.gs`) o, en un DEV, `node tools/pdf/html/pedir.js instalar`.
+
+**Encendido por documento:** `PdfHtml.DOCUMENTOS` (`{ dev, prod }`). En un DEV en cuanto pasa su comparación; en
+producción solo con autorización (un contrato cuenta los encendidos en prod). Apagado, sale del Doc como siempre.
+
+### Replicar un documento (el proceso)
+
+1. `uv run … python tools/pdf/html/bajar.py <documento> 10`: los 10 más recientes de producción (solo lectura) con su
+   PDF, la plantilla (.docx: medidas, tipografía, logo) y sus firmas, en `tools/pdf/.cache/<documento>/` (fuera de git);
+   sube `casos.json` a «PRUEBA PDF HTML/<documento>». El documento se declara en `tools/pdf/html/comun.py`.
+2. Con la geometría del PDF real (posición, letra y color de cada texto y rectángulo) se escribe
+   `src/html/pdf/<documento>.html`; lo que hacían las fórmulas `<<IF(…)>>` va en el servicio (datos ya listos).
+3. `npm run push`, `node tools/pdf/html/pedir.js <documento>` (arma los PDF en el DEV por el camino real) y
+   `uv run … python tools/pdf/html/comparar.py <documento> --imagenes`.
+4. Criterio de «igual»: **0 renglones distintos** en los 10 casos, **0.5 pt** o menos de desfase y las imágenes lado a
+   lado revisadas por el usuario. Entonces se enciende en el DEV y se prueba desde la app.
+
+| Documento | Estado |
+|---|---|
+| Responsiva vehicular | igual en 10 de 10; encendida en DEV |
+| Adherente vehicular | pendiente |
+| Responsiva de celular | pendiente |
+| Inspección de celular (2 variantes) | pendiente |
+| Inspección vehicular (una plantilla para los 18 tipos) | pendiente |
+| Arqueo | pendiente |
+
 ## Resultado de la fase 1 (9-nov)
 
 `node tools/pdf/inventario.js` (DEV) bajó las 24 plantillas en uso: 21 de Vehículos (Responsiva, Adherente y las 19

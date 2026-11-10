@@ -1,25 +1,47 @@
 /**
- * PdfHtml.gs — llenar una plantilla HTML de documento (experimento, 10-nov-2026).
+ * PdfHtml.gs — los documentos del sistema (responsivas, inspecciones, arqueo) como HTML convertido a PDF (10-nov-2026).
  *
- * La idea: en vez de copiar un Google Doc, llenarlo y exportarlo (10-30 s y frágil), el documento es un HTML con
- * medidas en puntos (hoja carta, 612 × 792 pt) y el servidor lo convierte a PDF. Esto solo LLENA: no sabe de hojas ni
- * de Drive, así que también corre en node (tests y la vista previa local).
+ * En vez de copiar un Google Doc, llenarlo y exportarlo (10-30 s y frágil), cada documento es un HTML con medidas en
+ * puntos (hoja carta, 612 × 792 pt) en src/html/pdf/<documento>.html, y el convertidor de Apps Script lo pasa a PDF
+ * (Utilities.newBlob(html, 'text/html').getAs('application/pdf')). PdfService.generar({ html: '<documento>' }) lo usa;
+ * el proceso para replicar un documento y comprobarlo contra los PDF reales está en docs/pdf-motor.md.
  *
- * Marcadores (dentro del HTML de src/html/pdf/<documento>.html):
- *   {{CAMPO}}            el valor de la columna, escapado
- *   {{SI:CAMPO}}         ✓ si el valor es SI (casillas de "se entrega")
- *   {{NO:CAMPO}}         ✓ si el valor es NO
- *   {{IMG:CAMPO:AxB}}    la imagen de esa firma, a lo más A × B pt, sin deformar (agranda o achica, como Docs)
- *   {{LOGO}}             el logo (data URI)
- *   (las @font-face de la tipografía las pone llenar() solo, al inicio del <head>, si llegan en recursos.fuentes)
+ * Marcadores (dentro del HTML):
+ *   {{CAMPO}}              el valor de la columna, escapado (una fecha: dd/mm/aaaa)
+ *   {{SI:CAMPO}}           ✓ si el valor es SI (casillas)            {{NO:CAMPO}}  ✓ si es NO
+ *   {{IMG:CAMPO:AxB}}      la imagen (firma, diagrama), a lo más A × B pt, sin deformar (agranda o achica, como Docs)
+ *   {{LOGO:nombre}}        el logo (data URI) del archivo logo-<nombre>.png de RECURSOS PDF
+ *   {{HTML:CLAVE}}         un pedazo de HTML que ya armó (y escapó) el servicio del documento: tablas que dependen del tipo
+ *   {{#SI CAMPO}}…{{/SI}}  el bloque solo si el campo trae algo         {{#VACIO CAMPO}}…{{/VACIO}}  solo si viene vacío
  *
- * Las tipografías y el logo NO van en el repo (es público y la tipografía es comercial): llegan en `recursos`, que el
- * servidor lee de Drive.
+ * Lo que el convertidor exige (medido el 10-nov contra 10 responsivas reales; docs/pdf-motor.md):
+ *   - la tipografía INCRUSTADA (no tiene fuentes instaladas ni carga URLs): llenar() pone las @font-face en su propio
+ *     <style> al inicio del <head> (un marcador dentro del CSS lo tira el compresor de `npm run push`);
+ *   - `text-rendering: geometricPrecision` en el body: sin eso redondea cada letra a pixeles y los renglones cortan distinto.
+ *
+ * Las tipografías (comerciales) y los logos NO van en el repo (es público): viven en la carpeta RECURSOS PDF de la raíz
+ * de cada proyecto como <Familia>-<regular|bold|italic|boldItalic>.ttf y logo-<nombre>.png, y se guardan en la caché.
+ * La parte de llenar no toca Drive: también corre en node (tests/pdf-html.test.cjs).
  */
 const PdfHtml = (function () {
   const esc = (v) => String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const PALOMITA = '✓';
+
+  /**
+   * Qué documento ya sale del HTML. En un DEV en cuanto pasa su comparación con los PDF reales; en producción solo con
+   * autorización. Con false, el documento sigue saliendo del Google Doc de siempre.
+   */
+  const DOCUMENTOS = {
+    'responsiva-vehicular': { dev: true, prod: false },
+  };
+  const encendido = (documento) => {
+    const d = DOCUMENTOS[documento];
+    if (!d) return false;
+    return typeof Config !== 'undefined' && Config.ENTORNO === 'PROD' ? !!d.prod : !!d.dev;
+  };
+
+  // ------------------------------------------------------------------ llenar (sin Drive)
 
   /** Ancho y alto en pixeles de un PNG o JPEG en base64 (sin abrir la imagen) */
   function medidas(base64) {
@@ -52,19 +74,14 @@ const PdfHtml = (function () {
     return '<img src="data:' + (img.mimeType || 'image/png') + ';base64,' + img.base64 + '" style="' + estilo + '">';
   }
 
-  function fuentes(f, familia) {
-    if (!f) return '';
-    const cara = (archivo, peso, estilo) => (f[archivo] ? '@font-face{font-family:"' + familia + '";src:url(data:font/ttf;base64,' +
-      f[archivo] + ') format("truetype");font-weight:' + peso + ';font-style:' + estilo + '}' : '');
-    return cara('regular', 400, 'normal') + cara('bold', 700, 'normal') + cara('italic', 400, 'italic') + cara('boldItalic', 700, 'italic');
+  const CARAS = { regular: [400, 'normal'], bold: [700, 'normal'], italic: [400, 'italic'], boldItalic: [700, 'italic'] };
+  /** Las @font-face de las familias que el documento nombra (las demás no se incrustan: pesan) */
+  function fuentes(familias, plantilla) {
+    return Object.keys(familias || {}).filter((f) => plantilla.indexOf(f) !== -1).map((f) =>
+      Object.keys(CARAS).filter((c) => familias[f][c]).map((c) => '@font-face{font-family:"' + f + '";src:url(data:font/ttf;base64,' +
+        familias[f][c] + ') format("truetype");font-weight:' + CARAS[c][0] + ';font-style:' + CARAS[c][1] + '}').join('')).join('');
   }
 
-  /**
-   * @param {string} plantilla  el HTML con marcadores
-   * @param {Object} datos      { COLUMNA: valor }
-   * @param {Object} imagenes   { 'FIRMA RESPONSABLE': { base64, mimeType } }
-   * @param {Object} recursos   { logo: { base64, mimeType }, fuentes: { regular, bold, italic, boldItalic } (base64) }
-   */
   /** Una fecha (Date o "aaaa-mm-dd…") como la escribe el documento: dd/mm/aaaa. Lo demás, tal cual */
   function texto(v) {
     if (Object.prototype.toString.call(v) === '[object Date]') {
@@ -75,23 +92,151 @@ const PdfHtml = (function () {
     return iso ? iso[3] + '/' + iso[2] + '/' + iso[1] : (v == null ? '' : v);
   }
 
-  function llenar(plantilla, datos, imagenes, recursos) {
+  /**
+   * @param {string} plantilla  el HTML con marcadores
+   * @param {Object} datos      { COLUMNA: valor }
+   * @param {Object} imagenes   { 'FIRMA RESPONSABLE': { base64, mimeType } }
+   * @param {Object} recursos   { fuentes: { Familia: { regular, bold, italic, boldItalic } }, logos: { nombre: { base64, mimeType } } }
+   * @param {Object} [opciones] { aviso: 'VISTA PREVIA — AÚN SIN FIRMAR' } (un letrero arriba de la primera hoja)
+   * @return {string} el HTML listo para convertir
+   */
+  function llenar(plantilla, datos, imagenes, recursos, opciones) {
     const d = datos || {};
     const r = recursos || {};
+    const o = opciones || {};
     const valor = (c) => (d[c] === undefined ? '' : texto(d[c]));
-    // Las @font-face van en su propio <style> al inicio del <head>: un marcador dentro del CSS lo tira el compresor
-    // de `npm run push` (no es CSS válido) y el documento sale en Arial
-    const conFuentes = r.fuentes ? plantilla.replace(/<head>/i, '<head><style>' + fuentes(r.fuentes, 'Century Gothic Doc') + '</style>') : plantilla;
-    return conFuentes.replace(/\{\{([^{}]+)\}\}/g, (todo, marcador) => {
+    const lleno = (c) => String(valor(c)).trim() !== '';
+    let html = plantilla
+      .replace(/\{\{#SI ([^{}]+)\}\}([\s\S]*?)\{\{\/SI\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? bloque : ''))
+      .replace(/\{\{#VACIO ([^{}]+)\}\}([\s\S]*?)\{\{\/VACIO\}\}/g, (t, c, bloque) => (lleno(c.trim()) ? '' : bloque));
+    // Las @font-face en su propio <style> al inicio del <head>: un marcador dentro del CSS lo tira el compresor
+    const caras = fuentes(r.fuentes, html);
+    if (caras) html = html.replace(/<head>/i, '<head><style>' + caras + '</style>');
+    if (o.aviso) {
+      html = html.replace(/<body([^>]*)>/i, '<body$1><div style="position:absolute;left:0;top:2pt;width:612pt;text-align:center;' +
+        'font-weight:700;font-size:14pt;color:#8a6d3a;z-index:9">' + esc(o.aviso) + '</div>');
+    }
+    return html.replace(/\{\{(?![#/])([^{}]+)\}\}/g, (todo, marcador) => {
       const m = marcador.trim();
-      if (m === 'LOGO') return r.logo ? 'data:' + (r.logo.mimeType || 'image/png') + ';base64,' + r.logo.base64 : '';
-      let x = /^(SI|NO):(.+)$/.exec(m);
+      let x = /^LOGO(?::(.+))?$/.exec(m);
+      if (x) {
+        const logos = r.logos || {};
+        const l = logos[(x[1] || '').trim()] || logos[Object.keys(logos)[0]];
+        return l ? 'data:' + (l.mimeType || 'image/png') + ';base64,' + l.base64 : '';
+      }
+      x = /^(SI|NO):(.+)$/.exec(m);
       if (x) return String(valor(x[2].trim())).trim().toUpperCase() === x[1] ? PALOMITA : '';
       x = /^IMG:(.+):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(m);
       if (x) return imagen((imagenes || {})[x[1].trim()], Number(x[2]), Number(x[3]));
+      x = /^HTML:(.+)$/.exec(m);
+      if (x) return String(d[x[1].trim()] == null ? '' : d[x[1].trim()]);
       return esc(valor(m));
     });
   }
 
-  return { llenar, medidas, esc };
+  /** Los campos que la plantilla pide y no llegaron en `datos` (como sinResolver del motor de Docs) */
+  function faltantes(plantilla, datos) {
+    const d = datos || {};
+    const vistos = {};
+    (plantilla.match(/\{\{[^{}]+\}\}/g) || []).forEach((t) => {
+      const m = t.slice(2, -2).trim().replace(/^#(SI|VACIO) /, '').replace(/^(SI|NO|HTML):/, '');
+      if (/^(LOGO|IMG:|\/)/.test(m)) return;
+      if (d[m] === undefined) vistos[m] = true;
+    });
+    return Object.keys(vistos);
+  }
+
+  // ------------------------------------------------------------------ servidor (Drive, caché, convertir)
+
+  const CARPETA_RECURSOS = 'RECURSOS PDF';
+  const TROZO = 90 * 1000;   // CacheService guarda hasta 100 KB por clave
+
+  /** Un archivo de RECURSOS PDF en base64, guardado en la caché por trozos (6 h) */
+  function base64De_(archivo) {
+    const cache = CacheService.getScriptCache();
+    const clave = 'pdfrec_' + archivo.getId() + '_' + archivo.getLastUpdated().getTime();
+    const n = Number(cache.get(clave) || 0);
+    if (n) {
+      const trozos = cache.getAll(Array.from({ length: n }, (_, i) => clave + '_' + i));
+      const unido = Array.from({ length: n }, (_, i) => trozos[clave + '_' + i]);
+      if (unido.every((t) => t)) return unido.join('');
+    }
+    const b64 = Utilities.base64Encode(archivo.getBlob().getBytes());
+    const guardar = {};
+    for (let i = 0; i * TROZO < b64.length; i++) guardar[clave + '_' + i] = b64.slice(i * TROZO, (i + 1) * TROZO);
+    try {
+      cache.putAll(guardar, 6 * 60 * 60);
+      cache.put(clave, String(Object.keys(guardar).length), 6 * 60 * 60);
+    } catch (e) { /* sin caché: se lee de Drive la próxima vez */ }
+    return b64;
+  }
+
+  /** Las tipografías y los logos de RECURSOS PDF: { fuentes: { Familia: { cara: base64 } }, logos: { nombre: {…} } } */
+  function recursos() {
+    const salida = { fuentes: {}, logos: {} };
+    const archivos = DriveUtils.carpetaEnRaiz(CARPETA_RECURSOS).getFiles();
+    while (archivos.hasNext()) {
+      const a = archivos.next();
+      const n = a.getName();
+      let x = /^(.+)-(regular|bold|italic|boldItalic)\.ttf$/.exec(n);
+      if (x) { (salida.fuentes[x[1]] = salida.fuentes[x[1]] || {})[x[2]] = base64De_(a); continue; }
+      x = /^logo-(.+)\.(png|jpe?g)$/i.exec(n);
+      if (x) salida.logos[x[1]] = { base64: base64De_(a), mimeType: x[2].toLowerCase() === 'png' ? 'image/png' : 'image/jpeg' };
+    }
+    return salida;
+  }
+
+  function plantilla(documento) {
+    if (!/^[\w-]+$/.test(documento || '')) throw new Error('Documento HTML no válido: ' + documento);
+    return HtmlService.createHtmlOutputFromFile('html/pdf/' + documento).getContent();
+  }
+
+  /**
+   * El PDF de un documento: { blob, sinResolver }. imagenes acepta { base64, mimeType } o { blob } (un archivo de Drive,
+   * como los diagramas en blanco).
+   */
+  function pdf(documento, datos, imagenes, opciones) {
+    const p = plantilla(documento);
+    const imgs = {};
+    Object.keys(imagenes || {}).forEach((k) => {
+      const i = imagenes[k];
+      if (!i) return;
+      imgs[k] = i.base64 ? i : (i.blob ? { base64: Utilities.base64Encode(i.blob.getBytes()), mimeType: i.blob.getContentType() } : null);
+    });
+    const html = llenar(p, datos, imgs, recursos(), opciones);
+    return { blob: Utilities.newBlob(html, 'text/html', documento + '.html').getAs('application/pdf'), sinResolver: faltantes(p, datos) };
+  }
+
+  /**
+   * Copia a RECURSOS PDF (en la raíz de ESTE proyecto) las tipografías y logos que hay en otra carpeta: así se instala
+   * cada entorno sin subir nada al repo. Reemplaza los que tengan el mismo nombre. → los nombres copiados
+   */
+  function instalarRecursos(origenId) {
+    const destino = DriveUtils.carpetaEnRaiz(CARPETA_RECURSOS);
+    const copiados = [];
+    const archivos = DriveApp.getFolderById(origenId).getFiles();
+    while (archivos.hasNext()) {
+      const a = archivos.next();
+      const n = a.getName();
+      if (!/^(.+-(regular|bold|italic|boldItalic)\.ttf|logo-.+\.(png|jpe?g))$/i.test(n)) continue;
+      const viejos = destino.getFilesByName(n);
+      while (viejos.hasNext()) DriveUtils.aPapelera(viejos.next());
+      DriveUtils.copiar(a, n, destino);
+      copiados.push(n);
+    }
+    return copiados;
+  }
+
+  return { DOCUMENTOS, encendido, llenar, faltantes, medidas, esc, texto, recursos, plantilla, pdf, instalarRecursos, CARPETA_RECURSOS };
 })();
+
+/**
+ * Desde el editor (cualquier proyecto, también producción): instala las tipografías y logos de los documentos HTML en
+ * RECURSOS PDF de este proyecto, copiándolos de la carpeta `origenId` (la que deja tools/pdf/html/recursos.py).
+ */
+function pdfRecursosInstalar(origenId) {
+  soloEditor_();
+  const r = PdfHtml.instalarRecursos(origenId);
+  console.log('Instalados en ' + PdfHtml.CARPETA_RECURSOS + ': ' + (r.join(', ') || 'nada'));
+  return r;
+}

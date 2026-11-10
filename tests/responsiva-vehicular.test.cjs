@@ -105,6 +105,8 @@ function crearContexto() {
       PRESTAMOS: 'PRESTAMOS',
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push(Object.assign({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }, op && op.prestamo ? { prestamo: true } : {})); },
     },
+    // El documento en HTML apagado: aquí se prueba el camino de siempre (el HTML, en pdf-html.test.cjs)
+    PdfHtml: { encendido: () => false },
     PdfService: {
       generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },

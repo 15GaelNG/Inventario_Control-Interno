@@ -46,6 +46,8 @@ const ResponsivaVehicularService = (function () {
 
   // Doc de Google con los marcadores <<CAMPO>> (formato F-CI01-045, corregido por el área).
   const PLANTILLA = '1JCbmKTFkSQlY5mXG0RFi54K3d7rSyuO_lb4oVCHjmHc';
+  // La misma responsiva en HTML (src/html/pdf/responsiva-vehicular.html, PdfHtml.gs): la usa cuando está encendida
+  const DOCUMENTO_HTML = 'responsiva-vehicular';
 
   // Carpetas de Drive dedicadas a esta responsiva (decisión del usuario, 06-oct-2026) --
   // no la carpeta general de REPORTES que usan los demás módulos.
@@ -371,6 +373,8 @@ const ResponsivaVehicularService = (function () {
       });
       pdf = PdfService.generar({
         plantillaId: PLANTILLA,
+        // En HTML cuando el documento ya está encendido para este entorno (PdfHtml.DOCUMENTOS); si no, el Doc de siempre
+        html: PdfHtml.encendido(DOCUMENTO_HTML) ? DOCUMENTO_HTML : undefined,
         datos: datosPdf,
         imagenes: imagenesPdf,
         // Directo en el expediente del vehículo (NUCOS VEHICULOS/<NUCO>/1.-DOCUMENTACIÓN/5.-RESPONSIVA; un préstamo,
@@ -639,7 +643,8 @@ const ResponsivaVehicularService = (function () {
       'AÑO': Utilities.formatDate(ahora, ZONA, 'yyyy'),
     });
     return PdfService.generarVistaPrevia({
-      plantillaId: PLANTILLA, datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
+      plantillaId: PLANTILLA, html: PdfHtml.encendido(DOCUMENTO_HTML) ? DOCUMENTO_HTML : undefined,
+      datos: datosPdf, imagenes: imagenesDesdeTemp_(fila), carpetaId: ExpedienteNuco.carpeta(fila['NUCCO'], 'RESPONSIVA').getId(),
     });
   }
 
