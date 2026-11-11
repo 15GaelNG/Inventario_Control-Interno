@@ -38,12 +38,24 @@ def _sin_bordes(t):
 
 
 # ------------------------------------------------------------------------------------------- responsiva de celular
+def _raya_negra_bajo_nombres(t):
+    """En una tabla de firmas: cada celda con un nombre ({{RESPONSABLE n}} o {{NOMBRE CI}}) con su borde de abajo negro"""
+    def celda(m):
+        apertura, contenido = m.group(1), m.group(2)
+        if '{{RESPONSABLE' in contenido or '{{NOMBRE CI}}' in contenido:
+            apertura = re.sub(r'border-bottom-color:#[0-9a-fA-F]{6}', 'border-bottom-color:#000000', apertura)
+        return apertura + contenido
+    return re.sub(r'(<td\b[^>]*>)(.*?</td>)', celda, t, flags=re.S)
+
+
 def responsiva_celular(s):
     """La plantilla «PRUEBA RESPONSABLE 05-nov» (rama LineasResponsivasEinspecciones, 6-nov): una casilla por responsable,
     en tablas de firmas aparte (hoja 1: Flotillas y responsables 1–2, luego 3–5; hoja 2: 1–3, luego 4–5), y sin el pie
     «F-CI04-039». De la manita de gato de la del 19-oct (responsiva_celular_19oct) aplica lo de las firmas:
       - los nombres bajo la firma, abajo en su celda (con un nombre de dos renglones las rayas quedaban desparejas);
-      - en la hoja 2 cada firma cuenta entera (sin :linea) y 8 pt de aire bajo la tabla de sanciones"""
+      - en la hoja 2 cada firma cuenta entera (sin :linea) y 8 pt de aire bajo la tabla de sanciones;
+      - la raya bajo cada nombre, negra (11-nov: en el Doc la del responsable 4 de la hoja 2 venía del azul del fondo,
+        #ddebf7, y no se veía)"""
     sanciones = _tabla_con(s, 'Sucesos')
     firmas = [(a, b) for a, b in tablas_nivel(s, s.find('<body')) if 'Nombre y firma' in s[a:b]]
     if len(firmas) != 4:
@@ -53,6 +65,7 @@ def responsiva_celular(s):
         raise SystemExit('responsiva de celular: esperaba 2 tablas de firmas después de las sanciones')
     for a, b in reversed(firmas):
         t = _cambiar_filas(s[a:b], [1], lambda r: r.replace('vertical-align:top', 'vertical-align:bottom'))
+        t = _raya_negra_bajo_nombres(t)
         if (a, b) in hoja2:
             t = t.replace(':tope:linea}}', ':tope}}')
             if (a, b) == hoja2[0]:

@@ -129,6 +129,10 @@ test('la responsiva de celular: sus campos, y los valores como los ponía Lineas
   ['FIRMA RESPONSABLE', 'FIRMA RESPONSABLE 2', 'FIRMA RESPONSABLE 3', 'FIRMA RESPONSABLE 4', 'FIRMA RESPONSABLE 5'].forEach((f) =>
     assert.strictEqual(html.split('{{IMG:' + f + ':67.5x30:tope').length - 1, 2, f + ' en la hoja 1 y en la de sanciones'));
   [1, 2, 3, 4, 5].forEach((i) => assert.strictEqual(html.split('{{RESPONSABLE ' + i + '}}').length - 1, 2, 'RESPONSABLE ' + i));
+  // La raya bajo cada nombre, negra (11-nov: la del responsable 4 de la hoja 2 venía del azul del fondo y no se veía)
+  const nombres = html.match(/<td\b[^>]*>(?:(?!<\/td>)[\s\S])*?\{\{(?:RESPONSABLE [1-5]|NOMBRE CI)\}\}/g) || [];
+  assert.strictEqual(nombres.length, 11);
+  nombres.forEach((td) => assert.match(td.slice(0, td.indexOf('>') + 1), /border-bottom-color:#000000;[^"]*border-bottom-width:1pt/, td.slice(-20)));
   assert.match(html, /class="\{\{SALTO\}\}"/);
   const c = vm.createContext({ Utilities: { formatDate: () => '04/11/2026' } });
   vm.runInContext(fs.readFileSync(path.join(raiz, 'src/services/lineas/LineasCaptura.gs'), 'utf8') + '\nthis.L = LineasCaptura;', c);
