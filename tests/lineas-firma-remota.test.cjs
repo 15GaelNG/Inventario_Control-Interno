@@ -492,6 +492,11 @@ test('pendientes (panel "Firmas pendientes", 10-nov): una fila por documento con
       'FECHA DE REGISTRO': new Date('2026-11-02T09:00:00'), 'ID LINEA': 'LIN-9' },
   ]);
   ctx.Permisos.puedeLeer = (token, modulo) => { pedidos.push(modulo); return {}; };
+  // Quién lo mandó, por su nombre de USUARIOS (11-nov), guardado mientras la hoja no cambie
+  const recordados = [];
+  ctx.Config.SPREADSHEET_IDS = { USUARIOS: () => 'ss-usuarios' };
+  ctx.CacheHojas = { recordar: (clave, hojas, fn) => { recordados.push([clave, hojas]); return fn(); } };
+  ctx.SheetUtils = { getAll: () => [{ CORREO: ' Eje@X.com ', NOMBRE: 'EJECUTIVO TELEFONIA' }, { CORREO: 'otro@x.com', NOMBRE: '' }] };
   const r = F.pendientes('sesion');
   assert.deepEqual(pedidos, ['firmas-lineas']);
   assert.equal(r.diasVigencia, 15);
@@ -505,7 +510,9 @@ test('pendientes (panel "Firmas pendientes", 10-nov): una fila por documento con
   const personas = JSON.parse(JSON.stringify(porId['RES-1']._pendientes));
   assert.deepEqual(personas.map((p) => [p.rol, p.nombre, p.dias, p.estado]), [['PRINCIPAL', 'ANDREA', 11, 'VIGENTE'], ['TERCER', 'TERE', 12, 'VIGENTE']]);
   assert.equal(porId['RES-1'].NUCO, '0669');
-  assert.equal(porId['RES-1']['ENVIADO POR'], 'eje@x.com');
+  assert.equal(porId['RES-1']['ENVIADO POR'], 'EJECUTIVO TELEFONIA');
+  assert.equal(porId['RES-2']['ENVIADO POR'], '', 'sin quién lo mandó (de antes), vacío');
+  assert.equal(JSON.stringify(recordados), JSON.stringify([['lineas_firmas_nombres_v1', [['ss-usuarios', 'USUARIOS']]]]));
   assert.equal(porId['RES-1']._idLinea, 'IMEI-1');
   assert.equal(porId['RES-2'].ESTADO, 'POR VENCER');
   assert.equal(porId['RES-2']['DIAS RESTANTES'], 2);
@@ -614,4 +621,18 @@ test('Subir PDF firmado de un documento pendiente: el servidor lo cierra y la pa
   assert.match(paginas, /estadoFirma: d\.estadoFirma \|\| null/);
   assert.match(paginas, /x\.estadoFirma === 'PENDIENTE'\)\s*\? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>/);
   assert.match(read('src/api/LineasFirmaRemota.gs'), /function apiLineasFirmaRemotaPdfParaFirmar\(token, tipoDoc, documentoId\)/);
+});
+
+test('Firmas pendientes: si el correo no está en USUARIOS o no se pudo leer la hoja, sale el correo', () => {
+  const { F, ctx } = entorno([{ ID: 'RES-1', RESPONSABLE: 'A', 'ESTADO FIRMA': 'PENDIENTE', 'TOKEN FIRMA': 't', 'TOKEN FIRMA EXPIRA': new Date(Date.now() + 86400000),
+    'ENVIADO A FIRMA POR': 'nadie@x.com' }], []);
+  ctx.Permisos.puedeLeer = () => ({});
+  ctx.Config.SPREADSHEET_IDS = { USUARIOS: () => 'ss' };
+  ctx.CacheHojas = { recordar: (c, h, fn) => fn() };
+  ctx.SheetUtils = { getAll: () => [{ CORREO: 'eje@x.com', NOMBRE: 'EJE' }] };
+  assert.equal(F.pendientes('s').filas[0]['ENVIADO POR'], 'nadie@x.com');
+  ctx.SheetUtils = { getAll: () => { throw new Error('sin acceso'); } };
+  const errores = [];
+  ctx.console = { error: (m) => errores.push(m) };
+  assert.equal(F.pendientes('s').filas[0]['ENVIADO POR'], 'nadie@x.com');
 });

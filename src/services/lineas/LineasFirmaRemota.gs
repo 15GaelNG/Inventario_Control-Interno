@@ -503,6 +503,33 @@ const LineasFirmaRemota = (function () {
     return salida;
   }
 
+  /**
+   * Quién mandó a firmar, por su nombre (usuario, 11-nov: en «Firmas pendientes», el nombre en vez del correo): de la
+   * columna NOMBRE de USUARIOS, guardado mientras la hoja no cambie. Sin usuario con ese correo (o si no se pudo leer),
+   * el correo tal cual.
+   */
+  function nombresDeUsuarios_() {
+    let mapa = {};
+    try {
+      const ss = Config.SPREADSHEET_IDS.USUARIOS();
+      mapa = CacheHojas.recordar('lineas_firmas_nombres_v1', [[ss, 'USUARIOS']], () => {
+        const r = {};
+        SheetUtils.getAll(ss, 'USUARIOS').forEach((u) => {
+          const c = String(u.CORREO == null ? '' : u.CORREO).trim().toLowerCase();
+          const n = String(u.NOMBRE == null ? '' : u.NOMBRE).trim();
+          if (c && n) r[c] = n;
+        });
+        return r;
+      }) || {};
+    } catch (e) {
+      console.error('Firmas pendientes, nombres de USUARIOS: ' + (e && e.message ? e.message : e));
+    }
+    return (correo) => {
+      const c = String(correo || '').trim().toLowerCase();
+      return (c && mapa[c]) || c;
+    };
+  }
+
   /** Cuántos días le quedan a una liga para que deje de servir ("Por vencer" desde aquí). */
   const DIAS_POR_VENCER = 3;
   const ETIQUETA_ROL = { PRINCIPAL: 'Responsable', SEGUNDO: 'Responsable 2', TERCER: 'Responsable 3', CUARTO: 'Responsable 4', QUINTO: 'Responsable 5' };
@@ -517,6 +544,7 @@ const LineasFirmaRemota = (function () {
    */
   function pendientes(token) {
     Permisos.puedeLeer(token, 'firmas-lineas');
+    const nombreDeCorreo_ = nombresDeUsuarios_();
     const ahora = Date.now();
     const DIA = 24 * 60 * 60 * 1000;
     const salida = [];
@@ -549,7 +577,7 @@ const LineasFirmaRemota = (function () {
           'ESTADO': primera.estado,
           'VENCE': primera.vence,
           'FIRMAS': (diferidos.length - faltan.length) + ' de ' + diferidos.length,
-          'ENVIADO POR': String(fila[COL_ENVIADO_POR] || ''),
+          'ENVIADO POR': nombreDeCorreo_(fila[COL_ENVIADO_POR]),
           'FECHA': fechaIso_(fila[doc.colFecha]),
           'FOLIO': String(fila['ID'] || ''),
         });
