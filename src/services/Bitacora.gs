@@ -5,7 +5,8 @@
  * nadie escribe la bitácora a mano y un módulo nuevo nace anotado. Lo que se junta en una ejecución sale en UNA
  * escritura al soltar el candado (Candado.con → vaciar), así nunca se cruzan dos operaciones.
  *
- * Dónde: carpeta LOGS en la raíz del proyecto (usuario, 28-oct) → libro "LOGS <año>" → una pestaña por mes ("2026-10"). Solo la
+ * Dónde: carpeta LOGS en la raíz del proyecto (usuario, 28-oct) → libro "LOGS <año>" (en un DEV,
+ * "LOGS <año> <cuenta>") → una pestaña por mes ("2026-10"). Solo la
  * cuenta que despliega (la dueña) lo abre: no se comparte (usuario, 28-oct).
  *
  * Un renglón: FECHA · QUIEN · ORIGEN (app / a mano / sistema) · OPERACION (una por ejecución) · ACCION · LIBRO · HOJA ·
@@ -358,7 +359,15 @@ const Bitacora = (function () {
     }
     return ultimo ? SpreadsheetApp.openById(ultimo.getId()) : libroNuevo_(carpeta, anio, false);
   }
-  const nombreLibro_ = (anio, n) => CARPETA + ' ' + anio + (n > 1 ? ' (' + n + ')' : '');
+  // En un DEV, el libro lleva la cuenta: varios DEV comparten la raíz de pruebas y cada proyecto encadena con su propia
+  // huella previa, así que en un libro común la cadena se rompía donde se intercalaban (61 cortes en nov-2026, ninguno
+  // una edición). Producción se queda con "LOGS 2026".
+  const nombreLibro_ = (anio, n) => CARPETA + ' ' + anio + deQuien_() + (n > 1 ? ' (' + n + ')' : '');
+  function deQuien_() {
+    if (Config.ENTORNO === 'PROD') return '';
+    const correo = String(Session.getEffectiveUser().getEmail() || '');
+    return ' ' + (correo.split('@')[0] || ScriptApp.getScriptId());
+  }
   function libroNuevo_(carpeta, anio, siguiente) {
     let n = 1;
     if (siguiente) while (carpeta.getFilesByName(nombreLibro_(anio, n)).hasNext()) n++;
