@@ -261,6 +261,7 @@ const REVISION_EN_RAIZ = [
   'ADQUISICION_VEHICULAR_OCR_TEMPORAL',   // copias con OCR de AdquisicionVehicularIndice.gs, se tiran enseguida
   'LOGS',   // la bitácora de ingresos y cambios (Bitacora.gs); en producción, crearla a mano o con instalarBitacora()
   'RESPONSIVAS LINEAS_FirmasTemp',   // firma a distancia de Líneas (LineasFirmaRemota.gs): archivos de espera, se tiran al cerrar el documento
+  'INSPECCIONES LINEAS_FirmasTemp',  // lo mismo para la inspección (DOCUMENTOS.INSPECCION.carpetaTemp; el contrato no la veía por ir en un objeto)
   // Tipografías y logos de los documentos en HTML (PdfHtml.gs; no van en el repo). En producción: pdfRecursosInstalar(<id>)
   'RECURSOS PDF',
 ];

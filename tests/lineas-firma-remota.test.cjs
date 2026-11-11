@@ -526,3 +526,12 @@ test('panel "Firmas pendientes": su módulo, su vista en el menú y su pantalla'
   assert.match(js, /llamar\('apiLineasFirmaRemotaRegenerarLiga', f\._tipo, f\._id, p\.rol\)/);
   assert.match(js, /if \(!opera \|\| !tabla\) return/, 'copiar y regenerar solo con EDICIÓN en Líneas Telefónicas');
 });
+
+test('las carpetas de espera de la firma a distancia se revisan antes de desplegar (en prod no se crean solas)', () => {
+  const { F } = entorno([]);
+  const revisadas = /const REVISION_EN_RAIZ = \[([\s\S]*?)\];/.exec(read('src/Diagnostico.gs'))[1];
+  Object.keys(F.DOCUMENTOS).forEach((k) => {
+    const carpeta = F.DOCUMENTOS[k].carpetaTemp;
+    assert.ok(carpeta && revisadas.includes("'" + carpeta + "'"), k + ': ' + carpeta + ' en REVISION_EN_RAIZ (Diagnostico.gs)');
+  });
+});
