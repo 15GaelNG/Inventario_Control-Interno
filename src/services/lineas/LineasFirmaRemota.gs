@@ -242,6 +242,16 @@ const LineasFirmaRemota = (function () {
       throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
     }
     const filaVista = Object.assign({}, fila, { 'COMENTARIO': (fila['COMENTARIO'] || '') + ' (VISTA PREVIA — AÚN SIN FIRMAR)' });
+    return pdfConLoQueHay_(doc, fila, filaVista);
+  }
+
+  /**
+   * El PDF de un documento pendiente con las firmas que ya hay (las demás casillas en blanco), sin guardar nada: lo
+   * comparten la vista previa de la liga (con su marca en COMENTARIO) y "PDF para firmar". `filaPdf` es la fila con
+   * la que se llena el documento.
+   */
+  function pdfConLoQueHay_(doc, fila, filaPdf) {
+    const filaVista = filaPdf;
     const imagenesBase64 = imagenesDesdeTemp_(doc, fila);
     const imagenesBlob = {};
     TODOS_LOS_ROLES.forEach((r) => {
@@ -266,6 +276,62 @@ const LineasFirmaRemota = (function () {
     } finally {
       try { DriveUtils.aPapelera(DriveApp.getFileById(pdf.id), { temporal: true }); } catch (e) { /* no-op */ }
     }
+  }
+
+  /** La fila del documento por su ID, o error. */
+  function filaPorId_(doc, documentoId) {
+    const filas = LineasDatos.buscarFilasPorId(doc.tabla(), documentoId);
+    if (!filas.length) throw new Error('No se encontró el documento.');
+    return LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
+  }
+  const estaPendiente_ = (fila) => String(fila['ESTADO FIRMA'] || '').trim().toUpperCase() === 'PENDIENTE';
+
+  /**
+   * "PDF para firmar" (usuario, 11-nov): lo normal es la firma por liga, pero si alguien insiste en papel o en
+   * firmar el PDF a su modo, se le manda este archivo (con las firmas que ya hay y sus casillas en blanco) y lo que
+   * regrese firmado se sube con "Subir PDF firmado" (cerrarConPdfSubido). No guarda nada.
+   */
+  function pdfParaFirmar(doc, token, documentoId) {
+    Permisos.puedeEditar(token, 'lineas-telefonicas');
+    const fila = filaPorId_(doc, documentoId);
+    if (!estaPendiente_(fila)) throw new Error('Este documento ya quedó firmado: su PDF está en Documentos.');
+    const r = pdfConLoQueHay_(doc, fila, fila);
+    const nuco = LineasUtil.nuco4(fila['NUCO']);
+    r.nombre = (doc.tipoPdf === 'INSPECCION' ? 'INSP ' : 'RESP ') + (nuco || fila['ID']) + ' para firmar.pdf';
+    return r;
+  }
+
+  /**
+   * "Subir PDF firmado" de un documento que esperaba firmas por liga (usuario, 11-nov: para quien no firma por liga y
+   * manda el PDF firmado). Cierra el documento como al firmar la última liga: su PDF se genera con las firmas que ya hay
+   * (va a su carpeta y queda ligado a la hoja), las ligas que faltaban dejan de servir (sale de Firmas pendientes) y
+   * FIRMADO POR de cada quien dice que fue en el PDF subido. LineasCaptura.subirPdfFirmado pone después en ese PDF el
+   * contenido del que se subió. Regresa { id } del PDF, o null si ya no estaba pendiente.
+   */
+  function cerrarConPdfSubido(tipoPdf, documentoId, usuario) {
+    const doc = tipoPdf === 'INSPECCION' ? DOCUMENTOS.INSPECCION : DOCUMENTOS.RESPONSIVA;
+    return LineasDatos.conCandado(() => {
+      const fila = filaPorId_(doc, documentoId);
+      if (!estaPendiente_(fila)) return null;
+      const resultado = LineasCaptura.generarPdf(doc.tipoPdf, fila['ID'], false, usuario, imagenesDesdeTemp_(doc, fila));
+      if (!resultado || !resultado.id) throw new Error('No se pudo preparar el PDF del documento para guardar el firmado.');
+      const correo = String((usuario && usuario.correo) || '').trim().toLowerCase();
+      const quien = 'PDF FIRMADO' + (correo ? ': ' + correo : '');
+      const cambios = { 'ESTADO FIRMA': 'FIRMADO' };
+      ROLES_DIFERIBLES.forEach((rol) => {
+        if (!fila[colToken_(rol)]) return;
+        cambios[colToken_(rol)] = '';
+        cambios[colTokenExpira_(rol)] = '';
+        cambios[colFirmadoPor_(rol)] = quien;
+      });
+      TODOS_LOS_ROLES.forEach((rol) => {
+        if (!fila[colTemp_(doc, rol)]) return;
+        borrarFirmaTempSiHay_(fila[colTemp_(doc, rol)]);
+        cambios[colTemp_(doc, rol)] = '';
+      });
+      LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambios);
+      return { id: resultado.id };
+    });
   }
 
   /**
@@ -534,6 +600,7 @@ const LineasFirmaRemota = (function () {
     ROLES_DIFERIBLES: ROLES_DIFERIBLES, DOCUMENTOS: DOCUMENTOS, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
     obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma, firmarPresencial: firmarPresencial,
     copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos, pendientes: pendientes,
+    pdfParaFirmar: pdfParaFirmar, cerrarConPdfSubido: cerrarConPdfSubido,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
     _base64DeImagen: base64DeImagen_, COL_ENVIADO_POR: COL_ENVIADO_POR,

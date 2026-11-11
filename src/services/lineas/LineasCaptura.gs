@@ -1335,8 +1335,15 @@ const LineasCaptura = (function () {
     const bytes = Utilities.base64Decode(String(base64));
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('Solo se aceptan archivos PDF.');
-    if (!doc.pdfId && doc.origen === 'SISTEMA') throw new Error('Primero genera el PDF.');
-    const archivo = doc.pdfId ? LineasArchivos.reemplazarPdf(doc.pdfId, bytes) : pdfFirmadoNuevo_(registro, doc, bytes);
+    let pdfId = doc.pdfId;
+    // Esperaba firmas por liga (usuario, 11-nov): el PDF subido lo cierra (se generan su PDF y su liga en la hoja, y las
+    // ligas que faltaban dejan de servir); luego su contenido es el del subido
+    if (!pdfId && doc.estadoFirma === 'PENDIENTE') {
+      const cerrado = LineasFirmaRemota.cerrarConPdfSubido(doc.tipo, doc.id, usuario);
+      if (cerrado) pdfId = cerrado.id;
+    }
+    if (!pdfId && doc.origen === 'SISTEMA') throw new Error('Primero genera el PDF.');
+    const archivo = pdfId ? LineasArchivos.reemplazarPdf(pdfId, bytes) : pdfFirmadoNuevo_(registro, doc, bytes);
     if (registro.nuco) LineasArchivos.olvidarNuco(registro.nuco);
     LineasDatos.conCandado(() => LineasRepo.registrarMovimiento('PDF_FIRMADO', { motivo: '' }, usuario, new Date(), {
       refs: [registro.id], nuco: registro.nuco,

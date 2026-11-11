@@ -74,7 +74,7 @@ test('solo PDF: el contenido debe empezar con %PDF- y pesar 15 MB o menos; queda
 test('la pantalla: «Subir PDF firmado» en Documentos, solo con permiso de operar y solo PDF', () => {
   const cliente = LINEAS;
   // Del sistema con su PDF; del AppSheet y de NUCOS siempre (usuario, 5-oct)
-  assert.match(cliente, /doc\('file-up', 'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA'\),\s*\(d\) => \(d\.registroId \? subirPdfFirmado\(d\.registroId, d\) : subirPdfFirmado\(id, d, vista\)\)\)/);
+  assert.match(cliente, /doc\('file-up', 'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA' \|\| d\.estadoFirma === 'PENDIENTE'\),\s*\(d\) => \(d\.registroId \? subirPdfFirmado\(d\.registroId, d\) : subirPdfFirmado\(id, d, vista\)\)\)/);
   const fn = cliente.slice(cliente.indexOf('function subirPdfFirmado('), cliente.indexOf('function soltarDocumentos('));
   assert.match(fn, /input\.accept = 'application\/pdf,\.pdf';/);
   assert.match(fn, /Solo se aceptan archivos PDF\./);

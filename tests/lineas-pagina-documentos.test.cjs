@@ -44,7 +44,7 @@ test('las dos páginas: Ver PDF y Subir PDF firmado a la vista; lo demás en ⋮
   assert.match(lineas, /botonesDocumento\('INSPECCION', i, r\)/);
   assert.match(lineas, /botonesDocumento\('RESPONSIVA', d, r\)/);
   assert.match(lineas, /data-ln-doc-subir>' \+ icono\('file-up'\) \+ ' Subir PDF firmado/);
-  assert.match(lineas, /r\.puedeOperar && x\.registroId && \(x\.pdfId \|\| x\.origen !== 'SISTEMA'\)/);
+  assert.match(lineas, /r\.puedeOperar && x\.registroId && \(x\.pdfId \|\| x\.origen !== 'SISTEMA' \|\| x\.estadoFirma === 'PENDIENTE'\)/);
   const opciones = lineas.slice(lineas.indexOf('function opcionesDocumento('), lineas.indexOf('function botonesDocumento('));
   ['Ver equipo', 'Ver carpeta en Drive', 'Generar PDF', 'Regenerar PDF'].forEach((t) => assert.match(opciones, new RegExp("texto: '" + t + "'")));
   // Regenerar: inspección y responsiva del sistema con PDF (la inspección desde el 22-oct)

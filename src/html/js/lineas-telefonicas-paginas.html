@@ -11,7 +11,7 @@
     Lineas.telefonicas.registrar('paginas', (T) => {
       const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, vigente } = T;
       const { abrir, campos, encabezado, migas, pedirDocumento, tarjeta } = T.de('ficha');
-      const { activarLigasFirma, generarPdfPendiente, htmlLigasFirma, regenerarPdf, subirPdfFirmado } = T.de('documentos');
+      const { activarLigasFirma, descargarParaFirmar, generarPdfPendiente, htmlLigasFirma, regenerarPdf, subirPdfFirmado } = T.de('documentos');
       const { htmlSubirFotos, manejarSubidaArchivo } = T.de('captura');
 
       // ---- Inspección y responsiva: su página ----
@@ -22,7 +22,7 @@
       function datosDocumento(tipoPdf, d, r) {
         const pdfs = r.pdfs || [];
         return { documento: tipoPdf === 'INSPECCION' ? 'Inspección' : 'Responsiva', tipoPdf: tipoPdf, id: d._id, origen: d.origen,
-          fecha: d.fecha, pdfId: pdfs.length ? pdfs[0].id : null, carpetaId: d.drive ? d.drive.carpetaId : null,
+          fecha: d.fecha, pdfId: pdfs.length ? pdfs[0].id : null, carpetaId: d.drive ? d.drive.carpetaId : null, estadoFirma: d.estadoFirma || null,
           responsable: (d.snapshot && d.snapshot.responsable) || null, registroId: d.registroId || (r.equipo && r.equipo._id) || null };
       }
       function opcionesDocumento(x, r) {
@@ -31,6 +31,8 @@
           r.equipo ? { icono: 'smartphone', texto: 'Ver equipo', alHacer: () => abrir('equipo', r.equipo._id) } : null,
           x.carpetaId ? { icono: 'folder-open', texto: 'Ver carpeta en Drive',
             alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
+          operar && x.estadoFirma === 'PENDIENTE' ? { icono: 'download', texto: 'PDF para firmar', separador: true,
+            alHacer: () => descargarParaFirmar(x) } : null,
           operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId && !pdfsEnCurso[x.id] ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
             alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
           operar && x.registroId && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
@@ -44,7 +46,7 @@
         const ids = r.identificaciones || [];
         return pdfs.map((p, indice) => enlaceDrive(p.id, 'Ver PDF' + (pdfs.length > 1 ? ' ' + (indice + 1) : ''), true)).join('') +
           ids.map((x) => enlaceDrive(x.id, 'Ver ' + (x.tipo || 'identificación') + (ids.length > 1 ? ' · ' + x.persona : ''), true)).join('') +
-          (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA')
+          (r.puedeOperar && x.registroId && (x.pdfId || x.origen !== 'SISTEMA' || x.estadoFirma === 'PENDIENTE')
             ? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>' + icono('file-up') + ' Subir PDF firmado</button>' : '') +
           (opcionesDocumento(x, r).length
             ? '<button type="button" class="ln-btn-icono ln-btn-mas" data-ln-doc-mas title="Más opciones" aria-label="Más opciones">' + icono('ellipsis-vertical') + '</button>' : '');

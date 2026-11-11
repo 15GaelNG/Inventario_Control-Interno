@@ -44,6 +44,10 @@ function apiLineasFirmaRemotaEstado(token, tipoDoc, documentoId) {
 function apiLineasFirmaRemotaPendientes(token) {
   return LineasFirmaRemota.pendientes(token);
 }
+/** "PDF para firmar": el PDF pendiente con lo que ya está firmado, para quien lo firma en papel o a su modo. */
+function apiLineasFirmaRemotaPdfParaFirmar(token, tipoDoc, documentoId) {
+  return LineasFirmaRemota.pdfParaFirmar(docDeTipoPdf_(tipoDoc), token, documentoId);
+}
 /** "Firmar aquí": quien falta firma presencial en el equipo de quien opera (con sesión; la liga puede estar vencida). */
 function apiLineasFirmaRemotaFirmarAqui(token, tipoDoc, documentoId, rol, imagen) {
   return LineasFirmaRemota.firmarPresencial(docDeTipoPdf_(tipoDoc), token, documentoId, rol, imagen);

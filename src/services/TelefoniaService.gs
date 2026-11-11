@@ -872,7 +872,7 @@ const TelefoniaService = (function () {
     const doc = (tipo === 'INSPECCION' ? docs.inspecciones : docs.responsivas).filter((d) => d.id === docId)[0];
     if (!doc || (pdfId && doc.pdfId !== pdfId)) throw new Error('El PDF no es de este registro.');
     return LineasUtil.paraCliente(LineasCaptura.subirPdfFirmado(r, {
-      tipo: tipo, id: docId, origen: doc.origen, fecha: doc.fecha, pdfId: doc.pdfId, carpetaId: doc.carpetaId,
+      tipo: tipo, id: docId, origen: doc.origen, fecha: doc.fecha, pdfId: doc.pdfId, carpetaId: doc.carpetaId, estadoFirma: doc.estadoFirma,
     }, base64, usuarioOperacion_(sesion)));
   }
 

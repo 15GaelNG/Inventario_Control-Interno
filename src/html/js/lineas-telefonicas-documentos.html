@@ -211,6 +211,20 @@
        * sube aquí y reemplaza su PDF (el mismo archivo de Drive, LineasCaptura.subirPdfFirmado). Solo PDF.
        */
       function subirPdfFirmado(registroId, d, vista) {
+        // Esperaba firmas por liga (usuario, 11-nov): el PDF que se sube lo cierra; se avisa antes
+        if (d.estadoFirma === 'PENDIENTE') {
+          Confirmar.pedir({
+            titulo: 'Subir PDF firmado',
+            mensaje: (d.tipoPdf === 'INSPECCION' ? 'Esta inspección' : 'Esta responsiva') + ' espera firmas por liga. El PDF que subas queda como ' +
+              'el documento firmado y las ligas que faltan dejan de servir.',
+            textoConfirmar: 'Elegir el PDF',
+          }).then((ok) => { if (ok) elegirPdfFirmado(registroId, d, vista); });
+          return;
+        }
+        elegirPdfFirmado(registroId, d, vista);
+      }
+
+      function elegirPdfFirmado(registroId, d, vista) {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'application/pdf,.pdf';
@@ -256,6 +270,27 @@
           });
         });
         input.click();
+      }
+
+      /**
+       * "PDF para firmar" (usuario, 11-nov): el PDF de un documento que espera firmas por liga, con lo que ya está
+       * firmado y las casillas vacías, para quien no firma por liga (se lo imprime o se lo manda); firmado, regresa con
+       * "Subir PDF firmado". Sin guardar nada.
+       */
+      function descargarParaFirmar(d) {
+        aviso(icono('loader') + ' Preparando el PDF para firmar…', 4000);
+        return llamar('apiLineasFirmaRemotaPdfParaFirmar', d.tipoPdf, d.id).then((r) => {
+          const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+          const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = r.nombre || 'para firmar.pdf';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+          aviso(icono('circle-check') + ' Listo. Ya firmado, súbelo con «Subir PDF firmado».', 6000);
+        }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 8000));
       }
 
       /**
@@ -498,9 +533,12 @@
             doc('file-plus', 'Generar PDF', 'pdf', true, (d) => operar && !!d.pdfPendiente && !pdfsEnCurso[d.id], (d) => generarPdfPendiente(d.tipoPdf, d.id, d.carpetaId)),
             // Mientras falte alguna firma a distancia por completarse (usuario, 6-nov; como la Responsiva/Adherente Vehicular)
             doc('send', 'Ver ligas de firma', 'pdf', false, (d) => operar && d.estadoFirma === 'PENDIENTE', (d) => verLigasFirma(d)),
-            // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct)
+            // Para quien no firma por liga (usuario, 11-nov): se baja, se firma y se sube con «Subir PDF firmado»
+            doc('download', 'PDF para firmar', 'pdf', false, (d) => operar && d.estadoFirma === 'PENDIENTE', (d) => descargarParaFirmar(d)),
+            // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct); y el que espera firmas
+            // por liga (usuario, 11-nov: el PDF firmado lo cierra)
             // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
-            doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA'),
+            doc('file-up', 'Subir PDF firmado', 'pdf', true, (d) => operar && (!!d.pdfId || d.origen !== 'SISTEMA' || d.estadoFirma === 'PENDIENTE'),
               (d) => (d.registroId ? subirPdfFirmado(d.registroId, d) : subirPdfFirmado(id, d, vista))),
             // Inspecciones también (usuario, 22-oct: el PDF del NUCO 0820 salió sin el patrón)
             doc('refresh-ccw', 'Regenerar PDF', 'pdf', false, (d) => operar && d.origen === 'SISTEMA' && !!d.pdfId,
@@ -546,7 +584,7 @@
         cargarEvidencias: cargarEvidencias, copiarConAviso: copiarConAviso, generarPdfPendiente: generarPdfPendiente,
         htmlLigasFirma: htmlLigasFirma, activarLigasFirma: activarLigasFirma,
         pedirFirmasPdf: pedirFirmasPdf, ponerCopiarTarjetas: ponerCopiarTarjetas, regenerarPdf: regenerarPdf,
-        soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado, textoTarjeta: textoTarjeta,
+        soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado, descargarParaFirmar: descargarParaFirmar, textoTarjeta: textoTarjeta,
       };
     });
   })();

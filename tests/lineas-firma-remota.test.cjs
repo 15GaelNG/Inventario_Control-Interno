@@ -535,3 +535,83 @@ test('las carpetas de espera de la firma a distancia se revisan antes de despleg
     assert.ok(carpeta && revisadas.includes("'" + carpeta + "'"), k + ': ' + carpeta + ' en REVISION_EN_RAIZ (Diagnostico.gs)');
   });
 });
+
+test('cerrarConPdfSubido (usuario, 11-nov): el PDF firmado que se sube cierra el documento; las ligas que faltaban dejan de servir', () => {
+  const { F, DOC, ctx, filas, drive } = entorno([], []);
+  const trazo = (texto) => Buffer.from(texto).toString('base64');
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL', 'SEGUNDO'], { CI: trazo('trazo-ci') }, 'capturista@x.com');
+  filas.push(Object.assign({ _fila: 2, ID: 'RES-9', 'ESTADO FIRMA': 'PENDIENTE' }, cambios));
+  // El SEGUNDO ya firmó por su liga; falta el principal
+  F.completarFirma(DOC, cambios['TOKEN FIRMA SEGUNDO'], trazo('trazo-segundo'));
+  const fila = filas.find((f) => f.ID === 'RES-9');
+  const temps = [fila['FIRMA CI TEMP'], fila['FIRMA SEGUNDO RESPONSABLE TEMP']].map((v) => JSON.parse(v).archivoId);
+  const llamadas = [];
+  ctx.LineasCaptura.generarPdf = (tipo, id, forzar, usuario, firmasNuevas) => {
+    llamadas.push({ tipo, id, forzar, usuario, firmasNuevas });
+    return { id: 'pdf-oficial', url: 'https://drive/pdf-oficial' };
+  };
+
+  const r = F.cerrarConPdfSubido('RESPONSIVA', 'RES-9', { nombre: 'OPERADOR', correo: 'Opera@X.com' });
+  assert.equal(r.id, 'pdf-oficial');
+  // Su PDF se genera con lo que ya estaba firmado (va a su carpeta y queda ligado: LineasCaptura.generarPdf)
+  assert.equal(llamadas.length, 1);
+  assert.equal(llamadas[0].tipo, 'RESPONSIVA');
+  assert.equal(Buffer.from(llamadas[0].firmasNuevas.ci, 'base64').toString(), 'trazo-ci');
+  assert.equal(Buffer.from(llamadas[0].firmasNuevas.segundo, 'base64').toString(), 'trazo-segundo');
+  assert.equal(fila['ESTADO FIRMA'], 'FIRMADO');
+  assert.equal(fila['TOKEN FIRMA'], '');
+  assert.equal(fila['FIRMADO POR'], 'PDF FIRMADO: opera@x.com');
+  assert.equal(fila['FIRMADO POR SEGUNDO'], 'quien-firma@x.com', 'quien ya firmó por liga se queda así');
+  assert.equal(fila['FIRMA CI TEMP'], '');
+  temps.forEach((id) => assert.ok(!drive.has(id), 'las firmas temporales se tiran'));
+  // La liga que faltaba ya no sirve y sale del panel de pendientes
+  assert.throws(() => F.completarFirma(DOC, cambios['TOKEN FIRMA'], trazo('tarde')), /no es válida/);
+  ctx.Permisos.puedeLeer = () => ({});
+  assert.equal(F.pendientes('sesion').filas.length, 0);
+  // Ya cerrado: no se vuelve a generar nada
+  assert.equal(F.cerrarConPdfSubido('RESPONSIVA', 'RES-9', {}), null);
+  assert.equal(llamadas.length, 1);
+});
+
+test('cerrarConPdfSubido: si no se pudo generar el PDF, el documento sigue pendiente con sus ligas', () => {
+  const { F, DOC, ctx, filas } = entorno([]);
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL'], { CI: Buffer.from('ci').toString('base64') });
+  filas.push(Object.assign({ _fila: 2, ID: 'RES-8', 'ESTADO FIRMA': 'PENDIENTE' }, cambios));
+  ctx.LineasCaptura.generarPdf = () => ({ faltanFirmas: true });
+  assert.throws(() => F.cerrarConPdfSubido('RESPONSIVA', 'RES-8', {}), /No se pudo preparar el PDF/);
+  const fila = filas.find((f) => f.ID === 'RES-8');
+  assert.equal(fila['ESTADO FIRMA'], 'PENDIENTE');
+  assert.equal(fila['TOKEN FIRMA'], cambios['TOKEN FIRMA']);
+});
+
+test('pdfParaFirmar ("PDF para firmar", 11-nov): el PDF con lo que ya hay, sin la marca de vista previa ni guardar nada', () => {
+  const { F, DOC, ctx, filas, drive, pdfsHtml } = entorno([]);
+  ctx.LineasUtil.nuco4 = (v) => (v ? String(v).padStart(4, '0') : '');
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL'], { CI: Buffer.from('ci').toString('base64') });
+  filas.push(Object.assign({ _fila: 2, ID: 'RES-7', NUCO: 83, COMENTARIO: 'CAMBIO DE LINEA', 'ESTADO FIRMA': 'PENDIENTE' }, cambios));
+  const antes = drive.size;
+  const r = F.pdfParaFirmar(DOC, 'sesion', 'RES-7');
+  assert.equal(r.mimeType, 'application/pdf');
+  assert.equal(r.nombre, 'RESP 0083 para firmar.pdf');
+  assert.equal(pdfsHtml[0].datos.COMENTARIO, 'CAMBIO DE LINEA');
+  assert.ok(pdfsHtml[0].imagenes['FIRMA CI'], 'con la firma que ya está');
+  assert.ok(!pdfsHtml[0].imagenes['FIRMA RESPONSABLE'], 'la del responsable, en blanco');
+  assert.equal(drive.size, antes, 'el PDF temporal se tira');
+  assert.equal(filas[0]['ESTADO FIRMA'], 'PENDIENTE');
+  filas[0]['ESTADO FIRMA'] = 'FIRMADO';
+  assert.throws(() => F.pdfParaFirmar(DOC, 'sesion', 'RES-7'), /ya quedó firmado/);
+});
+
+test('Subir PDF firmado de un documento pendiente: el servidor lo cierra y la pantalla lo ofrece con aviso', () => {
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /if \(!pdfId && doc\.estadoFirma === 'PENDIENTE'\) \{\s*const cerrado = LineasFirmaRemota\.cerrarConPdfSubido\(doc\.tipo, doc\.id, usuario\);/);
+  assert.match(read('src/services/TelefoniaService.gs'), /carpetaId: doc\.carpetaId, estadoFirma: doc\.estadoFirma,/);
+  const docs = read('src/html/js/lineas-telefonicas-documentos.html');
+  assert.match(docs, /'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA' \|\| d\.estadoFirma === 'PENDIENTE'\)/);
+  assert.match(docs, /'PDF para firmar', 'pdf', false, \(d\) => operar && d\.estadoFirma === 'PENDIENTE'/);
+  assert.match(docs, /las ligas que faltan dejan de servir/);
+  const paginas = read('src/html/js/lineas-telefonicas-paginas.html');
+  assert.match(paginas, /estadoFirma: d\.estadoFirma \|\| null/);
+  assert.match(paginas, /x\.estadoFirma === 'PENDIENTE'\)\s*\? '<button type="button" class="ln-btn-icono" data-ln-doc-subir>/);
+  assert.match(read('src/api/LineasFirmaRemota.gs'), /function apiLineasFirmaRemotaPdfParaFirmar\(token, tipoDoc, documentoId\)/);
+});
