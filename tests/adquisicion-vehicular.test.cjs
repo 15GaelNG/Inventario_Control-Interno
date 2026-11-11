@@ -231,6 +231,8 @@ test('archivos regresa soportado:false si la liga no es de Drive (Dropbox)', () 
 function hojaVehMock(encabezados, filasDatos) {
   const filas = [encabezados.slice()].concat(filasDatos.map((f) => f.slice()));
   return {
+    getName: () => 'VEHICULOS',
+    getParent: () => ({ getId: () => 'SS' }),
     getLastColumn: () => encabezados.length,
     getLastRow: () => filas.length,
     getRange(row, col, numRows, numCols) {
@@ -268,6 +270,8 @@ function crearContextoVehiculos({ hoja } = {}) {
     CacheHojas: { tocar: (ssId, hojaNombre) => llamadas.tocar.push({ ssId, hojaNombre }) },
     console,
   });
+  // Las escrituras van por las primitivas de verdad (cambiarColumna…), sobre la hoja simulada
+  require('./sheet-utils-real')(contexto);
   vm.runInContext(
     fs.readFileSync(path.join(__dirname, '../src/services/VehiculosService.gs'), 'utf8') +
     '\nthis.Servicio = VehiculosService;',
@@ -324,7 +328,7 @@ test('autoLlenarAdquisicion llena solo los vehículos sin folio cuya serie está
   assert.deepEqual(hoja._filas[1], ['V1', 'jn1be6ds1r9105926', '30371', 'https://drive/30371']);
   assert.deepEqual(hoja._filas[2], ['V2', 'MMBM7U5G6SH031049', 'YA-TENIA', 'https://drive/viejo'], 'no se pisa lo ya capturado');
   assert.deepEqual(hoja._filas[3], ['V3', 'NOESTAENELINDICE1', '', '']);
-  assert.equal(llamadas.tocar.length, 1, 'avisa a CacheHojas cuando sí cambió algo');
+  assert.ok(llamadas.tocar.length >= 1, 'avisa a CacheHojas cuando sí cambió algo (cada columna escrita, por SheetUtils)');
 });
 
 test('autoLlenarAdquisicion no toca CacheHojas si no llenó nada', () => {

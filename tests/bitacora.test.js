@@ -28,7 +28,7 @@ function entorno(opciones) {
     },
     globales: {
       DriveUtils: { carpetaEnRaiz: () => carpeta, carpetaEnRaizSiExiste: () => (archivos.length ? carpeta : null) },
-      Config: { DRIVE_FOLDERS: { RAIZ: () => 'RAIZ' } },
+      Config: { ENTORNO: (opciones && opciones.entorno) || 'PROD', DRIVE_FOLDERS: { RAIZ: () => 'RAIZ' } },
       DriveApp: { getFileById: (id) => ({ moveTo: () => { archivos.push({ nombre: e.libros[id].getName(), getId: () => id }); } }), getFolderById: () => ({}) },
       MailApp: { sendEmail: (m) => correos.push(m) },
     },
@@ -248,6 +248,15 @@ console.log('10. Una pestaña que ya existía sin formato se repinta sola (Calen
   ok(/2026-10/.test(B.repintar()) && pestana._reglas.length === 17, 'repintarBitacora() la vuelve a pintar al momento');
   const calentador = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'Calentador.gs'), 'utf8');
   ok(/Bitacora\.alDia\(\)/.test(calentador), 'es un paso del Calentador');
+}
+
+console.log('\n11. En un DEV, su propio libro: varios DEV comparten la raíz de pruebas (la cadena se rompía al intercalarse)');
+{
+  const { S, B, archivos } = entorno({ entorno: 'DEV' });
+  B.sesion({ correo: 'ana@x.com' });
+  S.update('libro', 'TICKETS', 'TCK-1', { ESTADO: 'CERRADO' });
+  ok(archivos.length === 1 && archivos[0].nombre === 'LOGS 2026 despliega', 'el libro lleva la cuenta que despliega: ' + (archivos[0] || {}).nombre);
+  ok(!B.revisarCadena('2026-10').rota, 'y su cadena verifica');
 }
 
 if (fallas) { console.error('\n' + fallas + ' FALLA(S)'); process.exit(1); }

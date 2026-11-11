@@ -135,9 +135,8 @@ const InspeccionesService = (function () {
     const tiene = () => SheetUtils.indiceDeColumnas(
       hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0], [columna])[columna] !== -1;
     if (tiene()) return;
-    Candado.con(() => {
-      if (!tiene()) hoja.getRange(1, hoja.getLastColumn() + 1).setValue(columna);
-    });
+    // Dentro del candado se vuelve a leer el encabezado (tabla): dos a la vez no la duplican
+    Candado.con(() => SheetUtils.asegurarColumnas(SheetUtils.tabla(hoja), [columna], { negritas: false }));
   }
 
   /** Un renglón crudo con su calificación en porcentaje (copia: la caché es de todos y no se toca) */
@@ -328,6 +327,17 @@ const InspeccionesService = (function () {
    */
   const FORMATO_PDF = { fuente: 'Arial', margenes: { arriba: 27, abajo: 27, izquierda: 20, derecha: 20 } };
 
+  /**
+   * El documento en HTML (src/html/pdf/inspeccion-vehicular.html, una plantilla para todos los tipos) cuando está
+   * encendido para este entorno (PdfHtml.DOCUMENTOS) y el tipo tiene su formato (InspeccionFormatos.gs, generado de las
+   * plantillas de Docs); si no, el Doc del tipo, como siempre. → lo que va a PdfService.generar en vez de solo datos
+   */
+  const DOCUMENTO_HTML = 'inspeccion-vehicular';
+  function documentoPdf_(estructura, datos) {
+    if (!PdfHtml.encendido(DOCUMENTO_HTML) || !InspeccionFormatos.de(estructura.tipo)) return { datos: datos };
+    return { html: DOCUMENTO_HTML, datos: InspeccionHtml.datos(datos, estructura.tipo) };
+  }
+
   /** Lo que captura el inspector además del checklist */
   const CAPTURADOS = {
     CONDUCTOR: 'CONDUCTOR',
@@ -487,10 +497,10 @@ const InspeccionesService = (function () {
         plantillaId: estructura.plantillaId,
         // Una imagen que no llegó deja su marcador vacío: si no, el PDF imprimiría la ruta
         // del archivo ("MODELOS INSPECCION/HONDA 150XR/IZQUIERDA.png") en lugar del dibujo
-        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+        ...documentoPdf_(estructura, Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
           if (!paraPdf[columna]) vacias[columna] = '';
           return vacias;
-        }, {})),
+        }, {}))),
         imagenes: paraPdf,
         formato: FORMATO_PDF,
         carpetaId: enNuco ? carpetaInspeccion_().getId() : Config.DRIVE_FOLDERS.REPORTES(),
@@ -666,10 +676,10 @@ const InspeccionesService = (function () {
     try {
       const pdf = PdfService.generar({
         plantillaId: estructura.plantillaId,
-        datos: Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+        ...documentoPdf_(estructura, Object.assign({}, fila, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
           if (!paraPdf[columna]) vacias[columna] = '';
           return vacias;
-        }, {})),
+        }, {}))),
         imagenes: paraPdf,
         formato: FORMATO_PDF,
         carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, fila['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),
@@ -871,6 +881,7 @@ const InspeccionesService = (function () {
     const indices = SheetUtils.indiceDeColumnas(
       hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0], COLUMNAS_CALIFICACION());
     const r = { filas: filas, columnas: 0, faltan: [], celdas: 0, cambian: 0, raras: 0 };
+    const t = aplicar ? SheetUtils.tabla(hoja) : null;
     COLUMNAS_CALIFICACION().forEach((columna) => {
       if (indices[columna] === -1) { r.faltan.push(columna); return; }
       r.columnas++;
@@ -892,11 +903,10 @@ const InspeccionesService = (function () {
         return [fraccion];
       });
       if (aplicar && cambia) {
-        rango.setValues(nuevos);
+        SheetUtils.cambiarColumna(t, indices[columna], nuevos.map((x) => x[0]));
         rango.setNumberFormat('0.00%');
       }
     });
-    if (aplicar && r.cambian) CacheHojas.tocarHoja(hoja);
     return r;
   }
 
@@ -973,11 +983,8 @@ const InspeccionesService = (function () {
       return [puntaje.maximo / 100];
     });
     if (aplicar && r.calculadas) {
-      const columna = col(COL_MAXIMO) + 1;
-      const rango = hoja.getRange(2, columna, nuevos.length, 1);
-      rango.setValues(nuevos);
-      rango.setNumberFormat('0.00%');
-      CacheHojas.tocarHoja(hoja);
+      SheetUtils.cambiarColumna(SheetUtils.tabla(hoja), col(COL_MAXIMO), nuevos.map((x) => x[0]));
+      hoja.getRange(2, col(COL_MAXIMO) + 1, nuevos.length, 1).setNumberFormat('0.00%');
     }
     return r;
   }
@@ -1012,7 +1019,7 @@ const InspeccionesService = (function () {
       filas: datos.length - 1, corregidas: 0, yaCorrectas: 0, sinCalificar: 0, sinRespuestas: 0, sinTipo: 0,
       errores: {}, pdfRegenerados: 0, pdfErrores: {},
     };
-    let huboCambios = false;
+    const t = aplicar ? SheetUtils.tabla(hoja, { encabezados: encabezados }) : null;
     datos.slice(1).forEach((row, i) => {
       const actual = iFinal === -1 ? '' : row[iFinal];
       if (limpiar_(actual) === '') { r.sinCalificar++; return; }
@@ -1035,12 +1042,14 @@ const InspeccionesService = (function () {
       const actualPorcentaje = enCien_(actual);
       if (actualPorcentaje !== null && Math.abs(actualPorcentaje - puntaje.final) < 0.01) { r.yaCorrectas++; return; }
       r.corregidas++;
-      huboCambios = true;
       // Se escribe ESTA fila ya, no se junta para un solo setValues al final: con cientos de
       // filas que además regeneran su PDF, la ejecución se puede cortar a la mitad (el límite
       // de 6 min de Apps Script) -- juntar todo para el final perdía lo ya corregido y una
       // corrida siguiente no avanzaba nada. Así, lo que ya se escribió queda aunque se corte.
-      if (aplicar) hoja.getRange(i + 2, iFinal + 1).setValue(puntaje.final / 100).setNumberFormat('0.00%');
+      if (aplicar) {
+        SheetUtils.cambiarCeldas(t, [{ fila: i + 2, columnas: [{ i: iFinal, valor: puntaje.final / 100 }] }]);
+        hoja.getRange(i + 2, iFinal + 1).setNumberFormat('0.00%');
+      }
       if (aplicar && regenerarPdf && iId !== -1) {
         const idFila = limpiar_(row[iId]);
         const filaReal = {};
@@ -1054,7 +1063,6 @@ const InspeccionesService = (function () {
         }
       }
     });
-    if (aplicar && huboCambios) CacheHojas.tocarHoja(hoja);
     return r;
   }
 
@@ -1075,10 +1083,10 @@ const InspeccionesService = (function () {
     const enNuco = ExpedienteNuco.tieneNuco(nucco);
     const pdf = PdfService.generar({
       plantillaId: estructura.plantillaId,
-      datos: Object.assign({}, filaReal, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
+      ...documentoPdf_(estructura, Object.assign({}, filaReal, COLUMNAS_IMAGEN.reduce((vacias, [columna]) => {
         if (!paraPdf[columna]) vacias[columna] = '';
         return vacias;
-      }, {})),
+      }, {}))),
       imagenes: paraPdf,
       formato: FORMATO_PDF,
       carpetaId: enNuco ? ExpedienteNuco.carpetaInspeccion(nucco, filaReal['FECHA']).getId() : Config.DRIVE_FOLDERS.REPORTES(),

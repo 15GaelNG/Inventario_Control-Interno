@@ -39,7 +39,14 @@ const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto);
   console.log('3. Todo src/');
   const destino = path.join(__dirname, '..', '.construido', 'prueba');
   const rep = await construir(path.join(__dirname, '..', 'src'), destino);
-  ok(rep.despues < rep.antes * 0.7, 'el HTML pesa menos: ' + Math.round(rep.antes / 1024) + ' → ' + Math.round(rep.despues / 1024) + ' KB');
+  // Sin los documentos de PDF (src/html/pdf): son HTML con estilos en línea, casi sin JS ni CSS que comprimir
+  const pesoPdf = (raiz) => {
+    const d = path.join(raiz, 'html', 'pdf');
+    return fs.existsSync(d) ? fs.readdirSync(d).reduce((t, n) => t + fs.statSync(path.join(d, n)).size, 0) : 0;
+  };
+  const antes = rep.antes - pesoPdf(path.join(__dirname, '..', 'src'));
+  const despues = rep.despues - pesoPdf(destino);
+  ok(despues < antes * 0.7, 'el HTML pesa menos: ' + Math.round(antes / 1024) + ' → ' + Math.round(despues / 1024) + ' KB (sin los documentos de PDF)');
   ok(rep.sinComprimir.length === 0, rep.sinComprimir.length ? 'sin comprimir: ' + rep.sinComprimir.join('; ') : 'todos los bloques se comprimieron');
   const conBarras = [];
   const invalidos = [];

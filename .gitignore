@@ -58,3 +58,6 @@ prototipos/
 # Respaldo de Líneas para el cuadre (estados de cuenta, facturas, ventas: datos reales). Nunca al repo (es público)
 emergencia/
 REPORTE L*NEAS.xlsx
+
+# Documentos en HTML: los PDF reales, datos y firmas que baja tools/pdf/html (datos de personas) y las tipografías
+tools/pdf/.cache/

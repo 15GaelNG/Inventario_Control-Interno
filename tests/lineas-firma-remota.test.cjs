@@ -21,6 +21,7 @@ function entorno(filasIniciales, filasInsp) {
   const drive = new Map(); // id -> { bytes: Buffer, mimeType }
   let siguienteId = 1;
   const llamadasGenerarPdf = [];
+  const pdfsHtml = [];
   const correos = [];
 
   const archivo = (id) => {
@@ -80,9 +81,20 @@ function entorno(filasIniciales, filasInsp) {
         drive.set(id, { bytes: Buffer.from('PDF-FALSO'), mimeType: 'application/pdf' });
         return { id: id, nombre: nombre, url: 'https://drive/' + id };
       },
+      // DEV y producción desde el 10-nov: la plantilla HTML (PdfHtml encendido)
+      generarPdfHtml: (documento, datos, imagenes, carpeta, nombre) => {
+        const id = 'pdf-' + (siguienteId++);
+        pdfsHtml.push({ documento: documento, datos: datos, imagenes: imagenes });
+        drive.set(id, { bytes: Buffer.from('PDF-FALSO'), mimeType: 'application/pdf' });
+        return { id: id, nombre: nombre, url: 'https://drive/' + id };
+      },
     },
+    PdfHtml: { encendido: () => true },
     LineasCaptura: {
       _registroPlantilla: (fila) => Object.assign({}, fila),
+      _documentoHtml: (fila, esInspeccion) => (esInspeccion ? 'inspeccion-celular' : 'responsiva-celular'),
+      datosHtml: (fila) => Object.assign({ _de: 'responsiva' }, fila),
+      datosInspeccionHtml: (fila) => Object.assign({ _de: 'inspeccion' }, fila),
       generarPdf: (tipo, id, forzar, usuario, firmasNuevas) => {
         llamadasGenerarPdf.push({ tipo: tipo, id: id, forzar: forzar, firmasNuevas: firmasNuevas });
         return { url: 'https://drive/pdf-final-' + id };
@@ -90,7 +102,7 @@ function entorno(filasIniciales, filasInsp) {
     },
   });
   vm.runInContext(read('src/services/lineas/LineasFirmaRemota.gs') + '\nthis.F = LineasFirmaRemota;', ctx);
-  return { F: ctx.F, DOC: ctx.F.DOCUMENTOS.RESPONSIVA, filas: filas, drive: drive, llamadasGenerarPdf: llamadasGenerarPdf, correos: correos, ctx: ctx };
+  return { F: ctx.F, DOC: ctx.F.DOCUMENTOS.RESPONSIVA, filas: filas, drive: drive, llamadasGenerarPdf: llamadasGenerarPdf, correos: correos, ctx: ctx, pdfsHtml: pdfsHtml };
 }
 
 test('generarPendientes_: sin diferir nada no hay nada que hacer (0 roles)', () => {
@@ -244,12 +256,17 @@ test('completarFirma: si una TEMP ya guardada no se puede leer (archivo borrado)
 
 test('vistaPrevia: arma un PDF con lo que ya hay, sin guardar nada (se tira enseguida)', () => {
   const vence = new Date(Date.now() + 86400000);
-  const { F, DOC, drive } = entorno([
+  const { F, DOC, drive, pdfsHtml } = entorno([
     { ID: 'RES-1', COMENTARIO: 'un comentario', 'TOKEN FIRMA': 'tok-a', 'TOKEN FIRMA EXPIRA': vence },
   ]);
   const antes = drive.size;
   const pdf = F.vistaPrevia(DOC, 'tok-a');
   assert.equal(pdf.mimeType, 'application/pdf');
+  // El mismo camino que el PDF final: la plantilla HTML de la responsiva, con el aviso en el comentario
+  assert.equal(pdfsHtml.length, 1);
+  assert.equal(pdfsHtml[0].documento, 'responsiva-celular');
+  assert.equal(pdfsHtml[0].datos._de, 'responsiva');
+  assert.match(pdfsHtml[0].datos.COMENTARIO, /^un comentario \(VISTA PREVIA/);
   assert.ok(pdf.base64);
   assert.equal(drive.size, antes, 'el PDF de la vista previa se tira enseguida, no queda en Drive');
   assert.throws(() => F.vistaPrevia(DOC, 'no-existe'), /no es válida/);

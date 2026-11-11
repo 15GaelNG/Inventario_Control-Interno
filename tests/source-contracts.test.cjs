@@ -552,7 +552,6 @@ test('reducir una foto en el navegador es Imagen (componentes/imagen.html), sin 
   // 22-oct: había 5 copias; en el celular abrir fotos de cámara completas (y varias a la vez) dejaba la pantalla en
   // blanco. Imagen las abre con poca memoria y de una en una. Una copia nueva no tendría eso.
   const QUEDAN = {
-    'src/html/js/app-arqueos.html': 'Evidencias: se pasa a Imagen al integrar la rama de Jorge (él la cambió: aviso HEIC)',
     'src/html/js/lineas.html': 'una PÁGINA de PDF dibujada con pdf.js y firmaAchicada (una firma ya dibujada de 600 px, ' +
       'hasta que quepa en la caché; Emmanuel, 22-oct): ninguna abre una foto de cámara',
   };
@@ -604,13 +603,8 @@ test('toda escritura de una hoja pasa por SheetUtils (sus primitivas: ahí se co
   // Scripts que corre un editor (no la app): las migraciones, el arranque y la lectura de INE (solo en un DEV,
   // pestañas de análisis que se rehacen completas)
   const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
-  const QUEDAN = {   // solo puede encoger
-    'src/services/HelpdeskService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/InspeccionesService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/VehiculosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    // UberService.gs y PendientesInspeccionService.gs ya se integraron (hojaDeteccion_ y
-    // agregar_/revisarCargaHelpdesk ya usan SheetUtils.asegurarPestana/insert/updateMany).
-  };
+  // Ya no queda ninguno (10-nov): Help Desk, Inspecciones y Vehículos se pasaron al integrar la rama de Jorge
+  const QUEDAN = {};   // solo puede encoger
   const ESCRIBE = /\.(setValues?|appendRow|insertRows?(After|Before)?|deleteRows?|deleteColumns?|clearContents?|insertSheet|deleteSheet)\(|\.getRangeList\([^)]*\)\.setValue|Sheets\.Spreadsheets\.Values\.(update|batchUpdate|append|clear|batchClear)\(|sheetsApi\(['"]\/values:batchUpdate/;
   // Un renglón con «// fuera del sistema» escribe en un libro que NO es del sistema (la lista privada de temporales,
   // con contraseñas): a propósito no pasa por SheetUtils ni por la bitácora
@@ -629,11 +623,8 @@ test('toda escritura en Drive pasa por DriveUtils (sus primitivas avisan a la bi
   // 28-oct: crearArchivo, crearCarpeta, mover, renombrar, copiar, aPapelera, cambiarContenido y las de la API
   // (crearConApi, copiarConApi, reemplazarConApi). Lo temporal (copias de plantillas y de OCR) va con { temporal: true }.
   const EDITOR = /^src\/((Migracion\w*|SetupInicial)\.gs|services\/lineas\/LineasIne(Lectura|Nucos)\.gs)$/;
-  const QUEDAN = {   // solo puede encoger
-    'src/services/AdherenteVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/ArqueosService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-    'src/services/ResponsivaVehicularService.gs': 'la rama de Jorge lo cambia: se pasa al integrarla',
-  };
+  // Ya no queda ninguno (10-nov): Adherente, Arqueos y Responsiva vehicular se pasaron al integrar la rama de Jorge
+  const QUEDAN = {};   // solo puede encoger
   const ESCRIBE = /\.(createFile|makeCopy|setTrashed|moveTo|createFolder|setContent)\(|Drive\.Files\.(create|update|copy|remove|delete|insert)\(/;
   const sinComentarios = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const con = filesBelow(path.join(root, 'src')).filter((f) => f.endsWith('.gs'))

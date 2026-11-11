@@ -88,5 +88,5 @@ test('las plantillas del AppSheet quedan aparte de las del sistema', () => {
   // Las funciones de una sola vez (renombrar columnas, copiar plantillas) ya se corrieron y se quitaron (7-oct)
   const admin = read('src/services/lineas/LineasAdmin.gs');
   assert.doesNotMatch(admin, /lineasRenombrarColumnasDocumentos|lineasPlantillasComentario/);
-  assert.deepEqual(Object.keys(P).sort(), ['PLANTILLAS', 'PLANTILLAS_APPSHEET', 'generarPdfDesdePlantilla', 'plantillaInspeccion']);
+  assert.deepEqual(Object.keys(P).sort(), ['PLANTILLAS', 'PLANTILLAS_APPSHEET', 'generarPdfDesdePlantilla', 'generarPdfHtml', 'plantillaInspeccion']);
 });

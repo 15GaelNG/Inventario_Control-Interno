@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<!-- Carta adherente vehicular: la plantilla de Docs replicada (10-nov-2026). Hoja 2 = la de la responsiva vehicular, recorrida. -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: 612pt 792pt; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "CenturyGothic", sans-serif; color: #000; font-kerning: none; font-variant-ligatures: none; font-feature-settings: "kern" 0, "liga" 0; text-rendering: geometricPrecision; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hoja { position: relative; width: 612pt; height: 792pt; overflow: hidden; page-break-after: always; break-after: page; }
+  .hoja:last-child { page-break-after: auto; break-after: auto; }
+  .a { position: absolute; white-space: nowrap; line-height: 1.43; }
+  .f7 { font-size: 7pt; } .f8 { font-size: 8pt; } .f9 { font-size: 9pt; } .f10 { font-size: 10pt; } .f11 { font-size: 11pt; } .f16 { font-size: 16pt; }
+  .b { font-weight: 700; } .i { font-style: italic; }
+  .a.f7, .centro.f7 { margin-top: 0.6pt; } .a.f8, .centro.f8 { margin-top: 0.85pt; } .a.f9 { margin-top: 0.65pt; } .a.f10 { margin-top: 0.6pt; } .a.f16 { margin-top: 0.8pt; }
+  .palomita { margin-top: 0.8pt; }
+  .v { background: #ddebf6; }
+  .caja { position: absolute; }
+  .celda { position: absolute; background: #e7f0fe; width: 44pt; height: 23pt; }
+  .palomita { position: absolute; font-size: 9.5pt; line-height: 1; font-family: "MS PGothic", "Segoe UI Symbol", "DejaVu Sans", sans-serif; }
+  .pie { position: absolute; left: 0; width: 612pt; background: #05253a; color: #fff; }
+  .pie .a { color: #fff; }
+  .flujo { position: absolute; left: 0; width: 612pt; }
+  .intro { margin-left: 14.2pt; width: 588.6pt; height: 83.25pt; border-collapse: collapse; }
+  .intro td { padding: 0; vertical-align: middle; }
+  .parrafo-flujo { text-align: justify; white-space: pre-wrap; }
+  .debajo { position: relative; height: 0; }
+  .parrafo { position: absolute; font-size: 9pt; line-height: 16.5pt; text-align: justify; white-space: pre-wrap; }
+  .clausulas { position: absolute; left: 50.2pt; width: 547.68pt; top: 40.125pt; font-size: 7pt; line-height: 12.75pt; text-align: justify; }
+  .clausulas .c { position: relative; }
+  .clausulas .n { position: absolute; left: -18pt; top: 0; }
+  .bloque { position: absolute; left: 14.2pt; width: 582.95pt; font-size: 7pt; line-height: 12.75pt; text-align: justify; }
+  .estado { color: #1155cc; }
+  .firma { position: absolute; top: 590.2pt; width: 150pt; height: 60pt; }
+  .firma table { border-collapse: collapse; width: 150pt; height: 60pt; }
+  .firma td { padding: 0; vertical-align: bottom; text-align: center; height: 60pt; }
+  .firma img { display: inline-block; vertical-align: bottom; }
+  .raya { position: absolute; top: 672pt; height: 0; border-top: 1pt solid #000; }
+  .centro { position: absolute; text-align: center; white-space: nowrap; line-height: 1.43; }
+</style>
+</head>
+<body>
+
+<div class="hoja">
+  <img class="caja" src="{{LOGO:ciudad-maderas}}" style="left:15.7pt;top:19.4pt;width:163.5pt;height:101.3pt">
+  <div class="a f16 b" style="right:9.1pt;top:38.2pt">CARTA ADHERENTE VEHICULAR</div>
+  <div class="a f10" style="right:9.1pt;top:82.5pt">Querétaro, Qro. a <span class="v">{{DIA}}</span> de <span class="v">{{MES}}</span> de <span class="v">{{AÑO}}</span><span class="f11">.</span></div>
+  <div class="a f9" style="right:9.1pt;top:102.2pt">NUCO:<span class="f10" style="line-height:0"> </span><span class="f8 v">{{NUCCO}}</span><span class="f10" style="line-height:0"> </span>Sede y oficina:<span class="f10" style="line-height:0"> </span><span class="f8 v">{{SEDE}}</span> / <span class="f8 v">{{OFICINA / DESARROLLO}}</span></div>
+
+  <!-- La introducción vive en una fila de 83.25 pt de alto mínimo, centrada (como en el Doc): con más renglones crece
+       y empuja todo lo de abajo, que cuelga del final de esta fila -->
+  <div class="flujo" style="top:122.325pt">
+    <table class="intro"><tr><td><div class="parrafo-flujo" style="font-size:10pt;line-height:18pt">Yo, <span class="v">{{ADHERENTE}}</span>  colaborador (a) del departamento  de <span class="v">{{DEPARTAMENTO}}</span> en el área de <span class="v">{{AREA}}</span>, en función de mi puesto como  <span class="v">{{PUESTO}}</span>, para el grupo comercial denominado Ciudad Maderas y/o cualquier otra razón social perteneciente a dicho grupo comercial, acepto y firmo de conformidad la presente corresponsabilidad vehicular en el tenor de los siguientes compromisos e información detallada.</div></td></tr></table>
+    <div class="debajo">
+
+    <div class="a f10 b" style="left:17.2pt;top:4.225pt">INFORMACIÓN DEL VEHÍCULO</div>
+    <div class="a f10" style="left:17.2pt;top:22.225pt">Marca: <span class="v">{{MARCA}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:41.515pt">Tipo: <span class="v">{{CLASE}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:60.805pt">Año: <span class="v">{{MODELO}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:80.095pt">Color: <span class="v">{{COLOR}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:99.385pt">No. de Serie: <span class="v">{{SERIE VEHICULO}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:118.675pt">Placa: <span class="v">{{PLACA}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:137.965pt">Lugar de resguardo: <span class="v">{{LUGAR DE RESGUARDO}}</span></div>
+    <div class="a f10" style="left:17.2pt;top:157.255pt">Razón Social: <span class="v">{{RAZON SOCIAL}}</span></div>
+
+    <div class="a f10 b" style="left:294.7pt;top:4.225pt">DOCUMENTACIÓN</div>
+    <div class="a f10" style="left:294.7pt;top:22.225pt">Tarjeta de circulación : <span class="v">{{TARJETA DE CIRCULACION}}</span></div>
+    <div class="a f10" style="left:294.7pt;top:41.515pt">Licencia : <span class="v">{{LICENCIA}}</span></div>
+    <div class="a f10" style="left:294.7pt;top:60.805pt">Vigencia: <span class="v">{{VIGENCIA LICENCIA}}</span></div>
+    <div class="a f10" style="left:294.7pt;top:80.095pt">INE : <span class="v">{{INE}}</span></div>
+    <div class="a f10" style="left:294.7pt;top:99.385pt">No. de Inventario : <span class="v">{{NO DE INVENTARIO}}</span></div>
+    <div class="a f10" style="left:294.7pt;top:118.675pt">Póliza de seguro : <span class="v">{{POLIZA DE SEGURO}}</span></div>
+    <div class="a f10" style="left:294.7pt;top:137.965pt">Vigencia de poliza : <span class="v">{{VIGENCIA POLIZA}}</span></div>
+
+    <div class="parrafo" style="left:19.4pt;width:569pt;top:225.775pt;font-size:10pt;line-height:12pt">El ADHERENTE se obliga a utilizar la unidad vehicular con la debida precaución, cuidado y responsabilidad, exclusivamente para los fines autorizados por la empresa y conforme a las políticas internas aplicables. Asimismo, será responsable de cualquier daño, perjuicio, infracción o sanción que se derive de actos de negligencia, uso indebido, incumplimiento de las disposiciones legales, reglamentarias o administrativas vigentes, así como de la omisión de las obligaciones establecidas.</div>
+    <div class="parrafo" style="left:19.4pt;width:569pt;top:299.275pt;font-size:10pt;line-height:12pt">Las cláusulas de restricciones, penalizaciones, multas, deducibles y demás cargos aplicables será exigible al ADHERENTE del presente documento cuando se determine que el daño, infracción o incumplimiento es aplicable, conforme a lo establecido en la responsiva suscrita para el titular de la unidad y las políticas internas de la empresa.</div>
+
+    <div class="pie" style="top:538.425pt;height:27pt;left:0;width:612pt"></div>
+    <div class="a f10 b" style="left:38.9pt;top:543.525pt;color:#fff;white-space:pre">CONTÁCTENOS:  442 103 4451</div>
+    <div class="a f10" style="left:295.4pt;top:543.525pt;color:#fff">gestorvehicular.ft@ciudadmaderas.com</div>
+    <div class="a f10 b" style="left:531.7pt;top:543.525pt;color:#fff;white-space:pre">        F-CI01-047</div>
+    </div>
+  </div>
+</div>
+
+<div class="hoja">
+  <div style="position:absolute;left:0;top:4pt;width:612pt;height:720pt">
+  <div class="a f16 b" style="left:14.2pt;top:15.3pt">Cláusulas de responsabilidad para el colaborador:</div>
+  <div class="clausulas" style="top:43.925pt">
+    <div class="c"><span class="n">1.</span>Revisé por cuenta propia el automóvil que se detalla líneas arriba, reconozco que dicha unidad fue entregada <span class="estado">{{ESTADO DE ENTREGA}}</span>, en óptimas condiciones y que no representa alguna anomalía.</div>
+    <div class="c"><span class="n">2.</span>Haré buen uso, cuidaré y resguardaré la unidad vehicular, la cual será herramienta de trabajo que me es otorgada para el buen desempeño de mis actividades y me comprometo al mismo tiempo en cuidar y vigilar el mantenimiento que corresponde de acuerdo a los periodos señalados en el programa de servicios que se deberán realizar a dicha unidad, esto con apoyo de los administradores vehiculares.</div>
+    <div class="c"><span class="n">3.</span>Reportaré de manera inmediata cualquier falla o anomalía que requiera de atención inmediata para asegurar la preservación adecuada del vehículo.</div>
+    <div class="c" style="width:547.38pt"><span class="n">4.</span>Mantendré limpia y en buen estado la unidad, así mismo, la pondré a disposición de la empresa para gestionar con anticipación los mantenimientos preventivos en coordinación del área de <span class="b">Servicios Vehiculares.</span></div>
+    <div class="c"><span class="n">5.</span>Solicitaré en tiempo y forma la gestión de la verificación de la unidad de acuerdo a las fechas que corresponda así como los documentos requeridos para dicho trámite.</div>
+    <div class="c"><span class="n">6.</span>Para el caso que la unidad haya sido adquirida mediante financiamiento y se encuentre en alguno de los siguientes supuestos: así la unidad vehicular incluye una póliza vehicular obligatorio soy responsable de solicitar la renovación de la misma durante la vigencia de la misma b) En el caso que dicho financiamiento no implique la contratación de un seguro obligatorio pero en caso de que la EMPRESA lo solicite, realizaré la contratación de la póliza vehicular bajo los lineamientos que se me indiquen.</div>
+    <div class="c"><span class="n">7.</span>Me aseguraré que la empresa entregue los documentos necesarios para circular de acuerdo a los reglamentos de tránsito (tarjeta de circulación, placas, etc.).</div>
+    <div class="c"><span class="n">8.</span>Reportar por medio de una bitácora firmada por el responsable de la unidad cada carga de combustible, lectura de kilometraje inicial/final y recorridos.</div>
+    <div class="c"><span class="n">9.</span>En caso de ser responsable y obligado a responder sobre cualquier multa o sanción administrativa que derive por el uso, goce y disfrute del Vehículo liberando de cualquier responsabilidad a la EMPRESA.</div>
+    <div class="c"><span class="n">10.</span>En caso de utilizar el vehículo fuera de mi horario laboral (incluyendo fines de semana) debo contar con autorización expresa y por escrito de mi Director de Área, donde manifieste las razones por las cuales haré uso de la unidad de forma extemporánea. Para el caso particular que la vigencia del presente instrumento llegue a suscitarse algún siniestro con el vehículo, me obligo a notificar inmediatamente a la EMPRESA, a fin de dar el debido seguimiento tal y como se establece en el manual de gestión vehicular PRO-CI07-005.</div>
+    <div class="c"><span class="n">11.</span>Si se llegase a registrar algún siniestro en el día, durante mi uso fuera del horario laboral y/o fines de semana y en caso de que cuente con la autorización mencionada en el punto anterior, el área de Servicios Vehiculares, evaluará las circunstancias de los hechos, con el propósito de deslindar responsabilidades y determinar el pago para la reparación de la unidad por los daños ocasionados derivados del percance. En caso contrario y no contar con la autorización mencionada en el punto 10, seré el único responsable de los siniestros que se susciten durante el uso del vehículo, por lo que cubriré al 100% los gastos y sanciones que se deriven del siniestro.</div>
+    <div class="c"><span class="n">12.</span>En caso de que el vehículo cuente con garantía vigente, me comprometo a cumplir con el mantenimiento establecido, así como a solicitar el servicio preventivo con al menos 1,000 kilómetros de anticipación. En caso de incumplimiento, asumiré la responsabilidad total de cubrir el 100% de los costos generados por dicho servicio, así como cualquier falla que pudiera derivarse de esta omisión.</div>
+    <div class="c"><span class="n">13.</span>Para el resguardo de vehículos tipo motocicletas y motocarros, el responsable designado deberá garantizar en todo momento su adecuado resguardo. Será obligatorio prevenir el desgaste innecesario ocasionado por condiciones climáticas, tales como exposición prolongada al sol, lluvia u otros factores ambientales que puedan evitarse mediante un resguardo apropiado de la unidad.</div>
+  </div>
+  <div class="bloque b" style="top:476.625pt">Reconozco que la EMPRESA me ha proporcionado esta unidad vehicular exclusivamente para el desempeño de mis actividades laborales, y que soy el único responsable del uso, cuidado, siniestros, mantenimiento y resguardo del vehículo mientras esté bajo mi custodia. Cualquier incidente, daño, siniestro, o infracción relacionada con el uso del vehículo durante el periodo en que esté bajo mi responsabilidad será de mi exclusivo conocimiento, asumiendo las consecuencias legales y económicas que correspondan, y exonerando a la EMPRESA y/o cualquier otra razón social perteneciente al grupo comercial denominado "Ciudad Maderas" de cualquier responsabilidad civil y/o penal derivada del uso indebido o negligente del vehículo.</div>
+  <div class="bloque i" style="top:552.425pt"><span class="b">NOTA:</span> En caso de que el responsable haya causado baja definitiva y su jefe directo no haya notificado para la correspondiente revisión de la unidad vehicular, la responsabilidad del vehículo y del cumplimiento de las cláusulas anteriores pasarán a ser responsabilidad del jefe.</div>
+
+  <div class="firma" style="top:593.9pt;left:41pt"><table><tr><td>{{IMG:FIRMA ADHERENTE:150x60}}</td></tr></table></div>
+  <div class="firma" style="top:593.9pt;left:242.5pt"><table><tr><td>{{IMG:FIRMA JEFE:150x60}}</td></tr></table></div>
+  <div class="firma" style="top:593.9pt;left:430pt"><table><tr><td>{{IMG:FIRMA CI:150x60}}</td></tr></table></div>
+  <div class="raya" style="top:679pt;left:23pt;width:186pt"></div>
+  <div class="raya" style="top:679pt;left:229pt;width:177pt"></div>
+  <div class="raya" style="top:679pt;left:427pt;width:156pt"></div>
+  <div class="centro f7" style="left:23pt;width:186pt;top:670pt">{{ADHERENTE}}</div>
+  <div class="centro f7" style="left:229pt;width:177pt;top:670pt">{{NOMBRE JEFE}}</div>
+  <div class="centro f7" style="left:427pt;width:156pt;top:670pt">{{NOMBRE CI}}</div>
+  <div class="centro f8" style="left:23pt;width:186pt;top:678.9pt">Adherente</div>
+  <div class="centro f8" style="left:229pt;width:177pt;top:678.9pt">Jefe Directo</div>
+  <div class="centro f8" style="left:427pt;width:156pt;top:678.9pt">Entrega</div>
+  <div class="centro f8" style="left:23pt;width:186pt;top:699.1pt">Nombre y Firma</div>
+  <div class="centro f8" style="left:229pt;width:177pt;top:699.1pt">Nombre y Firma</div>
+  <div class="centro f8" style="left:427pt;width:156pt;top:699.1pt">Nombre y Firma</div>
+
+  </div>
+
+  <div class="pie" style="top:744pt;height:27pt;left:0;width:612pt"></div>
+  <div class="a f10 b" style="left:38.9pt;top:749.1pt;color:#fff;white-space:pre">CONTÁCTENOS:  442 103 4451</div>
+  <div class="a f10" style="left:295.4pt;top:749.1pt;color:#fff">gestorvehicular.ft@ciudadmaderas.com</div>
+  <div class="a f10 b" style="left:531.7pt;top:749.1pt;color:#fff;white-space:pre">        F-CI01-047</div>
+</div>
+
+</body>
+</html>

@@ -68,7 +68,13 @@ function entorno() {
         hechos.generados.push({ plantilla, imagenes, nombre });
         return { id: 'PDFNUEVO', nombre, url: 'url-nuevo', avisos: [] };
       },
+      // El camino de DEV y producción desde el 10-nov (PdfHtml encendido): las mismas imágenes van a la plantilla HTML
+      generarPdfHtml: (documento, datos, imagenes, carpeta, nombre) => {
+        hechos.generados.push({ plantilla: documento, datos, imagenes, nombre });
+        return { id: 'PDFNUEVO', nombre, url: 'url-nuevo', avisos: [] };
+      },
     },
+    PdfHtml: { encendido: () => true },
     LineasChecklist: { cumple: (condicion) => condicion !== 'NUNCA' },
     LineasFirmaRemota: { ROLES_DIFERIBLES: ['PRINCIPAL', 'SEGUNDO', 'TERCER', 'CUARTO', 'QUINTO'] },
     LineasAcciones: { PERSONA_DE_RESPONSIVA: [] },

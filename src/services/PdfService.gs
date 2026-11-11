@@ -324,7 +324,7 @@ const PdfService = (function () {
    *   `tiempos`: cuánto tardó cada paso (Cronometro.gs); también queda una línea [tiempo] en Ejecuciones.
    */
   function generar(p) {
-    if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
+    if (!p || (!p.plantillaId && !p.html)) throw new Error('Falta indicar la plantilla');
     const cuenta = () => Session.getEffectiveUser().getEmail();
     // El nombre empieza con el tipo («pdf vehicular-INSPECCION …»): cronometroResumen() agrupa por las dos primeras palabras
     const crono = Cronometro.iniciar('pdf vehicular-' + String(p.nombre || 'DOCUMENTO').split(' ')[0] + ' ' + (p.nombre || p.plantillaId));
@@ -359,6 +359,32 @@ const PdfService = (function () {
       nombre += ' ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'HH.mm');
     }
     crono.marcar('nombre único');
+
+    // El documento en HTML (PdfHtml.gs): sin copia de ningún Doc; el mismo resultado que el camino de siempre
+    if (p.html) {
+      let salidaHtml = null;
+      try {
+        const hecho = PdfHtml.pdf(p.html, datosParaPlantilla_(p.datos), p.imagenes);
+        crono.marcar('convertir');
+        let pdf;
+        try {
+          pdf = DriveUtils.crearArchivo(carpeta, hecho.blob, nombre + '.pdf');
+        } catch (err) {
+          throw new Error('Se armó el documento, pero no se pudo guardar el PDF en la carpeta. La cuenta ' + cuenta() +
+            ' necesita permiso de editor ahí. ' + err.message);
+        }
+        crono.marcar('crear archivo');
+        if (!DriveUtils.compartirLoMasAmplioPosible(pdf)) {
+          console.warn('No se pudo compartir explícitamente el PDF (cuenta ' + cuenta() + '). Archivo: ' + pdf.getUrl());
+        }
+        crono.marcar('compartir');
+        salidaHtml = { url: pdf.getUrl(), fileId: pdf.getId(), nombre: pdf.getName(), marcadores: 0, sinResolver: hecho.sinResolver };
+        return salidaHtml;
+      } finally {
+        if (salidaHtml) salidaHtml.tiempos = crono.tiempos();
+        crono.anotar();
+      }
+    }
 
     let copia;
     try {
@@ -428,7 +454,18 @@ const PdfService = (function () {
    * @return {{base64: string, mimeType: string}}
    */
   function generarVistaPrevia(p) {
-    if (!p || !p.plantillaId) throw new Error('Falta indicar la plantilla');
+    if (!p || (!p.plantillaId && !p.html)) throw new Error('Falta indicar la plantilla');
+    if (p.html) {
+      // En HTML no hay copia que crear ni tirar: el PDF sale directo, con el aviso arriba
+      const cronoHtml = Cronometro.iniciar('pdf vista-previa ' + p.html);
+      try {
+        const hecho = PdfHtml.pdf(p.html, datosParaPlantilla_(p.datos), p.imagenes, { aviso: 'VISTA PREVIA — AÚN SIN FIRMAR' });
+        cronoHtml.marcar('convertir');
+        return { base64: Utilities.base64Encode(hecho.blob.getBytes()), mimeType: 'application/pdf' };
+      } finally {
+        cronoHtml.anotar();
+      }
+    }
     const crono = Cronometro.iniciar('pdf vista-previa ' + p.plantillaId);
     const carpeta = p.carpetaId ? DriveApp.getFolderById(p.carpetaId) : carpetaReportes_();
     crono.marcar('carpeta');

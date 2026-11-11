@@ -50,7 +50,9 @@ function crearContexto() {
         createFile: (blob) => { llamadas.imagenesSubidas.push({ carpetaId: id, nombre: blob.nombre }); return { id: 'file-' + llamadas.imagenesSubidas.length }; },
       }),
     },
+    // Las primitivas de escritura de verdad (crearArchivo, aPapelera…) sobre el Drive de mentira
     DriveUtils: {
+      ...require('./drive-utils-real')(),
       compartirLoMasAmplioPosible: () => 'DOMAIN',
       marcarAutor: (archivo) => archivo,
       // Las carpetas se buscan por nombre en la raíz de la app: aquí el nombre hace de ID
@@ -103,6 +105,8 @@ function crearContexto() {
       PRESTAMOS: 'PRESTAMOS',
       archivar: (archivo, nucco, doc, op) => { llamadas.expediente.push(Object.assign({ archivar: archivo.id, nucco, doc, adherente: !!(op && op.adherente) }, op && op.prestamo ? { prestamo: true } : {})); },
     },
+    // El documento en HTML apagado: aquí se prueba el camino de siempre (el HTML, en pdf-html.test.cjs)
+    PdfHtml: { encendido: () => false },
     PdfService: {
       generar: (o) => { llamadas.pdfGenerados++; llamadas.pdfEn = o.carpetaId; llamadas.imagenesPdf = o.imagenes; return { id: 'pdf1', fileId: 'pdf1', nombre: 'r.pdf', url: 'https://drive/r.pdf' }; },
       generarVistaPrevia: (p) => { llamadas.vistasPrevias++; return { base64: 'pdf-bytes', mimeType: 'application/pdf', imagenes: p.imagenes }; },
@@ -111,7 +115,7 @@ function crearContexto() {
     },
   });
   vm.runInContext(
-    fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') + fs.readFileSync(path.join(__dirname, '../src/services/ResponsivaVehicularService.gs'), 'utf8') +
+    fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') + fs.readFileSync(path.join(__dirname, '../src/utils/Cronometro.gs'), 'utf8') + '\n' + fs.readFileSync(path.join(__dirname, '../src/services/ResponsivaVehicularService.gs'), 'utf8') +
     '\nthis.Servicio = ResponsivaVehicularService;',
     contexto
   );

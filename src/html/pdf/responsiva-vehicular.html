@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: 612pt 792pt; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "CenturyGothic", sans-serif; color: #000; font-kerning: none; font-variant-ligatures: none; font-feature-settings: "kern" 0, "liga" 0; text-rendering: geometricPrecision; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hoja { position: relative; width: 612pt; height: 792pt; overflow: hidden; page-break-after: always; break-after: page; }
+  .hoja:last-child { page-break-after: auto; break-after: auto; }
+  .a { position: absolute; white-space: nowrap; line-height: 1.43; }
+  .f7 { font-size: 7pt; } .f8 { font-size: 8pt; } .f9 { font-size: 9pt; } .f10 { font-size: 10pt; } .f11 { font-size: 11pt; } .f16 { font-size: 16pt; }
+  .b { font-weight: 700; } .i { font-style: italic; }
+  .a.f7, .centro.f7 { margin-top: 0.6pt; } .a.f8, .centro.f8 { margin-top: 0.85pt; } .a.f9 { margin-top: 0.65pt; } .a.f10 { margin-top: 0.6pt; } .a.f16 { margin-top: 0.8pt; }
+  .palomita { margin-top: 0.8pt; }
+  .v { background: #ddebf6; }
+  .caja { position: absolute; }
+  .celda { position: absolute; background: #e7f0fe; width: 44pt; height: 23pt; }
+  .palomita { position: absolute; font-size: 9.5pt; line-height: 1; font-family: "MS PGothic", "Segoe UI Symbol", "DejaVu Sans", sans-serif; }
+  .pie { position: absolute; left: 0; width: 612pt; background: #05253a; color: #fff; }
+  .pie .a { color: #fff; }
+  .flujo { position: absolute; left: 0; width: 612pt; }
+  .intro { margin-left: 14.2pt; width: 588.6pt; height: 83.25pt; border-collapse: collapse; }
+  .intro td { padding: 0; vertical-align: middle; }
+  .parrafo-flujo { text-align: justify; white-space: pre-wrap; }
+  .debajo { position: relative; height: 0; }
+  .parrafo { position: absolute; font-size: 9pt; line-height: 16.5pt; text-align: justify; white-space: pre-wrap; }
+  .clausulas { position: absolute; left: 50.2pt; width: 547.68pt; top: 40.125pt; font-size: 7pt; line-height: 12.75pt; text-align: justify; }
+  .clausulas .c { position: relative; }
+  .clausulas .n { position: absolute; left: -18pt; top: 0; }
+  .bloque { position: absolute; left: 14.2pt; width: 582.95pt; font-size: 7pt; line-height: 12.75pt; text-align: justify; }
+  .estado { color: #1155cc; }
+  .firma { position: absolute; top: 590.2pt; width: 150pt; height: 60pt; }
+  .firma table { border-collapse: collapse; width: 150pt; height: 60pt; }
+  .firma td { padding: 0; vertical-align: bottom; text-align: center; height: 60pt; }
+  .firma img { display: inline-block; vertical-align: bottom; }
+  .raya { position: absolute; top: 672pt; height: 0; border-top: 1pt solid #000; }
+  .centro { position: absolute; text-align: center; white-space: nowrap; line-height: 1.43; }
+</style>
+</head>
+<body>
+
+<div class="hoja">
+  <img class="caja" src="{{LOGO:ciudad-maderas}}" style="left:15.7pt;top:19.4pt;width:163.5pt;height:101.3pt">
+  <div class="a f16 b" style="right:9.1pt;top:38.2pt">CARTA RESPONSIVA VEHICULAR</div>
+  <div class="a f10" style="right:9.1pt;top:82.5pt">Querétaro, Qro. a <span class="v">{{DIA}}</span> de <span class="v">{{MES}}</span> de <span class="v">{{AÑO}}</span><span class="f11">.</span></div>
+  <div class="a f9" style="right:9.1pt;top:102.2pt">NUCO:<span class="f10" style="line-height:0"> </span><span class="f8 v">{{NUCCO}}</span><span class="f10" style="line-height:0"> </span>Sede y oficina:<span class="f10" style="line-height:0"> </span><span class="f8 v">{{SEDE}}</span> / <span class="f8 v">{{OFICINA / DESARROLLO}}</span></div>
+
+  <!-- La introducción vive en una fila de 83.25 pt de alto mínimo, centrada (como en el Doc): con más renglones crece
+       y empuja todo lo de abajo, que cuelga del final de esta fila -->
+  <div class="flujo" style="top:122.425pt">
+    <table class="intro"><tr><td><div class="parrafo-flujo" style="font-size:9pt;line-height:16.5pt">Yo, <span class="v">{{RESPONSABLE}}</span>  colaborador (a) del departamento  de <span class="v">{{DEPARTAMENTO}}</span> en el área de <span class="v">{{AREA}}</span>, en función de mi puesto como  <span class="v">{{PUESTO}}</span>, para el grupo comercial denominado Ciudad Maderas y/o cualquier otra razón social perteneciente a dicho grupo comercial, acepto y firmo de conformidad la presente responsabilidad vehicular en el tenor de los siguientes compromisos e información detallada.</div></td></tr></table>
+    <div class="debajo">
+
+    <div class="a f9 b" style="left:17.2pt;top:4.325pt">INFORMACIÓN DEL VEHÍCULO</div>
+    <div class="a f9" style="left:17.2pt;top:20.825pt">Marca: <span class="v">{{MARCA}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:39.25pt">Tipo: <span class="v">{{CLASE}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:57.68pt">Año: <span class="v">{{MODELO}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:76.11pt">Color: <span class="v">{{COLOR}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:94.54pt">No. de Serie: <span class="v">{{SERIE VEHICULO}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:112.97pt">Placa: <span class="v">{{PLACA}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:131.4pt">Lugar de resguardo: <span class="v">{{LUGAR DE RESGUARDO}}</span></div>
+    <div class="a f9" style="left:17.2pt;top:149.825pt">Razón Social: <span class="v">{{RAZON SOCIAL}}</span></div>
+
+    <div class="a f9 b" style="left:294.7pt;top:4.325pt">DOCUMENTACIÓN</div>
+    <div class="a f9" style="left:294.7pt;top:20.825pt">Tarjeta de circulación : <span class="v">{{TARJETA DE CIRCULACION}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:39.25pt">Licencia : <span class="v">{{LICENCIA}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:57.68pt">Vigencia: <span class="v">{{VIGENCIA LICENCIA}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:76.11pt">INE : <span class="v">{{INE}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:94.54pt">No. de Inventario : <span class="v">{{NO DE INVENTARIO}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:112.97pt">Póliza de seguro : <span class="v">{{POLIZA DE SEGURO}}</span></div>
+    <div class="a f9" style="left:294.7pt;top:131.4pt">Vigencia de poliza : <span class="v">{{VIGENCIA POLIZA}}</span></div>
+
+    <div class="a f9 b" style="left:19.4pt;top:185.825pt">El vehículo se entrega</div>
+    <div class="a f8" style="left:150.8pt;top:185.925pt">SI</div>
+    <div class="a f8" style="left:192.2pt;top:185.925pt">NO</div>
+    <div class="a f8 b" style="left:298.4pt;top:185.925pt">Observaciones adicionales</div>
+
+    <!-- Casillas: 13 renglones de 24 pt desde 408.7 pt; la raya blanca de 1 pt entre celdas queda como hueco -->
+    <div class="celda" style="left:132pt;top:203.325pt"></div><div class="celda" style="left:177pt;top:203.325pt"></div>
+    <div class="celda" style="left:132pt;top:227.325pt"></div><div class="celda" style="left:177pt;top:227.325pt"></div>
+    <div class="celda" style="left:132pt;top:251.325pt"></div><div class="celda" style="left:177pt;top:251.325pt"></div>
+    <div class="celda" style="left:132pt;top:275.325pt"></div><div class="celda" style="left:177pt;top:275.325pt"></div>
+    <div class="celda" style="left:132pt;top:299.325pt"></div><div class="celda" style="left:177pt;top:299.325pt"></div>
+    <div class="celda" style="left:132pt;top:323.325pt"></div><div class="celda" style="left:177pt;top:323.325pt"></div>
+    <div class="celda" style="left:132pt;top:347.325pt"></div><div class="celda" style="left:177pt;top:347.325pt"></div>
+    <div class="celda" style="left:132pt;top:371.325pt"></div><div class="celda" style="left:177pt;top:371.325pt"></div>
+    <div class="celda" style="left:132pt;top:395.325pt"></div><div class="celda" style="left:177pt;top:395.325pt"></div>
+    <div class="celda" style="left:132pt;top:419.325pt"></div><div class="celda" style="left:177pt;top:419.325pt"></div>
+    <div class="celda" style="left:132pt;top:443.325pt"></div><div class="celda" style="left:177pt;top:443.325pt"></div>
+    <div class="celda" style="left:132pt;top:467.325pt"></div><div class="celda" style="left:177pt;top:467.325pt"></div>
+    <div class="celda" style="left:132pt;top:491.325pt"></div><div class="celda" style="left:177pt;top:491.325pt"></div>
+    <div class="caja" style="left:132pt;top:515.325pt;width:160.2pt;height:29pt;background:#ddebf6"></div>
+    <div class="caja" style="left:294.2pt;top:203.325pt;width:305pt;height:341pt;background:#ddebf6"></div>
+
+    <div class="a f8" style="left:19.4pt;top:206.925pt">Gato hidráulico</div>
+    <div class="a f8" style="left:19.4pt;top:230.925pt">Gato mecanico</div>
+    <div class="a f8" style="left:19.4pt;top:254.925pt">Llave de cruz</div>
+    <div class="a f8" style="left:19.4pt;top:278.925pt">Maneral</div>
+    <div class="a f8" style="left:19.4pt;top:302.925pt">Llanta de refacción</div>
+    <div class="a f8" style="left:19.4pt;top:326.925pt">Kit de seguridad</div>
+    <div class="a f8" style="left:19.4pt;top:350.925pt">Parasol</div>
+    <div class="a f8" style="left:19.4pt;top:374.925pt">Tapetes uso rudo</div>
+    <div class="a f8" style="left:19.4pt;top:398.925pt">Tapetes alfombra</div>
+    <div class="a f8" style="left:19.4pt;top:422.925pt">Cubre volante</div>
+    <div class="a f8" style="left:19.4pt;top:446.925pt">Cubre asientos</div>
+    <div class="a f8" style="left:19.4pt;top:470.925pt">Bed liner</div>
+    <div class="a f8" style="left:19.4pt;top:494.925pt">Cubierta de batea</div>
+    <div class="a f8" style="left:19.4pt;top:518.925pt">Otros:</div>
+    <div class="a f7" style="left:136.4pt;top:519.825pt">{{OTROS}}</div>
+    <div class="a f8" style="left:298.4pt;top:207.325pt;width:296pt;white-space:pre-wrap">{{OBSERVACIONES}}</div>
+
+    <div class="palomita" style="left:148.8pt;top:209.925pt">{{SI:GATO HIDRAULICO}}</div><div class="palomita" style="left:193.8pt;top:209.925pt">{{NO:GATO HIDRAULICO}}</div>
+    <div class="palomita" style="left:148.8pt;top:233.925pt">{{SI:GATO MECANICO}}</div><div class="palomita" style="left:193.8pt;top:233.925pt">{{NO:GATO MECANICO}}</div>
+    <div class="palomita" style="left:148.8pt;top:257.925pt">{{SI:LLAVE CRUZ}}</div><div class="palomita" style="left:193.8pt;top:257.925pt">{{NO:LLAVE CRUZ}}</div>
+    <div class="palomita" style="left:148.8pt;top:281.925pt">{{SI:MANERAL}}</div><div class="palomita" style="left:193.8pt;top:281.925pt">{{NO:MANERAL}}</div>
+    <div class="palomita" style="left:148.8pt;top:305.925pt">{{SI:LLANTA REFACCION}}</div><div class="palomita" style="left:193.8pt;top:305.925pt">{{NO:LLANTA REFACCION}}</div>
+    <div class="palomita" style="left:148.8pt;top:329.925pt">{{SI:KIT SEGURIDAD}}</div><div class="palomita" style="left:193.8pt;top:329.925pt">{{NO:KIT SEGURIDAD}}</div>
+    <div class="palomita" style="left:148.8pt;top:353.925pt">{{SI:PARASOL}}</div><div class="palomita" style="left:193.8pt;top:353.925pt">{{NO:PARASOL}}</div>
+    <div class="palomita" style="left:148.8pt;top:377.925pt">{{SI:TAPETES RUDO}}</div><div class="palomita" style="left:193.8pt;top:377.925pt">{{NO:TAPETES RUDO}}</div>
+    <div class="palomita" style="left:148.8pt;top:401.925pt">{{SI:TAPETES ALFOMBRA}}</div><div class="palomita" style="left:193.8pt;top:401.925pt">{{NO:TAPETES ALFOMBRA}}</div>
+    <div class="palomita" style="left:148.8pt;top:425.925pt">{{SI:CUBRE VOLANTE}}</div><div class="palomita" style="left:193.8pt;top:425.925pt">{{NO:CUBRE VOLANTE}}</div>
+    <div class="palomita" style="left:148.8pt;top:449.925pt">{{SI:CUBRE ASIENTOS}}</div><div class="palomita" style="left:193.8pt;top:449.925pt">{{NO:CUBRE ASIENTOS}}</div>
+    <div class="palomita" style="left:148.8pt;top:473.925pt">{{SI:BED LINER}}</div><div class="palomita" style="left:193.8pt;top:473.925pt">{{NO:BED LINER}}</div>
+    <div class="palomita" style="left:148.8pt;top:497.925pt">{{SI:CUBIERTA BATEA}}</div><div class="palomita" style="left:193.8pt;top:497.925pt">{{NO:CUBIERTA BATEA}}</div>
+
+    <div class="pie" style="top:552.325pt;height:26pt;left:0;width:612pt"></div>
+    <div class="a f10 b" style="left:38.9pt;top:556.925pt;color:#fff;white-space:pre">CONTÁCTENOS:  442 103 4451</div>
+    <div class="a f10" style="left:295.4pt;top:556.925pt;color:#fff">gestorvehicular.ft@ciudadmaderas.com</div>
+    <div class="a f10 b" style="left:531.7pt;top:556.925pt;color:#fff;white-space:pre">        F-CI01-045</div>
+    </div>
+  </div>
+</div>
+
+<div class="hoja">
+  <div style="position:absolute;left:0;top:8pt;width:612pt;height:720pt">
+  <div class="a f16 b" style="left:14.2pt;top:11.6pt">Cláusulas de responsabilidad para el colaborador:</div>
+  <div class="clausulas">
+    <div class="c"><span class="n">1.</span>Revisé por cuenta propia el automóvil que se detalla líneas arriba, reconozco que dicha unidad fue entregada <span class="estado">{{ESTADO DE ENTREGA}}</span>, en óptimas condiciones y que no representa alguna anomalía.</div>
+    <div class="c"><span class="n">2.</span>Haré buen uso, cuidaré y resguardaré la unidad vehicular, la cual será herramienta de trabajo que me es otorgada para el buen desempeño de mis actividades y me comprometo al mismo tiempo en cuidar y vigilar el mantenimiento que corresponde de acuerdo a los periodos señalados en el programa de servicios que se deberán realizar a dicha unidad, esto con apoyo de los administradores vehiculares.</div>
+    <div class="c"><span class="n">3.</span>Reportaré de manera inmediata cualquier falla o anomalía que requiera de atención inmediata para asegurar la preservación adecuada del vehículo.</div>
+    <div class="c" style="width:547.38pt"><span class="n">4.</span>Mantendré limpia y en buen estado la unidad, así mismo, la pondré a disposición de la empresa para gestionar con anticipación los mantenimientos preventivos en coordinación del área de <span class="b">Servicios Vehiculares.</span></div>
+    <div class="c"><span class="n">5.</span>Solicitaré en tiempo y forma la gestión de la verificación de la unidad de acuerdo a las fechas que corresponda así como los documentos requeridos para dicho trámite.</div>
+    <div class="c"><span class="n">6.</span>Para el caso que la unidad haya sido adquirida mediante financiamiento y se encuentre en alguno de los siguientes supuestos: así la unidad vehicular incluye una póliza vehicular obligatorio soy responsable de solicitar la renovación de la misma durante la vigencia de la misma b) En el caso que dicho financiamiento no implique la contratación de un seguro obligatorio pero en caso de que la EMPRESA lo solicite, realizaré la contratación de la póliza vehicular bajo los lineamientos que se me indiquen.</div>
+    <div class="c"><span class="n">7.</span>Me aseguraré que la empresa entregue los documentos necesarios para circular de acuerdo a los reglamentos de tránsito (tarjeta de circulación, placas, etc.).</div>
+    <div class="c"><span class="n">8.</span>Reportar por medio de una bitácora firmada por el responsable de la unidad cada carga de combustible, lectura de kilometraje inicial/final y recorridos.</div>
+    <div class="c"><span class="n">9.</span>En caso de ser responsable y obligado a responder sobre cualquier multa o sanción administrativa que derive por el uso, goce y disfrute del Vehículo liberando de cualquier responsabilidad a la EMPRESA.</div>
+    <div class="c"><span class="n">10.</span>En caso de utilizar el vehículo fuera de mi horario laboral (incluyendo fines de semana) debo contar con autorización expresa y por escrito de mi Director de Área, donde manifieste las razones por las cuales haré uso de la unidad de forma extemporánea. Para el caso particular que la vigencia del presente instrumento llegue a suscitarse algún siniestro con el vehículo, me obligo a notificar inmediatamente a la EMPRESA, a fin de dar el debido seguimiento tal y como se establece en el manual de gestión vehicular PRO-CI07-005.</div>
+    <div class="c"><span class="n">11.</span>Si se llegase a registrar algún siniestro en el día, durante mi uso fuera del horario laboral y/o fines de semana y en caso de que cuente con la autorización mencionada en el punto anterior, el área de Servicios Vehiculares, evaluará las circunstancias de los hechos, con el propósito de deslindar responsabilidades y determinar el pago para la reparación de la unidad por los daños ocasionados derivados del percance. En caso contrario y no contar con la autorización mencionada en el punto 10, seré el único responsable de los siniestros que se susciten durante el uso del vehículo, por lo que cubriré al 100% los gastos y sanciones que se deriven del siniestro.</div>
+    <div class="c"><span class="n">12.</span>En caso de que el vehículo cuente con garantía vigente, me comprometo a cumplir con el mantenimiento establecido, así como a solicitar el servicio preventivo con al menos 1,000 kilómetros de anticipación. En caso de incumplimiento, asumiré la responsabilidad total de cubrir el 100% de los costos generados por dicho servicio, así como cualquier falla que pudiera derivarse de esta omisión.</div>
+    <div class="c"><span class="n">13.</span>Para el resguardo de vehículos tipo motocicletas y motocarros, el responsable designado deberá garantizar en todo momento su adecuado resguardo. Será obligatorio prevenir el desgaste innecesario ocasionado por condiciones climáticas, tales como exposición prolongada al sol, lluvia u otros factores ambientales que puedan evitarse mediante un resguardo apropiado de la unidad.</div>
+  </div>
+  <div class="bloque b" style="top:472.925pt">Reconozco que la EMPRESA me ha proporcionado esta unidad vehicular exclusivamente para el desempeño de mis actividades laborales, y que soy el único responsable del uso, cuidado, siniestros, mantenimiento y resguardo del vehículo mientras esté bajo mi custodia. Cualquier incidente, daño, siniestro, o infracción relacionada con el uso del vehículo durante el periodo en que esté bajo mi responsabilidad será de mi exclusivo conocimiento, asumiendo las consecuencias legales y económicas que correspondan, y exonerando a la EMPRESA y/o cualquier otra razón social perteneciente al grupo comercial denominado "Ciudad Maderas" de cualquier responsabilidad civil y/o penal derivada del uso indebido o negligente del vehículo.</div>
+  <div class="bloque i" style="top:548.625pt"><span class="b">NOTA:</span> En caso de que el responsable haya causado baja definitiva y su jefe directo no haya notificado para la correspondiente revisión de la unidad vehicular, la responsabilidad del vehículo y del cumplimiento de las cláusulas anteriores pasarán a ser responsabilidad del jefe.</div>
+
+  <div class="firma" style="left:41pt"><table><tr><td>{{IMG:FIRMA RESPONSABLE:150x60}}</td></tr></table></div>
+  <div class="firma" style="left:242.5pt"><table><tr><td>{{IMG:FIRMA JEFE:150x60}}</td></tr></table></div>
+  <div class="firma" style="left:430pt"><table><tr><td>{{IMG:FIRMA CI:150x60}}</td></tr></table></div>
+  <div class="raya" style="left:23pt;width:186pt"></div>
+  <div class="raya" style="left:229pt;width:177pt"></div>
+  <div class="raya" style="left:427pt;width:156pt"></div>
+  <div class="centro f7" style="left:23pt;width:186pt;top:663.3pt">{{RESPONSABLE}}</div>
+  <div class="centro f7" style="left:229pt;width:177pt;top:663.3pt">{{NOMBRE JEFE}}</div>
+  <div class="centro f7" style="left:427pt;width:156pt;top:663.3pt">{{NOMBRE CI}}</div>
+  <div class="centro f8" style="left:23pt;width:186pt;top:672.1pt">Responsable</div>
+  <div class="centro f8" style="left:229pt;width:177pt;top:672.1pt">Jefe Directo</div>
+  <div class="centro f8" style="left:427pt;width:156pt;top:672.1pt">Entrega</div>
+  <div class="centro f8" style="left:23pt;width:186pt;top:692.4pt">Nombre y Firma</div>
+  <div class="centro f8" style="left:229pt;width:177pt;top:692.4pt">Nombre y Firma</div>
+  <div class="centro f8" style="left:427pt;width:156pt;top:692.4pt">Nombre y Firma</div>
+
+  </div>
+
+  <div class="pie" style="top:758pt;height:26pt;left:0;width:612pt"></div>
+  <div class="a f10 b" style="left:38.9pt;top:762.6pt;color:#fff;white-space:pre">CONTÁCTENOS:  442 103 4451</div>
+  <div class="a f10" style="left:295.4pt;top:762.6pt;color:#fff">gestorvehicular.ft@ciudadmaderas.com</div>
+  <div class="a f10 b" style="left:531.7pt;top:762.6pt;color:#fff;white-space:pre">        F-CI01-045</div>
+</div>
+
+</body>
+</html>

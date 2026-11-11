@@ -980,6 +980,68 @@ const LineasCaptura = (function () {
     return registro;
   }
 
+  // ---- La responsiva en HTML (src/html/pdf/responsiva-celular.html, PdfHtml; 10-nov-2026) ----
+  const DOCUMENTO_HTML = 'responsiva-celular';
+  // Los campos que pinta la plantilla (sus <<…>> de Docs), con el nombre tal cual los escribe ella
+  const CAMPOS_HTML = ['DIA', 'MES', 'AÑO', 'SEDE', 'OFICINA / DESARROLLO', 'RESPONSABLE', 'IDENTIFICACION', 'No EMPLEADO',
+    'RAZON SOCIAL', 'No TELEFONO', 'MODELO', 'COMPAÑIA', 'SIM', 'DEPARTAMENTO', 'IMEI', 'AREA', 'COLOR', 'PUESTO',
+    'ACCESORIOS', 'JEFE DIRECTO', 'TICKET', 'DIRECTOR', 'PIN WHATSAPP', 'CORREO', 'PIN EQUIPO', 'COMENTARIO', 'NOMBRE CI',
+    // El nombre bajo la casilla de cada responsable (plantilla «PRUEBA RESPONSABLE 05-nov»; registroPlantilla_: «N/A» si no hay)
+    'RESPONSABLE 1', 'RESPONSABLE 2', 'RESPONSABLE 3', 'RESPONSABLE 4', 'RESPONSABLE 5'];
+  /**
+   * Los valores de la responsiva para la plantilla HTML: lo mismo que ponía LineasPdf en el Doc (registroPlantilla_,
+   * columnas sin distinguir mayúsculas, una fecha como dd/mm/aaaa) y lo que allá eran fórmulas o ajustes:
+   *   NUCO4        RIGHT("000" & [NUCO], 4), o «NO APLICA» en la línea sin equipo
+   *   ADICIONALES  'SI' con responsables adicionales: la firma del principal y los nombres bajo la firma, más chicos
+   *   SALTO        'salto': las sanciones en la hoja 2 (LineasPdf.generarPdfHtml lo quita si la hoja 1 no alcanza)
+   */
+  function datosHtml_(fila) {
+    const r = registroPlantilla_(fila);
+    const buscar = (c) => {
+      const b = c.toUpperCase().trim();
+      for (const k in r) { if (k.toUpperCase().trim() === b) return r[k]; }
+      return '';
+    };
+    const texto = (v) => {
+      if (v === null || v === undefined) return '';
+      if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? '' : Utilities.formatDate(v, ZONA, 'dd/MM/yyyy');
+      if (typeof v === 'boolean') return v ? 'Y' : 'N';
+      return String(v);
+    };
+    const d = {};
+    CAMPOS_HTML.forEach((c) => { d[c] = texto(buscar(c)); });
+    d['NUCO4'] = r._fijas && r._fijas.NUCO ? String(r._fijas.NUCO) : ('000' + texto(buscar('NUCO'))).slice(-4);
+    d['ADICIONALES'] = ORDEN_ADICIONALES.some((n) => String(fila['NOMBRE ' + n + ' RESPONSABLE'] || '').trim()) ? 'SI' : '';
+    d['SALTO'] = 'salto';
+    return d;
+  }
+
+  /**
+   * La inspección en HTML: src/html/pdf/inspeccion-celular.html o, para una «de antes» (LineasPdf.plantillaInspeccion),
+   * inspeccion-celular-checklist.html.
+   */
+  function documentoInspeccionHtml_(fila) {
+    return LineasPdf.plantillaInspeccion(fila) === LineasPdf.PLANTILLAS.INSPECCION_CELULAR_CHECKLIST
+      ? 'inspeccion-celular-checklist' : 'inspeccion-celular';
+  }
+  /**
+   * Los valores de la inspección para la plantilla HTML: lo mismo que ponía LineasPdf (registroPlantilla_, una fecha
+   * como dd/mm/aaaa). Las casillas las resuelve la plantilla ({{ES:CAMPO:VALOR}}) y PdfHtml busca cada columna sin
+   * distinguir mayúsculas, como LineasPdf.
+   */
+  function datosInspeccionHtml_(fila) {
+    const r = registroPlantilla_(fila);
+    const d = {};
+    Object.keys(r).forEach((k) => {
+      if (k === '_fijas') return;
+      const v = r[k];
+      d[k] = v === null || v === undefined ? ''
+        : Object.prototype.toString.call(v) === '[object Date]' ? (isNaN(v.getTime()) ? '' : Utilities.formatDate(v, ZONA, 'dd/MM/yyyy'))
+          : typeof v === 'boolean' ? (v ? 'Y' : 'N') : String(v);
+    });
+    return d;
+  }
+
   /** Escribe la ruta del PDF en la fila (columna File del AppSheet, igual que su acción GUARDAR) y en APP_EVIDENCIAS. */
   function ligarPdf_(tabla, columnaPdf, ids, pdf, ruta) {
     const filas = LineasDatos.buscarFilasPorId(tabla, ids[0]);
@@ -1136,9 +1198,13 @@ const LineasCaptura = (function () {
     const anterior = forzar ? pdfVigente_(ev) : null;
     crono.marcar('firmas a imagen');
     try {
-      const pdf = LineasPdf.generarPdfDesdePlantilla(
-        esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
-        registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos, crono);
+      // En HTML cuando el documento ya está encendido para este entorno (PdfHtml.DOCUMENTOS); si no, el Doc de siempre
+      const docHtml = esInspeccion ? documentoInspeccionHtml_(fila) : DOCUMENTO_HTML;
+      const pdf = PdfHtml.encendido(docHtml)
+        ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? datosInspeccionHtml_(fila) : datosHtml_(fila), imagenes, carpeta, nombre, d.enNucos, crono)
+        : LineasPdf.generarPdfDesdePlantilla(
+          esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
+          registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos, crono);
       if (d.enNucos) LineasArchivos.olvidarNuco(d.nuco);
       if (anterior) {
         const nuevo = DriveApp.getFileById(pdf.id);
@@ -1317,5 +1383,9 @@ const LineasCaptura = (function () {
     _accesoriosDeInspeccion: accesoriosDeInspeccion_,
     // Para LineasFirmaRemota.gs (vistaPrevia): el mismo registro que arma generarPdf para la plantilla
     _registroPlantilla: registroPlantilla_,
+    // El documento en HTML de la fila (responsiva o la variante de su inspección): para la misma vista previa
+    _documentoHtml: (fila, esInspeccion) => (esInspeccion ? documentoInspeccionHtml_(fila) : DOCUMENTO_HTML),
+    /** Los valores del PDF en HTML (la comparación con los PDF reales, src/pruebas/PruebasPdfHtml.gs) */
+    datosHtml: (fila) => datosHtml_(fila), datosInspeccionHtml: (fila) => datosInspeccionHtml_(fila),
   };
 })();

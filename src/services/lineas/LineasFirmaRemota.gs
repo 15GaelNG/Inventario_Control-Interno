@@ -241,7 +241,7 @@ const LineasFirmaRemota = (function () {
     if (!expira || isNaN(expira.getTime()) || expira.getTime() < Date.now()) {
       throw new Error('Esta liga ya venció -- pide que te manden una nueva.');
     }
-    const registro = Object.assign({}, LineasCaptura._registroPlantilla(fila), { 'COMENTARIO': (fila['COMENTARIO'] || '') + ' (VISTA PREVIA — AÚN SIN FIRMAR)' });
+    const filaVista = Object.assign({}, fila, { 'COMENTARIO': (fila['COMENTARIO'] || '') + ' (VISTA PREVIA — AÚN SIN FIRMAR)' });
     const imagenesBase64 = imagenesDesdeTemp_(doc, fila);
     const imagenesBlob = {};
     TODOS_LOS_ROLES.forEach((r) => {
@@ -251,8 +251,15 @@ const LineasFirmaRemota = (function () {
     // El principal: <<FIRMA RESPONSABLE>> o <<FIRMA RESPONSABLE 1>> según la plantilla (igual que LineasCaptura.generarPdf)
     if (imagenesBlob['FIRMA RESPONSABLE']) imagenesBlob['FIRMA RESPONSABLE 1'] = imagenesBlob['FIRMA RESPONSABLE'];
     const carpeta = DriveUtils.carpetaEnRaiz(doc.carpetaTemp);
-    const plantilla = doc.tipoPdf === 'INSPECCION' ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR;
-    const pdf = LineasPdf.generarPdfDesdePlantilla(plantilla, registro, imagenesBlob, carpeta, 'vista previa ' + Utilities.getUuid() + '.pdf', true);
+    // El mismo camino que el PDF final (LineasCaptura.generarPdf): en HTML si PdfHtml lo enciende, si no con el Doc
+    const esInspeccion = doc.tipoPdf === 'INSPECCION';
+    const docHtml = LineasCaptura._documentoHtml(filaVista, esInspeccion);
+    const nombre = 'vista previa ' + Utilities.getUuid() + '.pdf';
+    const pdf = PdfHtml.encendido(docHtml)
+      ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? LineasCaptura.datosInspeccionHtml(filaVista) : LineasCaptura.datosHtml(filaVista),
+        imagenesBlob, carpeta, nombre, true)
+      : LineasPdf.generarPdfDesdePlantilla(esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
+        LineasCaptura._registroPlantilla(filaVista), imagenesBlob, carpeta, nombre, true);
     try {
       const blob = DriveApp.getFileById(pdf.id).getBlob();
       return { base64: Utilities.base64Encode(blob.getBytes()), mimeType: 'application/pdf' };

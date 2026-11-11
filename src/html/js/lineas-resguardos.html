@@ -297,6 +297,28 @@
         return vista === 'RESGUARDOS' ? todas.filter((f) => f.ESTADO) : todas.filter((f) => f.CANCELACION);
       }
 
+      // El detalle del total de Cancelaciones: cada estado con su cuenta (las canceladas, separadas en anteriores al
+      // sistema y del sistema); un estado que no esté en la lista sale con su nombre, así la suma siempre cuadra
+      function desgloseTotal(filas) {
+        const anterior = (f) => f.ORIGEN === 'ANTERIOR AL SISTEMA';
+        const partes = [
+          ['Canceladas anteriores al sistema', (f) => anterior(f)],
+          ['Canceladas en el sistema', (f) => !anterior(f) && f.CANCELACION === 'CANCELADA'],
+          ['Carta enviada', (f) => !anterior(f) && f.CANCELACION === 'CARTA ENVIADA'],
+          ['Carta firmada', (f) => !anterior(f) && f.CANCELACION === 'CARTA FIRMADA'],
+          ['Por firmar', (f) => !anterior(f) && f.CANCELACION === 'POR FIRMAR'],
+          ['Retiradas', (f) => !anterior(f) && f.CANCELACION === 'RETIRADA'],
+        ];
+        const lineas = partes.map(([nombre, es]) => [nombre, filas.filter(es).length]);
+        const otros = {};
+        filas.filter((f) => !partes.some(([, es]) => es(f)))
+          .forEach((f) => { const k = f.CANCELACION || 'Sin estado'; otros[k] = (otros[k] || 0) + 1; });
+        Object.keys(otros).forEach((k) => lineas.push([k, otros[k]]));
+        return 'Suma de todas las líneas de esta pestaña:\n' +
+          lineas.filter(([, n]) => n).map(([nombre, n]) => '• ' + nombre + ': ' + miles(n)).join('\n') +
+          '\nTotal: ' + miles(filas.length);
+      }
+
       function pintarKpis() {
         const filas = filasVista();
         const cuenta = (campo, valor) => filas.filter((f) => f[campo] === valor).length;
@@ -309,7 +331,8 @@
           { icono: 'gift', valor: miles(cuenta('ESTADO', 'DONADO')), etiqueta: 'Donados', filtros: { ESTADO: { valores: ['DONADO'] } } },
           { icono: 'trash-2', valor: miles(cuenta('ESTADO', 'DESECHADO')), etiqueta: 'Desechados', filtros: { ESTADO: { valores: ['DESECHADO'] } } },
         ] : [
-          { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Líneas a cancelar' },
+          // Al pasar el mouse, qué suma y cuánto es cada parte (lo pidió el área, 10-nov)
+          { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Proyección total de cancelaciones', titulo: desgloseTotal(filas) },
           { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] } } },
           { icono: 'signature', valor: miles(cuenta('CANCELACION', 'CARTA FIRMADA')), etiqueta: 'Carta firmada', filtros: { CANCELACION: { valores: ['CARTA FIRMADA'] } } },
           { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
