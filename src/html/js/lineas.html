@@ -850,9 +850,7 @@
         // remoto (LineasFirmaRemota.gs): esta firma SIEMPRE se difiere por liga (nunca CI/INSPECTOR, que siempre
         // firman presencial) -- ya no hay lienzo aquí ni selector "Firma aquí ahora" (usuario, 6-nov: se quitó esa
         // opción por el bug de las firmas en blanco al firmar un responsable dentro del sistema).
-        control = e.remoto
-          ? '<div class="ln-nota">' + icono('send', 'ln-icon-sm') + ' Al guardar se genera una liga para que firme a distancia -- tú se la compartes (no se manda sola).</div>'
-          : htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', ETIQUETA_FIRMA[e.columna]);
+        control = e.remoto ? htmlFirmaRemota_(e.columna) : htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', ETIQUETA_FIRMA[e.columna]);
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
       } else {
@@ -861,6 +859,45 @@
       const ancho = ['escala', 'area', 'patron', 'firma', 'identificacion'].indexOf(e.control) >= 0 ? ' ln-af-ancho' : '';
       return '<div class="field ln-af-campo' + ancho + (e.control === 'escala' ? ' ln-af-escala' : '') + (e.soloLectura ? ' ln-af-lectura' : '') + '" data-af-columna="' + esc(e.columna) + '" data-mostrar="' + condAtributo(e.mostrar) + '" data-requerido="' + condAtributo(e.requerido) + '" data-editable="' + condAtributo(e.editable) + '">' +
         '<label for="' + id + '">' + esc(e.etiqueta) + '<span class="ln-af-req"' + (e.requerido === 'SIEMPRE' ? '' : ' hidden') + '> *</span></label>' + control + '</div>';
+    }
+
+    /**
+     * Cómo firman los responsables (usuario, 11-nov): por liga, lo normal, o en papel para casos especiales (quien no
+     * sabe usar la liga). En papel no se genera ninguna liga: el PDF sale de una vez con sus casillas en blanco, se
+     * imprime, se firma y se sube con «Subir PDF firmado» en Documentos. Se elige una vez, en la firma del responsable
+     * principal, y vale para todos los responsables del documento (FIRMA_EN_PAPEL lo lee al guardar).
+     */
+    const NOTA_FIRMA_ = {
+      LIGA: ['send', 'Al guardar se genera una liga para que firme a distancia -- tú se la compartes (no se manda sola).'],
+      PAPEL: ['printer', 'En papel: el PDF sale con su casilla en blanco. Imprímelo, que lo firme y súbelo con «Subir PDF firmado» en Documentos.'],
+    };
+    const notaFirma_ = (modo) => icono(NOTA_FIRMA_[modo][0], 'ln-icon-sm') + ' ' + esc(NOTA_FIRMA_[modo][1]);
+    function htmlFirmaRemota_(columna) {
+      const nota = '<div class="ln-nota" data-firma-nota>' + notaFirma_('LIGA') + '</div>';
+      if (columna !== 'FIRMA RESPONSABLE') return nota;
+      return '<div class="ln-segmentado" role="group" aria-label="Cómo firman los responsables" data-firma-modo>' +
+        '<button type="button" class="secondary activo" data-modo-firma="LIGA" aria-pressed="true">' + icono('send') + ' Por liga</button>' +
+        '<button type="button" class="secondary" data-modo-firma="PAPEL" aria-pressed="false">' + icono('printer') + ' En papel</button></div>' + nota;
+    }
+    /** Liga el selector de htmlFirmaRemota_ dentro de `cuerpo`; regresa () => true si se eligió en papel. */
+    function activarFirmaEnPapel(cuerpo) {
+      let modo = 'LIGA';
+      const grupo = cuerpo.querySelector('[data-firma-modo]');
+      if (grupo) {
+        grupo.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-modo-firma]');
+          if (!b || b.dataset.modoFirma === modo) return;
+          modo = b.dataset.modoFirma;
+          grupo.querySelectorAll('[data-modo-firma]').forEach((x) => {
+            const activo = x.dataset.modoFirma === modo;
+            x.classList.toggle('activo', activo);
+            x.setAttribute('aria-pressed', activo ? 'true' : 'false');
+          });
+          cuerpo.querySelectorAll('[data-firma-nota]').forEach((n) => { n.innerHTML = notaFirma_(modo); });
+        });
+      }
+      // Si la firma del principal no se ve (inspección sin responsable), no hay nada que elegir: va por liga
+      return () => modo === 'PAPEL' && !!grupo && !(grupo.closest('.ln-af-campo') || {}).hidden;
     }
 
     // Responsables adicionales (6-oct); desde el firmado a distancia (usuario) cada uno también tiene su firma digital
@@ -2608,7 +2645,7 @@
       // de correcciones, html/js/lineas-correcciones.html). Cada pantalla agrega su init… con Object.assign(Lineas, …).
       comun: {
         $: $, esc: esc, guion: guion, miles: miles, ico: ico, chip: chip, chipCompania: chipCompania, fechaTabla: fechaTabla,
-        tablaLineas: tablaLineas, tilesKpi: tilesKpi, aviso: aviso, icono: icono, mensajeError: mensajeError,
+        tablaLineas: tablaLineas, tilesKpi: tilesKpi, aviso: aviso, icono: icono, mensajeError: mensajeError, activarFirmaEnPapel: activarFirmaEnPapel,
         llamar: llamar, pedirDatos: pedirDatos, CALIFICACION_DESEMPENO: CALIFICACION_DESEMPENO,
         CALIFICACION_SI: CALIFICACION_SI, CATALOGOS_LINEAS: CATALOGOS_LINEAS, COLOR_ESTATUS: COLOR_ESTATUS,
         NOMBRE_DE_FIRMA: NOMBRE_DE_FIRMA, NOTA_SIN_PANEL: NOTA_SIN_PANEL, ORDEN_ADICIONALES: ORDEN_ADICIONALES, PASOS_FORMULARIO: PASOS_FORMULARIO,

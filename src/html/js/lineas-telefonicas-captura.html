@@ -7,7 +7,7 @@
   (function () {
     'use strict';
     const { $, CALIFICACION_DESEMPENO, CALIFICACION_SI, NOMBRE_DE_FIRMA, NOTA_SIN_PANEL, ORDEN_ADICIONALES, PASOS_FORMULARIO,
-      POSICIONES_PATRON, activarAdicionales, activarBloqueo, activarCombosEn, activarIdentificaciones, activarPasos,
+      POSICIONES_PATRON, activarAdicionales, activarFirmaEnPapel, activarBloqueo, activarCombosEn, activarIdentificaciones, activarPasos,
       alternarMulti, aplicarBloqueo, aplicarCambiosIndice, aplicarReglasEn, aviso, bloqueoElegido,
       calificacionAppSheet, cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, copiarTexto, crearFirma, cumpleCondicion,
       enlaceDrive, errorPinBloqueo, erroresFormularioEn, esPuntosPatron, esc, firmaGuardadaEn, flechasPatron,
@@ -343,6 +343,8 @@
 
       function iniciarFormularioAppSheet() {
         const cuerpo = $('#ln-captura-cuerpo', raiz);
+        // Por liga o en papel (11-nov): lo lee el guardado de la responsiva y de la inspección
+        captura.firmaEnPapel = activarFirmaEnPapel(cuerpo);
         (captura.contexto.formulario || []).forEach((e) => {
           if (e.tipo !== 'campo') return;
           const id = 'af-' + e.columna.replace(/[^A-Za-z0-9]+/g, '-');
@@ -748,10 +750,11 @@
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
         Promise.all([firmaInspector.base64('#ffffff'), sesion.carpetaPromesa || null]).then(([inspector]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: null, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
-          // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
+          // El responsable principal y cada adicional presente firman a distancia, por liga (usuario, 6-nov:
           // "igual firman las mismas personas" que la Responsiva). El servidor ignora los roles sin nombre en la
-          // inspección (rolesADiferir_, LineasCaptura.gs): sin responsable, no se genera ninguna liga.
-          const rolesDiferidos = ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
+          // inspección (rolesADiferir_, LineasCaptura.gs): sin responsable, no se genera ninguna liga. En papel
+          // (11-nov, casos especiales) no se difiere nada: el PDF sale ya y se sube firmado desde Documentos.
+          const rolesDiferidos = sesion.firmaEnPapel && sesion.firmaEnPapel() ? [] : ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
@@ -831,10 +834,11 @@
         Promise.all([firmaCi.base64('#ffffff'), leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores)])
           .then(([ci, identificaciones]) => {
           sesion.pdfFirmas = { responsable: null, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
-          // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
-          // se quitó la opción de firmarlos aquí mismo, por el bug de las firmas en blanco al capturarlas en el
-          // formulario). El servidor ignora los roles sin nombre en la responsiva (rolesADiferir_, LineasCaptura.gs).
-          const rolesDiferidos = ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
+          // El responsable principal y cada adicional presente firman a distancia, por liga (usuario, 6-nov: se quitó
+          // la opción de firmarlos aquí mismo, por el bug de las firmas en blanco al capturarlas en el formulario). El
+          // servidor ignora los roles sin nombre en la responsiva (rolesADiferir_, LineasCaptura.gs). En papel (11-nov,
+          // casos especiales) no se difiere nada: el PDF sale ya y se sube firmado desde Documentos.
+          const rolesDiferidos = sesion.firmaEnPapel && sesion.firmaEnPapel() ? [] : ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
