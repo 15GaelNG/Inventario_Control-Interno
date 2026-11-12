@@ -636,3 +636,18 @@ test('Firmas pendientes: si el correo no está en USUARIOS o no se pudo leer la 
   ctx.console = { error: (m) => errores.push(m) };
   assert.equal(F.pendientes('s').filas[0]['ENVIADO POR'], 'nadie@x.com');
 });
+
+// La página de la liga (usuario, 12-nov): «: EMMA NOEMI…», «Tu firma ()» y «Firmar como» sin texto. Líneas no tiene
+// «otro» firmante (QUIEN_OTRO vacío) y una liga sin «quien» contaba como él; ahora es el principal, «Colaborador»
+test('FirmaExterna: la liga de Líneas firma como el colaborador, sin etiquetas vacías', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src/html/FirmaExterna.html'), 'utf8');
+  const js = html.slice(html.indexOf('const tipo = '), html.indexOf('const token = '));
+  const quien = (tipo, dato) => new Function('document', js + '\nreturn quien;')({ body: { dataset: { tipo: tipo, quien: dato } } });
+  assert.equal(quien('lineas-responsiva', ''), 'principal');
+  assert.equal(quien('lineas-inspeccion', ''), 'principal');
+  // Vehicular y Arqueos, como antes
+  assert.equal(quien('responsiva', 'jefe'), 'jefe');
+  assert.equal(quien('responsiva', ''), 'principal');
+  assert.equal(quien('arqueo', 'asistente'), 'asistente');
+  assert.match(html, /'lineas-responsiva': 'Colaborador', 'lineas-inspeccion': 'Colaborador' \};/);
+});
