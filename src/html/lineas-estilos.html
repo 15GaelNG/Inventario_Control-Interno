@@ -109,6 +109,11 @@
   .ln-activos-estado { font-weight: 600; }
   .ln-activos-estado.si { color: var(--ln-verde-tx); }
   .ln-activos-estado.no { color: var(--ln-rojo-tx); }
+  /* Lo que ya no cuenta como activo (cerrado, de baja, en resguardo…), plegado bajo cada tarjeta del panel */
+  .ln-activos-historial { margin-top: 10px; }
+  .ln-activos-historial > summary { cursor: pointer; color: var(--color-text-muted); font-size: var(--texto-xs); display: flex; align-items: center; gap: 6px; }
+  .ln-activos-historial[open] > summary { margin-bottom: 6px; }
+  .ln-activos-historial .ln-tabla { opacity: .75; }
   .ln-cuadros-mas { display: flex; justify-content: center; align-items: center; gap: 14px; flex-wrap: wrap; margin: 16px 0; font-size: var(--texto-s); }
   .ln-cuadros-mas button { min-width: 180px; }
   .ln-cuadro-vacio { grid-column: 1 / -1; min-height: 120px; display: flex; align-items: center; justify-content: center; gap: 8px; }

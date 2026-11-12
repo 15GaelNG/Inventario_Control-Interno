@@ -955,7 +955,7 @@ test('los campos de texto libre del AppSheet ahora tienen lista desplegable', ()
   // Reestructura (§3): los datos del responsable salen solo de Capital Humano (personas activas)
   ['sedes', 'areas', 'oficinas', 'puestos', 'jefes', 'directores'].forEach((k) => assert.match(repo, new RegExp(k + ": unicos\\(ch, '")));
   assert.match(repo, /CapitalHumano\.conBajasRecientes\(\)/);
-  assert.match(repo, /indice_colaboradores_v7/);
+  assert.match(repo, /indice_colaboradores_v8/);
   // "Agregar 'x'": lo tecleado sin elegirlo no se guarda, y solo en los datos del responsable
   const cbx = read('src/html/js/componentes/combobox.html');
   assert.match(cbx, /agregar: false/);

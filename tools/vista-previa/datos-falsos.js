@@ -25,6 +25,8 @@
       secciones: (window.__NODOS || []).filter((n) => n.padre === m.id).map((n) => ({ id: n.id, etiqueta: n.etiqueta, icono: n.icono || '', hereda: n.hereda })) })) }));
   const permisos = {};
   grupos.forEach((g) => g.modulos.forEach((m) => { permisos[m.id] = 'EDICION'; }));
+  // Gestión de activos va sola en el menú (no en un grupo): su escena la necesita igual
+  permisos['gestion-activos'] = 'EDICION';
   // Y sus secciones (vehiculos.documentos, …): el servidor manda el mapa ya resuelto
   (window.__NODOS || []).forEach((n) => { if (n.padre && permisos[n.padre]) permisos[n.id] = permisos[n.padre]; });
 
@@ -558,6 +560,14 @@
         },
       };
     })(),
+    // Capital Humano para Líneas (LineasRepo.indiceColaboradores): activos y una baja reciente que todavía tiene algo
+    apiLineasColaboradores: {
+      columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo', 'idPersona'],
+      filas: PERSONAS.map((n, i) => ['CIB0' + (1000 + i), n.normalize('NFD').replace(/[̀-ͯ]/g, ''), de(['COORDINADOR', 'AUXILIAR', 'GERENTE'], i),
+        de(DEPTOS, i), de(DEPTOS, i), de(SEDES, i), 'CORPORATIVO', i === 4 ? 'BAJA' : 'ACTIVO', '', '', 'persona' + i + '@ciudadmaderas.com', 'PER-' + i])
+        .concat([['CIB09999', 'PEDRO SIN ACTIVOS RUIZ', 'AUXILIAR', 'TI', 'TI', 'QUERETARO', 'CORPORATIVO', 'ACTIVO', '', '', '', 'PER-99']]),
+      generadoEn: new Date().toISOString(),
+    },
     // El índice (LineasRepo.indice): equipos y líneas en columnas + las columnas de la vista de tabla del AppSheet
     apiLineasIndice: (() => {
       const GENTE = [['JUAN MANUEL FULGENCIO HERNANDEZ', 'VENTAS', 'CANCUN'], ['ANA ISABEL CHI BUENFIL', 'COMPRAS', 'MERIDA'],
@@ -949,6 +959,15 @@
       await esperar(500);
     }])),
     'lineas-activos': async () => { await abrir('gestion-activos'); await esperar(800); },
+    // El panel de una persona: lo vigente en cada tarjeta y lo que ya no cuenta, plegado (usuario, 12-nov)
+    'lineas-activos-panel': async () => {
+      await abrir('gestion-activos'); await esperar(800);
+      (await hasta('.ln-cuadro-colaborador.con-activos')).click(); await esperar(500);
+      const h = document.querySelectorAll('.ln-activos-historial');
+      h.forEach((d) => { d.open = true; });
+      if (h.length) h[h.length - 1].scrollIntoView({ block: 'center' });
+      await esperar(200);
+    },
     'lineas-accesorios': async () => { await abrir('accesorios-lineas'); await esperar(800); },
     'lineas-resguardos': async () => { await abrir('resguardos-lineas'); await esperar(800); },
     'lineas-cambios': async () => { await abrir('cambios-lineas'); await esperar(800); },
