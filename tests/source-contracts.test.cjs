@@ -1390,7 +1390,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, bitácoras, historial y Excel)', 
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v14';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v15';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 

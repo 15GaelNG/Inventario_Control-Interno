@@ -595,7 +595,7 @@
         vista.push(['EQU-' + i, conLinea ? numero : '', nuco, tipo, estatus, resp, depto, sede, MODELOS[i % MODELOS.length]]);
       }
       return {
-        equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel', 'dg', 'ultimaCompania'], filas: equipos, generadoEn: hace(0) },
+        equipos: { columnas: ['id', 'nuco', 'tipo', 'modelo', 'imei', 'estatus', 'responsable', 'departamento', 'sede', 'lineaId', 'numero', 'compania', 'estatusLinea', 'tipoHoja', 'panel', 'dg', 'ultimaCompania', 'noEmpleado', 'idPersona'], filas: equipos, generadoEn: hace(0) },
         lineas: { columnas: ['id', 'numero', 'sim', 'compania', 'estatus', 'equipoId', 'nucoEquipo', 'responsable', 'departamento', 'suelta', 'tipoHoja', 'numerosAnteriores'], filas: lineas },
         vista: { columnas: ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'RESPONSABLE', 'DEPARTAMENTO', 'SEDE', 'EQUIPO'], secretas: [], filas: vista },
       };
