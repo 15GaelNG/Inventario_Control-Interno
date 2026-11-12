@@ -850,8 +850,9 @@
         // remoto (LineasFirmaRemota.gs): esta firma SIEMPRE se difiere por liga (nunca CI/INSPECTOR, que siempre
         // firman presencial) -- ya no hay lienzo aquí ni selector "Firma aquí ahora" (usuario, 6-nov: se quitó esa
         // opción por el bug de las firmas en blanco al firmar un responsable dentro del sistema).
+        // La caja (id-remota) la cambia la captura cuando el responsable es quien captura y tiene firma guardada (12-nov)
         control = e.remoto
-          ? '<div class="ln-nota">' + icono('send', 'ln-icon-sm') + ' Al guardar se genera una liga para que firme a distancia -- tú se la compartes (no se manda sola).</div>'
+          ? '<div id="' + id + '-remota"><div class="ln-nota">' + icono('send', 'ln-icon-sm') + ' Al guardar se genera una liga para que firme a distancia -- tú se la compartes (no se manda sola).</div></div>'
           : htmlFirma(ROL_FIRMA[e.columna] || 'ci', id + '-firma', ETIQUETA_FIRMA[e.columna]);
       } else if (e.control === 'calculado') {
         control = '<div' + (autoDe(e) ? ' data-auto' : '') + ' class="ln-af-calculado' + (e.fijo ? ' ln-af-fijo' : (e.formula ? '' : ' ln-af-calculado-texto')) + '" id="' + id + '"' + (e.formula ? ' data-formula="' + esc(e.formula) + '"' : '') + '>' + (valor ? esc(valor) : '—') + '</div>';
@@ -1024,11 +1025,12 @@
 
     /**
      * Firma guardada (usuario, 6-oct; LineasFirmas): quien captura y tiene una no firma; el servidor pone la suya en el PDF.
-     * La imagen no llega a la pantalla: aquí solo se avisa. «Firmar a mano» regresa al recuadro normal.
+     * La imagen no llega a la pantalla: aquí solo se avisa. «Firmar a mano» regresa al recuadro normal; `boton` cambia su
+     * texto (el del responsable dice «Mejor por liga»).
      */
-    function firmaGuardadaEn(contenedor, nombre, alFirmarAMano) {
+    function firmaGuardadaEn(contenedor, nombre, alFirmarAMano, boton) {
       contenedor.innerHTML = '<div class="ln-firma-guardada">' + icono('badge-check') + '<div><b>Se usa tu firma guardada</b><span>' + esc(nombre || '') +
-        '</span></div><button type="button" class="secondary ln-btn-chico" data-firmar-a-mano>' + icono('pen-line') + ' Firmar a mano</button></div>';
+        '</span></div><button type="button" class="secondary ln-btn-chico" data-firmar-a-mano>' + (boton || icono('pen-line') + ' Firmar a mano') + '</button></div>';
       pintarIconos(contenedor);
       contenedor.querySelector('[data-firmar-a-mano]').addEventListener('click', () => { contenedor.innerHTML = ''; alFirmarAMano(); });
       return { guardada: true, estaVacia: () => false, limpiar: () => {}, ajustar: () => {}, setNombre: () => {}, base64: () => Promise.resolve(null) };

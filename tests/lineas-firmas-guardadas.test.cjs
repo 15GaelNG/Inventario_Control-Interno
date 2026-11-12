@@ -113,7 +113,7 @@ test('la imagen solo la usa el servidor, con el correo de la sesión; la pantall
   // La caché junta lo nuevo con lo que ya había (la pantalla no manda la firma guardada)
   assert.match(cap, /Object\.keys\(nuevas\)\.forEach\(\(k\) => \{ if \(nuevas\[k\]\) juntas\[k\] = nuevas\[k\]; \}\);/);
   const lineas = LINEAS;
-  assert.match(lineas, /function firmaGuardadaEn\(contenedor, nombre, alFirmarAMano\)/);
+  assert.match(lineas, /function firmaGuardadaEn\(contenedor, nombre, alFirmarAMano, boton\)/);
   assert.match(lineas, /base64: \(\) => Promise\.resolve\(null\) \}/);
   assert.match(lineas, /usarFirmaGuardada: !!firmaInspector\.guardada,/);
   assert.match(lineas, /usarFirmaGuardada: !!firmaCi\.guardada,/);
@@ -151,9 +151,8 @@ test('la firma guardada también va como FIRMA RESPONSABLE si el responsable es 
   assert.equal((cap.match(/nombresPropios: nombresConFirma_\(usuario\),/g) || []).length, 2);
   // Al guardar, el servidor revisa que el responsable sea quien captura antes de poner su firma
   assert.match(cap, /if \(nombresPropios_\(usuario\)\.indexOf\(nombreDeFirma_\(responsable\)\) < 0\) throw/);
-  // El del servidor sigue en los dos (inspección y responsiva: la firma guardada todavía puede llegar por ahí si
-  // algo la manda directamente, p. ej. desde la consola), aunque desde el 6-nov ninguna de las dos tiene ya
-  // lienzo para su RESPONSABLE -- siempre se difiere por liga -- así que la pantalla nunca manda este campo.
+  // En los dos (inspección y responsiva): desde el 12-nov la pantalla lo vuelve a mandar cuando el responsable es
+  // quien captura (responsablePropio_), sin lienzo: solo su firma guardada, y entonces no difiere al PRINCIPAL.
   assert.equal((cap.match(/if \(datos\.usarFirmaGuardadaResponsable\) datos\.firmaResponsableBase64 = firmaResponsablePropia_\(usuario, \(datos\.valores \|\| \{\}\)\['RESPONSABLE'\]\);/g) || []).length, 2);
   // Al regenerar, solo si ya está la de Control Interno (sin ella se piden las firmas)
   assert.match(cap, /if \(firmas && firmas\[rolCI\] && !firmas\.responsable && usuario && nombresPropios_\(usuario\)/);
@@ -161,5 +160,11 @@ test('la firma guardada también va como FIRMA RESPONSABLE si el responsable es 
   // (usuario, 6-nov: la Inspección se sumó a la Responsiva -- las dos siempre difieren esa firma por liga), así
   // que ni el ajuste al cambiar de persona (revisarFirmaResponsable) ni el campo que lo acompañaba existen ya.
   assert.doesNotMatch(lineas, /revisarFirmaResponsable/);
+  // 12-nov: el responsable es quien captura → su firma guardada, sin liga para el principal (los adicionales sí)
+  assert.match(lineas, /function responsablePropio_\(cuerpo, id\) \{/);
+  assert.match(lineas, /if \(e\.control === 'firma' && e\.remoto && e\.columna === 'FIRMA RESPONSABLE'\) responsablePropio_\(cuerpo, id\);/);
+  assert.equal((lineas.match(/const rolesDiferidos = \(propio \? \[\] : \['PRINCIPAL'\]\)\.concat\(ORDEN_ADICIONALES\);/g) || []).length, 2);
+  assert.equal((lineas.match(/usarFirmaGuardadaResponsable: propio,/g) || []).length, 2);
+  assert.match(lineas, /'<div id="' \+ id \+ '-remota"><div class="ln-nota">'/);
   assert.equal((lineas.match(/usarFirmaGuardadaResponsable: !!\(firmaResponsable && firmaResponsable\.guardada\)/g) || []).length, 0);
 });

@@ -12,7 +12,7 @@
       calificacionAppSheet, cargarCatalogos, cargarPatronesAppSheet, conSelectorBloqueo, copiarTexto, crearFirma, cumpleCondicion,
       enlaceDrive, errorPinBloqueo, erroresFormularioEn, esPuntosPatron, esc, firmaGuardadaEn, flechasPatron,
       htmlAccionesPasos, htmlPasosAppSheet, icono, leerArchivosEn, leerFormularioEn, leerIdentificaciones, llamar,
-      marcarErroresEn, memoria, mensajeError, olvidarFicha, pedirDatos, pintarIconos,
+      marcarErroresEn, memoria, mensajeError, nombreDeFirma, olvidarFicha, pedirDatos, pintarIconos,
       redimensionarImagen } = Lineas.comun;
     Lineas.telefonicas.registrar('captura', (T) => {
       const { CANCELACION_LINEA, ESTATUS_EQUIPO_FINAL, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_PANEL,
@@ -244,6 +244,7 @@
           // aquí también, como ya hace alMostrar con los pasos (esta llamada no hace nada si no cambió el ancho).
           if (f && f.ajustar) f.ajustar();
         });
+        if (captura.revisarResponsablePropio) captura.revisarResponsablePropio();
       }
       const actualizarProgresoChecklist = actualizarFormularioAppSheet;
 
@@ -341,6 +342,32 @@
         });
       }
 
+      /**
+       * El responsable principal es quien captura y tiene firma guardada (usuario, 12-nov: en Mandar a resguardo, Gama se
+       * pone a sí mismo de responsable): va su firma guardada también como FIRMA RESPONSABLE y no se le genera liga. Los
+       * nombres son los suyos según el servidor (nombresPropios: USUARIOS y Capital Humano, solo con firma guardada), que
+       * lo vuelve a revisar al guardar (firmaResponsablePropia_). «Mejor por liga» lo regresa a la liga mientras siga él.
+       */
+      function responsablePropio_(cuerpo, id) {
+        const nombres = captura.contexto.nombresPropios || [];
+        const origen = cuerpo.querySelector('[data-columna="RESPONSABLE"]');
+        const caja = document.getElementById(id + '-remota');
+        if (!nombres.length || !origen || !caja) return;
+        const sesion = captura;
+        const notaLiga = caja.innerHTML;
+        let porLiga = false, antes = null;
+        const esSuyo = () => nombres.indexOf(nombreDeFirma(origen.value)) >= 0;
+        sesion.responsablePropio = () => esSuyo() && !porLiga;
+        sesion.revisarResponsablePropio = () => {
+          if (!esSuyo()) porLiga = false;
+          const ahora = sesion.responsablePropio();
+          if (ahora === antes) return;
+          antes = ahora;
+          if (!ahora) { caja.innerHTML = notaLiga; return; }
+          firmaGuardadaEn(caja, origen.value, () => { porLiga = true; sesion.revisarResponsablePropio(); }, icono('send') + ' Mejor por liga');
+        };
+      }
+
       function iniciarFormularioAppSheet() {
         const cuerpo = $('#ln-captura-cuerpo', raiz);
         (captura.contexto.formulario || []).forEach((e) => {
@@ -363,6 +390,7 @@
             if (propia) sesion.firmas[e.columna] = firmaGuardadaEn(lienzo, origen ? origen.value : '', aMano);
             else aMano();
           }
+          if (e.control === 'firma' && e.remoto && e.columna === 'FIRMA RESPONSABLE') responsablePropio_(cuerpo, id);
           if (e.control === 'patron') {
             captura.columnaPatron = e.columna;
             captura.patronInicial = esPuntosPatron(e.valor) ? e.valor : null;
@@ -748,15 +776,17 @@
         // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
         Promise.all([firmaInspector.base64('#ffffff'), sesion.carpetaPromesa || null]).then(([inspector]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: null, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
-          // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
+          // El responsable principal y cada adicional presente firman a distancia, por liga (usuario, 6-nov:
           // "igual firman las mismas personas" que la Responsiva). El servidor ignora los roles sin nombre en la
-          // inspección (rolesADiferir_, LineasCaptura.gs): sin responsable, no se genera ninguna liga.
-          const rolesDiferidos = ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
+          // inspección (rolesADiferir_, LineasCaptura.gs): sin responsable, no se genera ninguna liga. Si el
+          // responsable es quien captura, va su firma guardada (responsablePropio_, 12-nov).
+          const propio = !!(sesion.responsablePropio && sesion.responsablePropio());
+          const rolesDiferidos = (propio ? [] : ['PRINCIPAL']).concat(ORDEN_ADICIONALES);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaInspector.guardada,
+            usarFirmaGuardada: !!firmaInspector.guardada, usarFirmaGuardadaResponsable: propio,
             diferir: rolesDiferidos,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarInspeccion', datos);
@@ -831,14 +861,16 @@
         Promise.all([firmaCi.base64('#ffffff'), leerIdentificaciones($('#ln-captura-cuerpo', raiz), valores)])
           .then(([ci, identificaciones]) => {
           sesion.pdfFirmas = { responsable: null, ci: ci, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ffffff') : null };
-          // El responsable principal y cada adicional presente SIEMPRE firman a distancia, por liga (usuario, 6-nov:
-          // se quitó la opción de firmarlos aquí mismo, por el bug de las firmas en blanco al capturarlas en el
-          // formulario). El servidor ignora los roles sin nombre en la responsiva (rolesADiferir_, LineasCaptura.gs).
-          const rolesDiferidos = ['PRINCIPAL'].concat(ORDEN_ADICIONALES);
+          // El responsable principal y cada adicional presente firman a distancia, por liga (usuario, 6-nov: se quitó
+          // la opción de firmarlos aquí mismo, por el bug de las firmas en blanco al capturarlas en el formulario). El
+          // servidor ignora los roles sin nombre en la responsiva (rolesADiferir_, LineasCaptura.gs). Si el
+          // responsable es quien captura, va su firma guardada (responsablePropio_, 12-nov).
+          const propio = !!(sesion.responsablePropio && sesion.responsablePropio());
+          const rolesDiferidos = (propio ? [] : ['PRINCIPAL']).concat(ORDEN_ADICIONALES);
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             firmaCiBase64: sesion.pdfFirmas.ci, patronBase64: sesion.pdfFirmas.patron,
-            usarFirmaGuardada: !!firmaCi.guardada, identificaciones: identificaciones,
+            usarFirmaGuardada: !!firmaCi.guardada, usarFirmaGuardadaResponsable: propio, identificaciones: identificaciones,
             diferir: rolesDiferidos,
           });
           return sesion.flujo && sesion.flujo.guardar ? sesion.flujo.guardar(datos) : llamar('apiLineasGuardarResponsiva', datos);

@@ -170,7 +170,7 @@ test('pantalla: fotos o PDF por responsable, se ven antes de guardar y viajan co
   // siempre firman por liga (se quitó "Firma aquí ahora"), así que el Promise.all solo trae CI e identificaciones
   assert.match(pantalla, /Promise\.all\(\[firmaCi\.base64\('#ffffff'\), leerIdentificaciones\(\$\('#ln-captura-cuerpo', raiz\), valores\)\]\)/);
   assert.match(pantalla, /\.then\(\(\[ci, identificaciones\]\) => \{/);
-  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, identificaciones: identificaciones,/);
+  assert.match(pantalla, /usarFirmaGuardada: !!firmaCi\.guardada, usarFirmaGuardadaResponsable: propio, identificaciones: identificaciones,/);
   // Las listas del cuerpo del modal se escuchan una sola vez (el cuerpo se reutiliza)
   assert.match(pantalla, /if \(cuerpo\._identificacionesActivas\) return;/);
 });
