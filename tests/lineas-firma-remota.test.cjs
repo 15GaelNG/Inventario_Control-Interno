@@ -611,7 +611,7 @@ test('pdfParaFirmar ("PDF para firmar", 11-nov): el PDF con lo que ya hay, sin l
 
 test('Subir PDF firmado de un documento pendiente: el servidor lo cierra y la pantalla lo ofrece con aviso', () => {
   const captura = read('src/services/lineas/LineasCaptura.gs');
-  assert.match(captura, /if \(!pdfId && doc\.estadoFirma === 'PENDIENTE'\) \{\s*const cerrado = LineasFirmaRemota\.cerrarConPdfSubido\(doc\.tipo, doc\.id, usuario\);/);
+  assert.match(captura, /if \(doc\.estadoFirma === 'PENDIENTE'\) \{\s*const cerrado = LineasFirmaRemota\.cerrarConPdfSubido\(doc\.tipo, doc\.id, usuario\);/);
   assert.match(read('src/services/TelefoniaService.gs'), /carpetaId: doc\.carpetaId, estadoFirma: doc\.estadoFirma,/);
   const docs = read('src/html/js/lineas-telefonicas-documentos.html');
   assert.match(docs, /'Subir PDF firmado', 'pdf', true, \(d\) => operar && \(!!d\.pdfId \|\| d\.origen !== 'SISTEMA' \|\| d\.estadoFirma === 'PENDIENTE'\)/);

@@ -1337,8 +1337,9 @@ const LineasCaptura = (function () {
     if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('Solo se aceptan archivos PDF.');
     let pdfId = doc.pdfId;
     // Esperaba firmas por liga (usuario, 11-nov): el PDF subido lo cierra (se generan su PDF y su liga en la hoja, y las
-    // ligas que faltaban dejan de servir); luego su contenido es el del subido
-    if (!pdfId && doc.estadoFirma === 'PENDIENTE') {
+    // ligas que faltaban dejan de servir); luego su contenido es el del subido. Aunque ya traiga un PDF (12-nov, DEV NUCO
+    // 0018: el pendiente ya tenía uno y solo se reemplazaba, sin cerrar): cuál es el suyo lo dice su evidencia, no Documentos
+    if (doc.estadoFirma === 'PENDIENTE') {
       const cerrado = LineasFirmaRemota.cerrarConPdfSubido(doc.tipo, doc.id, usuario);
       if (cerrado) pdfId = cerrado.id;
     }
