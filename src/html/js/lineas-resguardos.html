@@ -5,7 +5,7 @@
    */
   (function () {
     'use strict';
-    const { $, aplicarCambiosIndice, aviso, chip, chipCompania, elegirPastilla, esc, fechaTabla, formularioResguardo, guion, icono,
+    const { $, aplicarCambiosIndice, aviso, chip, chipCompania, elegirPastilla, enlaceDrive, esc, fechaTabla, formularioResguardo, guion, icono,
       llamar, memoria, mensajeError, miles, montaje, pedirDatos, quitarDelPanel, tablaLineas, tablaRegreso, tilesKpi } = Lineas.comun;
     const { irARegistro } = Lineas;
     /** Las ligas de la carta de cancelación de un renglón (CARTAS: una por renglón; el servidor solo deja https). */
@@ -19,6 +19,29 @@
       if (!ligas.length) return '<span class="ln-tenue">—</span>';
       return ligas.map((u, i) => '<a class="externo ln-btn-chico" href="' + esc(u) + '" target="_blank" rel="noopener" title="Abrir la carta en Drive">' +
         icono('file-text') + ' ' + (ligas.length > 1 ? 'Carta ' + (i + 1) : 'Ver carta') + ' ' + icono('external-link', 'ln-icon-sm') + '</a>').join(' ');
+    }
+
+    /**
+     * «Ver detalle» de un resguardo (usuario, 12-nov): el PDF y las fotos de la inspección con que se mandó. Se pide al
+     * abrirlo (no con la tabla); si el panel ya cambió cuando llega, no se pinta.
+     */
+    function inspeccionEnDetalle(fila, cont) {
+      if (!cont || !fila.REGISTRO_ID || fila.ID_LINEA) return;
+      cont.innerHTML = '<div class="ln-resg-insp"><div class="dt-campo-titulo">Inspección del resguardo</div><p class="ln-tenue">Buscando la inspección…</p></div>';
+      const nota = () => cont.isConnected && cont.querySelector('.ln-resg-insp p');
+      llamar('apiLineasInspeccionResguardo', fila.ID).then((insp) => {
+        const p = nota();
+        if (!p) return;
+        if (!insp) { p.textContent = 'Sin inspección: el equipo no venía de una persona.'; return; }
+        const ligas = [
+          insp.pdfId ? enlaceDrive(insp.pdfId, 'PDF de la inspección', true) : '<span class="ln-tenue">La inspección no tiene PDF todavía.</span>',
+          insp.fotosCarpetaId && insp.fotos ? enlaceDrive(insp.fotosCarpetaId, 'Fotos de la inspección (' + insp.fotos + ')') : '<span class="ln-tenue">La inspección no tiene fotos.</span>',
+        ];
+        p.outerHTML = '<div class="ln-resg-insp-ligas">' + ligas.join('') + '</div>';
+      }).catch((e) => {
+        const p = nota();
+        if (p) p.textContent = mensajeError(e);
+      });
     }
 
     /** Retirar cancelación (pendiente 3.14): la línea vuelve a como estaba antes de mandarla a cancelar. */
@@ -359,7 +382,7 @@
           // La base; «Cancelaciones» (Excel por asesor) va a su lado (botonBaseCancelaciones, usuario, 22-oct)
           exportar: { nombreArchivo: vista === 'RESGUARDOS' ? 'Resguardos' : 'Cancelaciones de lineas' },
           etiquetaFila: (f) => 'NUCO ' + (f.NUCO || '—') + (f.NUMERO ? ' · ' + f.NUMERO : '') + ' · ' + fechaCorta(f.FECHA),
-          detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—') },
+          detalle: { titulo: (f) => 'NUCO ' + (f.NUCO || '—'), contenidoExtra: vista === 'RESGUARDOS' ? inspeccionEnDetalle : undefined },
           accionesFila: [{ icono: 'circle-chevron-right', titulo: 'Ver equipo', visible: (f) => !!f.REGISTRO_ID, alHacer: (f) => irARegistro(f.REGISTRO_ID) }]
             // Como «Ver PDF» del historial: abre la carta (la primera, si se pidió en varias; las demás, en la columna Carta)
             .concat(vista === 'CANCELACIONES' ? [{ icono: 'file-text', titulo: 'Ver carta', visible: (f) => !!ligasDe(f.CARTAS).length,

@@ -46,11 +46,12 @@ const LineasResguardos = (function () {
     'ESTADO', 'RECIBIDO_EN', 'RECIBIO', 'ENTREGADO_EN', 'ENTREGADO_A', 'ENTREGA_ASUNTO',
     'CANCELACION', 'ASESOR', 'CARTA_FIRMADA_EN', 'CARTA_ENVIADA_EN', 'CANCELACION_ASUNTO', 'CANCELADA_EN', 'CANCELO', 'ACTUALIZADO_EN',
     'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO',
-    'ID_LINEA_AL_MANDAR'];
+    'ID_LINEA_AL_MANDAR', 'ID_INSPECCION'];
   /** Las que llegaron después a una hoja que ya existía (13, 20 y 22-oct). ID_LINEA_AL_MANDAR: la línea con que se mandó el
-   *  equipo, por su ID (el número puede corregirse); no es ID_LINEA, que dice que el renglón es una cancelación. */
+   *  equipo, por su ID (el número puede corregirse); no es ID_LINEA, que dice que el renglón es una cancelación.
+   *  ID_INSPECCION (12-nov): la inspección con que se mandó (su PDF y sus fotos, en «Ver detalle»). */
   const COLUMNAS_NUEVAS = ['MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO',
-    'ID_LINEA_AL_MANDAR'];
+    'ID_LINEA_AL_MANDAR', 'ID_INSPECCION'];
 
   // RETIRADA: Pau retiró la cancelación (pendiente 3.12). Lo que Líneas quita antes de que Pau lo reciba ya no queda: se
   // borra (Quitar del panel; usuario, 22-oct)
@@ -198,9 +199,9 @@ const LineasResguardos = (function () {
     if (!LineasDatos.existeTabla(TAB)) { LineasDatos.asegurarPestana(TAB, ENCABEZADOS); return; }
     // Las columnas se revisan una vez cada 6 h, no en cada guardado (rapidez, 13-oct)
     const cache = typeof CacheService !== 'undefined' ? CacheService.getScriptCache() : null;
-    if (cache && cache.get('ln_resguardos_esquema_v3') === '1') return;
+    if (cache && cache.get('ln_resguardos_esquema_v4') === '1') return;
     if (typeof LineasDatos.asegurarColumnas === 'function') LineasDatos.asegurarColumnas(TAB, COLUMNAS_NUEVAS);
-    if (cache) cache.put('ln_resguardos_esquema_v3', '1', 21600);
+    if (cache) cache.put('ln_resguardos_esquema_v4', '1', 21600);
   }
 
   /** Renglón abierto de la bandeja (PENDIENTE DE RECEPCION o EN RESGUARDO) por ID de registro. */
@@ -539,7 +540,7 @@ const LineasResguardos = (function () {
           'ESTATUS_EQUIPO': pedido['ESTATUS EQUIPO'], 'ESTATUS_LINEA': lineaQueda ? pedido['ESTATUS LINEA'] : '',
           'COMENTARIO': pedido.COMENTARIO, 'MOTIVO': motivo, 'SOLICITO_CORREO': usuario.correo, 'SOLICITO_NOMBRE': usuario.nombre,
           'ESTADO': ESTADO.PENDIENTE, 'RECIBIO': '', 'CANCELACION': '', 'ASESOR': '', 'MOTIVO_CANCELACION': '',
-          'MOVIMIENTO_ID': idMovimiento || '', 'ACTUALIZADO_EN': ahora,
+          'MOVIMIENTO_ID': idMovimiento || '', 'ACTUALIZADO_EN': ahora, 'ID_INSPECCION': txt((d.inspecciones || {})[id]),
         }, ubicacion));
         hechos.push({ id: id, nuco: nuco, cancelacion: cancelacion, porRecibir: true });
       });
@@ -1509,8 +1510,38 @@ const LineasResguardos = (function () {
     return { hechos: hechos, omitidos: omitidos, indice: registros.length ? LineasRepo.refrescarIndice(registros) : null };
   }
 
+  /**
+   * La inspección con que se mandó a resguardo (usuario, 12-nov: su PDF y sus fotos en «Ver detalle»; la ve quien ve la
+   * bandeja). Desde el 12-nov el renglón guarda ID_INSPECCION; en los de antes, la del mismo equipo de ese día hasta la hora
+   * en que se mandó (Mandar a resguardo la exige del día: LineasCaptura.exigirInspeccion). Sin inspección (el equipo no
+   * venía de una persona) → null. → { id, fecha, pdfId, fotosCarpetaId, fotos }
+   */
+  function inspeccionDe(resguardoId, usuario) {
+    const id = txt(resguardoId);
+    const r = id && LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).filter((x) => txt(x['ID']) === id)[0] : null;
+    if (!r) throw new Error('Ese renglón ya no está en Resguardos y cancelaciones.');
+    if (typeof LineasDG !== 'undefined' && !(usuario && usuario.esAdmin) && LineasDG.esRenglonPanel(fila_(r))) throw new Error(LineasDG.MENSAJE);
+    const registro = txt(r['REGISTRO_ID']);
+    if (!registro || txt(r['ID_LINEA'])) return null;
+    const lista = LineasRepo.evidenciasDeRegistro(registro).inspecciones.filter((x) => x.origen === 'SISTEMA');
+    const guardada = txt(r['ID_INSPECCION']);
+    let insp = null;
+    if (guardada) {
+      insp = lista.filter((x) => x._id === guardada || (x._idsAnteriores || []).indexOf(guardada) >= 0)[0] || null;
+    } else if (r['FECHA'] instanceof Date) {
+      const mandado = r['FECHA'];
+      const hasta = mandado.getTime() + 5 * 60 * 1000; // unos minutos de holgura entre la hora de la inspección y la del renglón
+      insp = lista.filter((x) => x.fecha instanceof Date && dia(x.fecha) === dia(mandado) && x.fecha.getTime() <= hasta)
+        .sort((a, b) => b.fecha - a.fecha)[0] || null;
+    }
+    if (!insp) return null;
+    const drive = insp.drive || {};
+    return { id: insp._id, fecha: insp.fecha, pdfId: insp.pdf ? insp.pdf.id : null, fotosCarpetaId: drive.fotosCarpetaId || null,
+      fotos: Number(drive.fotos) || 0 };
+  }
+
   return {
-    formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, donado, desechado, faseCancelacion, confirmarCancelacion,
+    inspeccionDe, formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, donado, desechado, faseCancelacion, confirmarCancelacion,
     retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, porRecibirEnPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,

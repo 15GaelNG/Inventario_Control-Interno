@@ -154,6 +154,10 @@ function apiLineasMandarCancelacion(token, ids, datos) {
 function apiLineasBandejaResguardos(token) {
   return TelefoniaService.bandejaResguardos(token);
 }
+// La inspección de un renglón de Resguardos (su PDF y sus fotos, en «Ver detalle»)
+function apiLineasInspeccionResguardo(token, id) {
+  return TelefoniaService.inspeccionResguardo(token, id);
+}
 function apiLineasAccionBandejaResguardo(token, accion, ids, datos) {
   return TelefoniaService.accionBandejaResguardo(token, accion, ids, datos);
 }

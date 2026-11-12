@@ -979,6 +979,12 @@ const TelefoniaService = (function () {
     return JSON.stringify(LineasUtil.paraCliente(LineasResguardos.bandeja(usuarioResguardo_(sesion))));
   }
 
+  /** La inspección de un renglón de Resguardos, su PDF y sus fotos (usuario, 12-nov): la ve quien ve la bandeja. */
+  function inspeccionResguardo(token, id) {
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
+    return LineasUtil.paraCliente(LineasResguardos.inspeccionDe(id, usuarioResguardo_(sesion)));
+  }
+
   /** Retirar cancelación (pendiente 3.14): solo quien aprueba. La vista dice qué regresa y qué se queda de cada línea. */
   function vistaRetirarCancelacion(token, ids) {
     const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
@@ -1018,7 +1024,7 @@ const TelefoniaService = (function () {
     contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
-    formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, accionBandejaResguardo, vistaRetirarCancelacion, vistaQuitarPanel, quitarDelPanel,
+    formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, inspeccionResguardo, accionBandejaResguardo, vistaRetirarCancelacion, vistaQuitarPanel, quitarDelPanel,
     MODULOS_LINEAS,
     filtrarIndice_, deptoDeRegistro_,   // expuestas para las pruebas
   };

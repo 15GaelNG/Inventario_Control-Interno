@@ -78,7 +78,7 @@ function cargar(inventario, bandeja, movimientos, conDG) {
   const LineasDG = conDG ? new Function('LineasUtil', read('src/services/lineas/LineasDG.gs') + '\nreturn LineasDG;')(LineasUtil) : undefined;
   const R = new Function('LineasUtil', 'LineasNotificaciones', 'LineasDatos', 'LineasRepo', 'LineasRegistros', 'Utilities', 'LineasCaptura', 'LineasEscritura', 'LineasDG',
     read('src/services/lineas/LineasResguardos.gs') + '\nreturn LineasResguardos;')(LineasUtil, Notif, LineasDatos, LineasRepo, LineasRegistros, Utilities, LineasCaptura, LineasEscritura, LineasDG);
-  return { R, tablas, escritas };
+  return { R, tablas, escritas, LineasRepo };
 }
 
 const usuario = { correo: 'lineas@x', nombre: 'LINEAS' };
@@ -345,7 +345,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   t2.R.mandarCancelacion(['LIN-1'], { comentario: 'se cambió de línea' }, usuario, { motivoDelAdendum: true });
   assert.equal(t2.tablas.APP_RESGUARDOS[1].MOTIVO_CANCELACION, 'CANCELACION ANTICIPADA');
   // La hoja que ya existía recibe la columna nueva
-  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR']]);
+  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR', 'ID_INSPECCION']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario,\s+\{ motivoDelAdendum: true, nucos:/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
   const cliente = LINEAS;
@@ -910,4 +910,35 @@ test('Cancelaciones trae la carta de cada línea (LINK CARTA DE CANCELACION de L
   const pantalla = read('src/html/js/lineas-resguardos.html');
   assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v\) => ligasCarta\(v\) \}/);
   assert.match(pantalla, /vista === 'CANCELACIONES' \? \[\{ icono: 'file-text', titulo: 'Ver carta'/);
+});
+
+// «Ver detalle» de un resguardo (usuario, 12-nov): el PDF y las fotos de la inspección con que se mandó
+test('Resguardos: la inspección del renglón (la guardada desde el 12-nov; en los de antes, la del equipo de ese día)', () => {
+  const t = cargar([equipo('EQU-5', '0050', 'USO')], []);
+  t.R.mandar(['EQU-5'], { comentario: 'renuncia', inspecciones: { 'EQU-5': 'INS-5' }, porEquipo: { 'EQU-5': pedido('RESGUARDO') } }, usuario);
+  const nuevo = t.tablas.APP_RESGUARDOS[0];
+  assert.equal(nuevo['ID_INSPECCION'], 'INS-5');
+  nuevo['ID'] = 'RSG-5';
+  const insp = (id, fecha, extra) => Object.assign({ _id: id, origen: 'SISTEMA', fecha: fecha, pdf: { id: 'PDF-' + id }, drive: { fotosCarpetaId: 'FOT-' + id, fotos: '3' } }, extra || {});
+  const lista = [insp('INS-4', new Date(Date.now() - 3600000)), insp('INS-5', new Date(Date.now() - 7200000))];
+  t.LineasRepo.evidenciasDeRegistro = (id) => { assert.equal(id, 'EQU-5'); return { inspecciones: lista, responsivas: [] }; };
+  assert.deepEqual(Object.assign({}, t.R.inspeccionDe('RSG-5', usuario)),
+    { id: 'INS-5', fecha: lista[1].fecha, pdfId: 'PDF-INS-5', fotosCarpetaId: 'FOT-INS-5', fotos: 3 });
+  // Uno de antes (sin ID_INSPECCION): la más reciente del equipo ese día, hasta la hora en que se mandó
+  const mandado = new Date(2026, 10, 10, 12, 0);
+  t.tablas.APP_RESGUARDOS.push({ 'ID': 'RSG-OLD', 'REGISTRO_ID': 'EQU-5', 'FECHA': mandado, 'ESTADO': 'EN RESGUARDO' });
+  lista.splice(0, 2, insp('INS-A', new Date(2026, 10, 10, 11, 0)), insp('INS-B', new Date(2026, 10, 10, 11, 58)),
+    insp('INS-DESPUES', new Date(2026, 10, 10, 15, 0)), insp('INS-APPSHEET', new Date(2026, 10, 10, 11, 59), { origen: 'APPSHEET' }));
+  assert.equal(t.R.inspeccionDe('RSG-OLD', usuario).id, 'INS-B');
+  // Sin inspección (no venía de una persona) y los renglones de cancelación: null
+  lista.length = 0;
+  assert.equal(t.R.inspeccionDe('RSG-OLD', usuario), null);
+  t.tablas.APP_RESGUARDOS.push({ 'ID': 'RSG-LIN', 'REGISTRO_ID': 'EQU-5', 'ID_LINEA': 'LIN-1', 'CANCELACION': 'POR FIRMAR' });
+  assert.equal(t.R.inspeccionDe('RSG-LIN', usuario), null);
+  assert.throws(() => t.R.inspeccionDe('NO-EXISTE', usuario), /ya no está en Resguardos/);
+  // La pantalla lo pide al abrir el detalle (solo en Resguardos) y el servidor, con el permiso de la bandeja
+  assert.match(LINEAS, /contenidoExtra: vista === 'RESGUARDOS' \? inspeccionEnDetalle : undefined/);
+  assert.match(LINEAS, /llamar\('apiLineasInspeccionResguardo', fila\.ID\)/);
+  const tel = read('src/services/TelefoniaService.gs');
+  assert.match(tel, /function inspeccionResguardo\(token, id\) \{\r?\n    const sesion = sinAlcance_\(Permisos\.puedeLeer\(token, MODULO_RESGUARDOS\)\);/);
 });
