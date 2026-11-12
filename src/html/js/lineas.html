@@ -48,7 +48,7 @@
     // volvía a pedir sus 6 llamadas, ~10 s). Las páginas de inspección y responsiva no lo borran; cualquier otra llamada
     // (guardar, generar o subir un PDF, abrir un formulario, recargar) sí, para no enseñar nada de antes de un cambio.
     const FICHA_EN_MEMORIA = /^apiLineas(Equipo|Linea|Evidencias|Historial|Asignaciones|UltimoDocumentoNuco)$/;
-    const NO_BORRAN_FICHA = /^apiLineas(Inspeccion|Responsiva|PatronAppSheet|Archivo)$/;
+    const NO_BORRAN_FICHA = /^apiLineas(Inspeccion|Responsiva|PatronAppSheet|Archivo|DiagramaInspeccion)$/;
     const FICHA_MEMORIA_MS = 2 * 60 * 1000;
     let fichaEnMemoria = {};
     function llamar(fn, ...args) {
@@ -1104,6 +1104,8 @@
         { titulo: 'Accesorios y sistema', icono: 'package-check', desde: 'titulo:DOCUMENTACIÓN / ACCESORIOS' },
         { titulo: 'Estado físico', icono: 'smartphone', desde: 'titulo:ESTADO FÍSICO GENERAL' },
         { titulo: 'Accesos y apps', icono: 'key-round', desde: 'titulo:BLOQUEO Y CONTRASEÑAS' },
+        // Rayar el dibujo del celular (usuario, 12-nov): opcional, como los diagramas de la inspección vehicular
+        { titulo: 'Daños', icono: 'pencil-line', desde: 'extra:DANOS', siempre: true },
         { titulo: 'Fotos', icono: 'camera', desde: 'extra:FOTOS', siempre: true },
         { titulo: 'Firmas', icono: 'signature', desde: 'titulo:DATOS DE LA INSPECCIÓN' },
       ],

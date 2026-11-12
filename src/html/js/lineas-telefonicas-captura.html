@@ -747,16 +747,95 @@
           '<div class="ln-fotos-lista" id="' + prefijo + '-lista"></div>' + (nota ? '<p class="ln-tenue ln-fotos-nota">' + esc(nota) + '</p>' : '');
       }
 
+      // -- Daños del equipo (usuario, 12-nov): rayar el dibujo del celular, opcional y con varios colores --
+
+      /** Los colores de la pluma: el rojo primero (se ve sobre el azul marino del dibujo y sobre el blanco) */
+      const COLORES_DANOS = ['#e02020', '#f07800', '#1f6fd1', '#1e9e5a'];
+      let diagramaPromesa = null;
+      /** El dibujo en blanco y la tabla de sus partes (RECURSOS PDF): se piden una vez por sesión de la página */
+      function diagramaCelular() {
+        if (!diagramaPromesa) {
+          diagramaPromesa = llamar('apiLineasDiagramaInspeccion');
+          diagramaPromesa.catch(() => { diagramaPromesa = null; });
+        }
+        return diagramaPromesa;
+      }
+      const dataUrl = (img) => 'data:' + (img.mimeType || 'image/png') + ';base64,' + img.base64;
+
+      function htmlDanos() {
+        return '<section class="ln-af-seccion ln-af-extra"><div class="ln-danos">' +
+          '<p class="ln-nota">' + icono('info', 'ln-icon-sm') + ' Opcional: raya sobre la parte del equipo que tiene algún daño. Si no tiene, sigue al siguiente paso.</p>' +
+          '<div class="ln-danos-herramientas lienzo-herramientas"><span class="lienzo-colores" data-danos-colores></span>' +
+          '<button type="button" class="secondary" data-danos-deshacer disabled>' + icono('undo-2') + ' Deshacer</button>' +
+          '<button type="button" class="secondary" data-danos-borrar disabled>' + icono('eraser') + ' Borrar</button></div>' +
+          '<div class="ln-danos-cuerpo"><div class="ln-danos-lienzo" id="cap-danos">' + Carga.html('caja', { alto: 160 }) + '</div>' +
+          '<img class="ln-danos-partes" id="cap-danos-partes" alt="Partes del equipo: 1 lateral izquierda, 2 frontal, 3 lateral derecha, 4 posterior, 5 superior, 6 inferior" hidden></div>' +
+          '</div></section>';
+      }
+
+      /** El lienzo sobre el dibujo del celular; queda en captura.danos (vacío = sin daños) */
+      function prepararDanos() {
+        const sesion = captura;
+        const caja = $('#cap-danos', raiz);
+        if (!caja) return;
+        diagramaCelular().then((r) => {
+          if (captura !== sesion || !caja.isConnected) return;
+          if (!r || !r.diagrama) {
+            caja.innerHTML = '<p class="ln-nota">' + icono('triangle-alert', 'ln-icon-sm') + ' No está el dibujo del celular en RECURSOS PDF: la inspección se guarda sin él.</p>';
+            return;
+          }
+          const partes = $('#cap-danos-partes', raiz);
+          if (partes && r.partes) { partes.src = dataUrl(r.partes); partes.hidden = false; }
+          const cont = caja.closest('.ln-danos');
+          const botones = cont.querySelectorAll('[data-danos-deshacer], [data-danos-borrar]');
+          caja.innerHTML = '';
+          const lienzo = Lienzo.crear(caja, {
+            fondo: dataUrl(r.diagrama), color: COLORES_DANOS[0], colorPorTrazo: true, grosor: 3,
+            guia: 'Raya sobre el daño',
+            alCambiar: (vacio) => {
+              botones.forEach((b) => { b.disabled = vacio; });
+              sesion.danosSubido = null;   // cambió: se vuelve a subir al guardar
+            },
+          });
+          sesion.danos = lienzo;
+          cont.querySelector('[data-danos-deshacer]').addEventListener('click', () => lienzo.deshacer());
+          cont.querySelector('[data-danos-borrar]').addEventListener('click', () => lienzo.limpiar());
+          const colores = cont.querySelector('[data-danos-colores]');
+          colores.innerHTML = COLORES_DANOS.map((c, i) => '<button type="button" class="lienzo-color' + (i ? '' : ' activo') + '" style="background:' + c +
+            '" data-color="' + c + '" title="Color de la pluma" aria-label="Color de la pluma"></button>').join('');
+          colores.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => {
+            lienzo.cambiarColor(b.dataset.color);
+            colores.querySelectorAll('[data-color]').forEach((x) => x.classList.toggle('activo', x === b));
+          }));
+        }).catch((e) => {
+          if (captura === sesion && caja.isConnected) caja.innerHTML = '<p class="ln-nota">' + icono('triangle-alert', 'ln-icon-sm') + ' ' + esc(mensajeError(e)) + '</p>';
+        });
+      }
+
+      /**
+       * El dibujo rayado, subido a la carpeta de la inspección antes de guardar (como las fotos): su { id }, o null sin
+       * daños. Si no cambió desde la última vez (guardar falló y se reintenta), no se sube otra vez.
+       */
+      function subirDanos(sesion) {
+        if (!sesion.danos || sesion.danos.vacio()) return Promise.resolve(null);
+        if (sesion.danosSubido) return Promise.resolve(sesion.danosSubido);
+        return Promise.all([sesion.danos.exportar(), asegurarCarpeta()])
+          .then(([img, c]) => llamar('apiLineasSubirArchivo', c.carpetaId, 'DIAGRAMA DAÑOS.png', img.mimeType, img.base64))
+          .then((archivo) => { sesion.danosSubido = archivo; return archivo; });
+      }
+
       function formularioInspeccion(ctx) {
         const pasos = PASOS_FORMULARIO.INSPECCION;
         const fotos = '<section class="ln-af-seccion ln-af-extra">' +
           htmlSubirFotos('cap-fotos') + '</section>';
-        return htmlPasosAppSheet(ctx.formulario, pasos, { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos }, { acomodar: true }) +
+        const extras = { [pasos.findIndex((p) => p.desde === 'extra:FOTOS')]: fotos, [pasos.findIndex((p) => p.desde === 'extra:DANOS')]: htmlDanos() };
+        return htmlPasosAppSheet(ctx.formulario, pasos, extras, { acomodar: true }) +
           '<div class="error-msg ln-error-fijo" id="cap-error" hidden></div>' + htmlAccionesPasos(BOTON_GUARDAR_PDF);
       }
 
       function iniciarFormularioInspeccion() {
         iniciarFormularioAppSheet();
+        prepararDanos();
         ['cap-fotos', 'cap-fotos-camara'].forEach((inputId) => manejarSubidaArchivo(inputId, 'cap-fotos-lista',
           () => asegurarCarpeta().then(() => captura.fotosCarpetaId), true, (s) => { if (s && captura) captura.fotos.push(s); }));
         $('#cap-guardar', raiz).addEventListener('click', guardarInspeccionDesdeFormulario);
@@ -773,8 +852,9 @@
         const bloqueo = bloqueoElegido($('#ln-captura-cuerpo', raiz));
         const sesion = captura;
         estadoGuardado(sesion.flujo && sesion.flujo.espera ? sesion.flujo.espera : (sesion.flujo ? 'Guardando la inspección' : 'Generando tu PDF'));
-        // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla)
-        Promise.all([firmaInspector.base64('#ffffff'), sesion.carpetaPromesa || null]).then(([inspector]) => {
+        // La carpeta de fotos solo existe si se subió alguna (ya quedó creada al subirla) o si se rayaron los daños
+        Promise.all([firmaInspector.base64('#ffffff'), subirDanos(sesion)]).then(([inspector, danos]) => Promise.all([inspector, danos, sesion.carpetaPromesa || null]))
+          .then(([inspector, danos]) => {
           sesion.pdfFirmas = { inspector: inspector, responsable: null, patron: sesion.controlPatron ? sesion.controlPatron.base64('#ddebf7') : null };
           // El responsable principal y cada adicional presente firman a distancia, por liga (usuario, 6-nov:
           // "igual firman las mismas personas" que la Responsiva). El servidor ignora los roles sin nombre en la
@@ -785,6 +865,7 @@
           const datos = Object.assign({}, sesion.ref, {
             id: sesion.contexto.idPropuesto, valores: valores, patron: patron, bloqueo: bloqueo,
             carpetaId: sesion.carpetaId || null, fotosCarpetaId: sesion.fotosCarpetaId || null, ruta: sesion.ruta || '', fotos: sesion.fotos,
+            diagramaDanosId: danos ? danos.id : null,
             firmaInspectorBase64: sesion.pdfFirmas.inspector, patronBase64: sesion.pdfFirmas.patron,
             usarFirmaGuardada: !!firmaInspector.guardada, usarFirmaGuardadaResponsable: propio,
             diferir: rolesDiferidos,

@@ -75,7 +75,7 @@ test('lo que el equipo trae fuera de la lista se conserva; en Reasignar empieza 
 
 test('al guardar: los accesorios quedan en la inspección (columna nueva) y pasan a la ficha, salvo en la línea sola', () => {
   const cap = read('src/services/lineas/LineasCaptura.gs');
-  assert.match(cap, /const COLUMNAS_NUEVAS = \{ INSPECCION: \['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'\]/);
+  assert.match(cap, /const COLUMNAS_NUEVAS = \{ INSPECCION: \['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS', 'DIAGRAMA DAÑOS'\]/);
   assert.match(cap, /if \(LineasChecklist\.cumple\('NO_LINEA', valores\['TIPO'\] \|\| ''\)\) copia\['ACCESORIOS'\] = valores\['ACCESORIOS'\] \|\| '';\n\s+\/\/ tolerante/);
   // Va antes de guardar el registro, en todos los casos (también Mandar a resguardo y Reasignar), como el color
   const guardar = cap.slice(cap.indexOf('function guardarInspeccion'), cap.indexOf('LineasRepo.guardarCambiosRegistro(obj.fila, copia'));
@@ -126,4 +126,35 @@ test('PDF: la plantilla nueva para las inspecciones con la lista; la del 19-oct 
   assert.match(read('src/services/lineas/LineasCaptura.gs'), /esInspeccion \? LineasPdf\.plantillaInspeccion\(fila\) : LineasPdf\.PLANTILLAS\.RESPONSIVA_CELULAR/);
   // Las dos las revisa revisarEntorno (todas las de LineasPdf.PLANTILLAS)
   assert.match(read('src/Diagnostico.gs'), /Object\.keys\(LineasPdf\.PLANTILLAS\)\.forEach/);
+});
+
+// Daños del equipo (usuario, 12-nov): rayar el dibujo del celular, opcional y con varios colores
+test('daños del equipo: la pantalla sube el dibujo rayado a la carpeta de la inspección; la hoja guarda su liga y el PDF lo pone', () => {
+  const cap = read('src/services/lineas/LineasCaptura.gs');
+  // Solo un archivo de la carpeta de esta inspección
+  assert.match(cap, /LineasEvidencias\.validarArchivosEnCarpeta\(\[id\], \[datos\.carpetaId, datos\.fotosCarpetaId\]\.filter\(Boolean\)\);/);
+  assert.match(cap, /const diagrama = diagramaSubido_\(datos\);/);
+  assert.match(cap, /if \(diagrama\) fila\[COL_DIAGRAMA\] = 'https:\/\/drive\.google\.com\/file\/d\/' \+ diagrama \+ '\/view';/);
+  // El PDF final y la vista previa de la firma por liga
+  assert.match(cap, /esInspeccion \? ponerDiagramaDanos_\(fila, datosInspeccionHtml_\(fila\), imagenes\)/);
+  assert.match(read('src/services/lineas/LineasFirmaRemota.gs'), /LineasCaptura\.diagramaDanos\(filaVista, LineasCaptura\.datosInspeccionHtml\(filaVista\), imagenesBlob\)/);
+  // ponerDiagramaDanos_: con la imagen, 'SI'; sin ella (o si no abre), '' y sale el dibujo de siempre
+  const fuente = cap.match(/function ponerDiagramaDanos_\(fila, datos, imagenes\) \{[\s\S]*?\r?\n  \}/)[0];
+  const blobs = { 'https://drive.google.com/file/d/ABC/view': 'BLOB' };
+  const poner = new Function('LineasArchivos', 'LineasUtil', 'COL_DIAGRAMA', 'return ' + fuente)(
+    { blob: (r) => blobs[r] || null }, { col: (f, c) => f[c] }, 'DIAGRAMA DAÑOS');
+  const imgs = {};
+  assert.equal(poner({ 'DIAGRAMA DAÑOS': 'https://drive.google.com/file/d/ABC/view' }, {}, imgs)['DIAGRAMA DAÑOS'], 'SI');
+  assert.equal(imgs['DIAGRAMA DAÑOS'], 'BLOB');
+  assert.equal(poner({ 'DIAGRAMA DAÑOS': 'https://drive.google.com/file/d/NO/view' }, {}, {})['DIAGRAMA DAÑOS'], '');
+  assert.equal(poner({}, {}, {})['DIAGRAMA DAÑOS'], '');
+  // La pantalla: un paso «Daños», varios colores (cada trazo con el suyo) y lo sube antes de guardar
+  const lineas = LINEAS;
+  assert.match(lineas, /\{ titulo: 'Daños', icono: 'pencil-line', desde: 'extra:DANOS', siempre: true \}/);
+  assert.match(lineas, /colorPorTrazo: true/);
+  assert.match(lineas, /llamar\('apiLineasSubirArchivo', c\.carpetaId, 'DIAGRAMA DAÑOS\.png', img\.mimeType, img\.base64\)/);
+  assert.match(lineas, /diagramaDanosId: danos \? danos\.id : null,/);
+  const lienzo = read('src/html/js/componentes/lienzo.html');
+  assert.match(lienzo, /const color = \(cfg\.colorPorTrazo && t\.color\) \|\| cfg\.color;/);
+  assert.match(lienzo, /actual = \{ puntos: \[p\], color: cfg\.color \};/);
 });

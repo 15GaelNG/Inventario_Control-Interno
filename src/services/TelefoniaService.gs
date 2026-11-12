@@ -725,6 +725,12 @@ const TelefoniaService = (function () {
     return LineasUtil.paraCliente(LineasCaptura.contextoResponsiva(ref, usuarioOperacion_(sesion), puedeVerSecretos_(sesion)));
   }
 
+  /** El dibujo del celular para rayar los daños en la inspección y la tabla de sus partes (usuario, 12-nov). */
+  function diagramaInspeccion(token) {
+    operar_(token);
+    return LineasCaptura.diagramaEnBlanco();
+  }
+
   /** Crea la carpeta de evidencia en Drive (NUCOS, si el registro tiene NUCO) para una inspección nueva. */
   function prepararEvidencia(token, tipo, ref, idRegistro) {
     const sesion = operar_(token);
@@ -1021,7 +1027,7 @@ const TelefoniaService = (function () {
 
   return {
     indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, diagramaInspeccion, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, inspeccionResguardo, accionBandejaResguardo, vistaRetirarCancelacion, vistaQuitarPanel, quitarDelPanel,

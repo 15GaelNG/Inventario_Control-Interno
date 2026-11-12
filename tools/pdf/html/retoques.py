@@ -115,12 +115,22 @@ def responsiva_celular_19oct(s):
 
 
 # --------------------------------------------------------------------------------------------- inspección de celular
+# El dibujo del celular (logo 3): si la inspección trae los daños rayados (DIAGRAMA DAÑOS, 12-nov), va esa imagen en su
+# lugar, del mismo tamaño (264.49 × 102.97 px = 198.37 × 77.23 pt); si no, el dibujo de siempre
+_DIBUJO_CELULAR = re.compile(r'<img alt="" src="\{\{LOGO:inspeccion-celular-3\}\}"[^>]*>')
+_DIBUJO_RAYADO = '{{#SI DIAGRAMA DAÑOS}}{{IMG:DIAGRAMA DAÑOS:198.37x77.23}}{{/SI}}{{#VACIO DIAGRAMA DAÑOS}}%s{{/VACIO}}'
+
+
 def inspeccion_celular(s):
     """Las dos variantes: el contenido iba de 6 a 842 pt en una hoja de 842 (lo de la derecha tocaba la orilla y se
-    cortaba). Al 96 % y corrido, queda con unos 20 pt de margen a cada lado y arriba; nada más cambia"""
+    cortaba). Al 96 % y corrido, queda con unos 20 pt de margen a cada lado y arriba; nada más cambia. Y el dibujo del
+    celular, el rayado si la inspección lo trae (12-nov)"""
     viejo = 'padding:16.7pt 2.8pt 0 12.8pt'
     if s.count(viejo) != 1:
         raise SystemExit('inspección de celular: no encontré el relleno del cuerpo')
+    if len(_DIBUJO_CELULAR.findall(s)) != 1:
+        raise SystemExit('inspección de celular: no encontré el dibujo del celular (logo 3)')
+    s = _DIBUJO_CELULAR.sub(lambda m: _DIBUJO_RAYADO % m.group(0), s)
     # Medido en Chrome: lo visible va de x = 6.1 a 842.4 y desde y = 17.1 (con el relleno de antes)
     return s.replace(viejo, 'zoom:0.96;padding:20.4pt 4pt 0 27pt')
 

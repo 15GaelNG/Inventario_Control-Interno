@@ -236,6 +236,17 @@ const PdfHtml = (function () {
     return salida;
   }
 
+  /** Un logo de RECURSOS PDF ({ base64, mimeType }) sin leer los demás recursos; null si no está */
+  function logo(nombre) {
+    const archivos = DriveUtils.carpetaEnRaiz(CARPETA_RECURSOS).getFiles();
+    while (archivos.hasNext()) {
+      const a = archivos.next();
+      const x = /^logo-(.+)\.(png|jpe?g)$/i.exec(a.getName());
+      if (x && x[1] === nombre) return { base64: base64De_(a), mimeType: x[2].toLowerCase() === 'png' ? 'image/png' : 'image/jpeg' };
+    }
+    return null;
+  }
+
   function plantilla(documento) {
     if (!/^[\w-]+$/.test(documento || '')) throw new Error('Documento HTML no válido: ' + documento);
     return HtmlService.createHtmlOutputFromFile('html/pdf/' + documento).getContent();
@@ -277,7 +288,7 @@ const PdfHtml = (function () {
     return copiados;
   }
 
-  return { DOCUMENTOS, encendido, llenar, faltantes, medidas, esc, texto, recursos, plantilla, pdf, instalarRecursos, CARPETA_RECURSOS };
+  return { DOCUMENTOS, encendido, llenar, faltantes, medidas, esc, texto, recursos, logo, plantilla, pdf, instalarRecursos, CARPETA_RECURSOS };
 })();
 
 /**

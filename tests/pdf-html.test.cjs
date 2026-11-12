@@ -214,3 +214,24 @@ test('la inspección vehicular: una plantilla para los 18 tipos, con el formato 
   assert.strictEqual(m['DIAGRAMA 2'], 'INS TRASERA');
   assert.throws(() => c.H.datos({}, 'TRACTOR'), /no tiene formato HTML/);
 });
+
+// Daños del equipo (usuario, 12-nov): el dibujo del celular rayado va en lugar del de siempre, del mismo tamaño
+test('inspección de celular: con DIAGRAMA DAÑOS va el dibujo rayado; sin él, el dibujo en blanco de siempre', () => {
+  ['inspeccion-celular', 'inspeccion-celular-checklist'].forEach((doc) => {
+    const p = fs.readFileSync(path.join(raiz, 'src/html/pdf/' + doc + '.html'), 'utf8');
+    assert.ok(p.includes('{{#SI DIAGRAMA DAÑOS}}{{IMG:DIAGRAMA DAÑOS:198.37x77.23}}{{/SI}}{{#VACIO DIAGRAMA DAÑOS}}<img alt="" src="{{LOGO:inspeccion-celular-3}}"'), doc);
+    // Todos los logos (uno que falta toma el primero)
+    const logos = { 'inspeccion-celular-1': { base64: 'L1' }, 'inspeccion-celular-2': { base64: 'L2' }, 'inspeccion-celular-3': { base64: 'BLANCO', mimeType: 'image/png' },
+      'inspeccion-celular-4': { base64: 'L4' } };
+    const sin = PdfHtml.llenar(p, { 'DIAGRAMA DAÑOS': '' }, {}, { logos });
+    assert.ok(sin.includes('src="data:image/png;base64,BLANCO"'), doc + ': sin rayar, el de siempre');
+    const rayado = png(620, 241);
+    const con = PdfHtml.llenar(p, { 'DIAGRAMA DAÑOS': 'SI' }, { 'DIAGRAMA DAÑOS': { base64: rayado, mimeType: 'image/png' } }, { logos });
+    assert.ok(!con.includes('base64,BLANCO'), doc + ': rayado, sin el de siempre');
+    assert.match(con, new RegExp('<img src="data:image/png;base64,' + rayado.replace(/[+/=]/g, '\$&') + '" style="width:198\.37pt;height:77\.11pt">'));
+    assert.ok(!PdfHtml.faltantes(p, Object.assign({ 'DIAGRAMA DAÑOS': '' })).includes('DIAGRAMA DAÑOS'));
+  });
+  // El paso de Docs a HTML lo vuelve a poner si se convierte otra vez
+  const retoques = fs.readFileSync(path.join(raiz, 'tools/pdf/html/retoques.py'), 'utf8');
+  assert.match(retoques, /s = _DIBUJO_CELULAR\.sub\(lambda m: _DIBUJO_RAYADO % m\.group\(0\), s\)/);
+});

@@ -47,6 +47,9 @@
    *   daños.vacio() · daños.deshacer() · daños.limpiar() · daños.ajustar()
    *   await daños.exportar()   → { base64, mimeType: 'image/png' }  (dibujo + trazos, listo para Drive)
    *
+   * Con `colorPorTrazo: true` cada trazo se queda con el color con que se hizo y cambiarColor solo cambia los
+   * siguientes (Líneas, daños del celular: varios colores en un mismo dibujo, 12-nov); sin él, cambiarColor repinta todo.
+   *
    * Los trazos se guardan en coordenadas relativas (0 a 1), no en pixeles: así el dibujo
    * sobrevive a que cambie el tamaño de la pantalla (girar el celular, abrir el menú) y se
    * exporta a la resolución del dibujo original, no a la de la pantalla.
@@ -61,6 +64,7 @@
         guia: '',             // texto de ayuda mientras está vacío
         anchoExportar: 900,   // sin fondo; con fondo se usa el ancho natural del dibujo
         altoMaximo: 0,        // px en pantalla; un dibujo alto (una moto de frente) se angosta para caber
+        colorPorTrazo: false, // true: cada trazo con su color (cambiarColor no repinta los ya hechos)
         alCambiar: null,
       }, config);
 
@@ -100,6 +104,9 @@
         ctx.lineJoin = 'round';
         ctx.lineWidth = Math.max(1, (cfg.grosor / 400) * ancho);
         trazos.forEach((t) => {
+          const color = (cfg.colorPorTrazo && t.color) || cfg.color;
+          ctx.strokeStyle = color;
+          ctx.fillStyle = color;
           const p = t.puntos.map(([x, y]) => [x * ancho, y * alto]);
           if (p.length === 1) {   // un toque: un punto
             ctx.beginPath();
@@ -160,7 +167,7 @@
         if (canvas.setPointerCapture && ev.pointerId !== undefined) {
           try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* no-op */ }
         }
-        actual = { puntos: [p] };
+        actual = { puntos: [p], color: cfg.color };
         trazos.push(actual);
         redibujar();
         avisar();
@@ -195,7 +202,8 @@
         limpiar() { trazos = []; redibujar(); avisar(); },
         ajustar,
         /** Cambia el color de la pluma -- repinta los trazos ya hechos con el color
-         *  nuevo también (son vectores, no pixeles: no hay forma de que se vean "mezclados"). */
+         *  nuevo también (son vectores, no pixeles: no hay forma de que se vean "mezclados"),
+         *  salvo con colorPorTrazo: ahí solo cambia el de los siguientes. */
         cambiarColor(color) { cfg.color = color; redibujar(); },
         color: () => cfg.color,
         /**

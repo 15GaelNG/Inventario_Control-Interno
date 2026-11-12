@@ -63,6 +63,10 @@ function apiLineasContextoInspeccion(token, ref) {
 function apiLineasContextoResponsiva(token, ref) {
   return TelefoniaService.contextoResponsiva(token, ref);
 }
+// El dibujo del celular para rayar los daños en la inspección (y la tabla de sus partes)
+function apiLineasDiagramaInspeccion(token) {
+  return TelefoniaService.diagramaInspeccion(token);
+}
 function apiLineasPrepararEvidencia(token, tipo, ref, idRegistro) {
   return TelefoniaService.prepararEvidencia(token, tipo, ref, idRegistro);
 }

@@ -235,7 +235,42 @@ const LineasCaptura = (function () {
    * inspección pide los accesorios con la lista de la responsiva desde el 22-oct (usuario). La responsiva guarda su TICKET
    * desde el 5-nov: antes solo iba al historial y el PDF (que se arma con la fila) lo dejaba en blanco.
    */
-  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS'], RESPONSIVA: ['JEFE DIRECTO', 'TICKET'] };
+  const COLUMNAS_NUEVAS = { INSPECCION: ['No EMPLEADO', 'DIRECTOR', 'ACCESORIOS', 'DIAGRAMA DAÑOS'], RESPONSIVA: ['JEFE DIRECTO', 'TICKET'] };
+
+  /**
+   * Daños del equipo (usuario, 12-nov; como los diagramas de la inspección vehicular): en la inspección se raya, si se
+   * quiere, el dibujo del celular (logo-inspeccion-celular-3 de RECURSOS PDF, el mismo del PDF). La pantalla sube el
+   * dibujo rayado a la carpeta de la inspección (la de las fotos, en NUCOS) y la columna DIAGRAMA DAÑOS guarda su liga;
+   * el PDF lo pone en lugar del dibujo en blanco. Sin rayar no se guarda nada y sale el de siempre.
+   */
+  const COL_DIAGRAMA = 'DIAGRAMA DAÑOS';
+  const LOGO_DIAGRAMA = 'inspeccion-celular-3';
+  const LOGO_PARTES = 'inspeccion-celular-2';
+
+  /** El dibujo en blanco para rayar y la tabla de sus partes (1 a 6), para el formulario. */
+  function diagramaEnBlanco() {
+    return { diagrama: PdfHtml.logo(LOGO_DIAGRAMA), partes: PdfHtml.logo(LOGO_PARTES) };
+  }
+
+  /** El ID del dibujo rayado que subió la pantalla, revisado: un archivo de la carpeta de esta inspección ('' sin dibujo). */
+  function diagramaSubido_(datos) {
+    const id = String(datos.diagramaDanosId || '').trim();
+    if (!id) return '';
+    if (!/^[\w-]{10,}$/.test(id) || !datos.carpetaId) throw new Error('El dibujo de los daños no se subió bien: vuelve a guardar.');
+    LineasEvidencias.validarArchivosEnCarpeta([id], [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
+    return id;
+  }
+
+  /**
+   * El dibujo rayado en el PDF: su imagen en `imagenes` y 'SI' en `datos` (la plantilla lo pone en lugar del dibujo en
+   * blanco). Sin dibujo, o si no se pudo abrir, '' y sale el de siempre. Regresa `datos`.
+   */
+  function ponerDiagramaDanos_(fila, datos, imagenes) {
+    const b = LineasArchivos.blob(LineasUtil.col(fila, COL_DIAGRAMA));
+    if (b) imagenes[COL_DIAGRAMA] = b;
+    datos[COL_DIAGRAMA] = b ? 'SI' : '';
+    return datos;
+  }
   /**
    * Valor y opciones del campo ACCESORIOS, el mismo en la responsiva y la inspección (usuario, 22-oct): la lista única
    * (D5.5) con "TARJETA SD" (usuario, 4-oct; "SD" de antes cuenta como la misma), CARGADOR como CABLE y CUBO (usuario,
@@ -617,8 +652,9 @@ const LineasCaptura = (function () {
     if (!datos.firmaInspectorBase64) throw new Error('FIRMA INSPECTOR es obligatorio');
     const diferir = rolesADiferir_(datos, datos.valores || {});
     const id = /^[\w-]{6,40}$/.test(String(datos.id || '')) ? String(datos.id) : LineasDatos.nuevoId(LineasRepo.TAB.INSP);
-    // Las fotos son opcionales: la carpeta existe solo si se subió alguna
+    // Las fotos son opcionales: la carpeta existe solo si se subió alguna (o se rayó el dibujo de los daños)
     if (datos.carpetaId) LineasEvidencias.validarArchivosEnCarpeta((datos.fotos || []).map((f) => f.id), [datos.carpetaId, datos.fotosCarpetaId].filter(Boolean));
+    const diagrama = diagramaSubido_(datos);
 
     const res = LineasDatos.conCandado(() => {
       const ahora = new Date();
@@ -645,6 +681,7 @@ const LineasCaptura = (function () {
         'ID': id, 'ID LINEA': obj.reg.id, 'NUCO': LineasUtil.nucoVisible(valores['NUCO']) || '', 'FECHA DE REGISTRO': isNaN(fechaRegistro) ? ahora : fechaRegistro,
         'CALIFICACION': calificacion, 'NOMBRE INSPECTOR': usuario.nombre, 'FIRMA RESPONSABLE': '', 'FIRMA INSPECTOR': '',
       });
+      if (diagrama) fila[COL_DIAGRAMA] = 'https://drive.google.com/file/d/' + diagrama + '/view';
       if (ADICIONALES.some((c) => fila[c])) LineasDatos.asegurarColumnas(LineasRepo.TAB.INSP, ADICIONALES);
       // Las columnas que la hoja del AppSheet no tiene (19-oct, pendiente 2.54) se agregan con el primero que las trae
       const nuevas = COLUMNAS_NUEVAS.INSPECCION.filter((c) => fila[c]);
@@ -1201,7 +1238,7 @@ const LineasCaptura = (function () {
       // En HTML cuando el documento ya está encendido para este entorno (PdfHtml.DOCUMENTOS); si no, el Doc de siempre
       const docHtml = esInspeccion ? documentoInspeccionHtml_(fila) : DOCUMENTO_HTML;
       const pdf = PdfHtml.encendido(docHtml)
-        ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? datosInspeccionHtml_(fila) : datosHtml_(fila), imagenes, carpeta, nombre, d.enNucos, crono)
+        ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? ponerDiagramaDanos_(fila, datosInspeccionHtml_(fila), imagenes) : datosHtml_(fila), imagenes, carpeta, nombre, d.enNucos, crono)
         : LineasPdf.generarPdfDesdePlantilla(
           esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
           registroPlantilla_(fila), imagenes, carpeta, nombre, d.enNucos, crono);
@@ -1394,6 +1431,6 @@ const LineasCaptura = (function () {
     // El documento en HTML de la fila (responsiva o la variante de su inspección): para la misma vista previa
     _documentoHtml: (fila, esInspeccion) => (esInspeccion ? documentoInspeccionHtml_(fila) : DOCUMENTO_HTML),
     /** Los valores del PDF en HTML (la comparación con los PDF reales, src/pruebas/PruebasPdfHtml.gs) */
-    datosHtml: (fila) => datosHtml_(fila), datosInspeccionHtml: (fila) => datosInspeccionHtml_(fila),
+    datosHtml: (fila) => datosHtml_(fila), datosInspeccionHtml: (fila) => datosInspeccionHtml_(fila), diagramaDanos: ponerDiagramaDanos_, diagramaEnBlanco,
   };
 })();

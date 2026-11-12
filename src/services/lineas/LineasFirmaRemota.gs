@@ -266,7 +266,7 @@ const LineasFirmaRemota = (function () {
     const docHtml = LineasCaptura._documentoHtml(filaVista, esInspeccion);
     const nombre = 'vista previa ' + Utilities.getUuid() + '.pdf';
     const pdf = PdfHtml.encendido(docHtml)
-      ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? LineasCaptura.datosInspeccionHtml(filaVista) : LineasCaptura.datosHtml(filaVista),
+      ? LineasPdf.generarPdfHtml(docHtml, esInspeccion ? LineasCaptura.diagramaDanos(filaVista, LineasCaptura.datosInspeccionHtml(filaVista), imagenesBlob) : LineasCaptura.datosHtml(filaVista),
         imagenesBlob, carpeta, nombre, true)
       : LineasPdf.generarPdfDesdePlantilla(esInspeccion ? LineasPdf.plantillaInspeccion(fila) : LineasPdf.PLANTILLAS.RESPONSIVA_CELULAR,
         LineasCaptura._registroPlantilla(filaVista), imagenesBlob, carpeta, nombre, true);
