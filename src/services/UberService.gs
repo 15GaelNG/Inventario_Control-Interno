@@ -35,9 +35,10 @@ const UberService = (function () {
     hoja: 'UBER',
     // ID PERSONA de quien se capturó, calculado de su nombre (CapitalHumano.LIGAS)
     persona: true,
-    columnas: COLUMNAS_LISTA,
+    // ID PERSONA: Gestión de Activos cruza por él lo que no coincide por nombre (usuario, 12-nov)
+    columnas: COLUMNAS_LISTA.concat('ID PERSONA'),
     fila: (r) => {
-      const fila = { NOMBRE_COMPLETO: r['NOMBRE COMPLETO'] || '', RAZON_SOCIAL: r['RAZON SOCIAL'] || '', ESTATUS: r['ESTAUS USUARIO'] || '' };
+      const fila = { NOMBRE_COMPLETO: r['NOMBRE COMPLETO'] || '', RAZON_SOCIAL: r['RAZON SOCIAL'] || '', ESTATUS: r['ESTAUS USUARIO'] || '', ID_PERSONA: r['ID PERSONA'] || '' };
       COLUMNAS_LISTA.forEach((c) => { fila[c] = r[c] instanceof Date ? r[c].toISOString() : r[c]; });
       return fila;
     },
