@@ -1508,7 +1508,7 @@ const LineasRepo = (function () {
 
   /** Personas activas de CH para elegir al responsable: al elegir una se llenan sus datos (autollenar). */
   function indiceColaboradores() {
-    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v7');
+    const enCache = LineasDatos.cacheLeer('indice_colaboradores_v8');
     if (enCache) return enCache;
     // Los activos de Capital Humano: la MISMA lista que usan los demás módulos (12-oct-2026), más las bajas de los últimos
     // 12 meses con estatus BAJA (usuario, 21-oct; pendiente 2.58: la lista las marca y los catálogos no las toman).
@@ -1520,18 +1520,19 @@ const LineasRepo = (function () {
     const comoSeMuestra = (c, v) => { const t = may(v); return t && LineasUtil.mostrarCH(c, t); };
     const filas = CapitalHumano.conBajasRecientes().map((p) => [may(p.NO_EMPLEADO), may(p.NOMBRE), may(p.PUESTO), may(p.DEPARTAMENTO),
       comoSeMuestra('AREA', p.AREA), comoSeMuestra('SEDE', p.SEDE), comoSeMuestra('OFICINA/DESARROLLO', p.OFICINA), p.ESTATUS === 'BAJA' ? 'BAJA' : 'ACTIVO', may(p.DIRECTOR), may(p.JEFE_DIRECTO),
-      String(p.CORREO || '').trim().toLowerCase() || null]).filter((c) => c[1]);
+      String(p.CORREO || '').trim().toLowerCase() || null, p.ID_PERSONA || null]).filter((c) => c[1]);
+    // idPersona: Gestión de Activos cruza por él lo que no coincide por nombre (usuario, 12-nov)
     const ix = LineasUtil.paraCliente({
-      columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo'],
+      columnas: ['noEmpleado', 'nombre', 'puesto', 'departamento', 'area', 'sede', 'oficina', 'estatus', 'director', 'jefe', 'correo', 'idPersona'],
       filas: filas, generadoEn: new Date(),
     });
-    LineasDatos.cacheGuardar('indice_colaboradores_v7', ix, 21600);
+    LineasDatos.cacheGuardar('indice_colaboradores_v8', ix, 21600);
     return ix;
   }
 
   /** Vacía las cachés del módulo (índices, catálogos y carpetas). */
   function borrarCaches() {
-    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6', 'indice_colaboradores_v7',
+    ['indice_telefonia_v2', 'indice_telefonia_v3', 'indice_telefonia_v4', CLAVE_INDICE, 'indice_colaboradores', 'indice_colaboradores_v2', 'indice_colaboradores_v3', 'indice_colaboradores_v4', 'indice_colaboradores_v5', 'indice_colaboradores_v6', 'indice_colaboradores_v7', 'indice_colaboradores_v8',
       'carpetas_nucos', 'carpetas_nucos_v2', 'catalogos_telefonia_v2', 'catalogos_telefonia_v3', 'catalogos_telefonia_v4', 'catalogos_telefonia_v5', 'catalogos_telefonia_v6', 'catalogos_telefonia_v7', 'catalogos_telefonia_v8', 'catalogos_telefonia_v9',
       CLAVE_IDS].forEach(LineasDatos.cacheBorrar);
     // El mapa de carpetas de NUCOS y LINEAS vive en Expediente.gs

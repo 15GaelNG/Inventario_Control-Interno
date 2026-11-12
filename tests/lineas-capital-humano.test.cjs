@@ -13,7 +13,7 @@ test('Capital Humano en Líneas: la lista de personas sale de CapitalHumano.conB
   const ix = repo.slice(repo.indexOf('function indiceColaboradores()'), repo.indexOf('/** Vacía las cachés del módulo'));
   assert.match(ix, /CapitalHumano\.conBajasRecientes\(\)\.map\(/);
   assert.match(ix, /p\.ESTATUS === 'BAJA' \? 'BAJA' : 'ACTIVO'/);
-  assert.match(ix, /indice_colaboradores_v7/);
+  assert.match(ix, /indice_colaboradores_v8/);
   // Los catálogos (puestos, jefes, sedes…) solo con activos (2.58)
   assert.match(repo, /const ch = ix\.filas\.filter\(\(f\) => f\[iEstatus\] !== 'BAJA'\)\.map\(/);
   // Sede, área y oficina como las muestra el sistema: QRO → QUERETARO (usuario, 13-oct)
@@ -114,12 +114,13 @@ test('Capital Humano: conBajasRecientes trae los activos y las bajas de los últ
   assert.deepEqual(CH.activos().map((p) => p.NOMBRE), ['ZOE ACTIVA'], 'los demás módulos siguen solo con activos');
 });
 
-test('Capital Humano en Líneas: la lista marca a las bajas y Gestión de activos sigue solo con activos (2.58)', () => {
+test('Capital Humano en Líneas: la lista marca a las bajas y Gestión de activos solo enseña a las que tienen activos (2.58)', () => {
   const cliente = LINEAS;
   assert.match(cliente, /baja: c\.estatus && String\(c\.estatus\)\.toUpperCase\(\) !== 'ACTIVO',/);
   assert.match(cliente, /const etiquetaDe = \(partes, c\) => \(c\.baja \? \['BAJA'\] : \[\]\)\.concat\(partes\)\.filter\(Boolean\)\.join\(' · '\);/);
   assert.match(cliente, /const distintos = \(campo\) => gente\.filter\(\(c\) => !c\.baja\)/);
-  assert.match(cliente, /colaboradores = filasComoObjetos\(r\)\.filter\(\(c\) => c\.estatus !== 'BAJA'\)/);
+  // Gestión de activos: una baja solo se muestra si todavía tiene algo vigente («Dados de baja con activos», 12-nov)
+  assert.match(cliente, /\.filter\(\(c\) => c\.estatus !== 'BAJA' \|\| c\.totalActivos > 0\)/);
   // Otra copia en el navegador: la de antes (sin bajas) no se enseña mientras llega la nueva
   assert.match(cliente, /const cargarColaboradores = \(forzar\) => catalogoLineas_\('apiLineasColaboradores', forzar, 'bajas'\);/);
 });

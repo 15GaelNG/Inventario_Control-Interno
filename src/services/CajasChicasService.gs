@@ -67,7 +67,8 @@ const CajasChicasService = (function () {
     libro: () => Config.SPREADSHEET_IDS.VEHICULOS(),
     hoja: 'CAJAS CHICAS',
     id: ID_COLUMN,
-    columnas: COLUMNAS_LISTA,
+    // ID PERSONA: Gestión de Activos cruza por él lo que no coincide por nombre (usuario, 12-nov)
+    columnas: COLUMNAS_LISTA.concat('ID PERSONA'),
     fila: (r) => {
       const fila = {
         ID_CCH: r['ID CCH'],
@@ -76,6 +77,7 @@ const CajasChicasService = (function () {
         EMPRESA_ORIGEN: r['EMPRESA ORIGEN'] || '',
         MONTO_ACTUAL: r['MONTO ACTUAL'] || '',
         METODO_REEMBOLSO: r['METODO DE REEMBOLSO'] || '',
+        ID_PERSONA: r['ID PERSONA'] || '',
       };
       COLUMNAS_LISTA.forEach((c) => { fila[c] = (r[c] instanceof Date ? r[c].toISOString() : r[c]) || ''; });
       return fila;

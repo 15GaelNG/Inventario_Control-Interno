@@ -163,7 +163,7 @@ const VehiculosService = (function () {
     leenTambien: ['panorama-vehiculos', 'gestion-activos'],
     columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
       'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
-      'RESPONSABLE VEHICULO'],
+      'RESPONSABLE VEHICULO', 'ID PERSONA'],
     incluir: (r) => !!r['FOLIO'],
     fila: (r) => ({
       ID_VEHICULO: r['ID'],
@@ -182,6 +182,8 @@ const VehiculosService = (function () {
       ESTATUS: r['ESTATUS'] || '',
       FECHA_REGISTRO: r['FECHA REGISTRO SISTEMA CI'] || '',
       RESPONSABLE_VEHICULO: r['RESPONSABLE VEHICULO'] || '',
+      // Gestión de Activos cruza por él lo que no coincide por nombre (usuario, 12-nov)
+      ID_PERSONA: r['ID PERSONA'] || '',
     }),
     orden: { campo: 'FOLIO' },
   });
