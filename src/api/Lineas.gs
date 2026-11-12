@@ -63,6 +63,10 @@ function apiLineasContextoInspeccion(token, ref) {
 function apiLineasContextoResponsiva(token, ref) {
   return TelefoniaService.contextoResponsiva(token, ref);
 }
+// Bajar fotos de una inspección: las elegidas o todas, en un ZIP
+function apiLineasFotosInspeccionZip(token, id, ids) {
+  return TelefoniaService.fotosInspeccionZip(token, id, ids);
+}
 // El dibujo del celular para rayar los daños en la inspección (y la tabla de sus partes)
 function apiLineasDiagramaInspeccion(token) {
   return TelefoniaService.diagramaInspeccion(token);

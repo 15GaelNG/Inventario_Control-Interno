@@ -6,7 +6,7 @@
    */
   (function () {
     'use strict';
-    const { $, aviso, chip, copiarTexto, crearFirma, enlaceDrive, esc, fecha, htmlFirma, ico, icono, llamar,
+    const { $, aviso, bajarBase64, chip, copiarTexto, crearFirma, enlaceDrive, esc, fecha, htmlFirma, ico, icono, llamar,
       mensajeError, miles, porcentaje, puedeOperar, tablaLineas, tilesKpi, vacio, veDocumentos } = Lineas.comun;
     Lineas.telefonicas.registrar('documentos', (T) => {
       const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, raiz,
@@ -280,15 +280,7 @@
       function descargarParaFirmar(d) {
         aviso(icono('loader') + ' Preparando el PDF para firmar…', 4000);
         return llamar('apiLineasFirmaRemotaPdfParaFirmar', d.tipoPdf, d.id).then((r) => {
-          const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
-          const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = r.nombre || 'para firmar.pdf';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 60000);
+          bajarBase64(Object.assign({ mimeType: 'application/pdf' }, r), 'para firmar.pdf');
           aviso(icono('circle-check') + ' Listo. Ya firmado, súbelo con «Subir PDF firmado».', 6000);
         }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + esc(mensajeError(e)), 8000));
       }

@@ -2158,6 +2158,19 @@
     }
     const mensajeError = (e) => esc(e && e.message ? e.message : e);
 
+    /** Guarda en el equipo un archivo que mandó el servidor en base64 ({ base64, mimeType, nombre }). */
+    function bajarBase64(r, nombre) {
+      const bytes = Uint8Array.from(atob(r.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: r.mimeType || 'application/octet-stream' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = r.nombre || nombre || 'archivo';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+
     /** Copia texto al portapapeles; dentro del iframe de Apps Script cae a execCommand si la API no está permitida. */
     function copiarTexto(texto) {
       const conArea = () => {
@@ -2625,7 +2638,7 @@
         cargarAccesorios: cargarAccesorios, cargarCatalogos: cargarCatalogos, cargarColaboradores: cargarColaboradores,
         cargarIndice: cargarIndice, cargarPatronesAppSheet: cargarPatronesAppSheet, colorAppSheet: colorAppSheet,
         columnasDeHoja: columnasDeHoja, conSelectorBloqueo: conSelectorBloqueo, contarDesde: contarDesde,
-        contarPor: contarPor, copiarTexto: copiarTexto, crearFirma: crearFirma, cumpleCondicion: cumpleCondicion,
+        bajarBase64: bajarBase64, contarPor: contarPor, copiarTexto: copiarTexto, crearFirma: crearFirma, cumpleCondicion: cumpleCondicion,
         deOtroModulo: deOtroModulo, diaClave: diaClave, dinero: dinero, elegirPastilla: elegirPastilla,
         enlaceDrive: enlaceDrive, errorPinBloqueo: errorPinBloqueo, erroresFormularioEn: erroresFormularioEn,
         esPuntosPatron: esPuntosPatron, exportarBase: exportarBase, fecha: fecha, fechaHora: fechaHora,

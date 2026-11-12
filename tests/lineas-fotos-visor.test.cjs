@@ -74,3 +74,36 @@ test('clic derecho solo en la galería, y su menú no se queda encima del visor;
   assert.ok(visor.includes("if (!cerca && !sobreFoto(ev)) { cerrar(); return; }"));
   assert.ok(visor.includes("img.style.cursor = cerca ? 'zoom-out' : (sobreFoto(ev) ? 'zoom-in' : 'default');"));
 });
+
+// Bajar fotos (usuario, 12-nov): seleccionar y bajar las elegidas, o todas de un jalón, en un ZIP
+test('bajar fotos: el servidor arma el ZIP solo con las fotos de esa inspección; una sola va suelta', () => {
+  const fuente = servicio.match(/function fotosInspeccionZip\(token, id, ids\) \{[\s\S]*?\n  \}\n/)[0];
+  const blob = (nombre, n) => { let nm = nombre; return { getBytes: () => new Array(n).fill(1), getName: () => nm, setName(x) { nm = x; return this; }, getContentType: () => 'image/jpeg' }; };
+  const archivos = { A: blob('a.jpg', 10), B: blob('a.jpg', 20), C: blob('c.jpg', 5) };
+  const zips = [];
+  const ctx = {
+    inspeccion: () => ({ inspeccion: { fecha: '2026-11-12T16:00:00.000Z', nuco: '979' }, equipo: { nuco: '979' },
+      fotos: [{ id: 'A', nombre: 'a.jpg' }, { id: 'B', nombre: 'a.jpg' }, { id: 'C', nombre: 'c.jpg' }] }),
+    LineasUtil: { nuco4: (n) => ('000' + n).slice(-4) }, LineasDatos: { ZONA_APP: 'America/Mexico_City' },
+    DriveApp: { getFileById: (id) => ({ getBlob: () => archivos[id] }) },
+    Utilities: {
+      formatDate: () => '12-11-2026', base64Encode: (b) => 'B64:' + b.length,
+      zip: (bs, nombre) => { zips.push({ nombres: bs.map((b) => b.getName()), nombre }); return { getBytes: () => [1, 2], getContentType: () => 'application/zip' }; },
+    },
+    TOPE_FOTOS_BYTES: 32,
+  };
+  const correr = (ids) => new Function(...Object.keys(ctx), 'return (' + fuente + ')(\'T\', \'INS-1\', ' + JSON.stringify(ids) + ');')(...Object.values(ctx));
+  // Las elegidas: en un ZIP con el NUCO y el día; dos con el mismo nombre no se pisan
+  assert.deepEqual(correr(['A', 'B']), { nombre: 'Fotos INSP 0979 12-11-2026.zip', mimeType: 'application/zip', base64: 'B64:2' });
+  assert.deepEqual(zips[0].nombres, ['a.jpg', 'a (2).jpg']);
+  // Una sola: suelta, con su nombre
+  assert.equal(correr(['C']).nombre, 'Fotos INSP 0979 12-11-2026 - c.jpg');
+  // Una que no es de esta inspección, o más del tope: no
+  assert.throws(() => correr(['C', 'OTRA']), /ya no está en esta inspección/);
+  assert.throws(() => correr(null), /más de 40 MB/);
+  // La pantalla: Seleccionar / Bajar seleccionadas / Bajar todas; eligiendo, el clic marca la foto en vez de abrirla
+  assert.match(lineas, /llamar\('apiLineasFotosInspeccionZip', id, lista \? lista\.map\(\(f\) => f\.id\) : null\)/);
+  assert.match(lineas, /if \(eleccion\.activa\(\)\) \{ ev\.preventDefault\(\); ev\.stopImmediatePropagation\(\); eleccion\.alternar\(n, a\); \}/);
+  assert.match(lineas, /' Bajar seleccionadas \(<span data-fotos-cuenta>0<\/span>\)<\/button>'/);
+  assert.match(API, /function apiLineasFotosInspeccionZip\(token, id, ids\) \{\s*return TelefoniaService\.fotosInspeccionZip\(token, id, ids\);/);
+});

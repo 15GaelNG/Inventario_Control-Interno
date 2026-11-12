@@ -573,6 +573,19 @@
   .ln-danos-cuerpo { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
   .ln-danos-lienzo { flex: 1 1 420px; min-width: 0; }
   .ln-danos-partes { flex: 0 1 220px; max-width: 100%; height: auto; border-radius: var(--radio-m); }
+  /* Bajar fotos de una inspección (12-nov): la barra y la foto marcada al estar eligiendo */
+  .ln-fotos-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .ln-fotos-eligiendo { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+  .ln-fotos-eligiendo[hidden] { display: none; }
+  .ln-galeria-eligiendo .ln-evidencia { position: relative; cursor: pointer; }
+  .ln-galeria-eligiendo .ln-evidencia::after {
+    content: ''; position: absolute; top: 8px; left: 8px; width: 22px; height: 22px; border-radius: var(--radio-s);
+    border: 2px solid #fff; background: rgba(0,0,0,.35); box-shadow: 0 0 0 1px rgba(0,0,0,.3);
+  }
+  .ln-galeria-eligiendo .ln-evidencia.ln-foto-elegida { border-color: var(--color-accent); box-shadow: 0 0 0 2px var(--color-accent); }
+  .ln-galeria-eligiendo .ln-evidencia.ln-foto-elegida::after {
+    content: '✓'; color: #fff; font-weight: 700; font-size: var(--texto-s); line-height: 18px; text-align: center; background: var(--color-accent);
+  }
   /* «Ver detalle» de un resguardo: el PDF y las fotos de su inspección (12-nov) */
   .ln-resg-insp { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--color-border); }
   .ln-resg-insp p { margin: 6px 0 0; }

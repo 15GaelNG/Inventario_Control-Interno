@@ -6,7 +6,7 @@
    */
   (function () {
     'use strict';
-    const { aviso, chip, enlaceDrive, esc, fecha, icono, llamar, mensajeError, menuFlotante, miles, pedirDatos,
+    const { aviso, bajarBase64, chip, enlaceDrive, esc, fecha, icono, llamar, mensajeError, menuFlotante, miles, pedirDatos,
       pedirFotoGrande, porcentaje, verFotos } = Lineas.comun;
     Lineas.telefonicas.registrar('paginas', (T) => {
       const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, vigente } = T;
@@ -121,6 +121,69 @@
       }
 
       // ---- Inspección ----
+
+      /**
+       * Bajar fotos (usuario, 12-nov): «Bajar todas» de un jalón, o «Seleccionar» para marcar las que se quieren y «Bajar
+       * seleccionadas». Llegan en un ZIP (una sola, suelta) que arma el servidor (apiLineasFotosInspeccionZip).
+       */
+      function htmlBarraFotos() {
+        return '<div class="ln-fotos-barra">' +
+          '<button type="button" class="secondary ln-btn-chico" data-fotos-elegir>' + icono('square-check') + ' Seleccionar</button>' +
+          '<span class="ln-fotos-eligiendo" hidden>' +
+          '<button type="button" class="secondary ln-btn-chico" data-fotos-todas>' + icono('check-check') + ' Marcar todas</button>' +
+          '<button type="button" class="secondary ln-btn-chico" data-fotos-ninguna>' + icono('x') + ' Quitar selección</button>' +
+          '<button type="button" class="ln-btn-chico" data-fotos-bajar-elegidas disabled>' + icono('download') + ' Bajar seleccionadas (<span data-fotos-cuenta>0</span>)</button>' +
+          '<button type="button" class="secondary ln-btn-chico" data-fotos-salir>Cancelar</button></span>' +
+          '<button type="button" class="ln-btn-chico" data-fotos-bajar-todas>' + icono('download') + ' Bajar todas</button>' +
+          '</div>';
+      }
+
+      /** Liga la barra: regresa { activa(), alternar(n, enlace) } para que el clic en una foto la marque al estar eligiendo. */
+      function activarBarraFotos(detalle, id, fotos) {
+        const barra = detalle.querySelector('.ln-fotos-barra');
+        const galeria = detalle.querySelector('.ln-galeria');
+        if (!barra || !galeria) return { activa: () => false, alternar: () => {} };
+        const elegidas = new Set();
+        let eligiendo = false;
+        const enlaces = () => Array.from(galeria.querySelectorAll('.ln-evidencia'));
+        const pintar = () => {
+          enlaces().forEach((a, n) => { a.classList.toggle('ln-foto-elegida', elegidas.has(n)); a.setAttribute('aria-pressed', eligiendo ? String(elegidas.has(n)) : 'false'); });
+          barra.querySelector('[data-fotos-cuenta]').textContent = String(elegidas.size);
+          barra.querySelector('[data-fotos-bajar-elegidas]').disabled = !elegidas.size;
+        };
+        const modo = (si) => {
+          eligiendo = si;
+          if (!si) elegidas.clear();
+          galeria.classList.toggle('ln-galeria-eligiendo', si);
+          barra.querySelector('.ln-fotos-eligiendo').hidden = !si;
+          barra.querySelector('[data-fotos-elegir]').hidden = si;
+          barra.querySelector('[data-fotos-bajar-todas]').hidden = si;
+          pintar();
+        };
+        const bajar = (boton, lista) => {
+          const original = boton.innerHTML;
+          boton.disabled = true;
+          boton.innerHTML = '<span class="ln-spinner"></span> Preparando…';
+          llamar('apiLineasFotosInspeccionZip', id, lista ? lista.map((f) => f.id) : null).then((r) => {
+            bajarBase64(r, 'Fotos.zip');
+            aviso(icono('circle-check') + ' Listo: ' + esc(r.nombre) + '.', 5000);
+            if (lista) modo(false);
+          }).catch((e) => aviso(icono('triangle-alert', 'ln-alerta') + ' ' + mensajeError(e), 8000))
+            .finally(() => { if (boton.isConnected) { boton.innerHTML = original; boton.disabled = boton.hasAttribute('data-fotos-bajar-elegidas') && !elegidas.size; } });
+        };
+        barra.querySelector('[data-fotos-elegir]').addEventListener('click', () => modo(true));
+        barra.querySelector('[data-fotos-salir]').addEventListener('click', () => modo(false));
+        barra.querySelector('[data-fotos-todas]').addEventListener('click', () => { fotos.forEach((f, n) => elegidas.add(n)); pintar(); });
+        barra.querySelector('[data-fotos-ninguna]').addEventListener('click', () => { elegidas.clear(); pintar(); });
+        barra.querySelector('[data-fotos-bajar-todas]').addEventListener('click', (ev) => bajar(ev.currentTarget, null));
+        barra.querySelector('[data-fotos-bajar-elegidas]').addEventListener('click', (ev) =>
+          bajar(ev.currentTarget, fotos.filter((f, n) => elegidas.has(n))));
+        return {
+          activa: () => eligiendo,
+          alternar: (n) => { if (elegidas.has(n)) elegidas.delete(n); else elegidas.add(n); pintar(); },
+        };
+      }
+
       function pintarInspeccion(detalle, id) {
         return pedirDocumento('inspeccion', id).then((r) => {
           if (!vigente() || !pila.length || pila[pila.length - 1].tipo !== 'inspeccion' || pila[pila.length - 1].id !== id) return;
@@ -158,7 +221,7 @@
                 '</div>' +
                 tarjeta(icono('message-square-text') + ' Comentario', '<p class="ln-lectura-notas">' + esc(i.observaciones || 'Sin comentario registrado.') + '</p>')) +
             tarjeta(icono('images') + ' Fotografías (' + fotos.length + ')',
-              (fotos.length ? galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
+              (fotos.length ? htmlBarraFotos() + galeria(fotos) : '<p class="empty-state">No hay fotografías de esta inspección.</p>') +
               (r.puedeOperar ? '<div class="ln-fotos-despues"><h4>' + icono('image-plus') + ' Agregar fotos</h4>' +
                 htmlSubirFotos('insp-fotos') + '</div>' : ''));
           activarBotonesDocumento(detalle, 'INSPECCION', i, r);
@@ -176,10 +239,16 @@
               return true;
             });
           const ampliar = (f) => verFotos(enGaleria, enGaleria.indexOf(f), r.puedeOperar ? { alQuitar: alQuitar } : {});
+          const eleccion = activarBarraFotos(detalle, id, fotos);
+          detalle.querySelectorAll('.ln-galeria .ln-evidencia').forEach((a, n) => {
+            // Eligiendo (usuario, 12-nov): el clic marca o desmarca la foto, no la abre
+            a.addEventListener('click', (ev) => { if (eleccion.activa()) { ev.preventDefault(); ev.stopImmediatePropagation(); eleccion.alternar(n, a); } });
+          });
           detalle.querySelectorAll('[data-foto]').forEach((a) => {
             const f = fotos[Number(a.dataset.foto)];
             a.addEventListener('mouseenter', () => pedirFotoGrande(f), { once: true });
             a.addEventListener('click', (ev) => {
+              if (ev.defaultPrevented) return; // eligiendo fotos
               if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1) return; // abrir en otra pestaña sigue yendo a Drive
               ev.preventDefault();
               ampliar(f);

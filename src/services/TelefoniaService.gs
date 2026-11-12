@@ -474,6 +474,44 @@ const TelefoniaService = (function () {
     return documento_(token, id, 'INSPECCION');
   }
 
+  /** Tope de lo que se baja de una vez: Apps Script no regresa respuestas muy grandes (y en base64 crece un tercio) */
+  const TOPE_FOTOS_BYTES = 40 * 1024 * 1024;
+
+  /**
+   * Bajar fotos de una inspección (usuario, 12-nov): las elegidas (`ids`) o todas (sin `ids`), en un ZIP; una sola va
+   * suelta. Solo las que muestra su página (mismo permiso, la misma lista: inspeccion()), hasta TOPE_FOTOS_BYTES.
+   * → { nombre, mimeType, base64 }
+   */
+  function fotosInspeccionZip(token, id, ids) {
+    const r = inspeccion(token, id);
+    const pedidas = Array.isArray(ids) && ids.length ? ids.map(String) : null;
+    const fotos = (r.fotos || []).filter((f) => f && f.id && (!pedidas || pedidas.indexOf(String(f.id)) >= 0));
+    if (!fotos.length) throw new Error('No hay fotos para bajar.');
+    if (pedidas && fotos.length !== pedidas.length) throw new Error('Alguna de las fotos elegidas ya no está en esta inspección: vuelve a abrirla.');
+    const i = r.inspeccion || {};
+    const nuco = LineasUtil.nuco4((r.equipo && r.equipo.nuco) || i.nuco) || '';
+    const fch = i.fecha ? new Date(i.fecha) : null;   // paraCliente la manda como texto
+    const dia = fch && !isNaN(fch) ? Utilities.formatDate(fch, LineasDatos.ZONA_APP, 'dd-MM-yyyy') : '';
+    const base = ['Fotos INSP', nuco, dia].filter(Boolean).join(' ');
+    let total = 0;
+    const usados = {};
+    const blobs = fotos.map((f) => {
+      const b = DriveApp.getFileById(f.id).getBlob();
+      total += b.getBytes().length;
+      if (total > TOPE_FOTOS_BYTES) throw new Error('Son más de 40 MB: elige menos fotos y bájalas en partes.');
+      // Dos fotos con el mismo nombre no se pisan dentro del ZIP
+      const nombre = String(f.nombre || b.getName() || 'foto').replace(/[\\/:*?"<>|]/g, '_');
+      const punto = nombre.lastIndexOf('.');
+      let final = nombre;
+      for (let n = 2; usados[final.toLowerCase()]; n++) final = punto > 0 ? nombre.slice(0, punto) + ' (' + n + ')' + nombre.slice(punto) : nombre + ' (' + n + ')';
+      usados[final.toLowerCase()] = true;
+      return b.setName(final);
+    });
+    const salida = blobs.length === 1 ? blobs[0] : Utilities.zip(blobs, base + '.zip');
+    return { nombre: blobs.length === 1 ? base + ' - ' + blobs[0].getName() : base + '.zip', mimeType: salida.getContentType() || 'application/zip',
+      base64: Utilities.base64Encode(salida.getBytes()) };
+  }
+
   /** Página de una responsiva (usuario, 6-oct): como la de la inspección; sin fotos, que la responsiva no lleva. */
   function responsiva(token, id) {
     return documento_(token, id, 'RESPONSIVA');
@@ -1027,7 +1065,7 @@ const TelefoniaService = (function () {
 
   return {
     indice, equipo, linea, evidencias, historial, asignaciones, inspeccion, responsiva, catalogos, colaboradores, bitacora, formularioRegistro, recargarDatos,
-    contextoInspeccion, contextoResponsiva, diagramaInspeccion, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
+    contextoInspeccion, contextoResponsiva, diagramaInspeccion, fotosInspeccionZip, prepararEvidencia, cancelarEvidencia, subirArchivo, guardarInspeccion, guardarResponsiva, identificacionesRegistradas, registrarMediciones, medirServidor, pasosServidor, generarPdf, subirPdfFirmado, quitarFotoInspeccion, crearRegistro, editarRegistro,
     vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, inspeccionResguardo, accionBandejaResguardo, vistaRetirarCancelacion, vistaQuitarPanel, quitarDelPanel,
