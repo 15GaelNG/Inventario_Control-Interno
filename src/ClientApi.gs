@@ -32,7 +32,7 @@ function apiListaConHuella(token, fn, args) {
 }
 // ¿Cambió algo de lo que se ve? Solo CacheService (sin leer hojas): la llamada más barata que hay.
 function apiHuellasVigentes(token, claves) {
-  Auth.automatica();   // la pide el vigía cada minuto: no cuenta como actividad (la sesión se cierra a los 60 min sin uso)
+  Auth.automatica();   // la pide el vigía cada minuto: no cuenta como actividad (la sesión se cierra a los 180 min sin uso)
   Auth.validarSesion(token);
   const validas = (claves || []).filter((k) => /^ver_[\w-]{1,10}_/.test(String(k))).slice(0, 300);
   return CacheHojas.vigentes(validas);
