@@ -322,6 +322,38 @@ const cambiar = (el, checked) => { el.checked = checked; el.dispatchEvent(new wi
   ok($('.dt-filtros-activos').textContent.includes('Estado: Vencida') && !$('.dt-popover'), '"solo" filtra por ese valor y cierra el menú');
   tabla.limpiarFiltros();
 
+  console.log('13b. El menú de valores cuenta solo lo que dejan los OTROS filtros (usuario, 13-nov)');
+  {
+    const conteos = () => Object.fromEntries($$('.dt-popover .dt-lista-valores label').map((l) =>
+      [l.querySelector('input').value, Number(l.querySelector('.dt-conteo').textContent)]));
+    // Lo esperado: contar ESTADO en las filas que la tabla deja (en este punto ya hay ediciones y borrados de arriba)
+    const esperado = () => tabla.getFiltradas().reduce((m, f) => (m[f.ESTADO] = (m[f.ESTADO] || 0) + 1, m), {});
+    const igual = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+    click($('.dt-btn-filtro[data-campo="ESTADO"]'));
+    const sinFiltros = conteos();
+    ok(igual(sinFiltros, esperado()), 'sin filtros cuenta toda la tabla: ' + JSON.stringify(sinFiltros));
+    tabla.setFiltro('DIAS', { op: '<', v1: '5' });
+    const conDias = esperado();
+    click($('.dt-btn-filtro[data-campo="ESTADO"]'));
+    let c = conteos();
+    ok(igual(c, conDias) && !igual(c, sinFiltros), 'con «Días < 5» cuenta solo lo que queda: ' + JSON.stringify(c));
+    tabla.setFiltro('ESTADO', { valores: ['Vencida'] });
+    click($('.dt-btn-filtro[data-campo="ESTADO"]'));
+    c = conteos();
+    ok(igual(c, conDias) && c.Vigente > 0, 'el filtro de la misma columna no cuenta: «Vigente» se sigue viendo para volver a marcarla');
+    tabla.setFiltro('DIAS', { op: '>', v1: '100' });                     // ninguna fila
+    click($('.dt-btn-filtro[data-campo="ESTADO"]'));
+    ok($$('.dt-popover .dt-lista-valores label').length === 0, 'si los otros filtros no dejan nada, la lista sale vacía');
+    click($('.dt-popover [data-accion="aplicar"]'));
+    ok($('.dt-filtros-activos').textContent.includes('Estado: Vencida'), 'al aplicar, lo elegido que los otros filtros esconden se conserva');
+    tabla.setFiltro('DIAS', null);
+    click($('.dt-btn-filtro[data-campo="ESTADO"]'));
+    $$('.dt-popover .dt-lista-valores input').forEach((i) => { i.checked = true; });
+    click($('.dt-popover [data-accion="aplicar"]'));
+    ok(!$('.dt-filtros-activos').textContent.includes('Estado'), 'marcar todos los valores quita el filtro');
+    tabla.limpiarFiltros();
+  }
+
   console.log('14. Vista: mover, fijar, ocultar, densidad, recordar y restablecer');
   let caja2 = null;
   const vista2 = () => window.DataTable.crear((caja2 = doc.body.appendChild(doc.createElement('div'))), {
