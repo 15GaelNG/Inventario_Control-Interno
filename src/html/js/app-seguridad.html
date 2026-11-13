@@ -475,11 +475,11 @@
     }
 
     // ---------------------------------------------------------------- inactividad
-    // El servidor cierra la sesión a los 60 min sin uso (Auth.gs, Config.SESION_INACTIVIDAD_MIN). Aquí se ve venir:
+    // El servidor cierra la sesión a los 180 min sin uso (Auth.gs, Config.SESION_INACTIVIDAD_MIN). Aquí se ve venir:
     //   - con actividad real (clic, teclas, toque, scroll) se le avisa al servidor a lo más cada 10 min (apiSeguridadSigo),
     //     para que quien llena un formulario largo sin guardar no se quede sin sesión al final;
-    //   - a los 59 min sin nada, "¿Sigues ahí?" con cuenta regresiva; a los 60, se cierra y el login lo dice.
-    const INACTIVIDAD_MIN = 60;
+    //   - a los 179 min sin nada, "¿Sigues ahí?" con cuenta regresiva; a los 180, se cierra y el login lo dice.
+    const INACTIVIDAD_MIN = 180;   // igual que Config.SESION_INACTIVIDAD_MIN (lo revisa sesion.test.cjs)
     const AVISAR_SERVIDOR_MIN = 10;
     let ultimaActividad = Date.now();
     let ultimoAvisoAlServidor = Date.now();

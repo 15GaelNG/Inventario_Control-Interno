@@ -299,10 +299,10 @@ min, de un solo correo y paso) y la pantalla lo pinta en `#login-paso` (`Segurid
   `Mar1posa!`; sin el correo ni el nombre, distinta de la actual y fuera de la lista de comunes (`Credenciales.TIPOS` y
   `COMUNES`; la pantalla repite la lista para palomearla). La regla es para ELEGIRLA: guardarla con huella no cambia nada
   para la persona y no se quita.
-- **La sesión** (`Auth.gs`): vence a los 60 min sin uso (`Config.SESION_INACTIVIDAD_MIN`; cada llamada la renueva, a lo
-  más cada 5 min) y nunca pasa de 8 h. **Una `api…` que llama un temporizador de la pantalla empieza con
+- **La sesión** (`Auth.gs`): vence a los 180 min sin uso (`Config.SESION_INACTIVIDAD_MIN`; cada llamada la renueva, a lo
+  más cada 5 min) y nunca pasa de 24 h (el triple desde el 13-nov; antes 60 min y 8 h). **Una `api…` que llama un temporizador de la pantalla empieza con
   `Auth.automatica()`** (el vigía, la campanita, sensores en vivo): valida sin renovar, o la pestaña abierta nunca
-  cerraría. La pantalla avisa a los 59 min ("¿Sigues ahí?") y, con actividad sin llamadas (un formulario largo), avisa al
+  cerraría. La pantalla avisa a los 179 min ("¿Sigues ahí?") y, con actividad sin llamadas (un formulario largo), avisa al
   servidor cada 10 min (`apiSeguridadSigo`). Cada persona tiene una versión de sesión (ScriptProperties):
   `Auth.cerrarSesiones(correo, { conservar: token })` saca a todas sus sesiones abiertas (cambiar o restablecer la
   contraseña, quitar dispositivos, el admin) y a quien lo hizo le regresa un token nuevo (`{ sesion }`, la pantalla lo

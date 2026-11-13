@@ -8,7 +8,7 @@
 function apiSeguridadCambiarInicial(reto, nueva) {
   return Auth.cambiarContrasenaInicial(reto, nueva);
 }
-// La pantalla tuvo actividad (clics, teclas) sin llamar al servidor: renueva la sesión (60 min de inactividad, Auth.gs)
+// La pantalla tuvo actividad (clics, teclas) sin llamar al servidor: renueva la sesión (180 min de inactividad, Auth.gs)
 function apiSeguridadSigo(token) {
   Auth.validarSesion(token);
   return true;
