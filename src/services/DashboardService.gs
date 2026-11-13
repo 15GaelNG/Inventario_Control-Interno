@@ -77,10 +77,22 @@ const DashboardService = (function () {
   /**
    * Mismo criterio que el módulo de Verificaciones (app-verificaciones.html):
    * solo la verificación más reciente de cada vehículo (su ID) cuenta, y son 30 días
-   * antes de FECHA_PROXIMA para "por vencer".
+   * antes de FECHA_PROXIMA para "por vencer". Un vehículo ya de BAJA VEHICULAR no
+   * cuenta (ni como vencida ni en el total): si no se excluyera, cada baja se quedaría
+   * para siempre como "vencida" e inflaría el número (12-nov).
    */
   function alertaVerificaciones_(token) {
     const filas = VerificacionesService.listar(token);
+    const vehiculos = lista_('vehiculos', () => VehiculosService.listarResumen(token));
+    const bajaPorId = {};
+    const bajaPorFolio = {};
+    vehiculos.forEach((v) => {
+      if (String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR') return;
+      if (v.ID_VEHICULO) bajaPorId[v.ID_VEHICULO] = true;
+      if (v.FOLIO) bajaPorFolio[v.FOLIO] = true;
+    });
+    const esBaja = (v) => !!(bajaPorId[v.ID_VEHICULO] || bajaPorFolio[v.FOLIO]);
+
     const ultimaPorVehiculo = {};
     filas.forEach((v) => {
       const clave = v.ID_VEHICULO || 'folio:' + v.FOLIO;
@@ -89,14 +101,17 @@ const DashboardService = (function () {
     });
     let vencidas = 0;
     let porVencer = 0;
+    let total = 0;
     Object.keys(ultimaPorVehiculo).forEach((clave) => {
       const v = ultimaPorVehiculo[clave];
+      if (esBaja(v)) return;
+      total++;
       if (!v.FECHA_PROXIMA) return;
       const dias = Math.floor((new Date(v.FECHA_PROXIMA) - new Date()) / DIA_MS);
       if (dias < 0) vencidas++;
       else if (dias <= 30) porVencer++;
     });
-    return { vencidas: vencidas, porVencer: porVencer, total: Object.keys(ultimaPorVehiculo).length };
+    return { vencidas: vencidas, porVencer: porVencer, total: total };
   }
 
   /**

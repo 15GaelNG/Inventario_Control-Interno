@@ -159,8 +159,9 @@ const VehiculosService = (function () {
     // Gestión de Activos también (20-oct): a diferencia de BASICO (solo para autocompletar,
     // nunca trae BAJA VEHICULAR), esta sí los incluye con su ESTATUS -- es la que necesita para
     // seguir mostrando en el panel de la persona un vehículo que ya dio de baja, sin que cuente
-    // como activo (RESPONSABLE VEHICULO se agregó para ese match).
-    leenTambien: ['panorama-vehiculos', 'gestion-activos'],
+    // como activo (RESPONSABLE VEHICULO se agregó para ese match). Verificaciones también (12-nov):
+    // para que una verificación de un vehículo ya de baja deje de contar como "Vencida".
+    leenTambien: ['panorama-vehiculos', 'gestion-activos', 'verificaciones'],
     columnas: ['ID', 'FOLIO', 'NUCCO', 'DEPARTAMENTO', 'NO ECONOMICO', 'MARCA', 'CLASE',
       'LINEA VEHICULO', 'MODELO', 'COLOR', 'PLACA', 'SERIE VEHICULO', 'SEDE', 'ESTATUS', 'FECHA REGISTRO SISTEMA CI',
       'RESPONSABLE VEHICULO', 'ID PERSONA'],

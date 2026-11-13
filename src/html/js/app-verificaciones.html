@@ -26,6 +26,10 @@
     const puedeEditar = puedeEditarModulo('verificaciones');
     const modalEditar = document.getElementById('modal-editar-verificacion');
     let verificaciones = [];
+    // Folios/IDs de vehículos en BAJA VEHICULAR (apiListarVehiculosResumen: a diferencia del
+    // BASICO de los selectores, sí los trae). Se llena antes del primer cargar(); mientras tanto
+    // conDerivados simplemente no distingue ninguno (igual que si el vehículo siguiera activo).
+    const bajaVehiculos = new Set();
 
     // ----- Cálculos derivados (estado de vigencia por vehículo) -----
     function diasParaVencer(fechaProximaISO) {
@@ -33,7 +37,9 @@
       return Math.floor((new Date(fechaProximaISO) - new Date(hoyLocal() + 'T00:00:00')) / DIA_MS);
     }
 
-    /** Agrega ESTADO y DIAS_RESTANTES. Solo la verificación más reciente de cada folio cuenta como vigente. */
+    /** Agrega ESTADO y DIAS_RESTANTES. Solo la verificación más reciente de cada folio cuenta como vigente.
+     *  Un vehículo que ya está en BAJA VEHICULAR se queda como "Baja vehicular" en vez de "Vencida": si no,
+     *  cada baja se quedaría para siempre como vencida e inflaría ese número (usuario, 12-nov). */
     function conDerivados(filas) {
       const ultimaPorFolio = {};
       filas.forEach((v) => {
@@ -44,7 +50,9 @@
         const dias = diasParaVencer(v.FECHA_PROXIMA);
         let estado = 'Reemplazada';
         if (ultimaPorFolio[v.FOLIO] === v) {
-          estado = dias === null ? 'Sin fecha' : dias < 0 ? 'Vencida' : dias <= 30 ? 'Por vencer' : 'Vigente';
+          const deBaja = bajaVehiculos.has(v.ID_VEHICULO) || bajaVehiculos.has(v.FOLIO);
+          estado = deBaja ? 'Baja vehicular'
+            : dias === null ? 'Sin fecha' : dias < 0 ? 'Vencida' : dias <= 30 ? 'Por vencer' : 'Vigente';
         }
         return Object.assign({}, v, { ESTADO: estado, DIAS_RESTANTES: dias });
       });
@@ -55,6 +63,7 @@
       'Vigente': ['cerrada', 'circle-check'],
       'Por vencer': ['abierta', 'hourglass'],
       'Vencida': ['abierta', 'triangle-alert'],
+      'Baja vehicular': ['cerrada', 'ban'],
     };
     function badgeEstado(estado) {
       const b = BADGE_ESTADO[estado];
@@ -373,6 +382,18 @@
         },
       });
     }
+
+    // apiListarVehiculosResumen manda JSON.stringify (ver lineas-activos.html): hay que parsearlo.
+    // Sin permiso de leerlo (no debería pasar: 'verificaciones' ya está en VehiculosService.RESUMEN.leenTambien)
+    // se deja bajaVehiculos vacío y conDerivados simplemente no distingue ninguno.
+    try {
+      const resumenVehiculos = await callServerCacheado('apiListarVehiculosResumen', state.token);
+      (typeof resumenVehiculos === 'string' ? JSON.parse(resumenVehiculos) : resumenVehiculos || []).forEach((v) => {
+        if (String(v.ESTATUS || '').toUpperCase() !== 'BAJA VEHICULAR') return;
+        if (v.ID_VEHICULO) bajaVehiculos.add(v.ID_VEHICULO);
+        if (v.FOLIO) bajaVehiculos.add(v.FOLIO);
+      });
+    } catch (err) { /* ver comentario de arriba */ }
 
     await cargar();
   }
