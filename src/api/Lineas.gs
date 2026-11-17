@@ -169,6 +169,17 @@ function apiLineasInspeccionResguardo(token, id) {
 function apiLineasAccionBandejaResguardo(token, accion, ids, datos) {
   return TelefoniaService.accionBandejaResguardo(token, accion, ids, datos);
 }
+// «Subir carta» de Cancelaciones (10-nov): leer solo dice qué haría; aplicar pasa las marcadas a CARTA ENVIADA
+function apiLineasLeerCarta(token, nombre, base64) {
+  return TelefoniaService.leerCarta(token, nombre, base64);
+}
+function apiLineasAplicarCarta(token, archivoId, ids, datos) {
+  return TelefoniaService.aplicarCarta(token, archivoId, ids, datos);
+}
+// «Preparar carta» (11-nov): el borrador de la carta en PDF; las líneas avanzan solo al subirla firmada
+function apiLineasPrepararCarta(token, ids, fecha, firmante) {
+  return TelefoniaService.prepararCarta(token, ids, fecha, firmante);
+}
 function apiLineasVistaRetirarCancelacion(token, ids) {
   return TelefoniaService.vistaRetirarCancelacion(token, ids);
 }

@@ -259,7 +259,8 @@ test('espejo: al cerrar se guarda lo que se veía; cerrado sigue a su línea (po
   assert.deepEqual([r.NUMERO, r.ESTATUS_LINEA, r.IMEI], ['4420000006', 'CANCELADA', '999']);
 
   const linea = { 'ID': 'LIN-9', 'ID LINEA': 'LIN-9', 'TIPO': 'LINEA', 'NUMERO TELEFONO': '4420000010', 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' };
-  const t2 = cargar([linea], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'LIN-9', 'ID_LINEA': 'LIN-9', 'NUMERO': '4420000009', 'ESTADO': '', 'CANCELACION': 'POR FIRMAR' }]);
+  const t2 = cargar([linea], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'LIN-9', 'ID_LINEA': 'LIN-9', 'NUMERO': '4420000009', 'ESTADO': '', 'CANCELACION': 'POR FIRMAR',
+    'CARTA': 'https://drive.google.com/file/d/carta-de-prueba/view' }]);
   t2.R.confirmarCancelacion(['RSG-9'], {}, pau);
   assert.equal(t2.tablas.APP_RESGUARDOS[0].NUMERO, '4420000010');
   assert.equal(linea['ESTATUS LINEA'], 'CANCELADA');
@@ -345,7 +346,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   t2.R.mandarCancelacion(['LIN-1'], { comentario: 'se cambió de línea' }, usuario, { motivoDelAdendum: true });
   assert.equal(t2.tablas.APP_RESGUARDOS[1].MOTIVO_CANCELACION, 'CANCELACION ANTICIPADA');
   // La hoja que ya existía recibe la columna nueva
-  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR', 'ID_INSPECCION']]);
+  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR', 'ID_INSPECCION', 'CARTA', 'CARTA_HUELLA']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario,\s+\{ motivoDelAdendum: true, nucos:/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
   const cliente = LINEAS;
@@ -417,7 +418,8 @@ test('cada paso de la bandeja espera en su ventana hasta que contesta el servido
   assert.match(paso, /alConfirmar: \(extra\) => llamar\('apiLineasAccionBandejaResguardo'/);
   assert.doesNotMatch(paso, /Confirmar\.pedir/);
   const acciones = html.slice(html.indexOf('const ACCIONES = {'), html.indexOf('function filasVista()'));
-  assert.equal((acciones.match(/espera: '/g) || []).length, 9, 'las nueve acciones dicen qué están haciendo (Donado y Desechado: 3.16)');
+  // «Carta enviada» ya no es un paso (13-nov): es «Subir carta», con su propia ventana
+  assert.equal((acciones.match(/espera: '/g) || []).length, 8, 'las ocho acciones dicen qué están haciendo (Donado y Desechado: 3.16)');
   // Textos en oración y lo nuevo del 3.12: Retirar cancelación (Pau) y, para Líneas, Corregir resguardo y Quitar del panel
   assert.match(acciones, /texto: 'Entregar a líneas'/);
   assert.doesNotMatch(html, /Entregar a Líneas|Entregados a Líneas/);
@@ -676,7 +678,9 @@ test('Panel de Pau: Recibir solo lo por recibir; las fases de Cancelaciones solo
   assert.match(html, /texto: 'Recibir', titulo: '[^']*', minimo: 1, visible: porRecibir,/);
   assert.match(html, /texto: 'Entregar a líneas', titulo: '[^']*', minimo: 1, visible: recibidos,/);
   assert.match(html, /texto: 'Carta firmada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR'\]\),/);
-  assert.match(html, /texto: 'Carta enviada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR', 'CARTA FIRMADA'\]\),/);
+  // A CARTA ENVIADA solo subiendo la carta (11-nov): la acción de la tabla abre «Subir carta» con lo elegido
+  assert.doesNotMatch(html, /paso\('CARTA_ENVIADA'/);
+  assert.match(html, /texto: 'Subir carta', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR', 'CARTA FIRMADA'\]\),\s*alHacer: \(filas\) => elegirCarta\(filas\.map\(\(f\) => f\.ID\)\) \},/);
   assert.match(html, /texto: 'Confirmar cancelada', titulo: '[^']*', minimo: 1, peligro: true, visible: enFase\(EN_CURSO\),/);
   assert.match(html, /texto: 'Retirar cancelación', titulo: '[^']*', minimo: 1, visible: enFase\(EN_CURSO\),/);
 
@@ -687,9 +691,23 @@ test('Panel de Pau: Recibir solo lo por recibir; las fases de Cancelaciones solo
   const firmada = t.R.faseCancelacion(['RSG-1', 'RSG-3'], 'CARTA FIRMADA', {}, pau);
   assert.deepEqual(firmada.hechos, []);
   assert.deepEqual(firmada.omitidos.map((o) => o.motivo), ['Ya está carta enviada', 'Ya está carta firmada']);
-  const enviada = t.R.faseCancelacion(['RSG-2'], 'CARTA ENVIADA', {}, pau);
-  assert.deepEqual(enviada.hechos.map((h) => h.id), ['RSG-2']);
-  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.CANCELACION), ['CARTA ENVIADA', 'CARTA ENVIADA', 'CARTA FIRMADA']);
+  // Un solo camino a CARTA ENVIADA (usuario, 11-nov): subir la carta. A mano se rechaza
+  assert.throws(() => t.R.faseCancelacion(['RSG-2'], 'CARTA ENVIADA', {}, pau), /Subir carta/);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.CANCELACION), ['CARTA ENVIADA', 'POR FIRMAR', 'CARTA FIRMADA']);
+});
+
+// Usuario, 11-nov: sin carta no se brinca a CANCELADA; lo que ya estaba CARTA ENVIADA (de antes de la regla) sí pasa
+test('Confirmar cancelada: POR FIRMAR o FIRMADA sin carta no; con carta o ya CARTA ENVIADA sí', () => {
+  const carta = 'https://drive.google.com/file/d/carta-de-prueba/view';
+  const t = cargar([], [
+    { 'ID': 'RSG-1', 'NUMERO': '4420000001', 'CANCELACION': 'POR FIRMAR' },
+    { 'ID': 'RSG-2', 'NUMERO': '4420000002', 'CANCELACION': 'CARTA FIRMADA' },
+    { 'ID': 'RSG-3', 'NUMERO': '4420000003', 'CANCELACION': 'POR FIRMAR', 'CARTA': carta },
+    { 'ID': 'RSG-4', 'NUMERO': '4420000004', 'CANCELACION': 'CARTA ENVIADA' }]);
+  const r = t.R.confirmarCancelacion(['RSG-1', 'RSG-2', 'RSG-3', 'RSG-4'], {}, pau);
+  assert.deepEqual(r.hechos.map((h) => h.id), ['RSG-3', 'RSG-4']);
+  assert.deepEqual(r.omitidos.map((o) => o.motivo), ['Sin carta: súbela primero', 'Sin carta: súbela primero']);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((x) => x.CANCELACION), ['POR FIRMAR', 'CARTA FIRMADA', 'CANCELADA', 'CANCELADA']);
 });
 
 // Usuario, 22-oct: Cancelaciones con la región (por la lada, tabla de regiones de Líneas) y la cuenta padre de la línea,
@@ -908,7 +926,7 @@ test('Cancelaciones trae la carta de cada línea (LINK CARTA DE CANCELACION de L
   assert.strictEqual(de('LIN-B').CARTAS, '');
   // La pantalla: columna Carta y acción Ver carta, solo en Cancelaciones
   const pantalla = read('src/html/js/lineas-resguardos.html');
-  assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v\) => ligasCarta\(v\) \}/);
+  assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v, f\) => ligasCarta\(v, f\) \}/);
   assert.match(pantalla, /vista === 'CANCELACIONES' \? \[\{ icono: 'file-text', titulo: 'Ver carta'/);
 });
 

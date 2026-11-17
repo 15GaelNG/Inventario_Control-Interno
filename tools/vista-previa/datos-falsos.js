@@ -600,6 +600,61 @@
         vista: { columnas: ['NUMERO TELEFONO', 'NUCO', 'TIPO', 'ESTATUS GENERAL', 'RESPONSABLE', 'DEPARTAMENTO', 'SEDE', 'EQUIPO'], secretas: [], filas: vista },
       };
     })(),
+    // Resguardos y cancelaciones (escena `lineas-cancelaciones`, 11-nov): la bandeja con líneas POR FIRMAR de dos
+    // proveedores y razones sociales inventadas, una ya enviada con su carta y una de otra compañía
+    apiLineasBandejaResguardos: (() => {
+      const r = (id, numero, compania, razon, asesor, fase, extra) => Object.assign({ ID: id, FECHA: hace(3), NUCO: '0' + (400 + Number(id.slice(1))),
+        NUMERO: numero, COMPANIA: compania, RAZON_SOCIAL: razon, ASESOR: asesor, CANCELACION: fase, ESTADO: '', ORIGEN: 'SISTEMA',
+        REGION: numero.slice(0, 2) === '99' ? '8' : '6', CUENTA_PADRE: compania === 'TELCEL' ? '11122233' : '507000111', CARTA: '', CARTAS: '' }, extra || {});
+      return JSON.stringify({ puedeAprobar: true, puedeOperar: true, operaPanel: false, filas: [
+        r('C1', '4420000001', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'POR FIRMAR'),
+        r('C2', '4420000002', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'POR FIRMAR'),
+        r('C3', '9990000003', 'TELCEL', 'EMPRESA DOS SA DE CV', 'WILBERTO', 'CARTA FIRMADA'),
+        r('C4', '4420000004', 'AT&T', 'EMPRESA DOS SA DE CV', 'KARLA', 'POR FIRMAR'),
+        r('C5', '4420000005', 'AT&T', 'EMPRESA DOS SA DE CV', 'KARLA', 'POR FIRMAR'),
+        r('C6', '4420000006', 'MOVISTAR', 'EMPRESA UNO SERVICIOS SC', '', 'POR FIRMAR'),
+        r('C7', '4420000007', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'CARTA ENVIADA', { CARTA: 'https:\/\/drive.google.com/file/d/X/view', CARTAS: 'https:\/\/drive.google.com/file/d/X/view',
+          COBRO: { estado: 'SE_COBRA', monto: 199.5, corte: '2026-11-12', mes: '2026-11' } }),
+        // La factura (13-nov): una que ya no aparece (lista para confirmar) y una que espera el siguiente corte
+        r('C8', '4420000008', 'AT&T', 'EMPRESA DOS SA DE CV', 'KARLA', 'CARTA ENVIADA', { CARTA: 'https:\/\/drive.google.com/file/d/Y/view', CARTAS: 'https:\/\/drive.google.com/file/d/Y/view',
+          COBRO: { estado: 'YA_NO', corte: '2026-11-05', mes: '2026-11' } }),
+        r('C9', '4420000009', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'CARTA ENVIADA', { CARTA: 'https:\/\/drive.google.com/file/d/Z/view', CARTAS: 'https:\/\/drive.google.com/file/d/Z/view',
+          COBRO: { estado: 'SIN_CORTE', corte: '2026-10-12', mes: '2026-10' } }),
+      ], firmanteCarta: 'NOMBRE DE PRUEBA APODERADA' });
+    })(),
+    // «Preparar carta»: un PDF de una hoja que solo dice que es de prueba (el de verdad lo arma PdfHtml en el servidor)
+    apiLineasPrepararCarta: (token, ids, fecha) => {
+      const pdf = (texto) => {
+        const objs = ['<< /Type /Catalog /Pages 2 0 R >>', '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+          '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+          null, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+        const flujo = 'BT /F1 18 Tf 72 700 Td (' + texto + ') Tj ET';
+        objs[3] = '<< /Length ' + flujo.length + ' >>\nstream\n' + flujo + '\nendstream';
+        let s = '%PDF-1.4\n';
+        const pos = objs.map((o, i) => { const p = s.length; s += (i + 1) + ' 0 obj\n' + o + '\nendobj\n'; return p; });
+        const xref = s.length;
+        s += 'xref\n0 ' + (objs.length + 1) + '\n0000000000 65535 f \n' + pos.map((p) => ('000000000' + p).slice(-10) + ' 00000 n \n').join('') +
+          'trailer\n<< /Size ' + (objs.length + 1) + ' /Root 1 0 R >>\nstartxref\n' + xref + '\n%%EOF';
+        return btoa(s);
+      };
+      const telcel = ids.filter((i) => ['C1', 'C2'].indexOf(i) >= 0);
+      const dos = ids.filter((i) => i === 'C3');
+      const att = ids.filter((i) => ['C4', 'C5'].indexOf(i) >= 0);
+      const carta = (proveedor, razon, lista, asesor) => ({ nombre: 'CARTA CANCELACION ' + proveedor.replace('&', '') + ' ' + razon + ' ' + fecha + '.pdf',
+        proveedor: proveedor, razon: razon, lineas: lista.length, asesores: [asesor], numeros: lista,
+        tabla: lista.map((id) => ({ REGION: '6', CUENTA: proveedor === 'TELCEL' ? '11122233' : '507000111', NUMERO: '44200000' + ('0' + id.slice(1)).slice(-2), RAZON: razon, ASESOR: asesor })), base64: pdf('Borrador de prueba - ' + proveedor + ' - ' + razon) });
+      return { fecha: fecha, sinFirmante: false, omitidas: ids.indexOf('C6') >= 0 ? [{ numero: '4420000006', motivo: 'La carta es solo para TELCEL y AT&T (MOVISTAR)' }] : [],
+        cartas: [].concat(telcel.length ? [carta('TELCEL', 'EMPRESA UNO SERVICIOS SC', telcel, 'ALFREDO')] : [], dos.length ? [carta('TELCEL', 'EMPRESA DOS SA DE CV', dos, 'WILBERTO')] : [],
+          att.length ? [carta('AT&T', 'EMPRESA DOS SA DE CV', att, 'KARLA')] : []) };
+    },
+    apiLineasLeerCarta: (token, nombre) => ({ archivoId: 'ARCH-1', nombre: nombre, huella: 'abc', fecha: '2026-11-12', proveedor: 'TELCEL', sinTexto: false, duplicada: null,
+      numeros: [
+        { numero: '4420000001', estado: 'AVANZA', id: 'C1', fase: 'POR FIRMAR', compania: 'TELCEL', razon: 'EMPRESA UNO SERVICIOS SC', nuco: '0401', avisos: [] },
+        { numero: '4420000002', estado: 'AVANZA', id: 'C2', fase: 'POR FIRMAR', compania: 'TELCEL', razon: 'EMPRESA UNO SERVICIOS SC', nuco: '0402', avisos: [] },
+        { numero: '4420000007', estado: 'YA', id: 'C7', fase: 'CARTA ENVIADA', compania: 'TELCEL', razon: 'EMPRESA UNO SERVICIOS SC', nuco: '0407', conCarta: true, avisos: [] },
+        { numero: '5550000000', estado: 'NO_INVENTARIO' },
+      ] }),
+    apiLineasAplicarCarta: (token, archivoId, ids) => ({ hechos: ids.map((id) => ({ id: id })), omitidos: [], nombre: 'CARTA CANCELACION TELCEL EMPRESA UNO SERVICIOS SC 2026-11-12.pdf' }),
     // Agregar equipo (LineasRegistros.formulario): los elementos en el orden del AppSheet, con sus condiciones como datos
     apiLineasFormularioRegistro: (token, id, parte) => {
       const t = (texto) => ({ tipo: 'titulo', texto });
@@ -970,6 +1025,39 @@
     },
     'lineas-accesorios': async () => { await abrir('accesorios-lineas'); await esperar(800); },
     'lineas-resguardos': async () => { await abrir('resguardos-lineas'); await esperar(800); },
+    // Cancelaciones con «Preparar carta» y «Subir carta» (11-nov); la ventana de lo que va en cada carta, y las cartas listas
+    'lineas-cancelaciones': async () => {
+      await abrir('resguardos-lineas'); await esperar(800);
+      (await hasta('[data-lnr-vista="CANCELACIONES"]')).click(); await esperar(600);
+    },
+    'lineas-preparar-carta': async () => {
+      await abrir('resguardos-lineas'); await esperar(800);
+      (await hasta('[data-lnr-vista="CANCELACIONES"]')).click(); await esperar(600);
+      (await hasta('[data-guia="preparar"]')).click(); await esperar(500);
+    },
+    'lineas-cartas-listas': async () => {
+      await abrir('resguardos-lineas'); await esperar(800);
+      (await hasta('[data-lnr-vista="CANCELACIONES"]')).click(); await esperar(600);
+      (await hasta('[data-guia="preparar"]')).click(); await esperar(500);
+      (await hasta('.modal-backdrop [data-ok]')).click(); await esperar(900);
+    },
+    // «Subir carta» (13-nov): dos PDF a la vez; la primera ventana con lo que leyó el servidor
+    'lineas-subir-carta': async () => {
+      await abrir('resguardos-lineas'); await esperar(800);
+      (await hasta('[data-lnr-vista="CANCELACIONES"]')).click(); await esperar(600);
+      const entrada = document.querySelector('#ln-resguardos input[type="file"]');
+      const dt = new DataTransfer();
+      ['CARTA OCTUBRE.pdf', 'CARTA AT&T.pdf'].forEach((n) => dt.items.add(new File(['%PDF-1.4 prueba'], n, { type: 'application/pdf' })));
+      entrada.files = dt.files;
+      entrada.dispatchEvent(new Event('change'));
+      await esperar(900);
+    },
+    // La columna Factura y el paso 4 (lo que se sigue cobrando), con el filtro puesto
+    'lineas-cartas-factura': async () => {
+      await abrir('resguardos-lineas'); await esperar(800);
+      (await hasta('[data-lnr-vista="CANCELACIONES"]')).click(); await esperar(600);
+      (await hasta('[data-guia="cobran"]')).click(); await esperar(600);
+    },
     'lineas-cambios': async () => { await abrir('cambios-lineas'); await esperar(800); },
     // Agregar equipo: la captura por pasos de Líneas (Pasos, fase 5.6); con un paso avanzado y un error marcado
     'lineas-agregar': async () => {

@@ -1020,7 +1020,31 @@ const TelefoniaService = (function () {
   /** Bandeja de resguardos y cancelaciones: la ve todo el módulo (los renglones de DG, ocultos si no es ADMIN); los pasos solo quien aprueba. */
   function bandejaResguardos(token) {
     const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
-    return JSON.stringify(LineasUtil.paraCliente(LineasResguardos.bandeja(usuarioResguardo_(sesion))));
+    const u = usuarioResguardo_(sesion);
+    const r = conCobro_(LineasResguardos.bandeja(u), veFacturacion_(sesion));
+    // Quien firma la carta («Preparar carta» lo propone; Pau lo puede cambiar): solo a quien la prepara
+    if (u.puedeAprobar) r.firmanteCarta = LineasCarta.firmanteDe('');
+    return JSON.stringify(LineasUtil.paraCliente(r));
+  }
+
+  /**
+   * Cancelaciones con la carta enviada: lo que dice la factura del proveedor (LineasFacturas.cobro, 13-nov) en COBRO. El
+   * monto, solo para quien ve facturación (como en el Panorama). Si FACTURAS no se puede leer, la bandeja sale igual.
+   */
+  function conCobro_(r, veMontos) {
+    const enviadas = (r.filas || []).filter((f) => !f.ANTERIOR && f['CANCELACION'] === LineasResguardos.FASE.ENVIADA);
+    if (!enviadas.length) return r;
+    let datos = null;
+    try { datos = LineasFacturas.porNumero(); } catch (e) { console.warn('Cancelaciones: no se leyó FACTURAS: ' + e.message); }
+    if (!datos) return r;
+    enviadas.forEach((f) => {
+      const d = f['CARTA_ENVIADA_EN'];
+      const dia = d instanceof Date && !isNaN(d.getTime()) ? Utilities.formatDate(d, LineasDatos.ZONA_APP, 'yyyy-MM-dd') : '';
+      const c = LineasFacturas.cobro(f['NUMERO'], f['CUENTA_PADRE'], dia, datos);
+      if (!veMontos) delete c.monto;
+      f['COBRO'] = c;
+    });
+    return r;
   }
 
   /** La inspección de un renglón de Resguardos, su PDF y sus fotos (usuario, 12-nov): la ve quien ve la bandeja. */
@@ -1050,12 +1074,32 @@ const TelefoniaService = (function () {
       DONADO: () => R.donado(ids, d, u), // pendiente 3.16: solo los ya recibidos
       DESECHADO: () => R.desechado(ids, d, u),
       CARTA_FIRMADA: () => R.faseCancelacion(ids, R.FASE.FIRMADA, d, u),
-      CARTA_ENVIADA: () => R.faseCancelacion(ids, R.FASE.ENVIADA, d, u),
+      CARTA_ENVIADA: () => R.faseCancelacion(ids, R.FASE.ENVIADA, d, u), // ya no: rechaza y pide «Subir carta» (11-nov)
       CANCELADA: () => R.confirmarCancelacion(ids, d, u),
       RETIRAR_CANCELACION: () => R.retirarCancelacion(ids, d, u),
     }[String(accion || '').toUpperCase()];
     if (!hacer) throw new Error('Acción desconocida: ' + accion);
     return LineasUtil.paraCliente(hacer());
+  }
+
+  /**
+   * «Subir carta» de Cancelaciones (10-nov, LineasCarta.gs): leer guarda el PDF por confirmar y dice qué haría con cada
+   * número; aplicar pasa a CARTA ENVIADA lo que Pau dejó marcado. Los dos exigen ser aprobador; un CLIENT nunca.
+   */
+  function leerCarta(token, nombre, base64) {
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
+    return LineasUtil.paraCliente(LineasCarta.leer(nombre, base64, usuarioResguardo_(sesion)));
+  }
+
+  function aplicarCarta(token, archivoId, ids, datos) {
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
+    return LineasUtil.paraCliente(LineasCarta.aplicar(archivoId, ids, datos, usuarioResguardo_(sesion)));
+  }
+
+  /** «Preparar carta» (11-nov): el borrador en PDF de lo seleccionado; no cambia nada. Mismo permiso que «Subir carta». */
+  function prepararCarta(token, ids, fecha, firmante) {
+    const sesion = sinAlcance_(Permisos.puedeLeer(token, MODULO_RESGUARDOS));
+    return LineasUtil.paraCliente(LineasCarta.preparar(ids, fecha, usuarioResguardo_(sesion), firmante));
   }
 
   function marcarNotificaciones(token, ids) {
@@ -1069,6 +1113,7 @@ const TelefoniaService = (function () {
     vincular, fotosInspeccion, exportarBase, archivo, patronAppSheet, ultimoDocumentoNuco,
     notificaciones, marcarNotificaciones, formularioMasivo, accionMasiva, panorama,
     formularioResguardo, mandarResguardo, mandarCancelacion, bandejaResguardos, inspeccionResguardo, accionBandejaResguardo, vistaRetirarCancelacion, vistaQuitarPanel, quitarDelPanel,
+    leerCarta, aplicarCarta, prepararCarta,
     MODULOS_LINEAS,
     filtrarIndice_, deptoDeRegistro_,   // expuestas para las pruebas
   };

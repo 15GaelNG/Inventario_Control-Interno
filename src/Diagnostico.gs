@@ -262,6 +262,7 @@ const REVISION_EN_RAIZ = [
   'LOGS',   // la bitácora de ingresos y cambios (Bitacora.gs); en producción, crearla a mano o con instalarBitacora()
   'RESPONSIVAS LINEAS_FirmasTemp',   // firma a distancia de Líneas (LineasFirmaRemota.gs): archivos de espera, se tiran al cerrar el documento
   'INSPECCIONES LINEAS_FirmasTemp',  // lo mismo para la inspección (DOCUMENTOS.INSPECCION.carpetaTemp; el contrato no la veía por ir en un objeto)
+  'CARTAS DE CANCELACION',   // las cartas de cancelación que se suben en Cancelaciones (LineasCarta.gs, 10-nov); en producción, crearla a mano
   // Tipografías y logos de los documentos en HTML (PdfHtml.gs; no van en el repo). En producción: pdfRecursosInstalar(<id>)
   'RECURSOS PDF',
 ];

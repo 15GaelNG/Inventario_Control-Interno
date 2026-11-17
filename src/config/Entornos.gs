@@ -158,6 +158,9 @@ const ENTORNOS = {
 
     // Los números de las cartas de cancelación (LineasCartaCancelacion.gs): "CARTAS DE CANCELACION - numeros (para LINEAS)"
     LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
+    // Las cartas de cancelación de antes (lineasCartasAntesRevisar/Aplicar, LineasCarta.gs): la carpeta "Cartas de
+    // Cancelación de Líneas" de producción; el DEV solo la lee (no mueve ni renombra)
+    LINEAS_CARTAS_ANTES: '10aPUK3K9ZyaJCn9rqyU0lU3KZN6y0n-h',
   },
 
   // ---------------------------------------------------------------- DEV de Líneas: Responsivas e Inspecciones
