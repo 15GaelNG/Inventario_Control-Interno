@@ -68,6 +68,9 @@ function pdfHtmlAdaptador_(documento) {
       o[k] = f ? new Date(+f[3], +f[2] - 1, +f[1], +(f[4] || 0), +(f[5] || 0), +(f[6] || 0)) : d[k];
       return o;
     }, {})), c.tipo),
+    // El borrador de la carta de cancelación de Líneas (11-nov): el caso trae los renglones de la bandeja, la fecha y quien
+    // firma, como tools/pdf/html/local.js (una carta por caso)
+    'carta-cancelacion': (d) => LineasCarta.datosCarta(LineasCarta.agrupar(d.FILAS).grupos[0], d.FECHA, d.FIRMANTE),
   };
   return ADAPTADORES[documento] || PdfService.datosParaPlantilla_;
 }

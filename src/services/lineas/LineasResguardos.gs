@@ -46,12 +46,14 @@ const LineasResguardos = (function () {
     'ESTADO', 'RECIBIDO_EN', 'RECIBIO', 'ENTREGADO_EN', 'ENTREGADO_A', 'ENTREGA_ASUNTO',
     'CANCELACION', 'ASESOR', 'CARTA_FIRMADA_EN', 'CARTA_ENVIADA_EN', 'CANCELACION_ASUNTO', 'CANCELADA_EN', 'CANCELO', 'ACTUALIZADO_EN',
     'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO',
-    'ID_LINEA_AL_MANDAR', 'ID_INSPECCION'];
+    'ID_LINEA_AL_MANDAR', 'ID_INSPECCION', 'CARTA', 'CARTA_HUELLA'];
   /** Las que llegaron después a una hoja que ya existía (13, 20 y 22-oct). ID_LINEA_AL_MANDAR: la línea con que se mandó el
    *  equipo, por su ID (el número puede corregirse); no es ID_LINEA, que dice que el renglón es una cancelación.
-   *  ID_INSPECCION (12-nov): la inspección con que se mandó (su PDF y sus fotos, en «Ver detalle»). */
+   *  ID_INSPECCION (12-nov): la inspección con que se mandó (su PDF y sus fotos, en «Ver detalle»).
+   *  CARTA y CARTA_HUELLA (10-nov): la liga de la carta de cancelación de ESE trámite y la huella (MD5) del PDF, para no
+   *  subir la misma carta dos veces (LineasCarta.gs). */
   const COLUMNAS_NUEVAS = ['MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO',
-    'ID_LINEA_AL_MANDAR', 'ID_INSPECCION'];
+    'ID_LINEA_AL_MANDAR', 'ID_INSPECCION', 'CARTA', 'CARTA_HUELLA'];
 
   // RETIRADA: Pau retiró la cancelación (pendiente 3.12). Lo que Líneas quita antes de que Pau lo reciba ya no queda: se
   // borra (Quitar del panel; usuario, 22-oct)
@@ -889,7 +891,9 @@ const LineasResguardos = (function () {
         return Object.assign(o === r ? Object.assign({}, r) : o, {
           'CUENTA_PADRE': fl ? txt(LineasUtil.col(fl, 'CUENTA PADRE')) : '', 'REGION': LineasUtil.regionDeNumero(o['NUMERO']),
           'ORIGEN': 'SISTEMA',
-          'CARTAS': cartasDe_(cartas, o['ID_LINEA'] || (fl ? LineasUtil.col(fl, 'ID LINEA') : ''), o['NUMERO']),
+          // La carta de ESTE trámite (subida con «Subir carta», 10-nov); si no, la que tenga la línea en el inventario
+          'CARTAS': /^https:\/\/[^\s"'<>]+$/i.test(txt(o['CARTA'])) ? txt(o['CARTA'])
+            : cartasDe_(cartas, o['ID_LINEA'] || (fl ? LineasUtil.col(fl, 'ID LINEA') : ''), o['NUMERO']),
         });
       });
     }
@@ -1004,11 +1008,15 @@ const LineasResguardos = (function () {
   const donado = (ids, datos, usuario) => cerrar_(ids, 'DONADO', datos, usuario);
   const desechado = (ids, datos, usuario) => cerrar_(ids, 'DESECHADO', datos, usuario);
 
-  /** Avance de la cancelación: fase FIRMADA o ENVIADA (datos = { asesor, asunto }). */
+  /**
+   * Avance de la cancelación a mano: solo CARTA FIRMADA, una marca opcional (datos = { asesor, asunto }). A CARTA ENVIADA
+   * solo se llega subiendo la carta (cartaEnviada, desde LineasCarta.aplicar): un solo camino (usuario, 11-nov).
+   */
   function faseCancelacion(ids, fase, datos, usuario) {
     exigirAprobador_(usuario);
     const f = may(fase);
-    if ([FASE.FIRMADA, FASE.ENVIADA].indexOf(f) < 0) throw new Error('Fase desconocida: ' + fase);
+    if (f === FASE.ENVIADA) throw new Error('Para pasar a CARTA ENVIADA sube la carta con «Subir carta».');
+    if (f !== FASE.FIRMADA) throw new Error('Fase desconocida: ' + fase);
     const d = datos || {};
     return actualizar_(ids, (r) => {
       const actual = txt(r['CANCELACION']);
@@ -1037,6 +1045,8 @@ const LineasResguardos = (function () {
       const actual = txt(x['CANCELACION']);
       if (!actual) return { omitir: 'Su línea no va a cancelación' };
       if (EN_CURSO.indexOf(actual) < 0) return { omitir: 'Ya estaba ' + actual.toLowerCase() };
+      // Sin carta no se brinca a CANCELADA (11-nov). Lo que ya estaba en CARTA ENVIADA antes de la regla sí pasa
+      if (actual !== FASE.ENVIADA && !LIGA_WEB.test(txt(x['CARTA']))) return { omitir: 'Sin carta: súbela primero' };
       porId[txt(x['ID'])] = x;
       // Cerrada ya no sigue a la línea: se queda con su número de hoy (si se corrigió después de mandarla; revisión del 22-oct)
       const fl = registroDeLinea_(x, ix);
@@ -1054,6 +1064,135 @@ const LineasResguardos = (function () {
       return cambios;
     }, 'Cancelación de línea confirmada' + (asunto ? ': ' + asunto : ''), 'CANCELACION_LINEA', usuario, porId, true);
     return r;
+  }
+
+  // ---------------- La carta de cancelación (10-nov; LineasCarta.gs lee el PDF) ----------------
+
+  const LIGA_WEB = /^https:\/\/[^\s"'<>]+$/i;
+
+  /**
+   * Lo que haría una carta con estos números: por cada uno, su renglón de Cancelaciones y qué le pasa. Solo lee.
+   *   AVANZA         POR FIRMAR o CARTA FIRMADA → CARTA ENVIADA, con la carta
+   *   LIGA           ya CARTA ENVIADA o CANCELADA y sin carta: solo se le liga (no cambia su fase ni su fecha)
+   *   YA             ya tiene su carta, o se retiró su cancelación
+   *   FUERA          está en el inventario pero no en Cancelaciones (o la ve solo un ADMIN: Dirección General)
+   *   NO_INVENTARIO  ningún registro tiene ese número
+   * Un número con varios renglones (se retiró y se volvió a mandar): el que sigue en curso; si no, el más reciente.
+   * → { numeros: [{ numero, estado, id, fase, compania, razon, cuenta, nuco, estatus }], duplicada: { lineas, fecha } | null }
+   */
+  function vistaCarta(numeros, huella, usuario) {
+    exigirAprobador_(usuario);
+    const filas = bandeja(usuario).filas.filter((f) => !f.ANTERIOR && txt(f['CANCELACION']) && !f.dg);
+    const porNumero = {};
+    filas.forEach((f) => {
+      const n = LineasUtil.digitos(f['NUMERO']);
+      if (!n) return;
+      const antes = porNumero[n];
+      const pesa = (x) => (EN_CURSO.indexOf(txt(x['CANCELACION'])) >= 0 ? 2 : 0) + (x['FECHA'] instanceof Date ? x['FECHA'].getTime() / 1e15 : 0);
+      if (!antes || pesa(f) > pesa(antes)) porNumero[n] = f;
+    });
+    let ix = null;
+    const salida = (numeros || []).map((numero) => {
+      const n = LineasUtil.digitos(numero);
+      const f = porNumero[n];
+      if (!f) {
+        ix = ix || indices_();
+        const fi = ix.porNumero[n];
+        if (fi && bloqueadoDG_(fi, usuario)) return { numero: n, estado: 'FUERA', estatus: '' };
+        return fi ? { numero: n, estado: 'FUERA', estatus: txt(LineasUtil.col(fi, 'ESTATUS LINEA')), compania: txt(LineasUtil.col(fi, 'COMPAÑIA')),
+          razon: txt(LineasUtil.col(fi, 'RAZON SOCIAL')), nuco: LineasUtil.nucoVisible(LineasUtil.col(fi, 'NUCO')) } : { numero: n, estado: 'NO_INVENTARIO' };
+      }
+      const fase = txt(f['CANCELACION']);
+      const conCarta = LIGA_WEB.test(txt(f['CARTA']));
+      const estado = fase === FASE.POR_FIRMAR || fase === FASE.FIRMADA ? 'AVANZA'
+        : (fase === FASE.ENVIADA || fase === FASE.CANCELADA) && !conCarta ? 'LIGA' : 'YA';
+      return { numero: n, estado: estado, id: txt(f['ID']), fase: fase, compania: txt(f['COMPANIA']), razon: txt(f['RAZON_SOCIAL']),
+        cuenta: txt(f['CUENTA_PADRE']), nuco: txt(f['NUCO']), conCarta: conCarta };
+    });
+    const iguales = huella ? filas.filter((f) => txt(f['CARTA_HUELLA']) === huella) : [];
+    const fecha = iguales.map((f) => f['CARTA_ENVIADA_EN']).filter((d) => d instanceof Date).sort((a, b) => b - a)[0] || null;
+    return { numeros: salida, duplicada: iguales.length ? { lineas: iguales.length, fecha: fecha } : null };
+  }
+
+  /**
+   * La carta llegó (LineasCarta.aplicar): cada renglón en POR FIRMAR o CARTA FIRMADA pasa a CARTA ENVIADA con ella; uno ya
+   * enviado o cancelado sin carta solo se liga (su fase y su fecha no cambian). La liga también queda en el inventario
+   * (LINK CARTA DE CANCELACION y CARTA DE CANCELACION = SI de la hoja LINEAS), donde la buscan el Panorama y el reporte.
+   * datos = { carta (liga), huella, enviadaEn (Date), asunto }.
+   */
+  function cartaEnviada(ids, datos, usuario) {
+    exigirAprobador_(usuario);
+    const d = datos || {};
+    const carta = txt(d.carta);
+    if (!LIGA_WEB.test(carta)) throw new Error('Falta la carta de cancelación.');
+    asegurarBandeja_();
+    const enviadaEn = d.enviadaEn instanceof Date && !isNaN(d.enviadaEn.getTime()) ? d.enviadaEn : new Date();
+    const de = []; // compañía y razón social de cada renglón que se liga: con ellas se nombra la carta (LineasCarta.aplicar)
+    const r = actualizar_(ids, (x) => {
+      const actual = txt(x['CANCELACION']);
+      if (!actual) return { omitir: 'Su línea no va a cancelación' };
+      const liga = { 'CARTA': carta, 'CARTA_HUELLA': txt(d.huella) };
+      de.push({ id: txt(x['ID']), compania: txt(x['COMPANIA']), razon: txt(x['RAZON_SOCIAL']) });
+      if (actual === FASE.POR_FIRMAR || actual === FASE.FIRMADA) {
+        return Object.assign(liga, { 'CANCELACION': FASE.ENVIADA, 'CARTA_ENVIADA_EN': enviadaEn }, txt(d.asunto) ? { 'CANCELACION_ASUNTO': txt(d.asunto) } : {});
+      }
+      if ((actual === FASE.ENVIADA || actual === FASE.CANCELADA) && !LIGA_WEB.test(txt(x['CARTA']))) return liga;
+      return { omitir: actual === FASE.RETIRADA ? 'Se retiró su cancelación' : 'Ya tiene su carta' };
+    });
+    ligarEnLineas_(r.hechos.map((h) => h.id), carta);
+    const hechos = r.hechos.map((h) => h.id);
+    r.lineas = de.filter((x) => hechos.indexOf(x.id) >= 0).map((x) => ({ compania: x.compania, razon: x.razon }));
+    return r;
+  }
+
+  /**
+   * Los renglones `ids` para el borrador de la carta («Preparar carta», LineasCarta.preparar; 11-nov): solo los que esperan
+   * su carta (POR FIRMAR o CARTA FIRMADA, sin carta ligada). Los demás salen en `omitidas` con su motivo.
+   * → { filas: [renglones de la bandeja], omitidas: [{ id, numero, motivo }] }.
+   */
+  function filasParaCarta(ids, usuario) {
+    exigirAprobador_(usuario);
+    const quiero = {};
+    (ids || []).forEach((i) => { quiero[txt(i)] = true; });
+    const filas = [];
+    const omitidas = [];
+    bandeja(usuario).filas.forEach((f) => {
+      if (f.ANTERIOR || f.dg || !quiero[txt(f['ID'])]) return;
+      const fase = txt(f['CANCELACION']);
+      const conCarta = LIGA_WEB.test(txt(f['CARTA']));
+      if ((fase === FASE.POR_FIRMAR || fase === FASE.FIRMADA) && !conCarta) filas.push(f);
+      else omitidas.push({ id: txt(f['ID']), numero: txt(f['NUMERO']),
+        motivo: !fase ? 'Su línea no va a cancelación' : conCarta ? 'Ya tiene su carta' : 'Está en ' + fase });
+    });
+    return { filas: filas, omitidas: omitidas };
+  }
+
+  /** La liga de la carta en la hoja LINEAS de cada renglón `ids` (se suma a las que ya tenga). */
+  function ligarEnLineas_(ids, carta) {
+    if (!ids.length || !LineasDatos.existeTabla('LINEAS')) return;
+    const ix = indices_();
+    const idsLinea = {};
+    LineasDatos.leerTabla(TAB).forEach((r) => {
+      if (ids.indexOf(txt(r['ID'])) < 0) return;
+      const fl = registroDeLinea_(r, ix);
+      const idLinea = txt(r['ID_LINEA']) || (fl ? txt(LineasUtil.col(fl, 'ID LINEA')) : '');
+      if (idLinea) idsLinea[idLinea] = true;
+    });
+    if (!Object.keys(idsLinea).length) return;
+    LineasDatos.conCandado(() => {
+      LineasDatos.asegurarColumnas('LINEAS', [CARTA_COLUMNA, CARTA_LINK_COLUMNA]);
+      const lista = [];
+      LineasDatos.leerTabla('LINEAS').forEach((f) => {
+        if (!idsLinea[txt(f['ID'])]) return;
+        const ligas = txt(f[CARTA_LINK_COLUMNA]).split(/\s+/).filter(Boolean);
+        if (ligas.indexOf(carta) < 0) ligas.push(carta);
+        const cambios = {};
+        cambios[CARTA_COLUMNA] = 'SI';
+        cambios[CARTA_LINK_COLUMNA] = ligas.join('\n');
+        lista.push({ fila: f._fila, cambios: cambios });
+      });
+      LineasDatos.actualizarFilas('LINEAS', lista);
+    });
   }
 
   /**
@@ -1542,6 +1681,7 @@ const LineasResguardos = (function () {
 
   return {
     inspeccionDe, formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, donado, desechado, faseCancelacion, confirmarCancelacion,
+    vistaCarta, cartaEnviada, filasParaCarta,
     retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, porRecibirEnPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,

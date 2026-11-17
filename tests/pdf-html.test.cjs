@@ -103,8 +103,9 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
     assert.ok(fs.existsSync(archivo), d + ': falta src/html/pdf/' + d + '.html');
     const html = fs.readFileSync(archivo, 'utf8');
     // Carta (responsivas, adherente), A4 (el arqueo, como lo imprimía AppSheet) o A4 horizontal (la inspección de celular);
-    // la inspección vehicular con los márgenes de AppSheet (27 pt arriba y abajo, 20 a los lados): corre a varias hojas
-    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt|841\.9pt 595\.3pt); margin: (0|27pt 20pt); \}/, d);
+    // la inspección vehicular con los márgenes de AppSheet (27 pt arriba y abajo, 20 a los lados): corre a varias hojas;
+    // la carta de cancelación de Líneas, con aire arriba y abajo (su tabla larga corre a otra hoja; los lados van en .hoja)
+    assert.match(html, /@page \{ size: (612pt 792pt|595\.3pt 841\.9pt|841\.9pt 595\.3pt); margin: (0|27pt 20pt|36pt 0 50pt); \}/, d);
     assert.match(html, /text-rendering: geometricPrecision/, d);
     // Un marcador dentro del CSS lo tira el compresor: las tipografías las pone llenar()
     assert.doesNotMatch(html.slice(html.indexOf('<style>'), html.indexOf('</style>')), /\{\{/, d + ': un marcador dentro del CSS');
@@ -116,8 +117,8 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
     'FIRMA ASISTENTE TEXTO'].forEach((m) => assert.ok(arqueo.includes('{{' + m + '}}'), 'arqueo: ' + m));
   // Sin tipografía ni datos en el repo: solo marcadores
   assert.doesNotMatch(arqueo, /&lt;&lt;|@import|base64,/, 'arqueo: quedó algo de Docs o un dato');
-  // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza (10-nov: los 7)
-  assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 7);
+  // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza (10-nov: los 7; 17-nov: la carta)
+  assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 8);
 });
 
 test('la responsiva de celular: sus campos, y los valores como los ponía LineasPdf (LineasCaptura.datosHtml)', () => {
