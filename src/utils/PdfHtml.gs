@@ -55,8 +55,8 @@ const PdfHtml = (function () {
     'inspeccion-vehicular': { dev: true, prod: true },
     // Encendidos en producción el 10-nov (usuario), después de armarlos ahí con pdfHtmlProbarAqui: 8 de 8 iguales al DEV
     // El borrador de la carta de cancelación de Líneas (LineasCarta.preparar, 11-nov): nace en HTML, no tiene Doc de
-    // siempre; sin encender, «Preparar carta» avisa que no está disponible
-    'carta-cancelacion': { dev: true, prod: false },
+    // siempre; sin encender, «Preparar carta» avisa que no está disponible. Encendido en prod el 17-nov (usuario).
+    'carta-cancelacion': { dev: true, prod: true },
   };
   const encendido = (documento) => {
     const d = DOCUMENTOS[documento];

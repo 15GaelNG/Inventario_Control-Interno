@@ -227,7 +227,11 @@ const REVISION_CARPETAS = {
   // La carpeta LINEAS, junto a NUCOS (pendiente 2.45): la responsiva de la línea sin equipo
   LINEAS_DRIVE_LINEAS: {},
   LINEAS_DRIVE_APPSHEET_LECTURA: { soloLee: true },
+  // Donde se guardan las cartas de cancelación (LineasCarta.gs, 17-nov); sin la clave, "CARTAS DE CANCELACION" en la raíz
+  LINEAS_CARTAS_CARPETA: {},
 };
+/** Una carpeta de REVISION_EN_RAIZ que no se pide si el proyecto ya dice cuál usar con esa clave */
+const REVISION_EN_RAIZ_SALVO = { 'CARTAS DE CANCELACION': 'LINEAS_CARTAS_CARPETA' };
 /**
  * Las plantillas de Google Docs que la app COPIA para armar cada PDF (makeCopy): la cuenta que despliega tiene
  * que poder copiarlas. Cada servicio dice la suya; las de inspección vienen de la hoja MODELOS INSPECCION.
@@ -262,7 +266,7 @@ const REVISION_EN_RAIZ = [
   'LOGS',   // la bitácora de ingresos y cambios (Bitacora.gs); en producción, crearla a mano o con instalarBitacora()
   'RESPONSIVAS LINEAS_FirmasTemp',   // firma a distancia de Líneas (LineasFirmaRemota.gs): archivos de espera, se tiran al cerrar el documento
   'INSPECCIONES LINEAS_FirmasTemp',  // lo mismo para la inspección (DOCUMENTOS.INSPECCION.carpetaTemp; el contrato no la veía por ir en un objeto)
-  'CARTAS DE CANCELACION',   // las cartas de cancelación que se suben en Cancelaciones (LineasCarta.gs, 10-nov); en producción, crearla a mano
+  'CARTAS DE CANCELACION',   // las cartas de cancelación (LineasCarta.gs, 10-nov); en producción no: usa LINEAS_CARTAS_CARPETA
   // Tipografías y logos de los documentos en HTML (PdfHtml.gs; no van en el repo). En producción: pdfRecursosInstalar(<id>)
   'RECURSOS PDF',
 ];
@@ -454,6 +458,7 @@ function revisionEntorno_() {
   // ---- carpetas que se buscan por nombre en la raíz
   if (raiz) {
     REVISION_EN_RAIZ.forEach((nombre) => {
+      if (REVISION_EN_RAIZ_SALVO[nombre] && leerConfig_(REVISION_EN_RAIZ_SALVO[nombre])) return;
       const x = { clave: 'raíz / ' + nombre, id: '' };
       revisados.push(x);
       const enRaiz = DriveUtils.carpetaEnRaizSiExiste(raiz, nombre);

@@ -117,8 +117,8 @@ test('cada documento encendido tiene su plantilla (carta, sin redondeo de letras
     'FIRMA ASISTENTE TEXTO'].forEach((m) => assert.ok(arqueo.includes('{{' + m + '}}'), 'arqueo: ' + m));
   // Sin tipografía ni datos en el repo: solo marcadores
   assert.doesNotMatch(arqueo, /&lt;&lt;|@import|base64,/, 'arqueo: quedó algo de Docs o un dato');
-  // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza (10-nov: los 7)
-  assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 7);
+  // Encender uno en prod es decisión del usuario: este número solo cambia cuando lo autoriza (10-nov: los 7; 17-nov: la carta)
+  assert.strictEqual(Object.keys(PdfHtml.DOCUMENTOS).filter((d) => PdfHtml.DOCUMENTOS[d].prod).length, 8);
 });
 
 test('la responsiva de celular: sus campos, y los valores como los ponía LineasPdf (LineasCaptura.datosHtml)', () => {

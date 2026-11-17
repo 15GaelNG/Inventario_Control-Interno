@@ -83,7 +83,11 @@ const LineasCarta = (function () {
   const huellaDe_ = (bytes) => Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes)
     .map((b) => ('0' + (b & 255).toString(16)).slice(-2)).join('');
 
-  const carpetaCartas_ = () => DriveUtils.carpetaEnRaiz('CARTAS DE CANCELACION');
+  // En producción, la carpeta de siempre (LINEAS_CARTAS_CARPETA, 17-nov); en un DEV, la suya en la raíz
+  const carpetaCartas_ = () => {
+    const id = leerConfig_('LINEAS_CARTAS_CARPETA');
+    return id ? DriveApp.getFolderById(id) : DriveUtils.carpetaEnRaiz('CARTAS DE CANCELACION');
+  };
   const pendientes_ = () => DriveUtils.subcarpeta(carpetaCartas_(), POR_CONFIRMAR);
 
   function exigirAprobador_(usuario) {

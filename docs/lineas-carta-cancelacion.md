@@ -86,11 +86,13 @@ con la más reciente. Reemplaza a `lineasCartaAplicar` y al libro `LINEAS_CARTA_
 ## Producción: pasos, en orden (con autorización)
 
 1. Commit y PR (17-nov, después de la prueba del usuario en el DEV).
-2. Crear la carpeta `CARTAS DE CANCELACION` en la raíz de prod. Ya está en `REVISION_EN_RAIZ`.
+2. ~~Crear `CARTAS DE CANCELACION` en la raíz~~. **17-nov (usuario):** prod guarda en la carpeta de siempre, «Cartas de
+   Cancelación de Líneas»: `LINEAS_CARTAS_CARPETA` en el bloque de prod (un DEV no la tiene; revisarEntorno lo vigila).
+   La cuenta que despliega tiene que ser **Editor** de esa carpeta (revisarEntorno lo revisa y, si no, no despliega).
 3. Propiedad del proyecto `LINEAS_CARTA_FIRMANTE` (opcional: solo propone el nombre). Nunca en Entornos.gs.
 4. Subir `logo-ciudad-maderas-carta.png` (472 × 88) a `RECURSOS PDF` de prod (en el DEV ya está).
-5. Encender `carta-cancelacion` en prod (`PdfHtml.DOCUMENTOS`).
-6. Poner `LINEAS_CARTAS_ANTES: '10aPUK3K9ZyaJCn9rqyU0lU3KZN6y0n-h'` en el bloque de prod de Entornos.gs.
+5. ✔ `carta-cancelacion` encendido en prod (`PdfHtml.DOCUMENTOS`, 17-nov).
+6. ✔ `LINEAS_CARTAS_ANTES` en el bloque de prod (la misma carpeta, 17-nov).
 7. Desplegar.
 8. En el editor de prod (`src/services/lineas/LineasCarta.gs`): `lineasCartasAntesRevisar()` y luego
    `lineasCartasAntesAplicar('SI, EN PROD')`. Si se acaba el tiempo, se corre otra vez y sigue.

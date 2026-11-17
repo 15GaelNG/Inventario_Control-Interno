@@ -77,6 +77,11 @@ const ENTORNOS = {
     // Los números de las cartas de cancelación (LineasCartaCancelacion.gs, 30-oct-2026): "CARTAS DE CANCELACION - numeros
     // (para LINEAS)". Solo lo abre quien corre la función en el editor.
     LINEAS_CARTA_LIBRO: '1D3DqcRdJT9qJnCUWWFFQEwlot4BM7kop6dut6s8PoWU',
+    // Las cartas de cancelación (LineasCarta.gs, 17-nov-2026): las que se suben en Cancelaciones se guardan en la
+    // carpeta de siempre, "Cartas de Cancelación de Líneas", y de ahí mismo se leen las de antes. Solo producción: un
+    // DEV sin la clave usa "CARTAS DE CANCELACION" en su raíz (revisarEntorno marca error si un DEV apunta aquí).
+    LINEAS_CARTAS_CARPETA: '10aPUK3K9ZyaJCn9rqyU0lU3KZN6y0n-h',
+    LINEAS_CARTAS_ANTES: '10aPUK3K9ZyaJCn9rqyU0lU3KZN6y0n-h',
 
     // Geotab (opcional): usuario, base y servidor aquí; GEOTAB_PASSWORD solo en Script Properties
     GEOTAB_USUARIO: 'auxiliar6datos.ci@ciudadmaderas.com',

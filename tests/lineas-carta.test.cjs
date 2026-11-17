@@ -167,6 +167,16 @@ test('la pantalla: «Subir carta» junto al Excel de Cancelaciones, solo para qu
   assert.match(carta, /DriveUtils\.copiarConApi\([\s\S]*?\{ temporal: true \}\)/);
   assert.match(carta, /DriveUtils\.carpetaEnRaiz\('CARTAS DE CANCELACION'\)/);
   assert.match(read('src/Diagnostico.gs'), /'CARTAS DE CANCELACION',/);
+  // 17-nov: producción guarda en la carpeta de siempre ("Cartas de Cancelación de Líneas"); un DEV nunca la tiene
+  assert.match(carta, /leerConfig_\('LINEAS_CARTAS_CARPETA'\)/);
+  const diag = read('src/Diagnostico.gs');
+  assert.match(diag, /LINEAS_CARTAS_CARPETA: \{\},/);
+  assert.match(diag, /REVISION_EN_RAIZ_SALVO = \{ 'CARTAS DE CANCELACION': 'LINEAS_CARTAS_CARPETA' \}/);
+  const bloques = read('src/config/Entornos.gs').replace(/\r\n/g, '\n').split(/\n  '[\w-]{30,}': \{/).slice(1);
+  const prod = bloques.filter((b) => /ENTORNO: 'PROD'/.test(b));
+  assert.equal(prod.length, 1);
+  assert.match(prod[0], /LINEAS_CARTAS_CARPETA: '10aPUK3K9ZyaJCn9rqyU0lU3KZN6y0n-h'/);
+  bloques.filter((b) => !/ENTORNO: 'PROD'/.test(b)).forEach((b) => assert.doesNotMatch(b, /LINEAS_CARTAS_CARPETA/));
 });
 
 // ------------------------------------------------------------------ «Preparar carta»: el borrador (11-nov)
