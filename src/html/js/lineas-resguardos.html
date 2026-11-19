@@ -93,20 +93,22 @@
      * Excel por asesor (usuario, 22-oct; botón aparte del «Exportar a Excel» de la tabla, que da la base): una hoja por
      * compañía y asesor («TELCEL - ALFREDO», «ATT - KARLA») con las POR FIRMAR, en la tabla que Pau pega en la carta y
      * el correo al asesor: REGIÓN, CUENTA (la cuenta padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y ASESOR. Igual para
-     * Telcel y AT&T. Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
+     * Telcel y AT&T. Al final, solo en el Excel, FIN DE ADENDUM (usuario, 19-nov; el correo y la carta siguen con las
+     * cinco). Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
      */
     const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
+    const COLUMNAS_EXCEL_ASESOR = COLUMNAS_ASESOR.concat([['FIN_PLAN', 'FIN DE ADENDUM']]);
     function hojasPorAsesor(filas) {
       const grupos = {};
       filas.filter((f) => f.CANCELACION === 'POR FIRMAR').forEach((f) => {
         const compania = String(f.COMPANIA || 'SIN COMPAÑÍA').toUpperCase().replace(/&/g, '');
         const nombre = compania + ' - ' + (String(f.ASESOR || '').toUpperCase() || 'SIN ASESOR');
-        (grupos[nombre] = grupos[nombre] || []).push(COLUMNAS_ASESOR.map((c) => String(f[c[0]] || '')));
+        (grupos[nombre] = grupos[nombre] || []).push(COLUMNAS_EXCEL_ASESOR.map((c) => String(f[c[0]] || '')));
       });
       // Telcel primero, luego AT&T y lo demás; dentro, por asesor
       const orden = (n) => (/^TELCEL/.test(n) ? 0 : /^ATT/.test(n) ? 1 : 2);
       return Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b))
-        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_ASESOR.map((c) => c[1]), filas: grupos[n] }));
+        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_EXCEL_ASESOR.map((c) => c[1]), filas: grupos[n] }));
     }
 
     // xlsx-js-style: SheetJS con estilos de celda (el de ExportarExcel no los escribe). Se carga solo para este Excel y
@@ -717,7 +719,7 @@
        */
       function correoDeCarta(c) {
         const celda = 'border:1px solid #000;padding:4px 10px;font-family:Arial,sans-serif;text-align:center;';
-        const titulos = COLUMNAS_ASESOR.map((x) => x[1]); // los mismos del Excel «Cancelaciones»
+        const titulos = COLUMNAS_ASESOR.map((x) => x[1]); // los del Excel «Cancelaciones», sin el fin de adendum (es solo del Excel)
         const html = '<p style="font-family:Arial,sans-serif;">Buen día. Les comparto la carta de cancelación de ' +
           (c.lineas === 1 ? 'la siguiente línea' : 'las siguientes líneas') + ':</p>' +
           '<table style="border-collapse:collapse;"><tr>' + titulos.map((t) => '<th bgcolor="#002060" style="' + celda + '"><font color="#ffffff">' + t + '</font></th>').join('') + '</tr>' +

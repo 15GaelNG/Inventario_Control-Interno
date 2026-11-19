@@ -13,23 +13,24 @@ const ini = cliente.indexOf('    const COLUMNAS_ASESOR = ');
 const fuente = cliente.slice(ini, cliente.indexOf('    // xlsx-js-style:', ini));
 const { hojasPorAsesor } = new Function(fuente + '\nreturn { hojasPorAsesor };')();
 
-const fila = (numero, compania, asesor, fase, region, cuenta, razon) => ({ NUMERO: numero, COMPANIA: compania, ASESOR: asesor,
-  CANCELACION: fase, REGION: region, CUENTA_PADRE: cuenta, RAZON_SOCIAL: razon });
+const fila = (numero, compania, asesor, fase, region, cuenta, razon, fin) => ({ NUMERO: numero, COMPANIA: compania, ASESOR: asesor,
+  CANCELACION: fase, REGION: region, CUENTA_PADRE: cuenta, RAZON_SOCIAL: razon, FIN_PLAN: fin });
 
 test('Excel por asesor: una hoja por compañía y asesor, solo con las POR FIRMAR, Telcel primero', () => {
   const hojas = hojasPorAsesor([
     fila('4424051478', 'AT&T', 'KARLA', 'POR FIRMAR', 'Región 6', '507727479', 'FRACCIONADORA LA ROMITA SA DE CV'),
-    fila('5561167856', 'TELCEL', 'ALFREDO', 'POR FIRMAR', 'Región 9', '99022914', 'GPH SERVICIOS CONDOMINALES SC'),
+    fila('5561167856', 'TELCEL', 'ALFREDO', 'POR FIRMAR', 'Región 9', '99022914', 'GPH SERVICIOS CONDOMINALES SC', '15/03/2025'),
     fila('9981968021', 'TELCEL', 'WILBERTO', 'POR FIRMAR', 'Región 8', '83706999', 'FRACCIONADORA LA ROMITA SA DE CV'),
     fila('4421205041', 'TELCEL', 'ALFREDO', 'POR FIRMAR', 'Región 6', '62637313', 'GPH SERVICIOS CONDOMINALES SC'),
     fila('4421918218', 'TELCEL', 'ALFREDO', 'CARTA FIRMADA', 'Región 6', '62637313', 'GPH SERVICIOS CONDOMINALES SC'),
     fila('4772438415', 'AT&T', 'KARLA', 'CANCELADA', 'Región 6', '507727479', 'FRACCIONADORA LA ROMITA SA DE CV'),
   ]);
   assert.deepEqual(hojas.map((h) => h.nombre), ['TELCEL - ALFREDO', 'TELCEL - WILBERTO', 'ATT - KARLA']);
-  assert.deepEqual(hojas[0].titulos, ['REGIÓN', 'CUENTA', 'NÚMERO', 'RAZÓN SOCIAL', 'ASESOR']);
-  assert.deepEqual(hojas[0].filas, [['Región 9', '99022914', '5561167856', 'GPH SERVICIOS CONDOMINALES SC', 'ALFREDO'],
-    ['Región 6', '62637313', '4421205041', 'GPH SERVICIOS CONDOMINALES SC', 'ALFREDO']]);
-  assert.deepEqual(hojas[2].filas, [['Región 6', '507727479', '4424051478', 'FRACCIONADORA LA ROMITA SA DE CV', 'KARLA']]);
+  // Al final, solo en el Excel, el fin del adendum (usuario, 19-nov); sin fecha, vacío
+  assert.deepEqual(hojas[0].titulos, ['REGIÓN', 'CUENTA', 'NÚMERO', 'RAZÓN SOCIAL', 'ASESOR', 'FIN DE ADENDUM']);
+  assert.deepEqual(hojas[0].filas, [['Región 9', '99022914', '5561167856', 'GPH SERVICIOS CONDOMINALES SC', 'ALFREDO', '15/03/2025'],
+    ['Región 6', '62637313', '4421205041', 'GPH SERVICIOS CONDOMINALES SC', 'ALFREDO', '']]);
+  assert.deepEqual(hojas[2].filas, [['Región 6', '507727479', '4424051478', 'FRACCIONADORA LA ROMITA SA DE CV', 'KARLA', '']]);
 });
 
 test('sin POR FIRMAR no hay hojas; sin asesor o sin compañía, su propia hoja', () => {
@@ -52,4 +53,9 @@ test('dos botones: «Exportar a Excel» da la base y, a su lado, «Cancelaciones
   // En un .html de Apps Script la dirección va con «:\/\/» (CLAUDE.md del repo)
   assert.ok(cliente.includes("script.src = 'https:" + '\\/\\/' + "cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';"));
   assert.match(cliente, /fill: \{ fgColor: \{ rgb: '002060' \} \}/);
+});
+
+test('el correo al asesor sigue con las cinco columnas de la carta (el fin de adendum es solo del Excel)', () => {
+  assert.match(cliente, /const titulos = COLUMNAS_ASESOR\.map\(\(x\) => x\[1\]\);/);
+  assert.match(cliente, /\[l\.REGION, l\.CUENTA, l\.NUMERO, l\.RAZON, l\.ASESOR\]\.map/);
 });
