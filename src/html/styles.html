@@ -345,12 +345,9 @@
     border-radius: 0; box-shadow: var(--shadow);
   }
   .topbar-left { display: flex; align-items: center; gap: 16px; }
-  /* Alto fijo (igual al tamaño "compacto" de CMTC-Dark) para que la topbar
-     mida lo mismo sin importar el tema — CMTC-Light es más "cuadrado" que
-     CMTC-Dark, así que a igual alto, el ancho varía (eso sí es aceptable). */
-  /* CMTC-Light (texto oscuro, para tema claro) y CMTC-Dark (texto blanco,
-     para tema oscuro) — ya recortadas ambas al contenido real, así que
-     miden lo mismo de alto entre sí. */
+  /* Alto fijo para que la topbar mida lo mismo sin importar el tema. CMTP-Light (texto marino, para tema claro) y
+     CMTP-Dark (texto blanco, para tema oscuro): el logo «Terrenos Premium» (19-nov), recortados al contenido y del
+     mismo tamaño. Los de antes, CMTC-* («Terrenos y Casas»), siguen en assets/ sin uso. */
   .topbar-cm-logo { height: 36px; width: auto; }
   .cm-logo-dark { display: none; }
   :root[data-theme="dark"] .cm-logo-light { display: none; }
