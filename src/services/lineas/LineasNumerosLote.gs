@@ -7,8 +7,9 @@
  * una pestaña que tenga columnas que EMPIECEN con «ANTIGUO NUMERO», «NUEVO NUMERO» y «COMENTARIO» (acentos y signos
  * de más, como «¿…?» o «:», no importan). Si viene una columna que empiece con «COMPAÑIA» se usa solo para mostrarla
  * en el reporte (no se valida contra la del sistema). Cada línea se guarda por el mismo camino que «Corregir» de
- * Líneas (LineasRepo.guardarCambiosRegistro) y deja su movimiento EDICION con el comentario en el historial; la
- * bitácora la anota SheetUtils.
+ * Líneas (LineasRepo.guardarCambiosRegistro) y deja su movimiento CAMBIO_NUMERO con el comentario en el historial
+ * (el número viejo sale en «Números de esta línea», como el «Cambio de número» de Editar línea); la bitácora la anota
+ * SheetUtils.
  *
  *   lineasNumerosLoteRevisar('<id del libro>')                 → solo lee: qué haría con cada renglón
  *   lineasNumerosLoteAplicar('<id del libro>', 'SI, EN PROD')  → lo aplica (en un DEV no pide la confirmación)
@@ -119,7 +120,9 @@ function lineasNumerosLote_(idLibro, aplicar) {
         const antes = LineasRepo.convertirRegistro(fila);
         const ahora = new Date();
         const guardado = LineasRepo.guardarCambiosRegistro(fila, cambios, usuario, ahora, { corregir: true });
-        LineasRepo.registrarMovimiento('EDICION', { motivo: d.comentario, ticket: '' }, usuario, ahora, {
+        // CAMBIO_NUMERO (no EDICION): es la misma línea con otro número, como «Cambio de número» de Editar línea; así el
+        // número viejo sale en «Números de esta línea» y no parece un error de captura
+        LineasRepo.registrarMovimiento(LineasRepo.ACCION_CAMBIO_NUMERO, { motivo: d.comentario, ticket: '' }, usuario, ahora, {
           refs: [f['ID']].concat(guardado.refs || []), nuco: f['NUCO'] || '', numero: d.nuevo, antes: antes, despues: cambios,
           detalle: { idsCambios: guardado.idsCambios, cambios: guardado.campos, lote: true },
         });
