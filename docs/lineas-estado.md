@@ -57,7 +57,8 @@ está en el plan de la reestructura y los pendientes en la lista maestra, ambos 
   «Vincular línea»; no genera responsiva.
 - **Estatus en Corregir equipo** (8-oct; «Editar información» hasta el 13-oct y «Editar equipo» hasta el 16-oct): directo. Desde el 21-oct (`f1b7af5`, usuario) el equipo
   solo ofrece USO, RESGUARDO y los finales VENDIDO, DONADO, DESECHADO y EXTRAVIO-ROBO, más el que ya tiene
-  (`LineasRegistros.ESTATUS_EQUIPO_CORREGIR`; el servidor valida con la misma lista); PARA VENTA, PARA VENTA CON DETALLE
+  (`LineasRegistros.ESTATUS_EQUIPO_CORREGIR`; el servidor valida con la misma lista). Desde el 20-nov también PARA VENTA CON
+  DETALLE, con el aviso de RESGUARDO (no entra al panel). PARA VENTA, PARA VENTA CON DETALLE
   (estatus nuevo del 13-oct, 9 en total en `LineasRepo.CATALOGO.estatusEquipo`) y PARA DESECHO salen solo con «Mandar a
   resguardo» (el alta conserva todos). De la línea, EN PROCESO DE
   CANCELACION y CANCELADA de la línea, con un aviso «no se agregará en el panel de Resguardos y cancelaciones, pero se

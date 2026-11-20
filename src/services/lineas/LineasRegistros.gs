@@ -39,7 +39,8 @@ const LineasRegistros = (function () {
   /** El equipo que sale del inventario (usuario, 16-oct; pendiente 2.50): su línea en USO no se va con él. */
   const ESTATUS_EQUIPO_FINAL = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
   /** Los que se eligen en Corregir equipo (usuario, 21-oct; pendiente 2.55); los demás del panel, con «Mandar a resguardo». */
-  const ESTATUS_EQUIPO_CORREGIR = ['USO', 'RESGUARDO'].concat(ESTATUS_EQUIPO_FINAL);
+  // PARA VENTA CON DETALLE también (usuario, 20-nov), con el mismo aviso que RESGUARDO: no entra al panel de Pau
+  const ESTATUS_EQUIPO_CORREGIR = ['USO', 'RESGUARDO', 'PARA VENTA CON DETALLE'].concat(ESTATUS_EQUIPO_FINAL);
   /** Cómo va a cancelación la línea con el adendum vencido: lo elige quien captura (usuario, 16-oct; pendiente 2.50). */
   const CANCELACION_PANEL = 'PANEL';
   const CANCELACION_DIRECTA = 'DIRECTO';
