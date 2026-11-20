@@ -230,7 +230,12 @@ test('el borrador: la redacción de cada proveedor (singular y plural) y sin fir
   assert.match(t.SOLICITUD, /^la cancelación de las siguientes líneas debido a que .* ya no serán necesarias:$/);
   assert.equal(t.DESPUES, '');
   assert.equal(t.FIRMA_RAZON, '');
-  assert.deepEqual(t.LINEAS[0], { REGION: '6', CUENTA: '11122233', NUMERO: '4420000001', RAZON: 'EMPRESA UNO SERVICIOS SC', ASESOR: 'ALFREDO' });
+  // HIJA: la cuenta hija (Telcel la pidió, 20-nov); sin ella, vacía
+  assert.deepEqual(t.LINEAS[0], { REGION: '6', CUENTA: '11122233', HIJA: '', NUMERO: '4420000001', RAZON: 'EMPRESA UNO SERVICIOS SC', ASESOR: 'ALFREDO' });
+  assert.equal(C.datosCarta(C.agrupar([fila('TELCEL', 'EMPRESA UNO SERVICIOS SC', '4420000001', { CUENTA_HIJA: '1.20034567' })]).grupos[0], '2026-10-21', '').LINEAS[0].HIJA,
+    '1.20034567');
+  assert.match(read('src/html/pdf/carta-cancelacion.html'), /<th>\{\{TITULO_CUENTA\}\}<\/th><th>CUENTA HIJA<\/th>/);
+  assert.match(read('src/html/pdf/carta-cancelacion.html'), /<td>\{\{CUENTA\}\}<\/td><td>\{\{HIJA\}\}<\/td>/);
   const a = C.datosCarta(g[1], '2026-10-21', '');
   assert.equal(a.ASUNTO, 'Cancelación de línea');
   assert.equal(a.PROVEEDOR_LEGAL, 'AT&T Comercialización Móvil, S de R.L de C.V.');

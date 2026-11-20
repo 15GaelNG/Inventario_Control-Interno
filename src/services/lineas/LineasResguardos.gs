@@ -845,7 +845,7 @@ const LineasResguardos = (function () {
         'ID': 'ANTERIOR-' + idLinea, 'FECHA': fecha, 'CANCELADA_EN': fecha, 'ID_LINEA': idLinea,
         'REGISTRO_ID': txt(LineasUtil.col(f, 'ID')), 'NUCO': LineasUtil.nucoVisible(LineasUtil.col(f, 'NUCO')),
         'NUMERO': numero, 'COMPANIA': txt(LineasUtil.col(f, 'COMPAÑIA')), 'RAZON_SOCIAL': txt(LineasUtil.col(f, 'RAZON SOCIAL')),
-        'CUENTA_PADRE': txt(LineasUtil.col(f, 'CUENTA PADRE')), 'REGION': LineasUtil.regionDeNumero(numero),
+        'CUENTA_PADRE': txt(LineasUtil.col(f, 'CUENTA PADRE')), 'CUENTA_HIJA': txt(LineasUtil.col(f, 'CUENTA')), 'REGION': LineasUtil.regionDeNumero(numero),
         'CANCELACION': FASE.CANCELADA, 'ESTATUS_LINEA': 'CANCELADA', 'ORIGEN': ORIGEN_ANTERIOR, 'ANTERIOR': true,
         'CARTAS': cartasDe_(cartas, idLinea, numero),
       });
@@ -922,6 +922,8 @@ const LineasResguardos = (function () {
         const fl = registroDeLinea_(o, ix);
         return Object.assign(o === r ? Object.assign({}, r) : o, {
           'CUENTA_PADRE': fl ? txt(LineasUtil.col(fl, 'CUENTA PADRE')) : '', 'REGION': LineasUtil.regionDeNumero(o['NUMERO']),
+          // La cuenta hija (columna CUENTA de LINEAS; Telcel la pidió en las tablas de cancelación, 20-nov)
+          'CUENTA_HIJA': fl ? txt(LineasUtil.col(fl, 'CUENTA')) : '',
           'ORIGEN': 'SISTEMA',
           // La carta de ESTE trámite (subida con «Subir carta», 10-nov); si no, la que tenga la línea en el inventario
           'CARTAS': /^https:\/\/[^\s"'<>]+$/i.test(txt(o['CARTA'])) ? txt(o['CARTA'])

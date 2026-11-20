@@ -96,7 +96,8 @@
      * Telcel y AT&T. Al final, solo en el Excel, FIN DE ADENDUM (usuario, 19-nov; el correo y la carta siguen con las
      * cinco). Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
      */
-    const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
+    // CUENTA HIJA junto a la padre (Telcel la pidió en las tablas de cancelación, 20-nov; para los dos proveedores)
+    const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['CUENTA_HIJA', 'CUENTA HIJA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
     const COLUMNAS_EXCEL_ASESOR = COLUMNAS_ASESOR.concat([['FIN_PLAN', 'FIN DE ADENDUM']]);
     function hojasPorAsesor(filas) {
       const grupos = {};
@@ -226,6 +227,8 @@
           // Como en el correo al asesor (usuario, 22-oct): la región sale de la lada (LineasUtil.regionDeNumero)
           { campo: 'REGION', titulo: 'Región', tipo: 'lista' },
           { campo: 'CUENTA_PADRE', titulo: 'Cuenta padre', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          // Telcel la pidió en las tablas de cancelación (20-nov): la columna CUENTA de la línea
+          { campo: 'CUENTA_HIJA', titulo: 'Cuenta hija', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
           { campo: 'FIN_PLAN', titulo: 'Fin del adendum', tipo: 'texto' },
           { campo: 'ASESOR', titulo: 'Asesor', tipo: 'lista' },
@@ -728,9 +731,9 @@
         const html = '<p style="font-family:Arial,sans-serif;">Buen día. Les comparto la carta de cancelación de ' +
           (c.lineas === 1 ? 'la siguiente línea' : 'las siguientes líneas') + ':</p>' +
           '<table style="border-collapse:collapse;"><tr>' + titulos.map((t) => '<th bgcolor="#002060" style="' + celda + '"><font color="#ffffff">' + t + '</font></th>').join('') + '</tr>' +
-          (c.tabla || []).map((l) => '<tr>' + [l.REGION, l.CUENTA, l.NUMERO, l.RAZON, l.ASESOR].map((v) => '<td style="' + celda + '">' + esc(v || '') + '</td>').join('') + '</tr>').join('') +
+          (c.tabla || []).map((l) => '<tr>' + [l.REGION, l.CUENTA, l.HIJA, l.NUMERO, l.RAZON, l.ASESOR].map((v) => '<td style="' + celda + '">' + esc(v || '') + '</td>').join('') + '</tr>').join('') +
           '</table>';
-        const texto = titulos.join('\t') + '\n' + (c.tabla || []).map((l) => [l.REGION, l.CUENTA, l.NUMERO, l.RAZON, l.ASESOR].join('\t')).join('\n');
+        const texto = titulos.join('\t') + '\n' + (c.tabla || []).map((l) => [l.REGION, l.CUENTA, l.HIJA, l.NUMERO, l.RAZON, l.ASESOR].join('\t')).join('\n');
         return { html: html, texto: texto };
       }
 

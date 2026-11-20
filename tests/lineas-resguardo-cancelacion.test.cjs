@@ -730,6 +730,8 @@ test('Cancelaciones: región por la lada y cuenta padre de la línea, también y
   const r = (id) => filas.filter((f) => f.ID === id)[0];
   assert.deepEqual(['R1', 'R2', 'R3', 'R4'].map((id) => [r(id).REGION, r(id).CUENTA_PADRE]),
     [['Región 9', '99022914'], ['Región 6', '62637313'], ['Región 6', '62637313'], ['Región 6', '62637313']], 'Querétaro es todo región 6 (427 San Juan del Río; L30, 27-oct)');
+  // La cuenta hija (Telcel la pidió, 20-nov): la columna CUENTA de la línea; sin ella, vacía
+  assert.deepEqual(['R1', 'R2', 'R4'].map((id) => r(id).CUENTA_HIJA), ['99356683', '', '']);
   assert.equal(r('R5').REGION, undefined, 'los resguardos no llevan región');
   assert.equal(t.tablas.APP_RESGUARDOS[0].REGION, undefined, 'no se guarda en la hoja');
 

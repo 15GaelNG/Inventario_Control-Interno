@@ -308,7 +308,8 @@ const LineasCarta = (function () {
       'SOLICITUD': r.solicitud(n),
       'TITULO_CUENTA': r.tituloCuenta,
       'LINEAS': grupo.filas.map((f) => ({
-        'REGION': txt(f['REGION']), 'CUENTA': txt(f['CUENTA_PADRE']), 'NUMERO': LineasUtil.digitos(f['NUMERO']) || txt(f['NUMERO']),
+        // HIJA: la cuenta hija, junto a la padre (Telcel la pidió, 20-nov; también en AT&T)
+        'REGION': txt(f['REGION']), 'CUENTA': txt(f['CUENTA_PADRE']), 'HIJA': txt(f['CUENTA_HIJA']), 'NUMERO': LineasUtil.digitos(f['NUMERO']) || txt(f['NUMERO']),
         'RAZON': txt(f['RAZON_SOCIAL']).toUpperCase(), 'ASESOR': txt(f['ASESOR']).toUpperCase(),
       })),
       'DESPUES': r.despues(n),

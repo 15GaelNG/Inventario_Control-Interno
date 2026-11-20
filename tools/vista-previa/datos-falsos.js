@@ -605,7 +605,8 @@
     apiLineasBandejaResguardos: (() => {
       const r = (id, numero, compania, razon, asesor, fase, extra) => Object.assign({ ID: id, FECHA: hace(3), NUCO: '0' + (400 + Number(id.slice(1))),
         NUMERO: numero, COMPANIA: compania, RAZON_SOCIAL: razon, ASESOR: asesor, CANCELACION: fase, ESTADO: '', ORIGEN: 'SISTEMA',
-        REGION: numero.slice(0, 2) === '99' ? '8' : '6', CUENTA_PADRE: compania === 'TELCEL' ? '11122233' : '507000111', CARTA: '', CARTAS: '' }, extra || {});
+        REGION: numero.slice(0, 2) === '99' ? '8' : '6', CUENTA_PADRE: compania === 'TELCEL' ? '11122233' : '507000111',
+        CUENTA_HIJA: compania === 'TELCEL' ? '1.2' + numero.slice(-6) : '', CARTA: '', CARTAS: '' }, extra || {});
       return JSON.stringify({ puedeAprobar: true, puedeOperar: true, operaPanel: false, filas: [
         r('C1', '4420000001', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'POR FIRMAR'),
         r('C2', '4420000002', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'POR FIRMAR'),
@@ -650,7 +651,7 @@
       const att = ids.filter((i) => ['C4', 'C5'].indexOf(i) >= 0);
       const carta = (proveedor, razon, lista, asesor) => ({ nombre: 'CARTA CANCELACION ' + proveedor.replace('&', '') + ' ' + razon + ' ' + fecha + '.pdf',
         proveedor: proveedor, razon: razon, lineas: lista.length, asesores: [asesor], numeros: lista,
-        tabla: lista.map((id) => ({ REGION: '6', CUENTA: proveedor === 'TELCEL' ? '11122233' : '507000111', NUMERO: '44200000' + ('0' + id.slice(1)).slice(-2), RAZON: razon, ASESOR: asesor })), base64: pdf('Borrador de prueba - ' + proveedor + ' - ' + razon) });
+        tabla: lista.map((id) => ({ REGION: '6', CUENTA: proveedor === 'TELCEL' ? '11122233' : '507000111', HIJA: proveedor === 'TELCEL' ? '1.20000' + ('0' + id.slice(1)).slice(-2) : '', NUMERO: '44200000' + ('0' + id.slice(1)).slice(-2), RAZON: razon, ASESOR: asesor })), base64: pdf('Borrador de prueba - ' + proveedor + ' - ' + razon) });
       return { fecha: fecha, sinFirmante: false, omitidas: ids.indexOf('C6') >= 0 ? [{ numero: '4420000006', motivo: 'La carta es solo para TELCEL y AT&T (MOVISTAR)' }] : [],
         cartas: [].concat(telcel.length ? [carta('TELCEL', 'EMPRESA UNO SERVICIOS SC', telcel, 'ALFREDO')] : [], dos.length ? [carta('TELCEL', 'EMPRESA DOS SA DE CV', dos, 'WILBERTO')] : [],
           att.length ? [carta('AT&T', 'EMPRESA DOS SA DE CV', att, 'KARLA')] : []) };

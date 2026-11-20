@@ -18,8 +18,10 @@
   .cuerpo { margin-top: 13.6pt; line-height: 14.5pt; text-align: justify; }
   table { margin-top: 32pt; width: 445pt; border-collapse: collapse; table-layout: fixed; font-size: 9.5pt; line-height: 12pt; }
   thead { display: table-header-group; }
-  th { background: #002060; color: #fff; font-weight: 700; font-size: 8.5pt; white-space: nowrap; padding: 2pt 2pt; text-align: center; border: 0.5pt solid #002060; }
-  td { padding: 2pt 2pt; text-align: center; border-bottom: 0.5pt solid #bfbfbf; white-space: nowrap; overflow: hidden; }
+  th { background: #002060; color: #fff; font-weight: 700; font-size: 8.5pt; padding: 2pt 2pt; text-align: center; vertical-align: middle; border: 0.5pt solid #002060; }
+  td { padding: 2pt 2pt; text-align: center; vertical-align: middle; border-bottom: 0.5pt solid #bfbfbf; white-space: nowrap; overflow: hidden; }
+  /* Con la cuenta hija (20-nov) la razón social tiene menos espacio: si no cabe, pasa a dos renglones en lugar de cortarse */
+  td.razon { white-space: normal; }
   tr { page-break-inside: avoid; break-inside: avoid; }
   .despues { margin-top: 24pt; line-height: 14.5pt; text-align: justify; }
   .cierre { margin-top: 14pt; line-height: 13.5pt; text-align: justify; }
@@ -42,10 +44,10 @@
   </div>
   <p class="cuerpo">{{FIRMANTE}}, en representación del Grupo Comercial Ciudad Maderas, por conducto de sus empresas filiales, solicita de su amable apoyo para llevar a cabo {{SOLICITUD}}</p>
   <table>
-    <colgroup><col style="width:44pt"><col style="width:78pt"><col style="width:70pt"><col style="width:196pt"><col style="width:57pt"></colgroup>
-    <thead><tr><th>REGIÓN</th><th>{{TITULO_CUENTA}}</th><th>NÚMERO</th><th>RAZÓN SOCIAL</th><th>ASESOR</th></tr></thead>
+    <colgroup><col style="width:42pt"><col style="width:64pt"><col style="width:64pt"><col style="width:66pt"><col style="width:153pt"><col style="width:56pt"></colgroup>
+    <thead><tr><th>REGIÓN</th><th>{{TITULO_CUENTA}}</th><th>CUENTA HIJA</th><th>NÚMERO</th><th>RAZÓN SOCIAL</th><th>ASESOR</th></tr></thead>
     <tbody>
-{{#CADA LINEAS}}      <tr><td>{{REGION}}</td><td>{{CUENTA}}</td><td>{{NUMERO}}</td><td>{{RAZON}}</td><td>{{ASESOR}}</td></tr>
+{{#CADA LINEAS}}      <tr><td>{{REGION}}</td><td>{{CUENTA}}</td><td>{{HIJA}}</td><td>{{NUMERO}}</td><td class="razon">{{RAZON}}</td><td>{{ASESOR}}</td></tr>
 {{/CADA}}    </tbody>
   </table>
   {{#SI DESPUES}}<p class="despues">{{DESPUES}}</p>{{/SI}}
