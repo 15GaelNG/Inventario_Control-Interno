@@ -11,12 +11,11 @@
  * (el número viejo sale en «Números de esta línea», como el «Cambio de número» de Editar línea); la bitácora la anota
  * SheetUtils.
  *
- *   lineasNumerosLoteRevisar('<id del libro>')                 → solo lee: qué haría con cada renglón
- *   lineasNumerosLoteAplicar('<id del libro>', 'SI, EN PROD')  → lo aplica (en un DEV no pide la confirmación)
+ *   lineasNumerosLoteRevisar('<id del libro>')  → solo lee: qué haría con cada renglón
+ *   lineasNumerosLoteAplicar('<id del libro>')  → lo aplica, también en producción (sin confirmación desde el 20-nov)
  *
  * El botón Ejecutar del editor no pasa argumentos: sin ellos, el ID sale de la propiedad del script
- * LINEAS_NUMEROS_LOTE_LIBRO y la confirmación de LINEAS_NUMEROS_LOTE_CONFIRMACION (Configuración del proyecto ›
- * Propiedades del script). La confirmación se borra al aplicar, para que no se quede puesta.
+ * LINEAS_NUMEROS_LOTE_LIBRO (Configuración del proyecto › Propiedades del script).
  *
  * Se puede correr de nuevo: la línea que ya tiene el número nuevo se salta («ya estaba»). Si se acaba el tiempo, se
  * corre otra vez y sigue donde quedó.
@@ -29,15 +28,10 @@ function lineasNumerosLoteRevisar(idLibro) {
   return lineasNumerosLote_(lineasNumerosLoteLibro_(idLibro), false);
 }
 
-function lineasNumerosLoteAplicar(idLibro, confirmacion) {
+// Sin confirmación en producción (usuario, 20-nov: «que funcione directamente en prod»): aplica al ejecutarla. Antes,
+// lineasNumerosLoteRevisar para ver qué haría con cada renglón
+function lineasNumerosLoteAplicar(idLibro) {
   soloEditor_();
-  const props = PropertiesService.getScriptProperties();
-  const conf = typeof confirmacion === 'string' ? confirmacion : props.getProperty('LINEAS_NUMEROS_LOTE_CONFIRMACION');
-  if (String(Config.ENTORNO || '').toUpperCase() === 'PROD' && conf !== 'SI, EN PROD') {
-    throw new Error("En producción pide la confirmación: lineasNumerosLoteAplicar('<id del libro>', 'SI, EN PROD'), o la propiedad del script " +
-      'LINEAS_NUMEROS_LOTE_CONFIRMACION = SI, EN PROD. Primero lineasNumerosLoteRevisar.');
-  }
-  props.deleteProperty('LINEAS_NUMEROS_LOTE_CONFIRMACION');
   return lineasNumerosLote_(lineasNumerosLoteLibro_(idLibro), true);
 }
 
