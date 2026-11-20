@@ -697,6 +697,19 @@ const LineasResguardos = (function () {
 
   // ---------------- Bandeja ----------------
 
+  /**
+   * La huella del panel (usuario, 19-nov: «cuando cambian de estatus no cambian»): de qué hojas sale, para que el vigía
+   * (api.html) lo repinte cuando cambien, aunque el cambio se haga en Líneas Telefónicas o lo haga otra persona.
+   * APP_RESGUARDOS se lee directo (sin CacheHojas), así que se anota aquí; el inventario, por si ya venía de memoria.
+   */
+  function huellaBandeja_() {
+    try {
+      if (typeof CacheHojas === 'undefined') return;
+      const H = LineasLectura.HOJAS;
+      CacheHojas.versiones([TAB, H.LINEAS, H.EQUIPOS, H.ASIGNACIONES, H.ADENDUMS].map((n) => [LineasDatos.id(), n]));
+    } catch (e) { /* sin huella: el vigía lo vuelve a pedir completo de vez en cuando */ }
+  }
+
   function fila_(r) {
     const o = {};
     ENCABEZADOS.forEach((h) => { o[h] = r[h] instanceof Date ? r[h] : txt(r[h]); });
@@ -870,7 +883,8 @@ const LineasResguardos = (function () {
 
   /** Todos los renglones de la bandeja, del más reciente al más antiguo, y lo que la persona puede hacer. */
   function bandeja(usuario) {
-    let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
+    huellaBandeja_();
+    let filas =LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
     // El inventario se lee siempre: Cancelaciones también muestra las líneas canceladas sin renglón (9-nov)
     const ix = indices_();
     const cartas = cartas_();

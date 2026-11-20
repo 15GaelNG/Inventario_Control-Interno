@@ -814,9 +814,15 @@
         });
       }
 
+      // Por la lista con huella (como el índice de Líneas): el vigía de api.html pregunta cada minuto si cambió alguna de
+      // sus hojas y, si cambió, la vuelve a pedir y avisa con «lista-actualizada» (usuario, 19-nov: los estatus no se
+      // actualizaban si se cambiaban en otra pantalla o los cambiaba otra persona)
+      const BANDEJA = 'apiLineasBandejaResguardos';
       function cargar() {
         if (tabla) tabla.setCargando(true);
-        llamar('apiLineasBandejaResguardos').then((texto) => {
+        // Al entrar, con «Actualizar» y después de cada acción se espera al servidor, nunca a la copia guardada
+        invalidarCacheLista(BANDEJA, state.token);
+        callServerListaCacheada(BANDEJA, state.token).then((texto) => {
           if (!vigente()) return;
           datos = JSON.parse(texto);
           crearTabla();
@@ -840,6 +846,14 @@
         if (datos) { crearTabla(); pintarKpis(); }
       });
       $('#lnr-actualizar', raiz).addEventListener('click', cargar);
+      // Llegó distinta (alguien cambió un estatus): se repinta en su lugar, con los mismos filtros, orden y selección
+      escucharLista(BANDEJA, () => callServerListaCacheada(BANDEJA, state.token).then((texto) => {
+        if (!vigente() || !tabla || !datos) return;
+        datos = JSON.parse(texto);
+        tabla.setDatos(filasVista());
+        pintarKpis();
+        pintarGuia();
+      }).catch(() => { /* se queda lo que se ve; la siguiente vuelta del vigía lo intenta otra vez */ }), raiz);
       cargar();
     }
 
