@@ -960,3 +960,60 @@ test('Resguardos: la inspección del renglón (la guardada desde el 12-nov; en l
   const tel = read('src/services/TelefoniaService.gs');
   assert.match(tel, /function inspeccionResguardo\(token, id\) \{\r?\n    const sesion = sinAlcance_\(Permisos\.puedeLeer\(token, MODULO_RESGUARDOS\)\);/);
 });
+
+// Opción 2 (usuario, 20-nov: «ya le asigné una línea» y el panel seguía diciendo RESGUARDO): cada renglón de Resguardos
+// trae cómo está HOY su equipo, también lo ya entregado; las columnas del trámite se quedan como quedaron
+test('Resguardos: el estatus del equipo y su línea de hoy, aunque el renglón ya esté entregado', () => {
+  const inv = [
+    // Entregado a Líneas sin línea; después Líneas lo asignó con una línea nueva
+    equipo('EQU-1', '0982', 'ASIGNADO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4420000982', 'ESTATUS LINEA': 'USO' }),
+    // Sigue en resguardo, sin línea
+    equipo('EQU-2', '0388', 'RESGUARDO'),
+  ];
+  const bandeja = [
+    { ID: 'R1', REGISTRO_ID: 'EQU-1', NUCO: '0982', ESTADO: 'ENTREGADO A LINEAS', ESTATUS_EQUIPO: 'RESGUARDO', NUMERO: '', ESTATUS_LINEA: '' },
+    { ID: 'R2', REGISTRO_ID: 'EQU-2', NUCO: '0388', ESTADO: 'EN RESGUARDO', ESTATUS_EQUIPO: 'RESGUARDO' },
+    // Ya no está en el inventario: lo de hoy, vacío
+    { ID: 'R3', REGISTRO_ID: 'EQU-9', NUCO: '0999', ESTADO: 'VENDIDO', ESTATUS_EQUIPO: 'VENDIDO' },
+    // Solo cancelación (sin ESTADO): no es de Resguardos, no lleva lo de hoy
+    { ID: 'C1', REGISTRO_ID: 'EQU-1', NUCO: '0982', NUMERO: '4420000555', ESTADO: '', CANCELACION: 'POR FIRMAR' },
+  ];
+  const filas = cargar(inv, bandeja).R.bandeja({ puedeAprobar: true }).filas;
+  const r = (id) => filas.filter((f) => f.ID === id)[0];
+  // El trámite, como quedó al entregarlo
+  assert.equal(r('R1').ESTATUS_EQUIPO, 'RESGUARDO');
+  assert.equal(r('R1').ESTADO, 'ENTREGADO A LINEAS');
+  // Lo de hoy, del inventario
+  assert.equal(r('R1').ESTATUS_EQUIPO_HOY, 'ASIGNADO');
+  assert.equal(r('R1').NUMERO_HOY, '4420000982');
+  assert.equal(r('R1').ESTATUS_LINEA_HOY, 'USO');
+  assert.deepEqual([r('R2').ESTATUS_EQUIPO_HOY, r('R2').NUMERO_HOY, r('R2').ESTATUS_LINEA_HOY], ['RESGUARDO', '', '']);
+  assert.deepEqual([r('R3').ESTATUS_EQUIPO_HOY, r('R3').NUMERO_HOY, r('R3').ESTATUS_LINEA_HOY], ['', '', '']);
+  assert.ok(!('ESTATUS_EQUIPO_HOY' in r('C1')));
+  // La pantalla los muestra junto a los del trámite
+  assert.match(LINEAS, /\{ campo: 'ESTATUS_EQUIPO_HOY', titulo: 'Estatus del equipo hoy', tipo: 'lista'/);
+  assert.match(LINEAS, /\{ campo: 'NUMERO_HOY', titulo: 'Línea hoy', tipo: 'texto'/);
+  assert.match(LINEAS, /\{ campo: 'ESTATUS_LINEA_HOY', titulo: 'Estatus de la línea hoy', tipo: 'lista'/);
+});
+
+test('Resguardos, lo de hoy con Dirección General: quien no es ADMIN ve los estatus, nunca el número', () => {
+  const inv = [
+    // Un equipo que no es de DG pero hoy trae una línea de DG
+    equipo('EQU-1', '0982', 'ASIGNADO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4422798678', 'ESTATUS LINEA': 'USO' }),
+    // Un equipo de DG
+    equipo('EQU-2', '11002', 'ASIGNADO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4422798678', 'ESTATUS LINEA': 'USO' }),
+  ];
+  const bandeja = [
+    { ID: 'R1', REGISTRO_ID: 'EQU-1', NUCO: '0982', ESTADO: 'ENTREGADO A LINEAS', ESTATUS_EQUIPO: 'RESGUARDO' },
+    { ID: 'R2', REGISTRO_ID: 'EQU-2', NUCO: '11002', ESTADO: 'ENTREGADO A LINEAS', ESTATUS_EQUIPO: 'RESGUARDO' },
+  ];
+  const t = cargar(inv, bandeja, [], true);
+  const de = (u) => { const filas = t.R.bandeja(u).filas; return (id) => filas.filter((f) => f.ID === id)[0]; };
+  const otro = de({ puedeAprobar: true });
+  assert.equal(otro('R1').NUMERO_HOY, 'DG');
+  assert.equal(otro('R1').NUCO, '0982', 'el resto del renglón se ve');
+  assert.deepEqual([otro('R2').NUMERO_HOY, otro('R2').ESTATUS_EQUIPO_HOY, otro('R2').ESTATUS_LINEA_HOY], ['DG', 'ASIGNADO', 'USO']);
+  const admin = de({ puedeAprobar: true, esAdmin: true });
+  assert.equal(admin('R1').NUMERO_HOY, '4422798678');
+  assert.equal(admin('R2').NUMERO_HOY, '4422798678');
+});

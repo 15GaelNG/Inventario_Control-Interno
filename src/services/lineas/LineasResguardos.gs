@@ -881,10 +881,28 @@ const LineasResguardos = (function () {
   const cartasDe_ = (cartas, idLinea, numero) =>
     ((cartas || {})[txt(idLinea)] || (cartas || {})[LineasUtil.digitos(numero)] || []).join('\n');
 
+  /**
+   * Cómo está HOY el equipo de un renglón de Resguardos (usuario, 20-nov, opción 2: «ya le asigné una línea» y el panel
+   * seguía diciendo RESGUARDO): su estatus y la línea que trae hoy, con su estatus, aunque el renglón ya esté cerrado. Las
+   * columnas del trámite (ESTATUS_EQUIPO, NUMERO, ESTATUS_LINEA) se quedan como quedaron: así lo mandaron, así lo
+   * entregaron. No se guardan: se leen del inventario cada vez. Sin su registro en el inventario, vacío.
+   */
+  function hoyDelEquipo_(o, ix) {
+    const fe = ix.porId[txt(o['REGISTRO_ID'])];
+    if (!fe) return { 'ESTATUS_EQUIPO_HOY': '', 'NUMERO_HOY': '', 'ESTATUS_LINEA_HOY': '' };
+    const numero = txt(LineasUtil.col(fe, 'NUMERO TELEFONO'));
+    const conLinea = !!numero && !/^EQUIPO$/.test(may(LineasUtil.col(fe, 'TIPO')));
+    return {
+      'ESTATUS_EQUIPO_HOY': txt(LineasUtil.col(fe, 'ESTATUS EQUIPO')),
+      'NUMERO_HOY': conLinea ? numero : '',
+      'ESTATUS_LINEA_HOY': conLinea ? txt(LineasUtil.col(fe, 'ESTATUS LINEA')) : '',
+    };
+  }
+
   /** Todos los renglones de la bandeja, del más reciente al más antiguo, y lo que la persona puede hacer. */
   function bandeja(usuario) {
     huellaBandeja_();
-    let filas =LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
+    let filas = LineasDatos.existeTabla(TAB) ? LineasDatos.leerTabla(TAB).map(fila_) : [];
     // El inventario se lee siempre: Cancelaciones también muestra las líneas canceladas sin renglón (9-nov)
     const ix = indices_();
     const cartas = cartas_();
@@ -911,11 +929,15 @@ const LineasResguardos = (function () {
         });
       });
     }
+    // Resguardos: cómo está HOY su equipo, también en lo ya cerrado (opción 2, usuario 20-nov)
+    filas = filas.map((o) => (o['ESTADO'] ? Object.assign({}, o, hoyDelEquipo_(o, ix)) : o));
     filas = filas.concat(canceladasSinRenglon_(filas, ix, cartas));
     filas.sort((a, b) => (b.FECHA instanceof Date ? b.FECHA.getTime() : 0) - (a.FECHA instanceof Date ? a.FECHA.getTime() : 0));
     // Dirección General: quien no es ADMIN ve el renglón con DG, sus estados y el área (pendiente 8.16; auditoría del 23-oct)
     if (typeof LineasDG !== 'undefined' && !(usuario && usuario.esAdmin)) {
       filas = filas.map((o) => (LineasDG.esRenglonPanel(o) ? LineasDG.ocultarRenglonPanel(o) : o));
+      // Un equipo que no es de DG pero hoy trae una línea de DG: el número de hoy tampoco se ve
+      filas = filas.map((o) => (o['NUMERO_HOY'] && LineasDG.esNumero(o['NUMERO_HOY']) ? Object.assign({}, o, { 'NUMERO_HOY': LineasDG.ETIQUETA }) : o));
     }
     // puedeOperar: los de Líneas (Corregir resguardo y Quitar del panel; pendiente 3.12); operaPanel: quién las ve en el
     // panel (sin administradores; usuario, 21-oct)

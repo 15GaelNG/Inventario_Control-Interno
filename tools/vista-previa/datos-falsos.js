@@ -620,6 +620,14 @@
           COBRO: { estado: 'YA_NO', corte: '2026-11-05', mes: '2026-11' } }),
         r('C9', '4420000009', 'TELCEL', 'EMPRESA UNO SERVICIOS SC', 'ALFREDO', 'CARTA ENVIADA', { CARTA: 'https:\/\/drive.google.com/file/d/Z/view', CARTAS: 'https:\/\/drive.google.com/file/d/Z/view',
           COBRO: { estado: 'SIN_CORTE', corte: '2026-10-12', mes: '2026-10' } }),
+        // Resguardos (escena `lineas-resguardos`, 20-nov): uno ya entregado a Líneas que después se asignó con otra línea
+        // (el trámite dice RESGUARDO y «Sin línea»; lo de hoy, ASIGNADO con su línea) y uno que sigue en resguardo
+        { ID: 'R1', FECHA: hace(6), NUCO: '0982', ESTADO: 'ENTREGADO A LINEAS', MODELO: 'GALAXY A15', IMEI: '350000000000982', ESTATUS_EQUIPO: 'RESGUARDO',
+          NUMERO: '', ESTATUS_LINEA: '', COMPANIA: '', SEDE: 'QUERETARO', OFICINA: 'JARDINES DE LA HACIENDA', SOLICITO_NOMBRE: 'LÍNEAS PRUEBA',
+          RECIBIDO_EN: hace(5), ESTATUS_EQUIPO_HOY: 'ASIGNADO', NUMERO_HOY: '4420000982', ESTATUS_LINEA_HOY: 'USO' },
+        { ID: 'R2', FECHA: hace(2), NUCO: '0388', ESTADO: 'EN RESGUARDO', MODELO: 'MOTO G24', IMEI: '350000000000388', ESTATUS_EQUIPO: 'RESGUARDO',
+          NUMERO: '4420000388', ESTATUS_LINEA: 'DISPONIBLE', COMPANIA: 'TELCEL', SEDE: 'QUERETARO', OFICINA: 'JARDINES DE LA HACIENDA', SOLICITO_NOMBRE: 'LÍNEAS PRUEBA',
+          RECIBIDO_EN: hace(1), ESTATUS_EQUIPO_HOY: 'RESGUARDO', NUMERO_HOY: '4420000388', ESTATUS_LINEA_HOY: 'DISPONIBLE' },
       ], firmanteCarta: 'NOMBRE DE PRUEBA APODERADA' });
     })(),
     // «Preparar carta»: un PDF de una hoja que solo dice que es de prueba (el de verdad lo arma PdfHtml en el servidor)
