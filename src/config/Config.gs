@@ -115,8 +115,8 @@ const Config = (function () {
     },
 
     // La sesión: lo más que dura aunque se use (horas) y lo que aguanta sin usar la app (minutos). Auth.gs, 23-oct
-    SESION_DURACION_HORAS: 8,
-    SESION_INACTIVIDAD_MIN: 60,
+    SESION_DURACION_HORAS: 24,   // 13-nov: el triple (antes 8 h y 60 min; lo pidió el usuario)
+    SESION_INACTIVIDAD_MIN: 180,
 
     ROLES: {
       ADMIN: 'ADMIN',

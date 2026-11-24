@@ -57,54 +57,88 @@
      *  - Si el nombre no es de nadie, por su ID PERSONA, pero solo si ese ID es de alguien con al menos dos palabras del
      *    nombre en común (usuario, 12-nov: hay ID PERSONA que se pusieron por el correo del puesto y son de quien tiene
      *    hoy ese correo, no de quien tuvo el activo).
+     *  - Homónimos (usuario, 12-nov: dos ADRIANA RAMIREZ GONZALEZ y las dos con el NUCO 1427): el mismo nombre con distinto
+     *    ID PERSONA (o, sin él, distinto No. de empleado) son personas distintas. El activo es de la que tenga su ID PERSONA
+     *    y, si no lo trae, su No. de empleado (CH reutiliza números: el ID va primero). Si nada desempata, se le muestra a
+     *    todas marcado `_nombreRepetido` (una copia, con `_de` = el original) para que alguien lo corrija en la hoja.
+     *  - El mismo nombre y la misma persona en dos renglones (dos departamentos) comparten lo suyo, como antes.
      *  - catalogos.<tipo> en null (sin permiso de ese módulo): no se reparte.
      */
     function repartirActivos(personas, catalogos) {
+      const texto = (v) => String(v == null ? '' : v).trim();
+      const quienEs = (p) => (texto(p.idPersona) ? 'ID ' + texto(p.idPersona) : texto(p.noEmpleado) ? 'NO ' + texto(p.noEmpleado) : '');
       const porNombre = {};
       const porId = {};
       personas.forEach((p, i) => {
         const k = comparable(p.nombre);
-        if (k && !(k in porNombre)) porNombre[k] = i;
+        if (k) (porNombre[k] = porNombre[k] || []).push(i);
         if (p.idPersona && !(p.idPersona in porId)) porId[p.idPersona] = i;
       });
-      const quienes = (nombre, id) => {
-        const partes = String(nombre == null ? '' : nombre).split('/').map(comparable).filter(Boolean);
-        const salida = [];
-        partes.forEach((k) => {
-          let i = porNombre[k];
-          if (i === undefined && id && partes.length === 1 && porId[id] !== undefined &&
-            palabrasEnComun(k, comparable(personas[porId[id]].nombre)) >= 2) i = porId[id];
-          if (i !== undefined && salida.indexOf(i) < 0) salida.push(i);
-        });
-        return salida;
-      };
       const nuevo = () => ({ lineas: { vigentes: [], historial: [] }, vehiculos: { vigentes: [], historial: [] },
         hologramas: { vigentes: [], historial: [] }, uber: { vigentes: [], historial: [] }, cajasChicas: { vigentes: [], historial: [] } });
       const porPersona = personas.map(nuevo);
-      // El mismo nombre en dos renglones (dos departamentos): los dos ven lo mismo
-      personas.forEach((p, i) => { const k = comparable(p.nombre); if (k && porNombre[k] !== i) porPersona[i] = porPersona[porNombre[k]]; });
+      const homonimo = {};
+      Object.keys(porNombre).forEach((k) => {
+        const lista = porNombre[k];
+        const distintos = lista.map((i) => quienEs(personas[i])).filter((q, j, a) => q && a.indexOf(q) === j);
+        homonimo[k] = distintos.length > 1;
+        lista.forEach((i) => {
+          const q = quienEs(personas[i]);
+          if (homonimo[k] && !q) return; // entre homónimos, el renglón sin ID ni número no se junta con nadie
+          const primero = lista.filter((j) => !homonimo[k] || quienEs(personas[j]) === q)[0];
+          if (primero !== i) porPersona[i] = porPersona[primero];
+        });
+      });
+      /** [{ i, dudoso }]: a quién le toca. numero: el No. de empleado del activo («1 / 2» va con «A / B»). */
+      const quienes = (nombre, id, numero) => {
+        const partes = texto(nombre).split('/').map(comparable).filter(Boolean);
+        const numeros = texto(numero).split('/').map(texto);
+        const salida = [];
+        const agregar = (i, dudoso) => { if (!salida.some((x) => porPersona[x.i] === porPersona[i])) salida.push({ i: i, dudoso: dudoso }); };
+        partes.forEach((k, j) => {
+          const lista = porNombre[k];
+          const idP = partes.length === 1 ? texto(id) : '';
+          const no = numeros.length === partes.length ? numeros[j] : '';
+          if (!lista) {
+            if (idP && porId[idP] !== undefined && palabrasEnComun(k, comparable(personas[porId[idP]].nombre)) >= 2) agregar(porId[idP], false);
+            return;
+          }
+          if (!homonimo[k]) { agregar(lista[0], false); return; }
+          const deEl = lista.filter((i) => idP && texto(personas[i].idPersona) === idP)[0];
+          const delNumero = lista.filter((i) => no && texto(personas[i].noEmpleado) === no)[0];
+          const suyo = deEl !== undefined ? deEl : delNumero;
+          if (suyo !== undefined) agregar(suyo, false);
+          else lista.forEach((i) => agregar(i, true));
+        });
+        return salida;
+      };
       const sinDueno = {};
-      const poner = (tipo, lista, nombreDe, idDe, vigente) => (lista || []).forEach((a) => {
+      const poner = (tipo, lista, nombreDe, idDe, numeroDe, vigente) => (lista || []).forEach((a) => {
         const nombre = nombreDe(a);
-        if (!String(nombre == null ? '' : nombre).trim()) return;
+        if (!texto(nombre)) return;
         const ok = vigente(a);
-        const ids = quienes(nombre, idDe ? idDe(a) : '');
+        const ids = quienes(nombre, idDe ? idDe(a) : '', numeroDe ? numeroDe(a) : '');
         if (!ids.length) { if (ok) sinDueno[tipo] = (sinDueno[tipo] || 0) + 1; return; }
-        ids.forEach((i) => porPersona[i][tipo][ok ? 'vigentes' : 'historial'].push(a));
+        ids.forEach((x) => porPersona[x.i][tipo][ok ? 'vigentes' : 'historial']
+          .push(x.dudoso ? Object.assign({}, a, { _nombreRepetido: true, _de: a }) : a));
       });
       const ix = catalogos.indice || { equipos: [], lineas: [] };
-      poner('lineas', (ix.equipos || []).map((r) => Object.assign({ clase: 'equipo' }, r)), (r) => r.responsable, null, VIGENTE.equipo);
+      const idDeLinea = (r) => r.idPersona;
+      const numeroDeLinea = (r) => r.noEmpleado;
+      poner('lineas', (ix.equipos || []).map((r) => Object.assign({ clase: 'equipo' }, r)), (r) => r.responsable, idDeLinea, numeroDeLinea, VIGENTE.equipo);
       // La línea que va con un equipo ya sale con él: aparte, solo las sueltas
-      poner('lineas', (ix.lineas || []).filter((r) => r.suelta).map((r) => Object.assign({ clase: 'linea' }, r)), (r) => r.responsable, null, VIGENTE.linea);
-      poner('vehiculos', catalogos.vehiculos, (v) => v.RESPONSABLE_VEHICULO, (v) => v.ID_PERSONA, VIGENTE.vehiculo);
-      poner('hologramas', catalogos.hologramas, (h) => h.RESPONSABLE, null, VIGENTE.holograma);
-      poner('uber', catalogos.uber, (u) => u.NOMBRE_COMPLETO, (u) => u.ID_PERSONA, VIGENTE.uber);
-      poner('cajasChicas', catalogos.cajasChicas, (c) => c.RESPONSABLE, (c) => c.ID_PERSONA, VIGENTE.cajaChica);
+      poner('lineas', (ix.lineas || []).filter((r) => r.suelta).map((r) => Object.assign({ clase: 'linea' }, r)), (r) => r.responsable, idDeLinea, numeroDeLinea, VIGENTE.linea);
+      poner('vehiculos', catalogos.vehiculos, (v) => v.RESPONSABLE_VEHICULO, (v) => v.ID_PERSONA, null, VIGENTE.vehiculo);
+      poner('hologramas', catalogos.hologramas, (h) => h.RESPONSABLE, null, null, VIGENTE.holograma);
+      poner('uber', catalogos.uber, (u) => u.NOMBRE_COMPLETO, (u) => u.ID_PERSONA, null, VIGENTE.uber);
+      poner('cajasChicas', catalogos.cajasChicas, (c) => c.RESPONSABLE, (c) => c.ID_PERSONA, null, VIGENTE.cajaChica);
       return { porPersona: porPersona, sinDueno: sinDueno };
     }
 
     /** Cuántos activos vigentes tiene alguien (lo de un módulo sin permiso llega vacío). */
     const totalVigentes = (a) => Object.keys(a).reduce((t, k) => t + a[k].vigentes.length, 0);
+    /** Cuántos activos (vigentes e historial) se le muestran a alguien sin poder saber si son suyos (nombre repetido). */
+    const totalRepetidos = (a) => Object.keys(a).reduce((t, k) => t + a[k].vigentes.concat(a[k].historial).filter((x) => x._nombreRepetido).length, 0);
     // [repartir: fin]
 
     // ======================================================================
@@ -132,13 +166,18 @@
        * no cuenta (cerrado, de baja, en resguardo…) plegado abajo, con su estatus.
        */
       function tarjeta(o) {
+        // Lo que se le muestra sin saber si es suyo (nombre repetido): un aviso y «Revisar» en su renglón
+        const fila = (a) => (a._nombreRepetido ? o.fila(a).replace(/<\/td><\/tr>$/, ' ' + chip('Revisar', 'ambar') + '</td></tr>') : o.fila(a));
         const tabla = (lista) => '<div class="ln-tabla-wrap"><table class="ln-tabla"><thead><tr>' + o.cabeza.map((h) => '<th>' + h + '</th>').join('') +
-          '</tr></thead><tbody>' + lista.map(o.fila).join('') + '</tbody></table></div>';
+          '</tr></thead><tbody>' + lista.map(fila).join('') + '</tbody></table></div>';
+        const repetidos = o.grupo.vigentes.concat(o.grupo.historial).filter((a) => a._nombreRepetido).length;
+        const aviso = repetidos ? '<p class="error-msg">' + icono('triangle-alert') + ' ' + miles(repetidos) + ' de estos registros están a un nombre que tienen dos o más ' +
+          'colaboradores, y el registro no trae su ID PERSONA ni su No. de empleado: se le muestra a todos. Revisa de quién es y corrígelo en el registro.</p>' : '';
         const hist = o.grupo.historial;
         const porEstatus = {};
         hist.forEach((a) => { const e = mayus(o.estatusDe(a)) || 'SIN ESTATUS'; porEstatus[e] = (porEstatus[e] || 0) + 1; });
         const resumen = Object.keys(porEstatus).map((e) => miles(porEstatus[e]) + ' ' + e.toLowerCase()).join(', ');
-        return '<div class="card ln-card"><h3>' + icono(o.icono) + ' ' + o.titulo + ' (' + o.grupo.vigentes.length + ')</h3>' +
+        return '<div class="card ln-card"><h3>' + icono(o.icono) + ' ' + o.titulo + ' (' + o.grupo.vigentes.length + ')</h3>' + aviso +
           (o.grupo.vigentes.length ? tabla(o.grupo.vigentes) : '<p class="empty-state">' + o.vacio + '</p>') +
           (hist.length ? '<details class="ln-activos-historial"><summary>' + icono('history') + ' Ya no cuentan: ' + esc(resumen) + '</summary>' + tabla(hist) + '</details>' : '') +
           '</div>';
@@ -252,7 +291,9 @@
           '<div class="ln-cuadro-pie"><span>' + icono('map-pin') + ' ' + guion(c.sede) + '</span><span>' + icono('building-2') + ' ' + guion(c.oficina) + '</span></div>' +
           '<div class="ln-cuadro-pie"><span>' + icono('briefcase-business') + ' ' + chip(c.estatus || 'Sin estatus', esBaja ? 'rojo' : 'verde') + '</span>' +
           '<span class="ln-activos-estado ' + (conActivos ? 'si' : 'no') + '">' + icono(conActivos ? 'package-check' : 'package-x') + ' ' +
-          (conActivos ? miles(c.totalActivos) + ' activo(s)' : 'Sin activos') + '</span></div><div class="ln-cuadro-pie"><span>Consultar asignaciones ' + icono('chevron-right') + '</span></div></button>';
+          (conActivos ? miles(c.totalActivos) + ' activo(s)' : 'Sin activos') + '</span></div>' +
+          (c.repetidos ? '<div class="ln-cuadro-pie"><span>' + icono('triangle-alert') + ' ' + chip('Nombre repetido: revisar ' + miles(c.repetidos), 'ambar') + '</span></div>' : '') +
+          '<div class="ln-cuadro-pie"><span>Consultar asignaciones ' + icono('chevron-right') + '</span></div></button>';
       }
 
       function pintarCuadros() {
@@ -288,16 +329,14 @@
       // `filtrados` (lo que hay bajo el texto/selector actuales), igual que en el resto de los módulos.
       function valoresKpi(lista) {
         const con = lista.filter((c) => c.totalActivos).length;
-        // Dos renglones con el mismo nombre comparten sus activos: se suman una vez
+        // Cada activo una vez: dos renglones de la misma persona comparten sus activos y el de nombre repetido se le
+        // muestra a todos los homónimos (una copia con _de)
         const vistos = new Set();
+        lista.forEach((c) => Object.keys(c.activos).forEach((k) => c.activos[k].vigentes.forEach((a) => vistos.add(a._de || a))));
         return {
           TODOS: lista.length, CON: con, SIN: lista.length - con,
           BAJAS: lista.filter((c) => c.estatus === 'BAJA').length,
-          asignados: lista.reduce((t, c) => {
-            if (vistos.has(c.activos)) return t;
-            vistos.add(c.activos);
-            return t + c.totalActivos;
-          }, 0),
+          asignados: vistos.size,
         };
       }
       function pintarKpis() {
@@ -349,8 +388,9 @@
             const filas = [];
             unicos.forEach((c) => {
               const g = c.activos[tipo];
-              g.vigentes.forEach((a) => filas.push(Object.assign({ Colaborador: c.nombre }, armar(a), { 'Cuenta como activo': 'Sí' })));
-              g.historial.forEach((a) => filas.push(Object.assign({ Colaborador: c.nombre }, armar(a), { 'Cuenta como activo': 'No' })));
+              const de = (a) => (a._nombreRepetido ? c.nombre + ' (nombre repetido: revisar)' : c.nombre);
+              g.vigentes.forEach((a) => filas.push(Object.assign({ Colaborador: de(a) }, armar(a), { 'Cuenta como activo': 'Sí' })));
+              g.historial.forEach((a) => filas.push(Object.assign({ Colaborador: de(a) }, armar(a), { 'Cuenta como activo': 'No' })));
             });
             return filas;
           };
@@ -444,7 +484,8 @@
         const reparto = repartirActivos(personas, catalogosActivos);
         sinDueno = reparto.sinDueno;
         colaboradores = personas
-          .map((c, i) => Object.assign(c, { activos: reparto.porPersona[i], totalActivos: totalVigentes(reparto.porPersona[i]) }))
+          .map((c, i) => Object.assign(c, { activos: reparto.porPersona[i], totalActivos: totalVigentes(reparto.porPersona[i]),
+            repetidos: totalRepetidos(reparto.porPersona[i]) }))
           .filter((c) => c.estatus !== 'BAJA' || c.totalActivos > 0)
           .map((c, i) => Object.assign(c, { _i: i }));
         aplicarFiltros();

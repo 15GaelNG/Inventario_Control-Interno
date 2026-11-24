@@ -96,12 +96,15 @@ const LineasDG = (function () {
   }
 
   /** Lo que ve quien no es ADMIN de un renglón del panel de DG (auditoría del 23-oct): sus estados, DG y el área. */
-  const VISIBLES_PANEL = ['ID', 'FECHA', 'REGISTRO_ID', 'NUCO', 'ESTADO', 'CANCELACION', 'ESTATUS_EQUIPO', 'ESTATUS_LINEA', 'ID_LINEA', 'ACTUALIZADO_EN', '_fila'];
+  // Los estatus de hoy del equipo (Resguardos, 20-nov) también son estados; su número de hoy, como los demás, DG
+  const VISIBLES_PANEL = ['ID', 'FECHA', 'REGISTRO_ID', 'NUCO', 'ESTADO', 'CANCELACION', 'ESTATUS_EQUIPO', 'ESTATUS_LINEA', 'ID_LINEA', 'ACTUALIZADO_EN', '_fila',
+    'ESTATUS_EQUIPO_HOY', 'ESTATUS_LINEA_HOY'];
   function ocultarRenglonPanel(o) {
     const r = { dg: true };
     Object.keys(o).forEach((k) => { r[k] = VISIBLES_PANEL.indexOf(k) >= 0 ? o[k] : ''; });
     if (o['NUMERO']) r['NUMERO'] = ETIQUETA;
     if (o['LINEA_AL_MANDAR']) r['LINEA_AL_MANDAR'] = ETIQUETA;
+    if (o['NUMERO_HOY']) r['NUMERO_HOY'] = ETIQUETA;
     r['DEPARTAMENTO'] = AREA;
     return r;
   }

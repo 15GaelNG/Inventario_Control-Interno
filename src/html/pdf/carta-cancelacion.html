@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<!-- carta-cancelacion: el borrador de la carta de cancelación de Líneas (LineasCarta.preparar, 11-nov-2026). Medidas de
+     las cartas reales (Word, hoja carta): texto de 85 a 530 pt, Century Gothic 11 pt, logo horizontal arriba a la
+     izquierda. A diferencia de las demás plantillas lleva margen de hoja, porque una tabla larga corre a otra hoja y ahí
+     también necesita aire arriba y abajo. -->
+<style>
+  @page { size: 612pt 792pt; margin: 36pt 0 50pt; }
+  html, body { margin: 0; }
+  body { color: #000; font-family: "CenturyGothic"; font-size: 11pt; line-height: 13.4pt; font-kerning: none; font-variant-ligatures: none; text-rendering: geometricPrecision; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .hoja { margin-left: 85pt; width: 445pt; }
+  .logo { display: block; margin-left: -49.6pt; width: 176pt; height: auto; }
+  .encabezado { margin-top: 22.6pt; text-align: right; }
+  .destino { margin-top: 23pt; }
+  p { margin: 0; }
+  .cuerpo { margin-top: 13.6pt; line-height: 14.5pt; text-align: justify; }
+  table { margin-top: 32pt; width: 445pt; border-collapse: collapse; table-layout: fixed; font-size: 9.5pt; line-height: 12pt; }
+  thead { display: table-header-group; }
+  th { background: #002060; color: #fff; font-weight: 700; font-size: 8.5pt; padding: 2pt 2pt; text-align: center; vertical-align: middle; border: 0.5pt solid #002060; }
+  td { padding: 2pt 2pt; text-align: center; vertical-align: middle; border-bottom: 0.5pt solid #bfbfbf; white-space: nowrap; overflow: hidden; }
+  /* Con la cuenta hija (20-nov) la razón social tiene menos espacio: si no cabe, pasa a dos renglones en lugar de cortarse */
+  td.razon { white-space: normal; }
+  tr { page-break-inside: avoid; break-inside: avoid; }
+  .despues { margin-top: 24pt; line-height: 14.5pt; text-align: justify; }
+  .cierre { margin-top: 14pt; line-height: 13.5pt; text-align: justify; }
+  .firma { page-break-inside: avoid; break-inside: avoid; text-align: center; }
+  .atentamente { margin-top: 13.6pt; }
+  .raya { margin: 54pt auto 0; width: 416pt; border-top: 0.75pt solid #000; padding-top: 1pt; }
+</style>
+</head>
+<body>
+<div class="hoja">
+  <img class="logo" src="{{LOGO:ciudad-maderas-carta}}" alt="">
+  <div class="encabezado">
+    <p>Santiago de Querétaro, Querétaro.</p>
+    <p>{{FECHA_LETRA}}.</p>
+    <p>Asunto: {{ASUNTO}}</p>
+  </div>
+  <div class="destino">
+    <p>{{PROVEEDOR_LEGAL}}</p>
+    <p>A QUIEN CORRESPONDA:</p>
+  </div>
+  <p class="cuerpo">{{FIRMANTE}}, en representación del Grupo Comercial Ciudad Maderas, por conducto de sus empresas filiales, solicita de su amable apoyo para llevar a cabo {{SOLICITUD}}</p>
+  <table>
+    <colgroup><col style="width:42pt"><col style="width:64pt"><col style="width:64pt"><col style="width:66pt"><col style="width:153pt"><col style="width:56pt"></colgroup>
+    <thead><tr><th>REGIÓN</th><th>{{TITULO_CUENTA}}</th><th>CUENTA HIJA</th><th>NÚMERO</th><th>RAZÓN SOCIAL</th><th>ASESOR</th></tr></thead>
+    <tbody>
+{{#CADA LINEAS}}      <tr><td>{{REGION}}</td><td>{{CUENTA}}</td><td>{{HIJA}}</td><td>{{NUMERO}}</td><td class="razon">{{RAZON}}</td><td>{{ASESOR}}</td></tr>
+{{/CADA}}    </tbody>
+  </table>
+  {{#SI DESPUES}}<p class="despues">{{DESPUES}}</p>{{/SI}}
+  <p class="cierre">Por lo anteriormente expuesto, se extiende la presente solicitud para los fines antes mencionados, y sin otro particular por el momento, aprovecho la ocasión para agradecer sus atenciones y reiterarme a sus apreciables órdenes.</p>
+  <div class="firma">
+    <p class="atentamente">ATENTAMENTE</p>
+    <div class="raya">
+      {{#SI FIRMA_RAZON}}<p>{{FIRMA_RAZON}}</p>{{/SI}}
+      <p>{{FIRMANTE}}</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

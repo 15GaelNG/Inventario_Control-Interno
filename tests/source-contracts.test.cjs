@@ -1390,7 +1390,7 @@ test('NUCO siempre a 4 dígitos (tabla, ficha, bitácoras, historial y Excel)', 
   const repo = read('src/services/lineas/LineasRepo.gs');
   assert.match(repo, /if \(c === 'NUCO'\) return LineasUtil\.nucoVisible\(v\);/);
   assert.match(repo, /nuco: txt\(col\(f, 'NUCO'\)\) === null \? null : LineasUtil\.nucoVisible\(col\(f, 'NUCO'\)\),/);
-  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v14';/);
+  assert.match(repo, /const CLAVE_INDICE = 'indice_telefonia_v15';/);
   assert.match(read('src/services/lineas/LineasExportar.gs'), /return LineasUtil\.nucoVisible\(valor\);/);
 });
 
@@ -2049,8 +2049,8 @@ test('Estatus del 30-sep: listas nuevas, línea sin estatus en blanco, valores v
   const els = Reg._elementos(base, cat, u, { nuevo: false });
   assert.equal(campo(els, 'ESTATUS LINEA').valor, '');
   assert.equal(campo(els, 'ESTATUS EQUIPO').valor, 'FUERA DE INVENTARIO');
-  // Corregir equipo: USO, RESGUARDO y los finales (usuario, 21-oct; pendiente 2.55); el alta, todos
-  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo.filter((x) => ['USO', 'RESGUARDO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'].indexOf(x) >= 0));
+  // Corregir equipo: USO, RESGUARDO, PARA VENTA CON DETALLE (20-nov) y los finales (usuario, 21-oct; pendiente 2.55); el alta, todos
+  assert.deepEqual(campo(els, 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo.filter((x) => ['USO', 'RESGUARDO', 'PARA VENTA CON DETALLE', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'].indexOf(x) >= 0));
   assert.deepEqual(campo(Reg._elementos({}, cat, u, { nuevo: true, parte: 'EQUIPO' }), 'ESTATUS EQUIPO').opciones, Repo.CATALOGO.estatusEquipo);
   // Corregir equipo sin la pestaña Responsable (usuario, 16-oct; pendiente 2.50); en el alta sí
   assert.ok(!els.some((e) => ['RESPONSABLE', 'NO EMPLEADO', 'DEPARTAMENTO'].indexOf(e.columna) >= 0));

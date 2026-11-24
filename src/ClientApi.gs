@@ -22,7 +22,7 @@ function apiPing() {
 // (CacheHojas.conHuella). La lista revisa sus propios permisos con el token, igual que si se llamara directo.
 // Solo las listas (apiListar…, apiFicha…, el Inicio y las campanitas), no cualquier api…: source-contracts revisa que
 // cada callServerListaCacheada de la pantalla entre aquí
-const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|Notificaciones|LineasIndice)$/;
+const LISTAS_CON_HUELLA_ = /^api(Listar[A-Z]\w*|Ficha[A-Z]\w*|ResumenInicio|Notificaciones|LineasBandejaResguardos|LineasIndice)$/;
 function apiListaConHuella(token, fn, args) {
   if (!LISTAS_CON_HUELLA_.test(String(fn))) throw new Error('Lista desconocida: ' + fn);
   const f = globalThis[fn];
@@ -32,7 +32,7 @@ function apiListaConHuella(token, fn, args) {
 }
 // ¿Cambió algo de lo que se ve? Solo CacheService (sin leer hojas): la llamada más barata que hay.
 function apiHuellasVigentes(token, claves) {
-  Auth.automatica();   // la pide el vigía cada minuto: no cuenta como actividad (la sesión se cierra a los 60 min sin uso)
+  Auth.automatica();   // la pide el vigía cada minuto: no cuenta como actividad (la sesión se cierra a los 180 min sin uso)
   Auth.validarSesion(token);
   const validas = (claves || []).filter((k) => /^ver_[\w-]{1,10}_/.test(String(k))).slice(0, 300);
   return CacheHojas.vigentes(validas);

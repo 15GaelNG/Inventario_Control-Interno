@@ -259,7 +259,8 @@ test('espejo: al cerrar se guarda lo que se veía; cerrado sigue a su línea (po
   assert.deepEqual([r.NUMERO, r.ESTATUS_LINEA, r.IMEI], ['4420000006', 'CANCELADA', '999']);
 
   const linea = { 'ID': 'LIN-9', 'ID LINEA': 'LIN-9', 'TIPO': 'LINEA', 'NUMERO TELEFONO': '4420000010', 'ESTATUS LINEA': 'EN PROCESO DE CANCELACION' };
-  const t2 = cargar([linea], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'LIN-9', 'ID_LINEA': 'LIN-9', 'NUMERO': '4420000009', 'ESTADO': '', 'CANCELACION': 'POR FIRMAR' }]);
+  const t2 = cargar([linea], [{ 'ID': 'RSG-9', 'REGISTRO_ID': 'LIN-9', 'ID_LINEA': 'LIN-9', 'NUMERO': '4420000009', 'ESTADO': '', 'CANCELACION': 'POR FIRMAR',
+    'CARTA': 'https://drive.google.com/file/d/carta-de-prueba/view' }]);
   t2.R.confirmarCancelacion(['RSG-9'], {}, pau);
   assert.equal(t2.tablas.APP_RESGUARDOS[0].NUMERO, '4420000010');
   assert.equal(linea['ESTATUS LINEA'], 'CANCELADA');
@@ -345,7 +346,7 @@ test('Mandar a cancelación: el motivo se elige (LINEA VENCIDA o CANCELACION ANT
   t2.R.mandarCancelacion(['LIN-1'], { comentario: 'se cambió de línea' }, usuario, { motivoDelAdendum: true });
   assert.equal(t2.tablas.APP_RESGUARDOS[1].MOTIVO_CANCELACION, 'CANCELACION ANTICIPADA');
   // La hoja que ya existía recibe la columna nueva
-  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR', 'ID_INSPECCION']]);
+  assert.deepEqual(t2.escritas.columnas, [['APP_RESGUARDOS', 'MOTIVO_CANCELACION', 'ACCESORIOS', 'ID_LINEA', 'LINEA_AL_MANDAR', 'MOVIMIENTO_ID', 'RETIRADO_EN', 'RETIRO', 'RETIRO_MOTIVO', 'ID_LINEA_AL_MANDAR', 'ID_INSPECCION', 'CARTA', 'CARTA_HUELLA']]);
   assert.match(read('src/services/lineas/LineasAcciones.gs'), /\{ comentario: comentario, ticket: ticket \}, usuario,\s+\{ motivoDelAdendum: true, nucos:/);
   // La pantalla: la lista con «Selecciona…», obligatoria, y la columna en la pestaña Cancelaciones
   const cliente = LINEAS;
@@ -417,7 +418,8 @@ test('cada paso de la bandeja espera en su ventana hasta que contesta el servido
   assert.match(paso, /alConfirmar: \(extra\) => llamar\('apiLineasAccionBandejaResguardo'/);
   assert.doesNotMatch(paso, /Confirmar\.pedir/);
   const acciones = html.slice(html.indexOf('const ACCIONES = {'), html.indexOf('function filasVista()'));
-  assert.equal((acciones.match(/espera: '/g) || []).length, 9, 'las nueve acciones dicen qué están haciendo (Donado y Desechado: 3.16)');
+  // «Carta enviada» ya no es un paso (13-nov): es «Subir carta», con su propia ventana
+  assert.equal((acciones.match(/espera: '/g) || []).length, 8, 'las ocho acciones dicen qué están haciendo (Donado y Desechado: 3.16)');
   // Textos en oración y lo nuevo del 3.12: Retirar cancelación (Pau) y, para Líneas, Corregir resguardo y Quitar del panel
   assert.match(acciones, /texto: 'Entregar a líneas'/);
   assert.doesNotMatch(html, /Entregar a Líneas|Entregados a Líneas/);
@@ -676,7 +678,9 @@ test('Panel de Pau: Recibir solo lo por recibir; las fases de Cancelaciones solo
   assert.match(html, /texto: 'Recibir', titulo: '[^']*', minimo: 1, visible: porRecibir,/);
   assert.match(html, /texto: 'Entregar a líneas', titulo: '[^']*', minimo: 1, visible: recibidos,/);
   assert.match(html, /texto: 'Carta firmada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR'\]\),/);
-  assert.match(html, /texto: 'Carta enviada', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR', 'CARTA FIRMADA'\]\),/);
+  // A CARTA ENVIADA solo subiendo la carta (11-nov): la acción de la tabla abre «Subir carta» con lo elegido
+  assert.doesNotMatch(html, /paso\('CARTA_ENVIADA'/);
+  assert.match(html, /texto: 'Subir carta', titulo: '[^']*', minimo: 1, visible: enFase\(\['POR FIRMAR', 'CARTA FIRMADA'\]\),\s*alHacer: \(filas\) => elegirCarta\(filas\.map\(\(f\) => f\.ID\)\) \},/);
   assert.match(html, /texto: 'Confirmar cancelada', titulo: '[^']*', minimo: 1, peligro: true, visible: enFase\(EN_CURSO\),/);
   assert.match(html, /texto: 'Retirar cancelación', titulo: '[^']*', minimo: 1, visible: enFase\(EN_CURSO\),/);
 
@@ -687,9 +691,23 @@ test('Panel de Pau: Recibir solo lo por recibir; las fases de Cancelaciones solo
   const firmada = t.R.faseCancelacion(['RSG-1', 'RSG-3'], 'CARTA FIRMADA', {}, pau);
   assert.deepEqual(firmada.hechos, []);
   assert.deepEqual(firmada.omitidos.map((o) => o.motivo), ['Ya está carta enviada', 'Ya está carta firmada']);
-  const enviada = t.R.faseCancelacion(['RSG-2'], 'CARTA ENVIADA', {}, pau);
-  assert.deepEqual(enviada.hechos.map((h) => h.id), ['RSG-2']);
-  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.CANCELACION), ['CARTA ENVIADA', 'CARTA ENVIADA', 'CARTA FIRMADA']);
+  // Un solo camino a CARTA ENVIADA (usuario, 11-nov): subir la carta. A mano se rechaza
+  assert.throws(() => t.R.faseCancelacion(['RSG-2'], 'CARTA ENVIADA', {}, pau), /Subir carta/);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((r) => r.CANCELACION), ['CARTA ENVIADA', 'POR FIRMAR', 'CARTA FIRMADA']);
+});
+
+// Usuario, 11-nov: sin carta no se brinca a CANCELADA; lo que ya estaba CARTA ENVIADA (de antes de la regla) sí pasa
+test('Confirmar cancelada: POR FIRMAR o FIRMADA sin carta no; con carta o ya CARTA ENVIADA sí', () => {
+  const carta = 'https://drive.google.com/file/d/carta-de-prueba/view';
+  const t = cargar([], [
+    { 'ID': 'RSG-1', 'NUMERO': '4420000001', 'CANCELACION': 'POR FIRMAR' },
+    { 'ID': 'RSG-2', 'NUMERO': '4420000002', 'CANCELACION': 'CARTA FIRMADA' },
+    { 'ID': 'RSG-3', 'NUMERO': '4420000003', 'CANCELACION': 'POR FIRMAR', 'CARTA': carta },
+    { 'ID': 'RSG-4', 'NUMERO': '4420000004', 'CANCELACION': 'CARTA ENVIADA' }]);
+  const r = t.R.confirmarCancelacion(['RSG-1', 'RSG-2', 'RSG-3', 'RSG-4'], {}, pau);
+  assert.deepEqual(r.hechos.map((h) => h.id), ['RSG-3', 'RSG-4']);
+  assert.deepEqual(r.omitidos.map((o) => o.motivo), ['Sin carta: súbela primero', 'Sin carta: súbela primero']);
+  assert.deepEqual(t.tablas.APP_RESGUARDOS.map((x) => x.CANCELACION), ['POR FIRMAR', 'CARTA FIRMADA', 'CANCELADA', 'CANCELADA']);
 });
 
 // Usuario, 22-oct: Cancelaciones con la región (por la lada, tabla de regiones de Líneas) y la cuenta padre de la línea,
@@ -712,6 +730,8 @@ test('Cancelaciones: región por la lada y cuenta padre de la línea, también y
   const r = (id) => filas.filter((f) => f.ID === id)[0];
   assert.deepEqual(['R1', 'R2', 'R3', 'R4'].map((id) => [r(id).REGION, r(id).CUENTA_PADRE]),
     [['Región 9', '99022914'], ['Región 6', '62637313'], ['Región 6', '62637313'], ['Región 6', '62637313']], 'Querétaro es todo región 6 (427 San Juan del Río; L30, 27-oct)');
+  // La cuenta hija (Telcel la pidió, 20-nov): la columna CUENTA de la línea; sin ella, vacía
+  assert.deepEqual(['R1', 'R2', 'R4'].map((id) => r(id).CUENTA_HIJA), ['99356683', '', '']);
   assert.equal(r('R5').REGION, undefined, 'los resguardos no llevan región');
   assert.equal(t.tablas.APP_RESGUARDOS[0].REGION, undefined, 'no se guarda en la hoja');
 
@@ -908,7 +928,7 @@ test('Cancelaciones trae la carta de cada línea (LINK CARTA DE CANCELACION de L
   assert.strictEqual(de('LIN-B').CARTAS, '');
   // La pantalla: columna Carta y acción Ver carta, solo en Cancelaciones
   const pantalla = read('src/html/js/lineas-resguardos.html');
-  assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v\) => ligasCarta\(v\) \}/);
+  assert.match(pantalla, /\{ campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: \(v, f\) => ligasCarta\(v, f\) \}/);
   assert.match(pantalla, /vista === 'CANCELACIONES' \? \[\{ icono: 'file-text', titulo: 'Ver carta'/);
 });
 
@@ -941,4 +961,61 @@ test('Resguardos: la inspección del renglón (la guardada desde el 12-nov; en l
   assert.match(LINEAS, /llamar\('apiLineasInspeccionResguardo', fila\.ID\)/);
   const tel = read('src/services/TelefoniaService.gs');
   assert.match(tel, /function inspeccionResguardo\(token, id\) \{\r?\n    const sesion = sinAlcance_\(Permisos\.puedeLeer\(token, MODULO_RESGUARDOS\)\);/);
+});
+
+// Opción 2 (usuario, 20-nov: «ya le asigné una línea» y el panel seguía diciendo RESGUARDO): cada renglón de Resguardos
+// trae cómo está HOY su equipo, también lo ya entregado; las columnas del trámite se quedan como quedaron
+test('Resguardos: el estatus del equipo y su línea de hoy, aunque el renglón ya esté entregado', () => {
+  const inv = [
+    // Entregado a Líneas sin línea; después Líneas lo asignó con una línea nueva
+    equipo('EQU-1', '0982', 'ASIGNADO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4420000982', 'ESTATUS LINEA': 'USO' }),
+    // Sigue en resguardo, sin línea
+    equipo('EQU-2', '0388', 'RESGUARDO'),
+  ];
+  const bandeja = [
+    { ID: 'R1', REGISTRO_ID: 'EQU-1', NUCO: '0982', ESTADO: 'ENTREGADO A LINEAS', ESTATUS_EQUIPO: 'RESGUARDO', NUMERO: '', ESTATUS_LINEA: '' },
+    { ID: 'R2', REGISTRO_ID: 'EQU-2', NUCO: '0388', ESTADO: 'EN RESGUARDO', ESTATUS_EQUIPO: 'RESGUARDO' },
+    // Ya no está en el inventario: lo de hoy, vacío
+    { ID: 'R3', REGISTRO_ID: 'EQU-9', NUCO: '0999', ESTADO: 'VENDIDO', ESTATUS_EQUIPO: 'VENDIDO' },
+    // Solo cancelación (sin ESTADO): no es de Resguardos, no lleva lo de hoy
+    { ID: 'C1', REGISTRO_ID: 'EQU-1', NUCO: '0982', NUMERO: '4420000555', ESTADO: '', CANCELACION: 'POR FIRMAR' },
+  ];
+  const filas = cargar(inv, bandeja).R.bandeja({ puedeAprobar: true }).filas;
+  const r = (id) => filas.filter((f) => f.ID === id)[0];
+  // El trámite, como quedó al entregarlo
+  assert.equal(r('R1').ESTATUS_EQUIPO, 'RESGUARDO');
+  assert.equal(r('R1').ESTADO, 'ENTREGADO A LINEAS');
+  // Lo de hoy, del inventario
+  assert.equal(r('R1').ESTATUS_EQUIPO_HOY, 'ASIGNADO');
+  assert.equal(r('R1').NUMERO_HOY, '4420000982');
+  assert.equal(r('R1').ESTATUS_LINEA_HOY, 'USO');
+  assert.deepEqual([r('R2').ESTATUS_EQUIPO_HOY, r('R2').NUMERO_HOY, r('R2').ESTATUS_LINEA_HOY], ['RESGUARDO', '', '']);
+  assert.deepEqual([r('R3').ESTATUS_EQUIPO_HOY, r('R3').NUMERO_HOY, r('R3').ESTATUS_LINEA_HOY], ['', '', '']);
+  assert.ok(!('ESTATUS_EQUIPO_HOY' in r('C1')));
+  // La pantalla los muestra junto a los del trámite
+  assert.match(LINEAS, /\{ campo: 'ESTATUS_EQUIPO_HOY', titulo: 'Estatus del equipo hoy', tipo: 'lista'/);
+  assert.match(LINEAS, /\{ campo: 'NUMERO_HOY', titulo: 'Línea hoy', tipo: 'texto'/);
+  assert.match(LINEAS, /\{ campo: 'ESTATUS_LINEA_HOY', titulo: 'Estatus de la línea hoy', tipo: 'lista'/);
+});
+
+test('Resguardos, lo de hoy con Dirección General: quien no es ADMIN ve los estatus, nunca el número', () => {
+  const inv = [
+    // Un equipo que no es de DG pero hoy trae una línea de DG
+    equipo('EQU-1', '0982', 'ASIGNADO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4422798678', 'ESTATUS LINEA': 'USO' }),
+    // Un equipo de DG
+    equipo('EQU-2', '11002', 'ASIGNADO', { 'TIPO': 'EQUIPO + SIM', 'NUMERO TELEFONO': '4422798678', 'ESTATUS LINEA': 'USO' }),
+  ];
+  const bandeja = [
+    { ID: 'R1', REGISTRO_ID: 'EQU-1', NUCO: '0982', ESTADO: 'ENTREGADO A LINEAS', ESTATUS_EQUIPO: 'RESGUARDO' },
+    { ID: 'R2', REGISTRO_ID: 'EQU-2', NUCO: '11002', ESTADO: 'ENTREGADO A LINEAS', ESTATUS_EQUIPO: 'RESGUARDO' },
+  ];
+  const t = cargar(inv, bandeja, [], true);
+  const de = (u) => { const filas = t.R.bandeja(u).filas; return (id) => filas.filter((f) => f.ID === id)[0]; };
+  const otro = de({ puedeAprobar: true });
+  assert.equal(otro('R1').NUMERO_HOY, 'DG');
+  assert.equal(otro('R1').NUCO, '0982', 'el resto del renglón se ve');
+  assert.deepEqual([otro('R2').NUMERO_HOY, otro('R2').ESTATUS_EQUIPO_HOY, otro('R2').ESTATUS_LINEA_HOY], ['DG', 'ASIGNADO', 'USO']);
+  const admin = de({ puedeAprobar: true, esAdmin: true });
+  assert.equal(admin('R1').NUMERO_HOY, '4422798678');
+  assert.equal(admin('R2').NUMERO_HOY, '4422798678');
 });

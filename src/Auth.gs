@@ -75,8 +75,8 @@ const Auth = (function () {
   // ---- La copia de la sesión (9-nov). CacheService puede perder una entrada antes de que venza: el 9-nov hubo sesiones
   // recién creadas que ya no estaban segundos después («Sesión expirada» en Auth:268, 32 reingresos en menos de 5 min).
   // Cada sesión tiene una copia en ScriptProperties, bajo la huella del token (no el token), con su vencimiento: solo se
-  // lee si la caché no la tiene, y entonces se restaura. Las reglas no cambian: la copia vence igual que la caché (60 min
-  // sin uso), y validarSesion sigue revisando las 8 h y la versión. Si algo de la copia falla, todo sigue como antes.
+  // lee si la caché no la tiene, y entonces se restaura. Las reglas no cambian: la copia vence igual que la caché (180 min
+  // sin uso), y validarSesion sigue revisando las 24 h y la versión. Si algo de la copia falla, todo sigue como antes.
   // En Cloud Logging, cada caso deja una línea «[sesion] …»: rescatada, no encontrada o vencida.
   const PREFIJO_COPIA = 'sesion_copia_';
   const propsSesion_ = () => PropertiesService.getScriptProperties();

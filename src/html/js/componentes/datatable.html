@@ -954,9 +954,10 @@
         };
       }
 
-      /** Pasa los filtros de columna (st.filtros), sin importar la búsqueda general */
-      function pasaFiltrosColumna_(fila) {
+      /** Pasa los filtros de columna (st.filtros), sin importar la búsqueda general. excepto: un campo que no cuenta */
+      function pasaFiltrosColumna_(fila, excepto) {
         for (const campo in st.filtros) {
+          if (campo === excepto) continue;
           const col = colPorCampo(campo);
           if (col && !cumpleFiltro(col, fila, st.filtros[campo])) return false;
         }
@@ -974,11 +975,17 @@
         }, 3);
       }
 
-      function filasFiltradas() {
+      /** Las filas que dejan la búsqueda y los filtros de columna (menos el de `excepto`), sin ordenar */
+      function filasQuePasan_(excepto) {
         const q = normalizar(st.busqueda.trim());
         const buscables = columnasBuscables();
-        const filas = st.datos.filter((fila) => pasaFiltrosColumna_(fila) &&
+        return st.datos.filter((fila) => pasaFiltrosColumna_(fila, excepto) &&
           (!q || buscables.some((col) => normalizar(textoVisible(col, fila)).includes(q))));
+      }
+
+      function filasFiltradas() {
+        const q = normalizar(st.busqueda.trim());
+        const filas = filasQuePasan_(null);
         const criterios = st.orden
           .map((o) => ({ col: colPorCampo(o.campo), signo: o.dir === 'desc' ? -1 : 1 }))
           .filter((c) => c.col);
@@ -1678,17 +1685,22 @@
         else abrirFiltroPorCondicion(ancla, col);
       }
 
-      /** Lista de casillas con los valores existentes y su conteo (como el filtro de Excel) */
+      /**
+       * Lista de casillas con los valores existentes y su conteo (como el filtro de Excel). Los valores y los conteos
+       * salen de lo que dejan la búsqueda y los DEMÁS filtros (usuario, 13-nov: con «Oficina: JARDINES DE LA HACIENDA» y
+       * «Estatus: USO», 51 renglones, el menú de Departamento seguía contando los 1,341). El filtro de esta misma columna
+       * no cuenta: así se ven también los valores que se desmarcaron.
+       */
       function abrirFiltroPorValores(ancla, col) {
         const actual = st.filtros[col.campo] || {};
+        const claveDe = (fila) => { const v = valorDe(col, fila); return vacio(v) ? '' : String(v); };
         const conteo = new Map();
-        st.datos.forEach((fila) => {
-          const v = valorDe(col, fila);
-          const k = vacio(v) ? '' : String(v);
-          conteo.set(k, (conteo.get(k) || 0) + 1);
-        });
+        filasQuePasan_(col.campo).forEach((fila) => { const k = claveDe(fila); conteo.set(k, (conteo.get(k) || 0) + 1); });
         const valores = Array.from(conteo.keys()).sort((a, b) => a.localeCompare(b, 'es'));
         const marcados = actual.valores ? new Set(actual.valores) : new Set(valores);
+        // Lo que este filtro ya tenía elegido pero los otros filtros esconden se conserva al aplicar
+        const elegidosOcultos = (actual.valores || []).filter((v) => !conteo.has(v));
+        const todos = new Set(st.datos.map(claveDe));
         const { arriba, abajo } = partesMenuColumna(col);
 
         abrirPopover(ancla, `<h4>${esc(col.titulo)}</h4>${arriba}
@@ -1718,8 +1730,11 @@
             cambiarFiltro(col.campo, { valores: [b.dataset.solo] });
           }));
           conectarMenuColumna(pop, col, () => {
-            const elegidos = casillas().filter((c) => c.checked).map((c) => c.value);
-            cambiarFiltro(col.campo, elegidos.length === valores.length ? null : { valores: elegidos });
+            const elegidos = casillas().filter((c) => c.checked).map((c) => c.value).concat(elegidosOcultos);
+            // Sin filtro si quedan todos: los de la lista (sin uno previo) o todos los de la tabla
+            const completo = actual.valores ? elegidos.length >= todos.size && Array.from(todos).every((v) => elegidos.includes(v))
+              : elegidos.length === valores.length;
+            cambiarFiltro(col.campo, completo ? null : { valores: elegidos });
           });
           buscar.focus();
         });

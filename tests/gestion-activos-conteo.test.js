@@ -22,7 +22,7 @@ const formatoJs = formatoHtml.slice(formatoHtml.indexOf('<script>') + 8, formato
 const ctx = vm.createContext({});
 // El bloque usa normal (Formato.normal, de Lineas.comun)
 vm.runInContext(formatoJs + ';this.normal = Formato.normal;', ctx);
-vm.runInContext(bloque + '\nthis.repartirActivos = repartirActivos; this.totalVigentes = totalVigentes; this.comparable = comparable;', ctx);
+vm.runInContext(bloque + '\nthis.repartirActivos = repartirActivos; this.totalVigentes = totalVigentes; this.totalRepetidos = totalRepetidos; this.comparable = comparable;', ctx);
 
 let fallas = 0;
 const ok = (cond, texto) => { console.log((cond ? '  ✔ ' : '  ✘ ') + texto); if (!cond) fallas++; };
@@ -96,6 +96,37 @@ console.log('6. «A / B» le toca a las dos; el mismo nombre en dos renglones co
     { vehiculos: [{ RESPONSABLE_VEHICULO: 'JUAN UNO / PEDRO DOS', ESTATUS: 'ACTIVO' }] });
   ok(r.porPersona[0].vehiculos.vigentes.length === 1 && r.porPersona[1].vehiculos.vigentes.length === 1, 'el vehículo compartido sale con los dos');
   ok(r.porPersona[2] === r.porPersona[0], 'el segundo renglón de JUAN UNO ve lo mismo que el primero');
+}
+
+console.log('6b. Homónimos (usuario, 12-nov: dos ADRIANA RAMIREZ GONZALEZ con el mismo NUCO 1427)');
+{
+  const personas = [
+    { nombre: 'ADRIANA RAMIREZ GONZALEZ', idPersona: 'PER-1', noEmpleado: '100' },
+    { nombre: 'ADRIANA RAMIREZ GONZALEZ', idPersona: 'PER-2', noEmpleado: '200' },
+    { nombre: 'ADRIANA RAMIREZ GONZALEZ', idPersona: 'PER-1', noEmpleado: '100' }, // la misma PER-1 en otro departamento
+  ];
+  const r = repartir(personas, {
+    indice: {
+      equipos: [
+        { nuco: '1427', responsable: 'ADRIANA RAMIREZ GONZALEZ', estatus: 'USO', idPersona: 'PER-2', noEmpleado: '200' },
+        { nuco: '0001', responsable: 'ADRIANA RAMIREZ GONZALEZ', estatus: 'USO', noEmpleado: '100' },     // sin ID: por número
+        { nuco: '0002', responsable: 'ADRIANA RAMIREZ GONZALEZ', estatus: 'USO', idPersona: 'PER-2', noEmpleado: '100' }, // el ID manda
+        { nuco: '0003', responsable: 'ADRIANA RAMIREZ GONZALEZ / OTRA PERSONA', estatus: 'USO', noEmpleado: '200 / 300' },
+      ],
+      lineas: [],
+    },
+    hologramas: [{ RESPONSABLE: 'ADRIANA RAMIREZ GONZALEZ', ESTATUS_EOX: 'HABILITADO' }], // sin nada con qué desempatar
+  });
+  const nucos = (i) => r.porPersona[i].lineas.vigentes.map((x) => x.nuco).sort().join(',');
+  ok(nucos(0) === '0001', 'PER-1 solo tiene el 0001 (por su No. de empleado): ' + nucos(0));
+  ok(nucos(1) === '0002,0003,1427', 'PER-2 tiene el 1427 (ID), el 0002 (el ID manda sobre el número) y el 0003 («A / B» con «200 / 300»): ' + nucos(1));
+  ok(r.porPersona[2] === r.porPersona[0] && r.porPersona[1] !== r.porPersona[0], 'la misma PER-1 en dos renglones comparte; PER-2 no');
+  const h0 = r.porPersona[0].hologramas.vigentes;
+  const h1 = r.porPersona[1].hologramas.vigentes;
+  ok(h0.length === 1 && h1.length === 1 && h0[0]._nombreRepetido && h1[0]._nombreRepetido && h0[0]._de === h1[0]._de,
+    'el holograma sin ID ni número se le muestra a las dos, marcado «nombre repetido» (el mismo original)');
+  ok(ctx.totalRepetidos(r.porPersona[0]) === 1 && ctx.totalRepetidos(r.porPersona[1]) === 1, 'cada una cuenta 1 por revisar');
+  ok(!r.porPersona[1].lineas.vigentes.some((x) => x._nombreRepetido), 'lo que sí se desempató no se marca');
 }
 
 console.log('7. Un módulo sin permiso (null) no se reparte');

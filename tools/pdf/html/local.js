@@ -48,7 +48,16 @@ const ADAPTADORES = {
   'inspeccion-celular': lineas('datosInspeccionHtml'),
   'inspeccion-celular-checklist': lineas('datosInspeccionHtml'),
   'inspeccion-vehicular': inspeccionVehicular,
+  'carta-cancelacion': cartaCancelacion,
 };
+
+// La carta de cancelación de Líneas: el caso trae los renglones de la bandeja (FILAS), la fecha (aaaa-mm-dd) y quien firma;
+// se arman con el mismo LineasCarta.agrupar + datosCarta de «Preparar carta» (una carta por caso: la primera del grupo)
+function cartaCancelacion() {
+  vm.runInContext(['LineasUtil', 'LineasCarta'].map((m) => leer('src/services/lineas/' + m + '.gs')).join('\n') +
+    '\nthis.LineasCarta = LineasCarta;', ctx);
+  return (d) => ctx.LineasCarta.datosCarta(ctx.LineasCarta.agrupar(d.FILAS).grupos[0], d.FECHA, d.FIRMANTE);
+}
 
 // La inspección vehicular: el catálogo del tipo (InspeccionHtml.datos) y, como hace InspeccionesService, el dibujo en
 // blanco del tipo (.cache/inspeccion-vehicular/diagramas/<TIPO>) para la vista que no se rayó. Las fechas como las

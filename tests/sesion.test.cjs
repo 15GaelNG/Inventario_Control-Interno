@@ -197,3 +197,27 @@ test('copia: si la copia falla, entrar y usar la app sigue funcionando como ante
   assert.equal(vale(A, token), true);
   assert.ok(avisos.some((m) => m.includes('no se pudo guardar la copia')));
 });
+
+test('la pantalla avisa con la misma inactividad que el servidor (13-nov: el triple, 180 min y 24 h)', () => {
+  const raiz = path.join(__dirname, '..');
+  const config = fs.readFileSync(path.join(raiz, 'src/config/Config.gs'), 'utf8');
+  const pantalla = fs.readFileSync(path.join(raiz, 'src/html/js/app-seguridad.html'), 'utf8');
+  const servidor = Number((config.match(/SESION_INACTIVIDAD_MIN:\s*(\d+)/) || [])[1]);
+  const cliente = Number((pantalla.match(/const INACTIVIDAD_MIN = (\d+);/) || [])[1]);
+  assert.equal(servidor, 180);
+  assert.equal(Number((config.match(/SESION_DURACION_HORAS:\s*(\d+)/) || [])[1]), 24);
+  assert.equal(cliente, servidor, 'app-seguridad.html y Config.gs dicen lo mismo');
+  assert.ok(servidor * 60 <= 21600, 'CacheService guarda a lo más 6 h');
+});
+
+test('la pantalla avisa con la misma inactividad que el servidor (13-nov: el triple, 180 min y 24 h)', () => {
+  const raiz = path.join(__dirname, '..');
+  const config = fs.readFileSync(path.join(raiz, 'src/config/Config.gs'), 'utf8');
+  const pantalla = fs.readFileSync(path.join(raiz, 'src/html/js/app-seguridad.html'), 'utf8');
+  const servidor = Number((config.match(/SESION_INACTIVIDAD_MIN:\s*(\d+)/) || [])[1]);
+  const cliente = Number((pantalla.match(/const INACTIVIDAD_MIN = (\d+);/) || [])[1]);
+  assert.equal(servidor, 180);
+  assert.equal(Number((config.match(/SESION_DURACION_HORAS:\s*(\d+)/) || [])[1]), 24);
+  assert.equal(cliente, servidor, 'app-seguridad.html y Config.gs dicen lo mismo');
+  assert.ok(servidor * 60 <= 21600, 'CacheService guarda a lo más 6 h');
+});

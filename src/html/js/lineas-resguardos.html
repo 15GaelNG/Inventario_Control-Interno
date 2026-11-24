@@ -14,8 +14,10 @@
      * El botón azul de Líneas que abre Drive (externo, como enlaceDrive de lineas.html), del tamaño chico de las tablas
      * (ln-btn-chico, como el «Ver» de la INE): «Ver carta», o «Carta 1» y «Carta 2» si se pidió en varias; «—» sin carta.
      */
-    function ligasCarta(v) {
+    function ligasCarta(v, f) {
       const ligas = ligasDe(v);
+      // Lo que todavía espera su carta lo dice (13-nov): es lo que sigue en la guía
+      if (!ligas.length && f && !f.ANTERIOR && ['POR FIRMAR', 'CARTA FIRMADA'].indexOf(f.CANCELACION) >= 0) return '<span class="ln-chip ambar">Falta</span>';
       if (!ligas.length) return '<span class="ln-tenue">—</span>';
       return ligas.map((u, i) => '<a class="externo ln-btn-chico" href="' + esc(u) + '" target="_blank" rel="noopener" title="Abrir la carta en Drive">' +
         icono('file-text') + ' ' + (ligas.length > 1 ? 'Carta ' + (i + 1) : 'Ver carta') + ' ' + icono('external-link', 'ln-icon-sm') + '</a>').join(' ');
@@ -91,20 +93,23 @@
      * Excel por asesor (usuario, 22-oct; botón aparte del «Exportar a Excel» de la tabla, que da la base): una hoja por
      * compañía y asesor («TELCEL - ALFREDO», «ATT - KARLA») con las POR FIRMAR, en la tabla que Pau pega en la carta y
      * el correo al asesor: REGIÓN, CUENTA (la cuenta padre), NÚMERO, RAZÓN SOCIAL (la del proveedor) y ASESOR. Igual para
-     * Telcel y AT&T. Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
+     * Telcel y AT&T. Al final, solo en el Excel, FIN DE ADENDUM (usuario, 19-nov; el correo y la carta siguen con las
+     * cinco). Regresa [{ nombre, titulos, filas }]; sin POR FIRMAR, [].
      */
-    const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
+    // CUENTA HIJA junto a la padre (Telcel la pidió en las tablas de cancelación, 20-nov; para los dos proveedores)
+    const COLUMNAS_ASESOR = [['REGION', 'REGIÓN'], ['CUENTA_PADRE', 'CUENTA'], ['CUENTA_HIJA', 'CUENTA HIJA'], ['NUMERO', 'NÚMERO'], ['RAZON_SOCIAL', 'RAZÓN SOCIAL'], ['ASESOR', 'ASESOR']];
+    const COLUMNAS_EXCEL_ASESOR = COLUMNAS_ASESOR.concat([['FIN_PLAN', 'FIN DE ADENDUM']]);
     function hojasPorAsesor(filas) {
       const grupos = {};
       filas.filter((f) => f.CANCELACION === 'POR FIRMAR').forEach((f) => {
         const compania = String(f.COMPANIA || 'SIN COMPAÑÍA').toUpperCase().replace(/&/g, '');
         const nombre = compania + ' - ' + (String(f.ASESOR || '').toUpperCase() || 'SIN ASESOR');
-        (grupos[nombre] = grupos[nombre] || []).push(COLUMNAS_ASESOR.map((c) => String(f[c[0]] || '')));
+        (grupos[nombre] = grupos[nombre] || []).push(COLUMNAS_EXCEL_ASESOR.map((c) => String(f[c[0]] || '')));
       });
       // Telcel primero, luego AT&T y lo demás; dentro, por asesor
       const orden = (n) => (/^TELCEL/.test(n) ? 0 : /^ATT/.test(n) ? 1 : 2);
       return Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b))
-        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_ASESOR.map((c) => c[1]), filas: grupos[n] }));
+        .map((n) => ({ nombre: n.slice(0, 31), titulos: COLUMNAS_EXCEL_ASESOR.map((c) => c[1]), filas: grupos[n] }));
     }
 
     // xlsx-js-style: SheetJS con estilos de celda (el de ExportarExcel no los escribe). Se carga solo para este Excel y
@@ -175,6 +180,11 @@
           { campo: 'ESTATUS_EQUIPO', titulo: 'Estatus del equipo', tipo: 'lista', render: (v) => chip(v) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
           { campo: 'ESTATUS_LINEA', titulo: 'Estatus de la línea', tipo: 'lista', render: (v) => chip(v) },
+          // Cómo está HOY el equipo (usuario, 20-nov, opción 2): lo de arriba es el trámite (en lo cerrado, como quedó al
+          // entregarlo); esto sigue al inventario aunque ya se haya entregado, p. ej. con la línea que Líneas le asignó después
+          { campo: 'ESTATUS_EQUIPO_HOY', titulo: 'Estatus del equipo hoy', tipo: 'lista', render: (v) => chip(v) },
+          { campo: 'NUMERO_HOY', titulo: 'Línea hoy', tipo: 'texto', render: (v) => (v ? '<span class="ln-mono">' + esc(v) + '</span>' : '<span class="ln-tenue">Sin línea</span>') },
+          { campo: 'ESTATUS_LINEA_HOY', titulo: 'Estatus de la línea hoy', tipo: 'lista', render: (v) => chip(v) },
           // La compañía de su línea (usuario, 5-nov); ya venía en el renglón, como en Cancelaciones
           // Sin línea: badge con la compañía de la última que tuvo (ULTIMA_COMPANIA, usuario, 6-nov)
           // El valor también (no solo el badge): el detalle no la manda a «sin dato» y el filtro y el Excel dicen lo mismo
@@ -203,6 +213,11 @@
             render: (v, f) => (v ? esc(fechaTabla(v)) : (f && f.ANTERIOR ? 'Sin fecha' : guion(''))) },
           { campo: 'NUMERO', titulo: 'Línea', tipo: 'texto', render: (v) => '<span class="ln-mono ln-fuerte">' + guion(v) + '</span>' },
           { campo: 'CANCELACION', titulo: 'Cancelación', tipo: 'lista', render: (v) => chip(v) },
+          // Junto a la fase (13-nov: es lo que mueve la guía). La carta al proveedor (LINK CARTA DE CANCELACION del inventario; usuario, 9-nov): «Carta 1 · Carta 2» si se pidió
+          // en varias. Como «Evidencia» en el Panorama de Líneas
+          { campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: (v, f) => ligasCarta(v, f) },
+          // Con la carta enviada, lo que dice la factura del proveedor (13-nov, LineasFacturas.gs)
+          { campo: 'COBRO', titulo: 'Factura', tipo: 'lista', valor: (f) => (cobroDe(f) ? cobroDe(f).texto : ''), render: (v, f) => celdaCobro(f) },
           // SISTEMA (pasó por el panel) o ANTERIOR AL SISTEMA (cancelada antes, o directo sin panel): solo se muestra
           { campo: 'ORIGEN', titulo: 'Origen', tipo: 'lista' },
           // LINEA VENCIDA o CANCELACION ANTICIPADA (usuario, 13-oct)
@@ -212,6 +227,8 @@
           // Como en el correo al asesor (usuario, 22-oct): la región sale de la lada (LineasUtil.regionDeNumero)
           { campo: 'REGION', titulo: 'Región', tipo: 'lista' },
           { campo: 'CUENTA_PADRE', titulo: 'Cuenta padre', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
+          // Telcel la pidió en las tablas de cancelación (20-nov): la columna CUENTA de la línea
+          { campo: 'CUENTA_HIJA', titulo: 'Cuenta hija', tipo: 'texto', render: (v) => '<span class="ln-mono">' + guion(v) + '</span>' },
           { campo: 'RAZON_SOCIAL', titulo: 'Razón social', tipo: 'lista' },
           { campo: 'FIN_PLAN', titulo: 'Fin del adendum', tipo: 'texto' },
           { campo: 'ASESOR', titulo: 'Asesor', tipo: 'lista' },
@@ -219,9 +236,6 @@
           { campo: 'CARTA_ENVIADA_EN', titulo: 'Carta enviada', tipo: 'lnFechaHora' },
           { campo: 'CANCELADA_EN', titulo: 'Cancelada', tipo: 'lnFechaHora' },
           { campo: 'CANCELACION_ASUNTO', titulo: 'Asunto / correo', tipo: 'texto' },
-          // La carta al proveedor (LINK CARTA DE CANCELACION del inventario; usuario, 9-nov): «Carta 1 · Carta 2» si se pidió
-          // en varias. Como «Evidencia» en el Panorama de Líneas
-          { campo: 'CARTAS', titulo: 'Carta', tipo: 'texto', render: (v) => ligasCarta(v) },
           { campo: 'MOTIVO', titulo: 'Comentario', tipo: 'texto', visible: false },
           { campo: 'ESTADO', titulo: 'Equipo (resguardo)', tipo: 'lista', render: (v) => chip(v), visible: false },
           { campo: 'SOLICITO_NOMBRE', titulo: 'Mandó', tipo: 'lista', visible: false },
@@ -262,6 +276,9 @@
       // Cancelaciones: la fase solo avanza, y se puede brincar hacia adelante (usuario, 22-oct)
       const enFase = (fases) => (filas) => filas.every((f) => fases.indexOf(f.CANCELACION) >= 0);
       const EN_CURSO = ['POR FIRMAR', 'CARTA FIRMADA', 'CARTA ENVIADA'];
+      // «Preparar carta» (11-nov): lo que todavía espera su carta, y su proveedor (como LineasCarta.proveedorDeCompania)
+      const esperaCarta = (f) => !f.ANTERIOR && ['POR FIRMAR', 'CARTA FIRMADA'].indexOf(f.CANCELACION) >= 0 && !f.CARTA;
+      const proveedorCarta = (c) => (/TELCEL/i.test(c || '') ? 'TELCEL' : /^\s*AT\s*&?\s*T\b/i.test(c || '') ? 'AT&T' : '');
       const ACCIONES = {
         RESGUARDOS: [
           { icono: 'package-check', texto: 'Recibir', titulo: 'Confirma que recibiste físicamente los equipos', minimo: 1, visible: porRecibir,
@@ -284,13 +301,16 @@
               campos: [{ clave: 'comentario', etiqueta: 'Comentario', requerido: true, area: true, minimo: 4 }], boton: 'Marcar desechado', hecho: 'Desechados', inventario: true, espera: 'Marcando ' + miles(filas.length) + ' equipo(s) como desechados' }) },
         ],
         CANCELACIONES: [
+          // El borrador de lo seleccionado (11-nov): no cambia la fase
+          { icono: 'file-pen-line', texto: 'Preparar carta', titulo: 'El borrador de la carta de cancelación en PDF; no cambia su fase', minimo: 1,
+            visible: (filas) => filas.every(esperaCarta), alHacer: (filas) => prepararCarta(filas) },
           { icono: 'signature', texto: 'Carta firmada', titulo: 'La carta de cancelación ya está firmada', minimo: 1, visible: enFase(['POR FIRMAR']),
             alHacer: (filas) => paso('CARTA_FIRMADA', filas, { titulo: 'Carta firmada', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA FIRMADA.',
               campos: [{ clave: 'asesor', etiqueta: 'Asesor', valor: filas[0].ASESOR || '', opciones: ['KARLA', 'WILBERTO', 'ALFREDO'].indexOf(filas[0].ASESOR) >= 0 || !filas[0].ASESOR ? ['KARLA', 'WILBERTO', 'ALFREDO'] : null }],
               boton: 'Guardar', hecho: 'Cartas firmadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) firmada(s)' }) },
-          { icono: 'send', texto: 'Carta enviada', titulo: 'La cancelación ya se pidió al proveedor', minimo: 1, visible: enFase(['POR FIRMAR', 'CARTA FIRMADA']),
-            alHacer: (filas) => paso('CARTA_ENVIADA', filas, { titulo: 'Carta enviada al proveedor', mensaje: miles(filas.length) + ' línea(s) pasan a CARTA ENVIADA.',
-              campos: [{ clave: 'asunto', etiqueta: 'Asunto del correo (opcional)' }], boton: 'Guardar', hecho: 'Cartas enviadas', espera: 'Guardando ' + miles(filas.length) + ' carta(s) enviada(s)' }) },
+          // Un solo camino a CARTA ENVIADA (usuario, 11-nov): subir la carta. Lo elegido sale marcado en la vista previa
+          { icono: 'file-up', texto: 'Subir carta', titulo: 'Sube la carta que mandaste: estas líneas pasan a CARTA ENVIADA con ella', minimo: 1, visible: enFase(['POR FIRMAR', 'CARTA FIRMADA']),
+            alHacer: (filas) => elegirCarta(filas.map((f) => f.ID)) },
           { icono: 'phone-off', texto: 'Confirmar cancelada', titulo: 'El proveedor confirmó: la línea queda CANCELADA y el NUCO pasa a solo EQUIPO', minimo: 1, peligro: true, visible: enFase(EN_CURSO),
             alHacer: (filas) => paso('CANCELADA', filas, { titulo: '¿Confirmar la cancelación de ' + miles(filas.length) + ' línea(s)?',
               mensaje: 'En el inventario la línea queda CANCELADA, el NUCO pasa a solo EQUIPO y el número queda en su historial.', boton: 'Confirmar cancelada',
@@ -356,10 +376,10 @@
         ] : [
           // Al pasar el mouse, qué suma y cuánto es cada parte (lo pidió el área, 10-nov)
           { icono: 'phone-off', valor: miles(filas.length), etiqueta: 'Proyección total de cancelaciones', titulo: desgloseTotal(filas) },
-          { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] } } },
+          // COBRO: null, para que cualquier recuadro quite el filtro de la factura que pone el paso 4 de la guía
+          { icono: 'pen-line', valor: miles(cuenta('CANCELACION', 'POR FIRMAR')), etiqueta: 'Por firmar', clase: 'stat-tile-warn', filtros: { CANCELACION: { valores: ['POR FIRMAR'] }, COBRO: null } },
           { icono: 'signature', valor: miles(cuenta('CANCELACION', 'CARTA FIRMADA')), etiqueta: 'Carta firmada', filtros: { CANCELACION: { valores: ['CARTA FIRMADA'] } } },
-          { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },
-          { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
+          { icono: 'send', valor: miles(cuenta('CANCELACION', 'CARTA ENVIADA')), etiqueta: 'Carta enviada', filtros: { CANCELACION: { valores: ['CARTA ENVIADA'] } } },          { icono: 'circle-check', valor: miles(cuenta('CANCELACION', 'CANCELADA')), etiqueta: 'Canceladas', clase: 'stat-tile-ok', filtros: { CANCELACION: { valores: ['CANCELADA'] } } },
           { icono: 'undo-2', valor: miles(cuenta('CANCELACION', 'RETIRADA')), etiqueta: 'Retiradas', filtros: { CANCELACION: { valores: ['RETIRADA'] } } },
           // Las canceladas antes del sistema (o directo, sin panel): solo para verlas (usuario, 9-nov)
           { icono: 'history', valor: miles(cuenta('ORIGEN', 'ANTERIOR AL SISTEMA')), etiqueta: 'Anteriores al sistema', filtros: { ORIGEN: { valores: ['ANTERIOR AL SISTEMA'] } } },
@@ -393,6 +413,381 @@
         tabla.setDatos(filasVista());
         $('#lnr-solo-lectura', raiz).hidden = puede || opera;
         if (vista === 'CANCELACIONES') botonBaseCancelaciones();
+        // Preparar y Subir carta viven en la guía de arriba (13-nov), no en la barra de la tabla
+        if (puede) activarGuia();
+        pintarGuia();
+      }
+
+      // ------------------------------------------------------------ Las cartas de cancelación: la guía (13-nov)
+      //
+      // Un solo camino (usuario, 11-nov): 1) el sistema prepara el borrador, 2) Pau lo firma y lo manda desde su correo,
+      // 3) lo sube y sus líneas pasan a CARTA ENVIADA con la carta, 4) la factura del proveedor dice cuándo confirmar. La
+      // franja de arriba de la tabla (pintarGuia) lleva el botón de cada paso y cuenta lo que espera en cada uno; el paso
+      // que toca va resaltado.
+
+      let recienPreparada = false; // después de «Preparar carta», lo que toca es subirla
+      let entradaCarta = null;     // el selector de PDF (uno: la franja y la acción de la tabla lo comparten)
+      let preseleccion = [];       // lo elegido en la tabla al pulsar «Subir carta»: sale marcado en la vista previa
+      const CLAVE_FIRMANTE = 'lnr-carta-firmante';
+      const cuantas = (n, uno, varios) => miles(n) + ' ' + (n === 1 ? uno : varios);
+
+      /** Lo que dice la factura de una línea con la carta enviada (LineasFacturas.cobro). */
+      const COBRO = {
+        SE_COBRA: { texto: 'Se sigue cobrando', clase: 'rojo', icono: 'circle-alert' },
+        YA_NO: { texto: 'Ya no aparece', clase: 'verde', icono: 'circle-check' },
+        SIN_CORTE: { texto: 'Esperando la factura', clase: '', icono: 'clock' },
+        SIN_DATOS: { texto: 'Sin factura', clase: '', icono: 'minus' },
+      };
+      const cobroDe = (f) => (f && f.COBRO && COBRO[f.COBRO.estado]) || null;
+      const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+      const mesCorto = (ym) => { const m = String(ym || '').match(/^(\d{4})-(\d{2})/); return m ? MESES_CORTOS[Number(m[2]) - 1] + ' ' + m[1] : ''; };
+      function celdaCobro(f) {
+        const c = cobroDe(f);
+        if (!c) return guion('');
+        const x = f.COBRO;
+        const pie = x.estado === 'SE_COBRA' ? (x.monto !== undefined ? Formato.moneda(x.monto) + ' en ' : 'En ') + mesCorto(x.mes)
+          : x.estado === 'YA_NO' ? 'Desde ' + mesCorto(x.mes) : x.corte ? 'Último corte: ' + mesCorto(x.mes) : '';
+        return '<span class="ln-chip ' + c.clase + '">' + icono(c.icono, 'ln-icon-sm') + ' ' + esc(c.texto) + '</span>' +
+          (pie ? '<br><span class="ln-tenue">' + esc(pie) + '</span>' : '');
+      }
+
+      function pintarGuia() {
+        const caja = $('#lnr-guia', raiz);
+        if (!caja) return;
+        const filas = vista === 'CANCELACIONES' ? filasVista() : [];
+        const sinCarta = filas.filter(esperaCarta).length;
+        // Solo cuando hay líneas que esperan su carta (usuario, 13-nov: si no, ni aparece). La columna Factura y sus filtros
+        // siguen en la tabla, y «Subir carta» también es acción de lo seleccionado
+        const ver = vista === 'CANCELACIONES' && !!(datos && datos.puedeAprobar) && (sinCarta > 0 || recienPreparada);
+        caja.hidden = !ver;
+        if (!ver) { caja.innerHTML = ''; return; }
+        const enviadas = filas.filter((f) => !f.ANTERIOR && f.CANCELACION === 'CARTA ENVIADA');
+        const listas = enviadas.filter((f) => f.COBRO && f.COBRO.estado === 'YA_NO').length;
+        const cobran = enviadas.filter((f) => f.COBRO && f.COBRO.estado === 'SE_COBRA').length;
+        const toca = recienPreparada ? 3 : sinCarta ? 1 : listas || cobran ? 4 : 0;
+        const boton = (n, accion, ic, texto, apagado) => '<button type="button" class="' + (toca === n ? 'primary' : 'secondary') + '" data-guia="' + accion + '"' +
+          (apagado ? ' disabled' : '') + '>' + icono(ic) + ' ' + texto + '</button>';
+        const paso = (n, ic, titulo, texto, botones) => '<li class="lnr-paso' + (toca === n ? ' lnr-paso-toca' : '') + '"' + (toca === n ? ' aria-current="step"' : '') + '>' +
+          '<div class="lnr-paso-cabeza"><span class="lnr-paso-num">' + n + '</span><span class="lnr-paso-titulo">' + titulo + '</span>' + icono(ic, 'lnr-paso-icono') + '</div>' +
+          '<p class="lnr-paso-texto">' + texto + '</p>' + (botones ? '<div class="lnr-paso-botones">' + botones + '</div>' : '') + '</li>';
+        const uno = (n, singular, plural) => (n === 1 ? singular : plural);
+        const factura = listas || cobran
+          ? (listas ? '<b>' + miles(listas) + '</b> ' + uno(listas, 'ya no aparece en la factura: confírmala.', 'ya no aparecen en la factura: confírmalas.') : '') +
+            (cobran ? (listas ? ' ' : '') + '<b class="lnr-alerta">' + miles(cobran) + '</b> ' + uno(cobran, 'se sigue cobrando.', 'se siguen cobrando.') : '')
+          : enviadas.length ? '<b>' + miles(enviadas.length) + '</b> ' + uno(enviadas.length, 'tiene', 'tienen') + ' la carta enviada; la factura dirá cuándo confirmar.'
+            : 'Nada en espera de la factura.';
+        caja.innerHTML =
+          paso(1, 'file-pen-line', 'Prepara la carta', sinCarta ? '<b>' + miles(sinCarta) + '</b> ' + uno(sinCarta, 'línea espera', 'líneas esperan') + ' su carta. Sale el borrador en PDF; no cambia nada.'
+            : 'Ninguna línea espera su carta.', boton(1, 'preparar', 'file-pen-line', 'Preparar carta', !sinCarta)) +
+          paso(2, 'mail', 'Fírmala y mándala', 'Desde tu correo, al asesor de la compañía. El sistema no la manda.', '') +
+          paso(3, 'file-up', 'Súbela', 'El PDF que mandaste: sus líneas pasan a <b>CARTA ENVIADA</b> con la carta.', boton(3, 'subir', 'file-up', 'Subir carta')) +
+          paso(4, 'receipt-text', 'Confirma con la factura', factura,
+            (listas ? boton(4, 'listas', 'list-checks', 'Ver listas') : '') + (cobran ? '<button type="button" class="secondary" data-guia="cobran">' + icono('circle-alert') + ' Ver cobradas</button>' : ''));
+        refreshIcons();
+      }
+
+      function activarGuia() {
+        const caja = $('#lnr-guia', raiz);
+        if (!caja || caja.dataset.listo) return;
+        caja.dataset.listo = '1';
+        entradaCarta = document.createElement('input');
+        entradaCarta.type = 'file';
+        entradaCarta.accept = 'application/pdf,.pdf';
+        entradaCarta.multiple = true;
+        entradaCarta.hidden = true;
+        raiz.appendChild(entradaCarta);
+        entradaCarta.addEventListener('change', () => {
+          const archivos = Array.from(entradaCarta.files || []);
+          const ids = preseleccion;
+          preseleccion = [];
+          if (archivos.length) subirCartas(archivos, ids);
+        });
+        caja.addEventListener('click', (ev) => {
+          const b = ev.target.closest('[data-guia]');
+          if (!b || b.disabled) return;
+          const que = b.dataset.guia;
+          if (que === 'preparar') prepararCarta(tabla && tabla.getFiltradas().some(esperaCarta) ? tabla.getFiltradas() : filasVista());
+          else if (que === 'subir') elegirCarta([]);
+          else if (que === 'listas' || que === 'cobran') filtrarCobro(que === 'listas' ? 'YA_NO' : 'SE_COBRA');
+        });
+      }
+
+      /** Abre el selector de PDF; `ids`, lo elegido en la tabla (sale marcado). */
+      function elegirCarta(ids) {
+        if (!entradaCarta) activarGuia();
+        preseleccion = ids || [];
+        entradaCarta.value = '';
+        entradaCarta.click();
+      }
+
+      function filtrarCobro(estado) {
+        if (!tabla) return;
+        tabla.setFiltro('CANCELACION', { valores: ['CARTA ENVIADA'] });
+        tabla.setFiltro('COBRO', { valores: [COBRO[estado].texto] });
+      }
+
+      // Qué le pasa a cada número de la carta (LineasResguardos.vistaCarta): se marca solo lo que cambia
+      const CARTA_ESTADOS = {
+        AVANZA: { marcar: true, texto: () => 'Pasa a CARTA ENVIADA' },
+        LIGA: { marcar: true, texto: (x) => 'Se le liga la carta (sigue ' + String(x.fase || '').toLowerCase() + ')' },
+        YA: { marcar: false, texto: (x) => (x.conCarta ? 'Ya tiene su carta' : 'Se retiró su cancelación') },
+        FUERA: { marcar: false, texto: (x) => 'No está en Cancelaciones' + (x.estatus ? ' · ' + x.estatus : '') },
+        NO_INVENTARIO: { marcar: false, texto: () => 'No está en el inventario' },
+      };
+      const hoyIso = () => { const d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); };
+
+      function filaCarta(x) {
+        const e = CARTA_ESTADOS[x.estado] || CARTA_ESTADOS.NO_INVENTARIO;
+        const linea = [x.compania, x.razon, x.nuco ? 'NUCO ' + x.nuco : ''].filter(Boolean).map(esc).join(' · ');
+        return '<tr' + (e.marcar ? '' : ' class="ln-tenue"') + '><td>' + (x.id ? '<input type="checkbox" data-carta-id="' + esc(x.id) + '"' +
+          (e.marcar ? ' checked' : ' disabled') + ' aria-label="Línea ' + esc(x.numero) + '" />' : '') + '</td>' +
+          '<td><span class="ln-mono ln-fuerte" data-carta-numero>' + esc(x.numero) + '</span>' + (linea ? '<br><span class="ln-tenue">' + linea + '</span>' : '') + '</td>' +
+          '<td>' + (x.fase ? chip(x.fase) : guion('')) + '</td><td>' + esc(e.texto(x)) +
+          (x.avisos || []).map((a) => '<br><span class="ln-chip ambar">' + icono('triangle-alert', 'ln-icon-sm') + ' ' + esc(a) + '</span>').join('') + '</td></tr>';
+      }
+
+      /** Un renglón de la bandeja como lo regresaría vistaCarta (para agregarlo a mano o porque estaba seleccionado). */
+      function comoNumeroDeCarta(f, aviso) {
+        const conCarta = ligasDe(f.CARTAS).length > 0;
+        const estado = ['POR FIRMAR', 'CARTA FIRMADA'].indexOf(f.CANCELACION) >= 0 ? 'AVANZA'
+          : ['CARTA ENVIADA', 'CANCELADA'].indexOf(f.CANCELACION) >= 0 && !conCarta ? 'LIGA' : 'YA';
+        return { numero: String(f.NUMERO || '').replace(/\D/g, '').slice(-10), estado: estado, id: f.ID, fase: f.CANCELACION,
+          compania: f.COMPANIA, razon: f.RAZON_SOCIAL, nuco: f.NUCO, conCarta: conCarta, avisos: aviso ? [aviso] : [] };
+      }
+
+      function vistaCarta(v, ids) {
+        const n = (v.numeros || []).slice();
+        // Lo elegido en la tabla que la carta no trae: se agrega marcado, con el aviso (que Pau confirme que sí va)
+        const leidos = n.map((x) => x.id).filter(Boolean);
+        (ids || []).forEach((id) => {
+          if (leidos.indexOf(id) >= 0) return;
+          const f = filasVista().filter((x) => x.ID === id)[0];
+          if (f) n.push(comoNumeroDeCarta(f, 'Lo elegiste en la tabla, pero no viene en la carta'));
+        });
+        const cambian = n.filter((x) => (CARTA_ESTADOS[x.estado] || {}).marcar).length;
+        const avisos = [];
+        if (v.duplicada) avisos.push('Esta misma carta ya se subió' + (v.duplicada.fecha ? ' (enviada el ' + fechaTabla(v.duplicada.fecha) + ')' : '') +
+          ' para ' + cuantas(v.duplicada.lineas, 'línea', 'líneas') + '.');
+        if (v.sinTexto) avisos.push('No se pudo leer texto en el PDF: agrega los números a mano.');
+        else if (!(v.numeros || []).length) avisos.push('No se encontraron números de 10 dígitos en la carta: agrégalos a mano.');
+        return '<p class="ln-quitar-texto">' + (v.proveedor ? 'Carta para <b>' + esc(v.proveedor) + '</b> · ' : '') + cuantas((v.numeros || []).length, 'número leído', 'números leídos') + ' · ' +
+          '<b>' + miles(cambian) + '</b> cambian.</p>' +
+          avisos.map((a) => '<p class="ln-chip ambar">' + icono('triangle-alert', 'ln-icon-sm') + ' ' + esc(a) + '</p>').join('') +
+          '<div class="form-rejilla" data-columnas="2"><div class="field"><label for="lnr-carta-fecha">Fecha de envío</label>' +
+          '<input type="date" id="lnr-carta-fecha" data-carta-fecha value="' + esc(v.fecha || hoyIso()) + '" max="' + hoyIso() + '" /></div>' +
+          '<div class="field"><label for="lnr-carta-asunto">Asunto del correo (opcional)</label><input type="text" id="lnr-carta-asunto" data-carta-asunto autocomplete="off" /></div></div>' +
+          '<div class="lnr-tabla-scroll" data-scroll-x><table class="ln-quitar-tabla ln-carta-tabla"><thead><tr><th></th><th>Línea</th><th>Hoy</th><th>Qué pasa</th></tr></thead><tbody data-carta-filas>' +
+          n.map(filaCarta).join('') + '</tbody></table></div>' +
+          '<div class="field"><label for="lnr-carta-otro">¿Falta un número? Agrégalo</label><div class="ln-carta-agregar">' +
+          '<input type="text" id="lnr-carta-otro" data-carta-otro inputmode="numeric" autocomplete="off" placeholder="10 dígitos" />' +
+          '<button type="button" class="secondary" data-carta-agregar>' + icono('plus') + ' Agregar</button></div>' +
+          '<div class="error-msg" data-carta-otro-error hidden></div></div>';
+      }
+
+      /** «Agregar»: un número que la lectura no vio, buscado en lo que ya trae la bandeja (el servidor lo vuelve a revisar). */
+      function activarVistaCarta(div) {
+        const entrada = $('[data-carta-otro]', div);
+        const error = $('[data-carta-otro-error]', div);
+        const decir = (t) => { error.textContent = t; error.hidden = !t; };
+        const agregar = () => {
+          const n = String(entrada.value || '').replace(/\D/g, '').slice(-10);
+          if (n.length !== 10) { decir('Escribe los 10 dígitos de la línea.'); return; }
+          if (Array.from(div.querySelectorAll('[data-carta-numero]')).some((s) => s.textContent === n)) { decir('Ese número ya está en la lista.'); return; }
+          const f = filasVista().filter((x) => !x.ANTERIOR && String(x.NUMERO || '').replace(/\D/g, '') === n)
+            .sort((a, b) => (EN_CURSO.indexOf(b.CANCELACION) >= 0) - (EN_CURSO.indexOf(a.CANCELACION) >= 0))[0];
+          if (!f) { decir('Ese número no está en Cancelaciones.'); return; }
+          decir('');
+          $('[data-carta-filas]', div).insertAdjacentHTML('beforeend', filaCarta(comoNumeroDeCarta(f)));
+          entrada.value = '';
+          refreshIcons();
+        };
+        $('[data-carta-agregar]', div).addEventListener('click', agregar);
+        entrada.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); agregar(); } });
+      }
+
+      /** Varias cartas: una ventana por PDF, en fila. Al final, una sola recarga de la bandeja. */
+      async function subirCartas(archivos, ids) {
+        let guardadas = 0;
+        for (let i = 0; i < archivos.length; i++) {
+          const r = await subirCarta(archivos[i], { ids: i === 0 ? ids : [], indice: i + 1, total: archivos.length });
+          if (r) guardadas++;
+        }
+        if (!guardadas) return;
+        recienPreparada = false;
+        if (tabla) tabla.limpiarSeleccion();
+        cargar();
+      }
+
+      /** Una carta: la lee el servidor (OCR), dice qué pasa con cada número y, con lo que Pau deja marcado, la guarda. */
+      function subirCarta(archivo, o) {
+        const de = o.total > 1 ? ' (' + o.indice + ' de ' + o.total + ')' : '';
+        if (!/pdf$/i.test(archivo.type || '') && !/\.pdf$/i.test(archivo.name || '')) { Notificar.error(archivo.name + ': la carta tiene que ser un PDF.'); return Promise.resolve(null); }
+        if (archivo.size > 15 * 1024 * 1024) { Notificar.error(archivo.name + ': la carta supera 15 MB.'); return Promise.resolve(null); }
+        let lectura = null;
+        const cuerpo = new Promise((ok, mal) => {
+          const r = new FileReader();
+          r.onload = () => ok(String(r.result).split(',')[1]);
+          r.onerror = () => mal(new Error('No se pudo leer el archivo.'));
+          r.readAsDataURL(archivo);
+        }).then((b64) => llamar('apiLineasLeerCarta', archivo.name, b64)).then((v) => { lectura = v; return vistaCarta(v, o.ids); });
+        return pedirDatos('Subir carta de cancelación' + de, archivo.name, [], 'Guardar carta', {
+          ancho: { tipo: 'CANCELACIONES', icono: 'file-up' }, dentro: raiz, cuerpo: cuerpo, espera: 'Guardando la carta',
+          alCuerpo: activarVistaCarta,
+          leer: (div) => {
+            const marcadas = Array.from(div.querySelectorAll('[data-carta-id]:checked')).map((c) => c.dataset.cartaId);
+            if (!marcadas.length) return { error: 'Marca al menos una línea.' };
+            return { ids: marcadas, fecha: $('[data-carta-fecha]', div).value, asunto: $('[data-carta-asunto]', div).value.trim() };
+          },
+          alConfirmar: (d) => llamar('apiLineasAplicarCarta', lectura.archivoId, d.ids, { fecha: d.fecha, asunto: d.asunto }),
+        }).then((r) => {
+          if (!r) return null;
+          const omitidos = r.omitidos || [];
+          aviso(icono('circle-check') + ' Carta guardada' + (r.nombre ? ' como «' + esc(r.nombre) + '»' : '') + ': ' + cuantas((r.hechos || []).length, 'línea', 'líneas') +
+            (omitidos.length ? ' · ' + omitidos.length + ' sin cambio (' + omitidos.slice(0, 4).map((x) => 'NUCO ' + esc(x.nuco || x.id) + ': ' + esc(x.motivo)).join(' · ') + ')' : '') + '.', 8000);
+          return r;
+        });
+      }
+
+      // ------------------------------------------------------------ «Preparar carta»: el borrador (11-nov)
+      // Una por proveedor + razón social, con la tabla de las líneas. No cambia ninguna fase.
+
+      function leerFirmante() {
+        try { return localStorage.getItem(CLAVE_FIRMANTE) || ''; } catch (e) { return ''; }
+      }
+      function guardarFirmante(nombre) {
+        try { localStorage.setItem(CLAVE_FIRMANTE, nombre); } catch (e) { /* solo es comodidad */ }
+      }
+
+      function vistaPreparar(filas) {
+        const grupos = {};
+        filas.forEach((f) => {
+          const p = proveedorCarta(f.COMPANIA);
+          const clave = p ? p + ' · ' + String(f.RAZON_SOCIAL || 'SIN RAZÓN SOCIAL').toUpperCase() : 'OTRA';
+          (grupos[clave] = grupos[clave] || []).push(f);
+        });
+        // TELCEL primero, luego AT&T; lo de otra compañía al final
+        const orden = (c) => (c === 'OTRA' ? 2 : c.indexOf('TELCEL') === 0 ? 0 : 1);
+        const claves = Object.keys(grupos).sort((a, b) => orden(a) - orden(b) || a.localeCompare(b));
+        const cartas = claves.filter((c) => c !== 'OTRA').length;
+        const bloque = (clave) => {
+          const otra = clave === 'OTRA';
+          return '<tbody><tr class="ln-carta-grupo"><th colspan="4">' + (otra ? 'Otra compañía: no lleva esta carta' : icono('file-text', 'ln-icon-sm') + ' ' + esc(clave) + ' · ' + cuantas(grupos[clave].length, 'línea', 'líneas')) + '</th></tr>' +
+            grupos[clave].map((f) => '<tr' + (otra ? ' class="ln-tenue"' : '') + '><td>' + (otra ? '' : '<input type="checkbox" data-preparar-id="' + esc(f.ID) + '" checked aria-label="Línea ' + esc(f.NUMERO) + '" />') + '</td>' +
+              '<td><span class="ln-mono ln-fuerte">' + esc(f.NUMERO || '') + '</span>' + (f.NUCO ? '<br><span class="ln-tenue">NUCO ' + esc(f.NUCO) + '</span>' : '') + '</td>' +
+              '<td>' + chip(f.CANCELACION) + '</td><td>' + esc(otra ? (f.COMPANIA || 'Sin compañía') : (f.ASESOR || '—')) + '</td></tr>').join('') + '</tbody>';
+        };
+        const firmante = leerFirmante() || (datos && datos.firmanteCarta) || '';
+        return '<p class="ln-quitar-texto">' + (cartas === 1 ? 'Sale <b>1</b> carta' : 'Salen <b>' + miles(cartas) + '</b> cartas') + ': una por compañía y razón social. <b>Las líneas no cambian de fase</b>: cuando la firmes y la mandes desde tu correo, súbela con <b>Subir carta</b>.</p>' +
+          '<div class="form-rejilla" data-columnas="2"><div class="field"><label for="lnr-preparar-fecha">Fecha de la carta</label>' +
+          '<input type="date" id="lnr-preparar-fecha" data-preparar-fecha value="' + esc(hoyIso()) + '" /></div>' +
+          '<div class="field"><label for="lnr-preparar-firma">Quién firma</label><input type="text" id="lnr-preparar-firma" data-preparar-firma autocomplete="off" value="' + esc(firmante) + '" placeholder="Nombre de la apoderada legal" /></div></div>' +
+          '<div class="lnr-tabla-scroll" data-scroll-x><table class="ln-quitar-tabla ln-carta-tabla"><thead><tr><th></th><th>Línea</th><th>Hoy</th><th>Asesor</th></tr></thead>' + claves.map(bloque).join('') + '</table></div>';
+      }
+
+      function prepararCarta(filas) {
+        const candidatas = (filas || []).filter(esperaCarta);
+        if (!candidatas.length) { Notificar.error('No hay líneas POR FIRMAR sin carta con los filtros actuales.'); return; }
+        pedirDatos('Preparar carta de cancelación', cuantas(candidatas.length, 'línea', 'líneas') + ' sin carta', [], 'Generar cartas', {
+          ancho: { tipo: 'CANCELACIONES', icono: 'file-pen-line' }, dentro: raiz, cuerpo: Promise.resolve(vistaPreparar(candidatas)), espera: 'Armando las cartas',
+          leer: (div) => {
+            const ids = Array.from(div.querySelectorAll('[data-preparar-id]:checked')).map((c) => c.dataset.prepararId);
+            if (!ids.length) return { error: 'Marca al menos una línea.' };
+            const fecha = $('[data-preparar-fecha]', div).value;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return { error: 'Elige la fecha de la carta.' };
+            const firmante = $('[data-preparar-firma]', div).value.replace(/\s+/g, ' ').trim();
+            if (firmante.length < 5) return { error: 'Escribe el nombre de quien firma la carta.' };
+            guardarFirmante(firmante);
+            return { ids: ids, fecha: fecha, firmante: firmante };
+          },
+          alConfirmar: (d) => llamar('apiLineasPrepararCarta', d.ids, d.fecha, d.firmante),
+        }).then((r) => {
+          if (!r) return;
+          recienPreparada = true;
+          pintarGuia();
+          cartasListas(r);
+        });
+      }
+
+      function descargarCarta(c) {
+        const bytes = Uint8Array.from(atob(c.base64), (x) => x.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = c.nombre;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+      }
+
+      /**
+       * El cuerpo del correo al asesor: la tabla de la carta como la del Excel «Cancelaciones» (encabezado marino, letra
+       * blanca, bordes). Va a Gmail, no a la pantalla: el color va en atributos de correo (bgcolor, font color), que Gmail y
+       * Outlook respetan al pegar, y no en los tonos del tema.
+       */
+      function correoDeCarta(c) {
+        const celda = 'border:1px solid #000;padding:4px 10px;font-family:Arial,sans-serif;text-align:center;';
+        const titulos = COLUMNAS_ASESOR.map((x) => x[1]); // los del Excel «Cancelaciones», sin el fin de adendum (es solo del Excel)
+        const html = '<p style="font-family:Arial,sans-serif;">Buen día. Les comparto la carta de cancelación de ' +
+          (c.lineas === 1 ? 'la siguiente línea' : 'las siguientes líneas') + ':</p>' +
+          '<table style="border-collapse:collapse;"><tr>' + titulos.map((t) => '<th bgcolor="#002060" style="' + celda + '"><font color="#ffffff">' + t + '</font></th>').join('') + '</tr>' +
+          (c.tabla || []).map((l) => '<tr>' + [l.REGION, l.CUENTA, l.HIJA, l.NUMERO, l.RAZON, l.ASESOR].map((v) => '<td style="' + celda + '">' + esc(v || '') + '</td>').join('') + '</tr>').join('') +
+          '</table>';
+        const texto = titulos.join('\t') + '\n' + (c.tabla || []).map((l) => [l.REGION, l.CUENTA, l.HIJA, l.NUMERO, l.RAZON, l.ASESOR].join('\t')).join('\n');
+        return { html: html, texto: texto };
+      }
+
+      /** Copia como HTML (para pegar en Gmail con formato); si el navegador no deja, con la selección de siempre. */
+      async function copiarHtml(html, texto) {
+        try {
+          if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+            await navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([texto], { type: 'text/plain' }) })]);
+            return true;
+          }
+        } catch (e) { /* en el marco de Apps Script puede no dejar: sigue abajo */ }
+        const caja = document.createElement('div');
+        caja.className = 'lnr-copiar';
+        caja.innerHTML = html;
+        document.body.appendChild(caja);
+        const rango = document.createRange();
+        rango.selectNodeContents(caja);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(rango);
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        sel.removeAllRanges();
+        caja.remove();
+        return ok;
+      }
+
+      /** Las cartas armadas: guardar cada PDF, copiar el correo y el siguiente paso (subirla firmada). */
+      function cartasListas(r) {
+        const cartas = r.cartas || [];
+        const omitidas = r.omitidas || [];
+        const html = (cartas.length ? '<div class="lnr-tabla-scroll" data-scroll-x><table class="ln-quitar-tabla ln-carta-tabla ln-cartas-listas"><thead><tr><th>Carta</th><th></th></tr></thead><tbody>' +
+            cartas.map((c, i) => '<tr><td><b>' + esc(c.proveedor) + '</b> · ' + esc(c.razon) + '<br><span class="ln-tenue">' + cuantas(c.lineas, 'línea', 'líneas') + ' · ' +
+              esc((c.asesores || []).join(', ') || 'Sin asesor') + '</span></td>' +
+              '<td><div class="lnr-carta-botones"><button type="button" class="secondary" data-descargar-carta="' + i + '">' + icono('download') + ' Guardar PDF</button>' +
+              '<button type="button" class="secondary" data-copiar-carta="' + i + '" title="La tabla de la carta, lista para pegar en el correo al asesor">' + icono('copy') + ' Copiar para el correo</button></div></td></tr>').join('') +
+            '</tbody></table></div>' : '<p class="ln-quitar-texto">No salió ninguna carta.</p>') +
+          (omitidas.length ? '<p class="ln-quitar-texto">No entraron ' + miles(omitidas.length) + ': ' + omitidas.slice(0, 8).map((o) => esc(o.numero) + ' (' + esc(o.motivo) + ')').join(' · ') + (omitidas.length > 8 ? '…' : '') + '</p>' : '') +
+          '<ol class="lnr-siguiente"><li>Fírmala y mándala <b>desde tu correo</b> al asesor (pega la tabla con «Copiar para el correo»).</li>' +
+          '<li>Súbela con <b>Subir carta</b>: ahí las líneas pasan a CARTA ENVIADA.</li></ol>';
+        pedirDatos(cartas.length === 1 ? 'Carta lista' : miles(cartas.length) + ' cartas listas', 'Fecha de la carta: ' + String(r.fecha || '').split('-').reverse().join('/'), [], cartas.length > 1 ? 'Guardar todas' : 'Guardar PDF', {
+          ancho: { tipo: 'CANCELACIONES', icono: 'download' }, dentro: raiz, cuerpo: Promise.resolve(html),
+          alCuerpo: (div) => div.addEventListener('click', async (ev) => {
+            const b = ev.target.closest('[data-descargar-carta]');
+            if (b) { descargarCarta(cartas[Number(b.dataset.descargarCarta)]); return; }
+            const c = ev.target.closest('[data-copiar-carta]');
+            if (!c) return;
+            const correo = correoDeCarta(cartas[Number(c.dataset.copiarCarta)]);
+            if (await copiarHtml(correo.html, correo.texto)) Notificar.exito('Tabla copiada: pégala en el correo al asesor.');
+            else Notificar.error('El navegador no dejó copiar: abre el PDF y copia la tabla de ahí.');
+          }),
+          leer: () => (cartas.length ? {} : { error: 'No hay cartas para guardar.' }),
+          alConfirmar: () => { cartas.forEach(descargarCarta); return true; },
+        });
       }
 
       /**
@@ -427,9 +822,15 @@
         });
       }
 
+      // Por la lista con huella (como el índice de Líneas): el vigía de api.html pregunta cada minuto si cambió alguna de
+      // sus hojas y, si cambió, la vuelve a pedir y avisa con «lista-actualizada» (usuario, 19-nov: los estatus no se
+      // actualizaban si se cambiaban en otra pantalla o los cambiaba otra persona)
+      const BANDEJA = 'apiLineasBandejaResguardos';
       function cargar() {
         if (tabla) tabla.setCargando(true);
-        llamar('apiLineasBandejaResguardos').then((texto) => {
+        // Al entrar, con «Actualizar» y después de cada acción se espera al servidor, nunca a la copia guardada
+        invalidarCacheLista(BANDEJA, state.token);
+        callServerListaCacheada(BANDEJA, state.token).then((texto) => {
           if (!vigente()) return;
           datos = JSON.parse(texto);
           crearTabla();
@@ -453,6 +854,14 @@
         if (datos) { crearTabla(); pintarKpis(); }
       });
       $('#lnr-actualizar', raiz).addEventListener('click', cargar);
+      // Llegó distinta (alguien cambió un estatus): se repinta en su lugar, con los mismos filtros, orden y selección
+      escucharLista(BANDEJA, () => callServerListaCacheada(BANDEJA, state.token).then((texto) => {
+        if (!vigente() || !tabla || !datos) return;
+        datos = JSON.parse(texto);
+        tabla.setDatos(filasVista());
+        pintarKpis();
+        pintarGuia();
+      }).catch(() => { /* se queda lo que se ve; la siguiente vuelta del vigía lo intenta otra vez */ }), raiz);
       cargar();
     }
 
