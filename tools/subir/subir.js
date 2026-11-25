@@ -58,17 +58,20 @@ function cuentaClasp_() {
  * o desde la máquina de quien tiene esa cuenta. Con otra, la app correría con la cuenta de esa persona, y
  * si le falta una carpeta o una plantilla falla para todos (8-oct: las inspecciones sin PDF). Otra cuenta
  * solo con --desde-aqui. Desde el 24-nov-2026 `cuentaProd` es auxiliar5datos (Jorge): despliega desde su
- * máquina sin la Action (la de auxiliar6datos se saturaba con otros activadores).
+ * máquina sin la Action (la de auxiliar6datos se saturaba con otros activadores). 25-nov: mientras tanto, también
+ * auxiliar6datos (la Action con su secreto): `cuentaProd` puede ser una lista. La app corre con la de quien despliegue
+ * al último, así que conviene volver a una sola cuando Jorge despliegue siempre.
  */
 function exigirCuentaDeProd_(args) {
   const cuenta = cuentaClasp_();
-  const deProd = !DESTINOS.cuentaProd || cuenta === DESTINOS.cuentaProd.toLowerCase();
+  const permitidas = [].concat(DESTINOS.cuentaProd || []).map((c) => String(c).toLowerCase());
+  const deProd = !permitidas.length || permitidas.includes(cuenta);
   if (!deProd && EN_ACTION) {
     throw new Error('El secreto CLASPRC_JSON es de ' + (cuenta || 'una cuenta que no se pudo leer') + ', no de ' +
-      DESTINOS.cuentaProd + ' (cuentaProd en tools/subir/destinos.json). No se tocó producción.');
+      permitidas.join(' ni de ') + ' (cuentaProd en tools/subir/destinos.json). No se tocó producción.');
   }
   if (!deProd && !args.includes('--desde-aqui')) {
-    throw new Error('Producción corre con ' + DESTINOS.cuentaProd + ' (cuentaProd en tools/subir/destinos.json) y tu ' +
+    throw new Error('Producción corre con ' + permitidas.join(' o ') + ' (cuentaProd en tools/subir/destinos.json) y tu ' +
       'clasp es de ' + (cuenta || 'una cuenta que no se pudo leer') + '. Despliega con esa cuenta; si de verdad tiene ' +
       'que ser con la tuya, agrega --desde-aqui: la app va a correr con TU cuenta.');
   }
