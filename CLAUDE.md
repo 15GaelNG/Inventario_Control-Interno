@@ -459,11 +459,12 @@ puede entrar. Antes de mover los despliegues, quien desplegó corre en el editor
 función que lo use y acepta (para `directory.readonly`, de las fotos: `revisarFotosDirectorio()`).
 
 `node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
-mueve los dos despliegues. **Solo corre en la GitHub Action** (botón "Run workflow" sobre `master`,
-docs/subir-automatico.md): la app corre con la cuenta de quien movió los despliegues
-(`executeAs: USER_DEPLOYING`), y desde la Action es siempre la del secreto `CLASPRC_JSON`. Desde una
-máquina truena salvo con `--desde-aqui` (8-oct: Emmanuel desplegó la v66 desde la suya y las
-inspecciones dejaron de generar PDF). No le pongas `--desde-aqui` sin que la persona lo pida.
+mueve los dos despliegues. **Solo corre con la cuenta `cuentaProd`** de `tools/subir/destinos.json`: la app
+corre con la cuenta de quien movió los despliegues (`executeAs: USER_DEPLOYING`), así que siempre es la misma.
+Desde el 24-nov es auxiliar5datos (Jorge), que despliega desde su máquina; la GitHub Action (botón "Run workflow",
+docs/subir-automatico.md) también sirve si su secreto `CLASPRC_JSON` es de esa cuenta. Con otra cuenta truena salvo
+con `--desde-aqui` (8-oct: Emmanuel desplegó la v66 desde la suya y las inspecciones dejaron de generar PDF). No le
+pongas `--desde-aqui` sin que la persona lo pida.
 
 **Antes de desplegar se revisan los IDs** (`revisionEntorno_` en `Diagnostico.gs`): que cada libro y
 carpeta de Entornos.gs abra, se llame como dicen las rutas que se guardan, la raíz la alcance, nada de prod
