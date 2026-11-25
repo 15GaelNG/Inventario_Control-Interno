@@ -24,10 +24,18 @@ function entorno(opciones) {
     },
     releaseLock: () => { estado.soltadas++; estado.tomado = false; },
   };
-  const contexto = vm.createContext({ LockService: { getScriptLock: () => lock } });
+  // El reloj y el registro, de mentira: cada waitLock/tryLock «tarda» o.espera ms y fn «tarda» o.retiene ms
+  const reloj = { ahora: 0 };
+  const registro = [];
+  const consola = { log: (t) => registro.push(t), error: () => {} };
+  const conTiempo = (fn, ms) => function () { reloj.ahora += ms || 0; return fn.apply(this, arguments); };
+  lock.waitLock = conTiempo(lock.waitLock, o.espera);
+  lock.tryLock = conTiempo(lock.tryLock, o.espera);
+  const contexto = vm.createContext({ LockService: { getScriptLock: () => lock }, console: consola });
+  vm.runInContext('Date.now = () => reloj.ahora;', Object.assign(contexto, { reloj }));
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'Candado.gs'), 'utf8') +
     '\nthis.Candado = Candado;', contexto);
-  return { Candado: contexto.Candado, estado };
+  return { Candado: contexto.Candado, estado, reloj, registro };
 }
 
 let fallas = 0;
@@ -74,6 +82,26 @@ console.log('4. Ocupado por otro');
   ok(msg === 'Ocupado, ya merito.', 'el mensaje se puede cambiar');
   ok(Candado.con(() => 'nunca', { siOcupado: () => 'saltado' }) === 'saltado', 'con siOcupado: regresa lo suyo sin tronar');
   ok(!Candado.tomado(), 'y no queda marcado como tomado');
+}
+
+console.log('5. Bitácora de esperas [candado]');
+{
+  const rapido = entorno();
+  rapido.Candado.con(() => 'rápido');
+  ok(rapido.registro.length === 0, 'lo rápido no escribe nada');
+
+  const lento = entorno({ espera: 1500 });
+  function guardarAlgo() { return lento.Candado.con(() => { lento.reloj.ahora += 2500; return 'ok'; }); }
+  guardarAlgo();
+  ok(lento.registro.length === 1 && /^\[candado\] /.test(lento.registro[0]), 'esperar o retenerlo mucho deja una línea [candado]');
+  ok(/esperó 1500 ms · lo retuvo 2500 ms$/.test(lento.registro[0]), 'con cuánto esperó y cuánto lo retuvo: ' + lento.registro[0]);
+  ok(/guardarAlgo/.test(lento.registro[0]) && !/con|quien_|anotar_/.test(lento.registro[0]), 'dice quién lo pidió, sin las funciones del candado');
+
+  const lleno = entorno({ ocupado: true, espera: 30000 });
+  try { lleno.Candado.con(() => 'nunca'); } catch (e) { /* esperado */ }
+  ok(/esperó 30000 ms · lo retuvo 0 ms · ocupado: no lo obtuvo$/.test(lleno.registro[0] || ''), 'quedarse sin él también se anota');
+  lleno.Candado.con(() => 'nunca', { siOcupado: () => 'saltado' });
+  ok(/ocupado: se saltó$/.test(lleno.registro[1] || ''), 'y saltarlo (siOcupado) también');
 }
 
 if (fallas) { console.error('\n' + fallas + ' prueba(s) fallaron'); process.exit(1); }
