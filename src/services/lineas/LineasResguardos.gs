@@ -228,6 +228,26 @@ const LineasResguardos = (function () {
   }
 
   /**
+   * Para el lote del editor (LineasEstatusLote): los renglones abiertos del panel, leídos una vez, para pasárselos a
+   * estatusEnPanel en cada equipo.
+   */
+  function abiertosParaLote() {
+    return LineasDatos.existeTabla(TAB) ? abiertosPorRegistro_(LineasDatos.leerTabla(TAB)) : {};
+  }
+
+  /**
+   * Un equipo ya guardado cambia de estatus dentro del almacén (RESGUARDO → PARA VENTA…, lote del editor, 24-nov): si
+   * tiene su renglón abierto en el panel, ese renglón dice lo mismo, sin pedir otra recepción. Regresa el ESTADO del
+   * renglón ('' si no tiene).
+   */
+  function estatusEnPanel(abiertos, f, estatus, ahora) {
+    const abierto = abiertoDe_(abiertos || {}, f);
+    if (!abierto) return '';
+    LineasDatos.actualizarFila(TAB, abierto._fila, { 'ESTATUS_EQUIPO': estatus, 'ACTUALIZADO_EN': ahora });
+    return txt(abierto['ESTADO']);
+  }
+
+  /**
    * ¿El equipo `f` tiene su renglón abierto en el panel (por recibir o recibido)? Mientras tanto no lleva Responsiva ni
    * Inspección y Corregir no cambia su estatus (usuario, 21-oct; pendiente 3.15): lo sacan Quitar del panel, Corregir
    * resguardo o Pau (Entregar a líneas, Vendido).
@@ -1720,7 +1740,7 @@ const LineasResguardos = (function () {
   return {
     inspeccionDe, formulario, mandar, mandarCancelacion, lineaVencida, registrarCancelacionDirecta, bandeja, recibir, entregar, vendido, donado, desechado, faseCancelacion, confirmarCancelacion,
     vistaCarta, cartaEnviada, filasParaCarta,
-    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, enPanel, porRecibirEnPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
+    retirarCancelacion, vistaRetirar, vistaQuitar, quitarDelPanel, abiertosPorEquipo, abiertosParaLote, estatusEnPanel, enPanel, porRecibirEnPanel, POR_RECIBIR, cancelacionDe, exigirSinCancelacion, puedeAprobar, asesorPara,
     TAB, ENCABEZADOS, ESTADO, FASE, ESTATUS_EQUIPO_RESGUARDO, ESTATUS_LINEA_RESGUARDO, LINEA_SIN_PANEL, CANCELACION_DIRECTA, CAMPOS_PERSONA, CAMPOS_PERSONA_SI_HAY,
     MOTIVOS_CANCELACION, UBICACION_RESGUARDO, motivoCancelacionDe: motivoCancelacionDe_, cambioMotivo: cambioMotivo_, asegurarBandeja: asegurarBandeja_,
     _cambiosResguardo: cambiosResguardo_, _propuestaLinea: propuestaLinea_, _vigencia: vigencia_, _espejo: espejo_, _planQuitar: planQuitar_,

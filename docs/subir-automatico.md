@@ -51,7 +51,11 @@ Cada subida hace esto:
   que ser `cuentaProd` de `tools/subir/destinos.json`; si no, no se toca producción. El botón aparece para `master` hasta que el workflow esté en `master`, es
   decir, después de mezclarlo.
 
-### Producción solo desde la Action: con qué cuenta corre la app
+### Producción solo con `cuentaProd`: con qué cuenta corre la app
+
+> 24-nov-2026: la cuenta de antes se saturaba con activadores de otros proyectos y `cuentaProd` pasó a ser
+> auxiliar5datos (Jorge), que despliega desde su máquina sin `--desde-aqui`. La Action sigue sirviendo si su secreto
+> `CLASPRC_JSON` es de esa cuenta; con otra, se niega a tocar producción.
 
 La app de producción corre **con la cuenta de quien movió los despliegues** (`executeAs:
 USER_DEPLOYING`), no con la del dueño del proyecto. Si cada quien despliega desde su máquina, la
@@ -61,9 +65,9 @@ v66 y las inspecciones dejaron de generar PDF).
 
 Por eso:
 
-- `subir.js prod --desplegar` **solo corre en la Action**, que usa siempre la cuenta del secreto
-  `CLASPRC_JSON` (el paso "Cuenta con la que va a correr la app" la imprime). Desde una máquina
-  truena, salvo con `--desde-aqui`: entonces la app pasa a correr con la cuenta de clasp de esa
+- `subir.js prod --desplegar` **solo corre con la cuenta `cuentaProd`**: desde la máquina de esa persona o desde la
+  Action, si el secreto `CLASPRC_JSON` es de esa cuenta (el paso "Cuenta con la que va a correr la app" la imprime).
+  Con otra cuenta truena, salvo con `--desde-aqui`: entonces la app pasa a correr con la cuenta de clasp de esa
   persona.
 - `npm run push:prod` (subir sin desplegar) sigue funcionando desde cualquier máquina: no cambia
   la cuenta de nadie.
