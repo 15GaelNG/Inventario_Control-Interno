@@ -18,10 +18,18 @@
  * borra al aplicar, para que no se quede puesta.
  *
  * Se puede correr de nuevo: el equipo que ya tiene el estatus nuevo se salta. Si se acaba el tiempo, se corre otra vez.
+ *
+ * Dentro del almacén (24-nov, ajuste de Líneas: los de gama baja de RESGUARDO a PARA VENTA): un equipo que YA está guardado
+ * (RESGUARDO, PARA VENTA, PARA VENTA CON DETALLE o PARA DESECHO) puede pasar a otro de esos. No es «Mandar a resguardo»
+ * (no viene de una persona ni se vuelve a recibir): solo cambia el estatus y, si tiene su renglón abierto en Resguardos y
+ * cancelaciones, ese renglón dice lo mismo (LineasResguardos.estatusEnPanel). Llegar a ellos desde USO o POR RECIBIR
+ * sigue siendo por «Mandar a resguardo».
  */
 
-/** Solo estatus finales: lo de resguardo (RESGUARDO, PARA VENTA, PARA DESECHO) va por «Mandar a resguardo». */
+/** Estatus finales, desde cualquiera (sin línea). */
 const LOTE_ESTATUS_PERMITIDOS = ['VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+/** Los del almacén: solo entre ellos (un equipo ya guardado); a ellos desde USO va por «Mandar a resguardo». */
+const LOTE_ESTATUS_ALMACEN = ['RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO'];
 const LOTE_LIMITE_MS = 4.5 * 60 * 1000;
 
 function lineasEstatusLoteRevisar(idLibro) {
@@ -84,12 +92,16 @@ function lineasEstatusLote_(idLibro, aplicar) {
   const cuenta = { aplicado: 0, aplicaria: 0, yaEstaba: 0, error: 0, pendiente: 0 };
   const refrescar = [];
   const vistos = {};
+  let panel = null; // los renglones abiertos de Resguardos y cancelaciones, leídos una vez y solo si hacen falta
   decisiones.forEach((d) => {
     const fallo = (motivo) => { cuenta.error++; lineas.push('✗ renglón ' + d.renglon + ' · NUCO ' + (d.nuco || '—') + ': ' + motivo); };
     if (!d.nuco) return fallo('sin NUCO');
     if (vistos[d.nuco]) return fallo('el NUCO se repite en el libro (renglón ' + vistos[d.nuco] + ')');
     vistos[d.nuco] = d.renglon;
-    if (LOTE_ESTATUS_PERMITIDOS.indexOf(d.nuevo) < 0) return fallo('estatus nuevo «' + d.nuevo + '»; se permite ' + LOTE_ESTATUS_PERMITIDOS.join(', '));
+    const almacen = LOTE_ESTATUS_ALMACEN.indexOf(d.nuevo) >= 0;
+    if (!almacen && LOTE_ESTATUS_PERMITIDOS.indexOf(d.nuevo) < 0) {
+      return fallo('estatus nuevo «' + d.nuevo + '»; se permite ' + LOTE_ESTATUS_PERMITIDOS.concat(LOTE_ESTATUS_ALMACEN).join(', '));
+    }
     if (d.comentario.length <= 3) return fallo('el comentario es obligatorio (más de 3 caracteres)');
     const regs = porNuco[d.nuco] || [];
     if (regs.length !== 1) return fallo(regs.length ? regs.length + ' equipos con ese NUCO' : 'no hay equipo con ese NUCO');
@@ -97,12 +109,16 @@ function lineasEstatusLote_(idLibro, aplicar) {
     const estatus = String(f['ESTATUS EQUIPO'] || '').trim().toUpperCase();
     if (estatus === d.nuevo) { cuenta.yaEstaba++; lineas.push('= NUCO ' + d.nuco + ': ya está ' + d.nuevo); return; }
     if (d.actual && estatus !== d.actual) return fallo('está ' + (estatus || 'sin estatus') + ' y el libro dice ' + d.actual);
+    if (almacen && LOTE_ESTATUS_ALMACEN.indexOf(estatus) < 0) {
+      return fallo('está ' + (estatus || 'sin estatus') + ': a ' + d.nuevo + ' solo pasa un equipo ya guardado; desde la ficha va por «Mandar a resguardo»');
+    }
     if (LineasUtil.txt(f['NUMERO TELEFONO']) || LineasUtil.txt(f['NUMERO SIM'])) {
       return fallo('tiene línea (' + (f['NUMERO TELEFONO'] || f['NUMERO SIM']) + '): hazlo desde Editar, que decide qué pasa con la línea');
     }
     if (!aplicar) { cuenta.aplicaria++; lineas.push('→ NUCO ' + d.nuco + ': ' + (estatus || 'sin estatus') + ' → ' + d.nuevo + ' · ' + d.comentario); return; }
     if (Date.now() - inicio > LOTE_LIMITE_MS) { cuenta.pendiente++; return; }
     try {
+      let enPanel = '';
       LineasDatos.conCandado(() => {
         const fila = LineasRepo.leerRegistroObligatorio(f['ID'], 'el equipo');
         const cambios = { 'ESTATUS EQUIPO': d.nuevo };
@@ -113,10 +129,14 @@ function lineasEstatusLote_(idLibro, aplicar) {
           refs: [f['ID']].concat(guardado.refs || []), nuco: d.nuco, numero: '', antes: antes, despues: cambios,
           detalle: { idsCambios: guardado.idsCambios, cambios: guardado.campos, lote: true },
         });
+        if (almacen) {
+          if (!panel) panel = LineasResguardos.abiertosParaLote();
+          enPanel = LineasResguardos.estatusEnPanel(panel, fila, d.nuevo, ahora);
+        }
       });
       refrescar.push(f['ID']);
       cuenta.aplicado++;
-      lineas.push('✓ NUCO ' + d.nuco + ': ' + (estatus || 'sin estatus') + ' → ' + d.nuevo);
+      lineas.push('✓ NUCO ' + d.nuco + ': ' + (estatus || 'sin estatus') + ' → ' + d.nuevo + (enPanel ? ' (y su renglón ' + enPanel + ' del panel)' : ''));
     } catch (e) {
       fallo(e.message);
     }

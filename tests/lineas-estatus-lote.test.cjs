@@ -16,12 +16,27 @@ function cargar(decisiones, opciones) {
       { 'ID': 'EQU-3', 'NUCO': '0300', 'TIPO DE EQUIPO': 'CELULAR', 'MODELO': 'MOTO', 'ESTATUS EQUIPO': 'VENDIDO' },
       { 'ID': 'EQU-4', 'NUCO': '0400', 'TIPO DE EQUIPO': 'CELULAR', 'MODELO': 'MOTO', 'ESTATUS EQUIPO': 'USO' },
       { 'ID': 'EQU-5', 'NUCO': '10009', 'TIPO DE EQUIPO': 'CELULAR', 'MODELO': 'REDMI 9A', 'ESTATUS EQUIPO': 'FUERA DE INVENTARIO' },
+      { 'ID': 'EQU-6', 'NUCO': '0600', 'TIPO DE EQUIPO': 'CELULAR', 'MODELO': 'MOTO G20', 'ESTATUS EQUIPO': 'RESGUARDO' },
+      { 'ID': 'EQU-7', 'NUCO': '0700', 'TIPO DE EQUIPO': 'CELULAR', 'MODELO': 'MOTO G20', 'ESTATUS EQUIPO': 'RESGUARDO' },
+      { 'ID': 'EQU-8', 'NUCO': '0800', 'TIPO DE EQUIPO': 'CELULAR', 'MODELO': 'MOTO G20', 'ESTATUS EQUIPO': 'POR RECIBIR' },
     ],
     LINEAS: [{ 'ID': 'LIN-A', 'NUMERO TELEFONO': '4421090805', 'TIPO DE LINEA': 'PLAN', 'ESTATUS LINEA': 'USO' }],
     ASIGNACIONES: [
       { 'ID': 'ASG-1', 'TIPO': 'PERSONA', 'ID LINEA': 'LIN-A', 'ID EQUIPO': 'EQU-4', 'RESPONSABLE': 'DANAE', 'FECHA INICIO': new Date('2026-01-01T12:00:00Z'), 'FECHA FIN': '' },
     ],
     ADENDUMS: [],
+    // El renglón abierto de Resguardos y cancelaciones (solo el de EQU-6)
+    APP_RESGUARDOS: [{ 'REGISTRO_ID': 'EQU-6', 'ESTADO': 'EN RESGUARDO', 'ESTATUS_EQUIPO': 'RESGUARDO' }],
+  };
+  const lecturasPanel = [];
+  const LineasResguardos = {
+    abiertosParaLote: () => { lecturasPanel.push(1); return { 'EQU-6': Object.assign({ _fila: 2 }, hojas.APP_RESGUARDOS[0]) }; },
+    estatusEnPanel: (abiertos, f, estatus, ahora) => {
+      const a = abiertos[f['ID']];
+      if (!a) return '';
+      Object.assign(hojas.APP_RESGUARDOS[a._fila - 2], { 'ESTATUS_EQUIPO': estatus, 'ACTUALIZADO_EN': ahora });
+      return a['ESTADO'];
+    },
   };
   const movimientos = [];
   const LineasDatos = {
@@ -71,10 +86,10 @@ function cargar(decisiones, opciones) {
   const propiedades = Object.assign({}, (opciones && opciones.propiedades) || {});
   const PropertiesService = { getScriptProperties: () => ({
     getProperty: (k) => (k in propiedades ? propiedades[k] : null), deleteProperty: (k) => { delete propiedades[k]; } }) };
-  const m = new Function('LineasDatos', 'LineasRepo', 'LineasLectura', 'LineasUtil', 'SpreadsheetApp', 'Session', 'Config', 'Logger', 'PropertiesService', 'soloEditor_',
+  const m = new Function('LineasDatos', 'LineasRepo', 'LineasLectura', 'LineasUtil', 'LineasResguardos', 'SpreadsheetApp', 'Session', 'Config', 'Logger', 'PropertiesService', 'soloEditor_',
     leer('LineasEstatusLote.gs') + '; return { lineasEstatusLoteRevisar, lineasEstatusLoteAplicar };')(
-    LineasDatos, LineasRepo, base.LineasLectura, base.LineasUtil, SpreadsheetApp, Session, Config, Logger, PropertiesService, () => {});
-  return { m, hojas, movimientos, propiedades, log: () => registros.join('\n') };
+    LineasDatos, LineasRepo, base.LineasLectura, base.LineasUtil, LineasResguardos, SpreadsheetApp, Session, Config, Logger, PropertiesService, () => {});
+  return { m, hojas, movimientos, propiedades, lecturasPanel, log: () => registros.join('\n') };
 }
 
 const DECISIONES = [
@@ -111,7 +126,7 @@ test('se puede correr otra vez: lo que ya tiene el estatus nuevo se salta', () =
 
 test('no toca lo que no cuadra: estatus no permitido, sin comentario, NUCO que no existe, estatus distinto o con línea', () => {
   const t = cargar([
-    { 'NUCO': '0015', 'ESTATUS NUEVO': 'PARA DESECHO', 'COMENTARIO': 'NO SE PERMITE' },
+    { 'NUCO': '0015', 'ESTATUS NUEVO': 'EN TRÁNSITO', 'COMENTARIO': 'NO SE PERMITE' },
     { 'NUCO': '0193', 'ESTATUS NUEVO': 'DONADO', 'COMENTARIO': '' },
     { 'NUCO': '9999', 'ESTATUS NUEVO': 'DONADO', 'COMENTARIO': 'NO EXISTE' },
     { 'NUCO': '10009', 'ESTATUS ACTUAL': 'USO', 'ESTATUS NUEVO': 'DONADO', 'COMENTARIO': 'OTRO ESTATUS' },
@@ -119,12 +134,12 @@ test('no toca lo que no cuadra: estatus no permitido, sin comentario, NUCO que n
   ]);
   const r = t.m.lineasEstatusLoteAplicar('libro');
   assert.match(r, /0 cambiados.*5 con error/);
-  assert.match(t.log(), /PARA DESECHO/);
+  assert.match(t.log(), /estatus nuevo «EN TRANSITO»/);
   assert.match(t.log(), /comentario es obligatorio/);
   assert.match(t.log(), /no hay equipo con ese NUCO/);
   assert.match(t.log(), /está FUERA DE INVENTARIO y el libro dice USO/);
   assert.match(t.log(), /tiene línea/);
-  assert.deepStrictEqual(t.hojas.EQUIPOS.map((e) => e['ESTATUS EQUIPO']), ['FUERA DE INVENTARIO', 'FUERA DE INVENTARIO', 'VENDIDO', 'USO', 'FUERA DE INVENTARIO']);
+  assert.deepStrictEqual(t.hojas.EQUIPOS.map((e) => e['ESTATUS EQUIPO']), ['FUERA DE INVENTARIO', 'FUERA DE INVENTARIO', 'VENDIDO', 'USO', 'FUERA DE INVENTARIO', 'RESGUARDO', 'RESGUARDO', 'POR RECIBIR']);
   assert.strictEqual(t.movimientos.length, 0);
 });
 
@@ -149,4 +164,36 @@ test('desde el botón Ejecutar: el libro y la confirmación salen de las propied
   assert.match(t.m.lineasEstatusLoteAplicar({}), /2 cambiados/);
   assert.strictEqual('LINEAS_LOTE_CONFIRMACION' in t.propiedades, false);
   assert.throws(() => t.m.lineasEstatusLoteAplicar({}), /LINEAS_LOTE_CONFIRMACION/);
+});
+
+const ALMACEN = [
+  { 'NUCO': '0600', 'ESTATUS ACTUAL': 'RESGUARDO', 'ESTATUS NUEVO': 'PARA VENTA', 'COMENTARIO': 'GAMA BAJA A VENTA' },
+  { 'NUCO': '0700', 'ESTATUS ACTUAL': 'RESGUARDO', 'ESTATUS NUEVO': 'PARA VENTA', 'COMENTARIO': 'GAMA BAJA A VENTA' },
+];
+
+test('dentro del almacén: RESGUARDO → PARA VENTA, y el renglón abierto del panel dice lo mismo', () => {
+  const t = cargar(ALMACEN);
+  assert.match(t.m.lineasEstatusLoteRevisar('libro'), /2 se cambiarían/);
+  assert.strictEqual(t.lecturasPanel.length, 0, 'revisar no lee ni toca el panel');
+  const r = t.m.lineasEstatusLoteAplicar('libro');
+  assert.match(r, /APLICADO.*2 cambiados.*0 con error/);
+  assert.deepStrictEqual(t.hojas.EQUIPOS.slice(5, 7).map((e) => e['ESTATUS EQUIPO']), ['PARA VENTA', 'PARA VENTA']);
+  assert.strictEqual(t.hojas.APP_RESGUARDOS[0]['ESTATUS_EQUIPO'], 'PARA VENTA');
+  assert.strictEqual(t.hojas.APP_RESGUARDOS.length, 1, 'no crea renglones nuevos por recibir');
+  assert.strictEqual(t.lecturasPanel.length, 1, 'el panel se lee una sola vez');
+  assert.match(t.log(), /NUCO 0600: RESGUARDO → PARA VENTA \(y su renglón EN RESGUARDO del panel\)/);
+  assert.match(t.log(), /NUCO 0700: RESGUARDO → PARA VENTA$/m);
+  assert.deepStrictEqual(t.movimientos.map((x) => [x.tipo, x.datos.motivo]), [['EDICION', 'GAMA BAJA A VENTA'], ['EDICION', 'GAMA BAJA A VENTA']]);
+});
+
+test('a un estatus del almacén solo llega un equipo ya guardado: desde USO o POR RECIBIR, no', () => {
+  const t = cargar([
+    { 'NUCO': '10009', 'ESTATUS NUEVO': 'PARA VENTA', 'COMENTARIO': 'FUERA DE INVENTARIO' },
+    { 'NUCO': '0800', 'ESTATUS NUEVO': 'PARA VENTA', 'COMENTARIO': 'AÚN NO LO RECIBEN' },
+  ]);
+  const r = t.m.lineasEstatusLoteAplicar('libro');
+  assert.match(r, /0 cambiados.*2 con error/);
+  assert.match(t.log(), /NUCO 10009: está FUERA DE INVENTARIO: a PARA VENTA solo pasa un equipo ya guardado/);
+  assert.match(t.log(), /NUCO 0800: está POR RECIBIR/);
+  assert.strictEqual(t.hojas.EQUIPOS[7]['ESTATUS EQUIPO'], 'POR RECIBIR');
 });
