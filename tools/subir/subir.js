@@ -6,7 +6,7 @@
  *   node tools/subir/subir.js prod                      producción (.clasp.prod.json): solo sube
  *   node tools/subir/subir.js prod --desplegar "texto"  y además mueve LOS DOS despliegues a la
  *                                                       versión nueva (CLAUDE.md: "dos links"). Solo
- *                                                       en la GitHub Action, salvo --desde-aqui
+ *                                                       en la Action o desde la cuenta cuentaProd (destinos.json)
  *   node tools/subir/subir.js rama                      el DEV de la rama actual (destinos.json);
  *                                                       es lo que usa la GitHub Action
  *
@@ -54,21 +54,26 @@ function cuentaClasp_() {
 
 /**
  * Antes de mover los despliegues de prod. La app corre con la cuenta de quien los MUEVE (executeAs:
- * USER_DEPLOYING): desde la Action es la del secreto CLASPRC_JSON, y tiene que ser `cuentaProd`
- * (destinos.json); desde una máquina sería la de esa persona, y si a esa cuenta le falta una carpeta o
- * una plantilla, la app falla para todos (8-oct: las inspecciones sin PDF). Por eso, fuera de la Action,
- * solo con --desde-aqui.
+ * USER_DEPLOYING): tiene que ser `cuentaProd` (destinos.json), desde la Action (el secreto CLASPRC_JSON)
+ * o desde la máquina de quien tiene esa cuenta. Con otra, la app correría con la cuenta de esa persona, y
+ * si le falta una carpeta o una plantilla falla para todos (8-oct: las inspecciones sin PDF). Otra cuenta
+ * solo con --desde-aqui. Desde el 24-nov-2026 `cuentaProd` es auxiliar5datos (Jorge): despliega desde su
+ * máquina sin la Action (la de auxiliar6datos se saturaba con otros activadores). 25-nov: mientras tanto, también
+ * auxiliar6datos (la Action con su secreto): `cuentaProd` puede ser una lista. La app corre con la de quien despliegue
+ * al último, así que conviene volver a una sola cuando Jorge despliegue siempre.
  */
 function exigirCuentaDeProd_(args) {
   const cuenta = cuentaClasp_();
-  if (!EN_ACTION && !args.includes('--desde-aqui')) {
-    throw new Error('A producción se despliega con la GitHub Action (Actions → "Subir a Apps Script" → Run workflow ' +
-      'sobre master), para que la app corra siempre con la misma cuenta. Si de verdad tiene que ser desde aquí, ' +
-      'agrega --desde-aqui: la app va a correr con TU cuenta de clasp (' + cuenta + ').');
-  }
-  if (EN_ACTION && DESTINOS.cuentaProd && cuenta !== DESTINOS.cuentaProd.toLowerCase()) {
+  const permitidas = [].concat(DESTINOS.cuentaProd || []).map((c) => String(c).toLowerCase());
+  const deProd = !permitidas.length || permitidas.includes(cuenta);
+  if (!deProd && EN_ACTION) {
     throw new Error('El secreto CLASPRC_JSON es de ' + (cuenta || 'una cuenta que no se pudo leer') + ', no de ' +
-      DESTINOS.cuentaProd + ' (cuentaProd en tools/subir/destinos.json). No se tocó producción.');
+      permitidas.join(' ni de ') + ' (cuentaProd en tools/subir/destinos.json). No se tocó producción.');
+  }
+  if (!deProd && !args.includes('--desde-aqui')) {
+    throw new Error('Producción corre con ' + permitidas.join(' o ') + ' (cuentaProd en tools/subir/destinos.json) y tu ' +
+      'clasp es de ' + (cuenta || 'una cuenta que no se pudo leer') + '. Despliega con esa cuenta; si de verdad tiene ' +
+      'que ser con la tuya, agrega --desde-aqui: la app va a correr con TU cuenta.');
   }
   console.log('La app de producción va a correr con la cuenta ' + cuenta + '.');
   return cuenta;

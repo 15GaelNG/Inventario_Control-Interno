@@ -15,7 +15,7 @@ function cargar(vencida) {
   return new Function('LineasRepo', 'CacheService', 'Utilities', 'SpreadsheetApp', 'Config', 'LineasUtil', 'LineasResguardos',
     read('src/services/lineas/LineasRegistros.gs') + '; return LineasRegistros;')(
     { CATALOGO: { estatusLinea: ['USO', 'DISPONIBLE', 'EN PROCESO DE CANCELACION', 'CANCELADA'],
-      estatusEquipo: ['USO', 'RESGUARDO', 'PARA VENTA', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'] },
+      estatusEquipo: ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'] },
       TIPOS_CON_EQUIPO: { 'EQUIPO': 'CELULAR', 'EQUIPO + SIM': 'CELULAR', 'EQUIPO + SIM BASICO': 'CELULAR' } },
     { getScriptCache: () => ({ get: () => '', put: () => {} }) },
     { formatDate: () => '2026-10-16' }, {}, {}, LineasUtil, LineasResguardos);
@@ -43,9 +43,11 @@ test('Corregir equipo no trae la pestaña Responsable; Agregar equipo y Corregir
 test('Corregir equipo ofrece USO: con responsable vigente se guarda directo; sin él lo pasa la Responsiva (pendiente 2.55)', () => {
   const Reg = cargar();
   const opciones = (base) => campo(Reg._elementos(base, {}, usuario, Reg._contextoEdicion(base, null)), 'ESTATUS EQUIPO').opciones;
-  // USO, RESGUARDO y los finales, más el que ya tiene; PARA VENTA y PARA DESECHO, con «Mandar a resguardo» (usuario, 21-oct)
-  assert.deepEqual(opciones(guardado), ['USO', 'RESGUARDO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO']);
-  assert.deepEqual(opciones(Object.assign({}, guardado, { 'ESTATUS EQUIPO': 'PARA VENTA' })), ['USO', 'RESGUARDO', 'PARA VENTA', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO']);
+  // USO, los de almacén y los finales, más el que ya tiene (usuario, 21-oct; PARA VENTA y PARA DESECHO, Líneas 25-nov)
+  const todos = ['USO', 'RESGUARDO', 'PARA VENTA', 'PARA VENTA CON DETALLE', 'PARA DESECHO', 'VENDIDO', 'DONADO', 'DESECHADO', 'EXTRAVIO-ROBO'];
+  assert.deepEqual(opciones(guardado), todos);
+  // POR RECIBIR nunca se elige a mano: lo pone «Mandar a resguardo» mientras Pau no lo recibe
+  assert.ok(opciones(guardado).indexOf('POR RECIBIR') < 0);
   assert.ok(opciones(enUso).indexOf('USO') >= 0);
   // true = el estatus no cambia aquí y la pantalla abre la Responsiva; responsable vigente = TIPO ASIGNACION PERSONA y RESPONSABLE
   const vendido = { TIPO: 'EQUIPO', NUCO: '14', 'ESTATUS EQUIPO': 'VENDIDO', RESPONSABLE: 'ANA', 'TIPO ASIGNACION': 'PERSONA' };

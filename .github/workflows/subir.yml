@@ -8,7 +8,8 @@
 #
 # La app de producción corre con la cuenta de quien mueve los despliegues (executeAs:
 # USER_DEPLOYING): aquí siempre es la del secreto CLASPRC_JSON, que tiene que ser `cuentaProd` de
-# destinos.json (subir.js lo revisa). Ver docs/subir-automatico.md.
+# destinos.json (subir.js lo revisa; desde el 24-nov esa cuenta también despliega desde su máquina). Ver
+# docs/subir-automatico.md.
 #
 # Seguridad (guía de GitHub, "Security hardening for GitHub Actions"):
 # - el GITHUB_TOKEN solo lee el repo (permissions);
