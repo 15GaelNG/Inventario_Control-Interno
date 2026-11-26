@@ -6,7 +6,7 @@
    */
   (function () {
     'use strict';
-    const { $, aviso, bajarBase64, chip, copiarTexto, crearFirma, enlaceDrive, esc, fecha, htmlFirma, ico, icono, llamar,
+    const { $, aviso, bajarBase64, cancelarFirmaPendiente, chip, copiarTexto, crearFirma, enlaceDrive, esc, fecha, htmlFirma, ico, icono, llamar,
       mensajeError, miles, porcentaje, puedeOperar, tablaLineas, tilesKpi, vacio, veDocumentos } = Lineas.comun;
     Lineas.telefonicas.registrar('documentos', (T) => {
       const { COLOR_ORIGEN_DOCUMENTO, ETIQUETA_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, raiz,
@@ -19,8 +19,9 @@
 
       // Estatus de firma de una Responsiva (ESTADO FIRMA): '' = nunca usó firma a distancia (como antes); las
       // Inspecciones nunca traen este dato (usuario, 6-nov: quiere verlo como etiqueta en la tabla de documentos)
-      const ETIQUETA_ESTADO_FIRMA_DOC = { PENDIENTE: 'Pendiente de firma', FIRMADO: 'Firmado' };
-      const COLOR_ESTADO_FIRMA_DOC = { PENDIENTE: 'ambar', FIRMADO: 'verde' };
+      // CANCELADO: se mandó a firmar por error y se canceló (usuario, 26-nov; cancelarDocumento)
+      const ETIQUETA_ESTADO_FIRMA_DOC = { PENDIENTE: 'Pendiente de firma', FIRMADO: 'Firmado', CANCELADO: 'Cancelado' };
+      const COLOR_ESTADO_FIRMA_DOC = { PENDIENTE: 'ambar', FIRMADO: 'verde', CANCELADO: 'rojo' };
       // Días que sirve una liga de firma a distancia (FIRMA_REMOTA_DIAS_VIGENCIA de LineasFirmaRemota.gs; el servidor
       // es quien decide si venció, aquí solo se dice en el aviso)
       const DIAS_LIGA = 15;
@@ -286,6 +287,22 @@
       }
 
       /**
+       * "Cancelar documento" (usuario, 26-nov): el que se mandó a firmar con un dato mal y se volvió a hacer deja de esperar
+       * firmas (Lineas.comun.cancelarFirmaPendiente). Luego se vuelve a pintar lo abierto: la página del documento, o
+       * Documentos e historial de la ficha.
+       */
+      function cancelarDocumento(d) {
+        return cancelarFirmaPendiente({ tipoPdf: d.tipoPdf, id: d.id, titulo: [d.documento, fecha(d.fecha), d.responsable].filter(Boolean).join(' · ') })
+          .then((r) => {
+            const arriba = r && vigente() ? pila[pila.length - 1] : null;
+            if (!arriba) return;
+            if (arriba.id === d.id && ETIQUETA_DOCUMENTO[arriba.tipo]) { abrir(arriba.tipo, arriba.id, true, true); return; }
+            cargarEvidencias(arriba.id);
+            cargarHistorial(arriba.id);
+          });
+      }
+
+      /**
        * "Ver ligas de firma" (una Responsiva o una Inspección con ESTADO FIRMA = PENDIENTE, usuario 6-nov: las
        * dos firman las mismas personas): el nombre de cada responsable que se difirió, si ya firmó o sigue
        * pendiente, y "Copiar liga" / "Generar liga de nuevo" por cada uno -- lo mismo que ya ofrece la
@@ -527,6 +544,8 @@
             doc('send', 'Ver ligas de firma', 'pdf', false, (d) => operar && d.estadoFirma === 'PENDIENTE', (d) => verLigasFirma(d)),
             // Para quien no firma por liga (usuario, 11-nov): se baja, se firma y se sube con «Subir PDF firmado»
             doc('download', 'PDF para firmar', 'pdf', false, (d) => operar && d.estadoFirma === 'PENDIENTE', (d) => descargarParaFirmar(d)),
+            // Mandado a firmar por error (usuario, 26-nov): deja de esperar firmas y sus ligas dejan de servir
+            doc('ban', 'Cancelar documento', 'pdf', false, (d) => operar && d.estadoFirma === 'PENDIENTE', (d) => cancelarDocumento(d)),
             // Del sistema, con su PDF ya generado; del AppSheet y de NUCOS siempre (usuario, 5-oct); y el que espera firmas
             // por liga (usuario, 11-nov: el PDF firmado lo cierra)
             // La que se firmó dentro de un equipo (vista desde la línea): con el registro de su equipo
@@ -573,7 +592,7 @@
       Object.defineProperty(T, 'tablaDocumentos', { get: () => tablaDocumentos, set: (v) => { tablaDocumentos = v; } });
 
       return {
-        cargarEvidencias: cargarEvidencias, copiarConAviso: copiarConAviso, generarPdfPendiente: generarPdfPendiente,
+        cancelarDocumento: cancelarDocumento, cargarEvidencias: cargarEvidencias, copiarConAviso: copiarConAviso, generarPdfPendiente: generarPdfPendiente,
         htmlLigasFirma: htmlLigasFirma, activarLigasFirma: activarLigasFirma,
         pedirFirmasPdf: pedirFirmasPdf, ponerCopiarTarjetas: ponerCopiarTarjetas, regenerarPdf: regenerarPdf,
         soltarDocumentos: soltarDocumentos, subirPdfFirmado: subirPdfFirmado, descargarParaFirmar: descargarParaFirmar, textoTarjeta: textoTarjeta,

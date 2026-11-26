@@ -11,7 +11,7 @@
     Lineas.telefonicas.registrar('paginas', (T) => {
       const { COLOR_ORIGEN_DOCUMENTO, ORIGEN_DOCUMENTO, pdfsEnCurso, pila, vigente } = T;
       const { abrir, campos, encabezado, migas, pedirDocumento, tarjeta } = T.de('ficha');
-      const { activarLigasFirma, descargarParaFirmar, generarPdfPendiente, htmlLigasFirma, regenerarPdf, subirPdfFirmado } = T.de('documentos');
+      const { activarLigasFirma, cancelarDocumento, descargarParaFirmar, generarPdfPendiente, htmlLigasFirma, regenerarPdf, subirPdfFirmado } = T.de('documentos');
       const { htmlSubirFotos, manejarSubidaArchivo } = T.de('captura');
 
       // ---- Inspección y responsiva: su página ----
@@ -33,7 +33,8 @@
             alHacer: () => window.open('https:\/\/drive.google.com/drive/folders/' + encodeURIComponent(x.carpetaId), '_blank', 'noopener') } : null,
           operar && x.estadoFirma === 'PENDIENTE' ? { icono: 'download', texto: 'PDF para firmar', separador: true,
             alHacer: () => descargarParaFirmar(x) } : null,
-          operar && x.registroId && x.origen === 'SISTEMA' && !x.pdfId && !pdfsEnCurso[x.id] ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
+          operar && x.estadoFirma === 'PENDIENTE' ? { icono: 'ban', texto: 'Cancelar documento', alHacer: () => cancelarDocumento(x) } : null,
+          operar && x.estadoFirma !== 'CANCELADO' && x.registroId && x.origen === 'SISTEMA' && !x.pdfId && !pdfsEnCurso[x.id] ? { icono: 'file-plus', texto: 'Generar PDF', separador: true,
             alHacer: () => generarPdfPendiente(x.tipoPdf, x.id, x.carpetaId, x.registroId) } : null,
           operar && x.registroId && x.origen === 'SISTEMA' && x.pdfId ? { icono: 'refresh-ccw', texto: 'Regenerar PDF', separador: true,
             alHacer: () => regenerarPdf(x, x.registroId) } : null,
@@ -64,6 +65,11 @@
        * liga de cada quien que falta, para copiarla sin ir a Documentos. Solo quien opera (el servidor pide EDICIÓN).
        */
       function htmlRecuadroLigas(d, r) {
+        // Cancelado (usuario, 26-nov): se dice a la vista, para que nadie lo tome por el documento vigente
+        if (d.estadoFirma === 'CANCELADO') {
+          return tarjeta(icono('ban') + ' Documento cancelado', '<p class="ln-tenue">Se mandó a firmar por error y se canceló: sus ligas ya no sirven ' +
+            'y no lleva PDF. El motivo está en el historial.</p>');
+        }
         return r.puedeOperar && d.estadoFirma === 'PENDIENTE'
           ? tarjeta(icono('send') + ' Ligas de firma a distancia', '<div data-ln-ligas-pagina>' + Carga.html('bloque', { n: 2 }) + '</div>')
           : '';

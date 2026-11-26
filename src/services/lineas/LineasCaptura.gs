@@ -1171,6 +1171,10 @@ const LineasCaptura = (function () {
     const tabla = esInspeccion ? LineasRepo.TAB.INSP : LineasRepo.TAB.RESP;
     const fila = leerFilaPorId_(tabla, id);
     if (!fila) throw new Error('No existe ' + (esInspeccion ? 'la inspección ' : 'la responsiva ') + id);
+    // Mandado a firmar por error y cancelado (LineasFirmaRemota.cancelar, 26-nov): ya no lleva PDF
+    if (String(LineasUtil.col(fila, 'ESTADO FIRMA') || '').trim().toUpperCase() === 'CANCELADO') {
+      throw new Error((esInspeccion ? 'Esta inspección' : 'Esta responsiva') + ' se canceló; no se le genera PDF.');
+    }
     const ids = LineasDatos.idsDeFila(fila);
     const ev = evidenciaSistema_(ids);
     if (!ev) throw new Error('Solo se generan PDF de registros capturados en el sistema.');
@@ -1370,6 +1374,7 @@ const LineasCaptura = (function () {
   function subirPdfFirmado(registro, doc, base64, usuario) {
     if (!base64) throw new Error('Elige el PDF firmado.');
     const bytes = Utilities.base64Decode(String(base64));
+    if (doc.estadoFirma === 'CANCELADO') throw new Error('Este documento se canceló; no se le sube PDF.');
     if (bytes.length > 15 * 1024 * 1024) throw new Error('El archivo supera 15 MB.');
     if (String.fromCharCode.apply(null, bytes.slice(0, 5)) !== '%PDF-') throw new Error('Solo se aceptan archivos PDF.');
     let pdfId = doc.pdfId;

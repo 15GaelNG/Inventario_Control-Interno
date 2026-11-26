@@ -3,11 +3,12 @@
    * lineas-firmas.html — Firmas pendientes (usuario, 10-nov): las responsivas e inspecciones que se mandaron a firmar a
    * distancia y siguen esperando (LineasFirmaRemota.pendientes). Una fila por documento (usuario, 10-nov: agrupadas) y,
    * dentro, cada persona que falta con los días de su liga y su botón: copiar la liga o, si ya venció, generar otra. La
-   * fila abre la ficha (ahí está "Firmar aquí"). Copiar y regenerar piden EDICIÓN en Líneas Telefónicas, como en Documentos.
+   * fila abre la ficha (ahí está "Firmar aquí"). Copiar, regenerar y cancelar el documento (26-nov) piden EDICIÓN en Líneas
+   * Telefónicas, como en Documentos.
    */
   (function () {
     'use strict';
-    const { $, copiarTexto, esc, icono, llamar, mensajeError, miles, montaje, puedeOperar,
+    const { $, cancelarFirmaPendiente, copiarTexto, esc, icono, llamar, mensajeError, miles, montaje, puedeOperar,
       tablaLineas, tilesKpi, aviso } = Lineas.comun;
 
     const COLOR_ESTADO = { VENCIDA: 'rojo', 'POR VENCER': 'ambar', VIGENTE: 'verde' };
@@ -107,6 +108,10 @@
           accionesFila: [
             { icono: 'circle-chevron-right', titulo: 'Abrir ficha (ahí está «Firmar aquí»)', visible: (f) => !!f._idLinea,
               alHacer: (f) => Lineas.irARegistro(f._idLinea) },
+            // Mandado a firmar por error (usuario, 26-nov): deja de esperar firmas, sus ligas dejan de servir y sale de aquí
+            { icono: 'ban', titulo: 'Cancelar documento', visible: () => opera,
+              alHacer: (f) => cancelarFirmaPendiente({ tipoPdf: f._tipo, id: f._id,
+                titulo: [f.DOCUMENTO, f.NUCO && 'NUCO ' + f.NUCO, f.RESPONSABLE].filter(Boolean).join(' · ') }).then((r) => { if (r && vigente()) cargar(); }) },
           ],
           alCambiarFiltros: (f) => { filtros = f || {}; if (marcarKpi) marcarKpi(filtros); },
         });

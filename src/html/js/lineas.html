@@ -2619,6 +2619,27 @@
         });
     }
 
+    /**
+     * Cancelar documento (usuario, 26-nov): una responsiva o inspección que se mandó a firmar con un dato mal y se volvió
+     * a hacer. Pide el motivo; sus ligas dejan de servir y sale de Firmas pendientes (LineasFirmaRemota.cancelar). Lo usan
+     * Documentos, la página del documento y Firmas pendientes. `d` = { tipoPdf, id, titulo }. La respuesta, o null.
+     */
+    function cancelarFirmaPendiente(d) {
+      const cual = d.tipoPdf === 'INSPECCION' ? 'La inspección' : 'La responsiva';
+      return pedirDatos('Cancelar documento', d.titulo || '', [{ clave: 'motivo', etiqueta: 'Motivo', requerido: true, area: true, minimo: 4 }],
+        'Cancelar documento', {
+          peligro: true, espera: 'Cancelando',
+          detalle: [cual + ' deja de esperar firmas y sale de Firmas pendientes.', 'Sus ligas dejan de servir: quien la abra ya no podrá firmar.',
+            'Se queda en Documentos como Cancelado; el motivo va al historial.',
+            'Lo que se cambió en la línea al guardarla no se regresa (corrígelo con Editar si hace falta).', 'No se puede deshacer.'],
+          alConfirmar: (datos) => llamar('apiLineasFirmaRemotaCancelar', d.tipoPdf, d.id, datos.motivo),
+        })
+        .then((r) => {
+          if (r) aviso(icono('circle-check') + ' Documento cancelado: sus ligas ya no sirven.', 6000);
+          return r;
+        });
+    }
+
     return {
       precargar: precargar,
       // La base para las pantallas (lineas-*.html, fase 6.2) y para los módulos en su propio archivo (p. ej. el temporal
@@ -2634,7 +2655,7 @@
         activarAdicionales: activarAdicionales, activarBloqueo: activarBloqueo, activarCombosEn: activarCombosEn,
         activarIdentificaciones: activarIdentificaciones, activarPasos: activarPasos, alternarMulti: alternarMulti,
         aplicarBloqueo: aplicarBloqueo, aplicarCambiosIndice: aplicarCambiosIndice, aplicarReglasEn: aplicarReglasEn,
-        bloqueadoDG: bloqueadoDG, bloqueoElegido: bloqueoElegido, calificacionAppSheet: calificacionAppSheet,
+        bloqueadoDG: bloqueadoDG, bloqueoElegido: bloqueoElegido, calificacionAppSheet: calificacionAppSheet, cancelarFirmaPendiente: cancelarFirmaPendiente,
         cargarAccesorios: cargarAccesorios, cargarCatalogos: cargarCatalogos, cargarColaboradores: cargarColaboradores,
         cargarIndice: cargarIndice, cargarPatronesAppSheet: cargarPatronesAppSheet, colorAppSheet: colorAppSheet,
         columnasDeHoja: columnasDeHoja, conSelectorBloqueo: conSelectorBloqueo, contarDesde: contarDesde,

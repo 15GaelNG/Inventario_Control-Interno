@@ -48,6 +48,10 @@ function apiLineasFirmaRemotaPendientes(token) {
 function apiLineasFirmaRemotaPdfParaFirmar(token, tipoDoc, documentoId) {
   return LineasFirmaRemota.pdfParaFirmar(docDeTipoPdf_(tipoDoc), token, documentoId);
 }
+/** "Cancelar documento": uno mandado a firmar por error deja de esperar firmas y sus ligas dejan de servir. */
+function apiLineasFirmaRemotaCancelar(token, tipoDoc, documentoId, motivo) {
+  return LineasFirmaRemota.cancelar(docDeTipoPdf_(tipoDoc), token, documentoId, motivo);
+}
 /** "Firmar aquí": quien falta firma presencial en el equipo de quien opera (con sesión; la liga puede estar vencida). */
 function apiLineasFirmaRemotaFirmarAqui(token, tipoDoc, documentoId, rol, imagen) {
   return LineasFirmaRemota.firmarPresencial(docDeTipoPdf_(tipoDoc), token, documentoId, rol, imagen);

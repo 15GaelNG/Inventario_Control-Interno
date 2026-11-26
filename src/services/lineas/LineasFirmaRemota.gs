@@ -285,6 +285,9 @@ const LineasFirmaRemota = (function () {
     return LineasDatos.leerFilas([{ tabla: doc.tabla(), filas: filas.slice(0, 1) }])[0][0];
   }
   const estaPendiente_ = (fila) => String(fila['ESTADO FIRMA'] || '').trim().toUpperCase() === 'PENDIENTE';
+  /** ESTADO FIRMA de un documento que se mandó a firmar por error y se canceló (cancelar, 26-nov). */
+  const ESTADO_CANCELADO = 'CANCELADO';
+  const ACCION_FIRMA_CANCELADA = 'FIRMA_CANCELADA';
 
   /**
    * "PDF para firmar" (usuario, 11-nov): lo normal es la firma por liga, pero si alguien insiste en papel o en
@@ -533,6 +536,43 @@ const LineasFirmaRemota = (function () {
   /** Cuántos días le quedan a una liga para que deje de servir ("Por vencer" desde aquí). */
   const DIAS_POR_VENCER = 3;
   const ETIQUETA_ROL = { PRINCIPAL: 'Responsable', SEGUNDO: 'Responsable 2', TERCER: 'Responsable 3', CUARTO: 'Responsable 4', QUINTO: 'Responsable 5' };
+  /**
+   * "Cancelar documento" (usuario, 26-nov: un documento mandado a firmar con un dato mal, que se volvió a hacer, se
+   * quedaba para siempre en Firmas pendientes y su liga seguía sirviendo hasta vencer). Solo uno que sigue PENDIENTE:
+   * queda CANCELADO (sale de Firmas pendientes, en Documentos se ve así y no se le genera PDF), sus ligas dejan de
+   * servir al momento, las firmas que esperaban se tiran y el motivo queda en el historial de la línea. No regresa lo
+   * que el documento cambió en la línea al guardarse (eso se corrige con Editar). Regresa { id }.
+   */
+  function cancelar(doc, token, documentoId, motivo) {
+    const sesion = Permisos.puedeEditar(token, 'lineas-telefonicas');
+    const texto = String(motivo == null ? '' : motivo).trim();
+    if (texto.length <= 3) throw new Error('Escribe el motivo de la cancelación (más de 3 caracteres).');
+    const usuario = { correo: (sesion && sesion.correo) || '', nombre: (sesion && (sesion.nombre || sesion.correo)) || '' };
+    return LineasDatos.conCandado(() => {
+      const fila = filaPorId_(doc, documentoId);
+      if (!estaPendiente_(fila)) {
+        throw new Error(String(fila['ESTADO FIRMA'] || '').trim().toUpperCase() === ESTADO_CANCELADO
+          ? 'Este documento ya estaba cancelado.' : 'Solo se cancela un documento que sigue esperando firmas; este ya quedó firmado.');
+      }
+      const cambios = { 'ESTADO FIRMA': ESTADO_CANCELADO };
+      ROLES_DIFERIBLES.forEach((rol) => {
+        if (!fila[colToken_(rol)]) return;
+        cambios[colToken_(rol)] = '';
+        cambios[colTokenExpira_(rol)] = '';
+      });
+      const temporales = TODOS_LOS_ROLES.map((rol) => fila[colTemp_(doc, rol)]).filter(Boolean);
+      TODOS_LOS_ROLES.forEach((rol) => { if (fila[colTemp_(doc, rol)]) cambios[colTemp_(doc, rol)] = ''; });
+      LineasDatos.actualizarFila(doc.tabla(), fila._fila, cambios);
+      // Ya sin nada que las apunte: si la hoja no se pudo escribir, las firmas siguen ahí y el documento pendiente
+      temporales.forEach(borrarFirmaTempSiHay_);
+      LineasRepo.registrarMovimiento(ACCION_FIRMA_CANCELADA, { motivo: texto }, usuario, new Date(), {
+        refs: [fila['ID LINEA'], fila['ID LINEA ENTREGADA']].filter(Boolean), nuco: fila['NUCO'] || '',
+        detalle: Object.assign(doc.tipoPdf === 'INSPECCION' ? { inspeccionId: fila['ID'] } : { responsivaId: fila['ID'] },
+          { cambios: [{ campo: 'ESTADO FIRMA', antes: 'PENDIENTE', despues: ESTADO_CANCELADO }] }),
+      });
+      return { id: String(fila['ID'] || '') };
+    });
+  }
   const fechaIso_ = (v) => { const d = v instanceof Date ? v : (v ? new Date(v) : null); return d && !isNaN(d.getTime()) ? d.toISOString() : ''; };
 
   /**
@@ -628,7 +668,7 @@ const LineasFirmaRemota = (function () {
     ROLES_DIFERIBLES: ROLES_DIFERIBLES, DOCUMENTOS: DOCUMENTOS, columnasNuevas_: columnasNuevas_, generarPendientes_: generarPendientes_, ligasDe_: ligasDe_,
     obtenerPendientePorToken: obtenerPendientePorToken, vistaPrevia: vistaPrevia, completarFirma: completarFirma, firmarPresencial: firmarPresencial,
     copiarLiga: copiarLiga, regenerarLiga: regenerarLiga, estadoLigas: estadoLigas, ligasDeDocumentos: ligasDeDocumentos, pendientes: pendientes,
-    pdfParaFirmar: pdfParaFirmar, cerrarConPdfSubido: cerrarConPdfSubido,
+    pdfParaFirmar: pdfParaFirmar, cerrarConPdfSubido: cerrarConPdfSubido, cancelar: cancelar, ESTADO_CANCELADO: ESTADO_CANCELADO,
     // Para pruebas
     _buscarPorToken: buscarPorToken_, _colToken: colToken_, _colTemp: colTemp_, _imagenesDesdeTemp: imagenesDesdeTemp_,
     _base64DeImagen: base64DeImagen_, COL_ENVIADO_POR: COL_ENVIADO_POR,

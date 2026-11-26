@@ -314,7 +314,7 @@ const TelefoniaService = (function () {
       return {
         id: d._id, origen: d.origen, fecha: d.fecha, calificacion: d.calificacion === undefined ? null : d.calificacion,
         inspector: d.inspector || d.responsableCI || null,
-        pdfPendiente: d.origen === 'SISTEMA' && !pdf,
+        pdfPendiente: d.origen === 'SISTEMA' && !pdf && d.estadoFirma !== 'CANCELADO',
         responsable: d.snapshot ? d.snapshot.responsable : (d.responsable ? d.responsable.nombre : null),
         fotos: d.drive ? d.drive.fotos : 0, carpetaId: d.drive ? d.drive.carpetaId : null, pdfId: pdf,
         // Firmada dentro de un equipo, vista desde la línea (pendiente 2.45): su NUCO y el registro del equipo

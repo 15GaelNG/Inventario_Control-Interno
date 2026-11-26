@@ -915,6 +915,8 @@ const LineasRepo = (function () {
     COMENTARIO_ANTERIOR: 'Comentario anterior',
     // PDF de la inspección o la responsiva, ya firmado o vuelto a hacer con la plantilla (5-oct)
     PDF_FIRMADO: 'PDF firmado', PDF_REGENERADO: 'PDF regenerado',
+    // Una inspección o responsiva mandada a firmar por error: sus ligas dejan de servir (LineasFirmaRemota.cancelar, 26-nov)
+    FIRMA_CANCELADA: 'Documento cancelado',
     // Una foto de la inspección enviada por error, a la papelera de Drive (13-oct)
     FOTO_QUITADA: 'Foto quitada',
   };

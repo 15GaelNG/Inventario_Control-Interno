@@ -651,3 +651,68 @@ test('FirmaExterna: la liga de Líneas firma como el colaborador, sin etiquetas 
   assert.equal(quien('arqueo', 'asistente'), 'asistente');
   assert.match(html, /'lineas-responsiva': 'Colaborador', 'lineas-inspeccion': 'Colaborador' \};/);
 });
+
+test('cancelar ("Cancelar documento", 26-nov): el mandado a firmar por error deja de esperar firmas, sus ligas no sirven y queda en el historial', () => {
+  const { F, DOC, ctx, filas, drive } = entorno([], []);
+  const trazo = (texto) => Buffer.from(texto).toString('base64');
+  const cambios = F.generarPendientes_(DOC, ['PRINCIPAL', 'SEGUNDO'], { CI: trazo('trazo-ci') }, 'capturista@x.com');
+  filas.push(Object.assign({ _fila: 2, ID: 'RES-5', 'ID LINEA': 'EQ-1', NUCO: 83, 'ESTADO FIRMA': 'PENDIENTE' }, cambios));
+  F.completarFirma(DOC, cambios['TOKEN FIRMA SEGUNDO'], trazo('trazo-segundo'));
+  const fila = filas.find((f) => f.ID === 'RES-5');
+  const temps = [fila['FIRMA CI TEMP'], fila['FIRMA SEGUNDO RESPONSABLE TEMP']].map((v) => JSON.parse(v).archivoId);
+  const movimientos = [];
+  ctx.LineasRepo.registrarMovimiento = (...a) => movimientos.push(a);
+  ctx.Permisos.puedeEditar = () => ({ correo: 'opera@x.com', nombre: 'OPERADOR' });
+
+  // El motivo es obligatorio
+  assert.throws(() => F.cancelar(DOC, 'sesion', 'RES-5', ' no '), /motivo/);
+  assert.equal(fila['ESTADO FIRMA'], 'PENDIENTE');
+
+  assert.equal(F.cancelar(DOC, 'sesion', 'RES-5', 'Número equivocado, se hizo otra').id, 'RES-5');
+  assert.equal(fila['ESTADO FIRMA'], 'CANCELADO');
+  assert.equal(fila['TOKEN FIRMA'], '');
+  assert.equal(fila['TOKEN FIRMA EXPIRA'], '');
+  assert.equal(fila['FIRMA CI TEMP'], '');
+  temps.forEach((id) => assert.ok(!drive.has(id), 'las firmas que esperaban se tiran'));
+  // Ningún PDF: no se cerró como firmado
+  assert.equal(fila['FIRMADO POR'], undefined);
+  // La liga deja de servir al momento y sale de Firmas pendientes
+  assert.equal(F.obtenerPendientePorToken(DOC, cambios['TOKEN FIRMA']).motivo, 'no-existe');
+  assert.throws(() => F.completarFirma(DOC, cambios['TOKEN FIRMA'], trazo('tarde')), /no es válida/);
+  assert.throws(() => F.firmarPresencial(DOC, 'sesion', 'RES-5', 'PRINCIPAL', trazo('aqui')), /ya quedó firmado/);
+  assert.throws(() => F.regenerarLiga(DOC, 'sesion', 'RES-5', 'PRINCIPAL'), /ya quedó firmado/);
+  ctx.Permisos.puedeLeer = () => ({});
+  assert.equal(F.pendientes('sesion').filas.length, 0);
+  // En el historial de la línea, con el motivo y quién
+  assert.equal(movimientos.length, 1);
+  const [accion, datos, usuario, , extra] = movimientos[0];
+  assert.equal(accion, 'FIRMA_CANCELADA');
+  assert.equal(datos.motivo, 'Número equivocado, se hizo otra');
+  assert.equal(usuario.correo, 'opera@x.com');
+  assert.deepEqual([...extra.refs], ['EQ-1']);
+  assert.equal(extra.detalle.responsivaId, 'RES-5');
+  // Una vez cancelado (o ya firmado) no se vuelve a cancelar
+  assert.throws(() => F.cancelar(DOC, 'sesion', 'RES-5', 'otra vez'), /ya estaba cancelado/);
+  fila['ESTADO FIRMA'] = 'FIRMADO';
+  assert.throws(() => F.cancelar(DOC, 'sesion', 'RES-5', 'otra vez'), /ya quedó firmado/);
+  assert.equal(movimientos.length, 1);
+});
+
+test('Cancelar documento: su api, su nombre en el historial, sin PDF y el botón donde se ve un pendiente', () => {
+  assert.match(read('src/api/LineasFirmaRemota.gs'), /function apiLineasFirmaRemotaCancelar\(token, tipoDoc, documentoId, motivo\) \{\s*return LineasFirmaRemota\.cancelar\(docDeTipoPdf_\(tipoDoc\), token, documentoId, motivo\);/);
+  assert.match(read('src/services/lineas/LineasRepo.gs'), /FIRMA_CANCELADA: 'Documento cancelado',/);
+  const captura = read('src/services/lineas/LineasCaptura.gs');
+  assert.match(captura, /=== 'CANCELADO'\) \{\s*throw new Error\(\(esInspeccion \? 'Esta inspección' : 'Esta responsiva'\) \+ ' se canceló; no se le genera PDF\.'\);/);
+  assert.match(captura, /if \(doc\.estadoFirma === 'CANCELADO'\) throw new Error\('Este documento se canceló; no se le sube PDF\.'\);/);
+  assert.match(read('src/services/TelefoniaService.gs'), /pdfPendiente: d\.origen === 'SISTEMA' && !pdf && d\.estadoFirma !== 'CANCELADO',/);
+  const base = read('src/html/js/lineas.html');
+  assert.match(base, /llamar\('apiLineasFirmaRemotaCancelar', d\.tipoPdf, d\.id, datos\.motivo\)/);
+  assert.match(base, /cancelarFirmaPendiente: cancelarFirmaPendiente,/);
+  const docs = read('src/html/js/lineas-telefonicas-documentos.html');
+  assert.match(docs, /doc\('ban', 'Cancelar documento', 'pdf', false, \(d\) => operar && d\.estadoFirma === 'PENDIENTE', \(d\) => cancelarDocumento\(d\)\)/);
+  assert.match(docs, /CANCELADO: 'Cancelado'/);
+  const paginas = read('src/html/js/lineas-telefonicas-paginas.html');
+  assert.match(paginas, /operar && x\.estadoFirma === 'PENDIENTE' \? \{ icono: 'ban', texto: 'Cancelar documento', alHacer: \(\) => cancelarDocumento\(x\) \}/);
+  assert.match(paginas, /operar && x\.estadoFirma !== 'CANCELADO' && x\.registroId && x\.origen === 'SISTEMA' && !x\.pdfId/);
+  assert.match(read('src/html/js/lineas-firmas.html'), /\{ icono: 'ban', titulo: 'Cancelar documento', visible: \(\) => opera,/);
+});
