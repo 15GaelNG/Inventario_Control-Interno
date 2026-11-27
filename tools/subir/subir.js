@@ -60,7 +60,8 @@ function cuentaClasp_() {
  * solo con --desde-aqui. Desde el 24-nov-2026 `cuentaProd` es auxiliar5datos (Jorge): despliega desde su
  * máquina sin la Action (la de auxiliar6datos se saturaba con otros activadores). 25-nov: mientras tanto, también
  * auxiliar6datos (la Action con su secreto): `cuentaProd` puede ser una lista. La app corre con la de quien despliegue
- * al último, así que conviene volver a una sola cuando Jorge despliegue siempre.
+ * al último, así que conviene volver a una sola cuando Jorge despliegue siempre. 27-nov: de vuelta solo auxiliar6datos
+ * (con la de Jorge varias cosas dejaron de funcionar en prod); despliega desde su máquina.
  */
 function exigirCuentaDeProd_(args) {
   const cuenta = cuentaClasp_();

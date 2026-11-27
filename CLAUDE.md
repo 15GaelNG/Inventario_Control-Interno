@@ -461,7 +461,8 @@ función que lo use y acepta (para `directory.readonly`, de las fotos: `revisarF
 `node tools/subir/subir.js prod --desplegar "…"` hace todo eso solo: comprime, sube, verifica y
 mueve los dos despliegues. **Solo corre con la cuenta `cuentaProd`** de `tools/subir/destinos.json`: la app
 corre con la cuenta de quien movió los despliegues (`executeAs: USER_DEPLOYING`), así que siempre es la misma.
-Desde el 24-nov es auxiliar5datos (Jorge), que despliega desde su máquina; la GitHub Action (botón "Run workflow",
+Desde el 27-nov es otra vez solo auxiliar6datos (del 24 al 26-nov fue auxiliar5datos, de Jorge, y con ella varias cosas
+dejaron de funcionar), que despliega desde su máquina; la GitHub Action (botón "Run workflow",
 docs/subir-automatico.md) también sirve si su secreto `CLASPRC_JSON` es de esa cuenta. Con otra cuenta truena salvo
 con `--desde-aqui` (8-oct: Emmanuel desplegó la v66 desde la suya y las inspecciones dejaron de generar PDF). No le
 pongas `--desde-aqui` sin que la persona lo pida.
